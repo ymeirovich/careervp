@@ -1,6 +1,3 @@
-import uuid
-from datetime import datetime, timezone
-
 import boto3
 from botocore.exceptions import ClientError
 from cachetools import TTLCache, cached
@@ -9,44 +6,50 @@ from mypy_boto3_dynamodb.service_resource import Table
 from pydantic import ValidationError
 
 from careervp.dal.db_handler import DalHandler
-from careervp.dal.models.db import OrderEntry
 from careervp.handlers.utils.observability import logger, tracer
+from careervp.models.cv import UserCV
 from careervp.models.exceptions import InternalServerException
-from careervp.models.order import Order
 
 
 class DynamoDalHandler(DalHandler):
     def __init__(self, table_name: str):
         self.table_name = table_name
 
-    # cache dynamodb connection data for no longer than 5 minutes
     @cached(cache=TTLCache(maxsize=1, ttl=300))
     def _get_db_handler(self, table_name: str) -> Table:
         logger.info('opening connection to dynamodb table', table_name=table_name)
         dynamodb: DynamoDBServiceResource = boto3.resource('dynamodb')
         return dynamodb.Table(table_name)
 
-    def _get_unix_time(self) -> int:
-        return int(datetime.now(timezone.utc).timestamp())
-
     @tracer.capture_method(capture_response=False)
-    def create_order_in_db(self, customer_name: str, order_item_count: int) -> Order:
-        order_id = str(uuid.uuid4())
-        logger.append_keys(order_id=order_id)
-        logger.info('trying to save order', customer_name=customer_name, order_item_count=order_item_count)
+    def save_cv(self, user_cv: UserCV) -> None:
+        logger.append_keys(user_id=user_cv.user_id)
+        logger.info('saving CV to DynamoDB')
         try:
-            entry = OrderEntry(
-                id=order_id,
-                name=customer_name,
-                item_count=order_item_count,
-                created_at=self._get_unix_time(),
-            )
             table: Table = self._get_db_handler(self.table_name)
-            table.put_item(Item=entry.model_dump())
+            item = user_cv.model_dump()
+            item['pk'] = user_cv.user_id
+            item['sk'] = 'CV'
+            table.put_item(Item=item)
         except (ClientError, ValidationError) as exc:  # pragma: no cover
-            error_msg = 'failed to create order'
-            logger.exception(error_msg, customer_name=customer_name)
+            error_msg = 'failed to save CV'
+            logger.exception(error_msg, user_id=user_cv.user_id)
             raise InternalServerException(error_msg) from exc
 
-        logger.info('finished create order successfully', order_item_count=order_item_count, customer_name=customer_name)
-        return Order(id=entry.id, name=entry.name, item_count=entry.item_count)
+        logger.info('CV saved successfully', user_id=user_cv.user_id)
+
+    @tracer.capture_method(capture_response=False)
+    def get_cv(self, user_id: str) -> UserCV | None:
+        logger.append_keys(user_id=user_id)
+        logger.info('fetching CV from DynamoDB')
+        try:
+            table: Table = self._get_db_handler(self.table_name)
+            response = table.get_item(Key={'pk': user_id, 'sk': 'CV'})
+            item = response.get('Item')
+            if not item:
+                return None
+            return UserCV.model_validate(item)
+        except (ClientError, ValidationError) as exc:  # pragma: no cover
+            error_msg = 'failed to get CV'
+            logger.exception(error_msg, user_id=user_id)
+            raise InternalServerException(error_msg) from exc

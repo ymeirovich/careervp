@@ -39,3 +39,4 @@
 - [ ] Complete CV upload handler implementation.
 - [ ] Implement VPR Generator (Sonnet 4.5).
 - [ ] Implement CV Tailor (Haiku 4.5).
+- [ ] cv_parser.py tests: The handler tests cover the integration path. Dedicated unit tests for clean_text(), detect_language(), parse_llm_response() are low-value given they're simple functions. Note for later - add if coverage gaps appear.

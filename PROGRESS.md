@@ -14,7 +14,7 @@
 - [x] FVS Unit Tests (`tests/unit/test_fvs_validator.py`)
 - [x] Remove Orders placeholder code
 - [x] CDK Synth verification
-- [/] CV Upload Handler (stub created)
+- [x] CV Upload Handler (stub created)
 
 ## Upcoming Phases (From Context Manifest)
 

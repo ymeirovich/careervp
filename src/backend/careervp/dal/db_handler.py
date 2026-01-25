@@ -1,6 +1,6 @@
 from abc import ABC, ABCMeta, abstractmethod
 
-from careervp.models.order import Order
+from careervp.models.cv import UserCV
 
 
 class _SingletonMeta(ABCMeta):
@@ -12,7 +12,9 @@ class _SingletonMeta(ABCMeta):
         return cls._instances[cls]
 
 
-# data access handler / integration later adapter class
 class DalHandler(ABC, metaclass=_SingletonMeta):
     @abstractmethod
-    def create_order_in_db(self, customer_name: str, order_item_count: int) -> Order: ...  # pragma: no cover
+    def save_cv(self, user_cv: UserCV) -> None: ...  # pragma: no cover
+
+    @abstractmethod
+    def get_cv(self, user_id: str) -> UserCV | None: ...  # pragma: no cover
