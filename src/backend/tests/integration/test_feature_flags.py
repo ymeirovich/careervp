@@ -3,6 +3,7 @@ from http import HTTPStatus
 from typing import Any
 
 from careervp.models.input import CreateOrderRequest
+
 from tests.utils import generate_api_gw_event, generate_context, generate_random_string
 
 MOCKED_SCHEMA_CAMPAIGN_ON = {

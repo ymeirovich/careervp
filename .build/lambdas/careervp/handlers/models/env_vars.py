@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, HttpUrl, PositiveInt
 
 class Observability(BaseModel):
     POWERTOOLS_SERVICE_NAME: Annotated[str, Field(min_length=1)]
-    LOG_LEVEL: Literal['DEBUG', 'INFO', 'ERROR', 'CRITICAL', 'WARNING', 'EXCEPTION']
+    LOG_LEVEL: Literal["DEBUG", "INFO", "ERROR", "CRITICAL", "WARNING", "EXCEPTION"]
 
 
 class Idempotency(BaseModel):

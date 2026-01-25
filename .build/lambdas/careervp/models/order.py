@@ -30,20 +30,28 @@ def validate_product_id(product_id: str) -> str:
     return product_id
 
 
-OrderId = Annotated[str, Field(min_length=36, max_length=36, description='Order ID as UUID'), AfterValidator(validate_product_id)]
+OrderId = Annotated[
+    str,
+    Field(min_length=36, max_length=36, description="Order ID as UUID"),
+    AfterValidator(validate_product_id),
+]
 """Unique Product ID, represented and validated as a UUID string."""
 
 
 class Order(BaseModel):
-    name: Annotated[str, Field(min_length=1, max_length=20, description='Customer name')]
-    item_count: Annotated[int, Field(strict=True, description='Amount of items in order')]
+    name: Annotated[
+        str, Field(min_length=1, max_length=20, description="Customer name")
+    ]
+    item_count: Annotated[
+        int, Field(strict=True, description="Amount of items in order")
+    ]
     id: OrderId
 
-    @field_validator('item_count')
+    @field_validator("item_count")
     @classmethod
     def check_item_count(cls, v):
         # we don't use Field(gt=0) because pydantic exports it incorrectly to openAPI doc
         # see https://github.com/tiangolo/fastapi/issues/240
         if v <= 0:
-            raise ValueError('item_count must be larger than 0')
+            raise ValueError("item_count must be larger than 0")
         return v

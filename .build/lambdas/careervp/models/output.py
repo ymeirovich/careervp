@@ -13,4 +13,6 @@ class CreateOrderOutput(Order):
 
 
 class InternalServerErrorOutput(BaseModel):
-    error: Annotated[str, Field(description='Error description')] = 'internal server error'
+    error: Annotated[str, Field(description="Error description")] = (
+        "internal server error"
+    )

@@ -7,10 +7,12 @@ from pydantic import BaseModel
 from careervp.handlers.models.env_vars import DynamicConfiguration
 from careervp.models.exceptions import DynamicConfigurationException
 
-Model = TypeVar('Model', bound=BaseModel)
+Model = TypeVar("Model", bound=BaseModel)
 
 _DYNAMIC_CONFIGURATION: Union[FeatureFlags, None] = None
-_DEFAULT_FEATURE_FLAGS_ROOT = 'features'  # all feature flags reside in the JSON under this key
+_DEFAULT_FEATURE_FLAGS_ROOT = (
+    "features"  # all feature flags reside in the JSON under this key
+)
 
 
 def get_configuration_store() -> FeatureFlags:
@@ -22,7 +24,9 @@ def get_configuration_store() -> FeatureFlags:
     global _DYNAMIC_CONFIGURATION
     if _DYNAMIC_CONFIGURATION is None:
         # init singleton
-        env_vars: DynamicConfiguration = get_environment_variables(model=DynamicConfiguration)
+        env_vars: DynamicConfiguration = get_environment_variables(
+            model=DynamicConfiguration
+        )
         conf_store = AppConfigStore(
             environment=env_vars.CONFIGURATION_ENV,
             application=env_vars.CONFIGURATION_APP,
@@ -48,4 +52,6 @@ def parse_configuration(model: type[Model]) -> Model:
         conf_json = get_configuration_store().store.get_raw_configuration
         return model.model_validate(conf_json)
     except Exception as exc:
-        raise DynamicConfigurationException(f'appconfig schema failed pydantic validation, exception={str(exc)}') from exc
+        raise DynamicConfigurationException(
+            f"appconfig schema failed pydantic validation, exception={str(exc)}"
+        ) from exc

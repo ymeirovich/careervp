@@ -9,5 +9,5 @@ class MyConfiguration(BaseModel):
 
 
 class FeatureFlagsNames(Enum):
-    TEN_PERCENT_CAMPAIGN = 'ten_percent_off_campaign'
-    PREMIUM = 'premium_features'
+    TEN_PERCENT_CAMPAIGN = "ten_percent_off_campaign"
+    PREMIUM = "premium_features"
