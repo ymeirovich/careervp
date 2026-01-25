@@ -70,7 +70,7 @@ dev = [
 ]
 
 [tool.uv.sources]
-service-cdk = { path = "cdk", editable = true }
+service-cdk = { path = "../../infra", editable = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["service"]

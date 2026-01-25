@@ -23,8 +23,8 @@ from careervp.models.cv import (
     WorkExperience,
 )
 
-# Path to fixtures
-FIXTURES_DIR = Path(__file__).parent.parent.parent.parent / 'tests' / 'fixtures'
+# Path to fixtures (repo root/tests/fixtures)
+FIXTURES_DIR = Path(__file__).resolve().parents[4] / 'tests' / 'fixtures'
 
 
 @pytest.fixture
