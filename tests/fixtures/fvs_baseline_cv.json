@@ -1,0 +1,36 @@
+{
+  "full_name": "YITZCHAK MEIROVICH",
+  "immutable_facts": {
+    "contact_info": {
+      "phone": "052-756-3792",
+      "email": "ymeirovich@presgen.net",
+      "location": "Modiin, Israel"
+    },
+    "work_history": [
+      {
+        "company": "SysAid",
+        "role": "Learning Experience Specialist",
+        "dates": "2021 – Present"
+      },
+      {
+        "company": "Israel Ministry of Finance",
+        "role": "AWS Solutions Architect",
+        "dates": "2009 – 2021"
+      }
+    ],
+    "education": [
+      {
+        "institution": "University of Maryland",
+        "degree": "B.A. Political Science"
+      }
+    ]
+  },
+  "verifiable_skills": [
+    "AWS Solutions Architect Associate",
+    "AWS Certified Developer Associate",
+    "AWS Certified AI Practitioner",
+    "Python",
+    "JavaScript",
+    "LMS Implementation"
+  ]
+}

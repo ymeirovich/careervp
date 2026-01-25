@@ -1,0 +1,18 @@
+Metadata-Version: 2.4
+Name: service-cdk
+Version: 1.0
+Summary: CDK service code
+Author-email: Ran Isenberg <ran.isenberg@ranthebuilder.cloud>
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Software Development :: Build Tools
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.12
+Requires-Dist: aws-cdk-lib>=2.170.0
+Requires-Dist: aws-cdk.aws-lambda-python-alpha>=2.170.0
+Requires-Dist: constructs>=10.0.0
+Requires-Dist: boto3>=1.35.0
+Requires-Dist: cdk-nag>=2.28.0
+Requires-Dist: cdk-monitoring-constructs>=8.0.0
+Requires-Dist: aws-lambda-powertools>=2.0.0
+Requires-Dist: pydantic>=2.0.0
+Requires-Dist: gitpython>=3.1.0

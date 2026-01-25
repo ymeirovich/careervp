@@ -1,0 +1,16 @@
+{
+  "full_name": "YITZCHAK MEIROVICH",
+  "tailored_cv_output": {
+    "experience": [
+      {
+        "company": "SysAid",
+        "role": "Director of Learning",
+        "dates": "2018 – Present"
+      }
+    ],
+    "education": [
+      { "degree": "M.S. Computer Science" }
+    ],
+    "skills": ["Rust Expert"]
+  }
+}

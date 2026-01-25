@@ -1,0 +1,21 @@
+# CareerVP Coding & Workflow Rules
+
+## Architecture & Style
+- **Pattern:** Adhere strictly to the "Handler -> Logic -> DAL" separation.
+- **Handlers:** Every Lambda handler MUST use AWS Lambda Powertools for logging, tracing, and metrics.
+- **Types:** Python type hints are mandatory for all function signatures.
+- **Errors:** Use a standard Result object pattern for cross-layer error communication.
+
+## Feature Gatekeeping
+- **Test-First:** Never mark a task as complete in `plan.md` until its corresponding unit test passes.
+- **No Hallucinations:** When tailoring CVs, ensure the `Fact Verification System` rules are applied: Static facts (dates/titles) are IMMUTABLE.
+- **Anti-AI:** All generated text must follow the 8-pattern avoidance framework (natural transitions, varied structure).
+
+## Documentation
+- Before starting a new feature, read the corresponding spec in `docs/specs/`.
+- Update `PROGRESS.md` and `plan.md` at the end of every successful task.
+
+# Mandatory Type-Safety Guardrail
+- After every Python file edit, you MUST execute: `uv run mypy <filename> --strict`
+- If mypy returns errors, you are NOT allowed to present the code to the user.
+- You must fix the type errors and re-run the check until it passes.

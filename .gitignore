@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# AWS CDK
+cdk.out/
+.cdk.staging/
+*.db
+
+# Environment & Secrets
+.env
+.env.*
+.anthropic_api_key
+auth.json
+
+# Tooling
+.claude/
+uv.lock
+
+#Node modules
+node_modules/

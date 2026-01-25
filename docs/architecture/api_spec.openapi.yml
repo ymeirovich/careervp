@@ -1,0 +1,34 @@
+openapi: 3.0.0
+info:
+  title: CareerVP API
+  version: 1.0.0
+paths:
+  /cv/parse:
+    post:
+      summary: Upload and parse a CV
+      responses:
+        '200':
+          description: Successful extraction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserCV'
+components:
+  schemas:
+    UserCV:
+      type: object
+      required: [user_id, full_name, email]
+      properties:
+        user_id: {type: string}
+        full_name: {type: string}
+        email: {type: string, format: email}
+        skills: {type: array, items: {type: string}}
+        experience:
+          type: array
+          items:
+            type: object
+            properties:
+              company: {type: string}
+              role: {type: string}
+              dates: {type: string}
+              achievements: {type: array, items: {type: string}}
