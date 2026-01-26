@@ -153,14 +153,15 @@ def upload_cv() -> Response:
         file_type=request.file_type,
     )
 
-    if not parse_result.success:
-        logger.warning('CV parsing failed', error=parse_result.error, code=parse_result.code)
+    if not parse_result.success or parse_result.data is None:
+        error_message = parse_result.error or 'Failed to parse CV contents'
+        logger.warning('CV parsing failed', error=error_message, code=parse_result.code)
         response = CVParseResponse(
             success=False,
-            error=parse_result.error,
+            error=error_message,
             parse_time_ms=int((time.time() - start_time) * 1000),
         )
-        status_code = _get_status_code_for_result_code(parse_result.code)
+        status_code = _get_status_code_for_result_code(parse_result.code) if not parse_result.success else HTTPStatus.INTERNAL_SERVER_ERROR.value
         return Response(
             status_code=status_code,
             content_type=content_types.APPLICATION_JSON,
@@ -169,7 +170,7 @@ def upload_cv() -> Response:
 
     # Set S3 key on parsed CV
     user_cv = parse_result.data
-    if s3_key and user_cv:
+    if s3_key:
         user_cv.source_file_key = s3_key
 
     # Store parsed CV in DynamoDB
@@ -203,13 +204,15 @@ def upload_cv() -> Response:
     )
 
 
-def _get_content_type(file_type: str) -> str:
+def _get_content_type(file_type: str | None) -> str:
     """Get MIME content type for file type."""
     content_types_map = {
         'pdf': 'application/pdf',
         'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'txt': 'text/plain',
     }
+    if file_type is None:
+        return 'application/octet-stream'
     return content_types_map.get(file_type, 'application/octet-stream')
 
 

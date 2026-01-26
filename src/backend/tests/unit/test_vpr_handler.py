@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -83,6 +84,10 @@ def _successful_vpr_response() -> VPRResponse:
         cultural_fit='Great fit',
         talking_points=['Point one'],
         keywords=['Keyword'],
+        version=1,
+        language='en',
+        created_at=datetime.utcnow(),
+        word_count=250,
     )
     token_usage = TokenUsage(input_tokens=100, output_tokens=200, cost_usd=1.25, model='sonnet')
     return VPRResponse(success=True, vpr=vpr, token_usage=token_usage, generation_time_ms=321)

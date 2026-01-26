@@ -1,11 +1,12 @@
-# Codex Engineering Guardrails
+# CareerVP Coding & Workflow Rules (Codex)
 
-Codex must follow the same engineering discipline defined in `.clauderules`. Treat this file as mandatory operating procedures.
+Codex must follow the exact same rules defined in `.clauderules`. This document replicates those guardrails so both agents stay synchronized.
 
 ## Architecture & Style
-- Mirror the **Handler → Logic → DAL** separation in every change.
-- Ensure every Lambda handler wires AWS Lambda Powertools logging, tracing, and metrics.
-- Use full Python type hints on all functions and favor the shared `Result` object for cross-layer error propagation.
+- **Pattern:** Adhere strictly to the "Handler -> Logic -> DAL" separation.
+- **Handlers:** Every Lambda handler MUST use AWS Lambda Powertools for logging, tracing, and metrics.
+- **Types:** Python type hints are mandatory for all function signatures.
+- **Errors:** Use a standard Result object pattern for cross-layer error communication.
 
 ## Testing & Linting
 

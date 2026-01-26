@@ -37,7 +37,7 @@
 | `infra/careervp/constants.py`                        | Fixed to CareerVP naming                     |
 | `infra/careervp/api_db_construct.py`                 | Users table + S3 CV bucket                   |
 | `src/backend/pyproject.toml`                         | Added moto, anthropic, langdetect            |
-| `.env.example`                                       | Environment variable template                |
+| `.env`                                       | Environment variable template                |
 | `infra/careervp/api_construct.py`                    | Updated to CareerVP (CV upload endpoint)     |
 | `src/backend/careervp/handlers/cv_upload_handler.py` | CV upload handler stub                       |
 | `infra/careervp/service_stack.py`                    | Added S3 NAG suppression for dev             |

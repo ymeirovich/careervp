@@ -11,6 +11,14 @@
 - **No Hallucinations:** When tailoring CVs, ensure the `Fact Verification System` rules are applied: Static facts (dates/titles) are IMMUTABLE.
 - **Anti-AI:** All generated text must follow the 8-pattern avoidance framework (natural transitions, varied structure).
 
+## Mandatory Test Creation
+
+- Every logic module (`careervp/logic/*.py`) MUST have a corresponding test file in `tests/unit/`.
+- Every handler (`careervp/handlers/*.py`) MUST have a corresponding test file in `tests/unit/`.
+- Test files MUST use `moto` for AWS service mocking (DynamoDB, S3).
+- Test files MUST mock external API calls (LLM, etc.) - never call real APIs in tests.
+- Run `uv run pytest tests/unit/<test_file>.py -v` before marking any task complete.
+
 ## Documentation
 - Before starting a new feature, read the corresponding spec in `docs/specs/`.
 - Update `PROGRESS.md` and `plan.md` at the end of every successful task.

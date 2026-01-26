@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from careervp.logic.vpr_generator import generate_vpr
-from careervp.models.cv import ContactInfo, UserCV
+from careervp.models.cv import ContactInfo, UserCV, WorkExperience
 from careervp.models.job import JobPosting
 from careervp.models.result import Result, ResultCode
 from careervp.models.vpr import VPRRequest
@@ -23,8 +23,18 @@ def sample_user_cv() -> UserCV:
         language='en',
         contact_info=ContactInfo(email='alex@example.com'),
         experience=[
-            {'company': 'Apex Labs', 'role': 'Product Lead', 'dates': '2019 – Present', 'achievements': []},
-            {'company': 'Vertex Tech', 'role': 'Senior PM', 'dates': '2016 – 2019', 'achievements': []},
+            WorkExperience(
+                company='Apex Labs',
+                role='Product Lead',
+                dates='2019 – Present',
+                achievements=[],
+            ),
+            WorkExperience(
+                company='Vertex Tech',
+                role='Senior PM',
+                dates='2016 – 2019',
+                achievements=[],
+            ),
         ],
         education=[],
         certifications=[],

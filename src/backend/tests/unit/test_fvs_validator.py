@@ -6,6 +6,7 @@ Per .clauderules: Never mark a task as complete until its unit test passes.
 """
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -113,6 +114,8 @@ def hallucinated_user_cv() -> UserCV:
                 degree='M.S. Computer Science',  # HALLUCINATED: Should be "B.A. Political Science"
             ),
         ],
+        certifications=[],
+        top_achievements=[],
         skills=['Rust Expert'],  # HALLUCINATED: Not in verifiable skills
         is_parsed=True,
     )
@@ -199,6 +202,7 @@ class TestFullFVSValidation:
 
         assert result.success is True
         assert result.code == 'SUCCESS'
+        assert result.data is not None
         assert result.data.is_valid is True
 
 
@@ -225,6 +229,10 @@ class TestVPRValidationAgainstCV:
             cultural_fit='Values-first.',
             talking_points=['Discuss leadership as Learning Experience Specialist.'],
             keywords=['Enablement'],
+            version=1,
+            language='en',
+            created_at=datetime.utcnow(),
+            word_count=0,
         )
 
     def test_vpr_validation_passes_when_facts_align(self, aligned_vpr: VPR, valid_user_cv: UserCV):
@@ -233,6 +241,7 @@ class TestVPRValidationAgainstCV:
 
         assert result.success is True
         assert result.code == 'SUCCESS'
+        assert result.data is not None
         assert result.data.is_valid is True
 
     def test_vpr_validation_detects_unknown_company(self, aligned_vpr: VPR, valid_user_cv: UserCV):
@@ -243,6 +252,7 @@ class TestVPRValidationAgainstCV:
 
         assert result.success is False
         assert result.code == 'FVS_HALLUCINATION_DETECTED'
+        assert result.data is not None
         assert any(v.actual == 'Fictional Labs' for v in result.data.violations)
 
     def test_vpr_validation_detects_unknown_dates(self, aligned_vpr: VPR, valid_user_cv: UserCV):
@@ -253,6 +263,7 @@ class TestVPRValidationAgainstCV:
 
         assert result.success is False
         assert result.code == 'FVS_HALLUCINATION_DETECTED'
+        assert result.data is not None
         assert any(v.field == 'vpr.dates' for v in result.data.violations)
 
     def test_vpr_validation_detects_unknown_title(self, aligned_vpr: VPR, valid_user_cv: UserCV):
@@ -263,6 +274,7 @@ class TestVPRValidationAgainstCV:
 
         assert result.success is False
         assert result.code == 'FVS_HALLUCINATION_DETECTED'
+        assert result.data is not None
         assert any('Chief Visionary Officer' in v.actual for v in result.data.violations)
 
     def test_hallucinated_cv_returns_failure(self, fvs_baseline: dict, hallucinated_user_cv: UserCV):
@@ -271,6 +283,7 @@ class TestVPRValidationAgainstCV:
 
         assert result.success is False
         assert result.code == 'FVS_HALLUCINATION_DETECTED'
+        assert result.error is not None
         assert 'immutable fact violations' in result.error.lower()
 
 

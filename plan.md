@@ -34,9 +34,27 @@
 - [x] Remove orders placeholder code.
 - [x] Verify `cdk synth` success.
 
-## Phase 6: Next Steps
+## Phase 6: CV Upload Handler (COMPLETED)
 
-- [ ] Complete CV upload handler implementation.
-- [ ] Implement VPR Generator (Sonnet 4.5).
+- [x] Complete CV upload handler implementation.
+- [x] Write moto-based unit tests for CV upload handler (11 tests).
+- [x] Fix ruff linting (import sorting, unused imports).
+- [ ] cv_parser.py tests: Dedicated unit tests for clean_text(), detect_language(), parse_llm_response() (deferred).
+
+## Phase 7: VPR Generator (IN PROGRESS)
+
+**Spec:** [[docs/specs/03-vpr-generator.md]]
+**Tasks:** [[docs/tasks/03-vpr-generator/]]
+
+- [ ] Task 1: Create JobPosting and VPR Pydantic models.
+- [ ] Task 2: Add VPR DAL methods to DynamoDB handler.
+- [ ] Task 3: Implement VPR generator logic with Sonnet 4.5.
+- [ ] Task 4: Design Sonnet prompt with anti-AI patterns.
+- [ ] Task 5: Create VPR Lambda handler.
+- [ ] Task 6: Write moto-based unit tests.
+
+## Phase 8: Future
+
 - [ ] Implement CV Tailor (Haiku 4.5).
-- [ ] cv_parser.py tests: The handler tests cover the integration path. Dedicated unit tests for clean_text(), detect_language(), parse_llm_response() are low-value given they're simple functions. Note for later - add if coverage gaps appear.
+- [ ] Implement Cover Letter Generator (Haiku 4.5).
+- [ ] Deploy base stack to AWS.

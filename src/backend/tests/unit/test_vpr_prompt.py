@@ -3,7 +3,7 @@ VPR prompt builder tests (Task 04).
 """
 
 from careervp.logic.prompts.vpr_prompt import BANNED_WORDS, build_vpr_prompt, check_anti_ai_patterns
-from careervp.models.cv import ContactInfo, UserCV
+from careervp.models.cv import ContactInfo, UserCV, WorkExperience
 from careervp.models.job import JobPosting
 from careervp.models.vpr import VPRRequest
 
@@ -15,13 +15,17 @@ def _sample_user_cv() -> UserCV:
         language='en',
         contact_info=ContactInfo(email='jordan@example.com'),
         experience=[
-            {'company': 'Nova Metrics', 'role': 'Data Lead', 'dates': '2020 – Present', 'achievements': []},
+            WorkExperience(
+                company='Nova Metrics',
+                role='Data Lead',
+                dates='2020 – Present',
+                achievements=[],
+            )
         ],
         education=[],
         certifications=[],
         skills=['Data Strategy'],
         top_achievements=[],
-        raw_text='raw cv content',
         is_parsed=True,
     )
 
@@ -40,6 +44,7 @@ def _sample_request() -> VPRRequest:
         application_id='app-111',
         user_id='user-789',
         job_posting=posting,
+        gap_responses=[],
     )
 
 
@@ -54,7 +59,7 @@ class TestBuildVPRPrompt:
     def test_prompt_excludes_removed_fields(self) -> None:
         prompt = build_vpr_prompt(_sample_user_cv(), _sample_request())
 
-        assert 'raw cv content' not in prompt  # raw_text stripped during serialization.
+        assert 'jordan@example.com' not in prompt  # contact info omitted from prompt payload.
 
 
 class TestAntiAIPatterns:
