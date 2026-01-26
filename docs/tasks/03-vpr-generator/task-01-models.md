@@ -58,6 +58,56 @@ Create Pydantic models for VPR generation: JobPosting input model, VPR output mo
 
 - [ ] Commit with message: `feat(vpr): add JobPosting and VPR Pydantic models`.
 
+---
+
+## Codex Implementation Guide
+
+### File Paths
+
+| File | Purpose |
+| ---- | ------- |
+| `src/backend/careervp/models/job.py` | JobPosting, GapResponse, CompanyContext |
+| `src/backend/careervp/models/vpr.py` | VPR, EvidenceItem, GapStrategy, TokenUsage, VPRRequest, VPRResponse |
+
+### Commit Instructions
+
+```bash
+# Stage the model files
+cd /Users/yitzchak/Documents/dev/careervp
+git add src/backend/careervp/models/job.py
+git add src/backend/careervp/models/vpr.py
+
+# Commit with conventional commit message
+git commit -m "feat(vpr): add JobPosting and VPR Pydantic models
+
+- Add JobPosting model with company_name, role_title, requirements fields
+- Add GapResponse model for gap analysis Q&A pairs
+- Add CompanyContext model for company research data
+- Add VPR model with executive_summary, evidence_matrix, differentiators
+- Add EvidenceItem, GapStrategy, TokenUsage supporting models
+- Add VPRRequest and VPRResponse for API contract
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+```
+
+### Verification Commands
+
+```bash
+# Verify models pass linting
+cd src/backend && uv run ruff format careervp/models/job.py careervp/models/vpr.py
+cd src/backend && uv run ruff check careervp/models/job.py careervp/models/vpr.py
+
+# Verify models pass type checking
+cd src/backend && uv run mypy careervp/models/job.py --strict
+cd src/backend && uv run mypy careervp/models/vpr.py --strict
+```
+
+### Zero-Hallucination Checklist
+
+- [x] No FVS-relevant fields in models (models are data structures only).
+- [x] `EvidenceItem.evidence` field description references CV facts as source.
+- [x] `VPR.created_at` uses `datetime.utcnow` (no fabricated timestamps).
+
 ## Acceptance Criteria
 
 - All models pass ruff and mypy --strict checks.

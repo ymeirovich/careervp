@@ -8,10 +8,28 @@ Codex must follow the same engineering discipline defined in `.clauderules`. Tre
 - Use full Python type hints on all functions and favor the shared `Result` object for cross-layer error propagation.
 
 ## Testing & Linting
+
 - Follow the **test-first** rule: no task is complete (and no checklist item updated) until its unit/integration tests pass.
 - After modifying any Python file, immediately run `uv run mypy <filename> --strict`. Fix every reported issue before sharing code.
-- Run the project’s pytest suites relevant to your change (`pytest` targets live under `src/backend/tests`). Never declare success without green tests.
+- Run the project's pytest suites relevant to your change (`pytest` targets live under `src/backend/tests`). Never declare success without green tests.
 - Respect the pre-commit toolchain (Ruff lint/format, mypy, etc.) defined in `.pre-commit-config.yaml` and the `pyproject.toml` settings (line length 150, single quotes, Python 3.14).
+
+### Mandatory Testing Commands
+
+- **Unit tests:** `uv run pytest tests/unit/<test_file>.py -v`
+- **Integration tests:** `uv run pytest tests/integration/ -v`
+- **Full suite:** `uv run pytest tests/ -v --tb=short`
+
+### Mocking Requirements
+
+- Use `moto` for AWS service mocking (DynamoDB, S3).
+- Mock external API calls (LLM, HTTP) - NEVER call real APIs in tests.
+- Use `unittest.mock.patch` for LLM client mocking.
+
+### Mandatory Cleanup (Before Task Completion)
+
+- Run `uv run ruff format .` and `uv run ruff check --fix .`
+- Zero linting errors required for task completion.
 
 ## Anti-Hallucination & Content Rules
 - Enforce the Fact Verification tiers: IMMUTABLE facts (dates, roles, contact info) must never be altered; VERIFIABLE data must exist in the source CV; FLEXIBLE framing only where allowed.

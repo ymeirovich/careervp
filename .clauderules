@@ -16,6 +16,40 @@
 - Update `PROGRESS.md` and `plan.md` at the end of every successful task.
 
 # Mandatory Type-Safety Guardrail
+
 - After every Python file edit, you MUST execute: `uv run mypy <filename> --strict`
 - If mypy returns errors, you are NOT allowed to present the code to the user.
 - You must fix the type errors and re-run the check until it passes.
+
+## Mandatory Testing Rules
+
+### Unit Tests (Required for Deployment)
+
+- Every logic module (`careervp/logic/*.py`) MUST have a corresponding test file in `tests/unit/`.
+- Every handler (`careervp/handlers/*.py`) MUST have a corresponding test file in `tests/unit/`.
+- Test file naming: `test_<module_name>.py` (e.g., `test_vpr_generator.py`).
+- Run tests with: `uv run pytest tests/unit/<test_file>.py -v`
+- All tests MUST pass before marking any task complete.
+
+### Mocking Requirements
+
+- Use `moto` for AWS service mocking (DynamoDB, S3).
+- Mock external API calls (LLM, HTTP) - NEVER call real APIs in tests.
+- Use `unittest.mock.patch` for LLM client mocking.
+
+### CI/CD Integration
+
+- Pre-commit runs: `ruff check`, `ruff format --check`, `mypy --strict`
+- Deployment pipeline runs: `pytest tests/unit/ -v --tb=short`
+- Integration tests run on staging: `pytest tests/integration/ -v`
+
+### Mandatory Cleanup
+
+- Before completing any task: `uv run ruff format .` and `uv run ruff check --fix .`
+- Zero linting errors required for task completion.
+
+### Coverage Guidelines
+
+- Target: 80%+ line coverage for logic modules.
+- Critical paths (FVS validation, LLM parsing) require explicit test cases.
+- Edge cases: empty inputs, invalid data, timeout scenarios.
