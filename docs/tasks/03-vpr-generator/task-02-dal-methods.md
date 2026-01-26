@@ -1,6 +1,6 @@
 # Task 02: VPR DAL Methods
 
-**Status:** Pending
+**Status:** Complete
 **Spec Reference:** [[docs/specs/03-vpr-generator.md]]
 **Depends On:** Task 01 (Models)
 

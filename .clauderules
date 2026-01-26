@@ -53,3 +53,9 @@
 - Target: 80%+ line coverage for logic modules.
 - Critical paths (FVS validation, LLM parsing) require explicit test cases.
 - Edge cases: empty inputs, invalid data, timeout scenarios.
+
+## Section: Agent Escalation Protocol
+The Engineer (Codex) Rule: If any specified Path, Class Name, or Method Signature in a Task Guide does not exist in the current environment, the Engineer MUST NOT create a workaround. They must emit a "BLOCKING ISSUE" report and exit.
+
+## The Architect (Claude) Rule:
+Upon a Blocking Issue, the Architect must analyze if the Spec is wrong or if the Environment needs refactoring. The Architect must provide a "Migration Path" in the next Task Guide.

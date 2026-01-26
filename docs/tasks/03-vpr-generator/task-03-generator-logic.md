@@ -1,6 +1,6 @@
 # Task 03: VPR Generator Logic
 
-**Status:** Pending
+**Status:** Complete
 **Spec Reference:** [[docs/specs/03-vpr-generator.md]]
 **Depends On:** Task 01 (Models), Task 02 (DAL), Task 04 (Prompt)
 
@@ -205,6 +205,14 @@ cd src/backend && uv run pytest tests/unit/test_vpr_generator.py -v --cov=career
 # Run all logic tests
 cd src/backend && uv run pytest tests/unit/test_*.py -k "vpr or fvs" -v
 ```
+### Chunking/Streaming Check:
+
+- [ ] Implement a check for LLM 'Finish Reason'. Since we expect 2,000 words, ensure the logic handles potential truncation gracefully (or logs a warning if the response is suspiciously short).
+
+### Anti-AI Post-Processor:
+
+- [ ] Implement a simple 'Forbidden Word' filter in _parse_llm_response that logs a warning if Sonnet 4.5 slipped in a 'leverage' or 'delve' despite the system prompt.
+
 
 ### Zero-Hallucination Checklist
 

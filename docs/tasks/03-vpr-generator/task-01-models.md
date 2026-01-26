@@ -1,6 +1,6 @@
 # Task: VPR & JobPosting Models Implementation
 
-**Status:** In Progress
+**Status:** Complete
 **Spec Reference:** [[docs/specs/03-vpr-generator.md]]
 
 ## Overview

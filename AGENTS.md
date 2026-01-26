@@ -40,3 +40,9 @@ Codex must follow the same engineering discipline defined in `.clauderules`. Tre
 - Update both `PROGRESS.md` and `plan.md` when (and only when) the associated code + tests land.
 
 These rules are non‑negotiable. If any step fails (tests, lint, type checks), fix the issue and rerun before presenting results.
+
+## Section: Agent Escalation Protocol
+The Engineer (Codex) Rule: If any specified Path, Class Name, or Method Signature in a Task Guide does not exist in the current environment, the Engineer MUST NOT create a workaround. They must emit a "BLOCKING ISSUE" report and exit.
+
+## The Architect (Claude) Rule:
+Upon a Blocking Issue, the Architect must analyze if the Spec is wrong or if the Environment needs refactoring. The Architect must provide a "Migration Path" in the next Task Guide.
