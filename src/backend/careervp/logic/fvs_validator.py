@@ -8,11 +8,15 @@ FVS Tiers:
 - FLEXIBLE: Professional summaries - full creative liberty
 """
 
+import re
 from dataclasses import dataclass
+from difflib import SequenceMatcher
+from typing import Any, Iterable
 
 from careervp.handlers.utils.observability import logger
 from careervp.models.cv import UserCV
 from careervp.models.result import Result, ResultCode
+from careervp.models.vpr import VPR
 
 
 @dataclass
@@ -37,7 +41,7 @@ class FVSValidationResult:
         return any(v.severity == 'CRITICAL' for v in self.violations)
 
 
-def validate_immutable_facts(baseline: dict, generated: UserCV) -> FVSValidationResult:  # noqa: C901 - explicit comparisons aid readability
+def validate_immutable_facts(baseline: dict[str, Any], generated: UserCV) -> FVSValidationResult:  # noqa: C901 - explicit comparisons aid readability
     """
     Validate that generated CV does not modify immutable facts from baseline.
 
@@ -178,7 +182,7 @@ def validate_immutable_facts(baseline: dict, generated: UserCV) -> FVSValidation
     return FVSValidationResult(is_valid=len(violations) == 0, violations=violations)
 
 
-def validate_verifiable_skills(baseline: dict, generated: UserCV) -> FVSValidationResult:
+def validate_verifiable_skills(baseline: dict[str, Any], generated: UserCV) -> FVSValidationResult:
     """
     Validate that generated skills exist in the baseline verifiable skills list.
 
@@ -209,7 +213,7 @@ def validate_verifiable_skills(baseline: dict, generated: UserCV) -> FVSValidati
     return FVSValidationResult(is_valid=len(violations) == 0, violations=violations)
 
 
-def validate_cv_against_baseline(baseline: dict, generated: UserCV) -> Result[FVSValidationResult]:
+def validate_cv_against_baseline(baseline: dict[str, Any], generated: UserCV) -> Result[FVSValidationResult]:
     """
     Full FVS validation of generated CV against baseline.
 
@@ -234,3 +238,119 @@ def validate_cv_against_baseline(baseline: dict, generated: UserCV) -> Result[FV
     combined_result = FVSValidationResult(is_valid=len(all_violations) == 0, violations=all_violations)
 
     return Result(success=True, data=combined_result, code=ResultCode.SUCCESS)
+
+
+YEAR_PATTERN = re.compile(r'((?:19|20)\d{2})')
+COMPANY_PATTERN = re.compile(r'\b(?:at|with|for)\s+([A-Z][A-Za-z0-9&.\-]*(?:\s+[A-Z][A-Za-z0-9&.\-]*)*)')
+TITLE_PATTERN = re.compile(
+    r'\b(?:as|serving as|served as|working as|worked as|functioning as|functioned as)\s+([A-Za-z][A-Za-z0-9&/ \-]+)',
+    flags=re.IGNORECASE,
+)
+
+
+def validate_vpr_against_cv(vpr: VPR, user_cv: UserCV) -> Result[FVSValidationResult]:
+    """
+    Validate VPR IMMUTABLE facts against source CV.
+
+    Per docs/specs/03-vpr-generator.md FVS Rules:
+    - IMMUTABLE: Dates, company names, job titles cannot be fabricated
+    - VERIFIABLE: Skills/achievements must exist in CV or gap_responses
+    """
+
+    company_lookup = {exp.company.lower() for exp in user_cv.experience}
+    role_lookup = {exp.role.lower() for exp in user_cv.experience}
+    year_lookup = _collect_years(user_cv)
+
+    sections: list[str] = []
+    sections.extend(item.evidence for item in vpr.evidence_matrix if item.evidence)
+    sections.extend(vpr.differentiators)
+    sections.extend(vpr.talking_points)
+    sections = [section for section in sections if section]
+
+    violations: list[FVSViolation] = []
+
+    for section in sections:
+        for company in _extract_company_mentions(section):
+            if company.lower() not in company_lookup:
+                violations.append(
+                    FVSViolation(
+                        field='vpr.company',
+                        expected=f'Company from CV: {sorted(company_lookup)}',
+                        actual=company,
+                        severity='CRITICAL',
+                    )
+                )
+
+        for year in YEAR_PATTERN.findall(section):
+            if year not in year_lookup:
+                violations.append(
+                    FVSViolation(
+                        field='vpr.dates',
+                        expected=f'Dates from CV: {sorted(year_lookup)}',
+                        actual=year,
+                        severity='CRITICAL',
+                    )
+                )
+
+        for title in _extract_title_mentions(section):
+            if not _matches_known_role(title, role_lookup):
+                violations.append(
+                    FVSViolation(
+                        field='vpr.role',
+                        expected=f'Role from CV: {sorted(role_lookup)}',
+                        actual=title,
+                        severity='CRITICAL',
+                    )
+                )
+
+    validation_result = FVSValidationResult(is_valid=len(violations) == 0, violations=violations)
+
+    if violations:
+        logger.warning(
+            'FVS VPR validation failed',
+            violation_count=len(violations),
+            violations=[{'field': v.field, 'actual': v.actual} for v in violations],
+        )
+        return Result(
+            success=False,
+            data=validation_result,
+            error='VPR references facts not present in source CV',
+            code=ResultCode.FVS_HALLUCINATION_DETECTED,
+        )
+
+    return Result(success=True, data=validation_result, code=ResultCode.SUCCESS)
+
+
+def _collect_years(user_cv: UserCV) -> set[str]:
+    years: set[str] = set()
+    for experience in user_cv.experience:
+        years.update(YEAR_PATTERN.findall(experience.dates))
+    for education in user_cv.education:
+        if education.graduation_date:
+            years.update(YEAR_PATTERN.findall(education.graduation_date))
+    return years
+
+
+def _extract_company_mentions(text: str) -> list[str]:
+    return COMPANY_PATTERN.findall(text)
+
+
+def _extract_title_mentions(text: str) -> list[str]:
+    return [match.strip() for match in TITLE_PATTERN.findall(text)]
+
+
+def _normalize(value: str) -> str:
+    return re.sub(r'[^a-z0-9 ]', '', value.lower()).strip()
+
+
+def _matches_known_role(candidate: str, known_roles: Iterable[str]) -> bool:
+    normalized_candidate = _normalize(candidate)
+    if not normalized_candidate:
+        return True
+    for role in known_roles:
+        normalized_role = _normalize(role)
+        if normalized_candidate == normalized_role:
+            return True
+        if SequenceMatcher(None, normalized_candidate, normalized_role).ratio() >= 0.82:
+            return True
+    return False

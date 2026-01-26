@@ -14,6 +14,7 @@ from careervp.logic.fvs_validator import (
     validate_cv_against_baseline,
     validate_immutable_facts,
     validate_verifiable_skills,
+    validate_vpr_against_cv,
 )
 from careervp.models.cv import (
     Certification,
@@ -22,6 +23,7 @@ from careervp.models.cv import (
     UserCV,
     WorkExperience,
 )
+from careervp.models.vpr import VPR, EvidenceItem
 
 # Path to fixtures (repo root/tests/fixtures)
 FIXTURES_DIR = Path(__file__).resolve().parents[4] / 'tests' / 'fixtures'
@@ -198,6 +200,70 @@ class TestFullFVSValidation:
         assert result.success is True
         assert result.code == 'SUCCESS'
         assert result.data.is_valid is True
+
+
+class TestVPRValidationAgainstCV:
+    """Test VPR-specific IMMUTABLE validation."""
+
+    @pytest.fixture
+    def aligned_vpr(self, valid_user_cv: UserCV) -> VPR:
+        """Build a VPR aligned with the user's CV facts."""
+        return VPR(
+            application_id='app-123',
+            user_id=valid_user_cv.user_id,
+            executive_summary='SysAid impact narrative.',
+            evidence_matrix=[
+                EvidenceItem(
+                    requirement='Leadership',
+                    evidence='Led enablement at SysAid during 2021 delivering results.',
+                    alignment_score='STRONG',
+                    impact_potential='Immediate readiness.',
+                )
+            ],
+            differentiators=['Trusted partner at SysAid across 2021 initiatives.'],
+            gap_strategies=[],
+            cultural_fit='Values-first.',
+            talking_points=['Discuss leadership as Learning Experience Specialist.'],
+            keywords=['Enablement'],
+        )
+
+    def test_vpr_validation_passes_when_facts_align(self, aligned_vpr: VPR, valid_user_cv: UserCV):
+        """VPR referencing only CV facts should pass."""
+        result = validate_vpr_against_cv(aligned_vpr, valid_user_cv)
+
+        assert result.success is True
+        assert result.code == 'SUCCESS'
+        assert result.data.is_valid is True
+
+    def test_vpr_validation_detects_unknown_company(self, aligned_vpr: VPR, valid_user_cv: UserCV):
+        """Referencing a company not in the CV should fail."""
+        aligned_vpr.evidence_matrix[0].evidence = 'Led enablement at Fictional Labs between 2021 and 2022.'
+
+        result = validate_vpr_against_cv(aligned_vpr, valid_user_cv)
+
+        assert result.success is False
+        assert result.code == 'FVS_HALLUCINATION_DETECTED'
+        assert any(v.actual == 'Fictional Labs' for v in result.data.violations)
+
+    def test_vpr_validation_detects_unknown_dates(self, aligned_vpr: VPR, valid_user_cv: UserCV):
+        """Referencing dates not present in CV should fail."""
+        aligned_vpr.differentiators[0] = 'Managed programs at SysAid from 2015 to 2016.'
+
+        result = validate_vpr_against_cv(aligned_vpr, valid_user_cv)
+
+        assert result.success is False
+        assert result.code == 'FVS_HALLUCINATION_DETECTED'
+        assert any(v.field == 'vpr.dates' for v in result.data.violations)
+
+    def test_vpr_validation_detects_unknown_title(self, aligned_vpr: VPR, valid_user_cv: UserCV):
+        """Referencing a job title not in CV should fail."""
+        aligned_vpr.talking_points[0] = 'Discuss time serving as Chief Visionary Officer.'
+
+        result = validate_vpr_against_cv(aligned_vpr, valid_user_cv)
+
+        assert result.success is False
+        assert result.code == 'FVS_HALLUCINATION_DETECTED'
+        assert any('Chief Visionary Officer' in v.actual for v in result.data.violations)
 
     def test_hallucinated_cv_returns_failure(self, fvs_baseline: dict, hallucinated_user_cv: UserCV):
         """A CV with hallucinations should return failure Result."""
