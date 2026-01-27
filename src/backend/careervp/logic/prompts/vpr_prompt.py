@@ -199,4 +199,11 @@ def _serialize_cv_for_prompt(user_cv: UserCV) -> dict[str, Any]:
     data.pop('raw_text', None)
     data.pop('file_content', None)
     data.pop('source_file_key', None)
+    contact_info = data.get('contact_info')
+    if isinstance(contact_info, dict):
+        # Strip contact identifiers before sharing with the LLM.
+        for field in ['email', 'phone']:
+            contact_info.pop(field, None)
+        if not any(value for value in contact_info.values()):
+            data.pop('contact_info', None)
     return data

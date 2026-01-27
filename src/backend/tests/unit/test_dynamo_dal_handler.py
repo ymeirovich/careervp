@@ -33,6 +33,14 @@ def aws_env() -> Iterator[None]:
         os.environ.pop(key, None)
 
 
+@pytest.fixture(scope='function', autouse=True)
+def reset_dal_singleton() -> Iterator[None]:
+    """Ensure DynamoDalHandler picks up new table names each test."""
+    DynamoDalHandler.reset_instance()
+    yield
+    DynamoDalHandler.reset_instance()
+
+
 @pytest.fixture(scope='function')
 def dynamodb_table() -> Iterator[None]:
     """Create a DynamoDB table with the PK/SK + user_id GSI design."""

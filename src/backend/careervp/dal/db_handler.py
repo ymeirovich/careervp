@@ -20,6 +20,12 @@ class _SingletonMeta(ABCMeta):
 
 
 class DalHandler(ABC, metaclass=_SingletonMeta):
+    @classmethod
+    def reset_instance(cls) -> None:
+        """Testing hook to drop the cached singleton instance."""
+        if cls in _SingletonMeta._instances:
+            del _SingletonMeta._instances[cls]
+
     @abstractmethod
     def save_cv(self, user_cv: UserCV) -> None: ...  # pragma: no cover
 

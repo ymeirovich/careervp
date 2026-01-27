@@ -81,5 +81,7 @@ CONFIGURATION_MAX_AGE_MINUTES = "5"
 # BUILD PATHS
 # =============================================================================
 project_root = Path(__file__).parent.parent.parent
-BUILD_FOLDER = str(project_root / "src" / "backend")
-COMMON_LAYER_BUILD_FOLDER = ".build/common_layer"
+BUILD_FOLDER = str(project_root / "src" / "backend" / ".build" / "lambdas")
+COMMON_LAYER_BUILD_FOLDER = str(
+    project_root / "src" / "backend" / ".build" / "common_layer"
+)

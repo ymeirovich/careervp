@@ -29,6 +29,11 @@
 - If mypy returns errors, you are NOT allowed to present the code to the user.
 - You must fix the type errors and re-run the check until it passes.
 
+# Mandatory Lint Guardrail
+
+- After every Python file edit, you MUST execute: `uv run ruff check <filename> --fix`
+- Resolve all Ruff findings before sharing code or running other tasks.
+
 ## Mandatory Testing Rules
 
 ### Unit Tests (Required for Deployment)

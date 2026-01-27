@@ -9,7 +9,7 @@ import pytest
 from careervp.handlers.vpr_handler import lambda_handler
 from careervp.models.cv import ContactInfo, UserCV
 from careervp.models.result import Result, ResultCode
-from careervp.models.vpr import VPR, TokenUsage, VPRResponse
+from careervp.models.vpr import VPR, TokenUsage, VPRRequest, VPRResponse
 
 
 @pytest.fixture(autouse=True)
@@ -62,6 +62,24 @@ def _sample_request_body() -> dict[str, Any]:
         },
         'gap_responses': [],
     }
+
+
+def test_vpr_request_accepts_common_job_posting_aliases():
+    payload = {
+        'application_id': 'test-123',
+        'user_id': 'user-456',
+        'job_posting': {
+            'title': 'Senior Engineer',
+            'company': 'Acme Corp',
+            'requirements': ['Python', 'AWS'],
+        },
+    }
+
+    request = VPRRequest.model_validate(payload)
+
+    assert request.job_posting.company_name == 'Acme Corp'
+    assert request.job_posting.role_title == 'Senior Engineer'
+    assert request.job_posting.requirements == ['Python', 'AWS']
 
 
 def _generate_event(body: dict[str, Any]) -> dict[str, Any]:

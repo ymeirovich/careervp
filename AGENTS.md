@@ -12,6 +12,7 @@ Codex must follow the exact same rules defined in `.clauderules`. This document 
 
 - Follow the **test-first** rule: no task is complete (and no checklist item updated) until its unit/integration tests pass.
 - After modifying any Python file, immediately run `uv run mypy <filename> --strict`. Fix every reported issue before sharing code.
+- After modifying any Python file, immediately run `uv run ruff check <filename> --fix`. Resolve every Ruff finding before sharing code.
 - Run the project's pytest suites relevant to your change (`pytest` targets live under `src/backend/tests`). Never declare success without green tests.
 - Respect the pre-commit toolchain (Ruff lint/format, mypy, etc.) defined in `.pre-commit-config.yaml` and the `pyproject.toml` settings (line length 150, single quotes, Python 3.14).
 

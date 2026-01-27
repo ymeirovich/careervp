@@ -7,7 +7,7 @@ Job postings are used as input for VPR generation and CV tailoring.
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import AliasChoices, BaseModel, Field, HttpUrl
 
 
 class JobPosting(BaseModel):
@@ -16,8 +16,20 @@ class JobPosting(BaseModel):
     Based on docs/features/Job Post Example 1.md and Job Post Example 2.md.
     """
 
-    company_name: Annotated[str, Field(description='Company name')]
-    role_title: Annotated[str, Field(description='Job title/position')]
+    company_name: Annotated[
+        str,
+        Field(
+            description='Company name',
+            validation_alias=AliasChoices('company_name', 'company', 'employer'),
+        ),
+    ]
+    role_title: Annotated[
+        str,
+        Field(
+            description='Job title/position',
+            validation_alias=AliasChoices('role_title', 'title', 'job_title', 'position'),
+        ),
+    ]
     description: Annotated[str | None, Field(description='About the role/company')] = None
     responsibilities: Annotated[list[str], Field(default_factory=list, description='Job responsibilities/duties')]
     requirements: Annotated[list[str], Field(default_factory=list, description='Required qualifications')]

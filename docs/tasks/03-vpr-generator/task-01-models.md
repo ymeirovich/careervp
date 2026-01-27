@@ -53,6 +53,7 @@ Create Pydantic models for VPR generation: JobPosting input model, VPR output mo
 - [x] Run `uv run ruff check src/backend/careervp/models/vpr.py`.
 - [x] Run `uv run mypy src/backend/careervp/models/job.py --strict`.
 - [x] Run `uv run mypy src/backend/careervp/models/vpr.py --strict`.
+- [x] Added regression test `tests/unit/test_vpr_handler.py::test_vpr_request_accepts_common_job_posting_aliases` to ensure alias fields like `title`/`company` continue to validate.
 
 ### Commit
 

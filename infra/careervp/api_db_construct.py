@@ -45,9 +45,9 @@ class ApiDbConstruct(Construct):
         table = dynamodb.TableV2(
             self,
             table_id,
-            table_name=table_id,
+            table_name=None,
             partition_key=dynamodb.Attribute(
-                name="user_id", type=dynamodb.AttributeType.STRING
+                name="pk", type=dynamodb.AttributeType.STRING
             ),
             sort_key=dynamodb.Attribute(name="sk", type=dynamodb.AttributeType.STRING),
             billing=dynamodb.Billing.on_demand(),
@@ -67,7 +67,17 @@ class ApiDbConstruct(Construct):
                         name="email", type=dynamodb.AttributeType.STRING
                     ),
                     projection_type=dynamodb.ProjectionType.ALL,
-                )
+                ),
+                dynamodb.GlobalSecondaryIndexPropsV2(
+                    index_name="user_id-index",
+                    partition_key=dynamodb.Attribute(
+                        name="user_id", type=dynamodb.AttributeType.STRING
+                    ),
+                    sort_key=dynamodb.Attribute(
+                        name="sk", type=dynamodb.AttributeType.STRING
+                    ),
+                    projection_type=dynamodb.ProjectionType.ALL,
+                ),
             ],
         )
         CfnOutput(
