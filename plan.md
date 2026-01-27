@@ -39,19 +39,19 @@
 - [x] Complete CV upload handler implementation.
 - [x] Write moto-based unit tests for CV upload handler (11 tests).
 - [x] Fix ruff linting (import sorting, unused imports).
-- [ ] cv_parser.py tests: Dedicated unit tests for clean_text(), detect_language(), parse_llm_response() (deferred).
+- [x] cv_parser.py tests: Dedicated unit tests for clean_text(), detect_language(), parse_llm_response() (deferred).
 
-## Phase 7: VPR Generator (IN PROGRESS)
+## Phase 7: VPR Generator (COMPLETED)
 
 **Spec:** [[docs/specs/03-vpr-generator.md]]
 **Tasks:** [[docs/tasks/03-vpr-generator/]]
 
-- [ ] Task 1: Create JobPosting and VPR Pydantic models.
-- [ ] Task 2: Add VPR DAL methods to DynamoDB handler.
-- [ ] Task 3: Implement VPR generator logic with Sonnet 4.5.
-- [ ] Task 4: Design Sonnet prompt with anti-AI patterns.
-- [ ] Task 5: Create VPR Lambda handler.
-- [ ] Task 6: Write moto-based unit tests.
+- [x] Task 1: Create JobPosting and VPR Pydantic models.
+- [x] Task 2: Add VPR DAL methods to DynamoDB handler.
+- [x] Task 3: Implement VPR generator logic with Sonnet 4.5.
+- [x] Task 4: Design Sonnet prompt with anti-AI patterns.
+- [x] Task 5: Create VPR Lambda handler.
+- [x] Task 6: Write moto-based unit tests.
 
 ## Phase 8: Future
 
