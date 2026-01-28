@@ -48,3 +48,12 @@ repos:
         ]
         # This tells mypy to look at your specific source code
         args: ["--ignore-missing-imports", "--explicit-package-bases"]
+  - repo: local
+    hooks:
+      - id: validate-naming
+        name: Validate CareerVP Naming Conventions
+        entry: python src/backend/scripts/validate_naming.py --path infra --strict
+        language: python
+        types: [python]
+        files: ^infra/
+        pass_filenames: false
