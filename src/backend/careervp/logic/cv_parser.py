@@ -10,7 +10,7 @@ import json
 import re
 from typing import Literal
 
-from langdetect import LangDetectException, detect  # type: ignore[import-untyped]
+from langdetect import LangDetectException, detect
 
 from careervp.handlers.utils.observability import logger, tracer
 from careervp.logic.utils.llm_client import TaskMode, get_llm_router

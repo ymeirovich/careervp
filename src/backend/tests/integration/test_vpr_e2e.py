@@ -35,7 +35,7 @@ def aws_env() -> Iterator[None]:
         patcher.undo()
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope='function')
 def dynamodb_table(aws_env: None) -> Iterator[Table]:
     """Provision a moto-backed DynamoDB table matching the DAL schema."""
     table_name = 'test-careervp-artifacts'
@@ -67,7 +67,6 @@ def dynamodb_table(aws_env: None) -> Iterator[Table]:
         )
         table.meta.client.get_waiter('table_exists').wait(TableName=table_name)
         env_patcher.setenv('DYNAMODB_TABLE_NAME', table_name)
-        env_patcher.setenv('TABLE_NAME', table_name)
         try:
             yield table
         finally:

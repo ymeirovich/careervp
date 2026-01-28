@@ -70,8 +70,6 @@ def dynamodb_table() -> Iterator[None]:
             BillingMode='PAY_PER_REQUEST',
         )
         table.meta.client.get_waiter('table_exists').wait(TableName=TABLE_NAME)
-        # Clear cached table clients so each test uses the fresh moto table.
-        DynamoDalHandler._get_db_handler.cache_clear()
         yield
 
 
