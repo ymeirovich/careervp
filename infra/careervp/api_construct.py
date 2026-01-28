@@ -8,6 +8,7 @@ from aws_cdk import aws_s3 as s3
 from aws_cdk.aws_lambda_python_alpha import PythonLayerVersion
 from careervp.api_db_construct import ApiDbConstruct
 from careervp.monitoring import CrudMonitoring
+from careervp.naming_utils import NamingUtils
 from careervp.waf_construct import WafToApiGatewayConstruct
 from constructs import Construct
 
@@ -19,16 +20,20 @@ class ApiConstruct(Construct):
         id_: str,
         appconfig_app_name: str,
         is_production_env: bool,
+        naming: NamingUtils,
     ) -> None:
         super().__init__(scope, id_)
         self.id_ = id_
-        self.api_db = ApiDbConstruct(self, f"{id_}db")
+        self.naming = naming
+        self.api_db = ApiDbConstruct(self, f"{id_}db", naming=naming)
         self.lambda_role = self._build_lambda_role(
             self.api_db.db, self.api_db.idempotency_db, self.api_db.cv_bucket
         )
         # self.common_layer = self._build_common_layer()  # TODO: Enable when layer is built
         self.rest_api = self._build_api_gw()
-        api_resource: aws_apigateway.Resource = self.rest_api.root.add_resource("api")
+        api_resource: aws_apigateway.Resource = self.rest_api.root.add_resource(
+            constants.API_ROOT_RESOURCE
+        )
         cv_resource = api_resource.add_resource(constants.GW_RESOURCE)
         vpr_resource = api_resource.add_resource(constants.GW_RESOURCE_VPR)
         self.cv_upload_func = self._add_post_lambda_integration(
@@ -55,11 +60,18 @@ class ApiConstruct(Construct):
             self.api_db.db,
             self.api_db.idempotency_db,
             [self.cv_upload_func, self.vpr_generator_func],
+            naming=naming,
         )
 
         if is_production_env:
             # add WAF
-            self.waf = WafToApiGatewayConstruct(self, f"{id_}waf", self.rest_api)
+            self.waf = WafToApiGatewayConstruct(
+                self,
+                f"{id_}waf",
+                self.rest_api,
+                naming=naming,
+                feature=constants.API_FEATURE,
+            )
 
     def _build_swagger_endpoints(
         self, rest_api: aws_apigateway.RestApi, dest_func: _lambda.Function
@@ -95,7 +107,7 @@ class ApiConstruct(Construct):
         rest_api: aws_apigateway.RestApi = aws_apigateway.RestApi(
             self,
             "service-rest-api",
-            rest_api_name="Service Rest API",
+            rest_api_name=self.naming.api_name(constants.API_FEATURE),
             description="CareerVP API - AI-powered job application assistant",
             deploy_options=aws_apigateway.StageOptions(
                 throttling_rate_limit=2, throttling_burst_limit=10
@@ -118,6 +130,9 @@ class ApiConstruct(Construct):
             self,
             constants.SERVICE_ROLE_ARN,
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            role_name=self.naming.role_name(
+                constants.LAMBDA_SERVICE_NAME, constants.API_FEATURE
+            ),
             inline_policies={
                 "dynamic_configuration": iam.PolicyDocument(
                     statements=[
@@ -210,10 +225,11 @@ class ApiConstruct(Construct):
         idempotency_table: dynamodb.TableV2,
         cv_bucket: s3.Bucket,
     ) -> _lambda.Function:
-        # Create a custom log group with explicit retention settings
+        function_name = self.naming.lambda_name(constants.CV_PARSER_FEATURE)
         log_group = logs.LogGroup(
             self,
             f"{constants.CV_PARSER_LAMBDA}LogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
             removal_policy=RemovalPolicy.DESTROY,
         )
@@ -224,6 +240,7 @@ class ApiConstruct(Construct):
             runtime=_lambda.Runtime.PYTHON_3_14,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
             handler="careervp.handlers.cv_upload_handler.lambda_handler",
+            function_name=function_name,
             environment={
                 constants.POWERTOOLS_SERVICE_NAME: constants.SERVICE_NAME,
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
@@ -261,9 +278,11 @@ class ApiConstruct(Construct):
         db: dynamodb.TableV2,
         appconfig_app_name: str,
     ) -> _lambda.Function:
+        function_name = self.naming.lambda_name(constants.VPR_GENERATOR_FEATURE)
         log_group = logs.LogGroup(
             self,
             f"{constants.VPR_GENERATOR_LAMBDA}LogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
             removal_policy=RemovalPolicy.DESTROY,
         )
@@ -274,6 +293,7 @@ class ApiConstruct(Construct):
             runtime=_lambda.Runtime.PYTHON_3_14,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
             handler="careervp.handlers.vpr_handler.lambda_handler",
+            function_name=function_name,
             environment={
                 "DYNAMODB_TABLE_NAME": db.table_name,
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-vpr",

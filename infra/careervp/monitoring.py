@@ -4,7 +4,7 @@ from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_kms as kms
 from aws_cdk import aws_lambda as _lambda
-from careervp import constants
+from careervp.naming_utils import NamingUtils
 from cdk_monitoring_constructs import (
     AlarmFactoryDefaults,
     CustomMetricGroup,
@@ -16,6 +16,8 @@ from cdk_monitoring_constructs import (
 )
 from constructs import Construct
 
+from careervp import constants
+
 
 class CrudMonitoring(Construct):
     def __init__(
@@ -26,9 +28,11 @@ class CrudMonitoring(Construct):
         db: dynamodb.TableV2,
         idempotency_table: dynamodb.TableV2,
         functions: list[_lambda.Function],
+        naming: NamingUtils,
     ) -> None:
         super().__init__(scope, id_)
         self.id_ = id_
+        self.naming = naming
         self.notification_topic = self._build_topic()
         self._build_high_level_dashboard(crud_api, self.notification_topic)
         self._build_low_level_dashboard(
@@ -45,7 +49,11 @@ class CrudMonitoring(Construct):
             pending_window=Duration.days(7),
         )
         topic = sns.Topic(
-            self, f"{self.id_}alarms", display_name=f"{self.id_}alarms", master_key=key
+            self,
+            f"{self.id_}alarms",
+            display_name=f"{self.id_}alarms",
+            master_key=key,
+            topic_name=self.naming.topic_name(constants.MONITORING_FEATURE),
         )
         # Grant CloudWatch permissions to publish to the SNS topic
         topic.add_to_resource_policy(
@@ -63,7 +71,7 @@ class CrudMonitoring(Construct):
 
     def _build_high_level_dashboard(
         self, crud_api: aws_apigateway.RestApi, topic: sns.Topic
-    ):
+    ) -> None:
         high_level_facade = MonitoringFacade(
             self,
             f"{self.id_}HighFacade",
@@ -103,7 +111,7 @@ class CrudMonitoring(Construct):
         idempotency_table: dynamodb.TableV2,
         functions: list[_lambda.Function],
         topic: sns.Topic,
-    ):
+    ) -> None:
         low_level_facade = MonitoringFacade(
             self,
             f"{self.id_}LowFacade",

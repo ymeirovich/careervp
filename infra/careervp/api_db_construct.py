@@ -7,6 +7,7 @@ import careervp.constants as constants
 from aws_cdk import CfnOutput, Duration, RemovalPolicy
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_s3 as s3
+from careervp.naming_utils import NamingUtils
 from constructs import Construct
 
 
@@ -22,8 +23,9 @@ class ApiDbConstruct(Construct):
     - CV Bucket: Stores uploaded CV files (PDF, DOCX)
     """
 
-    def __init__(self, scope: Construct, id_: str) -> None:
+    def __init__(self, scope: Construct, id_: str, naming: NamingUtils) -> None:
         super().__init__(scope, id_)
+        self.naming = naming
 
         # DynamoDB Tables
         self.users_table: dynamodb.TableV2 = self._build_users_table(id_)
@@ -45,7 +47,7 @@ class ApiDbConstruct(Construct):
         table = dynamodb.TableV2(
             self,
             table_id,
-            table_name=None,
+            table_name=self.naming.table_name(constants.USERS_TABLE_NAME),
             partition_key=dynamodb.Attribute(
                 name="pk", type=dynamodb.AttributeType.STRING
             ),
@@ -91,7 +93,7 @@ class ApiDbConstruct(Construct):
         table = dynamodb.TableV2(
             self,
             table_id,
-            table_name=table_id,
+            table_name=self.naming.table_name(constants.IDEMPOTENCY_TABLE_NAME),
             partition_key=dynamodb.Attribute(
                 name="id", type=dynamodb.AttributeType.STRING
             ),
@@ -117,7 +119,7 @@ class ApiDbConstruct(Construct):
         bucket = s3.Bucket(
             self,
             bucket_id,
-            bucket_name=None,  # Auto-generate unique name
+            bucket_name=self.naming.bucket_name(constants.CV_BUCKET_NAME),
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,

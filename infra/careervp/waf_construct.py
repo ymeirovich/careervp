@@ -1,16 +1,29 @@
+from typing import Any
+
 from aws_cdk import Aws, CfnOutput, RemovalPolicy
 from aws_cdk import aws_apigateway as apigateway
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_logs as logs
 from aws_cdk import aws_wafv2 as waf
+from careervp.naming_utils import NamingUtils
 from constructs import Construct
 
 
 class WafToApiGatewayConstruct(Construct):
     def __init__(
-        self, scope: Construct, id: str, api: apigateway.RestApi, **kwargs
+        self,
+        scope: Construct,
+        id: str,
+        api: apigateway.RestApi,
+        naming: NamingUtils,
+        feature: str,
+        **kwargs: Any,
     ) -> None:
         super().__init__(scope, id, **kwargs)
+        self.naming = naming
+        self.feature = feature
+        web_acl_name = naming.resource_name(feature, "waf")
+        metric_name = web_acl_name.replace("-", "")
 
         # Create WAF WebACL with AWS Managed Rules
         web_acl = waf.CfnWebACL(
@@ -18,11 +31,11 @@ class WafToApiGatewayConstruct(Construct):
             "ProductApiGatewayWebAcl",
             scope="REGIONAL",  # Change to CLOUDFRONT if you're using edge-optimized API
             default_action=waf.CfnWebACL.DefaultActionProperty(allow={}),
-            name=f"{id}-Waf",
+            name=web_acl_name,
             visibility_config=waf.CfnWebACL.VisibilityConfigProperty(
                 sampled_requests_enabled=True,
                 cloud_watch_metrics_enabled=True,
-                metric_name="ProductApiGatewayWebAcl",
+                metric_name=metric_name,
             ),
             rules=[
                 waf.CfnWebACL.RuleProperty(
@@ -102,7 +115,7 @@ class WafToApiGatewayConstruct(Construct):
         )
 
         # Enable logging for WAF, must start with 'aws-waf-logs-' prefix
-        log_group_name = f"aws-waf-logs-{id}"
+        log_group_name = f"aws-waf-logs-{web_acl_name}"
         # Create CloudWatch Log Group for WAF logging
         waf_log_group = logs.LogGroup(
             self,
