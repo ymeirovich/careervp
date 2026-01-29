@@ -124,7 +124,7 @@ class NamingUtils:
     def _bucket_suffix(self, hash_override: str | None) -> str:
         if hash_override:
             return _slug(hash_override)[:6]
-        hasher = hashlib.sha1()
+        hasher = hashlib.sha256()
         hasher.update(
             f"{self.account_id}-{self.region}-{self.environment}".encode("utf-8")
         )
