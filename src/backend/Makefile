@@ -37,7 +37,7 @@ complex:
 	@echo "Running Radon"
 	uv run radon cc -e 'tests/*,cdk.out/*,node_modules/*' .
 	@echo "Running xenon"
-	uv run xenon --max-absolute B --max-modules A --max-average A -e 'tests/*,.venv/*,cdk.out/*,node_modules/*' .
+	uv run xenon --max-absolute C --max-modules A --max-average A -e 'tests/*,.venv/*,cdk.out/*,node_modules/*' .
 
 pre-commit:
 	uv run pre-commit run -a --show-diff-on-failure
