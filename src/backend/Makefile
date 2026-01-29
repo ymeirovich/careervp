@@ -90,7 +90,7 @@ deploy: build
 	npx cdk deploy --app=".venv/bin/python3 /Users/yitzchak/Documents/dev/careervp/infra/app.py" --require-approval=never
 
 destroy:
-	npx cdk destroy --app="${PYTHON} ${PWD}/../infra/app.py" --force
+	npx cdk destroy --app="$(PYTHON) ${PWD}/../infra/app.py" --force
 
 docs:
 	uv run mkdocs serve
