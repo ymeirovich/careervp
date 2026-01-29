@@ -84,16 +84,20 @@ def main(out_destination: str, out_filename: str, swagger_url_key: str, stack_na
     """
     outputs = get_cdk_stack_outputs(stack_name)
     swagger_url = outputs.get(swagger_url_key)
-    if swagger_url:
-        try:
-            swagger_json = download_swagger_json(swagger_url)
-            file_path = os.path.join(out_destination, out_filename)
-            save_json_to_file(swagger_json, file_path)
-            print(f'Swagger JSON saved to {file_path}')
-        except requests.HTTPError as e:
-            print(f'Failed to download Swagger JSON: {e}')
-    else:
-        print(f'Swagger endpoint URL with key "{swagger_url_key}" not found in stack outputs.')
+    if not swagger_url:
+        msg = f'Swagger endpoint URL with key "{swagger_url_key}" not found in stack outputs.'
+        print(msg)
+        raise SystemExit(1)
+
+    try:
+        swagger_json = download_swagger_json(swagger_url)
+    except requests.HTTPError as err:
+        print(f'Failed to download Swagger JSON: {err}')
+        raise SystemExit(1) from err
+
+    file_path = os.path.join(out_destination, out_filename)
+    save_json_to_file(swagger_json, file_path)
+    print(f'Swagger JSON saved to {file_path}')
 
 
 if __name__ == '__main__':

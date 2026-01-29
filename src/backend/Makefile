@@ -122,13 +122,17 @@ openapi:
 	uv run python generate_openapi.py
 
 compare-openapi:
-	uv run python generate_openapi.py --out-destination '.' --out-filename 'openapi_latest.json'
-	@if cmp --silent $(CURRENT_OPENAPI) $(LATEST_OPENAPI); then \
+	@if ! aws cloudformation describe-stacks --stack-name CareerVpCrudDev >/dev/null 2>&1; then \
+		echo "Stack CareerVpCrudDev not found; skipping swagger comparison."; \
+		exit 0; \
+	fi; \
+	uv run python generate_openapi.py --out-destination '.' --out-filename 'openapi_latest.json'; \
+	if cmp --silent $(CURRENT_OPENAPI) $(LATEST_OPENAPI); then \
 		rm $(LATEST_OPENAPI); \
 		echo "Swagger file is up to date"; \
 	else \
 		echo "Swagger files are not equal, did you run 'make pr' or 'make openapi'?"; \
-		rm $(LATEST_OPENAPI); \
+		rm -f $(LATEST_OPENAPI); \
 		exit 1; \
 	fi
 
