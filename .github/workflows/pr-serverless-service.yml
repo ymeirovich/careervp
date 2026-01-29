@@ -75,7 +75,7 @@ jobs:
         working-directory: src/backend
         run: make dev
       - name: Configure AWS credentials
-        if: ${{ secrets.AWS_ROLE != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
         uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
         with:
           role-to-assume: ${{ secrets.AWS_ROLE }}
@@ -90,7 +90,7 @@ jobs:
         working-directory: src/backend
         run: make infra-tests
       - name: Deploy to AWS
-        if: ${{ secrets.AWS_ROLE != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
         working-directory: src/backend
         run: make deploy
       # NOTE: these run unit and integration tests
@@ -117,6 +117,6 @@ jobs:
         working-directory: src/backend
         run: make e2e
       - name: Destroy stack
-        if: ${{ always() && secrets.AWS_ROLE != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        if: ${{ always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
         working-directory: src/backend
         run: make destroy
