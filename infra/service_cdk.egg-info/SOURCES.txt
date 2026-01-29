@@ -17,3 +17,8 @@ service_cdk.egg-info/SOURCES.txt
 service_cdk.egg-info/dependency_links.txt
 service_cdk.egg-info/requires.txt
 service_cdk.egg-info/top_level.txt
+tests/infrastructure/__init__.py
+tests/infrastructure/conftest.py
+tests/infrastructure/test_api_construct.py
+tests/infrastructure/test_monitoring.py
+tests/infrastructure/test_naming_utils.py
