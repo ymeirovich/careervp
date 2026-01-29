@@ -1,6 +1,6 @@
 # Project Progress: CareerVP
 
-## Current Phase: CV Engine Complete
+## Current Phase: VPR Generator Complete
 
 - [x] Folder Structure Initialization
 - [x] Environment Configuration
@@ -14,7 +14,13 @@
 - [x] FVS Unit Tests (`tests/unit/test_fvs_validator.py`)
 - [x] Remove Orders placeholder code
 - [x] CDK Synth verification
-- [/] CV Upload Handler (stub created)
+- [x] CV Upload Handler (stub created)
+- [x] VPR Pydantic Models (`models/job.py`, `models/vpr.py`)
+- [x] VPR DynamoDB DAL extensions (`dal/dynamo_dal_handler.py`)
+- [x] VPR Prompt + Generator Logic (`logic/prompts/vpr_prompt.py`, `logic/vpr_generator.py`)
+- [x] VPR Lambda Handler (`handlers/vpr_handler.py`)
+- [x] VPR Unit & Integration Tests (`tests/unit/test_vpr_generator.py`, `tests/unit/test_vpr_handler.py`, `tests/unit/test_dynamo_dal_handler.py`)
+- [x] CV Parser helper unit tests (`tests/unit/test_cv_parser.py`)
 
 ## Upcoming Phases (From Context Manifest)
 
@@ -37,7 +43,8 @@
 | `infra/careervp/constants.py`                        | Fixed to CareerVP naming                     |
 | `infra/careervp/api_db_construct.py`                 | Users table + S3 CV bucket                   |
 | `src/backend/pyproject.toml`                         | Added moto, anthropic, langdetect            |
-| `.env.example`                                       | Environment variable template                |
+| `.env`                                       | Environment variable template                |
 | `infra/careervp/api_construct.py`                    | Updated to CareerVP (CV upload endpoint)     |
 | `src/backend/careervp/handlers/cv_upload_handler.py` | CV upload handler stub                       |
 | `infra/careervp/service_stack.py`                    | Added S3 NAG suppression for dev             |
+| `src/backend/tests/unit/test_cv_parser.py`           | Unit tests for clean_text/detect_language/LLM parsing |

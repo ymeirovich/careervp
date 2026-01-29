@@ -2,7 +2,11 @@ import os
 from typing import Any
 
 import pytest
-from cdk.careervp.constants import CONFIGURATION_NAME, ENVIRONMENT, SERVICE_NAME
+from cdk.careervp.constants import (
+    CONFIGURATION_NAME,
+    ENVIRONMENT,
+    SERVICE_NAME,
+)
 from pydantic import BaseModel
 
 from careervp.handlers.utils.dynamic_configuration import parse_configuration

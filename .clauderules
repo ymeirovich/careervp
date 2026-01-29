@@ -1,5 +1,50 @@
 # CareerVP Coding & Workflow Rules
 
+## Naming Convention Standard
+
+### Kebab-Case Physical Resource Naming
+
+All AWS physical resource names MUST follow the kebab-case convention:
+
+**Format:** `careervp-{feature}-{resource_type}-{env}`
+
+| Resource Type | Pattern | Example |
+|---------------|---------|---------|
+| **Stack IDs** | `CareerVp{Feature}{Env}` (PascalCase) | `CareerVpApiDev` |
+| **Logical IDs** | Must match Construct class name | `ApiConstruct` |
+| **Lambda Functions** | `careervp-{feature}-lambda-{env}` | `careervp-cv-parser-lambda-dev` |
+| **DynamoDB Tables** | `careervp-{feature}-table-{env}` | `careervp-users-table-dev` |
+| **S3 Buckets** | `careervp-{env}-{purpose}-{region}-{hash}` | `careervp-dev-cvs-use1-a1b2` |
+| **IAM Roles** | `careervp-role-{service}-{feature}-{env}` | `careervp-role-lambda-cv-parser-dev` |
+
+### Naming Rules
+
+1. **No Auto-Generated Suffixes:** Logical IDs must NOT contain CDK tokens like `${Token[...]}`.
+2. **Explicit Physical Names:** Always set `function_name`, `table_name`, `bucket_name` explicitly.
+3. **Constants Source of Truth:** Resource names derive from `infra/careervp/constants.py` and `src/backend/careervp/logic/utils/constants.py`.
+4. **Environment Suffix:** All physical names must end with `-{env}` (e.g., `-dev`, `-prod`).
+
+### Code Convention Summary
+
+| Element | Convention | Example |
+|---------|------------|---------|
+| Python Classes | PascalCase | `VPRGenerator` |
+| Python Functions | snake_case | `get_user_cv` |
+| Constants | UPPER_SNAKE_CASE | `USERS_TABLE_NAME` |
+| AWS Resources | kebab-case | `careervp-users-table-dev` |
+
+### Gatekeeper Rule (MANDATORY)
+
+**Run the naming validator after ANY CDK change and BEFORE any deployment:**
+
+```bash
+python src/backend/scripts/validate_naming.py --path infra --verbose
+```
+
+**If the validator fails, the fix is MANDATORY before proceeding.**
+
+Valid resource types: `lambda`, `table`, `bucket`, `api`, `role`, `queue`, `topic`, `bus`
+
 ## Architecture & Style
 - **Pattern:** Adhere strictly to the "Handler -> Logic -> DAL" separation.
 - **Handlers:** Every Lambda handler MUST use AWS Lambda Powertools for logging, tracing, and metrics.
@@ -11,11 +56,87 @@
 - **No Hallucinations:** When tailoring CVs, ensure the `Fact Verification System` rules are applied: Static facts (dates/titles) are IMMUTABLE.
 - **Anti-AI:** All generated text must follow the 8-pattern avoidance framework (natural transitions, varied structure).
 
+## Mandatory Test Creation
+
+- Every logic module (`careervp/logic/*.py`) MUST have a corresponding test file in `tests/unit/`.
+- Every handler (`careervp/handlers/*.py`) MUST have a corresponding test file in `tests/unit/`.
+- Test files MUST use `moto` for AWS service mocking (DynamoDB, S3).
+- Test files MUST mock external API calls (LLM, etc.) - never call real APIs in tests.
+- Run `uv run pytest tests/unit/<test_file>.py -v` before marking any task complete.
+
 ## Documentation
 - Before starting a new feature, read the corresponding spec in `docs/specs/`.
 - Update `PROGRESS.md` and `plan.md` at the end of every successful task.
 
 # Mandatory Type-Safety Guardrail
+
 - After every Python file edit, you MUST execute: `uv run mypy <filename> --strict`
 - If mypy returns errors, you are NOT allowed to present the code to the user.
 - You must fix the type errors and re-run the check until it passes.
+
+# Mandatory Lint Guardrail
+
+- After every Python file edit, you MUST execute: `uv run ruff check <filename> --fix`
+- Resolve all Ruff findings before sharing code or running other tasks.
+
+# Mandatory Ruff Test Before Task Completion
+
+**CRITICAL:** ALL code edits MUST pass Ruff checks before completing any task.
+
+Before marking ANY task as complete, you MUST:
+
+1. Run `uv run ruff format <changed_files>` to auto-format code
+2. Run `uv run ruff check <changed_files> --fix` to fix linting issues
+3. Verify zero Ruff errors remain
+
+If Ruff reports any errors that cannot be auto-fixed:
+- You MUST manually fix the issues
+- Re-run Ruff checks until they pass
+- Do NOT mark the task complete until Ruff passes
+
+```bash
+# Example workflow for any code change
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+uv run ruff format careervp/logic/<file>.py
+uv run ruff check careervp/logic/<file>.py --fix
+# Verify output shows no errors before proceeding
+```
+
+## Mandatory Testing Rules
+
+### Unit Tests (Required for Deployment)
+
+- Every logic module (`careervp/logic/*.py`) MUST have a corresponding test file in `tests/unit/`.
+- Every handler (`careervp/handlers/*.py`) MUST have a corresponding test file in `tests/unit/`.
+- Test file naming: `test_<module_name>.py` (e.g., `test_vpr_generator.py`).
+- Run tests with: `uv run pytest tests/unit/<test_file>.py -v`
+- All tests MUST pass before marking any task complete.
+
+### Mocking Requirements
+
+- Use `moto` for AWS service mocking (DynamoDB, S3).
+- Mock external API calls (LLM, HTTP) - NEVER call real APIs in tests.
+- Use `unittest.mock.patch` for LLM client mocking.
+
+### CI/CD Integration
+
+- Pre-commit runs: `ruff check`, `ruff format --check`, `mypy --strict`
+- Deployment pipeline runs: `pytest tests/unit/ -v --tb=short`
+- Integration tests run on staging: `pytest tests/integration/ -v`
+
+### Mandatory Cleanup
+
+- Before completing any task: `uv run ruff format .` and `uv run ruff check --fix .`
+- Zero linting errors required for task completion.
+
+### Coverage Guidelines
+
+- Target: 80%+ line coverage for logic modules.
+- Critical paths (FVS validation, LLM parsing) require explicit test cases.
+- Edge cases: empty inputs, invalid data, timeout scenarios.
+
+## Section: Agent Escalation Protocol
+The Engineer (Codex) Rule: If any specified Path, Class Name, or Method Signature in a Task Guide does not exist in the current environment, the Engineer MUST NOT create a workaround. They must emit a "BLOCKING ISSUE" report and exit.
+
+## The Architect (Claude) Rule:
+Upon a Blocking Issue, the Architect must analyze if the Spec is wrong or if the Environment needs refactoring. The Architect must provide a "Migration Path" in the next Task Guide.

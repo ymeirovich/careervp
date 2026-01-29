@@ -1,5 +1,5 @@
 default_language_version:
-  python: python3.10
+  python: python3.14
 exclude: ^(node_modules/|\.build/|infra/service_cdk\.egg-info/)
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -48,3 +48,12 @@ repos:
         ]
         # This tells mypy to look at your specific source code
         args: ["--ignore-missing-imports", "--explicit-package-bases"]
+  - repo: local
+    hooks:
+      - id: validate-naming
+        name: Validate CareerVP Naming Conventions
+        entry: python src/backend/scripts/validate_naming.py --path infra --strict
+        language: python
+        types: [python]
+        files: ^infra/
+        pass_filenames: false
