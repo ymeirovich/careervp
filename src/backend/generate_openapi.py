@@ -20,6 +20,7 @@ Example:
 import argparse
 import json
 import os
+import time
 from typing import Any, Dict, Optional
 
 import boto3
@@ -44,7 +45,7 @@ def get_cdk_stack_outputs(stack_name: Optional[str] = None) -> Dict[str, str]:
     return {output['OutputKey']: output['OutputValue'] for output in outputs}
 
 
-def download_swagger_json(swagger_url: str) -> Dict[str, Any]:
+def download_swagger_json(swagger_url: str, retries: int = 5, delay_seconds: float = 5.0) -> Dict[str, Any]:
     """
     Download Swagger JSON from the provided URL.
 
@@ -54,9 +55,18 @@ def download_swagger_json(swagger_url: str) -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: The downloaded Swagger JSON.
     """
-    response = requests.get(f'{swagger_url}?format=json')
-    response.raise_for_status()
-    return response.json()
+    for attempt in range(1, retries + 1):
+        try:
+            response = requests.get(f'{swagger_url}?format=json', timeout=30)
+            response.raise_for_status()
+            return response.json()
+        except requests.HTTPError as exc:
+            if attempt == retries:
+                raise
+            print(f'Retry {attempt} failed fetching Swagger JSON ({exc}). Retrying in {delay_seconds} seconds...')
+            time.sleep(delay_seconds)
+    # Should never reach due to raise on final attempt
+    raise RuntimeError('Failed to download Swagger JSON after retries')
 
 
 def save_json_to_file(json_data: Dict[str, Any], file_path: str) -> None:
