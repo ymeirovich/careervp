@@ -1,7 +1,7 @@
 import os
 from typing import TypeVar, Union
 
-import boto3  # type: ignore[import-untyped]
+import boto3
 from aws_lambda_env_modeler import get_environment_variables
 from aws_lambda_powertools.utilities.feature_flags import AppConfigStore, FeatureFlags
 from pydantic import BaseModel
