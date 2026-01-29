@@ -1,0 +1,55 @@
+name: OpenAPI Drift Check
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # daily at 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PYTHON_VERSION: '3.14'
+  AWS_REGION: 'us-east-1'
+
+jobs:
+  compare-openapi:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+
+      - name: Configure AWS credentials
+        if: ${{ secrets.AWS_ROLE != '' }}
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          role-session-name: openapi-drift-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Ensure stack exists
+        if: ${{ secrets.AWS_ROLE != '' }}
+        run: |
+          set -euo pipefail
+          if ! aws cloudformation describe-stacks --stack-name CareerVpCrudDev >/tmp/stack.json 2>/tmp/stack.err; then
+            echo "OpenAPI drift check skipped – stack CareerVpCrudDev not found." >> "$GITHUB_STEP_SUMMARY"
+            echo "Stack not found, skipping compare."
+            exit 0
+          fi
+
+      - name: Compare OpenAPI
+        if: ${{ secrets.AWS_ROLE != '' }}
+        working-directory: src/backend
+        run: make compare-openapi
+
+      - name: Skip summary when credentials missing
+        if: ${{ secrets.AWS_ROLE == '' }}
+        run: |
+          echo "AWS_ROLE secret not configured – OpenAPI drift check skipped." >> "$GITHUB_STEP_SUMMARY"

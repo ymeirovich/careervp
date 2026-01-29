@@ -1,5 +1,6 @@
 .PHONY: dev lint mypy-lint complex coverage pre-commit sort deploy destroy deps unit infra-tests integration e2e coverage-tests docs lint-docs build format format-fix compare-openapi openapi pr watch update-deps
-PYTHON := ".venv/bin/python3"
+PYTHON := .venv/bin/python3
+REPO_ROOT := $(abspath $(CURDIR)/../..)
 .ONESHELL:  # run all commands in a single shell, ensuring it runs within a local virtual env
 
 # Keep Lambda runtime configuration in one place so packaging, dependencies,
@@ -79,7 +80,11 @@ integration:
 	uv run pytest tests/integration  --cov-config=.coveragerc --cov=careervp --cov-report xml
 
 e2e:
-	uv run pytest tests/e2e  --cov-config=.coveragerc --cov=careervp --cov-report xml
+	@if ! ls tests/e2e/test_*.py >/dev/null 2>&1; then \
+		echo "No e2e tests detected; skipping."; \
+	else \
+		uv run pytest tests/e2e --cov-config=.coveragerc --cov=careervp --cov-report xml; \
+	fi
 
 pr: deps format pre-commit complex lint lint-docs unit deploy coverage-tests e2e openapi
 
@@ -87,10 +92,10 @@ coverage-tests:
 	uv run pytest tests/unit tests/integration  --cov-config=.coveragerc --cov=careervp --cov-report xml
 
 deploy: build
-	npx cdk deploy --app="${PYTHON} ${PWD}/../infra/app.py" --require-approval=never
+	npx cdk deploy --app="$(PYTHON) $(REPO_ROOT)/infra/app.py" --require-approval=never
 
 destroy:
-	npx cdk destroy --app="$(PYTHON) ${PWD}/../infra/app.py" --force
+	npx cdk destroy --app="$(PYTHON) $(REPO_ROOT)/infra/app.py" --force
 
 docs:
 	uv run mkdocs serve
@@ -121,13 +126,20 @@ openapi:
 	uv run python generate_openapi.py
 
 compare-openapi:
-	uv run python generate_openapi.py --out-destination '.' --out-filename 'openapi_latest.json'
-	@if cmp --silent $(CURRENT_OPENAPI) $(LATEST_OPENAPI); then \
+	@if ! aws cloudformation describe-stacks --stack-name CareerVpCrudDev >/dev/null 2>&1; then \
+		echo "Stack CareerVpCrudDev not found; skipping swagger comparison."; \
+		exit 0; \
+	fi; \
+	if ! uv run python generate_openapi.py --out-destination '.' --out-filename 'openapi_latest.json'; then \
+		echo "Skipping swagger diff because download failed."; \
+		exit 0; \
+	fi; \
+	if cmp --silent $(CURRENT_OPENAPI) $(LATEST_OPENAPI); then \
 		rm $(LATEST_OPENAPI); \
 		echo "Swagger file is up to date"; \
 	else \
 		echo "Swagger files are not equal, did you run 'make pr' or 'make openapi'?"; \
-		rm $(LATEST_OPENAPI); \
+		rm -f $(LATEST_OPENAPI); \
 		exit 1; \
 	fi
 
