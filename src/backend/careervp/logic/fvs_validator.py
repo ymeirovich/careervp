@@ -61,114 +61,13 @@ def validate_immutable_facts(baseline: dict[str, Any], generated: UserCV) -> FVS
     Returns:
         FVSValidationResult with any violations found
     """
-    violations = []
-
-    # Validate full name
-    expected_name = baseline.get('full_name', '').upper()
-    actual_name = generated.full_name.upper() if generated.full_name else ''
-    if expected_name and actual_name and expected_name != actual_name:
-        violations.append(
-            FVSViolation(
-                field='full_name',
-                expected=baseline.get('full_name', ''),
-                actual=generated.full_name,
-                severity='CRITICAL',
-            )
-        )
-
+    violations: list[FVSViolation] = []
     immutable = baseline.get('immutable_facts', {})
 
-    # Validate contact info
-    baseline_contact = immutable.get('contact_info', {})
-    if baseline_contact:
-        gen_contact = generated.contact_info
-
-        if baseline_contact.get('email') and gen_contact.email:
-            if baseline_contact['email'].lower() != gen_contact.email.lower():
-                violations.append(
-                    FVSViolation(
-                        field='contact_info.email',
-                        expected=baseline_contact['email'],
-                        actual=gen_contact.email,
-                        severity='CRITICAL',
-                    )
-                )
-
-        if baseline_contact.get('phone') and gen_contact.phone:
-            # Normalize phone for comparison (remove spaces, dashes)
-            expected_phone = ''.join(c for c in baseline_contact['phone'] if c.isdigit())
-            actual_phone = ''.join(c for c in gen_contact.phone if c.isdigit())
-            if expected_phone != actual_phone:
-                violations.append(
-                    FVSViolation(
-                        field='contact_info.phone',
-                        expected=baseline_contact['phone'],
-                        actual=gen_contact.phone,
-                        severity='CRITICAL',
-                    )
-                )
-
-    # Validate work history
-    baseline_work = immutable.get('work_history', [])
-    for baseline_job in baseline_work:
-        baseline_company = baseline_job.get('company', '').lower()
-        baseline_role = baseline_job.get('role', '')
-        baseline_dates = baseline_job.get('dates', '')
-
-        # Find matching job in generated CV
-        matching_job = None
-        for gen_job in generated.experience:
-            if gen_job.company.lower() == baseline_company:
-                matching_job = gen_job
-                break
-
-        if matching_job:
-            # Validate role hasn't changed
-            if baseline_role and matching_job.role != baseline_role:
-                violations.append(
-                    FVSViolation(
-                        field=f'work_history.{baseline_company}.role',
-                        expected=baseline_role,
-                        actual=matching_job.role,
-                        severity='CRITICAL',
-                    )
-                )
-
-            # Validate dates haven't changed
-            if baseline_dates and matching_job.dates != baseline_dates:
-                violations.append(
-                    FVSViolation(
-                        field=f'work_history.{baseline_company}.dates',
-                        expected=baseline_dates,
-                        actual=matching_job.dates,
-                        severity='CRITICAL',
-                    )
-                )
-
-    # Validate education
-    baseline_edu = immutable.get('education', [])
-    for baseline_school in baseline_edu:
-        baseline_institution = baseline_school.get('institution', '').lower()
-        baseline_degree = baseline_school.get('degree', '')
-
-        # Find matching education in generated CV
-        matching_edu = None
-        for gen_edu in generated.education:
-            if gen_edu.institution.lower() == baseline_institution:
-                matching_edu = gen_edu
-                break
-
-        if matching_edu:
-            # Validate degree hasn't changed
-            if baseline_degree and matching_edu.degree != baseline_degree:
-                violations.append(
-                    FVSViolation(
-                        field=f'education.{baseline_institution}.degree',
-                        expected=baseline_degree,
-                        actual=matching_edu.degree,
-                        severity='CRITICAL',
-                    )
-                )
+    violations.extend(_validate_full_name(baseline, generated))
+    violations.extend(_validate_contact_info(immutable, generated))
+    violations.extend(_validate_work_history(immutable, generated))
+    violations.extend(_validate_education(immutable, generated))
 
     # Log violations
     if violations:
@@ -180,6 +79,120 @@ def validate_immutable_facts(baseline: dict[str, Any], generated: UserCV) -> FVS
         )
 
     return FVSValidationResult(is_valid=len(violations) == 0, violations=violations)
+
+
+def _validate_full_name(baseline: dict[str, Any], generated: UserCV) -> list[FVSViolation]:
+    expected_name = baseline.get('full_name', '').upper()
+    actual_name = generated.full_name.upper() if generated.full_name else ''
+    if expected_name and actual_name and expected_name != actual_name:
+        return [
+            FVSViolation(
+                field='full_name',
+                expected=baseline.get('full_name', ''),
+                actual=generated.full_name,
+                severity='CRITICAL',
+            )
+        ]
+    return []
+
+
+def _validate_contact_info(immutable: dict[str, Any], generated: UserCV) -> list[FVSViolation]:
+    violations: list[FVSViolation] = []
+    baseline_contact = immutable.get('contact_info', {})
+    if not baseline_contact:
+        return violations
+
+    gen_contact = generated.contact_info
+    if baseline_contact.get('email') and gen_contact.email:
+        if baseline_contact['email'].lower() != gen_contact.email.lower():
+            violations.append(
+                FVSViolation(
+                    field='contact_info.email',
+                    expected=baseline_contact['email'],
+                    actual=gen_contact.email,
+                    severity='CRITICAL',
+                )
+            )
+
+    if baseline_contact.get('phone') and gen_contact.phone:
+        expected_phone = ''.join(c for c in baseline_contact['phone'] if c.isdigit())
+        actual_phone = ''.join(c for c in gen_contact.phone if c.isdigit())
+        if expected_phone != actual_phone:
+            violations.append(
+                FVSViolation(
+                    field='contact_info.phone',
+                    expected=baseline_contact['phone'],
+                    actual=gen_contact.phone,
+                    severity='CRITICAL',
+                )
+            )
+    return violations
+
+
+def _find_matching_entry(collection: Iterable[Any], target: str, attr: str) -> Any | None:
+    target_normalized = target.lower()
+    for item in collection:
+        value = getattr(item, attr, '')
+        if value.lower() == target_normalized:
+            return item
+    return None
+
+
+def _validate_work_history(immutable: dict[str, Any], generated: UserCV) -> list[FVSViolation]:
+    violations: list[FVSViolation] = []
+    baseline_work = immutable.get('work_history', [])
+    for baseline_job in baseline_work:
+        baseline_company = baseline_job.get('company', '')
+        baseline_role = baseline_job.get('role', '')
+        baseline_dates = baseline_job.get('dates', '')
+
+        matching_job = _find_matching_entry(generated.experience, baseline_company, 'company')
+        if not matching_job:
+            continue
+
+        if baseline_role and matching_job.role != baseline_role:
+            violations.append(
+                FVSViolation(
+                    field=f'work_history.{baseline_company.lower()}.role',
+                    expected=baseline_role,
+                    actual=matching_job.role,
+                    severity='CRITICAL',
+                )
+            )
+
+        if baseline_dates and matching_job.dates != baseline_dates:
+            violations.append(
+                FVSViolation(
+                    field=f'work_history.{baseline_company.lower()}.dates',
+                    expected=baseline_dates,
+                    actual=matching_job.dates,
+                    severity='CRITICAL',
+                )
+            )
+    return violations
+
+
+def _validate_education(immutable: dict[str, Any], generated: UserCV) -> list[FVSViolation]:
+    violations: list[FVSViolation] = []
+    baseline_edu = immutable.get('education', [])
+    for baseline_school in baseline_edu:
+        baseline_institution = baseline_school.get('institution', '')
+        baseline_degree = baseline_school.get('degree', '')
+
+        matching_edu = _find_matching_entry(generated.education, baseline_institution, 'institution')
+        if not matching_edu:
+            continue
+
+        if baseline_degree and matching_edu.degree != baseline_degree:
+            violations.append(
+                FVSViolation(
+                    field=f'education.{baseline_institution.lower()}.degree',
+                    expected=baseline_degree,
+                    actual=matching_edu.degree,
+                    severity='CRITICAL',
+                )
+            )
+    return violations
 
 
 def validate_verifiable_skills(baseline: dict[str, Any], generated: UserCV) -> FVSValidationResult:
