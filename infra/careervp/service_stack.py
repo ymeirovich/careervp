@@ -1,5 +1,3 @@
-from typing import Any
-
 from aws_cdk import Aspects, Stack, Tags
 from careervp.api_construct import ApiConstruct
 from careervp.configuration.configuration_construct import ConfigurationStore
@@ -10,7 +8,6 @@ from careervp.constants import (
     SERVICE_NAME,
     SERVICE_NAME_TAG,
 )
-from careervp.naming_utils import NamingUtils
 from careervp.utils import get_construct_name, get_username
 from cdk_nag import AwsSolutionsChecks, NagSuppressions
 from constructs import Construct
@@ -18,17 +15,9 @@ from constructs import Construct
 
 class ServiceStack(Stack):
     def __init__(
-        self,
-        scope: Construct,
-        id: str,
-        is_production_env: bool,
-        naming: NamingUtils,
-        stack_feature: str,
-        **kwargs: Any,
+        self, scope: Construct, id: str, is_production_env: bool, **kwargs
     ) -> None:
         super().__init__(scope, id, **kwargs)
-        self.naming = naming
-        self.stack_feature = stack_feature
         self._add_stack_tags()
 
         # This construct should be deployed in a different repo and have its own pipeline so updates can be decoupled
@@ -46,7 +35,6 @@ class ServiceStack(Stack):
             get_construct_name(stack_prefix=id, construct_name="Crud"),
             self.dynamic_configuration.app_name,
             is_production_env=is_production_env,
-            naming=naming,
         )
 
         # add security check
@@ -56,7 +44,6 @@ class ServiceStack(Stack):
         # best practice to help identify resources in the console
         Tags.of(self).add(SERVICE_NAME_TAG, SERVICE_NAME)
         Tags.of(self).add(OWNER_TAG, get_username())
-        Tags.of(self).add("feature", self.stack_feature)
 
     def _add_security_tests(self) -> None:
         Aspects.of(self).add(AwsSolutionsChecks(verbose=True))

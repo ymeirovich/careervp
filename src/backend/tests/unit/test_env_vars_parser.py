@@ -4,11 +4,7 @@ from unittest import mock
 
 import pytest
 from aws_lambda_env_modeler import get_environment_variables, init_environment_variables
-from cdk.careervp.constants import (
-    POWER_TOOLS_LOG_LEVEL,
-    POWERTOOLS_SERVICE_NAME,
-    SERVICE_NAME,
-)
+from cdk.careervp.constants import POWER_TOOLS_LOG_LEVEL, POWERTOOLS_SERVICE_NAME, SERVICE_NAME
 from pydantic import BaseModel, HttpUrl
 
 from tests.utils import generate_context

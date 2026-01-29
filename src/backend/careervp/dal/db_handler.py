@@ -1,45 +1,18 @@
-from __future__ import annotations
-
 from abc import ABC, ABCMeta, abstractmethod
-from typing import Any
 
-from careervp.models.cv import UserCV
-from careervp.models.result import Result
-from careervp.models.vpr import VPR
-
-# Storage contract per docs/specs/03-vpr-generator.md:14 defines PK/SK for VPR artifacts.
+from careervp.models.order import Order
 
 
 class _SingletonMeta(ABCMeta):
-    _instances: dict[type, DalHandler] = {}
+    _instances: dict = {}
 
-    def __call__(cls, *args: Any, **kwargs: Any) -> DalHandler:
+    def __call__(cls, *args, **kwargs):
         if cls not in cls._instances:
             cls._instances[cls] = super(_SingletonMeta, cls).__call__(*args, **kwargs)
         return cls._instances[cls]
 
 
+# data access handler / integration later adapter class
 class DalHandler(ABC, metaclass=_SingletonMeta):
-    @classmethod
-    def reset_instance(cls) -> None:
-        """Testing hook to drop the cached singleton instance."""
-        if cls in _SingletonMeta._instances:
-            del _SingletonMeta._instances[cls]
-
     @abstractmethod
-    def save_cv(self, user_cv: UserCV) -> None: ...  # pragma: no cover
-
-    @abstractmethod
-    def get_cv(self, user_id: str) -> UserCV | None: ...  # pragma: no cover
-
-    @abstractmethod
-    def save_vpr(self, vpr: VPR) -> Result[None]: ...  # pragma: no cover
-
-    @abstractmethod
-    def get_vpr(self, application_id: str, version: int | None = None) -> Result[VPR | None]: ...  # pragma: no cover
-
-    @abstractmethod
-    def get_latest_vpr(self, application_id: str) -> Result[VPR | None]: ...  # pragma: no cover
-
-    @abstractmethod
-    def list_vprs(self, user_id: str) -> Result[list[VPR]]: ...  # pragma: no cover
+    def create_order_in_db(self, customer_name: str, order_item_count: int) -> Order: ...  # pragma: no cover

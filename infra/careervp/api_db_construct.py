@@ -7,7 +7,6 @@ import careervp.constants as constants
 from aws_cdk import CfnOutput, Duration, RemovalPolicy
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_s3 as s3
-from careervp.naming_utils import NamingUtils
 from constructs import Construct
 
 
@@ -23,9 +22,8 @@ class ApiDbConstruct(Construct):
     - CV Bucket: Stores uploaded CV files (PDF, DOCX)
     """
 
-    def __init__(self, scope: Construct, id_: str, naming: NamingUtils) -> None:
+    def __init__(self, scope: Construct, id_: str) -> None:
         super().__init__(scope, id_)
-        self.naming = naming
 
         # DynamoDB Tables
         self.users_table: dynamodb.TableV2 = self._build_users_table(id_)
@@ -47,9 +45,9 @@ class ApiDbConstruct(Construct):
         table = dynamodb.TableV2(
             self,
             table_id,
-            table_name=self.naming.table_name(constants.USERS_TABLE_NAME),
+            table_name=table_id,
             partition_key=dynamodb.Attribute(
-                name="pk", type=dynamodb.AttributeType.STRING
+                name="user_id", type=dynamodb.AttributeType.STRING
             ),
             sort_key=dynamodb.Attribute(name="sk", type=dynamodb.AttributeType.STRING),
             billing=dynamodb.Billing.on_demand(),
@@ -69,17 +67,7 @@ class ApiDbConstruct(Construct):
                         name="email", type=dynamodb.AttributeType.STRING
                     ),
                     projection_type=dynamodb.ProjectionType.ALL,
-                ),
-                dynamodb.GlobalSecondaryIndexPropsV2(
-                    index_name="user_id-index",
-                    partition_key=dynamodb.Attribute(
-                        name="user_id", type=dynamodb.AttributeType.STRING
-                    ),
-                    sort_key=dynamodb.Attribute(
-                        name="sk", type=dynamodb.AttributeType.STRING
-                    ),
-                    projection_type=dynamodb.ProjectionType.ALL,
-                ),
+                )
             ],
         )
         CfnOutput(
@@ -93,7 +81,7 @@ class ApiDbConstruct(Construct):
         table = dynamodb.TableV2(
             self,
             table_id,
-            table_name=self.naming.table_name(constants.IDEMPOTENCY_TABLE_NAME),
+            table_name=table_id,
             partition_key=dynamodb.Attribute(
                 name="id", type=dynamodb.AttributeType.STRING
             ),
@@ -119,7 +107,7 @@ class ApiDbConstruct(Construct):
         bucket = s3.Bucket(
             self,
             bucket_id,
-            bucket_name=self.naming.bucket_name(constants.CV_BUCKET_NAME),
+            bucket_name=None,  # Auto-generate unique name
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,

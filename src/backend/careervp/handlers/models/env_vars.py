@@ -23,8 +23,3 @@ class MyHandlerEnvVars(Observability, DynamicConfiguration, Idempotency):
     REST_API: HttpUrl
     ROLE_ARN: Annotated[str, Field(min_length=20, max_length=2048)]
     TABLE_NAME: Annotated[str, Field(min_length=1)]
-
-
-class CVUploadEnvVars(Observability, Idempotency):
-    TABLE_NAME: Annotated[str, Field(min_length=1)]
-    CV_BUCKET_NAME: Annotated[str, Field(min_length=1)]

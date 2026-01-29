@@ -1,21 +1,17 @@
-"""CareerVP Infrastructure Constants."""
+"""
+CareerVP Infrastructure Constants.
+All service names, table names, and resource identifiers.
+"""
 
-from __future__ import annotations
-
-import os
 from pathlib import Path
 
 # =============================================================================
 # SERVICE IDENTITY
 # =============================================================================
 SERVICE_NAME = "CareerVP"
-SERVICE_PREFIX = "careervp"
 SERVICE_NAME_TAG = "service"
 OWNER_TAG = "owner"
-ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
-STACK_FEATURE = os.getenv("CAREERVP_STACK_FEATURE", "crud")
-API_FEATURE = os.getenv("CAREERVP_API_FEATURE", "core")
-MONITORING_FEATURE = os.getenv("CAREERVP_MONITORING_FEATURE", "monitoring")
+ENVIRONMENT = "dev"
 
 # =============================================================================
 # DYNAMODB TABLES
@@ -41,7 +37,6 @@ CV_BUCKET_OUTPUT = "CVBucketOutput"
 # API GATEWAY
 # =============================================================================
 APIGATEWAY = "Apigateway"
-API_ROOT_RESOURCE = "api"
 GW_RESOURCE = "cv"
 GW_RESOURCE_VPR = "vpr"
 GW_RESOURCE_USERS = "users"
@@ -56,12 +51,9 @@ SWAGGER_URL = "SwaggerURL"
 # LAMBDA FUNCTIONS
 # =============================================================================
 CV_PARSER_LAMBDA = "CVParser"
-CV_PARSER_FEATURE = "cv-parser"
 VPR_GENERATOR_LAMBDA = "VPRGenerator"
-VPR_GENERATOR_FEATURE = "vpr-generator"
 CV_TAILOR_LAMBDA = "CVTailor"
 COVER_LETTER_LAMBDA = "CoverLetter"
-LAMBDA_SERVICE_NAME = "lambda"
 
 LAMBDA_LAYER_NAME = "common"
 API_HANDLER_LAMBDA_MEMORY_SIZE = 512  # MB - increased for CV parsing
@@ -89,7 +81,5 @@ CONFIGURATION_MAX_AGE_MINUTES = "5"
 # BUILD PATHS
 # =============================================================================
 project_root = Path(__file__).parent.parent.parent
-BUILD_FOLDER = str(project_root / "src" / "backend" / ".build" / "lambdas")
-COMMON_LAYER_BUILD_FOLDER = str(
-    project_root / "src" / "backend" / ".build" / "common_layer"
-)
+BUILD_FOLDER = str(project_root / "src" / "backend")
+COMMON_LAYER_BUILD_FOLDER = ".build/common_layer"

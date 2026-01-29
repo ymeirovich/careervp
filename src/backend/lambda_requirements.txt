@@ -4,16 +4,6 @@ annotated-types==0.7.0 \
     --hash=sha256:1f02e8b43a8fbbc3f3e0d4f0f4bfc8131bcb4eebe8849b8e5c773f3a1c582a53 \
     --hash=sha256:aff07c09a53a08bc8cfccb9c85b05f1aa9a2a6f23728d790723543408344ce89
     # via pydantic
-anthropic==0.76.0 \
-    --hash=sha256:81efa3113901192af2f0fe977d3ec73fdadb1e691586306c4256cd6d5ccc331c \
-    --hash=sha256:e0cae6a368986d5cf6df743dfbb1b9519e6a9eee9c6c942ad8121c0b34416ffe
-    # via aws-lambda-handler-cookbook
-anyio==4.12.1 \
-    --hash=sha256:41cfcc3a4c85d3f05c932da7c26d0201ac36f72abd4435ba90d0464a3ffed703 \
-    --hash=sha256:d405828884fc140aa80a3c667b8beed277f1dfedec42ba031bd6ac3db606ab6c
-    # via
-    #   anthropic
-    #   httpx
 aws-lambda-env-modeler==2.1.0 \
     --hash=sha256:2b7897224537de658819977f722ddbcc80e865e90c3a0533ea3c566b1364de7b \
     --hash=sha256:ddca66d1d8170ccc9de96f7da3cef2d5f6da26621bfbf031338b428b50c622bf
@@ -41,75 +31,18 @@ cachetools==6.2.4 \
     --hash=sha256:69a7a52634fed8b8bf6e24a050fb60bff1c9bd8f6d24572b99c32d4e71e62a51 \
     --hash=sha256:82c5c05585e70b6ba2d3ae09ea60b79548872185d2f24ae1f2709d37299fd607
     # via aws-lambda-handler-cookbook
-certifi==2026.1.4 \
-    --hash=sha256:9943707519e4add1115f44c2bc244f782c0249876bf51b6599fee1ffbedd685c \
-    --hash=sha256:ac726dd470482006e014ad384921ed6438c457018f4b3d204aea4281258b2120
-    # via
-    #   httpcore
-    #   httpx
-distro==1.9.0 \
-    --hash=sha256:2fa77c6fd8940f116ee1d6b94a2f90b13b5ea8d019b98bc8bafdcabcdd9bdbed \
-    --hash=sha256:7bffd925d65168f85027d8da9af6bddab658135b840670a223589bc0c8ef02b2
-    # via anthropic
 dnspython==2.8.0 \
     --hash=sha256:01d9bbc4a2d76bf0db7c1f729812ded6d912bd318d3b1cf81d30c0f845dbf3af \
     --hash=sha256:181d3c6996452cb1189c4046c61599b84a5a86e099562ffde77d26984ff26d0f
     # via email-validator
-docstring-parser==0.17.0 \
-    --hash=sha256:583de4a309722b3315439bb31d64ba3eebada841f2e2cee23b99df001434c912 \
-    --hash=sha256:cf2569abd23dce8099b300f9b4fa8191e9582dda731fd533daf54c4551658708
-    # via anthropic
 email-validator==2.3.0 \
     --hash=sha256:80f13f623413e6b197ae73bb10bf4eb0908faf509ad8362c5edeb0be7fd450b4 \
     --hash=sha256:9fc05c37f2f6cf439ff414f8fc46d917929974a82244c20eb10231ba60c54426
     # via aws-lambda-handler-cookbook
-h11==0.16.0 \
-    --hash=sha256:4e35b956cf45792e4caa5885e69fba00bdbc6ffafbfa020300e549b208ee5ff1 \
-    --hash=sha256:63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86
-    # via httpcore
-httpcore==1.0.9 \
-    --hash=sha256:2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55 \
-    --hash=sha256:6e34463af53fd2ab5d807f399a9b45ea31c3dfa2276f15a2c3f00afff6e176e8
-    # via httpx
-httpx==0.28.1 \
-    --hash=sha256:75e98c5f16b0f35b567856f597f06ff2270a374470a5c2392242528e3e3e42fc \
-    --hash=sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad
-    # via anthropic
 idna==3.11 \
     --hash=sha256:771a87f49d9defaf64091e6e6fe9c18d4833f140bd19464795bc32d966ca37ea \
     --hash=sha256:795dafcc9c04ed0c1fb032c2aa73654d8e8c5023a7df64a53f39190ada629902
-    # via
-    #   anyio
-    #   email-validator
-    #   httpx
-jiter==0.12.0 \
-    --hash=sha256:2fa940963bf02e1d8226027ef461e36af472dea85d36054ff835aeed944dd873 \
-    --hash=sha256:3f9b1cda8fcb736250d7e8711d4580ebf004a46771432be0ae4796944b5dfa5d \
-    --hash=sha256:506c9708dd29b27288f9f8f1140c3cb0e3d8ddb045956d7757b1fa0e0f39a473 \
-    --hash=sha256:5ab4c823b216a4aeab3fdbf579c5843165756bd9ad87cc6b1c65919c4715f783 \
-    --hash=sha256:64dfcd7d5c168b38d3f9f8bba7fc639edb3418abcc74f22fdbe6b8938293f30b \
-    --hash=sha256:65f04a9d0b4406f7e51279710b27484af411896246200e461d80d3ba0caa901a \
-    --hash=sha256:774ff60b27a84a85b27b88cd5583899c59940bcc126caca97eb2a9df6aa00c49 \
-    --hash=sha256:798e46eed9eb10c3adbbacbd3bdb5ecd4cf7064e453d00dbef08802dae6937ff \
-    --hash=sha256:8bbcfe2791dfdb7c5e48baf646d37a6a3dcb5a97a032017741dea9f817dca183 \
-    --hash=sha256:90d32894d4c6877a87ae00c6b915b609406819dce8bc0d4e962e4de2784e567e \
-    --hash=sha256:a78befb9cc0a45b5a5a0d537b06f8544c2ebb60d19d02c41ff15da28a9e22d42 \
-    --hash=sha256:a947920902420a6ada6ad51892082521978e9dd44a802663b001436e4b771684 \
-    --hash=sha256:add5e227e0554d3a52cf390a7635edaffdf4f8fce4fdbcef3cc2055bb396a30c \
-    --hash=sha256:b111b0e9152fa7df870ecaebb0bd30240d9f7fff1f2003bcb4ed0f519941820b \
-    --hash=sha256:b3f1368f0a6719ea80013a4eb90ba72e75d7ea67cfc7846db2ca504f3df0169a \
-    --hash=sha256:c46d927acd09c67a9fb1416df45c5a04c27e83aae969267e98fba35b74e99525 \
-    --hash=sha256:c5433fab222fb072237df3f637d01b81f040a07dcac1cb4a5c75c7aa9ed0bef1 \
-    --hash=sha256:c596cc0f4cb574877550ce4ecd51f8037469146addd676d7c1a30ebe6391923f \
-    --hash=sha256:d72f3b5a432a4c546ea4bedc84cce0c3404874f1d1676260b9c7f048a9855451 \
-    --hash=sha256:deeb12a2223fe0135c7ff1356a143d57f95bbf1f4a66584f1fc74df21d86b993 \
-    --hash=sha256:e1fe01c082f6aafbe5c8faf0ff074f38dfb911d53f07ec333ca03f8f6226debf \
-    --hash=sha256:e427eee51149edf962203ff8db75a7514ab89be5cb623fb9cea1f20b54f1107b \
-    --hash=sha256:e6ded41aeba3603f9728ed2b6196e4df875348ab97b28fc8afff115ed42ba7a7 \
-    --hash=sha256:edb868841f84c111255ba5e80339d386d937ec1fdce419518ce1bd9370fac5b6 \
-    --hash=sha256:f8c593c6e71c07866ec6bfb790e202a833eeec885022296aff6b9e0b92d6a70e \
-    --hash=sha256:fd990541982a24281d12b67a335e44f117e4c6cbad3c3b75c7dea68bf4ce3a67
-    # via anthropic
+    # via email-validator
 jmespath==1.1.0 \
     --hash=sha256:472c87d80f36026ae83c6ddd0f1d05d4e510134ed462851fd5f754c8c3cbb88d \
     --hash=sha256:a5663118de4908c91729bea0acadca56526eb2698e83de10cd116ae0f4e97c64
@@ -117,48 +50,6 @@ jmespath==1.1.0 \
     #   aws-lambda-powertools
     #   boto3
     #   botocore
-langdetect==1.0.9 \
-    --hash=sha256:cbc1fef89f8d062739774bd51eda3da3274006b3661d199c2655f6b3f6d605a0
-    # via aws-lambda-handler-cookbook
-lxml==6.0.2 \
-    --hash=sha256:063eccf89df5b24e361b123e257e437f9e9878f425ee9aae3144c77faf6da6d8 \
-    --hash=sha256:1db01e5cf14345628e0cbe71067204db658e2fb8e51e7f33631f5f4735fefd8d \
-    --hash=sha256:252a22982dca42f6155125ac76d3432e548a7625d56f5a273ee78a5057216eca \
-    --hash=sha256:25fcc59afc57d527cfc78a58f40ab4c9b8fd096a9a3f964d2781ffb6eb33f4ed \
-    --hash=sha256:2ca59e7e13e5981175b8b3e4ab84d7da57993eeff53c07764dcebda0d0e64ecd \
-    --hash=sha256:370cd78d5855cfbffd57c422851f7d3864e6ae72d0da615fca4dad8c45d375a5 \
-    --hash=sha256:414aaa94e974e23a3e92e7ca5b97d10c0cf37b6481f50911032c69eeb3991bba \
-    --hash=sha256:4468e3b83e10e0317a89a33d28f7aeba1caa4d1a6fd457d115dd4ffe90c5931d \
-    --hash=sha256:48461bd21625458dd01e14e2c38dd0aea69addc3c4f960c30d9f59d7f93be601 \
-    --hash=sha256:5179c60288204e6ddde3f774a93350177e08876eaf3ab78aa3a3649d43eb7d37 \
-    --hash=sha256:6162a86d86893d63084faaf4ff937b3daea233e3682fb4474db07395794fa80d \
-    --hash=sha256:65ac4a01aba353cfa6d5725b95d7aed6356ddc0a3cd734de00124d285b04b64f \
-    --hash=sha256:80dadc234ebc532e09be1975ff538d154a7fa61ea5031c03d25178855544728f \
-    --hash=sha256:875c6b5ab39ad5291588aed6925fac99d0097af0dd62f33c7b43736043d4a2ec \
-    --hash=sha256:8799481bbdd212470d17513a54d568f44416db01250f49449647b5ab5b5dccb9 \
-    --hash=sha256:901e3b4219fa04ef766885fb40fa516a71662a4c61b80c94d25336b4934b71c0 \
-    --hash=sha256:9261bb77c2dab42f3ecd9103951aeca2c40277701eb7e912c545c1b16e0e4917 \
-    --hash=sha256:945da35a48d193d27c188037a05fec5492937f66fb1958c24fc761fb9d40d43c \
-    --hash=sha256:957448ac63a42e2e49531b9d6c0fa449a1970dbc32467aaad46f11545be9af1d \
-    --hash=sha256:967aab75434de148ec80597b75062d8123cadf2943fb4281f385141e18b21338 \
-    --hash=sha256:98a5e1660dc7de2200b00d53fa00bcd3c35a3608c305d45a7bbcaf29fa16e83d \
-    --hash=sha256:a4bf42d2e4cf52c28cc1812d62426b9503cdb0c87a6de81442626aa7d69707ba \
-    --hash=sha256:abd44571493973bad4598a3be7e1d807ed45aa2adaf7ab92ab7c62609569b17d \
-    --hash=sha256:b0c732aa23de8f8aec23f4b580d1e52905ef468afb4abeafd3fec77042abb6fe \
-    --hash=sha256:b22a07cbb82fea98f8a2fd814f3d1811ff9ed76d0fc6abc84eb21527596e7cc8 \
-    --hash=sha256:b2c7fdaa4d7c3d886a42534adec7cfac73860b89b4e5298752f60aa5984641a0 \
-    --hash=sha256:b7fc49c37f1786284b12af63152fe1d0990722497e2d5817acfe7a877522f9a9 \
-    --hash=sha256:bb4c1847b303835d89d785a18801a883436cdfd5dc3d62947f9c49e24f0f5a2c \
-    --hash=sha256:be3aaa60da67e6153eb15715cc2e19091af5dc75faef8b8a585aea372507384b \
-    --hash=sha256:cd79f3367bd74b317dda655dc8fcfa304d9eb6e4fb06b7168c5cf27f96e0cd62 \
-    --hash=sha256:cdcbed9ad19da81c480dfd6dd161886db6096083c9938ead313d94b30aadf272 \
-    --hash=sha256:d100fcc8930d697c6561156c6810ab4a508fb264c8b6779e6e61e2ed5e7558f9 \
-    --hash=sha256:d759cdd7f3e055d6bc8d9bec3ad905227b2e4c785dc16c372eb5b5e83123f48a \
-    --hash=sha256:da08e7bb297b04e893d91087df19638dc7a6bb858a954b0cc2b9f5053c922312 \
-    --hash=sha256:dc051506c30b609238d79eda75ee9cab3e520570ec8219844a72a46020901e37 \
-    --hash=sha256:e19e0643cc936a22e837f79d01a550678da8377d7d801a14487c10c34ee49c7e \
-    --hash=sha256:fa25afbadead523f7001caf0c2382afd272c315a033a7b06336da2637d92d6ed
-    # via python-docx
 mypy-boto3-dynamodb==1.42.33 \
     --hash=sha256:79d783c9378d1baf1c1dab65aead1973afc4b63e23b254d5fc8c1ad805b33cd2 \
     --hash=sha256:a9dd48c4924356f72f250080a5fbefeac811df35817432db9ea446736788da86
@@ -167,7 +58,6 @@ pydantic==2.12.5 \
     --hash=sha256:4d351024c75c0f085a9febbb665ce8c0c6ec5d30e903bdb6394b7ede26aebb49 \
     --hash=sha256:e561593fccf61e8a20fc46dfc2dfe075b8be7d0188df33f221ad1f0139180f9d
     # via
-    #   anthropic
     #   aws-lambda-env-modeler
     #   aws-lambda-handler-cookbook
 pydantic-core==2.41.5 \
@@ -201,18 +91,10 @@ pydantic-core==2.41.5 \
     --hash=sha256:e56ba91f47764cc14f1daacd723e3e82d1a89d783f0f5afe9c364b8bb491ccdb \
     --hash=sha256:e672ba74fbc2dc8eea59fb6d4aed6845e6905fc2a8afe93175d94a83ba2a01a0
     # via pydantic
-pypdf2==3.0.1 \
-    --hash=sha256:a74408f69ba6271f71b9352ef4ed03dc53a31aa404d29b5d31f53bfecfee1440 \
-    --hash=sha256:d16e4205cfee272fbdc0568b68d82be796540b1537508cef59388f839c191928
-    # via aws-lambda-handler-cookbook
 python-dateutil==2.9.0.post0 \
     --hash=sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3 \
     --hash=sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427
     # via botocore
-python-docx==1.2.0 \
-    --hash=sha256:3fd478f3250fbbbfd3b94fe1e985955737c145627498896a8a6bf81f4baf66c7 \
-    --hash=sha256:7bc9d7b7d8a69c9c02ca09216118c86552704edc23bac179283f2e38f86220ce
-    # via aws-lambda-handler-cookbook
 s3transfer==0.16.0 \
     --hash=sha256:18e25d66fed509e3868dc1572b3f427ff947dd2c56f844a5bf09481ad3f3b2fe \
     --hash=sha256:8e990f13268025792229cd52fa10cb7163744bf56e719e0b9cb925ab79abf920
@@ -220,22 +102,14 @@ s3transfer==0.16.0 \
 six==1.17.0 \
     --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274 \
     --hash=sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81
-    # via
-    #   langdetect
-    #   python-dateutil
-sniffio==1.3.1 \
-    --hash=sha256:2f6da418d1f1e0fddd844478f41680e794e6051915791a034ff65e5f100525a2 \
-    --hash=sha256:f4324edc670a0f49750a81b895f35c3adb843cca46f0530f79fc1babb23789dc
-    # via anthropic
+    # via python-dateutil
 typing-extensions==4.15.0 \
     --hash=sha256:0cea48d173cc12fa28ecabc3b837ea3cf6f38c6d1136f85cbaaf598984861466 \
     --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548
     # via
-    #   anthropic
     #   aws-lambda-powertools
     #   pydantic
     #   pydantic-core
-    #   python-docx
     #   typing-inspection
 typing-inspection==0.4.2 \
     --hash=sha256:4ed1cacbdc298c220f1bd249ed5287caa16f34d44ef4e9c3d0cbad5b521545e7 \
