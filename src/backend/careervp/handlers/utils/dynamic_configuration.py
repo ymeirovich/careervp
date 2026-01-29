@@ -1,5 +1,7 @@
+import os
 from typing import TypeVar, Union
 
+import boto3  # type: ignore[import-untyped]
 from aws_lambda_env_modeler import get_environment_variables
 from aws_lambda_powertools.utilities.feature_flags import AppConfigStore, FeatureFlags
 from pydantic import BaseModel
@@ -29,10 +31,16 @@ def get_configuration_store() -> FeatureFlags:
             name=env_vars.CONFIGURATION_NAME,
             max_age=env_vars.CONFIGURATION_MAX_AGE_MINUTES,
             envelope=_DEFAULT_FEATURE_FLAGS_ROOT,
+            boto3_session=_build_boto3_session(),
         )
         _DYNAMIC_CONFIGURATION = FeatureFlags(store=conf_store)
 
     return _DYNAMIC_CONFIGURATION
+
+
+def _build_boto3_session() -> boto3.session.Session:
+    region = os.getenv('AWS_REGION') or os.getenv('AWS_DEFAULT_REGION') or 'us-east-1'
+    return boto3.session.Session(region_name=region)
 
 
 def parse_configuration(model: type[Model]) -> Model:
