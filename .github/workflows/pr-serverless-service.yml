@@ -90,6 +90,7 @@ jobs:
         working-directory: src/backend
         run: make infra-tests
       - name: Deploy to AWS
+        id: deploy
         if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
         working-directory: src/backend
         run: make deploy
@@ -101,6 +102,7 @@ jobs:
           base: https://raw.githubusercontent.com/ran-isenberg/aws-lambda-handler-cookbook/main/docs/swagger/openapi.json
           revision: ./docs/swagger/openapi.json
       - name: Validate OpenAPI Documentation
+        if: ${{ success() && steps.deploy.outcome == 'success' }}
         working-directory: src/backend
         run: make compare-openapi
       - name: Code coverage tests
