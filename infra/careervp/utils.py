@@ -1,9 +1,9 @@
 import getpass
 import os
-from typing import cast
+from pathlib import Path
 
 import careervp.constants as constants
-from careervp.naming_utils import NamingUtils
+from git import Repo
 
 
 def get_username() -> str:
@@ -14,12 +14,16 @@ def get_username() -> str:
 
 
 def get_stack_name() -> str:
-    environment = os.getenv("ENVIRONMENT", constants.ENVIRONMENT)
-    region = os.getenv("CDK_DEFAULT_REGION") or os.getenv("AWS_DEFAULT_REGION")
-    account_id = os.getenv("CDK_DEFAULT_ACCOUNT")
-    feature = os.getenv("CAREERVP_STACK_FEATURE", constants.STACK_FEATURE)
-    naming = NamingUtils(environment=environment, region=region, account_id=account_id)
-    return cast(str, naming.stack_id(feature))
+    repo = Repo(Path.cwd(), search_parent_directories=True)
+    username = get_username()
+    cicd_environment = os.getenv("ENVIRONMENT", "dev")
+    try:
+        branch_name = f"{repo.active_branch}".replace("/", "-").replace("_", "-")
+        return f"{username}-{branch_name}-{constants.SERVICE_NAME}-{cicd_environment}"
+    except TypeError:
+        # we're running in detached mode (HEAD)
+        # see https://github.com/gitpython-developers/GitPython/issues/633
+        return f"{username}-{constants.SERVICE_NAME}-{cicd_environment}"
 
 
 def get_construct_name(stack_prefix: str, construct_name: str) -> str:

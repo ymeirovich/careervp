@@ -2,16 +2,6 @@
 PYTHON := ".venv/bin/python3"
 .ONESHELL:  # run all commands in a single shell, ensuring it runs within a local virtual env
 
-# Keep Lambda runtime configuration in one place so packaging, dependencies,
-# and CDK stay aligned.
-PYTHON_RUNTIME_VERSION := 3.14
-LAMBDA_RUNTIME_ENUM := PYTHON_3_14
-LAMBDA_ARCH_ENUM := X86_64
-DOCKER_PLATFORM := linux/amd64
-LAYER_BUNDLING_PLATFORM := linux/amd64
-LAMBDA_BASE_IMAGE := public.ecr.aws/lambda/python:$(PYTHON_RUNTIME_VERSION)
-API_CONSTRUCT_PATH := ../../infra/careervp/api_construct.py
-
 OPENAPI_DIR := ./docs/swagger
 CURRENT_OPENAPI := $(OPENAPI_DIR)/openapi.json
 LATEST_OPENAPI := openapi_latest.json
@@ -37,7 +27,7 @@ complex:
 	@echo "Running Radon"
 	uv run radon cc -e 'tests/*,cdk.out/*,node_modules/*' .
 	@echo "Running xenon"
-	uv run xenon --max-absolute C --max-modules A --max-average A -e 'tests/*,.venv/*,cdk.out/*,node_modules/*' .
+	uv run xenon --max-absolute B --max-modules A --max-average A -e 'tests/*,.venv/*,cdk.out/*,node_modules/*' .
 
 pre-commit:
 	uv run pre-commit run -a --show-diff-on-failure
@@ -52,25 +42,9 @@ deps:
 unit:
 	uv run pytest tests/unit  --cov-config=.coveragerc --cov=careervp --cov-report xml
 
-build: deps check-runtime
-	rm -rf .build/lambdas
-	mkdir -p .build/lambdas
-	docker run --rm --platform $(DOCKER_PLATFORM) \
-		--entrypoint /bin/sh \
-		-v $(PWD):/app \
-		-w /app \
-		$(LAMBDA_BASE_IMAGE) \
-		-c "microdnf install -y gcc libxml2-devel libxslt-devel >/dev/null && pip install --prefer-binary -r lambda_requirements.txt -t .build/lambdas"
-	rsync -a careervp .build/lambdas \
-		--exclude 'cdk.out' \
-		--exclude '.mypy_cache' \
-		--exclude '.venv' \
-		--exclude '*.log'
-	mkdir -p .build/common_layer
-	uv export --no-dev --no-editable --no-emit-project --no-color --format=requirements-txt > .build/common_layer/requirements.txt
-
-check-runtime:
-	@python3 scripts/check_runtime.py $(PYTHON_RUNTIME_VERSION) $(LAMBDA_RUNTIME_ENUM) $(LAMBDA_ARCH_ENUM) $(LAYER_BUNDLING_PLATFORM) $(API_CONSTRUCT_PATH)
+build: deps
+	mkdir -p .build/lambdas ; cp -r careervp .build/lambdas
+	mkdir -p .build/common_layer ; uv export --no-dev --no-editable --no-emit-project --no-color --format=requirements-txt > .build/common_layer/requirements.txt
 
 infra-tests: build
 	uv run pytest tests/infrastructure
@@ -87,10 +61,10 @@ coverage-tests:
 	uv run pytest tests/unit tests/integration  --cov-config=.coveragerc --cov=careervp --cov-report xml
 
 deploy: build
-	npx cdk deploy --app="${PYTHON} ${PWD}/../infra/app.py" --require-approval=never
+	npx cdk deploy --app="${PYTHON} ${PWD}/app.py" --require-approval=never
 
 destroy:
-	npx cdk destroy --app="$(PYTHON) ${PWD}/../infra/app.py" --force
+	npx cdk destroy --app="${PYTHON} ${PWD}/app.py" --force
 
 docs:
 	uv run mkdocs serve
@@ -130,5 +104,3 @@ compare-openapi:
 		rm $(LATEST_OPENAPI); \
 		exit 1; \
 	fi
-
-	# npx cdk deploy --app="${PYTHON} ${PWD}/../infra/app.py" --require-approval=never

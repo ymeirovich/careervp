@@ -1,6 +1,0 @@
-uv run ruff check . --fix
-All checks passed!
-Running mypy
-/Library/Developer/CommandLineTools/usr/bin/make mypy-lint
-uv run mypy --pretty careervp cdk tests
-Success: no issues found in 50 source files
