@@ -10,13 +10,16 @@ import os
 from enum import Enum
 from functools import wraps
 from time import sleep
-from typing import Any
+from typing import Any, Callable, ParamSpec, TypeVar, cast
 
 from anthropic import Anthropic, APIError, RateLimitError
 from aws_lambda_powertools.metrics import MetricUnit
 
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.models.result import Result, ResultCode
+
+P = ParamSpec('P')
+R = TypeVar('R')
 
 # Model IDs per Decision 1.2 in CLAUDE.md
 SONNET_MODEL_ID = 'claude-sonnet-4-5-20250514'
@@ -33,16 +36,16 @@ class TaskMode(str, Enum):
     TEMPLATE = 'TEMPLATE'  # CV, Cover Letter, Interview -> Haiku 4.5
 
 
-def retry_on_transient_error(max_retries: int = 3, base_delay: float = 1.0):
+def retry_on_transient_error(max_retries: int = 3, base_delay: float = 1.0) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     Retry decorator for transient API errors.
     Per spec: Wrap all calls in retry decorator for transient 500 errors.
     """
 
-    def decorator(func):
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
         @wraps(func)
-        def wrapper(*args, **kwargs):
-            last_exception = None
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            last_exception: Exception | None = None
             for attempt in range(max_retries):
                 try:
                     return func(*args, **kwargs)
@@ -52,18 +55,27 @@ def retry_on_transient_error(max_retries: int = 3, base_delay: float = 1.0):
                     logger.warning('Rate limited, retrying', attempt=attempt + 1, delay=delay)
                     sleep(delay)
                 except APIError as e:
-                    if e.status_code and e.status_code >= 500:
+                    status_code = getattr(e, 'status_code', None)
+                    if isinstance(status_code, int) and status_code >= 500:
                         last_exception = e
                         delay = base_delay * (2**attempt)
-                        logger.warning('Transient API error, retrying', attempt=attempt + 1, status_code=e.status_code, delay=delay)
+                        logger.warning('Transient API error, retrying', attempt=attempt + 1, status_code=status_code, delay=delay)
                         sleep(delay)
                     else:
                         raise
-            raise last_exception
+            if last_exception is not None:
+                raise last_exception
+            raise RuntimeError('Retry attempts exhausted without capturing an exception')
 
         return wrapper
 
     return decorator
+
+
+def _capture_method_typed(*decorator_args: Any, **decorator_kwargs: Any) -> Callable[[Callable[P, R]], Callable[P, R]]:
+    """Typed shim for tracer.capture_method to satisfy mypy."""
+    decorator = tracer.capture_method(*decorator_args, **decorator_kwargs)
+    return cast(Callable[[Callable[P, R]], Callable[P, R]], decorator)
 
 
 class LLMRouter:
@@ -98,7 +110,7 @@ class LLMRouter:
             output_cost = (output_tokens / 1_000_000) * 1.25
         return input_cost + output_cost
 
-    @tracer.capture_method(capture_response=False)
+    @_capture_method_typed(capture_response=False)
     @retry_on_transient_error(max_retries=3)
     def invoke(
         self,

@@ -45,6 +45,7 @@ API_ROOT_RESOURCE = "api"
 GW_RESOURCE = "cv"
 GW_RESOURCE_VPR = "vpr"
 GW_RESOURCE_USERS = "users"
+GW_RESOURCE_COMPANY_RESEARCH = "company-research"
 
 # Swagger
 SWAGGER_RESOURCE = "swagger"
@@ -61,6 +62,8 @@ VPR_GENERATOR_LAMBDA = "VPRGenerator"
 VPR_GENERATOR_FEATURE = "vpr-generator"
 CV_TAILOR_LAMBDA = "CVTailor"
 COVER_LETTER_LAMBDA = "CoverLetter"
+COMPANY_RESEARCH_LAMBDA = "CompanyResearch"
+COMPANY_RESEARCH_FEATURE = "company-research"
 LAMBDA_SERVICE_NAME = "lambda"
 
 LAMBDA_LAYER_NAME = "common"

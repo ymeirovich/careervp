@@ -127,5 +127,14 @@ These rules are non‑negotiable. If any step fails (tests, lint, type checks), 
 ## Section: Agent Escalation Protocol
 The Engineer (Codex) Rule: If any specified Path, Class Name, or Method Signature in a Task Guide does not exist in the current environment, the Engineer MUST NOT create a workaround. They must emit a "BLOCKING ISSUE" report and exit.
 
-## The Architect (Claude) Rule:
+## The Architect (Claude) Rule
 Upon a Blocking Issue, the Architect must analyze if the Spec is wrong or if the Environment needs refactoring. The Architect must provide a "Migration Path" in the next Task Guide.
+
+## Implementation Guardrail
+- Before starting any task, verify the state of the environment using verify_aws_state.py --mode deployed if infrastructure was recently changed.
+
+## File Conventions
+- Python Modules: `snake_case.py` (e.g., `company_research.py`)
+- Infrastructure Scripts: `kebab-case.py` (e.g., `validate-naming.py`)
+- Documentation/Tasks: `task-##-name.md`
+- Tests: `test_*.py` located in `src/backend/tests/unit/`

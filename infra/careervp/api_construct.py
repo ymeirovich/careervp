@@ -36,6 +36,9 @@ class ApiConstruct(Construct):
         )
         cv_resource = api_resource.add_resource(constants.GW_RESOURCE)
         vpr_resource = api_resource.add_resource(constants.GW_RESOURCE_VPR)
+        company_research_resource = api_resource.add_resource(
+            constants.GW_RESOURCE_COMPANY_RESEARCH
+        )
         self.cv_upload_func = self._add_post_lambda_integration(
             cv_resource,
             self.lambda_role,
@@ -50,6 +53,12 @@ class ApiConstruct(Construct):
             self.api_db.db,
             appconfig_app_name,
         )
+        self.company_research_func = self._add_company_research_lambda_integration(
+            company_research_resource,
+            self.lambda_role,
+            self.api_db.db,
+            appconfig_app_name,
+        )
         self._build_swagger_endpoints(
             rest_api=self.rest_api, dest_func=self.cv_upload_func
         )
@@ -59,7 +68,7 @@ class ApiConstruct(Construct):
             self.rest_api,
             self.api_db.db,
             self.api_db.idempotency_db,
-            [self.cv_upload_func, self.vpr_generator_func],
+            [self.cv_upload_func, self.vpr_generator_func, self.company_research_func],
             naming=naming,
         )
 
@@ -305,6 +314,54 @@ class ApiConstruct(Construct):
             retry_attempts=0,
             timeout=Duration.seconds(120),
             memory_size=1024,
+            role=role,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+        api_resource.add_method(
+            http_method="POST",
+            integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
+        )
+
+        return lambda_function
+
+    def _add_company_research_lambda_integration(
+        self,
+        api_resource: aws_apigateway.Resource,
+        role: iam.Role,
+        db: dynamodb.TableV2,
+        appconfig_app_name: str,
+    ) -> _lambda.Function:
+        function_name = self.naming.lambda_name(constants.COMPANY_RESEARCH_FEATURE)
+        log_group = logs.LogGroup(
+            self,
+            f"{constants.COMPANY_RESEARCH_LAMBDA}LogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
+        lambda_function = _lambda.Function(
+            self,
+            constants.COMPANY_RESEARCH_LAMBDA,
+            runtime=_lambda.Runtime.PYTHON_3_14,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.company_research_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                "DYNAMODB_TABLE_NAME": db.table_name,
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-company-research",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                "CONFIGURATION_APP": appconfig_app_name,
+                "CONFIGURATION_ENV": constants.ENVIRONMENT,
+            },
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            timeout=Duration.seconds(60),
+            memory_size=512,
             role=role,
             log_group=log_group,
             logging_format=_lambda.LoggingFormat.JSON,
