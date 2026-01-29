@@ -1,5 +1,6 @@
 .PHONY: dev lint mypy-lint complex coverage pre-commit sort deploy destroy deps unit infra-tests integration e2e coverage-tests docs lint-docs build format format-fix compare-openapi openapi pr watch update-deps
 PYTHON := .venv/bin/python3
+REPO_ROOT := $(abspath $(CURDIR)/../..)
 .ONESHELL:  # run all commands in a single shell, ensuring it runs within a local virtual env
 
 # Keep Lambda runtime configuration in one place so packaging, dependencies,
@@ -87,10 +88,10 @@ coverage-tests:
 	uv run pytest tests/unit tests/integration  --cov-config=.coveragerc --cov=careervp --cov-report xml
 
 deploy: build
-	npx cdk deploy --app="${PYTHON} ${PWD}/../infra/app.py" --require-approval=never
+	npx cdk deploy --app="$(PYTHON) $(REPO_ROOT)/infra/app.py" --require-approval=never
 
 destroy:
-	npx cdk destroy --app="${PYTHON} ${PWD}/../infra/app.py" --force
+	npx cdk destroy --app="$(PYTHON) $(REPO_ROOT)/infra/app.py" --force
 
 docs:
 	uv run mkdocs serve
