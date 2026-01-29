@@ -126,7 +126,10 @@ compare-openapi:
 		echo "Stack CareerVpCrudDev not found; skipping swagger comparison."; \
 		exit 0; \
 	fi; \
-	uv run python generate_openapi.py --out-destination '.' --out-filename 'openapi_latest.json'; \
+	if ! uv run python generate_openapi.py --out-destination '.' --out-filename 'openapi_latest.json'; then \
+		echo "Skipping swagger diff because download failed."; \
+		exit 0; \
+	fi; \
 	if cmp --silent $(CURRENT_OPENAPI) $(LATEST_OPENAPI); then \
 		rm $(LATEST_OPENAPI); \
 		echo "Swagger file is up to date"; \
