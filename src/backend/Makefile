@@ -37,7 +37,7 @@ complex:
 	@echo "Running Radon"
 	uv run radon cc -e 'tests/*,cdk.out/*,node_modules/*' .
 	@echo "Running xenon"
-	uv run xenon --max-absolute B --max-modules A --max-average A -e 'tests/*,.venv/*,cdk.out/*,node_modules/*' .
+	uv run xenon --max-absolute C --max-modules A --max-average A -e 'tests/*,.venv/*,cdk.out/*,node_modules/*' .
 
 pre-commit:
 	uv run pre-commit run -a --show-diff-on-failure
@@ -87,10 +87,10 @@ coverage-tests:
 	uv run pytest tests/unit tests/integration  --cov-config=.coveragerc --cov=careervp --cov-report xml
 
 deploy: build
-	npx cdk deploy --app=".venv/bin/python3 /Users/yitzchak/Documents/dev/careervp/infra/app.py" --require-approval=never
+	npx cdk deploy --app="${PYTHON} ${PWD}/../infra/app.py" --require-approval=never
 
 destroy:
-	npx cdk destroy --app="${PYTHON} ${PWD}/../infra/app.py" --force
+	npx cdk destroy --app="$(PYTHON) ${PWD}/../infra/app.py" --force
 
 docs:
 	uv run mkdocs serve

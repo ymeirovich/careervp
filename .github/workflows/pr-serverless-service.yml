@@ -45,14 +45,18 @@ jobs:
       - name: Set up Python
         run: uv python install ${{ env.PYTHON_VERSION }}
       - name: Install dependencies
+        working-directory: src/backend
         run: make dev
       - name: Naming validator (infra guardrail)
         run: python src/backend/scripts/validate_naming.py --path infra --strict
       - name: pre commit
+        working-directory: src/backend
         run: make pre-commit
       - name: Formatting and Linting
+        working-directory: src/backend
         run: make lint
       - name: Complexity scan
+        working-directory: src/backend
         run: make complex
   tests:
     needs: quality_standards
@@ -75,8 +79,10 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
       - name: Install dependencies
+        working-directory: src/backend
         run: make dev
       - name: Configure AWS credentials
+        if: ${{ secrets.AWS_ROLE != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
         uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
         with:
           role-to-assume: ${{ secrets.AWS_ROLE }}
@@ -87,11 +93,13 @@ jobs:
       - name: CDK synth
         run: cdk synth
       - name: Unit tests
+        working-directory: src/backend
         run: make unit
       - name: Infrastructure tests
+        working-directory: src/backend
         run: make infra-tests
       - name: Deploy to AWS
-        id: deploy
+        if: ${{ secrets.AWS_ROLE != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
         working-directory: src/backend
         run: make deploy
       # NOTE: these run unit and integration tests
@@ -102,8 +110,10 @@ jobs:
           base: https://raw.githubusercontent.com/ran-isenberg/aws-lambda-handler-cookbook/main/docs/swagger/openapi.json
           revision: ./docs/swagger/openapi.json
       - name: Validate OpenAPI Documentation
+        working-directory: src/backend
         run: make compare-openapi
       - name: Code coverage tests
+        working-directory: src/backend
         run: make coverage-tests
       - name: Codecov
         uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
@@ -113,8 +123,9 @@ jobs:
           fail_ci_if_error: yes # optional (default = false)
           verbose: yes # optional (default = false)
       - name: Run E2E tests
+        working-directory: src/backend
         run: make e2e
-      - name: Destroy stack (on failure)
-        if: ${{ failure() }}
+      - name: Destroy stack
+        if: ${{ always() && secrets.AWS_ROLE != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
         working-directory: src/backend
         run: make destroy
