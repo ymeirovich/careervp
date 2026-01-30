@@ -28,7 +28,6 @@ jobs:
         uses: astral-sh/setup-uv@v3
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          enable-cache: true
       - name: Run CDK diff
         working-directory: infra
         run: |
