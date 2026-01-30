@@ -84,6 +84,8 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
+      - name: Install Node dependencies (root)
+        run: npm ci
       - name: Install dependencies
         working-directory: src/backend
         run: make dev
@@ -102,8 +104,8 @@ jobs:
         env:
           SESSION_NAME: "github-${{github.sha}}-dev"
       - name: CDK synth
-        working-directory: src/backend
-        run: cdk synth
+        working-directory: infra
+        run: npx cdk synth
       - name: Unit tests
         working-directory: src/backend
         run: make unit
