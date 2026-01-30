@@ -43,8 +43,8 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v3
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          enable-cache: true
+          version: "latest"
+          enable-cache: false
 
       - name: Install Python
         run: uv python install ${{ env.PYTHON_VERSION }}
@@ -106,8 +106,8 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v3
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          enable-cache: true
+          version: "latest"
+          enable-cache: false
 
       - name: Install Python
         run: uv python install ${{ env.PYTHON_VERSION }}
