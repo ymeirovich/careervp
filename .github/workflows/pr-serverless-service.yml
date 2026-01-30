@@ -91,11 +91,8 @@ jobs:
       - name: Infrastructure tests
         run: make infra-tests
       - name: Deploy to AWS
-<<<<<<< Updated upstream
-=======
         id: deploy
         working-directory: src/backend
->>>>>>> Stashed changes
         run: make deploy
       # NOTE: these run unit and integration tests
       # we can look into coverage collection only later to make it faster and less brittle (--collect-only)
@@ -117,12 +114,7 @@ jobs:
           verbose: yes # optional (default = false)
       - name: Run E2E tests
         run: make e2e
-<<<<<<< Updated upstream
-      - name: Destroy stack
-        if: always()
-=======
       - name: Destroy stack (on failure)
         if: ${{ failure() }}
         working-directory: src/backend
->>>>>>> Stashed changes
         run: make destroy
