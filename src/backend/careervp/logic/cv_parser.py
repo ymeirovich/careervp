@@ -237,10 +237,11 @@ def parse_cv(  # noqa: C901 - consolidates extraction, cleaning, LLM parsing, an
         return Result(success=False, error=f'LLM extraction failed: {llm_result.error}', code=llm_result.code)
 
     # Step 4: Parse and validate response
+    llm_data: Dict[str, Any] = llm_result.data or {}
     try:
-        extracted_data = parse_llm_response(llm_result.data['text'])
+        extracted_data = parse_llm_response(str(llm_data.get('text', '')))
     except json.JSONDecodeError as e:
-        logger.error('Failed to parse LLM JSON response', error=str(e), response=llm_result.data['text'][:500])
+        logger.error('Failed to parse LLM JSON response', error=str(e), response=str(llm_data.get('text', ''))[:500])
         return Result(success=False, error=f'Failed to parse extraction result: {e}', code=ResultCode.INTERNAL_ERROR)
 
     # Build UserCV model
@@ -301,9 +302,9 @@ def parse_cv(  # noqa: C901 - consolidates extraction, cleaning, LLM parsing, an
             language=language,
             experience_count=len(experience),
             skills_count=len(user_cv.skills),
-            input_tokens=llm_result.data.get('input_tokens'),
-            output_tokens=llm_result.data.get('output_tokens'),
-            cost=llm_result.data.get('cost'),
+            input_tokens=llm_data.get('input_tokens'),
+            output_tokens=llm_data.get('output_tokens'),
+            cost=llm_data.get('cost'),
         )
 
         return Result(success=True, data=user_cv, code=ResultCode.CV_PARSED)

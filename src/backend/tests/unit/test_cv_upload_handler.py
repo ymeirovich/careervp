@@ -527,7 +527,7 @@ class TestCVUploadErrorHandling:
             BillingMode='PAY_PER_REQUEST',
         )
 
-        llm_error_result = Result(
+        llm_error_result: Result[dict[str, Any] | None] = Result(
             success=False,
             error='LLM API rate limited',
             code=ResultCode.LLM_RATE_LIMITED,
