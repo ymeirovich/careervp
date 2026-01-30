@@ -15,6 +15,12 @@ on:
 
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: pr-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   quality_standards:
@@ -40,6 +46,8 @@ jobs:
         run: uv python install ${{ env.PYTHON_VERSION }}
       - name: Install dependencies
         run: make dev
+      - name: Naming validator (infra guardrail)
+        run: python src/backend/scripts/validate_naming.py --path infra --strict
       - name: pre commit
         run: make pre-commit
       - name: Formatting and Linting
@@ -76,11 +84,18 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
         env:
           SESSION_NAME: "github-${{github.sha}}-dev"
+      - name: CDK synth
+        run: cdk synth
       - name: Unit tests
         run: make unit
       - name: Infrastructure tests
         run: make infra-tests
       - name: Deploy to AWS
+<<<<<<< Updated upstream
+=======
+        id: deploy
+        working-directory: src/backend
+>>>>>>> Stashed changes
         run: make deploy
       # NOTE: these run unit and integration tests
       # we can look into coverage collection only later to make it faster and less brittle (--collect-only)
@@ -102,6 +117,12 @@ jobs:
           verbose: yes # optional (default = false)
       - name: Run E2E tests
         run: make e2e
+<<<<<<< Updated upstream
       - name: Destroy stack
         if: always()
+=======
+      - name: Destroy stack (on failure)
+        if: ${{ failure() }}
+        working-directory: src/backend
+>>>>>>> Stashed changes
         run: make destroy
