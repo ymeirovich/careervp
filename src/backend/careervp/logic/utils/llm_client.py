@@ -10,7 +10,7 @@ import os
 from enum import Enum
 from functools import wraps
 from time import sleep
-from typing import Any
+from typing import Any, Callable, TypeVar, cast
 
 from anthropic import Anthropic, APIError, RateLimitError
 from aws_lambda_powertools.metrics import MetricUnit
@@ -33,16 +33,19 @@ class TaskMode(str, Enum):
     TEMPLATE = 'TEMPLATE'  # CV, Cover Letter, Interview -> Haiku 4.5
 
 
-def retry_on_transient_error(max_retries: int = 3, base_delay: float = 1.0):
+F = TypeVar('F', bound=Callable[..., Any])
+
+
+def retry_on_transient_error(max_retries: int = 3, base_delay: float = 1.0) -> Callable[[F], F]:
     """
     Retry decorator for transient API errors.
     Per spec: Wrap all calls in retry decorator for transient 500 errors.
     """
 
-    def decorator(func):
+    def decorator(func: F) -> F:
         @wraps(func)
-        def wrapper(*args, **kwargs):
-            last_exception = None
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            last_exception: Exception | None = None
             for attempt in range(max_retries):
                 try:
                     return func(*args, **kwargs)
@@ -52,16 +55,19 @@ def retry_on_transient_error(max_retries: int = 3, base_delay: float = 1.0):
                     logger.warning('Rate limited, retrying', attempt=attempt + 1, delay=delay)
                     sleep(delay)
                 except APIError as e:
-                    if e.status_code and e.status_code >= 500:
+                    status = getattr(e, 'status_code', None)
+                    if status is not None and status >= 500:
                         last_exception = e
                         delay = base_delay * (2**attempt)
-                        logger.warning('Transient API error, retrying', attempt=attempt + 1, status_code=e.status_code, delay=delay)
+                        logger.warning('Transient API error, retrying', attempt=attempt + 1, status_code=status, delay=delay)
                         sleep(delay)
                     else:
                         raise
-            raise last_exception
+            if last_exception is not None:
+                raise last_exception
+            raise RuntimeError('Retry decorator exhausted without exception captured')
 
-        return wrapper
+        return cast(F, wrapper)
 
     return decorator
 

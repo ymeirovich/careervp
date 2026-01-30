@@ -20,7 +20,7 @@ Example:
 import argparse
 import json
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import boto3
 import requests
@@ -56,7 +56,7 @@ def download_swagger_json(swagger_url: str) -> Dict[str, Any]:
     """
     response = requests.get(f'{swagger_url}?format=json')
     response.raise_for_status()
-    return response.json()
+    return cast(Dict[str, Any], response.json())
 
 
 def save_json_to_file(json_data: Dict[str, Any], file_path: str) -> None:

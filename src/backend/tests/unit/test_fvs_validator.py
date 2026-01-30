@@ -8,6 +8,7 @@ Per .clauderules: Never mark a task as complete until its unit test passes.
 import json
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -31,7 +32,7 @@ FIXTURES_DIR = Path(__file__).resolve().parents[4] / 'tests' / 'fixtures'
 
 
 @pytest.fixture
-def fvs_baseline() -> dict:
+def fvs_baseline() -> dict[str, Any]:
     """Load FVS baseline fixture."""
     baseline_path = FIXTURES_DIR / 'fvs_baseline_cv.json'
     with open(baseline_path) as f:
@@ -39,7 +40,7 @@ def fvs_baseline() -> dict:
 
 
 @pytest.fixture
-def fvs_hallucination() -> dict:
+def fvs_hallucination() -> dict[str, Any]:
     """Load FVS hallucination example fixture."""
     hallucination_path = FIXTURES_DIR / 'fvs_test_hallucination.json'
     with open(hallucination_path) as f:

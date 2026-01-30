@@ -8,7 +8,7 @@ Supports English and Hebrew (RTL) documents.
 
 import json
 import re
-from typing import Literal
+from typing import Any, Dict, Literal
 
 from langdetect import LangDetectException, detect
 
@@ -146,7 +146,7 @@ def clean_text(text: str) -> str:
     return '\n'.join(lines)
 
 
-def parse_llm_response(response_text: str) -> dict:
+def parse_llm_response(response_text: str) -> Dict[str, Any]:
     """Parse JSON from LLM response, handling potential markdown code blocks."""
     # Remove markdown code blocks if present
     text = response_text.strip()
@@ -157,7 +157,10 @@ def parse_llm_response(response_text: str) -> dict:
     if text.endswith('```'):
         text = text[:-3]
 
-    return json.loads(text.strip())
+    parsed: Dict[str, Any] = json.loads(text.strip())
+    if not isinstance(parsed, dict):
+        raise ValueError('Parsed response is not a dictionary')
+    return parsed
 
 
 @tracer.capture_method(capture_response=False)
