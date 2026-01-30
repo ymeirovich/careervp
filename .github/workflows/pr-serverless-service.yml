@@ -86,6 +86,8 @@ jobs:
           cache: "npm"
       - name: Install Node dependencies (root)
         run: npm ci
+      - name: Install CDK CLI
+        run: npm install -g aws-cdk@2.1100.3
       - name: Install dependencies
         working-directory: src/backend
         run: make dev
@@ -105,7 +107,7 @@ jobs:
           SESSION_NAME: "github-${{github.sha}}-dev"
       - name: CDK synth
         working-directory: infra
-        run: npx cdk synth
+        run: cdk synth
       - name: Unit tests
         working-directory: src/backend
         run: make unit
