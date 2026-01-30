@@ -74,7 +74,7 @@ jobs:
 
       - name: Targeted integration (gap + company_research)
         working-directory: src/backend
-        run: uv run pytest tests/integration -k "gap or company_research"
+        run: uv run pytest tests/integration
 
       - name: CDK synth
         run: cdk synth
