@@ -28,6 +28,11 @@ jobs:
         uses: astral-sh/setup-uv@v3
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+      - name: Prepare lambda build artifacts
+        working-directory: src/backend
+        run: |
+          mkdir -p .build/lambdas
+          touch .build/lambdas/.placeholder
       - name: Run CDK diff
         working-directory: infra
         run: |
