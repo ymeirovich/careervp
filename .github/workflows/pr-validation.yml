@@ -22,8 +22,7 @@ jobs:
         uses: astral-sh/setup-uv@v3
         with:
           version: "latest"
-          enable-cache: true
-          cache-dependency-glob: "**/uv.lock"
+          enable-cache: false
       - name: Ruff check
         working-directory: src/backend
         run: uv run ruff check .
@@ -37,8 +36,7 @@ jobs:
         uses: astral-sh/setup-uv@v3
         with:
           version: "latest"
-          enable-cache: true
-          cache-dependency-glob: "**/uv.lock"
+          enable-cache: false
       - name: Run mypy
         working-directory: src/backend
         run: uv run mypy careervp --config-file mypy.ini
@@ -52,8 +50,7 @@ jobs:
         uses: astral-sh/setup-uv@v3
         with:
           version: "latest"
-          enable-cache: true
-          cache-dependency-glob: "**/uv.lock"
+          enable-cache: false
       - name: Run pytest
         working-directory: src/backend
         run: uv run pytest
@@ -74,8 +71,7 @@ jobs:
         uses: astral-sh/setup-uv@v3
         with:
           version: "latest"
-          enable-cache: true
-          cache-dependency-glob: "**/uv.lock"
+          enable-cache: false
       - name: Validate naming guardrail
         working-directory: src/backend
         run: uv run python scripts/validate_naming.py --path ../infra --strict
