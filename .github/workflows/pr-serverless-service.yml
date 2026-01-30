@@ -51,7 +51,7 @@ jobs:
         run: make dev
       - name: Naming validator (infra guardrail)
         working-directory: src/backend
-        run: python src/backend/scripts/validate_naming.py --path infra --strict
+        run: python scripts/validate_naming.py --path ../infra --strict
       - name: pre commit
         working-directory: src/backend
         run: make pre-commit
