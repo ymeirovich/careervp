@@ -8,7 +8,7 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 from cdk.careervp.utils import get_stack_name
 
 
-def generate_random_string(length: int = 3):
+def generate_random_string(length: int = 3) -> str:
     letters = string.ascii_letters
     random_string = ''.join(random.choice(letters) for _ in range(length))
     return random_string
@@ -82,9 +82,17 @@ def generate_api_gw_event(body: Optional[dict[str, Any]]) -> dict[str, Any]:
 
 def get_stack_output(output_key: str) -> str:
     client = boto3.client('cloudformation')
-    response = client.describe_stacks(StackName=get_stack_name())
-    stack_outputs = response['Stacks'][0]['Outputs']
-    for value in stack_outputs:
-        if str(value['OutputKey']) == output_key:
-            return value['OutputValue']
-    raise Exception(f'stack output {output_key} was not found')
+    response: dict[str, Any] = client.describe_stacks(StackName=get_stack_name())
+    stacks = response.get('Stacks', [])
+    if not stacks:
+        raise ValueError('No stacks returned from CloudFormation')
+
+    outputs: list[dict[str, Any]] = stacks[0].get('Outputs', [])
+    for value in outputs:
+        if str(value.get('OutputKey')) == output_key:
+            output_value = value.get('OutputValue')
+            if isinstance(output_value, str):
+                return output_value
+            raise TypeError(f'stack output {output_key} was not a string')
+
+    raise KeyError(f'stack output {output_key} was not found')

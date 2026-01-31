@@ -56,7 +56,10 @@ def download_swagger_json(swagger_url: str) -> Dict[str, Any]:
     """
     response = requests.get(f'{swagger_url}?format=json')
     response.raise_for_status()
-    return response.json()
+    data = response.json()
+    if not isinstance(data, dict):
+        raise ValueError('Swagger JSON response was not an object')
+    return data
 
 
 def save_json_to_file(json_data: Dict[str, Any], file_path: str) -> None:

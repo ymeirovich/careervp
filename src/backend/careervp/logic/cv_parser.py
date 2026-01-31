@@ -8,7 +8,7 @@ Supports English and Hebrew (RTL) documents.
 
 import json
 import re
-from typing import Literal
+from typing import Any, Dict, Literal
 
 from langdetect import LangDetectException, detect
 
@@ -146,7 +146,7 @@ def clean_text(text: str) -> str:
     return '\n'.join(lines)
 
 
-def parse_llm_response(response_text: str) -> dict:
+def parse_llm_response(response_text: str) -> Dict[str, Any]:
     """Parse JSON from LLM response, handling potential markdown code blocks."""
     # Remove markdown code blocks if present
     text = response_text.strip()
@@ -157,7 +157,10 @@ def parse_llm_response(response_text: str) -> dict:
     if text.endswith('```'):
         text = text[:-3]
 
-    return json.loads(text.strip())
+    data = json.loads(text.strip())
+    if not isinstance(data, dict):
+        raise ValueError('LLM response did not return a JSON object')
+    return data
 
 
 @tracer.capture_method(capture_response=False)
@@ -233,12 +236,21 @@ def parse_cv(  # noqa: C901 - consolidates extraction, cleaning, LLM parsing, an
         logger.error('LLM extraction failed', error=llm_result.error)
         return Result(success=False, error=f'LLM extraction failed: {llm_result.error}', code=llm_result.code)
 
+    if llm_result.data is None:
+        logger.error('LLM extraction returned no data', result_code=llm_result.code)
+        return Result(success=False, error='LLM extraction returned no data', code=ResultCode.INTERNAL_ERROR)
+
+    llm_payload: Dict[str, Any] = llm_result.data
+
     # Step 4: Parse and validate response
     try:
-        extracted_data = parse_llm_response(llm_result.data['text'])
+        extracted_data = parse_llm_response(llm_payload['text'])
     except json.JSONDecodeError as e:
-        logger.error('Failed to parse LLM JSON response', error=str(e), response=llm_result.data['text'][:500])
+        logger.error('Failed to parse LLM JSON response', error=str(e), response=llm_payload['text'][:500])
         return Result(success=False, error=f'Failed to parse extraction result: {e}', code=ResultCode.INTERNAL_ERROR)
+    except (KeyError, TypeError) as e:
+        logger.error('LLM response missing text payload', error=str(e), response=llm_payload)
+        return Result(success=False, error='LLM response missing text payload', code=ResultCode.INTERNAL_ERROR)
 
     # Build UserCV model
     try:

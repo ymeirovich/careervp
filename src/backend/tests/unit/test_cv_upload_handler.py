@@ -8,10 +8,12 @@ Per docs/specs/01-cv-parser.md and CLAUDE.md patterns.
 import base64
 import json
 import os
+from typing import Any, Dict, cast
 from unittest.mock import MagicMock, patch
 
 import boto3
 import pytest
+from aws_lambda_powertools.utilities.typing import LambdaContext
 from moto import mock_aws
 
 from careervp.models.result import Result, ResultCode
@@ -121,7 +123,7 @@ def mock_llm_success():
     return mock_result
 
 
-def generate_api_gw_event(body: dict, path: str = '/api/cv', method: str = 'POST') -> dict:
+def generate_api_gw_event(body: Dict[str, Any], path: str = '/api/cv', method: str = 'POST') -> Dict[str, Any]:
     """Generate an API Gateway event for testing."""
     return {
         'version': '1.0',
@@ -152,14 +154,14 @@ def generate_api_gw_event(body: dict, path: str = '/api/cv', method: str = 'POST
     }
 
 
-def generate_lambda_context():
+def generate_lambda_context() -> LambdaContext:
     """Generate a mock Lambda context."""
     context = MagicMock()
     context.aws_request_id = 'test-request-id'
     context.function_name = 'cv-upload-handler'
     context.memory_limit_in_mb = 1024
     context.invoked_function_arn = 'arn:aws:lambda:us-east-1:123456789012:function:cv-upload'
-    return context
+    return cast(LambdaContext, context)
 
 
 class TestCVUploadValidation:
@@ -526,7 +528,7 @@ class TestCVUploadErrorHandling:
             BillingMode='PAY_PER_REQUEST',
         )
 
-        llm_error_result = Result(
+        llm_error_result: Result[Dict[str, Any]] = Result(
             success=False,
             error='LLM API rate limited',
             code=ResultCode.LLM_RATE_LIMITED,

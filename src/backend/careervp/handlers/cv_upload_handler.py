@@ -10,6 +10,7 @@ import json
 import time
 import uuid
 from http import HTTPStatus
+from typing import Any, Dict
 
 import boto3
 from aws_lambda_env_modeler import get_environment_variables
@@ -33,14 +34,14 @@ from careervp.models.result import ResultCode
 app = APIGatewayRestResolver()
 
 
-def _get_s3_client():
+def _get_s3_client() -> Any:
     """Get S3 client (separated for testability)."""
     return boto3.client('s3')
 
 
 @app.post('/api/cv')
 @tracer.capture_method(capture_response=False)
-def upload_cv() -> Response:
+def upload_cv() -> Response[Any]:
     """
     Handle CV upload and parsing request.
 
@@ -230,6 +231,6 @@ def _get_status_code_for_result_code(code: str) -> int:
 
 @logger.inject_lambda_context(correlation_id_path=API_GATEWAY_REST)
 @tracer.capture_lambda_handler(capture_response=False)
-def lambda_handler(event: dict, context: LambdaContext) -> dict:
+def lambda_handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
     """Lambda entry point for CV upload."""
     return app.resolve(event, context)
