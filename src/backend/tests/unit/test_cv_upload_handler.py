@@ -8,6 +8,7 @@ Per docs/specs/01-cv-parser.md and CLAUDE.md patterns.
 import base64
 import json
 import os
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import boto3
@@ -152,7 +153,7 @@ def generate_api_gw_event(body: dict, path: str = '/api/cv', method: str = 'POST
     }
 
 
-def generate_lambda_context():
+def generate_lambda_context() -> Any:
     """Generate a mock Lambda context."""
     context = MagicMock()
     context.aws_request_id = 'test-request-id'
@@ -526,7 +527,7 @@ class TestCVUploadErrorHandling:
             BillingMode='PAY_PER_REQUEST',
         )
 
-        llm_error_result = Result(
+        llm_error_result: Result[dict[str, Any] | None] = Result(
             success=False,
             error='LLM API rate limited',
             code=ResultCode.LLM_RATE_LIMITED,

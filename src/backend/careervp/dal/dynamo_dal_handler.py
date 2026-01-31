@@ -3,7 +3,6 @@ from typing import Any
 import boto3
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
-from cachetools import TTLCache, cached
 from mypy_boto3_dynamodb import DynamoDBServiceResource
 from mypy_boto3_dynamodb.service_resource import Table
 from pydantic import ValidationError
@@ -24,10 +23,10 @@ class DynamoDalHandler(DalHandler):
     def __init__(self, table_name: str):
         self.table_name = table_name
 
-    @cached(cache=TTLCache(maxsize=1, ttl=300))
     def _get_db_handler(self, table_name: str) -> Table:
         logger.info('opening connection to dynamodb table', table_name=table_name)
-        dynamodb: DynamoDBServiceResource = boto3.resource('dynamodb')
+        session = boto3.session.Session()
+        dynamodb: DynamoDBServiceResource = session.resource('dynamodb')
         return dynamodb.Table(table_name)
 
     @tracer.capture_method(capture_response=False)

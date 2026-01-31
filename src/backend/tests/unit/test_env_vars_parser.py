@@ -20,8 +20,11 @@ class MySchema(BaseModel):
     REST_API: HttpUrl
 
 
-def test_handler_missing_env_var():
+def test_handler_missing_env_var(monkeypatch: pytest.MonkeyPatch):
     # Given: A handler that requires certain environment variables
+    for key in (POWERTOOLS_SERVICE_NAME, POWER_TOOLS_LOG_LEVEL, 'REST_API'):
+        monkeypatch.delenv(key, raising=False)
+
     @init_environment_variables(model=MySchema)
     def my_handler1(event, context) -> dict[str, Any]:
         return {}

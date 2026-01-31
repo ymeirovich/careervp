@@ -9,6 +9,7 @@ from careervp.constants import (
     OWNER_TAG,
     SERVICE_NAME,
     SERVICE_NAME_TAG,
+    STACK_FEATURE,
 )
 from careervp.naming_utils import NamingUtils
 from careervp.utils import get_construct_name, get_username
@@ -22,13 +23,13 @@ class ServiceStack(Stack):
         scope: Construct,
         id: str,
         is_production_env: bool,
-        naming: NamingUtils,
-        stack_feature: str,
+        naming: NamingUtils | None = None,
+        stack_feature: str | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(scope, id, **kwargs)
-        self.naming = naming
-        self.stack_feature = stack_feature
+        self.naming = naming or NamingUtils(environment=ENVIRONMENT)
+        self.stack_feature = stack_feature or STACK_FEATURE
         self._add_stack_tags()
 
         # This construct should be deployed in a different repo and have its own pipeline so updates can be decoupled
@@ -46,7 +47,7 @@ class ServiceStack(Stack):
             get_construct_name(stack_prefix=id, construct_name="Crud"),
             self.dynamic_configuration.app_name,
             is_production_env=is_production_env,
-            naming=naming,
+            naming=self.naming,
         )
 
         # add security check
