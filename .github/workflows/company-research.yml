@@ -93,6 +93,10 @@ jobs:
           mkdir -p .build/lambdas
           touch .build/lambdas/.placeholder
           cd ../.. && cd infra && npx cdk synth
+        env:
+          AWS_DEFAULT_ACCOUNT: "000000000000"  # avoid STS call during synth
+          AWS_DEFAULT_REGION: ${{ env.AWS_REGION }}
+          AWS_EC2_METADATA_DISABLED: "true"
 
       - name: OpenAPI drift check
         working-directory: src/backend
