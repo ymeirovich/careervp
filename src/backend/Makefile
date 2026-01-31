@@ -1,5 +1,6 @@
 .PHONY: dev lint mypy-lint complex coverage pre-commit sort deploy destroy deps unit infra-tests integration e2e coverage-tests docs lint-docs build format format-fix compare-openapi openapi pr watch update-deps
-PYTHON := ".venv/bin/python3"
+PYTHON := .venv/bin/python3
+APP := ../../infra/app.py
 .ONESHELL:  # run all commands in a single shell, ensuring it runs within a local virtual env
 
 # Keep Lambda runtime configuration in one place so packaging, dependencies,
@@ -60,12 +61,16 @@ build: deps check-runtime
 		-v $(PWD):/app \
 		-w /app \
 		$(LAMBDA_BASE_IMAGE) \
-		-c "microdnf install -y gcc libxml2-devel libxslt-devel >/dev/null && pip install --prefer-binary -r lambda_requirements.txt -t .build/lambdas"
+		-c "microdnf install -y gcc libxml2-devel libxslt-devel >/dev/null && \
+		    pip install --prefer-binary -r lambda_requirements.txt -t .build/lambdas && \
+		    chown -R $$(id -u):$$(id -g) .build/lambdas"
 	rsync -a careervp .build/lambdas \
 		--exclude 'cdk.out' \
 		--exclude '.mypy_cache' \
 		--exclude '.venv' \
 		--exclude '*.log'
+	@test -d .build/lambdas/careervp || (echo "ERROR: careervp not found in build" && exit 1)
+	@echo "Build verified: careervp package present"
 	mkdir -p .build/common_layer
 	uv export --no-dev --no-editable --no-emit-project --no-color --format=requirements-txt > .build/common_layer/requirements.txt
 
@@ -87,7 +92,7 @@ coverage-tests:
 	uv run pytest tests/unit tests/integration  --cov-config=.coveragerc --cov=careervp --cov-report xml
 
 deploy: build
-	npx cdk deploy --app="${PYTHON} ${PWD}/../infra/app.py" --require-approval=never
+	npx cdk deploy --app="$(PYTHON) $(APP)" --require-approval=never
 
 destroy:
 	npx cdk destroy --app="$(PYTHON) ${PWD}/../infra/app.py" --force

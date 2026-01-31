@@ -35,3 +35,5 @@ src/backend/.build/*
 #node modules
 */node_modules/*
 node_modules
+
+temp

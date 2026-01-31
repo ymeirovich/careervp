@@ -15,7 +15,6 @@ from typing import Any
 import boto3
 from aws_lambda_env_modeler import get_environment_variables
 from aws_lambda_powertools.event_handler import (
-    APIGatewayRestResolver,
     Response,
     content_types,
 )
@@ -28,11 +27,10 @@ from botocore.exceptions import ClientError
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.handlers.models.env_vars import CVUploadEnvVars
 from careervp.handlers.utils.observability import logger, tracer
+from careervp.handlers.utils.rest_api_resolver import app
 from careervp.logic.cv_parser import create_cv_parse_response, parse_cv
 from careervp.models.cv import CVParseRequest, CVParseResponse
 from careervp.models.result import ResultCode
-
-app = APIGatewayRestResolver()
 
 
 def _get_s3_client() -> BaseClient:
