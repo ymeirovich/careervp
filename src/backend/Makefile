@@ -54,9 +54,8 @@ unit:
 	uv run pytest tests/unit  --cov-config=.coveragerc --cov=careervp --cov-report xml
 
 build: deps check-runtime
-	@set -euo pipefail && \
-	rm -rf .build/lambdas && \
-	mkdir -p .build/lambdas && \
+	rm -rf .build/lambdas
+	mkdir -p .build/lambdas
 	docker run --rm --platform $(DOCKER_PLATFORM) \
 		--entrypoint /bin/sh \
 		-v $(PWD):/app \
@@ -64,14 +63,14 @@ build: deps check-runtime
 		$(LAMBDA_BASE_IMAGE) \
 		-c "microdnf install -y gcc libxml2-devel libxslt-devel >/dev/null && \
 		    pip install --prefer-binary -r lambda_requirements.txt -t .build/lambdas && \
-		    chown -R $$(id -u):$$(id -g) .build/lambdas" && \
+		    chown -R $$(id -u):$$(id -g) .build/lambdas"
 	rsync -a careervp .build/lambdas \
 		--exclude 'cdk.out' \
 		--exclude '.mypy_cache' \
 		--exclude '.venv' \
-		--exclude '*.log' && \
-	test -d .build/lambdas/careervp || (echo "ERROR: careervp not found in build" && exit 1) && \
-	echo "Build verified: careervp package present"
+		--exclude '*.log'
+	@test -d .build/lambdas/careervp || (echo "ERROR: careervp not found in build" && exit 1)
+	@echo "Build verified: careervp package present"
 	mkdir -p .build/common_layer
 	uv export --no-dev --no-editable --no-emit-project --no-color --format=requirements-txt > .build/common_layer/requirements.txt
 
