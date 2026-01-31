@@ -140,6 +140,7 @@ jobs:
         working-directory: src/backend
         run: make e2e
       - name: Destroy stack
-        if: ${{ always() && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        # Keep successful deployments for inspection; tear down only on failure/cancel
+        if: ${{ (failure() || cancelled()) && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) }}
         working-directory: src/backend
         run: make destroy
