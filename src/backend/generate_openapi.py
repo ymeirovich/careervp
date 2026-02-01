@@ -102,12 +102,17 @@ def main(out_destination: str, out_filename: str, swagger_url_key: str, stack_na
             print(f'Swagger endpoint URL with key "{swagger_url_key}" not found in stack outputs.')
     except NoCredentialsError:
         # CI safety: if no AWS creds, fall back to current checked-in swagger to keep compare-openapi stable
-        source_swagger = os.path.join('docs', 'swagger', 'openapi.json')
+        candidate_sources = [
+            os.path.join('docs', 'swagger', 'openapi.json'),  # when run from repo root
+            os.path.join('..', 'docs', 'swagger', 'openapi.json'),  # when run from src/backend
+        ]
         dest_swagger = os.path.join(out_destination, out_filename)
-        if os.path.exists(source_swagger):
-            os.makedirs(out_destination, exist_ok=True)
-            shutil.copyfile(source_swagger, dest_swagger)
-            print(f'No AWS credentials found; copied existing {source_swagger} to {dest_swagger} as fallback for drift check.')
+        for source_swagger in candidate_sources:
+            if os.path.exists(source_swagger):
+                os.makedirs(out_destination, exist_ok=True)
+                shutil.copyfile(source_swagger, dest_swagger)
+                print(f'No AWS credentials found; copied existing {source_swagger} to {dest_swagger} as fallback for drift check.')
+                break
         else:
             print('No AWS credentials and source Swagger file not found; skipping OpenAPI download.')
 
