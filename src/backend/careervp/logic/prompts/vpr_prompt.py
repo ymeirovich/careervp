@@ -140,9 +140,37 @@ If you cannot verify a fact, DO NOT INCLUDE IT.
 
 ---
 
-OUTPUT FORMAT: Professional markdown document, ready for DOCX export.
+OUTPUT FORMAT: Return ONLY valid JSON (no markdown formatting, no code blocks). The JSON will be parsed programmatically.
 
-Generate the VPR now:"""
+```json
+{{
+  "executive_summary": "...",
+  "evidence_matrix": [
+    {{
+      "requirement": "Exact requirement from job posting",
+      "evidence": "Specific facts from CV + gap responses",
+      "alignment_score": "Strong|Moderate|Developing",
+      "impact_potential": "How this translates to role success"
+    }}
+  ],
+  "differentiators": ["different strength 1", "different strength 2"],
+  "gap_strategies": [
+    {{
+      "gap": "Missing requirement",
+      "mitigation_approach": "How to address this",
+      "transferable_skills": ["skill 1", "skill 2"]
+    }}
+  ],
+  "cultural_fit": "Analysis based on company research",
+  "talking_points": ["point 1", "point 2"],
+  "keywords": ["keyword 1", "keyword 2"],
+  "language": "en",
+  "version": 1,
+  "word_count": 1500
+}}
+```
+
+Generate the JSON VPR now:"""
 
 # Anti-AI detection list from docs/specs/03-vpr-generator.md lines 80-84.
 BANNED_WORDS: list[str] = [
