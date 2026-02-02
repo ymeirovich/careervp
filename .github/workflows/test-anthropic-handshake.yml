@@ -1,0 +1,71 @@
+name: Anthropic Integration Tests
+
+on:
+  push:
+    branches:
+      - main
+      - feature/anthropic-integration
+    paths:
+      - 'src/backend/careervp/logic/utils/llm_client.py'
+      - 'src/backend/careervp/logic/prompts/*.py'
+      - 'src/backend/tests/**'
+      - '.github/workflows/test-anthropic-handshake.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PYTHON_VERSION: '3.14'
+  AWS_REGION: 'us-east-1'
+
+jobs:
+  anthropic-handshake-test:
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      - name: Install dependencies
+        working-directory: src/backend
+        run: |
+          uv sync
+          source .venv/bin/activate
+          uv pip install -e .
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          role-session-name: anthropic-test-${{ github.sha }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Ensure SSM Parameter exists
+        run: |
+          aws ssm put-parameter \
+            --name "/careervp/dev/anthropic-api-key" \
+            --value "${{ secrets.ANTHROPIC_API_KEY }}" \
+            --type SecureString \
+            --overwrite 2>/dev/null || true
+      - name: Run unit tests for LLM client
+        working-directory: src/backend
+        run: |
+          source .venv/bin/activate
+          uv run pytest tests/unit/test_llm_client.py -v --tb=short
+      - name: Run VPR integration test
+        working-directory: src/backend
+        run: |
+          source .venv/bin/activate
+          uv run pytest tests/integration/test_vpr_integration.py -v --tb=short -k "test_vpr_success"
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      - name: Report results
+        if: always()
+        run: |
+          echo "## Anthropic Integration Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- LLM client tests: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- VPR integration tests: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
