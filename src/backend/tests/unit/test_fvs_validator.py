@@ -6,7 +6,7 @@ Per .clauderules: Never mark a task as complete until its unit test passes.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, cast
 
@@ -234,7 +234,7 @@ class TestVPRValidationAgainstCV:
             keywords=['Enablement'],
             version=1,
             language='en',
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             word_count=0,
         )
 
