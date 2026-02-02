@@ -14,10 +14,12 @@ on:
 permissions:
   contents: read
   deployments: write
+  id-token: write  # Required for OIDC
 
 env:
-  PYTHON_VERSION: '3.12'
-  NODE_VERSION: '20'
+  PYTHON_VERSION: '3.14'
+  NODE_VERSION: '22'
+  AWS_REGION: 'us-east-1'
 
 jobs:
   deploy-dev:
@@ -38,11 +40,27 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
-      - name: Deploy dev
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          role-session-name: deploy-dev-${{ github.sha }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Ensure SSM Parameter exists
+        run: |
+          aws ssm put-parameter \
+            --name "/careervp/dev/anthropic-api-key" \
+            --value "${{ secrets.ANTHROPIC_API_KEY }}" \
+            --type SecureString \
+            --overwrite
+      - name: Build and Deploy
+        working-directory: src/backend
         env:
           ENVIRONMENT: dev
-        working-directory: infra
-        run: uv run cdk deploy --require-approval never
+        run: make deploy
+      - name: Post-deploy smoke test
+        working-directory: src/backend
+        run: make smoke-test
 
   deploy-other:
     if: github.event_name == 'workflow_dispatch'
@@ -64,8 +82,26 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
-      - name: Deploy ${{ inputs.environment }}
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          role-session-name: deploy-${{ inputs.environment }}-${{ github.sha }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Ensure SSM Parameter exists
+        run: |
+          aws ssm put-parameter \
+            --name "/careervp/${{ inputs.environment }}/anthropic-api-key" \
+            --value "${{ secrets.ANTHROPIC_API_KEY }}" \
+            --type SecureString \
+            --overwrite
+      - name: Build and Deploy
+        working-directory: src/backend
         env:
           ENVIRONMENT: ${{ inputs.environment }}
-        working-directory: infra
-        run: uv run cdk deploy
+        run: make deploy
+      - name: Post-deploy smoke test
+        working-directory: src/backend
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+        run: make smoke-test

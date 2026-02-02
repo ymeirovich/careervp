@@ -201,6 +201,15 @@ class ApiConstruct(Construct):
                         ),
                     ]
                 ),
+                "ssm_parameters": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=["ssm:GetParameter"],
+                            resources=["arn:aws:ssm:*:*:parameter/careervp/*"],
+                            effect=iam.Effect.ALLOW,
+                        )
+                    ]
+                ),
             },
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name(
@@ -260,6 +269,7 @@ class ApiConstruct(Construct):
                 "TABLE_NAME": db.table_name,
                 "IDEMPOTENCY_TABLE_NAME": idempotency_table.table_name,
                 "CV_BUCKET_NAME": cv_bucket.bucket_name,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=0,
@@ -303,12 +313,14 @@ class ApiConstruct(Construct):
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
             handler="careervp.handlers.vpr_handler.lambda_handler",
             function_name=function_name,
+            description="Updated for JSON response parsing and improved VPR generation",
             environment={
                 "DYNAMODB_TABLE_NAME": db.table_name,
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-vpr",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": constants.ENVIRONMENT,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=0,
@@ -357,6 +369,7 @@ class ApiConstruct(Construct):
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": constants.ENVIRONMENT,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=0,

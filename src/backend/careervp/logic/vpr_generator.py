@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, cast
 
 from careervp.logic.fvs_validator import validate_vpr_against_cv
@@ -149,11 +149,24 @@ def generate_vpr(request: VPRRequest, user_cv: UserCV, dal: DynamoDalHandler) ->
 def _parse_llm_response(response_text: str, request: VPRRequest) -> VPR:
     """
     Parse structured JSON response produced by Sonnet (spec line 97).
+    Handles LLM responses that may be wrapped in code blocks.
     """
+    # Strip code block markers if present
+    cleaned_text = response_text.strip()
+    if cleaned_text.startswith('```'):
+        # Remove opening code block
+        first_newline = cleaned_text.find('\n')
+        if first_newline != -1:
+            cleaned_text = cleaned_text[first_newline + 1 :]
+        # Remove closing code block
+        if cleaned_text.endswith('```'):
+            cleaned_text = cleaned_text[:-3]
+        cleaned_text = cleaned_text.strip()
+
     try:
-        payload = json.loads(response_text)
+        payload = json.loads(cleaned_text)
     except json.JSONDecodeError as exc:
-        raise ValueError('LLM response is not valid JSON') from exc
+        raise ValueError(f'LLM response is not valid JSON: {exc}') from exc
 
     evidence_items = [
         EvidenceItem(
@@ -197,7 +210,7 @@ def _parse_llm_response(response_text: str, request: VPRRequest) -> VPR:
         keywords=keywords,
         language=payload.get('language', request.job_posting.language),
         version=int(payload.get('version', 1)),
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
         word_count=int(payload.get('word_count', 0)),
     )
 

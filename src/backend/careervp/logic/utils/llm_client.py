@@ -12,8 +12,10 @@ from functools import wraps
 from time import sleep
 from typing import Any, Callable, ParamSpec, TypeVar, cast
 
+import boto3
 from anthropic import Anthropic, APIError, RateLimitError
 from aws_lambda_powertools.metrics import MetricUnit
+from botocore.exceptions import BotoCoreError, ClientError
 
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.models.result import Result, ResultCode
@@ -21,9 +23,9 @@ from careervp.models.result import Result, ResultCode
 P = ParamSpec('P')
 R = TypeVar('R')
 
-# Model IDs per Decision 1.2 in CLAUDE.md
-SONNET_MODEL_ID = 'claude-sonnet-4-5-20250514'
-HAIKU_MODEL_ID = 'claude-haiku-4-5-20250514'
+# Model IDs per Decision 1.2 in CLAUDE.md - Updated to current available versions
+SONNET_MODEL_ID = 'claude-sonnet-4-5-20250929'
+HAIKU_MODEL_ID = 'claude-haiku-4-5-20251001'
 
 # Cost thresholds for alerting (per CLAUDE.md Emergency Contacts)
 MAX_COST_PER_APPLICATION = 0.15
@@ -85,10 +87,43 @@ class LLMRouter:
     """
 
     def __init__(self, api_key: str | None = None):
+        # Priority: explicit api_key > direct env var > SSM Parameter Store
         self._api_key = api_key or os.environ.get('ANTHROPIC_API_KEY')
+
         if not self._api_key:
-            raise ValueError('ANTHROPIC_API_KEY environment variable not set')
+            # Try to fetch from SSM Parameter Store
+            ssm_param_name = os.environ.get('ANTHROPIC_API_KEY_SSM_PARAM')
+            if ssm_param_name:
+                logger.info('Fetching ANTHROPIC_API_KEY from SSM Parameter Store', parameter=ssm_param_name)
+                self._api_key = self._fetch_from_ssm(ssm_param_name)
+
+        if not self._api_key:
+            raise ValueError('ANTHROPIC_API_KEY not found in environment variable or SSM Parameter Store')
+
         self._client = Anthropic(api_key=self._api_key)
+
+    def _fetch_from_ssm(self, parameter_name: str) -> str | None:
+        """
+        Fetch API key from SSM Parameter Store.
+
+        Args:
+            parameter_name: SSM parameter path (e.g., /careervp/dev/anthropic-api-key)
+
+        Returns:
+            The parameter value or None if fetch fails
+        """
+        try:
+            ssm_client = boto3.client('ssm')
+            response = ssm_client.get_parameter(Name=parameter_name, WithDecryption=True)
+            api_key: str = response['Parameter']['Value']
+            logger.info('Successfully fetched ANTHROPIC_API_KEY from SSM', parameter=parameter_name)
+            return api_key
+        except (ClientError, BotoCoreError) as e:
+            logger.error('Failed to fetch parameter from SSM', parameter=parameter_name, error=str(e))
+            return None
+        except KeyError as e:
+            logger.error('Unexpected SSM response structure', parameter=parameter_name, error=str(e))
+            return None
 
     def _resolve_model(self, mode: TaskMode) -> str:
         """Route to appropriate model based on task complexity."""

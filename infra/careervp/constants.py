@@ -89,6 +89,12 @@ CONFIGURATION_NAME = "careervp_config"
 CONFIGURATION_MAX_AGE_MINUTES = "5"
 
 # =============================================================================
+# SSM PARAMETERS
+# =============================================================================
+ANTHROPIC_API_KEY_SSM_PARAM = f"/careervp/{ENVIRONMENT}/anthropic-api-key"
+ANTHROPIC_API_KEY_ENV_VAR = "ANTHROPIC_API_KEY_SSM_PARAM"
+
+# =============================================================================
 # BUILD PATHS
 # =============================================================================
 project_root = Path(__file__).parent.parent.parent
