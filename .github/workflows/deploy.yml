@@ -38,6 +38,9 @@ jobs:
         with:
           version: "latest"
           enable-cache: false
+      - name: Build Lambda code
+        working-directory: src/backend
+        run: make build
       - name: Deploy dev
         env:
           ENVIRONMENT: dev
@@ -64,6 +67,9 @@ jobs:
         with:
           version: "latest"
           enable-cache: false
+      - name: Build Lambda code
+        working-directory: src/backend
+        run: make build
       - name: Deploy ${{ inputs.environment }}
         env:
           ENVIRONMENT: ${{ inputs.environment }}
