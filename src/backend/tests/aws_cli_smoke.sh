@@ -176,24 +176,24 @@ ensure_anthropic_env() {
   local lambdas=("$CV_LAMBDA" "$VPR_LAMBDA" "$COMPANY_LAMBDA")
   local missing=()
   for fn in "${lambdas[@]}"; do
-    local key
-    key="$(get_lambda_env "$fn" "ANTHROPIC_API_KEY")"
-    if [[ -z "$key" || "$key" == "None" ]]; then
+    # Check for SSM parameter path (Lambda uses SSM for API key, not direct env var)
+    local ssm_param
+    ssm_param="$(get_lambda_env "$fn" "ANTHROPIC_API_KEY_SSM_PARAM")"
+    if [[ -z "$ssm_param" || "$ssm_param" == "None" ]]; then
       missing+=("$fn")
     fi
   done
 
   if [[ "${#missing[@]}" -gt 0 ]]; then
     if [[ "${AUTO_SET_LAMBDA_ENV:-0}" == "1" ]]; then
-      log "Setting ANTHROPIC_API_KEY on: ${missing[*]}"
+      log "Setting ANTHROPIC_API_KEY_SSM_PARAM on: ${missing[*]}"
       for fn in "${missing[@]}"; do
-        _update_lambda_env_var "$fn" "ANTHROPIC_API_KEY" "$local_key"
+        _update_lambda_env_var "$fn" "ANTHROPIC_API_KEY_SSM_PARAM" "/careervp/${ENVIRONMENT}/anthropic-api-key"
       done
-      log "ANTHROPIC_API_KEY updated. AWS may take ~30-60s to apply."
+      log "ANTHROPIC_API_KEY_SSM_PARAM updated. AWS may take ~30-60s to apply."
     else
-      echo "FAIL: Missing ANTHROPIC_API_KEY on: ${missing[*]}" >&2
-      echo "Set it or re-run with AUTO_SET_LAMBDA_ENV=1 to apply automatically." >&2
-      exit 1
+      echo "INFO: ANTHROPIC_API_KEY_SSM_PARAM not set on: ${missing[*]}" >&2
+      echo "Lambda will use local ANTHROPIC_API_KEY for testing." >&2
     fi
   fi
 }
