@@ -48,6 +48,52 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE }}
           role-session-name: deploy-dev-${{ github.sha }}
           aws-region: us-east-1
+      - name: Clean up stuck changesets
+        run: |
+          STACK_NAME="CareerVpCrudDev"
+          echo "Checking for stuck changesets..."
+          CHANGESETS=$(aws cloudformation list-change-sets \
+            --stack-name "$STACK_NAME" \
+            --query "Summaries[?Status==\`CREATE_IN_PROGRESS\` || Status==\`FAILED\`].ChangeSetName" \
+            --output text 2>/dev/null || echo "")
+
+          if [ -n "$CHANGESETS" ]; then
+            echo "Found stuck changesets, cleaning up..."
+            echo "$CHANGESETS" | tr '\t' '\n' | while read changeset; do
+              if [ -n "$changeset" ]; then
+                echo "  Deleting: $changeset"
+                aws cloudformation delete-change-set \
+                  --stack-name "$STACK_NAME" \
+                  --change-set-name "$changeset" 2>/dev/null || true
+              fi
+            done
+          else
+            echo "No stuck changesets found."
+          fi
+      - name: Wait for stack stability
+        run: |
+          STACK_NAME="CareerVpCrudDev"
+          STATUS=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query "Stacks[0].StackStatus" \
+            --output text 2>/dev/null || echo "NOT_FOUND")
+
+          case "$STATUS" in
+            *CREATE_IN_PROGRESS*|*UPDATE_IN_PROGRESS*)
+              echo "Stack is $STATUS, waiting for completion..."
+              aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME" 2>/dev/null || \
+              aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" 2>/dev/null || true
+              ;;
+            *FAILED*|*ROLLBACK*)
+              echo "Stack is in failed state ($STATUS), deleting for clean deploy..."
+              aws cloudformation delete-stack --stack-name "$STACK_NAME"
+              echo "Waiting for stack deletion..."
+              aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || true
+              ;;
+            *)
+              echo "Stack status: $STATUS"
+              ;;
+          esac
       - name: Deploy dev
         env:
           ENVIRONMENT: dev
@@ -83,6 +129,52 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE }}
           role-session-name: deploy-${{ inputs.environment }}-${{ github.sha }}
           aws-region: us-east-1
+      - name: Clean up stuck changesets
+        run: |
+          STACK_NAME="CareerVpCrudDev"
+          echo "Checking for stuck changesets..."
+          CHANGESETS=$(aws cloudformation list-change-sets \
+            --stack-name "$STACK_NAME" \
+            --query "Summaries[?Status==\`CREATE_IN_PROGRESS\` || Status==\`FAILED\`].ChangeSetName" \
+            --output text 2>/dev/null || echo "")
+
+          if [ -n "$CHANGESETS" ]; then
+            echo "Found stuck changesets, cleaning up..."
+            echo "$CHANGESETS" | tr '\t' '\n' | while read changeset; do
+              if [ -n "$changeset" ]; then
+                echo "  Deleting: $changeset"
+                aws cloudformation delete-change-set \
+                  --stack-name "$STACK_NAME" \
+                  --change-set-name "$changeset" 2>/dev/null || true
+              fi
+            done
+          else
+            echo "No stuck changesets found."
+          fi
+      - name: Wait for stack stability
+        run: |
+          STACK_NAME="CareerVpCrudDev"
+          STATUS=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query "Stacks[0].StackStatus" \
+            --output text 2>/dev/null || echo "NOT_FOUND")
+
+          case "$STATUS" in
+            *CREATE_IN_PROGRESS*|*UPDATE_IN_PROGRESS*)
+              echo "Stack is $STATUS, waiting for completion..."
+              aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME" 2>/dev/null || \
+              aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" 2>/dev/null || true
+              ;;
+            *FAILED*|*ROLLBACK*)
+              echo "Stack is in failed state ($STATUS), deleting for clean deploy..."
+              aws cloudformation delete-stack --stack-name "$STACK_NAME"
+              echo "Waiting for stack deletion..."
+              aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || true
+              ;;
+            *)
+              echo "Stack status: $STATUS"
+              ;;
+          esac
       - name: Deploy ${{ inputs.environment }}
         env:
           ENVIRONMENT: ${{ inputs.environment }}
