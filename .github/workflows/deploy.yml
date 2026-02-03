@@ -52,7 +52,7 @@ jobs:
         env:
           ENVIRONMENT: dev
         working-directory: infra
-        run: npx cdk deploy --require-approval never
+        run: npx cdk deploy CareerVpCrudDev --require-approval never --outputs-file cdk-outputs.json
 
   deploy-other:
     if: github.event_name == 'workflow_dispatch'
@@ -87,4 +87,4 @@ jobs:
         env:
           ENVIRONMENT: ${{ inputs.environment }}
         working-directory: infra
-        run: npx cdk deploy
+        run: npx cdk deploy CareerVpCrudDev --require-approval never --outputs-file cdk-outputs.json
