@@ -177,14 +177,14 @@ jobs:
 
       - name: Upload cdk.out
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cdk-out-company-research
           path: src/backend/cdk.out
 
       - name: Upload coverage
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-company-research
           path: src/backend/coverage.xml
