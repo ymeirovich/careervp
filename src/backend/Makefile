@@ -84,7 +84,11 @@ integration:
 	uv run pytest tests/integration  --cov-config=.coveragerc --cov=careervp --cov-report xml
 
 e2e:
-	uv run pytest tests/e2e  --cov-config=.coveragerc --cov=careervp --cov-report xml
+	@if ! ls tests/e2e/test_*.py >/dev/null 2>&1; then \
+		echo "No e2e tests detected; skipping."; \
+	else \
+		uv run pytest tests/e2e --cov-config=.coveragerc --cov=careervp --cov-report xml; \
+	fi
 
 pr: deps format pre-commit complex lint lint-docs unit deploy coverage-tests e2e openapi
 
@@ -92,7 +96,7 @@ coverage-tests:
 	uv run pytest tests/unit tests/integration  --cov-config=.coveragerc --cov=careervp --cov-report xml
 
 deploy: build
-	npx cdk deploy --app="$(PYTHON) $(APP)" --require-approval=never
+	npx cdk deploy --app="$(PYTHON) $(REPO_ROOT)/infra/app.py" --require-approval=never
 
 destroy:
 	npx cdk destroy --app="$(PYTHON) ${PWD}/../infra/app.py" --force

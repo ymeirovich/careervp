@@ -1,4 +1,4 @@
-from os import getenv
+import os
 from typing import TypeVar, Union
 
 import boto3
@@ -25,18 +25,22 @@ def get_configuration_store() -> FeatureFlags:
     if _DYNAMIC_CONFIGURATION is None:
         # init singleton
         env_vars: DynamicConfiguration = get_environment_variables(model=DynamicConfiguration)
-        session = boto3.session.Session(region_name=getenv('AWS_REGION') or getenv('AWS_DEFAULT_REGION') or 'us-east-1')
         conf_store = AppConfigStore(
             environment=env_vars.CONFIGURATION_ENV,
             application=env_vars.CONFIGURATION_APP,
             name=env_vars.CONFIGURATION_NAME,
             max_age=env_vars.CONFIGURATION_MAX_AGE_MINUTES,
             envelope=_DEFAULT_FEATURE_FLAGS_ROOT,
-            boto3_session=session,
+            boto3_session=_build_boto3_session(),
         )
         _DYNAMIC_CONFIGURATION = FeatureFlags(store=conf_store)
 
     return _DYNAMIC_CONFIGURATION
+
+
+def _build_boto3_session() -> boto3.session.Session:
+    region = os.getenv('AWS_REGION') or os.getenv('AWS_DEFAULT_REGION') or 'us-east-1'
+    return boto3.session.Session(region_name=region)
 
 
 def parse_configuration(model: type[Model]) -> Model:

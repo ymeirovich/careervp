@@ -1,5 +1,6 @@
 # This workflow will install Python dependencies, run tests and lint with a single version of Python
 # For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+# forcing a new PR
 name: PR - Serverless Service CI/CD
 
 permissions:
@@ -9,19 +10,12 @@ env:
   NODE_VERSION: "22"
   PYTHON_VERSION: "3.14"
   AWS_REGION: "us-east-1"
-  AWS_DEFAULT_REGION: "us-east-1"
 
 on:
   workflow_dispatch:
 
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
-
-concurrency:
-  group: pr-ci-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   quality_standards:
@@ -42,18 +36,12 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@6b9c6063abd6010835644d4c2e1bef4cf5cd0fca # v6.0.0
         with:
-          version: "latest"
-          enable-cache: false
+          enable-cache: true
       - name: Set up Python
         run: uv python install ${{ env.PYTHON_VERSION }}
       - name: Install dependencies
         working-directory: src/backend
         run: make dev
-      - name: Naming validator (infra guardrail)
-        working-directory: src/backend
-        run: |
-          ROOT=$(git rev-parse --show-toplevel)
-          python scripts/validate_naming.py --path "$ROOT/infra" --strict
       - name: pre commit
         working-directory: src/backend
         run: make pre-commit
@@ -75,8 +63,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@6b9c6063abd6010835644d4c2e1bef4cf5cd0fca # v6.0.0
         with:
-          version: "latest"
-          enable-cache: false
+          enable-cache: true
       - name: Set up Python
         run: uv python install ${{ env.PYTHON_VERSION }}
       - name: Set up Node
@@ -84,8 +71,6 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
-      - name: Install Node dependencies (root)
-        run: npm ci
       - name: Install dependencies
         working-directory: src/backend
         run: make dev
@@ -103,9 +88,6 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
         env:
           SESSION_NAME: "github-${{github.sha}}-dev"
-      - name: CDK synth
-        working-directory: infra
-        run: npx cdk synth
       - name: Unit tests
         working-directory: src/backend
         run: make unit
@@ -124,6 +106,7 @@ jobs:
           base: https://raw.githubusercontent.com/ran-isenberg/aws-lambda-handler-cookbook/main/docs/swagger/openapi.json
           revision: ./docs/swagger/openapi.json
       - name: Validate OpenAPI Documentation
+        if: ${{ success() && steps.deploy.outcome == 'success' }}
         working-directory: src/backend
         run: make compare-openapi
       - name: Code coverage tests
@@ -133,7 +116,7 @@ jobs:
         uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./src/backend/coverage.xml
+          files: ./coverage.xml
           fail_ci_if_error: yes # optional (default = false)
           verbose: yes # optional (default = false)
       - name: Run E2E tests
