@@ -68,7 +68,7 @@ def sqs_client(aws_credentials):
         )["Attributes"]["QueueArn"]
 
         # Create main queue with DLQ configuration
-        queue_response = client.create_queue(
+        _ = client.create_queue(
             QueueName="careervp-vpr-jobs-queue-dev",
             Attributes={
                 "VisibilityTimeout": "660",  # 11 minutes
@@ -555,7 +555,7 @@ def test_worker_handles_failure_with_dlq(
     queue_url = sqs_client.get_queue_url(QueueName="careervp-vpr-jobs-queue-dev")[
         "QueueUrl"
     ]
-    dlq_url = sqs_client.get_queue_url(QueueName="careervp-vpr-jobs-dlq-dev")[
+    _ = sqs_client.get_queue_url(QueueName="careervp-vpr-jobs-dlq-dev")[
         "QueueUrl"
     ]
 
@@ -575,7 +575,7 @@ def test_worker_handles_failure_with_dlq(
 
     # Act - Simulate worker failure (receive and don't delete, 3 times)
     for attempt in range(3):
-        messages = sqs_client.receive_message(
+        _ = sqs_client.receive_message(
             QueueUrl=queue_url, MaxNumberOfMessages=1, WaitTimeSeconds=1
         )
         # Don't delete message - simulates worker crash/failure

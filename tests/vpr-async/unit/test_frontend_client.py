@@ -10,9 +10,7 @@ Tests cover:
 """
 
 import pytest
-import json
-from unittest.mock import Mock, patch, AsyncMock
-from datetime import datetime, timedelta
+from unittest.mock import AsyncMock
 
 
 class VPRAsyncClient:
@@ -115,7 +113,7 @@ class VPRAsyncClient:
                 else:
                     raise ValueError(f"HTTP {response['status_code']}")
 
-            except Exception as e:
+            except Exception:
                 # Retry on transient errors
                 if poll_count < max_polls - 1:
                     backoff_delay = min(poll_interval * (2**poll_count), 60)

@@ -13,7 +13,7 @@ import pytest
 import json
 import uuid
 from datetime import datetime, timedelta
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock
 from enum import Enum
 
 
@@ -331,7 +331,7 @@ class TestVPRAsyncWorkflowJobCreation:
         workflow = VPRAsyncWorkflow(jobs_repo, sqs_client, s3_client, claude_client)
 
         before = datetime.utcnow()
-        result = workflow.create_job(
+        _ = workflow.create_job(
             user_id="user-123",
             application_id="app-456",
             vpr_request={"company_name": "Test Co"},
@@ -468,7 +468,7 @@ class TestVPRAsyncWorkflowStateMachine:
         workflow = VPRAsyncWorkflow(jobs_repo, sqs_client, s3_client, claude_client)
 
         # Should handle gracefully (no reprocessing)
-        result = workflow.process_job("job-123")
+        _ = workflow.process_job("job-123")
         # Result will complete again unless we add state validation
 
 

@@ -12,10 +12,8 @@ Tests CRUD operations on the careervp-jobs-table-dev DynamoDB table:
 
 from datetime import datetime, timedelta
 from typing import Any
-from unittest.mock import MagicMock, patch
 
 import pytest
-from botocore.exceptions import ClientError
 from moto import mock_aws
 import boto3
 

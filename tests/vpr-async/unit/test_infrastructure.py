@@ -9,12 +9,9 @@ Tests AWS resource configurations deployed by Task 7.1:
 - Uses CDK assertions and boto3 describe APIs
 """
 
-import json
 from typing import Any
 
 import pytest
-from aws_cdk import App, Environment
-from aws_cdk.assertions import Match, Template
 
 # Note: In actual implementation, import from:
 # from careervp.service_stack import ServiceStack

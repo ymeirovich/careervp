@@ -12,10 +12,8 @@ Tests cover:
 """
 
 import pytest
-import json
 import re
 from typing import Dict, List, Any
-from unittest.mock import Mock, patch
 
 
 class DeploymentValidator:
@@ -265,7 +263,7 @@ class DeploymentValidator:
             self.errors.append("S3 bucket must have public access block enabled")
 
         # Validate versioning
-        if bucket_config.get("versioning") != True:
+        if not bucket_config.get("versioning"):
             self.warnings.append("S3 bucket should have versioning enabled")
 
         # Validate encryption
@@ -439,7 +437,7 @@ class DeploymentValidator:
         for policy in policies:
             actions = policy.get("actions", [])
             if "*" in actions:
-                self.warnings.append(f"Role has wildcard actions: consider restricting")
+                self.warnings.append("Role has wildcard actions: consider restricting")
 
         return True
 
@@ -503,9 +501,9 @@ class TestResourceNamingValidation:
         validator = DeploymentValidator("dev")
 
         valid_names = {
-            "queue": "careervp-vpr-jobs-queue-dev",
-            "queue": "careervp-vpr-jobs-queue-staging",
-            "queue": "careervp-vpr-jobs-queue-prod",
+            "queue_dev": "careervp-vpr-jobs-queue-dev",
+            "queue_staging": "careervp-vpr-jobs-queue-staging",
+            "queue_prod": "careervp-vpr-jobs-queue-prod",
         }
 
         assert validator.validate_resource_names(valid_names)
@@ -515,9 +513,9 @@ class TestResourceNamingValidation:
         validator = DeploymentValidator("dev")
 
         invalid_names = {
-            "queue": "vpr-jobs-queue",  # Missing prefix
-            "queue": "careervp-vpr-jobs-queue",  # Missing environment
-            "queue": "careervp-vpr-jobs-queue-staging",  # Wrong environment
+            "queue_missing_prefix": "vpr-jobs-queue",  # Missing prefix
+            "queue_missing_env": "careervp-vpr-jobs-queue",  # Missing environment
+            "queue_wrong_env": "careervp-vpr-jobs-queue-staging",  # Wrong environment
         }
 
         assert not validator.validate_resource_names(invalid_names)
