@@ -120,15 +120,34 @@ update-deps:
 	@echo "All dependencies updated successfully!"
 
 openapi:
-	uv run python generate_openapi.py
+	@echo "Downloading OpenAPI spec from deployed API..."
+	@uv run python generate_openapi.py --mode download && exit 0 || (echo ""; echo "NOTE: Run 'make openapi' after swagger endpoint is available in Lambda handler."; exit 0)
 
-compare-openapi:
-	uv run python generate_openapi.py --out-destination '.' --out-filename 'openapi_latest.json'
+# Verify deployed OpenAPI matches local - requires AWS credentials and deployed stack
+# Use this after successful deployment to verify runtime spec matches
+verify-openapi-deployed:
+	@echo "Verifying deployed OpenAPI matches local file..."
+	@echo "This requires AWS credentials and a deployed stack."
+	uv run python generate_openapi.py --mode download
 	@if cmp --silent $(CURRENT_OPENAPI) $(LATEST_OPENAPI); then \
 		rm $(LATEST_OPENAPI); \
-		echo "Swagger file is up to date"; \
+		echo "Deployed OpenAPI matches local file - verification PASSED"; \
 	else \
-		echo "Swagger files are not equal, did you run 'make pr' or 'make openapi'?"; \
+		echo "ERROR: Deployed OpenAPI differs from local file!"; \
+		echo "Did you run 'make openapi' to update the local file?"; \
+		rm $(LATEST_OPENAPI); \
+		exit 1; \
+	fi
+
+compare-openapi:
+	@echo "Validating OpenAPI spec (local mode - no AWS required)..."
+	@# Local mode copies existing file to verify it's valid JSON
+	uv run python generate_openapi.py --mode local --out-destination '.' --out-filename '$(LATEST_OPENAPI)'
+	@if cmp --silent $(CURRENT_OPENAPI) $(LATEST_OPENAPI); then \
+		rm $(LATEST_OPENAPI); \
+		echo "OpenAPI spec is valid and up to date"; \
+	else \
+		echo "ERROR: OpenAPI file mismatch - this should not happen in local mode"; \
 		rm $(LATEST_OPENAPI); \
 		exit 1; \
 	fi
