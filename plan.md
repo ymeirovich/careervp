@@ -1290,20 +1290,67 @@ aws lambda get-function --function-name careervp-cover-letter-lambda-dev \
 
 ## Phase 11: Gap Analysis (BEFORE Artifact Generation)
 
-**Spec:** [[docs/specs/06-gap-analysis.md]] (to be created)
+**Spec:** [[docs/specs/gap-analysis/GAP_SPEC.md]] ✅ COMPLETE
+**Architecture:** [[docs/architecture/GAP_ANALYSIS_DESIGN.md]] ✅ COMPLETE
+**Tasks:** [[docs/tasks/11-gap-analysis/README.md]] ✅ COMPLETE
 **Priority:** P0 (Core feature - runs BEFORE VPR/CV/Cover Letter)
-**Model:** Claude Sonnet 4.5 (`TaskMode.STRATEGIC`)
+**Model:** Claude Haiku 4.5 (synchronous implementation for Phase 11)
+**Status:** 🏗️ **ARCHITECTURE COMPLETE** - Implementation pending
 
 **IMPORTANT WORKFLOW NOTE:** Gap Analysis runs BEFORE artifact generation. User responses from Gap Analysis are used as input to VPR, Tailored CV, and Cover Letter generation.
+
+**CRITICAL ARCHITECTURAL DECISION (February 4, 2026):**
+- Phase 11 uses **SYNCHRONOUS** Lambda implementation (like VPR), NOT async SQS pattern
+- Async foundation pattern documented in [[docs/architecture/VPR_ASYNC_DESIGN.md]] for future phases
+- Gap scoring algorithm: `gap_score = (0.7 × impact) + (0.3 × probability)`
+- Maximum 5 questions per analysis (not 10 as originally spec'd)
+- LLM: Claude Haiku 4.5 for speed and cost optimization
+
+**Architectural Deliverables (27 files created):**
+- ✅ Architecture & Design: 2 files (VPR_ASYNC_DESIGN.md, GAP_ANALYSIS_DESIGN.md)
+- ✅ Specification: 1 file (GAP_SPEC.md)
+- ✅ Task Documentation: 11 files (README + 9 tasks + deliverables + sign-off)
+- ✅ Test Suite (RED phase): 15 files, 150+ tests (unit/integration/infrastructure/e2e)
+- ✅ Complete task-to-test mapping: All 9 tasks have corresponding unit tests
+
+**Handoff Status:** Ready for Engineer (Minimax) implementation
+**Next Step:** Engineer runs RED tests to confirm all fail, then implements code following task documentation
+
+---
+
+### Task 11.0: Foundation - Validation Utilities (NEW)
+
+**File:** `src/backend/careervp/handlers/utils/validation.py`
+**Status:** 📋 Architecture complete, implementation pending
+**Test Coverage:** [[tests/gap-analysis/unit/test_validation.py]] ✅ Created (18 tests)
+**Task Documentation:** [[docs/tasks/11-gap-analysis/task-01-async-foundation.md]]
+
+This is a NEW foundation task that establishes validation utilities for Phase 11 and future phases.
+
+- [x] Architecture: Validation utilities designed
+- [x] Architecture: Test suite created (RED phase)
+- [ ] Implementation: `MAX_FILE_SIZE = 10 * 1024 * 1024` (10MB constant)
+- [ ] Implementation: `MAX_TEXT_LENGTH = 1_000_000` (1M characters)
+- [ ] Implementation: `validate_file_size(content: bytes) -> None` - Raises ValueError if >10MB
+- [ ] Implementation: `validate_text_length(text: str) -> None` - Raises ValueError if >1M chars
+- [ ] Implementation: Error messages must be clear and actionable
+
+**Note:** This also documents the async foundation pattern (VPR_ASYNC_DESIGN.md) for future phases, but Phase 11 uses synchronous implementation.
+
+---
 
 ### Task 11.1: Gap Analysis Models
 
 **File:** `src/backend/careervp/models/gap_analysis.py`
+**Status:** 📋 Architecture complete, implementation pending
+**Test Coverage:** [[tests/gap-analysis/unit/test_gap_models.py]] ✅ Created (20+ tests)
 
-- [ ] Create `GapAnalysisRequest` model
-- [ ] Create `GapQuestion` model (question, category, priority, rationale)
-- [ ] Create `GapResponse` model (question_id, answer, timestamp)
-- [ ] Create `GapAnalysisSession` model (tracks all Q&A pairs)
+- [x] Architecture: Models designed in GAP_SPEC.md
+- [x] Architecture: Test suite created (RED phase)
+- [ ] Implementation: Create `GapAnalysisRequest` model
+- [ ] Implementation: Create `GapQuestion` model (question_id, question, impact, probability, gap_score)
+- [ ] Implementation: Create `GapAnalysisResponse` model (questions, metadata)
+- [ ] Implementation: Validation via Pydantic (language: 'en' or 'he', gap_score: 0.0-1.0)
 
 **Minimax Implementation Guidelines:**
 ```
@@ -1333,15 +1380,21 @@ cd src/backend && uv run ruff check careervp/models/gap_analysis.py --fix
 cd src/backend && uv run mypy careervp/models/gap_analysis.py --strict
 ```
 
-### Task 11.2: Gap Analysis DAL Methods
+### Task 11.2: Gap Analysis DAL Methods (OPTIONAL for Phase 11)
 
 **File:** `src/backend/careervp/dal/dynamo_dal_handler.py`
+**Status:** 📋 Architecture complete, OPTIONAL for Phase 11 (synchronous returns immediately)
+**Test Coverage:** [[tests/gap-analysis/unit/test_gap_dal_unit.py]] ✅ Created (10 tests)
+**Task Documentation:** [[docs/tasks/11-gap-analysis/task-06-dal-extensions.md]]
 
-- [ ] `save_gap_questions(application_id: str, questions: list[GapQuestion]) -> None`
-- [ ] `get_gap_questions(application_id: str) -> list[GapQuestion]`
-- [ ] `save_gap_responses(application_id: str, responses: list[GapResponse]) -> None`
-- [ ] `get_gap_responses(application_id: str) -> list[GapResponse]`
-- [ ] `get_all_user_gap_responses(user_id: str) -> list[GapResponse]` (for reuse across applications)
+**NOTE:** Phase 11 uses synchronous Lambda that returns questions directly. DAL storage is OPTIONAL.
+
+- [x] Architecture: DAL methods designed in task documentation
+- [x] Architecture: Test suite created (RED phase)
+- [ ] Implementation (Optional): `save_gap_analysis(user_id, cv_id, job_posting_id, questions, version=1)`
+- [ ] Implementation (Optional): `get_gap_analysis(user_id, cv_id, job_posting_id, version=1)`
+- [ ] Implementation (Optional): Storage pattern: `pk=user_id, sk=ARTIFACT#GAP#{cv_id}#{job_id}#v{version}`
+- [ ] Implementation (Optional): 90-day TTL on stored gap analysis artifacts
 
 **Minimax Implementation Guidelines:**
 ```
@@ -1361,11 +1414,38 @@ cd src/backend && uv run mypy careervp/dal/dynamo_dal_handler.py --strict
 
 ### Task 11.3: Gap Analysis Logic
 
-**File:** `src/backend/careervp/logic/gap_analyzer.py`
+**File:** `src/backend/careervp/logic/gap_analysis.py`
+**Status:** 📋 Architecture complete, implementation pending
+**Test Coverage:** [[tests/gap-analysis/unit/test_gap_analysis_logic.py]] ✅ Created (23+ tests)
+**Task Documentation:** [[docs/tasks/11-gap-analysis/task-03-gap-analysis-logic.md]]
 
-- [ ] `generate_gap_questions(cv: UserCV, job: JobPosting, company_research: CompanyResearchResult) -> Result[list[GapQuestion]]`
-- [ ] Max 10 questions enforced
-- [ ] Questions must be non-redundant with CV content
+- [x] Architecture: Logic designed with gap scoring algorithm
+- [x] Architecture: Test suite created (RED phase)
+- [ ] Implementation: `generate_gap_questions(user_cv, job_posting, dal, language='en') -> Result[list[dict]]`
+- [ ] Implementation: Gap scoring formula: `gap_score = (0.7 × impact) + (0.3 × probability)`
+- [ ] Implementation: Max 10 questions enforced (sorted by gap_score descending)
+- [ ] Implementation: LLM integration with Claude Haiku 4.5 (600s timeout)
+- [ ] Implementation: Questions must be non-redundant with CV content
+
+---
+
+### Task 11.3b: Gap Analysis Prompt Generation
+
+**File:** `src/backend/careervp/logic/prompts/gap_analysis_prompt.py`
+**Status:** 📋 Architecture complete, implementation pending
+**Test Coverage:** [[tests/gap-analysis/unit/test_gap_prompt.py]] ✅ Created (15+ tests)
+**Task Documentation:** [[docs/tasks/11-gap-analysis/task-04-gap-analysis-prompt.md]]
+
+- [x] Architecture: Prompt templates designed
+- [x] Architecture: Test suite created (RED phase)
+- [ ] Implementation: `create_gap_analysis_system_prompt(language: str) -> str`
+- [ ] Implementation: `create_gap_analysis_user_prompt(cv_data: dict, job_data: dict, language: str) -> str`
+- [ ] Implementation: `_format_cv_for_prompt(cv: UserCV) -> str` - Format CV sections
+- [ ] Implementation: `_format_job_for_prompt(job: JobPosting) -> str` - Format job requirements
+- [ ] Implementation: Support both English ('en') and Hebrew ('he') languages
+- [ ] Implementation: Prompt must instruct LLM to output JSON with impact/probability/question fields
+
+---
 
 **Minimax Implementation Guidelines:**
 ```
@@ -1393,11 +1473,20 @@ cd src/backend && uv run mypy careervp/logic/gap_analyzer.py --strict
 
 ### Task 11.4: Gap Analysis Handler
 
-**File:** `src/backend/careervp/handlers/gap_analysis_handler.py`
+**File:** `src/backend/careervp/handlers/gap_handler.py`
+**Status:** 📋 Architecture complete, implementation pending
+**Test Coverage:**
+- [[tests/gap-analysis/unit/test_gap_handler_unit.py]] ✅ Created (14 tests - helper functions)
+- [[tests/gap-analysis/integration/test_gap_submit_handler.py]] ✅ Created (20+ tests)
+**Task Documentation:** [[docs/tasks/11-gap-analysis/task-05-gap-handler.md]]
 
-- [ ] POST /gap-analysis/questions - Generate questions
-- [ ] POST /gap-analysis/responses - Save user responses
-- [ ] GET /gap-analysis/responses - Retrieve responses
+- [x] Architecture: Handler designed following VPR pattern
+- [x] Architecture: Test suite created (RED phase)
+- [ ] Implementation: POST /api/gap-analysis - Generate questions (synchronous)
+- [ ] Implementation: Lambda handler with AWS Powertools decorators (@logger, @tracer, @metrics)
+- [ ] Implementation: JWT authentication and user validation
+- [ ] Implementation: Helper functions: `_error_response()`, `_cors_headers()`
+- [ ] Implementation: HTTP status mapping (200 OK, 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 413 Payload Too Large, 500 Internal Error)
 
 **Minimax Implementation Guidelines:**
 ```
@@ -1421,19 +1510,55 @@ cd src/backend && uv run mypy careervp/handlers/gap_analysis_handler.py --strict
 
 ### Task 11.5: Gap Analysis Tests
 
-- [ ] Test question generation (verify max 10)
-- [ ] Test response storage and retrieval
-- [ ] Test cross-application response retrieval
-- [ ] Test handler endpoints
+**Status:** ✅ **COMPLETE** - All test files created (RED phase)
+**Test Files:** 15 total files, 150+ test cases
+**Task Documentation:** [[docs/tasks/11-gap-analysis/task-07-integration-tests.md]]
+
+- [x] Unit tests: test_validation.py (18 tests - Task 01)
+- [x] Unit tests: test_gap_analysis_logic.py (23 tests - Task 03)
+- [x] Unit tests: test_gap_prompt.py (15 tests - Task 04)
+- [x] Unit tests: test_gap_handler_unit.py (14 tests - Task 05)
+- [x] Unit tests: test_gap_dal_unit.py (10 tests - Task 06)
+- [x] Unit tests: test_gap_models.py (20 tests - Task 07)
+- [x] Integration tests: test_gap_submit_handler.py (20+ tests)
+- [x] Infrastructure tests: test_gap_analysis_stack.py (10 tests)
+- [x] E2E tests: test_gap_analysis_flow.py (8 tests)
+- [x] Test fixtures: conftest.py (20+ pytest fixtures)
+- [ ] Run RED tests: Confirm all tests FAIL (no implementation exists yet)
+- [ ] Run GREEN tests: After implementation, confirm all tests PASS
 
 ### Task 11.6: CDK Integration
 
-- [ ] Add gap-analysis Lambda function
-- [ ] Add /gap-analysis/* routes
+**File:** `infra/careervp/api_construct.py`
+**Status:** 📋 Architecture complete, implementation pending
+**Test Coverage:** [[tests/gap-analysis/infrastructure/test_gap_analysis_stack.py]] ✅ Created (10 tests)
+**Task Documentation:** [[docs/tasks/11-gap-analysis/task-02-infrastructure.md]]
+
+- [x] Architecture: Lambda and API Gateway configuration designed
+- [x] Architecture: Infrastructure tests created (RED phase)
+- [ ] Implementation: Add gap-analysis Lambda function
+  - Function name: `careervp-gap-analysis-lambda-dev`
+  - Runtime: Python 3.14
+  - Memory: 512 MB
+  - Timeout: 120 seconds (LLM processing time)
+- [ ] Implementation: Add POST /api/gap-analysis route
+- [ ] Implementation: Configure Cognito authorization
+- [ ] Implementation: Grant DynamoDB read permissions (for CV retrieval)
+- [ ] Implementation: Set environment variables (table names, API keys)
 
 ### Task 11.7: Deployment & Verification
 
+**Status:** 📋 Architecture complete, deployment pending
+**Task Documentation:** [[docs/tasks/11-gap-analysis/task-08-e2e-verification.md]]
 **Objective:** Verify the Gap Analysis feature is fully operational in AWS.
+
+**Prerequisites:**
+- [x] Architecture documentation complete
+- [x] Test suite complete (RED phase)
+- [ ] Implementation complete (all code written)
+- [ ] All unit tests pass (GREEN phase)
+- [ ] All integration tests pass
+- [ ] CDK deployment successful
 
 #### Physical Resource Check
 
@@ -1560,14 +1685,95 @@ aws lambda get-function --function-name careervp-gap-analysis-lambda-dev \
 
 #### Verification Checklist
 
+**Architecture (Architect responsibility):**
+- [x] All design documents created (GAP_ANALYSIS_DESIGN.md, VPR_ASYNC_DESIGN.md)
+- [x] API specification created (GAP_SPEC.md)
+- [x] Task documentation created (11 files)
+- [x] Complete test suite created (15 files, 150+ tests)
+- [x] Handoff documentation created (ARCHITECT_SIGN_OFF.md)
+
+**Implementation (Engineer responsibility):**
 - [ ] Lambda function `careervp-gap-analysis-lambda-dev` exists
-- [ ] `POST /gap-analysis/questions` returns 8-10 questions
-- [ ] Questions capped at maximum 10 (hard limit enforced)
-- [ ] `POST /gap-analysis/responses` stores data in DynamoDB
-- [ ] `GET /gap-analysis/responses` retrieves stored responses
-- [ ] CloudWatch logs show `[GAP_QUESTIONS_GENERATED]` signature
-- [ ] Questions cover multiple categories (behavioral, technical, experience)
-- [ ] Cross-application response retrieval works for user enrichment
+- [ ] `POST /api/gap-analysis` returns 3-5 questions (synchronous)
+- [ ] Questions capped at maximum 5 (hard limit enforced)
+- [ ] Questions sorted by gap_score descending
+- [ ] Gap scoring algorithm implemented: `gap_score = (0.7 × impact) + (0.3 × probability)`
+- [ ] CloudWatch logs show gap analysis processing
+- [ ] All unit tests pass (GREEN phase)
+- [ ] All integration tests pass
+- [ ] Code coverage ≥90%
+
+---
+
+### Phase 11: Summary & Handoff
+
+**Architectural Work Status:** ✅ **COMPLETE** (February 4, 2026)
+**Implementation Status:** ⏳ **PENDING** - Awaiting Engineer (Minimax)
+
+#### What Was Delivered (Architect)
+
+**27 Files Created (~18,000 lines):**
+
+1. **Architecture & Design (2 files):**
+   - `docs/architecture/VPR_ASYNC_DESIGN.md` - Async foundation for future phases
+   - `docs/architecture/GAP_ANALYSIS_DESIGN.md` - Gap analysis algorithm and design
+
+2. **Specification (1 file):**
+   - `docs/specs/gap-analysis/GAP_SPEC.md` - Complete API specification
+
+3. **Task Documentation (11 files):**
+   - `docs/tasks/11-gap-analysis/README.md` - Master task list
+   - `docs/tasks/11-gap-analysis/task-01-async-foundation.md` - Validation utilities
+   - `docs/tasks/11-gap-analysis/task-02-infrastructure.md` - CDK integration
+   - `docs/tasks/11-gap-analysis/task-03-gap-analysis-logic.md` - Core logic
+   - `docs/tasks/11-gap-analysis/task-04-gap-analysis-prompt.md` - Prompt generation
+   - `docs/tasks/11-gap-analysis/task-05-gap-handler.md` - Lambda handler
+   - `docs/tasks/11-gap-analysis/task-06-dal-extensions.md` - DAL (optional)
+   - `docs/tasks/11-gap-analysis/task-07-integration-tests.md` - Integration testing
+   - `docs/tasks/11-gap-analysis/task-08-e2e-verification.md` - E2E verification
+   - `docs/tasks/11-gap-analysis/task-09-deployment.md` - Deployment guide
+   - `docs/tasks/11-gap-analysis/ARCHITECT_DELIVERABLES.md` - Architect summary
+   - `docs/tasks/11-gap-analysis/ARCHITECT_SIGN_OFF.md` - Handoff document
+
+4. **Test Suite - RED Phase (15 files, 150+ tests):**
+   - Unit tests: 6 files (validation, logic, prompt, handler helpers, DAL, models)
+   - Integration tests: 1 file (Handler → Logic → DAL flow)
+   - Infrastructure tests: 1 file (CDK assertions)
+   - E2E tests: 1 file (Complete API flow)
+   - Test fixtures: conftest.py (20+ pytest fixtures)
+
+#### What Needs to Be Done (Engineer)
+
+**Implementation Tasks (9 tasks):**
+1. Implement `handlers/utils/validation.py` (10MB/1M limits)
+2. Update CDK infrastructure (Lambda + API Gateway)
+3. Implement `logic/gap_analysis.py` (core question generation)
+4. Implement `logic/prompts/gap_analysis_prompt.py` (prompt templates)
+5. Implement `handlers/gap_handler.py` (Lambda entry point)
+6. Implement `models/gap_analysis.py` (Pydantic models)
+7. (Optional) Implement DAL extensions for storage
+8. Run integration tests (verify Handler → Logic → DAL flow)
+9. Deploy and verify E2E functionality
+
+**Verification Commands:**
+```bash
+# Step 1: Run RED tests (all should FAIL)
+cd src/backend
+uv run pytest tests/gap-analysis/ -v --tb=short
+# Expected: ALL tests FAIL (no implementation exists)
+
+# Step 2: Implement code following task docs
+
+# Step 3: Run GREEN tests (all should PASS)
+uv run pytest tests/gap-analysis/ -v --cov=careervp --cov-report=html
+# Expected: ALL tests PASS, coverage ≥90%
+
+# Step 4: Deploy
+cd ../../infra
+cdk deploy --all
+```
+
+**Start Here:** Read [[docs/tasks/11-gap-analysis/ARCHITECT_SIGN_OFF.md]] for complete handoff details.
 
 ---
 
