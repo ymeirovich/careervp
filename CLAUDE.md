@@ -4,6 +4,7 @@
 - [cite_start]**Infrastructure:** AWS Serverless (Lambda, DynamoDB, S3, API Gateway)[cite: 250].
 - **Pattern:** Layered Monorepo (Handler -> Logic -> DAL).
 - [cite_start]**Cost Target:** 91%+ profit margin via Hybrid AI Strategy[cite: 617].
+- Environment: dev (AWS region: us-east-1)
 
 ## AI Model Strategy (Decision 1.2)
 - [cite_start]**Strategic (Sonnet 4.5):** VPR Generation, Gap Analysis[cite: 259, 266].
@@ -33,3 +34,16 @@
 **INCLUDED:** Auth, VPR, CV Tailoring, Cover Letter, Gap Analysis (10 Q max), Interview Prep (10 Q max), Company Research, Knowledge Base, English + Hebrew.
 
 **DEFERRED TO V2:** Job Tracking, French, API access, Team collaboration, OCR.
+
+**Active Commands:**
+- Backend: cd src/backend && uv run ruff format . && uv run ruff check --fix . && uv run mypy careervp --strict.
+- Testing: uv run pytest tests/unit/ -v --tb=short.
+- Infra: cd infra && uv sync && cdk synth.
+- Naming Check: python src/backend/scripts/validate_naming.py --path infra --strict.
+
+## Key Path Mappings
+- **Task Source:** `docs/tasks/`
+- **Infra Source:** `infra/careervp/` (CDK Stacks)
+- **Logic Source:** `src/backend/careervp/logic/`
+- **Models Source:** `src/backend/careervp/models/`
+- **Verification Scripts:** `src/backend/scripts/`

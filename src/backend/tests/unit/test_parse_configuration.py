@@ -26,7 +26,7 @@ def mock_dynamic_configuration(mocker: Any, mock_schema: dict[str, Any]) -> None
 
 
 @pytest.fixture(scope='module', autouse=True)
-def init():
+def init() -> None:
     os.environ['CONFIGURATION_APP'] = SERVICE_NAME
     os.environ['CONFIGURATION_ENV'] = ENVIRONMENT
     os.environ['CONFIGURATION_NAME'] = CONFIGURATION_NAME

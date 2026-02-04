@@ -1,5 +1,4 @@
 import careervp.constants as constants
-from pathlib import Path
 from aws_cdk import CfnOutput, Duration, RemovalPolicy, aws_apigateway
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
@@ -37,6 +36,9 @@ class ApiConstruct(Construct):
         )
         cv_resource = api_resource.add_resource(constants.GW_RESOURCE)
         vpr_resource = api_resource.add_resource(constants.GW_RESOURCE_VPR)
+        company_research_resource = api_resource.add_resource(
+            constants.GW_RESOURCE_COMPANY_RESEARCH
+        )
         self.cv_upload_func = self._add_post_lambda_integration(
             cv_resource,
             self.lambda_role,
@@ -51,6 +53,12 @@ class ApiConstruct(Construct):
             self.api_db.db,
             appconfig_app_name,
         )
+        self.company_research_func = self._add_company_research_lambda_integration(
+            company_research_resource,
+            self.lambda_role,
+            self.api_db.db,
+            appconfig_app_name,
+        )
         self._build_swagger_endpoints(
             rest_api=self.rest_api, dest_func=self.cv_upload_func
         )
@@ -60,7 +68,7 @@ class ApiConstruct(Construct):
             self.rest_api,
             self.api_db.db,
             self.api_db.idempotency_db,
-            [self.cv_upload_func, self.vpr_generator_func],
+            [self.cv_upload_func, self.vpr_generator_func, self.company_research_func],
             naming=naming,
         )
 
@@ -193,6 +201,15 @@ class ApiConstruct(Construct):
                         ),
                     ]
                 ),
+                "ssm_parameters": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=["ssm:GetParameter"],
+                            resources=["arn:aws:ssm:*:*:parameter/careervp/*"],
+                            effect=iam.Effect.ALLOW,
+                        )
+                    ]
+                ),
             },
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name(
@@ -239,7 +256,7 @@ class ApiConstruct(Construct):
             self,
             constants.CV_PARSER_LAMBDA,
             runtime=_lambda.Runtime.PYTHON_3_14,
-            code=self._lambda_code_asset(),
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
             handler="careervp.handlers.cv_upload_handler.lambda_handler",
             function_name=function_name,
             environment={
@@ -252,6 +269,7 @@ class ApiConstruct(Construct):
                 "TABLE_NAME": db.table_name,
                 "IDEMPOTENCY_TABLE_NAME": idempotency_table.table_name,
                 "CV_BUCKET_NAME": cv_bucket.bucket_name,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=0,
@@ -292,15 +310,17 @@ class ApiConstruct(Construct):
             self,
             constants.VPR_GENERATOR_LAMBDA,
             runtime=_lambda.Runtime.PYTHON_3_14,
-            code=self._lambda_code_asset(),
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
             handler="careervp.handlers.vpr_handler.lambda_handler",
             function_name=function_name,
+            description="Updated for JSON response parsing and improved VPR generation",
             environment={
                 "DYNAMODB_TABLE_NAME": db.table_name,
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-vpr",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": constants.ENVIRONMENT,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=0,
@@ -320,17 +340,51 @@ class ApiConstruct(Construct):
 
         return lambda_function
 
-    def _lambda_code_asset(self) -> _lambda.Code:
-        """Return lambda code asset; fallback to inline stub if build folder missing."""
-        build_path = Path(constants.BUILD_FOLDER)
-        if build_path.exists():
-            return _lambda.Code.from_asset(constants.BUILD_FOLDER)
-
-        build_path.mkdir(parents=True, exist_ok=True)
-        (build_path / ".placeholder").touch()
-        # Minimal handler to satisfy synth in CI when assets are not built.
-        inline_code = (
-            "def lambda_handler(event, context):\n"
-            "    return {'statusCode': 200, 'body': 'placeholder'}\n"
+    def _add_company_research_lambda_integration(
+        self,
+        api_resource: aws_apigateway.Resource,
+        role: iam.Role,
+        db: dynamodb.TableV2,
+        appconfig_app_name: str,
+    ) -> _lambda.Function:
+        function_name = self.naming.lambda_name(constants.COMPANY_RESEARCH_FEATURE)
+        log_group = logs.LogGroup(
+            self,
+            f"{constants.COMPANY_RESEARCH_LAMBDA}LogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
         )
-        return _lambda.Code.from_inline(inline_code)
+
+        lambda_function = _lambda.Function(
+            self,
+            constants.COMPANY_RESEARCH_LAMBDA,
+            runtime=_lambda.Runtime.PYTHON_3_14,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.company_research_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                "DYNAMODB_TABLE_NAME": db.table_name,
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-company-research",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                "CONFIGURATION_APP": appconfig_app_name,
+                "CONFIGURATION_ENV": constants.ENVIRONMENT,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+            },
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            timeout=Duration.seconds(60),
+            memory_size=512,
+            role=role,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+        api_resource.add_method(
+            http_method="POST",
+            integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
+        )
+
+        return lambda_function

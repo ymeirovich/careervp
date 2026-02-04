@@ -77,6 +77,9 @@ jobs:
         run: |
           ROOT=$(git rev-parse --show-toplevel)
           uv run python scripts/validate_naming.py --path "$ROOT/infra" --strict
+      - name: Build Lambda code
+        working-directory: src/backend
+        run: make build
       - name: Run cdk synth
         working-directory: infra
         run: npx cdk synth
