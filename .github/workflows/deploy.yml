@@ -1,0 +1,182 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy (dev, staging, prod)'
+        required: true
+        default: dev
+
+permissions:
+  contents: read
+  deployments: write
+  id-token: write  # Required for OIDC
+
+env:
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '20'
+
+jobs:
+  deploy-dev:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install Node dependencies
+        run: npm ci
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: false
+      - name: Build Lambda code
+        working-directory: src/backend
+        run: make build
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          role-session-name: deploy-dev-${{ github.sha }}
+          aws-region: us-east-1
+      - name: Clean up stuck changesets
+        run: |
+          STACK_NAME="CareerVpCrudDev"
+          echo "Checking for stuck changesets..."
+          CHANGESETS=$(aws cloudformation list-change-sets \
+            --stack-name "$STACK_NAME" \
+            --query "Summaries[?Status==\`CREATE_IN_PROGRESS\` || Status==\`FAILED\`].ChangeSetName" \
+            --output text 2>/dev/null || echo "")
+
+          if [ -n "$CHANGESETS" ]; then
+            echo "Found stuck changesets, cleaning up..."
+            echo "$CHANGESETS" | tr '\t' '\n' | while read changeset; do
+              if [ -n "$changeset" ]; then
+                echo "  Deleting: $changeset"
+                aws cloudformation delete-change-set \
+                  --stack-name "$STACK_NAME" \
+                  --change-set-name "$changeset" 2>/dev/null || true
+              fi
+            done
+          else
+            echo "No stuck changesets found."
+          fi
+      - name: Wait for stack stability
+        run: |
+          STACK_NAME="CareerVpCrudDev"
+          STATUS=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query "Stacks[0].StackStatus" \
+            --output text 2>/dev/null || echo "NOT_FOUND")
+
+          case "$STATUS" in
+            *CREATE_IN_PROGRESS*|*UPDATE_IN_PROGRESS*)
+              echo "Stack is $STATUS, waiting for completion..."
+              aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME" 2>/dev/null || \
+              aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" 2>/dev/null || true
+              ;;
+            *FAILED*|*ROLLBACK*)
+              echo "Stack is in failed state ($STATUS), deleting for clean deploy..."
+              aws cloudformation delete-stack --stack-name "$STACK_NAME"
+              echo "Waiting for stack deletion..."
+              aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || true
+              ;;
+            *)
+              echo "Stack status: $STATUS"
+              ;;
+          esac
+      - name: Deploy dev
+        env:
+          ENVIRONMENT: dev
+        working-directory: infra
+        run: npx cdk deploy CareerVpCrudDev --require-approval never --outputs-file cdk-outputs.json
+
+  deploy-other:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+      url: https://${{ inputs.environment }}.careervp.example.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install Node dependencies
+        run: npm ci
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: false
+      - name: Build Lambda code
+        working-directory: src/backend
+        run: make build
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          role-session-name: deploy-${{ inputs.environment }}-${{ github.sha }}
+          aws-region: us-east-1
+      - name: Clean up stuck changesets
+        run: |
+          STACK_NAME="CareerVpCrudDev"
+          echo "Checking for stuck changesets..."
+          CHANGESETS=$(aws cloudformation list-change-sets \
+            --stack-name "$STACK_NAME" \
+            --query "Summaries[?Status==\`CREATE_IN_PROGRESS\` || Status==\`FAILED\`].ChangeSetName" \
+            --output text 2>/dev/null || echo "")
+
+          if [ -n "$CHANGESETS" ]; then
+            echo "Found stuck changesets, cleaning up..."
+            echo "$CHANGESETS" | tr '\t' '\n' | while read changeset; do
+              if [ -n "$changeset" ]; then
+                echo "  Deleting: $changeset"
+                aws cloudformation delete-change-set \
+                  --stack-name "$STACK_NAME" \
+                  --change-set-name "$changeset" 2>/dev/null || true
+              fi
+            done
+          else
+            echo "No stuck changesets found."
+          fi
+      - name: Wait for stack stability
+        run: |
+          STACK_NAME="CareerVpCrudDev"
+          STATUS=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query "Stacks[0].StackStatus" \
+            --output text 2>/dev/null || echo "NOT_FOUND")
+
+          case "$STATUS" in
+            *CREATE_IN_PROGRESS*|*UPDATE_IN_PROGRESS*)
+              echo "Stack is $STATUS, waiting for completion..."
+              aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME" 2>/dev/null || \
+              aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" 2>/dev/null || true
+              ;;
+            *FAILED*|*ROLLBACK*)
+              echo "Stack is in failed state ($STATUS), deleting for clean deploy..."
+              aws cloudformation delete-stack --stack-name "$STACK_NAME"
+              echo "Waiting for stack deletion..."
+              aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || true
+              ;;
+            *)
+              echo "Stack status: $STATUS"
+              ;;
+          esac
+      - name: Deploy ${{ inputs.environment }}
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+        working-directory: infra
+        run: npx cdk deploy CareerVpCrudDev --require-approval never --outputs-file cdk-outputs.json

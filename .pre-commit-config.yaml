@@ -57,3 +57,8 @@ repos:
         types: [python]
         files: ^infra/
         pass_filenames: false
+      - id: pytest
+        name: Run pytest suite
+        entry: bash -c "cd src/backend && uv run pytest"
+        language: system
+        pass_filenames: false

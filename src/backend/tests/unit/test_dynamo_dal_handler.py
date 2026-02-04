@@ -3,7 +3,7 @@ VPR DynamoDAL tests per docs/specs/03-vpr-generator.md:14 storage contract.
 """
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Iterator
 
 import boto3
@@ -70,8 +70,6 @@ def dynamodb_table() -> Iterator[None]:
             BillingMode='PAY_PER_REQUEST',
         )
         table.meta.client.get_waiter('table_exists').wait(TableName=TABLE_NAME)
-        # Clear cached table clients so each test uses the fresh moto table.
-        DynamoDalHandler._get_db_handler.cache_clear()
         yield
 
 
@@ -102,7 +100,7 @@ def _build_vpr(version: int = 1, application_id: str = 'app-123', user_id: str =
         keywords=['Leadership', 'AI strategy'],
         version=version,
         language='en',
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
         word_count=1200,
     )
 

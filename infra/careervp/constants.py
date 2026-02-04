@@ -45,6 +45,7 @@ API_ROOT_RESOURCE = "api"
 GW_RESOURCE = "cv"
 GW_RESOURCE_VPR = "vpr"
 GW_RESOURCE_USERS = "users"
+GW_RESOURCE_COMPANY_RESEARCH = "company-research"
 
 # Swagger
 SWAGGER_RESOURCE = "swagger"
@@ -61,6 +62,8 @@ VPR_GENERATOR_LAMBDA = "VPRGenerator"
 VPR_GENERATOR_FEATURE = "vpr-generator"
 CV_TAILOR_LAMBDA = "CVTailor"
 COVER_LETTER_LAMBDA = "CoverLetter"
+COMPANY_RESEARCH_LAMBDA = "CompanyResearch"
+COMPANY_RESEARCH_FEATURE = "company-research"
 LAMBDA_SERVICE_NAME = "lambda"
 
 LAMBDA_LAYER_NAME = "common"
@@ -84,6 +87,12 @@ MONITORING_TOPIC = "MonitoringTopic"
 # =============================================================================
 CONFIGURATION_NAME = "careervp_config"
 CONFIGURATION_MAX_AGE_MINUTES = "5"
+
+# =============================================================================
+# SSM PARAMETERS
+# =============================================================================
+ANTHROPIC_API_KEY_SSM_PARAM = f"/careervp/{ENVIRONMENT}/anthropic-api-key"
+ANTHROPIC_API_KEY_ENV_VAR = "ANTHROPIC_API_KEY_SSM_PARAM"
 
 # =============================================================================
 # BUILD PATHS

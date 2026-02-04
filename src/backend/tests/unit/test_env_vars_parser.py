@@ -4,6 +4,7 @@ from unittest import mock
 
 import pytest
 from aws_lambda_env_modeler import get_environment_variables, init_environment_variables
+from aws_lambda_powertools.utilities.typing import LambdaContext
 from cdk.careervp.constants import (
     POWER_TOOLS_LOG_LEVEL,
     POWERTOOLS_SERVICE_NAME,
@@ -20,10 +21,13 @@ class MySchema(BaseModel):
     REST_API: HttpUrl
 
 
-def test_handler_missing_env_var():
+def test_handler_missing_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
     # Given: A handler that requires certain environment variables
+    for key in (POWERTOOLS_SERVICE_NAME, POWER_TOOLS_LOG_LEVEL, 'REST_API'):
+        monkeypatch.delenv(key, raising=False)
+
     @init_environment_variables(model=MySchema)
-    def my_handler1(event, context) -> dict[str, Any]:
+    def my_handler1(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
         return {}
 
     # When & Then: Handler is invoked without the required environment variables, expect a ValueError
@@ -32,10 +36,10 @@ def test_handler_missing_env_var():
 
 
 @mock.patch.dict(os.environ, {POWERTOOLS_SERVICE_NAME: SERVICE_NAME, POWER_TOOLS_LOG_LEVEL: 'DEBUG', 'REST_API': 'fakeapi'})
-def test_handler_invalid_env_var_value():
+def test_handler_invalid_env_var_value() -> None:
     # Given: A handler that requires certain environment variables with valid values
     @init_environment_variables(model=MySchema)
-    def my_handler2(event, context) -> dict[str, Any]:
+    def my_handler2(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
         return {}
 
     # When & Then: Handler is invoked with invalid environment variable values, expect a ValueError
@@ -46,10 +50,10 @@ def test_handler_invalid_env_var_value():
 @mock.patch.dict(
     os.environ, {POWERTOOLS_SERVICE_NAME: SERVICE_NAME, POWER_TOOLS_LOG_LEVEL: 'DEBUG', 'REST_API': 'https://www.ranthebuilder.cloud/api'}
 )
-def test_handler_schema_ok():
+def test_handler_schema_ok() -> None:
     # Given: A handler that requires certain environment variables with valid values
     @init_environment_variables(model=MySchema)
-    def my_handler(event, context) -> dict[str, Any]:
+    def my_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
         # When: Environment variables are retrieved
         env_vars: MySchema = get_environment_variables(model=MySchema)
 

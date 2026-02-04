@@ -8,7 +8,7 @@ from collections.abc import Callable, Sequence
 from typing import Final
 
 import boto3
-from botocore.client import BaseClient  # type: ignore[import-untyped]
+from botocore.client import BaseClient
 from botocore.exceptions import BotoCoreError, ClientError
 
 DEFAULT_ENV: Final[str] = 'dev'

@@ -4,6 +4,7 @@ careervp/api_construct.py
 careervp/api_db_construct.py
 careervp/constants.py
 careervp/monitoring.py
+careervp/naming_utils.py
 careervp/service_stack.py
 careervp/utils.py
 careervp/waf_construct.py
@@ -16,3 +17,8 @@ service_cdk.egg-info/SOURCES.txt
 service_cdk.egg-info/dependency_links.txt
 service_cdk.egg-info/requires.txt
 service_cdk.egg-info/top_level.txt
+tests/infrastructure/__init__.py
+tests/infrastructure/conftest.py
+tests/infrastructure/test_api_construct.py
+tests/infrastructure/test_monitoring.py
+tests/infrastructure/test_naming_utils.py
