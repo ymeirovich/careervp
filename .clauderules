@@ -23,6 +23,7 @@ All AWS physical resource names MUST follow the kebab-case convention:
 2. **Explicit Physical Names:** Always set `function_name`, `table_name`, `bucket_name` explicitly.
 3. **Constants Source of Truth:** Resource names derive from `infra/careervp/constants.py` and `src/backend/careervp/logic/utils/constants.py`.
 4. **Environment Suffix:** All physical names must end with `-{env}` (e.g., `-dev`, `-prod`).
+5. Ensure the Naming Convention Table is present: Follow the careervp-{feature}-{resource_type}-{env} format strictly.
 
 ### Code Convention Summary
 
@@ -124,6 +125,10 @@ uv run ruff check careervp/logic/<file>.py --fix
 - Deployment pipeline runs: `pytest tests/unit/ -v --tb=short`
 - Integration tests run on staging: `pytest tests/integration/ -v`
 
+### CI/CD Guardrails
+- MANDATORY: All code must pass cdk-synth and mypy --strict before marking a task complete.".
+- MANDATORY: All new result codes must be added to careervp/models/result.py before logic implementation.".
+
 ### Mandatory Cleanup
 
 - Before completing any task: `uv run ruff format .` and `uv run ruff check --fix .`
@@ -140,3 +145,13 @@ The Engineer (Codex) Rule: If any specified Path, Class Name, or Method Signatur
 
 ## The Architect (Claude) Rule:
 Upon a Blocking Issue, the Architect must analyze if the Spec is wrong or if the Environment needs refactoring. The Architect must provide a "Migration Path" in the next Task Guide.
+
+## Testing Laws:
+- Zero Ruff errors allowed. Target 80%+ line coverage for logic modules.".
+- Mock all external APIs (LLM, Scrapers) using unittest.mock.".
+
+## File Conventions
+- Python Modules: `snake_case.py` (e.g., `company_research.py`)
+- Infrastructure Scripts: `kebab-case.py` (e.g., `validate-naming.py`)
+- Documentation/Tasks: `task-##-name.md`
+- Tests: `test_*.py` located in `src/backend/tests/unit/`

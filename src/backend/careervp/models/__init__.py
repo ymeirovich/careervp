@@ -1,3 +1,9 @@
+from careervp.models.company import (
+    CompanyResearchRequest,
+    CompanyResearchResult,
+    ResearchSource,
+    SearchResult,
+)
 from careervp.models.cv import (
     Certification,
     ContactInfo,
@@ -23,4 +29,8 @@ __all__ = [
     'FVSBaseline',
     'CVParseRequest',
     'CVParseResponse',
+    'CompanyResearchRequest',
+    'CompanyResearchResult',
+    'SearchResult',
+    'ResearchSource',
 ]
