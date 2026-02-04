@@ -26,8 +26,17 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
 
+      - name: Check for AWS credentials
+        id: check-creds
+        run: |
+          if [ -n "${{ secrets.AWS_ROLE }}" ]; then
+            echo "has_credentials=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_credentials=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Configure AWS credentials
-        if: ${{ secrets.AWS_ROLE != '' }}
+        if: steps.check-creds.outputs.has_credentials == 'true'
         uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_ROLE }}
@@ -35,7 +44,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Ensure stack exists
-        if: ${{ secrets.AWS_ROLE != '' }}
+        if: steps.check-creds.outputs.has_credentials == 'true'
         run: |
           set -euo pipefail
           if ! aws cloudformation describe-stacks --stack-name CareerVpCrudDev >/tmp/stack.json 2>/tmp/stack.err; then
@@ -45,11 +54,11 @@ jobs:
           fi
 
       - name: Compare OpenAPI
-        if: ${{ secrets.AWS_ROLE != '' }}
+        if: steps.check-creds.outputs.has_credentials == 'true'
         working-directory: src/backend
         run: make compare-openapi
 
       - name: Skip summary when credentials missing
-        if: ${{ secrets.AWS_ROLE == '' }}
+        if: steps.check-creds.outputs.has_credentials != 'true'
         run: |
           echo "AWS_ROLE secret not configured – OpenAPI drift check skipped." >> "$GITHUB_STEP_SUMMARY"
