@@ -10,6 +10,35 @@
 
 ---
 
+## IMPORTANT: Documentation-First Development Rule ⚠️
+
+**BEFORE any implementation, the following MUST be created first:**
+
+1. **Specs & Tasks Documentation:**
+   - Create spec files in `docs/specs/` (e.g., `docs/specs/07-vpr-async-architecture.md`)
+   - Create task files in `docs/tasks/` (e.g., `docs/tasks/07-vpr-async/task-*.md`)
+
+2. **Test Files:**
+   - Create test files in `src/backend/tests/` BEFORE writing implementation code
+   - Unit tests: `tests/unit/test_<module>.py`
+   - Integration tests: `tests/integration/test_<flow>.py`
+   - Infrastructure tests: `tests/infrastructure/test_<resource>.py`
+   - E2E tests: `tests/e2e/test_<feature>.py`
+
+3. **GitHub Workflows:**
+   - Create/update workflow files in `.github/workflows/` BEFORE deployment changes
+   - Include test workflows, CI/CD workflows, branch testing workflows
+
+**Enforcement:** Code implementation MUST NOT begin until:
+- [ ] Specs documented in `docs/specs/`
+- [ ] Tasks broken down in `docs/tasks/`
+- [ ] Test files created in `src/backend/tests/`
+- [ ] GitHub workflows updated in `.github/workflows/`
+
+**Why:** This ensures testability, CI/CD readiness, and prevents drift between implementation and testing.
+
+---
+
 ## Application Workflow
 
 The CareerVP application follows a sequential workflow where earlier responses enrich later artifacts:
@@ -88,12 +117,51 @@ CREATED → COMPANY_RESEARCH → GAP_ANALYSIS → GENERATING_ARTIFACTS → INTER
 
 | Component | Status | Description |
 |-----------|--------|-------------|
-| **Backend Logic** | In Progress | Python Lambda functions (Handler → Logic → DAL) |
+| **Backend Logic** | Company Research Complete | Python Lambda functions (Handler → Logic → DAL) |
 | **Infrastructure (CDK)** | In Progress | AWS CDK stacks for all resources |
-| **Unit Tests** | In Progress | pytest + moto for mocked AWS |
-| **Integration Tests** | Partial | End-to-end flow tests |
-| **CICD Pipeline** | Not Started | GitHub Actions for deploy |
+| **Unit Tests** | Partial | pytest + moto (growing) |
+| **Integration Tests** | Enhanced | Changeset handling + company-research test |
+| **CICD Pipeline** | Enhanced | GitHub Actions + branch testing workflows |
+| **VPR Async Architecture** | ✅ Documented | Event-driven SQS/SNS pattern |
 | **Frontend (SPA)** | Not Started | React SPA at app.careervp.com |
+
+---
+
+## Recently Completed Tasks
+
+### PR #20: CDK Changeset Handling ✅ COMPLETED
+**Branch:** `fix/changeset-handling` → merged to main
+**Date:** Feb 2026
+
+**Changes:**
+- Added pre-deploy changeset cleanup to `.github/workflows/deploy.yml`
+- Created `.github/workflows/test-changeset.yml` for branch testing
+- Created `src/backend/tests/company_research_test.sh` integration test
+
+**Files Modified:**
+- `.github/workflows/deploy.yml`
+- `.github/workflows/test-changeset.yml` (new)
+- `src/backend/tests/company_research_test.sh` (new)
+
+**Test Result:** ✅ PASSED (2m18s)
+
+---
+
+### PR #21: OpenAPI Workflow Fix ✅ COMPLETED
+**Branch:** `fix/openapi-workflow` → merged to main
+**Date:** Feb 2026
+
+**Changes:**
+- Added `--mode local` to `generate_openapi.py` for AWS-free validation
+- Added `--mode download` as default for AWS download
+- Added 404 handling for graceful exit when swagger unavailable
+- Added three Make targets: `openapi`, `compare-openapi`, `verify-openapi-deployed`
+
+**Files Modified:**
+- `src/backend/generate_openapi.py`
+- `src/backend/Makefile`
+
+**Test Result:** ✅ PASSED
 
 ---
 
@@ -262,18 +330,60 @@ def verify_deployed_state() -> bool:
 - [x] Phase 4: CV Parsing Implementation
 - [x] Phase 5: Verification
 - [x] Phase 6: CV Upload Handler
-- [x] Phase 7: VPR Generator
+- [x] Phase 7: VPR Generator (Base Implementation)
+- [x] VPR Async Architecture (Documentation Only - Tests Required)
+
+### VPR Async Architecture ⚠️ DOCUMENTATION ONLY
+**Status:** PENDING - Implementation and tests required
+**Branch:** `feature/company-research`
+**Date:** Feb 2026
+
+**Documentation Created:**
+- `docs/architecture/async-vpr-design.md` - Event-driven architecture design
+- `docs/specs/07-vpr-async-architecture.md` - Technical specifications
+- `docs/tasks/07-vpr-async/` - Task breakdown files
+
+**BLOCKED - Tests Required Before Implementation:**
+- [ ] Create `tests/unit/test_vpr_async.py`
+- [ ] Create `tests/infrastructure/test_vpr_queue.py`
+- [ ] Create `.github/workflows/test-vpr-async.yml`
+
+**Architecture Overview:**
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        ASYNC VPR WORKFLOW                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  POST /api/vpr → SQS Queue → Lambda Processing                             │
+│                                                                             │
+│  Status Tracking: CREATED → PROCESSING → COMPANY_RESEARCH                  │
+│                   → GAP_ANALYSIS → GENERATING_ARTIFACTS                   │
+│                   → INTERVIEW_PREP → COMPLETE                              │
+│                                                                             │
+│  Polling Endpoint: GET /api/vpr/{application_id}/status                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
 ### Required Update: VPR Generator Enhancement
-
+**Priority:** After VPR Async Implementation (Task 8)
 **File:** `src/backend/careervp/logic/vpr_generator.py`
 
-The existing VPR Generator needs to be updated to accept Gap Analysis responses:
+**Prerequisites:**
+- [ ] Company Research Endpoint tests complete
+- [ ] Gap Analysis implementation complete
+- [ ] VPR Async implementation complete
 
-- [ ] Update `generate_vpr()` signature to accept `gap_responses: list[GapResponse]`
-- [ ] Update `generate_vpr()` signature to accept `previous_responses: list[GapResponse]` (from previous applications)
-- [ ] Update VPR prompt to incorporate gap analysis evidence
-- [ ] Update tests to verify gap response integration
+**Tasks:**
+
+1. **Accept Company Context (from Company Research):**
+   - [ ] Update `generate_vpr()` signature to accept `company_context: CompanyContext | None`
+   - [ ] Update VPR prompt to include company overview, values, mission
+   - [ ] Create `tests/unit/test_vpr_company_context.py`
+
+2. **Accept Gap Analysis Responses:**
+   - [ ] Update `generate_vpr()` signature to accept `gap_responses: list[GapResponse]`
+   - [ ] Update `generate_vpr()` to accept `previous_responses: list[GapResponse]`
+   - [ ] Update VPR prompt to incorporate gap analysis evidence
+   - [ ] Create `tests/unit/test_vpr_gap_integration.py`
 
 **Codex Implementation Guidelines:**
 ```
@@ -282,8 +392,9 @@ def generate_vpr(
     request: VPRRequest,
     user_cv: UserCV,
     dal: DynamoDalHandler,
-    gap_responses: list[GapResponse],        # Current application
-    previous_responses: list[GapResponse],   # All previous applications
+    company_context: CompanyContext | None = None,  # From Company Research
+    gap_responses: list[GapResponse] | None = None,  # Current application
+    previous_responses: list[GapResponse] | None = None,  # All previous
 ) -> Result[VPRResponse]
 
 Prompt Enhancement:
@@ -2281,16 +2392,30 @@ uv run pytest tests/ -v --tb=short
 
 ---
 
-## Next Steps (Workflow Order)
+## Next Steps (Updated Feb 2026)
 
 Implementation order follows the application workflow:
 
-1. **Phase 8: Company Research** - Start immediately (Stage 1)
+### Recently Completed ✅
+- CDK Changeset Handling (PR #20)
+- OpenAPI Workflow Fix (PR #21)
+- Company Research Endpoint (Phase 8) - Implementation complete, tests pending
+- VPR Async Architecture - Documentation complete, tests + implementation pending
+
+### Priority Tasks
+
+1. **Phase 8: Company Research Tests** - Create unit/integration tests
 2. **Phase 11: Gap Analysis** - After company research (Stage 2) - **BEFORE artifact generation**
 3. **Phase 9: CV Tailoring** - After gap analysis (Stage 3) - Uses gap responses
 4. **Phase 10: Cover Letter** - After CV tailoring (Stage 3) - Uses gap responses
 5. **Phase 12: Interview Prep** - After artifacts (Stage 4-5) - Questions then Report
+6. **VPR Async Tests** - Create tests for async workflow BEFORE implementation
+7. **VPR Async Implementation** - SQS/SNS Lambda integration
+8. **VPR Generator Enhancement** - Accept gap_responses and company_context inputs
 
-**Note:** VPR Generator (Phase 7) is already complete but may need updates to accept gap_responses input.
+**Note:** VPR Generator (Phase 7) needs updates to:
+- Accept `company_context` from Company Research
+- Accept `gap_responses` from Gap Analysis
+- Update VPR prompt to use both inputs
 
-**Deployment Target:** Base stack deployment after Phase 12 completion.
+**Deployment Target:** Base stack deployment after all Phase 12 + VPR Async + VPR Generator enhancement completion.
