@@ -14,10 +14,12 @@ on:
 permissions:
   contents: read
   deployments: write
+  id-token: write
 
 env:
   PYTHON_VERSION: '3.12'
   NODE_VERSION: '20'
+  AWS_REGION: 'us-east-1'
 
 jobs:
   deploy-dev:
@@ -31,15 +33,31 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: package-lock.json
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: latest
+          enable-cache: false
+      - name: Install Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
       - name: Install Node dependencies
         run: npm ci
       - name: Install CDK CLI
         run: npm install -g aws-cdk@2.1100.3
+      - name: Build Lambda code
+        working-directory: src/backend
+        run: make build
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          role-session-name: deploy-dev-${{ github.sha }}
+          aws-region: ${{ env.AWS_REGION }}
       - name: Deploy dev
         env:
           ENVIRONMENT: dev
         working-directory: infra
-        run: cdk deploy --require-approval never
+        run: npx cdk deploy --require-approval never
 
   deploy-other:
     if: github.event_name == 'workflow_dispatch'
@@ -54,12 +72,25 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: package-lock.json
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: latest
+          enable-cache: false
+      - name: Install Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
       - name: Install Node dependencies
         run: npm ci
       - name: Install CDK CLI
         run: npm install -g aws-cdk@2.1100.3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          role-session-name: deploy-${{ github.sha }}
+          aws-region: ${{ env.AWS_REGION }}
       - name: Deploy ${{ inputs.environment }}
         env:
           ENVIRONMENT: ${{ inputs.environment }}
         working-directory: infra
-        run: cdk deploy --require-approval never
+        run: npx cdk deploy --require-approval never
