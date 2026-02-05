@@ -56,7 +56,7 @@ Implement comprehensive unit tests for the CV tailoring feature with 80%+ code c
 
 ---
 
-## Codex Implementation Guide
+## Minimax Implementation Guide
 
 ### File Paths
 
