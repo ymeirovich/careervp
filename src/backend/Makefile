@@ -1,4 +1,8 @@
+<<<<<<< Updated upstream
 .PHONY: dev lint mypy-lint complex coverage pre-commit sort deploy destroy deps unit infra-tests integration e2e coverage-tests docs lint-docs build format format-fix compare-openapi openapi pr watch update-deps ssm-setup smoke-test
+=======
+.PHONY: dev lint mypy-lint complex coverage pre-commit sort deploy destroy deps unit infra-tests integration e2e coverage-tests docs lint-docs build format format-fix compare-openapi openapi pr watch update-deps cleanup-changesets wait-for-stack smoke-test
+>>>>>>> Stashed changes
 PYTHON := .venv/bin/python3
 APP := ../../infra/app.py
 .ONESHELL:  # run all commands in a single shell, ensuring it runs within a local virtual env
@@ -142,6 +146,7 @@ compare-openapi:
 
 	# npx cdk deploy --app="${PYTHON} ${PWD}/../infra/app.py" --require-approval=never
 
+<<<<<<< Updated upstream
 # SSM Parameter Setup - creates the Anthropic API key in SSM Parameter Store
 # Usage: ANTHROPIC_API_KEY=sk-ant-xxx make ssm-setup
 ssm-setup:
@@ -158,6 +163,48 @@ ssm-setup:
 		--region $${AWS_REGION:-us-east-1}
 	@echo "SSM parameter created: /careervp/$${ENVIRONMENT:-dev}/anthropic-api-key"
 
+# Deployment helpers
+STACK_NAME := CareerVpCrud$(if $(filter $(ENVIRONMENT),dev staging prod),$(shell echo $(ENVIRONMENT) | tr '[:lower:]' '[:upper:]' | sed 's/PROD/PRODUCTION/'))
+
+cleanup-changesets:
+	@echo "Checking for stuck changesets on $(STACK_NAME)..."
+	@CHANGESETS=$(shell aws cloudformation list-change-sets \
+		--stack-name "$(STACK_NAME)" \
+		--query "Summaries[?Status==\`CREATE_IN_PROGRESS\` || Status==\`FAILED\`].ChangeSetName" \
+		--output text 2>/dev/null || echo ""); \
+	if [ -n "$$CHANGESETS" ]; then \
+		echo "Found stuck changesets, cleaning up..."; \
+		echo "$$CHANGESETS" | tr '\t' '\n' | while read changeset; do \
+			if [ -n "$$changeset" ]; then \
+				echo "  Deleting: $$changeset"; \
+				aws cloudformation delete-change-set \
+					--stack-name "$(STACK_NAME)" \
+					--change-set-name "$$changeset" 2>/dev/null || true; \
+			done; \
+	else \
+		echo "No stuck changesets found."; \
+	fi
+
+wait-for-stack:
+	@STATUS=$(shell aws cloudformation describe-stacks \
+		--stack-name "$(STACK_NAME)" \
+		--query "Stacks[0].StackStatus" \
+		--output text 2>/dev/null || echo "NOT_FOUND"); \
+	echo "Stack status: $$STATUS"; \
+	case "$$STATUS" in \
+		*CREATE_IN_PROGRESS*|*UPDATE_IN_PROGRESS*) \
+			echo "Waiting for stack completion..."; \
+			aws cloudformation wait stack-create-complete --stack-name "$(STACK_NAME)" 2>/dev/null || \
+			aws cloudformation wait stack-update-complete --stack-name "$(STACK_NAME)" 2>/dev/null || true; \
+			;; \
+		*FAILED*|*ROLLBACK*) \
+			echo "Stack is in failed state ($$STATUS), deleting for clean deploy..."; \
+			aws cloudformation delete-stack --stack-name "$(STACK_NAME)"; \
+			echo "Waiting for stack deletion..."; \
+			aws cloudformation wait stack-delete-complete --stack-name "$(STACK_NAME)" || true; \
+			;; \
+	esac
+
 # Post-deploy smoke test - verifies Lambda functions can call Anthropic API
 smoke-test:
 	@echo "Running smoke test..."
@@ -168,9 +215,15 @@ smoke-test:
 		--region $${AWS_REGION:-us-east-1}))
 	@echo "API Gateway URL: $(API_URL)"
 	@echo "Testing swagger endpoint..."
-	curl -sf "$(API_URL)swagger" > /dev/null && echo "✓ Swagger endpoint OK" || echo "✗ Swagger endpoint failed"
+	curl -sf "$(API_URL)swagger" > /dev/null && echo "Swagger endpoint OK" || echo "Swagger endpoint failed"
 	@echo "Testing VPR endpoint (expects 400 for missing data, proves Lambda runs)..."
 	@curl -s -o /dev/null -w "%{http_code}" -X POST "$(API_URL)api/vpr" \
 		-H "Content-Type: application/json" \
-		-d '{}' | grep -q "4[0-9][0-9]\|5[0-9][0-9]" && echo "✓ VPR Lambda responding" || echo "✗ VPR Lambda not responding"
+		-d '{}' | grep -q "4[0-9][0-9]\|5[0-9][0-9]" && echo "VPR Lambda responding" || echo "VPR Lambda not responding"
 	@echo "Smoke test complete"
+	@if [ -f "tests/aws_cli_smoke.sh" ]; then \
+		echo "Running AWS CLI smoke tests..."; \
+		bash tests/aws_cli_smoke.sh; \
+	else \
+		echo "AWS CLI smoke test script not found, skipping."; \
+	fi
