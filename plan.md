@@ -726,9 +726,30 @@ aws lambda get-function --function-name careervp-company-research-lambda-dev \
 
 ## Phase 9: CV Tailoring (Uses Gap Analysis Responses)
 
-**Spec:** [[docs/specs/04-cv-tailor.md]] (to be created)
+**Spec:** [[docs/specs/cv-tailoring/CV_TAILORING_SPEC.md]] ✅ COMPLETE
+**Architecture:** [[docs/architecture/CV_TAILORING_DESIGN.md]] ✅ COMPLETE
+**Status:** 🏗️ **ARCHITECTURE COMPLETE** - Implementation Pending
 **Priority:** P0 (Core feature)
 **Model:** Claude Haiku 4.5 (`TaskMode.TEMPLATE`)
+
+**CRITICAL ARCHITECTURAL DECISION (February 5, 2026):**
+- Phase 9 uses **SYNCHRONOUS** Lambda implementation (like cv_upload_handler.py)
+- Relevance scoring algorithm: `(0.40 × keyword_match) + (0.35 × skill_alignment) + (0.25 × experience_relevance)`
+- Cost target: $0.005-0.010 per tailoring operation
+- Timeout: 300 seconds (5 minutes)
+
+**Architectural Deliverables (32 files created):**
+- ✅ Architecture & Design: 1 file (37KB)
+- ✅ Specification: 1 file (48KB)
+- ✅ Task Documentation: 13 files (~10,000 lines)
+- ✅ Test Suite Foundation: 8 files (62 tests + templates)
+- ✅ Handoff Documents: 2 files (ARCHITECT_SIGN_OFF.md, ENGINEER_PROMPT.md)
+
+**Engineer Handoff:**
+- 📖 Read: `docs/tasks/09-cv-tailoring/ENGINEER_PROMPT.md` (1,576 lines)
+- ✅ Phase 0: Verify RED tests fail
+- 🔨 Implement: Tasks 01-11 (19 hours estimated)
+- ✅ Phase 1: Verify GREEN tests pass (185-220 tests total)
 
 **INPUTS:** CV + VPR + Job Posting + **Gap Analysis Responses** + Previous Gap/Interview Responses
 
