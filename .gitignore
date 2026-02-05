@@ -36,4 +36,10 @@ src/backend/.build/*
 */node_modules/*
 node_modules
 
+#.build
+src/backend/.build/*
+node_modules
+
+# omc
 temp
+.omc/state/*
