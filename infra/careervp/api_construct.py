@@ -76,7 +76,9 @@ class ApiConstruct(Construct):
         )
 
         # VPR Status Lambda - GET /api/vpr/status/{job_id}
-        vpr_status_resource = vpr_resource.add_resource("status")
+        vpr_status_resource = vpr_resource.add_resource("status").add_resource(
+            "{job_id}"
+        )
         self.vpr_status_func = self._add_vpr_status_lambda_integration(
             vpr_status_resource,
             self.lambda_role,
