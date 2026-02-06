@@ -59,7 +59,9 @@ def download_swagger_json(swagger_url: str, retries: int = 5, delay_seconds: flo
         try:
             response = requests.get(f'{swagger_url}?format=json', timeout=30)
             response.raise_for_status()
-            return response.json()
+            json_data = response.json()
+            assert isinstance(json_data, dict), 'Swagger JSON should be a dict'
+            return json_data
         except requests.HTTPError as exc:
             if attempt == retries:
                 raise

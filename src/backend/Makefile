@@ -1,8 +1,4 @@
-<<<<<<< Updated upstream
-.PHONY: dev lint mypy-lint complex coverage pre-commit sort deploy destroy deps unit infra-tests integration e2e coverage-tests docs lint-docs build format format-fix compare-openapi openapi pr watch update-deps ssm-setup smoke-test
-=======
-.PHONY: dev lint mypy-lint complex coverage pre-commit sort deploy destroy deps unit infra-tests integration e2e coverage-tests docs lint-docs build format format-fix compare-openapi openapi pr watch update-deps cleanup-changesets wait-for-stack smoke-test
->>>>>>> Stashed changes
+.PHONY: dev lint mypy-lint complex coverage pre-commit sort deploy destroy deps unit infra-tests integration e2e coverage-tests docs lint-docs build format format-fix compare-openapi openapi pr watch update-deps cleanup-changesets wait-for-stack smoke-test ssm-setup
 PYTHON := .venv/bin/python3
 APP := ../../infra/app.py
 .ONESHELL:  # run all commands in a single shell, ensuring it runs within a local virtual env
@@ -40,9 +36,9 @@ lint: format
 
 complex:
 	@echo "Running Radon"
-	uv run radon cc -e 'tests/*,cdk.out/*,node_modules/*' .
+	uv run radon cc -e 'tests/*,cdk.out/**,**/cdk.out/**,node_modules/*' .
 	@echo "Running xenon"
-	uv run xenon --max-absolute C --max-modules A --max-average A -e 'tests/*,.venv/*,cdk.out/*,node_modules/*' .
+	uv run xenon --max-absolute C --max-modules A --max-average A -e 'tests/*,.venv/*,cdk.out/**,**/cdk.out/**,node_modules/*' .
 
 pre-commit:
 	uv run pre-commit run -a --show-diff-on-failure
@@ -100,10 +96,12 @@ coverage-tests:
 	uv run pytest tests/unit tests/integration  --cov-config=.coveragerc --cov=careervp --cov-report xml
 
 deploy: build
-	npx cdk deploy --app="$(PYTHON) $(REPO_ROOT)/infra/app.py" --require-approval=never
+	npx cdk acknowledge 34892
+	npx cdk deploy --app="$(PYTHON) ../../infra/app.py" --require-approval=never
 
 destroy:
-	npx cdk destroy --app="$(PYTHON) ${PWD}/../infra/app.py" --force
+	npx cdk acknowledge 34892
+	npx cdk destroy --app="$(PYTHON) ../../infra/app.py" --force
 
 docs:
 	uv run mkdocs serve
@@ -146,7 +144,6 @@ compare-openapi:
 
 	# npx cdk deploy --app="${PYTHON} ${PWD}/../infra/app.py" --require-approval=never
 
-<<<<<<< Updated upstream
 # SSM Parameter Setup - creates the Anthropic API key in SSM Parameter Store
 # Usage: ANTHROPIC_API_KEY=sk-ant-xxx make ssm-setup
 ssm-setup:

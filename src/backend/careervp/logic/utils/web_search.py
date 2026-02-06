@@ -27,29 +27,33 @@ async def search_company_info(company_name: str) -> Result[list[SearchResult]]:
     """
     query = f'{company_name} about culture values mission'
 
-    try:
-        async with httpx.AsyncClient(timeout=SEARCH_TIMEOUT) as client:
-            response = await client.post(
-                DUCKDUCKGO_URL,
-                data={'q': query},
-                headers={'User-Agent': USER_AGENT},
-            )
-            response.raise_for_status()
-    except httpx.TimeoutException:
-        return Result(success=False, error='Search timeout', code=ResultCode.TIMEOUT)
-    except httpx.HTTPStatusError as exc:
-        status_code = exc.response.status_code if exc.response else 'unknown'
-        return Result(success=False, error=f'Search HTTP {status_code}', code=ResultCode.SEARCH_FAILED)
-    except httpx.RequestError as exc:
-        return Result(success=False, error=f'Search request error: {exc}', code=ResultCode.SEARCH_FAILED)
-    except Exception as exc:  # pragma: no cover - safety net
-        return Result(success=False, error=str(exc), code=ResultCode.SEARCH_FAILED)
+    response = await _make_search_request(query)
+    if isinstance(response, Result):
+        return response  # type: ignore[return-value]
 
     results = _parse_duckduckgo_results(response.text)
     if not results:
         return Result(success=False, error='No search results found', code=ResultCode.NO_RESULTS)
 
     return Result(success=True, data=results[:MAX_RESULTS], code=ResultCode.SUCCESS)
+
+
+async def _make_search_request(query: str) -> Result[httpx.Response] | httpx.Response:
+    """Make HTTP request with error handling, returning Result on failure."""
+    try:
+        async with httpx.AsyncClient(timeout=SEARCH_TIMEOUT) as client:
+            return await client.post(
+                DUCKDUCKGO_URL,
+                data={'q': query},
+                headers={'User-Agent': USER_AGENT},
+            )
+    except httpx.TimeoutException:
+        return Result(success=False, error='Search timeout', code=ResultCode.TIMEOUT)
+    except httpx.HTTPStatusError as exc:
+        status_code = exc.response.status_code if exc.response else 'unknown'
+        return Result(success=False, error=f'Search HTTP {status_code}', code=ResultCode.SEARCH_FAILED)
+    except (httpx.RequestError, Exception) as exc:
+        return Result(success=False, error=f'Search request error: {exc}', code=ResultCode.SEARCH_FAILED)
 
 
 def _parse_duckduckgo_results(html: str) -> list[SearchResult]:
@@ -65,22 +69,22 @@ def _parse_duckduckgo_results(html: str) -> list[SearchResult]:
             continue
 
         title = link.get_text(strip=True)
-        raw_href = link.get('href')
-        raw_url = raw_href if isinstance(raw_href, str) else ''
-        resolved_url = _extract_redirect_target(raw_url)
-        snippet_el = result_block.select_one('.result__snippet')
-        snippet = snippet_el.get_text(strip=True) if snippet_el else ''
-
-        if not title or not resolved_url:
+        if not title:
             continue
 
-        resolved_http_url = cast(HttpUrl, resolved_url)
+        href = link.get('href', '')
+        raw_url = _extract_redirect_target(str(href) if href else '')
+        if not raw_url:
+            continue
+
+        snippet_el = result_block.select_one('.result__snippet')
+        snippet_text = snippet_el.get_text(strip=True) if snippet_el else ''
 
         parsed_results.append(
             SearchResult(
                 title=title,
-                url=resolved_http_url,
-                snippet=snippet,
+                url=cast(HttpUrl, raw_url),
+                snippet=snippet_text,
             )
         )
 
@@ -94,11 +98,7 @@ def aggregate_search_content(results: list[SearchResult]) -> str:
     """
     Combine snippets from SearchResult items into a single text blob for structuring.
     """
-    snippets = [result.snippet.strip() for result in results if result.snippet.strip()]
-    if snippets:
-        return ' '.join(snippets)
-    titles = [result.title.strip() for result in results if result.title.strip()]
-    return ' '.join(titles)
+    return ' '.join(result.snippet.strip() or result.title.strip() for result in results if result.snippet.strip() or result.title.strip())
 
 
 def _extract_redirect_target(raw_url: str) -> str:
@@ -107,15 +107,11 @@ def _extract_redirect_target(raw_url: str) -> str:
         return ''
 
     parsed = urlparse(raw_url)
-    if parsed.scheme and parsed.netloc and parsed.netloc != 'duckduckgo.com':
+    if all([parsed.scheme, parsed.netloc, parsed.netloc != 'duckduckgo.com']):
         return raw_url
 
-    params = parse_qs(parsed.query)
-    uddg = params.get('uddg')
-    if uddg and uddg[0]:
-        return unquote(uddg[0])
-
-    return raw_url
+    uddg = parse_qs(parsed.query).get('uddg')
+    return unquote(uddg[0]) if uddg else raw_url
 
 
 __all__ = [

@@ -22,4 +22,5 @@ def test_synthesizes_properly():
 
     # verify that we have one API GW, that is it not deleted by mistake
     template.resource_count_is('AWS::ApiGateway::RestApi', 1)
-    template.resource_count_is('AWS::DynamoDB::GlobalTable', 2)  # main db and one for idempotency
+    # main db, idempotency table, and vpr_jobs table for async processing
+    template.resource_count_is('AWS::DynamoDB::GlobalTable', 3)

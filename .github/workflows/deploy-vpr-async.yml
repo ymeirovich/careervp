@@ -37,16 +37,18 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v4
         with:
-          version: "latest"
-          enable-cache: false
+          version: "0.5.0"
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
 
       - name: Install dependencies
         working-directory: src/backend
-        run: uv sync
+        run: uv sync --frozen
 
       - name: Run ruff check
         working-directory: src/backend
@@ -82,10 +84,11 @@ jobs:
         run: npm ci
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v4
         with:
-          version: "latest"
-          enable-cache: false
+          version: "0.5.0"
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
 
       - name: Build Lambda code
         working-directory: src/backend
@@ -139,10 +142,11 @@ jobs:
           path: infra/cdk.out/
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v4
         with:
-          version: "latest"
-          enable-cache: false
+          version: "0.5.0"
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
 
       - name: Build Lambda code
         working-directory: src/backend
@@ -249,14 +253,15 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v4
         with:
-          version: "latest"
-          enable-cache: false
+          version: "0.5.0"
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
 
       - name: Install test dependencies
         working-directory: src/backend
-        run: uv sync
+        run: uv sync --frozen
 
       - name: Download stack outputs
         uses: actions/download-artifact@v4
@@ -303,10 +308,11 @@ jobs:
         run: npm ci
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v4
         with:
-          version: "latest"
-          enable-cache: false
+          version: "0.5.0"
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
 
       - name: Build Lambda code
         working-directory: src/backend

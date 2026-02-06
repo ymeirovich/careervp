@@ -1,8 +1,9 @@
 import careervp.constants as constants
-from aws_cdk import CfnOutput, Duration, RemovalPolicy, aws_apigateway
+from aws_cdk import CfnOutput, Duration, RemovalPolicy, aws_apigateway, aws_sqs
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as _lambda
+from aws_cdk import aws_lambda_event_sources as eventsources
 from aws_cdk import aws_logs as logs
 from aws_cdk import aws_s3 as s3
 from aws_cdk.aws_lambda_python_alpha import PythonLayerVersion
@@ -47,10 +48,40 @@ class ApiConstruct(Construct):
             self.api_db.idempotency_db,
             self.api_db.cv_bucket,
         )
-        self.vpr_generator_func = self._add_vpr_lambda_integration(
+        # Note: Original synchronous VPR generator removed - using async VPR architecture instead
+        self.vpr_generator_func = None  # Placeholder for backward compatibility
+
+        # VPR Async Architecture - DLQ first, then Queue (DLQ must exist first)
+        self.vpr_jobs_dlq = self._build_vpr_jobs_dlq()
+        self.vpr_jobs_queue = self._build_vpr_jobs_queue(self.vpr_jobs_dlq)
+
+        # VPR Submit Lambda - POST /api/vpr (async architecture)
+        self.vpr_submit_func = self._add_vpr_submit_lambda_integration(
             vpr_resource,
             self.lambda_role,
+            self.api_db.jobs_table,
+            self.api_db.vpr_results_bucket,
+            self.vpr_jobs_queue,
+            appconfig_app_name,
+        )
+
+        # VPR Status Lambda - GET /api/vpr/status/{job_id}
+        vpr_status_resource = vpr_resource.add_resource("status")
+        self.vpr_status_func = self._add_vpr_status_lambda_integration(
+            vpr_status_resource,
+            self.lambda_role,
+            self.api_db.jobs_table,
+            self.api_db.vpr_results_bucket,
+            appconfig_app_name,
+        )
+
+        # VPR Worker Lambda - SQS triggered
+        self.vpr_worker_func = self._add_vpr_worker_lambda_integration(
+            self.lambda_role,
+            self.api_db.jobs_table,
+            self.api_db.vpr_results_bucket,
             self.api_db.db,
+            self.vpr_jobs_queue,
             appconfig_app_name,
         )
         self.company_research_func = self._add_company_research_lambda_integration(
@@ -68,7 +99,11 @@ class ApiConstruct(Construct):
             self.rest_api,
             self.api_db.db,
             self.api_db.idempotency_db,
-            [self.cv_upload_func, self.vpr_generator_func, self.company_research_func],
+            [
+                self.cv_upload_func,
+                self.vpr_submit_func,
+                self.company_research_func,
+            ],
             naming=naming,
         )
 
@@ -385,6 +420,199 @@ class ApiConstruct(Construct):
         api_resource.add_method(
             http_method="POST",
             integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
+        )
+
+        return lambda_function
+
+    def _build_vpr_jobs_queue(self, dlq: aws_sqs.Queue) -> aws_sqs.Queue:
+        """Build SQS queue for VPR async job processing."""
+        queue = aws_sqs.Queue(
+            self,
+            constants.VPR_JOBS_QUEUE,
+            queue_name=self.naming.queue_name(constants.VPR_JOBS_QUEUE),
+            visibility_timeout=Duration.seconds(300),  # 5 minutes for worker timeout
+            receive_message_wait_time=Duration.seconds(20),  # Long polling
+            encryption=aws_sqs.QueueEncryption.SQS_MANAGED,
+            dead_letter_queue=aws_sqs.DeadLetterQueue(
+                queue=dlq,
+                max_receive_count=3,
+            ),
+        )
+        return queue
+
+    def _build_vpr_jobs_dlq(self) -> aws_sqs.Queue:
+        """Build SQS dead letter queue for failed VPR jobs."""
+        return aws_sqs.Queue(
+            self,
+            constants.VPR_JOBS_DLQ,
+            queue_name=self.naming.dlq_name(constants.VPR_JOBS_DLQ),
+            encryption=aws_sqs.QueueEncryption.SQS_MANAGED,
+        )
+
+    def _add_vpr_submit_lambda_integration(
+        self,
+        api_resource: aws_apigateway.Resource,
+        role: iam.Role,
+        jobs_table: dynamodb.TableV2,
+        results_bucket: s3.Bucket,
+        queue: aws_sqs.Queue,
+        appconfig_app_name: str,
+    ) -> _lambda.Function:
+        """Add VPR Submit Lambda integration - POST /api/vpr."""
+        function_name = self.naming.lambda_name(constants.VPR_SUBMIT_FEATURE)
+        log_group = logs.LogGroup(
+            self,
+            f"{constants.VPR_SUBMIT_LAMBDA}LogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
+        lambda_function = _lambda.Function(
+            self,
+            constants.VPR_SUBMIT_LAMBDA,
+            runtime=_lambda.Runtime.PYTHON_3_14,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.vpr_submit_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-vpr-submit",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                "CONFIGURATION_APP": appconfig_app_name,
+                "CONFIGURATION_ENV": constants.ENVIRONMENT,
+                "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,
+                "CONFIGURATION_MAX_AGE_MINUTES": constants.CONFIGURATION_MAX_AGE_MINUTES,
+                "JOBS_TABLE_NAME": jobs_table.table_name,
+                "VPR_RESULTS_BUCKET_NAME": results_bucket.bucket_name,
+                "SQS_QUEUE_URL": queue.queue_url,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+            },
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            timeout=Duration.seconds(30),
+            memory_size=256,
+            role=role,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+        # POST /api/vpr
+        api_resource.add_method(
+            http_method="POST",
+            integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
+        )
+
+        return lambda_function
+
+    def _add_vpr_status_lambda_integration(
+        self,
+        api_resource: aws_apigateway.Resource,
+        role: iam.Role,
+        jobs_table: dynamodb.TableV2,
+        results_bucket: s3.Bucket,
+        appconfig_app_name: str,
+    ) -> _lambda.Function:
+        """Add VPR Status Lambda integration - GET /api/vpr/status/{job_id}."""
+        function_name = self.naming.lambda_name(constants.VPR_STATUS_FEATURE)
+        log_group = logs.LogGroup(
+            self,
+            f"{constants.VPR_STATUS_LAMBDA}LogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
+        lambda_function = _lambda.Function(
+            self,
+            constants.VPR_STATUS_LAMBDA,
+            runtime=_lambda.Runtime.PYTHON_3_14,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.vpr_status_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-vpr-status",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                "CONFIGURATION_APP": appconfig_app_name,
+                "CONFIGURATION_ENV": constants.ENVIRONMENT,
+                "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,
+                "CONFIGURATION_MAX_AGE_MINUTES": constants.CONFIGURATION_MAX_AGE_MINUTES,
+                "JOBS_TABLE_NAME": jobs_table.table_name,
+                "VPR_RESULTS_BUCKET_NAME": results_bucket.bucket_name,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+            },
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            timeout=Duration.seconds(10),
+            memory_size=128,
+            role=role,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+        # GET /api/vpr/status/{job_id}
+        api_resource.add_method(
+            http_method="GET",
+            integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
+        )
+
+        return lambda_function
+
+    def _add_vpr_worker_lambda_integration(
+        self,
+        role: iam.Role,
+        jobs_table: dynamodb.TableV2,
+        results_bucket: s3.Bucket,
+        users_table: dynamodb.TableV2,
+        queue: aws_sqs.Queue,
+        appconfig_app_name: str,
+    ) -> _lambda.Function:
+        """Add VPR Worker Lambda integration - SQS triggered for async processing."""
+        function_name = self.naming.lambda_name(constants.VPR_WORKER_FEATURE)
+        log_group = logs.LogGroup(
+            self,
+            f"{constants.VPR_WORKER_LAMBDA}LogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
+        lambda_function = _lambda.Function(
+            self,
+            constants.VPR_WORKER_LAMBDA,
+            runtime=_lambda.Runtime.PYTHON_3_14,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.vpr_worker_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-vpr-worker",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                "CONFIGURATION_APP": appconfig_app_name,
+                "CONFIGURATION_ENV": constants.ENVIRONMENT,
+                "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,
+                "CONFIGURATION_MAX_AGE_MINUTES": constants.CONFIGURATION_MAX_AGE_MINUTES,
+                "JOBS_TABLE_NAME": jobs_table.table_name,
+                "VPR_RESULTS_BUCKET_NAME": results_bucket.bucket_name,
+                "DYNAMODB_TABLE_NAME": users_table.table_name,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+            },
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=2,
+            timeout=Duration.seconds(300),  # 5 minutes for VPR generation
+            memory_size=1024,
+            role=role,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+        # Add SQS event source
+        lambda_function.add_event_source(
+            eventsources.SqsEventSource(queue, batch_size=1)
         )
 
         return lambda_function
