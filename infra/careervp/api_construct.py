@@ -27,9 +27,9 @@ class ApiConstruct(Construct):
         self.id_ = id_
         self.naming = naming
         self.api_db = ApiDbConstruct(self, f"{id_}db", naming=naming)
-        self.lambda_role = self._build_lambda_role(
-            self.api_db.db, self.api_db.idempotency_db, self.api_db.cv_bucket
-        )
+        # Note: lambda_role is created after VPR async infrastructure (line ~60)
+        # to include VPR permissions
+        self.lambda_role = None  # type: ignore
         # self.common_layer = self._build_common_layer()  # TODO: Enable when layer is built
         self.rest_api = self._build_api_gw()
         api_resource: aws_apigateway.Resource = self.rest_api.root.add_resource(
@@ -54,6 +54,16 @@ class ApiConstruct(Construct):
         # VPR Async Architecture - DLQ first, then Queue (DLQ must exist first)
         self.vpr_jobs_dlq = self._build_vpr_jobs_dlq()
         self.vpr_jobs_queue = self._build_vpr_jobs_queue(self.vpr_jobs_dlq)
+
+        # Recreate role with VPR async permissions
+        self.lambda_role = self._build_lambda_role(
+            self.api_db.db,
+            self.api_db.idempotency_db,
+            self.api_db.cv_bucket,
+            self.api_db.jobs_table,
+            self.api_db.vpr_results_bucket,
+            self.vpr_jobs_queue,
+        )
 
         # VPR Submit Lambda - POST /api/vpr (async architecture)
         self.vpr_submit_func = self._add_vpr_submit_lambda_integration(
@@ -169,6 +179,9 @@ class ApiConstruct(Construct):
         db: dynamodb.TableV2,
         idempotency_table: dynamodb.TableV2,
         cv_bucket: s3.Bucket,
+        jobs_table: dynamodb.TableV2,
+        results_bucket: s3.Bucket,
+        queue: aws_sqs.Queue,
     ) -> iam.Role:
         return iam.Role(
             self,
@@ -234,6 +247,53 @@ class ApiConstruct(Construct):
                             resources=[cv_bucket.bucket_arn],
                             effect=iam.Effect.ALLOW,
                         ),
+                    ]
+                ),
+                "vpr_jobs_table": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "dynamodb:PutItem",
+                                "dynamodb:GetItem",
+                                "dynamodb:UpdateItem",
+                                "dynamodb:Query",
+                            ],
+                            resources=[
+                                jobs_table.table_arn,
+                                f"{jobs_table.table_arn}/index/*",
+                            ],
+                            effect=iam.Effect.ALLOW,
+                        )
+                    ]
+                ),
+                "vpr_results_bucket": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "s3:PutObject",
+                                "s3:GetObject",
+                            ],
+                            resources=[f"{results_bucket.bucket_arn}/*"],
+                            effect=iam.Effect.ALLOW,
+                        ),
+                        iam.PolicyStatement(
+                            actions=["s3:ListBucket"],
+                            resources=[results_bucket.bucket_arn],
+                            effect=iam.Effect.ALLOW,
+                        ),
+                    ]
+                ),
+                "vpr_jobs_queue": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "sqs:SendMessage",
+                                "sqs:ReceiveMessage",
+                                "sqs:DeleteMessage",
+                            ],
+                            resources=[queue.queue_arn],
+                            effect=iam.Effect.ALLOW,
+                        )
                     ]
                 ),
                 "ssm_parameters": iam.PolicyDocument(
