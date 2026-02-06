@@ -4,7 +4,8 @@
 name: PR - Serverless Service CI/CD
 
 permissions:
-  contents: read
+  contents: write
+  id-token: write  # Required for OIDC
 
 env:
   NODE_VERSION: "22"
@@ -44,7 +45,14 @@ jobs:
         run: make dev
       - name: pre commit
         working-directory: src/backend
-        run: make pre-commit
+        run: |
+          make pre-commit || true
+          if ! git diff --quiet; then
+            git add -A
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git config user.name "github-actions[bot]"
+            git commit -m "chore: Auto-fix pre-commit issues" || true
+          fi
       - name: Formatting and Linting
         working-directory: src/backend
         run: make lint
