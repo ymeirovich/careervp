@@ -48,6 +48,63 @@ def _generate_presigned_url(result_key: str) -> str:
     )
 
 
+def _build_processing_response(job: dict[str, Any], job_id: str) -> dict[str, Any]:
+    """Build response for PROCESSING status."""
+    return {
+        'job_id': job_id,
+        'status': 'PROCESSING',
+        'created_at': job.get('created_at'),
+        'started_at': job.get('started_at'),
+        'message': 'VPR generation in progress',
+    }
+
+
+def _build_completed_response(job: dict[str, Any], job_id: str) -> dict[str, Any]:
+    """Build response for COMPLETED status."""
+    result_key = job.get('result_key')
+    if result_key:
+        result_url = _generate_presigned_url(result_key)
+    else:
+        result_url = job.get('result_url', '')
+
+    response = {
+        'job_id': job_id,
+        'status': 'COMPLETED',
+        'created_at': job.get('created_at'),
+        'completed_at': job.get('completed_at'),
+        'result_url': result_url,
+        'vpr_version': job.get('vpr_version'),
+        'word_count': job.get('word_count'),
+        'message': 'VPR generation completed successfully',
+    }
+
+    if job.get('token_usage'):
+        response['token_usage'] = job.get('token_usage')
+
+    return response
+
+
+def _build_failed_response(job: dict[str, Any], job_id: str) -> dict[str, Any]:
+    """Build response for FAILED status."""
+    return {
+        'job_id': job_id,
+        'status': 'FAILED',
+        'created_at': job.get('created_at'),
+        'error': job.get('error', 'Unknown error'),
+        'message': 'VPR generation failed',
+    }
+
+
+def _build_pending_response(job: dict[str, Any], job_id: str) -> dict[str, Any]:
+    """Build response for PENDING status."""
+    return {
+        'job_id': job_id,
+        'status': job.get('status', 'PENDING'),
+        'created_at': job.get('created_at'),
+        'message': f'Job status: {job.get("status", "PENDING")}',
+    }
+
+
 @logger.inject_lambda_context(log_event=True)
 @tracer.capture_lambda_handler(capture_response=False)
 @metrics.log_metrics(capture_cold_start_metric=True)
@@ -62,6 +119,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
     Returns:
         200 OK: Job found, returns status and result_url if completed
+        400 Bad Request: Missing job_id
         404 Not Found: Job not found
         500 Internal Server Error: Infrastructure error
     """
@@ -81,7 +139,6 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
     # Handle Result object or dict return
     if hasattr(job_result, 'data'):
-        # Result object
         if not job_result.success:
             logger.error('Failed to fetch job', error=job_result.error)
             return _build_error_response(
@@ -90,7 +147,6 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             )
         job = job_result.data
     else:
-        # Direct dict return
         job = job_result
 
     if not job:
@@ -99,53 +155,17 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     status = job.get('status', 'UNKNOWN')
 
     # Build response based on status
-    response_data = {
-        'job_id': job_id,
-        'status': status,
-        'created_at': job.get('created_at'),
-    }
-
-    # Add status-specific fields
     if status == 'PROCESSING':
-        response_data['started_at'] = job.get('started_at')
-        response_data['message'] = 'VPR generation in progress'
-
+        response_data = _build_processing_response(job, job_id)
     elif status == 'COMPLETED':
-        # Generate fresh presigned URL for the result
-        result_key = job.get('result_key')
-        if result_key:
-            result_url = _generate_presigned_url(result_key)
-        else:
-            # Fallback to stored URL if key not found
-            result_url = job.get('result_url', '')
-
-        response_data['completed_at'] = job.get('completed_at')
-        response_data['result_url'] = result_url
-        response_data['vpr_version'] = job.get('vpr_version')
-        response_data['word_count'] = job.get('word_count')
-        response_data['message'] = 'VPR generation completed successfully'
-
+        response_data = _build_completed_response(job, job_id)
     elif status == 'FAILED':
-        response_data['error'] = job.get('error', 'Unknown error')
-        response_data['message'] = 'VPR generation failed'
-
+        response_data = _build_failed_response(job, job_id)
     else:
-        response_data['message'] = f'Job status: {status}'
-
-    # Add token usage if available
-    if job.get('token_usage'):
-        response_data['token_usage'] = job.get('token_usage')
+        response_data = _build_pending_response(job, job_id)
 
     # Emit metrics
-    metrics.add_metric(
-        name='VPRStatusQuery',
-        unit='Count',
-        value=1,
-    )
-    if status == 'COMPLETED':
-        metrics.add_metric(name='VPRStatusCompleted', unit='Count', value=1)
-    elif status == 'FAILED':
-        metrics.add_metric(name='VPRStatusFailed', unit='Count', value=1)
+    _emit_status_metrics(status)
 
     logger.info('Status query successful', job_id=job_id, status=status)
 
@@ -154,6 +174,15 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         'headers': JSON_HEADERS,
         'body': json.dumps(response_data),
     }
+
+
+def _emit_status_metrics(status: str) -> None:
+    """Emit metrics based on job status."""
+    metrics.add_metric(name='VPRStatusQuery', unit='Count', value=1)
+    if status == 'COMPLETED':
+        metrics.add_metric(name='VPRStatusCompleted', unit='Count', value=1)
+    elif status == 'FAILED':
+        metrics.add_metric(name='VPRStatusFailed', unit='Count', value=1)
 
 
 def _build_error_response(message: str, status: HTTPStatus) -> dict[str, Any]:
