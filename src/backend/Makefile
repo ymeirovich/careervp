@@ -97,7 +97,7 @@ coverage-tests:
 
 deploy: build
 	npx cdk acknowledge 34892
-	npx cdk deploy --app="$(PYTHON) $(REPO_ROOT)/infra/app.py" --require-approval=never
+	npx cdk deploy --app="$(PYTHON) ${PWD}/../infra/app.py" --require-approval=never
 
 destroy:
 	npx cdk acknowledge 34892
