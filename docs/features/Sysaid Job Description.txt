@@ -1,0 +1,39 @@
+About the job
+We are looking for a strategic and creative Learning Experience Specialist to build and launch the SysAid Customer Academy. In this pivotal role, you will be responsible for executing our vision of a unified, scalable learning hub that empowers customers, partners, and internal teams.
+
+You will not just be creating content; you will be the architect of our educational ecosystem - working in a new LMS, defining certification frameworks, and designing role-based learning paths that drive product adoption and generate new revenue streams.
+
+Key Responsibilities
+
+ Academy Strategy & Infrastructure
+LMS Implementation: Lead the setup of the Learning Management System (LMS) that will serve as the foundation for the Academy.
+Branding & Structure: Define the structure of the Academy to ensure a world-class, on-brand user experience.
+Certification Framework: Design the architecture for paid and free certification programs, based on user role.
+ Content Development & Instructional Design
+Curriculum Design: Develop role-based learning tracks for external users (Admins, IT Managers, Service Desk Agents) and internal teams (Customer Care, Customer Revenue).
+Content Creation: Produce high-quality, engaging educational assets, including:
+Self-paced video courses and interactive modules.
+Sandbox exercises and deep-dive workshops.
+"Trial learning packs" to support Sales-Led Trials (SLT).
+ Internal Enablement & Knowledge Management
+Internal Tracks: Build specialized onboarding and enablement paths for SysAid employees (Customer Care, Customer Revenue, Sales Engineers, Professional Services).
+Readiness Programs: Create mandatory readiness certifications and knowledge refresh cycles for every major product release to ensure global consistency.
+ Community & Revenue Growth
+Community Integration: Gamify learning through badges and ranks, and foster peer-to-peer learning.
+Revenue Generation: Develop and launch paid certification programs and advanced instructor-led bootcamps to create a new revenue channel.
+
+Requirements:
+
+3+ years of experience in Instructional Design, Learning & Development, or Customer Education in a SaaS environment.
+Proven experience selecting, implementing, and managing an LMS.
+Strong proficiency in content creation tools.
+Experience building certification programs from scratch is a huge plus.
+Ability to translate complex technical concepts (ITSM, automation, asset management, AI) into accessible, engaging learning experiences.
+Strategic mindset: You can connect educational initiatives to business KPIs like MRR, adoption, and support ticket reduction.
+
+Why Join Us?
+
+Impact: You will be building a "strategic growth engine" from the ground up that directly impacts revenue and customer retention.
+Ownership: You will have the autonomy to shape the vision of the SysAid Customer Academy.
+
+Growth: As the Academy expands to include AI-driven learning and enterprise packages, your role and influence will grow with it.
