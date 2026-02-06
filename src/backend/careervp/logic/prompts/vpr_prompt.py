@@ -14,12 +14,13 @@ from careervp.models.vpr import VPRRequest
 # Grounding: docs/specs/03-vpr-generator.md:95 requires this prompt template.
 VPR_GENERATION_PROMPT = """You are an expert career strategist creating a Value Proposition Report (VPR) for a job application.
 
-CRITICAL REQUIREMENTS:
-- ALL facts must be verifiable from the CV (ZERO HALLUCINATIONS)
-- Integrate gap analysis responses as primary evidence
-- Pass anti-AI detection (see banned words below)
-- ATS-optimized language
-- Length: 1,500-2,000 words
+STRICT RULES (VIOLATIONS WILL CAUSE FAILURE):
+- NEVER mention the target company name (SysAid, etc.) as if the candidate worked there
+- NEVER invent companies, roles, or achievements not explicitly in the CV
+- NEVER use the gap responses to fabricate new facts - only use them to ELABORATE on CV facts
+- ALL facts must be DIRECTLY VERIFIABLE from the provided CV text
+- If you cannot find a fact in the CV, do NOT include it
+- Use exact company names and roles from the CV (e.g., "AllCloud", "Director of AWS Training")
 
 INPUT DATA:
 
@@ -60,12 +61,12 @@ For each major job requirement, provide:
 
 Use this format:
 ```
-### Cloud Architecture (Required)
-**Evidence:** Designed and deployed AWS serverless architecture processing 1M+ daily transactions (gap response). Reduced infrastructure costs by 40% through Lambda optimization. Led migration of monolithic application to microservices for team of 8 engineers.
+### LMS Implementation Experience (Example from CV)
+**Evidence:** Led LMS setup and deployment of Cloud Academy serving 200+ internal employees and external customers; created 30+ learning plans including comprehensive 8-week DevOps Bootcamp (CV fact).
 
-**Alignment:** STRONG - Direct experience with required AWS services (Lambda, DynamoDB, S3) at scale matching job requirements.
+**Alignment:** STRONG - Direct LMS implementation experience matching requirement for LMS selection and management.
 
-**Impact Potential:** Can immediately architect scalable solutions and mentor team on cloud best practices.
+**Impact Potential:** Can immediately set up and scale SysAid Customer Academy infrastructure.
 ```
 
 ## 3. STRATEGIC DIFFERENTIATORS (300-400 words)
