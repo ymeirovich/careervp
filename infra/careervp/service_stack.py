@@ -90,5 +90,9 @@ class ServiceStack(Stack):
                     "id": "AwsSolutions-S1",
                     "reason": "CV bucket access logs not needed in dev; enable in production",
                 },
+                {
+                    "id": "AwsSolutions-SQS4",
+                    "reason": "VPR async queues are internal, SSL not required",
+                },
             ],
         )

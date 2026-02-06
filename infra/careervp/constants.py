@@ -29,6 +29,33 @@ IDEMPOTENCY_TABLE_NAME = "idempotency"
 TABLE_NAME_OUTPUT = "UsersTableOutput"
 SESSIONS_TABLE_OUTPUT = "SessionsTableOutput"
 IDEMPOTENCY_TABLE_NAME_OUTPUT = "IdempotencyTableOutput"
+JOBS_TABLE_OUTPUT = "JobsTableOutput"
+
+# =============================================================================
+# SQS QUEUES
+# =============================================================================
+# VPR Async Architecture queues
+VPR_JOBS_QUEUE = "vpr-jobs"
+VPR_JOBS_DLQ = "vpr-jobs-dlq"
+
+# =============================================================================
+# S3 BUCKETS
+# =============================================================================
+# VPR Async Architecture buckets
+VPR_RESULTS_BUCKET = "vpr-results"
+
+# =============================================================================
+# LAMBDA FUNCTIONS
+# =============================================================================
+# VPR Async Architecture Lambdas
+VPR_SUBMIT_LAMBDA = "vpr-submit"
+VPR_WORKER_LAMBDA = "vpr-worker"
+VPR_STATUS_LAMBDA = "vpr-status"
+
+# VPR Async Lambda features
+VPR_SUBMIT_FEATURE = "vpr-submit"
+VPR_WORKER_FEATURE = "vpr-worker"
+VPR_STATUS_FEATURE = "vpr-status"
 
 # =============================================================================
 # S3 BUCKETS

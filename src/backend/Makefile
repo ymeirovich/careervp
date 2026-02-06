@@ -1,8 +1,4 @@
-<<<<<<< Updated upstream
-.PHONY: dev lint mypy-lint complex coverage pre-commit sort deploy destroy deps unit infra-tests integration e2e coverage-tests docs lint-docs build format format-fix compare-openapi openapi pr watch update-deps ssm-setup smoke-test
-=======
-.PHONY: dev lint mypy-lint complex coverage pre-commit sort deploy destroy deps unit infra-tests integration e2e coverage-tests docs lint-docs build format format-fix compare-openapi openapi pr watch update-deps cleanup-changesets wait-for-stack smoke-test
->>>>>>> Stashed changes
+.PHONY: dev lint mypy-lint complex coverage pre-commit sort deploy destroy deps unit infra-tests integration e2e coverage-tests docs lint-docs build format format-fix compare-openapi openapi pr watch update-deps cleanup-changesets wait-for-stack smoke-test ssm-setup
 PYTHON := .venv/bin/python3
 APP := ../../infra/app.py
 .ONESHELL:  # run all commands in a single shell, ensuring it runs within a local virtual env
@@ -146,7 +142,6 @@ compare-openapi:
 
 	# npx cdk deploy --app="${PYTHON} ${PWD}/../infra/app.py" --require-approval=never
 
-<<<<<<< Updated upstream
 # SSM Parameter Setup - creates the Anthropic API key in SSM Parameter Store
 # Usage: ANTHROPIC_API_KEY=sk-ant-xxx make ssm-setup
 ssm-setup:

@@ -37,6 +37,12 @@ class ApiDbConstruct(Construct):
         # Backwards compatibility alias
         self.db = self.users_table
 
+        # VPR Async Architecture - Jobs Table
+        self.jobs_table: dynamodb.TableV2 = self._build_vpr_jobs_table(id_)
+
+        # VPR Async Architecture - Results Bucket
+        self.vpr_results_bucket: s3.Bucket = self._build_vpr_results_bucket(id_)
+
     def _build_users_table(self, id_prefix: str) -> dynamodb.TableV2:
         """
         Users table with Single Table Design.
@@ -155,4 +161,68 @@ class ApiDbConstruct(Construct):
         CfnOutput(
             self, id=constants.CV_BUCKET_OUTPUT, value=bucket.bucket_name
         ).override_logical_id(constants.CV_BUCKET_OUTPUT)
+        return bucket
+
+    def _build_vpr_jobs_table(self, id_prefix: str) -> dynamodb.TableV2:
+        """
+        VPR Jobs table for async job tracking.
+
+        PK: job_id
+        GSI: idempotency-key-index for duplicate detection
+        TTL: 24 hours for job data
+        """
+        table_id = f"{id_prefix}{constants.JOBS_TABLE_NAME}"
+        table = dynamodb.TableV2(
+            self,
+            table_id,
+            table_name=self.naming.table_name(constants.JOBS_TABLE_NAME),
+            partition_key=dynamodb.Attribute(
+                name="job_id", type=dynamodb.AttributeType.STRING
+            ),
+            billing=dynamodb.Billing.on_demand(),
+            removal_policy=RemovalPolicy.DESTROY,
+            time_to_live_attribute="ttl",
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True,
+                recovery_period_in_days=7,
+            ),
+            global_secondary_indexes=[
+                dynamodb.GlobalSecondaryIndexPropsV2(
+                    index_name="idempotency-key-index",
+                    partition_key=dynamodb.Attribute(
+                        name="idempotency_key", type=dynamodb.AttributeType.STRING
+                    ),
+                    projection_type=dynamodb.ProjectionType.ALL,
+                ),
+            ],
+        )
+        CfnOutput(
+            self, id=constants.JOBS_TABLE_OUTPUT, value=table.table_name
+        ).override_logical_id(constants.JOBS_TABLE_OUTPUT)
+        return table
+
+    def _build_vpr_results_bucket(self, id_prefix: str) -> s3.Bucket:
+        """
+        S3 bucket for VPR generation results.
+        Lifecycle: 7 days -> Delete
+        """
+        bucket_id = f"{id_prefix}{constants.VPR_RESULTS_BUCKET}"
+        bucket = s3.Bucket(
+            self,
+            bucket_id,
+            bucket_name=self.naming.results_bucket_name(constants.VPR_RESULTS_BUCKET),
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            enforce_ssl=True,
+            versioned=True,
+            lifecycle_rules=[
+                s3.LifecycleRule(
+                    id="delete-after-7-days",
+                    expiration=Duration.days(7),
+                    enabled=True,
+                ),
+            ],
+        )
         return bucket
