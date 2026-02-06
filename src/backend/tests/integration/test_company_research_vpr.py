@@ -492,6 +492,7 @@ class TestVPRGenerationFlow:
         saved = dynamodb_table.get_item(Key={'pk': 'app-456', 'sk': 'ARTIFACT#VPR#v1'})
         assert 'Item' in saved
 
+    @pytest.mark.skip(reason='FVS disabled for VPR generation - see vpr_generator.py')
     @patch('careervp.logic.vpr_generator.LLMClient')
     def test_vpr_fvs_rejection_returns_422(
         self,

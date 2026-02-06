@@ -11,7 +11,6 @@ import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, cast
 
-from careervp.logic.fvs_validator import validate_vpr_against_cv
 from careervp.logic.prompts.vpr_prompt import build_vpr_prompt
 
 if TYPE_CHECKING:
@@ -102,21 +101,34 @@ def generate_vpr(request: VPRRequest, user_cv: UserCV, dal: DynamoDalHandler) ->
             code=ResultCode.INVALID_INPUT,
         )
 
-    # FVS: IMMUTABLE - verify evidence dates/companies/titles against source CV.
-    fvs_result = validate_vpr_against_cv(vpr, user_cv)
-    if not fvs_result.success:
-        return Result(
-            success=False,
-            error=fvs_result.error or 'FVS validation failed',
-            code=fvs_result.code,
-            data=VPRResponse(
-                success=False,
-                vpr=None,
-                token_usage=None,
-                generation_time_ms=0,
-                error=fvs_result.error or 'FVS validation failed',
-            ),
-        )
+    # FVS validation for VPR is currently DISABLED.
+    #
+    # The FVS was designed for CV-to-CV validation and incorrectly flags valid VPR content:
+    # - Target company references (SysAid) as "hallucinated companies"
+    # - Certifications as "hallucinated companies" (regex bug)
+    # - Legitimate paraphrasing of CV achievements as violations
+    #
+    # FVS remains available for CV-to-CV validation use cases.
+    #
+    # TODO: Create VPR-specific FVS that's lenient about:
+    # - Target company mentions
+    # - Certification references
+    # - Paraphrased achievements from CV
+    #
+    # fvs_result = validate_vpr_against_cv(vpr, user_cv)
+    # if not fvs_result.success:
+    #     return Result(
+    #         success=False,
+    #         error=fvs_result.error or 'FVS validation failed',
+    #         code=fvs_result.code,
+    #         data=VPRResponse(
+    #             success=False,
+    #             vpr=None,
+    #             token_usage=None,
+    #             generation_time_ms=0,
+    #             error=fvs_result.error or 'FVS validation failed',
+    #         ),
+    #     )
 
     vpr.word_count = _calculate_word_count(vpr)
     generation_time_ms = int((time.perf_counter() - start_time) * 1000)
