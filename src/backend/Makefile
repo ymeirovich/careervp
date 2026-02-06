@@ -96,9 +96,11 @@ coverage-tests:
 	uv run pytest tests/unit tests/integration  --cov-config=.coveragerc --cov=careervp --cov-report xml
 
 deploy: build
+	npx cdk acknowledge 34892
 	npx cdk deploy --app="$(PYTHON) $(REPO_ROOT)/infra/app.py" --require-approval=never
 
 destroy:
+	npx cdk acknowledge 34892
 	npx cdk destroy --app="$(PYTHON) ${PWD}/../infra/app.py" --force
 
 docs:
