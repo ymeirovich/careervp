@@ -149,7 +149,7 @@ OUTPUT FORMAT: Return ONLY valid JSON (no markdown formatting, no code blocks). 
     {{
       "requirement": "Exact requirement from job posting",
       "evidence": "Specific facts from CV + gap responses",
-      "alignment_score": "Strong|Moderate|Developing",
+      "alignment_score": "STRONG|MODERATE|DEVELOPING",
       "impact_potential": "How this translates to role success"
     }}
   ],

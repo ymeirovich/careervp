@@ -74,7 +74,7 @@ def generate_vpr(request: VPRRequest, user_cv: UserCV, dal: DynamoDalHandler) ->
     llm_result = llm_client.invoke(
         prompt=prompt,
         task_mode=TaskMode.STRATEGIC,
-        max_tokens=4000,
+        max_tokens=8192,
         temperature=0.7,
     )
 
