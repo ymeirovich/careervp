@@ -52,10 +52,8 @@ async def _make_search_request(query: str) -> Result[httpx.Response] | httpx.Res
     except httpx.HTTPStatusError as exc:
         status_code = exc.response.status_code if exc.response else 'unknown'
         return Result(success=False, error=f'Search HTTP {status_code}', code=ResultCode.SEARCH_FAILED)
-    except httpx.RequestError as exc:
+    except (httpx.RequestError, Exception) as exc:
         return Result(success=False, error=f'Search request error: {exc}', code=ResultCode.SEARCH_FAILED)
-    except Exception as exc:  # pragma: no cover - safety net
-        return Result(success=False, error=str(exc), code=ResultCode.SEARCH_FAILED)
 
 
 def _parse_duckduckgo_results(html: str) -> list[SearchResult]:
@@ -79,8 +77,8 @@ def _parse_duckduckgo_results(html: str) -> list[SearchResult]:
         if not raw_url:
             continue
 
-        snippet = result_block.select_one('.result__snippet')
-        snippet_text = snippet.get_text(strip=True) if snippet else ''
+        snippet_el = result_block.select_one('.result__snippet')
+        snippet_text = snippet_el.get_text(strip=True) if snippet_el else ''
 
         parsed_results.append(
             SearchResult(
