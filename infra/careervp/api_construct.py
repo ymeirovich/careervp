@@ -27,11 +27,22 @@ class ApiConstruct(Construct):
         self.id_ = id_
         self.naming = naming
         self.api_db = ApiDbConstruct(self, f"{id_}db", naming=naming)
-        # Note: lambda_role is created after VPR async infrastructure (line ~60)
-        # to include VPR permissions
-        self.lambda_role = None  # type: ignore
-        # self.common_layer = self._build_common_layer()  # TODO: Enable when layer is built
         self.rest_api = self._build_api_gw()
+
+        # VPR Async Architecture - DLQ first, then Queue (DLQ must exist first)
+        self.vpr_jobs_dlq = self._build_vpr_jobs_dlq()
+        self.vpr_jobs_queue = self._build_vpr_jobs_queue(self.vpr_jobs_dlq)
+
+        # Create Lambda role BEFORE lambdas that need it
+        self.lambda_role = self._build_lambda_role(
+            self.api_db.db,
+            self.api_db.idempotency_db,
+            self.api_db.cv_bucket,
+            self.api_db.jobs_table,
+            self.api_db.vpr_results_bucket,
+            self.vpr_jobs_queue,
+        )
+
         api_resource: aws_apigateway.Resource = self.rest_api.root.add_resource(
             constants.API_ROOT_RESOURCE
         )
@@ -50,20 +61,6 @@ class ApiConstruct(Construct):
         )
         # Note: Original synchronous VPR generator removed - using async VPR architecture instead
         self.vpr_generator_func = None  # Placeholder for backward compatibility
-
-        # VPR Async Architecture - DLQ first, then Queue (DLQ must exist first)
-        self.vpr_jobs_dlq = self._build_vpr_jobs_dlq()
-        self.vpr_jobs_queue = self._build_vpr_jobs_queue(self.vpr_jobs_dlq)
-
-        # Recreate role with VPR async permissions
-        self.lambda_role = self._build_lambda_role(
-            self.api_db.db,
-            self.api_db.idempotency_db,
-            self.api_db.cv_bucket,
-            self.api_db.jobs_table,
-            self.api_db.vpr_results_bucket,
-            self.vpr_jobs_queue,
-        )
 
         # VPR Submit Lambda - POST /api/vpr (async architecture)
         self.vpr_submit_func = self._add_vpr_submit_lambda_integration(
