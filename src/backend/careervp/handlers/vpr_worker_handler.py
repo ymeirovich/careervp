@@ -29,7 +29,7 @@ from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.vpr_generator import generate_vpr
-from careervp.models.vpr import VPRRequest
+from careervp.models.vpr import VPR, VPRRequest
 
 # Module-level S3 client for testing/mocking
 s3 = boto3.client('s3')
@@ -49,11 +49,13 @@ def _generate_presigned_url(result_key: str) -> str:
     """Generate presigned URL for downloading result."""
     client = boto3.client('s3')
     bucket = _get_results_bucket()
-    return client.generate_presigned_url(
+    url = client.generate_presigned_url(
         'get_object',
         Params={'Bucket': bucket, 'Key': result_key},
         ExpiresIn=3600,
     )
+    assert isinstance(url, str), 'S3 presigned URL should return a string'
+    return url
 
 
 def _process_job_record(
@@ -75,18 +77,12 @@ def _process_job_record(
     # Fetch job from DynamoDB
     job_result = jobs_repo.get_job(job_id)
 
-    # Handle Result object or dict return
-    if hasattr(job_result, 'data'):
-        if not job_result.success or not job_result.data:
-            logger.error('Job not found', job_id=job_id)
-            return
-        job = job_result.data
-    else:
-        job = job_result
-        if not job:
-            logger.error('Job not found', job_id=job_id)
-            return
+    # Repository returns dict or None
+    if job_result is None:
+        logger.error('Job not found', job_id=job_id)
+        return
 
+    job = job_result
     status = job.get('status')
 
     if status == 'COMPLETED':
@@ -116,7 +112,7 @@ def _execute_job(
     )
 
     # Get CV for this user
-    user_id = job.get('user_id')
+    user_id: str = job.get('user_id', '')
     input_data = job.get('input_data', {})
 
     # Fetch CV from DynamoDB
@@ -153,7 +149,8 @@ def _execute_job(
         logger.error('VPR generation failed', job_id=job_id, error=result.error)
         return
 
-    vpr = result.data
+    vpr_response = result.data
+    vpr: VPR = vpr_response.vpr  # type: ignore[assignment]
 
     # Upload result to S3
     result_key = f'results/{job_id}.json'
@@ -193,16 +190,16 @@ def _execute_job(
 
     # Emit metrics
     metrics.add_metric(name='VPRJobCompleted', unit='Count', value=1)
-    if result.token_usage:
+    if vpr_response.token_usage:
         metrics.add_metric(
             name='VPRInputTokens',
             unit='Count',
-            value=result.token_usage.input_tokens,
+            value=vpr_response.token_usage.input_tokens,
         )
         metrics.add_metric(
             name='VPROutputTokens',
             unit='Count',
-            value=result.token_usage.output_tokens,
+            value=vpr_response.token_usage.output_tokens,
         )
 
     logger.info(

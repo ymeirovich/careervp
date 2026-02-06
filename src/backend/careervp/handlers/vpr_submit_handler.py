@@ -96,19 +96,11 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     idempotency_key = _build_idempotency_key(request_model)
     existing_job = jobs_repo.get_job_by_idempotency_key(idempotency_key)
 
-    # Handle both Result object and dict returns (for testing compatibility)
-    if hasattr(existing_job, 'data'):
-        # Result object
-        existing_job_data = existing_job.data
-    else:
-        # Direct dict return
-        existing_job_data = existing_job
-
-    if existing_job_data:
+    if existing_job:
         # Duplicate request - return existing job_id
         logger.info(
             'Idempotent duplicate request',
-            job_id=existing_job_data.get('job_id'),
+            job_id=existing_job.get('job_id'),
             idempotency_key=idempotency_key,
         )
 
@@ -117,8 +109,8 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             'headers': JSON_HEADERS,
             'body': json.dumps(
                 {
-                    'job_id': existing_job_data.get('job_id'),
-                    'status': existing_job_data.get('status'),
+                    'job_id': existing_job.get('job_id'),
+                    'status': existing_job.get('status'),
                     'message': 'VPR generation already exists with this idempotency key.',
                 }
             ),

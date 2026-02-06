@@ -129,7 +129,7 @@ class JobsRepository:
         """
         try:
             response = self.table.get_item(Key={'job_id': job_id})
-            job = response.get('Item')
+            job: dict[str, Any] | None = response.get('Item')
 
             if job:
                 logger.info('Found job', job_id=job_id, status=job.get('status'))

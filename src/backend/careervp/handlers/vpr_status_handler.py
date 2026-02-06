@@ -41,11 +41,13 @@ def _get_results_bucket() -> str:
 def _generate_presigned_url(result_key: str) -> str:
     """Generate presigned URL for downloading result."""
     bucket = _get_results_bucket()
-    return s3.generate_presigned_url(
+    url = s3.generate_presigned_url(
         'get_object',
         Params={'Bucket': bucket, 'Key': result_key},
         ExpiresIn=3600,
     )
+    assert isinstance(url, str), 'S3 presigned URL should return a string'
+    return url
 
 
 def _build_processing_response(job: dict[str, Any], job_id: str) -> dict[str, Any]:
@@ -137,20 +139,12 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     # Fetch job from DynamoDB
     job_result = jobs_repo.get_job(job_id)
 
-    # Handle Result object or dict return
-    if hasattr(job_result, 'data'):
-        if not job_result.success:
-            logger.error('Failed to fetch job', error=job_result.error)
-            return _build_error_response(
-                'Failed to fetch job status',
-                HTTPStatus.INTERNAL_SERVER_ERROR,
-            )
-        job = job_result.data
-    else:
-        job = job_result
-
-    if not job:
+    # Repository returns dict or None
+    if job_result is None:
+        logger.error('Job not found', job_id=job_id)
         return _build_error_response('Job not found', HTTPStatus.NOT_FOUND)
+
+    job = job_result
 
     status = job.get('status', 'UNKNOWN')
 
