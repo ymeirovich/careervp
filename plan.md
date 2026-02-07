@@ -2666,6 +2666,8 @@ uv run pytest tests/ -v --tb=short
 
 ## Risk Mitigation
 
+### Core Risks
+
 | Risk | Mitigation |
 |------|------------|
 | LLM hallucination | FVS validation on all outputs |
@@ -2673,6 +2675,304 @@ uv run pytest tests/ -v --tb=short
 | Cost overrun | Token tracking + alerts |
 | Web scraping blocked | Web search + LLM fallback |
 | Cold start latency | User expectation setting (progress indicators) |
+
+---
+
+### Scaling & Performance Risks
+
+#### Risk 1: Gap Responses Reuse Without Persistent Storage
+
+**Problem Identified:** (Feb 2026 - Architecture Review)
+- Current design passes `gap_responses` via request payload only
+- No backend storage = responses lost after request completes
+- Cannot support "ALL previous gap responses across applications" feature
+- No cross-device synchronization possible
+
+**Impact:**
+- **HIGH** - Blocks cross-application response reuse
+- Users cannot leverage accumulated gap responses over time
+- Frontend must manually track responses (unreliable)
+
+**Solution:** Hybrid Storage + Request Payload Approach
+1. **Store gap responses in DynamoDB users table**
+   - Schema: `PK: user_id`, `SK: RESPONSE#{question_id}`
+   - TTL: 90 days
+   - Attributes: question, answer, destination, application_id, created_at
+
+2. **Add API endpoints:**
+   - `POST /api/gap-responses` - Store new responses
+   - `GET /api/gap-responses?user_id={id}` - Retrieve all historical responses
+
+3. **Frontend workflow:**
+   - Fetch all previous responses via GET endpoint
+   - Include in VPR/CV/Letter request payload
+   - Backend validates ownership (user_id match)
+
+**Implementation Priority:** P0 - Required before Phase 9-11 (CV Tailoring, Cover Letter)
+
+**Estimated Effort:** 8-12 hours
+
+**Monitoring:**
+- Track gap response count per user (average, p50, p90, p99)
+- Alert if storage failures exceed 1%
+- Track retrieval latency (target: <100ms)
+
+---
+
+#### Risk 2: Latency Degradation as Applications Scale (40-60 Apps)
+
+**Problem Identified:** (Feb 2026 - Scaling Analysis)
+- Each application adds 5 gap responses (~750 tokens)
+- At 60 applications: 300 total responses = 45,000 tokens
+- Token growth: 8K baseline → 52K at 60 apps (+553%)
+- Latency impact: VPR 50-65s → 90-135s (+80%)
+
+**Current Status:** ✅ SAFE
+- VPR (async): 90-135s at 60 apps (45% of 300s timeout)
+- CV Tailoring (sync): 40-65s at 60 apps (22% of 300s timeout)
+- Cover Letter (sync): 40-65s at 60 apps (22% of 300s timeout)
+- Gap Analysis (sync): 30-60s expected (20% of 300s timeout)
+
+**Mitigation Strategy 1: Response Filtering (Implement at 30+ Apps)**
+
+```python
+def filter_gap_responses(responses, max_tokens=30000):
+    """Filter to most relevant responses within token budget."""
+    # 1. Filter to CV_IMPACT only (exclude INTERVIEW_MVP_ONLY)
+    cv_impact = [r for r in responses if r.destination == "CV_IMPACT"]
+
+    # 2. Sort by recency (newest first)
+    sorted_responses = sorted(cv_impact, key=lambda r: r.created_at, reverse=True)
+
+    # 3. Accumulate up to token budget
+    accumulated = []
+    token_count = 0
+    for response in sorted_responses:
+        response_tokens = estimate_tokens(response.question + response.answer)
+        if token_count + response_tokens <= max_tokens:
+            accumulated.append(response)
+            token_count += response_tokens
+        else:
+            break
+
+    return accumulated
+```
+
+**When to Apply:**
+- Application count > 30 (45K+ tokens)
+- User has >200 total gap responses
+- Average prompt tokens approaching 50K
+
+**Implementation Priority:** P1 - Optimization phase
+
+**Estimated Effort:** 4-6 hours
+
+**Monitoring - Response Token Accumulation:**
+```yaml
+Metric: GapResponseTokenCount
+Dimensions: [UserId, ApplicationCount]
+Thresholds:
+  - WARN at 25,000 tokens (avg across users)
+  - ALERT at 30,000 tokens (avg across users)
+  - CRITICAL at 45,000 tokens (individual user)
+
+Metric: GapResponseFilteringRate
+Dimensions: [Feature] # VPR, CV_TAILORING, COVER_LETTER
+Thresholds:
+  - INFO at 10% filtering rate
+  - WARN at 30% filtering rate
+  - Review filtering strategy at 50% rate
+
+Metric: GapResponseCount
+Dimensions: [UserId]
+Thresholds:
+  - INFO at 50 responses (10 applications)
+  - WARN at 150 responses (30 applications)
+  - ALERT at 300 responses (60 applications)
+```
+
+**CloudWatch Dashboard: Gap Responses Scaling**
+- Panel 1: Response count over time (p50, p90, p99 by user)
+- Panel 2: Token count distribution
+- Panel 3: Filtering rate by feature
+- Panel 4: Latency vs response count (scatter plot)
+- Panel 5: Cost per generation vs response count
+
+---
+
+**Mitigation Strategy 2: Response Deduplication (Future Enhancement - Phase 15+)**
+
+**Problem:** Multiple applications may ask semantically similar questions
+- App 1: "Describe your LMS experience"
+- App 5: "Tell me about your learning management system background"
+- App 10: "What LMS platforms have you worked with?"
+- Result: 3 responses with overlapping information = token waste
+
+**Solution:** Semantic Similarity Clustering
+```python
+def deduplicate_gap_responses(responses):
+    """Merge similar questions across applications."""
+    # 1. Compute semantic embeddings for questions
+    embeddings = [get_embedding(r.question) for r in responses]
+
+    # 2. Cluster by similarity (threshold: 0.85)
+    clusters = cluster_by_similarity(embeddings, threshold=0.85)
+
+    # 3. Per cluster: keep most comprehensive answer
+    deduplicated = []
+    for cluster in clusters:
+        best_response = max(cluster, key=lambda r: len(r.answer))
+        deduplicated.append(best_response)
+
+    return deduplicated
+```
+
+**Benefits:**
+- Reduces token count by 20-40% (estimated)
+- Preserves most comprehensive answers
+- Maintains full context with less redundancy
+
+**Implementation Trigger:**
+- User has >100 gap responses (20+ applications)
+- Token savings >5,000 tokens per request
+- Cost: Claude API embedding calls ($0.0001 per response)
+
+**Estimated Effort:** 12-16 hours (includes embedding integration)
+
+**Monitoring:**
+- Track deduplication rate (% responses merged)
+- Track token savings per request
+- Track embedding API costs
+
+---
+
+**Mitigation Strategy 3: Historical Summarization (Future - Phase 15+)**
+
+**Problem:** After 100+ applications, even filtered responses may exceed limits
+- 100 apps = 500 responses = ~75K tokens (approaching Claude 200K limit)
+- Older responses less relevant but still valuable for context
+
+**Solution:** Progressive Summarization
+```
+Recent Applications (last 20): Full detail (100 responses)
+  → Keep complete question + answer pairs
+  → Most relevant for current context
+
+Older Applications (21-100): Summarized format (400 responses → 50 summaries)
+  → "LMS Experience Summary: Implemented 10+ learning management systems
+     across 8 companies including Moodle, Canvas, and Blackboard.
+     Led migrations, integrations, and training programs."
+  → Condensed but preserves key facts
+
+Ancient Applications (100+): High-level aggregates
+  → Statistical summaries only
+  → "200+ gap questions answered across 50 applications"
+```
+
+**Benefits:**
+- Maintains context from all applications
+- Keeps token count manageable (<50K)
+- Preserves important historical evidence
+
+**Implementation Trigger:**
+- User reaches 100+ applications
+- Total response tokens exceed 75K
+- Claude context window utilization >60%
+
+**Estimated Effort:** 16-20 hours (includes LLM-based summarization)
+
+**Monitoring:**
+- Track summarization rate (% responses summarized)
+- Track context window utilization
+- Track user feedback on summary quality
+
+---
+
+#### Risk 3: Sync vs Async Migration Threshold
+
+**Current Architecture:**
+- VPR: Async (SQS + Worker) - Handles 45-60s+ operations
+- CV Tailoring: Sync - Expected <30s
+- Cover Letter: Sync - Expected <20s
+- Gap Analysis: Sync (recommended) - Expected <60s
+
+**Migration Decision Matrix:**
+
+| Feature | Current Mode | App 60 Latency | Timeout (300s) | Status |
+|---------|--------------|----------------|----------------|--------|
+| VPR Generation | Async | 90-135s | N/A (already async) | ✅ SAFE |
+| CV Tailoring | Sync | 40-65s | 22% of timeout | ✅ Keep Sync |
+| Cover Letter | Sync | 40-65s | 22% of timeout | ✅ Keep Sync |
+| Gap Analysis | Sync | 30-60s | 20% of timeout | ✅ Use Sync |
+
+**Migration Trigger (Sync → Async):**
+Migrate feature to async pattern if **ANY** of:
+1. p95 latency exceeds **200 seconds** (67% of 300s timeout)
+2. Timeout failure rate exceeds **5%** per month
+3. User complaints about "slow" or "hanging" responses
+4. Average response time consistently >150s for 7 days
+
+**Estimated Timeline:**
+- Based on scaling analysis: Won't occur until ~150+ applications per user
+- Expected timeframe: 12-18 months post-launch (Q3 2027)
+
+**Migration Effort:** 8-12 hours per feature
+- Create SQS queue (`{feature}-worker-queue`)
+- Implement worker handler
+- Add status polling endpoint
+- Update frontend to polling pattern
+- Migrate existing sync users (backwards compatibility)
+
+**Monitoring - Latency Thresholds:**
+```yaml
+Metric: FeatureLatency
+Dimensions: [Feature, Stage]
+Features: [VPR, CV_TAILORING, COVER_LETTER, GAP_ANALYSIS]
+
+Thresholds:
+  INFO:
+    - VPR: >120s (p95)
+    - CV_TAILORING: >60s (p95)
+    - COVER_LETTER: >50s (p95)
+    - GAP_ANALYSIS: >90s (p95)
+
+  WARN:
+    - VPR: >180s (p95)
+    - CV_TAILORING: >120s (p95)
+    - COVER_LETTER: >100s (p95)
+    - GAP_ANALYSIS: >150s (p95)
+
+  CRITICAL (Async Migration Trigger):
+    - ANY_FEATURE: >200s (p95)
+    - ANY_FEATURE: >5% timeout failures
+
+Metric: TimeoutFailureRate
+Dimensions: [Feature]
+Thresholds:
+  - WARN at 2% failures per month
+  - CRITICAL at 5% failures per month (trigger migration)
+
+Metric: ApplicationCountPerUser
+Dimensions: [UserId]
+Purpose: Track when users approach 150+ apps (migration risk zone)
+Thresholds:
+  - INFO at 50 applications
+  - WARN at 100 applications
+  - REVIEW at 150 applications (consider proactive migration)
+```
+
+**CloudWatch Dashboard: Sync/Async Health**
+- Panel 1: Latency by feature over time (p50, p95, p99)
+- Panel 2: Timeout failure rate by feature
+- Panel 3: Application count distribution (histogram)
+- Panel 4: Users approaching migration threshold (150+ apps)
+- Panel 5: Cost impact of async migration (projected savings)
+
+**Proactive Review:** Quarterly review of latency trends
+- Q1 2027: Baseline latency with 10-20 apps per user
+- Q2 2027: Monitor growth to 30-50 apps
+- Q3 2027: Evaluate 100+ app users for migration
+- Q4 2027: Execute migrations if thresholds exceeded
 
 ---
 
