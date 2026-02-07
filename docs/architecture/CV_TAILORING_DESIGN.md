@@ -161,6 +161,96 @@ TTL: current_timestamp + 7776000                   # 90 days in seconds
 
 ---
 
+## Architecture Pattern: Handler → Logic → DAL
+
+### Handler Layer (cv_tailoring_handler.py)
+- Validates API input (Pydantic models)
+- Initializes dependencies (DAL, LLM, FVS)
+- Delegates ALL business logic to CVTailoringLogic
+- Formats HTTP responses
+- NO DIRECT DAL ACCESS
+
+### Logic Layer (cv_tailoring_logic.py)
+- Fetches master CV from DAL
+- Calls LLM for tailoring
+- Validates with FVS
+- Stores tailored CV via DAL
+- Returns Result[TailoredCV]
+
+### DAL Layer (dynamo_dal_handler.py - SHARED)
+- get_cv(cv_id) -> UserCV
+- store_tailored_cv(tailored_cv) -> None
+- query_by_user_id(user_id) -> list[TailoredCV]
+
+---
+
+## Input Schema
+
+```python
+class CVTailoringRequest(BaseModel):
+    cv_id: str
+    job_description: str
+    gap_responses: Optional[GapAnalysisResponses] = None  # NEW
+```
+
+### Gap Responses Usage
+
+Gap responses provide additional context for tailoring:
+- Skills with evidence → Highlight in tailored CV
+- Experience with details → Expand relevant sections
+- Missing skills → De-emphasize or omit weak areas
+
+---
+
+## Observability: AWS Lambda Powertools
+
+### Handler Decorators
+
+```python
+from aws_lambda_powertools import Logger, Tracer, Metrics
+
+logger = Logger(service="cv-tailoring")
+tracer = Tracer(service="cv-tailoring")
+metrics = Metrics(namespace="CareerVP", service="cv-tailoring")
+
+@logger.inject_lambda_context(log_event=True)
+@tracer.capture_lambda_handler(capture_response=False)
+@metrics.log_metrics(capture_cold_start_metric=True)
+def lambda_handler(event, context):
+    ...
+```
+
+### Metrics to Track
+- `CVTailoringSuccess` - Successful tailoring count
+- `CVTailoringFailure` - Failed tailoring count
+- `TailoringLatency` - End-to-end latency (ms)
+- `LLMCost` - Cost per tailoring ($)
+- `FVSViolations` - Hallucination count
+
+---
+
+## DynamoDB Table: cv_tailoring_jobs
+
+### Schema
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| job_id (PK) | String | UUID for tailoring job |
+| user_id | String | User who submitted request |
+| cv_id | String | Reference to master CV |
+| job_description | String | Target job description |
+| status | String | PENDING / PROCESSING / COMPLETED / FAILED |
+| tailored_cv_s3_key | String | S3 path to result |
+| created_at | Number | Unix timestamp |
+| ttl | Number | Auto-delete timestamp (90 days) |
+
+### GSI: user_id_index
+- Partition Key: user_id
+- Sort Key: created_at
+- Projection: ALL
+
+---
+
 ## Relevance Scoring Algorithm
 
 ### Overview
@@ -347,29 +437,32 @@ Score: (0.40 × 0.85) + (0.30 × 0.5) + (0.30 × 0.80)
 ┌─────────────────────────────────────────────────────────────┐
 │ Handler: cv_tailoring_handler.py                            │
 │  - Validate request (Pydantic)                              │
-│  - Fetch master CV from DAL                                 │
-│  - Fetch job description (or parse from request)            │
-│  - Call tailor_cv() logic                                   │
+│  - Initialize CVTailoringLogic with dependencies            │
+│  - Call logic.tailor_cv(request)                            │
+│  - Format and return HTTP response                          │
+│  - NO DIRECT DAL ACCESS                                     │
 └────────┬────────────────────────────────────────────────────┘
          │
          ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ Logic: cv_tailoring.py                                       │
-│  1. Extract job requirements (keywords, skills, seniority)  │
-│  2. Score each CV section for relevance                     │
-│  3. Build tailoring prompt with scored sections             │
-│  4. Call LLM (Haiku 4.5) to generate tailored CV            │
-│  5. Parse LLM response into TailoredCV model                │
-│  6. Validate with FVS (fvs_validator.py)                    │
-│  7. Return Result[TailoredCV]                               │
+│ Logic: cv_tailoring_logic.py                                 │
+│  1. Fetch master CV from DAL (via injected dal)             │
+│  2. Extract job requirements (keywords, skills, seniority)  │
+│  3. Score each CV section for relevance                     │
+│  4. Build tailoring prompt with scored sections             │
+│  5. Call LLM (Haiku 4.5) to generate tailored CV            │
+│  6. Parse LLM response into TailoredCV model                │
+│  7. Validate with FVS (fvs_validator.py)                    │
+│  8. If CRITICAL violations: return Result(error=...)        │
+│  9. Store tailored CV via DAL (via injected dal)            │
+│ 10. Return Result[TailoredCV]                               │
 └────────┬────────────────────────────────────────────────────┘
          │
          ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ Handler: cv_tailoring_handler.py                            │
-│  - Check FVS validation result                              │
-│  - If CRITICAL violations: return 400 Bad Request           │
-│  - Store tailored CV as artifact in DAL                     │
+│  - Unwrap Result[TailoredCV]                                │
+│  - If error: return appropriate HTTP error                  │
 │  - Return TailoredCVResponse with download URL              │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -865,13 +958,18 @@ Return a JSON object with the following structure:
 }
 ```
 
-### User Prompt Template
+### User Prompt Template (with Gap Responses)
 
-```
-# Job Description
+```xml
+<instruction>
+Tailor this CV to match the job description.
+</instruction>
+
+<job_description>
 {{job_description}}
+</job_description>
 
-# Master CV (with relevance scores)
+<master_cv>
 Full Name: {{full_name}}
 Contact: {{email}}, {{phone}}
 
@@ -893,14 +991,25 @@ Education:
 {{#each education}}
 - {{institution}} - {{degree}} ({{graduation_date}})
 {{/each}}
+</master_cv>
 
-# Tailoring Instructions
+{{#if gap_responses}}
+<gap_analysis_responses>
+The candidate has provided additional context:
+{{gap_responses}}
+</gap_analysis_responses>
+{{/if}}
+
+<tailoring_instructions>
 - Emphasize experiences with score ≥ 0.80 (HIGH PRIORITY)
 - Include experiences with score ≥ 0.60
 - De-emphasize experiences with score 0.40-0.59
 - Exclude experiences with score < 0.40 (unless timeline continuity required)
+</tailoring_instructions>
 
-# FVS RULES (CRITICAL - STRICT ENFORCEMENT)
+<fvs_rules>
+CRITICAL - STRICT ENFORCEMENT:
+
 IMMUTABLE Facts - NEVER modify these:
 - Dates: {{immutable_dates}}
 - Companies: {{immutable_companies}}
@@ -916,8 +1025,9 @@ VERIFIABLE Skills - Can reframe but must exist in source:
 FLEXIBLE Content - Full creative liberty:
 - Professional summary
 - Achievement descriptions (preserve IMMUTABLE facts)
+</fvs_rules>
 
-# ATS Optimization
+<ats_optimization>
 Target keywords from job description:
 {{target_keywords}}
 
@@ -925,13 +1035,15 @@ Ensure these keywords appear naturally in:
 - Professional summary
 - Experience descriptions
 - Skills section
+</ats_optimization>
 
-# Output Requirements
-1. Return valid JSON (no markdown code blocks)
-2. Preserve all IMMUTABLE facts exactly as provided
-3. Include "changes_made" array explaining modifications
-4. Optimize experience descriptions for target keywords
-5. Keep professional summary under 150 words
+<output_format>
+Return valid JSON (no markdown code blocks) with:
+1. All IMMUTABLE facts preserved exactly as provided
+2. "changes_made" array explaining modifications
+3. Experience descriptions optimized for target keywords
+4. Professional summary under 150 words
+</output_format>
 ```
 
 ### Prompt Engineering Best Practices

@@ -17,27 +17,275 @@ Users often have relevant experience that doesn't appear in their CV because:
 - CV mentions "DevOps engineer" but doesn't explicitly list CI/CD tools
 - Gap Analysis asks: "You worked as a DevOps Engineer at Company X. Can you describe your experience with continuous integration and deployment pipelines, including specific tools (e.g., Jenkins, GitLab CI, GitHub Actions)?"
 
-## Architecture Pattern
+## Architecture Pattern: Handler → Logic → DAL
 
-Gap Analysis follows the **Async Task Pattern** defined in [VPR_ASYNC_DESIGN.md](./VPR_ASYNC_DESIGN.md).
+Gap Analysis uses a **synchronous pattern** (not async) because question generation completes within acceptable time limits.
+
+### Handler Layer (gap_analysis_handler.py)
+- Validates API input (Pydantic models)
+- Initializes dependencies (DAL, LLM, FVS)
+- Delegates ALL business logic to GapAnalysisLogic
+- Formats HTTP responses
+- NO DIRECT DAL ACCESS
+
+### Logic Layer (gap_analysis_logic.py)
+- Fetches CV and job description from DAL
+- Calls LLM (Sonnet 4.5) for question generation
+- Validates questions with FVS (skill verification)
+- Stores gap questions via DAL
+- Returns Result[list[GapQuestion]]
+
+### DAL Layer (dynamo_dal_handler.py - SHARED)
+- get_cv(cv_id) -> UserCV
+- get_job_description(job_id) -> str
+- store_gap_questions(questions) -> None
+- get_gap_responses(cv_id, job_id) -> GapAnalysisResponses
+
+### Synchronous Flow
 
 ```
-POST /api/gap-analysis/submit
+POST /api/gap-analysis
   │
-  ├─> Submit Handler: Create job, enqueue
+  ├─> Handler: Validate request, initialize logic
   │
-  └─> 202 ACCEPTED { job_id }
-
-SQS Queue triggers Worker Handler
+  ├─> Logic: Fetch CV, generate questions (Sonnet 4.5), validate with FVS
   │
-  ├─> Gap Analysis Logic: Generate questions via LLM
-  │
-  └─> Save to S3, update status COMPLETED
-
-GET /api/gap-analysis/status/{job_id}
-  │
-  └─> 200 OK { status: "COMPLETED", result_url }
+  └─> 200 OK { questions: [...] }
 ```
+
+### LLM Model: Claude Sonnet 4.5 (TaskMode.STRATEGIC)
+
+**Rationale:**
+- Gap analysis requires strategic reasoning (understanding implicit skills, context)
+- Sonnet 4.5 produces higher-quality, more contextual questions
+- Cost: ~$0.10 per question set (acceptable for strategic task)
+- Timeout: 600 seconds (10 minutes) for complex analysis
+
+### Timeout: 600 Seconds
+
+```python
+import asyncio
+
+async def generate_gap_questions_with_timeout(llm_client: LLMClient, prompt: str) -> list[GapQuestion]:
+    try:
+        response = await asyncio.wait_for(
+            llm_client.generate(
+                messages=[...],
+                model="claude-sonnet-4-5",
+                max_tokens=4096
+            ),
+            timeout=600.0  # 10 minutes
+        )
+        return response
+    except asyncio.TimeoutError:
+        raise TimeoutError("LLM call timed out after 600 seconds")
+```
+
+---
+
+## FVS Integration: Skill Verification
+
+### Purpose
+
+Validate that skills mentioned in gap questions are real and not hallucinated by the LLM.
+
+### Validation Rules
+
+```python
+class GapAnalysisFVSValidator:
+    def validate_questions(self, questions: list[GapQuestion], master_cv: UserCV, job_desc: str):
+        """
+        Validate gap questions against master CV and job description.
+
+        IMMUTABLE FACTS:
+        - Skills mentioned in master CV
+        - Job requirements from job description
+
+        HALLUCINATION CHECK:
+        - Question references skill not in CV or job desc → REJECT
+        - Question fabricates experience → REJECT
+        """
+        violations = []
+
+        # Extract skills from CV and job description
+        cv_skills = set(skill.lower() for skill in master_cv.skills)
+        job_skills = self._extract_skills_from_job_desc(job_desc)
+        allowed_skills = cv_skills | job_skills
+
+        for question in questions:
+            # Check if question references skills not in allowed set
+            question_skills = self._extract_skills_from_text(question.question)
+            invalid_skills = question_skills - allowed_skills
+
+            if invalid_skills:
+                violations.append({
+                    "question_id": question.question_id,
+                    "question": question.question,
+                    "invalid_skills": list(invalid_skills),
+                    "severity": "CRITICAL"
+                })
+
+        if violations:
+            return Result(
+                success=False,
+                error=f"{len(violations)} hallucinated skills detected",
+                code=ResultCode.FVS_HALLUCINATION_DETECTED,
+                data={"violations": violations}
+            )
+
+        return Result(success=True)
+```
+
+### Integration Point
+
+```python
+# Logic layer (gap_analysis_logic.py)
+def generate_gap_questions(
+    cv_id: str,
+    job_id: str,
+    dal: DynamoDalHandler,
+    llm_client: LLMClient,
+    fvs_validator: GapAnalysisFVSValidator
+) -> Result[list[GapQuestion]]:
+    # Fetch data from DAL
+    cv = dal.get_cv(cv_id)
+    job_desc = dal.get_job_description(job_id)
+
+    # Generate questions via LLM (Sonnet 4.5)
+    questions = llm_client.generate_questions(cv, job_desc)
+
+    # FVS validation
+    fvs_result = fvs_validator.validate_questions(questions, cv, job_desc)
+    if not fvs_result.success:
+        return Result(
+            success=False,
+            error="Hallucinated skills detected in questions",
+            code=ResultCode.FVS_HALLUCINATION_DETECTED,
+            data=fvs_result.data
+        )
+
+    # Store questions via DAL
+    dal.store_gap_questions(cv_id, job_id, questions)
+
+    return Result(success=True, data=questions)
+```
+
+---
+
+## Observability: AWS Lambda Powertools
+
+### Handler Decorators
+
+```python
+from aws_lambda_powertools import Logger, Tracer, Metrics
+
+logger = Logger(service="gap-analysis")
+tracer = Tracer(service="gap-analysis")
+metrics = Metrics(namespace="CareerVP", service="gap-analysis")
+
+@logger.inject_lambda_context(log_event=True)
+@tracer.capture_lambda_handler(capture_response=False)
+@metrics.log_metrics(capture_cold_start_metric=True)
+def lambda_handler(event, context):
+    ...
+```
+
+### Metrics to Track
+- `GapAnalysisSuccess` - Successful question generation count
+- `GapAnalysisFailure` - Failed generation count
+- `QuestionGenerationLatency` - End-to-end latency (ms)
+- `LLMCost` - Cost per question set ($)
+- `QuestionsGenerated` - Number of questions per request
+- `FVSViolations` - Hallucination count
+
+---
+
+## DynamoDB Table: gap_analysis_jobs
+
+### Schema
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| pk (PK) | String | `GAP#{cv_id}#{job_id}` |
+| sk (SK) | String | `ANALYSIS#v1` |
+| user_id | String | User who submitted request |
+| cv_id | String | Reference to master CV |
+| job_id | String | Reference to target job posting |
+| questions | List | Array of generated gap questions |
+| questions_count | Number | Number of questions generated |
+| created_at | Number | Unix timestamp |
+| ttl | Number | Auto-delete timestamp (90 days) |
+
+### GSI: user_id_index
+- Partition Key: user_id
+- Sort Key: created_at
+- Projection: ALL
+
+---
+
+## Gap Responses Storage
+
+### Purpose
+
+Store user answers to gap questions for reuse across applications (VPR, CV Tailoring, Cover Letter).
+
+### DynamoDB Schema (Users Table - Extended)
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| pk | String | `user_id` (partition key) |
+| sk | String | `RESPONSE#{question_id}` (sort key) |
+| question_id | String | Unique question identifier |
+| question | String | Question text |
+| answer | String | User's answer |
+| destination | String | `CV_IMPACT` or `INTERVIEW_MVP_ONLY` |
+| application_id | String | Application that generated question |
+| created_at | String | ISO timestamp |
+| ttl | Number | Unix timestamp (90-day expiration) |
+
+### Query Pattern
+
+```python
+# Get all gap responses for a user
+responses = dal.query_items(
+    table_name="careervp-users-table-prod",
+    key_condition_expression="pk = :user_id AND begins_with(sk, :prefix)",
+    expression_values={
+        ":user_id": user_id,
+        ":prefix": "RESPONSE#"
+    }
+)
+```
+
+### API Endpoints
+
+**POST /api/gap-responses** - Store new responses
+```json
+{
+  "user_id": "user_123",
+  "responses": [
+    {
+      "question_id": "gap_q_abc",
+      "question": "Describe your experience...",
+      "answer": "I have 5 years...",
+      "destination": "CV_IMPACT",
+      "application_id": "app_001"
+    }
+  ]
+}
+```
+
+**GET /api/gap-responses?user_id={id}** - Retrieve all responses
+```json
+{
+  "responses": [...],
+  "total_count": 45,
+  "cv_impact_count": 30,
+  "interview_only_count": 15
+}
+```
+
+---
 
 ## Gap Analysis Algorithm
 
@@ -122,29 +370,56 @@ class GapResponse(BaseModel):
 
 ## LLM Prompt Design
 
+### LLM Model: Claude Sonnet 4.5 (Strategic Reasoning)
+
+Gap analysis uses **Claude Sonnet 4.5** (TaskMode.STRATEGIC) because:
+- Requires deep understanding of implicit skills and transferable experience
+- Must infer probable skills from job history and context
+- Needs nuanced judgment about gap severity and user capability
+- Strategic task justified by importance (helps users articulate hidden strengths)
+
 ### System Prompt
 
 ```
-You are a career coach specializing in identifying skill and experience gaps between candidates and job requirements. Your goal is to help candidates articulate hidden strengths that may not be obvious from their CV.
+You are an expert career coach with deep expertise in identifying skill and experience gaps between candidates and job requirements. Your role is to use strategic reasoning to uncover hidden strengths and implicit skills that candidates may not have explicitly stated in their CV.
 
-**Guidelines:**
-1. Generate 3-5 targeted questions that help the candidate showcase relevant experience
-2. Focus on gaps where the candidate LIKELY has experience but hasn't explicitly stated it
-3. Prioritize high-impact requirements (technical skills, key qualifications)
-4. Make questions specific and actionable (include company names, role titles from CV)
-5. Avoid questions about obviously missing qualifications (e.g., if CV shows 2 years experience, don't ask about 10 years)
+**Strategic Analysis Guidelines:**
+1. **Deep Context Understanding:** Analyze the candidate's entire career trajectory to infer implicit skills
+   - Example: "DevOps Engineer" role likely includes CI/CD experience even if not listed
+   - Example: "Team Lead" role suggests leadership, mentoring, and project management skills
+
+2. **Transferable Skills Reasoning:** Identify skills from unrelated domains that apply to the target role
+   - Example: "Product Manager" experience may include data analysis relevant to "Data Analyst" role
+   - Example: "Startup experience" often includes wearing multiple hats and learning diverse skills
+
+3. **Gap Prioritization (Impact × Probability):**
+   - HIGH IMPACT: Critical requirements explicitly stated in job posting
+   - HIGH PROBABILITY: Skills the candidate likely has based on related experience
+   - Generate 3-5 questions prioritized by (impact × probability) score
+
+4. **Question Specificity:**
+   - Reference specific companies, roles, and dates from the CV
+   - Ask about concrete examples and measurable outcomes
+   - Make questions answerable in 2-3 sentences
+
+5. **Avoid Hallucination (FVS Compliance):**
+   - ONLY reference skills mentioned in CV or job description
+   - DO NOT invent skills or experience not suggested by the evidence
+   - DO NOT ask about qualifications the candidate obviously lacks
 
 **Question Format:**
-- Start with context from their CV (e.g., "You worked as X at Y...")
-- Ask specifically about the missing requirement
-- Keep questions concise (1-2 sentences)
-- Make answers easy to provide (2-3 sentence responses)
+- Start with context: "You worked as [role] at [company]..."
+- State the gap: "The job requires [skill/experience]..."
+- Ask for evidence: "Can you describe your experience with [specific aspect]?"
 
-Output Format: JSON array of objects with:
-- question_id: Unique identifier (use UUID)
-- question: The question text
-- impact: "HIGH" | "MEDIUM" | "LOW" - How critical is this gap?
-- probability: "HIGH" | "MEDIUM" | "LOW" - Likelihood user has this experience
+**Output Format:** JSON array with:
+{
+  "question_id": "uuid",
+  "question": "contextualized question text",
+  "impact": "HIGH" | "MEDIUM" | "LOW",
+  "probability": "HIGH" | "MEDIUM" | "LOW",
+  "reasoning": "brief explanation of why this gap is relevant"
+}
 ```
 
 ### User Prompt Template
@@ -262,7 +537,7 @@ class GapQuestion(BaseModel):
 class GapAnalysisResult(BaseModel):
     """Complete gap analysis output."""
 
-    job_id: str                         # Async job ID
+    job_id: str                         # Job posting ID
     user_id: str
     job_posting: JobPosting
     questions: list[GapQuestion]        # 3-5 questions
@@ -271,57 +546,36 @@ class GapAnalysisResult(BaseModel):
 
 ### Storage Schema
 
-**DynamoDB Job Record:**
+**DynamoDB Record (Sync Pattern):**
 ```python
 {
-    "pk": "JOB#01234567-89ab-cdef-0123-456789abcdef",
-    "sk": "METADATA",
-    "gsi1pk": "USER#user_123",
-    "gsi1sk": "JOB#gap_analysis#2025-02-04T12:00:00Z",
-    "job_id": "01234567-89ab-cdef-0123-456789abcdef",
+    "pk": "GAP#{cv_id}#{job_id}",
+    "sk": "ANALYSIS#v1",
     "user_id": "user_123",
-    "feature": "gap_analysis",
-    "status": "COMPLETED",
-    "request_data": {
-        "cv_id": "cv_789",
-        "job_posting": { /* JobPosting object */ }
-    },
-    "result_s3_key": "jobs/gap-analysis/01234567-89ab-cdef.json",
+    "cv_id": "cv_789",
+    "job_id": "job_456",
+    "questions": [
+        {
+            "question_id": "q1-uuid",
+            "question": "You worked as a Cloud Engineer...",
+            "impact": "HIGH",
+            "probability": "HIGH",
+            "gap_score": 1.0
+        }
+    ],
+    "questions_count": 5,
     "created_at": "2025-02-04T12:00:00Z",
-    "completed_at": "2025-02-04T12:00:45Z",
-    "code": "GAP_QUESTIONS_GENERATED",
-    "ttl": 1738684800
+    "ttl": 1738684800  # 90 days
 }
 ```
 
-**S3 Result Object:**
-```json
-{
-  "job_id": "01234567-89ab-cdef-0123-456789abcdef",
-  "user_id": "user_123",
-  "job_posting": {
-    "company_name": "TechCorp",
-    "role_title": "Senior Software Engineer",
-    "requirements": [...]
-  },
-  "questions": [
-    {
-      "question_id": "q1-uuid",
-      "question": "You worked as a Cloud Engineer at Previous Corp. Can you describe your hands-on experience with AWS services, particularly EC2, S3, and Lambda?",
-      "impact": "HIGH",
-      "probability": "HIGH",
-      "gap_score": 1.0
-    },
-    {
-      "question_id": "q2-uuid",
-      "question": "The role requires experience with microservices architecture. In your current position, have you designed or maintained microservices-based systems?",
-      "impact": "HIGH",
-      "probability": "MEDIUM",
-      "gap_score": 0.88
-    }
-  ],
-  "created_at": "2025-02-04T12:00:00Z"
-}
+**Query Pattern:**
+```python
+# Fetch gap analysis for specific CV + job combination
+response = dal.get_item(
+    pk=f"GAP#{cv_id}#{job_id}",
+    sk="ANALYSIS#v1"
+)
 ```
 
 ## Implementation Components
@@ -379,25 +633,6 @@ def _format_requirements(requirements: list[str]) -> str:
     """Format job requirements for prompt."""
 ```
 
-### 3. Worker Handler: `handlers/gap_analysis_worker.py`
-
-```python
-from careervp.handlers.utils.async_task import AsyncTaskHandler
-from careervp.logic.gap_analysis import generate_gap_questions
-
-class GapAnalysisWorker(AsyncTaskHandler):
-    """Async worker for gap analysis processing."""
-
-    async def process(self, job_id: str, request: GapAnalysisRequest) -> Result[dict]:
-        """
-        Execute gap analysis logic.
-
-        1. Retrieve user CV from DAL
-        2. Call generate_gap_questions()
-        3. Return result
-        """
-```
-
 ## Testing Strategy
 
 ### Unit Tests
@@ -420,51 +655,47 @@ class GapAnalysisWorker(AsyncTaskHandler):
 
 ### Integration Tests
 
-**`tests/gap-analysis/integration/test_gap_worker_handler.py`**
-- Test worker processing with mocked SQS event
-- Test status updates (PENDING → PROCESSING → COMPLETED)
-- Test S3 result storage
-- Test error scenarios (FAILED status)
+**`tests/gap-analysis/integration/test_gap_handler.py`**
+- Test request handling with mocked LLM responses
+- Test DAL writes for analysis record
+- Test error scenarios (timeout, invalid input)
 
 **`tests/gap-analysis/integration/test_gap_dal.py`**
-- Test job creation
-- Test status updates
-- Test job retrieval by job_id
-- Test user job queries
+- Test analysis record creation
+- Test retrieval by cv_id + job_id
+- Test user analysis queries
 
 ### Infrastructure Tests
 
 **`tests/gap-analysis/infrastructure/test_gap_analysis_stack.py`**
-- Assert SQS queue exists with correct name
-- Assert DLQ exists with correct configuration
-- Assert Lambda functions exist
-- Assert DynamoDB GSI exists
+- Assert DynamoDB table exists
+- Assert Lambda function exists
 - Assert API Gateway routes exist
 
 ### E2E Tests
 
 **`tests/gap-analysis/e2e/test_gap_analysis_flow.py`**
-- Submit job → poll status → retrieve result
-- Test full async flow with real DynamoDB (local)
+- Submit request → receive questions
+- Test full sync flow with real DynamoDB (local)
 - Test timeout scenarios
-- Test concurrent job processing
+- Test concurrent request processing
 
 ## Performance Considerations
 
 ### LLM Latency
-- **Expected:** 15-30 seconds for question generation
+- **Expected:** 30-60 seconds for strategic question generation
 - **Timeout:** 600 seconds (10 minutes) max
-- **Optimization:** Use Claude 3 Haiku for faster responses
+- **Model:** Use Claude Sonnet 4.5 (TaskMode.STRATEGIC) for complex reasoning
 
 ### Concurrency
-- **SQS batch size:** 1 (one job per worker invocation)
-- **Max concurrent workers:** 10 (configurable)
+- **Lambda timeout:** 600 seconds (sync request handling)
+- **Max concurrent invocations:** 100 (AWS default, configurable)
 - **Rate limiting:** Respect Claude API rate limits
 
 ### Cost Optimization
 - **Token usage:** ~2000 input tokens (CV + job) + ~500 output tokens (5 questions)
-- **Cost per analysis:** ~$0.01 (with Haiku)
-- **S3 storage:** Minimal (5KB per result)
+- **Cost per analysis:** ~$0.05 (with Sonnet 4.5)
+- **DynamoDB storage:** Minimal (single record per analysis)
 
 ## Security Considerations
 
@@ -474,14 +705,15 @@ class GapAnalysisWorker(AsyncTaskHandler):
 - Validate CV structure with Pydantic models
 
 ### Data Privacy
-- Job records auto-delete after 7 days (TTL)
-- S3 results use presigned URLs (expire in 1 hour)
+- Gap analysis records auto-delete after 90 days (TTL)
+- Questions returned directly in API response (sync - no S3 storage needed)
+- Gap responses stored in DynamoDB users table with 90-day TTL
 - No PII in CloudWatch logs
 
 ### Access Control
 - Cognito authentication required for all endpoints
-- Users can only access their own jobs
-- S3 presigned URLs validated by user_id
+- Users can only access their own gap analyses and responses
+- Enforce `user_id` ownership checks in DAL queries
 
 ## Future Enhancements
 
@@ -493,7 +725,6 @@ class GapAnalysisWorker(AsyncTaskHandler):
 
 ## References
 
-- **Async foundation:** [VPR_ASYNC_DESIGN.md](./VPR_ASYNC_DESIGN.md)
 - **Models:** `src/backend/careervp/models/job.py` - `GapResponse`, `GapQuestion`
 - **Result codes:** `src/backend/careervp/models/result.py` - `GAP_QUESTIONS_GENERATED`
 - **Prompt examples:** `docs/features/CareerVP Prompt Library.md`

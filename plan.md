@@ -148,9 +148,39 @@ CV Upload: ✅ SUCCESS (DOCX parsed, stored in DynamoDB)
 VPR Job: ✅ SUCCESS (job created, SQS message sent)
 Worker: ✅ SUCCESS (Lambda invoked, LLM called)
 LLM Response: ~2,555 tokens generated
-FVS: ❌ FALSE POSITIVES (disabled)
+FVS: ❌ FALSE POSITIVES (disabled for VPR)
 Result: VPR would have been valid but blocked by FVS
 ```
+
+### FVS Remediation Plan (v1.5)
+
+**Background:** FVS was designed for CV-to-CV validation (preserving immutable facts). It incorrectly flags valid VPR content:
+- Target company mentions → flagged as "not in source CV"
+- Certification references → flagged as hallucinations
+- Paraphrased achievements from CV → flagged as fabrications
+
+**Scope for v1.5:**
+| Item | Description |
+|------|-------------|
+| **VPR-Specific FVS Ruleset** | Create separate validation rules for VPR generation |
+| **Target Company Whitelist** | Allow target company mentions (from job posting input) |
+| **Certification Recognition** | Detect and allow cert-related keywords |
+| **Gap Response Integration** | Allow evidence from gap_responses as valid sources |
+
+**Tasks:**
+- [ ] Create `fvs_validator_vpr.py` with VPR-specific ruleset
+- [ ] Add target_company parameter to VPR FVS validation
+- [ ] Add certification keyword patterns to allowed list
+- [ ] Update `validate_vpr_against_cv()` to accept gap_responses as valid sources
+- [ ] Add feature flag `ENABLE_VPR_FVS` for gradual rollout
+- [ ] Create unit tests for false positive cases
+- [ ] Re-enable FVS for VPR behind feature flag
+
+**Validation:**
+- [ ] SysAid (target company) no longer flagged
+- [ ] Certifications no longer flagged
+- [ ] Paraphrased achievements from CV pass validation
+- [ ] Gap response evidence accepted as valid source
 
 ---
 
@@ -168,124 +198,76 @@ Result: VPR would have been valid but blocked by FVS
 
 ---
 
+## Architecture Cross-Cutting Concerns
+
+**Reference Documents:**
+- `docs/architecture/CV_TAILORING_DESIGN.md`
+- `docs/architecture/VPR_ASYNC_DESIGN.md`
+- `docs/architecture/COVER_LETTER_DESIGN.md`
+- `docs/architecture/system_design.md`
+
+### Shared Patterns Identified
+
+| Pattern | Location | Description |
+|---------|----------|-------------|
+| **Result[T] Pattern** | `models/result.py` | Unified success/failure return type across all features |
+| **DAL Handler Pattern** | `dal/dynamo_dal_handler.py` | Shared DynamoDB access layer |
+| **State Machine** | Jobs tables | PENDING → PROCESSING → COMPLETED/FAILED |
+| **Idempotency** | GSI on idempotency_key | Prevents duplicate job creation |
+| **Presigned URLs** | S3 integration | Time-limited secure file access |
+| **DLQ Strategy** | SQS + Lambda | Dead letter queue for failed jobs |
+
+### Cross-Cutting Validation Rules
+
+All LLM-generated artifacts must follow these rules per CLAUDE.md Anti-AI Detection Framework:
+
+- **Pattern 1:** Avoid excessive AI phrases (e.g., "In the ever-evolving landscape")
+- **Pattern 2:** Vary sentence structure naturally
+- **Pattern 3:** Include minor natural transitions
+- **Pattern 4:** Avoid perfect parallel structure
+
+### FVS Awareness Matrix
+
+| Feature | Source → Target | FVS Status | Validation Type |
+|---------|-----------------|------------|-----------------|
+| **CV Tailoring** | Master CV → Tailored CV | ✅ ENABLED | Immutable facts preservation |
+| **Cover Letter** | CV → Generated Letter | ✅ ENABLED | Company/job title verification |
+| **VPR Generation** | CV → VPR | ❌ DISABLED | Target company mentions flagged incorrectly |
+| **Gap Analysis** | CV → Questions | ✅ ENABLED | Skill verification |
+
+---
+
+## Anti-AI Detection Compliance Checklist
+
+**Per CLAUDE.md 8-Pattern Avoidance Framework**
+
+All LLM-generated content MUST pass these checks before storage:
+
+### Generation-Time Checks
+
+- [ ] **No AI Clichés:** Avoid phrases like "In today's fast-paced world," "leveraging cutting-edge"
+- [ ] **Natural Variation:** Sentence lengths vary (not all short, not all long)
+- [ ] **Organic Transitions:** Use varied connectors (however, therefore → naturally, at the same time)
+- [ ] **Structural Authenticity:** Avoid bullet-point perfection, numbered lists with equal items
+
+### Post-Generation Validation
+
+- [ ] **Human Readability:** Content sounds like professional communication, not AI output
+- [ ] **Contextual Appropriateness:** Tone matches job/industry expectations
+- [ ] **No Over-optimization:** Achievements are specific, not generically impressive
+
+### Compliance Enforcement
+
+**Locations implementing checks:**
+- `logic/vpr_generator.py` - VPR generation
+- `logic/cv_tailor.py` - CV tailoring
+- `logic/cover_letter_generator.py` - Cover letter generation
+
+---
+
 ## Recently Completed Tasks
 
-### PR #20: CDK Changeset Handling ✅ COMPLETED
-**Branch:** `fix/changeset-handling` → merged to main
-**Date:** Feb 2026
-
-**Changes:**
-- Added pre-deploy changeset cleanup to `.github/workflows/deploy.yml`
-- Created `.github/workflows/test-changeset.yml` for branch testing
-- Created `src/backend/tests/company_research_test.sh` integration test
-
-**Files Modified:**
-- `.github/workflows/deploy.yml`
-- `.github/workflows/test-changeset.yml` (new)
-- `src/backend/tests/company_research_test.sh` (new)
-
-**Test Result:** ✅ PASSED (2m18s)
-
----
-
-### PR #21: OpenAPI Workflow Fix ✅ COMPLETED
-**Branch:** `fix/openapi-workflow` → merged to main
-**Date:** Feb 2026
-
-**Changes:**
-- Added `--mode local` to `generate_openapi.py` for AWS-free validation
-- Added `--mode download` as default for AWS download
-- Added 404 handling for graceful exit when swagger unavailable
-- Added three Make targets: `openapi`, `compare-openapi`, `verify-openapi-deployed`
-
-**Files Modified:**
-- `src/backend/generate_openapi.py`
-- `src/backend/Makefile`
-
-**Test Result:** ✅ PASSED
-
----
-
-### VPR-Async Documentation & Testing Layer ✅ COMPLETED
-**Date:** Feb 4, 2026
-
-**Objective:** Create comprehensive documentation, test files, and CI/CD workflows for VPR async architecture BEFORE implementation (TDD approach).
-
-**Changes:**
-
-1. **Architecture Documentation** (4,100+ lines)
-
-   - Created `docs/architecture/VPR_ASYNC_DESIGN.md`
-   - System architecture with Mermaid sequence diagrams
-   - State machine logic (PENDING → PROCESSING → COMPLETED/FAILED)
-   - Error handling & DLQ strategy (6 error categories)
-   - API contracts, cost analysis, security, monitoring
-   - Frontend integration patterns
-   - Migration strategy
-
-2. **E2E Tests** (8 test cases)
-
-   - Created `tests/e2e/test_vpr_async_polling.py`
-   - Submit → Poll → Verify flow with 60s timeout handling
-   - VPRAsyncClient HTTP wrapper with polling logic
-   - Idempotency validation
-   - Status transitions (PENDING → PROCESSING → COMPLETED)
-   - Result retrieval from S3 presigned URLs
-
-3. **Integration Tests** (11 test cases)
-
-   - Created `tests/integration/test_vpr_async_infra.py`
-   - SQS message handling and DLQ configuration
-   - DynamoDB state transitions with moto mocking
-   - S3 result storage with encryption
-   - End-to-end workflow validation
-   - Idempotency via GSI queries
-
-4. **Testing Strategy Documentation** (1,375 lines)
-
-   - Created `docs/tests/VPR-Async-Testing.md`
-   - Testing pyramid (unit/integration/E2E)
-   - Anthropic SDK mocking patterns (45+ code examples)
-   - CDK infrastructure assertions
-   - CI/CD integration guide
-   - 20+ testing patterns and best practices
-
-5. **GitHub Workflow** (OIDC-secured)
-
-   - Created `.github/workflows/deploy-vpr-async.yml`
-   - Jobs: lint-and-test, cdk-synth, cdk-deploy, e2e-test, dry-run
-   - AWS OIDC authentication via `aws-actions/configure-aws-credentials@v4`
-   - Permissions: `id-token: write`, `contents: read`
-   - Stack name: `CareerVpVprAsyncDev`
-   - Includes changeset cleanup and stack stability checks
-
-**Files Created:**
-- `docs/architecture/VPR_ASYNC_DESIGN.md` (95 KB)
-- `tests/e2e/test_vpr_async_polling.py`
-- `tests/integration/test_vpr_async_infra.py`
-- `docs/tests/VPR-Async-Testing.md` (41 KB)
-- `.github/workflows/deploy-vpr-async.yml`
-
-**Verification:**
-- ✅ CDK synth completed successfully (no errors)
-- ✅ All files follow naming conventions
-- ✅ OIDC security rules enforced
-- ✅ Tests follow TDD principles (written before implementation)
-- ✅ Documentation references existing spec: `docs/specs/07-vpr-async-architecture.md`
-
-**Security Compliance:**
-- ✅ OIDC-only authentication (no static credentials)
-- ✅ Repository secret: `AWS_ROLE`
-- ✅ Permissions explicitly declared
-- ✅ S3 encryption validated in tests
-- ✅ DynamoDB TTL configured
-- ✅ SQS DLQ configured with 3-retry max
-
-**Next Steps:**
-- Phase 7 implementation tasks can now proceed (infrastructure deployment)
-- All tests are ready to guide implementation
-- CI/CD pipeline ready for automated testing
-- Reference: `docs/tasks/07-vpr-async/task-*.md` (8 task files)
+**Recent PRs archived to git history. Active tasks documented in Phases below.**
 
 ---
 
@@ -447,7 +429,7 @@ def verify_deployed_state() -> bool:
 
 ---
 
-## Completed Phases (1-7)
+## Completed Phases (1-8)
 
 - [x] Phase 1: Environment Setup
 - [x] Phase 2: Foundation Models & Utilities
@@ -456,59 +438,14 @@ def verify_deployed_state() -> bool:
 - [x] Phase 5: Verification
 - [x] Phase 6: CV Upload Handler
 - [x] Phase 7: VPR Generator (Base Implementation)
-- [x] VPR Async Architecture (Documentation Only - Tests Required)
-
-### VPR Async Architecture ✅ COMPLETED
-**Status:** COMPLETED - Deployed and tested
-**Branch:** `feature/company-research`
-**Date:** Feb 2026
-
-**Implementation Complete:**
-- **Infrastructure:**
-  - SQS Queue: `careervp-{env}-vpr-jobs` (with DLQ)
-  - DynamoDB Table: `careervp-{env}-vpr-jobs` (with idempotency GSI)
-  - S3 Bucket: `careervp-{env}-vpr-results` (7-day lifecycle)
-  - Lambda Functions: vpr-submit, vpr-worker, vpr-status
-
-- **API Endpoints:**
-  - `POST /api/vpr` → Returns 202 Accepted with job_id
-  - `GET /api/vpr/status/{job_id}` → Returns status and presigned URL
-
-- **Handlers Created:**
-  - `vpr_submit_handler.py` - Creates job, checks idempotency, sends to SQS
-  - `vpr_worker_handler.py` - SQS-triggered, generates VPR, uploads to S3
-  - `vpr_status_handler.py` - Returns job status and presigned URL
-
-- **Files Modified/Created:**
-  - `infra/careervp/constants.py` - Added VPR async constants
-  - `infra/careervp/naming_utils.py` - Added queue/bucket naming
-  - `infra/careervp/api_db_construct.py` - Added jobs_table, vpr_results_bucket
-  - `infra/careervp/api_construct.py` - Added VPR async Lambdas
-  - `src/backend/careervp/logic/utils/constants.py` - Added backend constants
-  - `src/backend/careervp/dal/jobs_repository.py` - Created DAL
-  - `src/backend/careervp/handlers/vpr_submit_handler.py` - Created
-  - `src/backend/careervp/handlers/vpr_worker_handler.py` - Created
-  - `src/backend/careervp/handlers/vpr_status_handler.py` - Created
-
-**Verification:**
-- ✅ CDK synth passes
-- ✅ All 99 unit tests pass
-- ⚠️ Unit tests for async handlers need to be created
-
-**Curl Example:**
-```bash
-# Submit VPR generation job
-curl -X POST https://api.careervp.dev/api/vpr \
-  -H "Content-Type: application/json" \
-  -d '{"user_id": "user_123", "application_id": "app_456", "job_posting": {...}}'
-
-# Check job status
-curl https://api.careervp.dev/api/vpr/status/{job_id}
-```
+- [x] Phase 8: Company Research (Feb 2026)
+- [x] VPR Async Architecture (Documentation + Tests + Implementation Complete)
 
 ---
 
-## DEPLOYMENT INFRASTRUCTURE FIXES (February 2026)
+## DEPLOYMENT INFRASTRUCTURE FIXES (Archived)
+
+**These fixes are now incorporated into standard workflows. See git history for details.**
 
 ### GitHub Actions Workflow Fixes
 
@@ -606,98 +543,13 @@ cd src/backend && uv run pytest tests/unit/test_vpr_generator.py -v
 
 ## Phase 8: Company Research
 
-**Spec:** [[docs/specs/02-company-research.md]]
-**Status:** COMPLETED (February 2026)
-**Priority:** P0 (Required for V1)
-**Model:** No AI (web scraping + text extraction) with Sonnet fallback
+**Status:** ✅ COMPLETED (February 2026)
 
-**Integration Test Results:**
-```
-tests/integration/test_company_research_vpr.py::TestCompanyResearchFlow::test_research_success_via_website_scrape PASSED
-tests/integration/test_company_research_vpr.py::TestCompanyResearchFlow::test_research_fallback_to_web_search PASSED
-tests/integration/test_company_research_vpr.py::TestCompanyResearchFlow::test_research_fallback_to_llm_synthesis PASSED
-tests/integration/test_company_research_vpr.py::TestCompanyResearchVPRIntegration::test_full_flow_company_research_then_vpr PASSED
-```
+**Implementation complete. See "Completed Phases" section for details.**
 
-**Implementation Complete:**
-- CompanyResearch models (company.py)
-- Web scraper utility (web_scraper.py)
-- Web search fallback (web_search.py)
-- Company research logic (company_research.py)
-- Handler (company_research_handler.py)
-- CDK integration (Lambda + API Gateway route)
+---
 
-### Task 8.1: CompanyResearch Models
-
-**File:** `src/backend/careervp/models/company.py`
-
-- [ ] Create `CompanyResearchRequest` model (company_name, domain, job_posting_url)
-- [ ] Create `CompanyResearchResult` model (overview, values, recent_news, source)
-- [ ] Create `ResearchSource` enum (WEBSITE_SCRAPE, WEB_SEARCH, LLM_FALLBACK)
-
-**Minimax Implementation Guidelines:**
-```
-File Paths:
-| File | Purpose |
-| ---- | ------- |
-| src/backend/careervp/models/company.py | Company research data models |
-
-Verification Commands:
-cd src/backend && uv run ruff format careervp/models/company.py
-cd src/backend && uv run ruff check careervp/models/company.py --fix
-cd src/backend && uv run mypy careervp/models/company.py --strict
-
-Dependencies: None (uses existing Pydantic patterns from models/cv.py)
-
-Acceptance Criteria:
-- All models pass ruff and mypy --strict
-- Models include proper Field descriptions
-- ResearchSource enum covers all fallback scenarios
-```
-
-### Task 8.2: Web Scraper Utility
-
-**File:** `src/backend/careervp/logic/utils/web_scraper.py`
-
-- [ ] Implement `scrape_company_about_page(url: str) -> Result[str]`
-- [ ] Implement `extract_company_values(html: str) -> list[str]`
-- [ ] Add timeout handling (10s max)
-- [ ] Add error handling for blocked/unavailable sites
-
-**Minimax Implementation Guidelines:**
-```
-File Paths:
-| File | Purpose |
-| ---- | ------- |
-| src/backend/careervp/logic/utils/web_scraper.py | Web scraping utilities |
-
-Dependencies to Add (pyproject.toml):
-- beautifulsoup4>=4.12.0
-- httpx>=0.27.0 (async HTTP client)
-
-Verification Commands:
-cd src/backend && uv run ruff format careervp/logic/utils/web_scraper.py
-cd src/backend && uv run ruff check careervp/logic/utils/web_scraper.py --fix
-cd src/backend && uv run mypy careervp/logic/utils/web_scraper.py --strict
-
-Pattern: Return Result[T] objects, not exceptions
-Timeout: 10 seconds max per request
-User-Agent: Use realistic browser User-Agent string
-
-Acceptance Criteria:
-- Handles timeout gracefully (returns Result with error)
-- Extracts text content from HTML
-- Removes scripts/styles/navigation
-```
-
-### Task 8.3: Web Search Fallback
-
-**File:** `src/backend/careervp/logic/utils/web_search.py`
-
-- [ ] Implement `search_company_info(company_name: str) -> Result[list[SearchResult]]`
-- [ ] Use MCP tool (google-search or brave-search) if available
-- [ ] Fallback to DuckDuckGo HTML scraping if no MCP tool
-- [ ] Return top 3-5 relevant results
+## Phase 9: CV Tailoring (Uses Gap Analysis Responses)
 
 **Minimax Implementation Guidelines:**
 ```
@@ -2814,6 +2666,8 @@ uv run pytest tests/ -v --tb=short
 
 ## Risk Mitigation
 
+### Core Risks
+
 | Risk | Mitigation |
 |------|------------|
 | LLM hallucination | FVS validation on all outputs |
@@ -2824,30 +2678,329 @@ uv run pytest tests/ -v --tb=short
 
 ---
 
+### Scaling & Performance Risks
+
+#### Risk 1: Gap Responses Reuse Without Persistent Storage
+
+**Problem Identified:** (Feb 2026 - Architecture Review)
+- Current design passes `gap_responses` via request payload only
+- No backend storage = responses lost after request completes
+- Cannot support "ALL previous gap responses across applications" feature
+- No cross-device synchronization possible
+
+**Impact:**
+- **HIGH** - Blocks cross-application response reuse
+- Users cannot leverage accumulated gap responses over time
+- Frontend must manually track responses (unreliable)
+
+**Solution:** Hybrid Storage + Request Payload Approach
+1. **Store gap responses in DynamoDB users table**
+   - Schema: `PK: user_id`, `SK: RESPONSE#{question_id}`
+   - TTL: 90 days
+   - Attributes: question, answer, destination, application_id, created_at
+
+2. **Add API endpoints:**
+   - `POST /api/gap-responses` - Store new responses
+   - `GET /api/gap-responses?user_id={id}` - Retrieve all historical responses
+
+3. **Frontend workflow:**
+   - Fetch all previous responses via GET endpoint
+   - Include in VPR/CV/Letter request payload
+   - Backend validates ownership (user_id match)
+
+**Implementation Priority:** P0 - Required before Phase 9-11 (CV Tailoring, Cover Letter)
+
+**Estimated Effort:** 8-12 hours
+
+**Monitoring:**
+- Track gap response count per user (average, p50, p90, p99)
+- Alert if storage failures exceed 1%
+- Track retrieval latency (target: <100ms)
+
+---
+
+#### Risk 2: Latency Degradation as Applications Scale (40-60 Apps)
+
+**Problem Identified:** (Feb 2026 - Scaling Analysis)
+- Each application adds 5 gap responses (~750 tokens)
+- At 60 applications: 300 total responses = 45,000 tokens
+- Token growth: 8K baseline → 52K at 60 apps (+553%)
+- Latency impact: VPR 50-65s → 90-135s (+80%)
+
+**Current Status:** ✅ SAFE
+- VPR (async): 90-135s at 60 apps (45% of 300s timeout)
+- CV Tailoring (sync): 40-65s at 60 apps (22% of 300s timeout)
+- Cover Letter (sync): 40-65s at 60 apps (22% of 300s timeout)
+- Gap Analysis (sync): 30-60s expected (20% of 300s timeout)
+
+**Mitigation Strategy 1: Response Filtering (Implement at 30+ Apps)**
+
+```python
+def filter_gap_responses(responses, max_tokens=30000):
+    """Filter to most relevant responses within token budget."""
+    # 1. Filter to CV_IMPACT only (exclude INTERVIEW_MVP_ONLY)
+    cv_impact = [r for r in responses if r.destination == "CV_IMPACT"]
+
+    # 2. Sort by recency (newest first)
+    sorted_responses = sorted(cv_impact, key=lambda r: r.created_at, reverse=True)
+
+    # 3. Accumulate up to token budget
+    accumulated = []
+    token_count = 0
+    for response in sorted_responses:
+        response_tokens = estimate_tokens(response.question + response.answer)
+        if token_count + response_tokens <= max_tokens:
+            accumulated.append(response)
+            token_count += response_tokens
+        else:
+            break
+
+    return accumulated
+```
+
+**When to Apply:**
+- Application count > 30 (45K+ tokens)
+- User has >200 total gap responses
+- Average prompt tokens approaching 50K
+
+**Implementation Priority:** P1 - Optimization phase
+
+**Estimated Effort:** 4-6 hours
+
+**Monitoring - Response Token Accumulation:**
+```yaml
+Metric: GapResponseTokenCount
+Dimensions: [UserId, ApplicationCount]
+Thresholds:
+  - WARN at 25,000 tokens (avg across users)
+  - ALERT at 30,000 tokens (avg across users)
+  - CRITICAL at 45,000 tokens (individual user)
+
+Metric: GapResponseFilteringRate
+Dimensions: [Feature] # VPR, CV_TAILORING, COVER_LETTER
+Thresholds:
+  - INFO at 10% filtering rate
+  - WARN at 30% filtering rate
+  - Review filtering strategy at 50% rate
+
+Metric: GapResponseCount
+Dimensions: [UserId]
+Thresholds:
+  - INFO at 50 responses (10 applications)
+  - WARN at 150 responses (30 applications)
+  - ALERT at 300 responses (60 applications)
+```
+
+**CloudWatch Dashboard: Gap Responses Scaling**
+- Panel 1: Response count over time (p50, p90, p99 by user)
+- Panel 2: Token count distribution
+- Panel 3: Filtering rate by feature
+- Panel 4: Latency vs response count (scatter plot)
+- Panel 5: Cost per generation vs response count
+
+---
+
+**Mitigation Strategy 2: Response Deduplication (Future Enhancement - Phase 15+)**
+
+**Problem:** Multiple applications may ask semantically similar questions
+- App 1: "Describe your LMS experience"
+- App 5: "Tell me about your learning management system background"
+- App 10: "What LMS platforms have you worked with?"
+- Result: 3 responses with overlapping information = token waste
+
+**Solution:** Semantic Similarity Clustering
+```python
+def deduplicate_gap_responses(responses):
+    """Merge similar questions across applications."""
+    # 1. Compute semantic embeddings for questions
+    embeddings = [get_embedding(r.question) for r in responses]
+
+    # 2. Cluster by similarity (threshold: 0.85)
+    clusters = cluster_by_similarity(embeddings, threshold=0.85)
+
+    # 3. Per cluster: keep most comprehensive answer
+    deduplicated = []
+    for cluster in clusters:
+        best_response = max(cluster, key=lambda r: len(r.answer))
+        deduplicated.append(best_response)
+
+    return deduplicated
+```
+
+**Benefits:**
+- Reduces token count by 20-40% (estimated)
+- Preserves most comprehensive answers
+- Maintains full context with less redundancy
+
+**Implementation Trigger:**
+- User has >100 gap responses (20+ applications)
+- Token savings >5,000 tokens per request
+- Cost: Claude API embedding calls ($0.0001 per response)
+
+**Estimated Effort:** 12-16 hours (includes embedding integration)
+
+**Monitoring:**
+- Track deduplication rate (% responses merged)
+- Track token savings per request
+- Track embedding API costs
+
+---
+
+**Mitigation Strategy 3: Historical Summarization (Future - Phase 15+)**
+
+**Problem:** After 100+ applications, even filtered responses may exceed limits
+- 100 apps = 500 responses = ~75K tokens (approaching Claude 200K limit)
+- Older responses less relevant but still valuable for context
+
+**Solution:** Progressive Summarization
+```
+Recent Applications (last 20): Full detail (100 responses)
+  → Keep complete question + answer pairs
+  → Most relevant for current context
+
+Older Applications (21-100): Summarized format (400 responses → 50 summaries)
+  → "LMS Experience Summary: Implemented 10+ learning management systems
+     across 8 companies including Moodle, Canvas, and Blackboard.
+     Led migrations, integrations, and training programs."
+  → Condensed but preserves key facts
+
+Ancient Applications (100+): High-level aggregates
+  → Statistical summaries only
+  → "200+ gap questions answered across 50 applications"
+```
+
+**Benefits:**
+- Maintains context from all applications
+- Keeps token count manageable (<50K)
+- Preserves important historical evidence
+
+**Implementation Trigger:**
+- User reaches 100+ applications
+- Total response tokens exceed 75K
+- Claude context window utilization >60%
+
+**Estimated Effort:** 16-20 hours (includes LLM-based summarization)
+
+**Monitoring:**
+- Track summarization rate (% responses summarized)
+- Track context window utilization
+- Track user feedback on summary quality
+
+---
+
+#### Risk 3: Sync vs Async Migration Threshold
+
+**Current Architecture:**
+- VPR: Async (SQS + Worker) - Handles 45-60s+ operations
+- CV Tailoring: Sync - Expected <30s
+- Cover Letter: Sync - Expected <20s
+- Gap Analysis: Sync (recommended) - Expected <60s
+
+**Migration Decision Matrix:**
+
+| Feature | Current Mode | App 60 Latency | Timeout (300s) | Status |
+|---------|--------------|----------------|----------------|--------|
+| VPR Generation | Async | 90-135s | N/A (already async) | ✅ SAFE |
+| CV Tailoring | Sync | 40-65s | 22% of timeout | ✅ Keep Sync |
+| Cover Letter | Sync | 40-65s | 22% of timeout | ✅ Keep Sync |
+| Gap Analysis | Sync | 30-60s | 20% of timeout | ✅ Use Sync |
+
+**Migration Trigger (Sync → Async):**
+Migrate feature to async pattern if **ANY** of:
+1. p95 latency exceeds **200 seconds** (67% of 300s timeout)
+2. Timeout failure rate exceeds **5%** per month
+3. User complaints about "slow" or "hanging" responses
+4. Average response time consistently >150s for 7 days
+
+**Estimated Timeline:**
+- Based on scaling analysis: Won't occur until ~150+ applications per user
+- Expected timeframe: 12-18 months post-launch (Q3 2027)
+
+**Migration Effort:** 8-12 hours per feature
+- Create SQS queue (`{feature}-worker-queue`)
+- Implement worker handler
+- Add status polling endpoint
+- Update frontend to polling pattern
+- Migrate existing sync users (backwards compatibility)
+
+**Monitoring - Latency Thresholds:**
+```yaml
+Metric: FeatureLatency
+Dimensions: [Feature, Stage]
+Features: [VPR, CV_TAILORING, COVER_LETTER, GAP_ANALYSIS]
+
+Thresholds:
+  INFO:
+    - VPR: >120s (p95)
+    - CV_TAILORING: >60s (p95)
+    - COVER_LETTER: >50s (p95)
+    - GAP_ANALYSIS: >90s (p95)
+
+  WARN:
+    - VPR: >180s (p95)
+    - CV_TAILORING: >120s (p95)
+    - COVER_LETTER: >100s (p95)
+    - GAP_ANALYSIS: >150s (p95)
+
+  CRITICAL (Async Migration Trigger):
+    - ANY_FEATURE: >200s (p95)
+    - ANY_FEATURE: >5% timeout failures
+
+Metric: TimeoutFailureRate
+Dimensions: [Feature]
+Thresholds:
+  - WARN at 2% failures per month
+  - CRITICAL at 5% failures per month (trigger migration)
+
+Metric: ApplicationCountPerUser
+Dimensions: [UserId]
+Purpose: Track when users approach 150+ apps (migration risk zone)
+Thresholds:
+  - INFO at 50 applications
+  - WARN at 100 applications
+  - REVIEW at 150 applications (consider proactive migration)
+```
+
+**CloudWatch Dashboard: Sync/Async Health**
+- Panel 1: Latency by feature over time (p50, p95, p99)
+- Panel 2: Timeout failure rate by feature
+- Panel 3: Application count distribution (histogram)
+- Panel 4: Users approaching migration threshold (150+ apps)
+- Panel 5: Cost impact of async migration (projected savings)
+
+**Proactive Review:** Quarterly review of latency trends
+- Q1 2027: Baseline latency with 10-20 apps per user
+- Q2 2027: Monitor growth to 30-50 apps
+- Q3 2027: Evaluate 100+ app users for migration
+- Q4 2027: Execute migrations if thresholds exceeded
+
+---
+
 ## Next Steps (Updated Feb 2026)
 
 Implementation order follows the application workflow:
 
 ### Recently Completed ✅
-- CDK Changeset Handling (PR #20)
-- OpenAPI Workflow Fix (PR #21)
-- Company Research Endpoint (Phase 8) - Implementation complete, tests pending
-- VPR Async Architecture - Documentation complete, tests + implementation pending
+- Phase 8: Company Research (COMPLETE - Feb 2026)
+- VPR Async Architecture (Documentation + Tests + Implementation Complete)
 
 ### Priority Tasks
 
-1. **Phase 8: Company Research Tests** - Create unit/integration tests
-2. **Phase 11: Gap Analysis** - After company research (Stage 2) - **BEFORE artifact generation**
-3. **Phase 9: CV Tailoring** - After gap analysis (Stage 3) - Uses gap responses
-4. **Phase 10: Cover Letter** - After CV tailoring (Stage 3) - Uses gap responses
-5. **Phase 12: Interview Prep** - After artifacts (Stage 4-5) - Questions then Report
-6. **VPR Async Tests** - Create tests for async workflow BEFORE implementation
-7. **VPR Async Implementation** - SQS/SNS Lambda integration
-8. **VPR Generator Enhancement** - Accept gap_responses and company_context inputs
+1. **Phase 11: Gap Analysis** - After company research (Stage 2) - **BEFORE artifact generation**
+2. **Phase 9: CV Tailoring** - After gap analysis (Stage 3) - Uses gap responses
+3. **Phase 10: Cover Letter** - After CV tailoring (Stage 3) - Uses gap responses
+4. **Phase 12: Interview Prep** - After artifacts (Stage 4-5) - Questions then Report
+5. **VPR Generator Enhancement** - Accept gap_responses and company_context inputs
+6. **FVS Remediation (v1.5)** - VPR-specific FVS validation
 
-**Note:** VPR Generator (Phase 7) needs updates to:
-- Accept `company_context` from Company Research
-- Accept `gap_responses` from Gap Analysis
-- Update VPR prompt to use both inputs
+**VPR Generator Enhancement:**
+- Accept `company_context` from Company Research (COMPLETE - implemented)
+- Accept `gap_responses` from Gap Analysis (pending implementation)
+- Update VPR prompt to use both inputs (pending)
 
-**Deployment Target:** Base stack deployment after all Phase 12 + VPR Async + VPR Generator enhancement completion.
+**See Also:**
+- "Architecture Cross-Cutting Concerns" section for FVS awareness matrix
+- "Anti-AI Detection Compliance Checklist" for generation guidelines
+- "FVS Remediation Plan (v1.5)" for future work
+
+**Deployment Target:** Base stack deployment after Phases 9-12 completion.

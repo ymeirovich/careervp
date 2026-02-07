@@ -99,6 +99,19 @@ class CoverLetterPreferences(BaseModel):
     )
 
 
+class GapAnalysisResponse(BaseModel):
+    """Single gap analysis response."""
+    question_id: str
+    question_text: str
+    response_text: str
+    skills_mentioned: list[str]
+
+
+class GapAnalysisResponses(BaseModel):
+    """Collection of gap analysis responses."""
+    responses: list[GapAnalysisResponse]
+
+
 class GenerateCoverLetterRequest(BaseModel):
     """Request to generate a personalized cover letter."""
 
@@ -131,6 +144,10 @@ class GenerateCoverLetterRequest(BaseModel):
         max_length=50000,
         description="Full job description text (optional, up to 50,000 chars)"
     )
+    gap_responses: Optional[GapAnalysisResponses] = Field(
+        default=None,
+        description="Optional gap analysis responses for additional context"
+    )
     preferences: Optional[CoverLetterPreferences] = Field(
         default=None,
         description="Optional generation preferences"
@@ -144,6 +161,16 @@ class GenerateCoverLetterRequest(BaseModel):
                 "company_name": "TechCorp Inc",
                 "job_title": "Senior Python Engineer",
                 "job_description": "We are seeking a Senior Python Engineer with 5+ years...",
+                "gap_responses": {
+                    "responses": [
+                        {
+                            "question_id": "q1",
+                            "question_text": "Describe your experience with Python and AWS",
+                            "response_text": "I have 6 years of experience building scalable systems with Python and AWS...",
+                            "skills_mentioned": ["Python", "AWS", "Lambda", "DynamoDB"]
+                        }
+                    ]
+                },
                 "preferences": {
                     "tone": "professional",
                     "word_count_target": 300,

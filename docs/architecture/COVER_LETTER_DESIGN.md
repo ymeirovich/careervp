@@ -207,6 +207,107 @@ TTL: current_timestamp + 7776000                     # 90 days in seconds
 
 ---
 
+## Architecture Pattern: Handler → Logic → DAL
+
+### Handler Layer (cover_letter_handler.py)
+- Validates API input (Pydantic models)
+- Initializes dependencies (DAL, LLM, FVS)
+- Delegates ALL business logic to CoverLetterLogic
+- Formats HTTP responses
+- NO DIRECT DAL ACCESS
+
+### Logic Layer (cover_letter_generator.py)
+- Fetches master CV, VPR, gap_responses from DAL
+- Synthesizes input data
+- Calls LLM for cover letter generation
+- Validates with FVS
+- Stores cover letter artifact via DAL
+- Returns Result[TailoredCoverLetter]
+
+### DAL Layer (dynamo_dal_handler.py - SHARED)
+- get_cv(cv_id) -> UserCV
+- get_vpr_artifact(cv_id, job_id) -> VPRArtifact
+- get_gap_responses(cv_id, job_id) -> GapAnalysisResponses
+- store_cover_letter(cover_letter) -> None
+- query_by_user_id(user_id) -> list[CoverLetter]
+
+---
+
+## Decision: Async Migration Trigger
+
+### Current: Synchronous (300s timeout)
+
+Cover Letter generation is synchronous because expected latency <20s.
+
+### Migration Trigger
+
+Migrate to async SQS pattern if ANY of:
+- p95 latency >60s in production
+- >5% timeout failures
+- User feedback: "slow" or "hangs"
+
+### Migration Path
+
+1. Create cover_letter_worker_queue (SQS)
+2. Implement cover_letter_worker.py (async handler)
+3. Add cover_letter_status.py (polling endpoint)
+4. Update API Gateway to async submit/status pattern
+5. Estimated migration effort: 8-12 hours
+
+---
+
+## Observability: AWS Lambda Powertools
+
+### Handler Decorators
+
+```python
+from aws_lambda_powertools import Logger, Tracer, Metrics
+
+logger = Logger(service="cover-letter")
+tracer = Tracer(service="cover-letter")
+metrics = Metrics(namespace="CareerVP", service="cover-letter")
+
+@logger.inject_lambda_context(log_event=True)
+@tracer.capture_lambda_handler(capture_response=False)
+@metrics.log_metrics(capture_cold_start_metric=True)
+def lambda_handler(event, context):
+    ...
+```
+
+### Metrics to Track
+- `CoverLetterSuccess` - Successful generation count
+- `CoverLetterFailure` - Failed generation count
+- `GenerationLatency` - End-to-end latency (ms)
+- `LLMCost` - Cost per letter ($)
+- `QualityScore` - Average quality score
+- `FVSViolations` - Hallucination count
+
+---
+
+## DynamoDB Table: cover_letter_jobs
+
+### Schema
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| job_id (PK) | String | UUID for cover letter job |
+| user_id | String | User who submitted request |
+| cv_id | String | Reference to master CV |
+| company_name | String | Target company name |
+| job_title | String | Target job title |
+| status | String | PENDING / PROCESSING / COMPLETED / FAILED |
+| cover_letter_s3_key | String | S3 path to result |
+| quality_score | Number | Overall quality score (0.0-1.0) |
+| created_at | Number | Unix timestamp |
+| ttl | Number | Auto-delete timestamp (90 days) |
+
+### GSI: user_id_index
+- Partition Key: user_id
+- Sort Key: created_at
+- Projection: ALL
+
+---
+
 ## Cover Letter Generation Algorithm
 
 ### Overview
@@ -614,21 +715,24 @@ Final: 0.50*0.90 + 0.25*0.85 + 0.25*0.88 = 0.45 + 0.2125 + 0.22 = 0.88 tone_scor
 │ Handler: cover_letter_handler.py                            │
 │  - Validate request (Pydantic)                              │
 │  - Authenticate user (JWT)                                  │
-│  - Fetch master CV and VPR from DAL                         │
+│  - Initialize dependencies (DAL, LLM, FVS)                  │
 │  - Call generate_cover_letter() logic                       │
+│  - NO DIRECT DAL ACCESS                                     │
 └────────┬────────────────────────────────────────────────────┘
          │
          ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ Logic: cover_letter_generator.py                             │
-│  1. Synthesize input data (CV, VPR, job description)        │
-│  2. Build LLM prompt (system + user)                        │
-│  3. Call LLM (Haiku 4.5) to generate cover letter           │
-│  4. Parse LLM response into TailoredCoverLetter model       │
-│  5. Calculate quality score (personalization + relevance)   │
-│  6. Validate with FVS (company name, job title)             │
-│  7. If quality < 0.70, retry with Sonnet 4.5               │
-│  8. Return Result[TailoredCoverLetter]                      │
+│  1. Fetch master CV, VPR, gap_responses from DAL            │
+│  2. Synthesize input data (CV, VPR, job description)        │
+│  3. Build LLM prompt (system + user)                        │
+│  4. Call LLM (Haiku 4.5) to generate cover letter           │
+│  5. Parse LLM response into TailoredCoverLetter model       │
+│  6. Calculate quality score (personalization + relevance)   │
+│  7. Validate with FVS (company name, job title)             │
+│  8. If quality < 0.70, retry with Sonnet 4.5               │
+│  9. Store cover letter artifact via DAL                     │
+│  10. Return Result[TailoredCoverLetter]                     │
 └────────┬────────────────────────────────────────────────────┘
          │
          ▼
@@ -636,7 +740,6 @@ Final: 0.50*0.90 + 0.25*0.85 + 0.25*0.88 = 0.45 + 0.2125 + 0.22 = 0.88 tone_scor
 │ Handler: cover_letter_handler.py                            │
 │  - Check generation result                                  │
 │  - If error: return appropriate HTTP status                 │
-│  - Store cover letter artifact in DAL                       │
 │  - Generate S3 presigned URL for download                   │
 │  - Return TailoredCoverLetterResponse                       │
 └─────────────────────────────────────────────────────────────┘
@@ -686,19 +789,27 @@ class CoverLetterPreferences(BaseModel):
 - tone: Must be one of [professional, enthusiastic, technical]
 - word_count_target: 200-500 words
 
-#### Step 2: Data Retrieval
+#### Step 2: Data Retrieval (Logic Layer)
 
-**Fetch from DAL:**
+**Fetch from DAL (in cover_letter_generator.py):**
 ```python
+# Logic layer fetches all required data from DAL
 # Retrieve master CV
-cv_result = await dal.get_cv_by_id(request.cv_id, user_id)
+cv_result = await self.dal.get_cv_by_id(request.cv_id, user_id)
 if not cv_result.success:
     return Result.failure(code=ResultCode.CV_NOT_FOUND)
 
 # Retrieve VPR artifact (required for personalization)
-vpr_result = await dal.get_vpr_artifact(request.cv_id, request.job_id)
+vpr_result = await self.dal.get_vpr_artifact(request.cv_id, request.job_id)
 if not vpr_result.success:
     return Result.failure(code=ResultCode.VPR_NOT_FOUND)
+
+# Retrieve gap analysis responses (optional)
+gap_responses = None
+if request.include_gap_responses:
+    gap_result = await self.dal.get_gap_responses(request.cv_id, request.job_id)
+    if gap_result.success:
+        gap_responses = gap_result.data
 
 # Optionally retrieve tailored CV (for additional context)
 tailored_cv_result = await dal.get_artifact(

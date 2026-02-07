@@ -721,7 +721,8 @@ uv run pytest tests/cv-tailoring/unit/test_fvs_integration.py::test_fvs_rejects_
        validate_job_description,
        validate_tailoring_preferences
    )
-   from careervp.logic.cv_tailoring import tailor_cv
+   from careervp.llm.client import get_llm_client
+   from careervp.logic.cv_tailoring import CVTailoringLogic
    from careervp.models.cv_tailoring import TailorCVRequest, TailoredCVResponse
    from careervp.models.result import ResultCode
 
@@ -792,37 +793,21 @@ uv run pytest tests/cv-tailoring/unit/test_fvs_integration.py::test_fvs_rejects_
                body=response.model_dump_json(),
            )
 
-       # Fetch master CV from DAL
-       try:
-           dal = DynamoDalHandler(table_name=env_vars.TABLE_NAME)
-           master_cv_result = dal.get_cv(cv_id=request.cv_id, user_id=request.user_id)
-           if not master_cv_result.success or master_cv_result.data is None:
-               response = TailoredCVResponse(
-                   success=False,
-                   error=f'CV with id {request.cv_id} not found',
-                   code=ResultCode.CV_NOT_FOUND
-               )
-               return Response(
-                   status_code=HTTPStatus.NOT_FOUND.value,
-                   body=response.model_dump_json(),
-               )
-           master_cv = master_cv_result.data
-       except Exception as e:
-           logger.exception('Failed to fetch master CV', error=str(e))
-           response = TailoredCVResponse(
-               success=False,
-               error='Failed to retrieve CV',
-               code=ResultCode.STORAGE_ERROR
-           )
-           return Response(
-               status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value,
-               body=response.model_dump_json(),
-           )
+       # Initialize dependencies and delegate to logic layer
+       # IMPORTANT: Handler does NOT access DAL directly - logic layer handles all storage
+       dal = DynamoDalHandler(table_name=env_vars.TABLE_NAME)
+       llm_client = get_llm_client(model_id=env_vars.BEDROCK_MODEL_ID)
 
-       # Call tailoring logic
-       tailoring_result = tailor_cv(
-           master_cv=master_cv,
+       # Create logic instance with injected dependencies
+       cv_tailoring_logic = CVTailoringLogic(dal=dal, llm_client=llm_client)
+
+       # Delegate entire operation to logic layer
+       # Logic layer handles: CV fetch, LLM call, FVS validation, artifact storage
+       tailoring_result = cv_tailoring_logic.tailor_cv(
+           cv_id=request.cv_id,
+           user_id=request.user_id,
            job_description=request.job_description,
+           job_id=request.job_id,
            preferences=prefs_result.data
        )
 
@@ -840,20 +825,6 @@ uv run pytest tests/cv-tailoring/unit/test_fvs_integration.py::test_fvs_rejects_
            )
 
        tailored_cv = tailoring_result.data
-
-       # Store tailored CV as artifact
-       try:
-           artifact = {
-               "pk": request.user_id,
-               "sk": f"ARTIFACT#CV_TAILORED#{request.cv_id}#{request.job_id}#v1",
-               "artifact_type": "CV_TAILORED",
-               "tailored_cv": tailored_cv.model_dump(),
-               "created_at": time.time()
-           }
-           dal.save_artifact(artifact)
-       except Exception as e:
-           logger.exception('Failed to store tailored CV', error=str(e))
-           # Log but don't fail - return tailored CV anyway
 
        # Build success response
        processing_time_ms = int((time.time() - start_time) * 1000)

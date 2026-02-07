@@ -555,8 +555,8 @@ uv run pytest tests/gap-analysis/ -v --tb=short
 3. **Don't modify architectural decisions** - Implement as designed (synchronous, not async)
 4. **Don't skip validation commands** - Run ruff/mypy after every file change
 5. **Don't create new patterns** - Follow existing VPR handler pattern
-6. **Don't use different model than specified** - Use Claude Haiku 4.5, not Sonnet
-7. **Don't exceed question limit** - Maximum 5 questions (not 10)
+6. **Use correct model** - Use Claude Sonnet 4.5 (TaskMode.STRATEGIC) for complex reasoning
+7. **Don't exceed question limit** - Maximum 5 questions
 8. **Don't skip error handling** - All scenarios must handle errors gracefully
 
 ---
