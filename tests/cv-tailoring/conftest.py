@@ -5,8 +5,9 @@ from typing import Any, Dict, List
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from unittest.mock import MagicMock
 
-from careervp.models.cv_models import (
+from careervp.models.cv import (
     Certification,
     Education,
     Skill,
@@ -21,7 +22,16 @@ from careervp.models.cv_tailoring_models import (
     TailoredCVResponse,
     TailoringPreferences,
 )
-from careervp.models.fvs_models import FVSBaseline, ImmutableFact
+from careervp.models.fvs import FVSBaseline, ImmutableFact
+from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+
+
+@pytest.fixture(autouse=True)
+def reset_dynamo_dal_singleton():
+    """Ensure DynamoDalHandler singleton does not leak between tests."""
+    DynamoDalHandler.reset_instance()
+    yield
+    DynamoDalHandler.reset_instance()
 
 
 @pytest.fixture
@@ -46,6 +56,34 @@ def lambda_context():
             return 30000
 
     return MockLambdaContext()
+
+
+@pytest.fixture
+def mock_dynamodb_table() -> MagicMock:
+    """Mock DynamoDB table for integration tests."""
+    table = MagicMock()
+    table.get_item = MagicMock()
+    table.put_item = MagicMock()
+    table.query = MagicMock(return_value={"Items": []})
+    return table
+
+
+@pytest.fixture
+def mock_bedrock_client() -> MagicMock:
+    """Mock Bedrock client for integration tests."""
+    client = MagicMock()
+    client.invoke_model = MagicMock()
+    client.invoke_model_with_response_stream = MagicMock()
+    return client
+
+
+@pytest.fixture
+def mock_s3_client() -> MagicMock:
+    """Mock S3 client for integration tests."""
+    client = MagicMock()
+    client.put_object = MagicMock()
+    client.generate_presigned_url = MagicMock(return_value="https://example.com/fake-url")
+    return client
 
 
 @pytest.fixture
@@ -279,9 +317,9 @@ def mock_llm_client() -> Mock:
 def mock_dal_handler() -> Mock:
     """Mock DynamoDalHandler."""
     dal = Mock()
-    dal.save_tailored_cv_artifact = AsyncMock(return_value=True)
-    dal.get_tailored_cv_artifact = AsyncMock(return_value=None)
-    dal.query_tailored_cvs_by_user = AsyncMock(return_value=[])
+    dal.save_tailored_cv = AsyncMock(return_value=True)
+    dal.get_tailored_cv = AsyncMock(return_value=None)
+    dal.list_tailored_cvs = AsyncMock(return_value=[])
     dal.increment_tailoring_counter = AsyncMock(return_value=1)
     dal.check_rate_limit = AsyncMock(return_value=False)
     return dal

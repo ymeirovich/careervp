@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from careervp.models.cv_models import UserCV
+from careervp.models.cv import Skill, UserCV
 from careervp.models.cv_tailoring_models import TailoringPreferences
-from careervp.models.fvs_models import FVSBaseline
+from careervp.models.fvs import FVSBaseline
 
 
 def build_system_prompt() -> str:
@@ -76,7 +76,8 @@ def format_cv_for_prompt(cv: UserCV) -> str:
                 lines.append(f'  {exp.description}')
 
     if cv.skills:
-        lines.append('Skills: ' + ', '.join(skill.name for skill in cv.skills))
+        skills = [skill.name if isinstance(skill, Skill) else str(skill) for skill in cv.skills]
+        lines.append('Skills: ' + ', '.join(skills))
 
     if cv.education:
         lines.append('Education:')
@@ -102,7 +103,27 @@ def annotate_with_relevance_scores(cv_text: str, relevance_scores: dict[str, flo
 
 def include_fvs_constraints(fvs_baseline: FVSBaseline) -> str:
     """Format FVS immutable constraints."""
-    immutable_values = [fact.value for fact in fvs_baseline.immutable_facts]
+    immutable = fvs_baseline.immutable_facts
+    if isinstance(immutable, list):
+        immutable_values = [fact.value for fact in immutable]
+    else:
+        immutable_values = []
+        contact = immutable.contact_info
+        if contact.name:
+            immutable_values.append(f'Name: {contact.name}')
+        if contact.email:
+            immutable_values.append(f'Email: {contact.email}')
+        if contact.phone:
+            immutable_values.append(f'Phone: {contact.phone}')
+        if contact.location:
+            immutable_values.append(f'Location: {contact.location}')
+        for exp in immutable.work_history:
+            if exp.dates:
+                immutable_values.append(f'{exp.company} | {exp.role} | {exp.dates}')
+            else:
+                immutable_values.append(f'{exp.company} | {exp.role}')
+        for edu in immutable.education:
+            immutable_values.append(f'{edu.institution} | {edu.degree}')
     return 'IMMUTABLE facts - must not change:\n' + '\n'.join(f'- {value}' for value in immutable_values)
 
 

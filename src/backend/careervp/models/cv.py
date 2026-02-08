@@ -8,14 +8,38 @@ FVS Tiers (per CLAUDE.md):
 - FLEXIBLE: Professional summaries - full creative liberty
 """
 
-from typing import Annotated, Literal
+from __future__ import annotations
 
-from pydantic import BaseModel, EmailStr, Field
+from datetime import datetime
+from enum import Enum
+from typing import Annotated, Any, Literal
+
+from pydantic import BaseModel, EmailStr, Field, field_serializer, model_validator
+
+
+class SkillLevel(str, Enum):
+    """Skill proficiency levels."""
+
+    BEGINNER = 'BEGINNER'
+    INTERMEDIATE = 'INTERMEDIATE'
+    ADVANCED = 'ADVANCED'
+    EXPERT = 'EXPERT'
+
+
+class Skill(BaseModel):
+    """Skill with proficiency and optional years of experience."""
+
+    name: str
+    level: SkillLevel | None = None
+    years_of_experience: int | None = None
+
+    model_config = {'frozen': True}
 
 
 class ContactInfo(BaseModel):
     """Contact information - IMMUTABLE tier."""
 
+    name: Annotated[str | None, Field(description='Full name')] = None
     phone: Annotated[str | None, Field(description='Phone number')] = None
     email: Annotated[EmailStr | None, Field(description='Email address')] = None
     location: Annotated[str | None, Field(description='City, Country')] = None
@@ -27,8 +51,22 @@ class WorkExperience(BaseModel):
 
     company: Annotated[str, Field(description='Company name - IMMUTABLE')]
     role: Annotated[str, Field(description='Job title - IMMUTABLE')]
-    dates: Annotated[str, Field(description='Employment dates (e.g., "2021 – Present") - IMMUTABLE')]
+    dates: Annotated[str | None, Field(description='Employment dates (e.g., "2021 – Present") - IMMUTABLE')] = None
+    start_date: Annotated[str | None, Field(description='Employment start date')] = None
+    end_date: Annotated[str | None, Field(description='Employment end date')] = None
+    current: Annotated[bool, Field(description='Whether this is the current role')] = False
+    description: Annotated[str | None, Field(description='Role description')] = None
     achievements: Annotated[list[str], Field(default_factory=list, description='Quantified achievements - VERIFIABLE')]
+    technologies: Annotated[list[str], Field(default_factory=list, description='Technologies used')]
+
+    @model_validator(mode='after')
+    def _populate_dates(self) -> 'WorkExperience':
+        if not self.dates:
+            if self.end_date:
+                self.dates = f'{self.start_date}-{self.end_date}' if self.start_date else self.end_date
+            else:
+                self.dates = self.start_date
+        return self
 
 
 class Education(BaseModel):
@@ -38,6 +76,23 @@ class Education(BaseModel):
     degree: Annotated[str, Field(description='Degree name - IMMUTABLE')]
     field_of_study: Annotated[str | None, Field(description='Major/Field')] = None
     graduation_date: Annotated[str | None, Field(description='Graduation date - IMMUTABLE')] = None
+    start_date: Annotated[str | None, Field(description='Start date')] = None
+    end_date: Annotated[str | None, Field(description='End date')] = None
+    gpa: Annotated[float | None, Field(description='GPA')] = None
+    honors: Annotated[list[str], Field(default_factory=list, description='Honors')]
+    dates: Annotated[str | None, Field(description='Education dates')] = None
+
+    @model_validator(mode='after')
+    def _populate_dates(self) -> 'Education':
+        if not self.dates:
+            if self.end_date:
+                if self.start_date:
+                    self.dates = f'{self.start_date}-{self.end_date}'
+                else:
+                    self.dates = self.end_date
+            else:
+                self.dates = self.start_date
+        return self
 
 
 class Certification(BaseModel):
@@ -45,7 +100,23 @@ class Certification(BaseModel):
 
     name: Annotated[str, Field(description='Certification name')]
     issuer: Annotated[str | None, Field(description='Issuing organization')] = None
+    issuing_organization: Annotated[str | None, Field(description='Issuing organization (alias)')] = None
     date: Annotated[str | None, Field(description='Date obtained')] = None
+    issue_date: Annotated[str | None, Field(description='Issue date')] = None
+    expiry_date: Annotated[str | None, Field(description='Expiry date')] = None
+    credential_id: Annotated[str | None, Field(description='Credential ID')] = None
+
+    @model_validator(mode='after')
+    def _sync_issuer_fields(self) -> 'Certification':
+        if self.issuing_organization and not self.issuer:
+            self.issuer = self.issuing_organization
+        if self.issuer and not self.issuing_organization:
+            self.issuing_organization = self.issuer
+        if self.issue_date is None and self.date is not None:
+            self.issue_date = self.date
+        if self.date is None and self.issue_date is not None:
+            self.date = self.issue_date
+        return self
 
 
 class UserCV(BaseModel):
@@ -58,15 +129,23 @@ class UserCV(BaseModel):
     # Identification
     user_id: Annotated[str, Field(description='Unique user identifier')]
     full_name: Annotated[str, Field(description='Full name - IMMUTABLE')]
+    cv_id: Annotated[str | None, Field(description='CV identifier')] = None
 
     # Language detection per 01-cv-parser.md
     language: Annotated[Literal['en', 'he'], Field(default='en', description='Detected language (English/Hebrew)')]
 
     # Contact - IMMUTABLE tier
-    contact_info: Annotated[ContactInfo, Field(default_factory=ContactInfo)]
+    contact_info: Annotated[ContactInfo | None, Field(default_factory=ContactInfo)]
+    email: Annotated[EmailStr | None, Field(description='Email address')] = None
+    phone: Annotated[str | None, Field(description='Phone number')] = None
+    location: Annotated[str | None, Field(description='Location')] = None
+    linkedin: Annotated[str | None, Field(description='LinkedIn profile URL')] = None
 
     # Work History - IMMUTABLE tier (dates, roles, companies)
-    experience: Annotated[list[WorkExperience], Field(default_factory=list, description='Work history with dates')]
+    experience: Annotated[
+        list[WorkExperience],
+        Field(default_factory=list, description='Work history with dates', alias='work_experience'),
+    ]
 
     # Education - IMMUTABLE tier
     education: Annotated[list[Education], Field(default_factory=list)]
@@ -75,40 +154,80 @@ class UserCV(BaseModel):
     certifications: Annotated[list[Certification], Field(default_factory=list)]
 
     # Skills - VERIFIABLE tier (must exist in source CV)
-    skills: Annotated[list[str], Field(default_factory=list, max_length=50, description='Technical and soft skills')]
+    skills: Annotated[
+        list[Skill | str],
+        Field(default_factory=list, max_length=50, description='Technical and soft skills'),
+    ]
 
     # Quantified achievements (top 3) - VERIFIABLE tier
-    top_achievements: Annotated[list[str], Field(default_factory=list, max_length=3, description='Top 3 quantified achievements')]
+    top_achievements: Annotated[
+        list[str],
+        Field(default_factory=list, max_length=3, description='Top 3 quantified achievements'),
+    ]
 
     # Professional Summary - FLEXIBLE tier
     professional_summary: Annotated[str | None, Field(description='Professional summary - can be tailored')] = None
+
+    # Additional metadata used by CV tailoring
+    languages: Annotated[list[str], Field(default_factory=list, description='Spoken languages')]
+    created_at: Annotated[datetime | None, Field(description='Created timestamp')] = None
+    updated_at: Annotated[datetime | None, Field(description='Updated timestamp')] = None
 
     # Parsing metadata
     is_parsed: Annotated[bool, Field(default=False, description='Whether CV has been parsed')]
     source_file_key: Annotated[str | None, Field(description='S3 key of source document')] = None
 
+    model_config = {'populate_by_name': True}
 
-class ImmutableFacts(BaseModel):
-    """
-    Extracted immutable facts for FVS validation.
-    Used to compare baseline CV against tailored output.
-    Mirrors structure of tests/fixtures/fvs_baseline_cv.json.
-    """
+    @model_validator(mode='after')
+    def _sync_contact_info(self) -> 'UserCV':
+        if self.contact_info is None:
+            self.contact_info = ContactInfo()
 
-    contact_info: ContactInfo
-    work_history: list[WorkExperience]
-    education: list[Education]
+        if self.email and not self.contact_info.email:
+            self.contact_info.email = self.email
+        if self.phone and not self.contact_info.phone:
+            self.contact_info.phone = self.phone
+        if self.location and not self.contact_info.location:
+            self.contact_info.location = self.location
+        if self.linkedin and not self.contact_info.linkedin:
+            self.contact_info.linkedin = self.linkedin
+        if self.full_name and not self.contact_info.name:
+            self.contact_info.name = self.full_name
 
+        if not self.email and self.contact_info.email:
+            self.email = self.contact_info.email
+        if not self.phone and self.contact_info.phone:
+            self.phone = self.contact_info.phone
+        if not self.location and self.contact_info.location:
+            self.location = self.contact_info.location
+        if not self.linkedin and self.contact_info.linkedin:
+            self.linkedin = self.contact_info.linkedin
+        return self
 
-class FVSBaseline(BaseModel):
-    """
-    FVS Baseline document for fact verification.
-    Per tests/fixtures/fvs_baseline_cv.json structure.
-    """
+    @property
+    def work_experience(self) -> list[WorkExperience]:
+        return self.experience
 
-    full_name: str
-    immutable_facts: ImmutableFacts
-    verifiable_skills: list[str]
+    @work_experience.setter
+    def work_experience(self, value: list[WorkExperience]) -> None:
+        self.experience = value
+
+    def skill_names(self) -> list[str]:
+        return [skill.name if isinstance(skill, Skill) else str(skill) for skill in self.skills]
+
+    def to_dict(self) -> dict[str, Any]:
+        return self.model_dump()
+
+    @field_serializer('skills')
+    def _serialize_skills(self, skills: list[Skill | str]) -> list[str]:
+        serialized: list[str] = []
+        for skill in skills:
+            if isinstance(skill, Skill):
+                serialized.append(skill.name)
+            else:
+                serialized.append(str(skill))
+        return serialized
 
 
 class CVParseRequest(BaseModel):
@@ -138,9 +257,9 @@ __all__ = [
     'WorkExperience',
     'Education',
     'Certification',
+    'Skill',
+    'SkillLevel',
     'UserCV',
-    'ImmutableFacts',
-    'FVSBaseline',
     'CVParseRequest',
     'CVParseResponse',
     'CV',

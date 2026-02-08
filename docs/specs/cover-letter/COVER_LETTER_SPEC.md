@@ -20,7 +20,8 @@
 9. [Security](#security)
 10. [OpenAPI Schema](#openapi-schema)
 11. [Example Requests & Responses](#example-requests--responses)
-12. [Appendices](#appendices)
+12. [Implementation Details](#implementation-details)
+13. [Appendices](#appendices)
 
 ---
 
@@ -1432,6 +1433,80 @@ After 60 seconds: Counter resets, requests available again
   }
 }
 ```
+
+---
+
+## Implementation Details
+
+### Handler → Logic → DAL Flow
+
+- **Handler** (`handlers/cover_letter_handler.py`)
+  - Parse API Gateway event and validate request payload.
+  - Extract `user_id` from JWT claims.
+  - Initialize dependencies (`DynamoDalHandler`, LLM client, FVS validator).
+  - Delegate to `CoverLetterLogic` and map `Result` → HTTP response.
+  - **No direct DAL access.**
+- **Logic** (`logic/cover_letter_logic.py`)
+  - Fetch CV, VPR, and gap responses from DAL.
+  - Build prompts via `logic/prompts/cover_letter_prompt.py`.
+  - Call LLM client and parse output.
+  - Run FVS validation (company name, job title, immutable facts).
+  - Persist cover letter artifact via DAL.
+- **DAL** (`dal/dynamo_dal_handler.py`)
+  - All DynamoDB access (no handler-level DAL calls).
+
+### DAL Storage Contract
+
+- **PK:** `user_id`
+- **SK:** `ARTIFACT#COVER_LETTER#{cv_id}#{job_id}#v{version}`
+- **TTL:** 90 days
+- **Required fields:** `user_id`, `cv_id`, `job_id`, `version`, `cover_letter`, `created_at`, `updated_at`, `ttl`
+
+### DAL Method Signatures
+
+```python
+def save_cover_letter(
+    self,
+    cover_letter: dict,
+    user_id: str,
+    cv_id: str,
+    job_id: str,
+    version: int = 1,
+) -> Result[None]: ...
+
+def get_cover_letter(
+    self,
+    user_id: str,
+    cv_id: str,
+    job_id: str,
+    version: int | None = None,
+) -> Result[dict | None]: ...
+
+def list_cover_letters(self, user_id: str) -> Result[list[dict]]: ...
+```
+
+### FVS Validation Rules
+
+- **Company name** in output must match `company_name` from request.
+- **Job title** in output must match `job_title` from request.
+- **Immutable facts** (names, dates, roles, companies) must not change.
+- Violations → `FVS_VIOLATION_DETECTED` with `400 Bad Request`.
+
+### Error Codes and HTTP Mapping
+
+- `VALIDATION_ERROR` → `400 Bad Request`
+- `CV_NOT_FOUND` → `404 Not Found`
+- `FORBIDDEN` → `403 Forbidden`
+- `UNAUTHORIZED` → `401 Unauthorized`
+- `LLM_TIMEOUT` → `504 Gateway Timeout`
+- `LLM_API_ERROR` → `502 Bad Gateway`
+- `DYNAMODB_ERROR` → `500 Internal Server Error`
+
+### Idempotency Key
+
+Format: `cover_letter#{user_id}#{cv_id}#{job_id}`
+
+Used to deduplicate repeated requests and return the latest stored artifact.
 
 ---
 

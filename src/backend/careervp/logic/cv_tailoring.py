@@ -9,7 +9,7 @@ import re
 from typing import Any, Iterable, cast
 
 from careervp.logic import cv_tailoring_prompt
-from careervp.models.cv_models import Certification, Skill, UserCV, WorkExperience
+from careervp.models.cv import Certification, Skill, UserCV, WorkExperience
 from careervp.models.cv_tailoring_models import (
     ChangeLog,
     TailoredCV,
@@ -17,7 +17,7 @@ from careervp.models.cv_tailoring_models import (
     TailoringPreferences,
 )
 from careervp.models.fvs import FVSValidationResult, FVSViolation, ViolationSeverity
-from careervp.models.fvs_models import FVSBaseline
+from careervp.models.fvs import FVSBaseline
 from careervp.models.result import Result, ResultCode
 
 WORD_PATTERN = re.compile(r'[A-Za-z][A-Za-z0-9+#/.-]*')
@@ -35,6 +35,7 @@ def tailor_cv(  # noqa: C901
     timeout: int = 300,
 ) -> Result[TailorCVResultData]:
     """Tailor a master CV to a job description."""
+    job_hash = hashlib.sha256(job_description.encode('utf-8')).hexdigest()
     if dal is not None:
         if _has_defined_attr(dal, 'check_rate_limit'):
             rate_limited = _maybe_await(dal.check_rate_limit(master_cv.user_id))
@@ -79,14 +80,14 @@ def tailor_cv(  # noqa: C901
     if not parsed.success or parsed.data is None:
         return Result(success=False, error=parsed.message, code=parsed.code)
 
-    tailored_cv = _build_tailored_cv(master_cv, parsed.data)
+    tailored_cv = _build_tailored_cv(master_cv, parsed.data, job_hash)
 
     validation = validate_tailored_output(master_cv, tailored_cv, fvs_baseline)
     if not validation.success:
         return Result(
             success=False,
             error=validation.message or 'FVS validation failed',
-            code=ResultCode.FVS_VIOLATION_DETECTED,
+            code=validation.code,
             data=validation.data,
         )
 
@@ -104,15 +105,8 @@ def tailor_cv(  # noqa: C901
     )
 
     if dal is not None:
-        if _has_defined_attr(dal, 'save_tailored_cv_artifact'):
-            _maybe_await(
-                dal.save_tailored_cv_artifact(
-                    user_id=master_cv.user_id,
-                    cv_id=master_cv.cv_id,
-                    job_description=job_description,
-                    tailored_cv=tailored_cv,
-                )
-            )
+        if _has_defined_attr(dal, 'save_tailored_cv'):
+            _maybe_await(dal.save_tailored_cv(tailored_cv, job_id=job_hash))
         elif _has_defined_attr(dal, 'put_item'):
             dal.put_item(
                 Item={
@@ -162,7 +156,7 @@ def calculate_relevance_scores(cv: UserCV, job_description: str) -> dict[str, fl
     summary_score = score_text(cv.professional_summary or '')
     skills_text = ' '.join(skill.name if isinstance(skill, Skill) else str(skill) for skill in cv.skills)
     skills_score = score_text(skills_text)
-    exp_text = ' '.join(f'{exp.company} {exp.role} {exp.description}' for exp in cv.work_experience)
+    exp_text = ' '.join(f'{exp.company} {exp.role} {exp.description or ""}' for exp in cv.work_experience)
     exp_score = score_text(exp_text)
 
     education_text = ' '.join(f'{edu.institution} {edu.degree}' for edu in cv.education)
@@ -516,7 +510,7 @@ def create_fvs_baseline(master_cv: UserCV) -> FVSBaseline:
 def _fact(fact_type: str, value: str | None, context: str) -> Any:
     if value is None:
         value = ''
-    from careervp.models.fvs_models import ImmutableFact
+    from careervp.models.fvs import ImmutableFact
 
     return ImmutableFact(fact_type=fact_type, value=value, context=context)
 
@@ -545,7 +539,7 @@ def _average_score(scores: dict[str, float]) -> float:
     return sum(scores.values()) / len(scores)
 
 
-def _build_tailored_cv(master_cv: UserCV, payload: dict[str, Any]) -> TailoredCV:
+def _build_tailored_cv(master_cv: UserCV, payload: dict[str, Any], job_hash: str) -> TailoredCV:
     work_experience = [WorkExperience(**exp) for exp in payload.get('work_experience', [])]
     skills: list[Skill | str] = []
     for skill in payload.get('skills', []):
@@ -557,8 +551,6 @@ def _build_tailored_cv(master_cv: UserCV, payload: dict[str, Any]) -> TailoredCV
             skills.append(str(skill))
 
     professional_summary = payload.get('professional_summary') or master_cv.professional_summary
-
-    job_hash = hashlib.sha256(payload.get('job_description', '').encode('utf-8') if payload.get('job_description') else b'').hexdigest()
 
     return TailoredCV(
         cv_id=master_cv.cv_id,
