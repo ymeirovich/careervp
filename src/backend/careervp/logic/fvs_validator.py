@@ -14,9 +14,9 @@ from difflib import SequenceMatcher
 from typing import Any, Iterable
 
 from careervp.handlers.utils.observability import logger
-from careervp.models.cv import UserCV
+from careervp.models.cv import Skill, UserCV
 from careervp.models.fvs import FVSValidationResult as TailoringFVSValidationResult
-from careervp.models.fvs_models import FVSBaseline as TailoringFVSBaseline
+from careervp.models.fvs import FVSBaseline as TailoringFVSBaseline
 from careervp.models.result import Result, ResultCode
 from careervp.models.vpr import VPR
 
@@ -207,7 +207,8 @@ def validate_verifiable_skills(baseline: dict[str, Any], generated: UserCV) -> F
     verifiable_skills = [s.lower() for s in baseline.get('verifiable_skills', [])]
 
     for skill in generated.skills:
-        skill_lower = skill.lower()
+        skill_value = skill.name if isinstance(skill, Skill) else str(skill)
+        skill_lower = skill_value.lower()
         # Check if skill or a variation exists in baseline
         found = False
         for baseline_skill in verifiable_skills:
@@ -220,7 +221,7 @@ def validate_verifiable_skills(baseline: dict[str, Any], generated: UserCV) -> F
                 FVSViolation(
                     field='skills',
                     expected=f'Skill from verifiable list: {verifiable_skills}',
-                    actual=skill,
+                    actual=skill_value,
                     severity='WARNING',
                 )
             )

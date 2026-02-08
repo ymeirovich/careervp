@@ -6,7 +6,7 @@ against those baselines to detect hallucinations and factual violations.
 """
 
 from careervp.logic.fvs_validator import create_fvs_baseline, validate_tailored_cv
-from careervp.models.cv_models import Skill
+from careervp.models.cv import Skill
 from careervp.models.fvs import ViolationSeverity
 from careervp.models.result import ResultCode
 

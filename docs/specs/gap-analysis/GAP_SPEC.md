@@ -527,6 +527,91 @@ components:
 
 ---
 
+## Implementation Details
+
+### Handler → Logic → DAL Flow
+
+- **Handler** (`handlers/gap_analysis_handler.py`)
+  - Parse request and validate payload.
+  - Extract `user_id` from JWT claims.
+  - Initialize dependencies (`DynamoDalHandler`, LLM client, FVS validator).
+  - Delegate to `GapAnalysisLogic` and map `Result` → HTTP response.
+  - **No direct DAL access.**
+- **Logic** (`logic/gap_analysis_logic.py`)
+  - Fetch CV and job posting from DAL.
+  - Build prompts via `logic/prompts/gap_analysis_prompt.py`.
+  - Call LLM client (Sonnet 4.5, TaskMode.STRATEGIC).
+  - Validate output with FVS (skills must exist in CV or job posting).
+  - Persist gap questions and responses via DAL.
+- **DAL** (`dal/dynamo_dal_handler.py`)
+  - Centralized DynamoDB access for artifacts.
+
+### DAL Storage Contract
+
+- **PK:** `user_id`
+- **SK:** `ARTIFACT#GAP_ANALYSIS#{cv_id}#{job_id}`
+- **TTL:** 90 days
+- **Required fields:** `user_id`, `cv_id`, `job_id`, `questions`, `created_at`, `updated_at`, `ttl`
+
+### DAL Method Signatures
+
+```python
+def save_gap_questions(
+    self,
+    user_id: str,
+    cv_id: str,
+    job_id: str,
+    questions: list[dict],
+) -> Result[None]: ...
+
+def get_gap_questions(
+    self,
+    user_id: str,
+    cv_id: str,
+    job_id: str,
+) -> Result[list[dict] | None]: ...
+
+def save_gap_responses(
+    self,
+    user_id: str,
+    responses: list[GapResponse],
+    version: int = 1,
+) -> Result[None]: ...
+
+def get_gap_responses(
+    self,
+    user_id: str,
+    version: int | None = None,
+) -> Result[list[GapResponse]]: ...
+```
+
+### FVS Validation Rules
+
+- Questions must reference **skills/requirements present** in CV or job posting.
+- No hallucinated companies, roles, or certifications.
+- Violations → `FVS_VIOLATION_DETECTED` with `400 Bad Request`.
+
+### Error Codes and HTTP Mapping
+
+- `VALIDATION_ERROR` → `400 Bad Request`
+- `CV_NOT_FOUND` → `404 Not Found`
+- `FORBIDDEN` → `403 Forbidden`
+- `UNAUTHORIZED` → `401 Unauthorized`
+- `LLM_TIMEOUT` → `504 Gateway Timeout`
+- `LLM_API_ERROR` → `502 Bad Gateway`
+- `DYNAMODB_ERROR` → `500 Internal Server Error`
+
+### Gap Scoring Algorithm (Summary)
+
+- **Coverage Score:** `matched_requirements / total_requirements`
+- **Gap Severity:**
+  - `HIGH` if coverage < 0.40
+  - `MEDIUM` if 0.40 ≤ coverage < 0.70
+  - `LOW` if coverage ≥ 0.70
+- Use severity to prioritize top 3–5 questions.
+
+---
+
 ## Monitoring & Alerts
 
 ### CloudWatch Metrics

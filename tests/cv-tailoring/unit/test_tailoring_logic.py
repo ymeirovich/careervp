@@ -12,7 +12,7 @@ from careervp.logic.cv_tailoring import (
     validate_tailored_output,
 )
 from careervp.models.result import Result, ResultCode
-from careervp.models.cv_models import UserCV
+from careervp.models.cv import UserCV
 
 
 def test_tailor_cv_success(
@@ -156,7 +156,7 @@ def test_tailor_cv_fvs_violation(
 
     # Assert
     assert result.success is False
-    assert result.code == ResultCode.FVS_VIOLATION_DETECTED
+    assert result.code == ResultCode.FVS_HALLUCINATION_DETECTED
     assert len(result.data.violations) > 0
 
 
@@ -220,7 +220,7 @@ def test_tailor_cv_stores_artifact(
 
     # Assert
     assert result.success is True
-    mock_dal_handler.save_tailored_cv_artifact.assert_called_once()
+    mock_dal_handler.save_tailored_cv.assert_called_once()
 
 
 def test_calculate_relevance_scores(sample_master_cv, sample_job_description):

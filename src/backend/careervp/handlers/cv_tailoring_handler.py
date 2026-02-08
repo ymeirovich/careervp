@@ -8,12 +8,12 @@ from datetime import datetime
 from http import HTTPStatus
 from typing import Any, cast
 
+from aws_lambda_powertools.utilities.typing import LambdaContext
+
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
-from careervp.logic.cv_tailoring import tailor_cv
-from careervp.logic.fvs_validator import create_fvs_baseline
-from careervp.logic.utils.llm_client import LLMRouter, TaskMode
-from careervp.models.cv import UserCV as DynamoUserCV
-from careervp.models.cv_models import UserCV, Skill, SkillLevel
+from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.logic.cv_tailoring_logic import CVTailoringLogic
+from careervp.logic.llm_client import LLMClient
 from careervp.models.cv_tailoring_models import TailorCVRequest, TailoringPreferences
 from careervp.models.result import Result, ResultCode
 from careervp.validation.cv_tailoring_validation import validate_job_description
@@ -30,38 +30,10 @@ class CustomJSONEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
-logger: Any
-try:
-    from careervp.handlers.utils.observability import logger as powertools_logger
-
-    logger = powertools_logger
-except Exception:  # pragma: no cover - fallback for tests
-    import logging
-
-    logger = logging.getLogger(__name__)
-
-
-class TailoringLLMClient:
-    """Wrapper to adapt LLMRouter to the simple generate interface expected by cv_tailoring."""
-
-    def __init__(self, router: LLMRouter | None = None) -> None:
-        self._router = router or LLMRouter()
-
-    def generate(self, prompt: str, timeout: int = 300) -> dict[str, Any]:
-        """Call LLMRouter with TEMPLATE mode (Haiku) for CV tailoring."""
-        result = self._router.invoke(
-            mode=TaskMode.TEMPLATE,
-            system_prompt='You are an expert CV writer. Output valid JSON only.',
-            user_prompt=prompt,
-            max_tokens=4096,
-            temperature=0.3,
-        )
-        if not result.success or result.data is None:
-            raise Exception(result.error or 'LLM invocation failed')
-        return result.data
-
-
-def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C901
+@logger.inject_lambda_context(log_event=True)
+@tracer.capture_lambda_handler(capture_response=False)
+@metrics.log_metrics(capture_cold_start_metric=True)
+def handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:  # noqa: C901
     """Handle CV tailoring request."""
     headers = _cors_headers()
 
@@ -142,6 +114,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
         job_description=job_description,
         user_id=user_id,
         preferences=preferences,
+        idempotency_key=body.get('idempotency_key'),
     )
 
     try:
@@ -157,6 +130,12 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
             },
             headers,
         )
+
+    metrics.add_metric(name='CVTailoringRequests', unit='Count', value=1)
+    if result.success:
+        metrics.add_metric(name='CVTailoringSuccess', unit='Count', value=1)
+    else:
+        metrics.add_metric(name='CVTailoringFailure', unit='Count', value=1)
 
     status_code = _status_from_code(result.code)
     if result.success:
@@ -179,98 +158,12 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
     return _response(status_code, body, headers)
 
 
-def _convert_cv(dynamo_cv: DynamoUserCV) -> UserCV:
-    """Convert from DynamoDB UserCV to tailoring UserCV model."""
-    # Convert skills from strings to Skill objects if needed
-    skills = []
-    for skill in dynamo_cv.skills:
-        if isinstance(skill, str):
-            # Assume basic proficiency for converted skills
-            skills.append(Skill(name=skill, level=SkillLevel.INTERMEDIATE))
-        else:
-            skills.append(skill)
-
-    # Convert experience - build description from achievements
-    experience = []
-    for exp in dynamo_cv.experience:
-        dates = exp.dates.split(' – ') if ' – ' in exp.dates else [exp.dates, None]
-        achievements = exp.achievements or []
-        # Build description from role and achievements
-        description = f'{exp.role} at {exp.company}'
-        if achievements:
-            description += '. ' + '; '.join(achievements[:3])
-        experience.append(
-            {
-                'company': exp.company,
-                'role': exp.role,
-                'start_date': dates[0] or '',
-                'end_date': dates[1],
-                'current': 'Present' in (dates[1] or ''),
-                'description': description,
-                'achievements': achievements,
-            }
-        )
-
-    return UserCV(
-        cv_id=dynamo_cv.user_id,
-        user_id=dynamo_cv.user_id,
-        full_name=dynamo_cv.full_name,
-        email=dynamo_cv.contact_info.email or '',
-        phone=dynamo_cv.contact_info.phone,
-        location=dynamo_cv.contact_info.location,
-        professional_summary=dynamo_cv.professional_summary,
-        work_experience=experience,  # type: ignore
-        education=[
-            {
-                'institution': edu.institution,
-                'degree': edu.degree,
-                'field_of_study': edu.field_of_study,
-                'start_date': edu.graduation_date or '',
-                'end_date': edu.graduation_date,
-                'description': f'{edu.degree} at {edu.institution}',
-            }
-            for edu in dynamo_cv.education
-        ],
-        skills=skills,
-        certifications=[
-            {
-                'name': cert.name,
-                'issuer': cert.issuer,
-                'date': cert.date,
-            }
-            for cert in dynamo_cv.certifications
-        ],
-    )
-
-
 def _fetch_and_tailor_cv(request: TailorCVRequest) -> Result[Any]:
-    """Fetch CV from DAL and invoke tailoring logic."""
-    # Use TABLE_NAME environment variable (passed by CDK) or fallback to cv-table
-    table_name = os.environ.get('TABLE_NAME', 'cv-table')
+    """Delegate CV tailoring to logic layer (Handler -> Logic -> DAL)."""
+    table_name = os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', 'careervp-users-dev')
     dal = DynamoDalHandler(table_name=table_name)
-    llm_client = TailoringLLMClient()
-
-    # Get CV by user_id using the correct DynamoDB key schema (pk=user_id, sk='CV')
-    dynamo_cv = dal.get_cv(request.user_id)
-    if not dynamo_cv:
-        return Result(
-            success=False,
-            error=f"CV for user '{request.user_id}' not found",
-            code=ResultCode.CV_NOT_FOUND,
-        )
-
-    # Convert to tailoring UserCV model
-    master_cv = _convert_cv(dynamo_cv)
-    baseline = create_fvs_baseline(master_cv)
-
-    return tailor_cv(
-        master_cv=master_cv,
-        job_description=request.job_description,
-        preferences=request.preferences,
-        fvs_baseline=baseline,
-        dal=dal,
-        llm_client=llm_client,
-    )
+    logic = CVTailoringLogic(dal=dal, llm_client=LLMClient(), fvs_validator=None)
+    return logic.tailor_cv(request, request.user_id or '')
 
 
 def _get_user_id(event: dict[str, Any]) -> str | None:

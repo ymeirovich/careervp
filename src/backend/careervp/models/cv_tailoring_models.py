@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_serializer, model_validator
 
-from careervp.models.cv_models import Certification, ContactInfo, Education, Skill, WorkExperience
+from careervp.models.cv import Certification, ContactInfo, Education, Skill, WorkExperience
 
 
 class TailoringPreferences(BaseModel):
