@@ -215,7 +215,11 @@ def parse_cv(  # noqa: C901 - consolidates extraction, cleaning, LLM parsing, an
     logger.info('Language detected', language=language)
 
     # Step 3: Send to Haiku 4.5 for extraction
-    llm_router = get_llm_router()
+    try:
+        llm_router = get_llm_router()
+    except ValueError as e:
+        logger.error('LLM router initialization failed', error=str(e))
+        return Result(success=False, error=f'LLM configuration error: {e}', code=ResultCode.INTERNAL_ERROR)
 
     # Add language context to prompt
     language_instruction = ''

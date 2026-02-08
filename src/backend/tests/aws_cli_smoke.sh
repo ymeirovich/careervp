@@ -178,36 +178,39 @@ PY
 }
 
 ensure_anthropic_env() {
+  log "Checking ANTHROPIC_API_KEY on Lambdas"
   local local_key
   local_key="${ANTHROPIC_API_KEY:-}"
   if [[ -z "$local_key" ]]; then
     echo "FAIL: ANTHROPIC_API_KEY not set locally (check .env)." >&2
     exit 1
   fi
+  debug "Local ANTHROPIC_API_KEY length: ${#local_key}"
 
   local lambdas=("$CV_LAMBDA" "$COMPANY_LAMBDA")
   local missing=()
   for fn in "${lambdas[@]}"; do
     local key
     key="$(get_lambda_env "$fn" "ANTHROPIC_API_KEY")"
+    debug "Lambda $fn ANTHROPIC_API_KEY: ${key:+SET (${#key} chars)}${key:-NOT SET}"
     if [[ -z "$key" || "$key" == "None" ]]; then
       missing+=("$fn")
     fi
   done
 
-  if [[ "${#missing[@]}" -gt 0 ]]; then
-    if [[ "${AUTO_SET_LAMBDA_ENV:-0}" == "1" ]]; then
-      log "Setting ANTHROPIC_API_KEY on: ${missing[*]}"
-      for fn in "${missing[@]}"; do
-        _update_lambda_env_var "$fn" "ANTHROPIC_API_KEY" "$local_key"
-      done
-      log "ANTHROPIC_API_KEY updated. Waiting 45s for AWS to apply changes..."
-      sleep 45
-    else
-      echo "FAIL: Missing ANTHROPIC_API_KEY on: ${missing[*]}" >&2
-      echo "Set it or re-run with AUTO_SET_LAMBDA_ENV=1 to apply automatically." >&2
-      exit 1
-    fi
+  if [[ "${#missing[@]}" -eq 0 ]]; then
+    log "All Lambdas have ANTHROPIC_API_KEY set"
+  elif [[ "${AUTO_SET_LAMBDA_ENV:-0}" == "1" ]]; then
+    log "Setting ANTHROPIC_API_KEY on: ${missing[*]}"
+    for fn in "${missing[@]}"; do
+      _update_lambda_env_var "$fn" "ANTHROPIC_API_KEY" "$local_key"
+    done
+    log "ANTHROPIC_API_KEY updated. Waiting 45s for AWS to apply changes..."
+    sleep 45
+  else
+    echo "FAIL: Missing ANTHROPIC_API_KEY on: ${missing[*]}" >&2
+    echo "Set it or re-run with AUTO_SET_LAMBDA_ENV=1 to apply automatically." >&2
+    exit 1
   fi
 }
 
