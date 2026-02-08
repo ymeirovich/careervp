@@ -73,6 +73,8 @@ jobs:
         run: make deploy
       - name: Post-deploy smoke test
         working-directory: src/backend
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: make smoke-test
 
   deploy-other:
@@ -131,4 +133,5 @@ jobs:
         working-directory: src/backend
         env:
           ENVIRONMENT: ${{ inputs.environment }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: make smoke-test
