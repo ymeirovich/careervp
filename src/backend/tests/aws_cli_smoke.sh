@@ -84,7 +84,7 @@ resolve_cv_bucket() {
 }
 
 assert_status_ok() {
-  local status="$1" context="$2"
+  local status="$1" context="$2" response_file="${3:-}" log_meta_file="${4:-}"
   if [[ ! "$status" =~ ^[0-9]+$ ]]; then
     echo "FAIL: ${context} returned non-numeric status: ${status}" >&2
     exit 1
@@ -93,6 +93,20 @@ assert_status_ok() {
     log "${context}: OK (${status})"
   else
     echo "FAIL: ${context} returned status ${status}" >&2
+    # Print response body for debugging
+    if [[ -n "$response_file" && -f "$response_file" ]]; then
+      echo "=== Response Body ===" >&2
+      cat "$response_file" >&2
+    fi
+    # Decode and print Lambda logs for debugging
+    if [[ -n "$log_meta_file" && -f "$log_meta_file" ]]; then
+      local log_result
+      log_result="$(jq -r '.LogResult // empty' "$log_meta_file")"
+      if [[ -n "$log_result" ]]; then
+        echo "=== Lambda Logs ===" >&2
+        decode_log_result "$log_result" >&2 || true
+      fi
+    fi
     exit 1
   fi
 }
@@ -266,7 +280,7 @@ test_cv_parser_lambda() {
   fi
   body="$(jq -r '.body' "$outfile")"
   success="$(printf '%s' "$body" | jq -r '.success')"
-  assert_status_ok "$status" "CV parser status"
+  assert_status_ok "$status" "CV parser status" "$outfile" "/tmp/cv_parser_invoke_meta.json"
   [[ "$success" == "true" ]] || { echo "CV parser returned success=false" >&2; cat "$outfile"; exit 1; }
   source_key="$(printf '%s' "$body" | jq -r '.user_cv.source_file_key // empty')"
   if [[ -n "$source_key" ]]; then
@@ -344,7 +358,7 @@ JSON
   fi
   body="$(jq -r '.body' "$outfile")"
   success="$(printf '%s' "$body" | jq -r '.success')"
-  assert_status_ok "$status" "VPR generator status"
+  assert_status_ok "$status" "VPR generator status" "$outfile" "/tmp/vpr_invoke_meta.json"
 
   # Verify Anthropic API returned actual content (not just a successful HTTP response)
   vpr_text="$(printf '%s' "$body" | jq -r '.data.vpr // empty')"
