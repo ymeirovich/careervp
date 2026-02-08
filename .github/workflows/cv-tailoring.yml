@@ -77,13 +77,16 @@ jobs:
         run: python src/backend/scripts/validate_naming.py --path infra --strict
 
       - name: Unit tests (cv_tailaling, fvs)
-        run: uv run pytest ${{ github.workspace }}/tests/cv-tailoring/unit -q
+        run: |
+          cd src/backend && uv run pytest ../tests/cv-tailoring/unit -q
 
       - name: Integration tests (cv_tailoring)
-        run: uv run pytest ${{ github.workspace }}/tests/cv-tailoring/integration -q
+        run: |
+          cd src/backend && uv run pytest ../tests/cv-tailoring/integration -q
 
       - name: E2E tests (cv_tailoring flow)
-        run: uv run pytest ${{ github.workspace }}/tests/cv-tailoring/e2e -q
+        run: |
+          cd src/backend && uv run pytest ../tests/cv-tailoring/e2e -q
 
       - name: CDK synth
         working-directory: src/backend
@@ -102,7 +105,8 @@ jobs:
 
       - name: Coverage (xml)
         if: ${{ always() }}
-        run: uv run pytest ${{ github.workspace }}/tests/cv-tailoring --cov --cov-report=xml
+        run: |
+          cd src/backend && uv run pytest ../tests/cv-tailoring --cov --cov-report=xml
 
       - name: Upload coverage
         if: ${{ always() }}
