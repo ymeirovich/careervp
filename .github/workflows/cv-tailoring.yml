@@ -90,7 +90,7 @@ jobs:
 
       - name: CDK synth
         run: |
-          cd src/backend && mkdir -p .build/lambdas && touch .build/lambdas/.placeholder && cd ../infra && npx cdk synth
+          cd src/backend && mkdir -p .build/lambdas && touch .build/lambdas/.placeholder && cd ../../infra && npx cdk synth
         env:
           AWS_DEFAULT_ACCOUNT: "000000000000"
           AWS_DEFAULT_REGION: ${{ env.AWS_REGION }}
