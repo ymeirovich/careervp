@@ -155,7 +155,7 @@ def test_tailored_cv_serialization(sample_tailored_cv):
     # Assert
     assert isinstance(json_data, dict)
     assert "contact_info" in json_data
-    assert "experience" in json_data
+    assert "work_experience" in json_data
     assert "education" in json_data
 
 
@@ -165,13 +165,13 @@ def test_tailored_cv_deserialization(sample_tailored_cv):
     json_data = sample_tailored_cv.dict()
 
     # Act
-    from careervp.models.cv import CV
+    from careervp.models.cv_tailoring_models import TailoredCV
 
-    deserialized = CV(**json_data)
+    deserialized = TailoredCV(**json_data)
 
     # Assert
     assert deserialized.contact_info.email == sample_tailored_cv.contact_info.email
-    assert len(deserialized.experience) == len(sample_tailored_cv.experience)
+    assert len(deserialized.work_experience) == len(sample_tailored_cv.work_experience)
 
 
 def test_tailor_cv_request_cv_id_format():

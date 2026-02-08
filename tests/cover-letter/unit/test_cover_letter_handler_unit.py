@@ -17,17 +17,17 @@ from unittest.mock import Mock, AsyncMock, patch
 def sample_api_gateway_event():
     """Sample API Gateway event with cover letter request."""
     return {
-        "headers": {
-            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoidXNlcjEyMyJ9.xxx"
+        'headers': {
+            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoidXNlcjEyMyJ9.xxx'
         },
-        "body": json.dumps({
-            "cv_id": "cv_123",
-            "job_posting_id": "job_456",
-            "vpr_data": {
-                "role_title": "Senior Software Engineer",
-                "company_name": "TechCorp",
-                "key_requirements": ["Python", "AWS", "5+ years"],
-                "culture_keywords": ["innovation", "collaboration"]
+        'body': json.dumps({
+            'cv_id': 'cv_123',
+            'job_posting_id': 'job_456',
+            'vpr_data': {
+                'role_title': 'Senior Software Engineer',
+                'company_name': 'TechCorp',
+                'key_requirements': ['Python', 'AWS', '5+ years'],
+                'culture_keywords': ['innovation', 'collaboration']
             }
         })
     }
@@ -37,8 +37,8 @@ def sample_api_gateway_event():
 def mock_lambda_context():
     """Mock AWS Lambda context."""
     context = Mock()
-    context.function_name = "cover-letter-generator"
-    context.request_id = "req-123"
+    context.function_name = 'cover-letter-generator'
+    context.request_id = 'req-123'
     context.get_remaining_time_in_millis = Mock(return_value=30000)
     return context
 
@@ -47,14 +47,14 @@ def mock_lambda_context():
 def sample_cover_letter_response():
     """Sample cover letter generation response."""
     return {
-        "cover_letter": "Dear Hiring Manager,\n\nI am writing to...",
-        "quality_score": 8.5,
-        "fvs_validation": {
-            "is_valid": True,
-            "violations": []
+        'cover_letter': 'Dear Hiring Manager,\n\nI am writing to...',
+        'quality_score': 8.5,
+        'fvs_validation': {
+            'is_valid': True,
+            'violations': []
         },
-        "processing_time_ms": 1234,
-        "cost_estimate": 0.045
+        'processing_time_ms': 1234,
+        'cost_estimate': 0.045
     }
 
 

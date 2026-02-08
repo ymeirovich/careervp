@@ -6,8 +6,9 @@ against those baselines to detect hallucinations and factual violations.
 """
 
 from careervp.logic.fvs_validator import create_fvs_baseline, validate_tailored_cv
-from careervp.models.result import ResultCode
+from careervp.models.cv_models import Skill
 from careervp.models.fvs import ViolationSeverity
+from careervp.models.result import ResultCode
 
 
 def test_create_fvs_baseline_from_cv(sample_master_cv):
@@ -225,17 +226,24 @@ def test_validate_tailored_cv_certification_added(sample_master_cv, sample_tailo
     assert any(v.severity == ViolationSeverity.WARNING for v in result.data.violations)
 
 
-def test_validate_tailored_cv_empty_experience(sample_master_cv):
+def test_validate_tailored_cv_empty_experience(sample_master_cv, sample_tailored_cv):
     """Test FVS validation with empty experience list."""
     # Arrange
     baseline = create_fvs_baseline(sample_master_cv)
-    from careervp.models.cv import CV
+    # Create a tailored CV with empty experience
+    from careervp.models.cv_tailoring_models import TailoredCV
 
-    tailored_cv = CV(
-        contact_info=sample_master_cv.contact_info,
-        experience=[],
+    tailored_cv = TailoredCV(
+        cv_id=sample_tailored_cv.cv_id,
+        user_id=sample_master_cv.user_id,
+        full_name=sample_master_cv.full_name,
+        email=sample_master_cv.email,
+        phone=sample_master_cv.phone,
+        location=sample_master_cv.location,
+        professional_summary=sample_master_cv.professional_summary,
+        work_experience=[],  # Empty experience - should be caught
         education=sample_master_cv.education,
-        skills=sample_master_cv.skills,
+        skills=[s.name if isinstance(s, Skill) else s for s in sample_master_cv.skills],
         certifications=[],
     )
 

@@ -26,15 +26,15 @@ from unittest.mock import Mock, AsyncMock
 def sample_cover_letter_request() -> Dict:
     """Valid cover letter generation request."""
     return {
-        "cv_id": "cv_test_123",
-        "job_id": "job_test_456",
-        "company_name": "TechCorp",
-        "job_title": "Senior Software Engineer",
-        "preferences": {
-            "tone": "professional",
-            "word_count_target": 300,
-            "emphasis_areas": ["leadership", "python", "aws"],
-            "include_salary_expectations": False,
+        'cv_id': 'cv_test_123',
+        'job_id': 'job_test_456',
+        'company_name': 'TechCorp',
+        'job_title': 'Senior Software Engineer',
+        'preferences': {
+            'tone': 'professional',
+            'word_count_target': 300,
+            'emphasis_areas': ['leadership', 'python', 'aws'],
+            'include_salary_expectations': False,
         },
     }
 
@@ -43,10 +43,10 @@ def sample_cover_letter_request() -> Dict:
 def sample_cover_letter_preferences() -> Dict:
     """Sample cover letter preferences."""
     return {
-        "tone": "professional",
-        "word_count_target": 300,
-        "emphasis_areas": ["leadership", "python"],
-        "include_salary_expectations": False,
+        'tone': 'professional',
+        'word_count_target': 300,
+        'emphasis_areas': ['leadership', 'python'],
+        'include_salary_expectations': False,
     }
 
 
@@ -54,10 +54,10 @@ def sample_cover_letter_preferences() -> Dict:
 def sample_preferences_enthusiastic() -> Dict:
     """Enthusiastic tone preferences."""
     return {
-        "tone": "enthusiastic",
-        "word_count_target": 350,
-        "emphasis_areas": ["passion", "innovation"],
-        "include_salary_expectations": False,
+        'tone': 'enthusiastic',
+        'word_count_target': 350,
+        'emphasis_areas': ['passion', 'innovation'],
+        'include_salary_expectations': False,
     }
 
 
@@ -65,10 +65,10 @@ def sample_preferences_enthusiastic() -> Dict:
 def sample_preferences_technical() -> Dict:
     """Technical tone preferences."""
     return {
-        "tone": "technical",
-        "word_count_target": 400,
-        "emphasis_areas": ["architecture", "systems", "scalability"],
-        "include_salary_expectations": False,
+        'tone': 'technical',
+        'word_count_target': 400,
+        'emphasis_areas': ['architecture', 'systems', 'scalability'],
+        'include_salary_expectations': False,
     }
 
 
@@ -79,40 +79,40 @@ def sample_preferences_technical() -> Dict:
 def sample_master_cv() -> Mock:
     """Complete UserCV mock with experience, skills, education."""
     cv = Mock()
-    cv.cv_id = "cv_test_123"
-    cv.user_id = "user_test_789"
-    cv.skills = ["Python", "AWS", "Kubernetes", "PostgreSQL", "React"]
+    cv.cv_id = 'cv_test_123'
+    cv.user_id = 'user_test_789'
+    cv.skills = ['Python', 'AWS', 'Kubernetes', 'PostgreSQL', 'React']
     cv.experience = [
         Mock(
-            title="Senior Software Engineer",
-            company="Previous Corp",
-            start_date="2020-01",
-            end_date="2024-01",
+            title='Senior Software Engineer',
+            company='Previous Corp',
+            start_date='2020-01',
+            end_date='2024-01',
             highlights=[
-                "Led team of 10 engineers to deliver critical project",
-                "Reduced system latency by 50% through optimization",
-                "Implemented CI/CD pipeline reducing deployment time by 80%",
+                'Led team of 10 engineers to deliver critical project',
+                'Reduced system latency by 50% through optimization',
+                'Implemented CI/CD pipeline reducing deployment time by 80%',
             ],
         ),
         Mock(
-            title="Software Engineer",
-            company="Startup Inc",
-            start_date="2018-01",
-            end_date="2020-01",
+            title='Software Engineer',
+            company='Startup Inc',
+            start_date='2018-01',
+            end_date='2020-01',
             highlights=[
-                "Built microservices architecture serving 1M+ users",
-                "Designed and implemented RESTful APIs",
+                'Built microservices architecture serving 1M+ users',
+                'Designed and implemented RESTful APIs',
             ],
         ),
     ]
     cv.education = [
         Mock(
-            degree="M.S. Computer Science",
-            institution="Tech University",
+            degree='M.S. Computer Science',
+            institution='Tech University',
             graduation_year=2018,
         ),
     ]
-    cv.summary = "Experienced software engineer with 6+ years of experience in building scalable systems."
+    cv.summary = 'Experienced software engineer with 6+ years of experience in building scalable systems.'
     return cv
 
 
@@ -120,36 +120,36 @@ def sample_master_cv() -> Mock:
 def sample_vpr() -> Mock:
     """Sample VPR (Value Proposition Report) with accomplishments."""
     vpr = Mock()
-    vpr.cv_id = "cv_test_123"
-    vpr.job_id = "job_test_456"
+    vpr.cv_id = 'cv_test_123'
+    vpr.job_id = 'job_test_456'
     vpr.accomplishments = [
         Mock(
-            text="Led team of 10 engineers to deliver critical project on time",
-            keywords=["led", "team", "engineers", "project"],
+            text='Led team of 10 engineers to deliver critical project on time',
+            keywords=['led', 'team', 'engineers', 'project'],
             relevance_score=0.95,
         ),
         Mock(
-            text="Reduced system latency by 50% through optimization",
-            keywords=["latency", "performance", "optimization"],
+            text='Reduced system latency by 50% through optimization',
+            keywords=['latency', 'performance', 'optimization'],
             relevance_score=0.88,
         ),
         Mock(
-            text="Implemented CI/CD pipeline reducing deployment time by 80%",
-            keywords=["ci/cd", "pipeline", "deployment", "automation"],
+            text='Implemented CI/CD pipeline reducing deployment time by 80%',
+            keywords=['ci/cd', 'pipeline', 'deployment', 'automation'],
             relevance_score=0.82,
         ),
     ]
     vpr.job_requirements = [
-        "Python expertise",
-        "AWS experience",
-        "Team leadership",
-        "System design",
-        "Agile methodology",
+        'Python expertise',
+        'AWS experience',
+        'Team leadership',
+        'System design',
+        'Agile methodology',
     ]
     vpr.skill_gaps = []
     vpr.recommendations = [
-        "Emphasize leadership experience",
-        "Highlight cloud expertise",
+        'Emphasize leadership experience',
+        'Highlight cloud expertise',
     ]
     return vpr
 
@@ -158,9 +158,9 @@ def sample_vpr() -> Mock:
 def sample_tailored_cv() -> Mock:
     """Sample tailored CV."""
     cv = Mock()
-    cv.cv_id = "cv_test_123"
-    cv.job_id = "job_test_456"
-    cv.tailored_summary = "Results-driven engineer with proven leadership experience..."
+    cv.cv_id = 'cv_test_123'
+    cv.job_id = 'job_test_456'
+    cv.tailored_summary = 'Results-driven engineer with proven leadership experience...'
     cv.relevance_score = 0.85
     return cv
 
@@ -170,12 +170,12 @@ def sample_gap_responses() -> List[Mock]:
     """Sample gap analysis responses."""
     return [
         Mock(
-            question="Why are you interested in this role?",
-            response="I am passionate about building scalable systems and leading engineering teams.",
+            question='Why are you interested in this role?',
+            response='I am passionate about building scalable systems and leading engineering teams.',
         ),
         Mock(
-            question="What experience do you have with cloud infrastructure?",
-            response="I have 4+ years of AWS experience including EC2, Lambda, and EKS.",
+            question='What experience do you have with cloud infrastructure?',
+            response='I have 4+ years of AWS experience including EC2, Lambda, and EKS.',
         ),
     ]
 
@@ -232,13 +232,13 @@ def sample_job_description() -> str:
 @pytest.fixture
 def sample_company_name() -> str:
     """Sample company name."""
-    return "TechCorp"
+    return 'TechCorp'
 
 
 @pytest.fixture
 def sample_job_title() -> str:
     """Sample job title."""
-    return "Senior Software Engineer"
+    return 'Senior Software Engineer'
 
 
 # ==================== COVER LETTER FIXTURES ====================
@@ -262,12 +262,12 @@ I would welcome the opportunity to discuss how my background in system design, t
 def sample_tailored_cover_letter(sample_generated_cover_letter_content: str) -> Mock:
     """Sample TailoredCoverLetter object."""
     letter = Mock()
-    letter.cover_letter_id = "cl_test_123_456_1704067200"
-    letter.cv_id = "cv_test_123"
-    letter.job_id = "job_test_456"
-    letter.user_id = "user_test_789"
-    letter.company_name = "TechCorp"
-    letter.job_title = "Senior Software Engineer"
+    letter.cover_letter_id = 'cl_test_123_456_1704067200'
+    letter.cv_id = 'cv_test_123'
+    letter.job_id = 'job_test_456'
+    letter.user_id = 'user_test_789'
+    letter.company_name = 'TechCorp'
+    letter.job_title = 'Senior Software Engineer'
     letter.content = sample_generated_cover_letter_content
     letter.word_count = 285
     letter.personalization_score = 0.85
@@ -281,10 +281,10 @@ def sample_tailored_cover_letter(sample_generated_cover_letter_content: str) -> 
 def sample_quality_scores() -> Dict[str, float]:
     """Quality scoring breakdown."""
     return {
-        "personalization": 0.85,
-        "relevance": 0.82,
-        "tone": 0.88,
-        "overall": 0.85,  # 0.40*0.85 + 0.35*0.82 + 0.25*0.88
+        'personalization': 0.85,
+        'relevance': 0.82,
+        'tone': 0.88,
+        'overall': 0.85,  # 0.40*0.85 + 0.35*0.82 + 0.25*0.88
     }
 
 
@@ -295,9 +295,9 @@ def sample_quality_scores() -> Dict[str, float]:
 def sample_fvs_baseline() -> Mock:
     """Sample FVS baseline for validation."""
     baseline = Mock()
-    baseline.company_name = "TechCorp"
-    baseline.job_title = "Senior Software Engineer"
-    baseline.company_variations = ["TechCorp", "TechCorp Inc.", "The TechCorp"]
+    baseline.company_name = 'TechCorp'
+    baseline.job_title = 'Senior Software Engineer'
+    baseline.company_variations = ['TechCorp', 'TechCorp Inc.', 'The TechCorp']
     return baseline
 
 
@@ -316,10 +316,10 @@ def sample_fvs_result_valid() -> Mock:
 def sample_fvs_result_invalid() -> Mock:
     """Invalid FVS validation result with violations."""
     violation = Mock()
-    violation.field = "company_name"
-    violation.expected = "TechCorp"
-    violation.actual = "OtherCompany"
-    violation.severity = "critical"
+    violation.field = 'company_name'
+    violation.expected = 'TechCorp'
+    violation.actual = 'OtherCompany'
+    violation.severity = 'critical'
     violation.message = "Company name 'TechCorp' not found in cover letter"
 
     result = Mock()
@@ -339,7 +339,7 @@ def mock_llm_client() -> Mock:
     client = Mock()
     client.generate = AsyncMock(
         return_value=Mock(
-            content="I am excited to apply for the Senior Software Engineer position at TechCorp...",
+            content='I am excited to apply for the Senior Software Engineer position at TechCorp...',
             usage=Mock(input_tokens=5000, output_tokens=300),
         )
     )
@@ -355,8 +355,8 @@ def mock_dal_handler() -> Mock:
     dal.get_cv_by_id = AsyncMock(
         return_value=Mock(
             success=True,
-            data=Mock(cv_id="cv_test_123", user_id="user_test_789"),
-            code="SUCCESS",
+            data=Mock(cv_id='cv_test_123', user_id='user_test_789'),
+            code='SUCCESS',
         )
     )
 
@@ -365,28 +365,28 @@ def mock_dal_handler() -> Mock:
         return_value=Mock(
             success=True,
             data=Mock(accomplishments=[], job_requirements=[]),
-            code="SUCCESS",
+            code='SUCCESS',
         )
     )
 
     # Tailored CV retrieval
     dal.get_tailored_cv_artifact = AsyncMock(
-        return_value=Mock(success=True, data=Mock(), code="SUCCESS")
+        return_value=Mock(success=True, data=Mock(), code='SUCCESS')
     )
 
     # Gap responses
     dal.get_gap_responses = AsyncMock(
-        return_value=Mock(success=True, data=[], code="SUCCESS")
+        return_value=Mock(success=True, data=[], code='SUCCESS')
     )
 
     # Save artifact
     dal.save_cover_letter_artifact = AsyncMock(
-        return_value=Mock(success=True, data="cl_123", code="SUCCESS")
+        return_value=Mock(success=True, data='cl_123', code='SUCCESS')
     )
 
     # Get artifact
     dal.get_cover_letter_artifact = AsyncMock(
-        return_value=Mock(success=True, data=Mock(), code="SUCCESS")
+        return_value=Mock(success=True, data=Mock(), code='SUCCESS')
     )
 
     return dal
@@ -396,12 +396,12 @@ def mock_dal_handler() -> Mock:
 def mock_lambda_context() -> Mock:
     """Mock Lambda context."""
     context = Mock()
-    context.function_name = "cover-letter-handler"
+    context.function_name = 'cover-letter-handler'
     context.memory_limit_in_mb = 2048
     context.invoked_function_arn = (
-        "arn:aws:lambda:us-east-1:123456789:function:cover-letter"
+        'arn:aws:lambda:us-east-1:123456789:function:cover-letter'
     )
-    context.aws_request_id = "test-request-id-12345"
+    context.aws_request_id = 'test-request-id-12345'
     context.get_remaining_time_in_millis = Mock(return_value=290000)
     return context
 
@@ -415,24 +415,24 @@ def sample_api_gateway_event(sample_cover_letter_request: Dict) -> Dict:
     import json
 
     return {
-        "body": json.dumps(sample_cover_letter_request),
-        "headers": {
-            "Authorization": "Bearer mock_jwt_token",
-            "Content-Type": "application/json",
+        'body': json.dumps(sample_cover_letter_request),
+        'headers': {
+            'Authorization': 'Bearer mock_jwt_token',
+            'Content-Type': 'application/json',
         },
-        "requestContext": {
-            "authorizer": {
-                "claims": {
-                    "sub": "user_test_789",
-                    "email": "test@example.com",
+        'requestContext': {
+            'authorizer': {
+                'claims': {
+                    'sub': 'user_test_789',
+                    'email': 'test@example.com',
                 }
             },
-            "requestId": "test-request-id",
-            "httpMethod": "POST",
-            "path": "/api/cover-letter",
+            'requestId': 'test-request-id',
+            'httpMethod': 'POST',
+            'path': '/api/cover-letter',
         },
-        "httpMethod": "POST",
-        "path": "/api/cover-letter",
+        'httpMethod': 'POST',
+        'path': '/api/cover-letter',
     }
 
 
@@ -442,11 +442,11 @@ def sample_api_gateway_event_no_auth(sample_cover_letter_request: Dict) -> Dict:
     import json
 
     return {
-        "body": json.dumps(sample_cover_letter_request),
-        "headers": {"Content-Type": "application/json"},
-        "requestContext": {},
-        "httpMethod": "POST",
-        "path": "/api/cover-letter",
+        'body': json.dumps(sample_cover_letter_request),
+        'headers': {'Content-Type': 'application/json'},
+        'requestContext': {},
+        'httpMethod': 'POST',
+        'path': '/api/cover-letter',
     }
 
 
@@ -457,11 +457,11 @@ def sample_api_gateway_event_no_auth(sample_cover_letter_request: Dict) -> Dict:
 def valid_company_names() -> List[str]:
     """Valid company name examples."""
     return [
-        "TechCorp",
-        "Google",
-        "Amazon Web Services",
-        "Meta Platforms, Inc.",
-        "StartUp.io",
+        'TechCorp',
+        'Google',
+        'Amazon Web Services',
+        'Meta Platforms, Inc.',
+        'StartUp.io',
     ]
 
 
@@ -469,9 +469,9 @@ def valid_company_names() -> List[str]:
 def invalid_company_names() -> List[str]:
     """Invalid company name examples."""
     return [
-        "",  # Empty
-        " ",  # Whitespace only
-        "A" * 256,  # Too long
+        '',  # Empty
+        ' ',  # Whitespace only
+        'A' * 256,  # Too long
         "<script>alert('xss')</script>",  # XSS attempt
     ]
 
@@ -480,11 +480,11 @@ def invalid_company_names() -> List[str]:
 def valid_job_titles() -> List[str]:
     """Valid job title examples."""
     return [
-        "Software Engineer",
-        "Senior Software Engineer",
-        "Principal Engineer",
-        "Engineering Manager",
-        "VP of Engineering",
+        'Software Engineer',
+        'Senior Software Engineer',
+        'Principal Engineer',
+        'Engineering Manager',
+        'VP of Engineering',
     ]
 
 
@@ -492,9 +492,9 @@ def valid_job_titles() -> List[str]:
 def invalid_job_titles() -> List[str]:
     """Invalid job title examples."""
     return [
-        "",  # Empty
-        " ",  # Whitespace only
-        "T" * 256,  # Too long
+        '',  # Empty
+        ' ',  # Whitespace only
+        'T' * 256,  # Too long
         "<script>alert('xss')</script>",  # XSS attempt
     ]
 
@@ -506,26 +506,26 @@ def invalid_job_titles() -> List[str]:
 def sample_personalization_context() -> Dict:
     """Sample personalization context for prompts."""
     return {
-        "accomplishments": [
+        'accomplishments': [
             {
-                "text": "Led team of 10 engineers",
-                "keywords": ["led", "team", "engineers"],
+                'text': 'Led team of 10 engineers',
+                'keywords': ['led', 'team', 'engineers'],
             },
             {
-                "text": "Reduced latency by 50%",
-                "keywords": ["latency", "performance"],
+                'text': 'Reduced latency by 50%',
+                'keywords': ['latency', 'performance'],
             },
         ],
-        "job_requirements": ["Python", "AWS", "Leadership"],
-        "skills": ["Python", "AWS", "Kubernetes"],
-        "experience_highlights": [
-            ["Led team of 10 engineers"],
-            ["Built microservices architecture"],
+        'job_requirements': ['Python', 'AWS', 'Leadership'],
+        'skills': ['Python', 'AWS', 'Kubernetes'],
+        'experience_highlights': [
+            ['Led team of 10 engineers'],
+            ['Built microservices architecture'],
         ],
-        "gap_responses": [
+        'gap_responses': [
             {
-                "question": "Why this role?",
-                "response": "Passion for building scalable systems",
+                'question': 'Why this role?',
+                'response': 'Passion for building scalable systems',
             }
         ],
     }
@@ -539,8 +539,8 @@ def sample_cv_not_found_result() -> Mock:
     """CV not found result."""
     result = Mock()
     result.success = False
-    result.error = "CV not found: cv_nonexistent"
-    result.code = "CV_NOT_FOUND"
+    result.error = 'CV not found: cv_nonexistent'
+    result.code = 'CV_NOT_FOUND'
     result.data = None
     return result
 
@@ -550,8 +550,8 @@ def sample_vpr_not_found_result() -> Mock:
     """VPR not found result."""
     result = Mock()
     result.success = False
-    result.error = "VPR not found - generate VPR first"
-    result.code = "VPR_NOT_FOUND"
+    result.error = 'VPR not found - generate VPR first'
+    result.code = 'VPR_NOT_FOUND'
     result.data = None
     return result
 
@@ -561,7 +561,7 @@ def sample_timeout_result() -> Mock:
     """Timeout result."""
     result = Mock()
     result.success = False
-    result.error = "Cover letter generation timed out after 300s"
-    result.code = "CV_LETTER_GENERATION_TIMEOUT"
+    result.error = 'Cover letter generation timed out after 300s'
+    result.code = 'CV_LETTER_GENERATION_TIMEOUT'
     result.data = None
     return result
