@@ -78,15 +78,15 @@ jobs:
 
       - name: Unit tests (cv_tailoring, fvs)
         run: |
-          cd src/backend && PYTHONPATH=. uv run pytest ../tests/cv-tailoring/unit -q
+          cd src/backend && PYTHONPATH=. uv run pytest ../../tests/cv-tailoring/unit -q
 
       - name: Integration tests (cv_tailoring)
         run: |
-          cd src/backend && PYTHONPATH=. uv run pytest ../tests/cv-tailoring/integration -q
+          cd src/backend && PYTHONPATH=. uv run pytest ../../tests/cv-tailoring/integration -q
 
       - name: E2E tests (cv_tailoring flow)
         run: |
-          cd src/backend && PYTHONPATH=. uv run pytest ../tests/cv-tailoring/e2e -q
+          cd src/backend && PYTHONPATH=. uv run pytest ../../tests/cv-tailoring/e2e -q
 
       - name: CDK synth
         run: |
@@ -103,7 +103,7 @@ jobs:
       - name: Coverage (xml)
         if: ${{ always() }}
         run: |
-          cd src/backend && PYTHONPATH=. uv run pytest ../tests/cv-tailoring --cov --cov-report=xml
+          cd src/backend && PYTHONPATH=. uv run pytest ../../tests/cv-tailoring --cov --cov-report=xml
 
       - name: Upload coverage
         if: ${{ always() }}
