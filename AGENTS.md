@@ -138,3 +138,8 @@ Upon a Blocking Issue, the Architect must analyze if the Spec is wrong or if the
 - Infrastructure Scripts: `kebab-case.py` (e.g., `validate-naming.py`)
 - Documentation/Tasks: `task-##-name.md`
 - Tests: `test_*.py` located in `src/backend/tests/unit/`
+
+## Git Workflow Rules
+- **Don't switch branches with uncommitted changes** - use `git stash` first to avoid accidentally deleting files
+- **Merge via gh CLI directly from the feature branch** - avoids needing to checkout main
+- **Only clean up local branch after successful merge**

@@ -47,3 +47,8 @@
 - **Logic Source:** `src/backend/careervp/logic/`
 - **Models Source:** `src/backend/careervp/models/`
 - **Verification Scripts:** `src/backend/scripts/`
+
+## Git Workflow Rules
+- **Don't switch branches with uncommitted changes** - use `git stash` first to avoid accidentally deleting files
+- **Merge via gh CLI directly from the feature branch** - avoids needing to checkout main
+- **Only clean up local branch after successful merge**
