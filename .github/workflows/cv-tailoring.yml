@@ -76,37 +76,32 @@ jobs:
       - name: Naming validator (infra guardrail)
         run: python src/backend/scripts/validate_naming.py --path infra --strict
 
-      - name: Unit tests (cv_tailoring, fvs)
-        working-directory: src/backend
+      - name: Unit tests (cv_tailaling, fvs)
         env:
           PYTHONPATH: ${{ github.workspace }}/src/backend
         run: uv run pytest tests/cv-tailoring/unit -q
 
       - name: Integration tests (cv_tailoring)
-        working-directory: src/backend
         env:
           PYTHONPATH: ${{ github.workspace }}/src/backend
         run: uv run pytest tests/cv-tailoring/integration -q
 
       - name: E2E tests (cv_tailoring flow)
-        working-directory: src/backend
         env:
           PYTHONPATH: ${{ github.workspace }}/src/backend
         run: uv run pytest tests/cv-tailoring/e2e -q
 
       - name: CDK synth
-        working-directory: src/backend
         run: |
-          mkdir -p .build/lambdas
-          touch .build/lambdas/.placeholder
-          cd ../.. && cd infra && npx cdk synth
+          mkdir -p src/backend/.build/lambdas
+          touch src/backend/.build/lambdas/.placeholder
+          cd infra && npx cdk synth
         env:
           AWS_DEFAULT_ACCOUNT: "000000000000"
           AWS_DEFAULT_REGION: ${{ env.AWS_REGION }}
           AWS_EC2_METADATA_DISABLED: "true"
 
       - name: OpenAPI drift check
-        working-directory: src/backend
         run: make compare-openapi
 
       - name: Coverage (xml)
