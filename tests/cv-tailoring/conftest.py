@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 from typing import Any, Dict, List
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 from unittest.mock import MagicMock
@@ -513,3 +513,40 @@ def sample_empty_cv() -> UserCV:
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )
+
+
+@pytest.fixture
+def mock_dynamodb_table() -> Mock:
+    """Mock DynamoDB table for CV storage."""
+    table = Mock()
+    table.get_item = Mock(return_value={})
+    table.put_item = Mock(return_value={})
+    table.update_item = Mock(return_value={})
+    table.query = Mock(return_value={"Items": []})
+    table.delete_item = Mock(return_value={})
+    return table
+
+
+@pytest.fixture
+def mock_bedrock_client() -> Mock:
+    """Mock Bedrock client for LLM calls."""
+    client = Mock()
+    client.invoke_model = Mock(
+        return_value={
+            "body": MagicMock(
+                read=lambda: b'{"professional_summary": "Tailored summary", "work_experience": [], "skills": []}'
+            )
+        }
+    )
+    return client
+
+
+@pytest.fixture
+def mock_s3_client() -> Mock:
+    """Mock S3 client for artifact storage."""
+    client = Mock()
+    client.put_object = Mock(return_value={"ETag": '"abc123"'})
+    client.get_object = Mock(
+        return_value={"Body": MagicMock(read=lambda: b'{"test": "data"}')}
+    )
+    return client

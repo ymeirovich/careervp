@@ -167,7 +167,23 @@ def _fetch_and_tailor_cv(request: TailorCVRequest) -> Result[Any]:
 
 
 def _get_user_id(event: dict[str, Any]) -> str | None:
+    # Try to get user_id from Cognito authorizer claims first
     user_id = event.get('requestContext', {}).get('authorizer', {}).get('claims', {}).get('sub')
+    if user_id:
+        return cast(str | None, user_id)
+
+    # For testing: allow user_id in request body if no authorizer
+    # This bypass is only active when AUTHORIZER_DISABLED env var is set
+    if os.environ.get('AUTHORIZER_DISABLED') == 'true':
+        body = event.get('body') or '{}'
+        if isinstance(body, str):
+            try:
+                body = json.loads(body)
+            except json.JSONDecodeError:
+                pass
+        if isinstance(body, dict):
+            return body.get('user_id')
+
     return cast(str | None, user_id)
 
 

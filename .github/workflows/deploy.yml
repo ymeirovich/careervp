@@ -17,7 +17,7 @@ permissions:
   id-token: write  # Required for OIDC
 
 env:
-  PYTHON_VERSION: '3.14'
+  PYTHON_VERSION: '3.13'
   NODE_VERSION: '22'
   AWS_REGION: 'us-east-1'
 
@@ -36,10 +36,15 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
+          cache-dependency-glob: '**/uv.lock'
+      - name: Install Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+      - name: Install backend dependencies
+        working-directory: src/backend
+        run: uv sync
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -47,12 +52,20 @@ jobs:
           role-session-name: deploy-dev-${{ github.sha }}
           aws-region: ${{ env.AWS_REGION }}
       - name: Ensure SSM Parameter exists
+        env:
+          ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          aws ssm put-parameter \
-            --name "/careervp/dev/anthropic-api-key" \
-            --value "${{ secrets.ANTHROPIC_API_KEY }}" \
-            --type SecureString \
-            --overwrite
+          if [ -n "$ANTHROPIC_KEY" ]; then
+            aws ssm put-parameter \
+              --name "/careervp/dev/anthropic-api-key" \
+              --value "$ANTHROPIC_KEY" \
+              --type SecureString \
+              --overwrite
+          else
+            echo "::warning::ANTHROPIC_API_KEY secret not set. Checking if SSM parameter exists..."
+            aws ssm get-parameter --name "/careervp/dev/anthropic-api-key" --query "Parameter.Name" --output text || \
+              echo "::warning::SSM parameter /careervp/dev/anthropic-api-key not found. Set ANTHROPIC_API_KEY secret or create manually."
+          fi
       - name: Build and Deploy
         working-directory: src/backend
         env:
@@ -60,6 +73,9 @@ jobs:
         run: make deploy
       - name: Post-deploy smoke test
         working-directory: src/backend
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AUTO_SET_LAMBDA_ENV: '1'
         run: make smoke-test
 
   deploy-other:
@@ -78,10 +94,15 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
+          cache-dependency-glob: '**/uv.lock'
+      - name: Install Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+      - name: Install backend dependencies
+        working-directory: src/backend
+        run: uv sync
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -89,12 +110,21 @@ jobs:
           role-session-name: deploy-${{ inputs.environment }}-${{ github.sha }}
           aws-region: ${{ env.AWS_REGION }}
       - name: Ensure SSM Parameter exists
+        env:
+          ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TARGET_ENV: ${{ inputs.environment }}
         run: |
-          aws ssm put-parameter \
-            --name "/careervp/${{ inputs.environment }}/anthropic-api-key" \
-            --value "${{ secrets.ANTHROPIC_API_KEY }}" \
-            --type SecureString \
-            --overwrite
+          if [ -n "$ANTHROPIC_KEY" ]; then
+            aws ssm put-parameter \
+              --name "/careervp/${TARGET_ENV}/anthropic-api-key" \
+              --value "$ANTHROPIC_KEY" \
+              --type SecureString \
+              --overwrite
+          else
+            echo "::warning::ANTHROPIC_API_KEY secret not set. Checking if SSM parameter exists..."
+            aws ssm get-parameter --name "/careervp/${TARGET_ENV}/anthropic-api-key" --query "Parameter.Name" --output text || \
+              echo "::warning::SSM parameter /careervp/${TARGET_ENV}/anthropic-api-key not found. Set ANTHROPIC_API_KEY secret or create manually."
+          fi
       - name: Build and Deploy
         working-directory: src/backend
         env:
@@ -104,4 +134,6 @@ jobs:
         working-directory: src/backend
         env:
           ENVIRONMENT: ${{ inputs.environment }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AUTO_SET_LAMBDA_ENV: '1'
         run: make smoke-test

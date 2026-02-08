@@ -1,0 +1,26 @@
+{
+  "api_url": "https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod/",
+  "user_id": "test-user-001",
+  "tests": {
+    "cv_tailoring_basic": {
+      "passed": true,
+      "error": null
+    },
+    "cv_tailoring_with_preferences": {
+      "passed": true,
+      "error": null
+    },
+    "invalid_cv_id": {
+      "passed": true,
+      "error": null
+    },
+    "validation_error": {
+      "passed": true,
+      "error": null
+    }
+  },
+  "passed": 4,
+  "failed": 0,
+  "total": 4,
+  "timestamp": "2026-02-08T19:59:59.905073"
+}

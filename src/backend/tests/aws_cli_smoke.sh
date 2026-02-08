@@ -27,7 +27,6 @@ AWS_REGION="${AWS_DEFAULT_REGION:-us-east-1}"
 ACCOUNT_EXPECTED="${AWS_DEFAULT_ACCOUNT:-}"
 
 CV_LAMBDA="${CV_PARSER_LAMBDA:-careervp-cv-parser-lambda-${ENVIRONMENT}}"
-VPR_LAMBDA="${VPR_GENERATOR_LAMBDA:-careervp-vpr-generator-lambda-${ENVIRONMENT}}"
 COMPANY_LAMBDA="${COMPANY_RESEARCH_LAMBDA:-careervp-company-research-lambda-${ENVIRONMENT}}"
 
 USERS_TABLE="${USERS_TABLE_NAME:-careervp-users-table-${ENVIRONMENT}}"
@@ -85,7 +84,7 @@ resolve_cv_bucket() {
 }
 
 assert_status_ok() {
-  local status="$1" context="$2"
+  local status="$1" context="$2" response_file="${3:-}" log_meta_file="${4:-}"
   if [[ ! "$status" =~ ^[0-9]+$ ]]; then
     echo "FAIL: ${context} returned non-numeric status: ${status}" >&2
     exit 1
@@ -94,6 +93,20 @@ assert_status_ok() {
     log "${context}: OK (${status})"
   else
     echo "FAIL: ${context} returned status ${status}" >&2
+    # Print response body for debugging
+    if [[ -n "$response_file" && -f "$response_file" ]]; then
+      echo "=== Response Body ===" >&2
+      cat "$response_file" >&2
+    fi
+    # Decode and print Lambda logs for debugging
+    if [[ -n "$log_meta_file" && -f "$log_meta_file" ]]; then
+      local log_result
+      log_result="$(jq -r '.LogResult // empty' "$log_meta_file")"
+      if [[ -n "$log_result" ]]; then
+        echo "=== Lambda Logs ===" >&2
+        decode_log_result "$log_result" >&2 || true
+      fi
+    fi
     exit 1
   fi
 }
@@ -114,7 +127,6 @@ preflight() {
 check_resources() {
   log "Checking required resources exist"
   aws lambda get-function --function-name "$CV_LAMBDA" --region "$AWS_REGION" >/dev/null
-  aws lambda get-function --function-name "$VPR_LAMBDA" --region "$AWS_REGION" >/dev/null
   aws lambda get-function --function-name "$COMPANY_LAMBDA" --region "$AWS_REGION" >/dev/null
   aws dynamodb describe-table --table-name "$USERS_TABLE" --region "$AWS_REGION" >/dev/null
   aws dynamodb describe-table --table-name "$IDEMPOTENCY_TABLE" --region "$AWS_REGION" >/dev/null
@@ -122,7 +134,7 @@ check_resources() {
   bucket="$(resolve_cv_bucket)"
   [[ -n "$bucket" && "$bucket" != "None" ]] || { echo "CV bucket not found" >&2; exit 1; }
   log "Resolved CV bucket: ${bucket}"
-  debug "Resources: CV_LAMBDA=${CV_LAMBDA} VPR_LAMBDA=${VPR_LAMBDA} COMPANY_LAMBDA=${COMPANY_LAMBDA} USERS_TABLE=${USERS_TABLE} IDEMPOTENCY_TABLE=${IDEMPOTENCY_TABLE}"
+  debug "Resources: CV_LAMBDA=${CV_LAMBDA} COMPANY_LAMBDA=${COMPANY_LAMBDA} USERS_TABLE=${USERS_TABLE} IDEMPOTENCY_TABLE=${IDEMPOTENCY_TABLE}"
 }
 
 _update_lambda_env_var() {
@@ -166,35 +178,39 @@ PY
 }
 
 ensure_anthropic_env() {
+  log "Checking ANTHROPIC_API_KEY on Lambdas"
   local local_key
   local_key="${ANTHROPIC_API_KEY:-}"
   if [[ -z "$local_key" ]]; then
     echo "FAIL: ANTHROPIC_API_KEY not set locally (check .env)." >&2
     exit 1
   fi
+  debug "Local ANTHROPIC_API_KEY length: ${#local_key}"
 
-  local lambdas=("$CV_LAMBDA" "$VPR_LAMBDA" "$COMPANY_LAMBDA")
+  local lambdas=("$CV_LAMBDA" "$COMPANY_LAMBDA")
   local missing=()
   for fn in "${lambdas[@]}"; do
     local key
     key="$(get_lambda_env "$fn" "ANTHROPIC_API_KEY")"
+    debug "Lambda $fn ANTHROPIC_API_KEY: ${key:+SET (${#key} chars)}${key:-NOT SET}"
     if [[ -z "$key" || "$key" == "None" ]]; then
       missing+=("$fn")
     fi
   done
 
-  if [[ "${#missing[@]}" -gt 0 ]]; then
-    if [[ "${AUTO_SET_LAMBDA_ENV:-0}" == "1" ]]; then
-      log "Setting ANTHROPIC_API_KEY on: ${missing[*]}"
-      for fn in "${missing[@]}"; do
-        _update_lambda_env_var "$fn" "ANTHROPIC_API_KEY" "$local_key"
-      done
-      log "ANTHROPIC_API_KEY updated. AWS may take ~30-60s to apply."
-    else
-      echo "FAIL: Missing ANTHROPIC_API_KEY on: ${missing[*]}" >&2
-      echo "Set it or re-run with AUTO_SET_LAMBDA_ENV=1 to apply automatically." >&2
-      exit 1
-    fi
+  if [[ "${#missing[@]}" -eq 0 ]]; then
+    log "All Lambdas have ANTHROPIC_API_KEY set"
+  elif [[ "${AUTO_SET_LAMBDA_ENV:-0}" == "1" ]]; then
+    log "Setting ANTHROPIC_API_KEY on: ${missing[*]}"
+    for fn in "${missing[@]}"; do
+      _update_lambda_env_var "$fn" "ANTHROPIC_API_KEY" "$local_key"
+    done
+    log "ANTHROPIC_API_KEY updated. Waiting 45s for AWS to apply changes..."
+    sleep 45
+  else
+    echo "FAIL: Missing ANTHROPIC_API_KEY on: ${missing[*]}" >&2
+    echo "Set it or re-run with AUTO_SET_LAMBDA_ENV=1 to apply automatically." >&2
+    exit 1
   fi
 }
 
@@ -232,17 +248,39 @@ PY
 test_cv_parser_lambda() {
   log "Testing CV Parser Lambda"
   local user_id="cli-smoke-user"
-  local cv_text="Seasoned product engineer with 10+ years leading cross-functional teams, shipping cloud products, improving reliability, and mentoring engineers across distributed environments."
+  # CV text must include a name for LLM extraction to succeed
+  local cv_text="John Smith
+Senior Product Engineer
+Email: john.smith@example.com | Phone: +1-555-123-4567 | Location: San Francisco, CA
+
+Professional Summary:
+Seasoned product engineer with 10+ years leading cross-functional teams, shipping cloud products, improving reliability, and mentoring engineers across distributed environments.
+
+Experience:
+TechCorp Inc - Senior Software Engineer (2020 - Present)
+- Led development of cloud-native microservices
+- Reduced API latency by 40%
+
+Education:
+BS Computer Science - Stanford University (2010)"
   local file_b64
   file_b64="$(printf '%s' "$cv_text" | base64)"
-  log "Testing 2"
   local body_json
   body_json="$(jq -n --arg uid "$user_id" --arg b64 "$file_b64" '{user_id:$uid, file_content:$b64, file_type:"txt"}')"
-  log "Testing 2a"
+  # Build proper API Gateway event with required fields for Powertools
   local event
-  log "Testing 2b"
-  event="$(jq -cn --arg body "$body_json" '{body:$body, path:"/api/cv", httpMethod:"POST"}')"
-  log "Testing 3"
+  event="$(jq -cn --arg body "$body_json" '{
+    body: $body,
+    path: "/api/cv",
+    httpMethod: "POST",
+    headers: {"Content-Type": "application/json"},
+    requestContext: {
+      requestId: "smoke-test-request",
+      stage: "prod"
+    },
+    isBase64Encoded: false
+  }')"
+  log "Event prepared"
   local outfile="/tmp/cv_parser_response.json"
   log "Invoking ${CV_LAMBDA}"
   aws lambda invoke \
@@ -267,7 +305,7 @@ test_cv_parser_lambda() {
   fi
   body="$(jq -r '.body' "$outfile")"
   success="$(printf '%s' "$body" | jq -r '.success')"
-  assert_status_ok "$status" "CV parser status"
+  assert_status_ok "$status" "CV parser status" "$outfile" "/tmp/cv_parser_invoke_meta.json"
   [[ "$success" == "true" ]] || { echo "CV parser returned success=false" >&2; cat "$outfile"; exit 1; }
   source_key="$(printf '%s' "$body" | jq -r '.user_cv.source_file_key // empty')"
   if [[ -n "$source_key" ]]; then
@@ -345,7 +383,7 @@ JSON
   fi
   body="$(jq -r '.body' "$outfile")"
   success="$(printf '%s' "$body" | jq -r '.success')"
-  assert_status_ok "$status" "VPR generator status"
+  assert_status_ok "$status" "VPR generator status" "$outfile" "/tmp/vpr_invoke_meta.json"
 
   # Verify Anthropic API returned actual content (not just a successful HTTP response)
   vpr_text="$(printf '%s' "$body" | jq -r '.data.vpr // empty')"
@@ -380,8 +418,19 @@ test_company_research_lambda() {
     job_posting_text:"We are hiring to scale values-driven products.",
     max_sources:2
   }')"
+  # Build proper API Gateway event with required fields for Powertools
   local event
-  event="$(jq -cn --arg body "$body_json" '{body:$body, path:"/company-research", httpMethod:"POST"}')"
+  event="$(jq -cn --arg body "$body_json" '{
+    body: $body,
+    path: "/api/company-research",
+    httpMethod: "POST",
+    headers: {"Content-Type": "application/json"},
+    requestContext: {
+      requestId: "smoke-test-company-research",
+      stage: "prod"
+    },
+    isBase64Encoded: false
+  }')"
   local outfile="/tmp/company_research_response.json"
 
   log "Invoking ${COMPANY_LAMBDA}"
@@ -519,9 +568,9 @@ main() {
   run_verify_script
   test_s3_crud
   test_cv_parser_lambda
-  test_vpr_generator_lambda
   test_company_research_lambda
-  test_anthropic_via_api_gateway
+  # VPR uses async architecture (submit/status/worker) - no standalone Lambda
+  # test_anthropic_via_api_gateway  # Requires VPR endpoint
   test_anthropic_ping
   log "All smoke tests completed"
 }

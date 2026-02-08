@@ -289,6 +289,62 @@ def test_full_flow_invalid_job_description(lambda_context):
     assert body["success"] is False
 
 
+def test_full_flow_missing_cv_id(lambda_context):
+    """Test full flow returns 400 when cv_id is missing."""
+    event = {
+        "body": json.dumps(
+            {
+                "job_description": "Looking for a senior software engineer with Python and AWS experience.",
+            }
+        ),
+        "requestContext": {"authorizer": {"claims": {"sub": "user-123"}}},
+    }
+
+    response = handler(event, lambda_context)
+
+    assert response["statusCode"] == 400
+    body = json.loads(response["body"])
+    assert body["success"] is False
+
+
+def test_full_flow_missing_job_description(lambda_context):
+    """Test full flow returns 400 when job_description is missing."""
+    event = {
+        "body": json.dumps(
+            {
+                "cv_id": "cv-123",
+            }
+        ),
+        "requestContext": {"authorizer": {"claims": {"sub": "user-123"}}},
+    }
+
+    response = handler(event, lambda_context)
+
+    assert response["statusCode"] == 400
+    body = json.loads(response["body"])
+    assert body["success"] is False
+
+
+def test_full_flow_invalid_preferences(lambda_context):
+    """Test full flow returns 400 for invalid preferences."""
+    event = {
+        "body": json.dumps(
+            {
+                "cv_id": "cv-123",
+                "job_description": "Looking for a senior software engineer with Python and AWS experience.",
+                "preferences": "invalid",
+            }
+        ),
+        "requestContext": {"authorizer": {"claims": {"sub": "user-123"}}},
+    }
+
+    response = handler(event, lambda_context)
+
+    assert response["statusCode"] == 400
+    body = json.loads(response["body"])
+    assert body["success"] is False
+
+
 def test_full_flow_error_propagation(
     sample_master_cv,
     lambda_context,

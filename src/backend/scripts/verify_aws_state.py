@@ -15,7 +15,7 @@ DEFAULT_ENV: Final[str] = 'dev'
 SERVICE_PREFIX: Final[str] = 'careervp'
 EXPECTED_LAMBDAS: Final[tuple[str, ...]] = (
     'cv-parser',
-    'vpr-generator',
+    # 'vpr-generator',  # TODO: Enable when VPR generator Lambda is deployed
 )
 EXPECTED_TABLES: Final[tuple[str, ...]] = (
     'users',
