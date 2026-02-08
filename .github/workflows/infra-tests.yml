@@ -38,6 +38,9 @@ jobs:
         working-directory: infra
         run: uv sync
 
+      - name: Create Lambda asset placeholder
+        run: mkdir -p src/backend/.build/lambdas && touch src/backend/.build/lambdas/.placeholder
+
       - name: Run infrastructure tests
         working-directory: infra
         run: uv run pytest tests/infrastructure -v
