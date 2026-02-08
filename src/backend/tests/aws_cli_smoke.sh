@@ -187,7 +187,8 @@ ensure_anthropic_env() {
       for fn in "${missing[@]}"; do
         _update_lambda_env_var "$fn" "ANTHROPIC_API_KEY" "$local_key"
       done
-      log "ANTHROPIC_API_KEY updated. AWS may take ~30-60s to apply."
+      log "ANTHROPIC_API_KEY updated. Waiting 45s for AWS to apply changes..."
+      sleep 45
     else
       echo "FAIL: Missing ANTHROPIC_API_KEY on: ${missing[*]}" >&2
       echo "Set it or re-run with AUTO_SET_LAMBDA_ENV=1 to apply automatically." >&2
