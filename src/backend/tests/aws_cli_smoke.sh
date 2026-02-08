@@ -251,14 +251,22 @@ test_cv_parser_lambda() {
   local cv_text="Seasoned product engineer with 10+ years leading cross-functional teams, shipping cloud products, improving reliability, and mentoring engineers across distributed environments."
   local file_b64
   file_b64="$(printf '%s' "$cv_text" | base64)"
-  log "Testing 2"
   local body_json
   body_json="$(jq -n --arg uid "$user_id" --arg b64 "$file_b64" '{user_id:$uid, file_content:$b64, file_type:"txt"}')"
-  log "Testing 2a"
+  # Build proper API Gateway event with required fields for Powertools
   local event
-  log "Testing 2b"
-  event="$(jq -cn --arg body "$body_json" '{body:$body, path:"/api/cv", httpMethod:"POST"}')"
-  log "Testing 3"
+  event="$(jq -cn --arg body "$body_json" '{
+    body: $body,
+    path: "/api/cv",
+    httpMethod: "POST",
+    headers: {"Content-Type": "application/json"},
+    requestContext: {
+      requestId: "smoke-test-request",
+      stage: "prod"
+    },
+    isBase64Encoded: false
+  }')"
+  log "Event prepared"
   local outfile="/tmp/cv_parser_response.json"
   log "Invoking ${CV_LAMBDA}"
   aws lambda invoke \
@@ -396,8 +404,19 @@ test_company_research_lambda() {
     job_posting_text:"We are hiring to scale values-driven products.",
     max_sources:2
   }')"
+  # Build proper API Gateway event with required fields for Powertools
   local event
-  event="$(jq -cn --arg body "$body_json" '{body:$body, path:"/company-research", httpMethod:"POST"}')"
+  event="$(jq -cn --arg body "$body_json" '{
+    body: $body,
+    path: "/api/company-research",
+    httpMethod: "POST",
+    headers: {"Content-Type": "application/json"},
+    requestContext: {
+      requestId: "smoke-test-company-research",
+      stage: "prod"
+    },
+    isBase64Encoded: false
+  }')"
   local outfile="/tmp/company_research_response.json"
 
   log "Invoking ${COMPANY_LAMBDA}"
