@@ -17,7 +17,7 @@ permissions:
   id-token: write
 
 env:
-  PYTHON_VERSION: '3.14'
+  PYTHON_VERSION: '3.13'
   AWS_REGION: 'us-east-1'
 
 jobs:
@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
