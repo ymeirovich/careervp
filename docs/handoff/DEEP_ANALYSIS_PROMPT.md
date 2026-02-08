@@ -1,9 +1,9 @@
 # Deep Architecture Analysis - Engineer Handoff Prompt
 
-**Date:** 2026-02-07
+**Date:** 2026-02-08
 **Review Type:** Post-Implementation Comprehensive Review
 **Duration:** 6-8 hours
-**Deliverable:** `/docs/architecture/DEEP_ANALYSIS_RESULTS.md`
+**Deliverable:** `/docs/architecture/architecture-review/DEEP_ANALYSIS_RESULTS.md`
 
 ---
 
@@ -30,13 +30,28 @@ This is a **comprehensive code-level review** using advanced LSP tools, security
 
 ---
 
+## 🔍 KEY FINDINGS FROM LIGHTWEIGHT REVIEW (Verify These Were Fixed)
+
+The lightweight review identified these issues that should have been resolved before implementation:
+
+| Issue | Expected Resolution | Verify In Deep Analysis |
+|-------|---------------------|------------------------|
+| **CV Tailoring layering contradiction** | Handler should NOT access DAL directly; all DAL calls via Logic layer | Check Task 1.6 (DIP) and Task 2.2 |
+| **CV Tailoring has its own DAL** | `cv_tailoring_dal.py` exists - verify it follows shared DAL patterns | Check Task 2.1 and Task 2.2 |
+| **Gap Responses storage** | Should be stored for cross-feature reuse | Check Task 2.3 data flow |
+
+**Reference:** See `/docs/architecture/architecture-review/LIGHTWEIGHT_REVIEW_RESULTS.md` for full findings.
+
+---
+
 ## 📚 REQUIRED READING (90 minutes - DO NOT SKIP)
 
 Read these documents in order before starting the review:
 
 ### 1. Review Framework
-- [ ] **`/docs/architecture/ARCHITECTURE_REVIEW_PLAN.md`** - Full review methodology (focus on "Phase 2: Deep Analysis" section)
-- [ ] **`/docs/architecture/LIGHTWEIGHT_REVIEW_RESULTS.md`** - Results from pre-implementation review (what issues were found?)
+- [ ] **`/docs/architecture/architecture-review/ARCHITECTURE_REVIEW_PLAN.md`** - Full review methodology (focus on "Phase 2: Deep Analysis" section)
+- [ ] **`/docs/architecture/architecture-review/LIGHTWEIGHT_REVIEW_RESULTS.md`** - Results from pre-implementation review (what issues were found?)
+- [ ] **`/docs/architecture/architecture-review/DOCUMENTATION_UPDATE_PLAN.md`** - Fixes applied after lightweight review
 
 ### 2. Implemented Code (VPR - Reference Pattern)
 - [ ] **`/src/backend/careervp/handlers/vpr_submit_handler.py`** - VPR submit handler
@@ -49,9 +64,13 @@ Read these documents in order before starting the review:
 - [ ] **`/src/backend/careervp/models/result.py`** - Result[T] pattern
 
 ### 3. Implemented Code (CV Tailoring - Under Review)
-- [ ] **`/src/backend/careervp/handlers/cv_tailor_handler.py`** - CV Tailoring handler
-- [ ] **`/src/backend/careervp/logic/cv_tailoring_logic.py`** - CV Tailoring logic
+- [ ] **`/src/backend/careervp/handlers/cv_tailoring_handler.py`** - CV Tailoring handler
+- [ ] **`/src/backend/careervp/logic/cv_tailoring.py`** - CV Tailoring logic
+- [ ] **`/src/backend/careervp/logic/cv_tailoring_prompt.py`** - CV Tailoring LLM prompts
 - [ ] **`/src/backend/careervp/models/cv_tailoring.py`** - CV Tailoring models
+- [ ] **`/src/backend/careervp/models/cv_tailoring_models.py`** - Additional CV Tailoring models
+- [ ] **`/src/backend/careervp/dal/cv_tailoring_dal.py`** - CV Tailoring DAL layer
+- [ ] **`/src/backend/careervp/validation/cv_tailoring_validation.py`** - CV Tailoring validation
 
 ### 4. Design Documentation (Compare Implementation vs Design)
 - [ ] **`/docs/architecture/VPR_ASYNC_DESIGN.md`** - VPR design
@@ -60,9 +79,9 @@ Read these documents in order before starting the review:
 
 ### 5. Test Suites (Verify Coverage)
 - [ ] **`/tests/unit/test_vpr_generator.py`** - VPR unit tests
-- [ ] **`/tests/unit/test_cv_tailoring_logic.py`** - CV Tailoring unit tests
+- [ ] **`/tests/cv-tailoring/e2e/test_cv_tailoring_flow.py`** - CV Tailoring E2E tests
+- [ ] **`/tests/cv-tailoring/infrastructure/test_cv_tailoring_stack.py`** - CV Tailoring infrastructure tests
 - [ ] **`/tests/integration/test_vpr_flow.py`** - VPR integration tests
-- [ ] **`/tests/integration/test_cv_tailoring_flow.py`** - CV Tailoring integration tests
 
 **Total Reading:** ~200 pages (~90 minutes at 2 pages/minute)
 
@@ -93,7 +112,7 @@ ast_grep_search("class $NAME(BaseModel)", language="python")
 lsp_find_references("DynamoDALHandler")
 
 # Check for type errors in CV Tailoring logic
-lsp_diagnostics("src/backend/careervp/logic/cv_tailoring_logic.py")
+lsp_diagnostics("src/backend/careervp/logic/cv_tailoring.py")
 
 # Project-wide type check
 lsp_diagnostics_directory("src/backend", strategy="tsc")
@@ -150,15 +169,17 @@ For each major class, count methods and imports to assess SRP violations:
 
 **Classes to Review:**
 - `VPRGenerator` (from `vpr_generator.py`)
-- `CVTailoringLogic` (from `cv_tailoring_logic.py`)
+- CV Tailoring logic (from `cv_tailoring.py`)
 - `FVSValidator` (from `fvs_validator.py`)
 - `DynamoDALHandler` (from `dynamo_dal_handler.py`)
+- `CVTailoringDAL` (from `cv_tailoring_dal.py`) - **Verify uses shared patterns**
 
 **For each class, check:**
 
 ```bash
 # Get class outline
 lsp_document_symbols("src/backend/careervp/logic/vpr_generator.py")
+lsp_document_symbols("src/backend/careervp/logic/cv_tailoring.py")
 
 # Count methods (should be ≤ 10 for SRP compliance)
 # Count imports (should be ≤ 10 for low coupling)
@@ -318,6 +339,19 @@ ast_grep_search("self.$VAR = $CLASS()", language="python")
 - 2 = Many hardcoded dependencies
 - 1 = No dependency injection, everything instantiated directly
 
+**CRITICAL CHECK (from Lightweight Review):**
+The lightweight review found a layering contradiction in CV Tailoring design:
+- Design said "NO DIRECT DAL ACCESS" in handler
+- But workflow showed handler fetching/storing via DAL directly
+
+**Verify in implementation:**
+```python
+# Check if CV Tailoring handler directly accesses DAL
+ast_grep_search("dal.$METHOD", language="python", path="src/backend/careervp/handlers/cv_tailoring_handler.py")
+
+# Should be ZERO results - all DAL access should be in logic layer
+```
+
 ---
 
 ### Category 1 Deliverable
@@ -415,6 +449,10 @@ lsp_find_references("UserCV")
 lsp_find_references("DynamoDALHandler")
 
 # Expected: VPR handlers, CV Tailoring handlers, all use the same instance
+
+# IMPORTANT: CV Tailoring has its own DAL (cv_tailoring_dal.py)
+# Verify it follows shared patterns and uses DynamoDALHandler internally
+lsp_document_symbols("src/backend/careervp/dal/cv_tailoring_dal.py")
 ```
 
 **Check LLM client interface usage:**
@@ -430,6 +468,12 @@ ast_grep_search("$VAR = ClaudeClient()", language="python")
 - ❌ Features use different DAL implementations
 - ❌ Direct `boto3.client('dynamodb')` usage (bypassing DAL)
 - ❌ LLM client instantiated in multiple places (should be DI)
+- ❌ CV Tailoring DAL (`cv_tailoring_dal.py`) doesn't use shared `DynamoDALHandler`
+
+**NOTE:** Lightweight review found CV Tailoring has its own DAL layer. Verify it:
+1. Uses `DynamoDALHandler` internally (not direct boto3)
+2. Follows same patterns as VPR DAL usage
+3. Has consistent error handling with `Result[T]`
 
 **Score:**
 - 5 = All features use same interfaces via DI
@@ -458,6 +502,7 @@ Cover Letter Logic → CoverLetter → S3
 - Does CV Tailoring actually use `UserCV` model from VPR?
 - Are results stored in S3 with consistent structure?
 - Do presigned URLs work the same way?
+- Are Gap Responses stored and retrievable for cross-feature reuse? (See DOCUMENTATION_UPDATE_PLAN.md)
 
 **Use LSP to trace:**
 
@@ -1260,7 +1305,7 @@ grep -r "ApproximateNumberOfMessagesVisible" infra/
 
 ## 📝 FINAL DELIVERABLE FORMAT
 
-Create this file: `/docs/architecture/DEEP_ANALYSIS_RESULTS.md`
+Create this file: `/docs/architecture/architecture-review/DEEP_ANALYSIS_RESULTS.md`
 
 **Template:**
 
@@ -1430,14 +1475,17 @@ Create this file: `/docs/architecture/DEEP_ANALYSIS_RESULTS.md`
 | Module | Coverage | Status |
 |--------|----------|--------|
 | vpr_generator.py | XX% | ✅ / ❌ |
-| cv_tailoring_logic.py | XX% | ✅ / ❌ |
+| cv_tailoring.py | XX% | ✅ / ❌ |
+| cv_tailoring_dal.py | XX% | ✅ / ❌ |
+| cv_tailoring_validation.py | XX% | ✅ / ❌ |
 
-### Integration Test Coverage
+### Integration/E2E Test Coverage
 
-| Flow | Tests | Status |
-|------|-------|--------|
-| VPR E2E | X tests | ✅ / ❌ |
-| CV Tailoring E2E | X tests | ✅ / ❌ |
+| Flow | Tests | Location | Status |
+|------|-------|----------|--------|
+| VPR E2E | X tests | tests/integration/ | ✅ / ❌ |
+| CV Tailoring E2E | X tests | tests/cv-tailoring/e2e/ | ✅ / ❌ |
+| CV Tailoring Infra | X tests | tests/cv-tailoring/infrastructure/ | ✅ / ❌ |
 
 ---
 

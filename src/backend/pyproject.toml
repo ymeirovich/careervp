@@ -12,12 +12,12 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Natural Language :: English",
-    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.13",
 ]
 readme = "README.md"
 keywords = ["aws lambda cookbook", "guide to aws lambda", "cdk blueprint", "best practices", "serverless service blueprint"]
 license = {text = "MIT-0"}
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 dependencies = [
     "pydantic>=2.12.0",
     "email-validator",
@@ -121,8 +121,8 @@ exclude = [
 line-length = 150
 indent-width = 4
 
-# Assume Python 3.14
-target-version = "py314"
+# Assume Python 3.13
+target-version = "py313"
 
 [tool.ruff.lint]
 # Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`)  codes by default.

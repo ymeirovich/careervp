@@ -5,8 +5,8 @@ APP := ../../infra/app.py
 
 # Keep Lambda runtime configuration in one place so packaging, dependencies,
 # and CDK stay aligned.
-PYTHON_RUNTIME_VERSION := 3.14
-LAMBDA_RUNTIME_ENUM := PYTHON_3_14
+PYTHON_RUNTIME_VERSION := 3.13
+LAMBDA_RUNTIME_ENUM := PYTHON_3_13
 LAMBDA_ARCH_ENUM := X86_64
 DOCKER_PLATFORM := linux/amd64
 LAYER_BUNDLING_PLATFORM := linux/amd64
@@ -29,6 +29,10 @@ format:
 
 format-fix:
 	uv run ruff format .
+
+check-all: format format-fix
+	@echo "Running mypy strict..."
+	uv run mypy careervp --strict
 
 lint: format
 	@echo "Running mypy"
