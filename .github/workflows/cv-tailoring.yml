@@ -111,10 +111,9 @@ jobs:
 
       - name: Coverage (xml)
         if: ${{ always() }}
-        working-directory: src/backend
         env:
           PYTHONPATH: ${{ github.workspace }}/src/backend
-        run: uv run pytest ../tests/cv-tailoring --cov --cov-report=xml
+        run: uv run pytest tests/cv-tailoring --cov --cov-report=xml
 
       - name: Upload coverage
         if: ${{ always() }}

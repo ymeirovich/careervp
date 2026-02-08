@@ -233,7 +233,8 @@ def _build_success_data(data: Any) -> dict[str, Any]:
         return {'tailored_cv': None}
     if isinstance(data, dict):
         if 'tailored_cv' in data:
-            return _serialize_result_data(data)
+            serialized = _serialize_result_data(data)
+            return dict(serialized) if isinstance(serialized, dict) else {'tailored_cv': serialized}
         return {'tailored_cv': _serialize_result_data(data)}
     if hasattr(data, 'tailored_cv'):
         # TailoredCVResponse object
