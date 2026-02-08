@@ -1,0 +1,43 @@
+name: Infra Tests
+
+on:
+  pull_request:
+    paths:
+      - 'infra/**'
+      - '.github/workflows/infra-tests.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'infra/**'
+      - '.github/workflows/infra-tests.yml'
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '20'
+  JSII_SILENCE_WARNING_UNTESTED_NODE_VERSION: '1'
+
+jobs:
+  infra-pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: latest
+          enable-cache: true
+
+      - name: Install infra dependencies
+        working-directory: infra
+        run: uv sync
+
+      - name: Run infrastructure tests
+        working-directory: infra
+        run: uv run pytest tests/infrastructure -v

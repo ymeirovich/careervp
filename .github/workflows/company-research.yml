@@ -1,0 +1,195 @@
+# Branch-specific workflow for feature/company-research (Phase 8)
+name: Company Research Branch CI/CD
+
+on:
+  push:
+    branches: ["feature/company-research"]
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "src/backend/careervp/logic/company_*"
+      - "src/backend/careervp/logic/utils/web_scraper*"
+      - "src/backend/careervp/logic/utils/web_search*"
+      - "src/backend/careervp/handlers/company_*"
+      - "src/backend/careervp/models/company*"
+      - "src/backend/tests/**/test_company*"
+      - "src/backend/tests/**/test_web_*"
+      - "infra/**"
+      - ".github/workflows/company-research.yml"
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Deploy to dev environment"
+        required: false
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+
+env:
+  PYTHON_VERSION: "3.14"
+  NODE_VERSION: "22"
+  AWS_REGION: "us-east-1"
+  AWS_DEFAULT_REGION: "us-east-1"
+
+concurrency:
+  group: company-research-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+          enable-cache: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install Node dependencies (root)
+        run: npm ci
+
+      - name: Install Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        working-directory: src/backend
+        run: make dev
+
+      - name: Ruff format (check)
+        working-directory: src/backend
+        run: uv run ruff format --check .
+
+      - name: Ruff lint
+        working-directory: src/backend
+        run: uv run ruff check --exit-non-zero-on-fix .
+
+      - name: MyPy strict
+        working-directory: src/backend
+        run: uv run mypy --strict .
+
+      - name: Naming validator (infra guardrail)
+        run: python src/backend/scripts/validate_naming.py --path infra --strict
+
+      - name: Unit tests (company, web_scraper, web_search)
+        working-directory: src/backend
+        run: uv run pytest tests/unit -k "company or web_scraper or web_search" -q
+
+      - name: Integration tests (mocked HTTP)
+        working-directory: src/backend
+        run: uv run pytest tests/integration -k "company" -q
+
+      - name: CDK synth
+        working-directory: src/backend
+        run: |
+          mkdir -p .build/lambdas
+          touch .build/lambdas/.placeholder
+          cd ../.. && cd infra && npx cdk synth
+        env:
+          AWS_DEFAULT_ACCOUNT: "000000000000"  # avoid STS call during synth
+          AWS_DEFAULT_REGION: ${{ env.AWS_REGION }}
+          AWS_EC2_METADATA_DISABLED: "true"
+
+      - name: OpenAPI drift check
+        working-directory: src/backend
+        run: make compare-openapi
+
+      - name: Coverage (xml)
+        if: ${{ always() }}
+        working-directory: src/backend
+        run: uv run pytest tests/unit tests/integration -k "company or web_scraper or web_search" --cov --cov-report=xml
+
+      - name: Upload coverage
+        if: ${{ always() }}
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./src/backend/coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+  deploy-dev:
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy == 'true') }}
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+          enable-cache: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install Node dependencies (root)
+        run: npm ci
+
+      - name: Install Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        working-directory: src/backend
+        run: make dev
+
+      - name: Configure AWS credentials (dev)
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          role-session-name: company-research-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build and Deploy
+        working-directory: src/backend
+        run: make deploy
+
+      - name: Post-deploy smoke (company-research endpoint)
+        run: |
+          echo "Waiting for deployment to stabilize..."
+          sleep 10
+          # Smoke test for company-research endpoint (if exists)
+          # curl -sf "${API_ENDPOINT}/api/company-research/health" || echo "Health endpoint not yet available"
+
+      - name: Post-deploy state verifier
+        run: |
+          if [ -f src/backend/scripts/verify_aws_state.py ]; then
+            python src/backend/scripts/verify_aws_state.py --mode deployed
+          else
+            echo "State verifier script not found, skipping"
+          fi
+
+      - name: Upload cdk.out
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: cdk-out-company-research
+          path: src/backend/cdk.out
+
+      - name: Upload coverage
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-company-research
+          path: src/backend/coverage.xml
+
+      - name: Destroy stack on failure
+        if: ${{ failure() }}
+        working-directory: src/backend
+        run: make destroy

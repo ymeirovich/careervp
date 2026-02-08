@@ -6,8 +6,9 @@ Per .clauderules: Never mark a task as complete until its unit test passes.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Dict, cast
 
 import pytest
 
@@ -31,19 +32,21 @@ FIXTURES_DIR = Path(__file__).resolve().parents[4] / 'tests' / 'fixtures'
 
 
 @pytest.fixture
-def fvs_baseline() -> dict:
+def fvs_baseline() -> Dict[str, Any]:
     """Load FVS baseline fixture."""
     baseline_path = FIXTURES_DIR / 'fvs_baseline_cv.json'
     with open(baseline_path) as f:
-        return json.load(f)
+        data = json.load(f)
+        return cast(Dict[str, Any], data)
 
 
 @pytest.fixture
-def fvs_hallucination() -> dict:
+def fvs_hallucination() -> Dict[str, Any]:
     """Load FVS hallucination example fixture."""
     hallucination_path = FIXTURES_DIR / 'fvs_test_hallucination.json'
     with open(hallucination_path) as f:
-        return json.load(f)
+        data = json.load(f)
+        return cast(Dict[str, Any], data)
 
 
 @pytest.fixture
@@ -124,7 +127,7 @@ def hallucinated_user_cv() -> UserCV:
 class TestFVSImmutableFactsValidation:
     """Test validation of immutable facts."""
 
-    def test_valid_cv_passes_immutable_check(self, fvs_baseline: dict, valid_user_cv: UserCV):
+    def test_valid_cv_passes_immutable_check(self, fvs_baseline: Dict[str, Any], valid_user_cv: UserCV) -> None:
         """A CV with correct immutable facts should pass validation."""
         result = validate_immutable_facts(fvs_baseline, valid_user_cv)
 
@@ -132,7 +135,7 @@ class TestFVSImmutableFactsValidation:
         assert len(result.violations) == 0
         assert result.has_critical_violations is False
 
-    def test_hallucinated_role_fails(self, fvs_baseline: dict, hallucinated_user_cv: UserCV):
+    def test_hallucinated_role_fails(self, fvs_baseline: Dict[str, Any], hallucinated_user_cv: UserCV) -> None:
         """A CV with hallucinated job title should fail validation."""
         result = validate_immutable_facts(fvs_baseline, hallucinated_user_cv)
 
@@ -148,7 +151,7 @@ class TestFVSImmutableFactsValidation:
         assert role_violation.actual == 'Director of Learning'
         assert role_violation.severity == 'CRITICAL'
 
-    def test_hallucinated_dates_fails(self, fvs_baseline: dict, hallucinated_user_cv: UserCV):
+    def test_hallucinated_dates_fails(self, fvs_baseline: Dict[str, Any], hallucinated_user_cv: UserCV) -> None:
         """A CV with hallucinated dates should fail validation."""
         result = validate_immutable_facts(fvs_baseline, hallucinated_user_cv)
 
@@ -161,7 +164,7 @@ class TestFVSImmutableFactsValidation:
         assert dates_violation.actual == '2018 – Present'
         assert dates_violation.severity == 'CRITICAL'
 
-    def test_contact_info_change_fails(self, fvs_baseline: dict, valid_user_cv: UserCV):
+    def test_contact_info_change_fails(self, fvs_baseline: Dict[str, Any], valid_user_cv: UserCV) -> None:
         """Changing contact info should fail validation."""
         # Modify email
         valid_user_cv.contact_info.email = 'wrong@email.com'
@@ -176,14 +179,14 @@ class TestFVSImmutableFactsValidation:
 class TestFVSVerifiableSkillsValidation:
     """Test validation of verifiable skills."""
 
-    def test_valid_skills_pass(self, fvs_baseline: dict, valid_user_cv: UserCV):
+    def test_valid_skills_pass(self, fvs_baseline: Dict[str, Any], valid_user_cv: UserCV) -> None:
         """Skills from the verifiable list should pass."""
         result = validate_verifiable_skills(fvs_baseline, valid_user_cv)
 
         assert result.is_valid is True
         assert len(result.violations) == 0
 
-    def test_hallucinated_skill_fails(self, fvs_baseline: dict, hallucinated_user_cv: UserCV):
+    def test_hallucinated_skill_fails(self, fvs_baseline: Dict[str, Any], hallucinated_user_cv: UserCV) -> None:
         """Skills not in verifiable list should be flagged."""
         result = validate_verifiable_skills(fvs_baseline, hallucinated_user_cv)
 
@@ -196,7 +199,7 @@ class TestFVSVerifiableSkillsValidation:
 class TestFullFVSValidation:
     """Test complete FVS validation flow."""
 
-    def test_valid_cv_returns_success(self, fvs_baseline: dict, valid_user_cv: UserCV):
+    def test_valid_cv_returns_success(self, fvs_baseline: Dict[str, Any], valid_user_cv: UserCV) -> None:
         """A fully valid CV should return success Result."""
         result = validate_cv_against_baseline(fvs_baseline, valid_user_cv)
 
@@ -231,11 +234,11 @@ class TestVPRValidationAgainstCV:
             keywords=['Enablement'],
             version=1,
             language='en',
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             word_count=0,
         )
 
-    def test_vpr_validation_passes_when_facts_align(self, aligned_vpr: VPR, valid_user_cv: UserCV):
+    def test_vpr_validation_passes_when_facts_align(self, aligned_vpr: VPR, valid_user_cv: UserCV) -> None:
         """VPR referencing only CV facts should pass."""
         result = validate_vpr_against_cv(aligned_vpr, valid_user_cv)
 
@@ -244,7 +247,7 @@ class TestVPRValidationAgainstCV:
         assert result.data is not None
         assert result.data.is_valid is True
 
-    def test_vpr_validation_detects_unknown_company(self, aligned_vpr: VPR, valid_user_cv: UserCV):
+    def test_vpr_validation_detects_unknown_company(self, aligned_vpr: VPR, valid_user_cv: UserCV) -> None:
         """Referencing a company not in the CV should fail."""
         aligned_vpr.evidence_matrix[0].evidence = 'Led enablement at Fictional Labs between 2021 and 2022.'
 
@@ -255,7 +258,7 @@ class TestVPRValidationAgainstCV:
         assert result.data is not None
         assert any(v.actual == 'Fictional Labs' for v in result.data.violations)
 
-    def test_vpr_validation_detects_unknown_dates(self, aligned_vpr: VPR, valid_user_cv: UserCV):
+    def test_vpr_validation_detects_unknown_dates(self, aligned_vpr: VPR, valid_user_cv: UserCV) -> None:
         """Referencing dates not present in CV should fail."""
         aligned_vpr.differentiators[0] = 'Managed programs at SysAid from 2015 to 2016.'
 
@@ -266,7 +269,7 @@ class TestVPRValidationAgainstCV:
         assert result.data is not None
         assert any(v.field == 'vpr.dates' for v in result.data.violations)
 
-    def test_vpr_validation_detects_unknown_title(self, aligned_vpr: VPR, valid_user_cv: UserCV):
+    def test_vpr_validation_detects_unknown_title(self, aligned_vpr: VPR, valid_user_cv: UserCV) -> None:
         """Referencing a job title not in CV should fail."""
         aligned_vpr.talking_points[0] = 'Discuss time serving as Chief Visionary Officer.'
 
@@ -277,7 +280,7 @@ class TestVPRValidationAgainstCV:
         assert result.data is not None
         assert any('Chief Visionary Officer' in v.actual for v in result.data.violations)
 
-    def test_hallucinated_cv_returns_failure(self, fvs_baseline: dict, hallucinated_user_cv: UserCV):
+    def test_hallucinated_cv_returns_failure(self, fvs_baseline: Dict[str, Any], hallucinated_user_cv: UserCV) -> None:
         """A CV with hallucinations should return failure Result."""
         result = validate_cv_against_baseline(fvs_baseline, hallucinated_user_cv)
 
@@ -290,7 +293,7 @@ class TestVPRValidationAgainstCV:
 class TestFVSFixtureIntegrity:
     """Test that fixtures are properly structured."""
 
-    def test_baseline_fixture_has_required_fields(self, fvs_baseline: dict):
+    def test_baseline_fixture_has_required_fields(self, fvs_baseline: Dict[str, Any]) -> None:
         """Baseline fixture should have all required FVS fields."""
         assert 'full_name' in fvs_baseline
         assert 'immutable_facts' in fvs_baseline
@@ -301,7 +304,7 @@ class TestFVSFixtureIntegrity:
         assert 'work_history' in immutable
         assert 'education' in immutable
 
-    def test_hallucination_fixture_has_violations(self, fvs_hallucination: dict):
+    def test_hallucination_fixture_has_violations(self, fvs_hallucination: Dict[str, Any]) -> None:
         """Hallucination fixture should contain known violations."""
         tailored = fvs_hallucination['tailored_cv_output']
 

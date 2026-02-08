@@ -1,26 +1,51 @@
 """Pytest fixtures for CV Tailoring tests."""
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any, Dict, List
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import AsyncMock, Mock
+
 import pytest
 
 from careervp.models.cv_models import (
-    UserCV,
-    WorkExperience,
+    Certification,
     Education,
     Skill,
     SkillLevel,
-    Certification,
+    UserCV,
+    WorkExperience,
 )
 from careervp.models.cv_tailoring_models import (
-    TailorCVRequest,
-    TailoringPreferences,
-    TailoredCVResponse,
-    TailoredCV,
     ChangeLog,
+    TailorCVRequest,
+    TailoredCV,
+    TailoredCVResponse,
+    TailoringPreferences,
 )
 from careervp.models.fvs_models import FVSBaseline, ImmutableFact
+
+
+@pytest.fixture
+def lambda_context():
+    """Mock AWS Lambda context for handler tests."""
+
+    class MockLambdaContext:
+        def __init__(self):
+            self.aws_request_id = "test-request-id"
+            self.function_name = "cv_tailoring_handler"
+            self.function_version = "1"
+            self.invoked_function_arn = (
+                "arn:aws:lambda:us-east-1:123456789:function:cv_tailoring_handler"
+            )
+            self.log_group_name = "/aws/lambda/cv_tailoring_handler"
+            self.log_stream_name = "2024/01/01/[$LATEST]abc123"
+            self.memory_limit_in_mb = 256
+            self.client_context = None
+            self.identity = None
+
+        def get_remaining_time_in_millis(self):
+            return 30000
+
+    return MockLambdaContext()
 
 
 @pytest.fixture
@@ -78,6 +103,7 @@ def sample_master_cv() -> UserCV:
             Skill(name="Python", level=SkillLevel.EXPERT, years_of_experience=8),
             Skill(name="AWS", level=SkillLevel.ADVANCED, years_of_experience=5),
             Skill(name="Docker", level=SkillLevel.ADVANCED, years_of_experience=4),
+            Skill(name="Kubernetes", level=SkillLevel.ADVANCED, years_of_experience=3),
             Skill(name="React", level=SkillLevel.INTERMEDIATE, years_of_experience=3),
             Skill(
                 name="PostgreSQL", level=SkillLevel.INTERMEDIATE, years_of_experience=4
@@ -162,6 +188,7 @@ def sample_fvs_baseline(sample_master_cv: UserCV) -> FVSBaseline:
     return FVSBaseline(
         cv_id=sample_master_cv.cv_id,
         user_id=sample_master_cv.user_id,
+        full_name=sample_master_cv.full_name,
         immutable_facts=[
             ImmutableFact(
                 fact_type="employment_date",
@@ -169,34 +196,14 @@ def sample_fvs_baseline(sample_master_cv: UserCV) -> FVSBaseline:
                 context="TechCorp Inc - Senior Software Engineer - start_date",
             ),
             ImmutableFact(
-                fact_type="employment_date",
-                value="2016-06-01",
-                context="StartupXYZ - Software Engineer - start_date",
-            ),
-            ImmutableFact(
-                fact_type="employment_date",
-                value="2019-12-31",
-                context="StartupXYZ - Software Engineer - end_date",
-            ),
-            ImmutableFact(
                 fact_type="company_name",
                 value="TechCorp Inc",
-                context="Work experience",
-            ),
-            ImmutableFact(
-                fact_type="company_name",
-                value="StartupXYZ",
                 context="Work experience",
             ),
             ImmutableFact(
                 fact_type="job_title",
                 value="Senior Software Engineer",
                 context="TechCorp Inc",
-            ),
-            ImmutableFact(
-                fact_type="job_title",
-                value="Software Engineer",
-                context="StartupXYZ",
             ),
             ImmutableFact(
                 fact_type="email",
@@ -220,6 +227,14 @@ def sample_fvs_baseline(sample_master_cv: UserCV) -> FVSBaseline:
             ),
         ],
         created_at=datetime.now(UTC),
+        email=sample_master_cv.email,
+        phone=sample_master_cv.phone,
+        location=sample_master_cv.location,
+        experience_dates=["2020-01-15"],
+        education_dates=["2012-09-01-2016-05-31"],
+        companies=["TechCorp Inc"],
+        skills=["Python", "AWS", "Docker", "Kubernetes", "React", "PostgreSQL"],
+        certifications=["AWS Certified Solutions Architect"],
     )
 
 
@@ -348,6 +363,18 @@ def sample_tailor_cv_request(
         job_description=sample_job_description,
         preferences=sample_tailoring_preferences,
     )
+
+
+@pytest.fixture
+def sample_tailor_request(sample_tailor_cv_request: TailorCVRequest) -> Dict[str, Any]:
+    """Dict payload for handler tests."""
+    return sample_tailor_cv_request.model_dump()
+
+
+@pytest.fixture
+def sample_tailored_cv(sample_tailored_cv_response: TailoredCVResponse) -> TailoredCV:
+    """Convenience fixture for tailored CV instance."""
+    return sample_tailored_cv_response.tailored_cv
 
 
 @pytest.fixture

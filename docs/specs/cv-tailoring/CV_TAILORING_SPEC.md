@@ -92,6 +92,19 @@ class TailoringPreferences(BaseModel):
     )
 
 
+class GapAnalysisResponse(BaseModel):
+    """Single gap analysis response."""
+    question_id: str
+    question_text: str
+    response_text: str
+    skills_mentioned: list[str]
+
+
+class GapAnalysisResponses(BaseModel):
+    """Collection of gap analysis responses."""
+    responses: list[GapAnalysisResponse]
+
+
 class TailorCVRequest(BaseModel):
     """Request to generate a tailored CV."""
 
@@ -107,6 +120,10 @@ class TailorCVRequest(BaseModel):
         default=None,
         description="Optional job ID for tracking"
     )
+    gap_responses: Optional[GapAnalysisResponses] = Field(
+        default=None,
+        description="Optional gap analysis responses for additional context"
+    )
     preferences: Optional[TailoringPreferences] = Field(
         default=None,
         description="Optional tailoring preferences"
@@ -118,6 +135,16 @@ class TailorCVRequest(BaseModel):
                 "cv_id": "cv_abc123",
                 "job_description": "We are seeking a Senior Python Developer...",
                 "job_id": "job_xyz789",
+                "gap_responses": {
+                    "responses": [
+                        {
+                            "question_id": "q1",
+                            "question_text": "Describe your experience with Python and Django",
+                            "response_text": "I have 5 years of experience building REST APIs with Django...",
+                            "skills_mentioned": ["Python", "Django", "REST APIs"]
+                        }
+                    ]
+                },
                 "preferences": {
                     "tone": "professional",
                     "length": "standard",
@@ -134,6 +161,8 @@ class TailorCVRequest(BaseModel):
 | `cv_id` | ✅ Yes | string | Non-empty | Master CV identifier |
 | `job_description` | ✅ Yes | string | 50-50,000 chars | Target job description |
 | `job_id` | ❌ No | string | Optional | Job tracking ID |
+| `gap_responses` | ❌ No | object | Optional | Gap analysis responses for context |
+| `gap_responses.responses` | ❌ No | array | GapAnalysisResponse[] | Array of gap responses |
 | `preferences` | ❌ No | object | Optional | Tailoring preferences |
 | `preferences.tone` | ❌ No | enum | 'professional' \| 'casual' \| 'technical' | Tone of tailored CV |
 | `preferences.length` | ❌ No | enum | 'compact' \| 'standard' \| 'detailed' | Target length |
@@ -660,8 +689,37 @@ components:
         job_id:
           type: string
           description: Optional job ID for tracking
+        gap_responses:
+          $ref: '#/components/schemas/GapAnalysisResponses'
         preferences:
           $ref: '#/components/schemas/TailoringPreferences'
+
+    GapAnalysisResponses:
+      type: object
+      properties:
+        responses:
+          type: array
+          items:
+            $ref: '#/components/schemas/GapAnalysisResponse'
+
+    GapAnalysisResponse:
+      type: object
+      required:
+        - question_id
+        - question_text
+        - response_text
+        - skills_mentioned
+      properties:
+        question_id:
+          type: string
+        question_text:
+          type: string
+        response_text:
+          type: string
+        skills_mentioned:
+          type: array
+          items:
+            type: string
 
     TailoringPreferences:
       type: object

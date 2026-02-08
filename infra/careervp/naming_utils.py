@@ -106,6 +106,17 @@ class NamingUtils:
     def queue_name(self, feature: str) -> str:
         return self.resource_name(feature, "queue")
 
+    def dlq_name(self, feature: str) -> str:
+        """Generate dead letter queue name."""
+        return self.resource_name(feature, "dlq")
+
+    def results_bucket_name(
+        self, purpose: str, hash_override: str | None = None
+    ) -> str:
+        """Generate results bucket name (different prefix for results buckets)."""
+        suffix = self._bucket_suffix(hash_override)
+        return f"{self.prefix}-{self.environment}-{_slug(purpose)}-{self._region_code()}-{suffix}"
+
     def bus_name(self, feature: str) -> str:
         return self.resource_name(feature, "bus")
 
@@ -124,7 +135,7 @@ class NamingUtils:
     def _bucket_suffix(self, hash_override: str | None) -> str:
         if hash_override:
             return _slug(hash_override)[:6]
-        hasher = hashlib.sha1()
+        hasher = hashlib.sha256()
         hasher.update(
             f"{self.account_id}-{self.region}-{self.environment}".encode("utf-8")
         )

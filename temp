@@ -1,13 +1,25 @@
-1. Continue with your Update Todos2. Remove the cookbook "orders" service and any related dependencies NOT related to CareerVP's requirements.3. Tooling expects a cdk package that isn’t present (source lives in infra/), so dependency resolution and every test that imports cdk.careervp.* will fail until the package path or imports are fixed4. Infrastructure constants are inconsistent: service/table names still default to the cookbook “Orders” service and are even defined twice, which will propagate wrong stack names, metric namespaces, and API paths if you deploy as-is (infra/careervp/constants.py:4-25).5. Onboarding materials are minimal—README and PROGRESS give almost no setup steps, and the root package.json only pins CDK without scripts, so new contributors lack instructions for running uv, CDK synth, or tests (README.md:1, package.json:1).6. Shift the backend away from the placeholder order flow by implementing the CV parser pipeline per the spec, exposing a CV upload handler, wiring UserCV persistence, and covering it with unit/fixture-driven tests (docs/specs/01-cv-parser.md:12, src/backend/careervp/models/cv.py:1).7. Align infrastructure and tooling: package the CDK code so cdk.careervp.* imports resolve (or update imports to infra), and rename constants/resources to the actual CareerVP services to avoid drift before running cdk synth (src/backend/pyproject.toml:72, infra/careervp/constants.py:4-25).think harder
+cd src/backend
+cat <<'PY' | uv run python -
+import json, os
+from unittest.mock import MagicMock
+from careervp.handlers import vpr_handler
 
+os.environ.setdefault('DYNAMODB_TABLE_NAME', 'local-test-table')
+# ...seed Dynamo using moto or point to a dev table...
 
+event = {'body': json.dumps({
+    "application_id": "app-123",
+    "user_id": "user-abc",
+    "job_posting": {
+        "company_name": "TechCo",
+        "role_title": "Senior Engineer",
+        "description": "Build systems.",
+        "responsibilities": ["Own services"],
+        "requirements": ["3+ years experience"],
+        "nice_to_have": [],
+        "language": "en"
+    }
+})}
 
-The foundation is set. We are at 97% confidence. Let's finish the CV Parsing Engine.
-
-
-
-Goal 1: Infra. Implement the DynamoDB Users table (Single Table Design) and S3 CV Bucket in 'infra/careervp/api_db_construct.py'. Goal 2: Logic. Implement 'src/backend/careervp/logic/cv_parser.py'. Use Haiku 4.5 via our new LLMClient. Ensure Hebrew RTL support. Goal 3: Test. Write a pytest using 'moto' that validates the parser against 'tests/fixtures/fvs_baseline_cv.json'. If the immutable facts don't match exactly, the test must fail.
-
-
-
-Follow the plan.md and update PROGRESS.md upon success.
+print(vpr_handler.lambda_handler(event, MagicMock()))
+PY

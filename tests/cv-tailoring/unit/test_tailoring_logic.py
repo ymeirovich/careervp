@@ -126,7 +126,7 @@ def test_tailor_cv_llm_timeout(
     # Assert
     assert result.success is False
     assert result.code == ResultCode.LLM_TIMEOUT
-    assert "timeout" in result.message.lower()
+    assert "timed out" in result.message.lower()
 
 
 def test_tailor_cv_fvs_violation(
@@ -135,11 +135,13 @@ def test_tailor_cv_fvs_violation(
     """Test CV tailoring rejects output with FVS violations."""
     # Arrange
     mock_llm = Mock()
+    # Convert WorkExperience objects to dicts for the LLM response
+    work_exp_dicts = [exp.model_dump() for exp in sample_master_cv.work_experience]
     mock_llm.generate = AsyncMock(
         return_value={
             "full_name": sample_master_cv.full_name,
             "email": "wrong.email@example.com",  # CRITICAL violation
-            "work_experience": sample_master_cv.work_experience,
+            "work_experience": work_exp_dicts,
         }
     )
 
@@ -241,6 +243,9 @@ def test_calculate_relevance_scores_no_match():
     cv = Mock(spec=UserCV)
     cv.skills = []
     cv.work_experience = []
+    cv.professional_summary = ""
+    cv.education = []
+    cv.certifications = []
     job_description = "Looking for Rust developer with blockchain experience"
 
     # Act

@@ -128,3 +128,20 @@ class CVParseResponse(BaseModel):
     language_detected: Literal['en', 'he'] = 'en'
     parse_time_ms: int = 0
     error: str | None = None
+
+
+# Backward compatibility alias for tests expecting CV in this module.
+CV = UserCV
+
+__all__ = [
+    'ContactInfo',
+    'WorkExperience',
+    'Education',
+    'Certification',
+    'UserCV',
+    'ImmutableFacts',
+    'FVSBaseline',
+    'CVParseRequest',
+    'CVParseResponse',
+    'CV',
+]

@@ -178,7 +178,49 @@ COVER_LETTER_LAMBDA: Final[str] = os.environ.get(
 )
 
 # =============================================================================
-# OBSERVABILITY
+# VPR ASYNC ARCHITECTURE
+# =============================================================================
+# Queue names for VPR async processing
+VPR_JOBS_QUEUE_NAME: Final[str] = os.environ.get(
+    'VPR_JOBS_QUEUE_NAME',
+    get_resource_name('vpr-jobs', 'queue'),
+)
+
+VPR_JOBS_DLQ_NAME: Final[str] = os.environ.get(
+    'VPR_JOBS_DLQ_NAME',
+    get_resource_name('vpr-jobs-dlq', 'queue'),
+)
+
+# Jobs table for async job tracking
+VPR_JOBS_TABLE_NAME: Final[str] = os.environ.get(
+    'VPR_JOBS_TABLE_NAME',
+    get_table_name('vpr-jobs'),
+)
+
+# Results bucket for VPR async output
+VPR_RESULTS_BUCKET_NAME: Final[str] = os.environ.get(
+    'VPR_RESULTS_BUCKET_NAME',
+    get_bucket_name('vpr-results'),
+)
+
+# Lambda function names for async handlers
+VPR_SUBMIT_LAMBDA_NAME: Final[str] = os.environ.get(
+    'VPR_SUBMIT_LAMBDA_NAME',
+    get_lambda_name('vpr-submit'),
+)
+
+VPR_WORKER_LAMBDA_NAME: Final[str] = os.environ.get(
+    'VPR_WORKER_LAMBDA_NAME',
+    get_lambda_name('vpr-worker'),
+)
+
+VPR_STATUS_LAMBDA_NAME: Final[str] = os.environ.get(
+    'VPR_STATUS_LAMBDA_NAME',
+    get_lambda_name('vpr-status'),
+)
+
+# =============================================================================
+# LLM CONFIGURATION
 # =============================================================================
 METRICS_NAMESPACE: Final[str] = 'careervp_kpi'
 METRICS_DIMENSION_KEY: Final[str] = 'service'

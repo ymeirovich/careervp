@@ -29,6 +29,33 @@ IDEMPOTENCY_TABLE_NAME = "idempotency"
 TABLE_NAME_OUTPUT = "UsersTableOutput"
 SESSIONS_TABLE_OUTPUT = "SessionsTableOutput"
 IDEMPOTENCY_TABLE_NAME_OUTPUT = "IdempotencyTableOutput"
+JOBS_TABLE_OUTPUT = "JobsTableOutput"
+
+# =============================================================================
+# SQS QUEUES
+# =============================================================================
+# VPR Async Architecture queues
+VPR_JOBS_QUEUE = "vpr-jobs"
+VPR_JOBS_DLQ = "vpr-jobs-dlq"
+
+# =============================================================================
+# S3 BUCKETS
+# =============================================================================
+# VPR Async Architecture buckets
+VPR_RESULTS_BUCKET = "vpr-results"
+
+# =============================================================================
+# LAMBDA FUNCTIONS
+# =============================================================================
+# VPR Async Architecture Lambdas
+VPR_SUBMIT_LAMBDA = "vpr-submit"
+VPR_WORKER_LAMBDA = "vpr-worker"
+VPR_STATUS_LAMBDA = "vpr-status"
+
+# VPR Async Lambda features
+VPR_SUBMIT_FEATURE = "vpr-submit"
+VPR_WORKER_FEATURE = "vpr-worker"
+VPR_STATUS_FEATURE = "vpr-status"
 
 # =============================================================================
 # S3 BUCKETS
@@ -45,6 +72,7 @@ API_ROOT_RESOURCE = "api"
 GW_RESOURCE = "cv"
 GW_RESOURCE_VPR = "vpr"
 GW_RESOURCE_USERS = "users"
+GW_RESOURCE_COMPANY_RESEARCH = "company-research"
 
 # Swagger
 SWAGGER_RESOURCE = "swagger"
@@ -61,6 +89,8 @@ VPR_GENERATOR_LAMBDA = "VPRGenerator"
 VPR_GENERATOR_FEATURE = "vpr-generator"
 CV_TAILOR_LAMBDA = "CVTailor"
 COVER_LETTER_LAMBDA = "CoverLetter"
+COMPANY_RESEARCH_LAMBDA = "CompanyResearch"
+COMPANY_RESEARCH_FEATURE = "company-research"
 LAMBDA_SERVICE_NAME = "lambda"
 
 LAMBDA_LAYER_NAME = "common"
@@ -84,6 +114,12 @@ MONITORING_TOPIC = "MonitoringTopic"
 # =============================================================================
 CONFIGURATION_NAME = "careervp_config"
 CONFIGURATION_MAX_AGE_MINUTES = "5"
+
+# =============================================================================
+# SSM PARAMETERS
+# =============================================================================
+ANTHROPIC_API_KEY_SSM_PARAM = f"/careervp/{ENVIRONMENT}/anthropic-api-key"
+ANTHROPIC_API_KEY_ENV_VAR = "ANTHROPIC_API_KEY_SSM_PARAM"
 
 # =============================================================================
 # BUILD PATHS

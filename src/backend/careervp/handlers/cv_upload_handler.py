@@ -10,37 +10,37 @@ import json
 import time
 import uuid
 from http import HTTPStatus
+from typing import Any
 
 import boto3
 from aws_lambda_env_modeler import get_environment_variables
 from aws_lambda_powertools.event_handler import (
-    APIGatewayRestResolver,
     Response,
     content_types,
 )
 from aws_lambda_powertools.logging.correlation_paths import API_GATEWAY_REST
 from aws_lambda_powertools.utilities.parser import ValidationError, parse
 from aws_lambda_powertools.utilities.typing import LambdaContext
+from botocore.client import BaseClient
 from botocore.exceptions import ClientError
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.handlers.models.env_vars import CVUploadEnvVars
 from careervp.handlers.utils.observability import logger, tracer
+from careervp.handlers.utils.rest_api_resolver import app
 from careervp.logic.cv_parser import create_cv_parse_response, parse_cv
 from careervp.models.cv import CVParseRequest, CVParseResponse
 from careervp.models.result import ResultCode
 
-app = APIGatewayRestResolver()
 
-
-def _get_s3_client():
+def _get_s3_client() -> BaseClient:
     """Get S3 client (separated for testability)."""
     return boto3.client('s3')
 
 
 @app.post('/api/cv')
 @tracer.capture_method(capture_response=False)
-def upload_cv() -> Response:
+def upload_cv() -> Response[str]:
     """
     Handle CV upload and parsing request.
 
@@ -230,6 +230,6 @@ def _get_status_code_for_result_code(code: str) -> int:
 
 @logger.inject_lambda_context(correlation_id_path=API_GATEWAY_REST)
 @tracer.capture_lambda_handler(capture_response=False)
-def lambda_handler(event: dict, context: LambdaContext) -> dict:
+def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     """Lambda entry point for CV upload."""
     return app.resolve(event, context)
