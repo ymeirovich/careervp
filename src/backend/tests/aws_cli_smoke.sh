@@ -248,7 +248,21 @@ PY
 test_cv_parser_lambda() {
   log "Testing CV Parser Lambda"
   local user_id="cli-smoke-user"
-  local cv_text="Seasoned product engineer with 10+ years leading cross-functional teams, shipping cloud products, improving reliability, and mentoring engineers across distributed environments."
+  # CV text must include a name for LLM extraction to succeed
+  local cv_text="John Smith
+Senior Product Engineer
+Email: john.smith@example.com | Phone: +1-555-123-4567 | Location: San Francisco, CA
+
+Professional Summary:
+Seasoned product engineer with 10+ years leading cross-functional teams, shipping cloud products, improving reliability, and mentoring engineers across distributed environments.
+
+Experience:
+TechCorp Inc - Senior Software Engineer (2020 - Present)
+- Led development of cloud-native microservices
+- Reduced API latency by 40%
+
+Education:
+BS Computer Science - Stanford University (2010)"
   local file_b64
   file_b64="$(printf '%s' "$cv_text" | base64)"
   local body_json
