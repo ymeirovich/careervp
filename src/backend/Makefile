@@ -30,6 +30,10 @@ format:
 format-fix:
 	uv run ruff format .
 
+check-all: format format-fix
+	@echo "Running mypy strict..."
+	uv run mypy careervp --strict
+
 lint: format
 	@echo "Running mypy"
 	$(MAKE) mypy-lint
