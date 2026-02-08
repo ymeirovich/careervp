@@ -15,6 +15,8 @@ from typing import Any, Iterable
 
 from careervp.handlers.utils.observability import logger
 from careervp.models.cv import UserCV
+from careervp.models.fvs import FVSValidationResult as TailoringFVSValidationResult
+from careervp.models.fvs_models import FVSBaseline as TailoringFVSBaseline
 from careervp.models.result import Result, ResultCode
 from careervp.models.vpr import VPR
 
@@ -367,3 +369,21 @@ def _matches_known_role(candidate: str, known_roles: Iterable[str]) -> bool:
         if SequenceMatcher(None, normalized_candidate, normalized_role).ratio() >= 0.82:
             return True
     return False
+
+
+# Phase 9 CV Tailoring helpers (delegates to cv_tailoring implementation)
+def create_fvs_baseline(master_cv: Any) -> TailoringFVSBaseline:
+    """Create FVS baseline for CV tailoring flow."""
+    from careervp.logic.cv_tailoring import create_fvs_baseline as _create_baseline
+
+    return _create_baseline(master_cv)
+
+
+def validate_tailored_cv(
+    baseline: TailoringFVSBaseline,
+    tailored_cv: Any,
+) -> Result[TailoringFVSValidationResult]:
+    """Validate tailored CV against FVS baseline for CV tailoring flow."""
+    from careervp.logic.cv_tailoring import validate_tailored_cv as _validate
+
+    return _validate(baseline, tailored_cv)

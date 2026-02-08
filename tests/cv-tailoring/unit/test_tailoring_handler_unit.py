@@ -21,7 +21,9 @@ def test_handler_success_200(sample_tailor_request, sample_tailored_cv, lambda_c
     }
 
     with patch("careervp.handlers.cv_tailoring_handler.tailor_cv") as mock_tailor:
-        mock_tailor.return_value = Result.success(sample_tailored_cv)
+        mock_tailor.return_value = Result(
+            success=True, data=sample_tailored_cv, code=ResultCode.CV_TAILORED_SUCCESS
+        )
 
         # Act
         response = handler(event, lambda_context)
@@ -47,7 +49,9 @@ def test_handler_invalid_cv_id_404(lambda_context):
     }
 
     with patch("careervp.handlers.cv_tailoring_handler.tailor_cv") as mock_tailor:
-        mock_tailor.return_value = Result.error(ResultCode.CV_NOT_FOUND, "CV not found")
+        mock_tailor.return_value = Result(
+            success=False, code=ResultCode.CV_NOT_FOUND, error="CV not found"
+        )
 
         # Act
         response = handler(event, lambda_context)
@@ -119,9 +123,10 @@ def test_handler_fvs_violation_400(lambda_context):
     }
 
     with patch("careervp.handlers.cv_tailoring_handler.tailor_cv") as mock_tailor:
-        mock_tailor.return_value = Result.error(
-            ResultCode.FVS_HALLUCINATION_DETECTED,
-            "FVS detected hallucinations",
+        mock_tailor.return_value = Result(
+            success=False,
+            code=ResultCode.FVS_HALLUCINATION_DETECTED,
+            error="FVS detected hallucinations",
             data={"violations": [{"field": "dates", "severity": "CRITICAL"}]},
         )
 
@@ -149,8 +154,8 @@ def test_handler_llm_timeout_504(lambda_context):
     }
 
     with patch("careervp.handlers.cv_tailoring_handler.tailor_cv") as mock_tailor:
-        mock_tailor.return_value = Result.error(
-            ResultCode.LLM_TIMEOUT, "LLM request timed out"
+        mock_tailor.return_value = Result(
+            success=False, code=ResultCode.LLM_TIMEOUT, error="LLM request timed out"
         )
 
         # Act
@@ -177,8 +182,10 @@ def test_handler_rate_limit_exceeded_429(lambda_context):
     }
 
     with patch("careervp.handlers.cv_tailoring_handler.tailor_cv") as mock_tailor:
-        mock_tailor.return_value = Result.error(
-            ResultCode.RATE_LIMIT_EXCEEDED, "Rate limit exceeded"
+        mock_tailor.return_value = Result(
+            success=False,
+            code=ResultCode.RATE_LIMIT_EXCEEDED,
+            error="Rate limit exceeded",
         )
 
         # Act
@@ -227,8 +234,10 @@ def test_handler_forbidden_403(lambda_context):
     }
 
     with patch("careervp.handlers.cv_tailoring_handler.tailor_cv") as mock_tailor:
-        mock_tailor.return_value = Result.error(
-            ResultCode.FORBIDDEN, "User does not have access to this CV"
+        mock_tailor.return_value = Result(
+            success=False,
+            code=ResultCode.FORBIDDEN,
+            error="User does not have access to this CV",
         )
 
         # Act
@@ -318,7 +327,9 @@ def test_handler_with_preferences(sample_tailored_cv, lambda_context):
     }
 
     with patch("careervp.handlers.cv_tailoring_handler.tailor_cv") as mock_tailor:
-        mock_tailor.return_value = Result.success(sample_tailored_cv)
+        mock_tailor.return_value = Result(
+            success=True, data=sample_tailored_cv, code=ResultCode.CV_TAILORED_SUCCESS
+        )
 
         # Act
         response = handler(event, lambda_context)
@@ -375,7 +386,9 @@ def test_handler_response_includes_download_url(sample_tailored_cv, lambda_conte
     }
 
     with patch("careervp.handlers.cv_tailoring_handler.tailor_cv") as mock_tailor:
-        mock_tailor.return_value = Result.success(tailored_result)
+        mock_tailor.return_value = Result(
+            success=True, data=tailored_result, code=ResultCode.CV_TAILORED_SUCCESS
+        )
 
         # Act
         response = handler(event, lambda_context)
@@ -403,7 +416,9 @@ def test_handler_logs_request_id(sample_tailored_cv, lambda_context):
         patch("careervp.handlers.cv_tailoring_handler.tailor_cv") as mock_tailor,
         patch("careervp.handlers.cv_tailoring_handler.logger") as mock_logger,
     ):
-        mock_tailor.return_value = Result.success(sample_tailored_cv)
+        mock_tailor.return_value = Result(
+            success=True, data=sample_tailored_cv, code=ResultCode.CV_TAILORED_SUCCESS
+        )
 
         # Act
         _response = handler(event, lambda_context)
@@ -453,7 +468,9 @@ def test_handler_cors_headers_present(sample_tailored_cv, lambda_context):
     }
 
     with patch("careervp.handlers.cv_tailoring_handler.tailor_cv") as mock_tailor:
-        mock_tailor.return_value = Result.success(sample_tailored_cv)
+        mock_tailor.return_value = Result(
+            success=True, data=sample_tailored_cv, code=ResultCode.CV_TAILORED_SUCCESS
+        )
 
         # Act
         response = handler(event, lambda_context)
