@@ -49,12 +49,20 @@ jobs:
           role-session-name: deploy-dev-${{ github.sha }}
           aws-region: ${{ env.AWS_REGION }}
       - name: Ensure SSM Parameter exists
+        env:
+          ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          aws ssm put-parameter \
-            --name "/careervp/dev/anthropic-api-key" \
-            --value "${{ secrets.ANTHROPIC_API_KEY }}" \
-            --type SecureString \
-            --overwrite
+          if [ -n "$ANTHROPIC_KEY" ]; then
+            aws ssm put-parameter \
+              --name "/careervp/dev/anthropic-api-key" \
+              --value "$ANTHROPIC_KEY" \
+              --type SecureString \
+              --overwrite
+          else
+            echo "::warning::ANTHROPIC_API_KEY secret not set. Checking if SSM parameter exists..."
+            aws ssm get-parameter --name "/careervp/dev/anthropic-api-key" --query "Parameter.Name" --output text || \
+              echo "::warning::SSM parameter /careervp/dev/anthropic-api-key not found. Set ANTHROPIC_API_KEY secret or create manually."
+          fi
       - name: Build and Deploy
         working-directory: src/backend
         env:
@@ -93,12 +101,21 @@ jobs:
           role-session-name: deploy-${{ inputs.environment }}-${{ github.sha }}
           aws-region: ${{ env.AWS_REGION }}
       - name: Ensure SSM Parameter exists
+        env:
+          ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TARGET_ENV: ${{ inputs.environment }}
         run: |
-          aws ssm put-parameter \
-            --name "/careervp/${{ inputs.environment }}/anthropic-api-key" \
-            --value "${{ secrets.ANTHROPIC_API_KEY }}" \
-            --type SecureString \
-            --overwrite
+          if [ -n "$ANTHROPIC_KEY" ]; then
+            aws ssm put-parameter \
+              --name "/careervp/${TARGET_ENV}/anthropic-api-key" \
+              --value "$ANTHROPIC_KEY" \
+              --type SecureString \
+              --overwrite
+          else
+            echo "::warning::ANTHROPIC_API_KEY secret not set. Checking if SSM parameter exists..."
+            aws ssm get-parameter --name "/careervp/${TARGET_ENV}/anthropic-api-key" --query "Parameter.Name" --output text || \
+              echo "::warning::SSM parameter /careervp/${TARGET_ENV}/anthropic-api-key not found. Set ANTHROPIC_API_KEY secret or create manually."
+          fi
       - name: Build and Deploy
         working-directory: src/backend
         env:
