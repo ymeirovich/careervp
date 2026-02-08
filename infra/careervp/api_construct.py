@@ -99,6 +99,19 @@ class ApiConstruct(Construct):
             self.api_db.db,
             appconfig_app_name,
         )
+
+        # CV Tailoring - POST /api/cv-tailoring
+        cv_tailoring_resource = api_resource.add_resource(
+            constants.GW_RESOURCE_CV_TAILORING
+        )
+        self.cv_tailoring_func = self._add_cv_tailoring_lambda_integration(
+            cv_tailoring_resource,
+            self.lambda_role,
+            self.api_db.db,
+            appconfig_app_name,
+            self.api_db.idempotency_db,
+        )
+
         self._build_swagger_endpoints(
             rest_api=self.rest_api, dest_func=self.cv_upload_func
         )
@@ -112,6 +125,7 @@ class ApiConstruct(Construct):
                 self.cv_upload_func,
                 self.vpr_submit_func,
                 self.company_research_func,
+                self.cv_tailoring_func,
             ],
             naming=naming,
         )
@@ -672,6 +686,64 @@ class ApiConstruct(Construct):
         # Add SQS event source
         lambda_function.add_event_source(
             eventsources.SqsEventSource(queue, batch_size=1)
+        )
+
+        return lambda_function
+
+    def _add_cv_tailoring_lambda_integration(
+        self,
+        api_resource: aws_apigateway.Resource,
+        role: iam.Role,
+        db: dynamodb.TableV2,
+        appconfig_app_name: str,
+        idempotency_table: dynamodb.TableV2,
+    ) -> _lambda.Function:
+        """Add CV Tailoring Lambda integration - POST /api/cv-tailoring."""
+        function_name = self.naming.lambda_name(constants.CV_TAILOR_LAMBDA.lower())
+        log_group = logs.LogGroup(
+            self,
+            f"{constants.CV_TAILOR_LAMBDA}LogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
+        lambda_function = _lambda.Function(
+            self,
+            constants.CV_TAILOR_LAMBDA,
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.cv_tailoring_handler.handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-cv-tailoring",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                "CONFIGURATION_APP": appconfig_app_name,
+                "CONFIGURATION_ENV": constants.ENVIRONMENT,
+                "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,
+                "CONFIGURATION_MAX_AGE_MINUTES": constants.CONFIGURATION_MAX_AGE_MINUTES,
+                "TABLE_NAME": db.table_name,
+                "IDEMPOTENCY_TABLE_NAME": idempotency_table.table_name,
+                "AUTHORIZER_DISABLED": "true"
+                if constants.ENVIRONMENT != "prod"
+                else "false",
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+            },
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            timeout=Duration.seconds(120),  # 2 minutes for LLM processing
+            memory_size=512,
+            role=role,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+        # POST /api/cv-tailoring
+        api_resource.add_method(
+            http_method="POST",
+            integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
         )
 
         return lambda_function

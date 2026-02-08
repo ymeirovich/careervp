@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime
 from http import HTTPStatus
 from typing import Any, cast
 
-from careervp.dal.cv_dal import CVTable
+from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.logic.cv_tailoring import tailor_cv
 from careervp.logic.fvs_validator import create_fvs_baseline
-from careervp.logic.llm_client import LLMClient
-from careervp.models.cv_models import UserCV
+from careervp.logic.utils.llm_client import LLMRouter, TaskMode
+from careervp.models.cv import UserCV as DynamoUserCV
+from careervp.models.cv_models import UserCV, Skill, SkillLevel
 from careervp.models.cv_tailoring_models import TailorCVRequest, TailoringPreferences
 from careervp.models.result import Result, ResultCode
 from careervp.validation.cv_tailoring_validation import validate_job_description
@@ -37,6 +39,26 @@ except Exception:  # pragma: no cover - fallback for tests
     import logging
 
     logger = logging.getLogger(__name__)
+
+
+class TailoringLLMClient:
+    """Wrapper to adapt LLMRouter to the simple generate interface expected by cv_tailoring."""
+
+    def __init__(self, router: LLMRouter | None = None) -> None:
+        self._router = router or LLMRouter()
+
+    def generate(self, prompt: str, timeout: int = 300) -> dict[str, Any]:
+        """Call LLMRouter with TEMPLATE mode (Haiku) for CV tailoring."""
+        result = self._router.invoke(
+            mode=TaskMode.TEMPLATE,
+            system_prompt='You are an expert CV writer. Output valid JSON only.',
+            user_prompt=prompt,
+            max_tokens=4096,
+            temperature=0.3,
+        )
+        if not result.success or result.data is None:
+            raise Exception(result.error or 'LLM invocation failed')
+        return result.data
 
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C901
@@ -157,29 +179,88 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
     return _response(status_code, body, headers)
 
 
+def _convert_cv(dynamo_cv: DynamoUserCV) -> UserCV:
+    """Convert from DynamoDB UserCV to tailoring UserCV model."""
+    # Convert skills from strings to Skill objects if needed
+    skills = []
+    for skill in dynamo_cv.skills:
+        if isinstance(skill, str):
+            # Assume basic proficiency for converted skills
+            skills.append(Skill(name=skill, level=SkillLevel.INTERMEDIATE))
+        else:
+            skills.append(skill)
+
+    # Convert experience - build description from achievements
+    experience = []
+    for exp in dynamo_cv.experience:
+        dates = exp.dates.split(' – ') if ' – ' in exp.dates else [exp.dates, None]
+        achievements = exp.achievements or []
+        # Build description from role and achievements
+        description = f'{exp.role} at {exp.company}'
+        if achievements:
+            description += '. ' + '; '.join(achievements[:3])
+        experience.append(
+            {
+                'company': exp.company,
+                'role': exp.role,
+                'start_date': dates[0] or '',
+                'end_date': dates[1],
+                'current': 'Present' in (dates[1] or ''),
+                'description': description,
+                'achievements': achievements,
+            }
+        )
+
+    return UserCV(
+        cv_id=dynamo_cv.user_id,
+        user_id=dynamo_cv.user_id,
+        full_name=dynamo_cv.full_name,
+        email=dynamo_cv.contact_info.email or '',
+        phone=dynamo_cv.contact_info.phone,
+        location=dynamo_cv.contact_info.location,
+        professional_summary=dynamo_cv.professional_summary,
+        work_experience=experience,  # type: ignore
+        education=[
+            {
+                'institution': edu.institution,
+                'degree': edu.degree,
+                'field_of_study': edu.field_of_study,
+                'start_date': edu.graduation_date or '',
+                'end_date': edu.graduation_date,
+                'description': f'{edu.degree} at {edu.institution}',
+            }
+            for edu in dynamo_cv.education
+        ],
+        skills=skills,
+        certifications=[
+            {
+                'name': cert.name,
+                'issuer': cert.issuer,
+                'date': cert.date,
+            }
+            for cert in dynamo_cv.certifications
+        ],
+    )
+
+
 def _fetch_and_tailor_cv(request: TailorCVRequest) -> Result[Any]:
     """Fetch CV from DAL and invoke tailoring logic."""
-    dal = CVTable()
-    llm_client = LLMClient()
+    # Use TABLE_NAME environment variable (passed by CDK) or fallback to cv-table
+    table_name = os.environ.get('TABLE_NAME', 'cv-table')
+    dal = DynamoDalHandler(table_name=table_name)
+    llm_client = TailoringLLMClient()
 
-    response = dal.get_item({'cv_id': request.cv_id})
-    item = response.get('Item') if isinstance(response, dict) else None
-    if not item:
+    # Get CV by user_id using the correct DynamoDB key schema (pk=user_id, sk='CV')
+    dynamo_cv = dal.get_cv(request.user_id)
+    if not dynamo_cv:
         return Result(
             success=False,
-            error=f"CV with id '{request.cv_id}' not found",
+            error=f"CV for user '{request.user_id}' not found",
             code=ResultCode.CV_NOT_FOUND,
         )
 
-    if item.get('user_id') and request.user_id and item.get('user_id') != request.user_id:
-        return Result(
-            success=False,
-            error='User does not have access to this CV',
-            code=ResultCode.FORBIDDEN,
-        )
-
-    cv_data = item.get('cv_data') or item
-    master_cv = UserCV(**cv_data)
+    # Convert to tailoring UserCV model
+    master_cv = _convert_cv(dynamo_cv)
     baseline = create_fvs_baseline(master_cv)
 
     return tailor_cv(
@@ -193,7 +274,23 @@ def _fetch_and_tailor_cv(request: TailorCVRequest) -> Result[Any]:
 
 
 def _get_user_id(event: dict[str, Any]) -> str | None:
+    # Try to get user_id from Cognito authorizer claims first
     user_id = event.get('requestContext', {}).get('authorizer', {}).get('claims', {}).get('sub')
+    if user_id:
+        return cast(str | None, user_id)
+
+    # For testing: allow user_id in request body if no authorizer
+    # This bypass is only active when AUTHORIZER_DISABLED env var is set
+    if os.environ.get('AUTHORIZER_DISABLED') == 'true':
+        body = event.get('body') or '{}'
+        if isinstance(body, str):
+            try:
+                body = json.loads(body)
+            except json.JSONDecodeError:
+                pass
+        if isinstance(body, dict):
+            return body.get('user_id')
+
     return cast(str | None, user_id)
 
 

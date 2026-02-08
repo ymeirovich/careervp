@@ -73,6 +73,7 @@ GW_RESOURCE = "cv"
 GW_RESOURCE_VPR = "vpr"
 GW_RESOURCE_USERS = "users"
 GW_RESOURCE_COMPANY_RESEARCH = "company-research"
+GW_RESOURCE_CV_TAILORING = "cv-tailoring"
 
 # Swagger
 SWAGGER_RESOURCE = "swagger"
