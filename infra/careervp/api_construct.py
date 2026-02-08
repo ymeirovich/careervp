@@ -319,7 +319,7 @@ class ApiConstruct(Construct):
             self,
             f"{self.id_}{constants.LAMBDA_LAYER_NAME}",
             entry=constants.COMMON_LAYER_BUILD_FOLDER,
-            compatible_runtimes=[_lambda.Runtime.PYTHON_3_14],
+            compatible_runtimes=[_lambda.Runtime.PYTHON_3_13],
             removal_policy=RemovalPolicy.DESTROY,
             description="Common layer for the service",
             compatible_architectures=[_lambda.Architecture.X86_64],
@@ -349,7 +349,7 @@ class ApiConstruct(Construct):
         lambda_function = _lambda.Function(
             self,
             constants.CV_PARSER_LAMBDA,
-            runtime=_lambda.Runtime.PYTHON_3_14,
+            runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
             handler="careervp.handlers.cv_upload_handler.lambda_handler",
             function_name=function_name,
@@ -403,7 +403,7 @@ class ApiConstruct(Construct):
         lambda_function = _lambda.Function(
             self,
             constants.VPR_GENERATOR_LAMBDA,
-            runtime=_lambda.Runtime.PYTHON_3_14,
+            runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
             handler="careervp.handlers.vpr_handler.lambda_handler",
             function_name=function_name,
@@ -453,7 +453,7 @@ class ApiConstruct(Construct):
         lambda_function = _lambda.Function(
             self,
             constants.COMPANY_RESEARCH_LAMBDA,
-            runtime=_lambda.Runtime.PYTHON_3_14,
+            runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
             handler="careervp.handlers.company_research_handler.lambda_handler",
             function_name=function_name,
@@ -530,7 +530,7 @@ class ApiConstruct(Construct):
         lambda_function = _lambda.Function(
             self,
             constants.VPR_SUBMIT_LAMBDA,
-            runtime=_lambda.Runtime.PYTHON_3_14,
+            runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
             handler="careervp.handlers.vpr_submit_handler.lambda_handler",
             function_name=function_name,
@@ -586,7 +586,7 @@ class ApiConstruct(Construct):
         lambda_function = _lambda.Function(
             self,
             constants.VPR_STATUS_LAMBDA,
-            runtime=_lambda.Runtime.PYTHON_3_14,
+            runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
             handler="careervp.handlers.vpr_status_handler.lambda_handler",
             function_name=function_name,
@@ -642,7 +642,7 @@ class ApiConstruct(Construct):
         lambda_function = _lambda.Function(
             self,
             constants.VPR_WORKER_LAMBDA,
-            runtime=_lambda.Runtime.PYTHON_3_14,
+            runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
             handler="careervp.handlers.vpr_worker_handler.lambda_handler",
             function_name=function_name,
