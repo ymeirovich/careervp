@@ -14,10 +14,6 @@ Test Categories:
 """
 
 import pytest
-import time
-from datetime import datetime, timedelta
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, Any
 
 
 # ============================================================================
@@ -36,7 +32,7 @@ def valid_auth_token():
     """Valid JWT token for authenticated requests."""
     # TODO: Generate valid JWT token with correct claims
     assert True  # Placeholder
-    return "valid-jwt-token"
+    return 'valid-jwt-token'
 
 
 @pytest.fixture
@@ -44,13 +40,13 @@ def expired_auth_token():
     """Expired JWT token for testing token expiration."""
     # TODO: Generate expired JWT token
     assert True  # Placeholder
-    return "expired-jwt-token"
+    return 'expired-jwt-token'
 
 
 @pytest.fixture
 def invalid_auth_token():
     """Invalid/malformed JWT token."""
-    return "invalid-malformed-token"
+    return 'invalid-malformed-token'
 
 
 @pytest.fixture
@@ -58,7 +54,7 @@ def test_cv_id():
     """CV ID that exists in test database."""
     # TODO: Seed test database with CV data
     assert True  # Placeholder
-    return "cv-12345"
+    return 'cv-12345'
 
 
 @pytest.fixture
@@ -66,17 +62,17 @@ def test_vpr_id():
     """VPR ID that exists in test database."""
     # TODO: Seed test database with VPR data
     assert True  # Placeholder
-    return "vpr-67890"
+    return 'vpr-67890'
 
 
 @pytest.fixture
 def test_user_preferences():
     """User preferences for cover letter generation."""
     return {
-        "tone": "professional",
-        "length": "medium",
-        "focus_areas": ["technical_skills", "leadership"],
-        "company_research": True
+        'tone': 'professional',
+        'length': 'medium',
+        'focus_areas': ['technical_skills', 'leadership'],
+        'company_research': True
     }
 
 

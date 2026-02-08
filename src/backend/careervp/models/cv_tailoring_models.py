@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field, computed_field, field_serializer, model_validator
+from pydantic import BaseModel, Field, field_serializer, model_validator
 
 from careervp.models.cv_models import Certification, ContactInfo, Education, Skill, WorkExperience
 

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 import json
+from datetime import datetime
 from http import HTTPStatus
 from typing import Any, cast
 
@@ -125,13 +125,13 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
     try:
         result = _fetch_and_tailor_cv(request)
     except Exception as exc:  # noqa: BLE001
-        logger.info("CV tailoring failed", request_id=context.aws_request_id)
+        logger.info('CV tailoring failed', request_id=context.aws_request_id)
         return _response(
             HTTPStatus.INTERNAL_SERVER_ERROR,
             {
-                "success": False,
-                "code": ResultCode.INTERNAL_ERROR,
-                "message": str(exc),
+                'success': False,
+                'code': ResultCode.INTERNAL_ERROR,
+                'message': str(exc),
             },
             headers,
         )
@@ -162,8 +162,8 @@ def _fetch_and_tailor_cv(request: TailorCVRequest) -> Result[Any]:
     dal = CVTable()
     llm_client = LLMClient()
 
-    response = dal.get_item({"cv_id": request.cv_id})
-    item = response.get("Item") if isinstance(response, dict) else None
+    response = dal.get_item({'cv_id': request.cv_id})
+    item = response.get('Item') if isinstance(response, dict) else None
     if not item:
         return Result(
             success=False,
@@ -171,14 +171,14 @@ def _fetch_and_tailor_cv(request: TailorCVRequest) -> Result[Any]:
             code=ResultCode.CV_NOT_FOUND,
         )
 
-    if item.get("user_id") and request.user_id and item.get("user_id") != request.user_id:
+    if item.get('user_id') and request.user_id and item.get('user_id') != request.user_id:
         return Result(
             success=False,
-            error="User does not have access to this CV",
+            error='User does not have access to this CV',
             code=ResultCode.FORBIDDEN,
         )
 
-    cv_data = item.get("cv_data") or item
+    cv_data = item.get('cv_data') or item
     master_cv = UserCV(**cv_data)
     baseline = create_fvs_baseline(master_cv)
 

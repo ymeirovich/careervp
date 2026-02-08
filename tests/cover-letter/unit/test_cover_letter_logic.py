@@ -31,47 +31,47 @@ def mock_dal_handler():
 
     # Mock CV data
     dal.get_cv.return_value = {
-        "id": "cv-123",
-        "user_id": "user-123",
-        "work_experience": [
+        'id': 'cv-123',
+        'user_id': 'user-123',
+        'work_experience': [
             {
-                "title": "Senior Developer",
-                "company": "Tech Corp",
-                "duration": "2020-2023",
-                "achievements": ["Led team of 5", "Improved performance by 40%"]
+                'title': 'Senior Developer',
+                'company': 'Tech Corp',
+                'duration': '2020-2023',
+                'achievements': ['Led team of 5', 'Improved performance by 40%']
             }
         ],
-        "skills": ["Python", "React", "AWS"],
-        "education": [{"degree": "BS Computer Science", "school": "MIT"}]
+        'skills': ['Python', 'React', 'AWS'],
+        'education': [{'degree': 'BS Computer Science', 'school': 'MIT'}]
     }
 
     # Mock VPR data
     dal.get_vpr.return_value = {
-        "id": "vpr-123",
-        "user_id": "user-123",
-        "accomplishments": [
+        'id': 'vpr-123',
+        'user_id': 'user-123',
+        'accomplishments': [
             {
-                "title": "Cloud Migration",
-                "impact": "Reduced costs by $100k annually",
-                "metrics": "40% performance improvement"
+                'title': 'Cloud Migration',
+                'impact': 'Reduced costs by $100k annually',
+                'metrics': '40% performance improvement'
             }
         ]
     }
 
     # Mock job posting data
     dal.get_job_posting.return_value = {
-        "id": "job-123",
-        "title": "Senior Software Engineer",
-        "company": "Acme Inc",
-        "requirements": ["5+ years Python", "Cloud experience"],
-        "description": "We're looking for a senior engineer..."
+        'id': 'job-123',
+        'title': 'Senior Software Engineer',
+        'company': 'Acme Inc',
+        'requirements': ['5+ years Python', 'Cloud experience'],
+        'description': "We're looking for a senior engineer..."
     }
 
     # Mock company research
     dal.get_company_research.return_value = {
-        "company_name": "Acme Inc",
-        "culture": "Innovation-focused startup",
-        "recent_news": ["Series B funding", "New product launch"]
+        'company_name': 'Acme Inc',
+        'culture': 'Innovation-focused startup',
+        'recent_news': ['Series B funding', 'New product launch']
     }
 
     return dal
@@ -82,9 +82,9 @@ def mock_llm_client():
     """Mock LLM client for generation."""
     client = AsyncMock()
     client.generate.return_value = {
-        "content": "Dear Hiring Manager,\n\nI am excited to apply...",
-        "tokens_used": 450,
-        "model": "gpt-4"
+        'content': 'Dear Hiring Manager,\n\nI am excited to apply...',
+        'tokens_used': 450,
+        'model': 'gpt-4'
     }
     return client
 
@@ -93,11 +93,11 @@ def mock_llm_client():
 def sample_preferences():
     """Sample generation preferences."""
     return {
-        "tone": "professional",
-        "emphasis_areas": ["technical_skills", "leadership"],
-        "length": "medium",  # ~300 words
-        "include_salary_expectations": False,
-        "use_tailored_cv": True
+        'tone': 'professional',
+        'emphasis_areas': ['technical_skills', 'leadership'],
+        'length': 'medium',  # ~300 words
+        'include_salary_expectations': False,
+        'use_tailored_cv': True
     }
 
 
@@ -105,10 +105,10 @@ def sample_preferences():
 def sample_gap_responses():
     """Sample responses to address employment gaps."""
     return {
-        "gaps": [
+        'gaps': [
             {
-                "period": "2019-2020",
-                "explanation": "Pursued advanced certifications in cloud architecture"
+                'period': '2019-2020',
+                'explanation': 'Pursued advanced certifications in cloud architecture'
             }
         ]
     }
@@ -125,9 +125,9 @@ class TestGenerationSuccess:
     async def test_generate_cover_letter_success(self, mock_dal_handler, mock_llm_client):
         """Test successful cover letter generation with minimal inputs."""
         # Setup
-        user_id = "user-123"
-        cv_id = "cv-123"
-        job_id = "job-123"
+        user_id = 'user-123'
+        cv_id = 'cv-123'
+        job_id = 'job-123'
 
         # Execute
         # result = await generate_cover_letter(
