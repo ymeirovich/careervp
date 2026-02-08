@@ -27,7 +27,6 @@ AWS_REGION="${AWS_DEFAULT_REGION:-us-east-1}"
 ACCOUNT_EXPECTED="${AWS_DEFAULT_ACCOUNT:-}"
 
 CV_LAMBDA="${CV_PARSER_LAMBDA:-careervp-cv-parser-lambda-${ENVIRONMENT}}"
-VPR_LAMBDA="${VPR_GENERATOR_LAMBDA:-careervp-vpr-generator-lambda-${ENVIRONMENT}}"
 COMPANY_LAMBDA="${COMPANY_RESEARCH_LAMBDA:-careervp-company-research-lambda-${ENVIRONMENT}}"
 
 USERS_TABLE="${USERS_TABLE_NAME:-careervp-users-table-${ENVIRONMENT}}"
@@ -114,7 +113,6 @@ preflight() {
 check_resources() {
   log "Checking required resources exist"
   aws lambda get-function --function-name "$CV_LAMBDA" --region "$AWS_REGION" >/dev/null
-  aws lambda get-function --function-name "$VPR_LAMBDA" --region "$AWS_REGION" >/dev/null
   aws lambda get-function --function-name "$COMPANY_LAMBDA" --region "$AWS_REGION" >/dev/null
   aws dynamodb describe-table --table-name "$USERS_TABLE" --region "$AWS_REGION" >/dev/null
   aws dynamodb describe-table --table-name "$IDEMPOTENCY_TABLE" --region "$AWS_REGION" >/dev/null
@@ -122,7 +120,7 @@ check_resources() {
   bucket="$(resolve_cv_bucket)"
   [[ -n "$bucket" && "$bucket" != "None" ]] || { echo "CV bucket not found" >&2; exit 1; }
   log "Resolved CV bucket: ${bucket}"
-  debug "Resources: CV_LAMBDA=${CV_LAMBDA} VPR_LAMBDA=${VPR_LAMBDA} COMPANY_LAMBDA=${COMPANY_LAMBDA} USERS_TABLE=${USERS_TABLE} IDEMPOTENCY_TABLE=${IDEMPOTENCY_TABLE}"
+  debug "Resources: CV_LAMBDA=${CV_LAMBDA} COMPANY_LAMBDA=${COMPANY_LAMBDA} USERS_TABLE=${USERS_TABLE} IDEMPOTENCY_TABLE=${IDEMPOTENCY_TABLE}"
 }
 
 _update_lambda_env_var() {
@@ -173,7 +171,7 @@ ensure_anthropic_env() {
     exit 1
   fi
 
-  local lambdas=("$CV_LAMBDA" "$VPR_LAMBDA" "$COMPANY_LAMBDA")
+  local lambdas=("$CV_LAMBDA" "$COMPANY_LAMBDA")
   local missing=()
   for fn in "${lambdas[@]}"; do
     local key
@@ -519,9 +517,9 @@ main() {
   run_verify_script
   test_s3_crud
   test_cv_parser_lambda
-  test_vpr_generator_lambda
   test_company_research_lambda
-  test_anthropic_via_api_gateway
+  # VPR uses async architecture (submit/status/worker) - no standalone Lambda
+  # test_anthropic_via_api_gateway  # Requires VPR endpoint
   test_anthropic_ping
   log "All smoke tests completed"
 }
