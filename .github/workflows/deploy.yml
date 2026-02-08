@@ -75,6 +75,7 @@ jobs:
         working-directory: src/backend
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AUTO_SET_LAMBDA_ENV: '1'
         run: make smoke-test
 
   deploy-other:
@@ -134,4 +135,5 @@ jobs:
         env:
           ENVIRONMENT: ${{ inputs.environment }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AUTO_SET_LAMBDA_ENV: '1'
         run: make smoke-test
