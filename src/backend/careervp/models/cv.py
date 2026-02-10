@@ -181,9 +181,18 @@ class UserCV(BaseModel):
 
     @model_validator(mode='after')
     def _sync_contact_info(self) -> 'UserCV':
+        self._ensure_contact_info()
+        self._sync_from_self_to_contact()
+        self._sync_from_contact_to_self()
+        return self
+
+    def _ensure_contact_info(self) -> None:
+        """Create ContactInfo if None."""
         if self.contact_info is None:
             self.contact_info = ContactInfo()
 
+    def _sync_from_self_to_contact(self) -> None:
+        """Copy from self fields to contact_info (only if contact_info empty)."""
         if self.email and not self.contact_info.email:
             self.contact_info.email = self.email
         if self.phone and not self.contact_info.phone:
@@ -195,6 +204,8 @@ class UserCV(BaseModel):
         if self.full_name and not self.contact_info.name:
             self.contact_info.name = self.full_name
 
+    def _sync_from_contact_to_self(self) -> None:
+        """Copy from contact_info to self fields (if self field empty)."""
         if not self.email and self.contact_info.email:
             self.email = self.contact_info.email
         if not self.phone and self.contact_info.phone:
@@ -203,7 +214,6 @@ class UserCV(BaseModel):
             self.location = self.contact_info.location
         if not self.linkedin and self.contact_info.linkedin:
             self.linkedin = self.contact_info.linkedin
-        return self
 
     @property
     def work_experience(self) -> list[WorkExperience]:
