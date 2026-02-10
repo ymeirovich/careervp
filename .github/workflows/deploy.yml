@@ -153,11 +153,7 @@ jobs:
       - name: CFN State Guard
         env:
           # Dynamically compute stack name for other environments
-          STACK_NAME: ${{
-            inputs.environment == 'prod' && 'CareerVpCrudProduction' ||
-            inputs.environment == 'staging' && 'CareerVpCrudStaging' ||
-            'CareerVpCrudDev'
-          }}
+          STACK_NAME: ${{ inputs.environment == 'prod' && 'CareerVpCrudProduction' || inputs.environment == 'staging' && 'CareerVpCrudStaging' || 'CareerVpCrudDev' }}
         run: |
           .github/scripts/cfn-guard.sh "$STACK_NAME" "${{ env.AWS_REGION }}"
       - name: Build and Deploy
@@ -167,11 +163,7 @@ jobs:
         run: make deploy
       - name: Wait for Stack Stability
         env:
-          STACK_NAME: ${{
-            inputs.environment == 'prod' && 'CareerVpCrudProduction' ||
-            inputs.environment == 'staging' && 'CareerVpCrudStaging' ||
-            'CareerVpCrudDev'
-          }}
+          STACK_NAME: ${{ inputs.environment == 'prod' && 'CareerVpCrudProduction' || inputs.environment == 'staging' && 'CareerVpCrudStaging' || 'CareerVpCrudDev' }}
         run: |
           echo "Waiting for CloudFormation stack to stabilize..."
           aws cloudformation wait stack-create-complete \
@@ -182,11 +174,7 @@ jobs:
             --region ${{ env.AWS_REGION }} 2>/dev/null || true
       - name: Wait for API Availability
         env:
-          STACK_NAME: ${{
-            inputs.environment == 'prod' && 'CareerVpCrudProduction' ||
-            inputs.environment == 'staging' && 'CareerVpCrudStaging' ||
-            'CareerVpCrudDev'
-          }}
+          STACK_NAME: ${{ inputs.environment == 'prod' && 'CareerVpCrudProduction' || inputs.environment == 'staging' && 'CareerVpCrudStaging' || 'CareerVpCrudDev' }}
         run: |
           .github/scripts/wait-for-api.sh "${{ env.AWS_REGION }}" "$STACK_NAME"
       - name: Post-deploy smoke test
