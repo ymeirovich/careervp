@@ -106,7 +106,8 @@ jobs:
           echo "=== IAM PROPAGATION WAIT (15s) ==="
           sleep 15
 
-          # Run full smoke test
+          # Use uv's Python for inline scripts
+          export PATH="${PWD}/.venv/bin:${PATH}"
           bash tests/aws_cli_smoke.sh dev
 
   deploy-other:
