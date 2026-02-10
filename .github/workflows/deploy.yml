@@ -11,6 +11,12 @@ on:
         required: true
         default: dev
 
+# Concurrency control: prevents multiple deployments from running simultaneously
+# on the same stack. New pushes will cancel in-progress runs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   deployments: write
@@ -20,6 +26,8 @@ env:
   PYTHON_VERSION: '3.13'
   NODE_VERSION: '22'
   AWS_REGION: 'us-east-1'
+  UV_VERSION: '0.5.21'
+  STACK_NAME: 'CareerVpCrudDev'
 
 jobs:
   deploy-dev:
@@ -38,6 +46,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
+          version: ${{ env.UV_VERSION }}
           enable-cache: true
           cache-dependency-glob: '**/uv.lock'
       - name: Install Python
@@ -66,11 +75,26 @@ jobs:
             aws ssm get-parameter --name "/careervp/dev/anthropic-api-key" --query "Parameter.Name" --output text || \
               echo "::warning::SSM parameter /careervp/dev/anthropic-api-key not found. Set ANTHROPIC_API_KEY secret or create manually."
           fi
+      - name: CFN State Guard
+        run: |
+          .github/scripts/cfn-guard.sh "${{ env.STACK_NAME }}" "${{ env.AWS_REGION }}"
       - name: Build and Deploy
         working-directory: src/backend
         env:
           ENVIRONMENT: dev
         run: make deploy
+      - name: Wait for Stack Stability
+        run: |
+          echo "Waiting for CloudFormation stack to stabilize..."
+          aws cloudformation wait stack-create-complete \
+            --stack-name ${{ env.STACK_NAME }} \
+            --region ${{ env.AWS_REGION }} 2>/dev/null || \
+          aws cloudformation wait stack-update-complete \
+            --stack-name ${{ env.STACK_NAME }} \
+            --region ${{ env.AWS_REGION }} 2>/dev/null || true
+      - name: Wait for API Availability
+        run: |
+          .github/scripts/wait-for-api.sh "${{ env.AWS_REGION }}" "${{ env.STACK_NAME }}"
       - name: Post-deploy smoke test
         working-directory: src/backend
         env:
@@ -96,6 +120,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
+          version: ${{ env.UV_VERSION }}
           enable-cache: true
           cache-dependency-glob: '**/uv.lock'
       - name: Install Python
@@ -125,11 +150,45 @@ jobs:
             aws ssm get-parameter --name "/careervp/${TARGET_ENV}/anthropic-api-key" --query "Parameter.Name" --output text || \
               echo "::warning::SSM parameter /careervp/${TARGET_ENV}/anthropic-api-key not found. Set ANTHROPIC_API_KEY secret or create manually."
           fi
+      - name: CFN State Guard
+        env:
+          # Dynamically compute stack name for other environments
+          STACK_NAME: ${{
+            inputs.environment == 'prod' && 'CareerVpCrudProduction' ||
+            inputs.environment == 'staging' && 'CareerVpCrudStaging' ||
+            'CareerVpCrudDev'
+          }}
+        run: |
+          .github/scripts/cfn-guard.sh "$STACK_NAME" "${{ env.AWS_REGION }}"
       - name: Build and Deploy
         working-directory: src/backend
         env:
           ENVIRONMENT: ${{ inputs.environment }}
         run: make deploy
+      - name: Wait for Stack Stability
+        env:
+          STACK_NAME: ${{
+            inputs.environment == 'prod' && 'CareerVpCrudProduction' ||
+            inputs.environment == 'staging' && 'CareerVpCrudStaging' ||
+            'CareerVpCrudDev'
+          }}
+        run: |
+          echo "Waiting for CloudFormation stack to stabilize..."
+          aws cloudformation wait stack-create-complete \
+            --stack-name "$STACK_NAME" \
+            --region ${{ env.AWS_REGION }} 2>/dev/null || \
+          aws cloudformation wait stack-update-complete \
+            --stack-name "$STACK_NAME" \
+            --region ${{ env.AWS_REGION }} 2>/dev/null || true
+      - name: Wait for API Availability
+        env:
+          STACK_NAME: ${{
+            inputs.environment == 'prod' && 'CareerVpCrudProduction' ||
+            inputs.environment == 'staging' && 'CareerVpCrudStaging' ||
+            'CareerVpCrudDev'
+          }}
+        run: |
+          .github/scripts/wait-for-api.sh "${{ env.AWS_REGION }}" "$STACK_NAME"
       - name: Post-deploy smoke test
         working-directory: src/backend
         env:

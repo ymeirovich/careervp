@@ -554,7 +554,14 @@ resp = router.invoke(
     max_tokens=16,
     temperature=0.0,
 )
-print(json.dumps(resp.model_dump(), indent=2))
+
+# Safe serialization: only primitives that can't fail
+output = {
+    "success": bool(resp.success),
+    "code": str(resp.code) if resp.code else None,
+}
+print(json.dumps(output, indent=2))
+
 if not resp.success:
     raise SystemExit("Anthropic probe failed")
 PY
