@@ -1,0 +1,12 @@
+
+# DEEP ANALYSIS RESULTS V2 REMEDIATION
+## GOAL
+To base CV Tailoring, Cover Letter and Gap Analysis on VPR design. Fix CV Tailoring to align with VPR.
+
+## TASK
+1. Review Deep Analysis Results v2 and create an extremely detailed, step-by-step remediation plan to pass ALL tests 5/5. Assume a junior engineer is implementing the plan. Include plenty of examples. 
+2. Add validations/tests at each remediation step that ensures rerunning /Users/yitzchak/Documents/dev/careervp/docs/handoff/DEEP_ANALYSIS_PROMPT.md will pass completely
+3. Output your plan to /Users/yitzchak/Documents/dev/careervp/docs/architecture/architecture-review
+4. Ask questions for any contradictions or inconsistencies.
+
+

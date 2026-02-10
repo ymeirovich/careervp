@@ -42,4 +42,5 @@ node_modules
 
 # omc
 temp
-.omc/state/*
+.omc/*
+docs/architecture/prompt-improvement/
