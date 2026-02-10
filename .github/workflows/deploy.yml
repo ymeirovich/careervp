@@ -100,7 +100,16 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AUTO_SET_LAMBDA_ENV: '1'
-        run: make smoke-test
+        run: |
+          echo "=== SMOKE TEST DEBUG ==="
+          echo "ANTHROPIC_API_KEY set: ${#ANTHROPIC_API_KEY} chars"
+          echo "AWS_REGION: $AWS_REGION"
+          echo "========================"
+          make smoke-test 2>&1 || {
+            echo "=== SMOKE TEST FAILED ==="
+            echo "Exit code: $?"
+            exit 1
+          }
 
   deploy-other:
     if: github.event_name == 'workflow_dispatch'
