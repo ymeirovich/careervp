@@ -4,14 +4,16 @@ End-to-end test for CV Tailoring feature deployed on AWS.
 This test verifies:
 1. CV Upload endpoint works
 2. CV Tailoring endpoint returns tailored CV directly in response
+3. Multiple CV tailoring runs for different positions (9 applications)
 
 Usage:
-    python cv_tailoring_e2e_test.py [--api-url URL] [--cv-id CV_ID] [--user-id USER_ID]
+    python cv_tailoring_e2e_test.py [--api-url URL] [--cv-id CV_ID] [--user-id USER_ID] [--run-sample]
 
 Environment variables:
     API_URL       - API Gateway URL (default: auto-detect from CloudFormation)
     CV_ID         - CV ID to use for testing (auto-generated if not provided)
     USER_ID       - User ID for authentication
+    RUN_SAMPLE    - Set to "true" to run 9 sample applications (default: false)
 """
 
 import argparse
@@ -414,6 +416,239 @@ def test_validation_error(api_url: str, user_id: str) -> bool:
         return False
 
 
+def test_cv_tailoring_with_application(
+    api_url: str,
+    cv_id: str,
+    application: dict,
+    user_id: str,
+) -> bool:
+    """
+    Test CV tailoring for a specific job application.
+
+    Args:
+        api_url: API Gateway URL
+        cv_id: ID of uploaded CV
+        application: Dict with 'position', 'company', 'job_description', 'preferences'
+        user_id: User ID for authentication
+
+    Returns:
+        True if tailoring succeeded
+    """
+    api_url = normalize_url(api_url)
+    endpoint = "/api/cv-tailoring"
+    url = f"{api_url}{endpoint}"
+
+    job_description = application["job_description"]
+    preferences = application.get("preferences", {})
+
+    payload = {
+        "cv_id": cv_id,
+        "job_description": job_description,
+        "user_id": user_id,
+    }
+
+    if preferences:
+        payload["preferences"] = preferences
+
+    position = application["position"]
+    company = application["company"]
+
+    print(f"\nTest: CV Tailoring - {position}")
+    print(f"  Company: {company}")
+    print(f"  URL: {url}")
+    print(f"  CV ID: {cv_id}")
+    print(f"  Job Description Length: {len(job_description)} chars")
+
+    try:
+        response = requests.post(
+            url,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=120,  # LLM can take time
+        )
+        print(f"  Status: {response.status_code}")
+
+        if response.status_code == 200:
+            data = response.json()
+            print(f"  Success: {data.get('success')}")
+
+            if data.get("success"):
+                tailored_cv = data.get("data", {}).get("tailored_cv")
+                if tailored_cv:
+                    summary = tailored_cv.get("professional_summary", "")[:150]
+                    print(f"  Tailored CV received: Yes")
+                    print(f"  Tailored Summary: {summary}...")
+                    return True
+                else:
+                    print(f"  Error: No tailored_cv in response")
+                    return False
+            else:
+                print(f"  Error: {data.get('message', 'Unknown error')}")
+                return False
+        elif response.status_code == 400:
+            print(
+                f"  Bad Request: {response.json().get('message', 'Validation error')}"
+            )
+            return False
+        elif response.status_code == 401:
+            print(f"  Unauthorized: Missing or invalid authentication")
+            return False
+        elif response.status_code == 404:
+            print(f"  Not Found: CV not found (cv_id={cv_id})")
+            return False
+        elif response.status_code == 429:
+            print(f"  Rate Limited: Too many requests")
+            return False
+        elif response.status_code == 500:
+            print(f"  Server Error: {response.json().get('message', 'Internal error')}")
+            return False
+        else:
+            print(f"  Unexpected status: {response.status_code}")
+            return False
+
+    except requests.exceptions.Timeout:
+        print(f"  Error: Request timed out (LLM may be processing)")
+        return False
+    except Exception as e:
+        print(f"  Error: {e}")
+        return False
+
+
+def run_sample_applications(
+    api_url: str, user_id: str, save_results: bool = True
+) -> dict[str, Any]:
+    """
+    Run CV tailoring for all 9 sample job applications.
+
+    This is used to satisfy the Deep Analysis prerequisite of 10 successful runs.
+    """
+    # Import sample applications
+    from cv_applications_sample import CV_APPLICATIONS, SAMPLE_CV_TEXT
+
+    print("=" * 60)
+    print("CV Tailoring E2E Test - 9 Sample Applications")
+    print("=" * 60)
+    print(f"API URL: {api_url}")
+    print(f"User ID: {user_id}")
+    print(f"Timestamp: {datetime.now().isoformat()}")
+    print(f"Applications: {len(CV_APPLICATIONS)}")
+    print("=" * 60)
+
+    results = {
+        "api_url": api_url,
+        "user_id": user_id,
+        "tests": {},
+        "passed": 0,
+        "failed": 0,
+        "total": 0,
+        "applications_run": [],
+    }
+
+    # Step 1: Upload a CV first
+    print("\n" + "=" * 60)
+    print("STEP 1: Upload CV")
+    print("=" * 60)
+
+    cv_upload_success, cv_id = test_cv_upload(api_url, SAMPLE_CV_TEXT, user_id)
+    if cv_upload_success:
+        print(f"  CV uploaded successfully with ID: {cv_id}")
+    else:
+        print(f"  ERROR: CV upload failed. Cannot proceed with tailoring tests.")
+        results["tests"]["cv_upload"] = {"passed": False, "error": "CV upload failed"}
+        results["total"] += 1
+        results["failed"] += 1
+
+        if save_results:
+            save_test_result("cv_tailoring_sample_applications_results.json", results)
+
+        return results
+
+    # Step 2: Run CV tailoring for each application
+    print("\n" + "=" * 60)
+    print("STEP 2: Run CV Tailoring for 9 Applications")
+    print("=" * 60)
+
+    for i, application in enumerate(CV_APPLICATIONS, 1):
+        app_id = application["id"]
+        position = application["position"]
+        company = application["company"]
+
+        test_name = f"application_{app_id}_{position.replace(' ', '_')[:30]}"
+        results["total"] += 1
+
+        print(f"\n--- Application {i}/9: {position} ---")
+
+        try:
+            success = test_cv_tailoring_with_application(
+                api_url, cv_id, application, user_id
+            )
+            results["tests"][test_name] = {
+                "passed": success,
+                "error": None,
+                "position": position,
+                "company": company,
+                "app_id": app_id,
+            }
+            results["applications_run"].append(
+                {
+                    "id": app_id,
+                    "position": position,
+                    "company": company,
+                    "passed": success,
+                }
+            )
+
+            if success:
+                results["passed"] += 1
+                print(f"  Result: PASSED")
+            else:
+                results["failed"] += 1
+                print(f"  Result: FAILED")
+        except Exception as e:
+            results["tests"][test_name] = {
+                "passed": False,
+                "error": str(e),
+                "position": position,
+                "company": company,
+                "app_id": app_id,
+            }
+            results["failed"] += 1
+            results["applications_run"].append(
+                {
+                    "id": app_id,
+                    "position": position,
+                    "company": company,
+                    "passed": False,
+                    "error": str(e),
+                }
+            )
+            print(f"  Result: ERROR - {e}")
+
+        # Small delay between requests to avoid rate limiting
+        import time
+
+        time.sleep(2)
+
+    # Summary
+    print("\n" + "=" * 60)
+    print("Test Summary - 9 Sample Applications")
+    print("=" * 60)
+    print(f"Total: {results['total']}")
+    print(f"Passed: {results['passed']}")
+    print(f"Failed: {results['failed']}")
+    print(f"Success Rate: {(results['passed'] / results['total'] * 100):.1f}%")
+
+    print("\nIndividual Results:")
+    for app_result in results["applications_run"]:
+        status = "PASSED" if app_result["passed"] else "FAILED"
+        print(f"  [{status}] {app_result['position']} @ {app_result['company']}")
+
+    if save_results:
+        save_test_result("cv_tailoring_sample_applications_results.json", results)
+
+    return results
+
+
 def save_test_result(result_file: str, results: dict[str, Any]) -> None:
     """Save test results to a JSON file."""
     results["timestamp"] = datetime.now().isoformat()
@@ -534,6 +769,16 @@ def main() -> int:
     parser.add_argument(
         "--skip-health-wait", action="store_true", help="Skip waiting for deployment"
     )
+    parser.add_argument(
+        "--run-sample",
+        action="store_true",
+        help="Run 9 sample applications for Deep Analysis prerequisite",
+    )
+    parser.add_argument(
+        "--applications-file",
+        default="",
+        help="Path to custom applications JSON file",
+    )
 
     args = parser.parse_args()
 
@@ -546,7 +791,28 @@ def main() -> int:
         print("Error: API URL is required. Provide --api-url or set API_URL env var.")
         return 1
 
-    # Run tests
+    # Run sample applications test
+    if args.run_sample:
+        # Check if we need to wait for deployment
+        if not args.skip_health_wait:
+            if not wait_for_deployment(args.api_url):
+                print("Error: API not available. Exiting.")
+                return 1
+
+        results = run_sample_applications(api_url=args.api_url, user_id=args.user_id)
+
+        # Print final summary
+        print("\n" + "=" * 60)
+        print("DEEP ANALYSIS PREREQUISITE CHECK")
+        print("=" * 60)
+        print(f"Applications attempted: {results['total']}")
+        print(f"Applications passed: {results['passed']}")
+        print(f"Required for Deep Analysis: 10 total (including this run)")
+        print("=" * 60)
+
+        return 0 if results["failed"] == 0 else 1
+
+    # Run standard tests
     results = run_tests(api_url=args.api_url, user_id=args.user_id)
 
     # Return exit code based on results
