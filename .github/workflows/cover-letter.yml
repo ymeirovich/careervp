@@ -25,7 +25,7 @@ on:
         options: ["false", "true"]
 
 env:
-  PYTHON_VERSION: '3.13'
+  PYTHON_VERSION: "3.14"
   NODE_VERSION: "22"
   AWS_REGION: "us-east-1"
   AWS_DEFAULT_REGION: "us-east-1"
@@ -42,13 +42,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
           enable-cache: false
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
@@ -139,13 +139,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
           enable-cache: false
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
@@ -161,7 +161,7 @@ jobs:
         run: make dev
 
       - name: Configure AWS credentials (dev)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_ROLE }}
           role-session-name: cover-letter-${{ github.run_id }}
@@ -188,14 +188,14 @@ jobs:
 
       - name: Upload cdk.out
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cdk-out-cover-letter
           path: src/backend/cdk.out
 
       - name: Upload coverage
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-cover-letter
           path: src/backend/coverage.xml

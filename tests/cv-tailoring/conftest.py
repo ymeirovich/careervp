@@ -2,12 +2,11 @@
 
 from datetime import UTC, datetime
 from typing import Any, Dict, List
-from unittest.mock import AsyncMock, MagicMock, Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
-from unittest.mock import MagicMock
 
-from careervp.models.cv import (
+from careervp.models.cv_models import (
     Certification,
     Education,
     Skill,
@@ -84,6 +83,30 @@ def mock_s3_client() -> MagicMock:
     client.put_object = MagicMock()
     client.generate_presigned_url = MagicMock(return_value="https://example.com/fake-url")
     return client
+
+
+@pytest.fixture
+def lambda_context():
+    """Mock AWS Lambda context for handler tests."""
+
+    class MockLambdaContext:
+        def __init__(self):
+            self.aws_request_id = "test-request-id"
+            self.function_name = "cv_tailoring_handler"
+            self.function_version = "1"
+            self.invoked_function_arn = (
+                "arn:aws:lambda:us-east-1:123456789:function:cv_tailoring_handler"
+            )
+            self.log_group_name = "/aws/lambda/cv_tailoring_handler"
+            self.log_stream_name = "2024/01/01/[$LATEST]abc123"
+            self.memory_limit_in_mb = 256
+            self.client_context = None
+            self.identity = None
+
+        def get_remaining_time_in_millis(self):
+            return 30000
+
+    return MockLambdaContext()
 
 
 @pytest.fixture

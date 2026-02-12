@@ -16,6 +16,25 @@ from careervp.models.cv import (
     UserCV,
     WorkExperience,
 )
+from careervp.models.cv_models import (
+    Certification as TailoringCertification,
+)
+from careervp.models.cv_models import (
+    ContactInfo as TailoringContactInfo,
+)
+from careervp.models.cv_models import (
+    Education as TailoringEducation,
+)
+from careervp.models.cv_models import (
+    Skill,
+    SkillLevel,
+)
+from careervp.models.cv_models import (
+    UserCV as TailoringUserCV,
+)
+from careervp.models.cv_models import (
+    WorkExperience as TailoringWorkExperience,
+)
 from careervp.models.cv_tailoring_models import (
     ChangeLog,
     TailorCVRequest,
@@ -23,7 +42,9 @@ from careervp.models.cv_tailoring_models import (
     TailoredCVResponse,
     TailoringPreferences,
 )
-from careervp.models.fvs import FVSValidationResult, FVSViolation, FVSBaseline, ImmutableFact, ImmutableFacts, ViolationSeverity
+from careervp.models.fvs import FVSValidationResult, FVSViolation, ViolationSeverity
+from careervp.models.fvs_models import FVSBaseline as TailoringFVSBaseline
+from careervp.models.fvs_models import ImmutableFact
 from careervp.models.result import Result, ResultCode
 
 __all__ = [
@@ -45,12 +66,18 @@ __all__ = [
     'ResearchSource',
     'Skill',
     'SkillLevel',
+    'TailoringUserCV',
+    'TailoringContactInfo',
+    'TailoringWorkExperience',
+    'TailoringEducation',
+    'TailoringCertification',
     'TailoringPreferences',
     'TailorCVRequest',
     'TailoredCV',
     'TailoredCVResponse',
     'ChangeLog',
     'ImmutableFact',
+    'TailoringFVSBaseline',
     'ViolationSeverity',
     'FVSViolation',
     'FVSValidationResult',

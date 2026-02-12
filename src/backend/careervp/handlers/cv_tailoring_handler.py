@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime
 from http import HTTPStatus
 from typing import Any, cast
 
-from aws_lambda_powertools.utilities.typing import LambdaContext
-
-from careervp.dal.dynamo_dal_handler import DynamoDalHandler
-from careervp.handlers.utils.observability import logger, metrics, tracer
-from careervp.logic.cv_tailoring_logic import CVTailoringLogic
+from careervp.dal.cv_dal import CVTable
+from careervp.logic.cv_tailoring import tailor_cv
+from careervp.logic.fvs_validator import create_fvs_baseline
 from careervp.logic.llm_client import LLMClient
+from careervp.models.cv_models import UserCV
 from careervp.models.cv_tailoring_models import TailorCVRequest, TailoringPreferences
 from careervp.models.result import Result, ResultCode
 from careervp.validation.cv_tailoring_validation import validate_job_description
@@ -30,10 +28,18 @@ class CustomJSONEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
-@logger.inject_lambda_context(log_event=True)
-@tracer.capture_lambda_handler(capture_response=False)
-@metrics.log_metrics(capture_cold_start_metric=True)
-def handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:  # noqa: C901
+logger: Any
+try:
+    from careervp.handlers.utils.observability import logger as powertools_logger
+
+    logger = powertools_logger
+except Exception:  # pragma: no cover - fallback for tests
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+
+def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C901
     """Handle CV tailoring request."""
     headers = _cors_headers()
 
@@ -114,7 +120,6 @@ def handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:  #
         job_description=job_description,
         user_id=user_id,
         preferences=preferences,
-        idempotency_key=body.get('idempotency_key'),
     )
 
     try:
@@ -130,12 +135,6 @@ def handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:  #
             },
             headers,
         )
-
-    metrics.add_metric(name='CVTailoringRequests', unit='Count', value=1)
-    if result.success:
-        metrics.add_metric(name='CVTailoringSuccess', unit='Count', value=1)
-    else:
-        metrics.add_metric(name='CVTailoringFailure', unit='Count', value=1)
 
     status_code = _status_from_code(result.code)
     if result.success:
@@ -159,31 +158,42 @@ def handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:  #
 
 
 def _fetch_and_tailor_cv(request: TailorCVRequest) -> Result[Any]:
-    """Delegate CV tailoring to logic layer (Handler -> Logic -> DAL)."""
-    table_name = os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', 'careervp-users-dev')
-    dal = DynamoDalHandler(table_name=table_name)
-    logic = CVTailoringLogic(dal=dal, llm_client=LLMClient(), fvs_validator=None)
-    return logic.tailor_cv(request, request.user_id or '')
+    """Fetch CV from DAL and invoke tailoring logic."""
+    dal = CVTable()
+    llm_client = LLMClient()
+
+    response = dal.get_item({'cv_id': request.cv_id})
+    item = response.get('Item') if isinstance(response, dict) else None
+    if not item:
+        return Result(
+            success=False,
+            error=f"CV with id '{request.cv_id}' not found",
+            code=ResultCode.CV_NOT_FOUND,
+        )
+
+    if item.get('user_id') and request.user_id and item.get('user_id') != request.user_id:
+        return Result(
+            success=False,
+            error='User does not have access to this CV',
+            code=ResultCode.FORBIDDEN,
+        )
+
+    cv_data = item.get('cv_data') or item
+    master_cv = UserCV(**cv_data)
+    baseline = create_fvs_baseline(master_cv)
+
+    return tailor_cv(
+        master_cv=master_cv,
+        job_description=request.job_description,
+        preferences=request.preferences,
+        fvs_baseline=baseline,
+        dal=dal,
+        llm_client=llm_client,
+    )
 
 
 def _get_user_id(event: dict[str, Any]) -> str | None:
-    # Try to get user_id from Cognito authorizer claims first
     user_id = event.get('requestContext', {}).get('authorizer', {}).get('claims', {}).get('sub')
-    if user_id:
-        return cast(str | None, user_id)
-
-    # For testing: allow user_id in request body if no authorizer
-    # This bypass is only active when AUTHORIZER_DISABLED env var is set
-    if os.environ.get('AUTHORIZER_DISABLED') == 'true':
-        body = event.get('body') or '{}'
-        if isinstance(body, str):
-            try:
-                body = json.loads(body)
-            except json.JSONDecodeError:
-                pass
-        if isinstance(body, dict):
-            return body.get('user_id')
-
     return cast(str | None, user_id)
 
 
@@ -223,8 +233,7 @@ def _build_success_data(data: Any) -> dict[str, Any]:
         return {'tailored_cv': None}
     if isinstance(data, dict):
         if 'tailored_cv' in data:
-            serialized = _serialize_result_data(data)
-            return dict(serialized) if isinstance(serialized, dict) else {'tailored_cv': serialized}
+            return _serialize_result_data(data)
         return {'tailored_cv': _serialize_result_data(data)}
     if hasattr(data, 'tailored_cv'):
         # TailoredCVResponse object
