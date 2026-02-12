@@ -1,0 +1,203 @@
+# Refactoring Phase Validation Workflow
+# Validates spec compliance and phase-by-phase tests
+
+name: Refactoring Validation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'docs/refactor/**'
+      - 'src/backend/careervp/logic/**'
+      - 'src/backend/careervp/handlers/**'
+      - 'src/backend/careervp/models/**'
+      - 'src/backend/careervp/dal/**'
+      - 'infra/careervp/**'
+
+permissions:
+  contents: read
+  pull-requests: read
+
+env:
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  spec-validation:
+    name: Spec Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      - name: Validate all YAML specs
+        run: |
+          python -c "
+          import yaml
+          import os
+          errors = []
+          for d in ['docs/refactor/specs', 'infra/careervp/specs']:
+            for f in os.listdir(d):
+              if f.endswith('.yaml'):
+                path = f'{d}/{f}'
+                try:
+                  data = yaml.safe_load(open(path))
+                  print(f'{path}: ✅')
+                except Exception as e:
+                  print(f'{path}: ❌ {e}')
+                  errors.append(path)
+          if errors:
+            print(f'\n❌ Invalid specs: {errors}')
+            exit(1)
+          print('\n✅ All specs valid')
+          "
+
+  phase-consistency-check:
+    name: Phase Spec Consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      - name: Check spec-to-phase mapping
+        run: |
+          python -c "
+          import yaml
+
+          # Load registry
+          registry = yaml.safe_load(open('docs/refactor/specs/_registry.yaml'))
+
+          # Check each phase has specs
+          phases = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+          for p in phases:
+            key = f'phase_{p}'
+            if key not in registry.get('phase_mapping', {}):
+              print(f'⚠️ Phase {p}: No phase_mapping entry')
+              continue
+            mapping = registry['phase_mapping'][key]
+            mandatory = mapping.get('mandatory', [])
+            if not mandatory:
+              print(f'⚠️ Phase {p}: No mandatory specs')
+          print('✅ Phase spec consistency check complete')
+          "
+
+  backend-tests:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+          enable-cache: true
+          cache-dependency-glob: '**/uv.lock'
+      - name: Install Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+      - name: Sync dependencies
+        working-directory: src/backend
+        run: uv sync
+      - name: Lint
+        working-directory: src/backend
+        run: uv run ruff check .
+      - name: Type check
+        working-directory: src/backend
+        run: uv run mypy careervp --config-file mypy.ini
+      - name: Unit tests
+        working-directory: src/backend
+        run: uv run pytest tests/unit/ -v --tb=short
+
+  infra-consistency-check:
+    name: Infra Spec Consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      - name: Check DynamoDB spec matches stacks
+        run: |
+          python -c "
+          import yaml
+
+          # Load DynamoDB spec
+          spec = yaml.safe_load(open('infra/careervp/specs/dynamodb_spec.yaml'))
+          spec_tables = [t['name'] for t in spec['tables']]
+
+          # Load DynamoDB stack
+          with open('infra/careervp/dynamodb_stack.py') as f:
+            stack_content = f.read()
+
+          stack_tables = []
+          for line in stack_content.split('\n'):
+            if 'table_name=' in line:
+              table = line.split('table_name=')[1].split(',')[0].strip().strip('\"')
+              stack_tables.append(table)
+
+          # Compare
+          for t in spec_tables:
+            if t in stack_tables:
+              print(f'{t}: ✅')
+            else:
+              print(f'{t}: ❌ Missing from dynamodb_stack.py')
+              exit(1)
+
+          print('✅ DynamoDB spec matches stack')
+          "
+      - name: Check S3 spec matches stacks
+        run: |
+          python -c "
+          import yaml
+
+          # Load S3 spec
+          spec = yaml.safe_load(open('infra/careervp/specs/s3_spec.yaml'))
+          spec_buckets = [b['name'] for b in spec['buckets']]
+
+          # Load S3 stack
+          with open('infra/careervp/s3_stack.py') as f:
+            stack_content = f.read()
+
+          stack_buckets = []
+          for line in stack_content.split('\n'):
+            if 'bucket_name=' in line:
+              bucket = line.split('bucket_name=')[1].split(',')[0].strip().strip('\"')
+              stack_buckets.append(bucket)
+
+          # Compare
+          for b in spec_buckets:
+            if b in stack_buckets:
+              print(f'{b}: ✅')
+            else:
+              print(f'{b}: ❌ Missing from s3_stack.py')
+              exit(1)
+
+          print('✅ S3 spec matches stack')
+          "
+
+  cdk-validation:
+    name: CDK Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Naming guardrail
+        working-directory: src/backend
+        run: |
+          ROOT=$(pwd)/..
+          uv run python scripts/validate_naming.py --path "$ROOT/infra" --strict
+      - name: Build Lambda code
+        working-directory: src/backend
+        run: make build
+      - name: CDK Synth
+        working-directory: infra
+        run: npx cdk synth
