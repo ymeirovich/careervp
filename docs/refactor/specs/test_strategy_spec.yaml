@@ -1,0 +1,122 @@
+# Test Strategy Specification
+# Source: TEST_STRATEGY.md
+# Used by: All Phases
+
+spec_version: "1.0"
+date_created: "2026-02-12"
+
+tdd_pattern:
+  steps:
+    - step: 1
+      action: "Write failing test"
+      scope: "Single function/method"
+
+    - step: 2
+      action: "Implement minimal code to pass"
+      scope: "Just enough logic"
+
+    - step: 3
+      action: "Refactor for clarity"
+      scope: "Improve without changing behavior"
+
+test_pyramid:
+  unit:
+    coverage_target: "80%"
+    scope: "Single class/method"
+    mocks: "AWS services, external APIs"
+    files:
+      pattern: "tests/unit/test_*.py"
+
+  integration:
+    coverage_target: "50%"
+    scope: "Feature flow (2-3 classes)"
+    mocks: "External APIs only"
+    files:
+      pattern: "tests/integration/test_*_flow.py"
+
+  e2e:
+    coverage_target: "20%"
+    scope: "Full API endpoint"
+    mocks: "None (real AWS resources)"
+    files:
+      pattern: "tests/e2e/test_*.py"
+
+cv_tailoring_gates:
+  tests:
+    file: "tests/unit/test_cv_tailoring_gates.py"
+    cases:
+      - id: "GATE-01"
+        name: "matching_experience"
+        min_score: 9.0
+        type: "ats_score"
+
+      - id: "GATE-02"
+        name: "career_changer"
+        min_score: 7.5
+        type: "ats_score"
+
+      - id: "GATE-03"
+        name: "leadership_role"
+        min_score: 8.0
+        type: "ats_score"
+
+      - id: "GATE-04"
+        name: "senior_skills_gap"
+        min_score: 7.0
+        type: "ats_score"
+
+      - id: "GATE-05"
+        name: "recent_graduate"
+        min_score: 7.5
+        type: "ats_score"
+
+      - id: "GATE-06"
+        name: "remote_first"
+        min_score: 8.0
+        type: "ats_score"
+
+      - id: "GATE-07"
+        name: "startup_culture"
+        min_score: 8.0
+        type: "ats_score"
+
+      - id: "GATE-08"
+        name: "industry_transition"
+        min_score: 7.5
+        type: "ats_score"
+
+      - id: "GATE-09"
+        name: "contract_to_perm"
+        min_score: 8.0
+        type: "ats_score"
+
+      - id: "GATE-10"
+        name: "employment_gap"
+        min_score: 7.0
+        type: "ats_score"
+
+quality_validation:
+  fvs:
+    file: "tests/unit/test_quality_validator.py"
+    checks:
+      - check: "grammar"
+        min_score: 9.0
+
+      - check: "tone"
+        min_score: 8.0
+
+      - check: "anti_ai_patterns"
+        min_score: 9.0
+
+      - check: "formatting"
+        min_score: 8.0
+
+      - check: "structure"
+        min_score: 8.0
+
+verification_commands:
+  unit: "uv run pytest tests/unit/ -v --tb=short"
+  integration: "uv run pytest tests/integration/ -v --tb=short"
+  lint: "uv run ruff check careervp/"
+  typecheck: "uv run mypy careervp/ --strict"
+  format: "uv run ruff format careervp/"

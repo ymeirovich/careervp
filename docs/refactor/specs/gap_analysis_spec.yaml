@@ -1,0 +1,176 @@
+# Gap Analysis Specification
+# Source: JSA_FEATURE_MAPPING.md Section 8
+# Phase: 5
+# Reference: docs/specs/02-company-research.md (handler implementation pattern)
+
+spec_version: "1.1"
+date_created: "2026-02-12"
+date_updated: "2026-02-10"
+
+description: |
+  Gap Analysis identifies skills/experience gaps between CV and job
+  requirements, generates targeted questions, and processes user responses.
+
+handler_status: "NEEDS_ENHANCEMENT"
+handler_file: "src/backend/careervp/handlers/gap_handler.py"
+logic_files:
+  - "src/backend/careervp/logic/gap_analysis.py"
+  - "src/backend/careervp/logic/prompts/gap_analysis_prompt.py"
+
+reference_implementation: "docs/specs/02-company-research.md"
+
+implementation:
+  questions_file: "src/backend/careervp/logic/gap_questions.py"
+  responses_file: "src/backend/careervp/logic/gap_responses.py"
+  processor_file: "src/backend/careervp/logic/gap_processor.py"
+  handler_file: "src/backend/careervp/handlers/gap_handler.py"
+  tests: "tests/unit/test_gap_*.py tests/integration/test_gap_flow.py"
+  model: "Claude Sonnet 4.5 (STRATEGIC mode)"
+
+components:
+  - name: "GapQuestionsGenerator"
+    file: "gap_questions.py"
+    methods:
+      - "generate_questions(job_requirements) -> List[GapQuestion]"
+      - "identify_recurring_themes(gap_responses) -> List[str]"
+    max_questions: 10
+
+  - name: "GapResponsesHandler"
+    file: "gap_responses.py"
+    methods:
+      - "save_response(user_email, application_id, response) -> Result"
+      - "get_responses(application_id) -> List[GapResponse]"
+
+  - name: "GapProcessor"
+    file: "gap_processor.py"
+    methods:
+      - "process_gaps(cv_facts, job_requirements) -> GapAnalysisResult"
+      - "generate_impact_statements(gap_responses) -> List[ImpactStatement]"
+
+cost:
+  questions_phase: "~$0.02/request"
+  processor_phase: "~$0.05/request"
+  total: "$0.077/request"
+
+quality_requirements:
+  - "Recurring theme identification"
+  - "Prioritized by job importance"
+  - "Actionable remediation advice"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HANDLER ENHANCEMENT (based on company_research_handler.py pattern)
+# ─────────────────────────────────────────────────────────────────────────────
+handler:
+  current_status: "gap_handler.py exists (~650 bytes) - needs full implementation"
+  pattern: "Synchronous Lambda Handler (like company_research_handler.py)"
+  validation:
+    - "Validate request body against GapAnalysisRequest schema"
+    - "Verify CV and VPR are completed"
+    - "Check user has access to referenced resources"
+    - "Validate max 10 questions constraint"
+
+  steps:
+    1_request_validation: |
+      Validate CV ID and Job ID exist and belong to user
+
+    2_fetch_context: |
+      Fetch:
+      - CV facts from UserCV model
+      - VPR differentiators from VPR model
+      - Job requirements from Jobs model
+      - Company research (optional) for context
+
+    3_generate_questions: |
+      Call Claude Sonnet 4.5:
+      - Temperature: 0.5
+      - Max tokens: 2048
+      - System prompt: gap_questions_system_prompt()
+      - Identify 3-10 critical gaps
+
+    4_save_questions: |
+      Save questions to DynamoDB:
+      - Table: careervp-gap-responses-table-dev
+      - Status: PENDING
+
+    5_save_result: |
+      Return question IDs + metadata for polling
+
+  api_endpoints:
+    - "POST /gap-analysis/generate"
+    - "GET /gap-analysis/{id}/questions"
+    - "POST /gap-analysis/{id}/responses"
+    - "GET /gap-analysis/{id}/results"
+
+  request_schema:
+    type: "object"
+    required:
+      - "cv_id"
+      - "job_id"
+      - "vpr_id"
+    properties:
+      cv_id:
+        type: "string"
+        description: "ID of the user's parsed CV"
+      job_id:
+        type: "string"
+        description: "ID of the job application"
+      vpr_id:
+        type: "string"
+        description: "ID of the generated VPR"
+      company_research_id:
+        type: "string"
+        description: "ID of company research (optional)"
+      max_questions:
+        type: "integer"
+        description: "Max questions to generate (default: 10)"
+
+quality_requirements:
+  - "FVS validation (Phase 7)"
+  - "Max 10 questions"
+  - "Prioritized by job importance"
+  - "Actionable remediation advice"
+  - "No AI pattern detection"
+
+cost:
+  questions_phase: "~$0.02/request"
+  processor_phase: "~$0.05/request"
+  total: "$0.077/request"
+
+dependencies:
+  - "models_spec.yaml"
+  - "VPR 6-stage output"
+  - "COST_OPTIMIZATION_VALIDATION.md Strategy 3"
+  - "CRITICAL_CORRECTIONS.md Section 8"
+  - "docs/specs/02-company-research.md"
+
+integration:
+  - name: "CV Tailoring (Phase 4)"
+    purpose: "input source"
+  - name: "Cover Letter (Phase 6)"
+    purpose: "uses gap responses"
+  - name: "Interview Prep (Phase 9)"
+    purpose: "generates questions"
+  - name: "Quality Validator (Phase 7)"
+    purpose: "validate gap analysis"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RELATED FILES
+# ─────────────────────────────────────────────────────────────────────────────
+related_files:
+  specs:
+    - "docs/specs/02-company-research.md"
+    - "docs/refactor/specs/prompt_library_spec.yaml"
+    - "docs/swagger/careervp-api-v1.yaml"
+
+  code:
+    - "src/backend/careervp/handlers/gap_handler.py"
+    - "src/backend/careervp/logic/gap_analysis.py"
+    - "src/backend/careervp/logic/prompts/gap_analysis_prompt.py"
+    - "src/backend/careervp/logic/fvs_validator.py"
+
+  infrastructure:
+    - "careervp-gap-responses-table-dev"
+    - "careervp-jobs-table-dev"
+
+  tasks:
+    - "docs/tasks/08-gap-analysis/"

@@ -1,0 +1,1530 @@
+openapi: 3.0.3
+info:
+  title: CareerVP API
+  description: |
+    CareerVP API - Job Search Assistant
+
+    ## API Version: v1
+
+    ## Base URL
+    ```
+    https://api.careervp.com/v1
+    ```
+
+    ## Authentication
+    All endpoints require Bearer token authentication.
+    ```
+    Authorization: Bearer <token>
+    ```
+
+    ## Rate Limits
+    - Free tier: 10 requests/minute
+    - Premium tier: 100 requests/minute
+
+    ## Error Codes
+    | Code | Description |
+    |------|-------------|
+    | 400 | Bad Request - Invalid input |
+    | 401 | Unauthorized - Invalid token |
+    | 403 | Forbidden - Insufficient permissions |
+    | 404 | Not Found - Resource not found |
+    | 422 | Unprocessable Entity - Validation error |
+    | 429 | Rate Limit Exceeded |
+    | 500 | Internal Server Error |
+  version: 1.0.0
+  contact:
+    name: CareerVP Support
+    email: support@careervp.com
+
+servers:
+  - url: https://api.careervp.com/v1
+    description: Production
+  - url: https://staging-api.careervp.com/v1
+    description: Staging
+  - url: http://localhost:3000/v1
+    description: Local development
+
+tags:
+  - name: Auth
+    description: Authentication endpoints
+  - name: Users
+    description: User management
+  - name: Jobs
+    description: Job management
+  - name: VPR
+    description: Value Proposition Report generator
+  - name: Gap Analysis
+    description: Gap analysis and responses
+  - name: CV Tailoring
+    description: CV tailoring and ATS optimization
+  - name: Cover Letter
+    description: Cover letter generation
+  - name: Interview Prep
+    description: Interview preparation
+  - name: Company Research
+    description: Company research
+
+paths:
+  # ==========================================================================
+  # AUTH
+  # ==========================================================================
+
+  /auth/register:
+    post:
+      tags:
+        - Auth
+      summary: Register new user
+      description: Create a new user account
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Login user
+      description: Authenticate and receive access token
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid credentials
+
+  /auth/refresh:
+    post:
+      tags:
+        - Auth
+      summary: Refresh access token
+      description: Get new access token using refresh token
+      operationId: refreshToken
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid refresh token
+
+  # ==========================================================================
+  # USERS
+  # ==========================================================================
+
+  /users/me:
+    get:
+      tags:
+        - Users
+      summary: Get current user
+      description: Get the authenticated user's profile
+      operationId: getCurrentUser
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+    put:
+      tags:
+        - Users
+      summary: Update current user
+      description: Update the authenticated user's profile
+      operationId: updateCurrentUser
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+  /users/me/cv:
+    post:
+      tags:
+        - Users
+      summary: Upload CV
+      description: Upload a new CV for the authenticated user
+      operationId: uploadCV
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CVUploadRequest'
+      responses:
+        '201':
+          description: CV uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CVUploadResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+  /users/me/cvs:
+    get:
+      tags:
+        - Users
+      summary: List user's CVs
+      description: Get all CVs for the authenticated user
+      operationId: listUserCVs
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+          description: Maximum number of results
+        - in: query
+          name: cursor
+          schema:
+            type: string
+          description: Pagination cursor
+      responses:
+        '200':
+          description: List of CVs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CVListResponse'
+
+  # ==========================================================================
+  # JOBS
+  # ==========================================================================
+
+  /jobs:
+    post:
+      tags:
+        - Jobs
+      summary: Create job
+      description: Create a new job entry
+      operationId: createJob
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobCreateRequest'
+      responses:
+        '201':
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+    get:
+      tags:
+        - Jobs
+      summary: List jobs
+      description: Get all jobs for the authenticated user
+      operationId: listJobs
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: List of jobs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobListResponse'
+
+  /jobs/{jobId}:
+    get:
+      tags:
+        - Jobs
+      summary: Get job
+      description: Get a specific job by ID
+      operationId: getJob
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '404':
+          description: Job not found
+
+  # ==========================================================================
+  # VPR GENERATOR
+  # ==========================================================================
+
+  /vpr/generate:
+    post:
+      tags:
+        - VPR
+      summary: Generate VPR
+      description: |
+        Generate a Value Proposition Report (VPR).
+
+        **Requires:** CV + Gap Analysis responses completed first
+
+        **Workflow:** CV -> Gap Analysis -> VPR Generator -> CV Tailoring / Cover Letter
+      operationId: generateVPR
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VPRGenerateRequest'
+      responses:
+        '202':
+          description: Request accepted, processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VPRGenerateResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '422':
+          description: Prerequisites not met (Gap Analysis incomplete)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /vpr/{vprId}:
+    get:
+      tags:
+        - VPR
+      summary: Get VPR status or result
+      description: Poll for VPR generation status or retrieve completed result
+      operationId: getVPR
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: vprId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: VPR status or result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VPRStatusResponse'
+        '404':
+          description: VPR not found
+
+  /users/me/vprs:
+    get:
+      tags:
+        - VPR
+      summary: List user's VPRs
+      description: Get all VPRs for the authenticated user
+      operationId: listUserVPRs
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of VPRs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VPRListResponse'
+
+  # ==========================================================================
+  # GAP ANALYSIS
+  # ==========================================================================
+
+  /gap-analysis/questions:
+    post:
+      tags:
+        - Gap Analysis
+      summary: Generate gap questions
+      description: |
+        Generate gap analysis questions based on CV and job requirements.
+
+        **Workflow:** CV -> Gap Analysis Questions -> Gap Analysis Responses
+      operationId: generateGapQuestions
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GapQuestionRequest'
+      responses:
+        '200':
+          description: Gap questions generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GapQuestionResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+  /gap-analysis/responses:
+    post:
+      tags:
+        - Gap Analysis
+      summary: Submit gap responses
+      description: |
+        Submit user's answers to gap analysis questions.
+
+        **Output:** Impact statements usable in VPR and Cover Letter
+      operationId: submitGapResponses
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GapResponseRequest'
+      responses:
+        '200':
+          description: Responses saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GapResponseResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+  /gap-analysis/{jobId}/questions:
+    get:
+      tags:
+        - Gap Analysis
+      summary: Get previous gap questions
+      description: Get user's previous gap questions for a job
+      operationId: getGapQuestions
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Previous gap questions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GapQuestionHistoryResponse'
+
+  # ==========================================================================
+  # CV TAILORING
+  # ==========================================================================
+
+  /cv-tailoring/generate:
+    post:
+      tags:
+        - CV Tailoring
+      summary: Generate tailored CV
+      description: |
+        Generate an ATS-optimized CV tailored to a job.
+
+        **Requires:** CV + VPR completed first
+
+        **Gate Remediation:** Minimum ATS score 8.0 required
+      operationId: generateTailoredCV
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CVTailoringRequest'
+      responses:
+        '202':
+          description: Request accepted, processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CVTailoringResponse'
+        '422':
+          description: ATS score below minimum threshold
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /cv-tailoring/{cvTailoringId}:
+    get:
+      tags:
+        - CV Tailoring
+      summary: Get tailored CV status or result
+      description: Poll for CV tailoring status or retrieve completed result
+      operationId: getTailoredCV
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: cvTailoringId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: CV tailoring status or result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CVTailoringStatusResponse'
+        '404':
+          description: Not found
+
+  /users/me/tailored-cvs:
+    get:
+      tags:
+        - CV Tailoring
+      summary: List user's tailored CVs
+      operationId: listTailoredCVs
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of tailored CVs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CVTailoringListResponse'
+
+  # ==========================================================================
+  # COVER LETTER
+  # ==========================================================================
+
+  /cover-letter/generate:
+    post:
+      tags:
+        - Cover Letter
+      summary: Generate cover letter
+      description: |
+        Generate a 3-paragraph cover letter.
+
+        **Requires:** CV + VPR + Gap Analysis + Company Research
+
+        **Paragraph Structure:**
+        - Paragraph 1 (Hook): 80-100 words, UVP + company reference
+        - Paragraph 2 (Proof Points): 3 requirements, Claim + Proof format
+        - Paragraph 3 (Close): 60-80 words, CTA included
+      operationId: generateCoverLetter
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoverLetterRequest'
+      responses:
+        '202':
+          description: Request accepted, processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoverLetterResponse'
+        '422':
+          description: Prerequisites not met
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /cover-letter/{coverLetterId}:
+    get:
+      tags:
+        - Cover Letter
+      summary: Get cover letter status or result
+      operationId: getCoverLetter
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: coverLetterId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cover letter status or result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoverLetterStatusResponse'
+        '404':
+          description: Not found
+
+  /users/me/cover-letters:
+    get:
+      tags:
+        - Cover Letter
+      summary: List user's cover letters
+      operationId: listCoverLetters
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of cover letters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoverLetterListResponse'
+
+  # ==========================================================================
+  # INTERVIEW PREP
+  # ==========================================================================
+
+  /interview-prep/generate:
+    post:
+      tags:
+        - Interview Prep
+      summary: Generate interview prep
+      description: |
+        Generate STAR-formatted interview questions and answers.
+
+        **Requires:** VPR + Gap Analysis
+      operationId: generateInterviewPrep
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InterviewPrepRequest'
+      responses:
+        '202':
+          description: Request accepted, processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InterviewPrepResponse'
+
+  /interview-prep/{interviewPrepId}:
+    get:
+      tags:
+        - Interview Prep
+      summary: Get interview prep status or result
+      operationId: getInterviewPrep
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Interview prep status or result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InterviewPrepStatusResponse'
+
+  # ==========================================================================
+  # COMPANY RESEARCH
+  # ==========================================================================
+
+  /company-research/fetch:
+    post:
+      tags:
+        - Company Research
+      summary: Fetch company research
+      description: |
+        Fetch and research company information from job posting URL.
+      operationId: fetchCompanyResearch
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyResearchRequest'
+      responses:
+        '202':
+          description: Request accepted, processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyResearchResponse'
+
+  /company-research/{jobId}:
+    get:
+      tags:
+        - Company Research
+      summary: Get company research
+      description: Get company research for a specific job
+      operationId: getCompanyResearch
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Company research data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyResearchResultResponse'
+
+  # ==========================================================================
+  # HEALTH
+  # ==========================================================================
+
+  /health:
+    get:
+      summary: API health check
+      description: Check API and service health
+      operationId: healthCheck
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+# ==========================================================================
+# COMPONENTS
+# ==========================================================================
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # =========================================================================
+    # AUTH SCHEMAS
+    # =========================================================================
+
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - name
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        name:
+          type: string
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_in:
+          type: integer
+        token_type:
+          type: string
+          default: Bearer
+
+    # =========================================================================
+    # USER SCHEMAS
+    # =========================================================================
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        timezone:
+          type: string
+
+    CVUploadRequest:
+      type: object
+      required:
+        - cv_content
+        - file_name
+      properties:
+        cv_content:
+          type: string
+        file_name:
+          type: string
+
+    CVUploadResponse:
+      type: object
+      properties:
+        cv_id:
+          type: string
+        status:
+          type: string
+          enum:
+            - processing
+            - parsed
+            - failed
+        parsed_data:
+          type: object
+
+    CVListResponse:
+      type: object
+      properties:
+        cvs:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              file_name:
+                type: string
+              uploaded_at:
+                type: string
+                format: date-time
+        cursor:
+          type: string
+
+    # =========================================================================
+    # JOB SCHEMAS
+    # =========================================================================
+
+    JobCreateRequest:
+      type: object
+      required:
+        - title
+        - company_name
+        - description
+      properties:
+        title:
+          type: string
+        company_name:
+          type: string
+        description:
+          type: string
+        url:
+          type: string
+          format: uri
+
+    JobResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        company_name:
+          type: string
+        description:
+          type: string
+        url:
+          type: string
+        requirements:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+
+    JobListResponse:
+      type: object
+      properties:
+        jobs:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobResponse'
+
+    # =========================================================================
+    # VPR SCHEMAS
+    # =========================================================================
+
+    VPRGenerateRequest:
+      type: object
+      required:
+        - cv_id
+        - job_id
+        - gap_response_ids
+      properties:
+        cv_id:
+          type: string
+        job_id:
+          type: string
+        gap_response_ids:
+          type: array
+          items:
+            type: string
+        options:
+          type: object
+          properties:
+            include_company_research:
+              type: boolean
+              default: true
+            tone:
+              type: string
+              enum:
+                - professional
+                - conversational
+                - formal
+
+    VPRGenerateResponse:
+      type: object
+      properties:
+        request_id:
+          type: string
+        status:
+          type: string
+          enum:
+            - processing
+        estimated_time_seconds:
+          type: integer
+        webhook_url:
+          type: string
+
+    VPRStatusResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum:
+            - pending
+            - processing
+            - completed
+            - failed
+        result:
+          type: object
+          properties:
+            uvp:
+              type: string
+            differentiators:
+              type: array
+              items:
+                type: object
+                properties:
+                  text:
+                    type: string
+                  source:
+                    type: string
+                    enum:
+                      - cv
+                      - gap_response
+            strategic_narrative:
+              type: string
+            company_job_fit_score:
+              type: number
+            meta_evaluation:
+              type: object
+              properties:
+                persuasion_score:
+                  type: number
+                completeness_score:
+                  type: number
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+
+    VPRListResponse:
+      type: object
+      properties:
+        vprs:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              job_title:
+                type: string
+              company_name:
+                type: string
+              created_at:
+                type: string
+                format: date-time
+
+    # =========================================================================
+    # GAP ANALYSIS SCHEMAS
+    # =========================================================================
+
+    GapQuestionRequest:
+      type: object
+      required:
+        - cv_id
+        - job_id
+      properties:
+        cv_id:
+          type: string
+        job_id:
+          type: string
+        max_questions:
+          type: integer
+          default: 10
+        focus_areas:
+          type: array
+          items:
+            type: string
+
+    GapQuestionResponse:
+      type: object
+      properties:
+        questions:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              text:
+                type: string
+              tags:
+                type: array
+                items:
+                  type: string
+              strategic_intent:
+                type: string
+              evidence_gap:
+                type: string
+        missing_qualifications:
+          type: array
+          items:
+            type: object
+            properties:
+              skill:
+                type: string
+              priority:
+                type: string
+
+    GapResponseRequest:
+      type: object
+      required:
+        - responses
+      properties:
+        responses:
+          type: array
+          items:
+            type: object
+            properties:
+              question_id:
+                type: string
+              response:
+                type: string
+              quantifiable_data:
+                type: object
+                properties:
+                  team_size:
+                    type: integer
+                  duration_months:
+                    type: integer
+                  percentage:
+                    type: number
+
+    GapResponseResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        impact_statements:
+          type: array
+          items:
+            type: object
+            properties:
+              text:
+                type: string
+              evidence_type:
+                type: string
+                enum:
+                  - CV_IMPACT
+                  - INTERVIEW_PREP
+              usable_in:
+                type: array
+                items:
+                  type: string
+
+    GapQuestionHistoryResponse:
+      type: object
+      properties:
+        questions:
+          type: array
+
+    # =========================================================================
+    # CV TAILORING SCHEMAS
+    # =========================================================================
+
+    CVTailoringRequest:
+      type: object
+      required:
+        - cv_id
+        - job_id
+        - vpr_id
+      properties:
+        cv_id:
+          type: string
+        job_id:
+          type: string
+        vpr_id:
+          type: string
+        options:
+          type: object
+          properties:
+            preserve_length:
+              type: boolean
+              default: true
+            highlight_keywords:
+              type: boolean
+              default: true
+            target_ats:
+              type: string
+              default: standard
+
+    CVTailoringResponse:
+      type: object
+      properties:
+        request_id:
+          type: string
+        status:
+          type: string
+          enum:
+            - processing
+        estimated_time_seconds:
+          type: integer
+
+    CVTailoringStatusResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum:
+            - pending
+            - processing
+            - completed
+            - failed
+        result:
+          type: object
+          properties:
+            tailored_cv:
+              type: string
+            ats_score:
+              type: number
+            keyword_matches:
+              type: object
+              properties:
+                matched:
+                  type: array
+                  items:
+                    type: string
+                missing:
+                  type: array
+                  items:
+                    type: string
+            suggestions:
+              type: array
+              items:
+                type: string
+            fvs_validation:
+              type: object
+              properties:
+                is_valid:
+                  type: boolean
+                violations:
+                  type: array
+                  items:
+                    type: string
+
+    CVTailoringListResponse:
+      type: object
+      properties:
+        tailored_cvs:
+          type: array
+
+    # =========================================================================
+    # COVER LETTER SCHEMAS
+    # =========================================================================
+
+    CoverLetterRequest:
+      type: object
+      required:
+        - cv_id
+        - job_id
+        - vpr_id
+        - gap_response_ids
+        - company_research_id
+      properties:
+        cv_id:
+          type: string
+        job_id:
+          type: string
+        vpr_id:
+          type: string
+        gap_response_ids:
+          type: array
+          items:
+            type: string
+        company_research_id:
+          type: string
+        options:
+          type: object
+          properties:
+            tone:
+              type: string
+              enum:
+                - professional
+                - conversational
+                - formal
+            length:
+              type: string
+              enum:
+                - short
+                - standard
+                - long
+            include_portfolio_link:
+              type: boolean
+              default: false
+
+    CoverLetterResponse:
+      type: object
+      properties:
+        request_id:
+          type: string
+        status:
+          type: string
+          enum:
+            - processing
+        estimated_time_seconds:
+          type: integer
+
+    CoverLetterStatusResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+        result:
+          type: object
+          properties:
+            cover_letter:
+              type: string
+            paragraphs:
+              type: object
+              properties:
+                hook:
+                  type: object
+                  properties:
+                    word_count:
+                      type: integer
+                    includes_uvp:
+                      type: boolean
+                    includes_company_reference:
+                      type: boolean
+                proof_points:
+                  type: object
+                  properties:
+                    requirements_matched:
+                      type: integer
+                    claims_verified:
+                      type: boolean
+                    quantified_evidence:
+                      type: boolean
+                close:
+                  type: object
+                  properties:
+                    word_count:
+                      type: integer
+                    includes_cta:
+                      type: boolean
+            fvs_validation:
+              type: object
+              properties:
+                is_valid:
+                  type: boolean
+                violations:
+                  type: array
+                  items:
+                    type: string
+
+    CoverLetterListResponse:
+      type: object
+      properties:
+        cover_letters:
+          type: array
+
+    # =========================================================================
+    # INTERVIEW PREP SCHEMAS
+    # =========================================================================
+
+    InterviewPrepRequest:
+      type: object
+      required:
+        - vpr_id
+        - gap_response_ids
+      properties:
+        vpr_id:
+          type: string
+        gap_response_ids:
+          type: array
+          items:
+            type: string
+        focus_areas:
+          type: array
+          items:
+            type: string
+        question_count:
+          type: integer
+          default: 5
+
+    InterviewPrepResponse:
+      type: object
+      properties:
+        request_id:
+          type: string
+        status:
+          type: string
+
+    InterviewPrepStatusResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+        result:
+          type: object
+          properties:
+            questions:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  text:
+                    type: string
+                  suggested_answer:
+                    type: object
+                    properties:
+                      format:
+                        type: string
+                        enum:
+                          - STAR
+                          - CAR
+                          - XYZ
+                      situation:
+                        type: string
+                      task:
+                        type: string
+                      action:
+                        type: string
+                      result:
+                        type: string
+
+    # =========================================================================
+    # COMPANY RESEARCH SCHEMAS
+    # =========================================================================
+
+    CompanyResearchRequest:
+      type: object
+      required:
+        - job_id
+      properties:
+        job_id:
+          type: string
+        url:
+          type: string
+          format: uri
+        company_name:
+          type: string
+
+    CompanyResearchResponse:
+      type: object
+      properties:
+        request_id:
+          type: string
+        status:
+          type: string
+
+    CompanyResearchResultResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        company_name:
+          type: string
+        mission:
+          type: string
+        values:
+          type: array
+          items:
+            type: string
+        recent_news:
+          type: array
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+              date:
+                type: string
+        culture:
+          type: string
+        products:
+          type: array
+          items:
+            type: string
+        funding_status:
+          type: string
+        size_range:
+          type: string
+        industry:
+          type: string
+
+    # =========================================================================
+    # ERROR SCHEMAS
+    # =========================================================================
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                  message:
+                    type: string
+
+    # =========================================================================
+    # HEALTH SCHEMAS
+    # =========================================================================
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - healthy
+            - degraded
+            - unhealthy
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+        services:
+          type: object
+          properties:
+            dynamodb:
+              type: string
+            lambda:
+              type: string
+            bedrock:
+              type: string
+
+  # =========================================================================
+  # RESPONSES
+  # =========================================================================
+
+  responses:
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

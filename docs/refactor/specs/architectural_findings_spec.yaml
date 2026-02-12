@@ -1,0 +1,77 @@
+# Architectural Findings Specification
+# Source: ARCHITECTURAL_FINDINGS_REMEDIATION.md
+# Used by: Phase 1 (Model Unification), Phase 2 (DAL)
+
+spec_version: "1.0"
+date_created: "2026-02-12"
+
+findings:
+  - id: "LAYER-001"
+    violation: "Logic in handlers"
+    severity: "high"
+    remediation: "Move business logic to /logic layer"
+    files:
+      - "handlers/cv_handler.py"
+      - "handlers/job_handler.py"
+    expected_location: "logic/"
+
+  - id: "LAYER-002"
+    violation: " DAL imports in handlers"
+    severity: "medium"
+    remediation: "Handlers should use Logic layer, not DAL directly"
+    pattern: "from dal/.*import"
+    expected_pattern: "from logic/.*import"
+
+  - id: "LAYER-003"
+    violation: "Models in DAL"
+    severity: "medium"
+    remediation: "Models belong in /models"
+    files:
+      - "dal/models/*.py"
+    expected_location: "models/"
+
+layer_rules:
+  handler:
+    responsibilities:
+      - "Request validation (Pydantic)"
+      - "Response formatting"
+      - "Call Logic layer"
+    imports:
+      - "logic.*"
+      - "models.*"
+    must_not_import:
+      - "dal.*"
+
+  logic:
+    responsibilities:
+      - "Business rules"
+      - "Feature validation"
+      - "Call DAL"
+    imports:
+      - "dal.*"
+      - "models.*"
+    must_not_import:
+      - "handlers.*"
+
+  dal:
+    responsibilities:
+      - "DynamoDB operations"
+      - "S3 operations"
+      - "Data persistence"
+    imports:
+      - "models.*"
+    must_not_import:
+      - "handlers.*"
+      - "logic.*"
+
+consolidation_targets:
+  - layer: "models"
+    action: "Consolidate duplicate models"
+    targets:
+      - "handlers/models/*.py"
+      - "dal/models/*.py"
+
+  - layer: "logic"
+    action: "Move business logic from handlers"
+    targets:
+      - "handlers/*_logic.py"

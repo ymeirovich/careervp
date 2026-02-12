@@ -1,0 +1,97 @@
+# CV Tailoring Specification
+# Source: JSA_FEATURE_MAPPING.md Section 7
+# Phase: 4
+
+spec_version: "1.1"
+date_created: "2026-02-12"
+date_updated: "2026-02-10"
+
+description: |
+  CV Tailoring 3-Step Process adapts CV content for specific
+  job requirements using targeted matching and gate tests.
+
+handler_status: "IMPLEMENTED"
+handler_file: "src/backend/careervp/handlers/cv_tailoring_handler.py"
+logic_file: "src/backend/careervp/logic/cv_tailoring.py"
+prompt_file: "src/backend/careervp/logic/prompts/cv_tailoring_prompt.py"
+
+implementation:
+  logic_file: "src/backend/careervp/logic/cv_tailoring_logic.py"
+  handler_file: "src/backend/careervp/handlers/cv_tailoring_handler.py"
+  tests: "tests/unit/test_cv_tailoring_*.py"
+  model: "Claude Haiku 4.5 (TEMPLATE mode)"
+
+three_step_process:
+  - step: 1
+    method: "_analyze()"
+    input: "CV + Job Requirements"
+    output: "AnalysisResult"
+    description: "Analyze job requirements and CV match"
+
+  - step: 2
+    method: "_self_correct()"
+    input: "AnalysisResult"
+    output: "CorrectedCV"
+    description: "Apply gate remediation"
+
+  - step: 3
+    method: "_generate()"
+    input: "CorrectedCV"
+    output: "TailoredCV"
+    description: "Generate tailored CV content"
+
+gate_tests:
+  minimum_score: 7.0
+  gates:
+    - gate: 1
+      id: "matching_experience"
+      minimum_score: 9.0
+      source: "TEST_STRATEGY.md Section 4"
+
+    - gate: 2
+      id: "career_changer"
+      minimum_score: 7.5
+      source: "TEST_STRATEGY.md Section 4"
+
+    - gate: 3
+      id: "leadership_role"
+      minimum_score: 8.0
+
+    - gate: 4
+      id: "senior_skills_gap"
+      minimum_score: 7.0
+
+    - gate: 5
+      id: "recent_graduate"
+      minimum_score: 7.5
+
+    - gate: 6
+      id: "remote_first"
+      minimum_score: 8.0
+
+    - gate: 7
+      id: "startup_culture"
+      minimum_score: 8.0
+
+    - gate: 8
+      id: "industry_transition"
+      minimum_score: 7.5
+
+    - gate: 9
+      id: "contract_to_perm"
+      minimum_score: 8.0
+
+    - gate: 10
+      id: "employment_gap"
+      minimum_score: 7.0
+
+dependencies:
+  - "models_spec.yaml (CV models)"
+  - "cost_optimization_spec.yaml"
+  - "TEST_STRATEGY.md"
+
+integration:
+  - name: "Gap Analysis (Phase 5)"
+    purpose: "for remediation"
+  - name: "Cover Letter (Phase 6)"
+    purpose: "for next step"

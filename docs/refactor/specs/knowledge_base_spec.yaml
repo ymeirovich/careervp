@@ -1,0 +1,60 @@
+# Knowledge Base Specification
+# Source: JSA_FEATURE_MAPPING.md Section 10
+# Phase: 8
+
+spec_version: "1.0"
+date_created: "2026-02-12"
+
+description: |
+  Knowledge Base Repository stores and retrieves user-specific data
+  including gap responses and company research for continuity.
+
+implementation:
+  repository_file: "src/backend/careervp/dal/knowledge_repository.py"
+  handler_file: "src/backend/careervp/handlers/knowledge_base_handler.py"
+  tests: "tests/unit/test_knowledge_*.py tests/integration/test_knowledge_base_flow.py"
+
+data_types:
+  - name: "GapResponse"
+    storage: "DynamoDB Table: careervp-gap-responses"
+    fields:
+      - name: "user_email"
+        key_type: "PK"
+      - name: "application_id"
+        key_type: "SK"
+      - name: "question_id"
+      - name: "response_text"
+      - name: "created_at"
+
+  - name: "CompanyResearch"
+    storage: "DynamoDB Table + S3"
+    fields:
+      - name: "company_name"
+        key_type: "PK"
+      - name: "research_data"
+      - name: "cached_at"
+      - name: "ttl"
+        value: "30 days"
+
+methods:
+  - name: "KnowledgeRepository"
+    methods:
+      - "save_gap_response(response) -> Result"
+      - "get_gap_responses(user_email, application_id) -> List[GapResponse]"
+      - "save_company_research(company_name, research) -> Result"
+      - "get_company_research(company_name) -> CompanyResearch"
+
+ttl_policies:
+  gap_responses: "24 months (user lifetime)"
+  company_research: "30 days"
+  cv_context: "24 hours"
+
+dependencies:
+  - "DEPLOYMENT_OPERATIONS.md Section 2 (DynamoDB)"
+  - "DEPLOYMENT_OPERATIONS.md Section 3 (S3)"
+
+integration_points:
+  - name: "Gap Analysis (Phase 5)"
+    purpose: "stores responses"
+  - name: "Company Research"
+    purpose: "caches research"

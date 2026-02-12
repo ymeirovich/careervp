@@ -1,0 +1,47 @@
+# VPC Architecture Specification
+# Source: VPC_ARCHITECTURE_DECISION.md
+# Used by: Phase 0 (Security Foundation)
+
+spec_version: "1.0"
+date_created: "2026-02-12"
+
+architecture:
+  vpc:
+    cidr: "10.0.0.0/16"
+    subnets:
+      - name: "public"
+        cidr: "10.0.1.0/24"
+        az: "us-east-1a"
+      - name: "public"
+        cidr: "10.0.2.0/24"
+        az: "us-east-1b"
+      - name: "private"
+        cidr: "10.0.10.0/24"
+        az: "us-east-1a"
+      - name: "private"
+        cidr: "10.0.11.0/24"
+        az: "us-east-1b"
+
+  lambdas:
+    placement: "private_subnets"
+    vpc_access: true
+
+  nat_gateway:
+    enabled: true
+    elastic_ip: true
+
+  security_groups:
+    - name: "lambda-sg"
+      inbound:
+        - source: "alb-sg"
+          port: 443
+          protocol: "tcp"
+      outbound:
+        - destination: "0.0.0.0/0"
+          port: 443
+          protocol: "tcp"
+
+  alb:
+    placement: "public_subnets"
+    scheme: "internet-facing"
+    security_group: "alb-sg"

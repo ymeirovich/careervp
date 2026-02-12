@@ -1,0 +1,58 @@
+# Circuit Breaker Specification
+# Source: CIRCUIT_BREAKER_FALLBACK.md
+# Used by: Phase 0 (Security Foundation), Phase 2 (Cost Optimization)
+
+spec_version: "1.0"
+date_created: "2026-02-12"
+
+implementation:
+  file: "src/backend/careervp/logic/circuit_breaker.py"
+  class: "CircuitBreaker"
+  patterns:
+    - "failure_threshold: 5 consecutive failures"
+    - "success_threshold: 3 consecutive successes"
+    - "timeout: 60 seconds"
+
+states:
+  - state: "CLOSED"
+    description: "Normal operation"
+    action: "allow requests"
+
+  - state: "OPEN"
+    description: "Failure threshold exceeded"
+    action: "reject requests, use fallback"
+
+  - state: "HALF_OPEN"
+    description: "Testing if service recovered"
+    action: "allow limited requests"
+
+fallback_strategy:
+  types:
+    - type: "cache_fallback"
+      ttl: "300 seconds"
+      description: "Use cached response if available"
+
+    - type: "degraded_response"
+      description: "Return simplified response"
+
+    - type: "queue_and_retry"
+      max_queue_size: 100
+      retry_delay: 5
+      description: "Queue request for later processing"
+
+usage_by_feature:
+  - feature: "LLM calls"
+    strategy: "cache_fallback"
+    fallback: "cached_cv_context"
+
+  - feature: "External API calls"
+    strategy: "queue_and_retry"
+    fallback: "return error with retry instruction"
+
+tests:
+  file: "tests/unit/test_circuit_breaker.py"
+  cases:
+    - "test_state_transitions"
+    - "test_failure_threshold"
+    - "test_success_threshold"
+    - "test_fallback_execution"

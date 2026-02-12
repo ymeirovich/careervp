@@ -1,0 +1,200 @@
+# Cover Letter Specification
+# Source: JSA_FEATURE_MAPPING.md Section 9
+# Phase: 6
+# Reference: docs/specs/02-company-research.md (handler implementation pattern)
+
+spec_version: "1.1"
+date_created: "2026-02-12"
+date_updated: "2026-02-10"
+
+description: |
+  Cover Letter Generator creates personalized cover letters
+  that avoid AI detection patterns while highlighting CV strengths.
+
+handler_status: "TO_BE_CREATED"
+handler_file: "src/backend/careervp/handlers/cover_letter_handler.py"
+logic_file: "src/backend/careervp/logic/cover_letter.py"
+prompt_file: "src/backend/careervp/logic/prompts/cover_letter_prompt.py"
+
+reference_implementation: "docs/specs/02-company-research.md"
+
+implementation:
+  generator_file: "src/backend/careervp/logic/cover_letter.py"
+  handler_file: "src/backend/careervp/handlers/cover_letter_handler.py"
+  tests: "tests/unit/test_cover_letter_*.py tests/integration/test_cover_letter_flow.py"
+  model: "Claude Haiku 4.5 (TEMPLATE mode)"
+  max_tokens: 1000
+
+structure:
+  paragraph_1:
+    type: "Hook"
+    word_count: "80-100 words"
+    content:
+      - "Company-specific detail"
+      - "Enthusiasm without hyperbole"
+      - "Position reference"
+
+  paragraph_2:
+    type: "Proof Points"
+    content:
+      - "Requirements matched with evidence"
+      - "3-4 bullet points max"
+      - "Quantifiable achievements"
+
+  paragraph_3:
+    type: "Close"
+    word_count: "60-80 words"
+    content:
+      - "Call to action"
+      - "Interview availability"
+      - "Professional sign-off"
+
+anti_ai_detection:
+  source: "CRITICAL_CORRECTIONS.md Section 8"
+  patterns_to_avoid:
+    - "Excessive AI phrases (e.g., 'In the ever-evolving landscape')"
+    - "Perfect parallel structure"
+    - "Generic transitions"
+    - "Overly formal tone"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HANDLER IMPLEMENTATION (based on company_research_handler.py pattern)
+# ─────────────────────────────────────────────────────────────────────────────
+handler:
+  pattern: "Synchronous Lambda Handler (like company_research_handler.py)"
+  validation:
+    - "Validate request body against CoverLetterRequest schema"
+    - "Verify CV, VPR, Gap Analysis, Company Research are completed"
+    - "Check user has access to referenced resources"
+
+  steps:
+    1_request_validation: |
+      Validate CV ID, VPR ID, and Job ID exist and belong to user
+
+    2_fetch_context: |
+      Fetch:
+      - CV facts from UserCV model
+      - VPR differentiators from VPR model
+      - Gap impact statements from GapResponses
+      - Company research from CompanyResearch model
+
+    3_build_prompt: |
+      Build prompt using cover_letter_prompt.py:
+      - Inject CV facts as context
+      - Add VPR differentiators
+      - Include Gap impact statements
+      - Reference Company Research for personalization
+
+    4_invoke_llm: |
+      Call Claude Haiku 4.5:
+      - Temperature: 0.5
+      - Max tokens: 1000
+      - System prompt: cover_letter_system_prompt()
+
+    5_validate_output: |
+      Validate:
+      - Word count <= 400
+      - 3 paragraphs structure
+      - FVS compliance (no hallucinations)
+
+    6_save_result: |
+      Save cover letter to DynamoDB:
+      - Table: applications-table
+      - SK: ARTIFACT#COVER_LETTER#v1
+
+    7_return_response: |
+      Return cover letter content + metadata
+
+  api_endpoint: "POST /cover-letter/generate"
+  request_schema:
+    type: "object"
+    required:
+      - "cv_id"
+      - "job_id"
+      - "vpr_id"
+    properties:
+      cv_id:
+        type: "string"
+        description: "ID of the user's parsed CV"
+      job_id:
+        type: "string"
+        description: "ID of the job application"
+      vpr_id:
+        type: "string"
+        description: "ID of the generated VPR"
+      gap_response_ids:
+        type: "array"
+        items:
+          type: "string"
+        description: "IDs of gap analysis responses"
+      company_research_id:
+        type: "string"
+        description: "ID of company research (optional)"
+
+  response_schema:
+    type: "object"
+    properties:
+      cover_letter:
+        type: "string"
+        description: "Generated cover letter (markdown)"
+      word_count:
+        type: "integer"
+      paragraphs:
+        type: "object"
+        properties:
+          hook:
+            type: "object"
+            properties:
+              word_count: "integer"
+              includes_company_reference: "boolean"
+              includes_uvp: "boolean"
+          proof_points:
+            type: "object"
+            properties:
+              requirements_matched: "integer"
+              claims_verified: "boolean"
+          close:
+            type: "object"
+            properties:
+              word_count: "integer"
+              includes_cta: "boolean"
+
+quality_requirements:
+  - "FVS validation (Phase 7)"
+  - "Grammar score >= 9.0"
+  - "Tone: Professional but natural"
+  - "No AI pattern detection"
+  - "Word count <= 400 words"
+
+cost:
+  per_request: "$0.002-0.004"
+  monthly_estimate: "$2-4 (1000 requests)"
+
+dependencies:
+  - "CV Tailoring output (Phase 4)"
+  - "Gap Analysis responses (Phase 5)"
+  - "CRITICAL_CORRECTIONS.md Section 8"
+  - "docs/specs/02-company-research.md (handler pattern)"
+
+integration:
+  - name: "Quality Validator (Phase 7)"
+    purpose: "FVS validation"
+  - name: "Interview Prep (Phase 9)"
+    purpose: "coherent narrative"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RELATED FILES
+# ─────────────────────────────────────────────────────────────────────────────
+related_files:
+  specs:
+    - "docs/specs/02-company-research.md"
+    - "docs/refactor/specs/prompt_library_spec.yaml"
+    - "docs/swagger/careervp-api-v1.yaml"
+
+  code:
+    - "src/backend/careervp/handlers/company_research_handler.py"
+    - "src/backend/careervp/logic/prompts/cover_letter_prompt.py"
+    - "src/backend/careervp/logic/fvs_validator.py"
+
+  tasks:
+    - "docs/tasks/10-cover-letter/"

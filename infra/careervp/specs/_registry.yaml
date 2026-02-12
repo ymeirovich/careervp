@@ -1,0 +1,90 @@
+# Infrastructure Spec Registry
+# Generated: 2026-02-12
+# Updated: 2026-02-12 - Fixed naming to use NamingUtils conventions
+
+naming_convention:
+  tables: "NamingUtils.table_name(feature) -> careervp-{feature}-table-{env}"
+  buckets: "NamingUtils.bucket_name(purpose) -> careervp-{env}-{purpose}-{region_code}-{hash}"
+  utility: "infra/careervp/naming_utils.py"
+  constants: "infra/careervp/constants.py"
+
+specs:
+  - file: "dynamodb_spec.yaml"
+    source: "DEPLOYMENT_OPERATIONS.md, knowledge_base_spec.yaml"
+    category: "storage"
+    status: "UPDATED"
+    version: "1.1"
+
+  - file: "s3_spec.yaml"
+    source: "DEPLOYMENT_OPERATIONS.md"
+    category: "storage"
+    status: "UPDATED"
+    version: "1.1"
+
+stacks:
+  # Existing stack - manages original tables (users, sessions, jobs, idempotency)
+  - file: "api_db_construct.py"
+    spec: "dynamodb_spec.yaml (existing_tables)"
+    category: "dynamodb + s3"
+    naming: "NamingUtils.table_name(constants.USERS_TABLE_NAME)"
+    tables:
+      - "careervp-users-table-dev"
+      - "careervp-sessions-table-dev"
+      - "careervp-jobs-table-dev"
+      - "careervp-idempotency-table-dev"
+    buckets:
+      - "NamingUtils.bucket_name(constants.CV_BUCKET_NAME)"
+      - "NamingUtils.results_bucket_name(constants.VPR_RESULTS_BUCKET)"
+
+  # NEW stack - refactoring phase tables
+  - file: "dynamodb_stack.py"
+    spec: "dynamodb_spec.yaml (tables)"
+    category: "dynamodb"
+    naming: "NamingUtils.table_name(constants.*)"
+    tables:
+      - constant: "CVS_TABLE_NAME"
+        resolved: "careervp-cvs-table-dev"
+      - constant: "APPLICATIONS_TABLE_NAME"
+        resolved: "careervp-applications-table-dev"
+      - constant: "GAP_RESPONSES_TABLE_NAME"
+        resolved: "careervp-gap-responses-table-dev"
+      - constant: "KNOWLEDGE_TABLE_NAME"
+        resolved: "careervp-knowledge-table-dev"
+
+  # NEW stack - refactoring phase buckets
+  - file: "s3_stack.py"
+    spec: "s3_spec.yaml (buckets)"
+    category: "s3"
+    naming: "NamingUtils.bucket_name(constants.*)"
+    buckets:
+      - constant: "CV_BUCKET_NAME"
+        resolved: "careervp-dev-cvs-use1-{hash}"
+      - constant: "GENERATED_BUCKET_NAME"
+        resolved: "careervp-dev-generated-use1-{hash}"
+
+phase_mapping:
+  phase_0: []
+  phase_1: []
+  phase_2: []
+  phase_3: []
+  phase_4:
+    infra:
+      - "careervp-cvs-table-dev"          # DynamoDB table
+      - "careervp-applications-table-dev"  # DynamoDB table
+      - "careervp-dev-cvs-use1-{hash}"     # S3 bucket
+  phase_5:
+    infra:
+      - "careervp-gap-responses-table-dev"  # DynamoDB table
+  phase_6:
+    infra:
+      - "careervp-dev-generated-use1-{hash}"  # S3 bucket
+  phase_7: []
+  phase_8:
+    infra:
+      - "careervp-knowledge-table-dev"  # DynamoDB table
+  phase_9: []
+
+deployment:
+  command: "cdk deploy --all"
+  synth: "cdk synth"
+  bootstrap: "cdk bootstrap"

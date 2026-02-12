@@ -1,0 +1,47 @@
+# Models Specification
+# Source: REFACTORING_PLAN.md Section 2
+# Phase: 1
+
+spec_version: "1.0"
+date_created: "2026-02-12"
+
+categories:
+  - name: "CV Models"
+    source: "REFACTORING_PLAN.md Section 2.1"
+    file: "src/backend/careervp/models/cv.py"
+    tests: "tests/unit/test_cv_models.py"
+    models:
+      - "CVData"
+      - "CVSection"
+      - "WorkExperience"
+      - "Education"
+      - "Skill"
+
+  - name: "VPR Models"
+    source: "REFACTORING_PLAN_UPDATE.md Section 4"
+    file: "src/backend/careervp/models/vpr.py"
+    tests: "tests/unit/test_vpr_models.py"
+    models:
+      - "VPRData"
+      - "ValueProposition"
+      - "Achievement"
+      - "TargetRole"
+
+  - name: "FVS Models"
+    source: "REFACTORING_PLAN.md Section 2.3"
+    file: "src/backend/careervp/models/fvs.py"
+    tests: "tests/unit/test_fvs_models.py"
+    models:
+      - "FVSResult"
+      - "QualityScore"
+      - "GrammarIssue"
+      - "ToneIssue"
+
+dependencies:
+  - "ARCHITECTURAL_FINDINGS_REMEDIATION.md Section 3"
+  - "CRITICAL_CORRECTIONS.md Section 5"
+
+consolidation_rules:
+  - "Remove duplicate models from handlers"
+  - "Single source of truth per model type"
+  - "No logic in models - only data"

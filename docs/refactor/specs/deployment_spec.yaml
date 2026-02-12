@@ -1,0 +1,84 @@
+# Deployment Specification
+# Source: DEPLOYMENT_OPERATIONS.md
+# Used by: Phase 0 (Security), Phase 8 (Knowledge Base)
+
+spec_version: "1.0"
+date_created: "2026-02-12"
+
+lambda:
+  runtime: "python3.12"
+  memory: "512 MB"
+  timeout: "30 seconds"
+  powertools: "2.0.0"
+
+dynamodb:
+  tables:
+    - name: "careervp-users"
+      partition_key: "user_email"
+      sort_key: "entity_type"
+      billing: "PAY_PER_REQUEST"
+
+    - name: "careervp-cvs"
+      partition_key: "user_email"
+      sort_key: "cv_id"
+      billing: "PAY_PER_REQUEST"
+
+    - name: "careervp-jobs"
+      partition_key: "user_email"
+      sort_key: "job_id"
+      billing: "PAY_PER_REQUEST"
+
+    - name: "careervp-applications"
+      partition_key: "user_email"
+      sort_key: "application_id"
+      billing: "PAY_PER_REQUEST"
+
+    - name: "careervp-gap-responses"
+      partition_key: "user_email"
+      sort_key: "application_id"
+      billing: "PAY_PER_REQUEST"
+
+    - name: "careervp-knowledge"
+      partition_key: "user_email"
+      sort_key: "entity_type"
+      billing: "PAY_PER_REQUEST"
+
+s3:
+  buckets:
+    - name: "careervp-cvs"
+      public_access: false
+      encryption: "AES256"
+      versioning: true
+
+    - name: "careervp-generated"
+      public_access: false
+      encryption: "AES256"
+
+api_gateway:
+  cors:
+    allow_origins:
+      - "https://careervp.com"
+      - "http://localhost:3000"
+    allow_methods:
+      - "GET"
+      - "POST"
+      - "PUT"
+      - "DELETE"
+    allow_headers:
+      - "Authorization"
+      - "Content-Type"
+
+handler_patterns:
+  - pattern: "handlers/{feature}_handler.py"
+    class: "{Feature}Handler"
+    methods:
+      - "handle_{action}"
+
+dynamodb_patterns:
+  - pattern: "dal/{feature}_repository.py"
+    class: "{Feature}Repository"
+    methods:
+      - "create(data) -> str"
+      - "get(id) -> dict"
+      - "update(id, data) -> dict"
+      - "delete(id) -> bool"

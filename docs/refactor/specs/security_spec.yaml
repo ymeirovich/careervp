@@ -1,0 +1,44 @@
+# Security Specification
+# Source: REFACTORING_PLAN.md Section 3
+# Phase: 0
+
+spec_version: "1.0"
+date_created: "2026-02-12"
+
+requirements:
+  - id: SEC-001
+    name: "API Authorizer"
+    description: "Implement JWT-based API authorization"
+    source: "REFACTORING_PLAN.md Section 3.1"
+    validation:
+      - "Lambda Powertools middleware"
+      - "DynamoDB token blacklist"
+    tests:
+      - "tests/unit/test_auth_handler.py"
+      - "tests/unit/test_validators.py"
+
+  - id: SEC-002
+    name: "Input Validation"
+    description: "Validate all API inputs"
+    source: "REFACTORING_PLAN.md Section 3.2"
+    validation:
+      - "Pydantic models for schema validation"
+      - "Request body validation"
+    tests:
+      - "tests/unit/test_validators.py"
+
+  - id: SEC-003
+    name: "Circuit Breaker"
+    description: "Prevent cascade failures"
+    source: "CIRCUIT_BREAKER_FALLBACK.md"
+    implementation: "src/backend/careervp/logic/circuit_breaker.py"
+    tests:
+      - "tests/unit/test_circuit_breaker.py"
+
+dependencies:
+  - "VPC_ARCHITECTURE_DECISION.md"
+  - "DEPLOYMENT_OPERATIONS.md Section 1"
+
+output:
+  handler: "src/backend/careervp/handlers/auth_handler.py"
+  validators: "src/backend/careervp/handlers/validators.py"
