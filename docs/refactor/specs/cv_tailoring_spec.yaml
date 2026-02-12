@@ -2,7 +2,7 @@
 # Source: JSA_FEATURE_MAPPING.md Section 7
 # Phase: 4
 
-spec_version: "1.1"
+spec_version: "1.2"
 date_created: "2026-02-12"
 date_updated: "2026-02-10"
 
@@ -14,11 +14,16 @@ handler_status: "IMPLEMENTED"
 handler_file: "src/backend/careervp/handlers/cv_tailoring_handler.py"
 logic_file: "src/backend/careervp/logic/cv_tailoring.py"
 prompt_file: "src/backend/careervp/logic/prompts/cv_tailoring_prompt.py"
+dal_file: "src/backend/careervp/dal/dynamo_dal_handler.py"
+validation_file: "src/backend/careervp/validation/cv_tailoring_validation.py"
+infrastructure_file: "src/backend/careervp/infrastructure/stacks/cv_tailoring_stack.py"
 
 implementation:
-  logic_file: "src/backend/careervp/logic/cv_tailoring_logic.py"
   handler_file: "src/backend/careervp/handlers/cv_tailoring_handler.py"
-  tests: "tests/unit/test_cv_tailoring_*.py"
+  logic_file: "src/backend/careervp/logic/cv_tailoring.py"
+  dal_file: "src/backend/careervp/dal/dynamo_dal_handler.py"
+  validation_file: "src/backend/careervp/validation/cv_tailoring_validation.py"
+  tests: "tests/cv-tailoring/"
   model: "Claude Haiku 4.5 (TEMPLATE mode)"
 
 three_step_process:
