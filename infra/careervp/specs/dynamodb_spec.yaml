@@ -1,0 +1,135 @@
+# DynamoDB Tables Specification
+# Source: DEPLOYMENT_OPERATIONS.md, knowledge_base_spec.yaml
+# Used by: Phases 4-8
+# Naming: NamingUtils.table_name(feature) -> careervp-{feature}-table-{env}
+
+spec_version: "1.1"
+date_created: "2026-02-12"
+date_updated: "2026-02-12"
+
+naming_convention:
+  utility: "infra/careervp/naming_utils.py"
+  class: "NamingUtils"
+  method: "table_name(feature)"
+  pattern: "careervp-{feature}-table-{env}"
+  example: "careervp-users-table-dev"
+  constants_file: "infra/careervp/constants.py"
+
+# Tables already managed by ApiDbConstruct (infra/careervp/api_db_construct.py):
+# DO NOT duplicate these in DynamoDBStack.
+existing_tables:
+  - constant: "USERS_TABLE_NAME"
+    value: "users"
+    resolved_name: "careervp-users-table-dev"
+    managed_by: "ApiDbConstruct"
+
+  - constant: "SESSIONS_TABLE_NAME"
+    value: "sessions"
+    resolved_name: "careervp-sessions-table-dev"
+    managed_by: "ApiDbConstruct"
+
+  - constant: "JOBS_TABLE_NAME"
+    value: "jobs"
+    resolved_name: "careervp-jobs-table-dev"
+    managed_by: "ApiDbConstruct"
+
+  - constant: "IDEMPOTENCY_TABLE_NAME"
+    value: "idempotency"
+    resolved_name: "careervp-idempotency-table-dev"
+    managed_by: "ApiDbConstruct"
+
+# NEW tables managed by DynamoDBStack (infra/careervp/dynamodb_stack.py):
+tables:
+  - constant: "CVS_TABLE_NAME"
+    value: "cvs"
+    resolved_name: "careervp-cvs-table-dev"
+    managed_by: "DynamoDBStack"
+    description: "User CV documents"
+    phase: 4
+    partition_key: "user_email"
+    sort_key: "cv_id"
+    billing_mode: "PAY_PER_REQUEST"
+    attributes:
+      - name: "user_email"
+        type: "S"
+      - name: "cv_id"
+        type: "S"
+      - name: "uploaded_at"
+        type: "S"
+
+  - constant: "APPLICATIONS_TABLE_NAME"
+    value: "applications"
+    resolved_name: "careervp-applications-table-dev"
+    managed_by: "DynamoDBStack"
+    description: "Job applications"
+    phase: 4
+    partition_key: "user_email"
+    sort_key: "application_id"
+    billing_mode: "PAY_PER_REQUEST"
+    attributes:
+      - name: "user_email"
+        type: "S"
+      - name: "application_id"
+        type: "S"
+      - name: "job_id"
+        type: "S"
+      - name: "created_at"
+        type: "S"
+
+  - constant: "GAP_RESPONSES_TABLE_NAME"
+    value: "gap-responses"
+    resolved_name: "careervp-gap-responses-table-dev"
+    managed_by: "DynamoDBStack"
+    description: "Gap analysis responses (Phase 5)"
+    phase: 5
+    partition_key: "user_email"
+    sort_key: "application_id"
+    billing_mode: "PAY_PER_REQUEST"
+    attributes:
+      - name: "user_email"
+        type: "S"
+      - name: "application_id"
+        type: "S"
+      - name: "question_id"
+        type: "S"
+      - name: "created_at"
+        type: "S"
+
+  - constant: "KNOWLEDGE_TABLE_NAME"
+    value: "knowledge"
+    resolved_name: "careervp-knowledge-table-dev"
+    managed_by: "DynamoDBStack"
+    description: "Knowledge base storage (Phase 8)"
+    phase: 8
+    partition_key: "user_email"
+    sort_key: "entity_type"
+    billing_mode: "PAY_PER_REQUEST"
+    attributes:
+      - name: "user_email"
+        type: "S"
+      - name: "entity_type"
+        type: "S"
+      - name: "entity_id"
+        type: "S"
+      - name: "updated_at"
+        type: "S"
+    gsi:
+      - name: "entity-index"
+        partition_key: "entity_type"
+        sort_key: "entity_id"
+
+phase_mapping:
+  phase_0: []
+  phase_1: []
+  phase_2: []
+  phase_3: []
+  phase_4:
+    - "careervp-cvs-table-dev"
+    - "careervp-applications-table-dev"
+  phase_5:
+    - "careervp-gap-responses-table-dev"
+  phase_6: []
+  phase_7: []
+  phase_8:
+    - "careervp-knowledge-table-dev"
+  phase_9: []

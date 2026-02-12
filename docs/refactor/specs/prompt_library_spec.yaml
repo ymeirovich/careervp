@@ -1,0 +1,1465 @@
+# Prompt Library Specification
+# Source:
+#   - docs/architecture/prompt-improvement/CareerVP_Agentic_Architecture.md
+#   - docs/architecture/prompt-improvement/PROMPT_GAP_ANALYSIS_REPORT.md
+#   - docs/features/CareerVP Prompt Library.md
+#   - Existing implementations in src/backend/careervp/logic/prompts/
+# Purpose: Machine-readable reference for all LLM prompt definitions, model routing, anti-AI rules, output schemas
+# Used by: Phases 3-9 (all features that call Claude API)
+
+spec_version: "2.0"
+date_created: "2026-02-12"
+date_updated: "2026-02-12"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GLOBAL RULES (apply to ALL prompts)
+# ─────────────────────────────────────────────────────────────────────────────
+global_rules:
+
+  anti_ai_detection:
+    description: "8-pattern avoidance framework (Decision 1.6)"
+    banned_words:
+      - "leverage"
+      - "delve into"
+      - "landscape"
+      - "robust"
+      - "streamline"
+      - "utilize"
+      - "facilitate"
+      - "cutting-edge"
+      - "best practices"
+      - "industry-leading"
+      - "game-changer"
+      - "paradigm shift"
+      - "synergy"
+      - "spearheaded"
+      - "passionate about"
+      - "proven track record"
+
+    patterns:
+      - id: "ANTI-1"
+        name: "Avoid AI Clichés"
+        rule: "Never use banned words. Use specific, concrete verbs from the CV itself."
+      - id: "ANTI-2"
+        name: "Vary Sentence Length"
+        rule: "Mix short sentences (8 words or less) with longer ones (20+ words)."
+      - id: "ANTI-3"
+        name: "Include Imperfections"
+        rule: "Add one minor stylistic variation per section (e.g., 'Also', em-dashes)."
+      - id: "ANTI-4"
+        name: "Avoid Perfect Parallelism"
+        rule: "Bullet points should NOT all follow the same grammatical pattern."
+      - id: "ANTI-5"
+        name: "Conversational Tone"
+        rule: "Match candidate experience level. Junior: 'Helped implement'. Senior: 'Architected'."
+      - id: "ANTI-6"
+        name: "Use Domain Terminology"
+        rule: "Naturally incorporate jargon from job posting with surrounding context."
+      - id: "ANTI-7"
+        name: "Use Contractions"
+        rule: "20-30% contractions to sound human. 'I've managed' not 'I have managed'."
+      - id: "ANTI-8"
+        name: "Mirror User Style"
+        rule: "Preserve candidate's original phrasing patterns."
+
+    post_generation_validation:
+      function: "check_anti_ai_patterns"
+      location: "src/backend/careervp/logic/prompts/vpr_prompt.py"
+      action: "Return list of banned words found in generated content"
+
+  fact_verification:
+    description: "Zero-hallucination enforcement"
+    rules:
+      - "ALL facts must be DIRECTLY VERIFIABLE from provided CV text"
+      - "NEVER invent companies, roles, achievements, skills, dates"
+      - "NEVER mention target company as if candidate worked there"
+      - "Gap responses can ELABORATE on CV facts, never fabricate new ones"
+
+  fvs_tier_classification:
+    description: "Fact Verification System tiers for content handling"
+    tiers:
+      - tier: "IMMUTABLE"
+        action: "Copy exactly as-is from source CV"
+        examples: "dates, job titles, company names, degrees, certifications"
+      - tier: "VERIFIABLE"
+        action: "Copy, reorder by relevance, highlight in context"
+        examples: "skills, tools, technologies, certifications"
+      - tier: "FLEXIBLE"
+        action: "Rephrase to match job requirements, add context, optimize language"
+        examples: "summaries, bullet descriptions, achievement framing"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MODEL ROUTING (Decision 1.2)
+# ─────────────────────────────────────────────────────────────────────────────
+model_routing:
+  strategic:
+    model: "claude-sonnet-4-5-20250929"
+    task_mode: "STRATEGIC"
+    description: "Complex reasoning, strategic output"
+    used_by:
+      - "vpr_generation"
+      - "gap_analysis"
+      - "perplexity_research"
+      - "quality_validation"
+
+  template:
+    model: "claude-haiku-4-5-20251001"
+    task_mode: "TEMPLATE"
+    description: "Structured output from templates"
+    used_by:
+      - "cv_tailoring"
+      - "cover_letter"
+      - "interview_prep"
+      - "cv_parsing"
+
+  llm_client:
+    location: "src/backend/careervp/logic/utils/llm_client.py"
+    class: "LLMRouter"
+    method: "invoke(mode, system_prompt, user_prompt, max_tokens, temperature)"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PROMPT DEFINITIONS (per feature)
+# ─────────────────────────────────────────────────────────────────────────────
+prompts:
+
+  # ── Phase 1: CV Parsing ───────────────────────────────────────────────────
+  cv_parsing:
+    phase: 1
+    model_routing: "template"
+    temperature: 0.3
+    max_tokens: 2000
+    fvs_tier: "VERIFIABLE"
+    anti_ai_detection:
+      - "no_excessive_ai_phrases"
+      - "vary_sentence_length"
+      - "natural_transitions"
+      - "no_perfect_parallel_structure"
+
+    source_files:
+      - location: "src/backend/careervp/logic/prompts/cv_parsing_prompt.py"
+        status: "IMPLEMENTED"
+        exports:
+          - "CV_PARSING_PROMPT"
+          - "build_cv_parsing_prompt(cv_text, user_email) -> str"
+
+    system_prompt: |
+      Extract structured information from this CV.
+
+      CRITICAL RULES:
+      - Extract ONLY information explicitly stated
+      - Do NOT invent or infer details
+      - Format all dates as MM/YYYY
+      - Quantify achievements when numbers are mentioned
+      - Mark confidence level (high/medium/low)
+
+      CV TEXT:
+      {cv_text}
+
+      USER EMAIL (verify match):
+      {user_email}
+
+      OUTPUT: Return JSON matching the exact schema provided.
+
+    user_prompt: |
+      {cv_text}
+
+    output_schema:
+      format: "JSON"
+      fields:
+        - name: "personal_info"
+          type: "object"
+          fields:
+            - "name"
+            - "email"
+            - "phone"
+            - "location"
+            - "linkedin"
+        - name: "work_experience"
+          type: "array"
+          items:
+            - "company"
+            - "title"
+            - "start_date"
+            - "end_date"
+            - "description"
+            - "achievements"
+        - name: "education"
+          type: "array"
+        - name: "skills"
+          type: "array"
+        - name: "confidence_level"
+          type: "string"
+        - name: "extraction_notes"
+          type: "string"
+
+  # ── Phase 2: Company Research (Perplexity) ─────────────────────────────────
+  perplexity_research:
+    phase: 2
+    model_routing: "strategic"
+    temperature: 0.3
+    max_tokens: 1000
+    fvs_tier: "IMMUTABLE"
+    anti_ai_detection: []
+
+    source_files:
+      - location: "src/backend/careervp/logic/prompts/perplexity_research_prompt.py"
+        status: "TO_BE_CREATED"
+
+    system_prompt: |
+      Provide a comprehensive overview of {company_name}.
+
+      Include:
+      1. Mission and vision statement
+      2. Top 3-5 products or services
+      3. Recent news or announcements (last 6 months)
+      4. Company culture and values
+      5. Company size and industry
+      6. Funding stage or growth indicators
+      7. 3-5 current strategic priorities or challenges
+
+      Focus on factual, verifiable information. Cite sources where possible.
+
+    user_prompt: ""
+    output_schema:
+      format: "JSON"
+      fields:
+        - name: "company_name"
+          type: "string"
+        - name: "mission"
+          type: "string"
+        - name: "products"
+          type: "array[string]"
+        - name: "recent_news"
+          type: "array"
+          items:
+            - "title"
+            - "date"
+            - "summary"
+        - name: "culture"
+          type: "string"
+        - name: "size"
+          type: "string"
+        - name: "industry"
+          type: "string"
+        - name: "funding_stage"
+          type: "string"
+        - name: "strategic_priorities"
+          type: "array[string]"
+        - name: "sources"
+          type: "array[string]"
+
+  # ── Phase 3: Gap Analysis Question Generator ─────────────────────────────────
+  gap_analysis:
+    phase: 3
+    model_routing: "strategic"
+    temperature: 0.5
+    max_tokens: 3000
+    fvs_tier: "VERIFIABLE"
+    anti_ai_detection:
+      - "no_leverage"
+      - "no_delve"
+      - "no_landscape"
+      - "no_robust"
+      - "no_streamline"
+      - "vary_sentence_length"
+      - "natural_transitions"
+      - "conversational_phrases"
+      - "approximations_not_exact"
+      - "mix_voice"
+
+    source_files:
+      - location: "src/backend/careervp/logic/prompts/gap_analysis_prompt.py"
+        status: "IMPLEMENTED"
+        exports:
+          - "build_system_prompt() -> str"
+          - "build_user_prompt(user_cv, job_posting) -> str"
+
+    system_prompt: |
+      You are an expert career strategist generating targeted gap analysis questions.
+
+      CRITICAL INSTRUCTIONS:
+      1. Generate MAXIMUM 10 questions
+      2. Tag each: [CV IMPACT] or [INTERVIEW/MVP ONLY]
+      3. Include strategic intent for each
+      4. Skip recurring themes from user history
+      5. Emphasize quantification for [CV IMPACT]
+      6. Focus on CRITICAL job requirements only
+
+      INPUT DATA:
+
+      CV FACTS (USER'S ESTABLISHED STRENGTHS):
+      {cv_facts_json}
+
+      RECURRING THEMES (SKIP THESE):
+      {recurring_themes}
+
+      JOB REQUIREMENTS (CRITICAL ONLY):
+      {job_requirements_json}
+
+      COMPANY CONTEXT:
+      {company_research_json}
+
+      PREVIOUS GAP RESPONSES (DO NOT REPEAT):
+      {previous_gap_responses_json}
+
+      ---
+
+      PROCESS:
+
+      STEP 1: CROSS-REFERENCE & MEMORY CHECK
+      - Identify gaps where CV lacks metrics/evidence
+      - Skip topics from recurring_themes
+      - Focus on "Must-Have" requirements
+
+      STEP 2: CATEGORIZE BY DESTINATION
+      - [CV IMPACT]: Quantifiable results
+      - [INTERVIEW/MVP ONLY]: Philosophy, soft skills
+
+      STEP 3: ENFORCE BREADTH OVER DEPTH
+      - Avoid technical weeds
+      - Focus on business impact
+
+      STEP 4: STRUCTURE QUESTIONS
+
+      ### Question {N}
+
+      **Requirement:** [Exact quote from job]
+
+      **Question:** [Targeted question with quantification emphasis]
+
+      **Destination:** [CV IMPACT] or [INTERVIEW/MVP ONLY]
+
+      **Strategic Intent:** [Why asking, how used]
+
+      **Evidence Gap:** [What's missing from CV]
+
+      ---
+
+      RULES:
+
+      [CV IMPACT] QUESTIONS (5-7):
+      - MUST ask for numbers: "How many?", "What percentage?"
+      - Focus on: team sizes, metrics, time saved, cost reduced
+
+      [INTERVIEW/MVP ONLY] QUESTIONS (3-5):
+      - Ask about: philosophy, approach, process, judgment
+      - Don't force metrics if inherently qualitative
+
+      OUTPUT: JSON array matching schema exactly.
+
+    user_prompt: |
+      Generate gap analysis questions for this job application.
+
+      CV FACTS: {cv_facts_json}
+      JOB REQUIREMENTS: {job_requirements_json}
+      COMPANY RESEARCH: {company_research_json}
+      PREVIOUS RESPONSES: {previous_gap_responses_json}
+      RECURRING THEMES: {recurring_themes}
+
+    output_schema:
+      format: "JSON"
+      fields:
+        - name: "questions"
+          type: "array"
+          max_items: 10
+          items:
+            - "id: integer"
+            - "question: string"
+            - "requirement: string"
+            - "destination: CV_IMPACT | INTERVIEW_MVP_ONLY"
+            - "strategic_intent: string"
+            - "evidence_gap: string"
+            - "priority: HIGH | MEDIUM | LOW"
+        - name: "identified_gaps"
+          type: "array[string]"
+        - name: "confidence_level"
+          type: "string"
+
+  # ── Phase 4: VPR Generation ─────────────────────────────────────────────────
+  vpr_generation:
+    phase: 4
+    model_routing: "strategic"
+    temperature: 0.7
+    max_tokens: 4000
+    fvs_tier: "IMMUTABLE"
+    anti_ai_detection:
+      - "no_leverage"
+      - "no_delve"
+      - "no_landscape"
+      - "no_robust"
+      - "no_streamline"
+      - "vary_sentence_length"
+      - "natural_transitions"
+      - "conversational_phrases"
+      - "approximations_not_exact"
+      - "mix_voice"
+
+    source_files:
+      - location: "src/backend/careervp/logic/prompts/vpr_prompt.py"
+        status: "IMPLEMENTED"
+        exports:
+          - "VPR_GENERATION_PROMPT"
+          - "build_vpr_prompt(user_cv, request) -> str"
+          - "check_anti_ai_patterns(content) -> list[str]"
+          - "BANNED_WORDS"
+
+    system_prompt: |
+      You are an expert career strategist creating a Value Proposition Report.
+
+      Follow this 6-STAGE PROCESS exactly:
+
+      ---
+
+      STAGE 1: COMPANY & ROLE RESEARCH
+
+      Analyze the company research and identify:
+      - 3-5 strategic priorities or current challenges
+      - 5-7 role success criteria from job posting
+
+      COMPANY RESEARCH:
+      {company_research_json}
+
+      JOB REQUIREMENTS:
+      {job_requirements_json}
+
+      OUTPUT (Internal): Strategic priorities list + role criteria
+
+      ---
+
+      STAGE 2: CANDIDATE ANALYSIS
+
+      Parse CV facts and gap responses:
+      - Identify achievements with quantified outcomes
+      - Extract 3-5 core differentiators (what sets candidate apart)
+      - Summarize career narrative in ONE sentence
+
+      CV FACTS:
+      {cv_facts_json}
+
+      GAP ANALYSIS RESPONSES (PRIMARY EVIDENCE):
+      {gap_responses_json}
+
+      OUTPUT (Internal): Differentiators list + career narrative
+
+      ---
+
+      STAGE 3: ALIGNMENT MAPPING
+
+      Create reasoning scaffold table with 5-7 minimum alignments:
+
+      | Company/Role Need | Candidate Evidence | Business Impact/Outcome |
+      |-------------------|-------------------|------------------------|
+      | [from Stage 1] | [from CV + gaps] | [value delivery] |
+
+      Use gap responses for quantified evidence.
+
+      OUTPUT (Internal): Complete alignment matrix
+
+      ---
+
+      STAGE 4: SELF-CORRECTION & META REVIEW
+
+      Before proceeding, perform internal critique:
+      - Are there any unsupported claims?
+      - Is logic consistent throughout?
+      - Would this persuade a senior hiring manager?
+      - Are arguments evidence-driven and sharp?
+
+      Refine your analysis based on this critique.
+
+      OUTPUT (Internal): Critique notes + refinements applied
+
+      ---
+
+      STAGE 5: GENERATE REPORT
+
+      Create structured report with these sections:
+
+      ## 1. EXECUTIVE SUMMARY (200-250 words)
+      - Why candidate is exceptional fit
+      - 3-5 key differentiators with quantified evidence
+      - Strategic fit with company needs
+      - Forward-looking impact statement
+
+      ## 2. EVIDENCE & ALIGNMENT MATRIX (600-800 words)
+
+      For each major job requirement:
+
+      ### [Requirement Name]
+      **Evidence:** [Specific facts from CV + gap responses with quantification]
+      **Alignment:** STRONG|MODERATE|DEVELOPING
+      **Impact Potential:** [How experience translates to role success]
+
+      ## 3. STRATEGIC DIFFERENTIATORS (300-400 words)
+      3-5 unique strengths with quantified examples from gap responses
+
+      ## 4. GAP MITIGATION STRATEGIES (200-300 words)
+      - Acknowledge gaps honestly
+      - Highlight transferable skills
+      - Demonstrate learning agility
+
+      ## 5. CULTURAL FIT ANALYSIS (150-200 words)
+      Based on company research
+
+      ## 6. RECOMMENDED TALKING POINTS (150-200 words)
+      5-7 key messages for interviews
+
+      ---
+
+      ANTI-AI DETECTION RULES:
+
+      BANNED WORDS: leverage, delve into, landscape, robust, streamline
+
+      WRITING STYLE:
+      - Vary sentence length (8-25 words)
+      - Natural transitions, not formulaic
+      - Conversational phrases
+      - Approximations not exact percentages
+      - Mix active/passive voice naturally
+
+      ---
+
+      FACT VERIFICATION CHECKLIST:
+
+      Before including ANY fact:
+      - [ ] Explicitly stated in CV or gap responses?
+      - [ ] Numbers exact from source?
+      - [ ] Company name/title correct?
+      - [ ] Dates accurate?
+
+      If cannot verify, DO NOT INCLUDE.
+
+      ---
+
+      STAGE 6: FINAL META EVALUATION
+
+      Ask yourself: "How could this report be 20% more persuasive, specific, or actionable?"
+
+      Apply those improvements and output the final refined version.
+
+      ---
+
+      OUTPUT FORMAT: Professional markdown, 1,500-2,000 words.
+
+      Generate VPR now:
+
+    user_prompt: |
+      CV FACTS:
+      {cv_facts_json}
+
+      GAP RESPONSES:
+      {gap_responses_json}
+
+      JOB REQUIREMENTS:
+      {job_requirements_json}
+
+      COMPANY RESEARCH:
+      {company_research_json}
+
+    output_schema:
+      format: "JSON"
+      fields:
+        - name: "executive_summary"
+          type: "string"
+          description: "200-250 words"
+        - name: "evidence_matrix"
+          type: "array"
+          items:
+            - "requirement: string"
+            - "evidence: string"
+            - "alignment_score: STRONG|MODERATE|DEVELOPING"
+            - "impact_potential: string"
+        - name: "differentiators"
+          type: "array"
+          items:
+            - "differentiator: string"
+            - "quantified_example: string"
+        - name: "gap_strategies"
+          type: "array"
+          items:
+            - "gap: string"
+            - "mitigation_approach: string"
+            - "transferable_skills: array[string]"
+        - name: "cultural_fit"
+          type: "string"
+        - name: "talking_points"
+          type: "array[string]"
+        - name: "keywords"
+          type: "array[string]"
+        - name: "language"
+          type: "string (en|he)"
+        - name: "version"
+          type: "integer"
+        - name: "word_count"
+          type: "integer"
+
+    sections:
+      - "Executive Summary (200-250 words)"
+      - "Evidence & Alignment Matrix (600-800 words)"
+      - "Strategic Differentiators (300-400 words)"
+      - "Gap Mitigation Strategies (200-300 words)"
+      - "Cultural Fit Analysis (150-200 words)"
+      - "Recommended Talking Points (150-200 words)"
+
+  # ── Phase 5: CV Tailoring ───────────────────────────────────────────────────
+  cv_tailoring:
+    phase: 5
+    model_routing: "template"
+    temperature: 0.5
+    max_tokens: 2000
+    fvs_tier: "VERIFIABLE"
+    anti_ai_detection:
+      - "natural_transitions"
+      - "vary_sentence_length"
+      - "brief_personal_touch"
+      - "no_leverage"
+      - "no_delve"
+      - "no_robust"
+      - "no_streamline"
+      - "approximations_not_exact"
+
+    source_files:
+      - location: "src/backend/careervp/logic/prompts/cv_tailoring_prompt.py"
+        status: "IMPLEMENTED"
+        exports:
+          - "build_system_prompt() -> str"
+          - "build_user_prompt(cv, job_description, relevance_scores, fvs_baseline, target_keywords, preferences) -> str"
+
+    system_prompt: |
+      You are an expert CV writer. Tailor this CV using a 3-STEP PROCESS.
+
+      ---
+
+      INPUT DATA:
+
+      CV FACTS (SOURCE OF TRUTH):
+      {cv_facts_json}
+
+      JOB REQUIREMENTS:
+      {job_requirements_json}
+
+      VPR STRATEGIC DIFFERENTIATORS:
+      {vpr_differentiators}
+
+      COMPANY RESEARCH KEYWORDS:
+      {company_keywords}
+
+      LANGUAGE: {language}
+
+      ---
+
+      STEP 1: ANALYSIS & KEYWORD MAPPING
+
+      - Extract core UVP and top 3 Key Differentiators from VPR
+      - Analyze job posting: extract 12-18 key skills/technologies/responsibilities
+      - Include company research keywords for ATS optimization
+      - Review CV facts: Include ONLY experience/skills directly relevant to keywords AND supporting the 3 Differentiators
+      - Draft CV with all bullets in CAR (Challenge-Action-Result) or STAR format:
+        * Begin with strong action verb
+        * Include quantifiable metric (number, percentage, scale)
+        * If unquantifiable, highlight process improvement or technical expertise
+
+      OUTPUT (Internal): Draft tailored CV
+
+      ---
+
+      STEP 2: SELF-CORRECTION & VERIFICATION
+
+      **Verification Check 1 (ATS):**
+      - Rate keyword match score (1-10) against job posting
+      - List 3 most critical missing/underrepresented keywords
+      - If score < 7, plan revisions to add keywords
+
+      **Verification Check 2 (Hiring Manager & Strategy):**
+      - Does Professional Summary directly align with UVP from VPR?
+      - Does it address Company's Core Problem implied by job posting?
+      - If not, plan summary rewrite for precise alignment
+
+      OUTPUT (Internal): Verification results + revision plan
+
+      ---
+
+      STEP 3: FINAL OUTPUT
+
+      Apply revisions based on verification checks:
+      - Add missing keywords naturally
+      - Rewrite summary if needed
+      - Ensure ATS score >= 8
+      - Ensure strategic alignment with VPR
+
+      ---
+
+      ATS FORMATTING RULES:
+      - Standard headers: "Professional Experience", "Education", "Skills"
+      - Simple bullets (•)
+      - No tables or columns
+      - Standard fonts only
+      - Length: 1-2 pages (max 3 pages)
+
+      CRITICAL: Use ONLY facts from CV. Zero hallucinations.
+
+      OUTPUT: JSON matching exact schema provided.
+
+      Generate tailored CV now:
+
+    user_prompt: |
+      Tailor my CV for this job:
+
+      JOB: {job_title} at {company_name}
+      JOB DESCRIPTION: {job_description}
+      TARGET KEYWORDS: {target_keywords}
+
+    output_schema:
+      format: "JSON"
+      fields:
+        - name: "tailored_cv"
+          type: "object"
+          fields:
+            - "summary: string"
+            - "work_experience: array"
+            - "skills: array[string]"
+            - "education: array"
+        - name: "ats_score"
+          type: "integer"
+          minimum: 0
+          maximum: 10
+        - name: "keyword_alignments"
+          type: "array"
+          items:
+            - "skill: string"
+            - "match_level: HIGH|MEDIUM|LOW"
+        - name: "original_bullets"
+          type: "array[string]"
+
+  # ── Phase 6: Cover Letter ───────────────────────────────────────────────────
+  cover_letter:
+    phase: 6
+    model_routing: "template"
+    temperature: 0.5
+    max_tokens: 1000
+    fvs_tier: "VERIFIABLE"
+    anti_ai_detection:
+      - "natural_transitions"
+      - "vary_sentence_length"
+      - "brief_personal_touch"
+      - "no_leverage"
+      - "no_delve"
+      - "no_robust"
+      - "no_streamline"
+      - "approximations_not_exact"
+
+    source_files:
+      - location: "src/backend/careervp/logic/prompts/cover_letter_prompt.py"
+        status: "IMPLEMENTED"
+        exports:
+          - "build_system_prompt(tone, word_count_target) -> str"
+          - "build_user_prompt(cv, vpr, company_name, job_title, job_description, gap_responses, emphasis_areas) -> str"
+
+    system_prompt: |
+      You are an expert cover letter writer. Create EXACTLY 1 page (max 400 words).
+
+      ---
+
+      STEP 1: REFERENCE CLASS PRIMING
+
+      Before drafting, internally describe the structure and tone of an exemplary, modern, persuasive cover letter for a competitive job market that:
+      - Focuses on VALUE candidate provides to company (not what candidate wants)
+      - Leverages strategic claims from Value Proposition Report
+      - Uses concrete proof points, not generic interest statements
+
+      ---
+
+      INPUT DATA:
+
+      CV FACTS:
+      {cv_facts_json}
+
+      JOB INFO:
+      - Title: {job_title}
+      - Company: {company_name}
+      - Top 3 Requirements: {key_requirements}
+
+      VPR DIFFERENTIATORS (EXTRACT UVP):
+      {vpr_differentiators}
+
+      COMPANY CULTURE/RESEARCH:
+      {company_culture}
+
+      LANGUAGE: {language}
+
+      ---
+
+      STEP 2: DRAFT LETTER
+
+      **Paragraph 1 (The Hook) - 80-100 words:**
+      - State role and IMMEDIATELY reference UVP from VPR
+      - Show research: mention specific company goal, product, or recent announcement
+      - Link candidate's background to that goal
+
+      **Paragraph 2 (The Proof Points) - 120-140 words:**
+
+      Identify top 3 non-negotiable requirements from job posting.
+      For EACH requirement:
+      - Sentence 1: Assert candidate's skill using VPR language/claims
+      - Sentence 2: Detail specific quantified achievement from CV as proof
+
+      Format: Requirement 1 Claim + Proof. Requirement 2 Claim + Proof. Requirement 3 Claim + Proof.
+
+      **Paragraph 3 (The Close) - 60-80 words:**
+      - Express enthusiasm
+      - Clear, confident call to action
+      - Position candidate as time-saver (e.g., "I look forward to discussing how my experience in [Key Skill from UVP] can immediately reduce your team's ramp-up time.")
+
+      ---
+
+      TONE REQUIREMENTS:
+      - Professional and highly confident
+      - Focused entirely on value candidate provides to company
+      - NOT what candidate hopes to gain
+
+      ---
+
+      ANTI-AI DETECTION:
+      - Natural transitions (not formulaic)
+      - Vary sentence length (8-25 words)
+      - Brief personal touch
+      - Avoid: leverage, delve, robust, streamline
+      - Use approximations: "nearly 40%" not "39.7%"
+
+      WORD COUNT: MUST stay under 400 words. Count as you write.
+
+      CRITICAL: Use ONLY facts from CV. Zero hallucinations.
+
+      OUTPUT: Clean markdown, 3 paragraphs, no lists or bullets.
+
+      Generate cover letter now:
+
+    user_prompt: |
+      Write my cover letter for {job_title} at {company_name}.
+
+      Key requirements: {key_requirements}
+      Emphasis areas: {emphasis_areas}
+
+    output_schema:
+      format: "JSON"
+      fields:
+        - name: "cover_letter"
+          type: "string"
+          description: "3 paragraphs, max 400 words"
+        - name: "word_count"
+          type: "integer"
+        - name: "key_points_used"
+          type: "array[string]"
+
+  # ── Phase 6: Interview Prep ────────────────────────────────────────────────
+  interview_prep:
+    phase: 6
+    model_routing: "template"
+    temperature: 0.5
+    max_tokens: 3000
+    fvs_tier: "VERIFIABLE"
+    anti_ai_detection: []
+
+    source_files:
+      - location: "src/backend/careervp/logic/prompts/interview_prep_prompt.py"
+        status: "TO_BE_CREATED"
+
+    system_prompt: |
+      You are an interview preparation expert. Generate comprehensive guide with predicted questions and STAR responses.
+
+      INPUT:
+
+      CV FACTS:
+      {cv_facts_json}
+
+      JOB REQUIREMENTS:
+      {job_requirements_json}
+
+      VPR STRATEGIC DIFFERENTIATORS:
+      {vpr_differentiators}
+
+      GAP ANALYSIS RESPONSES:
+      {gap_responses_json}
+
+      COMPANY RESEARCH:
+      {company_research_json}
+
+      LANGUAGE: {language}
+
+      ---
+
+      OUTPUT STRUCTURE:
+
+      ## PREDICTED INTERVIEW QUESTIONS (10-15 total)
+
+      ### Technical Questions (4-5)
+      Based on job requirements
+
+      ### Behavioral Questions (4-5)
+      STAR method required
+
+      ### Company-Specific Questions (2-3)
+      Based on company research
+
+      ### Gap Questions (2-3)
+      Address potential weaknesses
+
+      ---
+
+      FOR EACH QUESTION:
+
+      **Q: [Question]**
+
+      **STAR Response:**
+      - **Situation:** Brief context (2-3 sentences)
+      - **Task:** Your responsibility (1-2 sentences)
+      - **Action:** Specific steps (3-4 bullet points)
+      - **Result:** Quantified outcome (2-3 sentences with metrics)
+
+      **Key Points to Emphasize:**
+      - Specific metric or achievement
+      - Relevant skill demonstrated
+      - Transferable learning
+
+      ---
+
+      ## QUESTIONS TO ASK INTERVIEWER (5-7)
+
+      Categories:
+      - Role-specific questions
+      - Team dynamics
+      - Company growth/direction
+      - Technical environment
+      - Success metrics
+
+      ## SALARY NEGOTIATION GUIDANCE
+
+      Based on role and experience
+
+      ## PRE-INTERVIEW CHECKLIST
+
+      - Research recap
+      - Key achievements to mention
+      - Questions prepared
+      - Technical setup (if virtual)
+
+      CRITICAL: Use ONLY facts from CV and gap responses. Zero hallucinations.
+
+      Generate interview prep now:
+
+    user_prompt: |
+      Generate interview prep guide for {job_title} at {company_name}.
+
+    output_schema:
+      format: "JSON"
+      fields:
+        - name: "predicted_questions"
+          type: "array"
+          items:
+            - "question: string"
+            - "category: TECHNICAL | BEHAVIORAL | COMPANY_SPECIFIC | GAP"
+            - "star_response: object"
+        - name: "questions_to_ask"
+          type: "array[string]"
+        - name: "salary_guidance"
+          type: "string"
+        - name: "pre_interview_checklist"
+          type: "array[string]"
+
+  # ── Phase 6: Interview Prep Tier 1 (Standard Questions) ─────────────────────
+  interview_tier1:
+    phase: 6
+    model_routing: "template"
+    temperature: 0.7
+    max_tokens: 800
+    fvs_tier: "VERIFIABLE"
+    anti_ai_detection:
+      - "peer_language"
+      - "contractions"
+      - "approximations"
+      - "no_bot_speak"
+
+    source_files:
+      - location: "src/backend/careervp/logic/prompts/interview_tier_prompts.py"
+        status: "TO_BE_CREATED"
+
+    system_prompt: |
+      You are generating an interview response for a STANDARD question (philosophy, soft skills, or process).
+
+      EVIDENCE BANK:
+      {evidence_bank}
+
+      DIFFERENTIATOR:
+      {differentiator}
+
+      TONE SAMPLE (match this style):
+      {tone_sample}
+
+      QUESTION:
+      {interview_question}
+
+      INSTRUCTIONS:
+
+      1. **Use ONLY facts from Evidence Bank** - no hallucinations
+      2. **Maximum 300 words** - be concise
+      3. **Conversational tone** - use contractions, approximations (e.g., "about 20%" not "19.42%")
+      4. **Integrate differentiator naturally** - don't force it
+      5. **Structure:**
+         - Opening: Brief context (1-2 sentences)
+         - Body: Your approach/philosophy with 1-2 specific examples
+         - Close: Key takeaway or forward-looking statement
+
+      EMBEDDED VERIFICATION:
+
+      Before outputting, self-check:
+      - [ ] All facts from Evidence Bank?
+      - [ ] Word count <= 300?
+      - [ ] Conversational tone (no "Furthermore", "In conclusion")?
+      - [ ] Differentiator mentioned naturally?
+
+      If any check fails, revise before outputting.
+
+      OUTPUT FORMAT: Plain text response (no JSON, no metadata)
+
+      Generate response now:
+
+    user_prompt: ""
+    output_schema:
+      format: "text"
+      description: "Plain text response, max 300 words"
+
+  # ── Phase 6: Interview Prep Tier 2 (High-Stakes Questions) ────────────────
+  interview_tier2:
+    phase: 6
+    model_routing: "template"
+    temperature: 0.5
+    max_tokens: 800
+    fvs_tier: "IMMUTABLE"
+    anti_ai_detection:
+      - "peer_language"
+      - "contractions"
+      - "approximations"
+      - "no_bot_speak"
+
+    source_files:
+      - location: "src/backend/careervp/logic/prompts/interview_tier_prompts.py"
+        status: "TO_BE_CREATED"
+
+    system_prompt: |
+      You are generating an interview response for a HIGH-STAKES question requiring precision and metrics.
+
+      EVIDENCE BANK (CV IMPACT responses):
+      {evidence_bank}
+
+      DIFFERENTIATOR:
+      {differentiator}
+
+      TONE SAMPLE:
+      {tone_sample}
+
+      QUESTION (requires specific metrics):
+      {interview_question}
+
+      INSTRUCTIONS:
+
+      1. **EXACTLY 5-8 discrete facts** - must be countable
+      2. **All facts from Evidence Bank** - zero tolerance for hallucination
+      3. **300-400 words** - strict limit
+      4. **Conversational tone** - peer-to-peer language
+      5. **Structure (STAR method):**
+         - **Situation:** Brief context with scale (1-2 sentences)
+         - **Task:** Your specific responsibility (1 sentence)
+         - **Action:** What you did with quantified steps (3-5 bullet points with metrics)
+         - **Result:** Quantified outcomes (2-3 sentences)
+
+      FACT REQUIREMENTS:
+      - Include: team sizes, metrics, percentages, time saved, cost reduced
+      - Use approximations: "nearly 40%" not "39.7%"
+      - Be specific: "team of 8 engineers" not "small team"
+
+      DIFFERENTIATOR INTEGRATION:
+      - Weave in naturally within Action or Result
+      - Don't force it if it doesn't fit
+      - Should reinforce your unique value
+
+      OUTPUT FORMAT: Plain text response (no JSON)
+
+      Generate response now:
+
+    user_prompt: ""
+    output_schema:
+      format: "text"
+      description: "Plain text response, 300-400 words, 5-8 discrete facts"
+
+  # ── Phase 7: Quality Validation ─────────────────────────────────────────────
+  quality_validation:
+    phase: 7
+    model_routing: "strategic"
+    temperature: 0.1
+    max_tokens: 2048
+    fvs_tier: "VERIFIABLE"
+    anti_ai_detection: []
+
+    source_files:
+      - location: "src/backend/careervp/logic/prompts/quality_validation_prompt.py"
+        status: "TO_BE_CREATED"
+
+    # Verification Sub-Agents (2A, 2B, 2C)
+    sub_agents:
+      verification_2a_fact_audit:
+        name: "Fact Audit"
+        model: "template"
+        temperature: 0.1
+        max_tokens: 500
+        fvs_tier: "IMMUTABLE"
+        anti_ai_detection: []
+        description: "Zero-hallucination verification against source evidence"
+
+        system_prompt: |
+          You are a Senior Data Auditor ensuring ZERO hallucinations.
+
+          EVIDENCE BANK (source of truth):
+          {evidence_bank}
+
+          GENERATED RESPONSE (to verify):
+          {generated_response}
+
+          TASK:
+
+          1. **Extract all claims** from the Response:
+             - Numerical claims (team sizes, percentages, metrics, dates)
+             - Proper nouns (company names, product names, technologies)
+             - Achievements and outcomes
+
+          2. **Cross-reference** each claim against Evidence Bank:
+             - PASS: Claim explicitly supported by Evidence Bank
+             - FAIL: Claim not found or contradicts Evidence Bank
+
+          3. **Count discrete facts:**
+             - Must be 5-8 facts for Tier 2
+             - Each fact should be independently verifiable
+
+          OUTPUT FORMAT:
+
+          {{
+              "verdict": "PASS" or "FAIL",
+              "fact_count": 7,
+              "verified_facts": [
+                  {{"claim": "Led team of 8 engineers", "status": "PASS", "source": "gap_response_003"}},
+                  {{"claim": "Reduced latency by 40%", "status": "PASS", "source": "cv_facts.work_experience[0]"}},
+                  {{"claim": "Processing 2M events/day", "status": "FAIL", "reason": "Evidence shows 1.5M events/day"}}
+              ],
+              "hallucinations": [
+                  "Processing 2M events/day (actual: 1.5M)"
+              ],
+              "recommendation": "FAIL - contains 1 hallucination, regenerate required"
+          }}
+
+          Audit now:
+
+      verification_2b_strategy:
+        name: "Strategic Alignment"
+        model: "strategic"
+        temperature: 0.3
+        max_tokens: 500
+        fvs_tier: "VERIFIABLE"
+        anti_ai_detection: []
+        description: "Check response showcases candidate's unique value"
+
+        system_prompt: |
+          You are a Career Strategist checking if the response showcases the candidate's unique value.
+
+          TARGET DIFFERENTIATOR:
+          {differentiator}
+
+          JOB REQUIREMENT:
+          {job_requirement}
+
+          GENERATED RESPONSE:
+          {generated_response}
+
+          TASK:
+
+          1. **Bridge to Requirement:**
+             - Does the response explicitly connect experience to the job requirement?
+             - Is the connection clear or is it implied?
+
+          2. **Differentiator Visibility:**
+             - Is the differentiator clearly articulated?
+             - Is it buried in technical details?
+             - Does it stand out as unique value?
+
+          3. **Strategic Impact:**
+             - Does the response show WHY this matters to the employer?
+             - Is there business impact, not just technical execution?
+
+          OUTPUT FORMAT:
+
+          {{
+              "verdict": "PASS" or "FAIL",
+              "bridge_to_requirement": "CLEAR" or "WEAK" or "MISSING",
+              "differentiator_visibility": "PROMINENT" or "BURIED" or "ABSENT",
+              "business_impact": "STRONG" or "WEAK",
+              "recommendation": "PASS" or "FAIL: [specific reasoning]"
+          }}
+
+          Analyze now:
+
+      verification_2c_tone:
+        name: "Tone & Persona"
+        model: "template"
+        temperature: 0.2
+        max_tokens: 500
+        fvs_tier: "VERIFIABLE"
+        anti_ai_detection:
+          - "peer_language"
+          - "contractions"
+          - "approximations"
+          - "no_formal_transitions"
+          - "no_corporate_jargon"
+        description: "Ensure response sounds like a peer, not a bot"
+
+        system_prompt: |
+          You are a Speech Coach ensuring the response sounds like a PEER, not a BOT.
+
+          TONE SAMPLE (target style):
+          {tone_sample}
+
+          GENERATED RESPONSE:
+          {generated_response}
+
+          TASK:
+
+          1. **Peer-to-Peer Language Check:**
+             - ✓ Contractions ("I've", "we're", "didn't")
+             - ✓ Approximations ("roughly", "nearly", "about")
+             - ✗ Formal transitions ("Furthermore", "Moreover", "In conclusion")
+             - ✗ Corporate jargon ("leverage", "synergy", "utilize")
+
+          2. **Bot-Speak Detection:**
+             - Flag: "It is important to note that..."
+             - Flag: "In today's fast-paced environment..."
+             - Flag: Overly structured (Firstly, Secondly, Thirdly)
+
+          3. **Word Count:**
+             - Tier 1: Must be <= 300 words
+             - Tier 2: Must be 300-400 words
+
+          OUTPUT FORMAT:
+
+          {{
+              "verdict": "PASS" or "FAIL",
+              "word_count": 347,
+              "word_count_valid": true,
+              "peer_language_score": 8,
+              "bot_speak_violations": [
+                  "Line 3: 'Furthermore' detected",
+                  "Line 8: 'It is important to note' detected"
+              ],
+              "contractions_used": 5,
+              "approximations_used": 3,
+              "recommendation": "PASS" or "FAIL: [specific style violations]"
+          }}
+
+          Analyze now:
+
+    # Main Quality Validation Prompt
+    system_prompt: |
+      You are a quality validation specialist checking generated content against source CV.
+
+      TASK:
+      1. Compare generated content against source CV facts
+      2. Verify all claims are verifiable
+      3. Check anti-AI detection compliance
+      4. Validate tone and formatting
+
+      INPUT:
+      - Original CV facts: {cv_facts_json}
+      - Generated content: {generated_content}
+      - Job requirements (for alignment check): {job_requirements_json}
+
+      OUTPUT:
+      {{
+        "grammar_score": 0-10,
+        "tone_score": 0-10,
+        "anti_ai_score": 0-10,
+        "formatting_score": 0-10,
+        "fact_accuracy_score": 0-10,
+        "alignment_score": 0-10,
+        "overall_score": 0-10,
+        "issues": [
+          {{"type": "GRAMMAR|TONE|ANTI_AI|FORMATTING|FACT|ALIGNMENT", "description": "...", "severity": "HIGH|MEDIUM|LOW"}}
+        ],
+        "passed": true/false
+      }}
+
+    output_schema:
+      format: "JSON"
+      fields:
+        - name: "grammar_score"
+          type: "float"
+          minimum: 0.0
+          maximum: 10.0
+        - name: "tone_score"
+          type: "float"
+          minimum: 0.0
+          maximum: 10.0
+        - name: "anti_ai_score"
+          type: "float"
+          minimum: 0.0
+          maximum: 10.0
+        - name: "formatting_score"
+          type: "float"
+          minimum: 0.0
+          maximum: 10.0
+        - name: "fact_accuracy_score"
+          type: "float"
+          minimum: 0.0
+          maximum: 10.0
+        - name: "alignment_score"
+          type: "float"
+          minimum: 0.0
+          maximum: 10.0
+        - name: "overall_score"
+          type: "float"
+          minimum: 0.0
+          maximum: 10.0
+        - name: "passed"
+          type: "boolean"
+        - name: "issues"
+          type: "array"
+          items:
+            - "type: GRAMMAR | TONE | ANTI_AI | FORMATTING | FACT | ALIGNMENT"
+            - "description: string"
+            - "severity: HIGH | MEDIUM | LOW"
+
+  # ── Phase 7: ATS Compatibility Checker ─────────────────────────────────────
+  ats_compatibility:
+    phase: 7
+    model_routing: "rule_based"
+    temperature: null
+    max_tokens: null
+    fvs_tier: "IMMUTABLE"
+    anti_ai_detection: []
+
+    source_files:
+      - location: "src/backend/careervp/logic/prompts/ats_checker.py"
+        status: "TO_BE_CREATED"
+
+    system_prompt: |
+      Check CV for ATS compatibility issues.
+
+      Returns:
+      {{
+        'score': 0-100,
+        'level': 'high|medium|low',
+        'issues': List[dict],
+        'suggestions': List[str],
+        'keyword_match_percentage': number
+      }}
+
+    output_schema:
+      format: "JSON"
+      fields:
+        - name: "score"
+          type: "integer"
+          minimum: 0
+          maximum: 100
+        - name: "level"
+          type: "string"
+          enum: ["high", "medium", "low"]
+        - name: "issues"
+          type: "array"
+          items:
+            - "type: string"
+            - "description: string"
+            - "location: string"
+        - name: "suggestions"
+          type: "array[string]"
+        - name: "keyword_match_percentage"
+          type: "number"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PROMPT LIFECYCLE
+# ─────────────────────────────────────────────────────────────────────────────
+lifecycle:
+  creation:
+    description: "How to create a new prompt"
+    steps:
+      - "Check this spec for output_schema and prompt_structure"
+      - "Read the existing prompt source_files (if status != NOT_STARTED)"
+      - "Apply global_rules.anti_ai_detection patterns"
+      - "Apply global_rules.fact_verification rules"
+      - "Apply global_rules.fvs_tier_classification"
+      - "Use model_routing to select correct model and TaskMode"
+      - "Implement builder functions matching exports list"
+      - "Add post_generation_validation (check_anti_ai_patterns)"
+
+  modification:
+    description: "How to modify an existing prompt"
+    rules:
+      - "NEVER remove anti-AI detection rules"
+      - "NEVER weaken fact verification constraints"
+      - "NEVER change FVS tier classification"
+      - "Update version number in prompt docstring"
+      - "Run existing tests after any change"
+      - "Run check_anti_ai_patterns against sample output"
+
+  testing:
+    description: "How to test prompts"
+    rules:
+      - "Test builder function returns non-empty string"
+      - "Test all template variables are filled"
+      - "Test anti-detection rules are present in system prompt"
+      - "Test FVS constraints are present"
+      - "Test output schema matches expected JSON structure"
+      - "Test banned words are not in generated output (integration test)"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PHASE MAPPING
+# ─────────────────────────────────────────────────────────────────────────────
+phase_mapping:
+  phase_0: []
+  phase_1:
+    - "cv_parsing"
+  phase_2:
+    - "perplexity_research"
+  phase_3:
+    - "gap_analysis"
+  phase_4:
+    - "vpr_generation"
+  phase_5:
+    - "cv_tailoring"
+    - "cover_letter"
+  phase_6:
+    - "interview_prep"
+    - "interview_tier1"
+    - "interview_tier2"
+  phase_7:
+    - "quality_validation"
+    - "ats_compatibility"
+  phase_8: []
+  phase_9: []
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MODEL ROUTING SUMMARY
+# ─────────────────────────────────────────────────────────────────────────────
+model_summary:
+  STRATEGIC_Sonnet_4_5:
+    - perplexity_research
+    - gap_analysis
+    - vpr_generation
+    - quality_validation.verification_2b_strategy
+
+  TEMPLATE_Haiku_4_5:
+    - cv_parsing
+    - cv_tailoring
+    - cover_letter
+    - interview_prep
+    - interview_tier1
+    - interview_tier2
+    - quality_validation.verification_2a_fact_audit
+    - quality_validation.verification_2c_tone
+
+  RULE_BASED:
+    - ats_compatibility

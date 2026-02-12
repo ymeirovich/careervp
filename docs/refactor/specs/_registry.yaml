@@ -1,0 +1,326 @@
+# Registry of all specification documents
+# Generated: 2026-02-12
+# Updated: 2026-02-12 - All reference docs converted to specs
+# Updated: 2026-02-10 - Added reference specs from docs/specs/
+
+specs:
+  # Core specs (required for implementation)
+  - file: "security_spec.yaml"
+    source: "REFACTORING_PLAN.md Section 3"
+    category: "security"
+    phase: 0
+    status: "CREATED"
+
+  - file: "models_spec.yaml"
+    source: "REFACTORING_PLAN.md Section 2"
+    category: "models"
+    phase: 1
+    status: "CREATED"
+
+  - file: "cost_optimization_spec.yaml"
+    source: "REFACTORING_PLAN.md Section 10.2"
+    category: "cost_optimization"
+    phase: 2
+    status: "CREATED"
+
+  - file: "vpr_6stage_spec.yaml"
+    source: "REFACTORING_PLAN.md Section 2.1"
+    category: "vpr"
+    phase: 3
+    status: "CREATED"
+    handler_status: "NEEDS_REFACTOR"
+
+  # ── Reference Specs from docs/specs/ ───────────────────────────────────────
+  # These specs contain detailed implementation patterns
+
+  - file: "docs/specs/03-vpr-generator.md"
+    source: "docs/specs/03-vpr-generator.md"
+    category: "vpr"
+    phase: 3
+    status: "REFERENCE"
+    note: "Detailed VPR Generator spec with API contract, FVS rules, anti-AI patterns"
+    handler_file: "src/backend/careervp/handlers/vpr_handler.py"
+
+  - file: "docs/specs/07-vpr-async-architecture.md"
+    source: "docs/specs/07-vpr-async-architecture.md"
+    category: "vpr"
+    phase: 7
+    status: "REFERENCE"
+    note: "Complete async architecture with SQS, DynamoDB, Lambda handlers"
+    handler_files:
+      - "src/backend/careervp/handlers/vpr_submit_handler.py"
+      - "src/backend/careervp/handlers/vpr_worker_handler.py"
+      - "src/backend/careervp/handlers/vpr_status_handler.py"
+    infrastructure:
+      - "careervp-vpr-jobs-queue-dev (SQS)"
+      - "careervp-vpr-jobs-dlq-dlq-dev (SQS DLQ)"
+      - "careervp-jobs-table-dev (DynamoDB)"
+      - "careervp-dev-vpr-results S3 bucket"
+
+  - file: "docs/specs/02-company-research.md"
+    source: "docs/specs/02-company-research.md"
+    category: "company_research"
+    phase: 2
+    status: "REFERENCE"
+    note: "Complete company research spec with scraping, web search, LLM fallback"
+    handler_file: "src/backend/careervp/handlers/company_research_handler.py"
+    logic_files:
+      - "src/backend/careervp/logic/company_research.py"
+      - "src/backend/careervp/logic/utils/web_scraper.py"
+      - "src/backend/careervp/logic/utils/web_search.py"
+
+  # ── Feature Specs ───────────────────────────────────────────────────────
+
+  - file: "cv_tailoring_spec.yaml"
+    source: "JSA_FEATURE_MAPPING.md"
+    category: "cv_tailoring"
+    phase: 4
+    status: "CREATED"
+    handler_file: "src/backend/careervp/handlers/cv_tailoring_handler.py"
+    handler_status: "IMPLEMENTED"
+    logic_file: "src/backend/careervp/logic/cv_tailoring.py"
+    prompt_file: "src/backend/careervp/logic/cv_tailoring_prompt.py"
+
+  - file: "gap_analysis_spec.yaml"
+    source: "JSA_FEATURE_MAPPING.md"
+    category: "gap_analysis"
+    phase: 5
+    status: "CREATED"
+    handler_file: "src/backend/careervp/handlers/gap_handler.py"
+    handler_status: "NEEDS_ENHANCEMENT"
+    logic_files:
+      - "src/backend/careervp/logic/gap_analysis.py"
+      - "src/backend/careervp/logic/prompts/gap_analysis_prompt.py"
+    note: "Questions generation + response processing - see docs/specs/02-company-research.md for handler pattern"
+
+  - file: "cover_letter_spec.yaml"
+    source: "JSA_FEATURE_MAPPING.md"
+    category: "cover_letter"
+    phase: 6
+    status: "CREATED"
+    handler_file: "src/backend/careervp/handlers/cover_letter_handler.py"
+    handler_status: "TO_BE_CREATED"
+    logic_file: "src/backend/careervp/logic/cover_letter.py"
+    prompt_file: "src/backend/careervp/logic/prompts/cover_letter_prompt.py"
+    reference_handler: "docs/specs/02-company-research.md (use as handler implementation pattern)"
+
+  - file: "fvs_spec.yaml"
+    source: "ARCHITECTURAL_FINDINGS_REMEDIATION.md"
+    category: "quality"
+    phase: 7
+    status: "CREATED"
+    logic_file: "src/backend/careervp/logic/fvs_validator.py"
+    handler_status: "N/A"
+
+  - file: "interview_prep_spec.yaml"
+    source: "JSA_FEATURE_MAPPING.md"
+    category: "interview_prep"
+    phase: 9
+    status: "CREATED"
+    handler_file: "src/backend/careervp/handlers/interview_prep_handler.py"
+    handler_status: "TO_BE_CREATED"
+    logic_file: "src/backend/careervp/logic/interview_prep.py"
+    prompt_file: "src/backend/careervp/logic/prompts/interview_prep_prompt.py"
+    reference_handler: "docs/specs/02-company-research.md (use as handler implementation pattern)"
+
+  - file: "knowledge_base_spec.yaml"
+    source: "JSA_FEATURE_MAPPING.md"
+    category: "knowledge_base"
+    phase: 8
+    status: "CREATED"
+    note: "DynamoDB table + CRUD - infrastructure in infra/careervp/specs/dynamodb_spec.yaml"
+    handler_status: "NOT_STARTED"
+
+  - file: "interview_prep_spec.yaml"
+    source: "JSA_FEATURE_MAPPING.md"
+    category: "interview_prep"
+    phase: 9
+    status: "CREATED"
+    handler_file: "src/backend/careervp/handlers/interview_prep_handler.py"
+    handler_status: "TO_BE_CREATED"
+    logic_file: "src/backend/careervp/logic/interview_prep.py"
+    prompt_file: "src/backend/careervp/logic/prompts/interview_prep_prompt.py"
+    reference_handler: "docs/specs/02-company-research.md (use as handler implementation pattern)"
+
+  # Reference specs (for architectural guidance)
+  - file: "vpc_spec.yaml"
+    source: "VPC_ARCHITECTURE_DECISION.md"
+    category: "infrastructure"
+    phases: [0, 8]
+    status: "CREATED"
+
+  - file: "circuit_breaker_spec.yaml"
+    source: "CIRCUIT_BREAKER_FALLBACK.md"
+    category: "resilience"
+    phases: [0, 2]
+    status: "CREATED"
+
+  - file: "architectural_findings_spec.yaml"
+    source: "ARCHITECTURAL_FINDINGS_REMEDIATION.md"
+    category: "architecture"
+    phases: [1, 2]
+    status: "CREATED"
+
+  - file: "test_strategy_spec.yaml"
+    source: "TEST_STRATEGY.md"
+    category: "testing"
+    phases: [ALL]
+    status: "CREATED"
+
+  - file: "deployment_spec.yaml"
+    source: "DEPLOYMENT_OPERATIONS.md"
+    category: "deployment"
+    phases: [0, 8]
+    status: "CREATED"
+
+  - file: "prompt_library_spec.yaml"
+    source: "CareerVP_Agentic_Architecture.md, PROMPT_GAP_ANALYSIS_REPORT.md, CareerVP Prompt Library.md"
+    version: "2.0"
+    category: "prompts"
+    phases: [1, 2, 3, 4, 5, 6, 7, 9]
+    prompts:
+      - cv_parsing
+      - perplexity_research
+      - gap_analysis
+      - vpr_generation
+      - cv_tailoring
+      - cover_letter
+      - interview_prep
+      - interview_tier1
+      - interview_tier2
+      - quality_validation
+      - verification_2a_fact_audit
+      - verification_2b_strategy
+      - verification_2c_tone
+      - ats_compatibility
+    status: "UPDATED"
+    note: "v2.0 includes actual prompt text with system_prompt, user_prompt, output_schema"
+
+phase_to_specs:
+  phase_0:
+    mandatory:
+      - "security_spec.yaml"
+    references:
+      - "vpc_spec.yaml"
+      - "circuit_breaker_spec.yaml"
+      - "deployment_spec.yaml"
+
+  phase_1:
+    mandatory:
+      - "models_spec.yaml"
+    references:
+      - "architectural_findings_spec.yaml"
+      - "test_strategy_spec.yaml"
+
+  phase_2:
+    mandatory:
+      - "cost_optimization_spec.yaml"
+    references:
+      - "docs/specs/02-company-research.md"
+      - "circuit_breaker_spec.yaml"
+
+  phase_3:
+    mandatory:
+      - "vpr_6stage_spec.yaml"
+      - "docs/specs/03-vpr-generator.md"
+    references:
+      - "docs/specs/07-vpr-async-architecture.md"
+      - "test_strategy_spec.yaml"
+      - "prompt_library_spec.yaml"
+
+  phase_4:
+    mandatory:
+      - "cv_tailoring_spec.yaml"
+    references:
+      - "test_strategy_spec.yaml"
+      - "prompt_library_spec.yaml"
+      - "docs/specs/02-company-research.md"
+
+  phase_5:
+    mandatory:
+      - "gap_analysis_spec.yaml"
+    references:
+      - "cost_optimization_spec.yaml"
+      - "prompt_library_spec.yaml"
+      - "docs/specs/02-company-research.md"
+
+  phase_6:
+    mandatory:
+      - "cover_letter_spec.yaml"
+    references:
+      - "test_strategy_spec.yaml"
+      - "prompt_library_spec.yaml"
+      - "docs/specs/02-company-research.md"
+
+  phase_7:
+    mandatory:
+      - "fvs_spec.yaml"
+      - "docs/specs/07-vpr-async-architecture.md"
+    references:
+      - "test_strategy_spec.yaml"
+      - "prompt_library_spec.yaml"
+
+  phase_8:
+    mandatory:
+      - "knowledge_base_spec.yaml"
+    references:
+      - "deployment_spec.yaml"
+      - "vpc_spec.yaml"
+      - "infra/careervp/specs/dynamodb_spec.yaml"
+
+  phase_9:
+    mandatory:
+      - "interview_prep_spec.yaml"
+    references:
+      - "test_strategy_spec.yaml"
+      - "prompt_library_spec.yaml"
+      - "docs/specs/02-company-research.md"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HANDLER STATUS MATRIX
+# ─────────────────────────────────────────────────────────────────────────────
+handler_status_matrix:
+  implemented:
+    - cv_tailoring_handler
+    - company_research_handler
+    - vpr_handler
+    - vpr_submit_handler
+    - vpr_worker_handler
+    - vpr_status_handler
+
+  needs_enhancement:
+    - gap_handler
+
+  to_be_created:
+    - cover_letter_handler
+    - interview_prep_handler
+
+  not_started:
+    - knowledge_base_handler
+
+# ─────────────────────────────────────────────────────────────────────────────
+# INFRASTRUCTURE STATUS (from infra/careervp/specs/)
+# ─────────────────────────────────────────────────────────────────────────────
+infrastructure_status:
+  dynamodb:
+    - "careervp-users-table-dev"
+    - "careervp-sessions-table-dev"
+    - "careervp-jobs-table-dev"
+    - "careervp-idempotency-table-dev"
+    - "careervp-cvs-table-dev"
+    - "careervp-applications-table-dev"
+    - "careervp-gap-responses-table-dev"
+    - "careervp-knowledge-table-dev"
+
+  s3:
+    - "careervp-dev-cvs-use1-{hash}"
+    - "careervp-dev-generated-use1-{hash}"
+
+  sqs:
+    - "careervp-vpr-jobs-queue-dev"
+    - "careervp-vpr-jobs-dlq-dlq-dev"
+
+  lambda:
+    - "careervp-vpr-submit-lambda-dev"
+    - "careervp-vpr-worker-lambda-dev"
+    - "careervp-vpr-status-lambda-dev"

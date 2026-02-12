@@ -1,0 +1,237 @@
+# Interview Preparation Specification
+# Source: JSA_FEATURE_MAPPING.md Section 11
+# Phase: 9
+# Reference: docs/specs/02-company-research.md (handler implementation pattern)
+
+spec_version: "1.1"
+date_created: "2026-02-12"
+date_updated: "2026-02-10"
+
+description: |
+  Interview Preparation Generator creates personalized interview
+  questions and suggested answers based on gap analysis and CV.
+
+handler_status: "TO_BE_CREATED"
+handler_file: "src/backend/careervp/handlers/interview_prep_handler.py"
+logic_file: "src/backend/careervp/logic/interview_prep.py"
+prompt_file: "src/backend/careervp/logic/prompts/interview_prep_prompt.py"
+
+reference_implementation: "docs/specs/02-company-research.md"
+
+implementation:
+  generator_file: "src/backend/careervp/logic/interview_prep.py"
+  handler_file: "src/backend/careervp/handlers/interview_prep_handler.py"
+  tests: "tests/unit/test_interview_prep*.py tests/integration/test_interview_prep_flow.py"
+  model: "Claude Haiku 4.5 (TEMPLATE mode)"
+  max_tokens: 4096
+
+components:
+  - name: "InterviewPrepGenerator"
+    methods:
+      - "generate_questions(gap_responses, vpr) -> List[InterviewQuestion]"
+      - "generate_answers(question, cv_facts) -> InterviewAnswer"
+      - "prioritize_questions(questions) -> List[InterviewQuestion]"
+
+question_types:
+  - type: "Behavioral"
+    description: "STAR method questions about past experience"
+    examples:
+      - "Tell me about a time you faced a challenge..."
+
+  - type: "Technical"
+    description: "Skills-based questions"
+    examples:
+      - "How would you approach [specific skill]..."
+
+  - type: "Situational"
+    description: "Hypothetical scenarios"
+    examples:
+      - "What would you do if..."
+
+  - type: "Gap-Focused"
+    description: "Address identified gaps with solutions"
+    examples:
+      - "I noticed experience with X is limited..."
+
+answer_structure:
+  - "STAR method (Situation, Task, Action, Result)"
+  - "2-3 paragraphs maximum"
+  - "Quantifiable outcomes where possible"
+
+constraints:
+  max_questions: 10
+  max_questions_per_type: 4
+  answer_length: "150-300 words"
+
+cost:
+  per_request: "$0.004-0.006"
+  monthly_estimate: "$2-3 (500 requests)"
+
+dependencies:
+  - "Gap Analysis output (Phase 5)"
+  - "VPR output (Phase 3)"
+  - "CV Tailoring output (Phase 4)"
+  - "TEST_STRATEGY.md Section 6"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HANDLER IMPLEMENTATION (based on company_research_handler.py pattern)
+# ─────────────────────────────────────────────────────────────────────────────
+handler:
+  pattern: "Synchronous Lambda Handler (like company_research_handler.py)"
+  validation:
+    - "Validate request body against InterviewPrepRequest schema"
+    - "Verify CV, VPR, Gap Analysis are completed"
+    - "Check user has access to referenced resources"
+
+  steps:
+    1_request_validation: |
+      Validate CV ID, VPR ID, Job ID exist and belong to user
+
+    2_fetch_context: |
+      Fetch:
+      - CV facts from UserCV model
+      - VPR differentiators from VPR model
+      - Gap responses from GapResponses
+      - Job requirements from Jobs model
+
+    3_build_prompt: |
+      Build prompt using interview_prep_prompt.py:
+      - Inject CV facts as context
+      - Add VPR differentiators
+      - Include Gap responses for question prioritization
+      - Reference Job requirements
+
+    4_invoke_llm: |
+      Call Claude Haiku 4.5:
+      - Temperature: 0.5
+      - Max tokens: 4096
+      - System prompt: interview_prep_system_prompt()
+
+    5_validate_output: |
+      Validate:
+      - Max 10 questions
+      - Question types: Behavioral, Technical, Situational, Gap-Focused
+      - Answers follow STAR method structure
+      - Word count: 150-300 words per answer
+
+    6_save_result: |
+      Save interview prep to DynamoDB:
+      - Table: applications-table
+      - SK: ARTIFACT#INTERVIEW_PREP#v1
+
+    7_return_response: |
+      Return questions + suggested answers + metadata
+
+  api_endpoint: "POST /interview-prep/generate"
+  request_schema:
+    type: "object"
+    required:
+      - "cv_id"
+      - "job_id"
+      - "vpr_id"
+      - "gap_response_ids"
+    properties:
+      cv_id:
+        type: "string"
+        description: "ID of the user's parsed CV"
+      job_id:
+        type: "string"
+        description: "ID of the job application"
+      vpr_id:
+        type: "string"
+        description: "ID of the generated VPR"
+      gap_response_ids:
+        type: "array"
+        items:
+          type: "string"
+        description: "IDs of gap analysis responses"
+      question_types:
+        type: "array"
+        items:
+          type: "string"
+          enum: ["Behavioral", "Technical", "Situational", "Gap-Focused"]
+        description: "Optional filter for question types"
+      max_questions:
+        type: "integer"
+        description: "Max questions to generate (default: 10)"
+
+  response_schema:
+    type: "object"
+    properties:
+      questions:
+        type: "array"
+        items:
+          type: "object"
+          properties:
+            type:
+              type: "string"
+            question:
+              type: "string"
+            suggested_answer:
+              type: "object"
+              properties:
+                content:
+                  type: "string"
+                word_count:
+                  type: "integer"
+                star_elements:
+                  type: "object"
+                  properties:
+                    situation:
+                      type: "string"
+                    task:
+                      type: "string"
+                    action:
+                      type: "string"
+                    result:
+                      type: "string"
+            priority:
+              type: "integer"
+      total_questions:
+        type: "integer"
+      questions_by_type:
+        type: "object"
+
+quality_requirements:
+  - "FVS validation (Phase 7)"
+  - "Grammar score >= 9.0"
+  - "STAR method compliance for answers"
+  - "Question relevance to job requirements"
+  - "No AI pattern detection"
+
+cost:
+  per_request: "$0.004-0.006"
+  monthly_estimate: "$2-3 (500 requests)"
+
+dependencies:
+  - "Gap Analysis output (Phase 5)"
+  - "VPR output (Phase 3)"
+  - "CV Tailoring output (Phase 4)"
+  - "CRITICAL_CORRECTIONS.md Section 8"
+  - "docs/specs/02-company-research.md"
+
+integration:
+  - name: "Gap Analysis (Phase 5)"
+    purpose: "uses gap responses"
+  - name: "Cover Letter (Phase 6)"
+    purpose: "coherent narrative"
+  - name: "Quality Validator (Phase 7)"
+    purpose: "validate answers"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RELATED FILES
+# ─────────────────────────────────────────────────────────────────────────────
+related_files:
+  specs:
+    - "docs/specs/02-company-research.md"
+    - "docs/refactor/specs/prompt_library_spec.yaml"
+    - "docs/swagger/careervp-api-v1.yaml"
+
+  code:
+    - "src/backend/careervp/handlers/company_research_handler.py"
+    - "src/backend/careervp/logic/interview_prep.py"
+    - "src/backend/careervp/logic/prompts/interview_prep_prompt.py"
+    - "src/backend/careervp/logic/fvs_validator.py"
+
+  tasks:
+    - "docs/tasks/11-interview-prep/"

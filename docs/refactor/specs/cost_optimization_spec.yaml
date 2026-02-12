@@ -1,0 +1,50 @@
+# Cost Optimization Specification
+# Source: REFACTORING_PLAN.md Section 10.2
+# Phase: 2
+
+spec_version: "1.0"
+date_created: "2026-02-12"
+
+strategies:
+  - id: "COST-001"
+    name: "Prompt Compression"
+    description: "Reduce CV text to highlights only (500 tokens vs 5000 tokens)"
+    source: "COST_OPTIMIZATION_VALIDATION.md Strategy 1"
+    implementation: "src/backend/careervp/logic/cv_summarizer.py"
+    tests: "tests/unit/test_cv_summarizer.py"
+    savings: "$0.0005/letter (13%)"
+
+  - id: "COST-002"
+    name: "Caching"
+    description: "Cache CV context and job requirements"
+    source: "COST_OPTIMIZATION_VALIDATION.md Strategy 2"
+    implementation: "src/backend/careervp/logic/llm_content_cache.py"
+    tests: "tests/unit/test_llm_content_cache.py"
+    ttl:
+      cv_context: "24 hours"
+      job_requirements: "1 hour"
+      company_research: "30 days"
+    savings: "$0.002/cached op"
+
+  - id: "COST-003"
+    name: "Response Truncation"
+    description: "Limit max_tokens per request"
+    source: "COST_OPTIMIZATION_VALIDATION.md Strategy 3"
+    status: "IMPLEMENTED"
+    evidence: "llm_client.py line 155: max_tokens=4096"
+
+  - id: "COST-004"
+    name: "Template-Based (Haiku)"
+    description: "Use Haiku for template tasks, Sonnet for strategic"
+    source: "COST_OPTIMIZATION_VALIDATION.md Strategy 4"
+    status: "IMPLEMENTED"
+    evidence: "TaskMode enum in llm_client.py"
+
+validation:
+  required_documents:
+    - "COST_CORRECTION.md"
+    - "COST_OPTIMIZATION_VALIDATION.md"
+
+expected_savings:
+  total_achievable: "70%"
+  current_implemented: "50%"

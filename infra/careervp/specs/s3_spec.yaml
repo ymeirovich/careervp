@@ -1,0 +1,86 @@
+# S3 Buckets Specification
+# Source: DEPLOYMENT_OPERATIONS.md
+# Used by: Phase 4 (CV storage), Phase 6 (Generated files)
+# Naming: NamingUtils.bucket_name(purpose) -> careervp-{env}-{purpose}-{region_code}-{hash}
+
+spec_version: "1.1"
+date_created: "2026-02-12"
+date_updated: "2026-02-12"
+
+naming_convention:
+  utility: "infra/careervp/naming_utils.py"
+  class: "NamingUtils"
+  method: "bucket_name(purpose)"
+  pattern: "careervp-{env}-{purpose}-{region_code}-{hash}"
+  example: "careervp-dev-cvs-use1-a1b2c3"
+  constants_file: "infra/careervp/constants.py"
+  note: "Hash is deterministic from account_id + region + environment"
+
+# Existing bucket managed by ApiDbConstruct:
+existing_buckets:
+  - constant: "CV_BUCKET_NAME"
+    value: "cvs"
+    managed_by: "ApiDbConstruct"
+    note: "Original CV uploads bucket - used by cv-parser Lambda"
+
+  - constant: "VPR_RESULTS_BUCKET"
+    value: "vpr-results"
+    managed_by: "ApiDbConstruct"
+    note: "VPR async results storage"
+
+# NEW buckets managed by S3Stack (infra/careervp/s3_stack.py):
+buckets:
+  - constant: "CV_BUCKET_NAME"
+    value: "cvs"
+    description: "User CV document storage (refactoring)"
+    phase: 4
+    public_access: false
+    encryption: "S3_MANAGED"
+    versioning: true
+    cors:
+      allowed_origins:
+        - "https://careervp.com"
+        - "http://localhost:3000"
+      allowed_methods:
+        - "GET"
+        - "PUT"
+        - "DELETE"
+    lifecycle_rules:
+      - rule: "cv_retention"
+        prefix: ""
+        expiration_days: 365
+        noncurrent_version_expiration_days: 90
+
+  - constant: "GENERATED_BUCKET_NAME"
+    value: "generated"
+    description: "Generated cover letters, tailored CVs"
+    phase: 6
+    public_access: false
+    encryption: "S3_MANAGED"
+    versioning: true
+    cors:
+      allowed_origins:
+        - "https://careervp.com"
+        - "http://localhost:3000"
+      allowed_methods:
+        - "GET"
+        - "PUT"
+    lifecycle_rules:
+      - rule: "generated_retention"
+        prefix: ""
+        expiration_days: 90
+        noncurrent_version_expiration_days: 30
+
+phase_mapping:
+  phase_0: []
+  phase_1: []
+  phase_2: []
+  phase_3: []
+  phase_4:
+    - "cvs"
+  phase_5: []
+  phase_6:
+    - "generated"
+  phase_7: []
+  phase_8: []
+  phase_9: []

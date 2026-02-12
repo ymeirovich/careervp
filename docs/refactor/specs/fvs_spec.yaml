@@ -1,0 +1,79 @@
+# Feature Validation System (FVS) Specification
+# Source: REFACTORING_PLAN.md Section 4
+# Phase: 7
+
+spec_version: "1.1"
+date_created: "2026-02-12"
+date_updated: "2026-02-10"
+
+description: |
+  Feature Validation System validates all generated content for
+  grammar, tone, anti-AI patterns, formatting, and structure.
+
+handler_status: "N/A"
+logic_file: "src/backend/careervp/logic/fvs_validator.py"
+prompt_file: "src/backend/careervp/logic/prompts/fvs_prompt.py"
+
+implementation:
+  validator_file: "src/backend/careervp/logic/quality_validator.py"
+  handler_file: "src/backend/careervp/handlers/quality_validator_handler.py"
+  tests: "tests/unit/test_quality_validator*.py tests/integration/test_quality_flow.py"
+  model: "Claude Sonnet 4.5 (STRATEGIC mode)"
+
+validation_checks:
+  - check: "Grammar"
+    minimum_score: 9.0
+    source: "TEST_STRATEGY.md Section 5"
+    methods:
+      - "validate_grammar(text) -> GrammarResult"
+      - "check_spelling(text) -> SpellingResult"
+
+  - check: "Tone"
+    minimum_score: 8.0
+    methods:
+      - "validate_tone(text) -> ToneResult"
+      - "check_professionalism(text) -> ProfessionalismResult"
+
+  - check: "Anti-AI Patterns"
+    minimum_score: 9.0
+    source: "CRITICAL_CORRECTIONS.md Section 8"
+    methods:
+      - "detect_ai_patterns(text) -> AIPatternResult"
+      - "flag_excessive_formality(text) -> FormalityResult"
+
+  - check: "Formatting"
+    minimum_score: 8.0
+    methods:
+      - "validate_formatting(text) -> FormattingResult"
+      - "check_bullet_points(text) -> BulletResult"
+
+  - check: "Content Structure"
+    methods:
+      - "validate_structure(content) -> StructureResult"
+      - "check_paragraph_coherence(content) -> CoherenceResult"
+
+output:
+  type: "FVSResult"
+  fields:
+    - name: "overall_score"
+    - name: "grammar_score"
+    - name: "tone_score"
+    - name: "ai_pattern_score"
+    - name: "formatting_score"
+    - name: "structure_score"
+    - name: "issues"
+      type: "List[QualityIssue]"
+    - name: "recommendations"
+      type: "List[str]"
+
+integration_points:
+  - name: "Cover Letter (Phase 6)"
+    purpose: "validate before output"
+  - name: "CV Tailoring (Phase 4)"
+    purpose: "validate tailored CV"
+  - name: "Interview Prep (Phase 9)"
+    purpose: "validate answers"
+
+dependencies:
+  - "TEST_STRATEGY.md Section 5"
+  - "CRITICAL_CORRECTIONS.md Section 8"

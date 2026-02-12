@@ -1,0 +1,70 @@
+# VPR 6-Stage Generator Specification
+# Source: REFACTORING_PLAN.md Section 2.1
+# Phase: 3
+
+spec_version: "1.1"
+date_created: "2026-02-12"
+date_updated: "2026-02-10"
+
+description: |
+  VPR (Value Proposition Resume) 6-Stage Generator creates targeted
+  value propositions by analyzing CV and job requirements through
+  5 sequential stages.
+
+handler_status: "NEEDS_REFACTOR"
+handler_file: "src/backend/careervp/handlers/vpr_handler.py"
+logic_file: "src/backend/careervp/logic/vpr_generator.py"
+prompt_file: "src/backend/careervp/logic/prompts/vpr_prompt.py"
+
+reference_implementation: "docs/specs/03-vpr-generator.md"
+
+implementation:
+  file: "src/backend/careervp/logic/vpr_generator.py"
+  tests: "tests/unit/test_vpr_generator.py"
+  model: "Claude Sonnet 4.5 (STRATEGIC mode)"
+  max_tokens: 8192
+
+stages:
+  - stage: 1
+    method: "_analyze_input()"
+    description: "Parse CV and job requirements"
+    input: "CV + Job Description"
+    output: "AnalysisResult"
+
+  - stage: 2
+    method: "_extract_evidence()"
+    description: "Extract relevant achievements from CV"
+    input: "AnalysisResult"
+    output: "EvidenceList"
+
+  - stage: 3
+    method: "_synthesize()"
+    description: "Synthesize value proposition"
+    input: "EvidenceList"
+    output: "DraftProposition"
+
+  - stage: 4
+    method: "_self_correct()"
+    description: "Self-correction for quality"
+    input: "DraftProposition"
+    output: "CorrectedProposition"
+
+  - stage: 5
+    method: "_generate_output()"
+    description: "Generate final VPR JSON"
+    input: "CorrectedProposition"
+    output: "VPRData"
+
+cost_optimization:
+  input_tokens: "~800-1000 (optimized CV + job summary)"
+  output_tokens: "~500-800 (structured JSON)"
+  cost_per_request: "$0.023-0.035"
+
+dependencies:
+  - "models_spec.yaml (VPR models)"
+  - "COST_OPTIMIZATION_VALIDATION.md Strategy 4"
+
+quality_requirements:
+  - "ATS-optimized formatting"
+  - "Achievement STAR method"
+  - "Quantifiable metrics"
