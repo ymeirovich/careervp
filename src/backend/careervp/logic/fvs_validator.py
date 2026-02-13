@@ -14,7 +14,7 @@ from difflib import SequenceMatcher
 from typing import Any, Iterable
 
 from careervp.handlers.utils.observability import logger
-from careervp.models.cv import UserCV
+from careervp.models.cv import Skill, UserCV
 from careervp.models.fvs import FVSValidationResult as TailoringFVSValidationResult
 from careervp.models.fvs_models import FVSBaseline as TailoringFVSBaseline
 from careervp.models.result import Result, ResultCode
@@ -105,6 +105,8 @@ def _validate_contact_info(immutable: dict[str, Any], generated: UserCV) -> list
         return violations
 
     gen_contact = generated.contact_info
+    if gen_contact is None:
+        return violations
     if baseline_contact.get('email') and gen_contact.email:
         if baseline_contact['email'].lower() != gen_contact.email.lower():
             violations.append(
@@ -340,7 +342,8 @@ def validate_vpr_against_cv(vpr: VPR, user_cv: UserCV) -> Result[FVSValidationRe
 def _collect_years(user_cv: UserCV) -> set[str]:
     years: set[str] = set()
     for experience in user_cv.experience:
-        years.update(YEAR_PATTERN.findall(experience.dates))
+        if experience.dates:
+            years.update(YEAR_PATTERN.findall(experience.dates))
     for education in user_cv.education:
         if education.graduation_date:
             years.update(YEAR_PATTERN.findall(education.graduation_date))

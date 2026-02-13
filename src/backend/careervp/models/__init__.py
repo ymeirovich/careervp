@@ -26,8 +26,8 @@ from careervp.models.cv_models import (
     Education as TailoringEducation,
 )
 from careervp.models.cv_models import (
-    Skill,
-    SkillLevel,
+    Skill as TailoringSkill,
+    SkillLevel as TailoringSkillLevel,
 )
 from careervp.models.cv_models import (
     UserCV as TailoringUserCV,
@@ -71,6 +71,8 @@ __all__ = [
     'TailoringWorkExperience',
     'TailoringEducation',
     'TailoringCertification',
+    'TailoringSkill',
+    'TailoringSkillLevel',
     'TailoringPreferences',
     'TailorCVRequest',
     'TailoredCV',

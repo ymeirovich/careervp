@@ -263,6 +263,7 @@ def parse_cv(  # noqa: C901 - consolidates extraction, cleaning, LLM parsing, an
                 role=exp.get('role', 'Unknown'),
                 dates=exp.get('dates', 'Unknown'),
                 achievements=exp.get('achievements', []),
+                technologies=exp.get('technologies', []),
             )
             for exp in extracted_data.get('experience', [])
         ]
@@ -273,6 +274,7 @@ def parse_cv(  # noqa: C901 - consolidates extraction, cleaning, LLM parsing, an
                 degree=edu.get('degree', 'Unknown'),
                 field_of_study=edu.get('field_of_study'),
                 graduation_date=edu.get('graduation_date'),
+                honors=edu.get('honors', []),
             )
             for edu in extracted_data.get('education', [])
         ]
@@ -297,6 +299,7 @@ def parse_cv(  # noqa: C901 - consolidates extraction, cleaning, LLM parsing, an
             skills=extracted_data.get('skills', [])[:50],  # Max 50 skills
             top_achievements=extracted_data.get('top_achievements', [])[:3],  # Max 3
             professional_summary=extracted_data.get('professional_summary'),
+            languages=extracted_data.get('languages', []),
             is_parsed=True,
         )
 

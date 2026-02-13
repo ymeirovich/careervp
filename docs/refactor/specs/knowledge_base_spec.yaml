@@ -2,8 +2,9 @@
 # Source: JSA_FEATURE_MAPPING.md Section 10
 # Phase: 8
 
-spec_version: "1.0"
+spec_version: "1.1"
 date_created: "2026-02-12"
+date_updated: "2026-02-12"
 
 description: |
   Knowledge Base Repository stores and retrieves user-specific data
@@ -16,7 +17,7 @@ implementation:
 
 data_types:
   - name: "GapResponse"
-    storage: "DynamoDB Table: careervp-gap-responses"
+    storage: "DynamoDB Table: careervp-gap-responses-table-dev (NamingUtils)"
     fields:
       - name: "user_email"
         key_type: "PK"
@@ -50,11 +51,16 @@ ttl_policies:
   cv_context: "24 hours"
 
 dependencies:
+  - "infra/careervp/specs/dynamodb_spec.yaml (GAP_RESPONSES_TABLE_NAME, KNOWLEDGE_TABLE_NAME)"
   - "DEPLOYMENT_OPERATIONS.md Section 2 (DynamoDB)"
   - "DEPLOYMENT_OPERATIONS.md Section 3 (S3)"
 
 integration_points:
   - name: "Gap Analysis (Phase 5)"
-    purpose: "stores responses"
+    purpose: "stores responses in careervp-gap-responses-table-dev"
   - name: "Company Research"
     purpose: "caches research"
+
+naming_convention:
+  table_pattern: "careervp-{feature}-table-dev"
+  source: "infra/careervp/naming_utils.py"
