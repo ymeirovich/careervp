@@ -27,6 +27,8 @@ from careervp.models.cv_models import (
 )
 from careervp.models.cv_models import (
     Skill as TailoringSkill,
+)
+from careervp.models.cv_models import (
     SkillLevel as TailoringSkillLevel,
 )
 from careervp.models.cv_models import (

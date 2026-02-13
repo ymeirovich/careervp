@@ -74,9 +74,7 @@ def validate_request(body: dict[str, Any], schema: type[BaseModel]) -> Result[di
             schema=schema.__name__,
             errors=str(exc),
         )
-        error_details = '; '.join(
-            [f"{error['loc'][0]}: {error['msg']}" for error in exc.errors()]
-        )
+        error_details = '; '.join([f'{error["loc"][0]}: {error["msg"]}' for error in exc.errors()])
         return Result(
             success=False,
             error=f'Request validation failed: {error_details}',

@@ -15,7 +15,7 @@ class GapAnalysisRequest(BaseModel):
     user_id: Annotated[str, Field(min_length=1)]
     cv_id: Annotated[str, Field(min_length=1)]
     job_posting: JobPosting
-    language: Annotated[Literal["en", "he"], Field(default="en")]
+    language: Annotated[Literal['en', 'he'], Field(default='en')]
 
 
 class GapQuestion(BaseModel):
@@ -23,8 +23,8 @@ class GapQuestion(BaseModel):
 
     question_id: Annotated[str, Field(min_length=1)]
     question: Annotated[str, Field(min_length=1)]
-    impact: Annotated[Literal["HIGH", "MEDIUM", "LOW"], Field(description="Impact level")]
-    probability: Annotated[Literal["HIGH", "MEDIUM", "LOW"], Field(description="Probability level")]
+    impact: Annotated[Literal['HIGH', 'MEDIUM', 'LOW'], Field(description='Impact level')]
+    probability: Annotated[Literal['HIGH', 'MEDIUM', 'LOW'], Field(description='Probability level')]
     gap_score: Annotated[float, Field(ge=0.0, le=1.0)]
 
 

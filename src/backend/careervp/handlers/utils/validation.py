@@ -10,11 +10,11 @@ def validate_file_size(content: bytes) -> None:
     """Validate file size is within limit."""
     size = len(content)
     if size > MAX_FILE_SIZE:
-        raise ValueError(f"File size {size} exceeds maximum {MAX_FILE_SIZE} bytes (10MB)")
+        raise ValueError(f'File size {size} exceeds maximum {MAX_FILE_SIZE} bytes (10MB)')
 
 
 def validate_text_length(text: str) -> None:
     """Validate text length is within limit."""
     length = len(text)
     if length > MAX_TEXT_LENGTH:
-        raise ValueError(f"Text length {length} exceeds maximum {MAX_TEXT_LENGTH} characters")
+        raise ValueError(f'Text length {length} exceeds maximum {MAX_TEXT_LENGTH} characters')

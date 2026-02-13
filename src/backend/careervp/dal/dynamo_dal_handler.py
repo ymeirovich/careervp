@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import Any, Iterable
+from typing import Any
 
 import boto3
 from boto3.dynamodb.conditions import Key
@@ -301,10 +301,7 @@ class DynamoDalHandler(DalHandler):
                     ExclusiveStartKey=response['LastEvaluatedKey'],
                 )
                 items.extend(response.get('Items', []))
-            results = [
-                TailoredCV.model_validate(item.get('tailored_cv') or item)
-                for item in items
-            ]
+            results = [TailoredCV.model_validate(item.get('tailored_cv') or item) for item in items]
             return Result(success=True, data=results, code=ResultCode.SUCCESS)
         except (ClientError, ValidationError) as exc:
             error_msg = 'failed to list tailored CVs'
@@ -514,9 +511,7 @@ class DynamoDalHandler(DalHandler):
                 latest_item = max(items, key=lambda item: self._parse_version_from_sk(item.get('sk', '')))
                 payload = latest_item.get('responses') or []
             else:
-                response = table.get_item(
-                    Key={'pk': user_id, 'sk': self._build_gap_responses_sort_key(version)}
-                )
+                response = table.get_item(Key={'pk': user_id, 'sk': self._build_gap_responses_sort_key(version)})
                 item = response.get('Item')
                 payload = item.get('responses') if item else []
             parsed = [GapResponse.model_validate(item) for item in payload]

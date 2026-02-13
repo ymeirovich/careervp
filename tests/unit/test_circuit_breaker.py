@@ -6,12 +6,12 @@ Per docs/refactor/specs/circuit_breaker_spec.yaml.
 """
 
 import pytest
-from unittest.mock import Mock, MagicMock, patch
 import time
 
 
 class CircuitState:
     """Circuit breaker states for testing."""
+
     CLOSED = "closed"
     OPEN = "open"
     HALF_OPEN = "half_open"
@@ -19,6 +19,7 @@ class CircuitState:
 
 class CircuitBreakerError(Exception):
     """Circuit breaker exception."""
+
     pass
 
 
@@ -37,7 +38,7 @@ class CircuitBreaker:
         failure_threshold: int = 5,
         recovery_timeout: float = 60.0,
         half_open_success_threshold: int = 3,
-        name: str = "default"
+        name: str = "default",
     ):
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
@@ -121,7 +122,7 @@ def circuit_breaker():
         failure_threshold=5,
         recovery_timeout=60.0,
         half_open_success_threshold=3,
-        name="test-circuit"
+        name="test-circuit",
     )
 
 
@@ -132,7 +133,7 @@ def fast_recovery_breaker():
         failure_threshold=3,
         recovery_timeout=1.0,  # 1 second for testing
         half_open_success_threshold=2,
-        name="fast-recovery"
+        name="fast-recovery",
     )
 
 
@@ -345,10 +346,7 @@ class TestCircuitBreakerConfiguration:
     @pytest.mark.skip(reason="Integration test - requires time mocking setup")
     def test_custom_recovery_timeout(self):
         """Test custom recovery timeout is applied."""
-        breaker = CircuitBreaker(
-            failure_threshold=3,
-            recovery_timeout=120.0
-        )
+        breaker = CircuitBreaker(failure_threshold=3, recovery_timeout=120.0)
 
         for i in range(3):
             breaker.record_failure()
@@ -360,9 +358,7 @@ class TestCircuitBreakerConfiguration:
     def test_custom_half_open_threshold(self):
         """Test custom half_open success threshold is applied."""
         breaker = CircuitBreaker(
-            failure_threshold=3,
-            recovery_timeout=1.0,
-            half_open_success_threshold=5
+            failure_threshold=3, recovery_timeout=1.0, half_open_success_threshold=5
         )
 
         for i in range(3):
