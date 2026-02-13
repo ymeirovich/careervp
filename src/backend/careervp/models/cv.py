@@ -193,27 +193,33 @@ class UserCV(BaseModel):
 
     def _sync_from_self_to_contact(self) -> None:
         """Copy from self fields to contact_info (only if contact_info empty)."""
-        if self.email and not self.contact_info.email:
-            self.contact_info.email = self.email
-        if self.phone and not self.contact_info.phone:
-            self.contact_info.phone = self.phone
-        if self.location and not self.contact_info.location:
-            self.contact_info.location = self.location
-        if self.linkedin and not self.contact_info.linkedin:
-            self.contact_info.linkedin = self.linkedin
-        if self.full_name and not self.contact_info.name:
-            self.contact_info.name = self.full_name
+        contact = self.contact_info
+        if contact is None:
+            return
+        if self.email and not contact.email:
+            contact.email = self.email
+        if self.phone and not contact.phone:
+            contact.phone = self.phone
+        if self.location and not contact.location:
+            contact.location = self.location
+        if self.linkedin and not contact.linkedin:
+            contact.linkedin = self.linkedin
+        if self.full_name and not contact.name:
+            contact.name = self.full_name
 
     def _sync_from_contact_to_self(self) -> None:
         """Copy from contact_info to self fields (if self field empty)."""
-        if not self.email and self.contact_info.email:
-            self.email = self.contact_info.email
-        if not self.phone and self.contact_info.phone:
-            self.phone = self.contact_info.phone
-        if not self.location and self.contact_info.location:
-            self.location = self.contact_info.location
-        if not self.linkedin and self.contact_info.linkedin:
-            self.linkedin = self.contact_info.linkedin
+        contact = self.contact_info
+        if contact is None:
+            return
+        if not self.email and contact.email:
+            self.email = contact.email
+        if not self.phone and contact.phone:
+            self.phone = contact.phone
+        if not self.location and contact.location:
+            self.location = contact.location
+        if not self.linkedin and contact.linkedin:
+            self.linkedin = contact.linkedin
 
     @property
     def work_experience(self) -> list[WorkExperience]:
@@ -268,8 +274,8 @@ __all__ = [
     'Education',
     'Certification',
     'UserCV',
-    'ImmutableFacts',
-    'FVSBaseline',
+    'Skill',
+    'SkillLevel',
     'CVParseRequest',
     'CVParseResponse',
     'CV',

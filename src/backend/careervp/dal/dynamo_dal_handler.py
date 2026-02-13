@@ -1,11 +1,10 @@
 from datetime import datetime, timedelta, timezone
-from typing import Any, Iterable
+from typing import Any
 
 import boto3
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 from mypy_boto3_dynamodb import DynamoDBServiceResource
-from mypy_boto3_dynamodb.service_resource import Table
 from pydantic import ValidationError
 
 from careervp.dal.db_handler import DalHandler
@@ -31,7 +30,7 @@ class DynamoDalHandler(DalHandler):
     def __init__(self, table_name: str):
         self.table_name = table_name
 
-    def _get_db_handler(self, table_name: str) -> Table:
+    def _get_db_handler(self, table_name: str) -> Any:
         logger.info('opening connection to dynamodb table', table_name=table_name)
         session = boto3.session.Session()
         dynamodb: DynamoDBServiceResource = session.resource('dynamodb')
@@ -42,7 +41,7 @@ class DynamoDalHandler(DalHandler):
         logger.append_keys(user_id=user_cv.user_id)
         logger.info('saving CV to DynamoDB')
         try:
-            table: Table = self._get_db_handler(self.table_name)
+            table = self._get_db_handler(self.table_name)
             item = user_cv.model_dump()
             item['pk'] = user_cv.user_id
             item['sk'] = 'CV'
@@ -59,7 +58,7 @@ class DynamoDalHandler(DalHandler):
         logger.append_keys(user_id=user_id)
         logger.info('fetching CV from DynamoDB')
         try:
-            table: Table = self._get_db_handler(self.table_name)
+            table = self._get_db_handler(self.table_name)
             response = table.get_item(Key={'pk': user_id, 'sk': 'CV'})
             item = response.get('Item')
             if not item:
@@ -113,7 +112,7 @@ class DynamoDalHandler(DalHandler):
         logger.append_keys(application_id=vpr.application_id, user_id=vpr.user_id)
         logger.info('saving VPR artifact to DynamoDB')
         try:
-            table: Table = self._get_db_handler(self.table_name)
+            table = self._get_db_handler(self.table_name)
             item = vpr.model_dump(mode='json')
             item['pk'] = vpr.application_id
             item['sk'] = self._build_vpr_sort_key(vpr.version)
@@ -138,7 +137,7 @@ class DynamoDalHandler(DalHandler):
         logger.append_keys(application_id=application_id, version=version)
         logger.info('fetching VPR version from DynamoDB')
         try:
-            table: Table = self._get_db_handler(self.table_name)
+            table = self._get_db_handler(self.table_name)
             response = table.get_item(
                 Key={'pk': application_id, 'sk': self._build_vpr_sort_key(version)},
             )
@@ -160,7 +159,7 @@ class DynamoDalHandler(DalHandler):
         logger.append_keys(application_id=application_id)
         logger.info('fetching latest VPR from DynamoDB')
         try:
-            table: Table = self._get_db_handler(self.table_name)
+            table = self._get_db_handler(self.table_name)
             key_condition = Key('pk').eq(application_id) & Key('sk').begins_with(VPR_SORT_KEY_PREFIX)
             items: list[dict[str, Any]] = []
             response = table.query(KeyConditionExpression=key_condition)
@@ -192,7 +191,7 @@ class DynamoDalHandler(DalHandler):
         logger.append_keys(user_id=user_id)
         logger.info('listing VPRs for user from DynamoDB')
         try:
-            table: Table = self._get_db_handler(self.table_name)
+            table = self._get_db_handler(self.table_name)
             key_condition = Key('user_id').eq(user_id) & Key('sk').begins_with(VPR_SORT_KEY_PREFIX)
             items: list[dict[str, Any]] = []
             response = table.query(IndexName=USER_VPRS_INDEX, KeyConditionExpression=key_condition)
@@ -227,7 +226,7 @@ class DynamoDalHandler(DalHandler):
         logger.info('saving tailored CV artifact to DynamoDB')
         resolved_job_id = job_id or tailored_cv.job_description_hash or 'unknown'
         try:
-            table: Table = self._get_db_handler(self.table_name)
+            table = self._get_db_handler(self.table_name)
             item = {
                 'pk': tailored_cv.user_id,
                 'sk': self._build_tailored_cv_sort_key(tailored_cv.cv_id, resolved_job_id, version),
@@ -259,7 +258,7 @@ class DynamoDalHandler(DalHandler):
         logger.append_keys(user_id=user_id, cv_id=cv_id, job_id=job_id)
         logger.info('fetching tailored CV from DynamoDB')
         try:
-            table: Table = self._get_db_handler(self.table_name)
+            table = self._get_db_handler(self.table_name)
             if version is None:
                 prefix = self._build_tailored_cv_sort_key(cv_id, job_id, version=0).replace('#v0', '#v')
                 key_condition = Key('pk').eq(user_id) & Key('sk').begins_with(prefix)
@@ -291,7 +290,7 @@ class DynamoDalHandler(DalHandler):
         logger.append_keys(user_id=user_id)
         logger.info('listing tailored CVs for user from DynamoDB')
         try:
-            table: Table = self._get_db_handler(self.table_name)
+            table = self._get_db_handler(self.table_name)
             key_condition = Key('pk').eq(user_id) & Key('sk').begins_with(TAILORED_CV_SORT_KEY_PREFIX)
             items: list[dict[str, Any]] = []
             response = table.query(KeyConditionExpression=key_condition)
@@ -302,10 +301,7 @@ class DynamoDalHandler(DalHandler):
                     ExclusiveStartKey=response['LastEvaluatedKey'],
                 )
                 items.extend(response.get('Items', []))
-            results = [
-                TailoredCV.model_validate(item.get('tailored_cv') or item)
-                for item in items
-            ]
+            results = [TailoredCV.model_validate(item.get('tailored_cv') or item) for item in items]
             return Result(success=True, data=results, code=ResultCode.SUCCESS)
         except (ClientError, ValidationError) as exc:
             error_msg = 'failed to list tailored CVs'
@@ -325,7 +321,7 @@ class DynamoDalHandler(DalHandler):
         logger.append_keys(user_id=user_id, cv_id=cv_id, job_id=job_id)
         logger.info('saving cover letter artifact to DynamoDB')
         try:
-            table: Table = self._get_db_handler(self.table_name)
+            table = self._get_db_handler(self.table_name)
             item = {
                 'pk': user_id,
                 'sk': self._build_cover_letter_sort_key(cv_id, job_id, version),
@@ -357,7 +353,7 @@ class DynamoDalHandler(DalHandler):
         logger.append_keys(user_id=user_id, cv_id=cv_id, job_id=job_id)
         logger.info('fetching cover letter from DynamoDB')
         try:
-            table: Table = self._get_db_handler(self.table_name)
+            table = self._get_db_handler(self.table_name)
             if version is None:
                 prefix = self._build_cover_letter_sort_key(cv_id, job_id, version=0).replace('#v0', '#v')
                 key_condition = Key('pk').eq(user_id) & Key('sk').begins_with(prefix)
@@ -389,7 +385,7 @@ class DynamoDalHandler(DalHandler):
         logger.append_keys(user_id=user_id)
         logger.info('listing cover letters for user from DynamoDB')
         try:
-            table: Table = self._get_db_handler(self.table_name)
+            table = self._get_db_handler(self.table_name)
             key_condition = Key('pk').eq(user_id) & Key('sk').begins_with(COVER_LETTER_SORT_KEY_PREFIX)
             items: list[dict[str, Any]] = []
             response = table.query(KeyConditionExpression=key_condition)
@@ -419,7 +415,7 @@ class DynamoDalHandler(DalHandler):
         logger.append_keys(user_id=user_id, cv_id=cv_id, job_id=job_id)
         logger.info('saving gap analysis questions to DynamoDB')
         try:
-            table: Table = self._get_db_handler(self.table_name)
+            table = self._get_db_handler(self.table_name)
             item = {
                 'pk': user_id,
                 'sk': self._build_gap_analysis_sort_key(cv_id, job_id),
@@ -449,7 +445,7 @@ class DynamoDalHandler(DalHandler):
         logger.append_keys(user_id=user_id, cv_id=cv_id, job_id=job_id)
         logger.info('fetching gap analysis questions from DynamoDB')
         try:
-            table: Table = self._get_db_handler(self.table_name)
+            table = self._get_db_handler(self.table_name)
             response = table.get_item(
                 Key={
                     'pk': user_id,
@@ -476,7 +472,7 @@ class DynamoDalHandler(DalHandler):
         logger.append_keys(user_id=user_id)
         logger.info('saving gap responses to DynamoDB')
         try:
-            table: Table = self._get_db_handler(self.table_name)
+            table = self._get_db_handler(self.table_name)
             item = {
                 'pk': user_id,
                 'sk': self._build_gap_responses_sort_key(version),
@@ -504,7 +500,7 @@ class DynamoDalHandler(DalHandler):
         logger.append_keys(user_id=user_id)
         logger.info('fetching gap responses from DynamoDB')
         try:
-            table: Table = self._get_db_handler(self.table_name)
+            table = self._get_db_handler(self.table_name)
             if version is None:
                 prefix = self._build_gap_responses_sort_key(version=0).replace('#v0', '#v')
                 key_condition = Key('pk').eq(user_id) & Key('sk').begins_with(prefix)
@@ -515,9 +511,7 @@ class DynamoDalHandler(DalHandler):
                 latest_item = max(items, key=lambda item: self._parse_version_from_sk(item.get('sk', '')))
                 payload = latest_item.get('responses') or []
             else:
-                response = table.get_item(
-                    Key={'pk': user_id, 'sk': self._build_gap_responses_sort_key(version)}
-                )
+                response = table.get_item(Key={'pk': user_id, 'sk': self._build_gap_responses_sort_key(version)})
                 item = response.get('Item')
                 payload = item.get('responses') if item else []
             parsed = [GapResponse.model_validate(item) for item in payload]

@@ -2,8 +2,14 @@
 # Source: DEPLOYMENT_OPERATIONS.md
 # Used by: Phase 0 (Security), Phase 8 (Knowledge Base)
 
-spec_version: "1.0"
+spec_version: "1.1"
 date_created: "2026-02-12"
+date_updated: "2026-02-12"
+
+naming_convention:
+  tables: "NamingUtils.table_name(feature) -> careervp-{feature}-table-{env}"
+  buckets: "NamingUtils.bucket_name(purpose) -> careervp-{env}-{purpose}-{region_code}-{hash}"
+  source: "infra/careervp/naming_utils.py"
 
 lambda:
   runtime: "python3.12"
@@ -13,44 +19,44 @@ lambda:
 
 dynamodb:
   tables:
-    - name: "careervp-users"
+    - name: "careervp-users-table-dev (NamingUtils: table_name('users'))"
       partition_key: "user_email"
       sort_key: "entity_type"
       billing: "PAY_PER_REQUEST"
 
-    - name: "careervp-cvs"
+    - name: "careervp-cvs-table-dev (NamingUtils: table_name('cvs'))"
       partition_key: "user_email"
       sort_key: "cv_id"
       billing: "PAY_PER_REQUEST"
 
-    - name: "careervp-jobs"
+    - name: "careervp-jobs-table-dev (NamingUtils: table_name('jobs'))"
       partition_key: "user_email"
       sort_key: "job_id"
       billing: "PAY_PER_REQUEST"
 
-    - name: "careervp-applications"
+    - name: "careervp-applications-table-dev (NamingUtils: table_name('applications'))"
       partition_key: "user_email"
       sort_key: "application_id"
       billing: "PAY_PER_REQUEST"
 
-    - name: "careervp-gap-responses"
+    - name: "careervp-gap-responses-table-dev (NamingUtils: table_name('gap-responses'))"
       partition_key: "user_email"
       sort_key: "application_id"
       billing: "PAY_PER_REQUEST"
 
-    - name: "careervp-knowledge"
+    - name: "careervp-knowledge-table-dev (NamingUtils: table_name('knowledge'))"
       partition_key: "user_email"
       sort_key: "entity_type"
       billing: "PAY_PER_REQUEST"
 
 s3:
   buckets:
-    - name: "careervp-cvs"
+    - name: "careervp-dev-cvs-use1-{hash} (NamingUtils: bucket_name('cvs'))"
       public_access: false
       encryption: "AES256"
       versioning: true
 
-    - name: "careervp-generated"
+    - name: "careervp-dev-generated-use1-{hash} (NamingUtils: bucket_name('generated'))"
       public_access: false
       encryption: "AES256"
 

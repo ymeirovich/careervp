@@ -1,36 +1,13 @@
 # CareerVP Refactoring Execution Runbook
 
-**Document Version:** 3.0
+**Document Version:** 2.4
 **Date:** 2026-02-12
 **Purpose:** Machine-readable execution guide for all refactoring phases
-**Status:** ALL INCONSISTENCIES FIXED ✅
 
 > **Status:** Phase -1 COMPLETE. All specs in `docs/refactor/specs/`
 > **Infra Specs:** `infra/careervp/specs/`
 > **Prompt Library:** `docs/refactor/specs/prompt_library_spec.yaml` (v2.0 - NOW WITH ACTUAL PROMPT TEXT)
 > **Handler Status Matrix:** See `docs/refactor/specs/_registry.yaml` (handler_status_matrix section)
-
-> **Test Directory Structure:**
-> - `tests/unit/` - Generic tests (auth, validators, circuit breaker)
-> - `tests/{feature}/unit/` - Feature-organized tests:
->   - `tests/cv-tailoring/unit/` (exists)
->   - `tests/gap_analysis/unit/` (exists)
->   - `tests/cover-letter/unit/` (exists)
->   - `tests/vpr-async/unit/` (exists)
->   - `tests/models/unit/` (create for Phase 1)
->   - `tests/cost_optimization/unit/` (create for Phase 2)
->   - `tests/quality_validator/unit/` (create for Phase 7)
->   - `tests/knowledge_base/unit/` (create for Phase 8)
-
-> **Handler Patterns:**
-> - Function-based Powertools (existing codebase pattern)
-> - Pattern: `@app.post('/api/{feature}')` → function `handle_{feature}()`
-> - Examples: `cv_upload_handler.py`, `cv_tailoring_handler.py`
-
-> **File Creation Rules:**
-> - ALWAYS check if file exists before creating
-> - "Create" = new file, "Enhance/Consolidate" = existing file
-> - Phase 1: models/cv.py, models/vpr.py, models/fvs.py already exist
 
 ---
 
@@ -67,9 +44,6 @@ for d in ['docs/refactor/specs', 'infra/careervp/specs']:
 
 **Duration:** 1 day | **Effort:** 8 hours
 
-> **⚠️ Handler Pattern Note:**
-> `deployment_spec.yaml` specifies class-based handler patterns, but actual implementation uses function-based Powertools patterns. Follow existing patterns in `cv_upload_handler.py` and `cv_tailoring_handler.py` for consistency with the codebase.
-
 ### Specs
 | Type | File | Purpose |
 |------|------|---------|
@@ -103,8 +77,6 @@ KNOWLEDGE: docs/refactor/specs/security_spec.yaml (requirements section)
 
 **READ FIRST:**
 - `docs/refactor/specs/security_spec.yaml`
-
-**HANDLER PATTERN:** Use function-based Powertools pattern (see cv_upload_handler.py)
 
 **CODE:**
 ```bash
@@ -147,12 +119,7 @@ KNOWLEDGE: docs/refactor/specs/circuit_breaker_spec.yaml (implementation section
 
 ### Verification
 ```bash
-cd /Users/yitzchak/Documents/dev/careervp/src/backend
-
-# Phase 0 tests
-uv run pytest tests/unit/ -v --tb=short
-# Files: test_auth_handler.py, test_validators.py, test_circuit_breaker.py
-
+uv run pytest tests/unit/test_auth_handler.py tests/unit/test_validators.py tests/unit/test_circuit_breaker.py -v --tb=short
 uv run ruff check careervp/handlers/ careervp/logic/circuit_breaker.py
 uv run mypy careervp/handlers/ careervp/logic/circuit_breaker.py --strict
 ```
@@ -175,15 +142,6 @@ cdk deploy --all
 
 **Duration:** 3 days | **Effort:** 22 hours
 
-### Existing Files (DO NOT OVERWRITE)
-| File | Status | Contains |
-|------|--------|----------|
-| `models/cv.py` | EXISTS | SkillLevel, Skill, CVSection, WorkExperience, Education, UserCV, CVParseRequest, CVParseResponse |
-| `models/vpr.py` | EXISTS | EvidenceItem, VPR (with executive_summary, evidence_matrix, differentiators, gap_strategies) |
-| `models/fvs.py` | EXISTS | ViolationSeverity, FVSViolation, FVSValidationResult |
-| `models/cv_models.py` | EXISTS | Duplicate of cv.py - consolidate into cv.py |
-| `models/fvs_models.py` | EXISTS | Duplicate of fvs.py - consolidate into fvs.py |
-
 ### Specs
 | Type | File | Purpose |
 |------|------|---------|
@@ -191,7 +149,10 @@ cdk deploy --all
 | Reference | `architectural_findings_spec.yaml` | Layer rules |
 | Reference | `test_strategy_spec.yaml` | Test patterns |
 
-### Step 1.1: Consolidate CV Models
+### Step 1.1: Implement CV Models
+
+**READ FIRST:**
+- `docs/refactor/specs/models_spec.yaml`
 
 **CODE:**
 ```bash
@@ -199,28 +160,19 @@ cdk deploy --all
 """
 Consolidate CV models per models_spec.yaml:
 
-1. ENHANCE: src/backend/careervp/models/cv.py
-   - Keep existing: SkillLevel, Skill, CVSection, WorkExperience, Education, UserCV, CVParseRequest, CVParseResponse
-   - Add from cv_models.py if missing
-   - DO NOT DELETE cv_models.py - update imports in cv_tailoring_handler first
+1. Create: src/backend/careervp/models/cv.py
+   - CVData, CVSection, WorkExperience, Education, Skill
 
-2. Create: tests/models/unit/test_cv_models.py (NEW FOLDER)
-
-MAPPING: spec "CVData" → existing "UserCV"
-MAPPING: spec "CVSection" → existing "CVSection"
-MAPPING: spec "WorkExperience" → existing "WorkExperience"
-MAPPING: spec "Education" → existing "Education"
-MAPPING: spec "Skill" → existing "Skill"
-
-After consolidation: Update cv_tailoring_handler.py imports from cv_models.py to cv.py
-"""
+2. Create: tests/unit/test_cv_models.py
 
 KNOWLEDGE: docs/refactor/specs/models_spec.yaml (categories.CV models)
-KNOWLEDGE: cv_tailoring_handler.py imports from careervp.models.cv_models
-```
+"""
 ```
 
-### Step 1.2: Consolidate VPR Models
+### Step 1.2: Implement VPR Models
+
+**READ FIRST:**
+- `docs/refactor/specs/models_spec.yaml`
 
 **CODE:**
 ```bash
@@ -228,23 +180,19 @@ KNOWLEDGE: cv_tailoring_handler.py imports from careervp.models.cv_models
 """
 Consolidate VPR models per models_spec.yaml:
 
-1. ENHANCE: src/backend/careervp/models/vpr.py
-   - Keep existing: EvidenceItem, VPR (with executive_summary, evidence_matrix, differentiators, gap_strategies)
-   - Add new if missing: ValueProposition, Achievement, TargetRole
+1. Create: src/backend/careervp/models/vpr.py
+   - VPRData, ValueProposition, Achievement, TargetRole
 
-2. Create: tests/models/unit/test_vpr_models.py (NEW FOLDER)
-
-MAPPING: spec "VPRData" → existing "VPR"
-MAPPING: spec "ValueProposition" → NEW (add to vpr.py)
-MAPPING: spec "Achievement" → NEW (add to vpr.py)
-MAPPING: spec "TargetRole" → NEW (add to vpr.py)
-"""
+2. Create: tests/unit/test_vpr_models.py
 
 KNOWLEDGE: docs/refactor/specs/models_spec.yaml (categories.VPR models)
-```
+"""
 ```
 
-### Step 1.3: Consolidate FVS Models
+### Step 1.3: Implement FVS Models
+
+**READ FIRST:**
+- `docs/refactor/specs/models_spec.yaml`
 
 **CODE:**
 ```bash
@@ -252,29 +200,18 @@ KNOWLEDGE: docs/refactor/specs/models_spec.yaml (categories.VPR models)
 """
 Consolidate FVS models per models_spec.yaml:
 
-1. ENHANCE: src/backend/careervp/models/fvs.py
-   - Keep existing: ViolationSeverity, FVSViolation, FVSValidationResult
-   - Add new if missing: FVSResult, QualityScore, GrammarIssue, ToneIssue
-   - DO NOT DELETE fvs_models.py - consolidate into fvs.py
+1. Create: src/backend/careervp/models/fvs.py
+   - FVSResult, QualityScore, GrammarIssue, ToneIssue
 
-2. Create: tests/models/unit/test_fvs_models.py (NEW FOLDER)
-
-MAPPING: spec "FVSResult" → NEW (add to fvs.py)
-MAPPING: spec "QualityScore" → NEW (add to fvs.py)
-MAPPING: spec "GrammarIssue" → NEW (add to fvs.py)
-MAPPING: spec "ToneIssue" → NEW (add to fvs.py)
-MAPPING: spec "FVSValidationResult" → existing "FVSValidationResult"
-"""
+2. Create: tests/unit/test_fvs_models.py
 
 KNOWLEDGE: docs/refactor/specs/models_spec.yaml (categories.FVS models)
-```
+"""
 ```
 
-### Phase 1 Verification
+### Verification
 ```bash
-cd /Users/yitzchak/Documents/dev/careervp/src/backend
-
-uv run pytest tests/models/unit/ -v  # NEW FOLDER
+uv run pytest tests/unit/test_cv_models.py tests/unit/test_vpr_models.py tests/unit/test_fvs_models.py -v
 uv run ruff check careervp/models/
 uv run mypy careervp/models/ --strict
 ```
@@ -336,51 +273,46 @@ KNOWLEDGE: docs/refactor/specs/cost_optimization_spec.yaml (strategies[1])
 
 ### Verification
 ```bash
-cd /Users/yitzchak/Documents/dev/careervp/src/backend
-
-uv run pytest tests/cost_optimization/unit/ -v  # NEW FOLDER
+uv run pytest tests/unit/test_cv_summarizer.py tests/unit/test_llm_content_cache.py -v
 uv run ruff check careervp/logic/
 uv run mypy careervp/logic/ --strict
 ```
 
 ---
 
-## Phase 3: VPR 6-Stage Generator
+## Phase 3: VPR 5-Stage Generator
 
 **Duration:** 1.5 days | **Effort:** 10 hours
-
-### Existing Files (DO NOT OVERWRITE)
-| File | Status | Contains |
-|------|--------|----------|
-| `logic/vpr_generator.py` | EXISTS | VPR generator logic |
-| `logic/prompts/vpr_prompt.py` | EXISTS | VPR prompts |
 
 ### Specs
 | Type | File | Purpose |
 |------|------|---------|
-| Mandatory | `vpr_6stage_spec.yaml` | VPR implementation (6 stages) |
+| Mandatory | `vpr_6stage_spec.yaml` | VPR implementation |
 | Reference | `test_strategy_spec.yaml` | Test patterns |
 | Reference | `prompt_library_spec.yaml` | Prompt: vpr_generation (Sonnet 4.5, STRATEGIC) |
 
-### Step 3.1: Enhance VPR Generator
+### Step 3.1: Implement VPR Generator
+
+**READ FIRST:**
+- `docs/refactor/specs/vpr_6stage_spec.yaml`
+- `docs/refactor/specs/prompt_library_spec.yaml` (prompts.vpr_generation)
 
 **CODE:**
 ```bash
 # VSCode + Anthropic Opus (complex architecture)
 """
-Enhance VPR Generator per vpr_6stage_spec.yaml:
+Implement VPR 5-Stage Generator per vpr_6stage_spec.yaml:
 
-1. ENHANCE: src/backend/careervp/logic/vpr_generator.py
-   - Add Stage 6: _final_meta_evaluation() -> FinalVPRData
-   - Keep existing stages 1-5 implementation
-   - Verify 6-stage process matches spec
+1. Create: src/backend/careervp/logic/vpr_generator.py
+   - Stage 1: _analyze_input() -> AnalysisResult
+   - Stage 2: _extract_evidence() -> EvidenceList
+   - Stage 3: _synthesize() -> DraftProposition
+   - Stage 4: _self_correct() -> CorrectedProposition
+   - Stage 5: _generate_output() -> VPRData
 
-2. Create: tests/vpr-async/unit/test_vpr_generator.py (use existing folder)
+2. Create: tests/unit/test_vpr_generator.py
 
-DO NOT CREATE NEW FILE - vpr_generator.py already exists
-"""
-
-KNOWLEDGE: docs/refactor/specs/vpr_6stage_spec.yaml (stages section - 6 stages total)
+KNOWLEDGE: docs/refactor/specs/vpr_6stage_spec.yaml (stages section - 5 stages total)
 PROMPTS: docs/refactor/specs/prompt_library_spec.yaml (prompts.vpr_generation)
   - Existing prompt: src/backend/careervp/logic/prompts/vpr_prompt.py (IMPLEMENTED)
   - Model: Claude Sonnet 4.5 (STRATEGIC mode), temp=0.7, max_tokens=8192
@@ -391,9 +323,7 @@ PROMPTS: docs/refactor/specs/prompt_library_spec.yaml (prompts.vpr_generation)
 
 ### Verification
 ```bash
-cd /Users/yitzchak/Documents/dev/careervp/src/backend
-
-uv run pytest tests/vpr-async/unit/ -v
+uv run pytest tests/unit/test_vpr_generator.py -v
 uv run ruff check careervp/logic/vpr_generator.py
 uv run mypy careervp/logic/vpr_generator.py --strict
 ```
@@ -421,22 +351,17 @@ uv run mypy careervp/logic/vpr_generator.py --strict
 ```bash
 # VSCode + Anthropic Sonnet
 """
-Implement CV Tailoring per cv_tailoring_spec.yaml:
+Implement CV Tailoring Logic per cv_tailoring_spec.yaml:
 
-File Structure (ALREADY EXISTS - ENHANCE ONLY):
-1. src/backend/careervp/logic/cv_tailoring.py (CORE FUNCTION - canonical)
-   - tailor_cv() - already exists, verify 3-step process
+1. Create: src/backend/careervp/logic/cv_tailoring_logic.py
+   - Class: CVTailoringLogic
+   - Step 1: _analyze() -> AnalysisResult
+   - Step 2: _self_correct() -> CorrectedCV
+   - Step 3: _generate() -> TailoredCV
 
-2. src/backend/careervp/logic/cv_tailoring_logic.py (ORCHESTRATION - already exists)
-   - CVTailoringLogic class - handles DAL + orchestrates tailor_cv()
-   - Verify dependency injection pattern
+2. Create: tests/unit/test_cv_tailoring_logic.py
 
-Handler imports from: cv_tailoring.tailor_cv
-
-DO NOT CREATE NEW FILES - These files already exist.
-ENHANCE: Verify 3-step process (_analyze, _self_correct, _generate)
-
-2. Update: tests/unit/test_cv_tailoring_logic.py
+NOTE: Consolidate with existing src/backend/careervp/logic/cv_tailoring.py if both files exist
 
 KNOWLEDGE: docs/refactor/specs/cv_tailoring_spec.yaml (three_step_process)
 PROMPTS: docs/refactor/specs/prompt_library_spec.yaml (prompts.cv_tailoring)
@@ -450,42 +375,39 @@ PROMPTS: docs/refactor/specs/prompt_library_spec.yaml (prompts.cv_tailoring)
 """
 ```
 
-### Step 4.2: Enhance CV Tailoring Handler
+### Step 4.2: Implement CV Tailoring Handler
 
 **READ FIRST:**
 - `docs/refactor/specs/cv_tailoring_spec.yaml`
-- `cv_tailoring_handler.py` (existing imports)
 
 **CODE:**
 ```bash
 # VSCode + Anthropic Haiku
 """
-Enhance CV Tailoring Handler per cv_tailoring_spec.yaml:
+Implement CV Tailoring Handler per cv_tailoring_spec.yaml:
 
-1. ENHANCE: src/backend/careervp/handlers/cv_tailoring_handler.py
-   - Already exists with: CustomJSONEncoder, CVTable imports
-   - Verify handler function-based pattern (@app.post)
-   - Check imports: from careervp.logic.cv_tailoring import tailor_cv
+1. Create: src/backend/careervp/handlers/cv_tailoring_handler.py
+   - Lambda handler with Powertools
+   - Input validation
+   - Calls CVTailoringLogic
 
-2. Update: tests/cv-tailoring/unit/test_cv_tailoring_handler.py
-
-DO NOT CREATE NEW FILE - cv_tailoring_handler.py already exists
-"""
+2. Create: tests/unit/test_cv_tailoring_handler.py
 
 KNOWLEDGE: docs/refactor/specs/cv_tailoring_spec.yaml (implementation)
-KNOWLEDGE: cv_tailoring_handler.py imports from careervp.logic.cv_tailoring
-```
+"""
 ```
 
 ### Step 4.3: Create Gate Tests
 
+**READ FIRST:**
+- `docs/refactor/specs/cv_tailoring_spec.yaml` (gate_tests)
+- `docs/refactor/specs/test_strategy_spec.yaml` (cv_tailoring_gates)
+
 **CODE:**
 ```bash
-# VSCode + Anthropic Sonnet
-"""
-Create Gate Tests per cv_tailoring_spec.yaml:
-
-1. Create: tests/cv-tailoring/unit/test_cv_tailoring_gates.py
+# Claude Code CLI
+/swarm 2:executor "Create tests/unit/test_cv_tailoring_gates.py:
+KNOWLEDGE: docs/refactor/specs/cv_tailoring_spec.yaml (gate_tests section)
 
 Test all 10 gates per cv_tailoring_spec.yaml minimum_scores:
 1. matching_experience >= 9.0
@@ -498,24 +420,12 @@ Test all 10 gates per cv_tailoring_spec.yaml minimum_scores:
 8. industry_transition >= 7.5
 9. contract_to_perm >= 8.0
 10. employment_gap >= 7.0
-
-USE EXISTING FOLDER: tests/cv-tailoring/unit/
-"""
-
-KNOWLEDGE: docs/refactor/specs/cv_tailoring_spec.yaml (gate_tests section)
-KNOWLEDGE: docs/refactor/specs/test_strategy_spec.yaml (cv_tailoring_gates section)
+"
 ```
 
 ### Verification
 ```bash
-cd /Users/yitzchak/Documents/dev/careervp/src/backend
-
-# Phase 4 tests
-uv run pytest tests/cv-tailoring/unit/ -v --tb=short
-# Files: test_cv_tailoring_handler.py, test_cv_tailoring_logic.py, test_cv_tailoring_gates.py,
-#        test_tailoring_dal_unit.py, test_tailoring_models.py, test_tailoring_prompt.py,
-#        test_fvs_integration.py, test_validation.py
-
+uv run pytest tests/unit/test_cv_tailoring_*.py -v --tb=short
 uv run ruff check careervp/logic/cv_tailoring_logic.py careervp/handlers/cv_tailoring_handler.py
 uv run mypy careervp/logic/cv_tailoring_logic.py careervp/handlers/cv_tailoring_handler.py --strict
 ```
@@ -616,10 +526,9 @@ KNOWLEDGE: docs/refactor/specs/gap_analysis_spec.yaml (components.GapProcessor)
 """
 Implement Gap Analysis Handler per gap_analysis_spec.yaml:
 
-1. Enhance: src/backend/careervp/handlers/gap_handler.py
+1. Create: src/backend/careervp/handlers/gap_handler.py
    - Lambda handler with Powertools
    - Handles: question generation, response submission, processing
-   - Preserve existing CORS helpers and error response utilities
 
 2. Create: tests/unit/test_gap_handler.py
 
@@ -629,9 +538,7 @@ KNOWLEDGE: docs/refactor/specs/gap_analysis_spec.yaml (implementation)
 
 ### Verification
 ```bash
-cd /Users/yitzchak/Documents/dev/careervp/src/backend
-
-uv run pytest tests/gap_analysis/unit/ -v --tb=short
+uv run pytest tests/unit/test_gap_*.py -v --tb=short
 uv run ruff check careervp/logic/gap_*.py careervp/handlers/gap_handler.py
 uv run mypy careervp/logic/gap_*.py careervp/handlers/gap_handler.py --strict
 ```
@@ -679,7 +586,7 @@ cdk deploy --all
 """
 Implement Cover Letter Generator per cover_letter_spec.yaml:
 
-1. Create: src/backend/careervp/logic/cover_letter.py
+1. Create: src/backend/careervp/logic/cover_letter_generator.py
    - Class: CoverLetterGenerator
    - generate(options) -> CoverLetterResult
    - Paragraph 1: Hook (80-100 words)
@@ -722,11 +629,9 @@ KNOWLEDGE: docs/refactor/specs/cover_letter_spec.yaml (implementation)
 
 ### Verification
 ```bash
-cd /Users/yitzchak/Documents/dev/careervp/src/backend
-
-uv run pytest tests/cover-letter/unit/ -v --tb=short
-uv run ruff check careervp/logic/cover_letter.py careervp/handlers/cover_letter_handler.py
-uv run mypy careervp/logic/cover_letter.py careervp/handlers/cover_letter_handler.py --strict
+uv run pytest tests/unit/test_cover_letter_*.py -v --tb=short
+uv run ruff check careervp/logic/cover_letter_generator.py careervp/handlers/cover_letter_handler.py
+uv run mypy careervp/logic/cover_letter_generator.py careervp/handlers/cover_letter_handler.py --strict
 ```
 
 ---
@@ -754,7 +659,7 @@ uv run mypy careervp/logic/cover_letter.py careervp/handlers/cover_letter_handle
 """
 Implement Quality Validator per fvs_spec.yaml:
 
-1. Enhance: src/backend/careervp/logic/fvs_validator.py
+1. Create: src/backend/careervp/logic/quality_validator.py
    - Class: QualityValidator
    - validate(content) -> FVSResult
    - Grammar >= 9.0
@@ -772,35 +677,31 @@ PROMPTS: docs/refactor/specs/prompt_library_spec.yaml (prompts.quality_validatio
 """
 ```
 
-### Step 7.2: FVS Handler Clarification
+### Step 7.2: Implement FVS Handler
+
+**READ FIRST:**
+- `docs/refactor/specs/fvs_spec.yaml`
 
 **CODE:**
 ```bash
 # VSCode + Anthropic Haiku
 """
-FVS is used inline by other features (cover letter, CV tailoring).
-Per fvs_spec.yaml: handler_status: "N/A"
+Implement Quality Validator Handler per fvs_spec.yaml:
 
-1. DO NOT create standalone handler unless explicitly required
-2. FVS is called via: QualityValidator.validate() in other logic modules
+1. Create: src/backend/careervp/handlers/quality_validator_handler.py
+   - Lambda handler with Powertools
 
-USE EXISTING FOLDER: tests/cv-tailoring/unit/ or tests/cover-letter/unit/ for inline FVS tests
+2. Create: tests/unit/test_quality_validator_handler.py
+
+KNOWLEDGE: docs/refactor/specs/fvs_spec.yaml (implementation)
 """
-
-KNOWLEDGE: docs/refactor/specs/fvs_spec.yaml (handler_status: N/A)
-```
 ```
 
 ### Verification
 ```bash
-cd /Users/yitzchak/Documents/dev/careervp/src/backend
-
-# FVS tests - inline in feature folders + unit tests
-uv run pytest tests/unit/test_quality_validator.py tests/cv-tailoring/unit/ tests/cover-letter/unit/ -v --tb=short
-# Files: test_quality_validator.py (unit), test_fvs_integration.py (feature folders)
-
-uv run ruff check careervp/logic/fvs_validator.py
-uv run mypy careervp/logic/fvs_validator.py --strict
+uv run pytest tests/unit/test_quality_validator*.py -v --tb=short
+uv run ruff check careervp/logic/quality_validator.py careervp/handlers/quality_validator_handler.py
+uv run mypy careervp/logic/quality_validator.py careervp/handlers/quality_validator_handler.py --strict
 ```
 
 ---
@@ -813,14 +714,12 @@ uv run mypy careervp/logic/fvs_validator.py --strict
 | Type | File | Purpose |
 |------|------|---------|
 | Mandatory | `knowledge_base_spec.yaml` | Repository |
-| Reference | `deployment_spec.yaml` | DynamoDB/S3 naming convention |
-| Reference | `infra/careervp/specs/dynamodb_spec.yaml` | Table schemas (GAP_RESPONSES, KNOWLEDGE) |
+| Reference | `deployment_spec.yaml` | DynamoDB/S3 |
 
 ### Step 8.1: Implement Knowledge Repository
 
 **READ FIRST:**
 - `docs/refactor/specs/knowledge_base_spec.yaml`
-- `infra/careervp/specs/dynamodb_spec.yaml` (GAP_RESPONSES_TABLE_NAME, KNOWLEDGE_TABLE_NAME)
 
 **CODE:**
 ```bash
@@ -837,10 +736,9 @@ Implement Knowledge Repository per knowledge_base_spec.yaml:
 
 2. Create: tests/unit/test_knowledge_repository.py
 
+NOTE: Verify DynamoDB table name format across specs (careervp-gap-responses vs careervp-gap-responses-table-dev)
+
 KNOWLEDGE: docs/refactor/specs/knowledge_base_spec.yaml (methods section)
-KNOWLEDGE: infra/careervp/specs/dynamodb_spec.yaml (table schemas)
-  - careervp-gap-responses-table-dev (PK: user_email, SK: application_id)
-  - careervp-knowledge-table-dev (PK: user_email, SK: entity_type)
 TTL: gap_responses(24mo), company_research(30d), cv_context(24h)
 """
 ```
@@ -867,12 +765,7 @@ KNOWLEDGE: docs/refactor/specs/knowledge_base_spec.yaml (implementation)
 
 ### Verification
 ```bash
-cd /Users/yitzchak/Documents/dev/careervp/src/backend
-
-# Phase 8 tests - PENDING SOURCE IMPLEMENTATION
-# Files: test_knowledge_repository.py, test_knowledge_base_handler.py
-uv run pytest tests/knowledge_base/unit/ -v --tb=short
-
+uv run pytest tests/unit/test_knowledge_*.py -v --tb=short
 uv run ruff check careervp/dal/knowledge_repository.py careervp/handlers/knowledge_base_handler.py
 uv run mypy careervp/dal/knowledge_repository.py careervp/handlers/knowledge_base_handler.py --strict
 ```
@@ -923,8 +816,6 @@ cdk deploy --all
 - `docs/refactor/specs/interview_prep_spec.yaml`
 - `docs/refactor/specs/prompt_library_spec.yaml` (prompts.interview_prep)
 
-**NOTE:** Check docs/refactor/specs/_registry.yaml for duplicate interview_prep_spec.yaml entries and remove duplicate
-
 **CODE:**
 ```bash
 # VSCode + Anthropic Sonnet
@@ -970,13 +861,7 @@ KNOWLEDGE: docs/refactor/specs/interview_prep_spec.yaml (implementation)
 
 ### Verification
 ```bash
-cd /Users/yitzchak/Documents/dev/careervp/src/backend
-
-# Phase 9 tests - PENDING SOURCE IMPLEMENTATION
-# Files: test_interview_prep_handler.py (pending), test_interview_prep_logic.py (pending),
-#        test_interview_prep_prompt.py (CREATED)
-uv run pytest tests/unit/test_interview_prep*.py tests/unit/test_interview_prep_prompt.py -v --tb=short
-
+uv run pytest tests/unit/test_interview_prep*.py -v --tb=short
 uv run ruff check careervp/logic/interview_prep.py careervp/handlers/interview_prep_handler.py
 uv run mypy careervp/logic/interview_prep.py careervp/handlers/interview_prep_handler.py --strict
 ```
@@ -988,29 +873,11 @@ uv run mypy careervp/logic/interview_prep.py careervp/handlers/interview_prep_ha
 ```bash
 cd /Users/yitzchak/Documents/dev/careervp/src/backend
 
-# Run all unit tests (EXISTING + CREATED)
+# Run all unit tests
 uv run pytest tests/unit/ -v --tb=short
-# Files:
-# - test_auth_handler.py (11 tests - EXISTS)
-# - test_validators.py (43 tests - EXISTS)
-# - test_circuit_breaker.py (20 tests - CREATED)
-# - test_quality_validator.py (62 tests - CREATED, fixtures pending fix)
-# - test_interview_prep_prompt.py (50 tests - CREATED)
-# - test_cv_upload_handler.py (pending)
-# - test_company_research_handler.py (pending)
-# - test_interview_prep_handler.py (pending - source not implemented)
-# - test_interview_prep_logic.py (pending - source not implemented)
-# - test_knowledge_repository.py (pending - source not implemented)
-# - test_knowledge_base_handler.py (pending - source not implemented)
-
-# Run feature unit tests
-uv run pytest tests/cv-tailoring/unit/ tests/gap_analysis/unit/ tests/vpr-async/unit/ tests/cover-letter/unit/ -v --tb=short
 
 # Run all integration tests
 uv run pytest tests/integration/ -v --tb=short
-
-# Run alignment tests
-uv run pytest tests/jsa_skill_alignment/ -v --tb=short
 
 # Lint all code
 uv run ruff check careervp/
@@ -1021,66 +888,9 @@ uv run mypy careervp/ --strict
 
 ---
 
-**Document Version:** 3.0
+**Document Version:** 2.4
 **Created:** 2026-02-12
-
 **Changes:**
-
-- v3.0 - Fixed INC-01 through INC-09 (Remaining Inconsistencies):
-  - INC-01: Changed Phase 1.1-1.3 from "Create" to "Enhance/Consolidate" with existing files table
-  - INC-02: Added handler pattern note (function-based Powertools) at document beginning
-  - INC-04: Added MODEL MAPPING tables showing spec class names → existing class names
-  - INC-05: Added cv_models.py → cv.py consolidation notes
-  - INC-06: Changed Step 6.1 file from cover_letter_logic.py to cover_letter.py (per spec)
-  - INC-07: Changed Step 7.1 file from fvs_validator_logic.py to fvs_validator.py (per spec)
-  - INC-08: Clarified fvs_spec.yaml says handler_status: "N/A" (FVS is inline, no handler)
-  - INC-09: Verified Step 5.1-5.4 already use "Enhance" not "Create"
-  - INC-10: Added test directory structure note, updated verification sections:
-    * Phase 2: tests/cost_optimization/unit/
-    * Phase 3: tests/vpr-async/unit/
-    * Phase 4: tests/cv-tailoring/unit/
-    * Phase 5: tests/gap_analysis/unit/
-    * Phase 6: tests/cover-letter/unit/
-    * Phase 7: inline tests (cv-tailoring, cover-letter)
-    * Phase 8: tests/knowledge_base/unit/
-  - Step 4.1: Changed from "Create" to "ENHANCE ONLY" (files already exist)
-  - Clarified file structure:
-    * `cv_tailoring.py` - CORE FUNCTION (canonical, contains tailor_cv())
-    * `cv_tailoring_logic.py` - ORCHESTRATION (contains CVTailoringLogic class)
-  - Handler imports from cv_tailoring.tailor_cv
-  - Added DO NOT CREATE NEW FILES directive
-
-- v2.11 - Fixed INC-14: DynamoDB Table Name Standardization:
-  - deployment_spec.yaml (v1.1): Added naming_convention section with NamingUtils pattern
-  - Updated all table names to `careervp-{feature}-table-dev` format
-  - Updated S3 bucket names to match infra naming
-  - knowledge_base_spec.yaml (v1.1): Updated storage references to use full table names
-  - Added `infra/careervp/specs/dynamodb_spec.yaml` reference for table schemas
-  - _registry.yaml: Added naming_convention section for clarity
-
-- v2.10 - Fixed VPR stage count inconsistency:
-  - Updated vpr_6stage_spec.yaml from 5 stages to 6 stages (spec v2.0)
-  - Changed Phase 3 title from "VPR 5-Stage Generator" back to "VPR 6-Stage Generator"
-  - Added Stage 6: `_final_meta_evaluation()` to Step 3.1
-  - Now matches CareerVP_Agentic_Architecture.md (6-stage VPR)
-
-- v2.9 - Fixed remaining CRITICAL and LOW inconsistencies:
-  - CRITICAL-01: ✅ Phase 1.1-1.3 "Create" → "Enhance/Consolidate"
-  - CRITICAL-02: ✅ Added handler pattern note at Phase 0 beginning
-  - CRITICAL-03: ✅ Added `cd /Users/yitzchak/Documents/dev/careervp/src/backend` to all 10 verification sections
-  - INC-04: ✅ Added existing model notes to Phase 1 steps
-  - INC-05, INC-06, INC-07, INC-08, INC-09: ✅ Fixed file naming and enhancement status
-  - INC-19: ✅ Converted Step 4.3 from CLI-specific syntax to standard format
-  - All 21 inconsistencies now addressed
-
-- v2.8 - Fixed MEDIUM inconsistencies (INC-10 through INC-16):
-  - INC-11: Changed Phase 3 title from "VPR 6-Stage Generator" to "VPR 5-Stage Generator" (matches spec at v1.x)
-  - INC-12: Added consolidation note for cv_tailoring.py vs cv_tailoring_logic.py in Step 4.1
-  - INC-13: Added guidance about existing validation/ package as alternative to handlers/validators.py in Step 0.2
-  - INC-15: Added note to check for duplicate interview_prep_spec.yaml entries in _registry.yaml (Step 9.1)
-  - INC-16: Changed Phase 2 title from "DAL Consolidation + Cost Optimization" to "Cost Optimization + LLM Caching"
-  - INC-14 & INC-20: Added table naming verification note in Step 8.1
-
 - v2.4 - Updated all specs with handler implementation patterns:
   - _registry.yaml: Added reference specs from docs/specs/ (vpr-async-architecture.md, company-research.md, vpr-generator.md)
   - _registry.yaml: Added handler_status_matrix (implemented/needs_enhancement/to_be_created/not_started)

@@ -2,14 +2,14 @@
 # Source: REFACTORING_PLAN.md Section 2.1
 # Phase: 3
 
-spec_version: "1.1"
+spec_version: "2.0"
 date_created: "2026-02-12"
-date_updated: "2026-02-10"
+date_updated: "2026-02-12"
 
 description: |
   VPR (Value Proposition Resume) 6-Stage Generator creates targeted
   value propositions by analyzing CV and job requirements through
-  5 sequential stages.
+  6 sequential stages.
 
 handler_status: "NEEDS_REFACTOR"
 handler_file: "src/backend/careervp/handlers/vpr_handler.py"
@@ -54,6 +54,12 @@ stages:
     description: "Generate final VPR JSON"
     input: "CorrectedProposition"
     output: "VPRData"
+
+  - stage: 6
+    method: "_final_meta_evaluation()"
+    description: "Final meta evaluation and verification"
+    input: "VPRData"
+    output: "FinalVPRData"
 
 cost_optimization:
   input_tokens: "~800-1000 (optimized CV + job summary)"

@@ -301,6 +301,11 @@ handler_status_matrix:
 # ─────────────────────────────────────────────────────────────────────────────
 # INFRASTRUCTURE STATUS (from infra/careervp/specs/)
 # ─────────────────────────────────────────────────────────────────────────────
+naming_convention:
+  tables: "careervp-{feature}-table-dev (NamingUtils.table_name(feature))"
+  s3: "careervp-{env}-{purpose}-{region_code}-{hash}"
+  source: "infra/careervp/naming_utils.py"
+
 infrastructure_status:
   dynamodb:
     - "careervp-users-table-dev"
