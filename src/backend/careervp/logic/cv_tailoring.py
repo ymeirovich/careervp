@@ -10,7 +10,7 @@ from typing import Any, Iterable, cast
 
 from careervp.logic import cv_tailoring_prompt
 from careervp.models.cv import UserCV as CVUserCV
-from careervp.models.cv_models import Certification, Education, Skill, UserCV, WorkExperience
+from careervp.models.cv_models import Certification, Skill, UserCV, WorkExperience
 from careervp.models.cv_tailoring_models import (
     ChangeLog,
     TailoredCV,
@@ -571,10 +571,10 @@ def _build_tailored_cv(master_cv: CVUserCV | UserCV, payload: dict[str, Any]) ->
         phone=payload.get('phone') or master_cv.phone,
         location=payload.get('location') or master_cv.location,
         professional_summary=professional_summary,
-        work_experience=work_experience or cast(list[WorkExperience], master_cv.work_experience),
-        education=cast(list[Education], master_cv.education),
+        work_experience=work_experience or master_cv.work_experience,
+        education=master_cv.education,
         skills=skills or cast(list[Skill | str], list(master_cv.skills)),
-        certifications=cast(list[Certification], master_cv.certifications),
+        certifications=master_cv.certifications,
         languages=master_cv.languages,
         created_at=master_cv.created_at,
     )
