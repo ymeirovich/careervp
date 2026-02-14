@@ -20,7 +20,6 @@ auth.json
 
 # Tooling
 .claude/
-uv.lock
 
 #Node modules
 node_modules/
