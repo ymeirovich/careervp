@@ -7,11 +7,14 @@ on:
   pull_request:
     branches: ["main"]
     paths:
-      - "src/backend/**"
+      - "src/backend/careervp/logic/gap*"
+      - "src/backend/careervp/handlers/gap*"
+      - "src/backend/careervp/models/gap*"
+      - "src/backend/careervp/validation/gap*"
+      - "src/backend/careervp/dal/gap*"
+      - "src/backend/tests/gap-analysis/**"
       - "infra/**"
-      - ".github/workflows/**"
-      - "docs/specs/**"
-      - "plan.md"
+      - ".github/workflows/gap-remediation.yml"
   workflow_dispatch:
     inputs:
       deploy:

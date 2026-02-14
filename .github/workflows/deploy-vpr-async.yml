@@ -5,15 +5,30 @@ on:
     branches:
       - main
     paths:
-      - 'infra/careervp/**'
-      - 'src/backend/careervp/**'
+      - 'infra/**'
+      - 'src/backend/careervp/handlers/vpr_*'
+      - 'src/backend/careervp/logic/vpr_*'
+      - 'src/backend/careervp/logic/prompts/vpr_*'
+      - 'src/backend/careervp/models/vpr.py'
+      - 'src/backend/careervp/dal/jobs_repository.py'
+      - 'src/backend/tests/unit/test_vpr_*'
+      - 'src/backend/tests/integration/test_*vpr*'
+      - 'src/backend/tests/e2e/test_vpr_*'
       - '.github/workflows/deploy-vpr-async.yml'
   pull_request:
     branches:
       - main
     paths:
-      - 'infra/careervp/**'
-      - 'src/backend/careervp/**'
+      - 'infra/**'
+      - 'src/backend/careervp/handlers/vpr_*'
+      - 'src/backend/careervp/logic/vpr_*'
+      - 'src/backend/careervp/logic/prompts/vpr_*'
+      - 'src/backend/careervp/models/vpr.py'
+      - 'src/backend/careervp/dal/jobs_repository.py'
+      - 'src/backend/tests/unit/test_vpr_*'
+      - 'src/backend/tests/integration/test_*vpr*'
+      - 'src/backend/tests/e2e/test_vpr_*'
+      - '.github/workflows/deploy-vpr-async.yml'
   workflow_dispatch:
 
 permissions:
@@ -21,7 +36,7 @@ permissions:
   id-token: write  # Required for OIDC
 
 env:
-  PYTHON_VERSION: '3.12'
+  PYTHON_VERSION: '3.13'
   NODE_VERSION: '20'
   AWS_REGION: us-east-1
   ENVIRONMENT: dev

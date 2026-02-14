@@ -986,3 +986,46 @@ Executed from:
 
 ### Outcome
 ✅ Workflow configuration issues remediated locally and ready for PR CI validation.
+
+---
+
+## Workflow Error Remediation (PR #50 follow-up, 2026-02-14)
+
+### Reported Failures Addressed
+- `Refactoring Validation` on PR #50
+- `PR - Serverless Service CI/CD` on PR #50
+- `Gap Remediation Branch CI/CD` on PR #50
+- `Deploy VPR Async Infrastructure` on PR #50
+
+### Root Causes and Fixes
+
+1. Python version mismatch vs backend constraints
+- `src/backend/pyproject.toml` requires `>=3.13`.
+- Updated workflows still using `3.12`:
+  - `.github/workflows/refactoring-validation.yml` -> `PYTHON_VERSION: '3.13'`
+  - `.github/workflows/deploy-vpr-async.yml` -> `PYTHON_VERSION: '3.13'`
+
+2. Overly broad PR triggers causing unrelated workflow execution/failures
+- Narrowed PR trigger scope in `.github/workflows/gap-remediation.yml` from broad `src/backend/**` + all workflows to gap-specific paths and workflow-local file trigger.
+- Narrowed trigger scope in `.github/workflows/deploy-vpr-async.yml` from broad `src/backend/careervp/**` to VPR-async-relevant handlers/logic/models/tests and workflow file.
+
+3. PR workflow deploy flakiness and step reference safety
+- In `.github/workflows/pr-serverless-service.yml`:
+  - Added `id: deploy` to deploy step.
+  - Changed deploy execution to `workflow_dispatch` only (skip deploy during PR validation).
+  - Scoped destroy step to `workflow_dispatch` runs only.
+
+### Validation Performed (local)
+
+From `src/backend`:
+- `uv run mypy careervp --config-file mypy.ini` -> ✅ pass
+- `uv run pytest tests/unit/ -q` -> ✅ pass (`96 passed, 3 skipped`)
+
+Workflow YAML parse checks:
+- `.github/workflows/refactoring-validation.yml` -> ✅ valid YAML
+- `.github/workflows/deploy-vpr-async.yml` -> ✅ valid YAML
+- `.github/workflows/gap-remediation.yml` -> ✅ valid YAML
+- `.github/workflows/pr-serverless-service.yml` -> ✅ valid YAML
+
+### Outcome
+✅ Workflow follow-up failures remediated with targeted trigger and runtime fixes.
