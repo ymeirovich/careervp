@@ -28,18 +28,21 @@ def sample_user_cv() -> UserCV:
                 role='Product Lead',
                 dates='2019 – Present',
                 achievements=[],
+                technologies=[],
             ),
             WorkExperience(
                 company='Vertex Tech',
                 role='Senior PM',
                 dates='2016 – 2019',
                 achievements=[],
+                technologies=[],
             ),
         ],
         education=[],
         certifications=[],
         skills=['Roadmapping', 'Stakeholder Alignment'],
         top_achievements=[],
+        languages=[],
         is_parsed=True,
     )
 

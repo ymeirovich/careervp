@@ -20,12 +20,14 @@ def _sample_user_cv() -> UserCV:
                 role='Data Lead',
                 dates='2020 – Present',
                 achievements=[],
+                technologies=[],
             )
         ],
         education=[],
         certifications=[],
         skills=['Data Strategy'],
         top_achievements=[],
+        languages=[],
         is_parsed=True,
     )
 

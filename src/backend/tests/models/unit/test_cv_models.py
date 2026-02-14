@@ -34,20 +34,37 @@ def test_work_experience_populates_dates() -> None:
         role='Engineer',
         start_date='2022-01',
         end_date='2024-01',
+        achievements=[],
+        technologies=[],
     )
     assert model.dates == '2022-01-2024-01'
 
 
 def test_education_populates_dates() -> None:
-    model = cv_models_primary.Education(institution='Uni', degree='BSc', end_date='2020')
+    model = cv_models_primary.Education(
+        institution='Uni',
+        degree='BSc',
+        end_date='2020',
+        honors=[],
+    )
     assert model.dates == '2020'
 
 
 def test_user_cv_accepts_work_experience_alias() -> None:
-    model = cv_models_primary.UserCV(
-        user_id='u1',
-        full_name='Jane Doe',
-        work_experience=[{'company': 'Acme', 'role': 'Engineer'}],
+    model = cv_models_primary.UserCV.model_validate(
+        {
+            'user_id': 'u1',
+            'full_name': 'Jane Doe',
+            'language': 'en',
+            'contact_info': {},
+            'work_experience': [{'company': 'Acme', 'role': 'Engineer'}],
+            'education': [],
+            'certifications': [],
+            'skills': [],
+            'top_achievements': [],
+            'languages': [],
+            'is_parsed': False,
+        }
     )
     assert len(model.work_experience) == 1
     assert model.work_experience[0].company == 'Acme'
@@ -57,6 +74,14 @@ def test_user_cv_serializes_skills_as_names() -> None:
     model = cv_models_primary.UserCV(
         user_id='u1',
         full_name='Jane Doe',
+        language='en',
+        contact_info=cv_models_primary.ContactInfo(),
+        experience=[],
+        education=[],
+        certifications=[],
         skills=[cv_models_primary.Skill(name='Python'), 'AWS'],
+        top_achievements=[],
+        languages=[],
+        is_parsed=False,
     )
     assert model.model_dump(mode='json')['skills'] == ['Python', 'AWS']

@@ -181,6 +181,25 @@ FINAL_STATUS=$(aws cloudformation describe-stacks \
     --query "Stacks[0].StackStatus" \
     --output text 2>/dev/null) || FINAL_STATUS="UNKNOWN"
 
+# In busy repos we can briefly observe an in-progress status even after changesets settle.
+# Retry/poll before failing to avoid false negatives.
+if [[ "$FINAL_STATUS" == *"_IN_PROGRESS"* ]]; then
+    log_warn "Stack is in $FINAL_STATUS at final check. Polling for stabilization..."
+    ATTEMPTS=0
+    MAX_ATTEMPTS=20
+    while [[ "$FINAL_STATUS" == *"_IN_PROGRESS"* ]] && [ "$ATTEMPTS" -lt "$MAX_ATTEMPTS" ]; do
+        ATTEMPTS=$((ATTEMPTS + 1))
+        log_info "  Poll attempt $ATTEMPTS/$MAX_ATTEMPTS; waiting 15 seconds..."
+        sleep 15
+        FINAL_STATUS=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --region "$REGION" \
+            --query "Stacks[0].StackStatus" \
+            --output text 2>/dev/null) || FINAL_STATUS="UNKNOWN"
+        log_info "  Current status: $FINAL_STATUS"
+    done
+fi
+
 echo "=========================================="
 if [[ "$FINAL_STATUS" == *"_IN_PROGRESS"* ]]; then
     log_error "Stack is still in progress. Aborting."
