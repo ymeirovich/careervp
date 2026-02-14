@@ -22,7 +22,7 @@ class Skill(BaseModel):
     """Skill with proficiency and optional years of experience."""
 
     name: str
-    level: SkillLevel
+    level: SkillLevel | None = None
     years_of_experience: int | None = None
 
     model_config = {'frozen': True}
@@ -33,10 +33,10 @@ class WorkExperience(BaseModel):
 
     company: str
     role: str
-    start_date: str
+    start_date: str | None = None
     end_date: str | None = None
     current: bool = False
-    description: str
+    description: str | None = None
     achievements: list[str] = Field(default_factory=list)
     technologies: list[str] = Field(default_factory=list)
     dates: str | None = None
@@ -99,7 +99,7 @@ class ContactInfo(BaseModel):
 class UserCV(BaseModel):
     """User CV model for tailoring workflow."""
 
-    cv_id: str
+    cv_id: str | None = None
     user_id: str
     full_name: str
     email: str

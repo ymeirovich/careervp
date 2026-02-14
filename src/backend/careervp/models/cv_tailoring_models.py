@@ -54,7 +54,7 @@ class ChangeLog(BaseModel):
 class TailoredCV(BaseModel):
     """Tailored CV output model."""
 
-    cv_id: str
+    cv_id: str | None = None
     user_id: str
     job_description_hash: str | None = None
     full_name: str

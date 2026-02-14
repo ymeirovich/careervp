@@ -9,7 +9,8 @@ import re
 from typing import Any, Iterable, cast
 
 from careervp.logic import cv_tailoring_prompt
-from careervp.models.cv_models import Certification, Skill, UserCV, WorkExperience
+from careervp.models.cv import Education as CVEducation, UserCV as CVUserCV
+from careervp.models.cv_models import Certification, Education, Skill, UserCV, WorkExperience
 from careervp.models.cv_tailoring_models import (
     ChangeLog,
     TailoredCV,
@@ -26,7 +27,7 @@ TailorCVResultData = TailoredCVResponse | FVSValidationResult
 
 
 def tailor_cv(  # noqa: C901
-    master_cv: UserCV,
+    master_cv: CVUserCV | UserCV,
     job_description: str,
     preferences: TailoringPreferences | None = None,
     fvs_baseline: FVSBaseline | None = None,
@@ -147,7 +148,7 @@ def extract_job_requirements(job_description: str) -> dict[str, list[str]]:
     }
 
 
-def calculate_relevance_scores(cv: UserCV, job_description: str) -> dict[str, float]:
+def calculate_relevance_scores(cv: CVUserCV | UserCV, job_description: str) -> dict[str, float]:
     """Compute relevance scores for CV sections."""
     keywords = set(_extract_keywords(job_description))
 
@@ -200,7 +201,7 @@ def filter_cv_sections_by_relevance(
 
 
 def build_tailoring_prompt(
-    cv: UserCV,
+    cv: CVUserCV | UserCV,
     job_description: str,
     relevance_scores: dict[str, float] | None = None,
     fvs_baseline: FVSBaseline | None = None,
@@ -242,7 +243,7 @@ def parse_llm_response(raw_response: Any) -> Result[dict[str, Any]]:
 
 
 def validate_tailored_output(
-    original_cv: UserCV,
+    original_cv: CVUserCV | UserCV,
     tailored_cv: TailoredCV,
     fvs_baseline: FVSBaseline | None = None,
 ) -> Result[FVSValidationResult]:
@@ -325,7 +326,7 @@ def validate_tailored_cv(  # noqa: C901
 
     baseline_companies = set(baseline.companies)
     baseline_roles = {fact.value for fact in baseline.immutable_facts if fact.fact_type == 'job_title'}
-    baseline_dates = set(baseline.experience_dates)
+    baseline_dates = {d for d in baseline.experience_dates if d is not None}
     baseline_skill_names = set()
     for skill in baseline.skills:
         if isinstance(skill, Skill):
@@ -406,12 +407,13 @@ def validate_tailored_cv(  # noqa: C901
                 )
             )
         edu_dates = getattr(edu, 'dates', None) or getattr(edu, 'graduation_date', None) or getattr(edu, 'end_date', None)
-        if edu_dates and edu_dates not in set(baseline.education_dates):
+        baseline_edu_dates = {d for d in baseline.education_dates if d is not None}
+        if edu_dates and edu_dates not in baseline_edu_dates:
             violations.append(
                 FVSViolation(
                     field='education.dates',
                     severity=ViolationSeverity.CRITICAL,
-                    expected=', '.join(baseline.education_dates),
+                    expected=', '.join(d for d in baseline.education_dates if d is not None),
                     actual=edu_dates,
                 )
             )
@@ -471,7 +473,7 @@ def validate_tailored_cv(  # noqa: C901
     return Result(success=True, data=result, code=ResultCode.SUCCESS)
 
 
-def create_fvs_baseline(master_cv: UserCV) -> FVSBaseline:
+def create_fvs_baseline(master_cv: CVUserCV | UserCV) -> FVSBaseline:
     """Create FVS baseline from master CV."""
     immutable_facts = []
 
@@ -490,8 +492,8 @@ def create_fvs_baseline(master_cv: UserCV) -> FVSBaseline:
         immutable_facts.append(_fact('degree', edu.degree, edu.institution))
         immutable_facts.append(_fact('institution', edu.institution, 'Education'))
 
-    experience_dates = [exp.dates or exp.start_date for exp in master_cv.work_experience]
-    education_dates = [edu.dates or edu.end_date or '' for edu in master_cv.education]
+    experience_dates: list[str | None] = [exp.dates or exp.start_date or '' for exp in master_cv.work_experience]
+    education_dates: list[str | None] = [edu.dates or edu.end_date or '' for edu in master_cv.education]
     companies = [exp.company for exp in master_cv.work_experience]
     skills = cast(list[Skill | str], list(master_cv.skills))
     certifications = cast(list[Certification | str], list(master_cv.certifications))
@@ -545,7 +547,7 @@ def _average_score(scores: dict[str, float]) -> float:
     return sum(scores.values()) / len(scores)
 
 
-def _build_tailored_cv(master_cv: UserCV, payload: dict[str, Any]) -> TailoredCV:
+def _build_tailored_cv(master_cv: CVUserCV | UserCV, payload: dict[str, Any]) -> TailoredCV:
     work_experience = [WorkExperience(**exp) for exp in payload.get('work_experience', [])]
     skills: list[Skill | str] = []
     for skill in payload.get('skills', []):
@@ -569,10 +571,10 @@ def _build_tailored_cv(master_cv: UserCV, payload: dict[str, Any]) -> TailoredCV
         phone=payload.get('phone') or master_cv.phone,
         location=payload.get('location') or master_cv.location,
         professional_summary=professional_summary,
-        work_experience=work_experience or master_cv.work_experience,
-        education=master_cv.education,
+        work_experience=work_experience or cast(list[WorkExperience], master_cv.work_experience),
+        education=cast(list[Education], master_cv.education),
         skills=skills or cast(list[Skill | str], list(master_cv.skills)),
-        certifications=master_cv.certifications,
+        certifications=cast(list[Certification], master_cv.certifications),
         languages=master_cv.languages,
         created_at=master_cv.created_at,
     )

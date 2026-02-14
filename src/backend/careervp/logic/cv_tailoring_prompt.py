@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
+from careervp.models.cv import UserCV as CVUserCV
 from careervp.models.cv_models import UserCV
 from careervp.models.cv_tailoring_models import TailoringPreferences
 from careervp.models.fvs_models import FVSBaseline
@@ -22,7 +23,7 @@ def build_system_prompt() -> str:
 
 
 def build_user_prompt(
-    cv: UserCV,
+    cv: CVUserCV | UserCV,
     job_description: str,
     relevance_scores: dict[str, float] | None = None,
     fvs_baseline: FVSBaseline | None = None,
@@ -56,7 +57,7 @@ def build_user_prompt(
     return '\n\n'.join(sections)
 
 
-def format_cv_for_prompt(cv: UserCV) -> str:
+def format_cv_for_prompt(cv: CVUserCV | UserCV) -> str:
     """Format CV content for prompt consumption."""
     lines = [
         f'Name: {cv.full_name}',
@@ -76,7 +77,13 @@ def format_cv_for_prompt(cv: UserCV) -> str:
                 lines.append(f'  {exp.description}')
 
     if cv.skills:
-        lines.append('Skills: ' + ', '.join(skill.name for skill in cv.skills))
+        skill_names = []
+        for skill in cv.skills:
+            if hasattr(skill, 'name'):
+                skill_names.append(skill.name)
+            else:
+                skill_names.append(str(skill))
+        lines.append('Skills: ' + ', '.join(skill_names))
 
     if cv.education:
         lines.append('Education:')
