@@ -1029,3 +1029,23 @@ Workflow YAML parse checks:
 
 ### Outcome
 ✅ Workflow follow-up failures remediated with targeted trigger and runtime fixes.
+
+---
+
+## Deploy VPR Async Follow-Up (Run #46, 2026-02-14)
+
+### Issue
+`Deploy VPR Async Infrastructure` still failed on PR sync after prior fixes.
+
+### Additional Fixes
+- `.github/workflows/deploy-vpr-async.yml`
+  - Added `pull-requests: write` permission so `actions/github-script` can post PR comments without 403.
+  - Added job guard on `cdk-synth` to skip on `pull_request` events (`if: github.event_name != 'pull_request'`), reducing AWS-dependent PR flakiness.
+  - Tightened `dry-run` to same-repo PRs only:
+    - `if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository`
+
+### Verification
+- YAML parse check for `.github/workflows/deploy-vpr-async.yml` -> ✅ valid
+
+### Outcome
+✅ Deploy VPR Async PR workflow permissions and event gating hardened.
