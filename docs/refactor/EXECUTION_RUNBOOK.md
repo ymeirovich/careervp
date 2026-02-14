@@ -193,18 +193,26 @@ cdk deploy --all
 
 ### Step 1.1: Consolidate CV Models
 
+**READ FIRST:**
+- `docs/refactor/specs/models_spec.yaml` (model definitions)
+- `docs/refactor/specs/architectural_findings_spec.yaml` (layer rules - LAYER-003)
+- `docs/refactor/specs/test_strategy_spec.yaml` (TDD pattern, 80% unit coverage)
+
 **CODE:**
 ```bash
 # VSCode + Anthropic Sonnet
 """
-Consolidate CV models per models_spec.yaml:
+Consolidate CV models per models_spec.yaml + architectural_findings_spec.yaml:
 
 1. ENHANCE: src/backend/careervp/models/cv.py
    - Keep existing: SkillLevel, Skill, CVSection, WorkExperience, Education, UserCV, CVParseRequest, CVParseResponse
    - Add from cv_models.py if missing
+   - Per architectural_findings_spec.yaml LAYER-003: Move models from handlers/models/ and dal/models/ to /models
    - DO NOT DELETE cv_models.py - update imports in cv_tailoring_handler first
 
 2. Create: tests/models/unit/test_cv_models.py (NEW FOLDER)
+   - Per test_strategy_spec.yaml: TDD pattern (write test first)
+   - Unit coverage target: 80%
 
 MAPPING: spec "CVData" → existing "UserCV"
 MAPPING: spec "CVSection" → existing "CVSection"
@@ -216,6 +224,8 @@ After consolidation: Update cv_tailoring_handler.py imports from cv_models.py to
 """
 
 KNOWLEDGE: docs/refactor/specs/models_spec.yaml (categories.CV models)
+KNOWLEDGE: docs/refactor/specs/architectural_findings_spec.yaml (consolidation_targets)
+KNOWLEDGE: docs/refactor/specs/test_strategy_spec.yaml (tdd_pattern, test_pyramid)
 KNOWLEDGE: cv_tailoring_handler.py imports from careervp.models.cv_models
 ```
 ```
