@@ -44,9 +44,8 @@ from careervp.models.cv_tailoring_models import (
     TailoredCVResponse,
     TailoringPreferences,
 )
-from careervp.models.fvs import FVSValidationResult, FVSViolation, ViolationSeverity
-from careervp.models.fvs_models import FVSBaseline as TailoringFVSBaseline
-from careervp.models.fvs_models import ImmutableFact
+from careervp.models.fvs import FVSBaseline as TailoringFVSBaseline
+from careervp.models.fvs import FVSValidationResult, FVSViolation, ImmutableFact, ViolationSeverity
 from careervp.models.result import Result, ResultCode
 
 __all__ = [

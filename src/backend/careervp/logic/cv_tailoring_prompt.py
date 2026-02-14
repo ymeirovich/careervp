@@ -7,7 +7,7 @@ from typing import Iterable
 from careervp.models.cv import UserCV as CVUserCV
 from careervp.models.cv_models import UserCV
 from careervp.models.cv_tailoring_models import TailoringPreferences
-from careervp.models.fvs_models import FVSBaseline
+from careervp.models.fvs import FVSBaseline
 
 
 def build_system_prompt() -> str:

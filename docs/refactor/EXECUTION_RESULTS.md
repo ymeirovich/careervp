@@ -1069,3 +1069,85 @@ Workflow YAML parse checks:
 
 ### Outcome
 ✅ Changeset test workflow aligned with runtime constraints and centralized CFN guard behavior.
+
+---
+
+## Step 1.3 FVS Model Consolidation (2026-02-14)
+
+### Scope Completed
+- Consolidated FVS models into `src/backend/careervp/models/fvs.py`.
+- Kept `src/backend/careervp/models/fvs_models.py` in place as compatibility re-export module.
+- Added model unit tests at `src/backend/tests/models/unit/test_fvs_models.py`.
+- Updated FVS-related imports in logic layer from `fvs_models` to `fvs`.
+
+### Model Verification
+Executed equivalent commands from repository root with backend-prefixed paths.
+
+1. Class presence check
+- Command:
+  - `grep -E "class (FVSValidationResult|ViolationSeverity|FVSViolation|FVSResult|QualityScore|GrammarIssue|ToneIssue)" careervp/src/backend/careervp/models/fvs.py`
+- Result:
+  - Found all required classes:
+    - `ViolationSeverity`
+    - `FVSViolation`
+    - `FVSValidationResult`
+    - `GrammarIssue`
+    - `ToneIssue`
+    - `QualityScore`
+    - `FVSResult`
+
+2. Compatibility file retained
+- Command:
+  - `ls -la careervp/src/backend/careervp/models/fvs_models.py`
+- Result:
+  - File exists and was not deleted.
+
+3. Logic/handlers import scan
+- Command:
+  - `grep -r "from.*fvs_models\|from.*handlers.models.fvs" careervp/src/backend/careervp/handlers/ careervp/src/backend/careervp/logic/ 2>/dev/null | grep -v ".pyc"`
+- Result:
+  - No matches in handlers/logic (imports migrated).
+
+4. Unit test file check
+- Command:
+  - `ls -la careervp/src/backend/tests/models/unit/test_fvs_models.py`
+- Result:
+  - File exists.
+
+### Quality Gates
+Executed from `careervp/src/backend`:
+
+1. Ruff
+- Command:
+  - `uv run ruff check careervp/models/fvs.py careervp/models/fvs_models.py`
+- Result:
+  - `All checks passed!`
+
+2. Mypy strict
+- Command:
+  - `uv run mypy careervp/models/fvs.py careervp/models/fvs_models.py --strict`
+- Result:
+  - `Success: no issues found in 2 source files`
+
+3. New model tests
+- Command:
+  - `uv run pytest tests/models/unit/test_fvs_models.py -v --tb=short`
+- Result:
+  - `4 passed`
+
+### Files Updated
+- `src/backend/careervp/models/fvs.py`
+- `src/backend/careervp/models/fvs_models.py`
+- `src/backend/careervp/logic/cv_tailoring.py`
+- `src/backend/careervp/logic/cv_tailoring_prompt.py`
+- `src/backend/careervp/logic/fvs_validator.py`
+- `src/backend/careervp/models/__init__.py`
+- `src/backend/tests/models/unit/test_fvs_models.py`
+
+### Outcome
+✅ Step 1.3 consolidation criteria satisfied:
+- Required FVS classes are in `fvs.py`
+- `fvs_models.py` still exists
+- handlers/logic imports updated off `fvs_models`
+- `test_fvs_models.py` exists
+- Ruff and mypy strict checks pass

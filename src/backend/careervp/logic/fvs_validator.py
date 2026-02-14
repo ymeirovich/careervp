@@ -15,8 +15,8 @@ from typing import Any, Iterable
 
 from careervp.handlers.utils.observability import logger
 from careervp.models.cv import Skill, UserCV
+from careervp.models.fvs import FVSBaseline as TailoringFVSBaseline
 from careervp.models.fvs import FVSValidationResult as TailoringFVSValidationResult
-from careervp.models.fvs_models import FVSBaseline as TailoringFVSBaseline
 from careervp.models.result import Result, ResultCode
 from careervp.models.vpr import VPR
 

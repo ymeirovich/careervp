@@ -17,8 +17,7 @@ from careervp.models.cv_tailoring_models import (
     TailoredCVResponse,
     TailoringPreferences,
 )
-from careervp.models.fvs import FVSValidationResult, FVSViolation, ViolationSeverity
-from careervp.models.fvs_models import FVSBaseline
+from careervp.models.fvs import FVSBaseline, FVSValidationResult, FVSViolation, ImmutableFact, ViolationSeverity
 from careervp.models.result import Result, ResultCode
 
 WORD_PATTERN = re.compile(r'[A-Za-z][A-Za-z0-9+#/.-]*')
@@ -518,7 +517,6 @@ def create_fvs_baseline(master_cv: CVUserCV | UserCV) -> FVSBaseline:
 def _fact(fact_type: str, value: str | None, context: str) -> Any:
     if value is None:
         value = ''
-    from careervp.models.fvs_models import ImmutableFact
 
     return ImmutableFact(fact_type=fact_type, value=value, context=context)
 
