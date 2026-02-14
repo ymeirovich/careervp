@@ -228,6 +228,42 @@ KNOWLEDGE: docs/refactor/specs/architectural_findings_spec.yaml (consolidation_t
 KNOWLEDGE: docs/refactor/specs/test_strategy_spec.yaml (tdd_pattern, test_pyramid)
 KNOWLEDGE: cv_tailoring_handler.py imports from careervp.models.cv_models
 ```
+
+**VALIDATION (Secondary Prompt - Run After Completion):**
+```bash
+# VSCode + Anthropic Haiku
+"""
+Validate Step 1.1 consolidation was successful:
+
+1. Verify cv.py has all expected models:
+   grep -E "class (UserCV|WorkExperience|Education|Skill|SkillLevel|CVSection|CVParseRequest|CVParseResponse)" careervp/models/cv.py
+
+2. Verify cv_models.py still exists (not deleted):
+   ls -la careervp/models/cv_models.py
+
+3. Verify cv_tailoring_handler.py imports from cv.py (not cv_models.py):
+   grep "from careervp.models" careervp/handlers/cv_tailoring_handler.py
+   grep "import.*UserCV\|import.*WorkExperience" careervp/handlers/cv_tailoring_handler.py
+
+4. Verify test file exists:
+   ls -la tests/models/unit/test_cv_models.py
+
+5. Run lint and type check:
+   uv run ruff check careervp/models/cv.py careervp/models/cv_models.py
+   uv run mypy careervp/models/cv.py careervp/models/cv_models.py --strict
+
+DONE when:
+- All 7 models in cv.py
+- cv_models.py exists (not deleted)
+- cv_tailoring_handler.py imports from cv.py
+- test_cv_models.py exists
+- ruff check passes (no errors)
+- mypy --strict passes (no errors)
+"""
+
+KNOWLEDGE: src/backend/careervp/models/cv.py (consolidated file)
+KNOWLEDGE: src/backend/careervp/models/cv_models.py (source file - still exists)
+KNOWLEDGE: src/backend/careervp/handlers/cv_tailoring_handler.py (updated imports)
 ```
 
 ### Step 1.2: Consolidate VPR Models
