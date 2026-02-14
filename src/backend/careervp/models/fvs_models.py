@@ -20,7 +20,7 @@ class ImmutableFact(BaseModel):
 class FVSBaseline(BaseModel):
     """Baseline of immutable facts for FVS validation."""
 
-    cv_id: str
+    cv_id: str | None = None
     user_id: str
     full_name: str | None = None
     immutable_facts: list[ImmutableFact] = Field(default_factory=list)
@@ -29,8 +29,8 @@ class FVSBaseline(BaseModel):
     email: str | None = None
     phone: str | None = None
     location: str | None = None
-    experience_dates: list[str] = Field(default_factory=list)
-    education_dates: list[str] = Field(default_factory=list)
+    experience_dates: list[str | None] = Field(default_factory=list)
+    education_dates: list[str | None] = Field(default_factory=list)
     companies: list[str] = Field(default_factory=list)
     skills: list[Skill | str] = Field(default_factory=list)
     certifications: list[Certification | str] = Field(default_factory=list)

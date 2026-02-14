@@ -56,8 +56,8 @@ class WorkExperience(BaseModel):
     end_date: Annotated[str | None, Field(description='Employment end date')] = None
     current: Annotated[bool, Field(description='Whether this is the current role')] = False
     description: Annotated[str | None, Field(description='Role description')] = None
-    achievements: Annotated[list[str], Field(default_factory=list, description='Quantified achievements - VERIFIABLE')]
-    technologies: Annotated[list[str], Field(default_factory=list, description='Technologies used')]
+    achievements: Annotated[list[str], Field(default_factory=list, description='Quantified achievements - VERIFIABLE')] = []
+    technologies: Annotated[list[str], Field(default_factory=list, description='Technologies used')] = []
 
     @model_validator(mode='after')
     def _populate_dates(self) -> 'WorkExperience':
@@ -79,7 +79,7 @@ class Education(BaseModel):
     start_date: Annotated[str | None, Field(description='Start date')] = None
     end_date: Annotated[str | None, Field(description='End date')] = None
     gpa: Annotated[float | None, Field(description='GPA')] = None
-    honors: Annotated[list[str], Field(default_factory=list, description='Honors')]
+    honors: Annotated[list[str], Field(default_factory=list, description='Honors')] = []
     dates: Annotated[str | None, Field(description='Education dates')] = None
 
     @model_validator(mode='after')
@@ -169,7 +169,7 @@ class UserCV(BaseModel):
     professional_summary: Annotated[str | None, Field(description='Professional summary - can be tailored')] = None
 
     # Additional metadata used by CV tailoring
-    languages: Annotated[list[str], Field(default_factory=list, description='Spoken languages')]
+    languages: Annotated[list[str], Field(default_factory=list, description='Spoken languages')] = []
     created_at: Annotated[datetime | None, Field(description='Created timestamp')] = None
     updated_at: Annotated[datetime | None, Field(description='Updated timestamp')] = None
 

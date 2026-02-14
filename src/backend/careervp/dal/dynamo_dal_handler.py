@@ -225,11 +225,12 @@ class DynamoDalHandler(DalHandler):
         logger.append_keys(user_id=tailored_cv.user_id, cv_id=tailored_cv.cv_id)
         logger.info('saving tailored CV artifact to DynamoDB')
         resolved_job_id = job_id or tailored_cv.job_description_hash or 'unknown'
+        resolved_cv_id = tailored_cv.cv_id or 'unknown'
         try:
             table = self._get_db_handler(self.table_name)
             item = {
                 'pk': tailored_cv.user_id,
-                'sk': self._build_tailored_cv_sort_key(tailored_cv.cv_id, resolved_job_id, version),
+                'sk': self._build_tailored_cv_sort_key(resolved_cv_id, resolved_job_id, version),
                 'artifact_type': 'cv_tailored',
                 'user_id': tailored_cv.user_id,
                 'cv_id': tailored_cv.cv_id,

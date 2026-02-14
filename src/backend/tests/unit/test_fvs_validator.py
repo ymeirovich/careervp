@@ -167,6 +167,7 @@ class TestFVSImmutableFactsValidation:
     def test_contact_info_change_fails(self, fvs_baseline: Dict[str, Any], valid_user_cv: UserCV) -> None:
         """Changing contact info should fail validation."""
         # Modify email
+        assert valid_user_cv.contact_info is not None
         valid_user_cv.contact_info.email = 'wrong@email.com'
 
         result = validate_immutable_facts(fvs_baseline, valid_user_cv)
