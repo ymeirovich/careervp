@@ -9,7 +9,7 @@ import re
 from typing import Any, Iterable, cast
 
 from careervp.logic import cv_tailoring_prompt
-from careervp.models.cv import Education as CVEducation, UserCV as CVUserCV
+from careervp.models.cv import UserCV as CVUserCV
 from careervp.models.cv_models import Certification, Education, Skill, UserCV, WorkExperience
 from careervp.models.cv_tailoring_models import (
     ChangeLog,
