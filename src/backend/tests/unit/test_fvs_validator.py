@@ -67,18 +67,21 @@ def valid_user_cv() -> UserCV:
                 role='Learning Experience Specialist',
                 dates='2021 – Present',
                 achievements=['Designed training programs'],
+                technologies=[],
             ),
             WorkExperience(
                 company='Israel Ministry of Finance',
                 role='AWS Solutions Architect',
                 dates='2009 – 2021',
                 achievements=['Architected cloud solutions'],
+                technologies=[],
             ),
         ],
         education=[
             Education(
                 institution='University of Maryland',
                 degree='B.A. Political Science',
+                honors=[],
             ),
         ],
         certifications=[
@@ -87,6 +90,7 @@ def valid_user_cv() -> UserCV:
         ],
         skills=['AWS Solutions Architect Associate', 'Python', 'JavaScript'],
         top_achievements=['Implemented LMS system'],
+        languages=[],
         is_parsed=True,
     )
 
@@ -109,17 +113,20 @@ def hallucinated_user_cv() -> UserCV:
                 role='Director of Learning',  # HALLUCINATED: Should be "Learning Experience Specialist"
                 dates='2018 – Present',  # HALLUCINATED: Should be "2021 – Present"
                 achievements=[],
+                technologies=[],
             ),
         ],
         education=[
             Education(
                 institution='Unknown',
                 degree='M.S. Computer Science',  # HALLUCINATED: Should be "B.A. Political Science"
+                honors=[],
             ),
         ],
         certifications=[],
         top_achievements=[],
         skills=['Rust Expert'],  # HALLUCINATED: Not in verifiable skills
+        languages=[],
         is_parsed=True,
     )
 
