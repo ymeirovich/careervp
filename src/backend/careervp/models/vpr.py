@@ -52,6 +52,39 @@ class TokenUsage(BaseModel):
     model: Annotated[str, Field(description='Model ID used')]
 
 
+class Achievement(BaseModel):
+    """Structured achievement statement used in value proposition narratives."""
+
+    description: Annotated[str, Field(description='Achievement description')]
+    impact: Annotated[str | None, Field(description='Business impact of the achievement')] = None
+    metric: Annotated[str | None, Field(description='Quantified metric if available')] = None
+
+
+class TargetRole(BaseModel):
+    """Target role context for value proposition framing."""
+
+    title: Annotated[str, Field(description='Target role title')]
+    company: Annotated[str | None, Field(description='Target company')] = None
+    industry: Annotated[str | None, Field(description='Target industry')] = None
+    level: Annotated[str | None, Field(description='Target role seniority level')] = None
+
+
+class ValueProposition(BaseModel):
+    """High-level value proposition summary mapped to target role and achievements."""
+
+    headline: Annotated[str, Field(description='Primary value proposition headline')]
+    summary: Annotated[str, Field(description='Narrative summary of candidate value')]
+    target_role: Annotated[TargetRole | None, Field(description='Target role context')] = None
+    achievements: Annotated[
+        list[Achievement],
+        Field(default_factory=list, description='Supporting achievements for the proposition'),
+    ]
+    differentiators: Annotated[
+        list[str],
+        Field(default_factory=list, description='Strategic differentiators supporting the proposition'),
+    ]
+
+
 class VPR(BaseModel):
     """
     Complete Value Proposition Report structure.

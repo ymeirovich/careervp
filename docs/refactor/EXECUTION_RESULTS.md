@@ -880,3 +880,61 @@ Executed from: `/Users/yitzchak/Documents/dev/careervp/src/backend`
 
 ### Outcome
 ✅ Step 1.1 success criteria met for CV model consolidation.
+
+---
+
+## Phase 1 Step 1.2 Update (2026-02-14)
+
+### Scope
+Consolidate VPR models per:
+- `docs/refactor/specs/models_spec.yaml` (categories.VPR models)
+- `docs/refactor/specs/architectural_findings_spec.yaml` (LAYER-003 consolidation intent)
+- `docs/refactor/specs/test_strategy_spec.yaml` (TDD pattern, unit test focus)
+
+### Code Changes
+
+1. Canonical VPR model enhancement
+- `src/backend/careervp/models/vpr.py`
+  - Kept existing models:
+    - `EvidenceItem`
+    - `VPR` (including `executive_summary`, `evidence_matrix`, `differentiators`, `gap_strategies`)
+  - Added missing models required by Step 1.2:
+    - `Achievement`
+    - `TargetRole`
+    - `ValueProposition`
+
+2. New tests (TDD)
+- `src/backend/tests/models/unit/test_vpr_models.py` (new folder/file)
+  - Added tests for:
+    - model existence for `ValueProposition`, `Achievement`, `TargetRole`
+    - field behavior for `Achievement` and `TargetRole`
+    - composition behavior (`ValueProposition` containing `TargetRole` and `Achievement`)
+    - regression check ensuring existing `VPR`/`EvidenceItem` model behavior remains valid
+
+3. VPR import consolidation check
+- Searched handlers and logic for:
+  - `from.*vpr_models`
+  - `from.*handlers.models.vpr`
+- No matches found, so no import migration changes were required.
+
+### Validation Results
+
+Executed from: `/Users/yitzchak/Documents/dev/careervp/src/backend`
+
+1. New unit tests
+- Command: `uv run pytest tests/models/unit/test_vpr_models.py -q`
+- Result: ✅ PASS (`5 passed`)
+
+2. Runbook validation checks
+- `grep -E "class (VPR|EvidenceItem|ValueProposition|Achievement|TargetRole)" careervp/models/vpr.py` → ✅ includes all expected classes
+- `grep -r "from.*vpr_models\|from.*handlers.models.vpr" careervp/handlers/ careervp/logic/ 2>/dev/null | grep -v ".pyc"` → ✅ no stale imports found
+- `ls -la tests/models/unit/test_vpr_models.py` → ✅ file exists
+
+3. Lint + strict typing
+- Command: `uv run ruff check careervp/models/vpr.py`
+- Result: ✅ PASS (`All checks passed!`)
+- Command: `uv run mypy careervp/models/vpr.py --strict`
+- Result: ✅ PASS (`Success: no issues found in 1 source file`)
+
+### Outcome
+✅ Step 1.2 success criteria met for VPR model consolidation.
