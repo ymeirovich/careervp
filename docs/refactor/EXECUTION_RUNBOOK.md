@@ -268,17 +268,25 @@ KNOWLEDGE: src/backend/careervp/handlers/cv_tailoring_handler.py (updated import
 
 ### Step 1.2: Consolidate VPR Models
 
+**READ FIRST:**
+- `docs/refactor/specs/models_spec.yaml` (VPR model definitions)
+- `docs/refactor/specs/architectural_findings_spec.yaml` (layer rules - LAYER-003)
+- `docs/refactor/specs/test_strategy_spec.yaml` (TDD pattern, 80% unit coverage)
+
 **CODE:**
 ```bash
 # VSCode + Anthropic Sonnet
 """
-Consolidate VPR models per models_spec.yaml:
+Consolidate VPR models per models_spec.yaml + architectural_findings_spec.yaml:
 
 1. ENHANCE: src/backend/careervp/models/vpr.py
    - Keep existing: EvidenceItem, VPR (with executive_summary, evidence_matrix, differentiators, gap_strategies)
    - Add new if missing: ValueProposition, Achievement, TargetRole
+   - Per architectural_findings_spec.yaml LAYER-003: Move models from handlers/models/ and dal/models/ to /models
 
 2. Create: tests/models/unit/test_vpr_models.py (NEW FOLDER)
+   - Per test_strategy_spec.yaml: TDD pattern (write test first)
+   - Unit coverage target: 80%
 
 MAPPING: spec "VPRData" → existing "VPR"
 MAPPING: spec "ValueProposition" → NEW (add to vpr.py)
@@ -287,23 +295,63 @@ MAPPING: spec "TargetRole" → NEW (add to vpr.py)
 """
 
 KNOWLEDGE: docs/refactor/specs/models_spec.yaml (categories.VPR models)
+KNOWLEDGE: docs/refactor/specs/architectural_findings_spec.yaml (consolidation_targets)
+KNOWLEDGE: docs/refactor/specs/test_strategy_spec.yaml (tdd_pattern, test_pyramid)
 ```
+
+**VALIDATION (Secondary Prompt - Run After Completion):**
+```bash
+# VSCode + Anthropic Haiku
+"""
+Validate Step 1.2 consolidation was successful:
+
+1. Verify vpr.py has all expected models:
+   grep -E "class (VPR|EvidenceItem|ValueProposition|Achievement|TargetRole)" careervp/models/vpr.py
+
+2. Check for VPR-related handlers that may need import updates:
+   grep -r "from.*vpr_models\|from.*handlers.models.vpr" careervp/handlers/ careervp/logic/ 2>/dev/null | grep -v ".pyc"
+
+3. Verify test file exists:
+   ls -la tests/models/unit/test_vpr_models.py
+
+4. Run lint and type check:
+   uv run ruff check careervp/models/vpr.py
+   uv run mypy careervp/models/vpr.py --strict
+
+DONE when:
+- VPR, EvidenceItem, ValueProposition, Achievement, TargetRole all in vpr.py
+- Any vpr_models imports in handlers/logic updated to vpr.py
+- test_vpr_models.py exists
+- ruff check passes (no errors)
+- mypy --strict passes (no errors)
+"""
+
+KNOWLEDGE: src/backend/careervp/models/vpr.py (consolidated file)
+KNOWLEDGE: src/backend/careervp/handlers/ (check for vpr_models imports)
 ```
 
 ### Step 1.3: Consolidate FVS Models
+
+**READ FIRST:**
+- `docs/refactor/specs/models_spec.yaml` (FVS model definitions)
+- `docs/refactor/specs/architectural_findings_spec.yaml` (layer rules - LAYER-003)
+- `docs/refactor/specs/test_strategy_spec.yaml` (TDD pattern, 80% unit coverage)
 
 **CODE:**
 ```bash
 # VSCode + Anthropic Haiku
 """
-Consolidate FVS models per models_spec.yaml:
+Consolidate FVS models per models_spec.yaml + architectural_findings_spec.yaml:
 
 1. ENHANCE: src/backend/careervp/models/fvs.py
    - Keep existing: ViolationSeverity, FVSViolation, FVSValidationResult
    - Add new if missing: FVSResult, QualityScore, GrammarIssue, ToneIssue
+   - Per architectural_findings_spec.yaml LAYER-003: Move models from handlers/models/ and dal/models/ to /models
    - DO NOT DELETE fvs_models.py - consolidate into fvs.py
 
 2. Create: tests/models/unit/test_fvs_models.py (NEW FOLDER)
+   - Per test_strategy_spec.yaml: TDD pattern (write test first)
+   - Unit coverage target: 80%
 
 MAPPING: spec "FVSResult" → NEW (add to fvs.py)
 MAPPING: spec "QualityScore" → NEW (add to fvs.py)
@@ -313,7 +361,45 @@ MAPPING: spec "FVSValidationResult" → existing "FVSValidationResult"
 """
 
 KNOWLEDGE: docs/refactor/specs/models_spec.yaml (categories.FVS models)
+KNOWLEDGE: docs/refactor/specs/architectural_findings_spec.yaml (consolidation_targets)
+KNOWLEDGE: docs/refactor/specs/test_strategy_spec.yaml (tdd_pattern, test_pyramid)
 ```
+
+**VALIDATION (Secondary Prompt - Run After Completion):**
+```bash
+# VSCode + Anthropic Haiku
+"""
+Validate Step 1.3 consolidation was successful:
+
+1. Verify fvs.py has all expected models:
+   grep -E "class (FVSValidationResult|ViolationSeverity|FVSViolation|FVSResult|QualityScore|GrammarIssue|ToneIssue)" careervp/models/fvs.py
+
+2. Verify fvs_models.py still exists (not deleted):
+   ls -la careervp/models/fvs_models.py
+
+3. Check for FVS-related handlers/logic that may need import updates:
+   grep -r "from.*fvs_models\|from.*handlers.models.fvs" careervp/handlers/ careervp/logic/ 2>/dev/null | grep -v ".pyc"
+
+4. Verify test file exists:
+   ls -la tests/models/unit/test_fvs_models.py
+
+5. Run lint and type check:
+   uv run ruff check careervp/models/fvs.py careervp/models/fvs_models.py
+   uv run mypy careervp/models/fvs.py careervp/models/fvs_models.py --strict
+
+DONE when:
+- ViolationSeverity, FVSViolation, FVSValidationResult, FVSResult, QualityScore, GrammarIssue, ToneIssue all in fvs.py
+- fvs_models.py exists (not deleted)
+- Any fvs_models imports in handlers/logic updated to fvs.py
+- test_fvs_models.py exists
+- ruff check passes (no errors)
+- mypy --strict passes (no errors)
+"""
+
+KNOWLEDGE: src/backend/careervp/models/fvs.py (consolidated file)
+KNOWLEDGE: src/backend/careervp/models/fvs_models.py (source file - still exists)
+KNOWLEDGE: src/backend/careervp/handlers/ (check for fvs_models imports)
+KNOWLEDGE: src/backend/careervp/logic/ (check for fvs_models imports)
 ```
 
 ### Phase 1 Verification
