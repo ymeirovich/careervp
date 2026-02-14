@@ -85,7 +85,7 @@ jobs:
         run: |
           set -o pipefail
           make deploy 2>&1 | tee /tmp/deploy.log || {
-            if grep -q "UPDATE_IN_PROGRESS state and can not be updated" /tmp/deploy.log; then
+            if grep -Eq "(_IN_PROGRESS state and can not be updated|UPDATE_COMPLETE_CLEANUP_IN_PROGRESS|is in .*_IN_PROGRESS state)" /tmp/deploy.log; then
               echo "::warning::Stack update lock detected. Re-running CFN guard and retrying deploy..."
               .github/scripts/cfn-guard.sh "${{ env.STACK_NAME }}" "${{ env.AWS_REGION }}"
               make deploy
@@ -182,7 +182,7 @@ jobs:
         run: |
           set -o pipefail
           make deploy 2>&1 | tee /tmp/deploy.log || {
-            if grep -q "UPDATE_IN_PROGRESS state and can not be updated" /tmp/deploy.log; then
+            if grep -Eq "(_IN_PROGRESS state and can not be updated|UPDATE_COMPLETE_CLEANUP_IN_PROGRESS|is in .*_IN_PROGRESS state)" /tmp/deploy.log; then
               echo "::warning::Stack update lock detected. Re-running CFN guard and retrying deploy..."
               .github/scripts/cfn-guard.sh "$STACK_NAME" "${{ env.AWS_REGION }}"
               make deploy

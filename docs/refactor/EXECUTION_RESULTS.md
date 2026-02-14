@@ -938,3 +938,51 @@ Executed from: `/Users/yitzchak/Documents/dev/careervp/src/backend`
 
 ### Outcome
 ✅ Step 1.2 success criteria met for VPR model consolidation.
+
+---
+
+## Workflow Follow-Up Fixes (2026-02-14)
+
+### Scope
+Address post-merge CI failures reported in:
+- `PR - Serverless Service CI/CD` (`Complexity Scan` / deploy path stability)
+- `Main Branch - Serverless Service CI/CD` (`Build and Deploy` path reliability)
+- `Deploy` (`CFN State Guard` / stack lock retry resilience)
+
+### Changes Applied
+
+1. PR workflow checkout action fix
+- `/.github/workflows/pr-serverless-service.yml`
+  - Replaced invalid `actions/checkout@v6` references with `actions/checkout@v4` in both jobs.
+
+2. Main workflow runner label fix
+- `/.github/workflows/main-serverless-service.yml`
+  - Updated production runner label from `ubuntu-24.04-arm` to valid `ubuntu-24.04-arm64`.
+
+3. Deploy lock-detection hardening
+- `/.github/workflows/deploy.yml`
+  - Expanded stack-lock detection regex in both `Build and Deploy` steps to catch broader CloudFormation in-progress messages:
+    - `_IN_PROGRESS state and can not be updated`
+    - `UPDATE_COMPLETE_CLEANUP_IN_PROGRESS`
+    - `is in .*_IN_PROGRESS state`
+  - Keeps existing behavior: rerun CFN guard and retry deploy when lock-like errors occur.
+
+### Verification
+
+Executed from:
+- `/Users/yitzchak/Documents/dev/careervp/src/backend` (tests/lint/type-check)
+- `/Users/yitzchak/Documents/dev/careervp` (workflow YAML parse)
+
+1. Step 1.2 regression safety
+- `uv run pytest tests/models/unit/test_vpr_models.py -q` → ✅ `5 passed`
+- `uv run ruff check careervp/models/vpr.py` → ✅ pass
+- `uv run mypy careervp/models/vpr.py --strict` → ✅ pass
+
+2. Workflow YAML sanity
+- Parsed successfully:
+  - `.github/workflows/pr-serverless-service.yml`
+  - `.github/workflows/main-serverless-service.yml`
+  - `.github/workflows/deploy.yml`
+
+### Outcome
+✅ Workflow configuration issues remediated locally and ready for PR CI validation.
