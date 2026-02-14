@@ -1,0 +1,53 @@
+{
+  "name": "Phase 1 VPR Generator Live Test",
+  "description": "Test VPR Generator async workflow with real inputs",
+  "phase": 1,
+  "type": "feature",
+  "endpoint": "POST /v1/vpr/generate",
+  "payload": {
+    "cv_id": "cv_phase1_test_001",
+    "job_id": "job_phase1_test_001",
+    "gap_response_ids": ["gap_phase1_test_001"],
+    "options": {
+      "include_company_research": true,
+      "tone": "professional",
+      "length": "standard"
+    },
+    "test_context": {
+      "cv_summary": "Senior Software Engineer with 8 years Python experience, AWS expertise, and leadership experience managing teams of 5-10 engineers. Strong background in microservices architecture and cloud-native development.",
+      "job_summary": "Looking for a Senior Software Engineer to lead our Python platform team. Must have 5+ years Python, AWS experience, and team leadership skills. Kubernetes experience a plus.",
+      "gap_responses": [
+        {
+          "id": "gap_phase1_test_001",
+          "question": "Describe a time you led a team through a significant technical challenge.",
+          "response": "Led a team to migrate legacy monolith of 8 engineers to microservices using Python and AWS, reducing deployment time by 60% and improving system reliability to 99.9%.",
+          "quantifiable_data": {
+            "team_size": 8,
+            "deployment_reduction_percent": 60,
+            "reliability_improvement": 99.9
+          },
+          "evidence_type": "CV_IMPACT"
+        }
+      ]
+    }
+  },
+  "expected": {
+    "status_code": 202,
+    "response_schema": {
+      "request_id": "string",
+      "status": "processing",
+      "estimated_time_seconds": 30
+    }
+  },
+  "polling_validation": {
+    "endpoint": "GET /v1/vpr/{request_id}",
+    "expected_final_status": "completed",
+    "timeout_seconds": 120,
+    "poll_interval_seconds": 5,
+    "result_validation": {
+      "required_fields": ["uvp", "differentiators", "strategic_narrative"],
+      "min_persuasion_score": 7.0,
+      "min_completeness_score": 7.0
+    }
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "name": "Phase 8 Company Research Live Test",
+  "description": "Test Company Research endpoint and data extraction",
+  "phase": 8,
+  "type": "feature",
+  "endpoint": "POST /v1/company-research/fetch",
+  "payload": {
+    "job_id": "job_phase8_test_001",
+    "company_name": "TechCorp Solutions",
+    "job_url": "https://techcorp.com/careers/senior-software-engineer",
+    "options": {
+      "extract_mission": true,
+      "extract_values": true,
+      "extract_recent_news": true,
+      "extract_culture": true,
+      "extract_products": true,
+      "cache_result": true,
+      "ttl_days": 30
+    },
+    "test_context": {
+      "job_description": {
+        "title": "Senior Software Engineer",
+        "department": "Platform Engineering",
+        "location": "Remote (US/EU)",
+        "description": "We are looking for a Senior Software Engineer to join our Platform Engineering team...",
+        "requirements": [
+          "5+ years software development experience",
+          "Strong Python skills",
+          "AWS experience",
+          "Kubernetes experience",
+          "Leadership experience"
+        ],
+        "responsibilities": [
+          "Design and implement scalable systems",
+          "Lead technical initiatives",
+          "Mentor junior engineers"
+        ]
+      }
+    }
+  },
+  "expected": {
+    "status_code": 200,
+    "response_schema": {
+      "company_research_id": "string",
+      "status": "completed",
+      "data": {
+        "company_name": "TechCorp Solutions",
+        "mission": "string",
+        "values": ["string"],
+        "recent_news": [
+          {
+            "title": "string",
+            "date": "string",
+            "summary": "string"
+          }
+        ],
+        "culture": "string",
+        "products": ["string"],
+        "competitors": ["string"],
+        "funding_status": "string",
+        "size_range": "string",
+        "industry": "string"
+      },
+      "used_in": ["cover_letter", "vpr"]
+    }
+  },
+  "validation": {
+    "required_fields": ["mission", "values", "recent_news", "culture"],
+    "cache_functionality": true,
+    "ttl_applied": true,
+    "data_freshness_days_max": 30
+  },
+  "integration_tests": {
+    "used_in_cover_letter": true,
+    "used_in_vpr": true,
+    "hook_paragraph_usage": true,
+    "proof_points_usage": true
+  }
+}

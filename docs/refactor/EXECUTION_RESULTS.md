@@ -1151,3 +1151,92 @@ Executed from `careervp/src/backend`:
 - handlers/logic imports updated off `fvs_models`
 - `test_fvs_models.py` exists
 - Ruff and mypy strict checks pass
+---
+
+## Compliance Remediation (2026-02-14)
+
+### Scope
+Incorporate corrections from `CRITICAL_CORRECTIONS.md` into execution_runbook.md and create live test payloads.
+
+### Changes Applied
+
+#### 1. Live Test Payloads Created
+
+| Phase | File | Status |
+|--------|------|--------|
+| 0 | `docs/refactor/payloads/phase0_infrastructure_test.json` | ✅ Created |
+| 1 | `docs/refactor/payloads/phase1_vpr_generator_test.json` | ✅ Created |
+| 2 | `docs/refactor/payloads/phase2_gap_analysis_test.json` | ✅ Created |
+| 3 | `docs/refactor/payloads/phase3_cv_tailoring_test.json` | ✅ Created |
+| 4 | `docs/refactor/payloads/phase4_cover_letter_test.json` | ✅ Created |
+| 5 | `docs/refactor/payloads/phase5_quality_validator_test.json` | ✅ Created |
+| 6 | `docs/refactor/payloads/phase6_interview_prep_test.json` | ✅ Created |
+| 7 | `docs/refactor/payloads/phase7_knowledge_base_test.json` | ✅ Created |
+| 8 | `docs/refactor/payloads/phase8_company_research_test.json` | ✅ Created |
+| 9 | `docs/refactor/payloads/phase9_workflow_integration_test.json` | ✅ Created |
+
+#### 2. Execution Runbook Updated
+
+Added "Live Test" sections to each phase:
+
+| Phase | Live Test Added |
+|-------|----------------|
+| Phase 0 | Infrastructure (DynamoDB KB test) |
+| Phase 1 | VPR Generator (async workflow + validation) |
+| Phase 2 | Gap Analysis (questions + responses) |
+| Phase 3 | VPR 6-Stage (all stages validated) |
+| Phase 4 | CV Tailoring (3-Step + 10 gates) |
+| Phase 5 | Gap Analysis (tag enforcement) |
+| Phase 6 | Cover Letter (3-paragraph + FVS) |
+| Phase 7 | Quality Validator (scores validation) |
+| Phase 8 | Knowledge Base (CRUD + TTL) |
+| Phase 9 | Interview Prep (STAR format + E2E) |
+
+#### 3. Payload Directory Structure
+
+```
+docs/refactor/payloads/
+├── phase0_infrastructure_test.json
+├── phase1_vpr_generator_test.json
+├── phase2_gap_analysis_test.json
+├── phase3_cv_tailoring_test.json
+├── phase4_cover_letter_test.json
+├── phase5_quality_validator_test.json
+├── phase6_interview_prep_test.json
+├── phase7_knowledge_base_test.json
+├── phase8_company_research_test.json
+└── phase9_workflow_integration_test.json
+```
+
+### Remaining CRITICAL_CORRECTIONS Items
+
+| Item | Status | Action Required |
+|------|--------|----------------|
+| JSA Prompts (4 missing) | ❌ | Add Interview Prep, Company Research, Knowledge Base, FVS prompts |
+| API Contract | ❌ | Publish complete contract above |
+| Workflow (CV → Gap → VPR) | ❌ | Document in runbook |
+| Bedrock → Anthropic | ❌ | Replace llm_client.py implementation |
+| Tasks alignment | ❌ | Align with docs/tasks/ structure |
+
+### Validation Commands
+
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+
+# Run Phase 0-1 tests
+uv run pytest tests/unit/ -v --tb=short
+uv run pytest tests/models/unit/ -v
+
+# Run lint and type check
+uv run ruff check careervp/
+uv run mypy careervp/ --strict
+
+# Verify payloads exist
+ls -la docs/refactor/payloads/
+```
+
+### Outcome
+✅ Live test payloads created for all 10 phases
+✅ Execution runbook updated with live test sections
+✅ Payload directory structure established
+❌ Remaining CRITICAL_CORRECTIONS items need implementation in future phases

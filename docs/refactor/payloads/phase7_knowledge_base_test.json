@@ -1,0 +1,84 @@
+{
+  "name": "Phase 7 Knowledge Base Live Test",
+  "description": "Test Knowledge Base CRUD operations and memory persistence",
+  "phase": 7,
+  "type": "infrastructure",
+  "endpoint": "POST /v1/knowledge",
+  "payload": {
+    "entity_type": "application",
+    "entities": [
+      {
+        "pk": "USER#jane@example.com",
+        "sk": "APPLICATION#app_001",
+        "data": {
+          "cv_id": "cv_001",
+          "job_description_hash": "abc123",
+          "company_name": "TechCorp Solutions",
+          "status": "in_progress",
+          "created_at": "2026-02-14T10:00:00Z"
+        }
+      },
+      {
+        "pk": "USER#jane@example.com",
+        "sk": "COMPANY_RESEARCH#app_001",
+        "data": {
+          "company_name": "TechCorp Solutions",
+          "mission": "Empowering businesses through innovative cloud technology",
+          "values": ["Innovation", "Customer Success", "Technical Excellence"],
+          "recent_news": [
+            {"title": "AI Platform Launch", "date": "2025-10-15"},
+            {"title": "EU Expansion", "date": "2025-08-01"}
+          ],
+          "culture": "Fast-paced, collaborative, remote-friendly"
+        }
+      },
+      {
+        "pk": "USER#jane@example.com",
+        "sk": "GAP_RESPONSE#app_001#gap_001",
+        "data": {
+          "question_text": "Describe a time you led a team through a challenge",
+          "response": "Led team of 8 through microservices migration...",
+          "quantifiable_data": {
+            "team_size": 8,
+            "duration_months": 12
+          },
+          "evidence_type": "CV_IMPACT"
+        }
+      },
+      {
+        "pk": "USER#jane@example.com",
+        "sk": "DIFFERENTIATOR#app_001",
+        "data": {
+          "differentiators": [
+            {"text": "40% latency reduction", "source": "achievement"},
+            {"text": "Led team of 8", "source": "gap_response"}
+          ]
+        }
+      }
+    ],
+    "ttl_config": {
+      "gap_responses_months": 24,
+      "company_research_days": 30,
+      "cv_context_hours": 24
+    }
+  },
+  "expected": {
+    "status_code": 200,
+    "response_schema": {
+      "success": true,
+      "items_stored": 4,
+      "ttl_applied": true
+    }
+  },
+  "retrieval_validation": {
+    "endpoint": "GET /v1/knowledge/{user_id}",
+    "expected_items": 4,
+    "verify_ttl": true,
+    "verify_index_operations": true
+  },
+  "memory_tests": {
+    "skip_recurring_themes": true,
+    "prioritize_by_job": true,
+    "track_question_history": true
+  }
+}

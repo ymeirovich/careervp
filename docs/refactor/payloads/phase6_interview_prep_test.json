@@ -1,0 +1,101 @@
+{
+  "name": "Phase 6 Interview Prep Live Test",
+  "description": "Test Interview Prep STAR-formatted question generation",
+  "phase": 6,
+  "type": "feature",
+  "endpoint": "POST /v1/interview-prep/generate",
+  "payload": {
+    "cv_id": "cv_phase6_test_001",
+    "job_id": "job_phase6_test_001",
+    "vpr_id": "vpr_phase6_test_001",
+    "gap_response_ids": ["gap_phase6_test_001", "gap_phase6_test_002"],
+    "options": {
+      "question_count": 10,
+      "include_model_answers": true,
+      "focus_areas": ["technical", "behavioral", "situational"],
+      "format": "STAR"
+    },
+    "test_context": {
+      "user_profile": {
+        "name": "Jane Developer",
+        "years_experience": 8,
+        "current_role": "Senior Software Engineer"
+      },
+      "cv_highlights": [
+        "8 years Python development",
+        "AWS Solutions Architect certified",
+        "Led teams of up to 10 engineers",
+        "40% latency reduction achievement"
+      ],
+      "vpr_summary": {
+        "uvp": "Experienced software engineer specializing in building scalable, high-performance cloud solutions",
+        "differentiators": [
+          "40% latency reduction through caching strategy",
+          "Led migration affecting 1M+ users",
+          "Mentored 15+ engineers to promotion"
+        ]
+      },
+      "gap_responses": [
+        {
+          "id": "gap_phase6_test_001",
+          "question": "Describe a time you led a team through a significant challenge.",
+          "response": "I led a team of 8 engineers through a 12-month microservices migration. We reduced deployment time by 60% and improved system reliability to 99.9%. The key was breaking down the monolith systematically and maintaining clear communication throughout.",
+          "quantifiable_data": {
+            "team_size": 8,
+            "duration_months": 12,
+            "deployment_reduction": 60,
+            "reliability": 99.9
+          }
+        },
+        {
+          "id": "gap_phase6_test_002",
+          "question": "How do you handle conflicting priorities?",
+          "response": "When faced with conflicting priorities, I use a systematic approach: first, I assess the business impact of each item; second, I consult with stakeholders to understand constraints; third, I create a weighted ranking; fourth, I communicate the decision clearly with rationale. This helped us deliver a critical feature during a high-pressure quarter without compromising technical debt reduction goals.",
+          "quantifiable_data": {
+            "features_delivered": 3,
+            "tech_debt_ reduction": 20
+          }
+        }
+      ],
+      "job_context": {
+        "role": "Senior Software Engineer",
+        "department": "Platform Engineering",
+        "focus_areas": ["cloud infrastructure", "scalability", "team leadership"]
+      }
+    }
+  },
+  "expected": {
+    "status_code": 200,
+    "response_schema": {
+      "questions": [
+        {
+          "id": "string",
+          "category": "technical|behavioral|situational",
+          "text": "string",
+          "model_answer": {
+            "situation": "string",
+            "task": "string",
+            "action": "string",
+            "result": "string"
+          },
+          "key_points": ["string"],
+          "follow_up_questions": ["string"]
+        }
+      ],
+      "total_questions": 10,
+      "categorized_breakdown": {
+        "technical": 4,
+        "behavioral": 4,
+        "situational": 2
+      }
+    }
+  },
+  "validation": {
+    "min_questions": 8,
+    "max_questions": 10,
+    "required_categories": ["technical", "behavioral", "situational"],
+    "star_format_enforced": true,
+    "model_answers_included": true,
+    "follow_up_questions_included": true
+  }
+}

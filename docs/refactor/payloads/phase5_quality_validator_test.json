@@ -1,0 +1,57 @@
+{
+  "name": "Phase 5 Quality Validator (FVS) Live Test",
+  "description": "Test FVS Quality Validator for grammar, tone, anti-AI, and formatting",
+  "phase": 5,
+  "type": "feature",
+  "endpoint": "POST /v1/quality-validate",
+  "payload": {
+    "content_type": "cover_letter",
+    "content": "Dear Hiring Manager,\n\nI am writing to express my strong interest in the Senior Software Engineer position at TechCorp Solutions. With over 8 years of experience in software development and a proven track record of building scalable cloud solutions, I am confident in my ability to contribute meaningfully to your team.\n\nIn my current role as a Senior Software Engineer at Tech Innovations Inc., I have led numerous initiatives that have directly impacted the company's bottom line. One of my most notable achievements was spearheading a microservices migration project that reduced system latency by 40% while improving overall reliability. This project not only demonstrated my technical capabilities but also showcased my ability to lead and inspire a team of 8 engineers toward a common goal.\n\nI am particularly drawn to TechCorp's mission of empowering businesses through innovative cloud technology. Your recent launch of the AI-powered analytics platform aligns perfectly with my interests in cutting-edge technology solutions. The company's collaborative culture and commitment to technical excellence resonate deeply with my professional values.\n\nThank you for considering my application. I would welcome the opportunity to discuss how my skills and experience can contribute to TechCorp's continued success.\n\nSincerely,\nJane Developer",
+    "source_cv": {
+      "experience": [
+        {
+          "title": "Senior Software Engineer",
+          "company": "Tech Innovations Inc.",
+          "bullets": [
+            "Led microservices migration reducing latency by 40%",
+            "Mentored 8 junior engineers",
+            "Designed AWS-based scalable architecture"
+          ]
+        }
+      ]
+    },
+    "options": {
+      "check_grammar": true,
+      "check_tone": true,
+      "check_anti_ai": true,
+      "check_formatting": true,
+      "check_facts": true,
+      "min_grammar_score": 9.0,
+      "min_tone_score": 8.0,
+      "min_anti_ai_score": 9.0,
+      "min_formatting_score": 8.0
+    }
+  },
+  "expected": {
+    "status_code": 200,
+    "response_schema": {
+      "is_valid": true,
+      "scores": {
+        "grammar_score": 9.5,
+        "tone_score": 8.5,
+        "anti_ai_score": 9.0,
+        "formatting_score": 9.0,
+        "overall_score": 9.0
+      },
+      "issues": []
+    }
+  },
+  "validation": {
+    "min_grammar_score": 9.0,
+    "min_tone_score": 8.0,
+    "min_anti_ai_score": 9.0,
+    "min_formatting_score": 8.0,
+    "max_issues": 0,
+    "fact_verification": true
+  }
+}

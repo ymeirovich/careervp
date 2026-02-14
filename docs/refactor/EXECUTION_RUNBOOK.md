@@ -169,6 +169,23 @@ cdk synth
 cdk deploy --all
 ```
 
+### Live Test (Phase 0 - Infrastructure)
+```bash
+# Run AFTER successful CDK deployment to AWS
+# Payload: docs/refactor/payloads/phase0_infrastructure_test.json
+
+cd /Users/yitzchak/Documents/dev/careervp
+
+# Test DynamoDB Knowledge Base connectivity
+curl -X PUT "https://api.careervp.com/v1/knowledge/test" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @docs/refactor/payloads/phase0_infrastructure_test.json
+
+# Expected: 200 OK with success=true
+# Verify: Item retrievable via GET
+```
+
 ---
 
 ## Phase 1: Model Unification
@@ -411,6 +428,48 @@ uv run ruff check careervp/models/
 uv run mypy careervp/models/ --strict
 ```
 
+### Live Test (Phase 1 - VPR Generator)
+```bash
+# Run AFTER Phase 1 model consolidation
+# Payload: docs/refactor/payloads/phase1_vpr_generator_test.json
+
+cd /Users/yitzchak/Documents/dev/careervp
+
+# 1. Generate VPR (async)
+curl -X POST "https://api.careervp.com/v1/vpr/generate" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @docs/refactor/payloads/phase1_vpr_generator_test.json
+
+# Expected: 202 Accepted with request_id
+
+# 2. Poll for completion (timeout: 120s)
+REQUEST_ID="<from_step_1>"
+for i in {1..24}; do
+  STATUS=$(curl -s "https://api.careervp.com/v1/vpr/$REQUEST_ID" \
+    -H "Authorization: Bearer $TOKEN" | jq -r '.status')
+
+  if [ "$STATUS" == "completed" ]; then
+    echo "SUCCESS: VPR generated"
+    curl -s "https://api.careervp.com/v1/vpr/$REQUEST_ID" \
+      -H "Authorization: Bearer $TOKEN" | jq '.result'
+    exit 0
+  fi
+
+  sleep 5
+done
+
+echo "TIMEOUT: VPR not completed in 120 seconds"
+exit 1
+```
+
+**Expected Results:**
+- `uvp`: Generated UVP statement
+- `differentiators`: List with evidence sources
+- `strategic_narrative`: Coherent career story
+- `persuasion_score`: >= 7.0
+- `completeness_score`: >= 7.0
+
 ---
 
 ## Phase 2: Cost Optimization + LLM Caching
@@ -475,6 +534,35 @@ uv run ruff check careervp/logic/
 uv run mypy careervp/logic/ --strict
 ```
 
+### Live Test (Phase 2 - Gap Analysis)
+```bash
+# Run AFTER CV Summarizer and LLM Cache implementation
+# Payload: docs/refactor/payloads/phase2_gap_analysis_test.json
+
+cd /Users/yitzchak/Documents/dev/careervp
+
+# 1. Generate gap questions
+curl -X POST "https://api.careervp.com/v1/gap-analysis/questions" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @docs/refactor/payloads/phase2_gap_analysis_test.json
+
+# Expected: 200 OK with questions array
+
+# 2. Submit responses
+curl -X POST "https://api.careervp.com/v1/gap-analysis/responses" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @docs/refactor/payloads/phase2_gap_analysis_test.json
+
+# Expected: 200 OK with impact statements
+```
+
+**Validation:**
+- Questions: 3-10 generated
+- Tags: [CV IMPACT], [INTERVIEW/MVP ONLY] enforced
+- Missing qualifications identified
+
 ---
 
 ## Phase 3: VPR 6-Stage Generator
@@ -529,6 +617,48 @@ uv run pytest tests/vpr-async/unit/ -v
 uv run ruff check careervp/logic/vpr_generator.py
 uv run mypy careervp/logic/vpr_generator.py --strict
 ```
+
+### Live Test (Phase 3 - VPR 6-Stage)
+```bash
+# Run AFTER VPR 6-Stage enhancement
+# Payload: docs/refactor/payloads/phase1_vpr_generator_test.json
+
+cd /Users/yitzchak/Documents/dev/careervp
+
+# 1. Submit VPR generation request
+curl -X POST "https://api.careervp.com/v1/vpr/generate" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @docs/refactor/payloads/phase1_vpr_generator_test.json
+
+# Expected: 202 Accepted
+
+# 2. Poll and verify 6-stage completion
+REQUEST_ID="<from_step_1>"
+for i in {1..24}; do
+  RESULT=$(curl -s "https://api.careervp.com/v1/vpr/$REQUEST_ID" \
+    -H "Authorization: Bearer $TOKEN")
+
+  STATUS=$(echo $RESULT | jq -r '.status')
+
+  if [ "$STATUS" == "completed" ]; then
+    echo "SUCCESS: 6-Stage VPR complete"
+    echo $RESULT | jq '.result'
+    exit 0
+  fi
+  sleep 5
+done
+echo "TIMEOUT"
+exit 1
+```
+
+**Validation (6-Stage):**
+- Stage 1: Company & Role Research → company_research included
+- Stage 2: Candidate Analysis → achievements extracted
+- Stage 3: Alignment Mapping → explicit table created
+- Stage 4: Self-Correction → meta-review passed
+- Stage 5: Report Generation → UVP + proof points
+- Stage 6: Meta Evaluation → persuasion_score >= 7.0
 
 ---
 
@@ -652,6 +782,57 @@ uv run ruff check careervp/logic/cv_tailoring_logic.py careervp/handlers/cv_tail
 uv run mypy careervp/logic/cv_tailoring_logic.py careervp/handlers/cv_tailoring_handler.py --strict
 ```
 
+### Live Test (Phase 4 - CV Tailoring)
+```bash
+# Run AFTER CV Tailoring 3-Step implementation
+# Payload: docs/refactor/payloads/phase3_cv_tailoring_test.json
+
+cd /Users/yitzchak/Documents/dev/careervp
+
+# 1. Generate tailored CV
+curl -X POST "https://api.careervp.com/v1/cv-tailoring/generate" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @docs/refactor/payloads/phase3_cv_tailoring_test.json
+
+# Expected: 202 Accepted
+
+# 2. Poll for completion
+REQUEST_ID="<from_step_1>"
+for i in {1..24}; do
+  RESULT=$(curl -s "https://api.careervp.com/v1/cv-tailoring/$REQUEST_ID" \
+    -H "Authorization: Bearer $TOKEN")
+
+  STATUS=$(echo $RESULT | jq -r '.status')
+
+  if [ "$STATUS" == "completed" ]; then
+    echo "SUCCESS: CV Tailored"
+    echo $RESULT | jq '.result'
+    exit 0
+  fi
+  sleep 5
+done
+echo "TIMEOUT"
+exit 1
+```
+
+**Validation (3-Step Process):**
+- Step 1 (Analysis): Keywords extracted (12-18)
+- Step 2 (Self-Correction): ATS score calculated
+- Step 3 (Finalize): ATS >= 8.0, FVS validated
+
+**Gate Tests:**
+- matching_experience >= 9.0
+- career_changer >= 7.5
+- leadership_role >= 8.0
+- senior_skills_gap >= 7.0
+- recent_graduate >= 7.5
+- remote_first >= 8.0
+- startup_culture >= 8.0
+- industry_transition >= 7.5
+- contract_to_perm >= 8.0
+- employment_gap >= 7.0
+
 ---
 
 ## Phase 5: Gap Analysis
@@ -768,6 +949,36 @@ uv run ruff check careervp/logic/gap_*.py careervp/handlers/gap_handler.py
 uv run mypy careervp/logic/gap_*.py careervp/handlers/gap_handler.py --strict
 ```
 
+### Live Test (Phase 5 - Gap Analysis)
+```bash
+# Run AFTER Gap Analysis implementation
+# Payload: docs/refactor/payloads/phase2_gap_analysis_test.json
+
+cd /Users/yitzchak/Documents/dev/careervp
+
+# 1. Generate questions
+curl -X POST "https://api.careervp.com/v1/gap-analysis/questions" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @docs/refactor/payloads/phase2_gap_analysis_test.json
+
+# Expected: 200 OK with questions array (3-10)
+
+# 2. Submit responses
+curl -X POST "https://api.careervp.com/v1/gap-analysis/responses" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @docs/refactor/payloads/phase2_gap_analysis_test.json
+
+# Expected: 200 OK with impact statements
+```
+
+**Validation:**
+- Questions tagged with [CV IMPACT], [INTERVIEW/MVP ONLY]
+- Strategic intent included for each question
+- Missing qualifications identified
+- Impact statements generated for CV enhancement
+
 ### Infrastructure
 ```bash
 cd infra/careervp
@@ -861,6 +1072,46 @@ uv run ruff check careervp/logic/cover_letter.py careervp/handlers/cover_letter_
 uv run mypy careervp/logic/cover_letter.py careervp/handlers/cover_letter_handler.py --strict
 ```
 
+### Live Test (Phase 6 - Cover Letter)
+```bash
+# Run AFTER Cover Letter implementation
+# Payload: docs/refactor/payloads/phase4_cover_letter_test.json
+
+cd /Users/yitzchak/Documents/dev/careervp
+
+# 1. Generate cover letter
+curl -X POST "https://api.careervp.com/v1/cover-letter/generate" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @docs/refactor/payloads/phase4_cover_letter_test.json
+
+# Expected: 202 Accepted
+
+# 2. Poll for completion
+LETTER_ID="<from_step_1>"
+for i in {1..18}; do
+  RESULT=$(curl -s "https://api.careervp.com/v1/cover-letter/$LETTER_ID" \
+    -H "Authorization: Bearer $TOKEN")
+
+  STATUS=$(echo $RESULT | jq -r '.status')
+
+  if [ "$STATUS" == "completed" ]; then
+    echo "SUCCESS: Cover Letter generated"
+    echo $RESULT | jq '.result'
+    exit 0
+  fi
+  sleep 5
+done
+echo "TIMEOUT"
+exit 1
+```
+
+**Validation (3-Paragraph Structure):**
+- Paragraph 1 (Hook): 80-100 words, includes UVP + company reference
+- Paragraph 2 (Proof Points): 3 requirements mapped, quantified evidence
+- Paragraph 3 (Close): 60-80 words, includes CTA
+- FVS Validation: is_valid=true, violations=[]
+
 ---
 
 ## Phase 7: Quality Validator (FVS)
@@ -934,6 +1185,29 @@ uv run pytest tests/unit/test_quality_validator.py tests/cv-tailoring/unit/ test
 uv run ruff check careervp/logic/fvs_validator.py
 uv run mypy careervp/logic/fvs_validator.py --strict
 ```
+
+### Live Test (Phase 7 - Quality Validator)
+```bash
+# Run AFTER Quality Validator enhancement
+# Payload: docs/refactor/payloads/phase5_quality_validator_test.json
+
+cd /Users/yitzchak/Documents/dev/careervp
+
+# Validate content
+curl -X POST "https://api.careervp.com/v1/quality-validate" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @docs/refactor/payloads/phase5_quality_validator_test.json
+
+# Expected: 200 OK with scores
+```
+
+**Validation Scores:**
+- Grammar: >= 9.0
+- Tone: >= 8.0
+- Anti-AI: >= 9.0
+- Formatting: >= 8.0
+- Issues: 0
 
 ---
 
@@ -1036,6 +1310,34 @@ cdk synth
 cdk deploy --all
 ```
 
+### Live Test (Phase 8 - Knowledge Base)
+```bash
+# Run AFTER Knowledge Base implementation
+# Payload: docs/refactor/payloads/phase7_knowledge_base_test.json
+
+cd /Users/yitzchak/Documents/dev/careervp
+
+# Store knowledge entities
+curl -X PUT "https://api.careervp.com/v1/knowledge" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @docs/refactor/payloads/phase7_knowledge_base_test.json
+
+# Expected: 200 OK with success=true, items_stored=4
+
+# Verify retrieval
+curl -X GET "https://api.careervp.com/v1/knowledge/jane@example.com" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Expected: All 4 items retrievable
+```
+
+**Validation:**
+- CRUD operations: All working
+- TTL functionality: Applied correctly
+- Skip recurring themes: Working
+- Prioritize by job: Working
+
 ---
 
 ## Phase 9: Interview Prep
@@ -1112,6 +1414,50 @@ uv run pytest tests/unit/test_interview_prep*.py tests/unit/test_interview_prep_
 uv run ruff check careervp/logic/interview_prep.py careervp/handlers/interview_prep_handler.py
 uv run mypy careervp/logic/interview_prep.py careervp/handlers/interview_prep_handler.py --strict
 ```
+
+### Live Test (Phase 9 - Interview Prep)
+```bash
+# Run AFTER Interview Prep implementation
+# Payload: docs/refactor/payloads/phase6_interview_prep_test.json
+
+cd /Users/yitzchak/Documents/dev/careervp
+
+# Generate interview questions
+curl -X POST "https://api.careervp.com/v1/interview-prep/generate" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @docs/refactor/payloads/phase6_interview_prep_test.json
+
+# Expected: 200 OK with questions array (8-10)
+```
+
+**Validation:**
+- Questions generated: 8-10
+- Categories: technical, behavioral, situational
+- STAR format: enforced
+- Model answers: included
+- Follow-up questions: generated
+
+### Live Test (Phase 9 - E2E Workflow Integration)
+```bash
+# Run AFTER all phases implemented
+# Payload: docs/refactor/payloads/phase9_workflow_integration_test.json
+
+cd /Users/yitzchak/Documents/dev/careervp
+
+# Execute full workflow
+bash scripts/test_workflow_e2e.sh \
+  --payload @docs/refactor/payloads/phase9_workflow_integration_test.json
+
+# Expected: All 9 steps complete successfully
+```
+
+**E2E Validation:**
+- Order enforced: CV → Gap → VPR → Tailor → Cover → Interview
+- Dependencies: Required
+- Knowledge Base: Updated throughout
+- Total time: < 15 minutes
+- Success rate: 100%
 
 ---
 

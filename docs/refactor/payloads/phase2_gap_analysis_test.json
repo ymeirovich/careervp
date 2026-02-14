@@ -1,0 +1,70 @@
+{
+  "name": "Phase 2 Gap Analysis Live Test",
+  "description": "Test Gap Analysis question generation and response handling",
+  "phase": 2,
+  "type": "feature",
+  "endpoint": "POST /v1/gap-analysis/questions",
+  "payload": {
+    "cv_id": "cv_phase2_test_001",
+    "job_id": "job_phase2_test_001",
+    "max_questions": 10,
+    "focus_areas": ["technical", "leadership", "achievements"],
+    "test_context": {
+      "cv_summary": {
+        "experience_years": 8,
+        "key_skills": ["Python", "AWS", "Docker", "PostgreSQL"],
+        "leadership_experience": "2 years team lead",
+        "achievements": ["Reduced latency by 40%", "Implemented CI/CD pipeline"]
+      },
+      "job_summary": {
+        "required_skills": ["Python", "AWS", "Kubernetes", "MongoDB"],
+        "preferred_skills": ["Leadership", "Docker", "CI/CD"],
+        "experience_level": "Senior",
+        "responsibilities": ["Lead development team", "Architect solutions", "Mentor junior developers"]
+      }
+    }
+  },
+  "expected": {
+    "status_code": 200,
+    "response_schema": {
+      "questions": [
+        {
+          "id": "string",
+          "text": "string",
+          "tags": ["string"],
+          "strategic_intent": "string",
+          "evidence_gap": "string"
+        }
+      ],
+      "missing_qualifications": ["string"]
+    },
+    "validation": {
+      "min_questions": 3,
+      "max_questions": 10,
+      "required_tags": ["CV_IMPACT", "INTERVIEW/MVP ONLY"],
+      "tags_enforced": true
+    }
+  },
+  "response_submission": {
+    "endpoint": "POST /v1/gap-analysis/responses",
+    "sample_response": {
+      "question_id": "gap_q_001",
+      "response": "I led a team of 8 engineers to migrate our legacy monolith to microservices...",
+      "quantifiable_data": {
+        "team_size": 8,
+        "duration_months": 12,
+        "success_rate": 95
+      }
+    },
+    "response_validation": {
+      "status": "saved",
+      "impact_statements": [
+        {
+          "text": "string",
+          "evidence_type": "CV_IMPACT",
+          "usable_in": ["cover_letter", "vpr"]
+        }
+      ]
+    }
+  }
+}
