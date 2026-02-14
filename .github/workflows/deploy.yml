@@ -82,7 +82,17 @@ jobs:
         working-directory: src/backend
         env:
           ENVIRONMENT: dev
-        run: make deploy
+        run: |
+          set -o pipefail
+          make deploy 2>&1 | tee /tmp/deploy.log || {
+            if grep -q "UPDATE_IN_PROGRESS state and can not be updated" /tmp/deploy.log; then
+              echo "::warning::Stack update lock detected. Re-running CFN guard and retrying deploy..."
+              .github/scripts/cfn-guard.sh "${{ env.STACK_NAME }}" "${{ env.AWS_REGION }}"
+              make deploy
+            else
+              exit 1
+            fi
+          }
       - name: Wait for Stack Stability
         run: |
           echo "Waiting for CloudFormation stack to stabilize..."
@@ -168,7 +178,18 @@ jobs:
         working-directory: src/backend
         env:
           ENVIRONMENT: ${{ inputs.environment }}
-        run: make deploy
+          STACK_NAME: ${{ inputs.environment == 'prod' && 'CareerVpCrudProduction' || inputs.environment == 'staging' && 'CareerVpCrudStaging' || 'CareerVpCrudDev' }}
+        run: |
+          set -o pipefail
+          make deploy 2>&1 | tee /tmp/deploy.log || {
+            if grep -q "UPDATE_IN_PROGRESS state and can not be updated" /tmp/deploy.log; then
+              echo "::warning::Stack update lock detected. Re-running CFN guard and retrying deploy..."
+              .github/scripts/cfn-guard.sh "$STACK_NAME" "${{ env.AWS_REGION }}"
+              make deploy
+            else
+              exit 1
+            fi
+          }
       - name: Wait for Stack Stability
         env:
           STACK_NAME: ${{ inputs.environment == 'prod' && 'CareerVpCrudProduction' || inputs.environment == 'staging' && 'CareerVpCrudStaging' || 'CareerVpCrudDev' }}
