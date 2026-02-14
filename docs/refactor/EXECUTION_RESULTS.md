@@ -810,3 +810,61 @@ Executed from: `/Users/yitzchak/Documents/dev/careervp/src/backend`
 - Previously failing tests fixed.
 - Ruff clean for requested paths.
 - Strict mypy now passes for requested targets.
+
+---
+
+## Phase 1 Model Consolidation Update (2026-02-14)
+
+### Scope
+Consolidate CV models into `src/backend/careervp/models/cv.py` per:
+- `docs/refactor/specs/models_spec.yaml` (CV models category)
+- `docs/refactor/specs/architectural_findings_spec.yaml` (LAYER-003)
+- `docs/refactor/specs/test_strategy_spec.yaml` (TDD pattern + unit focus)
+
+### Code Changes
+
+1. Enhanced canonical CV models
+- `src/backend/careervp/models/cv.py`
+  - Added `CVSection` enum with expected sections:
+    - `professional_summary`
+    - `work_experience`
+    - `education`
+    - `skills`
+    - `certifications`
+    - `languages`
+  - Kept existing models: `SkillLevel`, `Skill`, `WorkExperience`, `Education`, `UserCV`, `CVParseRequest`, `CVParseResponse`.
+
+2. Consolidated compatibility layer
+- `src/backend/careervp/models/cv_models.py`
+  - Replaced duplicate model definitions with compatibility re-exports from `careervp.models.cv`.
+  - File retained intentionally (not deleted) for backward compatibility while establishing single model source-of-truth.
+
+3. Import migration
+- `src/backend/careervp/handlers/cv_tailoring_handler.py`
+  - Updated import from:
+    - `from careervp.models.cv_models import UserCV`
+  - To:
+    - `from careervp.models.cv import UserCV`
+
+4. New unit tests (TDD)
+- Created folder and file:
+  - `src/backend/tests/models/unit/test_cv_models.py`
+- Added 9 tests covering:
+  - `CVSection` enum contract
+  - `Skill` immutability
+  - `WorkExperience`/`Education` date population
+  - `Certification` alias syncing
+  - `UserCV` contact sync and skill serialization
+  - `work_experience` alias handling
+  - `cv_models.py` compatibility re-exports to canonical classes
+
+### Validation Results
+
+Executed from: `/Users/yitzchak/Documents/dev/careervp/src/backend`
+
+1. Targeted unit tests
+- Command: `uv run pytest tests/models/unit/test_cv_models.py -v --tb=short`
+- Result: ✅ PASS (`9 passed`)
+
+### Outcome
+✅ CV model consolidation completed for requested scope with compatibility preserved and import migration applied in `cv_tailoring_handler.py`.

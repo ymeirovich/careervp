@@ -26,6 +26,17 @@ class SkillLevel(str, Enum):
     EXPERT = 'EXPERT'
 
 
+class CVSection(str, Enum):
+    """Supported CV sections."""
+
+    PROFESSIONAL_SUMMARY = 'professional_summary'
+    WORK_EXPERIENCE = 'work_experience'
+    EDUCATION = 'education'
+    SKILLS = 'skills'
+    CERTIFICATIONS = 'certifications'
+    LANGUAGES = 'languages'
+
+
 class Skill(BaseModel):
     """Skill with proficiency and optional years of experience."""
 
@@ -269,6 +280,7 @@ class CVParseResponse(BaseModel):
 CV = UserCV
 
 __all__ = [
+    'CVSection',
     'ContactInfo',
     'WorkExperience',
     'Education',

@@ -11,7 +11,7 @@ from careervp.dal.cv_dal import CVTable
 from careervp.logic.cv_tailoring import tailor_cv
 from careervp.logic.fvs_validator import create_fvs_baseline
 from careervp.logic.llm_client import LLMClient
-from careervp.models.cv_models import UserCV
+from careervp.models.cv import UserCV
 from careervp.models.cv_tailoring_models import TailorCVRequest, TailoringPreferences
 from careervp.models.result import Result, ResultCode
 from careervp.validation.cv_tailoring_validation import validate_job_description
