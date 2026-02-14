@@ -1049,3 +1049,23 @@ Workflow YAML parse checks:
 
 ### Outcome
 ✅ Deploy VPR Async PR workflow permissions and event gating hardened.
+
+---
+
+## Test Changeset Handling Follow-Up (Run #46, 2026-02-14)
+
+### Issue
+`Test Changeset Handling` failed after commit `1100477`.
+
+### Fixes
+- Updated `.github/workflows/test-changeset.yml`:
+  - `PYTHON_VERSION: '3.12'` -> `PYTHON_VERSION: '3.13'` (align with `src/backend/pyproject.toml` `requires-python >=3.13`)
+  - Replaced duplicated stack/changeset cleanup logic with shared guard:
+    - added `CFN State Guard` step invoking `.github/scripts/cfn-guard.sh "CareerVpCrudDev" "us-east-1"`
+    - removed duplicated inlined cleanup/wait script block
+
+### Verification
+- YAML parse check for `.github/workflows/test-changeset.yml` -> ✅ valid
+
+### Outcome
+✅ Changeset test workflow aligned with runtime constraints and centralized CFN guard behavior.
