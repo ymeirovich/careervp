@@ -40,6 +40,7 @@ def user_cv():
         certifications=[],
         skills=['python'],
         top_achievements=['Built things'],
+        languages=[],
         professional_summary='summary',
         is_parsed=True,
         source_file_key='key',
