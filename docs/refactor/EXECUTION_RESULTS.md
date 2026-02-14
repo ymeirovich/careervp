@@ -810,3 +810,73 @@ Executed from: `/Users/yitzchak/Documents/dev/careervp/src/backend`
 - Previously failing tests fixed.
 - Ruff clean for requested paths.
 - Strict mypy now passes for requested targets.
+
+---
+
+## Phase 1 Step 1.1 Update (2026-02-14)
+
+### Scope
+Consolidate CV models per:
+- `docs/refactor/specs/models_spec.yaml` (categories.CV models)
+- `docs/refactor/specs/architectural_findings_spec.yaml` (LAYER-003 consolidation intent)
+- `docs/refactor/specs/test_strategy_spec.yaml` (TDD pattern, unit test focus)
+
+### Code Changes
+
+1. Canonical model enhancement
+- `src/backend/careervp/models/cv.py`
+  - Added `CVSection` enum with values:
+    - `professional_summary`
+    - `work_experience`
+    - `education`
+    - `skills`
+    - `certifications`
+    - `languages`
+  - Updated `__all__` to include `CVSection`.
+  - Kept existing classes intact:
+    - `SkillLevel`, `Skill`, `WorkExperience`, `Education`, `UserCV`, `CVParseRequest`, `CVParseResponse`
+
+2. Compatibility module consolidation (file retained)
+- `src/backend/careervp/models/cv_models.py`
+  - Replaced duplicate class definitions with re-exports from `careervp.models.cv`.
+  - Kept file in place (not deleted) for backward compatibility.
+  - Added `__all__` with stable exports for canonical CV model types and aliases.
+
+3. Handler import migration
+- `src/backend/careervp/handlers/cv_tailoring_handler.py`
+  - Updated import:
+    - from `careervp.models.cv_models import UserCV`
+    - to `careervp.models.cv import UserCV`
+
+4. New tests (TDD)
+- `src/backend/tests/models/unit/test_cv_models.py` (new folder/file)
+  - Added tests for:
+    - `CVSection` existence and enum values
+    - `cv_models.py` importability and canonical identity re-exports
+    - `WorkExperience` date population behavior
+    - `Education` date population behavior
+    - `UserCV` `work_experience` alias behavior
+    - `UserCV` skills serialization behavior
+
+### Validation Results
+
+Executed from: `/Users/yitzchak/Documents/dev/careervp/src/backend`
+
+1. New unit tests
+- Command: `uv run pytest tests/models/unit/test_cv_models.py -q`
+- Result: ✅ PASS (`7 passed`)
+
+2. Runbook validation checks
+- `grep -E "class (UserCV|WorkExperience|Education|Skill|SkillLevel|CVSection|CVParseRequest|CVParseResponse)" careervp/models/cv.py` → ✅ includes all expected classes
+- `ls -la careervp/models/cv_models.py` → ✅ file exists
+- `grep "from careervp.models" careervp/handlers/cv_tailoring_handler.py` + `grep "import.*UserCV\|import.*WorkExperience" careervp/handlers/cv_tailoring_handler.py` → ✅ imports from `careervp.models.cv`
+- `ls -la tests/models/unit/test_cv_models.py` → ✅ file exists
+
+3. Lint + strict typing
+- Command: `uv run ruff check careervp/models/cv.py careervp/models/cv_models.py`
+- Result: ✅ PASS (`All checks passed!`)
+- Command: `uv run mypy careervp/models/cv.py careervp/models/cv_models.py --strict`
+- Result: ✅ PASS (`Success: no issues found in 2 source files`)
+
+### Outcome
+✅ Step 1.1 success criteria met for CV model consolidation.
