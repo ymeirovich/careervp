@@ -1,9 +1,9 @@
 # CareerVP Refactoring Execution Runbook
 
-**Document Version:** 4.1
+**Document Version:** 4.2
 **Date:** 2026-02-15
 **Purpose:** Machine-readable execution guide for all refactoring phases
-**Status:** API CONTRACT REMEDIATION + EXECUTION ORDER SYNC — NEW 2026-02-15
+**Status:** API + SPECS + STORAGE CONTRACT SYNC — NEW 2026-02-15
 
 > **Status:** Phase -1 COMPLETE. All specs in `docs/refactor/specs/`
 > **Infra Specs:** `infra/careervp/specs/`
@@ -70,10 +70,10 @@ This sequence identifies what to execute now to sync specs + API while preservin
 
 ### Required Order
 
-1. **Phase 0 (Sub-step only):**
-   - Step 0.4 (deployment spec handler pattern sync)
-2. **Phase 1 (Sub-step only):**
-   - Step 1.6.3 (spec sync gate)
+1. **Phase 0 (Sub-step only, already implemented):**
+   - Run Step 0.4 only (spec sync; no handler rewrites)
+2. **Phase 1 (Sub-step only, already implemented):**
+   - Run Step 1.6.3 only (spec sync gate)
 3. **Phase 2**
 4. **Phase 3**
 5. **Phase 4**
@@ -84,7 +84,7 @@ This sequence identifies what to execute now to sync specs + API while preservin
 10. **Phase X**
 11. **Phase 9**
 12. **Phase 10**
-   - Start with Step 10.0a / 10.0b / 10.0c (infra-safe path migration)
+   - Start with Step 10.0a / 10.0b / 10.0d / 10.0e / 10.0c (infra-safe migration + storage layer sync)
    - Then Step 10.0 and Steps 10.1 – 10.12
 
 **Why this order:** it preserves existing feature logic and infrastructure, then applies contract alignment after prerequisites are in place.
@@ -689,6 +689,10 @@ When updating API contracts:
 3. Company research specs:
    - Use `GET /company-research/{jobId}` (not `{company_name}`)
 4. Keep `docs/swagger/careervp-api-v1.yaml` as authoritative source.
+5. Storage contract sync:
+   - Add `storage_contract_spec.yaml`
+   - Reference it from `deployment_spec.yaml`, `knowledge_base_spec.yaml`, and `_registry.yaml`
+   - Ensure logical API IDs (`cv_id`, `job_id`, `vpr_id`) map to physical table keys via adapter rules.
 
 **Validation:**
 ```bash
@@ -701,6 +705,7 @@ python3 -c "import yaml; yaml.safe_load(open('docs/refactor/specs/cover_letter_s
 python3 -c "import yaml; yaml.safe_load(open('docs/refactor/specs/interview_prep_spec.yaml')); print('INTERVIEW_SPEC: VALID')"
 python3 -c "import yaml; yaml.safe_load(open('docs/refactor/specs/cv_tailoring_spec.yaml')); print('CV_TAILORING_SPEC: VALID')"
 python3 -c "import yaml; yaml.safe_load(open('docs/refactor/specs/vpr_6stage_spec.yaml')); print('VPR_SPEC: VALID')"
+python3 -c "import yaml; yaml.safe_load(open('docs/refactor/specs/storage_contract_spec.yaml')); print('STORAGE_CONTRACT_SPEC: VALID')"
 
 # Legacy endpoint patterns should be absent from specs after sync
 rg -n "/gap-analysis/generate|/gap-analysis/\\{id\\}|/company-research/\\{company_name\\}" docs/refactor/specs/ || true
@@ -2222,6 +2227,7 @@ bash scripts/test_workflow_e2e.sh \
 |------|------|---------|
 | Authoritative | `../swagger/careervp-api-v1.yaml` | Full OpenAPI 3.0.3 spec |
 | Reference | `api_contract_spec.yaml` | Quick reference (endpoints, tags, operationIds) |
+| Reference | `storage_contract_spec.yaml` | Logical API IDs ↔ physical storage key mapping |
 | Reference | `security_spec.yaml` | Auth requirements |
 | Reference | `workflow_dependencies_spec.yaml` | Prerequisite enforcement |
 
@@ -2340,6 +2346,90 @@ grep -r "@app\.\(get\|post\|put\|delete\).*'/api/" careervp/handlers/ | wc -l
 # Verify new route
 grep "@app.post" careervp/handlers/cv_upload_handler.py
 # Expected: @app.post('/users/me/cv')
+```
+
+### Step 10.0d: Storage Contract Lock — NEW 2026-02-15
+
+**Goal:** Define one canonical mapping from OpenAPI resource IDs to physical AWS storage keys, without replacing existing tables/buckets.
+
+**READ FIRST:**
+- `docs/swagger/careervp-api-v1.yaml`
+- `infra/careervp/api_db_construct.py`
+- `infra/careervp/specs/dynamodb_spec.yaml`
+- `docs/refactor/specs/deployment_spec.yaml`
+
+**CODE:**
+```bash
+# VSCode + Anthropic Sonnet
+"""
+Create and wire storage contract spec:
+
+1. Create: docs/refactor/specs/storage_contract_spec.yaml
+   - Define logical IDs from OpenAPI:
+     * cv_id, job_id, vpr_id, gap_response_ids, company_research_id
+   - Define active physical storage mapping (currently deployed):
+     * users table: PK=pk, SK=sk
+     * jobs table: PK=job_id
+     * idempotency table: PK=id
+     * S3 buckets: cvs + vpr-results
+   - Define compatibility mapping for planned refactor tables:
+     * cvs, applications, gap-responses, knowledge
+
+2. Update references in:
+   - docs/refactor/specs/deployment_spec.yaml
+   - docs/refactor/specs/_registry.yaml
+   - docs/refactor/specs/knowledge_base_spec.yaml
+"""
+```
+
+**VALIDATION:**
+```bash
+cd /Users/yitzchak/Documents/dev/careervp
+python3 -c "import yaml; yaml.safe_load(open('docs/refactor/specs/storage_contract_spec.yaml')); print('STORAGE_CONTRACT: VALID')"
+python3 -c "import yaml; yaml.safe_load(open('docs/refactor/specs/deployment_spec.yaml')); print('DEPLOYMENT_SPEC: VALID')"
+python3 -c "import yaml; yaml.safe_load(open('docs/refactor/specs/_registry.yaml')); print('REGISTRY: VALID')"
+```
+
+### Step 10.0e: Data Storage Adapter Integration — NEW 2026-02-15
+
+**Goal:** Keep existing infra and data, while exposing OpenAPI resource ID semantics to handlers/services.
+
+**READ FIRST:**
+- `docs/refactor/specs/storage_contract_spec.yaml`
+- `src/backend/careervp/dal/dynamo_dal_handler.py`
+- `src/backend/careervp/dal/jobs_repository.py`
+
+**CODE:**
+```bash
+# VSCode + Anthropic Sonnet
+"""
+Implement adapter layer for logical-to-physical key translation:
+
+1. Create: src/backend/careervp/dal/api_storage_adapter.py
+   - map_logical_to_physical_keys(resource_type, logical_identifiers)
+   - map_physical_to_logical_ids(resource_type, item)
+   - build_pk_sk_for_users_table(resource_type, user_id, identifiers)
+   - preserve backward compatibility for legacy items
+
+2. ENHANCE DAL consumers to use adapter:
+   - vpr_submit_handler.py
+   - vpr_status_handler.py
+   - cv_tailoring_handler.py
+   - gap_handler.py
+   - company_research handler(s)
+
+3. Create tests:
+   - tests/unit/test_api_storage_adapter.py
+   - tests/integration/test_storage_contract_mapping.py
+"""
+```
+
+**VALIDATION:**
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+uv run pytest tests/unit/test_api_storage_adapter.py tests/integration/test_storage_contract_mapping.py -v --tb=short
+uv run ruff check careervp/dal/api_storage_adapter.py
+uv run mypy careervp/dal/api_storage_adapter.py --strict
 ```
 
 ### Step 10.1: Auth Endpoints (register, login, refresh) — NEW 2026-02-15
@@ -3064,11 +3154,13 @@ SCHEMA MISMATCHES TO FIX:
 5. Create: src/backend/careervp/models/api_models.py
    - All OpenAPI-aligned request/response Pydantic models
    - ErrorResponse model (error{code, message, details[]})
+   - Include adapter-friendly internal ID fields where needed (without changing OpenAPI payloads)
 
 6. Create: tests/unit/test_api_models.py
    - Validate all models serialize/deserialize correctly
    - Validate required fields enforcement
    - Validate enum constraints
+   - Validate round-trip with storage adapter DTOs
 
 KNOWLEDGE: docs/swagger/careervp-api-v1.yaml (all schemas in components/schemas)
 """
@@ -3164,6 +3256,16 @@ uv run pytest tests/integration/test_openapi_contract.py \
   tests/integration/test_api_contract_spec_sync.py \
   -v --tb=short
 
+# Storage contract + DAL adapter tests
+uv run pytest tests/unit/test_api_storage_adapter.py \
+  tests/integration/test_storage_contract_mapping.py \
+  -v --tb=short
+
+# Storage contract spec validity
+cd /Users/yitzchak/Documents/dev/careervp
+python3 -c "import yaml; yaml.safe_load(open('docs/refactor/specs/storage_contract_spec.yaml')); print('STORAGE_CONTRACT: VALID')"
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+
 # Feature-specific tests updated for schema alignment
 uv run pytest tests/vpr-async/unit/ \
   tests/cv-tailoring/unit/ \
@@ -3197,6 +3299,8 @@ python3 ../../scripts/validate_api_coverage.py
 | 8 | All handler type checks pass | `uv run mypy careervp/handlers/ --strict` | 0 errors |
 | 9 | All unit tests pass | `uv run pytest tests/ -v --tb=short` | 100% pass |
 | 10 | Pagination on list endpoints | curl tests with limit/cursor params | Returns paginated results |
+| 11 | Storage contract spec is valid and referenced | `python3 -c "import yaml; yaml.safe_load(open('docs/refactor/specs/storage_contract_spec.yaml'))"` | Valid YAML + referenced from registry/deployment |
+| 12 | Logical ID ↔ physical key mapping is verified | `uv run pytest tests/unit/test_api_storage_adapter.py tests/integration/test_storage_contract_mapping.py -v` | All pass |
 
 ---
 
@@ -3261,10 +3365,18 @@ grep -r "@app\.\(get\|post\|put\|delete\).*'/api/" careervp/handlers/ | grep -v 
 
 ---
 
-**Document Version:** 4.1
+**Document Version:** 4.2
 **Created:** 2026-02-15
 
 **Changes:**
+
+- v4.2 - API + Specs + Storage Layer Sync (NEW 2026-02-15):
+  - Added `storage_contract_spec.yaml` as Phase 10 reference
+  - Added Step 10.0d: Storage Contract Lock
+  - Added Step 10.0e: Data Storage Adapter Integration
+  - Updated execution order to run 10.0a/10.0b/10.0d/10.0e/10.0c before endpoint remediation
+  - Expanded Step 1.6.3 checklist to include storage contract synchronization
+  - Added Phase 10 DONE Gate criteria for storage contract validation + adapter mapping tests
 
 - v4.1 - Sync Specs + API, Preserve Existing Code/Infra (NEW 2026-02-15):
   - Added "Execution Sequence (Post-Phase-1)" section with explicit phase/step order

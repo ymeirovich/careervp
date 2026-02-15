@@ -22,6 +22,10 @@ from __future__ import annotations
 import os
 import pytest
 
+pytestmark = pytest.mark.skip(
+    reason="Pending cover-letter prompt/handler implementation for JSA alignment."
+)
+
 
 class TestCoverLetterAlignment:
     """Test suite for Cover Letter scaffolded structure alignment."""

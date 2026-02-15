@@ -12,8 +12,6 @@ Test Categories:
 Current Status: ALL TESTS SHOULD FAIL - No implementation exists yet
 """
 
-import aws_cdk as cdk
-# from aws_cdk.assertions import Template, Match
 import pytest
 
 
@@ -370,12 +368,15 @@ def test_red_phase_complete():
     for cls in [
         TestCoverLetterLambdaConfiguration,
         TestCoverLetterAPIGateway,
-        TestCoverLetterPermissionsAndAlarms
+        TestCoverLetterPermissionsAndAlarms,
     ]:
-        test_methods.extend([
-            method for method in dir(cls)
-            if method.startswith('test_') and callable(getattr(cls, method))
-        ])
+        test_methods.extend(
+            [
+                method
+                for method in dir(cls)
+                if method.startswith("test_") and callable(getattr(cls, method))
+            ]
+        )
 
     # We should have exactly 14 tests (6 + 4 + 4)
     assert len(test_methods) == 14, (

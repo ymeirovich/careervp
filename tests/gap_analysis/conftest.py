@@ -282,8 +282,8 @@ def mock_sqs_event(mock_job_id: str) -> dict[str, Any]:
 def mock_api_gateway_event(mock_gap_analysis_request: dict[str, Any]) -> dict[str, Any]:
     """Mock API Gateway event for submit handler."""
     return {
-        "resource": "/api/gap-analysis/submit",
-        "path": "/api/gap-analysis/submit",
+        "resource": "/gap-analysis/questions",
+        "path": "/gap-analysis/questions",
         "httpMethod": "POST",
         "headers": {
             "Authorization": "Bearer mock-jwt-token",
@@ -303,11 +303,11 @@ def mock_api_gateway_event(mock_gap_analysis_request: dict[str, Any]) -> dict[st
 def mock_api_gateway_status_event(mock_job_id: str) -> dict[str, Any]:
     """Mock API Gateway event for status handler."""
     return {
-        "resource": "/api/gap-analysis/status/{job_id}",
-        "path": f"/api/gap-analysis/status/{mock_job_id}",
+        "resource": "/gap-analysis/{jobId}/questions",
+        "path": f"/gap-analysis/{mock_job_id}/questions",
         "httpMethod": "GET",
         "headers": {"Authorization": "Bearer mock-jwt-token"},
-        "pathParameters": {"job_id": mock_job_id},
+        "pathParameters": {"jobId": mock_job_id},
         "isBase64Encoded": False,
         "requestContext": {
             "authorizer": {

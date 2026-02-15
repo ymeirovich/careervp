@@ -48,6 +48,11 @@ def senior_dev_cv():
             "graduation_year": 2015,
         },
         "skills": ["Python", "AWS", "Kubernetes", "Docker", "Terraform"],
+        "senior_indicators": [
+            "system_design",
+            "architecture_ownership",
+            "cross_team_leadership",
+        ],
     }
 
 
@@ -98,6 +103,9 @@ def startup_candidate_cv():
             "Hired team members",
         ],
         "preferred_environment": "Fast-paced, ambiguous",
+        "startup_experience": True,
+        "scaling_experience": True,
+        "multi_role": True,
     }
 
 
@@ -138,7 +146,7 @@ def contract_to_perm_cv():
     return {
         "experience_years": 3,
         "current_status": "Contract Engineer",
-        "contract_duration": "18 months",
+        "contract_duration": 18,
         "perm_role": True,
         "company": ["Current Employer"],
         "skills": ["Python", "AWS", "DevOps"],

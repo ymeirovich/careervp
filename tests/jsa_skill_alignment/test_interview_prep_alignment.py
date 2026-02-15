@@ -292,7 +292,7 @@ class TestInterviewPrepAlignment:
 
     def test_interview_prep_has_post_endpoint(self):
         """
-        Verify API endpoint for POST /api/interview-prep is configured.
+        Verify API endpoint for POST /interview-prep/generate is configured.
 
         Requirement: IP-001 (API endpoint)
         Source: JSA-Skill-Alignment-Plan.md Section 6.3

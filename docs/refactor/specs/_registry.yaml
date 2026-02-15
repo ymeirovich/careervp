@@ -3,6 +3,7 @@
 # Updated: 2026-02-12 - All reference docs converted to specs
 # Updated: 2026-02-10 - Added reference specs from docs/specs/
 # Updated: 2026-02-15 - Phase 10 API contract remediation mapping sync
+# Updated: NEW 2026-02-15 - Added storage contract spec and phase sync for API↔DAL↔infra mapping
 
 specs:
   # Core specs (required for implementation)
@@ -199,6 +200,13 @@ specs:
     phases: [0, 8]
     status: "CREATED"
 
+  - file: "storage_contract_spec.yaml"
+    source: "OpenAPI + deployed infra key model reconciliation"
+    category: "storage_contract"
+    phases: [8, 10]
+    status: "CREATED"
+    note: "Canonical mapping of logical API IDs to physical table keys with adapter rules"
+
   - file: "prompt_library_spec.yaml"
     source: "CareerVP_Agentic_Architecture.md, PROMPT_GAP_ANALYSIS_REPORT.md, CareerVP Prompt Library.md"
     version: "2.0"
@@ -291,6 +299,7 @@ phase_to_specs:
       - "knowledge_base_spec.yaml"
     references:
       - "deployment_spec.yaml"
+      - "storage_contract_spec.yaml"
       - "vpc_spec.yaml"
       - "infra/careervp/specs/dynamodb_spec.yaml"
 
@@ -307,6 +316,7 @@ phase_to_specs:
       - "api_contract_spec.yaml"
     references:
       - "../swagger/careervp-api-v1.yaml"
+      - "storage_contract_spec.yaml"
       - "security_spec.yaml"
       - "workflow_dependencies_spec.yaml"
       - "deployment_spec.yaml"

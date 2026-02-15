@@ -2,8 +2,9 @@
 # Source: JSA_FEATURE_MAPPING.md Section 8
 # Phase: 5
 # Reference: docs/specs/02-company-research.md (handler implementation pattern)
+# Updated: NEW 2026-02-15 - Replaced application_id-centric persistence assumptions with storage contract mapping
 
-spec_version: "1.2"
+spec_version: "1.3"
 date_created: "2026-02-12"
 date_updated: "2026-02-15"
 
@@ -27,6 +28,14 @@ implementation:
   tests: "tests/unit/test_gap_*.py tests/integration/test_gap_flow.py"
   model: "Claude Sonnet 4.5 (STRATEGIC mode)"
 
+storage_contract:
+  source: "docs/refactor/specs/storage_contract_spec.yaml"
+  logical_keys:
+    - "user_id (auth context)"
+    - "job_id"
+    - "cv_id"
+  adapter_file: "src/backend/careervp/dal/api_storage_adapter.py"
+
 components:
   - name: "GapQuestionsGenerator"
     file: "gap_questions.py"
@@ -38,8 +47,8 @@ components:
   - name: "GapResponsesHandler"
     file: "gap_responses.py"
     methods:
-      - "save_response(user_email, application_id, response) -> Result"
-      - "get_responses(application_id) -> List[GapResponse]"
+      - "save_response(user_id, job_id, cv_id, response) -> Result"
+      - "get_responses(user_id, job_id) -> List[GapResponse]"
 
   - name: "GapProcessor"
     file: "gap_processor.py"
@@ -78,9 +87,10 @@ handler:
       - Identify 3-10 critical gaps
 
     4_save_questions: |
-      Save questions to DynamoDB:
-      - Table: careervp-gap-responses-table-dev
-      - Status: PENDING
+      Save questions via storage adapter:
+      - Logical keys: user_id + job_id + cv_id
+      - Active physical path: users table PK/SK artifact record
+      - Optional refactor path: careervp-gap-responses-table-dev
 
     5_save_result: |
       Return question IDs + metadata for polling
@@ -168,6 +178,7 @@ cost:
 dependencies:
   - "models_spec.yaml"
   - "VPR 6-stage output"
+  - "storage_contract_spec.yaml"
   - "COST_OPTIMIZATION_VALIDATION.md Strategy 3"
   - "CRITICAL_CORRECTIONS.md Section 8"
   - "docs/specs/02-company-research.md"
@@ -198,7 +209,8 @@ related_files:
     - "src/backend/careervp/logic/fvs_validator.py"
 
   infrastructure:
-    - "careervp-gap-responses-table-dev"
+    - "careervp-users-table-dev (active single-table storage)"
+    - "careervp-gap-responses-table-dev (planned refactor path)"
     - "careervp-jobs-table-dev"
 
   tasks:

@@ -513,9 +513,9 @@ class TestResourceNamingValidation:
         validator = DeploymentValidator("dev")
 
         invalid_names = {
-            "queue_missing_prefix": "vpr-jobs-queue",  # Missing prefix
-            "queue_missing_env": "careervp-vpr-jobs-queue",  # Missing environment
-            "queue_wrong_env": "careervp-vpr-jobs-queue-staging",  # Wrong environment
+            "queue": "vpr-jobs-queue",  # Missing prefix + env suffix pattern
+            "dlq": "careervp-vpr-jobs-dlq",  # Missing environment
+            "table": "careervp-vpr-jobs-qa",  # Invalid environment token
         }
 
         assert not validator.validate_resource_names(invalid_names)
@@ -877,7 +877,7 @@ class TestCloudWatchAlarmValidation:
         validator = DeploymentValidator("dev")
 
         alarms = [
-            {"name": "careervp-vpr-dlq-alarm", "threshold": 1},
+            {"name": "careervp-vpr-dlq-messages", "threshold": 1},
             {"name": "careervp-vpr-worker-errors", "threshold": 5},
             {"name": "careervp-vpr-worker-timeout", "threshold": 1},
             {"name": "careervp-vpr-queue-depth", "threshold": 50},
@@ -891,7 +891,7 @@ class TestCloudWatchAlarmValidation:
         validator = DeploymentValidator("dev")
 
         alarms = [
-            {"name": "careervp-vpr-dlq-alarm", "threshold": 5}  # Should be 1
+            {"name": "careervp-vpr-dlq-messages", "threshold": 5}  # Should be 1
         ]
 
         assert not validator.validate_cloudwatch_alarms(alarms)

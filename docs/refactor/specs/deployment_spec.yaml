@@ -1,8 +1,9 @@
 # Deployment Specification
 # Source: DEPLOYMENT_OPERATIONS.md
 # Used by: Phase 0 (Security), Phase 8 (Knowledge Base)
+# Updated: NEW 2026-02-15 - Synced active deployed infra keys + storage contract mapping
 
-spec_version: "1.2"
+spec_version: "1.3"
 date_created: "2026-02-12"
 date_updated: "2026-02-15"
 
@@ -18,47 +19,82 @@ lambda:
   powertools: "2.0.0"
 
 dynamodb:
-  tables:
-    - name: "careervp-users-table-dev (NamingUtils: table_name('users'))"
-      partition_key: "user_email"
-      sort_key: "entity_type"
-      billing: "PAY_PER_REQUEST"
+  active_contract:
+    source: "infra/careervp/api_db_construct.py"
+    tables:
+      - name: "careervp-users-table-dev (NamingUtils: table_name('users'))"
+        partition_key: "pk"
+        sort_key: "sk"
+        billing: "PAY_PER_REQUEST"
+        gsi:
+          - "email-index (PK=email)"
+          - "user_id-index (PK=user_id, SK=sk)"
 
-    - name: "careervp-cvs-table-dev (NamingUtils: table_name('cvs'))"
-      partition_key: "user_email"
-      sort_key: "cv_id"
-      billing: "PAY_PER_REQUEST"
+      - name: "careervp-jobs-table-dev (NamingUtils: table_name('jobs'))"
+        partition_key: "job_id"
+        billing: "PAY_PER_REQUEST"
+        ttl_attribute: "ttl"
+        gsi:
+          - "idempotency-key-index (PK=idempotency_key)"
 
-    - name: "careervp-jobs-table-dev (NamingUtils: table_name('jobs'))"
-      partition_key: "user_email"
-      sort_key: "job_id"
-      billing: "PAY_PER_REQUEST"
+      - name: "careervp-idempotency-table-dev (NamingUtils: table_name('idempotency'))"
+        partition_key: "id"
+        billing: "PAY_PER_REQUEST"
+        ttl_attribute: "expiration"
 
-    - name: "careervp-applications-table-dev (NamingUtils: table_name('applications'))"
-      partition_key: "user_email"
-      sort_key: "application_id"
-      billing: "PAY_PER_REQUEST"
-
-    - name: "careervp-gap-responses-table-dev (NamingUtils: table_name('gap-responses'))"
-      partition_key: "user_email"
-      sort_key: "application_id"
-      billing: "PAY_PER_REQUEST"
-
-    - name: "careervp-knowledge-table-dev (NamingUtils: table_name('knowledge'))"
-      partition_key: "user_email"
-      sort_key: "entity_type"
-      billing: "PAY_PER_REQUEST"
+  planned_refactor_contract:
+    source: "infra/careervp/specs/dynamodb_spec.yaml"
+    status: "PLANNED_NOT_WIRED_IN_SERVICE_STACK"
+    tables:
+      - name: "careervp-cvs-table-dev"
+        partition_key: "user_email"
+        sort_key: "cv_id"
+      - name: "careervp-applications-table-dev"
+        partition_key: "user_email"
+        sort_key: "application_id"
+      - name: "careervp-gap-responses-table-dev"
+        partition_key: "user_email"
+        sort_key: "application_id"
+      - name: "careervp-knowledge-table-dev"
+        partition_key: "user_email"
+        sort_key: "entity_type"
+        gsi:
+          - "entity-index (PK=entity_type, SK=entity_id)"
 
 s3:
-  buckets:
-    - name: "careervp-dev-cvs-use1-{hash} (NamingUtils: bucket_name('cvs'))"
-      public_access: false
-      encryption: "AES256"
-      versioning: true
+  active_contract:
+    source: "infra/careervp/api_db_construct.py"
+    buckets:
+      - name: "careervp-dev-cvs-use1-{hash} (NamingUtils: bucket_name('cvs'))"
+        purpose: "CV uploads"
+        public_access: false
+        encryption: "AES256"
+        versioning: false
 
-    - name: "careervp-dev-generated-use1-{hash} (NamingUtils: bucket_name('generated'))"
-      public_access: false
-      encryption: "AES256"
+      - name: "careervp-dev-vpr-results-use1-{hash} (NamingUtils: results_bucket_name('vpr-results'))"
+        purpose: "Async VPR result artifacts"
+        public_access: false
+        encryption: "AES256"
+        versioning: true
+
+  planned_refactor_contract:
+    source: "infra/careervp/specs/s3_spec.yaml"
+    status: "PLANNED_NOT_WIRED_IN_SERVICE_STACK"
+    buckets:
+      - name: "careervp-dev-generated-use1-{hash} (NamingUtils: bucket_name('generated'))"
+        purpose: "Generated cover letters and tailored CV artifacts"
+        public_access: false
+        encryption: "AES256"
+
+storage_contract:
+  canonical_spec: "docs/refactor/specs/storage_contract_spec.yaml"
+  rule: "OpenAPI logical IDs map to physical keys via DAL adapter; do not require table replacements."
+  logical_ids:
+    - "cv_id"
+    - "job_id"
+    - "vpr_id"
+    - "gap_response_ids"
+    - "company_research_id"
 
 api_gateway:
   cors:
@@ -102,3 +138,8 @@ dynamodb_patterns:
       - "get(id) -> dict"
       - "update(id, data) -> dict"
       - "delete(id) -> bool"
+  - pattern: "dal/api_storage_adapter.py"
+    class: "ApiStorageAdapter"
+    methods:
+      - "map_logical_to_physical_keys(resource_type, logical_identifiers) -> dict"
+      - "map_physical_to_logical_ids(resource_type, item) -> dict"

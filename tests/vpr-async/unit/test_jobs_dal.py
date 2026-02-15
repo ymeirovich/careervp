@@ -410,32 +410,37 @@ class TestJobsDALWithMoto:
     @pytest.fixture
     def dynamodb_table(self):
         """Create mock DynamoDB table for integration testing."""
-        dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
-        table = dynamodb.create_table(
-            TableName="test-jobs-table",
-            KeySchema=[{"AttributeName": "job_id", "KeyType": "HASH"}],
-            AttributeDefinitions=[
-                {"AttributeName": "job_id", "AttributeType": "S"},
-                {"AttributeName": "idempotency_key", "AttributeType": "S"},
-            ],
-            BillingMode="PAY_PER_REQUEST",
-            GlobalSecondaryIndexes=[
-                {
-                    "IndexName": "idempotency-key-index",
-                    "KeySchema": [
-                        {"AttributeName": "idempotency_key", "KeyType": "HASH"}
-                    ],
-                    "Projection": {"ProjectionType": "ALL"},
-                    "ProvisionedThroughput": {
-                        "ReadCapacityUnits": 5,
-                        "WriteCapacityUnits": 5,
-                    },
-                }
-            ],
-            TimeToLiveSpecification={"AttributeName": "ttl", "Enabled": True},
-        )
-        table.wait_until_exists()
-        return table
+        with mock_aws():
+            dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
+            table = dynamodb.create_table(
+                TableName="test-jobs-table",
+                KeySchema=[{"AttributeName": "job_id", "KeyType": "HASH"}],
+                AttributeDefinitions=[
+                    {"AttributeName": "job_id", "AttributeType": "S"},
+                    {"AttributeName": "idempotency_key", "AttributeType": "S"},
+                ],
+                BillingMode="PAY_PER_REQUEST",
+                GlobalSecondaryIndexes=[
+                    {
+                        "IndexName": "idempotency-key-index",
+                        "KeySchema": [
+                            {"AttributeName": "idempotency_key", "KeyType": "HASH"}
+                        ],
+                        "Projection": {"ProjectionType": "ALL"},
+                        "ProvisionedThroughput": {
+                            "ReadCapacityUnits": 5,
+                            "WriteCapacityUnits": 5,
+                        },
+                    }
+                ],
+            )
+            table.wait_until_exists()
+            client = boto3.client("dynamodb", region_name="us-east-1")
+            client.update_time_to_live(
+                TableName="test-jobs-table",
+                TimeToLiveSpecification={"AttributeName": "ttl", "Enabled": True},
+            )
+            yield table
 
     def test_moto_table_has_ttl_enabled(self, dynamodb_table):
         """Test that moto table has TTL enabled."""
