@@ -472,6 +472,327 @@ exit 1
 
 ---
 
+## Phase 1.5: JSA Prompt Library Completion
+
+**Duration:** 0.5 days | **Effort:** 4 hours
+
+### Specs
+| Type | File | Purpose |
+|------|------|---------|
+| Mandatory | `prompt_library_spec.yaml` (v3.0) | Complete prompt library |
+| Reference | `CRITICAL_CORRECTIONS.md` | Original requirements |
+
+### Step 1.5.1: Create Interview Prep Prompt
+
+**CODE:**
+```bash
+# VSCode + Anthropic Haiku
+"""
+Create interview_prep_prompt.py per prompt_library_spec.yaml v3.0:
+
+1. Create: src/backend/careervp/logic/prompts/interview_prep_prompt.py
+   - System prompt for STAR-formatted questions
+   - User prompt template
+   - Output schema with predicted_questions, star_response, key_points
+
+2. Create: tests/unit/test_interview_prep_prompt.py
+
+KNOWLEDGE: docs/refactor/specs/prompt_library_spec.yaml (interview_prep_complete section)
+"""
+```
+
+### Step 1.5.2: Create FVS Prompt
+
+**CODE:**
+```bash
+# VSCode + Anthropic Haiku
+"""
+Create fvs_prompt.py per prompt_library_spec.yaml v3.0:
+
+1. Create: src/backend/careervp/logic/prompts/fvs_prompt.py
+   - Grammar validation prompt
+   - Tone validation prompt
+   - Anti-AI detection prompt
+   - Output schema with scores (grammar, tone, anti_ai, formatting)
+
+2. Create: tests/unit/test_fvs_prompt.py
+
+KNOWLEDGE: docs/refactor/specs/prompt_library_spec.yaml (fvs_validation section)
+"""
+```
+
+### Step 1.5.3: Create Knowledge Base Prompt
+
+**CODE:**
+```bash
+# VSCode + Anthropic Haiku
+"""
+Create knowledge_base_prompt.py per prompt_library_spec.yaml v3.0:
+
+1. Create: src/backend/careervp/logic/prompts/knowledge_base_prompt.py
+   - Knowledge storage prompt
+   - Knowledge retrieval prompt
+   - Output schema with entities, tags, priority, ttl_days
+
+2. Create: tests/unit/test_knowledge_base_prompt.py
+
+KNOWLEDGE: docs/refactor/specs/prompt_library_spec.yaml (knowledge_base section)
+"""
+```
+
+### Verification
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+
+uv run pytest tests/unit/test_interview_prep_prompt.py tests/unit/test_fvs_prompt.py tests/unit/test_knowledge_base_prompt.py -v
+
+uv run ruff check careervp/logic/prompts/
+uv run mypy careervp/logic/prompts/ --strict
+```
+
+---
+
+## Phase 1.6: API Contract Documentation
+
+**Duration:** 0.5 days | **Effort:** 4 hours
+
+### Specs
+| Type | File | Purpose |
+|------|------|---------|
+| Mandatory | `api_contract_spec.yaml` | Quick reference (endpoints, tags, operationIds) |
+| Authoritative | `../swagger/careervp-api-v1.yaml` | Full OpenAPI 3.0.3 spec with schemas |
+
+### Step 1.6.1: Document API Endpoints
+
+**AUTHORITATIVE SOURCE:** `docs/swagger/careervp-api-v1.yaml` (full schemas, examples)
+**QUICK REFERENCE:** `docs/refactor/specs/api_contract_spec.yaml` (endpoints, tags, operationIds)
+
+**CODE:**
+```bash
+# VSCode + Anthropic Sonnet
+"""
+Implement API contract per api_contract_spec.yaml:
+
+1. Create: src/backend/careervp/api_contract.py
+   - Endpoint definitions with methods
+   - Request schemas (Pydantic models)
+   - Response schemas (standard format)
+   - Error codes
+
+2. Create: tests/integration/test_api_contract.py
+
+KNOWLEDGE:
+- docs/refactor/specs/api_contract_spec.yaml (quick reference)
+- docs/swagger/careervp-api-v1.yaml (authoritative schemas)
+
+Important: Use the OpenAPI spec for detailed schemas and examples.
+The api_contract_spec.yaml provides a quick reference for
+endpoints, tags, operationIds, and async patterns.
+"""
+```
+
+### Step 1.6.2: Sync with OpenAPI Spec
+
+The OpenAPI spec (`careervp-api-v1.yaml`) is the authoritative source.
+When updating API contracts:
+
+1. Update `docs/swagger/careervp-api-v1.yaml` for schema changes
+2. Update `docs/refactor/specs/api_contract_spec.yaml` for quick reference
+
+**KEY SECTIONS:**
+- 10 tags (Auth, Users, Jobs, VPR, Gap Analysis, CV Tailoring, Cover Letter, Interview Prep, Company Research, Health)
+- 34 endpoints total
+- 5 async endpoints (202 responses) with polling patterns
+- Pagination on list endpoints (/users/me/*, /jobs)
+
+### Verification
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+
+# Validate both YAML specs
+python3 -c "import yaml; yaml.safe_load(open('../swagger/careervp-api-v1.yaml')); print('OPENAPI: VALID')"
+python3 -c "import yaml; yaml.safe_load(open('../refactor/specs/api_contract_spec.yaml')); print('REF: VALID')"
+
+uv run pytest tests/integration/test_api_contract.py -v
+
+uv run ruff check careervp/api_contract.py
+uv run mypy careervp/api_contract.py --strict
+```
+
+---
+
+## Phase 1.7: Workflow Dependencies
+
+**Duration:** 0.5 days | **Effort:** 4 hours
+
+### Specs
+| Type | File | Purpose |
+|------|------|---------|
+| Mandatory | `workflow_dependencies_spec.yaml` | Workflow documentation |
+
+### Step 1.7.1: Implement Workflow Enforcer
+
+**CODE:**
+```bash
+# VSCode + Anthropic Sonnet
+"""
+Implement workflow dependencies per workflow_dependencies_spec.yaml:
+
+1. Create: src/backend/careervp/logic/workflow_enforcer.py
+   - WorkflowContext class
+   - WorkflowEnforcer class
+   - validate_prerequisites() method
+   - get_available_features() method
+
+2. Create: tests/unit/test_workflow_enforcer.py
+
+KNOWLEDGE: docs/refactor/specs/workflow_dependencies_spec.yaml
+"""
+```
+
+### Verification
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+
+uv run pytest tests/unit/test_workflow_enforcer.py -v
+
+uv run ruff check careervp/logic/workflow_enforcer.py
+uv run mypy careervp/logic/workflow_enforcer.py --strict
+```
+
+---
+
+## Phase 1.8: LLM Client Migration
+
+**Duration:** 1 day | **Effort:** 8 hours
+
+### Specs
+| Type | File | Purpose |
+|------|------|---------|
+| Mandatory | `llm_client_migration_spec.yaml` | Migration documentation |
+
+### Step 1.8.1: Create Anthropic Client
+
+**CODE:**
+```bash
+# VSCode + Anthropic Sonnet
+"""
+Create Anthropic client per llm_client_migration_spec.yaml:
+
+1. Create: src/backend/careervp/logic/anthropic_client.py
+   - AnthropicClient class
+   - Direct HTTP calls to Anthropic API
+   - Cost calculation
+   - Rate limiting
+
+2. Create: src/backend/careervp/logic/llm_router.py
+   - LLMRouter class
+   - Model routing (Sonnet/Haiku)
+
+3. Create: src/backend/careervp/logic/cost_estimator.py
+   - CostEstimator class
+   - Token usage tracking
+
+4. Create: src/backend/careervp/logic/rate_limiter.py
+   - RateLimiter class
+   - Circuit breaker pattern
+
+5. Create: tests/unit/test_anthropic_client.py
+6. Create: tests/unit/test_llm_router.py
+7. Create: tests/unit/test_cost_estimator.py
+
+KNOWLEDGE: docs/refactor/specs/llm_client_migration_spec.yaml
+"""
+```
+
+### Step 1.8.2: Migrate LLM Client
+
+**CODE:**
+```bash
+# VSCode + Anthropic Haiku
+"""
+Migrate llm_client.py per llm_client_migration_spec.yaml:
+
+1. UPDATE: src/backend/careervp/logic/llm_client.py
+   - Replace Bedrock with Anthropic
+   - Add model routing
+   - Add cost tracking
+
+2. Run: tests/unit/test_llm_client.py
+
+KNOWLEDGE: docs/refactor/specs/llm_client_migration_spec.yaml
+"""
+```
+
+### Verification
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+
+uv run pytest tests/unit/test_anthropic_client.py tests/unit/test_llm_router.py tests/unit/test_cost_estimator.py -v
+
+uv run ruff check careervp/logic/anthropic_client.py careervp/logic/llm_router.py
+uv run mypy careervp/logic/anthropic_client.py careervp/logic/llm_router.py --strict
+```
+
+---
+
+## Phase 1.9: Tasks Alignment
+
+**Duration:** 0.5 days | **Effort:** 4 hours
+
+### Specs
+| Type | File | Purpose |
+|------|------|---------|
+| Mandatory | `tasks_alignment_spec.yaml` | Tasks mapping |
+
+### Step 1.9.1: Create Alignment Matrix
+
+**CODE:**
+```bash
+# VSCode + Anthropic Haiku
+"""
+Create tasks alignment per tasks_alignment_spec.yaml:
+
+1. Create: src/backend/careervp/tasks_alignment.py
+   - TasksAlignment class
+   - Phase-to-task mapping
+   - get_alignment_report() method
+
+2. Create: tests/unit/test_tasks_alignment.py
+
+KNOWLEDGE: docs/refactor/specs/tasks_alignment_spec.yaml
+"""
+```
+
+### Step 1.9.2: Consolidate Duplicate Tasks
+
+**CODE:**
+```bash
+# VSCode + Anthropic Haiku
+"""
+Consolidate duplicate task directories:
+
+1. Merge 03-vpr-generator/ and 12-vpr-generator/
+2. Merge 06-cv-tailoring/ and 09-cv-tailoring/
+3. Merge 07-cover-letter/ and 10-cover-letter/
+4. Merge 08-gap-analysis/ and 11-gap-analysis/
+
+Update docs/tasks/README.md with consolidated structure.
+"""
+```
+
+### Verification
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+
+uv run pytest tests/unit/test_tasks_alignment.py -v
+
+uv run ruff check careervp/tasks_alignment.py
+uv run mypy careervp/tasks_alignment.py --strict
+```
+
+---
+
 ## Phase 2: Cost Optimization + LLM Caching
 
 **Duration:** 2.5 days | **Effort:** 20 hours
@@ -1337,6 +1658,170 @@ curl -X GET "https://api.careervp.com/v1/knowledge/jane@example.com" \
 - TTL functionality: Applied correctly
 - Skip recurring themes: Working
 - Prioritize by job: Working
+
+---
+
+## Phase X: Company Research Transformation
+
+**Duration:** 1 day | **Effort:** 8 hours
+
+### Specs
+| Type | File | Purpose |
+|------|------|---------|
+| Mandatory | `company_research_transform_spec.yaml` | Transformation layer spec |
+| Reference | `knowledge_base_spec.yaml` | Storage requirements |
+| Reference | `dynamodb_spec.yaml` | DynamoDB schema |
+
+### Step X.1: Extend CompanyResearchResult Model
+
+**READ FIRST:**
+- `docs/refactor/specs/company_research_transform_spec.yaml` (section 4.2)
+- `src/backend/careervp/models/company.py` (existing model)
+
+**CODE:**
+```bash
+# VSCode + Anthropic Sonnet
+"""
+Extend CompanyResearchResult per company_research_transform_spec.yaml section 4.2:
+
+1. ENHANCE: src/backend/careervp/models/company.py
+   - Add to_research_dict() method
+   - Add from_research_dict() classmethod
+   - Keep existing fields: company_name, overview, values, mission, strategic_priorities, recent_news, financial_summary
+
+2. Create: tests/unit/test_company_research_model.py
+
+DO NOT DELETE existing fields - extend only.
+
+KNOWLEDGE: docs/refactor/specs/company_research_transform_spec.yaml (section 4.2)
+"""
+```
+
+### Step X.2: Create CompanyResearchTransformer
+
+**CODE:**
+```bash
+# VSCode + Anthropic Sonnet
+"""
+Create CompanyResearchTransformer per company_research_transform_spec.yaml section 4.1:
+
+1. Create: src/backend/careervp/logic/company_research_transformer.py
+   - DynamoDBItem dataclass (user_email, entity_type, entity_id, cached_at, ttl, research_data)
+   - CompanyResearchTransformer class
+   - to_dynamodb_item() method (LLM → DynamoDB)
+   - from_dynamodb_item() method (DynamoDB → structured)
+   - calculate_ttl() method (30 days)
+
+2. Create: tests/unit/test_company_research_transformer.py
+
+KNOWLEDGE: docs/refactor/specs/company_research_transform_spec.yaml (section 4.1)
+"""
+```
+
+### Step X.3: Update KnowledgeRepository
+
+**CODE:**
+```bash
+# VSCode + Anthropic Haiku
+"""
+Update KnowledgeRepository per company_research_transform_spec.yaml section 5:
+
+1. ENHANCE: src/backend/careervp/dal/knowledge_repository.py
+   - Add save_company_research() method
+   - Add get_company_research() method
+   - Add cache check logic
+   - Add TTL expiration check
+
+2. Create: tests/integration/test_company_research_flow.py
+
+KNOWLEDGE: docs/refactor/specs/company_research_transform_spec.yaml (section 5)
+"""
+```
+
+### Step X.4: Create Company Research Prompt
+
+**CODE:**
+```bash
+# VSCode + Anthropic Haiku
+"""
+Extract company research prompt to separate file:
+
+1. Create: src/backend/careervp/logic/prompts/company_research_prompt.py
+   - Extract inline prompt from company.py
+   - Include system prompt
+   - Include user prompt template
+   - Include output schema (CompanyResearchResult)
+
+KNOWLEDGE: docs/refactor/specs/company_research_transform_spec.yaml (section 1)
+"""
+```
+
+### Step X.5: Update Infrastructure (CDK)
+
+**CODE:**
+```bash
+# VSCode + Anthropic Sonnet
+"""
+Add GSI to DynamoDB stack per company_research_transform_spec.yaml section 7:
+
+1. ENHANCE: infra/careervp/dynamodb_stack.py
+   - Add GSI: entity-index (entity_type → entity_id)
+   - Reference: dynamodb_spec.yaml
+
+2. ADD to: infra/careervp/constants.py
+   - KNOWLEDGE_TABLE_NAME = "knowledge"
+
+KNOWLEDGE: docs/refactor/specs/company_research_transform_spec.yaml (section 7)
+"""
+```
+
+### Verification
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+
+# Run unit tests
+uv run pytest tests/unit/test_company_research_transformer.py tests/unit/test_company_research_model.py -v
+
+# Run integration tests
+uv run pytest tests/integration/test_company_research_flow.py -v
+
+# Run lint
+uv run ruff check careervp/logic/company_research_transformer.py careervp/models/company.py
+
+# Run type check
+uv run mypy careervp/logic/company_research_transformer.py --strict
+```
+
+### Live Test (Phase X - Company Research)
+```bash
+# Run AFTER Company Research transformation implementation
+# Payload: docs/refactor/payloads/phase8_company_research_live_test.json
+
+cd /Users/yitzchak/Documents/dev/careervp
+
+# 1. Generate company research
+curl -X POST "https://api.careervp.com/v1/company-research/fetch" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @docs/refactor/payloads/phase8_company_research_live_test.json
+
+# Expected: 200 OK with research_id
+
+# 2. Retrieve research
+curl -X GET "https://api.careervp.com/v1/company-research/LiveTestCompany" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Expected: 200 OK with all fields
+
+# 3. Run live test script
+bash scripts/live_test_company_research.sh
+```
+
+**Validation:**
+- Transformation: All 6 fields preserved
+- Storage: DynamoDB item with JSON blob
+- TTL: 30 days expiration
+- Cache: Second request returns cached=true
 
 ---
 

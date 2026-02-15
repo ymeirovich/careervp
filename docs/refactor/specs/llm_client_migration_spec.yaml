@@ -1,0 +1,135 @@
+spec_version: "1.0"
+date_created: "2026-02-14"
+purpose: "Bedrock to Anthropic API migration specification"
+status: "READY_FOR_IMPLEMENTATION"
+
+migration_goals:
+  - goal: "LLM Provider"
+    current: "AWS Bedrock"
+    target: "Direct Anthropic API"
+  - goal: "Model Routing"
+    current: "Not implemented"
+    target: "Sonnet/Haiku router"
+  - goal: "Cost Tracking"
+    current: "Not implemented"
+    target: "Token usage tracking"
+  - goal: "Rate Limiting"
+    current: "Not implemented"
+    target: "Request throttling"
+
+model_routing:
+  vpr_generation:
+    model: "claude-sonnet-4-5-20250929"
+    temperature: 0.7
+    max_tokens: 8192
+    mode: "STRATEGIC"
+  gap_analysis:
+    model: "claude-sonnet-4-5-20250929"
+    temperature: 0.3
+    max_tokens: 4096
+    mode: "STRATEGIC"
+  quality_validation:
+    model: "claude-sonnet-4-5-20250929"
+    temperature: 0.1
+    max_tokens: 2048
+    mode: "STRATEGIC"
+  perplexity_research:
+    model: "claude-sonnet-4-5-20250929"
+    temperature: 0.3
+    max_tokens: 1000
+    mode: "STRATEGIC"
+  cv_parsing:
+    model: "claude-haiku-4-5-20251001"
+    temperature: 0.3
+    max_tokens: 2000
+    mode: "TEMPLATE"
+  cv_tailoring:
+    model: "claude-haiku-4-5-20251001"
+    temperature: 0.3
+    max_tokens: 4096
+    mode: "TEMPLATE"
+  cover_letter:
+    model: "claude-haiku-4-5-20251001"
+    temperature: 0.5
+    max_tokens: 1000
+    mode: "TEMPLATE"
+  interview_prep:
+    model: "claude-haiku-4-5-20251001"
+    temperature: 0.5
+    max_tokens: 3000
+    mode: "TEMPLATE"
+  company_research:
+    model: "claude-haiku-4-5-20251001"
+    temperature: 0.7
+    max_tokens: 1024
+    mode: "TEMPLATE"
+
+anthropic_client:
+  class_name: "AnthropicClient"
+  file: "src/backend/careervp/logic/anthropic_client.py"
+  api_url: "https://api.anthropic.com/v1/messages"
+  pricing:
+    claude-sonnet-4-5-20250929:
+      input_per_million: 3.00
+      output_per_million: 15.00
+    claude-haiku-4-5-20251001:
+      input_per_million: 0.25
+      output_per_million: 1.25
+  rate_limits:
+    claude-sonnet-4-5-20250929:
+      rpm: 50
+      tpm: 100000
+    claude-haiku-4-5-20251001:
+      rpm: 100
+      tpm: 200000
+
+llm_router:
+  class_name: "LLMRouter"
+  file: "src/backend/careervp/logic/llm_router.py"
+  default_task: "vpr_generation"
+  route_table: "model_routing"
+
+cost_estimator:
+  class_name: "CostEstimator"
+  file: "src/backend/careervp/logic/cost_estimator.py"
+  retention_days: 90
+
+rate_limiter:
+  class_name: "RateLimiter"
+  file: "src/backend/careervp/logic/rate_limiter.py"
+  circuit_config:
+    failure_threshold: 5
+    success_threshold: 3
+    open_duration_seconds: 60
+
+migration_steps:
+  - step: 1
+    action: "Create Anthropic client"
+    files: ["logic/anthropic_client.py"]
+  - step: 2
+    action: "Create LLM router"
+    files: ["logic/llm_router.py"]
+  - step: 3
+    action: "Create cost estimator"
+    files: ["logic/cost_estimator.py"]
+  - step: 4
+    action: "Create rate limiter"
+    files: ["logic/rate_limiter.py"]
+  - step: 5
+    action: "Update llm_client.py"
+    files: ["logic/llm_client.py"]
+    description: "Replace Bedrock with Anthropic"
+  - step: 6
+    action: "Update imports in handlers"
+    files: ["handlers/*"]
+    description: "Update feature handlers"
+
+configuration:
+  environment_variables:
+    ANTHROPIC_API_KEY: "sk-ant-api03-..."
+    ANTHROPIC_ORG_ID: "org_..."
+
+verification_commands:
+  - "python3 -c \"import yaml; yaml.safe_load(open('llm_client_migration_spec.yaml')); print('VALID')\""
+  - "cd src/backend && uv run pytest tests/unit/test_anthropic_client.py tests/unit/test_llm_router.py -v"
+  - "uv run ruff check careervp/logic/anthropic_client.py careervp/logic/llm_router.py"

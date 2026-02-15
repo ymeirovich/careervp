@@ -1,0 +1,358 @@
+spec_version: "2.0"
+date_created: "2026-02-14"
+date_updated: "2026-02-14"
+purpose: "API contract reference - quick lookup for endpoints and workflows"
+status: "READY_FOR_IMPLEMENTATION"
+
+openapi_spec_location: "../swagger/careervp-api-v1.yaml"
+openapi_version: "3.0.3"
+api_version: "v1"
+
+servers:
+  production: "https://api.careervp.com/v1"
+  staging: "https://staging-api.careervp.com/v1"
+  local: "http://localhost:3000/v1"
+
+authentication:
+  type: "Bearer JWT"
+  header: "Authorization"
+  format: "Bearer <token>"
+
+rate_limits:
+  free:
+    rpm: 10
+    rph: 100
+  premium:
+    rpm: 100
+    rph: 1000
+
+tags:
+  - name: "Auth"
+    description: "Authentication endpoints"
+    endpoints: ["registerUser", "loginUser", "refreshToken"]
+  - name: "Users"
+    description: "User management and CVs"
+    endpoints: ["getCurrentUser", "updateCurrentUser", "uploadCV", "listUserCVs"]
+  - name: "Jobs"
+    description: "Job management"
+    endpoints: ["createJob", "listJobs", "getJob"]
+  - name: "VPR"
+    description: "Value Proposition Report generator"
+    endpoints: ["generateVPR", "getVPR", "listUserVPRs"]
+  - name: "Gap Analysis"
+    description: "Gap analysis and responses"
+    endpoints: ["generateGapQuestions", "submitGapResponses", "getGapQuestions"]
+  - name: "CV Tailoring"
+    description: "CV tailoring and ATS optimization"
+    endpoints: ["generateTailoredCV", "getTailoredCV", "listTailoredCVs"]
+  - name: "Cover Letter"
+    description: "Cover letter generation"
+    endpoints: ["generateCoverLetter", "getCoverLetter", "listCoverLetters"]
+  - name: "Interview Prep"
+    description: "Interview preparation"
+    endpoints: ["generateInterviewPrep", "getInterviewPrep"]
+  - name: "Company Research"
+    description: "Company research"
+    endpoints: ["fetchCompanyResearch", "getCompanyResearch"]
+  - name: "Health"
+    description: "API health checks"
+    endpoints: ["healthCheck"]
+
+endpoints:
+  auth:
+    - method: "POST"
+      path: "/auth/register"
+      operationId: "registerUser"
+      description: "Register new user"
+      tag: "Auth"
+    - method: "POST"
+      path: "/auth/login"
+      operationId: "loginUser"
+      description: "Login and get tokens"
+      tag: "Auth"
+    - method: "POST"
+      path: "/auth/refresh"
+      operationId: "refreshToken"
+      description: "Refresh access token"
+      tag: "Auth"
+      security: true
+
+  users:
+    - method: "GET"
+      path: "/users/me"
+      operationId: "getCurrentUser"
+      description: "Get current user profile"
+      tag: "Users"
+      security: true
+    - method: "PUT"
+      path: "/users/me"
+      operationId: "updateCurrentUser"
+      description: "Update user profile"
+      tag: "Users"
+      security: true
+    - method: "POST"
+      path: "/users/me/cv"
+      operationId: "uploadCV"
+      description: "Upload CV"
+      tag: "Users"
+      security: true
+    - method: "GET"
+      path: "/users/me/cvs"
+      operationId: "listUserCVs"
+      description: "List user CVs"
+      tag: "Users"
+      security: true
+      pagination: true
+      params:
+        - name: "limit"
+          type: "integer"
+          default: 20
+        - name: "cursor"
+          type: "string"
+
+  jobs:
+    - method: "POST"
+      path: "/jobs"
+      operationId: "createJob"
+      description: "Create job entry"
+      tag: "Jobs"
+      security: true
+    - method: "GET"
+      path: "/jobs"
+      operationId: "listJobs"
+      description: "List user jobs"
+      tag: "Jobs"
+      security: true
+      pagination: true
+    - method: "GET"
+      path: "/jobs/{jobId}"
+      operationId: "getJob"
+      description: "Get job by ID"
+      tag: "Jobs"
+      security: true
+
+  vpr:
+    - method: "POST"
+      path: "/vpr/generate"
+      operationId: "generateVPR"
+      description: "Generate VPR (async, returns 202)"
+      tag: "VPR"
+      security: true
+      async: true
+      response_status: 202
+    - method: "GET"
+      path: "/vpr/{vprId}"
+      operationId: "getVPR"
+      description: "Get VPR by request ID"
+      tag: "VPR"
+      security: true
+    - method: "GET"
+      path: "/users/me/vprs"
+      operationId: "listUserVPRs"
+      description: "List user's VPRs"
+      tag: "VPR"
+      security: true
+
+  gap_analysis:
+    - method: "POST"
+      path: "/gap-analysis/questions"
+      operationId: "generateGapQuestions"
+      description: "Generate gap questions"
+      tag: "Gap Analysis"
+      security: true
+    - method: "POST"
+      path: "/gap-analysis/responses"
+      operationId: "submitGapResponses"
+      description: "Submit gap responses"
+      tag: "Gap Analysis"
+      security: true
+    - method: "GET"
+      path: "/gap-analysis/{jobId}/questions"
+      operationId: "getGapQuestions"
+      description: "Get questions for job"
+      tag: "Gap Analysis"
+      security: true
+
+  cv_tailoring:
+    - method: "POST"
+      path: "/cv-tailoring/generate"
+      operationId: "generateTailoredCV"
+      description: "Generate tailored CV (async, returns 202)"
+      tag: "CV Tailoring"
+      security: true
+      async: true
+      response_status: 202
+    - method: "GET"
+      path: "/cv-tailoring/{cvTailoringId}"
+      operationId: "getTailoredCV"
+      description: "Get tailored CV"
+      tag: "CV Tailoring"
+      security: true
+    - method: "GET"
+      path: "/users/me/tailored-cvs"
+      operationId: "listTailoredCVs"
+      description: "List user's tailored CVs"
+      tag: "CV Tailoring"
+      security: true
+
+  cover_letter:
+    - method: "POST"
+      path: "/cover-letter/generate"
+      operationId: "generateCoverLetter"
+      description: "Generate cover letter (async, returns 202)"
+      tag: "Cover Letter"
+      security: true
+      async: true
+      response_status: 202
+    - method: "GET"
+      path: "/cover-letter/{coverLetterId}"
+      operationId: "getCoverLetter"
+      description: "Get cover letter"
+      tag: "Cover Letter"
+      security: true
+    - method: "GET"
+      path: "/users/me/cover-letters"
+      operationId: "listCoverLetters"
+      description: "List user's cover letters"
+      tag: "Cover Letter"
+      security: true
+
+  interview_prep:
+    - method: "POST"
+      path: "/interview-prep/generate"
+      operationId: "generateInterviewPrep"
+      description: "Generate interview prep (async)"
+      tag: "Interview Prep"
+      security: true
+      async: true
+      response_status: 202
+    - method: "GET"
+      path: "/interview-prep/{interviewPrepId}"
+      operationId: "getInterviewPrep"
+      description: "Get interview prep"
+      tag: "Interview Prep"
+      security: true
+
+  company_research:
+    - method: "POST"
+      path: "/company-research/fetch"
+      operationId: "fetchCompanyResearch"
+      description: "Fetch company research (async)"
+      tag: "Company Research"
+      security: true
+      async: true
+      response_status: 202
+    - method: "GET"
+      path: "/company-research/{jobId}"
+      operationId: "getCompanyResearch"
+      description: "Get research by job"
+      tag: "Company Research"
+      security: true
+
+  health:
+    - method: "GET"
+      path: "/health"
+      operationId: "healthCheck"
+      description: "API health check"
+      tag: "Health"
+      security: false
+
+async_endpoints:
+  - path: "/vpr/generate"
+    polling_path: "/vpr/{vprId}"
+    status_values: ["pending", "processing", "completed", "failed"]
+  - path: "/cv-tailoring/generate"
+    polling_path: "/cv-tailoring/{cvTailoringId}"
+  - path: "/cover-letter/generate"
+    polling_path: "/cover-letter/{coverLetterId}"
+  - path: "/interview-prep/generate"
+    polling_path: "/interview-prep/{interviewPrepId}"
+  - path: "/company-research/fetch"
+    polling_path: "/company-research/{jobId}"
+
+error_codes:
+  AUTH001:
+    http_status: 401
+    message: "Invalid or expired token"
+  AUTH002:
+    http_status: 401
+    message: "Token missing"
+  AUTH003:
+    http_status: 403
+    message: "Insufficient permissions"
+  CV001:
+    http_status: 400
+    message: "Invalid CV format"
+  CV002:
+    http_status: 400
+    message: "CV too large"
+  CV003:
+    http_status: 404
+    message: "CV not found"
+  JOB001:
+    http_status: 400
+    message: "Invalid job posting"
+  JOB002:
+    http_status: 404
+    message: "Job not found"
+  GAP001:
+    http_status: 400
+    message: "Gap analysis not started"
+  GAP002:
+    http_status: 400
+    message: "Invalid gap response"
+  VPR001:
+    http_status: 400
+    message: "VPR generation failed"
+  VPR002:
+    http_status: 404
+    message: "VPR not found"
+  WORKFLOW001:
+    http_status: 400
+    message: "Workflow prerequisite not met"
+  RATE001:
+    http_status: 429
+    message: "Rate limit exceeded"
+  VALIDATION001:
+    http_status: 400
+    message: "Validation error"
+  VALIDATION002:
+    http_status: 422
+    message: "Unprocessable entity"
+
+workflow_prerequisites:
+  vpr_generation:
+    requires: ["cv_id", "job_id", "gap_response_ids"]
+    prerequisite_features: ["CV Upload", "Job Entry", "Gap Analysis"]
+  cv_tailoring:
+    requires: ["cv_id", "job_id", "vpr_id"]
+    prerequisite_features: ["CV Upload", "VPR Generation"]
+    gate_requirement: "ATS score >= 8.0"
+  cover_letter:
+    requires: ["cv_id", "job_id", "vpr_id", "gap_response_ids", "company_research_id"]
+    prerequisite_features: ["CV Upload", "VPR Generation", "Gap Analysis", "Company Research"]
+  interview_prep:
+    requires: ["vpr_id", "gap_response_ids"]
+    prerequisite_features: ["VPR Generation", "Gap Analysis"]
+  company_research:
+    requires: ["job_id"]
+    prerequisite_features: ["Job Entry"]
+
+pagination:
+  list_endpoints:
+    - "/users/me/cvs"
+    - "/users/me/vprs"
+    - "/users/me/tailored-cvs"
+    - "/users/me/cover-letters"
+    - "/jobs"
+  parameters:
+    limit:
+      type: "integer"
+      default: 20
+    cursor:
+      type: "string"
+
+verification_commands:
+  - "python3 -c \"import yaml; yaml.safe_load(open('api_contract_spec.yaml')); print('VALID')\""
+  - "python3 -c \"import yaml; yaml.safe_load(open('../swagger/careervp-api-v1.yaml')); print('OPENAPI_VALID')\""
+  - "Check endpoints: all 10 tags documented with operationIds"

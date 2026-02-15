@@ -1,0 +1,114 @@
+spec_version: "1.0"
+date_created: "2026-02-14"
+purpose: "Document workflow dependencies and enforcement for CareerVP"
+status: "READY_FOR_IMPLEMENTATION"
+
+workflow_sequence:
+  - step: 1
+    feature: "CV Upload"
+    required: true
+    description: "First step for all features"
+  - step: 2
+    feature: "Job Entry"
+    required: true
+    description: "Target position for VPR"
+  - step: 3
+    feature: "Gap Analysis"
+    required: true
+    description: "Builds evidence for VPR"
+  - step: 4
+    feature: "VPR Generation"
+    required: true
+    description: "Creates value proposition report"
+  - step: 5
+    feature: "CV Tailoring"
+    required: false
+    description: "Customize CV for job"
+  - step: 6
+    feature: "Cover Letter"
+    required: false
+    description: "Write personalized cover letter"
+  - step: 7
+    feature: "Interview Prep"
+    required: false
+    description: "Prepare for interview questions"
+
+dependency_matrix:
+  CV_UPLOAD:
+    requires: []
+    provides: ["cv_id"]
+    provides_to: ["JOB_ENTRY", "GAP_ANALYSIS"]
+  JOB_ENTRY:
+    requires: ["cv_id"]
+    provides: ["job_id"]
+    provides_to: ["GAP_ANALYSIS", "VPR_GENERATION"]
+  GAP_ANALYSIS:
+    requires: ["cv_id", "job_id"]
+    provides: ["gap_response_ids"]
+    provides_to: ["VPR_GENERATION"]
+  VPR_GENERATION:
+    requires: ["gap_response_ids"]
+    provides: ["vpr_id"]
+    provides_to: ["CV_TAILORING", "COVER_LETTER", "INTERVIEW_PREP"]
+  COMPANY_RESEARCH:
+    requires: []
+    provides: []
+    provides_to: ["VPR_GENERATION", "COVER_LETTER"]
+  CV_TAILORING:
+    requires: ["cv_id", "vpr_id"]
+    provides: ["tailored_cv_id"]
+    provides_to: ["INTERVIEW_PREP"]
+  COVER_LETTER:
+    requires: ["vpr_id"]
+    provides: ["cover_letter_id"]
+    provides_to: []
+  INTERVIEW_PREP:
+    requires: ["vpr_id"]
+    provides: ["interview_prep_id"]
+    provides_to: []
+
+data_flow:
+  - from: "CV Upload"
+    to: "Gap Analysis"
+    data: ["parsed_cv", "skills", "work_experience", "achievements"]
+  - from: "Job Entry"
+    to: "Gap Analysis"
+    data: ["job_requirements", "required_skills", "job_description", "company_name"]
+  - from: "Gap Analysis"
+    to: "VPR Generation"
+    data: ["gap_responses", "quantified_evidence", "identified_gaps"]
+  - from: "VPR Generation"
+    to: "CV Tailoring"
+    data: ["uvp", "differentiators", "keywords", "strategic_narrative"]
+  - from: "VPR Generation"
+    to: "Cover Letter"
+    data: ["uvp", "differentiators", "company_info"]
+  - from: "VPR Generation"
+    to: "Interview Prep"
+    data: ["strategic_narrative", "differentiators", "talking_points"]
+
+error_messages:
+  WORKFLOW001:
+    missing_cv: "Must upload CV before accessing this feature"
+    missing_job: "Must create job entry before accessing this feature"
+    missing_gap: "Must complete gap analysis before accessing this feature"
+    missing_vpr: "Must generate VPR before accessing this feature"
+
+workflow_enforcer:
+  class_name: "WorkflowEnforcer"
+  file: "src/backend/careervp/logic/workflow_enforcer.py"
+  methods:
+    - name: "validate_prerequisites"
+      params: ["feature: str", "context: WorkflowContext"]
+      returns: "[bool, Optional[str]]"
+    - name: "get_available_features"
+      params: ["context: WorkflowContext"]
+      returns: "List[Feature]"
+    - name: "get_next_steps"
+      params: ["context: WorkflowContext"]
+      returns: "List[Feature]"
+
+verification_commands:
+  - "python3 -c \"import yaml; yaml.safe_load(open('workflow_dependencies_spec.yaml')); print('VALID')\""
+  - "cd src/backend && uv run pytest tests/unit/test_workflow_enforcer.py -v"
+  - "uv run ruff check careervp/logic/workflow_enforcer.py"

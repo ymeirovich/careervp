@@ -1240,3 +1240,1533 @@ ls -la docs/refactor/payloads/
 ✅ Execution runbook updated with live test sections
 ✅ Payload directory structure established
 ❌ Remaining CRITICAL_CORRECTIONS items need implementation in future phases
+
+---
+
+## Architect Design Prompt: Company Research Data Schema Compliance (2026-02-14)
+
+**Document Version:** 2.0
+**Date:** 2026-02-14
+**Status:** REQUIRES COMPLETE SOLUTION
+**Priority:** CRITICAL
+
+---
+
+## BACKGROUND AND PROBLEM STATEMENT
+
+### System Overview
+
+CareerVP is an AI-powered job application assistant built on AWS serverless architecture. The system consists of:
+
+- **Compute:** AWS Lambda functions (Python 3.13)
+- **Storage:** DynamoDB for structured data, S3 for CV documents
+- **AI:** Anthropic Claude models via direct API ( Sonnet 4.5 for strategic tasks, Haiku 4.5 for template tasks)
+- **API Layer:** API Gateway with Lambda Powertools
+- **Database:** DynamoDB with single-table design per `infra/careervp/specs/dynamodb_spec.yaml`
+
+### Current Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         CAREERVP ARCHITECTURE                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌───────────┐  │
+│   │  API        │───▶│  Lambda     │───▶│  LLM        │───▶│  Output   │  │
+│   │  Gateway    │    │  Handlers   │    │  Service    │    │  Store    │  │
+│   └─────────────┘    └─────────────┘    └─────────────┘    └───────────┘  │
+│          │                   │                   │                   │      │
+│          │                   ▼                   │                   ▼      │
+│          │           ┌─────────────┐            │           ┌───────────┐  │
+│          │           │  DynamoDB   │◀───────────┘           │  S3       │  │
+│          │           │  (Tables)   │                        │  (CVs)    │  │
+│          │           └─────────────┘                        └───────────┘  │
+│          │                                                          │       │
+│          └──────────────────────────────────────────────────────────┘       │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### The Problem
+
+We discovered a **critical schema mismatch** between LLM-generated outputs and DynamoDB storage requirements for Company Research data.
+
+**LLM Output Format (10 fields):**
+```json
+{
+  "company_name": "TechCorp Solutions",
+  "mission": "We democratize enterprise software...",
+  "values": ["Innovation", "Customer Success", "Transparency"],
+  "recent_news": [
+    {"title": "Series C Funding", "date": "2026-01-15", "summary": "$50M raised"}
+  ],
+  "culture": "Remote-first, outcome-driven...",
+  "products": ["Cloud Platform", "Analytics Suite"],
+  "funding_status": "Series C",
+  "size_range": "500-1000 employees",
+  "industry": "Enterprise Software",
+  "researched_at": "2026-02-14T10:00:00Z"
+}
+```
+
+**DynamoDB Storage Format (3 fields):**
+```yaml
+table: careervp-knowledge-table-dev
+attributes:
+  - name: "user_email"       # PK
+  - name: "entity_type"       # SK (e.g., "company_research")
+  - name: "entity_id"         # GSI PK
+  - name: "cached_at"         # ISO8601 timestamp
+  - name: "ttl"               # Unix timestamp (30 days)
+  - name: "research_data"     # JSON blob (contains all 10 LLM fields)
+```
+
+**The Gap:**
+1. LLM generates 10 individual fields
+2. DynamoDB expects a single `research_data` JSON blob
+3. Field names differ (`researched_at` vs `cached_at`)
+4. No `user_email` in LLM output (must be injected from auth context)
+
+---
+
+## GOALS AND OBJECTIVES
+
+### Primary Goals
+
+| # | Goal | Description | Success Metric |
+|---|------|-------------|----------------|
+| 1 | **Define Data Contract** | Create canonical schema for Company Research data | Pydantic model with full validation |
+| 2 | **Build Transformation Layer** | Bridge LLM output → DynamoDB storage | Bidirectional mapping working |
+| 3 | **Preserve Data Integrity** | All 10 LLM fields must survive storage/retrieval | Zero data loss |
+| 4 | **Enable Query Operations** | Support filtering and retrieval by multiple keys | GSI queries functional |
+| 5 | **Maintain Compliance** | Adhere to existing DynamoDB naming conventions | 100% schema compliance |
+
+### Secondary Goals
+
+| # | Goal | Description |
+|---|------|-------------|
+| 1 | **Cache Avoidance** | Check for existing research before calling LLM |
+| 2 | **TTL Management** | Automatic expiration after 30 days |
+| 3 | **FVS Integration** | Validate generated content before storage |
+| 4 | **Extensibility** | Design supports future research types (e.g., competitor research) |
+
+---
+
+## CONSTRAINTS AND REQUIREMENTS
+
+### Technical Constraints
+
+| Category | Constraint | Source |
+|----------|------------|--------|
+| **Database Schema** | Must use `careervp-knowledge-table-dev` | `infra/careervp/specs/dynamodb_spec.yaml` |
+| **Partition Key** | `user_email` (string) | `knowledge_base_spec.yaml` |
+| **Sort Key** | `entity_type` (string, e.g., "company_research") | `knowledge_base_spec.yaml` |
+| **GSI** | `entity-index`: `entity_type` → `entity_id` | `knowledge_base_spec.yaml` |
+| **TTL** | 30 days for company research | `knowledge_base_spec.yaml` |
+| **Field Naming** | Use `cached_at`, NOT `researched_at` | DynamoDB naming convention |
+| **Storage Format** | All LLM fields in `research_data` blob | DynamoDB efficiency |
+| **No New Tables** | Reuse existing infrastructure | Cost optimization |
+
+### Code Quality Constraints
+
+| Constraint | Tool | Command |
+|------------|------|---------|
+| **Lint** | Ruff | `uv run ruff check careervp/logic/company_research_transformer.py` |
+| **Type Checking** | Mypy strict | `uv run mypy careervp/logic/company_research_transformer.py --strict` |
+| **Test Coverage** | pytest | `uv run pytest tests/unit/test_company_research_transformer.py -v` |
+| **Import Patterns** | Existing codebase | Follow patterns in `src/backend/careervp/logic/` |
+
+### Integration Constraints
+
+| Constraint | Description |
+|------------|-------------|
+| **KnowledgeRepository** | Must integrate with existing `src/backend/careervp/dal/knowledge_repository.py` |
+| **FVS Validation** | Must validate before storage per `docs/refactor/specs/fvs_spec.yaml` |
+| **Auth Context** | `user_email` must be extracted from JWT/auth context |
+| **Naming Utils** | Use `NamingUtils.table_name()` from `infra/careervp/naming_utils.py` |
+
+---
+
+## REFERENCE INFORMATION
+
+### Existing Schema Specifications
+
+#### DynamoDB Schema (`infra/careervp/specs/dynamodb_spec.yaml`)
+
+```yaml
+tables:
+  - constant: "KNOWLEDGE_TABLE_NAME"
+    value: "knowledge"
+    resolved_name: "careervp-knowledge-table-dev"
+    managed_by: "DynamoDBStack"
+    description: "Knowledge base storage (Phase 8)"
+    phase: 8
+    partition_key: "user_email"
+    sort_key: "entity_type"
+    billing_mode: "PAY_PER_REQUEST"
+    attributes:
+      - name: "user_email"
+        type: "S"
+      - name: "entity_type"
+        type: "S"
+      - name: "entity_id"
+        type: "S"
+      - name: "updated_at"
+        type: "S"
+    gsi:
+      - name: "entity-index"
+        partition_key: "entity_type"
+        sort_key: "entity_id"
+```
+
+#### Knowledge Base Spec (`docs/refactor/specs/knowledge_base_spec.yaml`)
+
+```yaml
+data_types:
+  - name: "CompanyResearch"
+    storage: "DynamoDB Table + S3"
+    fields:
+      - name: "company_name"
+        key_type: "PK"
+      - name: "research_data"
+      - name: "cached_at"
+      - name: "ttl"
+        value: "30 days"
+
+methods:
+  - name: "KnowledgeRepository"
+    methods:
+      - "save_company_research(company_name, research) -> Result"
+      - "get_company_research(company_name) -> CompanyResearch"
+
+ttl_policies:
+  company_research: "30 days"
+```
+
+### Existing Codebase Patterns
+
+#### Knowledge Repository Interface (`src/backend/careervp/dal/knowledge_repository.py`)
+
+```python
+class KnowledgeRepository:
+    """Repository for knowledge base storage."""
+
+    def save_gap_response(self, response: GapResponse) -> Result:
+        """Save gap analysis response."""
+        ...
+
+    def get_gap_responses(self, user_email: str, application_id: str) -> List[GapResponse]:
+        """Retrieve gap responses."""
+        ...
+
+    def save_company_research(self, company_name: str, research: dict) -> Result:
+        """Save company research data."""
+        ...
+
+    def get_company_research(self, company_name: str) -> Optional[CompanyResearch]:
+        """Retrieve company research data."""
+        ...
+```
+
+#### FVS Validator (`src/backend/careervp/logic/fvs_validator.py`)
+
+```python
+class QualityValidator:
+    """FVS Quality Validator for generated content."""
+
+    def validate(self, content: str) -> FVSValidationResult:
+        """Validate content against quality metrics."""
+        ...
+
+    def check_anti_ai_patterns(self, text: str) -> List[str]:
+        """Check for AI-generated patterns."""
+        ...
+```
+
+### Project Structure
+
+```
+src/backend/careervp/
+├── models/
+│   ├── cv.py
+│   ├── vpr.py
+│   ├── fvs.py
+│   └── company_research.py    # ← TO BE CREATED
+├── logic/
+│   ├── fvs_validator.py
+│   ├── circuit_breaker.py
+│   └── prompts/
+│       ├── vpr_prompt.py
+│       ├── gap_analysis_prompt.py
+│       ├── cover_letter_prompt.py
+│       └── company_research_prompt.py  # ← TO BE CREATED
+├── dal/
+│   └── knowledge_repository.py
+└── handlers/
+    └── ...
+
+tests/
+├── unit/
+│   └── test_company_research_transformer.py  # ← TO BE CREATED
+└── integration/
+    └── test_company_research_flow.py          # ← TO BE CREATED
+```
+
+---
+
+## REQUIRED DELIVERABLES
+
+### 1. Company Research Data Model
+
+**File:** `src/backend/careervp/models/company_research.py`
+
+**Purpose:** Canonical Pydantic schema for company research data with full validation
+
+**Requirements:**
+- Define `CompanyResearchData` model with all 10 LLM fields
+- Add field validation (non-empty strings, valid dates, etc.)
+- Include Pydantic v2 serialization/deserialization
+- Support JSON blob serialization for DynamoDB storage
+
+**Class Signature:**
+```python
+from pydantic import BaseModel, Field, validator
+from datetime import datetime
+from typing import List, Optional
+from enum import Enum
+
+
+class NewsItem(BaseModel):
+    """Single news article from company research."""
+    title: str = Field(..., min_length=1, max_length=500)
+    date: str = Field(..., description="ISO8601 date string")
+    summary: str = Field(..., max_length=2000)
+
+
+class CompanyResearchData(BaseModel):
+    """Company research data from LLM output."""
+    company_name: str = Field(..., min_length=1, max_length=200)
+    mission: str = Field(..., max_length=1000)
+    values: List[str] = Field(..., min_items=1, max_items=10)
+    recent_news: List[NewsItem] = Field(default_factory=list, max_items=10)
+    culture: str = Field(..., max_length=2000)
+    products: List[str] = Field(..., min_items=1, max_items=20)
+    funding_status: Optional[str] = Field(None, max_length=100)
+    size_range: Optional[str] = Field(None, max_length=50)
+    industry: Optional[str] = Field(None, max_length=100)
+    researched_at: datetime = Field(..., description="ISO8601 timestamp")
+
+    # Methods for serialization
+    def to_research_blob(self) -> str: ...
+    @classmethod
+    def from_research_blob(cls, blob: str) -> "CompanyResearchData": ...
+```
+
+**Deliverable Requirements:**
+- Full Pydantic v2 implementation
+- Field validators for data integrity
+- Serialization methods for DynamoDB blob storage
+- Unit tests with 100% coverage
+
+---
+
+### 2. Company Research Transformer
+
+**File:** `src/backend/careervp/logic/company_research_transformer.py`
+
+**Purpose:** Transform LLM output ↔ DynamoDB storage format bidirectionally
+
+**Requirements:**
+- Handle field transformations (`researched_at` → `cached_at`)
+- Inject `user_email` from auth context
+- Calculate TTL timestamp (30 days from now)
+- Support both single-item and batch operations
+
+**Class Signature:**
+```python
+from datetime import datetime, timedelta
+from typing import Dict, Any, Optional
+from dataclasses import dataclass
+
+
+@dataclass
+class DynamoDBItem:
+    """DynamoDB item for company research storage."""
+    user_email: str
+    entity_type: str = "company_research"
+    entity_id: str = ""
+    cached_at: str = ""
+    ttl: int = 0  # Unix timestamp
+    research_data: str = ""  # JSON blob
+
+
+class CompanyResearchTransformer:
+    """Transforms LLM output to DynamoDB format and vice versa."""
+
+    TTL_DAYS = 30
+
+    def __init__(self, user_email: str):
+        """
+        Initialize transformer with user context.
+
+        Args:
+            user_email: User's email from auth context (required for PK)
+        """
+        self.user_email = user_email
+
+    def to_dynamodb_item(
+        self,
+        llm_output: Dict[str, Any],
+        entity_id: Optional[str] = None
+    ) -> DynamoDBItem:
+        """
+        Transform LLM output to DynamoDB item format.
+
+        Args:
+            llm_output: Raw LLM output (10 fields)
+            entity_id: Optional entity ID (auto-generated if not provided)
+
+        Returns:
+            DynamoDBItem ready for storage
+        """
+        ...
+
+    def from_dynamodb_item(self, item: Dict[str, Any]) -> CompanyResearchData:
+        """
+        Transform DynamoDB item to structured data.
+
+        Args:
+            item: DynamoDB item with research_data blob
+
+        Returns:
+            CompanyResearchData with all fields parsed
+        """
+        ...
+
+    def _calculate_ttl(self, cached_at: Optional[datetime] = None) -> int:
+        """
+        Calculate TTL Unix timestamp.
+
+        Args:
+            cached_at: Reference timestamp (defaults to now)
+
+        Returns:
+            Unix timestamp for TTL (30 days from cached_at)
+        """
+        ...
+
+    def _transform_field_names(self, llm_output: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Transform LLM field names to DB field names.
+
+        Mapping:
+        - researched_at -> cached_at
+        - All other fields -> research_data blob
+        """
+        ...
+```
+
+**Deliverable Requirements:**
+- Full transformer implementation
+- TTL calculation with configurable days
+- Field name transformation
+- Error handling for malformed input
+- Unit tests for all transformation paths
+
+---
+
+### 3. Knowledge Repository Integration
+
+**File:** `src/backend/careervp/dal/knowledge_repository.py` (MODIFY)
+
+**Purpose:** Update repository methods to use transformer and support company research
+
+**Requirements:**
+- Update `save_company_research()` to use transformer
+- Update `get_company_research()` to return structured data
+- Add cache check to avoid redundant LLM calls
+- Integrate FVS validation before storage
+
+**Modified Methods:**
+```python
+class KnowledgeRepository:
+    """Knowledge repository with enhanced company research support."""
+
+    def __init__(
+        self,
+        table_name: str = None,
+        transformer: CompanyResearchTransformer = None,
+        fvs_validator: QualityValidator = None
+    ):
+        """
+        Initialize repository.
+
+        Args:
+            table_name: DynamoDB table name (auto-resolved if None)
+            transformer: Transformer instance (auto-created if None)
+            fvs_validator: FVS validator (optional)
+        """
+        self.table = dynamodb.Table(table_name or self._get_table_name())
+        self.transformer = transformer
+        self.fvs_validator = fvs_validator
+
+    async def save_company_research(
+        self,
+        user_email: str,
+        company_name: str,
+        llm_output: Dict[str, Any]
+    ) -> Result:
+        """
+        Save company research with transformation and validation.
+
+        Args:
+            user_email: User identifier (PK)
+            company_name: Company name
+            llm_output: Raw LLM output (10 fields)
+
+        Returns:
+            Result with entity_id and success status
+        """
+        # 1. Check cache first
+        existing = await self.get_company_research(user_email, company_name)
+        if existing and not self._is_expired(existing):
+            return Result(success=True, data={"cached": True, "entity_id": existing.entity_id})
+
+        # 2. Validate with FVS if validator provided
+        if self.fvs_validator:
+            validation_result = self.fvs_validator.validate(json.dumps(llm_output))
+            if not validation_result.is_valid:
+                return Result(success=False, error="FVS validation failed")
+
+        # 3. Transform to DynamoDB format
+        transformer = CompanyResearchTransformer(user_email)
+        item = transformer.to_dynamodb_item(llm_output, entity_id=str(uuid.uuid4()))
+
+        # 4. Store in DynamoDB
+        self.table.put_item(Item={
+            "user_email": item.user_email,
+            "entity_type": item.entity_type,
+            "entity_id": item.entity_id,
+            "cached_at": item.cached_at,
+            "ttl": item.ttl,
+            "research_data": item.research_data,
+        })
+
+        return Result(success=True, data={"entity_id": item.entity_id})
+
+    async def get_company_research(
+        self,
+        user_email: str,
+        company_name: str
+    ) -> Optional[CompanyResearchData]:
+        """
+        Retrieve company research for user and company.
+
+        Args:
+            user_email: User identifier (PK)
+            company_name: Company name to look up
+
+        Returns:
+            CompanyResearchData or None if not found
+        """
+        # Query by entity_type GSI to find research for company
+        response = self.table.query(
+            IndexName="entity-index",
+            KeyConditionExpression=Key("entity_type").eq("company_research")
+        )
+
+        # Find matching company and return
+        for item in response.get("Items", []):
+            if item.get("user_email") == user_email:
+                research_data = json.loads(item["research_data"])
+                if research_data.get("company_name") == company_name:
+                    transformer = CompanyResearchTransformer(user_email)
+                    return transformer.from_dynamodb_item(item)
+
+        return None
+
+    def _is_expired(self, research: CompanyResearchData) -> bool:
+        """Check if research is expired based on TTL."""
+        ...
+```
+
+**Deliverable Requirements:**
+- Full repository updates
+- Cache check implementation
+- FVS integration point
+- Error handling
+- Unit tests for all methods
+
+---
+
+### 4. Unit Tests
+
+**File:** `tests/unit/test_company_research_transformer.py`
+
+**Test Coverage Requirements:**
+
+| Test Category | Coverage | Examples |
+|---------------|----------|----------|
+| Model Validation | 100% | Invalid fields, missing required, type errors |
+| Transformer | 100% | All field transformations, TTL calculation |
+| Repository | 100% | Save, retrieve, cache, expiry |
+| Integration | E2E | Full flow: LLM → transform → store → retrieve |
+
+**Test Cases:**
+```python
+class TestCompanyResearchData:
+    """Tests for CompanyResearchData Pydantic model."""
+
+    def test_valid_full_output(self):
+        """Test model with all fields populated."""
+        ...
+
+    def test_valid_minimal_output(self):
+        """Test model with only required fields."""
+        ...
+
+    def test_invalid_empty_company_name(self):
+        """Test validation rejects empty company_name."""
+        ...
+
+    def test_invalid_news_item_missing_fields(self):
+        """Test validation rejects news without required fields."""
+        ...
+
+    def test_serialization_to_blob(self):
+        """Test serialization to JSON blob."""
+        ...
+
+    def test_deserialization_from_blob(self):
+        """Test deserialization from JSON blob."""
+        ...
+
+
+class TestCompanyResearchTransformer:
+    """Tests for transformation layer."""
+
+    def test_transform_all_fields(self):
+        """Test complete field transformation."""
+        ...
+
+    def test_transform_ttl_calculation(self):
+        """Test TTL is 30 days from cached_at."""
+        ...
+
+    def test_transform_user_email_injection(self):
+        """Test user_email is injected from auth context."""
+        ...
+
+    def test_transform_entity_id_generation(self):
+        """Test entity_id is generated if not provided."""
+        ...
+
+    def test_reverse_transform_dynamodb_to_data(self):
+        """Test DynamoDB item → CompanyResearchData."""
+        ...
+
+
+class TestKnowledgeRepository:
+    """Tests for knowledge repository."""
+
+    async def test_save_company_research(self):
+        """Test saving research data."""
+        ...
+
+    async def test_get_company_research(self):
+        """Test retrieving research data."""
+        ...
+
+    async def test_cache_hit_avoids_llm_call(self):
+        """Test cache check prevents redundant LLM calls."""
+        ...
+
+    async def test_expired_research_not_returned(self):
+        """Test expired research is not returned."""
+        ...
+```
+
+**Deliverable Requirements:**
+- All tests use pytest with async support
+- Fixtures for common data
+- Mock DynamoDB for isolation
+- 100% coverage on transformer and model
+
+---
+
+### 5. Integration Test
+
+**File:** `tests/integration/test_company_research_flow.py`
+
+**Purpose:** End-to-end test of company research flow
+
+**Test Flow:**
+```python
+@pytest.mark.asyncio
+async def test_company_research_full_flow():
+    """
+    Test complete company research flow:
+
+    1. User submits company name
+    2. System checks cache (miss)
+    3. LLM generates research (10 fields)
+    4. FVS validates content
+    5. Transformer converts format
+    6. DynamoDB stores research
+    7. System retrieves and returns research
+    """
+    # Arrange
+    user_email = "test@example.com"
+    company_name = "TechCorp Solutions"
+
+    llm_output = {
+        "company_name": company_name,
+        "mission": "We democratize enterprise software",
+        "values": ["Innovation", "Customer Success"],
+        "recent_news": [
+            {"title": "Series C", "date": "2026-01-15", "summary": "$50M raised"}
+        ],
+        "culture": "Remote-first",
+        "products": ["Cloud Platform"],
+        "funding_status": "Series C",
+        "size_range": "500-1000",
+        "industry": "Enterprise Software",
+        "researched_at": "2026-02-14T10:00:00Z"
+    }
+
+    # Act
+    # 1. Cache check
+    cached = await repo.get_company_research(user_email, company_name)
+    assert cached is None  # Cache miss
+
+    # 2. Save research
+    result = await repo.save_company_research(user_email, company_name, llm_output)
+    assert result.success
+    entity_id = result.data["entity_id"]
+
+    # 3. Retrieve research
+    retrieved = await repo.get_company_research(user_email, company_name)
+    assert retrieved is not None
+    assert retrieved.company_name == company_name
+    assert retrieved.mission == llm_output["mission"]
+    assert len(retrieved.values) == 2
+    assert len(retrieved.recent_news) == 1
+
+    # 4. Second request hits cache
+    result2 = await repo.save_company_research(user_email, company_name, llm_output)
+    assert result2.success
+    assert result2.data["cached"] is True
+```
+
+**Deliverable Requirements:**
+- Uses real DynamoDB or local dynamodb-local
+- Tests full flow with mocks where needed
+- Validates all 10 fields are preserved
+- Tests cache behavior
+- Tests expiry behavior
+
+---
+
+## VALIDATION REQUIREMENTS
+
+### Functional Validation
+
+| Requirement | Validation Method | Success Criteria |
+|------------|------------------|-----------------|
+| All 10 LLM fields preserved | Unit test | 100% field coverage |
+| TTL = 30 days | Unit test | Exact calculation verified |
+| Field name transformation | Unit test | `researched_at` → `cached_at` |
+| user_email injection | Integration test | Auth context passed correctly |
+| Cache check | Integration test | Redundant calls avoided |
+| FVS integration | Integration test | Validation called before save |
+
+### Code Quality Validation
+
+| Tool | Command | Pass Criteria |
+|------|---------|--------------|
+| Ruff | `uv run ruff check careervp/logic/company_research_transformer.py careervp/models/company_research.py` | 0 errors |
+| Mypy | `uv run mypy careervp/logic/company_research_transformer.py careervp/models/company_research.py --strict` | 0 errors |
+| Tests | `uv run pytest tests/unit/test_company_research_transformer.py -v` | 100% passing |
+| Coverage | `uv run pytest --cov=company_research_transformer --cov=company_research` | 100% coverage |
+
+---
+
+## DATA FLOW DIAGRAM
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     COMPANY RESEARCH DATA FLOW                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────┐                                                           │
+│  │   User      │                                                           │
+│  │   Request   │                                                           │
+│  └──────┬──────┘                                                           │
+│         │                                                                   │
+│         ▼                                                                   │
+│  ┌─────────────┐    ┌─────────────────┐                                     │
+│  │ Auth        │───▶│ user_email      │                                     │
+│  │ Context     │    │ (from JWT)      │                                     │
+│  └─────────────┘    └────────┬────────┘                                     │
+│                              │                                              │
+│                              ▼                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                    KnowledgeRepository                                │   │
+│  │  ┌──────────────────┐    ┌────────────────────────────────────────┐  │   │
+│  │  │ cache_check()    │───▶│ if cached && !expired:                │  │   │
+│  │  │                  │    │   return cached research              │  │   │
+│  │  └──────────────────┘    └────────────────────────────────────────┘  │   │
+│  │                              │                                          │   │
+│  │                              ▼                                          │   │
+│  │  ┌─────────────────────────────────────────────────────────────────┐ │   │
+│  │  │                      LLM Service                                 │ │   │
+│  │  │  ┌────────────────────────────────────────────────────────────┐ │ │   │
+│  │  │  │ company_research_prompt.py → Claude Sonnet 4.5 → JSON    │ │ │   │
+│  │  │  │ Output: {company_name, mission, values, ...} (10 fields)  │ │ │   │
+│  │  │  └────────────────────────────────────────────────────────────┘ │ │   │
+│  │  └─────────────────────────────────────────────────────────────────┘ │   │
+│  │                              │                                          │   │
+│  │                              ▼                                          │   │
+│  │  ┌─────────────────────────────────────────────────────────────────┐ │   │
+│  │  │                      FVS Validator                              │ │   │
+│  │  │  ┌────────────────────────────────────────────────────────────┐ │ │   │
+│  │  │  │ quality_validation_prompt.py → Grammar, Tone, Anti-AI    │ │ │   │
+│  │  │  │ Threshold: Grammar >= 9.0, Anti-AI >= 9.0                │ │ │   │
+│  │  │  └────────────────────────────────────────────────────────────┘ │ │   │
+│  │  └─────────────────────────────────────────────────────────────────┘ │   │
+│  │                              │                                          │   │
+│  │                              ▼                                          │   │
+│  │  ┌─────────────────────────────────────────────────────────────────┐ │   │
+│  │  │              CompanyResearchTransformer                         │ │   │
+│  │  │  ┌────────────────────────────────────────────────────────────┐ │ │   │
+│  │  │  │ TRANSFORMATIONS:                                          │ │ │   │
+│  │  │  │   - llm_output (10 fields)                                │ │ │   │
+│  │  │  │       ↓                                                    │ │ │   │
+│  │  │  │   - research_data: JSON blob                              │ │ │   │
+│  │  │  │   - researched_at → cached_at                             │ │ │   │
+│  │  │  │   - + user_email (from auth)                             │ │ │   │
+│  │  │  │   - + ttl (now + 30 days)                                │ │ │   │
+│  │  │  │   - + entity_id (UUID)                                    │ │ │   │
+│  │  │  └────────────────────────────────────────────────────────────┘ │ │   │
+│  │  └─────────────────────────────────────────────────────────────────┘ │   │
+│  │                              │                                          │   │
+│  │                              ▼                                          │   │
+│  │  ┌─────────────────────────────────────────────────────────────────┐ │   │
+│  │  │                   DynamoDB                                      │ │   │
+│  │  │  ┌────────────────────────────────────────────────────────────┐ │ │   │
+│  │  │  │ Table: careervp-knowledge-table-dev                      │ │ │   │
+│  │  │  │ PK: user_email                                            │ │ │   │
+│  │  │  │ SK: entity_type ("company_research")                     │ │ │   │
+│  │  │  │ GSI: entity_type → entity_id                             │ │ │   │
+│  │  │  │ Fields: cached_at, ttl, research_data                     │ │ │   │
+│  │  │  └────────────────────────────────────────────────────────────┘ │ │   │
+│  │  └─────────────────────────────────────────────────────────────────┘ │   │
+│  │                                                                             │
+│  └─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## SCHEMA MAPPING REFERENCE
+
+### Field Mapping Table
+
+| LLM Output Field | DynamoDB Field | Transformation | Required |
+|------------------|----------------|----------------|----------|
+| `company_name` | `research_data.company_name` | JSON serialization | Yes |
+| `mission` | `research_data.mission` | JSON serialization | Yes |
+| `values[]` | `research_data.values` | JSON serialization | Yes |
+| `recent_news[]` | `research_data.recent_news` | JSON serialization | No |
+| `culture` | `research_data.culture` | JSON serialization | No |
+| `products[]` | `research_data.products` | JSON serialization | No |
+| `funding_status` | `research_data.funding_status` | JSON serialization | No |
+| `size_range` | `research_data.size_range` | JSON serialization | No |
+| `industry` | `research_data.industry` | JSON serialization | No |
+| `researched_at` | `cached_at` | ISO8601 → ISO8601 string | Yes |
+| *(injected)* | `user_email` | From auth context | Yes |
+| *(generated)* | `entity_id` | UUID v4 | Yes |
+| *(generated)* | `ttl` | now + 30 days (Unix timestamp) | Yes |
+| *(generated)* | `entity_type` | Constant: "company_research" | Yes |
+
+---
+
+## ARCHITECTURAL DECISIONS TO MAKE
+
+### Decision 1: Single-Table vs Multi-Table Design
+
+**Current State:** Single-table design (`careervp-knowledge-table-dev`) with entity_type as sort key
+
+**Options:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| A. Keep Single-Table | Cost-efficient, simpler infra | Complex queries |
+| B. Separate Company Table | Simpler queries | Additional table management |
+
+**Recommendation:** Keep single-table per existing architecture. Use GSI for company research queries.
+
+---
+
+### Decision 2: Cache Key Strategy
+
+**Options:**
+
+| Option | Key | Pros | Cons |
+|--------|-----|------|------|
+| A. company_name only | `company:{name}` | Simple | User isolation? |
+| B. user_email + company | `user:{email}:company:{name}` | User isolation | Larger cache |
+
+**Recommendation:** Option B with user_email for data isolation and multi-tenant security.
+
+---
+
+### Decision 3: TTL Strategy
+
+**Options:**
+
+| Option | Implementation | Pros | Cons |
+|--------|----------------|------|------|
+| A. DynamoDB TTL | Automatic deletion | No code | Delay in deletion |
+| B. Application TTL | Check on retrieval | Immediate | Additional code |
+
+**Recommendation:** Use DynamoDB TTL (already configured) with application-level check for user experience.
+
+---
+
+## RISK ASSESSMENT
+
+| Risk | Severity | Probability | Impact | Mitigation |
+|------|----------|-------------|--------|------------|
+| LLM output format changes | High | Medium | Transformer breaks | Schema versioning, validation |
+| DynamoDB TTL misconfiguration | Medium | Low | Data never expires | TTL in transformer, unit tests |
+| FVS validation false positives | Medium | Medium | Valid content rejected | Allow bypass flag, logging |
+| Cache key collisions | Low | Low | Wrong data returned | User isolation in key |
+| GSI throughput issues | Low | Low | Slow queries | On-demand billing |
+
+---
+
+## SUCCESS CRITERIA
+
+### Functional Success
+
+| Criterion | Target | Measurement |
+|-----------|--------|-------------|
+| Field preservation | 100% | All 10 LLM fields in blob |
+| Query flexibility | 100% | GSI queries work |
+| Cache hit rate | >50% | Avoid redundant LLM calls |
+| TTL compliance | 100% | Data expires at 30 days |
+| FVS integration | 100% | Validation before storage |
+
+### Code Quality Success
+
+| Criterion | Target | Measurement |
+|-----------|--------|-------------|
+| Ruff lint | 0 errors | `uv run ruff check` |
+| Mypy strict | 0 errors | `uv run mypy --strict` |
+| Test coverage | 100% | `uv run pytest --cov` |
+| Test pass rate | 100% | `uv run pytest` |
+
+---
+
+## VALIDATION COMMANDS
+
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+
+# 1. Run unit tests
+uv run pytest tests/unit/test_company_research_transformer.py -v --tb=short
+
+# 2. Run with coverage
+uv run pytest tests/unit/test_company_research_transformer.py --cov=company_research_transformer --cov=company_research --cov-report=term-missing
+
+# 3. Run lint
+uv run ruff check careervp/logic/company_research_transformer.py careervp/models/company_research.py
+
+# 4. Run type check
+uv run mypy careervp/logic/company_research_transformer.py careervp/models/company_research.py --strict
+
+# 5. Run integration tests (requires DynamoDB)
+uv run pytest tests/integration/test_company_research_flow.py -v --tb=short
+
+# 6. Full validation suite
+uv run pytest tests/unit/test_company_research_transformer.py tests/integration/test_company_research_flow.py -v && \
+uv run ruff check careervp/logic/company_research_transformer.py careervp/models/company_research.py && \
+uv run mypy careervp/logic/company_research_transformer.py careervp/models/company_research.py --strict
+```
+
+---
+
+## REFERENCE STANDARDS
+
+### Coding Standards
+
+| Standard | Source |
+|----------|--------|
+| Python Style | PEP 8 (enforced by Ruff) |
+| Type Hints | PEP 484 (enforced by Mypy strict) |
+| Pydantic | Pydantic v2 (existing codebase) |
+| Async | asyncio (Python 3.13+) |
+| Testing | pytest with pytest-asyncio |
+
+### Project Standards
+
+| Standard | Source |
+|----------|--------|
+| Naming Conventions | `CLAUDE.md` |
+| Handler Patterns | Function-based Powertools in existing handlers |
+| Repository Patterns | `src/backend/careervp/dal/knowledge_repository.py` |
+| Logging | AWS Lambda Powertools |
+
+### Anti-AI Detection Rules
+
+Per `CLAUDE.md` Section 1.6:
+
+| Rule | Description |
+|------|-------------|
+| 1 | Avoid excessive AI phrases ("In the ever-evolving landscape") |
+| 2 | Vary sentence structure |
+| 3 | Include minor natural transitions |
+| 4 | Avoid perfect parallel structure |
+
+---
+
+## INSTRUCTIONS FOR ARCHITECT
+
+### What To Deliver
+
+1. **Executive Summary** (2-3 paragraphs)
+   - Problem restatement
+   - Proposed solution approach
+   - Key architectural decisions made
+
+2. **Complete Implementation**
+   - All 5 deliverable files
+   - Working code with no placeholders
+   - Full Pydantic v2 models
+   - Complete transformer logic
+
+3. **Unit Tests**
+   - 100% coverage on model and transformer
+   - Tests for all edge cases
+   - Async test support
+
+4. **Integration Test**
+   - Full end-to-end flow test
+   - Cache behavior verification
+   - TTL verification
+
+### What NOT To Deliver
+
+- Pseudo-code (must be working code)
+- Incomplete implementations
+- Code that fails lint/type-check
+- Tests that don't pass
+
+### Evaluation Criteria
+
+| Criterion | Weight | Description |
+|-----------|--------|-------------|
+| Correctness | 40% | All fields preserved, validations pass |
+| Completeness | 25% | All 5 deliverables implemented |
+| Quality | 20% | Lint clean, type-safe, tested |
+| Maintainability | 15% | Clear code, documented, extensible |
+
+---
+
+## Stakeholder Review: Company Research Architecture Decisions Required
+
+**Date:** 2026-02-14
+**Status:** ⏳ AWAITING DECISIONS
+**Priority:** CRITICAL
+
+---
+
+### Background
+
+The Company Research Transformation Layer architecture has been designed but requires stakeholder decisions on 7 critical issues before implementation can proceed. These decisions impact:
+- Data model design
+- DynamoDB schema and GSI
+- Infrastructure dependencies
+- Integration with existing code
+
+---
+
+### Critical Decisions Required
+
+#### DECISION 1: LLM Output Fields Scope
+
+**Question:** How many fields should the company research output contain?
+
+| Option | Fields | Description |
+|--------|--------|-------------|
+| A | 10 fields | Add 4 missing: culture, products, funding_status, size_range, researched_at |
+| B | 6 fields | Use existing: company_name, overview, values, mission, strategic_priorities, recent_news, financial_summary |
+| C | Custom | Specify exactly which fields are needed |
+
+**Current State:** Existing model has 6 fields, original prompt specified 10.
+
+**Impact:** Adding fields requires changes to:
+- `CompanyResearchResult` model
+- Company research prompt
+- Transformer logic
+- All tests
+
+**Recommendation:** Option A - Add the 4 missing fields for full feature parity.
+
+**YOUR CHOICE:** _____ (A / B / C)
+
+---
+
+#### DECISION 2: Model Strategy
+
+**Question:** Should we create a new model or reuse existing?
+
+| Option | Description | Pros | Cons |
+|--------|-------------|------|------|
+| A | Extend `CompanyResearchResult` | Single source of truth | Model grows larger |
+| B | Create `CompanyResearchData` | Clean separation | Duplication |
+| C | Wrapper pattern | Flexible | More complexity |
+
+**Current State:** Architecture proposes new `CompanyResearchData` model.
+
+**Impact:** Different refactoring effort for each option.
+
+**Recommendation:** Option B - Create `CompanyResearchData` for storage with `to_research_blob()` method, reuse `CompanyResearchResult` for LLM output.
+
+**YOUR CHOICE:** _____ (A / B / C)
+
+---
+
+#### DECISION 3: Schema Authority
+
+**Question:** Which spec defines the correct DynamoDB primary key?
+
+| Spec | PK | SK |
+|------|-----|-----|
+| `knowledge_base_spec.yaml` | `company_name` | `research_data` |
+| `dynamodb_spec.yaml` | `user_email` | `entity_type` |
+
+**Current State:** Architecture uses `user_email` (multi-tenant pattern).
+
+**Impact:** Changes require updates to:
+- DynamoDB table design
+- Repository logic
+- All callers
+
+**Recommendation:** Use `dynamodb_spec.yaml` - `user_email` for multi-tenant isolation is the correct pattern.
+
+**YOUR CHOICE:** _____ (knowledge_base_spec / dynamodb_spec / other)
+
+---
+
+#### DECISION 4: GSI Implementation
+
+**Question:** Should we implement the GSI now or defer?
+
+| Option | Description | Timeline |
+|--------|-------------|----------|
+| A | Implement GSI now | Requires CDK update + deployment |
+| B | Query without GSI (scan) | Works now, optimize later |
+| C | Hybrid (application-level index) | Query by company name manually |
+
+**Current State:** GSI defined in spec but NOT implemented in CDK.
+
+**Impact:**
+- Option A: +2-4 hours for CDK update
+- Option B: Slower queries, works now
+- Option C: Additional code complexity
+
+**Recommendation:** Option A - Implement GSI now to avoid technical debt.
+
+**YOUR CHOICE:** _____ (A / B / C)
+
+---
+
+#### DECISION 5: TTL Strategy
+
+**Question:** How should data expiration work?
+
+| Option | Implementation | Pros | Cons |
+|--------|----------------|------|------|
+| A | DynamoDB TTL (automatic) | No code | ~48hr delay |
+| B | Application check | Immediate | Additional code |
+| C | Hybrid | Best of both | Most complex |
+
+**Current State:** Architecture specifies DynamoDB TTL at 30 days.
+
+**Recommendation:** Option C - DynamoDB TTL with application-level check for immediate UX.
+
+**YOUR CHOICE:** _____ (A / B / C)
+
+---
+
+#### DECISION 6: Prompt Location
+
+**Question:** Should company research prompt be inline or separate?
+
+| Option | Location | Pros | Cons |
+|--------|----------|------|------|
+| A | Inline in `company.py` | Current pattern | Harder to find |
+| B | Separate file | Better organization | More files |
+
+**Current State:** Inline in `company.py`
+
+**Recommendation:** Option B - Extract to `company_research_prompt.py` for consistency with other features.
+
+**YOUR CHOICE:** _____ (A / B)
+
+---
+
+#### DECISION 7: Architecture Document Location
+
+**Question:** Where should the architecture document live?
+
+| Option | Location |
+|--------|----------|
+| A | `docs/refactor/COMPANY_RESEARCH_ARCHITECTURE.md` |
+| B | `docs/refactor/specs/company_research_architecture.md` |
+| C | `docs/refactor/specs/company_research_spec.md` (consolidate) |
+
+**Current State:** `docs/refactor/COMPANY_RESEARCH_ARCHITECTURE.md`
+
+**Recommendation:** Option C - Consolidate into specs directory for discoverability.
+
+**YOUR CHOICE:** _____ (A / B / C)
+
+---
+
+### What's Missing (For Architect to Complete)
+
+Once decisions are made, the architect must update:
+
+| Item | Status | Notes |
+|------|--------|-------|
+| LLM Output Schema | ❌ Depends on Decision 1 | Update model fields |
+| Pydantic Model | ❌ Depends on Decision 2 | Extend or create |
+| Transformer Class | ⚠️ Designed | Needs field updates |
+| DynamoDB Item | ⚠️ Designed | Depends on Decision 3 |
+| Repository Methods | ⚠️ Designed | Depends on Decision 4 |
+| GSI Implementation | ❌ Not in CDK | Decision 4 required |
+| Constants | ❌ Missing | KNOWLEDGE_TABLE_NAME |
+| Unit Tests | ⚠️ Designed | Update for final schema |
+| Integration Tests | ⚠️ Designed | Update for final schema |
+
+---
+
+### Immediate Action Items
+
+| # | Item | Owner | Blocked By |
+|---|------|-------|------------|
+| 1 | Add missing fields to `CompanyResearchResult` | Architect | Decision 1 |
+| 2 | Create or update `CompanyResearchData` model | Architect | Decision 2 |
+| 3 | Update architecture schema mapping | Architect | Decision 1, 2 |
+| 4 | Add GSI to `dynamodb_stack.py` | Infra | Decision 4 |
+| 5 | Add missing constants to `constants.py` | Infra | - |
+| 6 | Extract prompt to separate file | Architect | Decision 6 |
+| 7 | Update architecture document location | Architect | Decision 7 |
+
+---
+
+### Confirmation Required
+
+Before proceeding with implementation, confirm:
+
+- [ ] All 7 decisions above are answered
+- [ ] P0 critical issues are resolved
+- [ ] Architecture document is updated with decisions
+- [ ] P0 fixes are verified by architect
+- [ ] Infrastructure (GSI, constants) is ready
+
+**Reviewer Name:** _________________________________
+
+**Review Date:** _________________________________
+
+**Approved for Implementation:** _____ Yes / No
+
+**Additional Notes:** ______________________________________________________________________
+
+---
+
+### Response Format
+
+Please provide your decisions in this format:
+
+```
+DECISION 1: [A / B / C]
+DECISION 2: [A / B / C]
+DECISION 3: [knowledge_base_spec / dynamodb_spec / other]
+DECISION 4: [A / B / C]
+DECISION 5: [A / B / C]
+DECISION 6: [A / B]
+DECISION 7: [A / B / C]
+
+COMMENTS:
+[Your comments here]
+
+NAME: [Your name]
+DATE: [Today's date]
+```
+
+---
+
+### Stakeholder Decisions Received
+
+**Date:** 2026-02-14
+**Reviewed By:** Stakeholder
+**Status:** ✅ DECISIONS RECEIVED
+
+| # | Decision | Option | Status |
+|---|----------|--------|---------|
+| 1 | LLM Output Fields | **Option B** - 6 fields | ✅ DECIDED |
+| 2 | Model Strategy | **Option A** - Extend CompanyResearchResult | ✅ DECIDED |
+| 3 | Schema Authority | **dynamodb_spec.yaml** - user_email | ✅ DECIDED |
+| 4 | GSI Implementation | **Option A** - Implement GSI now | ✅ DECIDED |
+| 5 | TTL Strategy | **Option A** - DynamoDB TTL | ✅ DECIDED |
+| 6 | Prompt Location | **Option B** - Separate file | ✅ DECIDED |
+| 7 | Architecture Doc | **Option C** - Consolidate into specs | ✅ DECIDED |
+
+---
+
+### Remaining Work Items
+
+Based on stakeholder decisions, the following items require completion:
+
+| # | Work Item | Status | Owner | Notes |
+|---|-----------|--------|-------|-------|
+| 1 | **Update architecture schema mapping** | ⚠️ TODO | Architect | Use 6 fields, user_email PK |
+| 2 | **Extend CompanyResearchResult model** | ⚠️ TODO | Architect | Add storage methods |
+| 3 | **Update transformer logic** | ⚠️ TODO | Architect | Match 6-field schema |
+| 4 | **Update DynamoDB item mapping** | ⚠️ TODO | Architect | user_email PK, entity_type SK |
+| 5 | **Add GSI to dynamodb_stack.py** | ⚠️ TODO | Infra | entity-index GSI |
+| 6 | **Add constants to constants.py** | ⚠️ TODO | Infra | KNOWLEDGE_TABLE_NAME |
+| 7 | **Extract prompt to separate file** | ⚠️ TODO | Architect | company_research_prompt.py |
+| 8 | **Move architecture to specs/** | ⚠️ TODO | Architect | Consolidate documents |
+| 9 | **Update unit tests** | ⚠️ TODO | Architect | Match final schema |
+| 10 | **Update integration tests** | ⚠️ TODO | Architect | Match final schema |
+
+---
+
+### Decision Summary and Rationale
+
+| # | Decision | Rationale |
+|---|----------|-----------|
+| 1 | **Option B - 6 fields** | Use existing `CompanyResearchResult` fields: company_name, overview, values, mission, strategic_priorities, recent_news, financial_summary |
+| 2 | **Option A - Extend** | Extend `CompanyResearchResult` with `to_research_blob()` and `from_research_blob()` methods |
+| 3 | **dynamodb_spec.yaml** | Multi-tenant isolation with `user_email` PK is correct pattern |
+| 4 | **Option A - GSI now** | Avoid technical debt by implementing entity-index GSI in CDK |
+| 5 | **Option A - TTL** | Use DynamoDB automatic TTL at 30 days |
+| 6 | **Option B - Separate** | Extract to `company_research_prompt.py` for consistency |
+| 7 | **Option C - Consolidate** | Move architecture document to `docs/refactor/specs/` |
+
+---
+
+### Immediate Next Steps
+
+1. **Architect to update** `COMPANY_RESEARCH_ARCHITECTURE.md` with decisions
+2. **Infra to add** GSI to `dynamodb_stack.py` and constants to `constants.py`
+3. **Architect to extend** `CompanyResearchResult` model with storage methods
+4. **Architect to extract** prompt to `company_research_prompt.py`
+5. **Move architecture** document to `docs/refactor/specs/`
+6. **Re-submit** for architect verification with resolved issues
+7. **Proceed with implementation** after APPROVED verdict
+
+---
+
+### Task Checklist
+
+- [ ] Update architecture document with 7 decisions
+- [ ] Extend CompanyResearchResult model
+- [ ] Update DynamoDB schema mapping
+- [ ] Add GSI to dynamodb_stack.py
+- [ ] Add KNOWLEDGE_TABLE_NAME to constants.py
+- [ ] Extract company_research_prompt.py
+- [ ] Move architecture to specs/ directory
+- [ ] Update unit tests for 6-field schema
+- [ ] Update integration tests
+- [ ] Re-submit for architect verification
+
+---
+
+## BEGIN ARCHITECT UPDATE
+
+---
+
+## Company Research Transformation Layer - Architecture Design
+**Date:** 2026-02-14
+**Task:** Design transformation layer for LLM output → DynamoDB storage
+**Status:** ✅ DESIGN COMPLETE (Conditional Approval)
+
+### Research Executed (5 Parallel Stages)
+
+| Stage | Focus | Agent | Duration | Status |
+|-------|-------|-------|----------|--------|
+| 1 | Examine specs (knowledge_base, dynamodb, fvs) | scientist-low (haiku) | 14.3s | ✅ Complete |
+| 2 | Review code patterns (repository, naming, validator) | scientist-low (haiku) | 121.9s | ✅ Complete |
+| 3 | Analyze LLM prompt structure | scientist-low (haiku) | 97.9s | ✅ Complete |
+| 4 | Identify Pydantic model patterns | scientist-low (haiku) | 146.5s | ✅ Complete |
+| 5 | Map DynamoDB schema and GSI | scientist-low (haiku) | 176.6s | ✅ Complete |
+
+**Total Research Time:** ~557 seconds (9.3 minutes) in parallel
+
+### Key Findings
+
+**LLM Output Schema (Existing):**
+- 6 fields: `overview`, `values`, `mission`, `strategic_priorities`, `recent_news`, `financial_summary`
+- Generated by `company_research.py` (inline prompt, not separate file)
+- Returns `CompanyResearchResult` model (already exists in `models/company.py`)
+
+**DynamoDB Schema (Target):**
+- Table: `careervp-knowledge-table-dev`
+- PK: `user_email`, SK: `entity_type`
+- GSI: `entity-index` (entity_type → entity_id) - **NOT YET IMPLEMENTED IN CDK**
+- TTL: 30 days
+- Storage: JSON blob in `research_data` attribute
+
+**Patterns Identified:**
+- Existing models: 16 patterns (frozen models, field aliases, validators, serializers)
+- Repository pattern: Result wrapper for mutations, direct return for queries
+- Error handling: ClientError → Result with ResultCode enum
+- Logging: AWS Lambda Powertools with structured context
+
+### Architecture Document Delivered
+
+**File:** `/Users/yitzchak/Documents/dev/careervp/docs/refactor/COMPANY_RESEARCH_ARCHITECTURE.md`
+
+**Contents:**
+- Executive Summary (3 sections)
+- Data Flow Diagram (ASCII art)
+- Schema Mapping Table (LLM → DB)
+- 6 Deliverables with complete code examples:
+  1. CompanyResearchData Pydantic model (200+ lines)
+  2. CompanyResearchTransformer class (150+ lines)
+  3. KnowledgeRepository.save_company_research() (70+ lines)
+  4. KnowledgeRepository.get_company_research() (60+ lines)
+  5. Unit tests (250+ lines, 15+ test cases)
+  6. Integration tests (150+ lines, end-to-end flow)
+- Risk Assessment (7 risks identified)
+- Dependencies (infrastructure gaps documented)
+- Validation Commands (6 commands)
+- Implementation Checklist (7 phases, 11.5 hours estimated)
+
+### Architect Verification Results
+
+**Verdict:** ⚠️ **CONDITIONALLY APPROVED**
+
+**Summary:** Design philosophy is correct (JSON blob, transformer pattern, bidirectional serialization, TTL caching). However, **7 CRITICAL issues** and **5 MODERATE issues** must be resolved before implementation.
+
+#### Critical Issues (P0 - Must Fix Before Implementation)
+
+| # | Issue | Impact | Fix Required |
+|---|-------|--------|--------------|
+| 1 | **GSI Query Pattern Broken** | GSI queries will never match - `entity_type` stores `"company_research#TechCorp"` but queries expect `"company_research"` | Store pure type in `entity_type`, use `entity_id` for company name |
+| 2 | **Duplicate Model** | Proposed `CompanyResearchData` duplicates existing `CompanyResearchResult` (same 6 LLM fields) | Reuse or extend existing model |
+| 3 | **Missing Constants** | `KNOWLEDGE_TABLE_NAME` not in `constants.py` despite CDK reference | Add 4 missing constants: KNOWLEDGE, CVS, APPLICATIONS, GAP_RESPONSES |
+| 4 | **GSI Not in CDK** | `entity-index` GSI defined in spec but not implemented in `dynamodb_stack.py` | Add `add_global_secondary_index()` call |
+| 5 | **Schema Conflict** | `knowledge_base_spec.yaml` uses `company_name` as PK but architecture uses `user_email` | Reconcile specs or update knowledge_base_spec |
+| 6 | **Field Name Collision** | `entity_type` SK contains composite value, breaking semantic meaning | Separate type from composite key |
+| 7 | **Missing Imports** | Repository catches `json.JSONEncodeError` and `ValidationError` without imports | Add `import json` and `from pydantic import ValidationError` |
+
+#### Moderate Issues (P1/P2 - Can Fix During Implementation)
+
+| # | Issue | Priority | Fix |
+|---|-------|----------|-----|
+| 8 | **TTL Calculation Inconsistency** | P2 | Use existing `timedelta` pattern instead of `time.time()` |
+| 9 | **Model Frozen Contradiction** | P2 | Fix docstring or config (`frozen=False` vs "immutable after validation") |
+| 10 | **Overview min_length Too Restrictive** | P2 | Relax to match existing (no minimum) or handle gracefully |
+| 11 | **Missing Metadata in Storage** | P1 | Include `source`, `source_urls`, `confidence_score` in JSON blob |
+| 12 | **Repository Import Pattern** | P1 | Use `from careervp.handlers.utils.observability` not `from aws_lambda_powertools` |
+
+### Recommendations
+
+**Immediate Actions Required (P0):**
+
+1. **Fix GSI Design:**
+   ```python
+   # WRONG (current architecture):
+   item["entity_type"] = "company_research#TechCorp"  # Breaks GSI queries
+
+   # CORRECT (revised):
+   item["entity_type"] = "company_research"  # Pure type discriminator
+   item["entity_id"] = "TechCorp"  # Company name in separate field
+   # Composite SK can be: entity_type + "#" + entity_id if needed for queries
+   ```
+
+2. **Eliminate Duplicate Model:**
+   ```python
+   # Option A: Extend existing CompanyResearchResult
+   class CompanyResearchResult(BaseModel):
+       # ... existing 6 LLM fields + source/confidence ...
+
+       def to_storage_dict(self) -> dict:
+           """Extract fields for research_data JSON blob."""
+           return {
+               "company_name": self.company_name,
+               "overview": self.overview,
+               # ... all fields ...
+           }
+
+   # Option B: Add transformer to extract from CompanyResearchResult
+   CompanyResearchTransformer.from_result(result: CompanyResearchResult) -> dict
+   ```
+
+3. **Add Missing Infrastructure:**
+   ```python
+   # In constants.py:
+   KNOWLEDGE_TABLE_NAME = "knowledge"
+   CVS_TABLE_NAME = "cvs"
+   APPLICATIONS_TABLE_NAME = "applications"
+   GAP_RESPONSES_TABLE_NAME = "gap-responses"
+
+   # In dynamodb_stack.py:
+   self.knowledge_table.add_global_secondary_index(
+       index_name="entity-index",
+       partition_key=dynamodb.Attribute(name="entity_type", type=dynamodb.AttributeType.STRING),
+       sort_key=dynamodb.Attribute(name="entity_id", type=dynamodb.AttributeType.STRING),
+   )
+   ```
+
+### Next Steps
+
+**DO NOT PROCEED WITH IMPLEMENTATION** until architecture document is revised to address all P0 issues.
+
+**Recommended Revision Process:**
+1. Review architect findings with stakeholders
+2. Choose model strategy (reuse CompanyResearchResult vs. new model)
+3. Revise GSI design to separate entity_type from composite key
+4. Update architecture document with corrected schema
+5. Re-submit for architect verification
+6. Proceed with implementation only after APPROVED verdict
+
+### Evaluation Against Criteria
+
+| Criterion | Weight | Score | Notes |
+|-----------|--------|-------|-------|
+| **Correctness** | 40% | 60% | Schema mapping preserves data, but GSI design broken |
+| **Query Flexibility** | 25% | 40% | GSI queries won't work as designed |
+| **Maintainability** | 20% | 85% | Good separation of concerns, but duplicate model |
+| **Performance** | 15% | 90% | Efficient JSON blob, minimal overhead |
+| **OVERALL** | 100% | **65%** | Conditional - requires fixes before implementation |
+
+### Files Generated
+
+1. `/Users/yitzchak/Documents/dev/careervp/docs/refactor/COMPANY_RESEARCH_ARCHITECTURE.md` (1,400+ lines)
+2. Research artifacts:
+   - `.omc/research-stage-3-company-research-prompt-analysis.md`
+   - `.omc/scientist/pydantic_patterns_research.md`
+
+### Token Usage
+
+- Research stages: ~150K tokens (5 parallel agents)
+- Architecture synthesis: ~13K tokens
+- Architect verification: ~106K tokens
+- **Total: ~270K tokens** (ecomode saved ~40% vs. ultrawork)
+
+### Lessons Learned
+
+1. **Existing code research is critical** - Architecture proposed duplicate model because existing `CompanyResearchResult` wasn't initially discovered
+2. **Spec conflicts require resolution** - `knowledge_base_spec.yaml` vs. `dynamodb_spec.yaml` have different PK definitions
+3. **GSI design requires careful semantic separation** - Composite keys in GSI partition keys break query patterns
+4. **Infrastructure gaps block deployment** - Missing constants and GSI definitions are deployment blockers
+5. **Ecomode effective for research** - Haiku agents handled all data gathering efficiently
+
+---
