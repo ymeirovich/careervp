@@ -2,9 +2,9 @@
 # Source: DEPLOYMENT_OPERATIONS.md
 # Used by: Phase 0 (Security), Phase 8 (Knowledge Base)
 
-spec_version: "1.1"
+spec_version: "1.2"
 date_created: "2026-02-12"
-date_updated: "2026-02-12"
+date_updated: "2026-02-15"
 
 naming_convention:
   tables: "NamingUtils.table_name(feature) -> careervp-{feature}-table-{env}"
@@ -76,9 +76,23 @@ api_gateway:
 
 handler_patterns:
   - pattern: "handlers/{feature}_handler.py"
-    class: "{Feature}Handler"
-    methods:
-      - "handle_{action}"
+    style: "function_based_powertools"
+    entrypoints:
+      - "lambda_handler(event, context)"
+      - "@app.<method>('/path') for resolver-based handlers"
+    note: "Prefer existing codebase patterns; avoid introducing class-based handlers."
+
+api_route_migration:
+  strategy: "additive"
+  authoritative_contract: "docs/swagger/careervp-api-v1.yaml"
+  rules:
+    - "Add OpenAPI paths in API Gateway first; keep existing /api/* routes during migration window"
+    - "Handler route decorators should omit /v1 prefix; /v1 is API Gateway stage/base path"
+    - "Do not remove legacy /api/* routes until staging contract smoke tests pass"
+  decommission_gate:
+    - "All Phase 10 contract tests pass"
+    - "All 27 OpenAPI endpoints pass staging smoke tests"
+    - "Migration sign-off complete"
 
 dynamodb_patterns:
   - pattern: "dal/{feature}_repository.py"

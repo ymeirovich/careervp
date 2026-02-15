@@ -1046,11 +1046,12 @@ class TestCompanyResearchE2E:
         2. System generates research via LLM
         3. System validates with FVS
         4. System transforms and stores in DynamoDB
-        5. User calls GET /v1/company-research/{company_name}
+        5. User calls GET /v1/company-research/{job_id}
         6. System retrieves and returns research
         """
         # Arrange
         company_name = "TestCompany123"
+        job_id = "test-job-001"
         user_email = "testuser@example.com"
 
         # Act - Generate research
@@ -1058,20 +1059,19 @@ class TestCompanyResearchE2E:
             "/v1/company-research/fetch",
             json={
                 "company_name": company_name,
-                "job_id": "test-job-001"
+                "job_id": job_id
             },
             headers={"Authorization": f"Bearer {auth_token}"}
         )
 
         # Assert - Generation successful
-        assert response.status_code == 200
+        assert response.status_code == 202
         data = response.json()
-        assert data["company_name"] == company_name
-        assert "research_id" in data
+        assert "request_id" in data
 
         # Act - Retrieve research
         response = api_client.get(
-            f"/v1/company-research/{company_name}",
+            f"/v1/company-research/{job_id}",
             headers={"Authorization": f"Bearer {auth_token}"}
         )
 
@@ -1169,11 +1169,13 @@ set -e
 API_URL="${API_URL:-https://api.careervp.com/v1}"
 TOKEN="${AUTH_TOKEN:-$(get_token)}"
 COMPANY_NAME="LiveTestCompany_$(date +%s)"
+JOB_ID="job_live_test_001"
 PAYLOAD_FILE="docs/refactor/payloads/phase8_company_research_live_test.json"
 
 echo "=== Company Research Live Test ==="
 echo "API URL: $API_URL"
 echo "Company: $COMPANY_NAME"
+echo "Job ID: $JOB_ID"
 echo ""
 
 # Step 1: Generate company research
@@ -1186,15 +1188,15 @@ curl -X POST "$API_URL/company-research/fetch" \
 
 cat /tmp/research_response.json | jq '.'
 
-RESEARCH_ID=$(cat /tmp/research_response.json | jq -r '.research_id // "unknown"')
-echo "Research ID: $RESEARCH_ID"
+REQUEST_ID=$(cat /tmp/research_response.json | jq -r '.request_id // "unknown"')
+echo "Request ID: $REQUEST_ID"
 echo ""
 
 # Step 2: Retrieve company research
 echo "Step 2: Retrieving company research..."
 sleep 2  # Allow for async processing
 
-curl -X GET "$API_URL/company-research/$COMPANY_NAME" \
+curl -X GET "$API_URL/company-research/$JOB_ID" \
   -H "Authorization: Bearer $TOKEN" \
   > /tmp/research_retrieve.json
 
@@ -1272,12 +1274,10 @@ echo "=== Live Test Complete ==="
     }
   },
   "expected": {
-    "status_code": 200,
+    "status_code": 202,
     "response_schema": {
-      "research_id": "string",
-      "company_name": "LiveTestCompany",
-      "status": "completed",
-      "cached": false
+      "request_id": "string",
+      "status": "processing"
     }
   },
   "validation": {
@@ -1292,14 +1292,14 @@ echo "=== Live Test Complete ==="
       "name": "Generate research",
       "endpoint": "POST /v1/company-research/fetch",
       "expected": {
-        "status_code": 200,
+        "status_code": 202,
         "cached": false
       }
     },
     {
       "step": 2,
       "name": "Retrieve research",
-      "endpoint": "GET /v1/company-research/{company_name}",
+      "endpoint": "GET /v1/company-research/{job_id}",
       "expected": {
         "status_code": 200,
         "fields_present": ["company_name", "overview", "values", "mission"]

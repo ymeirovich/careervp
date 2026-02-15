@@ -3,9 +3,9 @@
 # Phase: 6
 # Reference: docs/specs/02-company-research.md (handler implementation pattern)
 
-spec_version: "1.1"
+spec_version: "1.2"
 date_created: "2026-02-12"
-date_updated: "2026-02-10"
+date_updated: "2026-02-15"
 
 description: |
   Cover Letter Generator creates personalized cover letters
@@ -61,7 +61,7 @@ anti_ai_detection:
 # HANDLER IMPLEMENTATION (based on company_research_handler.py pattern)
 # ─────────────────────────────────────────────────────────────────────────────
 handler:
-  pattern: "Synchronous Lambda Handler (like company_research_handler.py)"
+  pattern: "Async submit + polling + list handlers"
   validation:
     - "Validate request body against CoverLetterRequest schema"
     - "Verify CV, VPR, Gap Analysis, Company Research are completed"
@@ -103,15 +103,20 @@ handler:
       - SK: ARTIFACT#COVER_LETTER#v1
 
     7_return_response: |
-      Return cover letter content + metadata
+      Return 202 Accepted with request_id, status=processing, estimated_time_seconds
 
-  api_endpoint: "POST /cover-letter/generate"
+  api_endpoints:
+    - "POST /cover-letter/generate"
+    - "GET /cover-letter/{coverLetterId}"
+    - "GET /users/me/cover-letters"
   request_schema:
     type: "object"
     required:
       - "cv_id"
       - "job_id"
       - "vpr_id"
+      - "gap_response_ids"
+      - "company_research_id"
     properties:
       cv_id:
         type: "string"
@@ -129,35 +134,52 @@ handler:
         description: "IDs of gap analysis responses"
       company_research_id:
         type: "string"
-        description: "ID of company research (optional)"
-
-  response_schema:
-    type: "object"
-    properties:
-      cover_letter:
-        type: "string"
-        description: "Generated cover letter (markdown)"
-      word_count:
-        type: "integer"
-      paragraphs:
+        description: "ID of company research"
+      options:
         type: "object"
         properties:
-          hook:
+          tone:
+            type: "string"
+            enum: ["professional", "conversational", "formal"]
+          length:
+            type: "string"
+            enum: ["short", "standard", "long"]
+          include_portfolio_link:
+            type: "boolean"
+            default: false
+
+  response_schema_submit:
+    type: "object"
+    properties:
+      request_id:
+        type: "string"
+      status:
+        type: "string"
+      estimated_time_seconds:
+        type: "integer"
+
+  response_schema_status:
+    type: "object"
+    properties:
+      id:
+        type: "string"
+      status:
+        type: "string"
+      result:
+        type: "object"
+        properties:
+          cover_letter:
+            type: "string"
+          paragraphs:
             type: "object"
-            properties:
-              word_count: "integer"
-              includes_company_reference: "boolean"
-              includes_uvp: "boolean"
-          proof_points:
+          fvs_validation:
             type: "object"
-            properties:
-              requirements_matched: "integer"
-              claims_verified: "boolean"
-          close:
-            type: "object"
-            properties:
-              word_count: "integer"
-              includes_cta: "boolean"
+
+  response_schema_list:
+    type: "object"
+    properties:
+      cover_letters:
+        type: "array"
 
 quality_requirements:
   - "FVS validation (Phase 7)"

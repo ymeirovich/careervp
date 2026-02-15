@@ -3,9 +3,9 @@
 # Phase: 5
 # Reference: docs/specs/02-company-research.md (handler implementation pattern)
 
-spec_version: "1.1"
+spec_version: "1.2"
 date_created: "2026-02-12"
-date_updated: "2026-02-10"
+date_updated: "2026-02-15"
 
 description: |
   Gap Analysis identifies skills/experience gaps between CV and job
@@ -47,22 +47,12 @@ components:
       - "process_gaps(cv_facts, job_requirements) -> GapAnalysisResult"
       - "generate_impact_statements(gap_responses) -> List[ImpactStatement]"
 
-cost:
-  questions_phase: "~$0.02/request"
-  processor_phase: "~$0.05/request"
-  total: "$0.077/request"
-
-quality_requirements:
-  - "Recurring theme identification"
-  - "Prioritized by job importance"
-  - "Actionable remediation advice"
-
 # ─────────────────────────────────────────────────────────────────────────────
 # HANDLER ENHANCEMENT (based on company_research_handler.py pattern)
 # ─────────────────────────────────────────────────────────────────────────────
 handler:
   current_status: "gap_handler.py exists (~650 bytes) - needs full implementation"
-  pattern: "Synchronous Lambda Handler (like company_research_handler.py)"
+  pattern: "Function-based Lambda/API Gateway handler"
   validation:
     - "Validate request body against GapAnalysisRequest schema"
     - "Verify CV and VPR are completed"
@@ -96,17 +86,15 @@ handler:
       Return question IDs + metadata for polling
 
   api_endpoints:
-    - "POST /gap-analysis/generate"
-    - "GET /gap-analysis/{id}/questions"
-    - "POST /gap-analysis/{id}/responses"
-    - "GET /gap-analysis/{id}/results"
+    - "POST /gap-analysis/questions"
+    - "POST /gap-analysis/responses"
+    - "GET /gap-analysis/{jobId}/questions"
 
-  request_schema:
+  request_schema_generate_questions:
     type: "object"
     required:
       - "cv_id"
       - "job_id"
-      - "vpr_id"
     properties:
       cv_id:
         type: "string"
@@ -114,15 +102,56 @@ handler:
       job_id:
         type: "string"
         description: "ID of the job application"
-      vpr_id:
-        type: "string"
-        description: "ID of the generated VPR"
-      company_research_id:
-        type: "string"
-        description: "ID of company research (optional)"
       max_questions:
         type: "integer"
         description: "Max questions to generate (default: 10)"
+      focus_areas:
+        type: "array"
+        items:
+          type: "string"
+        description: "Optional focus areas"
+
+  request_schema_submit_responses:
+    type: "object"
+    required:
+      - "responses"
+    properties:
+      responses:
+        type: "array"
+        items:
+          type: "object"
+          required:
+            - "question_id"
+            - "response"
+          properties:
+            question_id:
+              type: "string"
+            response:
+              type: "string"
+            quantifiable_data:
+              type: "object"
+
+  response_schema_generate_questions:
+    type: "object"
+    properties:
+      questions:
+        type: "array"
+      missing_qualifications:
+        type: "array"
+
+  response_schema_submit_responses:
+    type: "object"
+    properties:
+      status:
+        type: "string"
+      impact_statements:
+        type: "array"
+
+  response_schema_get_question_history:
+    type: "object"
+    properties:
+      questions:
+        type: "array"
 
 quality_requirements:
   - "FVS validation (Phase 7)"

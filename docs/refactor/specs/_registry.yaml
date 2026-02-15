@@ -2,6 +2,7 @@
 # Generated: 2026-02-12
 # Updated: 2026-02-12 - All reference docs converted to specs
 # Updated: 2026-02-10 - Added reference specs from docs/specs/
+# Updated: 2026-02-15 - Phase 10 API contract remediation mapping sync
 
 specs:
   # Core specs (required for implementation)
@@ -69,6 +70,42 @@ specs:
       - "src/backend/careervp/logic/utils/web_scraper.py"
       - "src/backend/careervp/logic/utils/web_search.py"
 
+  - file: "company_research_model_spec.yaml"
+    source: "REFACTORING_PLAN.md Section 2"
+    category: "company_research"
+    phase: "X"
+    status: "CREATED"
+    note: "CompanyResearchResult model specification"
+
+  - file: "company_research_fvs_spec.yaml"
+    source: "REFACTORING_PLAN.md Section 2"
+    category: "company_research"
+    phase: "X"
+    status: "CREATED"
+    note: "FVS validation rules for company research"
+    logic_file: "src/backend/careervp/logic/fvs_validator.py"
+
+  - file: "company_research_payload_spec.yaml"
+    source: "REFACTORING_PLAN.md Section 2"
+    category: "company_research"
+    phase: "X"
+    status: "CREATED"
+    note: "Test payload specifications for company research"
+
+  - file: "company_research_e2e_spec.yaml"
+    source: "REFACTORING_PLAN.md Section 2"
+    category: "company_research"
+    phase: "X"
+    status: "CREATED"
+    note: "E2E test specifications for company research"
+
+  - file: "company_research_transform_spec.yaml"
+    source: "REFACTORING_PLAN.md Section 2"
+    category: "company_research"
+    phase: "X"
+    status: "CREATED"
+    note: "Master transformation layer specification (Markdown format)"
+
   # ── Feature Specs ───────────────────────────────────────────────────────
 
   - file: "cv_tailoring_spec.yaml"
@@ -130,17 +167,6 @@ specs:
     status: "CREATED"
     note: "DynamoDB table + CRUD - infrastructure in infra/careervp/specs/dynamodb_spec.yaml"
     handler_status: "NOT_STARTED"
-
-  - file: "interview_prep_spec.yaml"
-    source: "JSA_FEATURE_MAPPING.md"
-    category: "interview_prep"
-    phase: 9
-    status: "CREATED"
-    handler_file: "src/backend/careervp/handlers/interview_prep_handler.py"
-    handler_status: "TO_BE_CREATED"
-    logic_file: "src/backend/careervp/logic/interview_prep.py"
-    prompt_file: "src/backend/careervp/logic/prompts/interview_prep_prompt.py"
-    reference_handler: "docs/specs/02-company-research.md (use as handler implementation pattern)"
 
   # Reference specs (for architectural guidance)
   - file: "vpc_spec.yaml"
@@ -276,24 +302,53 @@ phase_to_specs:
       - "prompt_library_spec.yaml"
       - "docs/specs/02-company-research.md"
 
+  phase_10:
+    mandatory:
+      - "api_contract_spec.yaml"
+    references:
+      - "../swagger/careervp-api-v1.yaml"
+      - "security_spec.yaml"
+      - "workflow_dependencies_spec.yaml"
+      - "deployment_spec.yaml"
+
+  phase_x:
+    mandatory:
+      - "company_research_transform_spec.yaml"
+    references:
+      - "company_research_model_spec.yaml"
+      - "company_research_fvs_spec.yaml"
+      - "company_research_payload_spec.yaml"
+      - "company_research_e2e_spec.yaml"
+      - "knowledge_base_spec.yaml"
+      - "dynamodb_spec.yaml"
+
 # ─────────────────────────────────────────────────────────────────────────────
 # HANDLER STATUS MATRIX
 # ─────────────────────────────────────────────────────────────────────────────
 handler_status_matrix:
   implemented:
-    - cv_tailoring_handler
-    - company_research_handler
-    - vpr_handler
-    - vpr_submit_handler
+    - auth_handler
     - vpr_worker_handler
-    - vpr_status_handler
 
   needs_enhancement:
+    - cv_upload_handler
+    - company_research_handler
+    - cv_tailoring_handler
+    - vpr_submit_handler
+    - vpr_status_handler
     - gap_handler
 
   to_be_created:
+    - auth_endpoints_handler
+    - user_handler
+    - job_handler
     - cover_letter_handler
+    - cover_letter_status_handler
     - interview_prep_handler
+    - interview_prep_status_handler
+    - cv_tailoring_status_handler
+    - company_research_status_handler
+    - health_handler
 
   not_started:
     - knowledge_base_handler

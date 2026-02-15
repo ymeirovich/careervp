@@ -3,9 +3,9 @@
 # Phase: 9
 # Reference: docs/specs/02-company-research.md (handler implementation pattern)
 
-spec_version: "1.1"
+spec_version: "1.2"
 date_created: "2026-02-12"
-date_updated: "2026-02-10"
+date_updated: "2026-02-15"
 
 description: |
   Interview Preparation Generator creates personalized interview
@@ -77,7 +77,7 @@ dependencies:
 # HANDLER IMPLEMENTATION (based on company_research_handler.py pattern)
 # ─────────────────────────────────────────────────────────────────────────────
 handler:
-  pattern: "Synchronous Lambda Handler (like company_research_handler.py)"
+  pattern: "Async submit + polling handlers"
   validation:
     - "Validate request body against InterviewPrepRequest schema"
     - "Verify CV, VPR, Gap Analysis are completed"
@@ -120,23 +120,17 @@ handler:
       - SK: ARTIFACT#INTERVIEW_PREP#v1
 
     7_return_response: |
-      Return questions + suggested answers + metadata
+      Return 202 Accepted with request_id and status
 
-  api_endpoint: "POST /interview-prep/generate"
+  api_endpoints:
+    - "POST /interview-prep/generate"
+    - "GET /interview-prep/{interviewPrepId}"
   request_schema:
     type: "object"
     required:
-      - "cv_id"
-      - "job_id"
       - "vpr_id"
       - "gap_response_ids"
     properties:
-      cv_id:
-        type: "string"
-        description: "ID of the user's parsed CV"
-      job_id:
-        type: "string"
-        description: "ID of the job application"
       vpr_id:
         type: "string"
         description: "ID of the generated VPR"
@@ -145,52 +139,35 @@ handler:
         items:
           type: "string"
         description: "IDs of gap analysis responses"
-      question_types:
+      focus_areas:
         type: "array"
         items:
           type: "string"
-          enum: ["Behavioral", "Technical", "Situational", "Gap-Focused"]
-        description: "Optional filter for question types"
-      max_questions:
+        description: "Optional focus areas"
+      question_count:
         type: "integer"
-        description: "Max questions to generate (default: 10)"
+        description: "Question count (default: 5)"
 
-  response_schema:
+  response_schema_submit:
     type: "object"
     properties:
-      questions:
-        type: "array"
-        items:
-          type: "object"
-          properties:
-            type:
-              type: "string"
-            question:
-              type: "string"
-            suggested_answer:
-              type: "object"
-              properties:
-                content:
-                  type: "string"
-                word_count:
-                  type: "integer"
-                star_elements:
-                  type: "object"
-                  properties:
-                    situation:
-                      type: "string"
-                    task:
-                      type: "string"
-                    action:
-                      type: "string"
-                    result:
-                      type: "string"
-            priority:
-              type: "integer"
-      total_questions:
-        type: "integer"
-      questions_by_type:
+      request_id:
+        type: "string"
+      status:
+        type: "string"
+
+  response_schema_status:
+    type: "object"
+    properties:
+      id:
+        type: "string"
+      status:
+        type: "string"
+      result:
         type: "object"
+        properties:
+          questions:
+            type: "array"
 
 quality_requirements:
   - "FVS validation (Phase 7)"

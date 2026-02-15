@@ -1,5 +1,6 @@
 spec_version: "1.0"
 date_created: "2026-02-14"
+date_updated: "2026-02-15"
 purpose: "Document workflow dependencies and enforcement for CareerVP"
 status: "READY_FOR_IMPLEMENTATION"
 
@@ -47,23 +48,23 @@ dependency_matrix:
     provides: ["gap_response_ids"]
     provides_to: ["VPR_GENERATION"]
   VPR_GENERATION:
-    requires: ["gap_response_ids"]
+    requires: ["cv_id", "job_id", "gap_response_ids"]
     provides: ["vpr_id"]
     provides_to: ["CV_TAILORING", "COVER_LETTER", "INTERVIEW_PREP"]
   COMPANY_RESEARCH:
-    requires: []
-    provides: []
+    requires: ["job_id"]
+    provides: ["company_research_id"]
     provides_to: ["VPR_GENERATION", "COVER_LETTER"]
   CV_TAILORING:
-    requires: ["cv_id", "vpr_id"]
+    requires: ["cv_id", "job_id", "vpr_id"]
     provides: ["tailored_cv_id"]
     provides_to: ["INTERVIEW_PREP"]
   COVER_LETTER:
-    requires: ["vpr_id"]
+    requires: ["cv_id", "job_id", "vpr_id", "gap_response_ids", "company_research_id"]
     provides: ["cover_letter_id"]
     provides_to: []
   INTERVIEW_PREP:
-    requires: ["vpr_id"]
+    requires: ["vpr_id", "gap_response_ids"]
     provides: ["interview_prep_id"]
     provides_to: []
 

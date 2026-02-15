@@ -2770,3 +2770,368 @@ Based on stakeholder decisions, the following items require completion:
 5. **Ecomode effective for research** - Haiku agents handled all data gathering efficiently
 
 ---
+
+## Architect Design Prompt: Complete Company Research Transformation Layer (2026-02-14)
+
+**Document Version:** 3.0
+**Date:** 2026-02-14
+**Status:** READY FOR EXECUTION
+**Priority:** CRITICAL
+
+### Purpose
+
+This prompt directs an Architect agent to generate ALL missing components for the Company Research Transformation layer. It addresses gaps identified between the original requirements and current execution state.
+
+### Instructions
+
+1. Read: `docs/refactor/prompts/architect_company_research_missing.prompt`
+2. Execute the analysis and generation steps
+3. Output results to this document as an addendum
+
+### Quick Reference
+
+**Prompt Location:** `docs/refactor/prompts/architect_company_research_missing.prompt`
+
+**Required Actions:**
+1. Analyze existing state
+2. Generate 4 YAML spec files
+3. Add 5 steps to EXECUTION_RUNBOOK.md Phase X
+4. Document results in this file
+
+### Generated Components - COMPLETED (2026-02-15)
+
+#### Generated Spec Files
+
+| Spec File | Status | Location |
+|-----------|--------|----------|
+| `company_research_model_spec.yaml` | GENERATED | `docs/refactor/specs/` |
+| `company_research_fvs_spec.yaml` | GENERATED | `docs/refactor/specs/` |
+| `company_research_payload_spec.yaml` | GENERATED | `docs/refactor/specs/` |
+| `company_research_e2e_spec.yaml` | GENERATED | `docs/refactor/specs/` |
+
+#### Updated Execution Runbook Steps
+
+| Step | Description | Status |
+|------|-------------|--------|
+| X.0 | Validate Prerequisites | ADDED |
+| X.1 | Extend CompanyResearchResult Model | EXISTING |
+| X.2 | Create CompanyResearchTransformer | EXISTING |
+| X.3 | Update KnowledgeRepository | EXISTING |
+| X.4 | Create Company Research Prompt | EXISTING |
+| X.5 | Update Infrastructure (CDK) | EXISTING |
+| X.FVS | FVS Validation Integration | ADDED |
+| X.PAYLOAD | Create Test Payloads | ADDED |
+| X.E2E | Create E2E Tests | ADDED |
+| X.LIVE | Create Live Test Script | ADDED |
+
+#### Files To Be Created (Implementation Phase)
+
+| File | Purpose |
+|------|---------|
+| `src/backend/careervp/models/company.py` | ENHANCE - Add to_research_dict/from_research_dict methods |
+| `src/backend/careervp/logic/company_research_transformer.py` | CREATE - DynamoDB transformation layer |
+| `src/backend/careervp/logic/prompts/company_research_prompt.py` | CREATE - Extracted prompt template |
+| `src/backend/careervp/logic/fvs_validator.py` | ENHANCE - Add validate_company_research() |
+| `src/backend/careervp/dal/knowledge_repository.py` | ENHANCE - Add save/get company research |
+| `tests/unit/test_company_research_model.py` | CREATE - Model unit tests |
+| `tests/unit/test_company_research_transformer.py` | CREATE - Transformer unit tests |
+| `tests/unit/test_company_research_fvs.py` | CREATE - FVS validation tests |
+| `tests/integration/test_company_research_flow.py` | CREATE - Integration tests |
+| `tests/e2e/test_company_research_e2e.py` | CREATE - E2E tests |
+| `docs/refactor/payloads/phase8_company_research_live_test.json` | CREATE - Live test payload |
+| `docs/refactor/payloads/phase8_company_research_unit_test.json` | CREATE - Unit test payload |
+| `docs/refactor/payloads/phase8_company_research_integration.json` | CREATE - Integration payload |
+| `scripts/live_test_company_research.sh` | CREATE - Live test script |
+
+#### Validation Commands
+
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+
+# All unit tests
+uv run pytest tests/unit/test_company_research_model.py tests/unit/test_company_research_transformer.py tests/unit/test_company_research_fvs.py -v
+
+# Integration tests
+uv run pytest tests/integration/test_company_research_flow.py -v
+
+# E2E tests (dry run)
+uv run pytest tests/e2e/test_company_research_e2e.py -v --tb=short -k "not live"
+
+# Lint
+uv run ruff check careervp/logic/company_research_transformer.py careervp/models/company.py careervp/logic/fvs_validator.py
+
+# Type checks
+uv run mypy careervp/logic/company_research_transformer.py careervp/models/company.py --strict
+```
+
+#### Architecture Diagram
+
+```
+COMPANY RESEARCH TRANSFORMATION LAYER
+
+  API Handler ──▶ KnowledgeRepository ──▶ Cache Check (TTL 30 days)
+                    │                         │
+                    │ (cache miss)            │ (cache hit → return)
+                    ▼                         │
+              LLM Service ──▶ CompanyResearchResult
+                    │
+                    ▼
+              FVS Validator (Grammar >= 9.0, Anti-AI >= 9.0)
+                    │
+                    ▼
+              CompanyResearchTransformer
+                    │
+                    ▼
+              DynamoDB (knowledge table, entity_type=company_research)
+```
+
+#### Data Flow
+
+| Stage | Component | Transformation |
+|-------|-----------|----------------|
+| 1 | API Handler | Receives user_email + company_name |
+| 2 | Cache Check | Returns cached CompanyResearchResult if TTL valid |
+| 3 | LLM Call | Generates CompanyResearchResult (11 fields) |
+| 4 | FVS Validate | Grammar >= 9.0, Anti-AI >= 9.0, no buzzwords |
+| 5 | Transform | CompanyResearchResult → DynamoDB item with JSON blob |
+| 6 | DynamoDB | Store with TTL (30 days), entity_type=company_research |
+
+---
+
+*Generated 2026-02-15 by Architect Design Prompt execution. All spec files and runbook steps are ready for implementation.*
+
+---
+
+## Phase 10: API Contract Remediation — NEW 2026-02-15
+
+### Executive Summary
+
+A systematic analysis of `docs/swagger/careervp-api-v1.yaml` (27 endpoints) against the existing handler implementations in `src/backend/careervp/handlers/` revealed significant coverage gaps. The existing runbook (Phases 0–9) covers feature logic but does not ensure 100% OpenAPI endpoint coverage. Phase 10 was added to the runbook to close all gaps.
+
+**Key Findings:**
+- **27** total OpenAPI endpoints defined
+- **5** partially implemented (path/schema mismatches)
+- **1** stub-only handler (gap_handler.py — helpers only, no routes)
+- **19** completely missing endpoints
+- **0** endpoints fully conformant with OpenAPI contract
+- **3** response code mismatches (returning 200 instead of 201/202)
+- **3** request schema mismatches (handler models differ from OpenAPI schemas)
+
+### Gap Analysis Summary Table
+
+| # | OpenAPI Endpoint | Method | operationId | Current Status | Gap Type | Runbook Step | Tests Required |
+|---|-----------------|--------|-------------|----------------|----------|-------------|----------------|
+| 1 | `/auth/register` | POST | registerUser | MISSING | Missing endpoint | 10.1 | test_auth_endpoints_handler.py |
+| 2 | `/auth/login` | POST | loginUser | MISSING | Missing endpoint | 10.1 | test_auth_endpoints_handler.py |
+| 3 | `/auth/refresh` | POST | refreshToken | MISSING | Missing endpoint | 10.1 | test_auth_endpoints_handler.py |
+| 4 | `/users/me` | GET | getCurrentUser | MISSING | Missing endpoint | 10.2 | test_user_handler.py |
+| 5 | `/users/me` | PUT | updateCurrentUser | MISSING | Missing endpoint | 10.2 | test_user_handler.py |
+| 6 | `/users/me/cv` | POST | uploadCV | cv_upload_handler.py | PATH `/api/cv` + SCHEMA + RESPONSE 200 vs 201 | 10.0, 10.2 | test_user_handler.py |
+| 7 | `/users/me/cvs` | GET | listUserCVs | MISSING | Missing endpoint | 10.2 | test_user_handler.py |
+| 8 | `/jobs` | POST | createJob | MISSING | Missing endpoint | 10.3 | test_job_handler.py |
+| 9 | `/jobs` | GET | listJobs | MISSING | Missing endpoint | 10.3 | test_job_handler.py |
+| 10 | `/jobs/{jobId}` | GET | getJob | MISSING | Missing endpoint | 10.3 | test_job_handler.py |
+| 11 | `/vpr/generate` | POST | generateVPR | vpr_submit_handler.py | PATH `/api/vpr` + SCHEMA mismatch | 10.4 | vpr-async/unit/ |
+| 12 | `/vpr/{vprId}` | GET | getVPR | vpr_status_handler.py | PATH `/api/vpr/status/{job_id}` | 10.4 | vpr-async/unit/ |
+| 13 | `/users/me/vprs` | GET | listUserVPRs | MISSING | Missing endpoint | 10.4 | vpr-async/unit/ |
+| 14 | `/gap-analysis/questions` | POST | generateGapQuestions | gap_handler.py | STUB ONLY (helpers, no routes) | 10.5 | gap_analysis/unit/ |
+| 15 | `/gap-analysis/responses` | POST | submitGapResponses | gap_handler.py | STUB ONLY | 10.5 | gap_analysis/unit/ |
+| 16 | `/gap-analysis/{jobId}/questions` | GET | getGapQuestions | MISSING | Missing endpoint | 10.5 | gap_analysis/unit/ |
+| 17 | `/cv-tailoring/generate` | POST | generateTailoredCV | cv_tailoring_handler.py | SCHEMA mismatch + should be 202 | 10.6 | cv-tailoring/unit/ |
+| 18 | `/cv-tailoring/{cvTailoringId}` | GET | getTailoredCV | MISSING | Missing endpoint | 10.6 | cv_tailoring_status tests |
+| 19 | `/users/me/tailored-cvs` | GET | listTailoredCVs | MISSING | Missing endpoint | 10.6 | cv_tailoring_list tests |
+| 20 | `/cover-letter/generate` | POST | generateCoverLetter | MISSING (Phase 6) | Missing (Phase 6 + 10) | 10.7 | cover-letter/unit/ |
+| 21 | `/cover-letter/{coverLetterId}` | GET | getCoverLetter | MISSING | Missing endpoint | 10.7 | cover_letter_status tests |
+| 22 | `/users/me/cover-letters` | GET | listCoverLetters | MISSING | Missing endpoint | 10.7 | cover_letter_list tests |
+| 23 | `/interview-prep/generate` | POST | generateInterviewPrep | MISSING (Phase 9) | Missing (Phase 9 + 10) | 10.8 | interview_prep tests |
+| 24 | `/interview-prep/{interviewPrepId}` | GET | getInterviewPrep | MISSING | Missing endpoint | 10.8 | interview_prep_status tests |
+| 25 | `/company-research/fetch` | POST | fetchCompanyResearch | company_research_handler.py | RESPONSE CODE 200 vs 202 | 10.9 | company_research tests |
+| 26 | `/company-research/{jobId}` | GET | getCompanyResearch | MISSING | Missing endpoint | 10.9 | company_research_status tests |
+| 27 | `/health` | GET | healthCheck | MISSING | Missing endpoint | 10.10 | test_health_handler.py |
+
+### Gap Classification Summary
+
+| Gap Type | Count | Affected Endpoints |
+|----------|-------|--------------------|
+| Missing endpoint (no handler) | 19 | #1-5, #7-10, #13, #16, #18-19, #21-22, #24, #26-27 |
+| Path mismatch | 3 | #6 (`/api/cv`), #11 (`/api/vpr`), #12 (`/api/vpr/status/{job_id}`) |
+| Schema mismatch | 3 | #6 (CVParseRequest), #11 (VPRRequest), #17 (TailorCVRequest) |
+| Response code mismatch | 3 | #6 (200→201), #17 (200→202), #25 (200→202) |
+| Stub only (no route) | 1 | #14-15 (gap_handler.py) |
+| Auth mismatch | 0 | All auth requirements consistent |
+
+### Runbook Modifications Made
+
+| Section | Modification | Reference |
+|---------|-------------|-----------|
+| Document header | Version 3.0 → 4.0, date 2026-02-12 → 2026-02-15 | Lines 3-6 |
+| New Phase 10 | 13 steps (10.0–10.12) + DONE Gate | Between Phase 9 and All Verification Commands |
+| All Verification Commands | Added Phase 10 test commands + coverage script | Updated section |
+| Changelog | Added v4.0 entry documenting all changes | End of document |
+
+### New Files to Create (Phase 10)
+
+| # | File | Purpose | Step |
+|---|------|---------|------|
+| 1 | `handlers/auth_endpoints_handler.py` | Auth (register, login, refresh) | 10.1 |
+| 2 | `handlers/user_handler.py` | User management (profile, CVs list) | 10.2 |
+| 3 | `handlers/job_handler.py` | Job CRUD | 10.3 |
+| 4 | `logic/job_service.py` | Job business logic | 10.3 |
+| 5 | `handlers/cv_tailoring_status_handler.py` | CV tailoring status polling | 10.6 |
+| 6 | `handlers/cover_letter_status_handler.py` | Cover letter status polling | 10.7 |
+| 7 | `handlers/interview_prep_status_handler.py` | Interview prep status polling | 10.8 |
+| 8 | `handlers/company_research_status_handler.py` | Company research retrieval | 10.9 |
+| 9 | `handlers/health_handler.py` | Health check | 10.10 |
+| 10 | `models/api_models.py` | OpenAPI-aligned Pydantic models | 10.11 |
+| 11 | `scripts/validate_api_coverage.py` | Coverage validation script | 10.12 |
+| 12 | `tests/unit/test_auth_endpoints_handler.py` | Auth endpoint tests | 10.1 |
+| 13 | `tests/unit/test_user_handler.py` | User endpoint tests | 10.2 |
+| 14 | `tests/unit/test_job_handler.py` | Job endpoint tests | 10.3 |
+| 15 | `tests/unit/test_health_handler.py` | Health endpoint tests | 10.10 |
+| 16 | `tests/unit/test_api_models.py` | Schema model tests | 10.11 |
+| 17 | `tests/integration/test_openapi_contract.py` | Contract coverage tests | 10.12 |
+| 18 | `tests/integration/test_api_contract_spec_sync.py` | Spec sync tests | 10.12 |
+
+### Existing Files to Enhance (Phase 10)
+
+| File | Changes | Step |
+|------|---------|------|
+| `handlers/cv_upload_handler.py` | Fix route `/api/cv` → `/users/me/cv`, response 200→201, align schema | 10.0, 10.2 |
+| `handlers/vpr_submit_handler.py` | Fix route `/api/vpr` → `/vpr/generate`, align request schema | 10.4 |
+| `handlers/vpr_status_handler.py` | Fix route `/api/vpr/status/{job_id}` → `/vpr/{vprId}`, align response | 10.4 |
+| `handlers/gap_handler.py` | Add lambda_handler, route dispatching, 3 endpoint implementations | 10.5 |
+| `handlers/cv_tailoring_handler.py` | Align request schema, change to 202 async pattern | 10.6 |
+| `handlers/company_research_handler.py` | Fix response code 200→202, align response schema | 10.9 |
+
+### Validation Command Outputs
+
+| Command | Status | Expected |
+|---------|--------|----------|
+| `python3 -c "import yaml; yaml.safe_load(open('careervp-api-v1.yaml'))"` | NOT YET RUN | VALID |
+| `python3 -c "import yaml; yaml.safe_load(open('api_contract_spec.yaml'))"` | NOT YET RUN | VALID |
+| `python3 scripts/validate_api_coverage.py` | NOT YET RUN | 27/27 (100%) |
+| `uv run pytest tests/unit/test_auth_endpoints_handler.py -v` | NOT YET RUN | All pass |
+| `uv run pytest tests/unit/test_user_handler.py -v` | NOT YET RUN | All pass |
+| `uv run pytest tests/unit/test_job_handler.py -v` | NOT YET RUN | All pass |
+| `uv run pytest tests/unit/test_health_handler.py -v` | NOT YET RUN | All pass |
+| `uv run pytest tests/unit/test_api_models.py -v` | NOT YET RUN | All pass |
+| `uv run pytest tests/integration/test_openapi_contract.py -v` | NOT YET RUN | All pass |
+| `uv run ruff check careervp/handlers/` | NOT YET RUN | 0 errors |
+| `uv run mypy careervp/handlers/ --strict` | NOT YET RUN | 0 errors |
+| `grep -r "/api/" careervp/handlers/` | NOT YET RUN | 0 matches |
+
+### Async Endpoint Patterns
+
+Five endpoints use 202 Accepted async pattern:
+
+| Async Endpoint | Submit Path | Polling Path | Status Values |
+|---------------|-------------|--------------|---------------|
+| VPR Generate | `POST /vpr/generate` | `GET /vpr/{vprId}` | pending, processing, completed, failed |
+| CV Tailoring | `POST /cv-tailoring/generate` | `GET /cv-tailoring/{cvTailoringId}` | pending, processing, completed, failed |
+| Cover Letter | `POST /cover-letter/generate` | `GET /cover-letter/{coverLetterId}` | pending, processing, completed, failed |
+| Interview Prep | `POST /interview-prep/generate` | `GET /interview-prep/{interviewPrepId}` | pending, processing, completed, failed |
+| Company Research | `POST /company-research/fetch` | `GET /company-research/{jobId}` | pending, processing, completed, failed |
+
+**Implementation pattern (all 5 identical):**
+1. Submit handler creates DynamoDB job record (status=pending)
+2. Submit handler sends SQS message to processing queue
+3. Submit handler returns 202 with request_id + estimated_time_seconds
+4. Worker handler processes job, updates DynamoDB status → completed/failed
+5. Status handler reads DynamoDB job record, returns status + result
+
+### Risks, Assumptions, and Dependencies
+
+**Risks:**
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| Schema migration breaks existing clients | HIGH | Adapter layer in api_models.py maps old→new schemas |
+| Path normalization requires API Gateway redeployment | MEDIUM | Coordinate with infra; update CDK API Gateway resources |
+| Auth endpoints require user store design | HIGH | DynamoDB users table schema already in dynamodb_spec.yaml |
+| Async pattern needs SQS queues for all 5 features | MEDIUM | VPR queue exists; verify and create missing queues |
+
+**Assumptions:**
+
+1. API Gateway handles `/v1` prefix as stage name — handlers omit it
+2. Existing Lambda Authorizer (auth_handler.py) remains the API Gateway authorizer
+3. Auth endpoints (register/login/refresh) are separate Lambdas from the authorizer
+4. DynamoDB users table exists or will be created
+5. VPR async architecture (SQS + worker) is the reusable pattern for all async endpoints
+6. OpenAPI spec is authoritative — handlers conform to it
+
+**Sequencing:**
+
+| Step | Depends On | Parallelizable With |
+|------|-----------|---------------------|
+| 10.0 (Paths) | Nothing | 10.10 |
+| 10.1 (Auth) | Users table | 10.3, 10.10 |
+| 10.2 (Users) | 10.1 | 10.3 |
+| 10.3 (Jobs) | 10.1 | 10.2 |
+| 10.4 (VPR) | Phase 3 | 10.5, 10.6, 10.7, 10.8, 10.9 |
+| 10.5 (Gap) | Phase 5 | 10.4, 10.6, 10.7, 10.8, 10.9 |
+| 10.6 (CV Tailor) | Phase 4 | 10.4, 10.5, 10.7, 10.8, 10.9 |
+| 10.7 (Cover) | Phase 6 | 10.4, 10.5, 10.6, 10.8, 10.9 |
+| 10.8 (Interview) | Phase 9 | 10.4, 10.5, 10.6, 10.7, 10.9 |
+| 10.9 (Company) | Phase X | 10.4, 10.5, 10.6, 10.7, 10.8 |
+| 10.10 (Health) | Nothing | Everything |
+| 10.11 (Schemas) | 10.1–10.10 | Nothing |
+| 10.12 (Validation) | 10.11 | Nothing |
+
+### Reconciliation: api_contract_spec.yaml vs OpenAPI
+
+Both files are consistent:
+- Tags: 10/10 match
+- Endpoints: 27/27 match (paths, methods, operationIds)
+- Async markers: 5/5 match
+- Security requirements: All match (23 protected, 4 public)
+- No discrepancies found
+
+---
+
+*Generated 2026-02-15 by API Contract Remediation analysis. Phase 10 added to EXECUTION_RUNBOOK.md.*
+
+---
+
+## Review Addendum: Feature Scope Reality Check (2026-02-15)
+
+### Question Assessed
+
+After executing `EXECUTION_RUNBOOK.md`, will CareerVP have a working serverless AWS application with all required features enabled?
+
+### Short Answer
+
+**Partially.**
+The runbook is sufficient to drive a working **API-aligned backend scope** (27 OpenAPI endpoints), but it does **not** cover all required features from the full product feature specification.
+
+### Features That WILL Be Implemented by the Runbook Scope
+
+These are directly covered by runbook phases (especially Phase 10 OpenAPI remediation):
+
+| Category | Included in Runbook Scope | Notes |
+|----------|----------------------------|-------|
+| Auth API basics | register, login, refresh | Endpoint-focused implementation |
+| User API basics | get/update current user, CV upload/list | OpenAPI path/schema alignment |
+| Job API basics | create/list/get job | CRUD-level support |
+| Core generation APIs | VPR, gap analysis, CV tailoring, cover letter, interview prep, company research | Includes async submit/status/list patterns where defined |
+| Health endpoint | `/health` | Basic service health response |
+| Contract quality gates | OpenAPI endpoint coverage, schema conformance, auth enforcement tests | Phase 10 DONE gate criteria |
+
+### Features That WILL NOT Be Fully Implemented by the Runbook Scope
+
+These are required in the broader feature docs but are outside current runbook completion guarantees:
+
+| Category | Missing / Not Guaranteed | Source Context |
+|----------|---------------------------|----------------|
+| Full product feature set completion | V1 feature set is larger than 27 endpoints | Features doc defines 36 V1 features (+ V1.1/V2) |
+| Billing & subscriptions | Full Stripe checkout/portal/webhook lifecycle and billing UX not covered in OpenAPI v1 scope | Feature set includes dedicated subscription flows |
+| Admin operations | Admin dashboard API + audit workflows not covered in current OpenAPI endpoint set | Feature set includes admin metrics/user actions |
+| Notification system | Full SES/SNS notification and alerting workflows not part of Phase 10 endpoint contract | Feature set includes user emails + admin alerts |
+| Export/review UX scope | Artifact review/regeneration and export pipelines are not fully represented in the Phase 10 contract target | Feature set includes review and DOCX/PDF export |
+| End-to-end production readiness | Infrastructure deployment is optional in runbook, not a mandatory done gate | Runbook marks CDK deployment as optional in Phase 0 |
+| Fully implemented internals | Several tests/components are still marked pending/source-not-implemented in runbook verification notes | Indicates remaining implementation debt |
+
+### Conclusion
+
+Runbook completion yields a substantially improved, runnable **serverless API layer** for the documented OpenAPI v1 contract, but it does **not** by itself guarantee a complete CareerVP application with all required features from the full product specification.
+
+---

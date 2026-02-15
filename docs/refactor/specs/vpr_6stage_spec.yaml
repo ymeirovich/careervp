@@ -4,7 +4,7 @@
 
 spec_version: "2.0"
 date_created: "2026-02-12"
-date_updated: "2026-02-12"
+date_updated: "2026-02-15"
 
 description: |
   VPR (Value Proposition Resume) 6-Stage Generator creates targeted
@@ -12,9 +12,14 @@ description: |
   6 sequential stages.
 
 handler_status: "NEEDS_REFACTOR"
-handler_file: "src/backend/careervp/handlers/vpr_handler.py"
+handler_files:
+  - "src/backend/careervp/handlers/vpr_submit_handler.py"
+  - "src/backend/careervp/handlers/vpr_status_handler.py"
 logic_file: "src/backend/careervp/logic/vpr_generator.py"
 prompt_file: "src/backend/careervp/logic/prompts/vpr_prompt.py"
+legacy_handler:
+  file: "src/backend/careervp/handlers/vpr_handler.py"
+  status: "DEPRECATED - legacy /api/vpr endpoint"
 
 reference_implementation: "docs/specs/03-vpr-generator.md"
 
@@ -74,3 +79,10 @@ quality_requirements:
   - "ATS-optimized formatting"
   - "Achievement STAR method"
   - "Quantifiable metrics"
+
+api_contract_alignment:
+  submit_endpoint: "POST /vpr/generate"
+  status_endpoint: "GET /vpr/{vprId}"
+  list_endpoint: "GET /users/me/vprs"
+  async_response_status: 202
+  status_values: ["pending", "processing", "completed", "failed"]

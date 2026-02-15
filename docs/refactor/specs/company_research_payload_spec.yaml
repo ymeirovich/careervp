@@ -1,0 +1,147 @@
+spec_version: "1.0"
+date_created: "2026-02-14"
+purpose: "Payload specifications for Company Research testing"
+status: "READY_FOR_IMPLEMENTATION"
+
+payloads:
+  live_test:
+    file: "docs/refactor/payloads/phase8_company_research_live_test.json"
+    description: "Full live test payload for AWS deployment testing"
+    schema:
+      type: "object"
+      required:
+        - "company_name"
+        - "job_id"
+        - "options"
+      properties:
+        company_name:
+          type: "string"
+          example: "LiveTestCompany"
+        job_id:
+          type: "string"
+          example: "test-job-001"
+        options:
+          type: "object"
+          properties:
+            extract_mission:
+              type: "boolean"
+              default: true
+            extract_values:
+              type: "boolean"
+              default: true
+            extract_recent_news:
+              type: "boolean"
+              default: true
+            extract_products:
+              type: "boolean"
+              default: true
+            cache_result:
+              type: "boolean"
+              default: true
+            ttl_days:
+              type: "integer"
+              default: 30
+        test_context:
+          type: "object"
+          properties:
+            company_description:
+              type: "string"
+            company_type:
+              type: "string"
+            industry:
+              type: "string"
+            company_size:
+              type: "string"
+
+  unit_test:
+    file: "docs/refactor/payloads/phase8_company_research_unit_test.json"
+    description: "Unit test data with edge cases"
+    test_cases:
+      - name: "Full research with all fields"
+        input:
+          company_name: "TechCorp Solutions"
+          overview: "TechCorp Solutions democratizes enterprise software for mid-market companies."
+          values: ["Innovation", "Customer Success", "Transparency"]
+          mission: "Democratize enterprise software"
+          strategic_priorities: ["AI Integration", "Market Expansion"]
+          recent_news: ["Series C Funding announced Jan 2026"]
+          financial_summary: "$50M ARR, profitable since Q3 2025"
+          source: "website_scrape"
+          confidence_score: 0.95
+        expected:
+          validation_pass: true
+          dict_serialization: true
+
+      - name: "Minimal research (required fields only)"
+        input:
+          company_name: "SmallCo"
+          overview: "SmallCo helps small businesses grow."
+        expected:
+          validation_pass: true
+
+      - name: "Missing required field (company_name empty)"
+        input:
+          company_name: ""
+          overview: "Some overview"
+        expected:
+          validation_pass: false
+          error: "company_name must not be empty"
+
+      - name: "Invalid confidence score (out of range)"
+        input:
+          company_name: "BadCo"
+          overview: "Some overview"
+          confidence_score: 1.5
+        expected:
+          validation_pass: false
+          error: "confidence_score must be <= 1.0"
+
+  integration_test:
+    file: "docs/refactor/payloads/phase8_company_research_integration.json"
+    description: "Integration test scenarios for save/retrieve flow"
+    scenarios:
+      - name: "Save and retrieve"
+        steps:
+          - action: "save_company_research"
+            input:
+              user_email: "test@example.com"
+              company_name: "IntegrationTestCo"
+              llm_output:
+                company_name: "IntegrationTestCo"
+                overview: "A test company for integration testing."
+                values: ["Quality", "Speed"]
+                mission: "Test all the things"
+                strategic_priorities: ["Testing"]
+                recent_news: []
+            expected:
+              success: true
+          - action: "get_company_research"
+            input:
+              user_email: "test@example.com"
+              company_name: "IntegrationTestCo"
+            expected:
+              success: true
+              data_match: true
+
+      - name: "Cache hit on second save"
+        steps:
+          - action: "save_company_research"
+            input:
+              user_email: "test@example.com"
+              company_name: "CacheTestCo"
+            expected:
+              cached: false
+          - action: "save_company_research"
+            input:
+              user_email: "test@example.com"
+              company_name: "CacheTestCo"
+            expected:
+              cached: true
+
+      - name: "TTL expiration triggers refresh"
+        steps:
+          - action: "insert_expired_research"
+            ttl_days: -1
+          - action: "save_company_research"
+            expected:
+              cached: false

@@ -1,0 +1,69 @@
+spec_version: "1.0"
+date_created: "2026-02-14"
+purpose: "CompanyResearchData Pydantic model specification"
+status: "READY_FOR_IMPLEMENTATION"
+
+model:
+  name: "CompanyResearchResult"
+  file: "src/backend/careervp/models/company.py"
+  existing_fields:
+    - name: "company_name"
+      type: "Annotated[str, Field(...)]"
+      required: true
+    - name: "overview"
+      type: "Annotated[str, Field(...)]"
+      required: true
+    - name: "values"
+      type: "Annotated[list[str], Field(default_factory=list)]"
+      required: false
+    - name: "mission"
+      type: "Annotated[str | None, Field(default=None)]"
+      required: false
+    - name: "strategic_priorities"
+      type: "Annotated[list[str], Field(default_factory=list)]"
+      required: false
+    - name: "recent_news"
+      type: "Annotated[list[str], Field(default_factory=list)]"
+      required: false
+    - name: "financial_summary"
+      type: "Annotated[str | None, Field(default=None)]"
+      required: false
+    - name: "source"
+      type: "Annotated[ResearchSource, Field(default=ResearchSource.WEBSITE_SCRAPE)]"
+      required: false
+    - name: "source_urls"
+      type: "Annotated[list[str], Field(default_factory=list)]"
+      required: false
+    - name: "confidence_score"
+      type: "Annotated[float, Field(default=0.0, ge=0.0, le=1.0)]"
+      required: false
+    - name: "research_timestamp"
+      type: "Annotated[datetime, Field(default_factory=...)]"
+      required: false
+
+  methods_to_add:
+    - name: "to_research_dict"
+      returns: "dict[str, Any]"
+      description: "Serialize model to dictionary suitable for JSON blob storage in DynamoDB"
+      implementation_notes: |
+        Returns model_dump() with datetime fields converted to ISO8601 strings.
+        Used by CompanyResearchTransformer.to_dynamodb_item() to create research_data blob.
+    - name: "from_research_dict"
+      classmethod: true
+      params: ["data: dict[str, Any]"]
+      returns: "CompanyResearchResult"
+      description: "Deserialize from dictionary (inverse of to_research_dict)"
+      implementation_notes: |
+        Parses ISO8601 datetime strings back to datetime objects.
+        Used by CompanyResearchTransformer.from_dynamodb_item() to reconstruct model.
+
+  test_file: "tests/unit/test_company_research_model.py"
+  test_cases:
+    - name: "test_to_research_dict_all_fields"
+      description: "Verify all fields serialized correctly"
+    - name: "test_from_research_dict_roundtrip"
+      description: "Verify serialize/deserialize roundtrip preserves data"
+    - name: "test_from_research_dict_minimal"
+      description: "Verify deserialization with only required fields"
+    - name: "test_to_research_dict_datetime_format"
+      description: "Verify datetime fields are ISO8601 strings"
