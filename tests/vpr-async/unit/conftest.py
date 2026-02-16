@@ -125,6 +125,7 @@ def valid_vpr_request() -> Dict[str, Any]:
     """Return valid VPR request payload."""
     return {
         "user_id": "test-user-123",
+        "job_id": "job-456",
         "application_id": "test-app-456",
         "job_posting": {
             "company_name": "Acme Corp",

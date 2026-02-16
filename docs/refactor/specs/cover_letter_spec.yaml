@@ -2,10 +2,11 @@
 # Source: JSA_FEATURE_MAPPING.md Section 9
 # Phase: 6
 # Reference: docs/specs/02-company-research.md (handler implementation pattern)
+# Updated: NEW 2026-02-15 - Synced async storage path with jobs table + storage adapter
 
-spec_version: "1.1"
+spec_version: "1.3"
 date_created: "2026-02-12"
-date_updated: "2026-02-10"
+date_updated: "2026-02-15"
 
 description: |
   Cover Letter Generator creates personalized cover letters
@@ -24,6 +25,15 @@ implementation:
   tests: "tests/unit/test_cover_letter_*.py tests/integration/test_cover_letter_flow.py"
   model: "Claude Haiku 4.5 (TEMPLATE mode)"
   max_tokens: 1000
+
+storage_contract:
+  source: "docs/refactor/specs/storage_contract_spec.yaml"
+  submit_path:
+    logical_id: "coverLetterId (request_id)"
+    active_table: "careervp-jobs-table-dev (PK=job_id)"
+  result_path:
+    adapter_file: "src/backend/careervp/dal/api_storage_adapter.py"
+    logical_keys: ["user_id", "cv_id", "job_id", "vpr_id"]
 
 structure:
   paragraph_1:
@@ -61,7 +71,7 @@ anti_ai_detection:
 # HANDLER IMPLEMENTATION (based on company_research_handler.py pattern)
 # ─────────────────────────────────────────────────────────────────────────────
 handler:
-  pattern: "Synchronous Lambda Handler (like company_research_handler.py)"
+  pattern: "Async submit + polling + list handlers"
   validation:
     - "Validate request body against CoverLetterRequest schema"
     - "Verify CV, VPR, Gap Analysis, Company Research are completed"
@@ -98,20 +108,26 @@ handler:
       - FVS compliance (no hallucinations)
 
     6_save_result: |
-      Save cover letter to DynamoDB:
-      - Table: applications-table
-      - SK: ARTIFACT#COVER_LETTER#v1
+      Save cover letter using async + adapter pattern:
+      - Submit status: careervp-jobs-table-dev (job_id/request_id)
+      - Artifact persistence: adapter-managed user artifact record
+      - Do not require replacing existing tables
 
     7_return_response: |
-      Return cover letter content + metadata
+      Return 202 Accepted with request_id, status=processing, estimated_time_seconds
 
-  api_endpoint: "POST /cover-letter/generate"
+  api_endpoints:
+    - "POST /cover-letter/generate"
+    - "GET /cover-letter/{coverLetterId}"
+    - "GET /users/me/cover-letters"
   request_schema:
     type: "object"
     required:
       - "cv_id"
       - "job_id"
       - "vpr_id"
+      - "gap_response_ids"
+      - "company_research_id"
     properties:
       cv_id:
         type: "string"
@@ -129,35 +145,52 @@ handler:
         description: "IDs of gap analysis responses"
       company_research_id:
         type: "string"
-        description: "ID of company research (optional)"
-
-  response_schema:
-    type: "object"
-    properties:
-      cover_letter:
-        type: "string"
-        description: "Generated cover letter (markdown)"
-      word_count:
-        type: "integer"
-      paragraphs:
+        description: "ID of company research"
+      options:
         type: "object"
         properties:
-          hook:
+          tone:
+            type: "string"
+            enum: ["professional", "conversational", "formal"]
+          length:
+            type: "string"
+            enum: ["short", "standard", "long"]
+          include_portfolio_link:
+            type: "boolean"
+            default: false
+
+  response_schema_submit:
+    type: "object"
+    properties:
+      request_id:
+        type: "string"
+      status:
+        type: "string"
+      estimated_time_seconds:
+        type: "integer"
+
+  response_schema_status:
+    type: "object"
+    properties:
+      id:
+        type: "string"
+      status:
+        type: "string"
+      result:
+        type: "object"
+        properties:
+          cover_letter:
+            type: "string"
+          paragraphs:
             type: "object"
-            properties:
-              word_count: "integer"
-              includes_company_reference: "boolean"
-              includes_uvp: "boolean"
-          proof_points:
+          fvs_validation:
             type: "object"
-            properties:
-              requirements_matched: "integer"
-              claims_verified: "boolean"
-          close:
-            type: "object"
-            properties:
-              word_count: "integer"
-              includes_cta: "boolean"
+
+  response_schema_list:
+    type: "object"
+    properties:
+      cover_letters:
+        type: "array"
 
 quality_requirements:
   - "FVS validation (Phase 7)"
@@ -173,6 +206,7 @@ cost:
 dependencies:
   - "CV Tailoring output (Phase 4)"
   - "Gap Analysis responses (Phase 5)"
+  - "storage_contract_spec.yaml"
   - "CRITICAL_CORRECTIONS.md Section 8"
   - "docs/specs/02-company-research.md (handler pattern)"
 

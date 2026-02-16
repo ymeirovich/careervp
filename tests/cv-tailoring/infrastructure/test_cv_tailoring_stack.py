@@ -68,7 +68,7 @@ def test_lambda_environment_variables(template):
 
 
 def test_api_gateway_route_exists(template):
-    """Test API Gateway has POST /api/cv-tailoring route."""
+    """Test API Gateway has the currently deployed CV tailoring route."""
     # Assert
     template.has_resource_properties(
         "AWS::ApiGatewayV2::Route", {"RouteKey": "POST /api/cv-tailoring"}

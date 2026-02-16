@@ -2,10 +2,11 @@
 # Source: JSA_FEATURE_MAPPING.md Section 11
 # Phase: 9
 # Reference: docs/specs/02-company-research.md (handler implementation pattern)
+# Updated: NEW 2026-02-15 - Synced async storage path with jobs table + storage adapter
 
-spec_version: "1.1"
+spec_version: "1.3"
 date_created: "2026-02-12"
-date_updated: "2026-02-10"
+date_updated: "2026-02-15"
 
 description: |
   Interview Preparation Generator creates personalized interview
@@ -24,6 +25,15 @@ implementation:
   tests: "tests/unit/test_interview_prep*.py tests/integration/test_interview_prep_flow.py"
   model: "Claude Haiku 4.5 (TEMPLATE mode)"
   max_tokens: 4096
+
+storage_contract:
+  source: "docs/refactor/specs/storage_contract_spec.yaml"
+  submit_path:
+    logical_id: "interviewPrepId (request_id)"
+    active_table: "careervp-jobs-table-dev (PK=job_id)"
+  result_path:
+    adapter_file: "src/backend/careervp/dal/api_storage_adapter.py"
+    logical_keys: ["user_id", "vpr_id", "gap_response_ids"]
 
 components:
   - name: "InterviewPrepGenerator"
@@ -63,21 +73,11 @@ constraints:
   max_questions_per_type: 4
   answer_length: "150-300 words"
 
-cost:
-  per_request: "$0.004-0.006"
-  monthly_estimate: "$2-3 (500 requests)"
-
-dependencies:
-  - "Gap Analysis output (Phase 5)"
-  - "VPR output (Phase 3)"
-  - "CV Tailoring output (Phase 4)"
-  - "TEST_STRATEGY.md Section 6"
-
 # ─────────────────────────────────────────────────────────────────────────────
 # HANDLER IMPLEMENTATION (based on company_research_handler.py pattern)
 # ─────────────────────────────────────────────────────────────────────────────
 handler:
-  pattern: "Synchronous Lambda Handler (like company_research_handler.py)"
+  pattern: "Async submit + polling handlers"
   validation:
     - "Validate request body against InterviewPrepRequest schema"
     - "Verify CV, VPR, Gap Analysis are completed"
@@ -115,28 +115,23 @@ handler:
       - Word count: 150-300 words per answer
 
     6_save_result: |
-      Save interview prep to DynamoDB:
-      - Table: applications-table
-      - SK: ARTIFACT#INTERVIEW_PREP#v1
+      Save interview prep using async + adapter pattern:
+      - Submit status: careervp-jobs-table-dev (job_id/request_id)
+      - Artifact persistence: adapter-managed user artifact record
+      - Keep existing deployed infra intact
 
     7_return_response: |
-      Return questions + suggested answers + metadata
+      Return 202 Accepted with request_id and status
 
-  api_endpoint: "POST /interview-prep/generate"
+  api_endpoints:
+    - "POST /interview-prep/generate"
+    - "GET /interview-prep/{interviewPrepId}"
   request_schema:
     type: "object"
     required:
-      - "cv_id"
-      - "job_id"
       - "vpr_id"
       - "gap_response_ids"
     properties:
-      cv_id:
-        type: "string"
-        description: "ID of the user's parsed CV"
-      job_id:
-        type: "string"
-        description: "ID of the job application"
       vpr_id:
         type: "string"
         description: "ID of the generated VPR"
@@ -145,52 +140,35 @@ handler:
         items:
           type: "string"
         description: "IDs of gap analysis responses"
-      question_types:
+      focus_areas:
         type: "array"
         items:
           type: "string"
-          enum: ["Behavioral", "Technical", "Situational", "Gap-Focused"]
-        description: "Optional filter for question types"
-      max_questions:
+        description: "Optional focus areas"
+      question_count:
         type: "integer"
-        description: "Max questions to generate (default: 10)"
+        description: "Question count (default: 5)"
 
-  response_schema:
+  response_schema_submit:
     type: "object"
     properties:
-      questions:
-        type: "array"
-        items:
-          type: "object"
-          properties:
-            type:
-              type: "string"
-            question:
-              type: "string"
-            suggested_answer:
-              type: "object"
-              properties:
-                content:
-                  type: "string"
-                word_count:
-                  type: "integer"
-                star_elements:
-                  type: "object"
-                  properties:
-                    situation:
-                      type: "string"
-                    task:
-                      type: "string"
-                    action:
-                      type: "string"
-                    result:
-                      type: "string"
-            priority:
-              type: "integer"
-      total_questions:
-        type: "integer"
-      questions_by_type:
+      request_id:
+        type: "string"
+      status:
+        type: "string"
+
+  response_schema_status:
+    type: "object"
+    properties:
+      id:
+        type: "string"
+      status:
+        type: "string"
+      result:
         type: "object"
+        properties:
+          questions:
+            type: "array"
 
 quality_requirements:
   - "FVS validation (Phase 7)"
@@ -207,6 +185,8 @@ dependencies:
   - "Gap Analysis output (Phase 5)"
   - "VPR output (Phase 3)"
   - "CV Tailoring output (Phase 4)"
+  - "storage_contract_spec.yaml"
+  - "TEST_STRATEGY.md Section 6"
   - "CRITICAL_CORRECTIONS.md Section 8"
   - "docs/specs/02-company-research.md"
 

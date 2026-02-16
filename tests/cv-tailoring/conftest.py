@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 from typing import Any, Dict, List
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 
@@ -81,7 +81,9 @@ def mock_s3_client() -> MagicMock:
     """Mock S3 client for integration tests."""
     client = MagicMock()
     client.put_object = MagicMock()
-    client.generate_presigned_url = MagicMock(return_value="https://example.com/fake-url")
+    client.generate_presigned_url = MagicMock(
+        return_value="https://example.com/fake-url"
+    )
     return client
 
 
@@ -341,6 +343,7 @@ def mock_dal_handler() -> Mock:
     """Mock DynamoDalHandler."""
     dal = Mock()
     dal.save_tailored_cv = AsyncMock(return_value=True)
+    dal.save_tailored_cv_artifact = AsyncMock(return_value=True)
     dal.get_tailored_cv = AsyncMock(return_value=None)
     dal.list_tailored_cvs = AsyncMock(return_value=[])
     dal.increment_tailoring_counter = AsyncMock(return_value=1)

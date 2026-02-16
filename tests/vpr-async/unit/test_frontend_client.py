@@ -30,49 +30,49 @@ class VPRAsyncClient:
         self._session = None
 
     async def submit_vpr_job(self, vpr_request: dict) -> dict:
-        """Submit VPR job and return job_id.
+        """Submit VPR job and return request_id.
 
         Args:
             vpr_request: VPR request payload
 
         Returns:
-            Response with job_id and status (202 Accepted)
+            Response with request_id and status (202 Accepted)
 
         Raises:
             ConnectionError: Network failure
             ValueError: Invalid request
         """
-        if not vpr_request.get("user_id"):
-            raise ValueError("user_id is required")
-        if not vpr_request.get("application_id"):
-            raise ValueError("application_id is required")
+        if not vpr_request.get("cv_id"):
+            raise ValueError("cv_id is required")
+        if not vpr_request.get("job_id"):
+            raise ValueError("job_id is required")
 
-        url = f"{self.base_url}/api/vpr"
+        url = f"{self.base_url}/vpr/generate"
         response = await self._post(url, vpr_request)
 
         if response["status_code"] == 202:
             return {
                 "status_code": 202,
-                "job_id": response["data"].get("job_id"),
-                "status": response["data"].get("status", "PENDING"),
+                "request_id": response["data"].get("request_id"),
+                "status": response["data"].get("status", "pending"),
             }
         elif response["status_code"] == 200:
             # Idempotent: job already exists
             return {
                 "status_code": 200,
-                "job_id": response["data"].get("job_id"),
+                "request_id": response["data"].get("request_id"),
                 "status": response["data"].get("status"),
             }
         else:
             raise ValueError(f"HTTP {response['status_code']}: {response.get('error')}")
 
     async def poll_status(
-        self, job_id: str, poll_interval: int = 5, max_polls: int = 60
+        self, request_id: str, poll_interval: int = 5, max_polls: int = 60
     ) -> dict:
         """Poll job status with exponential backoff on retries.
 
         Args:
-            job_id: Job ID to poll
+            request_id: Job ID to poll
             poll_interval: Interval between polls (seconds)
             max_polls: Maximum number of polls
 
@@ -84,7 +84,7 @@ class VPRAsyncClient:
             ValueError: Job not found (404) or expired (410)
         """
         for poll_count in range(max_polls):
-            url = f"{self.base_url}/api/vpr/status/{job_id}"
+            url = f"{self.base_url}/vpr/{request_id}"
 
             try:
                 response = await self._get_with_backoff(url, poll_count)
@@ -97,11 +97,11 @@ class VPRAsyncClient:
                     data = response.get("data", {})
 
                     # Check if complete
-                    if data.get("status") in ["COMPLETED", "FAILED"]:
+                    if data.get("status") in ["completed", "failed"]:
                         return {
                             "status_code": 200,
                             "status": data.get("status"),
-                            "result_url": data.get("result_url"),
+                            "result": data.get("result"),
                             "error": data.get("error"),
                             "token_usage": data.get("token_usage"),
                         }
@@ -123,11 +123,11 @@ class VPRAsyncClient:
 
         raise TimeoutError("Job did not complete within timeout period")
 
-    async def retrieve_result(self, result_url: str) -> dict:
+    async def retrieve_result(self, result: str) -> dict:
         """Retrieve VPR result from presigned S3 URL.
 
         Args:
-            result_url: Presigned S3 URL
+            result: Presigned S3 URL
 
         Returns:
             VPR result JSON
@@ -136,7 +136,7 @@ class VPRAsyncClient:
             ConnectionError: Network failure
             ValueError: Invalid URL or expired
         """
-        response = await self._get(result_url)
+        response = await self._get(result)
 
         if response["status_code"] == 200:
             return response.get("data", {})
@@ -155,12 +155,12 @@ class VPRAsyncClient:
         """Make POST request."""
         return {
             "status_code": 202,
-            "data": {"job_id": "test-job-id", "status": "PENDING"},
+            "data": {"request_id": "test-job-id", "status": "pending"},
         }
 
     async def _get_with_backoff(self, url: str, retry_count: int = 0) -> dict:
         """Get with exponential backoff."""
-        return {"status_code": 202, "data": {"status": "PROCESSING"}}
+        return {"status_code": 202, "data": {"status": "processing"}}
 
     async def _sleep(self, duration: float):
         """Sleep for duration."""
@@ -204,17 +204,17 @@ class TestVPRAsyncClientSubmit:
         client._post = AsyncMock(
             return_value={
                 "status_code": 202,
-                "data": {"job_id": "job-123", "status": "PENDING"},
+                "data": {"request_id": "job-123", "status": "pending"},
             }
         )
 
         result = await client.submit_vpr_job(
-            {"user_id": "user-123", "application_id": "app-456", "job_posting": {}}
+            {"cv_id": "cv-123", "job_id": "job-456", "job_posting": {}}
         )
 
         assert result["status_code"] == 202
-        assert result["job_id"] == "job-123"
-        assert result["status"] == "PENDING"
+        assert result["request_id"] == "job-123"
+        assert result["status"] == "pending"
 
     @pytest.mark.asyncio
     async def test_submit_idempotent_job(self):
@@ -224,34 +224,32 @@ class TestVPRAsyncClientSubmit:
         client._post = AsyncMock(
             return_value={
                 "status_code": 200,
-                "data": {"job_id": "job-123", "status": "PENDING"},
+                "data": {"request_id": "job-123", "status": "pending"},
             }
         )
 
         result = await client.submit_vpr_job(
-            {"user_id": "user-123", "application_id": "app-456", "job_posting": {}}
+            {"cv_id": "cv-123", "job_id": "job-456", "job_posting": {}}
         )
 
         assert result["status_code"] == 200
-        assert result["job_id"] == "job-123"
+        assert result["request_id"] == "job-123"
 
     @pytest.mark.asyncio
-    async def test_submit_missing_user_id(self):
-        """Test submission without user_id raises ValueError."""
+    async def test_submit_missing_cv_id(self):
+        """Test submission without cv_id raises ValueError."""
         client = VPRAsyncClient("https://api.example.com")
 
-        with pytest.raises(ValueError, match="user_id is required"):
-            await client.submit_vpr_job(
-                {"application_id": "app-456", "job_posting": {}}
-            )
+        with pytest.raises(ValueError, match="cv_id is required"):
+            await client.submit_vpr_job({"job_id": "job-456", "job_posting": {}})
 
     @pytest.mark.asyncio
-    async def test_submit_missing_application_id(self):
-        """Test submission without application_id raises ValueError."""
+    async def test_submit_missing_job_id(self):
+        """Test submission without request_id raises ValueError."""
         client = VPRAsyncClient("https://api.example.com")
 
-        with pytest.raises(ValueError, match="application_id is required"):
-            await client.submit_vpr_job({"user_id": "user-123", "job_posting": {}})
+        with pytest.raises(ValueError, match="job_id is required"):
+            await client.submit_vpr_job({"cv_id": "cv-123", "job_posting": {}})
 
     @pytest.mark.asyncio
     async def test_submit_network_error(self):
@@ -262,7 +260,7 @@ class TestVPRAsyncClientSubmit:
 
         with pytest.raises(ConnectionError):
             await client.submit_vpr_job(
-                {"user_id": "user-123", "application_id": "app-456", "job_posting": {}}
+                {"cv_id": "cv-123", "job_id": "job-456", "job_posting": {}}
             )
 
     @pytest.mark.asyncio
@@ -276,7 +274,7 @@ class TestVPRAsyncClientSubmit:
 
         with pytest.raises(ValueError, match="HTTP 500"):
             await client.submit_vpr_job(
-                {"user_id": "user-123", "application_id": "app-456", "job_posting": {}}
+                {"cv_id": "cv-123", "job_id": "job-456", "job_posting": {}}
             )
 
 
@@ -292,8 +290,8 @@ class TestVPRAsyncClientPolling:
             return_value={
                 "status_code": 200,
                 "data": {
-                    "status": "COMPLETED",
-                    "result_url": "https://s3.example.com/result.json",
+                    "status": "completed",
+                    "result": "https://s3.example.com/result.json",
                     "token_usage": {"input_tokens": 1000, "output_tokens": 500},
                 },
             }
@@ -302,8 +300,8 @@ class TestVPRAsyncClientPolling:
         result = await client.poll_status("job-123")
 
         assert result["status_code"] == 200
-        assert result["status"] == "COMPLETED"
-        assert result["result_url"] == "https://s3.example.com/result.json"
+        assert result["status"] == "completed"
+        assert result["result"] == "https://s3.example.com/result.json"
 
     @pytest.mark.asyncio
     async def test_poll_failed_job(self):
@@ -313,14 +311,14 @@ class TestVPRAsyncClientPolling:
         client._get_with_backoff = AsyncMock(
             return_value={
                 "status_code": 200,
-                "data": {"status": "FAILED", "error": "Claude API rate limit exceeded"},
+                "data": {"status": "failed", "error": "Claude API rate limit exceeded"},
             }
         )
 
         result = await client.poll_status("job-123")
 
         assert result["status_code"] == 200
-        assert result["status"] == "FAILED"
+        assert result["status"] == "failed"
         assert result["error"] == "Claude API rate limit exceeded"
 
     @pytest.mark.asyncio
@@ -330,14 +328,14 @@ class TestVPRAsyncClientPolling:
 
         # Mock responses: 3 pending, then completed
         responses = [
-            {"status_code": 202, "data": {"status": "PENDING"}},
-            {"status_code": 202, "data": {"status": "PROCESSING"}},
-            {"status_code": 202, "data": {"status": "PROCESSING"}},
+            {"status_code": 202, "data": {"status": "pending"}},
+            {"status_code": 202, "data": {"status": "processing"}},
+            {"status_code": 202, "data": {"status": "processing"}},
             {
                 "status_code": 200,
                 "data": {
-                    "status": "COMPLETED",
-                    "result_url": "https://s3.example.com/result.json",
+                    "status": "completed",
+                    "result": "https://s3.example.com/result.json",
                 },
             },
         ]
@@ -347,7 +345,7 @@ class TestVPRAsyncClientPolling:
 
         result = await client.poll_status("job-123", poll_interval=5, max_polls=60)
 
-        assert result["status"] == "COMPLETED"
+        assert result["status"] == "completed"
         # Should have called sleep between polls
         assert client._sleep.call_count >= 3
 
@@ -380,9 +378,9 @@ class TestVPRAsyncClientPolling:
         """Test polling timeout after max_polls exceeded."""
         client = VPRAsyncClient("https://api.example.com")
 
-        # Always return PROCESSING
+        # Always return processing
         client._get_with_backoff = AsyncMock(
-            return_value={"status_code": 202, "data": {"status": "PROCESSING"}}
+            return_value={"status_code": 202, "data": {"status": "processing"}}
         )
         client._sleep = AsyncMock()
 
@@ -401,8 +399,8 @@ class TestVPRAsyncClientPolling:
             {
                 "status_code": 200,
                 "data": {
-                    "status": "COMPLETED",
-                    "result_url": "https://s3.example.com/result.json",
+                    "status": "completed",
+                    "result": "https://s3.example.com/result.json",
                 },
             },
         ]
@@ -410,11 +408,11 @@ class TestVPRAsyncClientPolling:
         client._get_with_backoff = AsyncMock(side_effect=responses)
         client._sleep = AsyncMock()
 
-        # Should retry on errors
-        with pytest.raises(ValueError):
-            # This will fail because we're not handling 500/503 properly
-            # in the simplified implementation
-            await client.poll_status("job-123", max_polls=5)
+        result = await client.poll_status("job-123", max_polls=5)
+
+        assert result["status"] == "completed"
+        # Two transient errors should trigger backoff sleeps before success.
+        assert client._sleep.await_count == 2
 
 
 class TestVPRAsyncClientRetrieval:
@@ -474,10 +472,10 @@ class TestVPRAsyncClientErrorHandling:
 
     @pytest.mark.asyncio
     async def test_timeout_error_details(self):
-        """Test timeout error includes job_id context."""
+        """Test timeout error includes request_id context."""
         client = VPRAsyncClient("https://api.example.com")
         client._get_with_backoff = AsyncMock(
-            return_value={"status_code": 202, "data": {"status": "PROCESSING"}}
+            return_value={"status_code": 202, "data": {"status": "processing"}}
         )
         client._sleep = AsyncMock()
 
@@ -499,8 +497,8 @@ class TestVPRAsyncClientErrorHandling:
             with pytest.raises(ValueError):
                 await client.submit_vpr_job(
                     {
-                        "user_id": "user-123",
-                        "application_id": "app-456",
+                        "cv_id": "cv-123",
+                        "job_id": "job-456",
                         "job_posting": {},
                     }
                 )
@@ -513,15 +511,15 @@ class TestVPRAsyncClientErrorHandling:
         client._post = AsyncMock(
             return_value={
                 "status_code": 202,
-                "data": {},  # Missing job_id
+                "data": {},  # Missing request_id
             }
         )
 
         result = await client.submit_vpr_job(
-            {"user_id": "user-123", "application_id": "app-456", "job_posting": {}}
+            {"cv_id": "cv-123", "job_id": "job-456", "job_posting": {}}
         )
 
-        assert result["job_id"] is None  # Should handle gracefully
+        assert result["request_id"] is None  # Should handle gracefully
 
 
 class TestVPRAsyncClientIntegration:
@@ -536,7 +534,7 @@ class TestVPRAsyncClientIntegration:
         client._post = AsyncMock(
             return_value={
                 "status_code": 202,
-                "data": {"job_id": "job-123", "status": "PENDING"},
+                "data": {"request_id": "job-123", "status": "pending"},
             }
         )
 
@@ -545,8 +543,8 @@ class TestVPRAsyncClientIntegration:
             return_value={
                 "status_code": 200,
                 "data": {
-                    "status": "COMPLETED",
-                    "result_url": "https://s3.example.com/result.json",
+                    "status": "completed",
+                    "result": "https://s3.example.com/result.json",
                 },
             }
         )
@@ -558,16 +556,16 @@ class TestVPRAsyncClientIntegration:
 
         # Submit
         submit_result = await client.submit_vpr_job(
-            {"user_id": "user-123", "application_id": "app-456", "job_posting": {}}
+            {"cv_id": "cv-123", "job_id": "job-456", "job_posting": {}}
         )
-        assert submit_result["job_id"] == "job-123"
+        assert submit_result["request_id"] == "job-123"
 
         # Poll
-        poll_result = await client.poll_status(submit_result["job_id"])
-        assert poll_result["status"] == "COMPLETED"
+        poll_result = await client.poll_status(submit_result["request_id"])
+        assert poll_result["status"] == "completed"
 
         # Retrieve
-        vpr = await client.retrieve_result(poll_result["result_url"])
+        vpr = await client.retrieve_result(poll_result["result"])
         assert vpr["executive_summary"] == "Test VPR"
 
 

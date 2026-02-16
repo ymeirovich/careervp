@@ -7,9 +7,9 @@
 # Purpose: Machine-readable reference for all LLM prompt definitions, model routing, anti-AI rules, output schemas
 # Used by: Phases 3-9 (all features that call Claude API)
 
-spec_version: "2.0"
+spec_version: "3.0"
 date_created: "2026-02-12"
-date_updated: "2026-02-12"
+date_updated: "2026-02-14"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # GLOBAL RULES (apply to ALL prompts)
@@ -1378,6 +1378,262 @@ prompts:
           type: "array[string]"
         - name: "keyword_match_percentage"
           type: "number"
+
+  # ── Phase 8: Knowledge Base ─────────────────────────────────────────────────
+  knowledge_base:
+    phase: 8
+    model_routing: "template"
+    temperature: 0.3
+    max_tokens: 1000
+    fvs_tier: "IMMUTABLE"
+    anti_ai_detection: []
+
+    source_files:
+      - location: "src/backend/careervp/logic/prompts/knowledge_base_prompt.py"
+        status: "TO_BE_CREATED"
+        exports:
+          - "build_system_prompt() -> str"
+          - "build_user_prompt(operation, context) -> str"
+
+    system_prompt: |
+      You are a knowledge management expert. Generate optimized knowledge storage/retrieval.
+
+      OPERATIONS:
+      {operation}
+
+      CONTEXT:
+      {context}
+
+      OUTPUT: Return JSON matching the exact schema provided.
+
+    user_prompt: |
+      {user_prompt}
+
+    output_schema:
+      format: "JSON"
+      fields:
+        - name: "operation"
+          type: "string"
+          enum: ["STORE", "RETRIEVE", "QUERY", "DELETE"]
+        - name: "entities"
+          type: "array"
+          items:
+            - "type: string"
+            - "key: string"
+            - "value: string"
+            - "metadata: object"
+        - name: "tags"
+          type: "array[string]"
+        - name: "priority"
+          type: "string"
+          enum: ["HIGH", "MEDIUM", "LOW"]
+        - name: "ttl_days"
+          type: "integer"
+
+  # ── Phase 7: FVS Quality Validation ─────────────────────────────────────────────
+  fvs_validation:
+    phase: 7
+    model_routing: "strategic"
+    temperature: 0.1
+    max_tokens: 2048
+    fvs_tier: "VERIFIABLE"
+    anti_ai_detection: []
+
+    source_files:
+      - location: "src/backend/careervp/logic/prompts/fvs_prompt.py"
+        status: "TO_BE_CREATED"
+        exports:
+          - "build_system_prompt() -> str"
+          - "build_validation_prompt(content, baseline_cv) -> str"
+
+    system_prompt: |
+      You are a quality validation specialist. Validate generated content against source CV.
+
+      CRITICAL RULES:
+      1. ALL facts must be DIRECTLY VERIFIABLE from CV
+      2. NEVER invent companies, roles, achievements, skills, dates
+      3. Allow elaboration on CV facts, never fabricate new ones
+      4. Grammar >= 9.0 required
+      5. Tone >= 8.0 required
+      6. Anti-AI patterns >= 9.0 required
+
+      BASELINE CV FACTS (SOURCE OF TRUTH):
+      {baseline_cv_json}
+
+      GENERATED CONTENT TO VALIDATE:
+      {generated_content}
+
+      ---
+
+      OUTPUT: Return JSON matching the exact schema provided.
+
+    user_prompt: |
+      Validate this content against the baseline CV facts.
+
+    output_schema:
+      format: "JSON"
+      fields:
+        - name: "grammar_score"
+          type: "float"
+          minimum: 0.0
+          maximum: 10.0
+        - name: "tone_score"
+          type: "float"
+          minimum: 0.0
+          maximum: 10.0
+        - name: "anti_ai_score"
+          type: "float"
+          minimum: 0.0
+          maximum: 10.0
+        - name: "formatting_score"
+          type: "float"
+          minimum: 0.0
+          maximum: 10.0
+        - name: "fact_accuracy_score"
+          type: "float"
+          minimum: 0.0
+          maximum: 10.0
+        - name: "overall_score"
+          type: "float"
+          minimum: 0.0
+          maximum: 10.0
+        - name: "is_valid"
+          type: "boolean"
+        - name: "violations"
+          type: "array"
+          items:
+            - "type: GRAMMAR | TONE | ANTI_AI | FORMATTING | FACT | ALIGNMENT"
+            - "description: string"
+            - "severity: HIGH | MEDIUM | LOW"
+            - "location: string"
+        - name: "verified_facts"
+          type: "array"
+          items:
+            - "fact: string"
+            - "source: string"
+            - "status: VERIFIED | HALLUCINATED | UNVERIFIABLE"
+        - name: "hallucinations"
+          type: "array[string]"
+
+  # ── Phase 9: Interview Prep (Complete) ────────────────────────────────────────
+  interview_prep_complete:
+    phase: 9
+    model_routing: "template"
+    temperature: 0.5
+    max_tokens: 3000
+    fvs_tier: "VERIFIABLE"
+    anti_ai_detection: []
+
+    source_files:
+      - location: "src/backend/careervp/logic/prompts/interview_prep_prompt.py"
+        status: "TO_BE_CREATED"
+        exports:
+          - "build_system_prompt() -> str"
+          - "build_user_prompt(cv_facts, job_requirements, vpr_differentiators, gap_responses, company_research, language) -> str"
+
+    system_prompt: |
+      You are an interview preparation expert. Generate comprehensive interview guide.
+
+      ---
+
+      INPUT DATA:
+
+      CV FACTS (SOURCE OF TRUTH):
+      {cv_facts_json}
+
+      JOB REQUIREMENTS:
+      {job_requirements_json}
+
+      VPR STRATEGIC DIFFERENTIATORS:
+      {vpr_differentiators_json}
+
+      GAP ANALYSIS RESPONSES:
+      {gap_responses_json}
+
+      COMPANY RESEARCH:
+      {company_research_json}
+
+      LANGUAGE: {language}
+
+      ---
+
+      OUTPUT STRUCTURE:
+
+      ## PREDICTED INTERVIEW QUESTIONS (10-15 total)
+
+      ### Technical Questions (4-5)
+      Based on job requirements
+
+      ### Behavioral Questions (4-5)
+      STAR method required
+
+      ### Company-Specific Questions (2-3)
+      Based on company research
+
+      ### Gap Questions (2-3)
+      Address potential weaknesses
+
+      ---
+
+      FOR EACH QUESTION:
+
+      **Q: [Question]**
+
+      **STAR Response:**
+      - **Situation:** Brief context (2-3 sentences)
+      - **Task:** Your responsibility (1-2 sentences)
+      - **Action:** Specific steps (3-4 bullet points with metrics)
+      - **Result:** Quantified outcome (2-3 sentences with metrics)
+
+      **Key Points to Emphasize:**
+      - Specific metric or achievement
+      - Relevant skill demonstrated
+      - Transferable learning
+
+      ---
+
+      ## QUESTIONS TO ASK INTERVIEWER (5-7)
+
+      Categories:
+      - Role-specific questions
+      - Team dynamics
+      - Company growth/direction
+      - Technical environment
+      - Success metrics
+
+      ## SALARY NEGOTIATION GUIDANCE
+
+      Based on role and experience
+
+      ## PRE-INTERVIEW CHECKLIST
+
+      - Research recap
+      - Key achievements to mention
+      - Questions prepared
+      - Technical setup (if virtual)
+
+      CRITICAL: Use ONLY facts from CV and gap responses. Zero hallucinations.
+
+      OUTPUT: JSON matching exact schema.
+
+    user_prompt: |
+      Generate interview prep guide for {job_title} at {company_name}.
+
+    output_schema:
+      format: "JSON"
+      fields:
+        - name: "predicted_questions"
+          type: "array"
+          items:
+            - "question: string"
+            - "category: TECHNICAL | BEHAVIORAL | COMPANY_SPECIFIC | GAP"
+            - "star_response: object"
+        - name: "questions_to_ask"
+          type: "array[string]"
+        - name: "salary_guidance"
+          type: "string"
+        - name: "pre_interview_checklist"
+          type: "array[string]"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PROMPT LIFECYCLE

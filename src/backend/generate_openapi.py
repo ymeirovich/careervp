@@ -1,20 +1,30 @@
 """
-This script is designed to download and save the Swagger JSON configuration from an AWS Cloud Development Kit (CDK) deployed service.
-It's particularly useful for automating the process of fetching Swagger documentation for APIs created using Powertools for Lambda since their swagger endpoint support a JSON download option.
-You can place the swagger file under your docs folder and publish it as part of your PR changes.
-When you run the 'make pr' command, it will run automatically run this script and save its' output to the default location where it will be uploaded to GitHub pages.
+This script is designed to download and save the Swagger JSON configuration from an AWS
+Cloud Development Kit (CDK) deployed service. It's particularly useful for automating
+the process of fetching Swagger documentation for APIs created using Powertools for Lambda
+since their swagger endpoint support a JSON download option.
 
-The script uses AWS Boto3 to interact with AWS services, and the 'requests' library to download the Swagger JSON.
+You can place the swagger file under your docs folder and publish it as part of your PR
+changes. When you run the 'make pr' command, it will run automatically run this script
+and save its output to the default location where it will be uploaded to GitHub pages.
+
+The script uses AWS Boto3 to interact with AWS services, and the 'requests' library to
+download the Swagger JSON.
 
 Usage:
     The script accepts command-line arguments for customization:
-    --out-destination: Specifies the directory where the Swagger JSON will be saved. (Default: 'docs/swagger')
-    --out-filename: Specifies the filename for the saved Swagger JSON. (Default: 'openapi.json')
-    --swagger-url-key: The key for the Swagger URL in the CDK stack outputs. (Default: 'SwaggerURL')
-    --stack-name: (Optional) The name of the CDK stack to use. If not provided, the 'get_stack_name' function from the cdk folder will be used
+    --out-destination: Specifies the directory where the Swagger JSON will be saved.
+        (Default: 'docs/swagger')
+    --out-filename: Specifies the filename for the saved Swagger JSON.
+        (Default: 'openapi.json')
+    --swagger-url-key: The key for the Swagger URL in the CDK stack outputs.
+        (Default: 'SwaggerURL')
+    --stack-name: (Optional) The name of the CDK stack to use. If not provided,
+        the 'get_stack_name' function from the cdk folder will be used
 
 Example:
-    python generate_openapi.py --out-destination './docs/swagger' --out-filename 'openapi.json' --swagger-url-key 'SwaggerURL' --stack-name 'MyStack'
+    python generate_openapi.py --out-destination './docs/swagger' --out-filename
+        'openapi.json' --swagger-url-key 'SwaggerURL' --stack-name 'MyStack'
 """
 
 import argparse
