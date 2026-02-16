@@ -1,10 +1,11 @@
 # Knowledge Base Specification
 # Source: JSA_FEATURE_MAPPING.md Section 10
 # Phase: 8
+# Updated: NEW 2026-02-15 - Synced logical OpenAPI IDs + adapter-backed physical storage mapping
 
-spec_version: "1.1"
+spec_version: "1.2"
 date_created: "2026-02-12"
-date_updated: "2026-02-12"
+date_updated: "2026-02-15"
 
 description: |
   Knowledge Base Repository stores and retrieves user-specific data
@@ -17,33 +18,53 @@ implementation:
 
 data_types:
   - name: "GapResponse"
-    storage: "DynamoDB Table: careervp-gap-responses-table-dev (NamingUtils)"
+    storage: "Logical IDs via storage adapter (OpenAPI: cv_id/job_id/question_id)"
     fields:
-      - name: "user_email"
-        key_type: "PK"
-      - name: "application_id"
-        key_type: "SK"
+      - name: "user_id"
+        key_type: "Auth Context"
+      - name: "job_id"
+        key_type: "Logical Partition"
+      - name: "cv_id"
+      - name: "response_id"
       - name: "question_id"
       - name: "response_text"
       - name: "created_at"
 
   - name: "CompanyResearch"
-    storage: "DynamoDB Table + S3"
+    storage: "Logical IDs via storage adapter (OpenAPI: job_id/company_research_id)"
     fields:
+      - name: "job_id"
+        key_type: "Logical Partition"
+      - name: "company_research_id"
+        key_type: "Logical Identifier"
       - name: "company_name"
-        key_type: "PK"
       - name: "research_data"
       - name: "cached_at"
       - name: "ttl"
         value: "30 days"
 
+storage_modes:
+  active_mode:
+    source: "infra/careervp/api_db_construct.py"
+    mapping:
+      - "Users table single-table records (PK=pk, SK=sk) for user artifacts"
+      - "Jobs table (PK=job_id) for async status/result tracking"
+  refactor_mode:
+    source: "infra/careervp/specs/dynamodb_spec.yaml"
+    mapping:
+      - "careervp-gap-responses-table-dev (PK=user_email, SK=application_id)"
+      - "careervp-knowledge-table-dev (PK=user_email, SK=entity_type, GSI entity-index)"
+  adapter:
+    file: "src/backend/careervp/dal/api_storage_adapter.py"
+    rule: "Handlers/services use logical IDs; adapter resolves physical keys."
+
 methods:
   - name: "KnowledgeRepository"
     methods:
-      - "save_gap_response(response) -> Result"
-      - "get_gap_responses(user_email, application_id) -> List[GapResponse]"
-      - "save_company_research(company_name, research) -> Result"
-      - "get_company_research(company_name) -> CompanyResearch"
+      - "save_gap_response(user_id, job_id, cv_id, response) -> Result"
+      - "get_gap_responses(user_id, job_id) -> List[GapResponse]"
+      - "save_company_research(user_id, job_id, research) -> Result"
+      - "get_company_research(user_id, job_id) -> CompanyResearch"
 
 ttl_policies:
   gap_responses: "24 months (user lifetime)"
@@ -52,14 +73,15 @@ ttl_policies:
 
 dependencies:
   - "infra/careervp/specs/dynamodb_spec.yaml (GAP_RESPONSES_TABLE_NAME, KNOWLEDGE_TABLE_NAME)"
+  - "docs/refactor/specs/storage_contract_spec.yaml"
   - "DEPLOYMENT_OPERATIONS.md Section 2 (DynamoDB)"
   - "DEPLOYMENT_OPERATIONS.md Section 3 (S3)"
 
 integration_points:
   - name: "Gap Analysis (Phase 5)"
-    purpose: "stores responses in careervp-gap-responses-table-dev"
+    purpose: "stores/retrieves response artifacts keyed by logical job_id and cv_id"
   - name: "Company Research"
-    purpose: "caches research"
+    purpose: "caches research by logical job_id with 30-day TTL"
 
 naming_convention:
   table_pattern: "careervp-{feature}-table-dev"

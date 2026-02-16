@@ -2,15 +2,15 @@
 # Source: JSA_FEATURE_MAPPING.md Section 7
 # Phase: 4
 
-spec_version: "1.2"
+spec_version: "1.3"
 date_created: "2026-02-12"
-date_updated: "2026-02-10"
+date_updated: "2026-02-15"
 
 description: |
   CV Tailoring 3-Step Process adapts CV content for specific
   job requirements using targeted matching and gate tests.
 
-handler_status: "IMPLEMENTED"
+handler_status: "NEEDS_ENHANCEMENT"
 handler_file: "src/backend/careervp/handlers/cv_tailoring_handler.py"
 logic_file: "src/backend/careervp/logic/cv_tailoring.py"
 prompt_file: "src/backend/careervp/logic/prompts/cv_tailoring_prompt.py"
@@ -100,3 +100,42 @@ integration:
     purpose: "for remediation"
   - name: "Cover Letter (Phase 6)"
     purpose: "for next step"
+
+api_contract_alignment:
+  endpoints:
+    - "POST /cv-tailoring/generate"
+    - "GET /cv-tailoring/{cvTailoringId}"
+    - "GET /users/me/tailored-cvs"
+  async_submit:
+    response_status: 202
+    response_schema: "CVTailoringResponse (request_id, status, estimated_time_seconds)"
+  polling:
+    response_schema: "CVTailoringStatusResponse"
+    status_values: ["pending", "processing", "completed", "failed"]
+  list_response_schema: "CVTailoringListResponse"
+
+request_schema:
+  type: "object"
+  required:
+    - "cv_id"
+    - "job_id"
+    - "vpr_id"
+  properties:
+    cv_id:
+      type: "string"
+    job_id:
+      type: "string"
+    vpr_id:
+      type: "string"
+    options:
+      type: "object"
+      properties:
+        preserve_length:
+          type: "boolean"
+          default: true
+        highlight_keywords:
+          type: "boolean"
+          default: true
+        target_ats:
+          type: "string"
+          default: "standard"

@@ -169,7 +169,7 @@ def s3_client(aws_credentials):
             LifecycleConfiguration={
                 "Rules": [
                     {
-                        "Id": "DeleteAfter7Days",
+                        "ID": "DeleteAfter7Days",
                         "Status": "Enabled",
                         "Expiration": {"Days": 7},
                         "Filter": {"Prefix": "results/"},
@@ -187,6 +187,7 @@ def sample_vpr_request() -> Dict[str, Any]:
     Return a sample VPR request payload.
     """
     return {
+        "job_id": "app-123",
         "application_id": "app-123",
         "user_id": "user-456",
         "job_posting": {
@@ -250,7 +251,7 @@ def test_submit_handler_creates_dynamodb_record(
     # Arrange
     job_id = str(uuid4())
     idempotency_key = (
-        f"vpr#{sample_vpr_request['user_id']}#{sample_vpr_request['application_id']}"
+        f"vpr#{sample_vpr_request['user_id']}#{sample_vpr_request['job_id']}"
     )
     created_at = datetime.utcnow().isoformat() + "Z"
     ttl = int((datetime.utcnow() + timedelta(minutes=10)).timestamp())
@@ -262,7 +263,7 @@ def test_submit_handler_creates_dynamodb_record(
             "job_id": {"S": job_id},
             "idempotency_key": {"S": idempotency_key},
             "user_id": {"S": sample_vpr_request["user_id"]},
-            "application_id": {"S": sample_vpr_request["application_id"]},
+            "input_job_id": {"S": sample_vpr_request["job_id"]},
             "status": {"S": "PENDING"},
             "created_at": {"S": created_at},
             "input_data": {"S": json.dumps(sample_vpr_request)},
@@ -320,7 +321,10 @@ def test_submit_handler_sends_sqs_message(
 
     # Assert
     messages = sqs_client.receive_message(
-        QueueUrl=queue_url, MaxNumberOfMessages=1, WaitTimeSeconds=1
+        QueueUrl=queue_url,
+        MaxNumberOfMessages=1,
+        WaitTimeSeconds=1,
+        MessageAttributeNames=["All"],
     )
 
     assert "Messages" in messages
@@ -331,7 +335,7 @@ def test_submit_handler_sends_sqs_message(
 
     assert body["job_id"] == job_id
     assert body["user_id"] == sample_vpr_request["user_id"]
-    assert body["input_data"]["application_id"] == sample_vpr_request["application_id"]
+    assert body["input_data"]["job_id"] == sample_vpr_request["job_id"]
     assert message["MessageAttributes"]["job_type"]["StringValue"] == "vpr_generation"
 
 
@@ -359,7 +363,7 @@ def test_worker_lambda_processes_sqs_message(
             "job_id": {"S": job_id},
             "status": {"S": "PENDING"},
             "user_id": {"S": sample_vpr_request["user_id"]},
-            "application_id": {"S": sample_vpr_request["application_id"]},
+            "input_job_id": {"S": sample_vpr_request["job_id"]},
             "input_data": {"S": json.dumps(sample_vpr_request)},
             "created_at": {"S": datetime.utcnow().isoformat() + "Z"},
         },
@@ -379,7 +383,10 @@ def test_worker_lambda_processes_sqs_message(
 
     # Act - Simulate worker receiving message
     messages = sqs_client.receive_message(
-        QueueUrl=queue_url, MaxNumberOfMessages=1, WaitTimeSeconds=1
+        QueueUrl=queue_url,
+        MaxNumberOfMessages=1,
+        WaitTimeSeconds=1,
+        MessageAttributeNames=["All"],
     )
 
     # Assert
@@ -555,9 +562,7 @@ def test_worker_handles_failure_with_dlq(
     queue_url = sqs_client.get_queue_url(QueueName="careervp-vpr-jobs-queue-dev")[
         "QueueUrl"
     ]
-    _ = sqs_client.get_queue_url(QueueName="careervp-vpr-jobs-dlq-dev")[
-        "QueueUrl"
-    ]
+    _ = sqs_client.get_queue_url(QueueName="careervp-vpr-jobs-dlq-dev")["QueueUrl"]
 
     dynamodb_client.put_item(
         TableName="careervp-jobs-table-dev",
@@ -576,7 +581,10 @@ def test_worker_handles_failure_with_dlq(
     # Act - Simulate worker failure (receive and don't delete, 3 times)
     for attempt in range(3):
         _ = sqs_client.receive_message(
-            QueueUrl=queue_url, MaxNumberOfMessages=1, WaitTimeSeconds=1
+            QueueUrl=queue_url,
+            MaxNumberOfMessages=1,
+            WaitTimeSeconds=1,
+            MessageAttributeNames=["All"],
         )
         # Don't delete message - simulates worker crash/failure
         # Message becomes visible again after VisibilityTimeout
@@ -611,7 +619,7 @@ def test_worker_handles_failure_with_dlq(
     )
 
     redrive_policy = json.loads(queue_attrs["Attributes"]["RedrivePolicy"])
-    assert redrive_policy["maxReceiveCount"] == "3"
+    assert str(redrive_policy["maxReceiveCount"]) == "3"
 
 
 def test_status_handler_returns_job_state(
@@ -714,7 +722,9 @@ def test_status_handler_returns_job_state(
 
     assert presigned_url is not None
     assert bucket_name in presigned_url
-    assert result_key.replace("/", "%2F") in presigned_url
+    assert (
+        result_key in presigned_url or result_key.replace("/", "%2F") in presigned_url
+    )
 
     # Test Case 4: FAILED status
     job_id_failed = str(uuid4())
@@ -762,7 +772,7 @@ def test_idempotency_prevents_duplicate_submissions(
     # Arrange
     job_id = str(uuid4())
     idempotency_key = (
-        f"vpr#{sample_vpr_request['user_id']}#{sample_vpr_request['application_id']}"
+        f"vpr#{sample_vpr_request['user_id']}#{sample_vpr_request['job_id']}"
     )
 
     # Act - First submission
@@ -772,7 +782,7 @@ def test_idempotency_prevents_duplicate_submissions(
             "job_id": {"S": job_id},
             "idempotency_key": {"S": idempotency_key},
             "user_id": {"S": sample_vpr_request["user_id"]},
-            "application_id": {"S": sample_vpr_request["application_id"]},
+            "input_job_id": {"S": sample_vpr_request["job_id"]},
             "status": {"S": "PENDING"},
             "created_at": {"S": datetime.utcnow().isoformat() + "Z"},
         },
@@ -810,7 +820,7 @@ def test_end_to_end_workflow(
     # Step 1: Submit handler creates job and sends message
     job_id = str(uuid4())
     idempotency_key = (
-        f"vpr#{sample_vpr_request['user_id']}#{sample_vpr_request['application_id']}"
+        f"vpr#{sample_vpr_request['user_id']}#{sample_vpr_request['job_id']}"
     )
     created_at = datetime.utcnow().isoformat() + "Z"
 
@@ -820,7 +830,7 @@ def test_end_to_end_workflow(
             "job_id": {"S": job_id},
             "idempotency_key": {"S": idempotency_key},
             "user_id": {"S": sample_vpr_request["user_id"]},
-            "application_id": {"S": sample_vpr_request["application_id"]},
+            "input_job_id": {"S": sample_vpr_request["job_id"]},
             "status": {"S": "PENDING"},
             "created_at": {"S": created_at},
             "input_data": {"S": json.dumps(sample_vpr_request)},
@@ -842,7 +852,9 @@ def test_end_to_end_workflow(
     assert response["Item"]["status"]["S"] == "PENDING"
 
     # Step 2: Worker receives message and updates to PROCESSING
-    messages = sqs_client.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=1)
+    messages = sqs_client.receive_message(
+        QueueUrl=queue_url, MaxNumberOfMessages=1, MessageAttributeNames=["All"]
+    )
     assert "Messages" in messages
 
     started_at = datetime.utcnow().isoformat() + "Z"

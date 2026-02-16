@@ -1,0 +1,773 @@
+# Architect Design Prompt: Complete Company Research Transformation Layer (2026-02-14)
+
+**Document Version:** 3.0
+**Date:** 2026-02-14
+**Status:** REQUIRES COMPLETE SOLUTION
+**Priority:** CRITICAL
+
+---
+
+## INSTRUCTIONS FOR ARCHITECT AGENT
+
+You are generating missing specifications and steps to COMPLETE the Company Research Transformation layer. Your output will directly update `docs/refactor/EXECUTION_RESULTS.md` and create any missing spec files.
+
+### YOUR TASK
+
+1. **ANALYZE EXISTING STATE** - Compare what exists vs what's needed
+2. **GENERATE MISSING SPECS** - Create machine-readable YAML spec files
+3. **ADD MISSING STEPS** - Update `docs/refactor/EXECUTION_RUNBOOK.md`
+4. **OUTPUT RESULTS** - Document what was generated in EXECUTION_RESULTS.md
+
+---
+
+## PART 1: CURRENT STATE ANALYSIS
+
+### A. Files Already Created (Check First)
+
+Run these commands to understand current state:
+
+```bash
+# Check existing spec files
+ls -la docs/refactor/specs/
+cat docs/refactor/specs/_registry.yaml | grep -i company
+
+# Check existing execution runbook
+grep -n "Phase X" docs/refactor/EXECUTION_RUNBOOK.md
+
+# Check existing tests
+ls -la tests/unit/ | grep -i company
+ls -la tests/integration/ | grep -i company
+
+# Check existing payloads
+ls -la docs/refactor/payloads/ | grep -i company
+
+# Check existing models
+cat src/backend/careervp/models/company.py 2>/dev/null || echo "File not found"
+
+# Check if transformer exists
+cat src/backend/careervp/logic/company_research_transformer.py 2>/dev/null || echo "File not found"
+```
+
+### B. Document Existing State
+
+Record your findings in this format:
+
+```markdown
+### Existing Files Found
+
+| File | Exists? | Lines | Notes |
+|------|----------|-------|-------|
+| docs/refactor/specs/company_research_transform_spec.yaml | | | |
+| src/backend/careervp/models/company.py | | | |
+| src/backend/careervp/logic/company_research_transformer.py | | | |
+| tests/unit/test_company_research_transformer.py | | | |
+| tests/unit/test_company_research_model.py | | | |
+| tests/integration/test_company_research_flow.py | | | |
+| docs/refactor/payloads/phase8_company_research_live_test.json | | | |
+```
+
+---
+
+## PART 2: ARCHITECT DESIGN PROMPT - GENERATE MISSING COMPONENTS
+
+### C. Requirements from Architect Design Prompt (2026-02-14)
+
+The **original requirements** from `docs/refactor/EXECUTION_RESULTS.md` (lines 1246-1891) specify:
+
+#### Required Files
+
+| # | File | Status in Original Spec | Required? |
+|---|------|------------------------|-----------|
+| 1 | `src/backend/careervp/models/company_research.py` | TO_BE_CREATED | YES - Main data model |
+| 2 | `src/backend/careervp/logic/company_research_transformer.py` | TO_BE_CREATED | YES - Transformer |
+| 3 | `src/backend/careervp/logic/prompts/company_research_prompt.py` | TO_BE_CREATED | YES - Prompt extraction |
+| 4 | `src/backend/careervp/dal/knowledge_repository.py` | MODIFY | YES - Integration |
+| 5 | `tests/unit/test_company_research_model.py` | TO_BE_CREATED | YES |
+| 6 | `tests/unit/test_company_research_transformer.py` | TO_BE_CREATED | YES |
+| 7 | `tests/integration/test_company_research_flow.py` | TO_BE_CREATED | YES |
+| 8 | `tests/e2e/test_company_research_e2e.py` | TO_BE_CREATED | YES |
+| 9 | `docs/refactor/payloads/phase8_company_research_live_test.json` | TO_BE_CREATED | YES |
+| 10 | `docs/refactor/payloads/phase8_company_research_unit_test.json` | TO_BE_CREATED | YES |
+| 11 | `docs/refactor/payloads/phase8_company_research_integration.json` | TO_BE_CREATED | YES |
+| 12 | `scripts/live_test_company_research.sh` | TO_BE_CREATED | YES |
+
+#### Data Model Requirements (from lines 1519-1563)
+
+```python
+# MUST BE IN: src/backend/careervp/models/company_research.py
+
+class NewsItem(BaseModel):
+    """Single news article from company research."""
+    title: str = Field(..., min_length=1, max_length=500)
+    date: str = Field(..., description="ISO8601 date string")
+    summary: str = Field(..., max_length=2000)
+
+class CompanyResearchData(BaseModel):
+    """Company research data from LLM output."""
+    company_name: str = Field(..., min_length=1, max_length=200)
+    mission: str = Field(..., max_length=1000)
+    values: List[str] = Field(..., min_items=1, max_items=10)
+    recent_news: List[NewsItem] = Field(default_factory=list, max_items=10)
+    culture: str = Field(..., max_length=2000)
+    products: List[str] = Field(..., min_items=1, max_items=20)
+    funding_status: Optional[str] = Field(None, max_length=100)
+    size_range: Optional[str] = Field(None, max_length=50)
+    industry: Optional[str] = Field(None, max_length=100)
+    researched_at: datetime = Field(..., description="ISO8601 timestamp")
+
+    # Methods REQUIRED
+    def to_research_blob(self) -> str: ...
+    @classmethod
+    def from_research_blob(cls, blob: str) -> "CompanyResearchData": ...
+```
+
+#### Transformer Requirements (from lines 1573-1667)
+
+```python
+# MUST BE IN: src/backend/careervp/logic/company_research_transformer.py
+
+@dataclass
+class DynamoDBItem:
+    """DynamoDB item for company research storage."""
+    user_email: str
+    entity_type: str = "company_research"
+    entity_id: str = ""
+    cached_at: str = ""
+    ttl: int = 0
+    research_data: str = ""
+
+class CompanyResearchTransformer:
+    """Transforms LLM output to DynamoDB format and vice versa."""
+    TTL_DAYS = 30
+
+    def to_dynamodb_item(self, llm_output: Dict[str, Any], entity_id: Optional[str] = None) -> DynamoDBItem: ...
+    def from_dynamodb_item(self, item: Dict[str, Any]) -> CompanyResearchData: ...
+    def _calculate_ttl(self, cached_at: Optional[datetime] = None) -> int: ...
+    def _transform_field_names(self, llm_output: Dict[str, Any]) -> Dict[str, Any]: ...
+```
+
+#### Knowledge Repository Requirements (from lines 1678-1791)
+
+Methods REQUIRED:
+- `save_company_research(user_email, company_name, llm_output) -> Result`
+- `get_company_research(user_email, company_name) -> Optional[CompanyResearchData]`
+- `_is_expired(research) -> bool`
+
+---
+
+## PART 3: GAP ANALYSIS - COMPARE EXISTING VS REQUIRED
+
+### D. Current Execution Runbook Gaps
+
+Compare Phase X in `docs/refactor/EXECUTION_RUNBOOK.md` with requirements:
+
+| Gap | Issue | Missing Component |
+|-----|-------|------------------|
+| G1 | Model file | Says ENHANCE `company.py` but should CREATE `company_research.py` |
+| G2 | Model fields | Current uses 6 fields but requires 10 fields |
+| G3 | Model methods | Missing `to_research_blob()` / `from_research_blob()` |
+| G4 | Transformer | Missing some methods per spec |
+| G5 | FVS Step | No dedicated FVS validation step |
+| G6 | Payloads | No payload files in Phase X |
+| G7 | E2E Tests | No E2E test step |
+| G8 | Live Script | No live test script step |
+
+### E. Missing Spec Files to Generate
+
+Generate these spec files:
+
+#### Spec 1: `company_research_model_spec.yaml`
+
+```yaml
+spec_version: "1.0"
+date_created: "2026-02-14"
+purpose: "CompanyResearchData Pydantic model specification"
+status: "READY_FOR_IMPLEMENTATION"
+
+model:
+  name: "CompanyResearchData"
+  file: "src/backend/careervp/models/company_research.py"
+  fields:
+    - name: "company_name"
+      type: "str"
+      required: true
+      validation: "min_length=1, max_length=200"
+    - name: "mission"
+      type: "str"
+      required: true
+      validation: "max_length=1000"
+    - name: "values"
+      type: "List[str]"
+      required: true
+      validation: "min_items=1, max_items=10"
+    - name: "recent_news"
+      type: "List[NewsItem]"
+      required: false
+      default_factory: "list"
+      validation: "max_items=10"
+    - name: "culture"
+      type: "str"
+      required: true
+      validation: "max_length=2000"
+    - name: "products"
+      type: "List[str]"
+      required: true
+      validation: "min_items=1, max_items=20"
+    - name: "funding_status"
+      type: "Optional[str]"
+      required: false
+      validation: "max_length=100"
+    - name: "size_range"
+      type: "Optional[str]"
+      required: false
+      validation: "max_length=50"
+    - name: "industry"
+      type: "Optional[str]"
+      required: false
+      validation: "max_length=100"
+    - name: "researched_at"
+      type: "datetime"
+      required: true
+  methods:
+    - name: "to_research_blob"
+      returns: "str"
+    - name: "from_research_blob"
+      classmethod: true
+      params: ["blob: str"]
+      returns: "CompanyResearchData"
+
+nested_models:
+  - name: "NewsItem"
+    file: "src/backend/careervp/models/company_research.py"
+    fields:
+      - name: "title"
+        type: "str"
+        required: true
+        validation: "min_length=1, max_length=500"
+      - name: "date"
+        type: "str"
+        required: true
+        validation: "ISO8601 format"
+      - name: "summary"
+        type: "str"
+        required: true
+        validation: "max_length=2000"
+```
+
+#### Spec 2: `company_research_fvs_spec.yaml`
+
+```yaml
+spec_version: "1.0"
+date_created: "2026-02-14"
+purpose: "FVS validation requirements for Company Research"
+status: "READY_FOR_IMPLEMENTATION"
+
+validation_requirements:
+  grammar_score:
+    minimum: 9.0
+    maximum: 10.0
+  anti_ai_score:
+    minimum: 9.0
+    maximum: 10.0
+  brand_mentions:
+    max_count: 3
+  ai_buzzwords:
+    blocked:
+      - "synergy"
+      - "leverage"
+      - "paradigm shift"
+      - "cutting-edge"
+      - "best-in-class"
+
+content_validation:
+  required_sections:
+    - "company_name"
+    - "mission"
+    - "values"
+    - "culture"
+    - "products"
+  length_limits:
+    total_max_words: 2000
+    per_section_max_words: 500
+
+error_codes:
+  FVS_COMPANY_001:
+    message: "Grammar score below threshold"
+    action: "Regenerate with improved grammar"
+  FVS_COMPANY_002:
+    message: "AI detection patterns found"
+    action: "Rewrite with natural language"
+  FVS_COMPANY_003:
+    message: "Missing required section"
+    action: "Complete all required sections"
+```
+
+#### Spec 3: `company_research_payload_spec.yaml`
+
+```yaml
+spec_version: "1.0"
+date_created: "2026-02-14"
+purpose: "Payload specifications for Company Research testing"
+status: "READY_FOR_IMPLEMENTATION"
+
+payloads:
+  live_test:
+    file: "docs/refactor/payloads/phase8_company_research_live_test.json"
+    schema:
+      type: "object"
+      required:
+        - "company_name"
+        - "job_id"
+        - "options"
+      properties:
+        company_name:
+          type: "string"
+        job_id:
+          type: "string"
+        options:
+          type: "object"
+          properties:
+            extract_mission:
+              type: "boolean"
+              default: true
+            extract_values:
+              type: "boolean"
+              default: true
+            extract_recent_news:
+              type: "boolean"
+              default: true
+            extract_products:
+              type: "boolean"
+              default: true
+            cache_result:
+              type: "boolean"
+              default: true
+            ttl_days:
+              type: "integer"
+              default: 30
+        test_context:
+          type: "object"
+          properties:
+            company_description:
+              type: "string"
+            company_type:
+              type: "string"
+            industry:
+              type: "string"
+            company_size:
+              type: "string"
+
+  unit_test:
+    file: "docs/refactor/payloads/phase8_company_research_unit_test.json"
+    test_cases:
+      - name: "Full research with all fields"
+        input:
+          company_name: "TechCorp Solutions"
+          mission: "Democratize enterprise software"
+          values: ["Innovation", "Customer Success", "Transparency"]
+          recent_news:
+            - title: "Series C Funding"
+              date: "2026-01-15"
+              summary: "$50M raised"
+          culture: "Remote-first, outcome-driven"
+          products: ["Cloud Platform", "Analytics Suite"]
+          funding_status: "Series C"
+          size_range: "500-1000 employees"
+          industry: "Enterprise Software"
+        expected:
+          validation_pass: true
+          blob_serialization: true
+
+      - name: "Minimal research"
+        input:
+          company_name: "SmallCo"
+          mission: "Help small businesses"
+          values: ["Quality"]
+          culture: "Local-focused"
+          products: ["Consulting"]
+        expected:
+          validation_pass: true
+
+      - name: "Missing required field"
+        input:
+          company_name: "BadCo"
+          mission: ""
+          values: ["Value1"]
+          culture: "Culture"
+          products: ["Product1"]
+        expected:
+          validation_pass: false
+          error: "mission is required"
+
+  integration_test:
+    file: "docs/refactor/payloads/phase8_company_research_integration.json"
+    scenarios:
+      - name: "Save and retrieve"
+        steps:
+          - action: "save_company_research"
+            input:
+              user_email: "test@example.com"
+              company_name: "IntegrationTestCo"
+              llm_output: {}
+            expected:
+              success: true
+          - action: "get_company_research"
+            input:
+              user_email: "test@example.com"
+              company_name: "IntegrationTestCo"
+            expected:
+              success: true
+              data_match: true
+
+      - name: "Cache hit prevention"
+        steps:
+          - action: "save_company_research"
+            input:
+              user_email: "test@example.com"
+              company_name: "CacheTestCo"
+            expected:
+              cached: false
+          - action: "save_company_research"
+            input:
+              user_email: "test@example.com"
+              company_name: "CacheTestCo"
+            expected:
+              cached: true
+
+      - name: "TTL expiration"
+        steps:
+          - action: "insert_expired_research"
+            ttl_days: -1
+          - action: "save_company_research"
+            expected:
+              cached: false
+```
+
+#### Spec 4: `company_research_e2e_spec.yaml`
+
+```yaml
+spec_version: "1.0"
+date_created: "2026-02-14"
+purpose: "E2E test specifications for Company Research"
+status: "READY_FOR_IMPLEMENTATION"
+
+e2e_tests:
+  - name: "User researches company and retrieves"
+    file: "tests/e2e/test_company_research_e2e.py"
+    test_id: "E2E-COMP-001"
+    steps:
+      - action: "POST /v1/company-research/fetch"
+        data:
+          company_name: "E2ETestCompany"
+          job_id: "test-job-001"
+        expected:
+          status_code: 202
+          response:
+            research_id: "string"
+            status: "processing"
+      - action: "GET /v1/company-research/{company_name}"
+        poll_max: 10
+        poll_interval: 2
+        expected:
+          status_code: 200
+          response:
+            company_name: "E2ETestCompany"
+            completed: true
+
+  - name: "Cache hit prevents duplicate generation"
+    test_id: "E2E-COMP-002"
+    steps:
+      - action: "POST /v1/company-research/fetch"
+        data:
+          company_name: "CachedCompany"
+        expected:
+          response:
+            cached: false
+      - action: "POST /v1/company-research/fetch"
+        data:
+          company_name: "CachedCompany"
+        expected:
+          response:
+            cached: true
+
+  - name: "Expired TTL triggers regeneration"
+    test_id: "E2E-COMP-003"
+    setup:
+      - action: "Direct DynamoDB insert"
+        ttl_days: -1
+    steps:
+      - action: "POST /v1/company-research/fetch"
+        data:
+          company_name: "ExpiredCompany"
+        expected:
+          response:
+            cached: false
+
+  - name: "FVS validation failure rejects content"
+    test_id: "E2E-COMP-004"
+    mock:
+      fvs_validator:
+        validate:
+          is_valid: false
+          violations:
+            - "Grammar score below 9.0"
+    expected:
+      status_code: 422
+      response:
+        error: "FVS validation failed"
+```
+
+---
+
+## PART 4: EXECUTION RUNBOOK ADDITIONS
+
+### F. New Steps to Add to Phase X
+
+Generate these additional steps for `docs/refactor/EXECUTION_RUNBOOK.md`:
+
+#### New Step X.0: Validate Prerequisites
+
+```markdown
+### Step X.0: Validate Prerequisites
+
+**CODE:**
+```bash
+# Check existing state
+ls -la docs/refactor/specs/ | grep company
+ls -la src/backend/careervp/models/ | grep company
+ls -la src/backend/careervp/logic/ | grep company
+ls -la tests/ | grep company
+
+# Verify spec files exist
+cat docs/refactor/specs/company_research_transform_spec.yaml | head -10
+cat docs/refactor/specs/company_research_model_spec.yaml | head -10
+```
+```
+
+#### New Step X.FVS: FVS Validation Integration
+
+```markdown
+### Step X.FVS: Integrate FVS Validation
+
+**READ FIRST:**
+- `docs/refactor/specs/company_research_fvs_spec.yaml`
+
+**CODE:**
+```bash
+# VSCode + Anthropic Sonnet
+"""
+Integrate FVS validation for company research:
+
+1. Create: src/backend/careervp/logic/company_research_fvs.py
+   - CompanyResearchFVSValidator class
+   - validate_company_research() method
+   - Grammar score >= 9.0
+   - Anti-AI score >= 9.0
+
+2. Update: src/backend/careervp/dal/knowledge_repository.py
+   - Add FVS validation before save
+   - Handle validation failure gracefully
+
+3. Create: tests/unit/test_company_research_fvs.py
+
+KNOWLEDGE: docs/refactor/specs/company_research_fvs_spec.yaml
+"""
+```
+
+**Verification:**
+```bash
+uv run pytest tests/unit/test_company_research_fvs.py -v
+
+uv run ruff check careervp/logic/company_research_fvs.py
+
+uv run mypy careervp/logic/company_research_fvs.py --strict
+```
+```
+
+#### New Step X.PAYLOAD: Create Test Payloads
+
+```markdown
+### Step X.PAYLOAD: Create Test Payloads
+
+**CODE:**
+```bash
+# VSCode + Anthropic Haiku
+"""
+Create test payload files:
+
+1. Create: docs/refactor/payloads/phase8_company_research_live_test.json
+   - Full live test payload per spec
+
+2. Create: docs/refactor/payloads/phase8_company_research_unit_test.json
+   - Unit test data with edge cases
+
+3. Create: docs/refactor/payloads/phase8_company_research_integration.json
+   - Integration test scenarios
+
+KNOWLEDGE: docs/refactor/specs/company_research_payload_spec.yaml
+"""
+```
+```
+
+#### New Step X.E2E: Create E2E Tests
+
+```markdown
+### Step X.E2E: Create E2E Tests
+
+**CODE:**
+```bash
+# VSCode + Anthropic Sonnet
+"""
+Create end-to-end tests:
+
+1. Create: tests/e2e/test_company_research_e2e.py
+   - Test E2E-COMP-001: User researches company and retrieves
+   - Test E2E-COMP-002: Cache hit prevents duplicate generation
+   - Test E2E-COMP-003: Expired TTL triggers regeneration
+   - Test E2E-COMP-004: FVS validation failure
+
+KNOWLEDGE: docs/refactor/specs/company_research_e2e_spec.yaml
+"""
+```
+
+**Verification:**
+```bash
+uv run pytest tests/e2e/test_company_research_e2e.py -v --tb=short
+
+# Run with AWS profile
+uv run pytest tests/e2e/test_company_research_e2e.py -v --aws-profile=careervp-dev
+```
+```
+
+#### New Step X.LIVE: Create Live Test Script
+
+```markdown
+### Step X.LIVE: Create Live Test Script
+
+**CODE:**
+```bash
+# VSCode + Anthropic Haiku
+"""
+Create live test script:
+
+1. Create: scripts/live_test_company_research.sh
+   - Generate research (POST)
+   - Retrieve research (GET)
+   - Verify DynamoDB storage
+   - Verify TTL
+   - Test cache hit
+   - Cleanup
+
+KNOWLEDGE: company_research_transform_spec.yaml section 12
+"""
+```
+
+**Execution:**
+```bash
+bash scripts/live_test_company_research.sh
+```
+```
+
+---
+
+## PART 5: OUTPUT TO EXECUTION_RESULTS.md
+
+### G. Document Generated Results
+
+After generating all specs and steps, update `docs/refactor/EXECUTION_RESULTS.md`:
+
+#### H. Add This Section After "Architect Design Prompt"
+
+```markdown
+---
+
+## ADDENDUM: Generated Missing Components (2026-02-14)
+
+### Generated Spec Files
+
+| Spec File | Status | Location |
+|-----------|--------|----------|
+| `company_research_model_spec.yaml` | GENERATED | `docs/refactor/specs/` |
+| `company_research_fvs_spec.yaml` | GENERATED | `docs/refactor/specs/` |
+| `company_research_payload_spec.yaml` | GENERATED | `docs/refactor/specs/` |
+| `company_research_e2e_spec.yaml` | GENERATED | `docs/refactor/specs/` |
+
+### Updated Execution Runbook Steps
+
+| Step | Description | Status |
+|------|-------------|--------|
+| X.0 | Validate Prerequisites | ADDED |
+| X.FVS | FVS Validation Integration | ADDED |
+| X.PAYLOAD | Create Test Payloads | ADDED |
+| X.E2E | Create E2E Tests | ADDED |
+| X.LIVE | Create Live Test Script | ADDED |
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `src/backend/careervp/models/company_research.py` | CompanyResearchData model |
+| `src/backend/careervp/logic/company_research_fvs.py` | FVS validator |
+| `src/backend/careervp/logic/company_research_transformer.py` | Transformer |
+| `tests/unit/test_company_research_model.py` | Model tests |
+| `tests/unit/test_company_research_fvs.py` | FVS tests |
+| `tests/unit/test_company_research_transformer.py` | Transformer tests |
+| `tests/integration/test_company_research_flow.py` | Integration tests |
+| `tests/e2e/test_company_research_e2e.py` | E2E tests |
+| `docs/refactor/payloads/phase8_company_research_live_test.json` | Live test payload |
+| `docs/refactor/payloads/phase8_company_research_unit_test.json` | Unit test payload |
+| `docs/refactor/payloads/phase8_company_research_integration.json` | Integration payload |
+| `scripts/live_test_company_research.sh` | Live test script |
+
+### Validation Commands
+
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+
+# All unit tests
+uv run pytest tests/unit/test_company_research*.py -v
+
+# All integration tests
+uv run pytest tests/integration/test_company_research*.py -v
+
+# All E2E tests
+uv run pytest tests/e2e/test_company_research*.py -v
+
+# All lint
+uv run ruff check careervp/models/company_research.py
+uv run ruff check careervp/logic/company_research_*.py
+
+# All type checks
+uv run mypy careervp/models/company_research.py --strict
+uv run mypy careervp/logic/company_research_*.py --strict
+```
+
+### Architecture Diagram
+
+```
+COMPANY RESEARCH TRANSFORMATION LAYER
+
+  API Handler ──▶ CompanyResearchTransformer ──▶ FVS Validator ──▶ DynamoDB
+                    │                              │
+                    ▼                              ▼
+              Cache Check                   Grammar >= 9.0
+              (TTL 30 days)                 Anti-AI >= 9.0
+```
+
+### Data Flow
+
+| Stage | Component | Transformation |
+|-------|-----------|----------------|
+| 1 | API Handler | Receives user_email + company_name |
+| 2 | Cache Check | Returns cached if TTL valid |
+| 3 | LLM Call | Generates CompanyResearchData (10 fields) |
+| 4 | FVS Validate | Grammar >= 9.0, Anti-AI >= 9.0 |
+| 5 | Transform | LLM output → DynamoDB item |
+| 6 | DynamoDB | Store with TTL (30 days) |
+
+---
+
+**Generated:** 2026-02-14
+**Architect Agent:** Claude Opus
+**Status:** COMPLETE - ALL COMPONENTS GENERATED
+```

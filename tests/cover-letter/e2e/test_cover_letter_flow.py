@@ -20,6 +20,7 @@ import pytest
 # FIXTURES
 # ============================================================================
 
+
 @pytest.fixture
 def api_client():
     """Mock API client for E2E testing - will be replaced with real client."""
@@ -32,7 +33,7 @@ def valid_auth_token():
     """Valid JWT token for authenticated requests."""
     # TODO: Generate valid JWT token with correct claims
     assert True  # Placeholder
-    return 'valid-jwt-token'
+    return "valid-jwt-token"
 
 
 @pytest.fixture
@@ -40,13 +41,13 @@ def expired_auth_token():
     """Expired JWT token for testing token expiration."""
     # TODO: Generate expired JWT token
     assert True  # Placeholder
-    return 'expired-jwt-token'
+    return "expired-jwt-token"
 
 
 @pytest.fixture
 def invalid_auth_token():
     """Invalid/malformed JWT token."""
-    return 'invalid-malformed-token'
+    return "invalid-malformed-token"
 
 
 @pytest.fixture
@@ -54,7 +55,7 @@ def test_cv_id():
     """CV ID that exists in test database."""
     # TODO: Seed test database with CV data
     assert True  # Placeholder
-    return 'cv-12345'
+    return "cv-12345"
 
 
 @pytest.fixture
@@ -62,17 +63,17 @@ def test_vpr_id():
     """VPR ID that exists in test database."""
     # TODO: Seed test database with VPR data
     assert True  # Placeholder
-    return 'vpr-67890'
+    return "vpr-67890"
 
 
 @pytest.fixture
 def test_user_preferences():
     """User preferences for cover letter generation."""
     return {
-        'tone': 'professional',
-        'length': 'medium',
-        'focus_areas': ['technical_skills', 'leadership'],
-        'company_research': True
+        "tone": "professional",
+        "length": "medium",
+        "focus_areas": ["technical_skills", "leadership"],
+        "company_research": True,
     }
 
 
@@ -80,18 +81,16 @@ def test_user_preferences():
 # HAPPY PATH TESTS (6 tests)
 # ============================================================================
 
+
 def test_e2e_generate_cover_letter_success(
-    api_client,
-    valid_auth_token,
-    test_cv_id,
-    test_vpr_id
+    api_client, valid_auth_token, test_cv_id, test_vpr_id
 ):
     """
     Test successful cover letter generation with minimal required fields.
 
     Expected flow:
-    1. POST /api/v1/cover-letters with CV ID, VPR ID, auth token
-    2. Receive 201 Created with cover letter ID
+    1. POST /cover-letter/generate with CV ID, VPR ID, auth token
+    2. Receive 202 Accepted with cover letter ID
     3. Cover letter contains required fields (id, content, download_url)
     """
     # TODO: Implement when API endpoint exists
@@ -100,7 +99,7 @@ def test_e2e_generate_cover_letter_success(
     #     "vpr_id": test_vpr_id
     # }
     # headers = {"Authorization": f"Bearer {valid_auth_token}"}
-    # response = api_client.post("/api/v1/cover-letters", json=request_payload, headers=headers)
+    # response = api_client.post("/cover-letter/generate", json=request_payload, headers=headers)
     #
     # assert response.status_code == 201
     # data = response.json()
@@ -114,18 +113,14 @@ def test_e2e_generate_cover_letter_success(
 
 
 def test_e2e_generate_with_preferences(
-    api_client,
-    valid_auth_token,
-    test_cv_id,
-    test_vpr_id,
-    test_user_preferences
+    api_client, valid_auth_token, test_cv_id, test_vpr_id, test_user_preferences
 ):
     """
     Test cover letter generation with user preferences.
 
     Expected flow:
-    1. POST /api/v1/cover-letters with CV, VPR, and preferences
-    2. Receive 201 Created
+    1. POST /cover-letter/generate with CV, VPR, and preferences
+    2. Receive 202 Accepted
     3. Cover letter reflects requested tone and focus areas
     """
     # TODO: Implement when API endpoint exists
@@ -135,7 +130,7 @@ def test_e2e_generate_with_preferences(
     #     "preferences": test_user_preferences
     # }
     # headers = {"Authorization": f"Bearer {valid_auth_token}"}
-    # response = api_client.post("/api/v1/cover-letters", json=request_payload, headers=headers)
+    # response = api_client.post("/cover-letter/generate", json=request_payload, headers=headers)
     #
     # assert response.status_code == 201
     # data = response.json()
@@ -146,10 +141,7 @@ def test_e2e_generate_with_preferences(
 
 
 def test_e2e_cover_letter_stored_in_dynamodb(
-    api_client,
-    valid_auth_token,
-    test_cv_id,
-    test_vpr_id
+    api_client, valid_auth_token, test_cv_id, test_vpr_id
 ):
     """
     Test that generated cover letter is persisted to DynamoDB.
@@ -178,12 +170,7 @@ def test_e2e_cover_letter_stored_in_dynamodb(
     assert True  # Placeholder - will FAIL when implemented
 
 
-def test_e2e_download_url_works(
-    api_client,
-    valid_auth_token,
-    test_cv_id,
-    test_vpr_id
-):
+def test_e2e_download_url_works(api_client, valid_auth_token, test_cv_id, test_vpr_id):
     """
     Test that download URL returns valid cover letter file.
 
@@ -194,7 +181,7 @@ def test_e2e_download_url_works(
     4. Verify PDF/DOCX file is returned with correct headers
     """
     # TODO: Implement when download endpoint exists
-    # response = api_client.post("/api/v1/cover-letters", ...)
+    # response = api_client.post("/cover-letter/generate", ...)
     # download_url = response.json()["download_url"]
     #
     # download_response = api_client.get(download_url)
@@ -207,10 +194,7 @@ def test_e2e_download_url_works(
 
 
 def test_e2e_quality_score_in_response(
-    api_client,
-    valid_auth_token,
-    test_cv_id,
-    test_vpr_id
+    api_client, valid_auth_token, test_cv_id, test_vpr_id
 ):
     """
     Test that response includes quality score for generated cover letter.
@@ -221,7 +205,7 @@ def test_e2e_quality_score_in_response(
     3. Score is between 0.0 and 1.0
     """
     # TODO: Implement when quality scoring exists
-    # response = api_client.post("/api/v1/cover-letters", ...)
+    # response = api_client.post("/cover-letter/generate", ...)
     # data = response.json()
     #
     # assert "quality_score" in data
@@ -232,10 +216,7 @@ def test_e2e_quality_score_in_response(
 
 
 def test_e2e_processing_time_reasonable(
-    api_client,
-    valid_auth_token,
-    test_cv_id,
-    test_vpr_id
+    api_client, valid_auth_token, test_cv_id, test_vpr_id
 ):
     """
     Test that cover letter generation completes in reasonable time.
@@ -248,7 +229,7 @@ def test_e2e_processing_time_reasonable(
     """
     # TODO: Implement when API endpoint exists
     # start_time = time.time()
-    # response = api_client.post("/api/v1/cover-letters", ...)
+    # response = api_client.post("/cover-letter/generate", ...)
     # end_time = time.time()
     #
     # processing_time = end_time - start_time
@@ -262,16 +243,13 @@ def test_e2e_processing_time_reasonable(
 # AUTHENTICATION TESTS (4 tests)
 # ============================================================================
 
-def test_e2e_missing_auth_returns_401(
-    api_client,
-    test_cv_id,
-    test_vpr_id
-):
+
+def test_e2e_missing_auth_returns_401(api_client, test_cv_id, test_vpr_id):
     """
     Test that request without auth token returns 401 Unauthorized.
 
     Expected flow:
-    1. POST /api/v1/cover-letters without Authorization header
+    1. POST /cover-letter/generate without Authorization header
     2. Receive 401 Unauthorized
     3. Error message indicates missing authentication
     """
@@ -280,7 +258,7 @@ def test_e2e_missing_auth_returns_401(
     #     "cv_id": test_cv_id,
     #     "vpr_id": test_vpr_id
     # }
-    # response = api_client.post("/api/v1/cover-letters", json=request_payload)
+    # response = api_client.post("/cover-letter/generate", json=request_payload)
     #
     # assert response.status_code == 401
     # assert "authentication required" in response.json()["detail"].lower()
@@ -289,10 +267,7 @@ def test_e2e_missing_auth_returns_401(
 
 
 def test_e2e_invalid_token_returns_401(
-    api_client,
-    invalid_auth_token,
-    test_cv_id,
-    test_vpr_id
+    api_client, invalid_auth_token, test_cv_id, test_vpr_id
 ):
     """
     Test that request with invalid token returns 401 Unauthorized.
@@ -308,7 +283,7 @@ def test_e2e_invalid_token_returns_401(
     #     "vpr_id": test_vpr_id
     # }
     # headers = {"Authorization": f"Bearer {invalid_auth_token}"}
-    # response = api_client.post("/api/v1/cover-letters", json=request_payload, headers=headers)
+    # response = api_client.post("/cover-letter/generate", json=request_payload, headers=headers)
     #
     # assert response.status_code == 401
     # assert "invalid token" in response.json()["detail"].lower()
@@ -317,10 +292,7 @@ def test_e2e_invalid_token_returns_401(
 
 
 def test_e2e_expired_token_returns_401(
-    api_client,
-    expired_auth_token,
-    test_cv_id,
-    test_vpr_id
+    api_client, expired_auth_token, test_cv_id, test_vpr_id
 ):
     """
     Test that request with expired token returns 401 Unauthorized.
@@ -336,7 +308,7 @@ def test_e2e_expired_token_returns_401(
     #     "vpr_id": test_vpr_id
     # }
     # headers = {"Authorization": f"Bearer {expired_auth_token}"}
-    # response = api_client.post("/api/v1/cover-letters", json=request_payload, headers=headers)
+    # response = api_client.post("/cover-letter/generate", json=request_payload, headers=headers)
     #
     # assert response.status_code == 401
     # assert "expired" in response.json()["detail"].lower()
@@ -345,17 +317,14 @@ def test_e2e_expired_token_returns_401(
 
 
 def test_e2e_valid_token_succeeds(
-    api_client,
-    valid_auth_token,
-    test_cv_id,
-    test_vpr_id
+    api_client, valid_auth_token, test_cv_id, test_vpr_id
 ):
     """
     Test that request with valid token succeeds.
 
     Expected flow:
     1. POST with valid, non-expired JWT token
-    2. Receive 201 Created (not 401)
+    2. Receive 202 Accepted (not 401)
     3. Response contains cover letter data
     """
     # TODO: Implement when auth middleware exists
@@ -364,7 +333,7 @@ def test_e2e_valid_token_succeeds(
     #     "vpr_id": test_vpr_id
     # }
     # headers = {"Authorization": f"Bearer {valid_auth_token}"}
-    # response = api_client.post("/api/v1/cover-letters", json=request_payload, headers=headers)
+    # response = api_client.post("/cover-letter/generate", json=request_payload, headers=headers)
     #
     # assert response.status_code == 201
     # assert "id" in response.json()
@@ -376,11 +345,8 @@ def test_e2e_valid_token_succeeds(
 # ERROR CASES TESTS (5 tests)
 # ============================================================================
 
-def test_e2e_cv_not_found_returns_404(
-    api_client,
-    valid_auth_token,
-    test_vpr_id
-):
+
+def test_e2e_cv_not_found_returns_404(api_client, valid_auth_token, test_vpr_id):
     """
     Test that non-existent CV ID returns 404 Not Found.
 
@@ -395,7 +361,7 @@ def test_e2e_cv_not_found_returns_404(
     #     "vpr_id": test_vpr_id
     # }
     # headers = {"Authorization": f"Bearer {valid_auth_token}"}
-    # response = api_client.post("/api/v1/cover-letters", json=request_payload, headers=headers)
+    # response = api_client.post("/cover-letter/generate", json=request_payload, headers=headers)
     #
     # assert response.status_code == 404
     # assert "cv not found" in response.json()["detail"].lower()
@@ -403,11 +369,7 @@ def test_e2e_cv_not_found_returns_404(
     assert True  # Placeholder - will FAIL when implemented
 
 
-def test_e2e_vpr_not_found_returns_400(
-    api_client,
-    valid_auth_token,
-    test_cv_id
-):
+def test_e2e_vpr_not_found_returns_400(api_client, valid_auth_token, test_cv_id):
     """
     Test that non-existent VPR ID returns 400 Bad Request.
 
@@ -422,7 +384,7 @@ def test_e2e_vpr_not_found_returns_400(
     #     "vpr_id": "non-existent-vpr-id"
     # }
     # headers = {"Authorization": f"Bearer {valid_auth_token}"}
-    # response = api_client.post("/api/v1/cover-letters", json=request_payload, headers=headers)
+    # response = api_client.post("/cover-letter/generate", json=request_payload, headers=headers)
     #
     # assert response.status_code == 400
     # assert "vpr not found" in response.json()["detail"].lower()
@@ -430,10 +392,7 @@ def test_e2e_vpr_not_found_returns_400(
     assert True  # Placeholder - will FAIL when implemented
 
 
-def test_e2e_invalid_request_returns_400(
-    api_client,
-    valid_auth_token
-):
+def test_e2e_invalid_request_returns_400(api_client, valid_auth_token):
     """
     Test that request with missing required fields returns 400 Bad Request.
 
@@ -448,7 +407,7 @@ def test_e2e_invalid_request_returns_400(
     #     "preferences": {"tone": "professional"}
     # }
     # headers = {"Authorization": f"Bearer {valid_auth_token}"}
-    # response = api_client.post("/api/v1/cover-letters", json=request_payload, headers=headers)
+    # response = api_client.post("/cover-letter/generate", json=request_payload, headers=headers)
     #
     # assert response.status_code == 400
     # assert "validation error" in response.json()["detail"].lower()
@@ -457,10 +416,7 @@ def test_e2e_invalid_request_returns_400(
 
 
 def test_e2e_rate_limit_returns_429(
-    api_client,
-    valid_auth_token,
-    test_cv_id,
-    test_vpr_id
+    api_client, valid_auth_token, test_cv_id, test_vpr_id
 ):
     """
     Test that exceeding rate limit returns 429 Too Many Requests.
@@ -479,7 +435,7 @@ def test_e2e_rate_limit_returns_429(
     #
     # # Make 20 rapid requests
     # for i in range(20):
-    #     response = api_client.post("/api/v1/cover-letters", json=request_payload, headers=headers)
+    #     response = api_client.post("/cover-letter/generate", json=request_payload, headers=headers)
     #
     # # Last response should be rate limited
     # assert response.status_code == 429
@@ -489,10 +445,7 @@ def test_e2e_rate_limit_returns_429(
 
 
 def test_e2e_fvs_violation_returns_400(
-    api_client,
-    valid_auth_token,
-    test_cv_id,
-    test_vpr_id
+    api_client, valid_auth_token, test_cv_id, test_vpr_id
 ):
     """
     Test that FVS (Functional Validation Schema) violation returns 400.
@@ -512,7 +465,7 @@ def test_e2e_fvs_violation_returns_400(
     #     }
     # }
     # headers = {"Authorization": f"Bearer {valid_auth_token}"}
-    # response = api_client.post("/api/v1/cover-letters", json=request_payload, headers=headers)
+    # response = api_client.post("/cover-letter/generate", json=request_payload, headers=headers)
     #
     # assert response.status_code == 400
     # assert "fvs violation" in response.json()["detail"].lower()
@@ -524,11 +477,9 @@ def test_e2e_fvs_violation_returns_400(
 # PERFORMANCE TESTS (3 tests)
 # ============================================================================
 
+
 def test_e2e_response_time_under_20s(
-    api_client,
-    valid_auth_token,
-    test_cv_id,
-    test_vpr_id
+    api_client, valid_auth_token, test_cv_id, test_vpr_id
 ):
     """
     Test that 95th percentile response time is under 20 seconds.
@@ -545,7 +496,7 @@ def test_e2e_response_time_under_20s(
     #
     # for i in range(20):
     #     start = time.time()
-    #     response = api_client.post("/api/v1/cover-letters",
+    #     response = api_client.post("/cover-letter/generate",
     #                                json={"cv_id": test_cv_id, "vpr_id": test_vpr_id},
     #                                headers=headers)
     #     end = time.time()
@@ -558,12 +509,7 @@ def test_e2e_response_time_under_20s(
     assert True  # Placeholder - will FAIL when implemented
 
 
-def test_e2e_concurrent_requests(
-    api_client,
-    valid_auth_token,
-    test_cv_id,
-    test_vpr_id
-):
+def test_e2e_concurrent_requests(api_client, valid_auth_token, test_cv_id, test_vpr_id):
     """
     Test that system handles 5 concurrent requests successfully.
 
@@ -575,7 +521,7 @@ def test_e2e_concurrent_requests(
     # TODO: Implement when API endpoint exists
     # def make_request():
     #     headers = {"Authorization": f"Bearer {valid_auth_token}"}
-    #     return api_client.post("/api/v1/cover-letters",
+    #     return api_client.post("/cover-letter/generate",
     #                           json={"cv_id": test_cv_id, "vpr_id": test_vpr_id},
     #                           headers=headers)
     #
@@ -589,12 +535,7 @@ def test_e2e_concurrent_requests(
     assert True  # Placeholder - will FAIL when implemented
 
 
-def test_e2e_cold_start_latency(
-    api_client,
-    valid_auth_token,
-    test_cv_id,
-    test_vpr_id
-):
+def test_e2e_cold_start_latency(api_client, valid_auth_token, test_cv_id, test_vpr_id):
     """
     Test cold start latency (first request after deployment).
 
@@ -608,14 +549,14 @@ def test_e2e_cold_start_latency(
     # TODO: Implement when deployment exists
     # # Cold start request
     # start_cold = time.time()
-    # response_cold = api_client.post("/api/v1/cover-letters",
+    # response_cold = api_client.post("/cover-letter/generate",
     #                                 json={"cv_id": test_cv_id, "vpr_id": test_vpr_id},
     #                                 headers={"Authorization": f"Bearer {valid_auth_token}"})
     # cold_latency = time.time() - start_cold
     #
     # # Warm start request
     # start_warm = time.time()
-    # response_warm = api_client.post("/api/v1/cover-letters",
+    # response_warm = api_client.post("/cover-letter/generate",
     #                                 json={"cv_id": test_cv_id, "vpr_id": test_vpr_id},
     #                                 headers={"Authorization": f"Bearer {valid_auth_token}"})
     # warm_latency = time.time() - start_warm
@@ -632,11 +573,9 @@ def test_e2e_cold_start_latency(
 # DATA INTEGRITY TESTS (2 tests)
 # ============================================================================
 
+
 def test_e2e_cover_letter_content_valid(
-    api_client,
-    valid_auth_token,
-    test_cv_id,
-    test_vpr_id
+    api_client, valid_auth_token, test_cv_id, test_vpr_id
 ):
     """
     Test that generated cover letter content is valid and complete.
@@ -652,7 +591,7 @@ def test_e2e_cover_letter_content_valid(
     3. Verify content matches CV and VPR data
     """
     # TODO: Implement when content generation exists
-    # response = api_client.post("/api/v1/cover-letters",
+    # response = api_client.post("/cover-letter/generate",
     #                           json={"cv_id": test_cv_id, "vpr_id": test_vpr_id},
     #                           headers={"Authorization": f"Bearer {valid_auth_token}"})
     #
@@ -671,10 +610,7 @@ def test_e2e_cover_letter_content_valid(
 
 
 def test_e2e_artifact_retrievable(
-    api_client,
-    valid_auth_token,
-    test_cv_id,
-    test_vpr_id
+    api_client, valid_auth_token, test_cv_id, test_vpr_id
 ):
     """
     Test that generated cover letter can be retrieved after creation.
@@ -682,12 +618,12 @@ def test_e2e_artifact_retrievable(
     Expected flow:
     1. Generate cover letter
     2. Extract cover_letter_id from response
-    3. GET /api/v1/cover-letters/{id}
+    3. GET /cover-letter/{coverLetterId}
     4. Verify retrieved content matches original
     """
     # TODO: Implement when retrieval endpoint exists
     # # Create cover letter
-    # create_response = api_client.post("/api/v1/cover-letters",
+    # create_response = api_client.post("/cover-letter/generate",
     #                                   json={"cv_id": test_cv_id, "vpr_id": test_vpr_id},
     #                                   headers={"Authorization": f"Bearer {valid_auth_token}"})
     #
@@ -695,7 +631,7 @@ def test_e2e_artifact_retrievable(
     # original_content = create_response.json()["content"]
     #
     # # Retrieve cover letter
-    # retrieve_response = api_client.get(f"/api/v1/cover-letters/{cover_letter_id}",
+    # retrieve_response = api_client.get(f"/cover-letter/generate/{cover_letter_id}",
     #                                    headers={"Authorization": f"Bearer {valid_auth_token}"})
     #
     # assert retrieve_response.status_code == 200
@@ -710,6 +646,7 @@ def test_e2e_artifact_retrievable(
 # ============================================================================
 # TEST EXECUTION METADATA
 # ============================================================================
+
 
 @pytest.mark.e2e
 @pytest.mark.slow

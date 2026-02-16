@@ -11,7 +11,7 @@ import os
 from typing import Annotated, Any
 
 import boto3
-import jwt  # type: ignore[import-not-found]
+import jwt
 from aws_lambda_powertools.logging.correlation_paths import API_GATEWAY_REST
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from pydantic import BaseModel, Field

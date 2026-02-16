@@ -1,0 +1,168 @@
+{
+  "name": "Phase 9 Workflow Integration Test",
+  "description": "End-to-end workflow test: CV Upload → Gap → VPR → CV Tailoring → Cover Letter",
+  "phase": 9,
+  "type": "e2e",
+  "sequence": [
+    {
+      "step": 1,
+      "name": "CV Upload",
+      "endpoint": "POST /v1/users/me/cv",
+      "payload": {
+        "cv_id": "cv_e2e_001",
+        "filename": "jane_developer_resume.pdf",
+        "content_base64": "<base64_encoded_cv>"
+      },
+      "expected": {
+        "status_code": 200,
+        "cv_id": "cv_e2e_001"
+      }
+    },
+    {
+      "step": 2,
+      "name": "Job Description Entry",
+      "endpoint": "POST /v1/jobs",
+      "payload": {
+        "job_id": "job_e2e_001",
+        "job_description": "Senior Software Engineer at TechCorp Solutions..."
+      },
+      "expected": {
+        "status_code": 200,
+        "job_id": "job_e2e_001",
+        "parsed_requirements": ["Python", "AWS", "Kubernetes"]
+      }
+    },
+    {
+      "step": 3,
+      "name": "Gap Analysis Questions",
+      "endpoint": "POST /v1/gap-analysis/questions",
+      "payload": {
+        "cv_id": "cv_e2e_001",
+        "job_id": "job_e2e_001",
+        "max_questions": 10
+      },
+      "expected": {
+        "status_code": 200,
+        "questions_count": ">=3",
+        "tags_enforced": true
+      }
+    },
+    {
+      "step": 4,
+      "name": "Gap Response Submission",
+      "endpoint": "POST /v1/gap-analysis/responses",
+      "payload": {
+        "application_id": "app_e2e_001",
+        "responses": [
+          {
+            "question_id": "gap_e2e_q001",
+            "response": "Led 8-person team through microservices migration...",
+            "quantifiable_data": {"team_size": 8, "duration": 12}
+          }
+        ]
+      },
+      "expected": {
+        "status_code": 200,
+        "impact_statements_generated": true
+      }
+    },
+    {
+      "step": 5,
+      "name": "VPR Generation",
+      "endpoint": "POST /v1/vpr/generate",
+      "payload": {
+        "cv_id": "cv_e2e_001",
+        "job_id": "job_e2e_001",
+        "gap_response_ids": ["gap_e2e_001"]
+      },
+      "expected": {
+        "status_code": 202,
+        "request_id": "vpr_e2e_001"
+      },
+      "polling": {
+        "endpoint": "GET /v1/vpr/{request_id}",
+        "timeout_seconds": 120,
+        "expected_status": "completed"
+      }
+    },
+    {
+      "step": 6,
+      "name": "CV Tailoring",
+      "endpoint": "POST /v1/cv-tailoring/generate",
+      "payload": {
+        "cv_id": "cv_e2e_001",
+        "job_id": "job_e2e_001",
+        "vpr_id": "vpr_e2e_001"
+      },
+      "expected": {
+        "status_code": 202,
+        "ats_score": ">=8.0"
+      },
+      "polling": {
+        "endpoint": "GET /v1/cv-tailoring/{request_id}",
+        "timeout_seconds": 60
+      }
+    },
+    {
+      "step": 7,
+      "name": "Company Research",
+      "endpoint": "POST /v1/company-research/fetch",
+      "payload": {
+        "job_id": "job_e2e_001",
+        "company_name": "TechCorp Solutions"
+      },
+      "expected": {
+        "status_code": 200,
+        "data": {"mission": true, "values": true, "culture": true}
+      }
+    },
+    {
+      "step": 8,
+      "name": "Cover Letter Generation",
+      "endpoint": "POST /v1/cover-letter/generate",
+      "payload": {
+        "cv_id": "cv_e2e_001",
+        "job_id": "job_e2e_001",
+        "vpr_id": "vpr_e2e_001",
+        "gap_response_ids": ["gap_e2e_001"],
+        "company_research_id": "comp_e2e_001"
+      },
+      "expected": {
+        "status_code": 202,
+        "fvs_validation": true
+      },
+      "polling": {
+        "endpoint": "GET /v1/cover-letter/{request_id}",
+        "timeout_seconds": 90,
+        "paragraph_validation": {
+          "hook": {"words": "80-100"},
+          "proof_points": {"requirements_mapped": 3},
+          "close": {"words": "60-80", "cta": true}
+        }
+      }
+    },
+    {
+      "step": 9,
+      "name": "Interview Prep (Optional)",
+      "endpoint": "POST /v1/interview-prep/generate",
+      "payload": {
+        "cv_id": "cv_e2e_001",
+        "job_id": "job_e2e_001",
+        "vpr_id": "vpr_e2e_001",
+        "gap_response_ids": ["gap_e2e_001"],
+        "question_count": 10
+      },
+      "expected": {
+        "status_code": 200,
+        "questions_count": ">=8"
+      }
+    }
+  ],
+  "workflow_validation": {
+    "order_enforced": true,
+    "dependencies_required": true,
+    "knowledge_base_updates": true,
+    "total_time_minutes": 15,
+    "success_rate": 1.0
+  }
+}

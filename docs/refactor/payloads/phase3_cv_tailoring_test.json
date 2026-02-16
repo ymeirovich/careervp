@@ -1,0 +1,92 @@
+{
+  "name": "Phase 3 CV Tailoring Live Test",
+  "description": "Test CV Tailoring 3-Step process with ATS scoring",
+  "phase": 3,
+  "type": "feature",
+  "endpoint": "POST /v1/cv-tailoring/generate",
+  "payload": {
+    "cv_id": "cv_phase3_test_001",
+    "job_id": "job_phase3_test_001",
+    "vpr_id": "vpr_phase3_test_001",
+    "options": {
+      "preserve_length": true,
+      "highlight_keywords": true,
+      "target_ats": "standard",
+      "emphasis_areas": ["technical_skills", "leadership"]
+    },
+    "test_context": {
+      "original_cv": {
+        "summary": "Experienced software engineer with diverse background",
+        "experience": [
+          {
+            "title": "Software Engineer",
+            "company": "Tech Corp",
+            "duration": "3 years",
+            "bullets": [
+              "Developed features for flagship product",
+              "Worked with cross-functional teams",
+              "Participated in code reviews"
+            ]
+          },
+          {
+            "title": "Senior Developer",
+            "company": "Startup Inc",
+            "duration": "2 years",
+            "bullets": [
+              "Led development initiatives",
+              "Mentored junior developers",
+              "Improved code quality"
+            ]
+          }
+        ],
+        "skills": ["Python", "JavaScript", "SQL", "Git"]
+      },
+      "job_description": {
+        "required": ["Python", "AWS", "Kubernetes", " microservices"],
+        "preferred": ["Leadership", "Terraform", "CI/CD"],
+        "responsibilities": ["Lead development team", "Design scalable systems", "Mentor engineers"]
+      },
+      "vpr_differentiators": [
+        {
+          "text": "40% latency reduction through caching strategy",
+          "source": "achievement"
+        },
+        {
+          "text": "Led team of 8 engineers",
+          "source": "gap_response"
+        }
+      ]
+    }
+  },
+  "expected": {
+    "status_code": 202,
+    "response_schema": {
+      "request_id": "string",
+      "status": "processing",
+      "estimated_time_seconds": 20
+    }
+  },
+  "polling_validation": {
+    "endpoint": "GET /v1/cv-tailoring/{request_id}",
+    "expected_final_status": "completed",
+    "timeout_seconds": 60,
+    "result_validation": {
+      "min_ats_score": 8.0,
+      "keyword_matching": true,
+      "fvs_validation_passed": true,
+      "required_in_result": ["ats_score", "keyword_matches", "tailored_cv"]
+    }
+  },
+  "gate_tests": {
+    "matching_experience": { "min_score": 9.0 },
+    "career_changer": { "min_score": 7.5 },
+    "leadership_role": { "min_score": 8.0 },
+    "senior_skills_gap": { "min_score": 7.0 },
+    "recent_graduate": { "min_score": 7.5 },
+    "remote_first": { "min_score": 8.0 },
+    "startup_culture": { "min_score": 8.0 },
+    "industry_transition": { "min_score": 7.5 },
+    "contract_to_perm": { "min_score": 8.0 },
+    "employment_gap": { "min_score": 7.0 }
+  }
+}

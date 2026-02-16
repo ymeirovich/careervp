@@ -1,0 +1,156 @@
+spec_version: "1.0"
+date_created: "2026-02-14"
+purpose: "Map execution runbook phases to docs/tasks/ directory"
+status: "READY_FOR_IMPLEMENTATION"
+
+phase_mapping:
+  phase_0:
+    section: "Security Foundation"
+    directories: ["00-infra", "00-gap-remediation"]
+    status: "aligned"
+  phase_1:
+    section: "Model Unification"
+    directories: []
+    status: "missing"
+  phase_2:
+    section: "Cost Optimization"
+    directories: ["05-cv-summarizer"]
+    status: "partial"
+  phase_3:
+    section: "VPR 6-Stage"
+    directories: ["03-vpr-generator", "12-vpr-generator"]
+    status: "partial"
+  phase_4:
+    section: "CV Tailoring"
+    directories: ["06-cv-tailoring", "09-cv-tailoring"]
+    status: "partial"
+  phase_5:
+    section: "Gap Analysis"
+    directories: ["08-gap-analysis", "11-gap-analysis"]
+    status: "partial"
+  phase_6:
+    section: "Cover Letter"
+    directories: ["07-cover-letter", "10-cover-letter"]
+    status: "partial"
+  phase_7:
+    section: "Quality Validator"
+    directories: []
+    status: "missing"
+  phase_8:
+    section: "Knowledge Base"
+    directories: ["13-knowledge-base"]
+    status: "partial"
+  phase_9:
+    section: "Interview Prep"
+    directories: ["14-interview-prep"]
+    status: "partial"
+  phase_x:
+    section: "Company Research"
+    directories: []
+    status: "missing"
+
+file_alignment:
+  - source: "docs/tasks/00-infra/"
+    target: "Phase 0"
+    status: "aligned"
+  - source: "docs/tasks/00-gap-remediation/"
+    target: "Phase 0"
+    status: "aligned"
+  - source: "docs/tasks/01-cv-models/"
+    target: "Phase 1"
+    status: "missing"
+  - source: "docs/tasks/02-cv-upload/"
+    target: "Phase 0"
+    status: "partial"
+  - source: "docs/tasks/03-vpr-generator/"
+    target: "Phase 3"
+    status: "partial"
+  - source: "docs/tasks/04-cv-parsing/"
+    target: "Phase 1"
+    status: "missing"
+  - source: "docs/tasks/05-cv-summarizer/"
+    target: "Phase 2"
+    status: "partial"
+  - source: "docs/tasks/06-cv-tailoring/"
+    target: "Phase 4"
+    status: "partial"
+  - source: "docs/tasks/07-cover-letter/"
+    target: "Phase 6"
+    status: "partial"
+  - source: "docs/tasks/08-gap-analysis/"
+    target: "Phase 5"
+    status: "partial"
+  - source: "docs/tasks/09-cv-tailoring/"
+    target: "Phase 4"
+    status: "partial"
+  - source: "docs/tasks/10-cover-letter/"
+    target: "Phase 6"
+    status: "partial"
+  - source: "docs/tasks/11-gap-analysis/"
+    target: "Phase 5"
+    status: "partial"
+  - source: "docs/tasks/12-vpr-generator/"
+    target: "Phase 3"
+    status: "partial"
+  - source: "docs/tasks/13-knowledge-base/"
+    target: "Phase 8"
+    status: "partial"
+  - source: "docs/tasks/14-interview-prep/"
+    target: "Phase 9"
+    status: "partial"
+
+duplicate_tasks:
+  - pair: ["03-vpr-generator", "12-vpr-generator"]
+    recommendation: "Consolidate into 03-vpr-generator/"
+  - pair: ["06-cv-tailoring", "09-cv-tailoring"]
+    recommendation: "Consolidate into 09-cv-tailoring/"
+  - pair: ["07-cover-letter", "10-cover-letter"]
+    recommendation: "Consolidate into 10-cover-letter/"
+  - pair: ["08-gap-analysis", "11-gap-analysis"]
+    recommendation: "Consolidate into 11-gap-analysis/"
+
+missing_phases:
+  - directory: "01-cv-models/"
+    feature: "CV Models Consolidation"
+    recommended_phase: "Phase 1"
+  - directory: "04-cv-parsing/"
+    feature: "CV Parsing"
+    recommended_phase: "Phase 1"
+  - directory: ""
+    feature: "Quality Validator (FVS)"
+    recommended_phase: "Phase 7"
+  - directory: ""
+    feature: "Company Research"
+    recommended_phase: "Phase X"
+
+tasks_alignment_class:
+  class_name: "TasksAlignment"
+  file: "src/backend/careervp/tasks_alignment.py"
+  methods:
+    - name: "get_phase_for_task"
+      params: ["task_dir: str"]
+      returns: "Optional[str]"
+    - name: "get_missing_phases"
+      returns: "List[str]"
+    - name: "get_duplicate_tasks"
+      returns: "List[tuple]"
+    - name: "get_alignment_report"
+      returns: "Dict"
+
+recommended_actions:
+  - priority: 1
+    action: "Consolidate duplicate task directories"
+    effort_hours: 2
+  - priority: 2
+    action: "Add missing task directories for Phases 1, 7, X"
+    effort_hours: 4
+  - priority: 3
+    action: "Update runbook references to consolidated tasks"
+    effort_hours: 1
+  - priority: 4
+    action: "Add validation script to check alignment"
+    effort_hours: 0.5
+
+verification_commands:
+  - "python3 -c \"import yaml; yaml.safe_load(open('tasks_alignment_spec.yaml')); print('VALID')\""
+  - "cd src/backend && uv run pytest tests/unit/test_tasks_alignment.py -v"

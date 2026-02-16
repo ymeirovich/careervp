@@ -1,6 +1,7 @@
 # Infrastructure Spec Registry
 # Generated: 2026-02-12
 # Updated: 2026-02-12 - Fixed naming to use NamingUtils conventions
+# Updated: 2026-02-15 - Added Phase 10 API Gateway additive migration mapping
 
 naming_convention:
   tables: "NamingUtils.table_name(feature) -> careervp-{feature}-table-{env}"
@@ -22,6 +23,11 @@ specs:
     version: "1.1"
 
 stacks:
+  # Existing stack - API Gateway routes and Lambda integrations
+  - file: "api_construct.py"
+    category: "api_gateway + lambda"
+    note: "Phase 10 adds OpenAPI routes additively while preserving legacy /api/* during migration"
+
   # Existing stack - manages original tables (users, sessions, jobs, idempotency)
   - file: "api_db_construct.py"
     spec: "dynamodb_spec.yaml (existing_tables)"
@@ -83,6 +89,11 @@ phase_mapping:
     infra:
       - "careervp-knowledge-table-dev"  # DynamoDB table
   phase_9: []
+  phase_10:
+    infra:
+      - "API Gateway OpenAPI path resources (additive)"
+      - "Lambda integrations for missing OpenAPI endpoints"
+      - "Temporary legacy /api/* compatibility during migration"
 
 deployment:
   command: "cdk deploy --all"

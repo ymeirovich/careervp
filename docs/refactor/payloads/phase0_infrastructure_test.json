@@ -1,0 +1,32 @@
+{
+  "name": "Phase 0 Infrastructure Test - DynamoDB Knowledge Base",
+  "description": "Test DynamoDB knowledge base table connectivity and operations",
+  "phase": 0,
+  "type": "infrastructure",
+  "endpoint": "PUT /v1/knowledge/test",
+  "payload": {
+    "pk": "TEST#phase0_validation",
+    "sk": "USER#test_user_001",
+    "test_data": {
+      "validation_type": "dynamodb_connectivity",
+      "timestamp": "2026-02-14T12:00:00Z",
+      "test_sequence": 1
+    },
+    "metadata": {
+      "purpose": "Phase 0 infrastructure validation",
+      "requires_auth": true
+    }
+  },
+  "expected": {
+    "status_code": 200,
+    "response": {
+      "success": true,
+      "item_id": "TEST#phase0_validation"
+    }
+  },
+  "validation": {
+    "verify_item_retrievable": true,
+    "verify_write_capacity": true,
+    "verify_ttl_functionality": true
+  }
+}

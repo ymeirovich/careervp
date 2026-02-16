@@ -62,7 +62,9 @@ For each major job requirement, provide:
 Use this format:
 ```
 ### LMS Implementation Experience (Example from CV)
-**Evidence:** Led LMS setup and deployment of Cloud Academy serving 200+ internal employees and external customers; created 30+ learning plans including comprehensive 8-week DevOps Bootcamp (CV fact).
+**Evidence:** Led LMS setup and deployment of Cloud Academy serving 200+ internal employees
+    and external customers; created 30+ learning plans including comprehensive 8-week
+    DevOps Bootcamp (CV fact).
 
 **Alignment:** STRONG - Direct LMS implementation experience matching requirement for LMS selection and management.
 

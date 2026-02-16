@@ -1,0 +1,115 @@
+{
+  "name": "Phase 4 Cover Letter Live Test",
+  "description": "Test Cover Letter 3-paragraph generation with FVS validation",
+  "phase": 4,
+  "type": "feature",
+  "endpoint": "POST /v1/cover-letter/generate",
+  "payload": {
+    "cv_id": "cv_phase4_test_001",
+    "job_id": "job_phase4_test_001",
+    "vpr_id": "vpr_phase4_test_001",
+    "gap_response_ids": ["gap_phase4_test_001"],
+    "company_research_id": "comp_phase4_test_001",
+    "options": {
+      "tone": "professional",
+      "length": "standard",
+      "include_portfolio_link": true,
+      "paragraph_style": "concise"
+    },
+    "test_context": {
+      "user_profile": {
+        "name": "Jane Developer",
+        "email": "jane@example.com",
+        "years_experience": 8,
+        "current_role": "Senior Software Engineer"
+      },
+      "cv_highlights": [
+        "8 years Python development",
+        "AWS Solutions Architect certified",
+        "Led teams of up to 10 engineers",
+        "Reduced system latency by 40%"
+      ],
+      "vpr_uvp": "Experienced software engineer specializing in building scalable, high-performance cloud solutions with a track record of technical leadership and team development.",
+      "vpr_differentiators": [
+        "40% latency reduction through innovative caching",
+        "Led migration affecting 1M+ users",
+        "Mentored 15+ engineers to promotion"
+      ],
+      "gap_response_impact": {
+        "id": "gap_phase4_test_001",
+        "text": "Led team of 8 engineers through 12-month microservices migration, reducing deployment time by 60% and improving system reliability to 99.9%",
+        "quantifiable_data": {
+          "team_size": 8,
+          "duration_months": 12,
+          "deployment_reduction": 60,
+          "reliability": 99.9
+        },
+        "evidence_type": "CV_IMPACT"
+      },
+      "company_research": {
+        "name": "TechCorp Solutions",
+        "mission": "Empowering businesses through innovative cloud technology",
+        "values": ["Innovation", "Customer Success", "Technical Excellence", "Collaborative Culture"],
+        "recent_news": [
+          "Launched new AI-powered analytics platform Q4 2025",
+          "Expanded to European markets with new data center",
+          "Named 'Best Place to Work' for 3rd consecutive year"
+        ],
+        "culture": "Fast-paced, innovation-driven, remote-friendly with strong emphasis on work-life balance",
+        "products": ["Cloud Analytics Platform", "Enterprise Dashboard", "Data Pipeline Service"]
+      },
+      "job_details": {
+        "title": "Senior Software Engineer",
+        "department": "Platform Engineering",
+        "requirements": [
+          "5+ years software development experience",
+          "Python expertise required",
+          "AWS experience required",
+          "Leadership experience preferred"
+        ],
+        "responsibilities": [
+          "Design and implement scalable systems",
+          "Lead technical initiatives",
+          "Mentor junior engineers"
+        ]
+      }
+    }
+  },
+  "expected": {
+    "status_code": 202,
+    "response_schema": {
+      "id": "string",
+      "status": "processing",
+      "estimated_time_seconds": 25
+    }
+  },
+  "polling_validation": {
+    "endpoint": "GET /v1/cover-letter/{id}",
+    "expected_final_status": "completed",
+    "timeout_seconds": 90,
+    "result_validation": {
+      "paragraph_structure": {
+        "hook": {
+          "min_word_count": 80,
+          "max_word_count": 100,
+          "required_elements": ["uvp", "company_reference"]
+        },
+        "proof_points": {
+          "min_requirements_mapped": 3,
+          "quantified_evidence_required": true,
+          "claim_proof_format": true
+        },
+        "close": {
+          "min_word_count": 60,
+          "max_word_count": 80,
+          "required_elements": ["cta", "professional_signoff"]
+        }
+      },
+      "fvs_validation": {
+        "is_valid": true,
+        "max_violations": 0,
+        "anti_ai_score_min": 8.0
+      }
+    }
+  }
+}

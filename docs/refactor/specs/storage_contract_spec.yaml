@@ -1,0 +1,174 @@
+# Storage Contract Specification
+# Updated: NEW 2026-02-15 - Canonical logical ID to physical key mapping for OpenAPI + deployed infra
+
+spec_version: "1.0"
+date_created: "2026-02-15"
+date_updated: "2026-02-15"
+purpose: "Canonical contract mapping OpenAPI logical IDs to physical AWS storage keys while preserving deployed infrastructure."
+status: "READY_FOR_IMPLEMENTATION"
+
+authoritative_sources:
+  openapi: "../swagger/careervp-api-v1.yaml"
+  deployed_infra:
+    - "infra/careervp/api_db_construct.py"
+    - "infra/careervp/api_construct.py"
+  deployment_spec: "deployment_spec.yaml"
+
+logical_identifiers:
+  - "cv_id"
+  - "job_id"
+  - "vpr_id"
+  - "cvTailoringId"
+  - "coverLetterId"
+  - "interviewPrepId"
+  - "gap_response_ids"
+  - "company_research_id"
+
+storage_modes:
+  active:
+    description: "Current deployed path used by ServiceStack via ApiConstruct/ApiDbConstruct."
+    dynamodb:
+      users_table:
+        name: "careervp-users-table-dev"
+        partition_key: "pk"
+        sort_key: "sk"
+      jobs_table:
+        name: "careervp-jobs-table-dev"
+        partition_key: "job_id"
+      idempotency_table:
+        name: "careervp-idempotency-table-dev"
+        partition_key: "id"
+    s3:
+      cv_bucket: "careervp-dev-cvs-use1-{hash}"
+      vpr_results_bucket: "careervp-dev-vpr-results-use1-{hash}"
+
+  refactor_planned:
+    description: "Dedicated tables/buckets defined in infra specs but not yet wired in ServiceStack."
+    dynamodb:
+      cvs_table:
+        name: "careervp-cvs-table-dev"
+        partition_key: "user_email"
+        sort_key: "cv_id"
+      applications_table:
+        name: "careervp-applications-table-dev"
+        partition_key: "user_email"
+        sort_key: "application_id"
+      gap_responses_table:
+        name: "careervp-gap-responses-table-dev"
+        partition_key: "user_email"
+        sort_key: "application_id"
+      knowledge_table:
+        name: "careervp-knowledge-table-dev"
+        partition_key: "user_email"
+        sort_key: "entity_type"
+        gsi:
+          name: "entity-index"
+          partition_key: "entity_type"
+          sort_key: "entity_id"
+    s3:
+      generated_bucket: "careervp-dev-generated-use1-{hash}"
+
+entity_mapping:
+  cv_upload:
+    openapi_endpoint: "POST /users/me/cv"
+    logical_ids: ["cv_id"]
+    active_storage:
+      users_table:
+        pk: "{user_id}"
+        sk: "CV"
+      s3:
+        bucket: "cv_bucket"
+        key_pattern: "{user_id}/{uuid}.{ext}"
+
+  jobs:
+    openapi_endpoints:
+      - "POST /jobs"
+      - "GET /jobs"
+      - "GET /jobs/{jobId}"
+    logical_ids: ["job_id"]
+    active_storage:
+      jobs_table:
+        pk: "job_id"
+
+  vpr_async:
+    openapi_endpoints:
+      - "POST /vpr/generate"
+      - "GET /vpr/{vprId}"
+      - "GET /users/me/vprs"
+    logical_ids: ["vpr_id", "cv_id", "job_id", "gap_response_ids"]
+    active_storage:
+      submit_status: "jobs_table.pk=job_id"
+      result_artifact: "users_table.pk/sk via adapter"
+      result_blob: "vpr_results_bucket/{job_id}.json"
+
+  cv_tailoring_async:
+    openapi_endpoints:
+      - "POST /cv-tailoring/generate"
+      - "GET /cv-tailoring/{cvTailoringId}"
+      - "GET /users/me/tailored-cvs"
+    logical_ids: ["cv_id", "job_id", "vpr_id", "cvTailoringId"]
+    active_storage:
+      submit_status: "jobs_table.pk=job_id"
+      artifact: "users_table.pk/sk via adapter"
+
+  cover_letter_async:
+    openapi_endpoints:
+      - "POST /cover-letter/generate"
+      - "GET /cover-letter/{coverLetterId}"
+      - "GET /users/me/cover-letters"
+    logical_ids: ["cv_id", "job_id", "vpr_id", "gap_response_ids", "company_research_id", "coverLetterId"]
+    active_storage:
+      submit_status: "jobs_table.pk=job_id"
+      artifact: "users_table.pk/sk via adapter"
+
+  interview_prep_async:
+    openapi_endpoints:
+      - "POST /interview-prep/generate"
+      - "GET /interview-prep/{interviewPrepId}"
+    logical_ids: ["vpr_id", "gap_response_ids", "interviewPrepId"]
+    active_storage:
+      submit_status: "jobs_table.pk=job_id"
+      artifact: "users_table.pk/sk via adapter"
+
+  company_research_async:
+    openapi_endpoints:
+      - "POST /company-research/fetch"
+      - "GET /company-research/{jobId}"
+    logical_ids: ["job_id", "company_research_id"]
+    active_storage:
+      submit_status: "jobs_table.pk=job_id"
+      artifact: "users_table.pk/sk via adapter"
+
+  gap_analysis:
+    openapi_endpoints:
+      - "POST /gap-analysis/questions"
+      - "POST /gap-analysis/responses"
+      - "GET /gap-analysis/{jobId}/questions"
+    logical_ids: ["cv_id", "job_id", "gap_response_ids"]
+    active_storage:
+      questions_and_responses: "users_table.pk/sk via adapter"
+
+adapter_contract:
+  file: "src/backend/careervp/dal/api_storage_adapter.py"
+  required_methods:
+    - "map_logical_to_physical_keys(resource_type, logical_identifiers) -> dict"
+    - "map_physical_to_logical_ids(resource_type, item) -> dict"
+    - "build_users_table_pk_sk(resource_type, user_id, identifiers) -> dict"
+  guarantees:
+    - "No destructive table or bucket migration required for Phase 10 completion"
+    - "OpenAPI payloads remain logical-ID based"
+    - "Legacy stored items remain readable"
+
+runbook_sync:
+  phase_0:
+    required_substeps: ["0.4"]
+    note: "Documentation sync only; no new auth code required."
+  phase_1:
+    required_substeps: ["1.6.3"]
+    note: "Spec sync gate only; no model rewrites required."
+  phase_10:
+    required_substeps: ["10.0a", "10.0b", "10.0d", "10.0e", "10.0c"]
+
+validation_commands:
+  - "python3 -c \"import yaml; yaml.safe_load(open('docs/refactor/specs/storage_contract_spec.yaml')); print('VALID')\""
+  - "uv run pytest tests/unit/test_api_storage_adapter.py tests/integration/test_storage_contract_mapping.py -v"

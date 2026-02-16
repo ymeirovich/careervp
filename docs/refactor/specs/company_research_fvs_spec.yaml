@@ -1,0 +1,64 @@
+spec_version: "1.0"
+date_created: "2026-02-14"
+purpose: "FVS validation requirements for Company Research"
+status: "READY_FOR_IMPLEMENTATION"
+
+validation_requirements:
+  grammar_score:
+    minimum: 9.0
+    maximum: 10.0
+    description: "Grammar quality score from FVS validator"
+  anti_ai_score:
+    minimum: 9.0
+    maximum: 10.0
+    description: "Anti-AI detection score (higher = more human-sounding)"
+  brand_mentions:
+    max_count: 3
+    description: "Maximum number of brand name mentions in content"
+  ai_buzzwords:
+    blocked:
+      - "synergy"
+      - "leverage"
+      - "paradigm shift"
+      - "cutting-edge"
+      - "best-in-class"
+    description: "Words that trigger anti-AI score reduction"
+
+content_validation:
+  required_sections:
+    - "company_name"
+    - "overview"
+    - "values"
+    - "mission"
+    - "strategic_priorities"
+  length_limits:
+    total_max_words: 2000
+    per_section_max_words: 500
+
+integration:
+  validator_file: "src/backend/careervp/logic/fvs_validator.py"
+  description: "Use existing FVS validator - no separate company FVS file needed"
+  method: "validate_company_research()"
+  called_by: "KnowledgeRepository.save_company_research() before DynamoDB write"
+
+error_codes:
+  FVS_COMPANY_001:
+    message: "Grammar score below threshold"
+    action: "Regenerate with improved grammar"
+  FVS_COMPANY_002:
+    message: "AI detection patterns found"
+    action: "Rewrite with natural language"
+  FVS_COMPANY_003:
+    message: "Missing required section"
+    action: "Complete all required sections"
+
+test_file: "tests/unit/test_company_research_fvs.py"
+test_cases:
+  - name: "test_valid_company_research_passes"
+    description: "Research with good scores passes validation"
+  - name: "test_low_grammar_score_fails"
+    description: "Grammar score < 9.0 triggers FVS_COMPANY_001"
+  - name: "test_ai_buzzword_detection"
+    description: "Content with blocked words triggers FVS_COMPANY_002"
+  - name: "test_missing_section_fails"
+    description: "Missing required section triggers FVS_COMPANY_003"

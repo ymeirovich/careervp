@@ -1,0 +1,86 @@
+spec_version: "1.1"
+date_created: "2026-02-14"
+date_updated: "2026-02-15"
+purpose: "E2E test specifications for Company Research"
+status: "READY_FOR_IMPLEMENTATION"
+
+e2e_tests:
+  - name: "User researches company and retrieves"
+    file: "tests/e2e/test_company_research_e2e.py"
+    test_id: "E2E-COMP-001"
+    steps:
+      - action: "POST /v1/company-research/fetch"
+        data:
+          company_name: "E2ETestCompany"
+          job_id: "test-job-001"
+        expected:
+          status_code: 202
+          response:
+            request_id: "string"
+            status: "processing"
+      - action: "GET /v1/company-research/{job_id}"
+        poll_max: 10
+        poll_interval: 2
+        expected:
+          status_code: 200
+          response:
+            company_name: "E2ETestCompany"
+            status: "completed"
+
+  - name: "Cache hit prevents duplicate generation"
+    test_id: "E2E-COMP-002"
+    steps:
+      - action: "POST /v1/company-research/fetch"
+        data:
+          company_name: "CachedCompany"
+          job_id: "test-job-002"
+        expected:
+          response:
+            cached: false
+      - action: "POST /v1/company-research/fetch"
+        data:
+          company_name: "CachedCompany"
+          job_id: "test-job-002"
+        expected:
+          response:
+            cached: true
+
+  - name: "Expired TTL triggers regeneration"
+    test_id: "E2E-COMP-003"
+    setup:
+      - action: "Direct DynamoDB insert"
+        ttl_days: -1
+    steps:
+      - action: "POST /v1/company-research/fetch"
+        data:
+          company_name: "ExpiredCompany"
+          job_id: "test-job-003"
+        expected:
+          response:
+            cached: false
+
+  - name: "FVS validation failure rejects content"
+    test_id: "E2E-COMP-004"
+    mock:
+      fvs_validator:
+        validate:
+          is_valid: false
+          violations:
+            - "Grammar score below 9.0"
+    expected:
+      status_code: 422
+      response:
+        error: "FVS validation failed"
+
+infrastructure:
+  api_base: "https://api.careervp.com"
+  auth: "Bearer $TOKEN"
+  dynamodb_table: "careervp-knowledge-table-dev"
+  aws_profile: "careervp-dev"
+
+cleanup:
+  description: "Delete test items from DynamoDB after E2E run"
+  items:
+    - entity_id: "E2ETestCompany"
+    - entity_id: "CachedCompany"
+    - entity_id: "ExpiredCompany"
