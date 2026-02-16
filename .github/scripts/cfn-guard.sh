@@ -206,6 +206,15 @@ if [[ "$FINAL_STATUS" == *"_IN_PROGRESS"* ]]; then
     exit 1
 fi
 
+# UPDATE_ROLLBACK_COMPLETE is a stable state - previous update failed but stack is recoverable
+if [[ "$FINAL_STATUS" == "UPDATE_ROLLBACK_COMPLETE" ]]; then
+    log_info "Stack is in UPDATE_ROLLBACK_COMPLETE state - previous update failed but stack is stable."
+    log_info "Stack is ready for deployment."
+    log_info "CloudFormation State Guard - PASSED"
+    echo "=========================================="
+    exit 0
+fi
+
 if [[ "$FINAL_STATUS" == *"_FAILED"* ]] || [[ "$FINAL_STATUS" == *"ROLLBACK"* ]]; then
     log_error "Stack is in failed state: $FINAL_STATUS. Manual intervention required."
     exit 1
