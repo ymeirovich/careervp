@@ -360,7 +360,105 @@ These tasks wrap the core logic in HTTP endpoints.
 
 ---
 
-# PART 3: VERIFICATION COMMANDS
+# PART 3: TEST CREATION (Missing Tests)
+
+These tests are referenced in workflows but are NOT yet created.
+
+## Task T1: VPR Async E2E Test
+
+### File to Create:
+- `src/backend/tests/e2e/test_vpr_async_polling.py`
+
+### Test Coverage:
+- Submit VPR job (POST /vpr/generate) → returns 202 with request_id
+- Poll status (GET /vpr/status/{job_id}) → pending → processing → completed
+- Error handling for invalid job_id
+- Timeout handling
+
+### Code:
+```python
+"""VPR Async Polling E2E Tests."""
+import pytest
+import requests
+import time
+
+API_BASE_URL = os.environ.get("API_BASE_URL", "https://api.careervp.com")
+
+class TestVPRAsyncPolling:
+    """Test VPR async job submission and status polling."""
+
+    def test_submit_and_poll_success(self, auth_token):
+        """Test complete VPR job lifecycle: submit → poll → completed."""
+        # Submit VPR job
+        response = requests.post(
+            f"{API_BASE_URL}/v1/vpr/generate",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={"cv_id": "test-cv-123", "job_id": "test-job-456"}
+        )
+        assert response.status_code == 202
+        data = response.json()
+        assert "request_id" in data
+        request_id = data["request_id"]
+
+        # Poll for completion (max 60 seconds)
+        for _ in range(60):
+            status_response = requests.get(
+                f"{API_BASE_URL}/v1/vpr/status/{request_id}",
+                headers={"Authorization": f"Bearer {auth_token}"}
+            )
+            status_data = status_response.json()
+            if status_data["status"] == "completed":
+                break
+            elif status_data["status"] == "failed":
+                pytest.fail("VPR job failed")
+            time.sleep(1)
+
+        # Verify final status
+        assert status_data["status"] == "completed"
+        assert "result" in status_data
+```
+
+---
+
+## Task T2: Cover Letter Tests
+
+### Files to Create:
+
+#### Unit Tests: `src/backend/tests/cover-letter/unit/`
+- `test_cover_letter_logic.py` - Test cover_letter.py logic
+- `test_cover_letter_prompt.py` - Test prompt building
+
+#### Integration Tests: `src/backend/tests/cover-letter/integration/`
+- `test_cover_letter_handler.py` - Test handler HTTP responses
+
+#### E2E Tests: `src/backend/tests/cover-letter/e2e/`
+- `test_cover_letter_flow.py` - Full cover letter generation flow
+
+### Code (Unit):
+```python
+"""Cover Letter Unit Tests."""
+import pytest
+from careervp.logic.cover_letter import generate_cover_letter
+
+class TestCoverLetterLogic:
+    """Test cover letter generation logic."""
+
+    @pytest.mark.asyncio
+    async def test_generate_professional_tone(self):
+        """Test professional tone cover letter generation."""
+        # Test implementation
+        pass
+
+    @pytest.mark.asyncio
+    async def test_word_count_limits(self):
+        """Test word count stays within limits."""
+        # short: 250, standard: 350, long: 400
+        pass
+```
+
+---
+
+# PART 4: VERIFICATION COMMANDS
 
 ```bash
 # Run all tests
@@ -389,6 +487,9 @@ cd infra && npx cdk synth
 - [ ] Phase 4: Self-correction loop (ATS >= 8.0)
 - [ ] Phase 5: 10 question limit
 - [ ] Phase 5: Question tagging
+- [ ] Phase 6: Cover Letter unit tests (tests/cover-letter/unit/)
+- [ ] Phase 6: Cover Letter integration tests (tests/cover-letter/integration/)
+- [ ] Phase 6: Cover Letter E2E tests (tests/cover-letter/e2e/)
 - [ ] Phase 7: ATS scoring
 - [ ] Phase 7: Anti-AI scoring
 - [ ] Phase 7: Cross-doc consistency
@@ -396,6 +497,7 @@ cd infra && npx cdk synth
 - [ ] Phase 10: Job handler (3 endpoints)
 - [ ] Phase 10: Status endpoints (6 endpoints)
 - [ ] Phase 10: Health endpoint
+- [ ] VPR Async: E2E test (tests/e2e/test_vpr_async_polling.py)
 - [ ] All tests passing
 - [ ] Lint clean
 - [ ] Type check clean
