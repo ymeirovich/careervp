@@ -225,16 +225,21 @@ jobs:
 
       - name: Deploy VPR Async Stack
         working-directory: infra
-        run: npx cdk deploy CareerVpVprAsyncDev --require-approval never --outputs-file cdk-outputs.json
+        run: npx cdk deploy --all --require-approval never --outputs-file cdk-outputs.json
 
       - name: Extract stack outputs
         id: stack-outputs
         working-directory: infra
         run: |
           if [ -f cdk-outputs.json ]; then
-            API_URL=$(jq -r '.CareerVpVprAsyncDev.VPRApiUrl // ""' cdk-outputs.json)
-            QUEUE_URL=$(jq -r '.CareerVpVprAsyncDev.VPRJobsQueueUrl // ""' cdk-outputs.json)
-            TABLE_NAME=$(jq -r '.CareerVpVprAsyncDev.JobsTableName // ""' cdk-outputs.json)
+            # Get the first stack name from outputs
+            STACK_NAME=$(jq -r 'keys[0]' cdk-outputs.json)
+            echo "Detected stack: $STACK_NAME"
+
+            # Try to extract VPR-related outputs, fallback to general outputs
+            API_URL=$(jq -r ".[\"$STACK_NAME\"].VPRApiUrl // .[\"$STACK_NAME\"].ApiUrl // .[\"$STACK_NAME\"].ApiGatewayUrl // \"\" " cdk-outputs.json)
+            QUEUE_URL=$(jq -r ".[\"$STACK_NAME\"].VPRJobsQueueUrl // .[\"$STACK_NAME\"].JobsQueueUrl // \"\" " cdk-outputs.json)
+            TABLE_NAME=$(jq -r ".[\"$STACK_NAME\"].JobsTableName // .[\"$STACK_NAME\"].TableName // \"\" " cdk-outputs.json)
 
             echo "api_url=$API_URL" >> $GITHUB_OUTPUT
             echo "queue_url=$QUEUE_URL" >> $GITHUB_OUTPUT
@@ -246,6 +251,9 @@ jobs:
             echo "  Table Name: $TABLE_NAME"
           else
             echo "Warning: cdk-outputs.json not found"
+            echo "api_url=" >> $GITHUB_OUTPUT
+            echo "queue_url=" >> $GITHUB_OUTPUT
+            echo "table_name=" >> $GITHUB_OUTPUT
           fi
 
       - name: Upload stack outputs
@@ -343,7 +351,7 @@ jobs:
 
       - name: CDK Diff (Dry Run)
         working-directory: infra
-        run: npx cdk diff CareerVpVprAsyncDev
+        run: npx cdk diff --all
 
       - name: Comment on PR
         if: always()
