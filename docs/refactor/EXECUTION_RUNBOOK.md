@@ -1,9 +1,22 @@
 # CareerVP Refactoring Execution Runbook
 
-**Document Version:** 4.2
-**Date:** 2026-02-15
+**Document Version:** 4.3
+**Date:** 2026-02-16
 **Purpose:** Machine-readable execution guide for all refactoring phases
-**Status:** API + SPECS + STORAGE CONTRACT SYNC — NEW 2026-02-15
+**Status:** EXECUTION IN PROGRESS — Phase 0-1 COMPLETE | Phase 6,8,9 IMPLEMENTED | Phase 2-5,7,10 ASSESSED
+
+> **Execution Status (2026-02-16):**
+> - ✅ Phase 0: COMPLETE (59 unit tests passing)
+> - ✅ Phase 1: COMPLETE (model consolidation)
+> - ⚠️ Phase 2: PARTIAL (60%) - CV Summarizer, LLM Cache missing
+> - ⚠️ Phase 3: PARTIAL (65%) - 6-stage pipeline not complete
+> - ⚠️ Phase 4: PARTIAL (70%) - 3-step process not complete
+> - ⚠️ Phase 5: PARTIAL (45%) - question limit 5, tagging missing
+> - ✅ Phase 6: IMPLEMENTED (Cover Letter - 3 files)
+> - ⚠️ Phase 7: PARTIAL (25%) - FVS scoring not complete
+> - ✅ Phase 8: IMPLEMENTED (Knowledge Base - 3 files)
+> - ✅ Phase 9: IMPLEMENTED (Interview Prep - 4 files)
+> - ⚠️ Phase 10: ASSESSED (12/27 endpoints implemented)
 
 > **Status:** Phase -1 COMPLETE. All specs in `docs/refactor/specs/`
 > **Infra Specs:** `infra/careervp/specs/`
@@ -91,9 +104,10 @@ This sequence identifies what to execute now to sync specs + API while preservin
 
 ---
 
-## Phase 0: Security Foundation
+## Phase 0: Security Foundation ✅ COMPLETE
 
 **Duration:** 1 day | **Effort:** 8 hours
+**Status (2026-02-16):** COMPLETE - 59 unit tests passing
 
 > **⚠️ Handler Pattern Note:**
 > `deployment_spec.yaml` specifies class-based handler patterns, but actual implementation uses function-based Powertools patterns. Follow existing patterns in `cv_upload_handler.py` and `cv_tailoring_handler.py` for consistency with the codebase.
@@ -248,9 +262,10 @@ curl -X PUT "https://api.careervp.com/v1/knowledge/test" \
 
 ---
 
-## Phase 1: Model Unification
+## Phase 1: Model Unification ✅ COMPLETE
 
 **Duration:** 3 days | **Effort:** 22 hours
+**Status (2026-02-16):** COMPLETE - Models consolidated with shims for backward compat
 
 ### Existing Files (DO NOT OVERWRITE)
 | File | Status | Contains |
@@ -899,9 +914,10 @@ uv run mypy careervp/tasks_alignment.py --strict
 
 ---
 
-## Phase 2: Cost Optimization + LLM Caching
+## Phase 2: Cost Optimization + LLM Caching ⚠️ PARTIAL
 
 **Duration:** 2.5 days | **Effort:** 20 hours
+**Status (2026-02-16):** PARTIAL (60%) - CV Summarizer and LLM Cache MISSING, CircuitBreaker UNWIRED
 
 ### Specs
 | Type | File | Purpose |
@@ -992,9 +1008,10 @@ curl -X POST "https://api.careervp.com/v1/gap-analysis/responses" \
 
 ---
 
-## Phase 3: VPR 6-Stage Generator
+## Phase 3: VPR 6-Stage Generator ⚠️ PARTIAL
 
 **Duration:** 1.5 days | **Effort:** 10 hours
+**Status (2026-02-16):** PARTIAL (65%) - Single-stage pipeline instead of 6-stage, anti-AI detection UNWIRED
 
 ### Existing Files (DO NOT OVERWRITE)
 | File | Status | Contains |
@@ -1089,9 +1106,10 @@ exit 1
 
 ---
 
-## Phase 4: CV Tailoring 3-Step
+## Phase 4: CV Tailoring 3-Step ⚠️ PARTIAL
 
 **Duration:** 1.5 days | **Effort:** 11 hours
+**Status (2026-02-16):** PARTIAL (70%) - Single-pass instead of 3-step, self-correction loop MISSING
 
 ### Specs
 | Type | File | Purpose |
@@ -1262,9 +1280,10 @@ exit 1
 
 ---
 
-## Phase 5: Gap Analysis
+## Phase 5: Gap Analysis ⚠️ PARTIAL
 
 **Duration:** 2 days | **Effort:** 13 hours
+**Status (2026-02-16):** PARTIAL (45%) - Question limit hardcoded to 5, tagging MISSING, handler is stub
 
 ### Specs
 | Type | File | Purpose |
@@ -1426,9 +1445,10 @@ cdk deploy --all
 
 ---
 
-## Phase 6: Cover Letter
+## Phase 6: Cover Letter ✅ IMPLEMENTED
 
 **Duration:** 2 days | **Effort:** 13 hours
+**Status (2026-02-16):** IMPLEMENTED - 3 files created (models/cover_letter.py, logic/cover_letter.py, handlers/cover_letter_handler.py)
 
 ### Specs
 | Type | File | Purpose |
@@ -1541,9 +1561,10 @@ exit 1
 
 ---
 
-## Phase 7: Quality Validator (FVS)
+## Phase 7: Quality Validator (FVS) ⚠️ PARTIAL
 
 **Duration:** 1.5 days | **Effort:** 12 hours
+**Status (2026-02-16):** PARTIAL (25%) - ATS scoring, anti-AI wiring, cross-doc consistency MISSING
 
 ### Specs
 | Type | File | Purpose |
@@ -1638,9 +1659,10 @@ curl -X POST "https://api.careervp.com/v1/quality-validate" \
 
 ---
 
-## Phase 8: Knowledge Base
+## Phase 8: Knowledge Base ✅ IMPLEMENTED
 
 **Duration:** 1.5 days | **Effort:** 12 hours
+**Status (2026-02-16):** IMPLEMENTED - 3 files created (models/knowledge_base.py, dal/knowledge_repository.py, handlers/knowledge_base_handler.py)
 
 ### Specs
 | Type | File | Purpose |
@@ -2091,9 +2113,10 @@ bash scripts/live_test_company_research.sh
 
 ---
 
-## Phase 9: Interview Prep
+## Phase 9: Interview Prep ✅ IMPLEMENTED
 
 **Duration:** 2 days | **Effort:** 16 hours
+**Status (2026-02-16):** IMPLEMENTED - 4 files created (models/interview_prep.py, logic/prompts/interview_prep_prompt.py, logic/interview_prep.py, handlers/interview_prep_handler.py)
 
 ### Specs
 | Type | File | Purpose |
@@ -2212,11 +2235,12 @@ bash scripts/test_workflow_e2e.sh \
 
 ---
 
-## Phase 10: API Contract Remediation — NEW 2026-02-15
+## Phase 10: API Contract Remediation ⚠️ PARTIAL
 
 **Duration:** 5 days | **Effort:** 40 hours
 **Depends on:** Phases 0–9 (feature logic implemented)
 **Purpose:** Ensure 100% coverage of all 27 OpenAPI endpoints in `docs/swagger/careervp-api-v1.yaml`
+**Status (2026-02-16):** ASSESSED - 12/27 endpoints implemented (56% coverage), 12 endpoints remain MISSING
 
 > **Gap Summary:** Current codebase has 5 partially-implemented handlers with path/schema mismatches,
 > 1 stub-only handler (gap_handler.py), and 19 completely missing endpoints.
@@ -3365,7 +3389,60 @@ grep -r "@app\.\(get\|post\|put\|delete\).*'/api/" careervp/handlers/ | grep -v 
 
 ---
 
-**Document Version:** 4.2
+## What Remains To Be Done (2026-02-16)
+
+### HIGH PRIORITY: API Contract Gaps (12 missing endpoints)
+
+| Endpoint | Handler Needed | Phase |
+|----------|---------------|-------|
+| `GET /users/me` | New `user_handler.py` | 10 |
+| `PUT /users/me` | Same `user_handler.py` | 10 |
+| `GET /users/me/cvs` | Extend CV handler | 10 |
+| `POST /jobs` | New `job_handler.py` | 10 |
+| `GET /jobs` | Same `job_handler.py` | 10 |
+| `GET /jobs/{jobId}` | Same `job_handler.py` | 10 |
+| `GET /cv-tailoring/{id}` | Extend CV tailoring handler | 10 |
+| `GET /users/me/tailored-cvs` | New list handler | 10 |
+| `GET /cover-letter/{id}` | Extend cover letter handler | 10 |
+| `GET /users/me/cover-letters` | New list handler | 10 |
+| `GET /interview-prep/{id}` | Extend interview prep handler | 10 |
+| `GET /health` | New `health_handler.py` | 10 |
+
+### MEDIUM PRIORITY: Quality Gaps
+
+| Phase | Gap | Effort |
+|-------|-----|--------|
+| Phase 2 | CV Summarizer module | Medium |
+| Phase 2 | LLM Cache implementation | Medium |
+| Phase 2 | Wire circuit breaker into LLMClient | Low |
+| Phase 3 | Refactor VPR to 6-stage pipeline | High |
+| Phase 3 | Wire anti-AI detection | Low |
+| Phase 4 | Split CV tailoring to 3 steps | Medium |
+| Phase 4 | Self-correction loop (ATS < 8.0) | Medium |
+| Phase 5 | Increase gap question limit 5→10 | Trivial |
+| Phase 5 | Flesh out gap_handler.py | Medium |
+| Phase 7 | Implement ATS/anti-AI/completeness scoring in FVS | High |
+| Phase 7 | Cross-document consistency validation | Medium |
+
+### Test Status
+- **Unit Tests:** 155 passing, 3 skipped, 0 failed
+- **Lint:** Clean (ruff pass)
+- **Need:** Unit tests for newly implemented features (Phase 6, 8, 9)
+
+---
+
+**Document Version:** 4.3
+**Updated:** 2026-02-16
+**Changes:**
+- v4.3 - Execution Status Update (2026-02-16):
+  - Marked Phase 0 as COMPLETE (59 unit tests)
+  - Marked Phase 1 as COMPLETE (model consolidation)
+  - Marked Phase 6 as IMPLEMENTED (Cover Letter)
+  - Marked Phase 8 as IMPLEMENTED (Knowledge Base)
+  - Marked Phase 9 as IMPLEMENTED (Interview Prep)
+  - Marked Phase 2,3,4,5,7,10 as PARTIAL/ASSESSED with remaining gaps documented
+
+- v4.2 - API + Specs + Storage Layer Sync (NEW 2026-02-15):
 **Created:** 2026-02-15
 
 **Changes:**

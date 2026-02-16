@@ -22,7 +22,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
-          enable-cache: false
+          enable-cache: true
       - name: Ruff check
         working-directory: src/backend
         run: uv run ruff check .
@@ -36,7 +36,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
-          enable-cache: false
+          enable-cache: true
       - name: Run mypy
         working-directory: src/backend
         run: uv run mypy careervp --config-file mypy.ini
@@ -50,7 +50,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
-          enable-cache: false
+          enable-cache: true
       - name: Run pytest
         working-directory: src/backend
         run: uv run pytest
@@ -71,7 +71,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
-          enable-cache: false
+          enable-cache: true
       - name: Validate naming guardrail
         working-directory: src/backend
         run: |

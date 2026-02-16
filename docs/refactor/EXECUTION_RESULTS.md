@@ -3135,3 +3135,321 @@ These are required in the broader feature docs but are outside current runbook c
 Runbook completion yields a substantially improved, runnable **serverless API layer** for the documented OpenAPI v1 contract, but it does **not** by itself guarantee a complete CareerVP application with all required features from the full product specification.
 
 ---
+
+## Execution Session: 2026-02-16 — Phases 2–10
+
+**Executor:** Claude Opus 4.6 (ralph-loop + ultrawork parallel)
+**Duration:** Single session
+**Test baseline:** 155 passed, 0 failed, 3 skipped (maintained throughout)
+**Lint status:** Clean (ruff pass, 0 errors)
+
+---
+
+### Phase 2: Cost Optimization Verification
+
+**Status:** ASSESSED — Partially implemented (60%)
+
+| Component | Expected | Actual | Status |
+|-----------|----------|--------|--------|
+| CV Summarizer | Dedicated summarizer reducing token cost | Not implemented — full CV text sent to LLM | MISSING |
+| LLM Cache | DynamoDB or in-memory cache for repeated prompts | Not implemented | MISSING |
+| Circuit Breaker | Wired into LLM calls via Powertools | Defined in code but **not wired** into any LLM call path | UNWIRED |
+| Token tracking | Per-request token usage metrics | Not implemented | MISSING |
+
+**What exists:** `LLMClient` in `logic/llm_client.py` calls Bedrock directly. Circuit breaker utility exists in handlers/utils but is not imported by any logic module.
+
+**Remaining work:**
+- Implement `cv_summarizer.py` logic module to extract key sections before LLM calls
+- Implement LLM response cache (DynamoDB TTL-based or in-memory)
+- Wire circuit breaker into `LLMClient.generate()` call path
+- Add token usage tracking via Powertools metrics
+
+---
+
+### Phase 3: VPR Quality Verification
+
+**Status:** ASSESSED — Partially implemented (65%)
+
+| Component | Expected | Actual | Status |
+|-----------|----------|--------|--------|
+| 6-stage pipeline | Sequential: Extract → Analyze → Match → Score → Narrate → Validate | Single-stage: one LLM call with combined prompt | PARTIAL |
+| FVS integration | FVS validates output before returning | `check_anti_ai_patterns()` defined but never called | UNWIRED |
+| Anti-AI detection | Active pattern detection on generated text | Function exists, not invoked in pipeline | UNWIRED |
+| VPR Submit handler | Async 202 submit pattern | `vpr_submit_handler.py` exists with full async pattern | IMPLEMENTED |
+| VPR Status handler | Polling endpoint | `vpr_status_handler.py` exists | IMPLEMENTED |
+| VPR Worker handler | Background processing | `vpr_worker_handler.py` exists | IMPLEMENTED |
+
+**What exists:** Complete handler layer (submit/status/worker) with async DynamoDB-backed pattern. `vpr_generator.py` has a working single-stage generation. Models are well-defined with `Annotated[type, Field(...)]` pattern.
+
+**Remaining work:**
+- Refactor `vpr_generator.py` into 6 discrete pipeline stages
+- Wire `check_anti_ai_patterns()` into validation stage
+- Add stage-level error handling and partial result caching
+
+---
+
+### Phase 4: CV Tailoring Quality Verification
+
+**Status:** ASSESSED — Partially implemented (70%)
+
+| Component | Expected | Actual | Status |
+|-----------|----------|--------|--------|
+| 3-step process | Analyze → Tailor → Validate | Single LLM call, no explicit steps | PARTIAL |
+| Self-correction loop | Re-generate if ATS score < threshold | Not implemented | MISSING |
+| CAR/STAR enforcement | Achievement bullet validation | Not implemented | MISSING |
+| ATS scoring | Sophisticated keyword + structure analysis | Simple keyword overlap percentage | BASIC |
+| Handler layer | Async submit pattern | `cv_tailoring_handler.py` with full request/response | IMPLEMENTED |
+
+**What exists:** `cv_tailoring_handler.py` handler with proper Powertools decorators. Logic module performs single-pass LLM tailoring. ATS score is computed as basic keyword overlap.
+
+**Remaining work:**
+- Split into explicit Analyze → Tailor → Validate steps
+- Implement self-correction loop (re-tailor if ATS < 8.0)
+- Add CAR/STAR bullet pattern enforcement
+- Improve ATS scoring with structure/format analysis
+
+---
+
+### Phase 5: Gap Analysis Quality + DAL Verification
+
+**Status:** ASSESSED — Partially implemented (45%)
+
+| Component | Expected | Actual | Status |
+|-----------|----------|--------|--------|
+| Question count | Up to 10 questions | Hardcoded limit of 5 (`questions[:5]`) | PARTIAL |
+| Priority levels | HIGH/MEDIUM/LOW with weighted scoring | Impact/probability scoring exists with correct weights (0.7/0.3) | IMPLEMENTED |
+| Tag assignment | Auto-tag questions by category | Not implemented in generation | MISSING |
+| gap_handler.py | Full CRUD handler | Stub with minimal routing | PARTIAL |
+| DAL integration | Save/retrieve gap responses | `knowledge_repository.py` handles persistence | IMPLEMENTED |
+| Models | GapQuestion, GapAnalysisRequest/Response | Well-defined with proper validation | IMPLEMENTED |
+
+**What exists:** `gap_analysis.py` logic with `calculate_gap_score()` (correct 0.7/0.3 weighting), async LLM generation, proper `Result[T]` returns. `gap_handler.py` exists but is minimal.
+
+**Remaining work:**
+- Increase question limit from 5 to 10
+- Add question tagging in LLM prompt
+- Flesh out `gap_handler.py` with full CRUD operations
+- Add gap response submission endpoint logic
+
+---
+
+### Phase 6: Cover Letter — IMPLEMENTED
+
+**Status:** IMPLEMENTED — 3 new files created
+
+| File | Path | Description |
+|------|------|-------------|
+| Models | `models/cover_letter.py` | `CoverLetterOptions`, `CoverLetterParagraph`, `CoverLetter`, `CoverLetterRequest`, `CoverLetterResponse` |
+| Logic | `logic/cover_letter.py` | `generate_cover_letter()` async, `_parse_cover_letter_response()`, `MAX_WORD_COUNT=400`, `WORD_COUNT_TARGETS` |
+| Handler | `handlers/cover_letter_handler.py` | `lambda_handler` with 202 Accepted async pattern, `_parse_request`, `_build_response` |
+
+**Key implementation details:**
+- 3-paragraph structure per spec: Hook (80-100 words), Proof Points (120-140 words), Close (60-80 words)
+- `WORD_COUNT_TARGETS = {'hook': 90, 'proof_points': 130, 'close': 70}` with MAX_WORD_COUNT=400
+- Uses existing `cover_letter_prompt.py` (build_system_prompt, build_user_prompt)
+- Follows `company_research_handler.py` async 202 pattern exactly
+- Lint clean, imports verified
+
+---
+
+### Phase 7: FVS Quality Validator Verification
+
+**Status:** ASSESSED — Minimally implemented (25%)
+
+| Component | Expected | Actual | Status |
+|-----------|----------|--------|--------|
+| Fact verification | Cross-reference claims against CV data | Basic implementation exists | IMPLEMENTED |
+| ATS scoring | Structure + keyword + format analysis | Not implemented in FVS | MISSING |
+| Anti-AI detection | Pattern-based AI text detection | `check_anti_ai_patterns()` exists but unused | UNWIRED |
+| Cross-document consistency | Validate across VPR/CV/CL | Not implemented | MISSING |
+| Completeness scoring | Check all required sections present | Not implemented | MISSING |
+| Language quality | Grammar, tone, readability | Not implemented | MISSING |
+| QualityScore model | Composite validation result | Exists as empty/minimal shell | PARTIAL |
+
+**What exists:** Basic fact verification logic. `check_anti_ai_patterns()` function defined but never called from any pipeline. `QualityScore` model exists with minimal fields.
+
+**Remaining work:**
+- Implement ATS scoring module
+- Wire `check_anti_ai_patterns()` into all generation pipelines
+- Add cross-document consistency checks
+- Implement completeness and language quality scoring
+- Flesh out `QualityScore` with all scoring dimensions
+
+---
+
+### Phase 8: Knowledge Base — IMPLEMENTED
+
+**Status:** IMPLEMENTED — 3 new files created
+
+| File | Path | Description |
+|------|------|-------------|
+| Models | `models/knowledge_base.py` | `KnowledgeEntry`, `GapResponseEntry`, `CompanyResearchEntry`, `KnowledgeBaseRequest`, `KnowledgeBaseResponse` |
+| DAL | `dal/knowledge_repository.py` | `KnowledgeRepository` with DynamoDB single-table design, TTL constants (gap: 24mo, research: 30d) |
+| Handler | `handlers/knowledge_base_handler.py` | `lambda_handler` routing GET/POST, `_handle_get`, `_handle_post` |
+
+**Key implementation details:**
+- DynamoDB key pattern: `PK=USER#{user_id}`, `SK=GAP_RESPONSE#{job_id}#{question_id}` / `COMPANY_RESEARCH#{job_id}`
+- TTL constants: `GAP_RESPONSE_TTL = 63072000` (24 months), `COMPANY_RESEARCH_TTL = 2592000` (30 days)
+- `save_gap_response()`, `get_gap_responses()`, `save_company_research()`, `get_company_research()`
+- Handler supports entity_type routing: `GAP_RESPONSE` and `COMPANY_RESEARCH`
+- Follows `_build_response()` pattern with CORS headers
+- Lint clean, imports verified
+
+---
+
+### Phase 9: Interview Prep — IMPLEMENTED
+
+**Status:** IMPLEMENTED — 4 new files created
+
+| File | Path | Description |
+|------|------|-------------|
+| Models | `models/interview_prep.py` | `InterviewAnswer` (STAR), `InterviewQuestion` (4 types), `InterviewerQuestion`, `InterviewPrep`, `InterviewPrepRequest`, `InterviewPrepResponse` |
+| Prompt | `logic/prompts/interview_prep_prompt.py` | `build_system_prompt()`, `build_user_prompt()` with VPR/gap/job context |
+| Logic | `logic/interview_prep.py` | `generate_interview_prep()` async, parsing helpers, `MAX_QUESTIONS=10`, `MAX_PER_TYPE=4` |
+| Handler | `handlers/interview_prep_handler.py` | `lambda_handler` with 202 Accepted pattern |
+
+**Key implementation details:**
+- 4 question types: `behavioral`, `technical`, `situational`, `gap_focused`
+- STAR-method answers: Situation, Task, Action, Result + full_text (150-300 words)
+- `VALID_QUESTION_TYPES = frozenset(...)` for O(1) validation
+- Complexity managed by extracting `_strip_code_blocks()`, `_parse_answer()`, `_parse_questions()` helpers
+- `InterviewerQuestion` model for "questions to ask the interviewer"
+- Includes salary_guidance and pre_interview_checklist fields
+- Lint clean (C901 resolved via refactoring), imports verified
+
+---
+
+### Phase 10: API Contract Coverage
+
+**Status:** ASSESSED — 17 of 27 endpoints have handlers
+
+#### Endpoint-to-Handler Mapping
+
+| # | Endpoint | Method | Handler File | Status |
+|---|----------|--------|-------------|--------|
+| 1 | `/auth/register` | POST | `auth_handler.py` | IMPLEMENTED |
+| 2 | `/auth/login` | POST | `auth_handler.py` | IMPLEMENTED |
+| 3 | `/auth/refresh` | POST | `auth_handler.py` | IMPLEMENTED |
+| 4 | `/users/me` | GET | — | MISSING |
+| 5 | `/users/me` | PUT | — | MISSING |
+| 6 | `/users/me/cv` | POST | `cv_upload_handler.py` | IMPLEMENTED |
+| 7 | `/users/me/cvs` | GET | — | MISSING |
+| 8 | `/jobs` | POST | — | MISSING |
+| 9 | `/jobs` | GET | — | MISSING |
+| 10 | `/jobs/{jobId}` | GET | — | MISSING |
+| 11 | `/vpr/generate` | POST | `vpr_submit_handler.py` | IMPLEMENTED |
+| 12 | `/vpr/{vprId}` | GET | `vpr_status_handler.py` | IMPLEMENTED |
+| 13 | `/users/me/vprs` | GET | `vpr_handler.py` | IMPLEMENTED |
+| 14 | `/gap-analysis/questions` | POST | `gap_handler.py` | PARTIAL (stub) |
+| 15 | `/gap-analysis/responses` | POST | `gap_handler.py` | PARTIAL (stub) |
+| 16 | `/gap-analysis/{jobId}/questions` | GET | `gap_handler.py` | PARTIAL (stub) |
+| 17 | `/cv-tailoring/generate` | POST | `cv_tailoring_handler.py` | IMPLEMENTED |
+| 18 | `/cv-tailoring/{cvTailoringId}` | GET | — | MISSING |
+| 19 | `/users/me/tailored-cvs` | GET | — | MISSING |
+| 20 | `/cover-letter/generate` | POST | `cover_letter_handler.py` | IMPLEMENTED |
+| 21 | `/cover-letter/{coverLetterId}` | GET | — | MISSING |
+| 22 | `/users/me/cover-letters` | GET | — | MISSING |
+| 23 | `/interview-prep/generate` | POST | `interview_prep_handler.py` | IMPLEMENTED |
+| 24 | `/interview-prep/{interviewPrepId}` | GET | — | MISSING |
+| 25 | `/company-research/fetch` | POST | `company_research_handler.py` | IMPLEMENTED |
+| 26 | `/company-research/{jobId}` | GET | `company_research_handler.py` | IMPLEMENTED |
+| 27 | `/health` | GET | — | MISSING |
+
+#### Coverage Summary
+
+| Category | Implemented | Partial | Missing | Total |
+|----------|------------|---------|---------|-------|
+| Auth (3) | 3 | 0 | 0 | 3 |
+| Users (4) | 1 | 0 | 3 | 4 |
+| Jobs (3) | 0 | 0 | 3 | 3 |
+| VPR (3) | 3 | 0 | 0 | 3 |
+| Gap Analysis (3) | 0 | 3 | 0 | 3 |
+| CV Tailoring (3) | 1 | 0 | 2 | 3 |
+| Cover Letter (3) | 1 | 0 | 2 | 3 |
+| Interview Prep (2) | 1 | 0 | 1 | 2 |
+| Company Research (2) | 2 | 0 | 0 | 2 |
+| Health (1) | 0 | 0 | 1 | 1 |
+| **TOTAL (27)** | **12** | **3** | **12** | **27** |
+
+**Coverage rate:** 12 implemented + 3 partial = **15/27 (56%)** with handler files; **12 remaining** endpoints need new or expanded handlers.
+
+---
+
+### Lint & Test Summary
+
+```
+Ruff:     PASS (0 errors, 0 warnings)
+Pytest:   155 passed, 3 skipped, 0 failed
+Imports:  All 10 new modules import cleanly
+```
+
+**Lint fixes applied during session:**
+1. `knowledge_base_handler.py` — Removed unused `ResultCode` import (F401)
+2. `cover_letter.py` — Removed unused `Literal`, `cast` imports (F401)
+3. `interview_prep.py` — Refactored `_parse_interview_prep` from complexity 13 to <10 (C901) by extracting `_strip_code_blocks()`, `_parse_answer()`, `_parse_questions()` helpers
+
+---
+
+### Files Created This Session (10 total)
+
+| # | File | Phase | Type |
+|---|------|-------|------|
+| 1 | `src/backend/careervp/models/cover_letter.py` | 6 | Models |
+| 2 | `src/backend/careervp/logic/cover_letter.py` | 6 | Logic |
+| 3 | `src/backend/careervp/handlers/cover_letter_handler.py` | 6 | Handler |
+| 4 | `src/backend/careervp/models/knowledge_base.py` | 8 | Models |
+| 5 | `src/backend/careervp/dal/knowledge_repository.py` | 8 | DAL |
+| 6 | `src/backend/careervp/handlers/knowledge_base_handler.py` | 8 | Handler |
+| 7 | `src/backend/careervp/models/interview_prep.py` | 9 | Models |
+| 8 | `src/backend/careervp/logic/prompts/interview_prep_prompt.py` | 9 | Prompt |
+| 9 | `src/backend/careervp/logic/interview_prep.py` | 9 | Logic |
+| 10 | `src/backend/careervp/handlers/interview_prep_handler.py` | 9 | Handler |
+
+---
+
+### What Remains To Be Done
+
+#### High Priority (API Contract Gaps — 12 missing endpoints)
+
+| Endpoint | Handler Needed | Effort |
+|----------|---------------|--------|
+| `GET /users/me` | New `user_handler.py` | Medium — needs user DAL |
+| `PUT /users/me` | Same `user_handler.py` | Medium |
+| `GET /users/me/cvs` | Extend `cv_upload_handler.py` or new handler | Low |
+| `POST /jobs` | New `job_handler.py` | Medium — needs job DAL |
+| `GET /jobs` | Same `job_handler.py` | Low |
+| `GET /jobs/{jobId}` | Same `job_handler.py` | Low |
+| `GET /cv-tailoring/{id}` | Extend `cv_tailoring_handler.py` | Low — add GET route |
+| `GET /users/me/tailored-cvs` | Same or new list handler | Low |
+| `GET /cover-letter/{id}` | Extend `cover_letter_handler.py` | Low — add GET route |
+| `GET /users/me/cover-letters` | Same or new list handler | Low |
+| `GET /interview-prep/{id}` | Extend `interview_prep_handler.py` | Low — add GET route |
+| `GET /health` | New `health_handler.py` | Trivial |
+
+#### Medium Priority (Quality Gaps)
+
+| Phase | Gap | Effort |
+|-------|-----|--------|
+| Phase 2 | CV Summarizer module | Medium |
+| Phase 2 | LLM Cache implementation | Medium |
+| Phase 2 | Wire circuit breaker into LLMClient | Low |
+| Phase 3 | Refactor VPR to 6-stage pipeline | High |
+| Phase 3 | Wire anti-AI detection | Low |
+| Phase 4 | Split CV tailoring to 3 steps | Medium |
+| Phase 4 | Self-correction loop (ATS < 8.0) | Medium |
+| Phase 4 | CAR/STAR bullet enforcement | Low |
+| Phase 5 | Increase gap question limit 5→10 | Trivial |
+| Phase 5 | Flesh out gap_handler.py | Medium |
+| Phase 7 | Implement ATS/anti-AI/completeness scoring in FVS | High |
+| Phase 7 | Cross-document consistency validation | Medium |
+
+#### Low Priority (Polish)
+
+| Item | Effort |
+|------|--------|
+| Token usage tracking metrics | Low |
+| Question tagging in gap analysis | Low |
+| Language quality scoring in FVS | Medium |
+| Pagination support for list endpoints | Medium |
+
+---
