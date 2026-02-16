@@ -1,3 +1,12 @@
+"""
+API Construct for CareerVP Lambda functions.
+
+Runtime Configuration:
+- Python 3.13
+- Architecture: X86_64
+- Bundling Platform: linux/amd64 (when using Lambda layers with bundling)
+"""
+
 import careervp.constants as constants
 from aws_cdk import CfnOutput, Duration, RemovalPolicy, aws_apigateway, aws_sqs
 from aws_cdk import aws_dynamodb as dynamodb
