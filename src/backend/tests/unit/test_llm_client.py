@@ -2,13 +2,18 @@
 LLM Router unit tests per docs/specs/00-llm-router.md:14 test coverage.
 """
 
+import json
 import os
+from time import monotonic
 from unittest.mock import MagicMock, patch
 
 import pytest
 from anthropic import Anthropic
 
 import careervp.logic.utils.llm_client as llm_client_module
+from careervp.logic.circuit_breaker import CircuitBreaker, CircuitState
+from careervp.logic.llm_cache import LLMResponseCache
+from careervp.logic.llm_client import BedrockInvocationError, CircuitBreakerOpen, LLMClient
 from careervp.logic.utils.llm_client import (
     HAIKU_MODEL_ID,
     SONNET_MODEL_ID,
@@ -29,6 +34,13 @@ def _calculate_cost(model_id: str, input_tokens: int, output_tokens: int) -> flo
         input_cost = (input_tokens / 1_000_000) * 0.25
         output_cost = (output_tokens / 1_000_000) * 1.25
     return input_cost + output_cost
+
+
+def _anthropic_text_response(text: str) -> MagicMock:
+    """Build a mock Anthropic response object with a single text content block."""
+    mock_response = MagicMock()
+    mock_response.content = [MagicMock(type='text', text=text)]
+    return mock_response
 
 
 class TestModelIds:
@@ -200,3 +212,84 @@ class TestCostThresholds:
         from careervp.logic.utils.llm_client import MAX_COST_PER_APPLICATION
 
         assert MAX_COST_PER_APPLICATION == 0.15
+
+
+class TestLLMClientCircuitBreaker:
+    """Circuit-breaker integration tests for careervp.logic.llm_client.LLMClient."""
+
+    @staticmethod
+    def _build_client(
+        *,
+        cache: LLMResponseCache | None = None,
+        create_side_effect: Exception | None = None,
+        create_return_value: MagicMock | None = None,
+    ) -> tuple[LLMClient, MagicMock]:
+        mock_client = MagicMock()
+        if create_side_effect is not None:
+            mock_client.messages.create.side_effect = create_side_effect
+        if create_return_value is not None:
+            mock_client.messages.create.return_value = create_return_value
+
+        circuit_breaker = CircuitBreaker(
+            name='test_llm_client',
+            failure_threshold=5,
+            failure_window_seconds=60.0,
+            recovery_timeout_seconds=30.0,
+            expected_exception=BedrockInvocationError,
+        )
+        llm_client = LLMClient(client=mock_client, cache=cache, circuit_breaker=circuit_breaker)
+        return llm_client, mock_client
+
+    def test_circuit_breaker_opens_after_threshold(self):
+        llm_client, _ = self._build_client(create_side_effect=RuntimeError('provider unavailable'))
+
+        for _ in range(5):
+            with pytest.raises(BedrockInvocationError):
+                llm_client.generate(prompt='return {"ok": true}')
+
+        with pytest.raises(CircuitBreakerOpen) as exc_info:
+            llm_client.generate(prompt='return {"ok": true}')
+
+        assert llm_client._circuit_breaker.state == CircuitState.OPEN
+        assert exc_info.value.retry_after > 0
+
+    def test_circuit_breaker_half_open_after_timeout(self):
+        llm_client, _ = self._build_client(create_side_effect=RuntimeError('provider unavailable'))
+
+        for _ in range(5):
+            with pytest.raises(BedrockInvocationError):
+                llm_client.generate(prompt='return {"ok": true}')
+
+        llm_client._circuit_breaker._opened_at = monotonic() - 31.0
+        assert llm_client._circuit_breaker.can_proceed() is True
+        assert llm_client._circuit_breaker.state == CircuitState.HALF_OPEN
+
+    def test_circuit_breaker_closed_after_success(self):
+        llm_client, mock_client = self._build_client(create_side_effect=RuntimeError('provider unavailable'))
+
+        for _ in range(5):
+            with pytest.raises(BedrockInvocationError):
+                llm_client.generate(prompt='return {"ok": true}')
+
+        llm_client._circuit_breaker._opened_at = monotonic() - 31.0
+        mock_client.messages.create.side_effect = None
+        mock_client.messages.create.return_value = _anthropic_text_response('{"status": "ok"}')
+
+        result = llm_client.generate(prompt='return {"ok": true}')
+
+        assert result == {'status': 'ok'}
+        assert llm_client._circuit_breaker.state == CircuitState.CLOSED
+        assert llm_client._circuit_breaker.failure_count == 0
+
+    def test_llm_client_returns_fallback_on_open_circuit(self):
+        cache = LLMResponseCache(table=None)
+        with patch.object(cache, 'get', side_effect=[None, json.dumps({'text': 'cached fallback'})]) as mock_cache_get:
+            llm_client, mock_client = self._build_client(cache=cache, create_side_effect=RuntimeError('should not be called'))
+            llm_client._circuit_breaker._state = CircuitState.OPEN
+            llm_client._circuit_breaker._opened_at = monotonic()
+
+            result = llm_client.generate(prompt='return {"ok": true}')
+
+        assert result == {'text': 'cached fallback'}
+        assert mock_cache_get.call_count == 2
+        assert mock_client.messages.create.call_count == 0

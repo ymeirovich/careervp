@@ -11,6 +11,7 @@ from typing import Any, cast
 import boto3
 from anthropic import Anthropic
 
+from careervp.logic.circuit_breaker import CircuitBreaker, CircuitBreakerBlockedError
 from careervp.logic.cv_summarizer import CVSummarizer
 from careervp.logic.llm_cache import LLMResponseCache
 from careervp.models.cv import UserCV
@@ -18,6 +19,18 @@ from careervp.models.cv import UserCV
 # Default model: Haiku for cost efficiency (per CLAUDE.md Decision 1.2)
 DEFAULT_MODEL = 'claude-haiku-4-5-20251001'
 DEFAULT_TEMPERATURE = 0.3
+
+
+class BedrockInvocationError(RuntimeError):
+    """Compatibility error name used by resilience configuration."""
+
+
+class CircuitBreakerOpen(RuntimeError):
+    """Raised when the LLM circuit is OPEN and no fallback is available."""
+
+    def __init__(self, retry_after: float) -> None:
+        self.retry_after = max(0.0, retry_after)
+        super().__init__(f'LLM circuit breaker is open. Retry after {self.retry_after:.2f} seconds.')
 
 
 def _get_anthropic_client() -> Anthropic:
@@ -43,10 +56,23 @@ class LLMClient:
     _CV_SUMMARY_TRIGGER_TOKENS = 5000
     _CV_SECTION_PATTERN = re.compile(r'(?s)(# CV\s*\n)(.*?)(\n\n# |\Z)')
 
-    def __init__(self, client: Anthropic | None = None, cache: LLMResponseCache | None = None) -> None:
+    def __init__(
+        self,
+        client: Anthropic | None = None,
+        cache: LLMResponseCache | None = None,
+        circuit_breaker: CircuitBreaker | None = None,
+    ) -> None:
         self._client = client or _get_anthropic_client()
         self._cv_summarizer = CVSummarizer()
         self._cache = cache or LLMResponseCache()
+        # Open after 5 failures in a 60-second window, then probe again after 30 seconds.
+        self._circuit_breaker = circuit_breaker or CircuitBreaker(
+            name='llm_client',
+            failure_threshold=5,
+            failure_window_seconds=60.0,
+            recovery_timeout_seconds=30.0,
+            expected_exception=BedrockInvocationError,
+        )
 
     def generate(
         self,
@@ -65,7 +91,15 @@ class LLMClient:
         if cached is not None:
             return cached
 
-        response = self._call_anthropic(optimized_prompt, model_name, temperature)
+        try:
+            response = self._call_anthropic(optimized_prompt, model_name, temperature)
+        except CircuitBreakerOpen:
+            # Graceful degradation path: serve cached deterministic response when available.
+            fallback = self._check_cache(cache_key)
+            if fallback is not None:
+                return fallback
+            raise
+
         return self._handle_response(response, cache_key)
 
     def _get_cache_key(
@@ -99,16 +133,28 @@ class LLMClient:
 
     def _call_anthropic(self, prompt: str, model_name: str, temperature: float) -> str:
         """Call Anthropic API and return text content."""
-        response = self._client.messages.create(
-            model=model_name,
-            max_tokens=4096,
-            temperature=temperature,
-            messages=[{'role': 'user', 'content': prompt}],
-        )
+        try:
+            with self._circuit_breaker:
+                response = self._invoke_model(prompt, model_name, temperature)
+        except CircuitBreakerBlockedError as exc:
+            raise CircuitBreakerOpen(retry_after=exc.retry_after) from exc
+
         for block in response.content:
             if block.type == 'text':
-                return block.text
+                return str(block.text)
         return ''
+
+    def _invoke_model(self, prompt: str, model_name: str, temperature: float) -> Any:
+        """Invoke model and normalize transport/runtime failures for the circuit breaker."""
+        try:
+            return self._client.messages.create(
+                model=model_name,
+                max_tokens=4096,
+                temperature=temperature,
+                messages=[{'role': 'user', 'content': prompt}],
+            )
+        except Exception as exc:  # noqa: BLE001 - translate provider errors into configured type.
+            raise BedrockInvocationError('Failed to invoke LLM model') from exc
 
     def _handle_response(self, text_content: str, cache_key: str | None) -> dict[str, Any]:
         """Parse response and handle caching."""
