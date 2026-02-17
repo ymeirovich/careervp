@@ -27,6 +27,7 @@ class ApiConstruct(Construct):
         self.id_ = id_
         self.naming = naming
         self.api_db = ApiDbConstruct(self, f"{id_}db", naming=naming)
+        self.llm_cache_table = self._build_llm_cache_table(is_production_env)
         self.rest_api = self._build_api_gw()
 
         # VPR Async Architecture - DLQ first, then Queue (DLQ must exist first)
@@ -187,6 +188,35 @@ class ApiConstruct(Construct):
         ).override_logical_id(constants.APIGATEWAY)
         return rest_api
 
+    def _build_llm_cache_table(self, is_production_env: bool) -> dynamodb.TableV2:
+        table = dynamodb.TableV2(
+            self,
+            "llm-cache-table",
+            # This table intentionally omits "-table-" per Step 2.2 naming requirement.
+            table_name=f"{self.naming.prefix}-{constants.LLM_CACHE_TABLE_NAME}-{self.naming.environment}",
+            partition_key=dynamodb.Attribute(
+                name="cache_key",
+                type=dynamodb.AttributeType.STRING,
+            ),
+            billing=dynamodb.Billing.on_demand(),
+            time_to_live_attribute="expires_at",
+            point_in_time_recovery_specification=(
+                dynamodb.PointInTimeRecoverySpecification(
+                    point_in_time_recovery_enabled=True,
+                    recovery_period_in_days=7,
+                )
+                if is_production_env
+                else None
+            ),
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+        CfnOutput(
+            self,
+            id=constants.LLM_CACHE_TABLE_OUTPUT,
+            value=table.table_name,
+        ).override_logical_id(constants.LLM_CACHE_TABLE_OUTPUT)
+        return table
+
     def _build_lambda_role(
         self,
         db: dynamodb.TableV2,
@@ -309,6 +339,19 @@ class ApiConstruct(Construct):
                         )
                     ]
                 ),
+                "llm_cache_table": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "dynamodb:GetItem",
+                                "dynamodb:PutItem",
+                                "dynamodb:DeleteItem",
+                            ],
+                            resources=[self.llm_cache_table.table_arn],
+                            effect=iam.Effect.ALLOW,
+                        )
+                    ]
+                ),
                 "ssm_parameters": iam.PolicyDocument(
                     statements=[
                         iam.PolicyStatement(
@@ -377,6 +420,7 @@ class ApiConstruct(Construct):
                 "TABLE_NAME": db.table_name,
                 "IDEMPOTENCY_TABLE_NAME": idempotency_table.table_name,
                 "CV_BUCKET_NAME": cv_bucket.bucket_name,
+                constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
                 constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
             tracing=_lambda.Tracing.ACTIVE,
@@ -430,6 +474,7 @@ class ApiConstruct(Construct):
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": constants.ENVIRONMENT,
+                constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
                 constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
             tracing=_lambda.Tracing.ACTIVE,
@@ -479,6 +524,7 @@ class ApiConstruct(Construct):
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": constants.ENVIRONMENT,
+                constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
                 constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
             tracing=_lambda.Tracing.ACTIVE,
@@ -560,6 +606,7 @@ class ApiConstruct(Construct):
                 "VPR_JOBS_TABLE_NAME": jobs_table.table_name,
                 "VPR_RESULTS_BUCKET_NAME": results_bucket.bucket_name,
                 "SQS_QUEUE_URL": queue.queue_url,
+                constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
                 constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
             tracing=_lambda.Tracing.ACTIVE,
@@ -615,6 +662,7 @@ class ApiConstruct(Construct):
                 "CONFIGURATION_MAX_AGE_MINUTES": constants.CONFIGURATION_MAX_AGE_MINUTES,
                 "VPR_JOBS_TABLE_NAME": jobs_table.table_name,
                 "VPR_RESULTS_BUCKET_NAME": results_bucket.bucket_name,
+                constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
                 constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
             tracing=_lambda.Tracing.ACTIVE,
@@ -672,6 +720,7 @@ class ApiConstruct(Construct):
                 "VPR_JOBS_TABLE_NAME": jobs_table.table_name,
                 "VPR_RESULTS_BUCKET_NAME": results_bucket.bucket_name,
                 "DYNAMODB_TABLE_NAME": users_table.table_name,
+                constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
                 constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
             tracing=_lambda.Tracing.ACTIVE,
@@ -729,6 +778,7 @@ class ApiConstruct(Construct):
                 "AUTHORIZER_DISABLED": "true"
                 if constants.ENVIRONMENT != "prod"
                 else "false",
+                constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
                 constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
             tracing=_lambda.Tracing.ACTIVE,

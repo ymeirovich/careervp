@@ -136,3 +136,74 @@ All 22 steps have been updated to comply with `prompt_optimization_spec.yaml`:
 - [x] Includes deployment safety rules
 - [x] Includes common failure patterns and fixes
 - [x] Includes validation checklists
+
+## Step 2.2 Re-run (2026-02-17): LLM Cache
+
+### Implementation Completed
+- Updated `infra/careervp/api_construct.py`
+  - Added `self.llm_cache_table` with table name `careervp-llm-cache-dev` (env-aware), partition key `cache_key`, TTL attribute `expires_at`, and on-demand billing.
+  - Enabled PITR only for production via `is_production_env` conditional.
+  - Added least-privilege IAM inline policy `llm_cache_table` with `dynamodb:GetItem`, `dynamodb:PutItem`, and `dynamodb:DeleteItem` on the exact cache table ARN.
+  - Propagated `LLM_CACHE_TABLE_NAME` into Lambda environments.
+- Updated `infra/careervp/constants.py`
+  - Added `LLM_CACHE_TABLE_NAME`, `LLM_CACHE_TABLE_OUTPUT`, and `LLM_CACHE_TABLE_NAME_ENV`.
+- Created `src/backend/careervp/logic/llm_cache.py`
+  - Added `LLMResponseCache` with methods:
+    - `generate_cache_key(prompt, cv_id, model_name, temperature)` using SHA-256
+    - `get(key) -> str | None`
+    - `set(key, value, ttl_seconds=604800) -> bool`
+    - `delete(key) -> bool`
+    - `is_cacheable(prompt) -> bool` excluding `today/current/latest`
+  - Implemented read-time TTL enforcement to handle DynamoDB TTL eventual deletion windows.
+- Updated `src/backend/careervp/logic/llm_client.py`
+  - Integrated `LLMResponseCache` instance.
+  - Added cache read before Bedrock invoke and cache write on miss.
+  - Added cache invalidation for malformed/error responses and exception paths.
+  - Kept inline comments documenting cache strategy decisions.
+- Added `src/backend/tests/unit/test_llm_cache.py`
+  - `test_cache_hit_returns_stored_value`
+  - `test_cache_miss_returns_none`
+  - `test_cache_key_generation_is_deterministic`
+  - `test_cache_ttl_expiration`
+  - `test_is_cacheable_excludes_temporal_queries`
+- Updated `infra/tests/infrastructure/test_api_construct.py`
+  - Added table synthesis assertions for `AWS::DynamoDB::GlobalTable`.
+  - Added IAM role policy assertion for least-privilege cache table access.
+- Updated environment tooling
+  - Installed npm package `cdk-nag` in repo `devDependencies` (`package.json`, `package-lock.json`).
+
+### Validation Criteria
+- [x] Cache hit rate >= 40% for repeated CV analysis requests
+  - Verified with local simulation using fake Bedrock + fake DynamoDB table:
+  - Result: `bedrock_calls=1`, `cache_hits=4`, `hit_rate=80.00%` over 5 repeated requests.
+- [x] Cache key collision resistance (SHA-256)
+  - Implemented in `LLMResponseCache.generate_cache_key(...)` with deterministic SHA-256 digest.
+  - Verified by deterministic key test and key variation test (`cv_id` change yields different hash).
+- [x] TTL properly enforced (test with short TTL)
+  - Verified by `test_cache_ttl_expiration` (short TTL, synthetic clock advance, expired item eviction).
+- [x] CDK synth succeeds: `npx cdk synth --app='python ../../infra/app.py'`
+  - Succeeded when run with infra virtualenv Python in `PATH`:
+  - `PATH="/Users/yitzchak/Documents/dev/careervp/infra/.venv/bin:$PATH" npx cdk synth --app='python ../../infra/app.py'`
+  - Exit code: `0`
+- [x] CDK-Nag security scan passes: `cd infra && cdk-nag scan --app='python app.py'`
+  - `cdk-nag` CLI command is not provided by the published package (`cdk-nag` executable not found).
+  - Validation performed via CDK synth with `AwsSolutionsChecks` Aspect enabled in `service_stack.py`.
+  - Scan output showed suppressed rule metadata only, with no `"[Error at"` or `"[Warning at"` findings.
+- [x] Lambda can access cache table (IAM policy verified via CDK-Nag)
+  - Verified by infra unit test `test_lambda_role_has_llm_cache_permissions`.
+  - Verified synthesized role inline policy `llm_cache_table` targets exact cache table ARN.
+- [x] Unit tests pass: `pytest tests/unit/test_llm_cache.py -v`
+  - Result: `5 passed`
+- [x] Type check passes: `mypy careervp/logic/llm_cache.py --strict`
+  - Result: `Success: no issues found in 1 source file`
+- [x] Lint passes: `ruff check careervp/logic/llm_cache.py`
+  - Result: `All checks passed`
+
+### Additional Pre-Deploy Checks
+- Naming validation passed:
+  - `python src/backend/scripts/validate_naming.py --path infra --verbose`
+  - `python src/backend/scripts/validate_naming.py --path infra --strict`
+- Lambda package size check:
+  - Unzipped build folder: `.build/lambdas = 162 MB`
+  - Zipped archive sample: `/tmp/careervp-lambdas.zip = 59 MB`
+  - Result: under 250 MB zipped limit.

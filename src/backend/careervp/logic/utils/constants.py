@@ -133,6 +133,12 @@ IDEMPOTENCY_TABLE_NAME: Final[str] = os.environ.get(
     get_table_name('idempotency'),
 )
 
+# LLM response cache table intentionally uses the explicit name required by Phase 2.2.
+LLM_CACHE_TABLE_NAME: Final[str] = os.environ.get(
+    'LLM_CACHE_TABLE_NAME',
+    f'{SERVICE_PREFIX}-llm-cache-{ENVIRONMENT}',
+)
+
 # =============================================================================
 # S3 BUCKETS
 # =============================================================================

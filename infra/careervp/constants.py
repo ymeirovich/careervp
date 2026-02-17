@@ -24,12 +24,17 @@ USERS_TABLE_NAME = "users"
 SESSIONS_TABLE_NAME = "sessions"
 JOBS_TABLE_NAME = "jobs"
 IDEMPOTENCY_TABLE_NAME = "idempotency"
+LLM_CACHE_TABLE_NAME = "llm-cache"
 
 # Output keys for CDK
 TABLE_NAME_OUTPUT = "UsersTableOutput"
 SESSIONS_TABLE_OUTPUT = "SessionsTableOutput"
 IDEMPOTENCY_TABLE_NAME_OUTPUT = "IdempotencyTableOutput"
 JOBS_TABLE_OUTPUT = "JobsTableOutput"
+LLM_CACHE_TABLE_OUTPUT = "LlmCacheTableOutput"
+
+# Lambda environment variable keys
+LLM_CACHE_TABLE_NAME_ENV = "LLM_CACHE_TABLE_NAME"
 
 # =============================================================================
 # SQS QUEUES
