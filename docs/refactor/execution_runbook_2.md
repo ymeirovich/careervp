@@ -101,6 +101,7 @@ OUTPUT FORMAT: Provide complete implementation with inline comments explaining t
 
 **READ FIRST:**
 - `docs/refactor/specs/cost_optimization_spec.yaml`
+- `docs/refactor/specs/prompt_optimization_cdk_spec.yaml`
 
 **CODE:**
 ```bash
@@ -108,6 +109,7 @@ OUTPUT FORMAT: Provide complete implementation with inline comments explaining t
 """
 **READ FIRST:**
 - `docs/refactor/specs/cost_optimization_spec.yaml`
+- `docs/refactor/specs/prompt_optimization_cdk_spec.yaml`
 
 ROLE: Senior Backend Engineer specializing in AWS Lambda, DynamoDB, and cost optimization
 
@@ -115,7 +117,19 @@ CONTEXT: Implement LLM response cache using DynamoDB with TTL to reduce API cost
 
 TASK: Implement LLM Cache following cost_optimization_spec.yaml caching strategy
 
-1. Create: src/backend/careervp/logic/llm_cache.py
+1. Create CDK Infrastructure (REQUIRED per CDK_001):
+   - Add DynamoDB table in infra/careervp/dynamodb_stack.py or api_construct.py
+   - Use PAY_PER_REQUEST billing (per DDB_001 in prompt_optimization_cdk_spec.yaml)
+   - Enable point_in_time_recovery=True for production (per DDB_002)
+   - Add TTL attribute on expires_at column (AWS manages automatic deletion)
+   - Table name: careervp-llm-cache-{env}
+   - Schema: partition key = cache_key (String), expires_at (Number TTL)
+
+2. Update Lambda IAM Role:
+   - Add read/write permissions for cache table to Lambda execution role
+   - Use least-privilege IAM per IAM_001 (specify exact table ARN, not wildcard)
+
+3. Create: src/backend/careervp/logic/llm_cache.py
    - Class: LLMResponseCache
    - Use DynamoDB with TTL for caching (default TTL: 7 days)
    - Cache key generation: hash(prompt + cv_id + model_name + temperature)
@@ -125,23 +139,31 @@ TASK: Implement LLM Cache following cost_optimization_spec.yaml caching strategy
      * delete(key: str) -> bool
      * is_cacheable(prompt: str) -> bool (exclude prompts with "today", "current", "latest")
 
-2. Integrate: src/backend/careervp/logic/llm_client.py
+4. Integrate: src/backend/careervp/logic/llm_client.py
    - Add LLMResponseCache instance
    - Check cache before calling Bedrock: cache.get(cache_key)
    - Store response on cache miss: cache.set(cache_key, response)
    - Implement cache invalidation for error responses
 
-3. Create: tests/unit/test_llm_cache.py
+5. Create: tests/unit/test_llm_cache.py
    - test_cache_hit_returns_stored_value
    - test_cache_miss_returns_none
    - test_cache_key_generation_is_deterministic
    - test_cache_ttl_expiration
    - test_is_cacheable_excludes_temporal_queries
 
+6. CDK Pre-Deploy Validation:
+   - Run CDK synth to verify template generation
+   - Run cdk-nag for security scanning
+   - Verify Lambda package size stays under 250MB (per LAMBDA_SIZE_001)
+
 VALIDATION CRITERIA (must all pass):
 - [ ] Cache hit rate >= 40% for repeated CV analysis requests
 - [ ] Cache key collision resistance (SHA-256)
 - [ ] TTL properly enforced (test with short TTL)
+- [ ] CDK synth succeeds: npx cdk synth --app='python ../../infra/app.py'
+- [ ] CDK-Nag security scan passes: cd infra && cdk-nag scan --app='python app.py'
+- [ ] Lambda can access cache table (IAM policy verified via CDK-Nag)
 - [ ] Unit tests pass: pytest tests/unit/test_llm_cache.py -v
 - [ ] Type check passes: mypy careervp/logic/llm_cache.py --strict
 - [ ] Lint passes: ruff check careervp/logic/llm_cache.py
