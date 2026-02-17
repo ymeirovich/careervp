@@ -47,71 +47,173 @@
 ### Step 2.1: Implement CV Summarizer
 
 **READ FIRST:**
+- `docs/refactor/specs/cv_summarizer_spec.yaml`
 - `docs/refactor/specs/cost_optimization_spec.yaml`
 
 **CODE:**
 ```bash
 # VSCode + Anthropic Sonnet
 """
-Implement CV Summarizer to reduce token costs:
+**READ FIRST:**
+- `docs/refactor/specs/cv_summarizer_spec.yaml`
+- `docs/refactor/specs/cost_optimization_spec.yaml`
+
+ROLE: Senior Backend Engineer specializing in AWS Lambda, Python, and cost optimization
+
+CONTEXT: Implement CV Summarizer to reduce token costs by 40%+ through intelligent context truncation.
+
+TASK: Implement CV Summarizer following cost_optimization_spec.yaml
 
 1. Create: src/backend/careervp/logic/cv_summarizer.py
    - Class: CVSummarizer
-   - Method: summarize(cv: UserCV) -> dict
+   - Method: summarize(cv: UserCV, max_tokens: int = 2000) -> dict
    - Extract key sections: summary, experience, skills, education
-   - Truncate to max lengths for LLM efficiency
+   - Implement truncation strategies:
+     * Summary: max 200 chars
+     * Experience: max 500 chars per job, top 3 jobs
+     * Skills: max 50 items, prioritized by relevance
+     * Education: max 300 chars
+   - Return format: {summary, experience, skills_extracted, education, token_count, was_truncated}
 
 2. Integrate: src/backend/careervp/logic/llm_client.py
    - Import CVSummarizer
-   - Use summarization before LLM calls for CV-heavy prompts
+   - Add conditional summarization for CV-heavy prompts (>5000 tokens)
+   - Create method: _maybe_summarize_cv(cv: UserCV) -> UserCV | dict
 
 3. Create: tests/unit/test_cv_summarizer.py
+   - test_summarize_truncates_long_sections
+   - test_summarize_preserves_key_information
+   - test_summarize_calculates_token_count
+   - test_summarize_handles_edge_cases (empty CV, missing sections)
 
-KNOWLEDGE: docs/refactor/specs/cost_optimization_spec.yaml
+VALIDATION CRITERIA (must all pass):
+- [ ] Token reduction >= 40% for CVs > 5000 tokens
+- [ ] All critical info (name, top skills, recent job) preserved
+- [ ] Unit tests pass: pytest tests/unit/test_cv_summarizer.py -v
+- [ ] Type check passes: mypy careervp/logic/cv_summarizer.py --strict
+- [ ] Lint passes: ruff check careervp/logic/cv_summarizer.py
+
+OUTPUT FORMAT: Provide complete implementation with inline comments explaining truncation decisions. Output results to docs/refactor/execution_runbook_2_results.md.
 """
 ```
 
 ### Step 2.2: Implement LLM Cache
 
+**READ FIRST:**
+- `docs/refactor/specs/cost_optimization_spec.yaml`
+
 **CODE:**
 ```bash
 # VSCode + Anthropic Sonnet
 """
-Implement LLM response cache:
+**READ FIRST:**
+- `docs/refactor/specs/cost_optimization_spec.yaml`
+
+ROLE: Senior Backend Engineer specializing in AWS Lambda, DynamoDB, and cost optimization
+
+CONTEXT: Implement LLM response cache using DynamoDB with TTL to reduce API costs by 60%+ through response reuse.
+
+TASK: Implement LLM Cache following cost_optimization_spec.yaml caching strategy
 
 1. Create: src/backend/careervp/logic/llm_cache.py
    - Class: LLMResponseCache
-   - Use DynamoDB with TTL for caching
-   - Cache key: hash of prompt + CV ID
+   - Use DynamoDB with TTL for caching (default TTL: 7 days)
+   - Cache key generation: hash(prompt + cv_id + model_name + temperature)
+   - Methods:
+     * get(key: str) -> str | None
+     * set(key: str, value: str, ttl_seconds: int = 604800) -> bool
+     * delete(key: str) -> bool
+     * is_cacheable(prompt: str) -> bool (exclude prompts with "today", "current", "latest")
 
 2. Integrate: src/backend/careervp/logic/llm_client.py
-   - Check cache before calling Bedrock
-   - Store response on cache miss
+   - Add LLMResponseCache instance
+   - Check cache before calling Bedrock: cache.get(cache_key)
+   - Store response on cache miss: cache.set(cache_key, response)
+   - Implement cache invalidation for error responses
 
 3. Create: tests/unit/test_llm_cache.py
+   - test_cache_hit_returns_stored_value
+   - test_cache_miss_returns_none
+   - test_cache_key_generation_is_deterministic
+   - test_cache_ttl_expiration
+   - test_is_cacheable_excludes_temporal_queries
 
-KNOWLEDGE: docs/refactor/specs/cost_optimization_spec.yaml (caching strategy)
+VALIDATION CRITERIA (must all pass):
+- [ ] Cache hit rate >= 40% for repeated CV analysis requests
+- [ ] Cache key collision resistance (SHA-256)
+- [ ] TTL properly enforced (test with short TTL)
+- [ ] Unit tests pass: pytest tests/unit/test_llm_cache.py -v
+- [ ] Type check passes: mypy careervp/logic/llm_cache.py --strict
+- [ ] Lint passes: ruff check careervp/logic/llm_cache.py
+
+OUTPUT FORMAT: Provide complete implementation with inline comments explaining cache strategy decisions. Output results to docs/refactor/execution_runbook_2_results.md.
 """
 ```
 
 ### Step 2.3: Wire Circuit Breaker into LLMClient
 
+**READ FIRST:**
+- `docs/refactor/specs/circuit_breaker_spec.yaml`
+
 **CODE:**
 ```bash
 # VSCode + Anthropic Haiku
 """
-Wire circuit breaker into LLMClient:
+**READ FIRST:**
+- `docs/refactor/specs/circuit_breaker_spec.yaml`
+
+ROLE: Backend Engineer specializing in resilience patterns and AWS Lambda
+
+CONTEXT: Wire circuit breaker into LLMClient to prevent cascading failures and ensure graceful degradation during Bedrock outages.
+
+TASK: Integrate CircuitBreaker following circuit_breaker_spec.yaml
 
 1. Update: src/backend/careervp/logic/llm_client.py
-   - Import CircuitBreaker from handlers/utils
-   - Wrap Bedrock calls with circuit breaker
-   - Handle open circuit gracefully
+   - Import CircuitBreaker from careervp/logic/circuit_breaker
+   - Configure circuit breaker:
+     * failure_threshold: 5 failures in 60 seconds
+     * recovery_timeout: 30 seconds
+     * expected_exception: BedrockInvocationError
+   - Wrap Bedrock invoke calls:
+     with circuit_breaker:
+         response = bedrock.invoke_model(...)
+   - Handle OPEN state gracefully:
+     * Return cached response if available
+     * Raise CircuitBreakerOpen with retry_after value
 
-2. Verify: tests/unit/test_llm_client.py
-   - Add circuit breaker test cases
+2. Add to tests/unit/test_llm_client.py:
+   - test_circuit_breaker_opens_after_threshold
+   - test_circuit_breaker_half_open_after_timeout
+   - test_circuit_breaker_closed_after_success
+   - test_llm_client_returns_fallback_on_open_circuit
 
-KNOWLEDGE: docs/refactor/specs/circuit_breaker_spec.yaml
+VALIDATION CRITERIA (must all pass):
+- [ ] Circuit opens after 5 consecutive failures
+- [ ] Circuit half-open after 30-second recovery timeout
+- [ ] Circuit closes after successful call in half-open state
+- [ ] Fallback behavior works when circuit is open
+- [ ] Unit tests pass: pytest tests/unit/test_llm_client.py -v
+- [ ] Type check passes: mypy careervp/logic/llm_client.py --strict
+- [ ] Lint passes: ruff check careervp/logic/llm_client.py
+
+OUTPUT FORMAT: Provide complete implementation with inline comments. Output results to docs/refactor/execution_runbook_2_results.md.
 """
+```
+
+### Phase 2 Verification
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+
+# Phase 2 unit tests
+uv run pytest tests/unit/test_cv_summarizer.py -v --tb=short
+uv run pytest tests/unit/test_llm_cache.py -v --tb=short
+uv run pytest tests/unit/test_llm_client.py -v --tb=short
+
+# Run lint
+uv run ruff check careervp/logic/cv_summarizer.py careervp/logic/llm_cache.py
+
+# Run type check
+uv run mypy careervp/logic/cv_summarizer.py careervp/logic/llm_cache.py --strict
 ```
 
 ---
@@ -136,28 +238,72 @@ KNOWLEDGE: docs/refactor/specs/circuit_breaker_spec.yaml
 ```bash
 # VSCode + Anthropic Sonnet
 """
-Refactor vpr_generator.py to 6-stage pipeline per vpr_6stage_spec.yaml:
+**READ FIRST:**
+- `docs/refactor/specs/vpr_6stage_spec.yaml`
+
+ROLE: Senior Backend Engineer specializing in LLM pipelines and prompt engineering
+
+CONTEXT: Refactor VPR Generator to 6-stage pipeline for improved quality, testability, and anti-AI detection.
+
+TASK: Implement 6-stage pipeline following vpr_6stage_spec.yaml stages section
 
 1. Update: src/backend/careervp/logic/vpr_generator.py
-   - Add Stage 1: _analyze_input() -> AnalysisResult
-   - Add Stage 2: _extract_evidence() -> EvidenceList
-   - Add Stage 3: _synthesize() -> DraftProposition
-   - Add Stage 4: _self_correct() -> CorrectedProposition
-   - Add Stage 5: _generate_output() -> VPRData
-   - Add Stage 6: _final_meta_evaluation() -> FinalVPRData
-   - Each stage as separate method with clear inputs/outputs
+   - Refactor to 6 sequential stages with clear interfaces:
+     * Stage 1: _analyze_input(cv: UserCV, job: Job) -> AnalysisResult
+              - Extract key skills, experience level, job requirements
+     * Stage 2: _extract_evidence(analysis: AnalysisResult) -> EvidenceList
+              - Map CV achievements to job requirements
+     * Stage 3: _synthesize(evidence: EvidenceList) -> DraftProposition
+              - Generate initial value proposition draft
+     * Stage 4: _self_correct(draft: DraftProposition) -> CorrectedProposition
+              - Apply refinement based on quality checks
+     * Stage 5: _generate_output(corrected: CorrectedProposition) -> VPRData
+              - Format final VPR with all required fields
+     * Stage 6: _final_meta_evaluation(vpr: VPRData) -> FinalVPRData
+              - Anti-AI pattern check, final quality gate
+   - Each stage returns typed dataclass with clear contract
 
 2. Update: src/backend/careervp/logic/prompts/vpr_prompt.py
    - Add prompt templates for each stage
+   - Stage-specific system prompts with role definitions
+   - Few-shot examples for complex stages (3, 4)
 
 3. Wire anti-AI detection:
    - Import check_anti_anti_ai_patterns from fvs_validator
    - Call in Stage 6: _final_meta_evaluation()
+   - Reject and regenerate if anti-AI score < 9.0
 
 4. Update: tests/unit/test_vpr_generator.py
+   - test_stage_1_analyze_input_returns_analysis_result
+   - test_stage_2_extract_evidence_maps_correctly
+   - test_stage_4_self_correct_improves_draft
+   - test_stage_6_rejects_ai_patterns
+   - test_full_pipeline_produces_valid_vpr
 
-KNOWLEDGE: docs/refactor/specs/vpr_6stage_spec.yaml (stages section)
+VALIDATION CRITERIA (must all pass):
+- [ ] Each stage has isolated, testable input/output contracts
+- [ ] Anti-AI patterns detected in Stage 6 trigger regeneration
+- [ ] Pipeline produces valid VPRData matching models/vpr.py schema
+- [ ] Unit tests pass: pytest tests/unit/test_vpr_generator.py -v
+- [ ] Type check passes: mypy careervp/logic/vpr_generator.py --strict
+- [ ] Lint passes: ruff check careervp/logic/vpr_generator.py
+
+OUTPUT FORMAT: Provide complete implementation with stage interfaces and inline documentation. Output results to docs/refactor/execution_runbook_2_results.md.
 """
+```
+
+### Phase 3 Verification
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+
+# Phase 3 unit tests
+uv run pytest tests/unit/test_vpr_generator.py -v --tb=short
+
+# Run lint
+uv run ruff check careervp/logic/vpr_generator.py
+
+# Run type check
+uv run mypy careervp/logic/vpr_generator.py --strict
 ```
 
 ---
@@ -181,24 +327,74 @@ KNOWLEDGE: docs/refactor/specs/vpr_6stage_spec.yaml (stages section)
 ```bash
 # VSCode + Anthropic Sonnet
 """
-Implement 3-step CV tailoring per cv_tailoring_spec.yaml:
+**READ FIRST:**
+- `docs/refactor/specs/cv_tailoring_spec.yaml`
+
+ROLE: Senior Backend Engineer specializing in ATS systems and resume optimization
+
+CONTEXT: Implement 3-step CV tailoring pipeline with ATS scoring >= 8.0 and self-correction loop.
+
+TASK: Implement CV tailoring following cv_tailoring_spec.yaml
 
 1. Update: src/backend/careervp/logic/cv_tailoring.py
-   - Step 1: analyze_and_map_keywords() - Extract 12-18 keywords from job
-   - Step 2: tailor_cv() - Apply keywords with ATS scoring
-   - Step 3: validate_and_finalize() - Final validation
+   - Implement 3-step pipeline:
+     * Step 1: analyze_and_map_keywords(cv: UserCV, job: Job) -> KeywordMap
+              - Extract 12-18 keywords from job description
+              - Categorize: required, preferred, nice-to-have
+              - Map to existing CV skills/experience
+     * Step 2: tailor_cv(cv: UserCV, keyword_map: KeywordMap) -> TailoredCV
+              - Rewrite bullets with keyword integration
+              - Reorder sections by relevance
+              - Calculate preliminary ATS score
+     * Step 3: validate_and_finalize(tailored: TailoredCV) -> FinalTailoredCV
+              - ATS scoring (must be >= 8.0)
+              - CAR/STAR format validation
+              - Final formatting checks
 
-2. Add self-correction loop:
-   - If ATS score < 8.0, regenerate with feedback
-   - Max 3 iterations
+2. Add self-correction loop (in Step 3):
+   - If ATS score < 8.0:
+     * Generate improvement feedback
+     * Return to Step 2 with feedback
+     * Maximum 3 iterations
+   - Track iteration count in metadata
 
 3. Add CAR/STAR enforcement:
    - Validate achievement bullets follow STAR format
+   - Pattern: "Verb | Context | Action | Result (with metrics)"
+   - Reject bullets missing Result component
 
 4. Update: tests/unit/test_cv_tailoring.py
+   - test_keyword_extraction_finds_12_to_18_keywords
+   - test_ats_scoring_returns_numeric_score
+   - test_self_correction_iterates_max_3_times
+   - test_star_format_validation_accepts_valid_bullets
+   - test_star_format_validation_rejects_invalid_bullets
 
-KNOWLEDGE: docs/refactor/specs/cv_tailoring_spec.yaml
+VALIDATION CRITERIA (must all pass):
+- [ ] ATS score >= 8.0 for all generated CVs
+- [ ] Self-correction loop improves score by >= 0.5 per iteration
+- [ ] All achievement bullets follow STAR format
+- [ ] Maximum 3 regeneration attempts
+- [ ] Unit tests pass: pytest tests/unit/test_cv_tailoring.py -v
+- [ ] Type check passes: mypy careervp/logic/cv_tailoring.py --strict
+- [ ] Lint passes: ruff check careervp/logic/cv_tailoring.py
+
+OUTPUT FORMAT: Provide complete implementation with ATS scoring logic. Output results to docs/refactor/execution_runbook_2_results.md.
 """
+```
+
+### Phase 4 Verification
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+
+# Phase 4 unit tests
+uv run pytest tests/unit/test_cv_tailoring.py -v --tb=short
+
+# Run lint
+uv run ruff check careervp/logic/cv_tailoring.py
+
+# Run type check
+uv run mypy careervp/logic/cv_tailoring.py --strict
 ```
 
 ---
@@ -222,21 +418,63 @@ KNOWLEDGE: docs/refactor/specs/cv_tailoring_spec.yaml
 ```bash
 # VSCode + Anthropic Haiku
 """
-Fix gap analysis issues:
+**READ FIRST:**
+- `docs/refactor/specs/gap_analysis_spec.yaml`
+
+ROLE: Backend Engineer specializing in API design and interview preparation
+
+CONTEXT: Fix Gap Analysis to generate 10 questions (was 5) with categorization tags for interview preparation.
+
+TASK: Update Gap Analysis following gap_analysis_spec.yaml
 
 1. Update: src/backend/careervp/logic/gap_analysis.py
    - Change question limit from 5 to 10
-   - Add question tagging in prompt
-   - Tags: [CV IMPACT], [INTERVIEW/MVP ONLY], [TECHNICAL], [BEHAVIORAL]
+   - Add question tagging in prompt:
+     * [CV IMPACT] - Questions about candidate's key achievements
+     * [INTERVIEW/MVP ONLY] - Questions for final round
+     * [TECHNICAL] - Technical/skill assessment questions
+     * [BEHAVIORAL] - STAR-based behavioral questions
+   - Distribution target: 4 CV IMPACT, 2 TECHNICAL, 2 BEHAVIORAL, 2 INTERVIEW/MVP
+   - Update response schema to include tags array per question
 
 2. Enhance: src/backend/careervp/handlers/gap_handler.py
-   - Add full CRUD operations
-   - Add GET endpoints for questions and responses
+   - Add full CRUD operations:
+     * GET /gap-analysis/questions/{jobId} -> get_questions()
+     * POST /gap-analysis/responses -> submit_response()
+     * GET /gap-analysis/responses/{jobId} -> get_responses()
+   - Add response storage in DynamoDB
 
 3. Update: tests/unit/test_gap_analysis.py
+   - test_generate_10_questions
+   - test_question_tagging_all_categories_present
+   - test_question_distribution_meets_targets
+   - test_response_storage_persists_correctly
 
-KNOWLEDGE: docs/refactor/specs/gap_analysis_spec.yaml
+VALIDATION CRITERIA (must all pass):
+- [ ] Exactly 10 questions generated per request
+- [ ] Each question has at least one tag
+- [ ] All 4 tag categories represented
+- [ ] CRUD endpoints return correct HTTP status codes
+- [ ] Unit tests pass: pytest tests/unit/test_gap_analysis.py -v
+- [ ] Type check passes: mypy careervp/logic/gap_analysis.py --strict
+- [ ] Lint passes: ruff check careervp/logic/gap_analysis.py
+
+OUTPUT FORMAT: Provide complete implementation with tagging logic. Output results to docs/refactor/execution_runbook_2_results.md.
 """
+```
+
+### Phase 5 Verification
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+
+# Phase 5 unit tests
+uv run pytest tests/unit/test_gap_analysis.py -v --tb=short
+
+# Run lint
+uv run ruff check careervp/logic/gap_analysis.py
+
+# Run type check
+uv run mypy careervp/logic/gap_analysis.py --strict
 ```
 
 ---
@@ -261,162 +499,913 @@ KNOWLEDGE: docs/refactor/specs/gap_analysis_spec.yaml
 ```bash
 # VSCode + Anthropic Sonnet
 """
-Implement full FVS validation per fvs_spec.yaml:
+**READ FIRST:**
+- `docs/refactor/specs/fvs_spec.yaml`
+
+ROLE: Senior QA Engineer specializing in content quality validation and anti-AI detection
+
+CONTEXT: Implement Feature Validation System (FVS) with comprehensive quality checks and anti-AI detection.
+
+TASK: Implement FVS validation following fvs_spec.yaml validation_checks section
 
 1. Update: src/backend/careervp/logic/fvs_validator.py
-   - Grammar validation (min 9.0)
-   - Tone validation (min 8.0)
-   - Anti-AI pattern detection (min 9.0)
-   - Formatting validation (min 8.0)
-   - Content structure validation
-   - ATS scoring for CV/cover letter
-   - Cross-document consistency check
+   - Implement validation checks with minimum thresholds:
+     * Grammar validation: min_score = 9.0 (use LanguageTool or equivalent)
+     * Tone validation: min_score = 8.0 (professional, confident, not robotic)
+     * Anti-AI pattern detection: min_score = 9.0 (8-pattern avoidance framework)
+     * Formatting validation: min_score = 8.0 (structure, spacing, bullet consistency)
+     * Content structure: Check for intro/body/conclusion, logical flow
+   - ATS scoring for CV/cover letter (target >= 8.0)
+   - Cross-document consistency: Compare VPR, CV, Cover Letter for contradictions
 
 2. Wire anti-AI into all pipelines:
-   - VPR: Import and call check_anti_ai_patterns
-   - Cover Letter: Import and call check_anti_ai_patterns
-   - CV Tailoring: Import and call check_anti_ai_patterns
+   - VPR: Import and call check_anti_ai_patterns in vpr_generator.py
+   - Cover Letter: Import and call check_anti_ai_patterns in cover_letter_generator.py
+   - CV Tailoring: Import and call check_anti_ai_patterns in cv_tailoring.py
+   - Reject content with anti-AI score < 9.0 and request regeneration
 
 3. Update: tests/unit/test_fvs_validator.py
-   - Add comprehensive FVS tests
+   - test_grammar_validation_scores_above_threshold
+   - test_tone_validation_detects_robotic_language
+   - test_anti_ai_patterns_detected
+   - test_ats_scoring_returns_numeric_score
+   - test_cross_document_consistency_check
 
 4. Create: tests/cover-letter/unit/test_fvs_integration.py
-   - Test FVS integration with cover letter
+   - test_fvs_integrates_with_cover_letter_pipeline
+   - test_rejects_cover_letter_below_thresholds
 
-KNOWLEDGE: docs/refactor/specs/fvs_spec.yaml (validation_checks section)
+VALIDATION CRITERIA (must all pass):
+- [ ] Grammar score >= 9.0 for all content
+- [ ] Tone score >= 8.0 for all content
+- [ ] Anti-AI pattern score >= 9.0 for all content
+- [ ] Formatting score >= 8.0 for all content
+- [ ] ATS score >= 8.0 for CV and cover letter
+- [ ] Cross-document consistency check passes
+- [ ] Unit tests pass: pytest tests/unit/test_fvs_validator.py -v
+- [ ] Integration tests pass: pytest tests/cover-letter/unit/test_fvs_integration.py -v
+- [ ] Type check passes: mypy careervp/logic/fvs_validator.py --strict
+- [ ] Lint passes: ruff check careervp/logic/fvs_validator.py
+
+OUTPUT FORMAT: Provide complete implementation with validation score details. Output results to docs/refactor/execution_runbook_2_results.md.
 """
+```
+
+### Phase 7 Verification
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+
+# Phase 7 unit tests
+uv run pytest tests/unit/test_fvs_validator.py -v --tb=short
+uv run pytest tests/cover-letter/unit/test_fvs_integration.py -v --tb=short
+
+# Run lint
+uv run ruff check careervp/logic/fvs_validator.py
+
+# Run type check
+uv run mypy careervp/logic/fvs_validator.py --strict
 ```
 
 ---
 
 # PART 2: API CONTRACT GAPS
 
-## Phase 10: API Contract Coverage - 12 Missing Endpoints
+## Phase 10: API Contract Coverage - All 27 Endpoints ✅ TARGET
 
-**Duration:** 2 days | **Effort:** 10 hours
-**Status (2026-02-16):** 12 of 27 endpoints implemented
+**Duration:** 5 days | **Effort:** 40 hours
+**Status (2026-02-17):** Includes all steps to achieve 100% (27/27 endpoints)
+
+> **Execution Order:** Start with Step 10.0a/10.0b/10.0d/10.0e/10.0c (infra-safe migration + storage layer sync), then Step 10.0 and Steps 10.1–10.12
 
 ### Specs
 | Type | File | Purpose |
 |------|------|---------|
 | Mandatory | `api_contract_spec.yaml` | API endpoints |
+| Authoritative | `../swagger/careervp-api-v1.yaml` | Full OpenAPI 3.0.3 spec |
+| Reference | `storage_contract_spec.yaml` | Logical API IDs ↔ physical storage key mapping |
 
-### Step 10.1: Implement User Handler (3 endpoints)
+### Step 10.0: Path Normalization Strategy — INFRASTRUCTURE
 
 **READ FIRST:**
+- `docs/swagger/careervp-api-v1.yaml` (servers section: base URL `/v1`)
 - `docs/refactor/specs/api_contract_spec.yaml`
 
+**CONTEXT:** Migrate from `/api/*` routes to OpenAPI contract paths without breaking existing clients.
+
 **CODE:**
 ```bash
-# VSCode + Anthropic Sonnet
+# VSCode + Haiku
 """
-Implement User endpoints per api_contract_spec.yaml:
+**READ FIRST:**
+- `docs/swagger/careervp-api-v1.yaml` (servers section: base URL `/v1`)
+- `docs/refactor/specs/api_contract_spec.yaml`
+
+ROLE: DevOps Engineer specializing in API Gateway and route migration
+
+TASK: Analyze and document current-to-OpenAPI route mapping
+
+1. Audit existing routes in src/backend/careervp/handlers/
+   - grep -r "@app\." careervp/handlers/ | grep -v "lambda_handler"
+   - Document all current route decorators
+
+2. Map current routes to OpenAPI paths (document in docs/refactor/route_mapping.md):
+   | Current Route | OpenAPI Path | Handler |
+   |---------------|--------------|---------|
+   | /api/cv | /users/me/cv | cv_upload_handler.py |
+   | /api/vpr | /vpr/generate | vpr_submit_handler.py |
+   | /api/vpr/status/* | /vpr/{vprId} | vpr_status_handler.py |
+
+3. Validate no /v1 prefix in handler routes (that is API Gateway stage name)
+
+VALIDATION CRITERIA:
+- [ ] All current routes documented with OpenAPI equivalents
+- [ ] No /v1 prefix in handler route decorators
+- [ ] Route mapping documented in docs/refactor/route_mapping.md
+
+OUTPUT FORMAT:
+Output results to docs/refactor/execution_runbook_2_results.md.
+"""
+```
+
+---
+
+### Step 10.0a: API Gateway Additive Route Migration — INFRASTRUCTURE
+
+**READ FIRST:**
+- `docs/swagger/careervp-api-v1.yaml`
+- `infra/careervp/api_construct.py`
+
+**CONTEXT:** Add OpenAPI-compliant routes while keeping existing `/api/*` routes temporarily.
+
+**CODE:**
+```bash
+# VSCode + Sonnet
+"""
+**READ FIRST:**
+- `docs/swagger/careervp-api-v1.yaml`
+- `infra/careervp/api_construct.py`
+
+**CONTEXT:** Add OpenAPI-compliant routes while keeping existing `/api/*` routes temporarily.
+
+ROLE: DevOps Engineer specializing in AWS CDK and API Gateway
+
+TASK: Add OpenAPI paths as API Gateway resources without removing existing routes
+
+1. Update: infra/careervp/api_construct.py
+   - Add OpenAPI paths as API Gateway resources:
+     * /auth/register, /auth/login, /auth/refresh
+     * /users/me, /users/me/cv, /users/me/cvs
+     * /jobs, /jobs/{jobId}
+     * /vpr/generate, /vpr/{vprId}, /users/me/vprs
+     * /gap-analysis/questions, /gap-analysis/responses, /gap-analysis/{jobId}/questions
+     * /cv-tailoring/generate, /cv-tailoring/{cvTailoringId}, /users/me/tailored-cvs
+     * /cover-letter/generate, /cover-letter/{coverLetterId}, /users/me/cover-letters
+     * /interview-prep/generate, /interview-prep/{interviewPrepId}
+     * /company-research/fetch, /company-research/{jobId}
+     * /health
+
+2. Configure Lambda integrations:
+   - Link each new resource to corresponding handler
+   - Use existing Lambda functions where handlers exist
+
+3. Preserve existing /api/* resources (do NOT remove)
+
+4. Reuse existing IAM role, DynamoDB table, S3 bucket, SQS queue
+
+VALIDATION CRITERIA:
+- [ ] cdk synth succeeds without errors
+- [ ] All 27 OpenAPI paths have API Gateway resources
+- [ ] Existing /api/* routes still functional
+- [ ] No new DynamoDB/S3/SQS resources created
+
+OUTPUT FORMAT:
+Output results to docs/refactor/execution_runbook_2_results.md.
+"""
+```
+
+---
+
+### Step 10.0b: Infra Diff + Safety Gate — INFRASTRUCTURE
+
+**CONTEXT:** Validate CDK changes are safe before deployment.
+
+**CODE:**
+```bash
+# VSCode + Haiku
+"""
+**CONTEXT:** Validate CDK changes are safe before deployment.
+
+ROLE: DevOps Engineer
+
+TASK: Validate CDK changes are additive and safe
+
+Run commands:
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/infra
+cdk synth CareerVpApi
+cdk diff CareerVpApi
+```
+
+VALIDATION CRITERIA:
+- [ ] cdk synth succeeds without errors
+- [ ] cdk diff shows only ADDITIVE changes (no replacements)
+- [ ] No DynamoDB table deletions
+- [ ] No S3 bucket deletions
+- [ ] No SQS queue deletions
+- [ ] Only API Gateway resource additions shown
+"""
+```
+
+---
+
+### Step 10.0c: Legacy Route Decommission Gate — INFRASTRUCTURE
+
+**READ FIRST:**
+- `docs/refactor/route_mapping.md` (from Step 10.0)
+
+**CONTEXT:** Remove legacy `/api/*` routes after all 27 endpoints verified working.
+
+**CODE:**
+```bash
+# VSCode + Haiku
+"""
+**READ FIRST:**
+- `docs/refactor/route_mapping.md` (from Step 10.0)
+
+**CONTEXT:** Remove legacy `/api/*` routes after all 27 endpoints verified working.
+
+ROLE: DevOps Engineer
+
+TASK: Normalize handler route decorators to match OpenAPI contract
+
+1. Update: src/backend/careervp/handlers/cv_upload_handler.py
+   - Change: @app.post('/api/cv') → @app.post('/users/me/cv')
+
+2. Verify all other handlers use lambda_handler(event, context) pattern
+
+3. Update Step 10.0a to remove old /api/* resources AFTER:
+   - All 27 endpoints return 200 OK
+   - Smoke tests pass
+   - Migration sign-off complete
+
+NOTE: Do NOT add /v1 prefix — that is the API Gateway stage name.
+"""
+
+VALIDATION CRITERIA:
+- [ ] grep "@app\..*'/api/" returns 0 matches
+- [ ] All handlers use lambda_handler(event, context) pattern
+- [ ] Smoke tests pass for all 27 endpoints
+"""
+```
+
+---
+
+### Step 10.0d: Storage Contract Lock — INFRASTRUCTURE
+
+**READ FIRST:**
+- `docs/swagger/careervp-api-v1.yaml`
+- `infra/careervp/api_db_construct.py`
+- `docs/refactor/specs/deployment_spec.yaml`
+
+**CONTEXT:** Define canonical mapping from OpenAPI resource IDs to physical AWS storage keys.
+
+**CODE:**
+```bash
+# VSCode + Sonnet
+"""
+**READ FIRST:**
+- `docs/swagger/careervp-api-v1.yaml`
+- `infra/careervp/api_db_construct.py`
+- `docs/refactor/specs/deployment_spec.yaml`
+
+**CONTEXT:** Define canonical mapping from OpenAPI resource IDs to physical AWS storage keys.
+
+ROLE: Solutions Architect
+
+TASK: Document logical-to-physical storage mapping
+
+1. Create: docs/refactor/specs/storage_contract_spec.yaml
+   - Define logical IDs from OpenAPI:
+     * cv_id → S3 object key pattern: cvs/{user_id}/{cv_id}.pdf
+     * job_id → DynamoDB: JobsTable PK=job_id
+     * vpr_id → DynamoDB: VPRTable PK=vpr_id
+     * gap_response_ids → DynamoDB: GapResponsesTable PK=user_id, SK=job_id
+     * company_research_id → DynamoDB: CompanyResearchTable PK=job_id
+   - Document active physical storage:
+     * users table: PK=pk, SK=sk (for user profiles)
+     * jobs table: PK=job_id (for job postings)
+     * idempotency table: PK=id (for request deduplication)
+     * S3 buckets: cvs, vpr-results
+
+2. Update references in:
+   - docs/refactor/specs/deployment_spec.yaml
+   - docs/refactor/specs/_registry.yaml
+
+VALIDATION CRITERIA:
+- [ ] YAML parses without errors
+- [ ] All logical IDs mapped to physical keys
+- [ ] No new infrastructure resources defined
+
+OUTPUT FORMAT:
+Output results to docs/refactor/execution_runbook_2_results.md.
+"""
+```
+
+---
+
+### Step 10.0e: Data Storage Adapter Integration — INFRASTRUCTURE
+
+**READ FIRST:**
+- `docs/refactor/specs/storage_contract_spec.yaml`
+- `src/backend/careervp/dal/dynamo_dal_handler.py`
+
+**CONTEXT:** Keep existing infra, expose OpenAPI resource ID semantics to handlers.
+
+**CODE:**
+```bash
+# VSCode + Sonnet
+"""
+**READ FIRST:**
+- `docs/refactor/specs/storage_contract_spec.yaml`
+- `src/backend/careervp/dal/dynamo_dal_handler.py`
+
+**CONTEXT:** Keep existing infra, expose OpenAPI resource ID semantics to handlers.
+
+ROLE: Senior Backend Engineer
+
+TASK: Implement logical-to-physical key translation adapter
+
+1. Create: src/backend/careervp/dal/api_storage_adapter.py
+   - map_logical_to_physical_keys(resource_type, logical_identifiers) -> dict
+   - map_physical_to_logical_ids(resource_type, item) -> dict
+   - build_pk_sk_for_users_table(resource_type, user_id, identifiers) -> tuple
+   - Resource types: cv, job, vpr, gap_response, company_research
+
+2. Wire adapter into existing repositories:
+   - cv_repository.py: Use adapter for S3 key generation
+   - jobs_repository.py: Use adapter for DynamoDB key generation
+
+3. Create: tests/unit/test_api_storage_adapter.py
+   - test_cv_key_generation
+   - test_job_pk_sk_construction
+   - test_vpr_key_mapping
+
+VALIDATION CRITERIA:
+- [ ] Unit tests pass: pytest tests/unit/test_api_storage_adapter.py -v
+- [ ] Type check passes: mypy careervp/dal/api_storage_adapter.py --strict
+- [ ] Lint passes: ruff check careervp/dal/api_storage_adapter.py
+
+OUTPUT FORMAT:
+Output results to docs/refactor/execution_runbook_2_results.md.
+"""
+```
+
+---
+
+### Step 10.1: Auth Endpoints (register, login, refresh)
+
+**READ FIRST:**
+- `docs/refactor/specs/api_contract_spec.yaml` (auth section)
+- `docs/swagger/careervp-api-v1.yaml` (auth paths)
+
+**CONTEXT:** Implement authentication endpoints following OpenAPI contract.
+
+**CODE:**
+```bash
+# VSCode + Sonnet
+"""
+**READ FIRST:**
+- `docs/refactor/specs/api_contract_spec.yaml` (auth section)
+- `docs/swagger/careervp-api-v1.yaml` (auth paths)
+
+**CONTEXT:** Implement authentication endpoints following OpenAPI contract.
+
+ROLE: Senior Backend Engineer specializing in authentication and JWT
+
+TASK: Implement auth endpoints per api_contract_spec.yaml
+
+1. Create: src/backend/careervp/handlers/auth_handler.py
+   - POST /auth/register -> register_user() -> 201 Created
+   - POST /auth/login -> login_user() -> 200 OK with JWT
+   - POST /auth/refresh -> refresh_token() -> 200 OK with new JWT
+
+2. Create: src/backend/careervp/logic/auth_service.py
+   - AuthService with JWT generation (RS256)
+   - Token validation with expiration
+   - Password hashing (bcrypt)
+
+3. Create: tests/unit/test_auth_handler.py
+   - test_register_creates_user
+   - test_login_returns_jwt
+   - test_refresh_returns_new_jwt
+
+VALIDATION CRITERIA:
+- [ ] All 3 endpoints return correct HTTP status codes
+- [ ] JWT contains user_id and expires in 1 hour
+- [ ] Refresh token valid for 7 days
+- [ ] Unit tests pass: pytest tests/unit/test_auth_handler.py -v
+- [ ] Type check passes: mypy careervp/handlers/auth_handler.py --strict
+- [ ] Lint passes: ruff check careervp/handlers/auth_handler.py
+
+OUTPUT FORMAT: Provide handler with Powertools @app decorators. Output results to docs/refactor/execution_runbook_2_results.md.
+"""
+```
+
+---
+
+### Step 10.2: User Management Endpoints
+
+**READ FIRST:**
+- `docs/refactor/specs/api_contract_spec.yaml` (users section)
+- `docs/swagger/careervp-api-v1.yaml` (user paths)
+
+**CONTEXT:** Implement user management endpoints for profile and CV listing.
+
+**CODE:**
+```bash
+# VSCode + Sonnet
+"""
+**READ FIRST:**
+- `docs/refactor/specs/api_contract_spec.yaml` (users section)
+- `docs/swagger/careervp-api-v1.yaml` (user paths)
+
+**CONTEXT:** Implement user management endpoints for profile and CV listing.
+
+ROLE: Backend Engineer
+
+TASK: Implement user endpoints per api_contract_spec.yaml
 
 1. Create: src/backend/careervp/models/user.py
-   - User model with email, name, preferences
+   - User model: user_id, email, name, preferences, created_at, updated_at
 
 2. Create: src/backend/careervp/dal/user_repository.py
-   - UserRepository with DynamoDB operations
-   - get_user(user_id), update_user(user_id, data)
+   - UserRepository: get_user(user_id), update_user(user_id, data)
+   - Use users table with PK=user_id
 
 3. Create: src/backend/careervp/handlers/user_handler.py
-   - GET /users/me -> get_current_user()
-   - PUT /users/me -> update_current_user()
-   - GET /users/me/cvs -> list_user_cvs()
+   - GET /users/me -> get_current_user() -> 200 OK
+   - PUT /users/me -> update_current_user() -> 200 OK
+   - GET /users/me/cvs -> list_user_cvs() -> 200 OK
 
 4. Create: tests/unit/test_user_handler.py
+   - test_get_current_user_returns_profile
+   - test_update_current_user_modifies_profile
 
-Endpoints:
-- GET /users/me (operationId: getCurrentUser)
-- PUT /users/me (operationId: updateCurrentUser)
-- GET /users/me/cvs (operationId: listUserCVs)
+VALIDATION CRITERIA:
+- [ ] All 3 endpoints return 200 OK
+- [ ] Auth required for all endpoints
+- [ ] User can only access own data (/users/me)
+- [ ] Unit tests pass: pytest tests/unit/test_user_handler.py -v
+- [ ] Type check passes: mypy careervp/handlers/user_handler.py --strict
+- [ ] Lint passes: ruff check careervp/handlers/user_handler.py
 
-KNOWLEDGE: docs/refactor/specs/api_contract_spec.yaml (users section)
+OUTPUT FORMAT:
+Output results to docs/refactor/execution_runbook_2_results.md.
 """
 ```
 
-### Step 10.2: Implement Job Handler (3 endpoints)
+### Step 10.3: Job CRUD Endpoints
+
+**READ FIRST:**
+- `docs/refactor/specs/api_contract_spec.yaml` (jobs section)
+- `docs/swagger/careervp-api-v1.yaml` (job paths)
+
+**CONTEXT:** Implement job CRUD endpoints for job posting management.
 
 **CODE:**
 ```bash
-# VSCode + Anthropic Sonnet
+# VSCode + Sonnet
 """
-Implement Job endpoints per api_contract_spec.yaml:
+**READ FIRST:**
+- `docs/refactor/specs/api_contract_spec.yaml` (jobs section)
+- `docs/swagger/careervp-api-v1.yaml` (job paths)
+
+**CONTEXT:** Implement job CRUD endpoints for job posting management.
+
+ROLE: Backend Engineer
+
+TASK: Implement job endpoints per api_contract_spec.yaml
 
 1. Create: src/backend/careervp/models/job.py
-   - Job model with id, title, company, description, status
+   - Job model: job_id, user_id, title, company, description, status, created_at
 
 2. Create: src/backend/careervp/dal/jobs_repository.py
-   - JobsRepository with DynamoDB operations
-   - create_job(), get_job(), list_jobs(), get_jobs_by_user()
+   - JobsRepository: create_job(), get_job(), list_jobs(), get_jobs_by_user()
+   - Use jobs table with PK=job_id
 
 3. Create: src/backend/careervp/handlers/job_handler.py
-   - POST /jobs -> create_job()
-   - GET /jobs -> list_jobs()
-   - GET /jobs/{jobId} -> get_job()
+   - POST /jobs -> create_job() -> 201 Created
+   - GET /jobs -> list_jobs() -> 200 OK
+   - GET /jobs/{jobId} -> get_job() -> 200 OK
 
 4. Create: tests/unit/test_job_handler.py
+   - test_create_job_returns_201
+   - test_list_jobs_returns_user_jobs
 
-Endpoints:
-- POST /jobs (operationId: createJob)
-- GET /jobs (operationId: listJobs)
-- GET /jobs/{jobId} (operationId: getJob)
+VALIDATION CRITERIA:
+- [ ] POST /jobs returns 201 Created
+- [ ] GET /jobs returns list of user's jobs
+- [ ] GET /jobs/{jobId} returns single job
+- [ ] Users can only access own jobs
+- [ ] Unit tests pass: pytest tests/unit/test_job_handler.py -v
+- [ ] Type check passes: mypy careervp/handlers/job_handler.py --strict
+- [ ] Lint passes: ruff check careervp/handlers/job_handler.py
 
-KNOWLEDGE: docs/refactor/specs/api_contract_spec.yaml (jobs section)
+OUTPUT FORMAT:
+Output results to docs/refactor/execution_runbook_2_results.md.
 """
 ```
 
-### Step 10.3: Add Status Endpoints to Existing Handlers
+---
+
+### Step 10.4: VPR Endpoint Alignment
+
+**READ FIRST:**
+- `docs/swagger/careervp-api-v1.yaml` (VPR endpoints)
+- `src/backend/careervp/handlers/vpr_submit_handler.py`
+- `src/backend/careervp/handlers/vpr_status_handler.py`
+
+**CONTEXT:** Align VPR routes with OpenAPI contract paths.
 
 **CODE:**
 ```bash
-# VSCode + Anthropic Haiku
+# VSCode + Sonnet
 """
-Add status/list endpoints to existing handlers:
+**READ FIRST:**
+- `docs/swagger/careervp-api-v1.yaml` (VPR endpoints)
+- `src/backend/careervp/handlers/vpr_submit_handler.py`
+- `src/backend/careervp/handlers/vpr_status_handler.py`
+
+**CONTEXT:** Align VPR routes with OpenAPI contract paths.
+
+ROLE: Backend Engineer
+
+TASK: Align VPR endpoints with OpenAPI contract
+
+1. Update: src/backend/careervp/handlers/vpr_submit_handler.py
+   - Route: POST /vpr/generate (was: /api/vpr)
+   - Schema: Match OpenAPI GenerateVPRRequest/GenerateVPRResponse
+   - Returns: 202 Accepted with job_id
+
+2. Update: src/backend/careervp/handlers/vpr_status_handler.py
+   - Route: GET /vpr/{vprId} (was: /api/vpr/status/{job_id})
+   - Add: GET /users/me/vprs -> list_user_vprs()
+
+3. Create: tests/unit/test_vpr_endpoints.py
+
+VALIDATION CRITERIA:
+- [ ] POST /vpr/generate returns 202 Accepted
+- [ ] GET /vpr/{vprId} returns job status
+- [ ] GET /users/me/vprs returns user's VPR list
+- [ ] Unit tests pass: pytest tests/unit/test_vpr_endpoints.py -v
+- [ ] Type check passes: mypy careervp/handlers/vpr_*.py --strict
+
+OUTPUT FORMAT:
+Output results to docs/refactor/execution_runbook_2_results.md.
+"""
+```
+
+---
+
+### Step 10.5: Gap Analysis Handler Completion
+
+**READ FIRST:**
+- `docs/swagger/careervp-api-v1.yaml` (gap-analysis paths)
+- `src/backend/careervp/handlers/gap_handler.py`
+
+**CONTEXT:** Complete gap analysis handler with all CRUD endpoints.
+
+**CODE:**
+```bash
+# VSCode + Haiku
+"""
+**READ FIRST:**
+- `docs/swagger/careervp-api-v1.yaml` (gap-analysis paths)
+- `src/backend/careervp/handlers/gap_handler.py`
+
+**CONTEXT:** Complete gap analysis handler with all CRUD endpoints.
+
+ROLE: Backend Engineer
+
+TASK: Implement gap analysis endpoints
+
+1. Update: src/backend/careervp/handlers/gap_handler.py
+   - POST /gap-analysis/questions -> generate_questions() -> 201
+   - GET /gap-analysis/{jobId}/questions -> get_questions() -> 200
+   - POST /gap-analysis/responses -> submit_response() -> 201
+   - GET /gap-analysis/responses/{jobId} -> get_responses() -> 200
+
+2. Create: tests/unit/test_gap_analysis_handler.py
+
+VALIDATION CRITERIA:
+- [ ] All 4 endpoints return correct HTTP status codes
+- [ ] Questions stored in DynamoDB
+- [ ] Unit tests pass: pytest tests/unit/test_gap_analysis_handler.py -v
+
+OUTPUT FORMAT:
+Output results to docs/refactor/execution_runbook_2_results.md.
+"""
+```
+
+---
+
+### Step 10.6: CV Tailoring Status + List Endpoints
+
+**READ FIRST:**
+- `docs/swagger/careervp-api-v1.yaml` (cv-tailoring paths)
+
+**CONTEXT:** Implement CV tailoring status and list endpoints.
+
+**CODE:**
+```bash
+# VSCode + Haiku
+"""
+**READ FIRST:**
+- `docs/swagger/careervp-api-v1.yaml` (cv-tailoring paths)
+
+**CONTEXT:** Implement CV tailoring status and list endpoints.
+
+ROLE: Backend Engineer
+
+TASK: Implement CV tailoring status endpoints
 
 1. Update: src/backend/careervp/handlers/cv_tailoring_handler.py
-   - Add GET /cv-tailoring/{cvTailoringId} -> get_tailored_cv_status()
-   - Add GET /users/me/tailored-cvs -> list_tailored_cvs()
+   - GET /cv-tailoring/{cvTailoringId} -> get_tailored_cv_status() -> 200
+   - GET /users/me/tailored-cvs -> list_tailored_cvs() -> 200
 
-2. Update: src/backend/careervp/handlers/cover_letter_handler.py
-   - Add GET /cover-letter/{coverLetterId} -> get_cover_letter_status()
-   - Add GET /users/me/cover-letters -> list_cover_letters()
+2. Create: tests/unit/test_cv_tailoring_status.py
 
-3. Update: src/backend/careervp/handlers/interview_prep_handler.py
-   - Add GET /interview-prep/{interviewPrepId} -> get_interview_prep_status()
+VALIDATION CRITERIA:
+- [ ] GET /cv-tailoring/{cvTailoringId} returns CV status
+- [ ] GET /users/me/tailored-cvs returns user's CV list
+- [ ] Unit tests pass
 
-4. Create: tests/unit/test_status_endpoints.py
-
-Endpoints:
-- GET /cv-tailoring/{cvTailoringId} (operationId: getTailoredCV)
-- GET /users/me/tailored-cvs (operationId: listTailoredCVs)
-- GET /cover-letter/{coverLetterId} (operationId: getCoverLetter)
-- GET /users/me/cover-letters (operationId: listCoverLetters)
-- GET /interview-prep/{interviewPrepId} (operationId: getInterviewPrep)
-
-KNOWLEDGE: docs/refactor/specs/api_contract_spec.yaml (cv-tailoring, cover-letter, interview-prep sections)
+OUTPUT FORMAT:
+Output results to docs/refactor/execution_runbook_2_results.md.
 """
 ```
 
-### Step 10.4: Implement Health Endpoint
+---
+
+### Step 10.7: Cover Letter Status + List Endpoints
+
+**READ FIRST:**
+- `docs/swagger/careervp-api-v1.yaml` (cover-letter paths)
+
+**CONTEXT:** Implement cover letter status and list endpoints.
 
 **CODE:**
 ```bash
-# VSCode + Anthropic Haiku
+# VSCode + Haiku
 """
-Implement Health endpoint:
+**READ FIRST:**
+- `docs/swagger/careervp-api-v1.yaml` (cover-letter paths)
+
+**CONTEXT:** Implement cover letter status and list endpoints.
+
+ROLE: Backend Engineer
+
+TASK: Implement cover letter status endpoints
+
+1. Update: src/backend/careervp/handlers/cover_letter_handler.py
+   - GET /cover-letter/{coverLetterId} -> get_cover_letter_status() -> 200
+   - GET /users/me/cover-letters -> list_cover_letters() -> 200
+
+2. Create: tests/unit/test_cover_letter_status.py
+
+VALIDATION CRITERIA:
+- [ ] GET /cover-letter/{coverLetterId} returns cover letter
+- [ ] GET /users/me/cover-letters returns user's letters
+
+OUTPUT FORMAT:
+Output results to docs/refactor/execution_runbook_2_results.md.
+"""
+```
+
+---
+
+### Step 10.8: Interview Prep Status Endpoint
+
+**READ FIRST:**
+- `docs/swagger/careervp-api-v1.yaml` (interview-prep paths)
+
+**CONTEXT:** Implement interview prep status endpoint.
+
+**CODE:**
+```bash
+# VSCode + Haiku
+"""
+**READ FIRST:**
+- `docs/swagger/careervp-api-v1.yaml` (interview-prep paths)
+
+**CONTEXT:** Implement interview prep status endpoint.
+
+ROLE: Backend Engineer
+
+TASK: Implement interview prep status endpoint
+
+1. Update: src/backend/careervp/handlers/interview_prep_handler.py
+   - GET /interview-prep/{interviewPrepId} -> get_interview_prep_status() -> 200
+
+2. Create: tests/unit/test_interview_prep_status.py
+
+VALIDATION CRITERIA:
+- [ ] GET /interview-prep/{interviewPrepId} returns prep data
+
+OUTPUT FORMAT:
+Output results to docs/refactor/execution_runbook_2_results.md.
+"""
+```
+
+---
+
+### Step 10.9: Company Research GET Endpoint
+
+**READ FIRST:**
+- `docs/swagger/careervp-api-v1.yaml` (company-research paths)
+
+**CONTEXT:** Implement company research GET endpoint with response code fix.
+
+**CODE:**
+```bash
+# VSCode + Haiku
+"""
+**READ FIRST:**
+- `docs/swagger/careervp-api-v1.yaml` (company-research paths)
+
+**CONTEXT:** Implement company research GET endpoint with response code fix.
+
+ROLE: Backend Engineer
+
+TASK: Implement company research GET endpoint
+
+1. Update: src/backend/careervp/handlers/company_research_handler.py
+   - GET /company-research/{jobId} -> get_company_research() -> 200 OK
+   - Fix: Return 200 (not 201) for GET requests
+
+2. Create: tests/unit/test_company_research_status.py
+
+VALIDATION CRITERIA:
+- [ ] GET /company-research/{jobId} returns 200 OK
+- [ ] Response matches OpenAPI schema
+
+OUTPUT FORMAT:
+Output results to docs/refactor/execution_runbook_2_results.md.
+"""
+```
+
+---
+
+### Step 10.10: Health Check Endpoint
+
+**READ FIRST:**
+- `docs/swagger/careervp-api-v1.yaml` (health path)
+- `docs/refactor/specs/api_contract_spec.yaml` (health section)
+
+**CONTEXT:** Implement health check endpoint (no auth required).
+
+**CODE:**
+```bash
+# VSCode + Haiku
+"""
+**READ FIRST:**
+- `docs/swagger/careervp-api-v1.yaml` (health path)
+- `docs/refactor/specs/api_contract_spec.yaml` (health section)
+
+**CONTEXT:** Implement health check endpoint (no auth required).
+
+ROLE: Backend Engineer
+
+TASK: Implement health check endpoint
 
 1. Create: src/backend/careervp/handlers/health_handler.py
-   - GET /health -> health_check()
-   - Return: status, timestamp, version
+   - GET /health -> health_check() -> 200 OK
+   - Response: {status: "healthy", timestamp: ISO8601, version: "1.0.0"}
 
 2. Create: tests/unit/test_health_handler.py
 
-Endpoint:
-- GET /health (operationId: healthCheck)
+VALIDATION CRITERIA:
+- [ ] GET /health returns 200 OK
+- [ ] No authentication required
+- [ ] Response matches OpenAPI schema
 
-KNOWLEDGE: docs/refactor/specs/api_contract_spec.yaml (health section)
+OUTPUT FORMAT:
+Output results to docs/refactor/execution_runbook_2_results.md.
 """
+```
+
+---
+
+### Step 10.11: Request/Response Schema Conformance
+
+**READ FIRST:**
+- `docs/swagger/careervp-api-v1.yaml`
+- `docs/refactor/specs/api_contract_spec.yaml`
+
+**CONTEXT:** Create Pydantic models for all API request/response schemas.
+
+**CODE:**
+```bash
+# VSCode + Sonnet
+"""
+**READ FIRST:**
+- `docs/swagger/careervp-api-v1.yaml`
+- `docs/refactor/specs/api_contract_spec.yaml`
+
+**CONTEXT:** Create Pydantic models for all API request/response schemas.
+
+ROLE: Senior Backend Engineer
+
+TASK: Create API models for schema conformance
+
+1. Create: src/backend/careervp/models/api_models.py
+   - Pydantic BaseModel for all request/response schemas
+   - Include validation decorators for required fields
+   - Serialization/deserialization methods
+
+2. Wire models into all handlers:
+   - cv_upload_handler.py, vpr_submit_handler.py
+   - cv_tailoring_handler.py, cover_letter_handler.py
+   - gap_handler.py, job_handler.py, user_handler.py
+
+3. Create: tests/unit/test_api_models.py
+
+VALIDATION CRITERIA:
+- [ ] All 27 endpoint schemas have Pydantic models
+- [ ] Models validate input/output correctly
+- [ ] Unit tests pass: pytest tests/unit/test_api_models.py -v
+- [ ] Type check passes: mypy careervp/models/api_models.py --strict
+
+OUTPUT FORMAT:
+Output results to docs/refactor/execution_runbook_2_results.md.
+"""
+```
+
+---
+
+### Step 10.12: OpenAPI Contract Validation Suite
+
+**CODE:**
+```bash
+# VSCode + Sonnet
+"""
+ROLE: QA Engineer
+
+TASK: Create OpenAPI contract validation suite
+
+1. Create: tests/integration/test_openapi_contract.py
+   - Validate all 27 endpoints exist in handler code
+   - Validate request schemas match OpenAPI
+   - Validate response schemas match OpenAPI
+   - Validate HTTP status codes match OpenAPI
+   - Validate authentication requirements
+
+2. Create: scripts/validate_openapi_coverage.py
+   - Parse OpenAPI spec
+   - Check handler coverage
+   - Report missing endpoints
+
+VALIDATION CRITERIA:
+- [ ] Coverage: 27/27 endpoints (100%)
+- [ ] Integration tests pass: pytest tests/integration/test_openapi_contract.py -v
+- [ ] No schema mismatches
+
+OUTPUT FORMAT:
+Output results to docs/refactor/execution_runbook_2_results.md.
+"""
+```
+
+### Phase 10 Verification
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+
+# Phase 10 unit tests
+uv run pytest tests/unit/test_auth_handler.py -v --tb=short
+uv run pytest tests/unit/test_user_handler.py -v --tb=short
+uv run pytest tests/unit/test_job_handler.py -v --tb=short
+uv run pytest tests/unit/test_vpr_endpoints.py -v --tb=short
+uv run pytest tests/unit/test_status_endpoints.py -v --tb=short
+uv run pytest tests/unit/test_cv_tailoring_status.py -v --tb=short
+uv run pytest tests/unit/test_cover_letter_status.py -v --tb=short
+uv run pytest tests/unit/test_interview_prep_status.py -v --tb=short
+uv run pytest tests/unit/test_company_research_status.py -v --tb=short
+uv run pytest tests/unit/test_health_handler.py -v --tb=short
+uv run pytest tests/unit/test_api_models.py -v --tb=short
+uv run pytest tests/unit/test_api_storage_adapter.py -v --tb=short
+
+# Phase 10 integration tests
+uv run pytest tests/integration/test_openapi_contract.py -v --tb=short
+
+# CDK infra validation
+cd /Users/yitzchak/Documents/dev/careervp/infra
+cdk synth
+cdk diff
+
+# Run lint
+uv run ruff check careervp/handlers/ careervp/models/ careervp/dal/
+
+# Run type check
+uv run mypy careervp/handlers/ careervp/models/ careervp/dal/ --strict
 ```
 
 ---
@@ -445,6 +1434,9 @@ Tests the full async lifecycle:
 - GET /vpr/{vprId} -> polling until completed
 
 KNOWLEDGE: docs/refactor/specs/api_contract_spec.yaml (async polling section)
+
+OUTPUT FORMAT:
+Output results to docs/refactor/execution_runbook_2_results.md.
 """
 ```
 
@@ -462,7 +1454,23 @@ Create Cover Letter test suite:
 2. Create: src/backend/tests/cover-letter/unit/test_cover_letter_prompt.py
 3. Create: src/backend/tests/cover-letter/integration/test_cover_letter_handler.py
 4. Create: src/backend/tests/cover-letter/e2e/test_cover_letter_flow.py
+
+OUTPUT FORMAT:
+Output results to docs/refactor/execution_runbook_2_results.md.
 """
+```
+
+### Test Creation Verification
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+
+# VPR Async E2E tests
+uv run pytest tests/e2e/test_vpr_async_polling.py -v --tb=short
+
+# Cover Letter tests
+uv run pytest tests/cover-letter/unit/ -v --tb=short
+uv run pytest tests/cover-letter/integration/ -v --tb=short
+uv run pytest tests/cover-letter/e2e/ -v --tb=short
 ```
 
 ---
@@ -498,27 +1506,57 @@ uv run pytest tests/cover-letter/ -v
 
 # COMPLETION CHECKLIST
 
+## Phase 2: Cost Optimization
 - [ ] Phase 2: CV Summarizer implemented
 - [ ] Phase 2: LLM Cache implemented
 - [ ] Phase 2: Circuit breaker wired
+
+## Phase 3: VPR 6-Stage Generator
 - [ ] Phase 3: 6-stage VPR pipeline
 - [ ] Phase 3: Anti-AI wired
+
+## Phase 4: CV Tailoring
 - [ ] Phase 4: 3-step CV tailoring
 - [ ] Phase 4: Self-correction loop (ATS >= 8.0)
+
+## Phase 5: Gap Analysis
 - [ ] Phase 5: 10 question limit
 - [ ] Phase 5: Question tagging
+
+## Phase 6: Cover Letter
 - [ ] Phase 6: Cover Letter unit tests
 - [ ] Phase 6: Cover Letter integration tests
 - [ ] Phase 6: Cover Letter E2E tests
+
+## Phase 7: Quality Validator (FVS)
 - [ ] Phase 7: ATS scoring
 - [ ] Phase 7: Anti-AI scoring wired
 - [ ] Phase 7: Cross-doc consistency
-- [ ] Phase 10: User handler (3 endpoints)
-- [ ] Phase 10: Job handler (3 endpoints)
-- [ ] Phase 10: Status endpoints (5 endpoints)
-- [ ] Phase 10: Health endpoint
+
+## Phase 10: API Contract (All 27 Endpoints)
+- [ ] Phase 10.0: Path Normalization Strategy
+- [ ] Phase 10.0a: API Gateway Additive Route Migration
+- [ ] Phase 10.0b: Infra Diff + Safety Gate
+- [ ] Phase 10.0c: Legacy Route Decommission Gate
+- [ ] Phase 10.0d: Storage Contract Lock
+- [ ] Phase 10.0e: Data Storage Adapter Integration
+- [ ] Phase 10.1: Auth endpoints (register, login, refresh)
+- [ ] Phase 10.2: User endpoints (GET/PUT /users/me, GET /users/me/cvs)
+- [ ] Phase 10.3: Job endpoints (POST/GET /jobs, GET /jobs/{jobId})
+- [ ] Phase 10.4: VPR endpoint alignment + list endpoint
+- [ ] Phase 10.5: Gap Analysis handler completion
+- [ ] Phase 10.6: CV Tailoring status + list endpoints
+- [ ] Phase 10.7: Cover Letter status + list endpoints
+- [ ] Phase 10.8: Interview Prep status endpoint
+- [ ] Phase 10.9: Company Research GET endpoint
+- [ ] Phase 10.10: Health check endpoint
+- [ ] Phase 10.11: Request/Response Schema Conformance
+- [ ] Phase 10.12: OpenAPI Contract Validation Suite
+
+## Verification
 - [ ] VPR Async: E2E test
 - [ ] All tests passing
 - [ ] Lint clean
 - [ ] Type check clean
 - [ ] CDK synth succeeds
+- [ ] OpenAPI contract validation: 27/27 endpoints (100%)

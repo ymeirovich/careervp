@@ -67,7 +67,7 @@ def tailor_cv(  # noqa: C901
     llm_payload: dict[str, Any] | None = None
     if llm_client is not None:
         try:
-            response = llm_client.generate(prompt=prompt, timeout=timeout)
+            response = llm_client.generate(prompt=prompt, timeout=timeout, cv=master_cv)
             response = _maybe_await(response)
             llm_payload = response
         except TimeoutError as exc:

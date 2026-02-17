@@ -1,0 +1,56 @@
+# CV Summarizer Specification
+# Source: cost_optimization_spec.yaml Strategy 1 (COST-001)
+# Phase: 2
+
+spec_version: "1.0"
+date_created: "2026-02-17"
+
+overview:
+  name: "CV Summarizer"
+  description: "Reduce CV text to highlights only (500 tokens vs 5000 tokens)"
+  purpose: "Token cost reduction through intelligent context truncation"
+  target_savings: "13% ($0.0005/letter)"
+
+requirements:
+  - id: "CVSUM-001"
+    description: "Extract key sections: summary, experience, skills, education"
+    priority: "HIGH"
+
+  - id: "CVSUM-002"
+    description: "Truncate to max lengths for LLM efficiency"
+    priority: "HIGH"
+    limits:
+      summary: "200 characters"
+      experience: "500 characters per job, top 3 jobs"
+      skills: "50 items, prioritized by relevance"
+      education: "300 characters"
+
+  - id: "CVSUM-003"
+    description: "Return format with token count and truncation flag"
+    priority: "MEDIUM"
+    output:
+      - summary
+      - experience
+      - skills_extracted
+      - education
+      - token_count
+      - was_truncated
+
+  - id: "CVSUM-004"
+    description: "Preserve critical info (name, top skills, recent job)"
+    priority: "HIGH"
+
+integration:
+  - component: "llm_client.py"
+    method: "_maybe_summarize_cv(cv: UserCV) -> UserCV | dict"
+    trigger: "CVs > 5000 tokens"
+
+validation:
+  - criterion: "Token reduction >= 40% for CVs > 5000 tokens"
+    test: "test_summarize_reduces_tokens"
+
+  - criterion: "Critical info preserved"
+    test: "test_summarize_preserves_key_information"
+
+  - criterion: "Edge cases handled"
+    test: "test_summarize_handles_edge_cases"

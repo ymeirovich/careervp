@@ -22,11 +22,11 @@ class RetryingLLMClient:
         self._max_retries = max_retries
         self._base_delay = base_delay
 
-    def generate(self, prompt: str, timeout: int = 300) -> dict[str, Any]:
+    def generate(self, prompt: str, timeout: int = 300, cv: Any | None = None) -> dict[str, Any]:
         last_exception: Exception | None = None
         for attempt in range(self._max_retries):
             try:
-                return self._client.generate(prompt=prompt, timeout=timeout)
+                return self._client.generate(prompt=prompt, timeout=timeout, cv=cv)
             except Exception as exc:  # noqa: BLE001 - retry on transient errors
                 last_exception = exc
                 delay = self._base_delay * (2**attempt)
