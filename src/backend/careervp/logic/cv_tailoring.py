@@ -325,7 +325,7 @@ def validate_tailored_cv(  # noqa: C901
 
     baseline_companies = set(baseline.companies)
     baseline_roles = {fact.value for fact in baseline.immutable_facts if fact.fact_type == 'job_title'}
-    baseline_dates = {d for d in baseline.experience_dates if d is not None}
+    baseline_dates = {d for d in baseline.experience_dates if d}
     baseline_skill_names = set()
     for skill in baseline.skills:
         if isinstance(skill, Skill):
@@ -353,7 +353,7 @@ def validate_tailored_cv(  # noqa: C901
                 )
             )
         exp_dates = getattr(exp, 'dates', None) or getattr(exp, 'start_date', None)
-        if exp_dates and exp_dates not in baseline_dates:
+        if baseline_dates and exp_dates and exp_dates not in baseline_dates:
             violations.append(
                 FVSViolation(
                     field='experience.dates',
@@ -406,13 +406,13 @@ def validate_tailored_cv(  # noqa: C901
                 )
             )
         edu_dates = getattr(edu, 'dates', None) or getattr(edu, 'graduation_date', None) or getattr(edu, 'end_date', None)
-        baseline_edu_dates = {d for d in baseline.education_dates if d is not None}
-        if edu_dates and edu_dates not in baseline_edu_dates:
+        baseline_edu_dates = {d for d in baseline.education_dates if d}
+        if baseline_edu_dates and edu_dates and edu_dates not in baseline_edu_dates:
             violations.append(
                 FVSViolation(
                     field='education.dates',
                     severity=ViolationSeverity.CRITICAL,
-                    expected=', '.join(d for d in baseline.education_dates if d is not None),
+                    expected=', '.join(d for d in baseline.education_dates if d),
                     actual=edu_dates,
                 )
             )

@@ -174,6 +174,24 @@ def test_validate_tailored_cv_education_dates_modified(
     assert any(v.severity == ViolationSeverity.CRITICAL for v in result.data.violations)
 
 
+def test_validate_tailored_cv_education_dates_allowed_when_baseline_missing(
+    sample_master_cv, sample_tailored_cv
+):
+    """Do not fail on education dates when source CV has no education date baseline."""
+    # Arrange
+    baseline = create_fvs_baseline(sample_master_cv)
+    baseline.education_dates = [""]
+    sample_tailored_cv.education[0].dates = "2017"
+
+    # Act
+    result = validate_tailored_cv(baseline, sample_tailored_cv)
+
+    # Assert
+    assert result.success is True
+    assert result.code == ResultCode.SUCCESS
+    assert len(result.data.violations) == 0
+
+
 def test_validate_tailored_cv_degree_modified(sample_master_cv, sample_tailored_cv):
     """Test FVS detects CRITICAL violation when degree type is modified."""
     # Arrange

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from decimal import Decimal
 from typing import Any
 
 from careervp.logic.llm_cache import LLMResponseCache
@@ -89,6 +90,18 @@ def test_cache_ttl_expiration() -> None:
     current_time[0] += 3
     assert cache.get('expiring-key') is None
     assert 'expiring-key' not in table.items
+
+
+def test_cache_hit_with_decimal_ttl() -> None:
+    table = FakeDynamoTable()
+    table.items['decimal-key'] = {
+        'cache_key': 'decimal-key',
+        'response_value': 'cached-response',
+        'expires_at': Decimal('9999999999'),
+    }
+    cache = LLMResponseCache(table_name='test-llm-cache', table=table)
+
+    assert cache.get('decimal-key') == 'cached-response'
 
 
 def test_is_cacheable_excludes_temporal_queries() -> None:

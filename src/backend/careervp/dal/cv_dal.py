@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 import boto3
@@ -29,6 +30,38 @@ class CVTable:
     def put_item(self, Item: dict[str, Any]) -> dict[str, Any]:  # noqa: N803
         """Proxy put_item to underlying table."""
         return cast(dict[str, Any], self.table.put_item(Item=Item))
+
+    def save_tailored_cv_artifact(
+        self,
+        user_id: str,
+        cv_id: str,
+        job_description: str,
+        tailored_cv: Any,
+        version: int = 1,
+        ttl_days: int = 90,
+    ) -> dict[str, Any]:
+        """Persist tailored CV artifact using users-table pk/sk schema."""
+        now = datetime.now(UTC)
+        created_at = now.isoformat()
+        artifact_id = f'TAILORED_CV#{cv_id}#{int(now.timestamp())}#v{version}'
+        ttl = int((now + timedelta(days=ttl_days)).timestamp())
+        payload = tailored_cv.model_dump(mode='json') if hasattr(tailored_cv, 'model_dump') else tailored_cv
+
+        item: dict[str, Any] = {
+            'pk': user_id,
+            'sk': artifact_id,
+            'entity_type': 'CV_TAILORING',
+            'user_id': user_id,
+            'cv_id': cv_id,
+            'job_description': job_description,
+            'version': version,
+            'tailored_cv': payload,
+            'created_at': created_at,
+            'updated_at': created_at,
+            'ttl': ttl,
+        }
+        self.put_item(Item=item)
+        return item
 
     def get_cv_item(self, user_id: str | None, cv_id: str | None) -> dict[str, Any]:
         """Resolve CV item across current (pk/sk) and legacy (cv_id) schemas."""
