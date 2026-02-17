@@ -1,12 +1,3 @@
-"""
-API Construct for CareerVP Lambda functions.
-
-Runtime Configuration:
-- Python 3.13
-- Architecture: X86_64
-- Bundling Platform: linux/amd64 (when using Lambda layers with bundling)
-"""
-
 import careervp.constants as constants
 from aws_cdk import CfnOutput, Duration, RemovalPolicy, aws_apigateway, aws_sqs
 from aws_cdk import aws_dynamodb as dynamodb
@@ -15,6 +6,7 @@ from aws_cdk import aws_lambda as _lambda
 from aws_cdk import aws_lambda_event_sources as eventsources
 from aws_cdk import aws_logs as logs
 from aws_cdk import aws_s3 as s3
+from aws_cdk.aws_lambda_python_alpha import PythonLayerVersion
 from careervp.api_db_construct import ApiDbConstruct
 from careervp.monitoring import CrudMonitoring
 from careervp.naming_utils import NamingUtils
@@ -336,6 +328,20 @@ class ApiConstruct(Construct):
             ],
         )
 
+    def _build_common_layer(self) -> PythonLayerVersion:
+        return PythonLayerVersion(
+            self,
+            f"{self.id_}{constants.LAMBDA_LAYER_NAME}",
+            entry=constants.COMMON_LAYER_BUILD_FOLDER,
+            compatible_runtimes=[_lambda.Runtime.PYTHON_3_13],
+            removal_policy=RemovalPolicy.DESTROY,
+            description="Common layer for the service",
+            compatible_architectures=[_lambda.Architecture.X86_64],
+            bundling={
+                "platform": "linux/amd64",
+            },
+        )
+
     def _add_post_lambda_integration(
         self,
         api_resource: aws_apigateway.Resource,
@@ -377,6 +383,7 @@ class ApiConstruct(Construct):
             retry_attempts=0,
             timeout=Duration.seconds(constants.API_HANDLER_LAMBDA_TIMEOUT),
             memory_size=constants.API_HANDLER_LAMBDA_MEMORY_SIZE,
+            layers=[self._build_common_layer()],
             role=role,
             log_group=log_group,
             logging_format=_lambda.LoggingFormat.JSON,
