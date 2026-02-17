@@ -1,31 +1,50 @@
-"""Compatibility LLM client for CV tailoring tests."""
+"""LLM client using Anthropic API directly (not Bedrock)."""
 
 from __future__ import annotations
 
 import json
 import math
+import os
 import re
 from typing import Any, cast
 
 import boto3
+from anthropic import Anthropic
 
 from careervp.logic.cv_summarizer import CVSummarizer
 from careervp.logic.llm_cache import LLMResponseCache
 from careervp.models.cv import UserCV
 
-bedrock_client = boto3.client('bedrock-runtime')
+# Default model: Haiku for cost efficiency (per CLAUDE.md Decision 1.2)
+DEFAULT_MODEL = 'claude-haiku-4-5-20251001'
+DEFAULT_TEMPERATURE = 0.3
+
+
+def _get_anthropic_client() -> Anthropic:
+    """Get Anthropic client with API key from env or SSM."""
+    api_key = os.environ.get('ANTHROPIC_API_KEY')
+
+    if not api_key:
+        ssm_param = os.environ.get('ANTHROPIC_API_KEY_SSM_PARAM')
+        if ssm_param:
+            ssm_client = boto3.client('ssm')
+            response = ssm_client.get_parameter(Name=ssm_param, WithDecryption=True)
+            api_key = response['Parameter']['Value']
+
+    if not api_key:
+        raise ValueError('ANTHROPIC_API_KEY not found in environment or SSM')
+
+    return Anthropic(api_key=api_key)
 
 
 class LLMClient:
-    """Simple LLM client wrapper used by CV tailoring handler."""
+    """LLM client using Anthropic API directly."""
 
     _CV_SUMMARY_TRIGGER_TOKENS = 5000
     _CV_SECTION_PATTERN = re.compile(r'(?s)(# CV\s*\n)(.*?)(\n\n# |\Z)')
-    _DEFAULT_MODEL_NAME = 'claude-haiku-4-5-20251001'
-    _DEFAULT_TEMPERATURE = 0.3
 
-    def __init__(self, client: Any | None = None, cache: LLMResponseCache | None = None) -> None:
-        self._client = client or bedrock_client
+    def __init__(self, client: Anthropic | None = None, cache: LLMResponseCache | None = None) -> None:
+        self._client = client or _get_anthropic_client()
         self._cv_summarizer = CVSummarizer()
         self._cache = cache or LLMResponseCache()
 
@@ -34,62 +53,81 @@ class LLMClient:
         prompt: str,
         timeout: int = 300,
         cv: UserCV | None = None,
-        model_name: str = _DEFAULT_MODEL_NAME,
-        temperature: float = _DEFAULT_TEMPERATURE,
+        model_name: str = DEFAULT_MODEL,
+        temperature: float = DEFAULT_TEMPERATURE,
     ) -> dict[str, Any]:
-        """Invoke Bedrock model and return parsed JSON payload."""
+        """Invoke Anthropic API and return parsed JSON payload."""
         _ = timeout
-        optimized_prompt = prompt
-        if cv is not None:
-            optimized_prompt = self._build_optimized_prompt(prompt=prompt, cv=cv)
+        optimized_prompt = self._build_optimized_prompt(prompt, cv) if cv else prompt
 
-        cache_key: str | None = None
-        if self._cache.is_cacheable(prompt):
-            cache_key = self._cache.generate_cache_key(
-                prompt=optimized_prompt,
-                cv_id=cv.cv_id if cv else None,
-                model_name=model_name,
-                temperature=temperature,
-            )
-            # Cache-first strategy: avoid Bedrock invocation when an exact deterministic response exists.
-            cached_value = self._cache.get(cache_key)
-            if cached_value is not None:
-                try:
-                    return cast(dict[str, Any], json.loads(cached_value))
-                except json.JSONDecodeError:
-                    self._cache.delete(cache_key)
+        cache_key = self._get_cache_key(optimized_prompt, cv, model_name, temperature)
+        cached = self._check_cache(cache_key)
+        if cached is not None:
+            return cached
 
-        try:
-            response = self._client.invoke_model(
-                body=json.dumps({'prompt': optimized_prompt}),
-                modelId=model_name,
-            )
-            parsed_response = self._parse_response(response)
+        response = self._call_anthropic(optimized_prompt, model_name, temperature)
+        return self._handle_response(response, cache_key)
 
-            if cache_key is not None:
-                if self._is_error_response(parsed_response):
-                    self._cache.delete(cache_key)
-                else:
-                    # Store canonical JSON for stable cache reads across warm/cold starts.
-                    self._cache.set(cache_key, json.dumps(parsed_response, ensure_ascii=False))
-            return parsed_response
-        except Exception:
-            if cache_key is not None:
+    def _get_cache_key(
+        self,
+        prompt: str,
+        cv: UserCV | None,
+        model_name: str,
+        temperature: float,
+    ) -> str | None:
+        """Generate cache key if prompt is cacheable."""
+        if not self._cache.is_cacheable(prompt):
+            return None
+        return self._cache.generate_cache_key(
+            prompt=prompt,
+            cv_id=cv.cv_id if cv else None,
+            model_name=model_name,
+            temperature=temperature,
+        )
+
+    def _check_cache(self, cache_key: str | None) -> dict[str, Any] | None:
+        """Check cache and return cached value if found."""
+        if cache_key is None:
+            return None
+        cached_value = self._cache.get(cache_key)
+        if cached_value is not None:
+            try:
+                return cast(dict[str, Any], json.loads(cached_value))
+            except json.JSONDecodeError:
                 self._cache.delete(cache_key)
-            raise
+        return None
 
-    def _parse_response(self, response: dict[str, Any]) -> dict[str, Any]:
-        body = response.get('body')
-        read_body = getattr(body, 'read', None)
-        if callable(read_body):
-            payload = read_body()
-        else:
-            payload = body
-        if isinstance(payload, bytes):
-            payload = payload.decode('utf-8')
-        if isinstance(payload, str):
-            return cast(dict[str, Any], json.loads(payload))
-        return cast(dict[str, Any], payload)
+    def _call_anthropic(self, prompt: str, model_name: str, temperature: float) -> str:
+        """Call Anthropic API and return text content."""
+        response = self._client.messages.create(
+            model=model_name,
+            max_tokens=4096,
+            temperature=temperature,
+            messages=[{'role': 'user', 'content': prompt}],
+        )
+        for block in response.content:
+            if block.type == 'text':
+                return block.text
+        return ''
+
+    def _handle_response(self, text_content: str, cache_key: str | None) -> dict[str, Any]:
+        """Parse response and handle caching."""
+        parsed_response = self._try_parse_json(text_content)
+
+        if cache_key is not None:
+            if self._is_error_response(parsed_response):
+                self._cache.delete(cache_key)
+            else:
+                self._cache.set(cache_key, json.dumps(parsed_response, ensure_ascii=False))
+        return parsed_response
+
+    def _try_parse_json(self, text: str) -> dict[str, Any]:
+        """Try to parse response as JSON, fallback to text wrapper."""
+        try:
+            return cast(dict[str, Any], json.loads(text))
+        except json.JSONDecodeError:
+            # Return as JSON with text field
+            return {'text': text}
 
     @staticmethod
     def _is_error_response(payload: dict[str, Any]) -> bool:
