@@ -304,3 +304,54 @@ All 22 steps have been updated to comply with `prompt_optimization_spec.yaml`:
 
 ### Git Workflow Status (commit/PR/merge)
 - [ ] Pending execution in this run section below.
+
+---
+
+## 2026-02-17 Phase 2 Live Test + Deployment Verification (Auth/Route Hardening)
+
+### Scope
+- Updated live test contract to deployed routes (`/api/cv-tailoring`) in `docs/refactor/execution_runbook_2.md`.
+- Fixed payload contract in `docs/refactor/payloads/phase3_cv_tailoring_test.json`.
+- Fixed CV lookup DAL/schema compatibility in `src/backend/careervp/dal/cv_dal.py`.
+- Updated auth/user resolution fallback in `src/backend/careervp/handlers/cv_tailoring_handler.py`.
+- Added hard preflight script `src/backend/scripts/preflight_phase2_live_test.sh`.
+
+### Verification Commands
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+uv run ruff check careervp/handlers/cv_tailoring_handler.py careervp/dal/cv_dal.py
+uv run mypy careervp/handlers/cv_tailoring_handler.py careervp/dal/cv_dal.py --strict
+uv run pytest tests/unit/test_cv_summarizer.py tests/unit/test_llm_cache.py tests/unit/test_llm_client.py -v --tb=short
+```
+
+### Verification Results
+- `ruff`: pass
+- `mypy --strict`: pass
+- `pytest` subset: `28 passed, 2 warnings`
+
+### Deploy
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+rsync -a careervp .build/lambdas --exclude 'cdk.out' --exclude '.mypy_cache' --exclude '.venv' --exclude '*.log'
+npx cdk deploy CareerVpCrudDev --app=".venv/bin/python ../../infra/app.py" --require-approval=never
+```
+
+- Stack: `CareerVpCrudDev`
+- Deployment status: success
+- API output: `https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod/`
+
+### Hard Preflight (Post-Deploy)
+```bash
+cd /Users/yitzchak/Documents/dev/careervp
+./src/backend/scripts/preflight_phase2_live_test.sh
+```
+
+Result:
+- `PASS: payload contract looks valid`
+- `PASS: API reachable (GET /swagger -> HTTP 200)`
+- `PASS: CV exists for user in DynamoDB`
+- `PASS: auth/route probe returned HTTP 400`
+
+Conclusion:
+- Preflight is working against deployed design changes.
+- Auth probe does not return `401`.

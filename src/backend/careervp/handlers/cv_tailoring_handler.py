@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime
 from http import HTTPStatus
-from typing import Any, cast
+from typing import Any
 
 from careervp.dal.cv_dal import CVTable
 from careervp.logic.cv_tailoring import tailor_cv
@@ -56,7 +57,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
             headers,
         )
 
-    user_id = _get_user_id(event)
+    user_id = _get_user_id(event, body)
     if not user_id:
         return _response(
             HTTPStatus.UNAUTHORIZED,
@@ -162,13 +163,20 @@ def _fetch_and_tailor_cv(request: TailorCVRequest) -> Result[Any]:
     dal = CVTable()
     llm_client = LLMClient()
 
-    response = dal.get_item({'cv_id': request.cv_id})
+    response = dal.get_cv_item(user_id=request.user_id, cv_id=request.cv_id)
     item = response.get('Item') if isinstance(response, dict) else None
     if not item:
         return Result(
             success=False,
             error=f"CV with id '{request.cv_id}' not found",
             code=ResultCode.CV_NOT_FOUND,
+        )
+
+    if not isinstance(item, dict):
+        return Result(
+            success=False,
+            error='Invalid CV data format',
+            code=ResultCode.INTERNAL_ERROR,
         )
 
     if item.get('user_id') and request.user_id and item.get('user_id') != request.user_id:
@@ -178,7 +186,12 @@ def _fetch_and_tailor_cv(request: TailorCVRequest) -> Result[Any]:
             code=ResultCode.FORBIDDEN,
         )
 
-    cv_data = item.get('cv_data') or item
+    raw_cv_data = item.get('cv_data')
+    cv_data = dict(raw_cv_data) if isinstance(raw_cv_data, dict) else dict(item)
+    if request.cv_id and not cv_data.get('cv_id'):
+        cv_data['cv_id'] = request.cv_id
+    if request.user_id and not cv_data.get('user_id'):
+        cv_data['user_id'] = request.user_id
     master_cv = UserCV(**cv_data)
     baseline = create_fvs_baseline(master_cv)
 
@@ -192,9 +205,75 @@ def _fetch_and_tailor_cv(request: TailorCVRequest) -> Result[Any]:
     )
 
 
-def _get_user_id(event: dict[str, Any]) -> str | None:
-    user_id = event.get('requestContext', {}).get('authorizer', {}).get('claims', {}).get('sub')
-    return cast(str | None, user_id)
+def _get_user_id(event: dict[str, Any], body: dict[str, Any] | None = None) -> str | None:
+    authorizer_user_id = _get_user_id_from_authorizer(event)
+    if authorizer_user_id:
+        return authorizer_user_id
+
+    if _authorizer_disabled():
+        return _get_user_id_from_unprotected_request(event, body)
+    return None
+
+
+def _get_user_id_from_authorizer(event: dict[str, Any]) -> str | None:
+    request_context = event.get('requestContext', {})
+    authorizer = request_context.get('authorizer')
+    if not isinstance(authorizer, dict):
+        return None
+
+    claims = authorizer.get('claims')
+    claim_user_id = _extract_user_id_from_claims(claims)
+    if claim_user_id:
+        return claim_user_id
+
+    jwt_context = authorizer.get('jwt')
+    if isinstance(jwt_context, dict):
+        jwt_claims = jwt_context.get('claims')
+        jwt_user_id = _extract_user_id_from_claims(jwt_claims)
+        if jwt_user_id:
+            return jwt_user_id
+
+    for direct_key in ('user_id', 'principalId', 'principal_id'):
+        direct_value = authorizer.get(direct_key)
+        if isinstance(direct_value, str) and direct_value.strip():
+            return direct_value.strip()
+    return None
+
+
+def _authorizer_disabled() -> bool:
+    return os.getenv('AUTHORIZER_DISABLED', 'false').strip().lower() == 'true'
+
+
+def _get_user_id_from_unprotected_request(event: dict[str, Any], body: dict[str, Any] | None) -> str | None:
+    headers = event.get('headers')
+    if isinstance(headers, dict):
+        header_user_id = _get_header_case_insensitive(headers, 'x-user-id')
+        if header_user_id:
+            return header_user_id
+
+    if isinstance(body, dict):
+        body_user_id = body.get('user_id')
+        if isinstance(body_user_id, str) and body_user_id.strip():
+            return body_user_id.strip()
+    return None
+
+
+def _extract_user_id_from_claims(claims: Any) -> str | None:
+    if not isinstance(claims, dict):
+        return None
+    for claim_key in ('sub', 'user_id', 'cognito:username'):
+        claim_value = claims.get(claim_key)
+        if isinstance(claim_value, str) and claim_value.strip():
+            return claim_value.strip()
+    return None
+
+
+def _get_header_case_insensitive(headers: dict[str, Any], target_header: str) -> str | None:
+    normalized_target = target_header.lower()
+    for key, value in headers.items():
+        if isinstance(key, str) and key.lower() == normalized_target and isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
 
 
 def _status_from_code(code: str) -> int:

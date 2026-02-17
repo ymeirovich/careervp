@@ -252,74 +252,90 @@ Run AFTER CV Summarizer and LLM Cache implementation.
 cd /Users/yitzchak/Documents/dev/careervp
 
 # Configuration
-API_BASE="https://api.careervp.com/v1"  # or staging URL
-TOKEN="your-jwt-token"
+API_BASE="${API_BASE:-https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod}"
+TEST_USER_ID="${TEST_USER_ID:-test-user-e2e}"
+TOKEN="${TOKEN:-}"  # Optional in dev when AUTHORIZER_DISABLED=true
+
+# Optional: auto-discover deployed API base from AWS
+# API_ID=$(aws apigateway get-rest-apis --region us-east-1 --limit 500 \
+#   | jq -r '.items[] | select(.name=="careervp-core-api-dev") | .id' | head -n1)
+# API_BASE="https://${API_ID}.execute-api.us-east-1.amazonaws.com/prod"
+
+# If JWT auth is enabled in staging:
+# TOKEN=$(curl -s -X POST "$API_BASE/auth/login" -H "Content-Type: application/json" \
+#   -d '{"email":"<email>","password":"<password>"}' | jq -r '.access_token')
+
+# Run hard preflight checks first (env, route, auth mode, payload, DynamoDB CV item)
+bash src/backend/scripts/preflight_phase2_live_test.sh
 
 # ============================================================================
 # Test 1: CV Tailoring with CV Summarizer
 # ============================================================================
 # Payload: docs/refactor/payloads/phase3_cv_tailoring_test.json
 
-# 1. Generate tailored CV (triggers CV Summarizer if CV > 5000 tokens)
-curl -X POST "$API_BASE/cv-tailoring/generate" \
-  -H "Authorization: Bearer $TOKEN" \
+# 1. Generate tailored CV (deployed route: POST /api/cv-tailoring)
+AUTH_HEADER=()
+if [[ -n "$TOKEN" && "$TOKEN" != "your-jwt-token" ]]; then
+  AUTH_HEADER=(-H "Authorization: Bearer $TOKEN")
+fi
+
+START_TS=$(date +%s)
+RESPONSE=$(curl -sS -X POST "$API_BASE/api/cv-tailoring" \
   -H "Content-Type: application/json" \
-  -d @docs/refactor/payloads/phase3_cv_tailoring_test.json
+  -H "X-User-Id: $TEST_USER_ID" \
+  "${AUTH_HEADER[@]}" \
+  -d @docs/refactor/payloads/phase3_cv_tailoring_test.json)
+ELAPSED_1=$(( $(date +%s) - START_TS ))
 
-# Expected: 202 Accepted with tailoring_id
+echo "$RESPONSE" | jq '.'
+echo "Request duration: ${ELAPSED_1}s"
 
-# 2. Poll for completion
-TAILORING_ID="<from_step_1>"
-for i in {1..24}; do
-  RESULT=$(curl -s "$API_BASE/cv-tailoring/$TAILORING_ID" \
-    -H "Authorization: Bearer $TOKEN")
+SUCCESS=$(echo "$RESPONSE" | jq -r '.success // false')
+if [[ "$SUCCESS" != "true" ]]; then
+  echo "FAILED: tailoring request did not succeed"
+  exit 1
+fi
 
-  STATUS=$(echo $RESULT | jq -r '.status')
-
-  if [ "$STATUS" == "completed" ]; then
-    echo "SUCCESS: CV Tailored with summarization"
-    # Verify compression metadata in response
-    echo $RESULT | jq '.result.compression_metadata'
-    exit 0
-  fi
-  sleep 5
-done
-echo "TIMEOUT"
+# Verify compression metadata if available in response shape
+echo "$RESPONSE" | jq '.data.tailored_cv.metadata.compression_metadata // .data.tailored_cv.compression_metadata // .data.compression_metadata // "compression_metadata not present in response payload"'
 
 # Validation:
-# - Response includes compression_metadata.token_count
-# - compression_metadata.was_truncated = true for large CVs
-# - CV Summarizer reduced tokens by ~95%
+# - HTTP 200 with success=true (deployed route is synchronous)
+# - If metadata is exposed: compression_metadata.token_count exists
+# - For large CVs: compression_metadata.was_truncated should be true
 
 # ============================================================================
 # Test 2: LLM Cache Hit Verification
 # ============================================================================
 
 # 1. Submit same CV tailoring request twice
-REQUEST_1=$(curl -s -X POST "$API_BASE/cv-tailoring/generate" \
-  -H "Authorization: Bearer $TOKEN" \
+START_1=$(date +%s)
+REQUEST_1=$(curl -sS -X POST "$API_BASE/api/cv-tailoring" \
   -H "Content-Type: application/json" \
+  -H "X-User-Id: $TEST_USER_ID" \
+  "${AUTH_HEADER[@]}" \
   -d @docs/refactor/payloads/phase3_cv_tailoring_test.json)
+DUR_1=$(( $(date +%s) - START_1 ))
 
-TAILORING_ID_1=$(echo $REQUEST_1 | jq -r '.tailoring_id')
-
-# Wait for first request to complete
-sleep 30
+echo "First request status: $(echo "$REQUEST_1" | jq -r '.success // false')"
+echo "First request duration: ${DUR_1}s"
 
 # 2. Submit identical request
-REQUEST_2=$(curl -s -X POST "$API_BASE/cv-tailoring/generate" \
-  -H "Authorization: Bearer $TOKEN" \
+sleep 2
+START_2=$(date +%s)
+REQUEST_2=$(curl -sS -X POST "$API_BASE/api/cv-tailoring" \
   -H "Content-Type: application/json" \
+  -H "X-User-Id: $TEST_USER_ID" \
+  "${AUTH_HEADER[@]}" \
   -d @docs/refactor/payloads/phase3_cv_tailoring_test.json)
-
-TAILORING_ID_2=$(echo $REQUEST_2 | jq -r '.tailoring_id')
+DUR_2=$(( $(date +%s) - START_2 ))
 
 # 3. Compare response times
-echo "First request timing: $(echo $REQUEST_1 | jq -r '.timing // "N/A"')"
-echo "Second request (cached): $(echo $REQUEST_2 | jq -r '.timing // "N/A"')"
+echo "Second request status: $(echo "$REQUEST_2" | jq -r '.success // false')"
+echo "Second request duration: ${DUR_2}s"
 
 # Validation:
-# - Second request should be faster (cache hit)
+# - Second request duration should be <= first request duration (possible cache hit)
 # - Check CloudWatch logs for "cache_hit=true"
 
 # ============================================================================
