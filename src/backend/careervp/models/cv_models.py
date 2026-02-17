@@ -1,7 +1,7 @@
 """Backward-compatible CV model imports.
 
-Canonical CV models live in ``careervp.models.cv``.
-This module remains for compatibility and re-exports those types.
+This module is retained for compatibility while canonical CV models live in
+careervp.models.cv.
 """
 
 from careervp.models.cv import (
