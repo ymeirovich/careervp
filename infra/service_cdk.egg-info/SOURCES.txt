@@ -3,8 +3,10 @@ careervp/__init__.py
 careervp/api_construct.py
 careervp/api_db_construct.py
 careervp/constants.py
+careervp/dynamodb_stack.py
 careervp/monitoring.py
 careervp/naming_utils.py
+careervp/s3_stack.py
 careervp/service_stack.py
 careervp/utils.py
 careervp/waf_construct.py

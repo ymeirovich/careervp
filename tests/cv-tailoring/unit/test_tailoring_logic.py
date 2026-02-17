@@ -1,18 +1,18 @@
 """Tests for CV tailoring logic."""
 
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 from careervp.logic.cv_tailoring import (
-    tailor_cv,
-    extract_job_requirements,
-    calculate_relevance_scores,
-    filter_cv_sections_by_relevance,
     build_tailoring_prompt,
+    calculate_relevance_scores,
+    extract_job_requirements,
+    filter_cv_sections_by_relevance,
     parse_llm_response,
+    tailor_cv,
     validate_tailored_output,
 )
-from careervp.models.result import Result, ResultCode
 from careervp.models.cv import UserCV
+from careervp.models.result import Result, ResultCode
 
 
 def test_tailor_cv_success(
@@ -37,6 +37,33 @@ def test_tailor_cv_success(
     assert len(result.data.changes_made) > 0
     assert result.data.average_relevance_score >= 0.0
     assert result.data.average_relevance_score <= 1.0
+
+
+def test_tailor_cv_forwards_cv_for_prompt_compression(
+    sample_master_cv, sample_job_description, mock_dal_handler
+):
+    """Ensure tailoring passes full CV to LLM client so summarization can trigger."""
+    mock_llm = Mock()
+    mock_llm.generate = AsyncMock(
+        return_value={
+            "professional_summary": "Tailored summary",
+            "work_experience": [],
+            "skills": [],
+            "changes_made": [],
+        }
+    )
+
+    result = tailor_cv(
+        master_cv=sample_master_cv,
+        job_description=sample_job_description,
+        dal=mock_dal_handler,
+        llm_client=mock_llm,
+    )
+
+    assert result.success is True
+    _, kwargs = mock_llm.generate.call_args
+    assert kwargs["cv"] is sample_master_cv
+    assert "prompt" in kwargs
 
 
 def test_tailor_cv_calculates_relevance_scores(
