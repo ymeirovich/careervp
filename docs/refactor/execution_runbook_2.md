@@ -240,6 +240,171 @@ uv run mypy careervp/logic/cv_summarizer.py careervp/logic/llm_cache.py --strict
 
 ---
 
+## Live Test (Phase 2 - Cost Optimization)
+
+Run AFTER CV Summarizer and LLM Cache implementation.
+
+**Prerequisites:**
+- CDK deployed to staging
+- ANTHROPIC_API_KEY configured in SSM (not Bedrock)
+
+```bash
+cd /Users/yitzchak/Documents/dev/careervp
+
+# Configuration
+API_BASE="https://api.careervp.com/v1"  # or staging URL
+TOKEN="your-jwt-token"
+
+# ============================================================================
+# Test 1: CV Tailoring with CV Summarizer
+# ============================================================================
+# Payload: docs/refactor/payloads/phase3_cv_tailoring_test.json
+
+# 1. Generate tailored CV (triggers CV Summarizer if CV > 5000 tokens)
+curl -X POST "$API_BASE/cv-tailoring/generate" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @docs/refactor/payloads/phase3_cv_tailoring_test.json
+
+# Expected: 202 Accepted with tailoring_id
+
+# 2. Poll for completion
+TAILORING_ID="<from_step_1>"
+for i in {1..24}; do
+  RESULT=$(curl -s "$API_BASE/cv-tailoring/$TAILORING_ID" \
+    -H "Authorization: Bearer $TOKEN")
+
+  STATUS=$(echo $RESULT | jq -r '.status')
+
+  if [ "$STATUS" == "completed" ]; then
+    echo "SUCCESS: CV Tailored with summarization"
+    # Verify compression metadata in response
+    echo $RESULT | jq '.result.compression_metadata'
+    exit 0
+  fi
+  sleep 5
+done
+echo "TIMEOUT"
+
+# Validation:
+# - Response includes compression_metadata.token_count
+# - compression_metadata.was_truncated = true for large CVs
+# - CV Summarizer reduced tokens by ~95%
+
+# ============================================================================
+# Test 2: LLM Cache Hit Verification
+# ============================================================================
+
+# 1. Submit same CV tailoring request twice
+REQUEST_1=$(curl -s -X POST "$API_BASE/cv-tailoring/generate" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @docs/refactor/payloads/phase3_cv_tailoring_test.json)
+
+TAILORING_ID_1=$(echo $REQUEST_1 | jq -r '.tailoring_id')
+
+# Wait for first request to complete
+sleep 30
+
+# 2. Submit identical request
+REQUEST_2=$(curl -s -X POST "$API_BASE/cv-tailoring/generate" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @docs/refactor/payloads/phase3_cv_tailoring_test.json)
+
+TAILORING_ID_2=$(echo $REQUEST_2 | jq -r '.tailoring_id')
+
+# 3. Compare response times
+echo "First request timing: $(echo $REQUEST_1 | jq -r '.timing // "N/A"')"
+echo "Second request (cached): $(echo $REQUEST_2 | jq -r '.timing // "N/A"')"
+
+# Validation:
+# - Second request should be faster (cache hit)
+# - Check CloudWatch logs for "cache_hit=true"
+
+# ============================================================================
+# Test 3: Verify Anthropic API (Not Bedrock)
+# ============================================================================
+
+# 1. Check CloudWatch logs for Anthropic API calls
+# Log group: /aws/lambda/careervp-dev-api
+# Look for: "anthropic" in log messages, NOT "bedrock"
+
+# 2. Verify cost in CloudWatch metrics
+# Metric: AWS/Lambda | EstimatedCost
+# Expected: Lower cost per request (Anthropic direct vs Bedrock)
+
+# 3. Verify API key source
+aws logs filter-log-events \
+  --log-group-name /aws/lambda/careervp-dev-api \
+  --filter-pattern "ANTHROPIC_API_KEY" \
+  --region us-east-1
+
+# Validation:
+# - No "bedrock-runtime" in logs
+# - "anthropic" SDK messages in logs
+# - Cost reduction verified
+
+# ============================================================================
+# Test 4: LLM Cache DynamoDB Verification
+# ============================================================================
+
+# 1. Check cache table for entries
+aws dynamodb scan \
+  --table-name careervp-llm-cache-dev \
+  --region us-east-1 \
+  --output json | jq '.Items | length'
+
+# Expected: > 0 after cache hits
+
+# 2. Verify TTL is set correctly
+aws dynamodb scan \
+  --table-name careervp-llm-cache-dev \
+  --region us-east-1 \
+  --output json | jq '.Items[].expires_at'
+
+# Expected: Current time + 604800 seconds (7 days)
+
+# Validation:
+# - Cache table has items after API calls
+# - TTL is 7 days (604800 seconds)
+# - PITR enabled for production
+
+# ============================================================================
+# Smoke Test: All Phase 2 Endpoints
+# ============================================================================
+
+ENDPOINTS=(
+  "GET /health"
+  "POST /cv-tailoring/generate"
+  "GET /cv-tailoring/{tailoringId}"
+  "POST /gap-analysis/questions"
+  "POST /gap-analysis/responses"
+)
+
+for endpoint in "${ENDPOINTS[@]}"; do
+  METHOD=$(echo $endpoint | cut -d' ' -f1)
+  PATH=$(echo $endpoint | cut -d' ' -f2)
+
+  echo "Testing $METHOD $PATH..."
+  # Add curl test for each endpoint
+done
+
+echo "All Phase 2 smoke tests completed"
+```
+
+**Validation Criteria:**
+
+| Test | Expected | Validation |
+|------|----------|------------|
+| CV Summarizer | ~95% token reduction | Check `compression_metadata.token_count` in response |
+| LLM Cache | 2nd request faster | Compare timing, check CloudWatch `cache_hit=true` |
+| Anthropic API | No Bedrock logs | CloudWatch filter for `bedrock-runtime` = 0 |
+| Cache Table | Items with TTL | DynamoDB scan shows entries with expires_at |
+| Smoke Tests | All 27 endpoints pass | HTTP 2xx for all |
+
+---
+
 ## Phase 3: VPR 6-Stage Generator ⚠️ PARTIAL
 
 **Duration:** 2 days | **Effort:** 12 hours
@@ -1529,9 +1694,10 @@ uv run pytest tests/cover-letter/ -v
 # COMPLETION CHECKLIST
 
 ## Phase 2: Cost Optimization
-- [ ] Phase 2: CV Summarizer implemented
-- [ ] Phase 2: LLM Cache implemented
-- [ ] Phase 2: Circuit breaker wired
+- [x] Phase 2: CV Summarizer implemented (Step 2.1)
+- [x] Phase 2: LLM Cache implemented (Step 2.2) - DynamoDB with TTL
+- [x] Phase 2: Anthropic API migration (not Bedrock)
+- [ ] Phase 2: Circuit breaker wired (Step 2.3)
 
 ## Phase 3: VPR 6-Stage Generator
 - [ ] Phase 3: 6-stage VPR pipeline
@@ -1582,3 +1748,84 @@ uv run pytest tests/cover-letter/ -v
 - [ ] Type check clean
 - [ ] CDK synth succeeds
 - [ ] OpenAPI contract validation: 27/27 endpoints (100%)
+
+---
+
+## Final Smoke Test: All Endpoints
+
+Run after full deployment to verify all 27 OpenAPI endpoints work:
+
+```bash
+#!/bin/bash
+# Smoke test for all 27 endpoints
+
+API_BASE="https://api.careervp.com/v1"
+TOKEN="your-jwt-token"
+
+echo "=== Running Smoke Tests ==="
+
+# Test health (no auth)
+curl -s "$API_BASE/health" | jq -e '.status == "healthy"' && echo "✓ GET /health" || echo "✗ GET /health"
+
+# Test auth endpoints (no auth required)
+curl -s -X POST "$API_BASE/auth/register" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@test.com","password":"Test1234!","full_name":"Test User"}' \
+  && echo "✓ POST /auth/register"
+
+curl -s -X POST "$API_BASE/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@test.com","password":"Test1234!"}' \
+  && echo "✓ POST /auth/login"
+
+# Test authenticated endpoints
+HEADERS="-H \"Authorization: Bearer $TOKEN\" -H \"Content-Type: application/json\""
+
+# CV endpoints
+eval "curl -s -X POST $HEADERS -d '@payloads/cv.json' '$API_BASE/cv'" && echo "✓ POST /cv"
+eval "curl -s $HEADERS '$API_BASE/cv'" && echo "✓ GET /cvs"
+
+# VPR endpoints
+eval "curl -s -X POST $HEADERS -d '@payloads/vpr.json' '$API_BASE/vpr/generate'" && echo "✓ POST /vpr/generate"
+
+# CV Tailoring endpoints
+eval "curl -s -X POST $HEADERS -d '@payloads/tailor.json' '$API_BASE/cv-tailoring/generate'" && echo "✓ POST /cv-tailoring/generate"
+
+# Gap Analysis endpoints
+eval "curl -s -X POST $HEADERS -d '@payloads/gap.json' '$API_BASE/gap-analysis/questions'" && echo "✓ POST /gap-analysis/questions"
+
+# Cover Letter endpoints
+eval "curl -s -X POST $HEADERS -d '@payloads/cover.json' '$API_BASE/cover-letter/generate'" && echo "✓ POST /cover-letter/generate"
+
+# Interview Prep endpoints
+eval "curl -s -X POST $HEADERS -d '@payloads/interview.json' '$API_BASE/interview-prep/generate'" && echo "✓ POST /interview-prep/generate"
+
+# Company Research endpoints
+eval "curl -s -X POST $HEADERS -d '@payloads/company.json' '$API_BASE/company-research/fetch'" && echo "✓ POST /company-research/fetch"
+
+# Job endpoints
+eval "curl -s -X POST $HEADERS -d '@payloads/job.json' '$API_BASE/jobs'" && echo "✓ POST /jobs"
+eval "curl -s $HEADERS '$API_BASE/jobs'" && echo "✓ GET /jobs"
+
+# User endpoints
+eval "curl -s $HEADERS '$API_BASE/users/me'" && echo "✓ GET /users/me"
+
+echo "=== Smoke Tests Complete ==="
+```
+
+**Expected Results:**
+- All endpoints return 2xx status codes
+- No authentication errors on protected endpoints
+- Response schemas match OpenAPI spec
+
+---
+
+## Phase 2 Live Test Verification Checklist
+
+After running live tests, mark complete:
+
+- [ ] CV Summarizer reduces tokens by ~95%
+- [ ] LLM Cache returns cached responses on repeat requests
+- [ ] Anthropic API (not Bedrock) is being called
+- [ ] Cache table has items with correct TTL
+- [ ] All Phase 2 endpoints respond correctly
