@@ -239,3 +239,68 @@ All 22 steps have been updated to comply with `prompt_optimization_spec.yaml`:
   - Result: `Success: no issues found in 1 source file`
 - [x] Lint passes: `ruff check careervp/logic/llm_client.py`
   - Result: `All checks passed`
+
+## Step 2.3 Re-run (2026-02-17): Wire Circuit Breaker into LLMClient
+
+### Implementation Completed
+- Updated `src/backend/careervp/logic/circuit_breaker.py`
+  - Added context-manager support (`__enter__` / `__exit__`) so calls can be wrapped with `with circuit_breaker:`.
+  - Added `CircuitBreakerBlockedError` carrying `retry_after` metadata for OPEN-state fast-fail behavior.
+  - Added optional `failure_window_seconds` to support threshold evaluation over a bounded time window.
+  - Added `expected_exception` configuration so only configured failure types increment circuit failure counters.
+  - Added `retry_after_seconds()` helper and exposed retry metadata in `get_state()`.
+- Updated `src/backend/careervp/logic/llm_client.py`
+  - Imported and configured `CircuitBreaker` for LLM calls:
+    - `failure_threshold=5`
+    - `failure_window_seconds=60.0`
+    - `recovery_timeout_seconds=30.0`
+    - `expected_exception=BedrockInvocationError`
+  - Added `BedrockInvocationError` and `CircuitBreakerOpen(retry_after=...)` exceptions.
+  - Wrapped provider invocation in `with self._circuit_breaker:`.
+  - Added OPEN-state graceful degradation: if circuit is open, re-check cache and return cached response when available; otherwise raise `CircuitBreakerOpen` with `retry_after`.
+  - Added inline comments documenting circuit-open fallback behavior.
+- Updated `src/backend/tests/unit/test_llm_client.py`
+  - Added `test_circuit_breaker_opens_after_threshold`.
+  - Added `test_circuit_breaker_half_open_after_timeout`.
+  - Added `test_circuit_breaker_closed_after_success`.
+  - Added `test_llm_client_returns_fallback_on_open_circuit`.
+
+### Validation Criteria
+- [x] Circuit opens after 5 consecutive failures
+  - Verified by `TestLLMClientCircuitBreaker::test_circuit_breaker_opens_after_threshold`
+- [x] Circuit half-open after 30-second recovery timeout
+  - Verified by `TestLLMClientCircuitBreaker::test_circuit_breaker_half_open_after_timeout`
+- [x] Circuit closes after successful call in half-open state
+  - Verified by `TestLLMClientCircuitBreaker::test_circuit_breaker_closed_after_success`
+- [x] Fallback behavior works when circuit is open
+  - Verified by `TestLLMClientCircuitBreaker::test_llm_client_returns_fallback_on_open_circuit`
+- [x] Unit tests pass: `pytest tests/unit/test_llm_client.py -v`
+  - Result: `19 passed, 2 warnings`
+- [x] Type check passes: `mypy careervp/logic/llm_client.py --strict`
+  - Result: `Success: no issues found in 1 source file`
+- [x] Lint passes: `ruff check careervp/logic/llm_client.py`
+  - Result: `All checks passed`
+
+## Phase 2 Verification Re-run (2026-02-17)
+
+### Runbook Source
+- Requested file `docs/refactor/execution_runbook_1.md` is not present in this repository.
+- Executed the `### Phase 2 Verification` command block from `docs/refactor/execution_runbook_2.md`.
+
+### Commands Executed
+- `uv run pytest tests/unit/test_cv_summarizer.py -v --tb=short`
+  - Result: `4 passed`
+- `uv run pytest tests/unit/test_llm_cache.py -v --tb=short`
+  - Result: `5 passed`
+- `uv run pytest tests/unit/test_llm_client.py -v --tb=short`
+  - Result: `19 passed, 2 warnings`
+- `uv run ruff check careervp/logic/cv_summarizer.py careervp/logic/llm_cache.py`
+  - Result: `All checks passed`
+- `uv run mypy careervp/logic/cv_summarizer.py careervp/logic/llm_cache.py --strict`
+  - Result: `Success: no issues found in 2 source files`
+
+### Completion Status
+- [x] Phase 2 verification task complete: all commands in the Phase 2 Verification block passed successfully.
+
+### Git Workflow Status (commit/PR/merge)
+- [ ] Pending execution in this run section below.
