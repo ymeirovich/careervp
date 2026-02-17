@@ -1,0 +1,400 @@
+# -*- mode: yaml; -*-
+# =============================================================================
+# CDK Code Specification
+# Machine-readable specification for AWS CDK architecture rules
+# Used to validate CDK code and prevent deployment failures
+# =============================================================================
+
+spec:
+  name: "CDK Code Compliance"
+  version: "1.0"
+  role: "AWS Infrastructure Architect"
+  mission: "Validate CDK code against AWS best practices, prevent deployment failures, and ensure cost-effective, secure architecture"
+
+input:
+  description: "CDK Python code to validate"
+  requirement: "Must include complete CDK construct or stack definition"
+
+# =============================================================================
+# VALIDATION RULES
+# =============================================================================
+
+rules:
+  # ---------------------------------------------------------------------------
+  # LAMBDA SIZE AND PACKAGING RULES
+  # ---------------------------------------------------------------------------
+  - id: LAMBDA_SIZE_001
+    category: lambda
+    severity: critical
+    name: "Lambda package size must not exceed 250MB (zipped)"
+    description: |
+      AWS Lambda deployment package size limits:
+      - 250MB (zipped) for upload
+      - 50MB (direct upload)
+      - 10GB (via Lambda layer)
+    check: |
+      1. Calculate deployment package size after build
+      2. If > 50MB, use Lambda layers for dependencies
+      3. If > 250MB, refactor into multiple functions or use containers
+    remediation: |
+      - Use Lambda layers for common dependencies (e.g., boto3, pandas)
+      - Use Docker-based builds with multi-stage builds
+      - Remove unnecessary dependencies
+      - Use slim Python wheels where available
+
+  - id: LAMBDA_SIZE_002
+    category: lambda
+    severity: critical
+    name: "Lambda layers must not exceed 10GB"
+    description: "Lambda layer size limit is 10GB (expanded). Keep layers lean."
+    check: "Verify layer size in AWS Console or via CLI after deployment"
+
+  - id: LAMBDA_SIZE_003
+    category: lambda
+    severity: high
+    name: "Use Lambda layers for shared dependencies"
+    description: |
+      Reduce Lambda package size by extracting common dependencies into layers.
+      Recommended layers:
+      - AWS SDK (boto3) - already available in Lambda runtime
+      - Lambda Powertools
+      - Common business logic libraries
+    implementation: |
+      from aws_cdk.aws_lambda_python_alpha import PythonLayerVersion
+      layer = PythonLayerVersion(
+          self, "CommonLayer",
+          entry="path/to/layer",
+          compatible_runtimes=[_lambda.Runtime.PYTHON_3_13]
+      )
+      lambda_function.add_layers(layer)
+
+  # ---------------------------------------------------------------------------
+  # LAMBDA CONFIGURATION RULES
+  # ---------------------------------------------------------------------------
+  - id: LAMBDA_CONFIG_001
+    category: lambda
+    severity: high
+    name: "Lambda memory allocation must be cost-effective"
+    description: |
+      Memory and CPU are proportionally linked in Lambda.
+      Formula: 1 vCPU per 1769 MB (up to 6 vCPUs)
+    recommendation: |
+      - Start with 512MB for simple functions
+      - Increase to 1024MB+ for I/O-bound (LLM calls, DB ops)
+      - Use 1536MB or higher for compute-heavy tasks
+      - Set timeout appropriately: 30s for simple, 120s for LLM calls
+
+  - id: LAMBDA_CONFIG_002
+    category: lambda
+    severity: medium
+    name: "Lambda ephemeral storage must not exceed 10GB"
+    description: "/tmp storage default is 512MB, max is 10GB"
+    check: "Verify ephemeral_storage configuration if /tmp is used heavily"
+
+  - id: LAMBDA_CONFIG_003
+    category: lambda
+    severity: high
+    name: "Enable Lambda tracing for production"
+    description: "X-Ray tracing helps debug production issues"
+    implementation: |
+      lambda_function = _lambda.Function(
+          self, "Function",
+          tracing=_lambda.Tracing.ACTIVE,  # Enable X-Ray
+          # ...
+      )
+
+  # ---------------------------------------------------------------------------
+  # IAM AND SECURITY RULES
+  # ---------------------------------------------------------------------------
+  - id: IAM_001
+    category: security
+    severity: critical
+    name: "Lambda execution role must follow least privilege"
+    description: |
+      Do not use wildcard (*) in IAM policies.
+      Specify exact resource ARNs.
+    anti_pattern: |
+      # BAD
+      iam.PolicyStatement(
+          effect=iam.Effect.ALLOW,
+          actions=["s3:*"],
+          resources=["*"]
+      )
+    pattern: |
+      # GOOD
+      iam.PolicyStatement(
+          effect=iam.Effect.ALLOW,
+          actions=["s3:GetObject", "s3:PutObject"],
+          resources=[bucket.arn_for_objects("*")]
+      )
+
+  - id: IAM_002
+    category: security
+    severity: critical
+    name: "Never hardcode secrets in Lambda environment variables"
+    description: |
+      Use SSM Parameter Store or Secrets Manager for sensitive data.
+    anti_pattern: |
+      # BAD
+      environment={"API_KEY": "sk-xxx"}
+    pattern: |
+      # GOOD
+      environment={
+          "API_KEY": ssm.StringParameter.from_secure_string_parameter_attributes(
+              self, "ApiKey",
+              parameter_name="/myapp/api-key"
+          ).string_value
+      }
+
+  # ---------------------------------------------------------------------------
+  # API GATEWAY RULES
+  # ---------------------------------------------------------------------------
+  - id: APIGW_001
+    category: apigateway
+    severity: high
+    name: "API Gateway timeout must match Lambda timeout"
+    description: "API Gateway timeout (max 30s) should not exceed Lambda timeout"
+    check: "Verify integration_timeout < Lambda timeout"
+
+  - id: APIGW_002
+    category: apigateway
+    severity: medium
+    name: "Enable API Gateway caching appropriately"
+    description: "Use caching for GET requests with immutable data"
+    recommendation: "Add cache parameters for read-only endpoints"
+
+  # ---------------------------------------------------------------------------
+  # DYNAMODB RULES
+  # ---------------------------------------------------------------------------
+  - id: DDB_001
+    category: dynamodb
+    severity: high
+    name: "DynamoDB on-demand mode for variable traffic"
+    description: |
+      Use PAY_PER_REQUEST billing for variable/unpredictable traffic.
+      Use PROVISIONED for predictable, high-volume workloads.
+    implementation: |
+      from aws_cdk import aws_dynamodb as dynamodb
+      table = dynamodb.TableV2(
+          self, "Table",
+          billing=dynamodb.Billing.on_demand()  # or .provisioned()
+      )
+
+  - id: DDB_002
+    category: dynamodb
+    severity: high
+    name: "Enable point-in-time recovery for production"
+    description: "PITR protects against accidental writes/deletes"
+    implementation: |
+      table = dynamodb.TableV2(
+          self, "Table",
+          point_in_time_recovery=True  # for production
+      )
+
+  # ---------------------------------------------------------------------------
+  # S3 RULES
+  # ---------------------------------------------------------------------------
+  - id: S3_001
+    category: s3
+    severity: critical
+    name: "Block public access to S3 buckets"
+    description: "All S3 buckets must have public access blocked by default"
+    implementation: |
+      bucket = s3.Bucket(
+          self, "Bucket",
+          block_public_access=s3.BlockPublicAccess.BLOCK_ALL
+      )
+
+  - id: S3_002
+    category: s3
+    severity: high
+    name: "Enable S3 versioning for data protection"
+    description: "Versioning protects against accidental overwrites/deletes"
+    recommendation: "Enable versioning for production buckets"
+
+  # ---------------------------------------------------------------------------
+  # CDK SYNTHESIS RULES
+  # ---------------------------------------------------------------------------
+  - id: CDK_001
+    category: cdk
+    severity: critical
+    name: "CDK synth must succeed before deployment"
+    description: "cdk synth validates CloudFormation template generation"
+    command: "npx cdk synth --app='python app.py'"
+    validation: |
+      - Exit code must be 0
+      - No errors in output
+      - Template size < 1MB (CloudFormation limit)
+
+  - id: CDK_002
+    category: cdk
+    severity: high
+    name: "Use CDK Guard for policy validation"
+    description: "Validate CloudFormation against security/compliance rules"
+    implementation: |
+      # Add cfn-guard validation in CI/CD
+      # See: .github/scripts/cfn-guard.sh
+
+  - id: CDK_003
+    category: cdk
+    severity: medium
+    name: "Enable CDK Nag for security scanning"
+    description: "CDK Nag provides security/compliance checks"
+    implementation: |
+      from cdk_nag import AwsSolutionsChecks, NagSuppressions
+      Aspects.of(stack).add(AwsSolutionsChecks())
+
+  # ---------------------------------------------------------------------------
+  # DEPLOYMENT SAFETY RULES
+  # ---------------------------------------------------------------------------
+  - id: DEPLOY_001
+    category: deployment
+    severity: critical
+    name: "CloudFormation stack state guard before deploy"
+    description: "Check for stuck changesets or IN_PROGRESS state before deploy"
+    implementation: |
+      # Use cfn-guard script
+      .github/scripts/cfn-guard.sh "$STACK_NAME" "$AWS_REGION"
+
+  - id: DEPLOY_002
+    category: deployment
+    severity: high
+    name: "Use change sets for production deployments"
+    description: "Review changes before applying in production"
+    command: |
+      aws cloudformation create-change-set \
+        --stack-name $STACK_NAME \
+        --template-body file://cdk.out/*.template.json \
+        --change-set-type UPDATE
+
+  - id: DEPLOY_003
+    category: deployment
+    severity: medium
+    name: "Wait for stack stability after deployment"
+    description: "Verify stack reaches UPDATE_COMPLETE before testing"
+    implementation: |
+      aws cloudformation wait stack-update-complete \
+        --stack-name $STACK_NAME
+
+  # ---------------------------------------------------------------------------
+  # COST OPTIMIZATION RULES
+  # ---------------------------------------------------------------------------
+  - id: COST_001
+    category: cost
+    severity: medium
+    name: "Use provisioned concurrency sparingly"
+    description: |
+      Provisioned concurrency keeps functions warm but has hourly cost.
+      Use only for latency-sensitive, high-traffic endpoints.
+    recommendation: |
+      - Use provisioned concurrency for < 5 critical endpoints
+      - Use async invocation with SQS for background processing
+      - Set appropriate scaling for Lambda
+
+  - id: COST_002
+    category: cost
+    severity: low
+    name: "Enable Lambda SnapStart for Java functions"
+    description: "SnapStart reduces Lambda cold start time for Java (up to 90%)"
+    applicable: "Java Lambda functions only"
+
+# =============================================================================
+# VALIDATION CHECKLIST
+# =============================================================================
+
+checklist:
+  pre_deploy:
+    - name: "Run cdk synth"
+      command: "npx cdk synth --app='python app.py'"
+      required: true
+    - name: "Check for stuck CloudFormation stacks"
+      command: "aws cloudformation list-stacks --stack-status-filter UPDATE_IN_PROGRESS"
+      required: true
+    - name: "Verify Lambda package size"
+      command: "du -sh .build/lambdas/"
+      threshold: "< 250MB"
+      required: true
+
+  pre_merge:
+    - name: "CDK unit tests pass"
+      command: "pytest tests/infrastructure"
+      required: true
+    - name: "CDK synth succeeds"
+      command: "npx cdk synth"
+      required: true
+    - name: "Security scan (cdk-nag)"
+      command: "cdk-nag scan --app='python app.py'"
+      required: false
+
+  post_deploy:
+    - name: "Wait for stack stability"
+      command: "aws cloudformation wait stack-update-complete"
+      required: true
+    - name: "Run smoke tests"
+      command: "make smoke-test"
+      required: true
+    - name: "Verify Lambda functions are running"
+      command: "aws lambda list-functions --query 'Functions[].FunctionName'"
+      required: true
+
+# =============================================================================
+# COMMON FAILURES AND FIXES
+# =============================================================================
+
+common_failures:
+  - error: "Lambda package too large"
+    symptom: "ValidationError: Unzipped size must be under 262144000 bytes"
+    fixes:
+      - "Use Lambda layers for dependencies"
+      - "Remove unused dependencies from requirements.txt"
+      - "Use slim Docker images"
+      - "Exclude test files from build"
+
+  - error: "Stack is in UPDATE_IN_PROGRESS state"
+    symptom: "CloudFormation cannot update stack while already updating"
+    fixes:
+      - "Wait for current update to complete"
+      - "Use cfn-guard script to check state"
+      - "Cancel stuck changesets"
+
+  - error: "Lambda memory size exceeds maximum"
+    symptom: "Value for parameter MemorySize is out of range"
+    fixes:
+      - "Memory must be between 128MB and 10240MB"
+      - "Check constants.API_HANDLER_LAMBDA_MEMORY_SIZE value"
+
+  - error: "OIDC role session name too long"
+    symptom: "InvalidClientTokenId - The security token included in the request is invalid"
+    fixes:
+      - "Role session name must be <= 64 characters"
+      - "Use shorter names: deploy-dev-sha[:8] instead of full SHA"
+
+  - error: "API Gateway route already exists"
+    symptom: "ConflictException: Route already exists"
+    fixes:
+      - "Use CDK CloudFormation logical ID to force replacement"
+      - "Delete stack and recreate for major API changes"
+
+# =============================================================================
+# OUTPUT FORMAT
+# =============================================================================
+
+output:
+  format:
+    summary:
+      - validation_passed: true/false
+      - critical_issues: number
+      - warnings: number
+      - recommendations: [list of suggestions]
+
+    issues:
+      - rule_id: string
+        severity: "critical|high|medium|low"
+        message: string
+        location: "file:line"
+        fix: string
+
+    deployment_status:
+      - stack_name: string
+        status: "CREATE_COMPLETE|UPDATE_COMPLETE|FAILED"
+        outputs: {key: value}

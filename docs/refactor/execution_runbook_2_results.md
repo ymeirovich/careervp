@@ -109,3 +109,30 @@ All 22 steps have been updated to comply with `prompt_optimization_spec.yaml`:
   - Result: `Success: no issues found in 1 source file`
 - [x] Lint passes: `ruff check careervp/logic/cv_summarizer.py`
   - Result: `All checks passed`
+
+### Step 11.1: CDK Code Specification (2026-02-17)
+
+- [x] Created cdk_code_spec.yaml
+
+#### Implementation Completed
+- Created `docs/refactor/specs/cdk_code_spec.yaml`
+  - Machine-readable specification for AWS CDK architecture rules
+  - Validation rules for Lambda size limits (250MB zipped, 10GB layers)
+  - Lambda configuration best practices (memory, timeout, tracing)
+  - IAM security rules (least privilege, no hardcoded secrets)
+  - API Gateway configuration rules
+  - DynamoDB and S3 best practices
+  - CDK synthesis and deployment safety rules
+  - Cost optimization guidelines
+  - Common failures and fixes section
+  - Pre-deploy, pre-merge, and post-deploy checklists
+
+#### Validation Criteria
+- [x] Spec file created with proper YAML structure
+- [x] Includes Lambda size rules (critical severity)
+- [x] Includes Lambda layer configuration guidance
+- [x] Includes IAM security rules
+- [x] Includes CDK synthesis validation rules
+- [x] Includes deployment safety rules
+- [x] Includes common failure patterns and fixes
+- [x] Includes validation checklists

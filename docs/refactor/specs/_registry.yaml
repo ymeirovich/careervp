@@ -200,6 +200,13 @@ specs:
     phases: [0, 8]
     status: "CREATED"
 
+  - file: "cdk_code_spec.yaml"
+    source: "Workflow failure remediation - Lambda size, CDK deploy"
+    category: "infrastructure"
+    phases: [0, 10]
+    status: "CREATED"
+    note: "CDK code compliance validation rules for Lambda size limits, IAM security, CDK synth, deployment safety"
+
   - file: "storage_contract_spec.yaml"
     source: "OpenAPI + deployed infra key model reconciliation"
     category: "storage_contract"
