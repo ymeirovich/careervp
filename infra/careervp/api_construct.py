@@ -383,7 +383,9 @@ class ApiConstruct(Construct):
             retry_attempts=0,
             timeout=Duration.seconds(constants.API_HANDLER_LAMBDA_TIMEOUT),
             memory_size=constants.API_HANDLER_LAMBDA_MEMORY_SIZE,
-            layers=[self._build_common_layer()],
+            # Note: Common layer removed to stay under 250MB Lambda size limit
+            # See commit 8dd795e for details - layer caused 283MB > 250MB limit
+            # layers=[self._build_common_layer()],
             role=role,
             log_group=log_group,
             logging_format=_lambda.LoggingFormat.JSON,
