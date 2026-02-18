@@ -1554,3 +1554,52 @@ Results:
 - [x] Unit tests pass: `pytest tests/unit/test_auth_handler.py -v`
 - [x] Type check passes: `mypy careervp/handlers/auth_handler.py --strict`
 - [x] Lint passes: `ruff check careervp/handlers/auth_handler.py`
+
+## Step 10.2 User Management Endpoints (2026-02-18)
+
+**Execution timestamp:** 2026-02-18
+**Scope:** OpenAPI users endpoints (`/users/me`, `/users/me/cvs`)
+
+### Implementation completed
+
+- Added `src/backend/careervp/models/user.py`:
+  - `User` model with required fields:
+    - `user_id`, `email`, `name`, `preferences`, `created_at`, `updated_at`
+- Added `src/backend/careervp/dal/user_repository.py`:
+  - `UserRepository.get_user(user_id)`
+  - `UserRepository.update_user(user_id, data)`
+  - Uses users table PK by authenticated user ID with compatibility lookup (`USER#{user_id}` and legacy raw `user_id`) and profile SK `PROFILE`.
+- Added `src/backend/careervp/handlers/user_handler.py` (Powertools `@app` routes):
+  - `GET /users/me` -> `get_current_user()` -> `200 OK`
+  - `PUT /users/me` -> `update_current_user()` -> `200 OK`
+  - `GET /users/me/cvs` -> `list_user_cvs()` -> `200 OK`
+  - Enforces authentication on all endpoints via bearer access-token validation (and supports API Gateway authorizer claims when present).
+  - Enforces self-scope for `/users/me` update payloads (rejects cross-user attempts with `403`).
+- Added `src/backend/tests/unit/test_user_handler.py`:
+  - `test_get_current_user_returns_profile`
+  - `test_update_current_user_modifies_profile`
+  - Additional coverage:
+    - `test_list_user_cvs_returns_own_records`
+    - `test_user_endpoints_require_auth`
+    - `test_user_can_only_access_own_data`
+
+### Validation evidence
+
+- Unit tests:
+  - Command: `uv run pytest tests/unit/test_user_handler.py -v`
+  - Result: `5 passed`
+- Type check:
+  - Command: `uv run mypy careervp/handlers/user_handler.py --strict`
+  - Result: `Success: no issues found in 1 source file`
+- Lint:
+  - Command: `uv run ruff check careervp/handlers/user_handler.py`
+  - Result: `All checks passed!`
+
+### Validation criteria
+
+- [x] All 3 endpoints return 200 OK
+- [x] Auth required for all endpoints
+- [x] User can only access own data (/users/me)
+- [x] Unit tests pass: `pytest tests/unit/test_user_handler.py -v`
+- [x] Type check passes: `mypy careervp/handlers/user_handler.py --strict`
+- [x] Lint passes: `ruff check careervp/handlers/user_handler.py`
