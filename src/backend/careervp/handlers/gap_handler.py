@@ -11,7 +11,7 @@ from typing import Any
 try:  # pragma: no cover - import guard for lightweight unit-test environments.
     from botocore.exceptions import ClientError
 except Exception:  # noqa: BLE001
-    ClientError = Exception  # type: ignore[assignment]
+    ClientError = Exception
 
 from careervp.models.result import ResultCode
 
@@ -26,6 +26,9 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
     if method == 'OPTIONS':
         return _json_response(HTTPStatus.OK, {'status': 'ok'})
+
+    if method == 'POST' and path == '/gap-analysis/questions':
+        return generate_questions(event)
 
     if method == 'GET' and _is_get_questions_path(path):
         return get_questions(event)
@@ -63,6 +66,56 @@ def _error_response(status_code: int | HTTPStatus, message: str, code: str) -> d
         'headers': _cors_headers(),
         'body': json.dumps({'error': message, 'code': code}, default=str),
     }
+
+
+def generate_questions(event: dict[str, Any]) -> dict[str, Any]:
+    payload = _parse_body(event)
+    if payload is None:
+        return _error_response(HTTPStatus.BAD_REQUEST, 'Invalid request body', ResultCode.INVALID_JSON)
+
+    user_id = _extract_user_id(event) or _coerce_str(payload.get('user_id'))
+    if not user_id:
+        return _error_response(HTTPStatus.UNAUTHORIZED, 'Missing user identity', ResultCode.UNAUTHORIZED)
+
+    cv_id = _coerce_str(payload.get('cv_id'))
+    job_id = _coerce_str(payload.get('job_id') or payload.get('application_id'))
+    if not cv_id or not job_id:
+        return _error_response(HTTPStatus.BAD_REQUEST, 'cv_id and job_id are required', ResultCode.MISSING_REQUIRED_FIELD)
+
+    max_questions = _normalize_max_questions(payload.get('max_questions'))
+    focus_areas = _normalize_focus_areas(payload.get('focus_areas'))
+    questions = _generate_gap_questions(job_id=job_id, focus_areas=focus_areas, max_questions=max_questions)
+    missing_qualifications = _build_missing_qualifications(focus_areas)
+
+    now = datetime.now(timezone.utc).isoformat()
+    item: dict[str, Any] = {
+        'pk': user_id,
+        'sk': _build_gap_questions_sort_key(cv_id=cv_id, job_id=job_id),
+        'artifact_type': 'gap_analysis',
+        'user_id': user_id,
+        'cv_id': cv_id,
+        'job_id': job_id,
+        'questions': questions,
+        'missing_qualifications': missing_qualifications,
+        'created_at': now,
+        'updated_at': now,
+        'ttl': _ttl_timestamp(),
+    }
+
+    try:
+        _get_table().put_item(Item=item)
+    except (ClientError, RuntimeError) as exc:
+        return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc), ResultCode.DYNAMODB_ERROR)
+
+    return _json_response(
+        HTTPStatus.CREATED,
+        {
+            'job_id': job_id,
+            'cv_id': cv_id,
+            'questions': questions,
+            'missing_qualifications': missing_qualifications,
+        },
+    )
 
 
 def get_questions(event: dict[str, Any]) -> dict[str, Any]:
@@ -147,7 +200,7 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
         return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc), ResultCode.DYNAMODB_ERROR)
 
     return _json_response(
-        HTTPStatus.OK,
+        HTTPStatus.CREATED,
         {
             'status': 'saved',
             'job_id': job_id,
@@ -292,6 +345,47 @@ def _coerce_str(value: Any) -> str | None:
     return None
 
 
+def _normalize_max_questions(value: Any) -> int:
+    default_questions = 10
+    max_allowed = 10
+    if value is None:
+        return default_questions
+    try:
+        parsed_value = int(value)
+    except (TypeError, ValueError):
+        return default_questions
+    return max(1, min(parsed_value, max_allowed))
+
+
+def _normalize_focus_areas(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    normalized = [entry.strip() for entry in value if isinstance(entry, str) and entry.strip()]
+    return normalized
+
+
+def _generate_gap_questions(job_id: str, focus_areas: list[str], max_questions: int) -> list[dict[str, Any]]:
+    questions: list[dict[str, Any]] = []
+    for index in range(max_questions):
+        focus_area = focus_areas[index] if index < len(focus_areas) else f'core competency {index + 1}'
+        questions.append(
+            {
+                'id': f'gap-q{index + 1}',
+                'text': f'What quantifiable examples show your impact in {focus_area} for job {job_id}?',
+                'tags': [focus_area],
+                'strategic_intent': 'Capture evidence-backed achievements for interview readiness.',
+                'evidence_gap': f'Need stronger measurable evidence for {focus_area}.',
+            }
+        )
+    return questions
+
+
+def _build_missing_qualifications(focus_areas: list[str]) -> list[dict[str, str]]:
+    if not focus_areas:
+        return []
+    return [{'skill': focus_area, 'priority': 'MEDIUM'} for focus_area in focus_areas]
+
+
 def _normalize_submitted_responses(
     raw_responses: Any,
 ) -> tuple[list[dict[str, Any]], dict[str, str] | None]:
@@ -357,6 +451,10 @@ def _build_gap_responses_sort_key(job_id: str) -> str:
     return f'{RESPONSE_ARTIFACT_PREFIX}{job_id}'
 
 
+def _build_gap_questions_sort_key(cv_id: str, job_id: str) -> str:
+    return f'{QUESTION_ARTIFACT_PREFIX}{cv_id}#{job_id}'
+
+
 def _build_question_query_condition(user_id: str) -> Any:
     try:
         from boto3.dynamodb.conditions import Key
@@ -380,4 +478,4 @@ def _get_table() -> Any:
     return boto3.resource('dynamodb').Table(table_name)
 
 
-__all__ = ['lambda_handler', 'get_questions', 'submit_response', 'get_responses']
+__all__ = ['lambda_handler', 'generate_questions', 'get_questions', 'submit_response', 'get_responses']

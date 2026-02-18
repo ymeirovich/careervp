@@ -1703,3 +1703,42 @@ Results:
 - [x] GET /users/me/vprs returns user's VPR list
 - [x] Unit tests pass: `pytest tests/unit/test_vpr_endpoints.py -v`
 - [x] Type check passes: `mypy careervp/handlers/vpr_*.py --strict`
+
+## Step 10.5 Gap Analysis Endpoints (2026-02-18)
+
+**Execution timestamp:** 2026-02-18
+**Scope:** Gap analysis endpoints (`/gap-analysis/questions`, `/gap-analysis/{jobId}/questions`, `/gap-analysis/responses`, `/gap-analysis/responses/{jobId}`)
+
+### Implementation completed
+
+- Updated `src/backend/careervp/handlers/gap_handler.py`:
+  - Added `POST /gap-analysis/questions` -> `generate_questions()` -> `201 Created`.
+  - Kept `GET /gap-analysis/{jobId}/questions` -> `get_questions()` -> `200 OK`.
+  - Updated `POST /gap-analysis/responses` -> `submit_response()` to return `201 Created`.
+  - Kept `GET /gap-analysis/responses/{jobId}` -> `get_responses()` -> `200 OK`.
+  - Added deterministic question generation helpers and persisted generated questions to DynamoDB under:
+    - `pk=<user_id>`
+    - `sk=ARTIFACT#GAP_ANALYSIS#{cv_id}#{job_id}`
+- Added `src/backend/tests/unit/test_gap_analysis_handler.py`:
+  - `test_generate_questions_returns_201_and_persists`
+  - `test_get_questions_returns_200`
+  - `test_submit_response_returns_201`
+  - `test_get_responses_returns_200`
+
+### Validation evidence
+
+- Unit tests:
+  - Command: `uv run pytest tests/unit/test_gap_analysis_handler.py -v`
+  - Result: `4 passed`
+- Type check (supplemental safety check):
+  - Command: `uv run mypy careervp/handlers/gap_handler.py --strict`
+  - Result: `Success: no issues found in 1 source file`
+- Lint (supplemental safety check):
+  - Command: `uv run ruff check careervp/handlers/gap_handler.py tests/unit/test_gap_analysis_handler.py`
+  - Result: `All checks passed!`
+
+### Validation criteria
+
+- [x] All 4 endpoints return correct HTTP status codes
+- [x] Questions stored in DynamoDB
+- [x] Unit tests pass: `pytest tests/unit/test_gap_analysis_handler.py -v`
