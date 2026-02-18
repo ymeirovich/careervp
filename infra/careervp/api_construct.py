@@ -42,6 +42,16 @@ class ApiConstruct(Construct):
             self.api_db.jobs_table,
             self.api_db.vpr_results_bucket,
             self.vpr_jobs_queue,
+            self.api_db.cvs_table,
+            self.api_db.applications_table,
+            self.api_db.gap_responses_table,
+            self.api_db.knowledge_table,
+            self.api_db.artifacts_table,
+            self.api_db.company_research_cache_table,
+            self.api_db.static_bucket,
+            self.api_db.backups_bucket,
+            self.api_db.logs_bucket,
+            self.api_db.artifacts_bucket,
         )
 
         api_resource: aws_apigateway.Resource = self.rest_api.root.add_resource(
@@ -260,6 +270,16 @@ class ApiConstruct(Construct):
         jobs_table: dynamodb.TableV2,
         results_bucket: s3.Bucket,
         queue: aws_sqs.Queue,
+        cvs_table: dynamodb.TableV2,
+        applications_table: dynamodb.TableV2,
+        gap_responses_table: dynamodb.TableV2,
+        knowledge_table: dynamodb.TableV2,
+        artifacts_table: dynamodb.TableV2,
+        company_research_cache_table: dynamodb.TableV2,
+        static_bucket: s3.Bucket,
+        backups_bucket: s3.Bucket,
+        logs_bucket: s3.Bucket,
+        artifacts_bucket: s3.Bucket,
     ) -> iam.Role:
         return iam.Role(
             self,
@@ -290,7 +310,11 @@ class ApiConstruct(Construct):
                                 "dynamodb:UpdateItem",
                                 "dynamodb:Query",
                             ],
-                            resources=[db.table_arn, f"{db.table_arn}/index/*"],
+                            resources=[
+                                db.table_arn,
+                                f"{db.table_arn}/index/email-index",
+                                f"{db.table_arn}/index/user_id-index",
+                            ],
                             effect=iam.Effect.ALLOW,
                         )
                     ]
@@ -309,6 +333,137 @@ class ApiConstruct(Construct):
                         )
                     ]
                 ),
+                # IAM_001: scope each table policy to explicit table/index ARNs.
+                "cvs_table": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "dynamodb:PutItem",
+                                "dynamodb:GetItem",
+                                "dynamodb:UpdateItem",
+                                "dynamodb:DeleteItem",
+                                "dynamodb:Query",
+                            ],
+                            resources=[cvs_table.table_arn],
+                            effect=iam.Effect.ALLOW,
+                        ),
+                    ]
+                ),
+                "applications_table": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "dynamodb:PutItem",
+                                "dynamodb:GetItem",
+                                "dynamodb:UpdateItem",
+                                "dynamodb:DeleteItem",
+                                "dynamodb:Query",
+                            ],
+                            resources=[
+                                applications_table.table_arn,
+                                f"{applications_table.table_arn}/index/status-index",
+                            ],
+                            effect=iam.Effect.ALLOW,
+                        ),
+                    ]
+                ),
+                "gap_responses_table": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "dynamodb:PutItem",
+                                "dynamodb:GetItem",
+                                "dynamodb:UpdateItem",
+                                "dynamodb:DeleteItem",
+                                "dynamodb:Query",
+                            ],
+                            resources=[gap_responses_table.table_arn],
+                            effect=iam.Effect.ALLOW,
+                        )
+                    ]
+                ),
+                "knowledge_table": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "dynamodb:PutItem",
+                                "dynamodb:GetItem",
+                                "dynamodb:UpdateItem",
+                                "dynamodb:DeleteItem",
+                                "dynamodb:Query",
+                            ],
+                            resources=[
+                                knowledge_table.table_arn,
+                                f"{knowledge_table.table_arn}/index/entity-index",
+                            ],
+                            effect=iam.Effect.ALLOW,
+                        )
+                    ]
+                ),
+                "artifacts_table": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "dynamodb:PutItem",
+                                "dynamodb:GetItem",
+                                "dynamodb:UpdateItem",
+                                "dynamodb:DeleteItem",
+                                "dynamodb:Query",
+                            ],
+                            resources=[
+                                artifacts_table.table_arn,
+                                f"{artifacts_table.table_arn}/index/type-index",
+                            ],
+                            effect=iam.Effect.ALLOW,
+                        ),
+                    ]
+                ),
+                "company_research_cache_table": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "dynamodb:GetItem",
+                                "dynamodb:PutItem",
+                                "dynamodb:UpdateItem",
+                                "dynamodb:DeleteItem",
+                                "dynamodb:Query",
+                            ],
+                            resources=[company_research_cache_table.table_arn],
+                            effect=iam.Effect.ALLOW,
+                        ),
+                    ]
+                ),
+                "vpr_jobs_table": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "dynamodb:PutItem",
+                                "dynamodb:GetItem",
+                                "dynamodb:UpdateItem",
+                                "dynamodb:Query",
+                            ],
+                            resources=[
+                                jobs_table.table_arn,
+                                f"{jobs_table.table_arn}/index/idempotency-key-index",
+                            ],
+                            effect=iam.Effect.ALLOW,
+                        )
+                    ]
+                ),
+                "llm_cache_table": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "dynamodb:GetItem",
+                                "dynamodb:PutItem",
+                                "dynamodb:DeleteItem",
+                            ],
+                            resources=[self.llm_cache_table.table_arn],
+                            effect=iam.Effect.ALLOW,
+                        )
+                    ]
+                ),
+                # IAM_001: scope bucket access to explicit bucket ARNs.
                 "cv_bucket": iam.PolicyDocument(
                     statements=[
                         iam.PolicyStatement(
@@ -325,23 +480,6 @@ class ApiConstruct(Construct):
                             resources=[cv_bucket.bucket_arn],
                             effect=iam.Effect.ALLOW,
                         ),
-                    ]
-                ),
-                "vpr_jobs_table": iam.PolicyDocument(
-                    statements=[
-                        iam.PolicyStatement(
-                            actions=[
-                                "dynamodb:PutItem",
-                                "dynamodb:GetItem",
-                                "dynamodb:UpdateItem",
-                                "dynamodb:Query",
-                            ],
-                            resources=[
-                                jobs_table.table_arn,
-                                f"{jobs_table.table_arn}/index/*",
-                            ],
-                            effect=iam.Effect.ALLOW,
-                        )
                     ]
                 ),
                 "vpr_results_bucket": iam.PolicyDocument(
@@ -361,6 +499,42 @@ class ApiConstruct(Construct):
                         ),
                     ]
                 ),
+                "static_bucket": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=["s3:ListBucket", "s3:GetBucketLocation"],
+                            resources=[static_bucket.bucket_arn],
+                            effect=iam.Effect.ALLOW,
+                        ),
+                    ]
+                ),
+                "backups_bucket": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=["s3:ListBucket", "s3:GetBucketLocation"],
+                            resources=[backups_bucket.bucket_arn],
+                            effect=iam.Effect.ALLOW,
+                        ),
+                    ]
+                ),
+                "logs_bucket": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=["s3:ListBucket", "s3:GetBucketLocation"],
+                            resources=[logs_bucket.bucket_arn],
+                            effect=iam.Effect.ALLOW,
+                        ),
+                    ]
+                ),
+                "artifacts_bucket": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=["s3:ListBucket", "s3:GetBucketLocation"],
+                            resources=[artifacts_bucket.bucket_arn],
+                            effect=iam.Effect.ALLOW,
+                        ),
+                    ]
+                ),
                 "vpr_jobs_queue": iam.PolicyDocument(
                     statements=[
                         iam.PolicyStatement(
@@ -374,24 +548,17 @@ class ApiConstruct(Construct):
                         )
                     ]
                 ),
-                "llm_cache_table": iam.PolicyDocument(
-                    statements=[
-                        iam.PolicyStatement(
-                            actions=[
-                                "dynamodb:GetItem",
-                                "dynamodb:PutItem",
-                                "dynamodb:DeleteItem",
-                            ],
-                            resources=[self.llm_cache_table.table_arn],
-                            effect=iam.Effect.ALLOW,
-                        )
-                    ]
-                ),
                 "ssm_parameters": iam.PolicyDocument(
                     statements=[
                         iam.PolicyStatement(
                             actions=["ssm:GetParameter"],
-                            resources=["arn:aws:ssm:*:*:parameter/careervp/*"],
+                            resources=[
+                                (
+                                    f"arn:aws:ssm:{self.naming.region}:"
+                                    f"{self.naming.account_id}:parameter/"
+                                    f"{constants.ANTHROPIC_API_KEY_SSM_PARAM.lstrip('/')}"
+                                )
+                            ],
                             effect=iam.Effect.ALLOW,
                         )
                     ]
@@ -405,6 +572,20 @@ class ApiConstruct(Construct):
                 )
             ],
         )
+
+    def _build_shared_table_env(self) -> dict[str, str]:
+        """Build shared table-name environment variables for Lambda portability."""
+        return {
+            # LAMBDA_CONFIG_008: inject table names from CDK (no hardcoded names).
+            "CVS_TABLE_NAME": self.api_db.cvs_table.table_name,
+            "APPLICATIONS_TABLE_NAME": self.api_db.applications_table.table_name,
+            "GAP_RESPONSES_TABLE_NAME": self.api_db.gap_responses_table.table_name,
+            "KNOWLEDGE_TABLE_NAME": self.api_db.knowledge_table.table_name,
+            "ARTIFACTS_TABLE_NAME": self.api_db.artifacts_table.table_name,
+            "COMPANY_RESEARCH_CACHE_TABLE_NAME": (
+                self.api_db.company_research_cache_table.table_name
+            ),
+        }
 
     def _build_common_layer(self) -> PythonLayerVersion:
         return PythonLayerVersion(
@@ -448,6 +629,7 @@ class ApiConstruct(Construct):
             environment={
                 constants.POWERTOOLS_SERVICE_NAME: constants.SERVICE_NAME,
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": constants.ENVIRONMENT,
                 "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,
@@ -507,6 +689,7 @@ class ApiConstruct(Construct):
                 "DYNAMODB_TABLE_NAME": db.table_name,
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-vpr",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": constants.ENVIRONMENT,
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
@@ -557,6 +740,7 @@ class ApiConstruct(Construct):
                 "DYNAMODB_TABLE_NAME": db.table_name,
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-company-research",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": constants.ENVIRONMENT,
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
@@ -645,6 +829,7 @@ class ApiConstruct(Construct):
             environment={
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-vpr-submit",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": constants.ENVIRONMENT,
                 "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,
@@ -702,6 +887,7 @@ class ApiConstruct(Construct):
             environment={
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-vpr-status",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": constants.ENVIRONMENT,
                 "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,
@@ -759,6 +945,7 @@ class ApiConstruct(Construct):
             environment={
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-vpr-sqs-worker",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": constants.ENVIRONMENT,
                 "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,
@@ -813,8 +1000,8 @@ class ApiConstruct(Construct):
             environment={
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-cv-upload-worker",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
                 "TABLE_NAME": cvs_table.table_name,
-                "CVS_TABLE_NAME": cvs_table.table_name,
                 "IDEMPOTENCY_TABLE_NAME": idempotency_table.table_name,
                 "CV_BUCKET_NAME": cv_bucket.bucket_name,
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
@@ -871,8 +1058,8 @@ class ApiConstruct(Construct):
             environment={
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-vpr-worker",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
                 "VPR_JOBS_TABLE_NAME": jobs_table.table_name,
-                "ARTIFACTS_TABLE_NAME": artifacts_table.table_name,
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
                 constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
@@ -928,9 +1115,8 @@ class ApiConstruct(Construct):
             environment={
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-cv-tailor-worker",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
                 "TABLE_NAME": cvs_table.table_name,
-                "CVS_TABLE_NAME": cvs_table.table_name,
-                "ARTIFACTS_TABLE_NAME": artifacts_table.table_name,
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
                 constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
@@ -985,8 +1171,7 @@ class ApiConstruct(Construct):
             environment={
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-cover-letter-worker",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
-                "APPLICATIONS_TABLE_NAME": applications_table.table_name,
-                "ARTIFACTS_TABLE_NAME": artifacts_table.table_name,
+                **self._build_shared_table_env(),
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
                 constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
@@ -1041,8 +1226,7 @@ class ApiConstruct(Construct):
             environment={
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-interview-prep-worker",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
-                "APPLICATIONS_TABLE_NAME": applications_table.table_name,
-                "ARTIFACTS_TABLE_NAME": artifacts_table.table_name,
+                **self._build_shared_table_env(),
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
                 constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
@@ -1100,6 +1284,7 @@ class ApiConstruct(Construct):
             environment={
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-cv-tailoring",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": constants.ENVIRONMENT,
                 "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,

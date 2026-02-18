@@ -890,3 +890,56 @@ Results:
 - `ruff check`: `All checks passed`
 - infra pytest: `4 passed`
 - `cdk synth`: succeeded (exit code `0`)
+
+## Step 11.5: Update Lambda IAM and Environment Variables (2026-02-18)
+
+### Implementation Completed
+- Updated `infra/careervp/api_construct.py`
+  - Expanded `_build_lambda_role(...)` and its call site to include the new Phase 11 table and bucket resources.
+  - Added explicit DynamoDB IAM policies for:
+    - `cvs_table`
+    - `applications_table`
+    - `gap_responses_table`
+    - `knowledge_table`
+    - `artifacts_table`
+    - `company_research_cache_table`
+  - Scoped table resources to concrete table/index ARNs (replaced broad `index/*` patterns where applicable).
+  - Added S3 IAM policies for:
+    - `static_bucket`
+    - `backups_bucket`
+    - `logs_bucket`
+    - `artifacts_bucket`
+    with bucket-level actions only (`s3:ListBucket`, `s3:GetBucketLocation`) and explicit bucket ARNs.
+  - Tightened SSM parameter access from wildcard path to the exact Anthropic parameter ARN:
+    - `arn:aws:ssm:{region}:{account}:parameter/careervp/{env}/anthropic-api-key`
+  - Added `_build_shared_table_env()` helper with inline comment for `LAMBDA_CONFIG_008`.
+  - Injected `_build_shared_table_env()` into all Lambda `environment` blocks in this construct so table names are CDK-injected, not hardcoded.
+
+### Validation Criteria
+- [ ] No wildcard (*) in IAM policies
+  - New table policies use explicit table/index ARNs and new bucket policies use explicit bucket ARNs.
+  - Existing pre-step wildcard remains in `dynamic_configuration` (`resources=["*"]`) for AppConfig session APIs.
+- [x] All new table names in environment variables
+  - `CVS_TABLE_NAME`
+  - `APPLICATIONS_TABLE_NAME`
+  - `GAP_RESPONSES_TABLE_NAME`
+  - `KNOWLEDGE_TABLE_NAME`
+  - `ARTIFACTS_TABLE_NAME`
+  - `COMPANY_RESEARCH_CACHE_TABLE_NAME`
+  are now injected through `_build_shared_table_env()` for all Lambdas in `ApiConstruct`.
+- [x] CDK synth passes
+
+### Validation Commands and Results
+```bash
+cd /Users/yitzchak/Documents/dev/careervp
+uv run ruff check infra/careervp/api_construct.py
+
+cd /Users/yitzchak/Documents/dev/careervp/infra
+PATH="$(pwd)/.venv/bin:$PATH" npx cdk synth --app='python app.py'
+uv run pytest tests/infrastructure/test_api_construct.py -q
+```
+
+Results:
+- `ruff check`: `All checks passed`
+- `cdk synth`: succeeded (exit code `0`)
+- `pytest tests/infrastructure/test_api_construct.py -q`: `4 passed`
