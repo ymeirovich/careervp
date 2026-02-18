@@ -1984,3 +1984,41 @@ Results:
 - [x] Models validate input/output correctly
 - [x] Unit tests pass: `pytest tests/unit/test_api_models.py -v`
 - [x] Type check passes: `mypy careervp/models/api_models.py --strict`
+
+## Step 10.12 OpenAPI Contract Validation Suite (2026-02-18)
+
+**Execution timestamp:** 2026-02-18
+**Scope:** OpenAPI coverage + contract validation for all 27 endpoints
+
+### Implementation completed
+
+- Replaced `tests/integration/test_openapi_contract.py` with a full contract suite covering:
+  - all 27 OpenAPI endpoints mapped to handler code
+  - request schema coverage against canonical API model classes
+  - response schema coverage against canonical API model classes
+  - success HTTP status contract checks (including async `202` requirements)
+  - authentication requirement checks (public endpoints vs BearerAuth-protected endpoints)
+
+- Created `scripts/validate_openapi_coverage.py`:
+  - parses `docs/swagger/careervp-api-v1.yaml`
+  - validates handler route coverage with explicit endpoint-to-handler marker mapping
+  - validates request/response schema references map to `src/backend/careervp/models/api_models.py`
+  - validates auth declarations and success status contract rules
+  - prints human-readable summary or JSON (`--json`)
+  - exits non-zero if any mismatch is detected
+
+### Validation evidence
+
+- Coverage script:
+  - Command: `python scripts/validate_openapi_coverage.py`
+  - Result: `Coverage: 27/27` and `Result: PASS`
+
+- Integration test suite (exact requested command):
+  - Command: `pytest tests/integration/test_openapi_contract.py -v`
+  - Result: `5 passed`
+
+### Validation criteria
+
+- [x] Coverage: 27/27 endpoints (100%)
+- [x] Integration tests pass: `pytest tests/integration/test_openapi_contract.py -v`
+- [x] No schema mismatches
