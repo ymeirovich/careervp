@@ -156,7 +156,7 @@ TASK: Implement LLM Cache following cost_optimization_spec.yaml caching strategy
 
 6. CDK Pre-Deploy Validation:
    - Run CDK synth to verify template generation
-   - Run cdk-nag for security scanning
+   - Run cdk-nag for security scanning (see prompt_optimization_cdk_spec.yaml NAG_* rules)
    - Verify Lambda package size stays under 250MB (per LAMBDA_SIZE_001)
 
 VALIDATION CRITERIA (must all pass):
@@ -165,6 +165,7 @@ VALIDATION CRITERIA (must all pass):
 - [ ] TTL properly enforced (test with short TTL)
 - [ ] CDK synth succeeds: npx cdk synth --app='python ../../infra/app.py'
 - [ ] CDK-Nag security scan passes: cd infra && cdk-nag scan --app='python app.py'
+  - See prompt_optimization_cdk_spec.yaml NAG_IAM_001, NAG_S3_*, NAG_DDB_*, NAG_LAMBDA_*, NAG_SQS_001 rules
 - [ ] Lambda can access cache table (IAM policy verified via CDK-Nag)
 - [ ] Unit tests pass: pytest tests/unit/test_llm_cache.py -v
 - [ ] Type check passes: mypy careervp/logic/llm_cache.py --strict
@@ -1979,6 +1980,7 @@ cd /Users/yitzchak/Documents/dev/careervp/infra
 uv run pytest tests/infrastructure/test_cdk.py -v --tb=short
 
 # Run CDK Nag security scan
+# See prompt_optimization_cdk_spec.yaml NAG_* rules for compliance requirements
 cdk nag scan --app='python app.py'
 ```
 
@@ -2153,7 +2155,7 @@ uv run pytest tests/cover-letter/ -v
 - [ ] Phase 11.7: Run infrastructure tests
 - [ ] CDK table count >= 9
 - [ ] CDK bucket count >= 6
-- [ ] CDK Nag passes
+- [ ] CDK Nag passes (see prompt_optimization_cdk_spec.yaml NAG_* rules for 15 compliance rules)
 
 ## Verification
 - [ ] VPR Async: E2E test

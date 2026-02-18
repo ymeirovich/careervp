@@ -907,6 +907,168 @@ rules:
     check: "Authorizer configured on protected routes"
 
 # =============================================================================
+# CDK-NAG AWS SOLUTIONS COMPLIANCE RULES
+# These rules ensure compliance with AWS Solutions Security Best Practices
+# enforced by cdk-nag during cdk synth
+# -------------------------------------------------------------------------------
+
+  - id: NAG_IAM_001
+    category: security
+    severity: high
+    name: "IAM Policy Avoid Wildcards"
+    description: |
+      IAM policies must not contain wildcards (*) in Action or Resource.
+      Use specific actions, e.g., "lambda:InvokeFunction" not "lambda:*"
+    check: "Check IAM statements for '*' in Action or Resource fields"
+    enforced_by: "cdk-nag (AwsSolutions-IAM5)"
+    auto_fixable: false
+
+  - id: NAG_S3_001
+    category: security
+    severity: high
+    name: "S3 Bucket Server-Side Encryption"
+    description: |
+      S3 buckets must have server-side encryption enabled.
+      Use AES256 or KMS managed keys.
+    check: "Verify S3 Bucket has encryption configured"
+    enforced_by: "cdk-nag (AwsSolutions-S3)"
+    auto_fixable: true
+
+  - id: NAG_S3_002
+    category: security
+    severity: high
+    name: "S3 Bucket Public Access Block"
+    description: |
+      S3 buckets must block public access.
+      Set block_public_acls=True, block_public_policy=True.
+    check: "Verify block_public_acls, block_public_policy, ignore_public_acls enabled"
+    enforced_by: "cdk-nag (AwsSolutions-S2)"
+    auto_fixable: true
+
+  - id: NAG_S3_003
+    category: observability
+    severity: medium
+    name: "S3 Bucket Access Logging"
+    description: |
+      S3 buckets should have access logging enabled for audit.
+    check: "Verify bucket has access logging configured"
+    enforced_by: "cdk-nag (AwsSolutions-S1)"
+    auto_fixable: true
+
+  - id: NAG_DDB_001
+    category: security
+    severity: high
+    name: "DynamoDB Point-in-Time Recovery"
+    description: |
+      DynamoDB tables must have point-in-time recovery enabled.
+      Dev: 7 days, Prod: 35 days per architecture spec.
+    check: "Verify table has point_in_time_recovery enabled"
+    enforced_by: "cdk-nag (AwsSolutions-DDB4)"
+    auto_fixable: true
+
+  - id: NAG_DDB_002
+    category: security
+    severity: medium
+    name: "DynamoDB Deletion Protection"
+    description: |
+      DynamoDB tables should have deletion protection for production.
+    check: "Verify deletion_protection enabled for prod stacks"
+    enforced_by: "cdk-nag (AwsSolutions-DDB3)"
+    auto_fixable: true
+
+  - id: NAG_LAMBDA_001
+    category: security
+    severity: high
+    name: "Lambda Latest Runtime"
+    description: |
+      Lambda functions must use a supported runtime (Python 3.11+).
+      Avoid deprecated runtimes (Python 3.8, 3.9).
+    check: "Verify runtime is Python 3.11 or later"
+    enforced_by: "cdk-nag (AwsSolutions-L1)"
+    auto_fixable: true
+
+  - id: NAG_LAMBDA_002
+    category: reliability
+    severity: medium
+    name: "Lambda Dead Letter Queue"
+    description: |
+      Async Lambda functions should have a dead-letter queue configured.
+      Required for ASYNC_004 compliance.
+    check: "Verify async invocation has DLQ configured"
+    enforced_by: "cdk-nag (AwsSolutions-L2)"
+    auto_fixable: true
+
+  - id: NAG_APIGW_001
+    category: observability
+    severity: medium
+    name: "API Gateway Access Logging"
+    description: |
+      API Gateway must have access logging enabled.
+    check: "Verify access_log_destination is configured"
+    enforced_by: "cdk-nag (AwsSolutions-APIG1)"
+    auto_fixable: true
+
+  - id: NAG_CW_001
+    category: observability
+    severity: medium
+    name: "CloudWatch Log Retention"
+    description: |
+      CloudWatch log groups must retain logs for at least 1 year.
+    check: "Verify log_group.retention is set to ONE_YEAR"
+    enforced_by: "cdk-nag (AwsSolutions-Logs1)"
+    auto_fixable: true
+
+  - id: NAG_VPC_001
+    category: observability
+    severity: medium
+    name: "VPC Flow Logs"
+    description: |
+      VPC should have flow logs enabled for network traffic monitoring.
+    check: "Verify flow_log is enabled on VPC"
+    enforced_by: "cdk-nag (AwsSolutions-VPC1)"
+    auto_fixable: true
+
+  - id: NAG_EC2_001
+    category: security
+    severity: high
+    name: "Security Group Unrestricted SSH"
+    description: |
+      Security groups must not allow unrestricted SSH (0.0.0.0/0).
+    check: "Check for port 22 open to 0.0.0.0/0"
+    enforced_by: "cdk-nag (AwsSolutions-EC21)"
+    auto_fixable: false
+
+  - id: NAG_KMS_001
+    category: security
+    severity: medium
+    name: "KMS Key Rotation"
+    description: |
+      KMS keys should have rotation enabled for security.
+    check: "Verify key_rotation is enabled"
+    enforced_by: "cdk-nag (AwsSolutions-KMS1)"
+    auto_fixable: true
+
+  - id: NAG_SECRETS_001
+    category: security
+    severity: medium
+    name: "Secrets Manager Automatic Rotation"
+    description: |
+      Secrets should have automatic rotation enabled (30-90 days).
+    check: "Verify rotation is enabled for secrets"
+    enforced_by: "cdk-nag (AwsSolutions-SECRETS1)"
+    auto_fixable: false
+
+  - id: NAG_SQS_001
+    category: security
+    severity: high
+    name: "SQS Queue Encryption"
+    description: |
+      SQS queues must have server-side encryption enabled.
+    check: "Verify queue has encryption enabled"
+    enforced_by: "cdk-nag (AwsSolutions-SQS1)"
+    auto_fixable: true
+
+# =============================================================================
 # VALIDATION CHECKLIST
 # =============================================================================
 
@@ -932,7 +1094,7 @@ checklist:
       required: true
     - name: "Security scan (cdk-nag)"
       command: "cdk-nag scan --app='python app.py'"
-      required: false
+      required: true
 
   post_deploy:
     - name: "Wait for stack stability"

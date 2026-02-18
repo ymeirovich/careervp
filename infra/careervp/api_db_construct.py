@@ -49,6 +49,10 @@ class ApiDbConstruct(Construct):
         # S3 Buckets
         self.cv_bucket: s3.Bucket = self._build_cv_bucket(id_)
         self.vpr_results_bucket: s3.Bucket = self._build_vpr_results_bucket(id_)
+        self.static_bucket: s3.Bucket = self._build_static_bucket(id_)
+        self.backups_bucket: s3.Bucket = self._build_backups_bucket(id_)
+        self.logs_bucket: s3.Bucket = self._build_logs_bucket(id_)
+        self.artifacts_bucket: s3.Bucket = self._build_artifacts_bucket(id_)
 
         # Backwards compatibility alias
         self.db = self.users_table
@@ -428,3 +432,123 @@ class ApiDbConstruct(Construct):
             ],
         )
         return bucket
+
+    def _build_static_bucket(self, id_prefix: str) -> s3.Bucket:
+        """S3 bucket for static frontend SPA assets (no lifecycle rules)."""
+        bucket_id = f"{id_prefix}StaticBucket"
+        return s3.Bucket(
+            self,
+            bucket_id,
+            bucket_name=self.naming.bucket_name(constants.STATIC_BUCKET_NAME),
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
+            # S3_001: keep public access fully blocked.
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            # Use SSE-S3 for managed at-rest encryption.
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            enforce_ssl=True,
+            versioned=False,
+        )
+
+    def _build_backups_bucket(self, id_prefix: str) -> s3.Bucket:
+        """S3 bucket for backups with long-term lifecycle transitions."""
+        bucket_id = f"{id_prefix}BackupsBucket"
+        return s3.Bucket(
+            self,
+            bucket_id,
+            bucket_name=self.naming.bucket_name(constants.BACKUPS_BUCKET_NAME),
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
+            # S3_001: keep public access fully blocked.
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            # Use SSE-S3 for managed at-rest encryption.
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            enforce_ssl=True,
+            # S3_002: backups must keep previous object versions.
+            versioned=True,
+            # S3_003: 30d -> IA, 90d -> Glacier.
+            lifecycle_rules=[
+                s3.LifecycleRule(
+                    id="backups-tiering",
+                    transitions=[
+                        s3.Transition(
+                            storage_class=s3.StorageClass.INFREQUENT_ACCESS,
+                            transition_after=Duration.days(30),
+                        ),
+                        s3.Transition(
+                            storage_class=s3.StorageClass.GLACIER,
+                            transition_after=Duration.days(90),
+                        ),
+                    ],
+                    enabled=True,
+                ),
+            ],
+        )
+
+    def _build_logs_bucket(self, id_prefix: str) -> s3.Bucket:
+        """S3 bucket for archived logs with slower tiering windows."""
+        bucket_id = f"{id_prefix}LogsBucket"
+        return s3.Bucket(
+            self,
+            bucket_id,
+            bucket_name=self.naming.bucket_name(constants.LOGS_BUCKET_NAME),
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
+            # S3_001: keep public access fully blocked.
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            # Use SSE-S3 for managed at-rest encryption.
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            enforce_ssl=True,
+            # S3_002: retain historical log versions for recovery/audit.
+            versioned=True,
+            lifecycle_rules=[
+                s3.LifecycleRule(
+                    id="logs-tiering",
+                    transitions=[
+                        s3.Transition(
+                            storage_class=s3.StorageClass.INFREQUENT_ACCESS,
+                            transition_after=Duration.days(180),
+                        ),
+                        s3.Transition(
+                            storage_class=s3.StorageClass.GLACIER,
+                            transition_after=Duration.days(365),
+                        ),
+                    ],
+                    enabled=True,
+                ),
+            ],
+        )
+
+    def _build_artifacts_bucket(self, id_prefix: str) -> s3.Bucket:
+        """S3 bucket for generated artifacts with retention-focused tiering."""
+        bucket_id = f"{id_prefix}ArtifactsBucket"
+        return s3.Bucket(
+            self,
+            bucket_id,
+            bucket_name=self.naming.bucket_name(constants.ARTIFACTS_BUCKET_NAME),
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
+            # S3_001: keep public access fully blocked.
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            # Use SSE-S3 for managed at-rest encryption.
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            enforce_ssl=True,
+            # S3_002/S3_004: artifacts require version history.
+            versioned=True,
+            lifecycle_rules=[
+                s3.LifecycleRule(
+                    id="artifacts-tiering",
+                    transitions=[
+                        s3.Transition(
+                            storage_class=s3.StorageClass.INFREQUENT_ACCESS,
+                            transition_after=Duration.days(90),
+                        ),
+                        s3.Transition(
+                            storage_class=s3.StorageClass.GLACIER,
+                            transition_after=Duration.days(180),
+                        ),
+                    ],
+                    enabled=True,
+                ),
+            ],
+        )

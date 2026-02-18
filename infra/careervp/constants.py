@@ -60,6 +60,10 @@ VPR_JOBS_DLQ = "vpr-jobs-dlq"
 # =============================================================================
 # VPR Async Architecture buckets
 VPR_RESULTS_BUCKET = "vpr-results"
+STATIC_BUCKET_NAME = "static"
+BACKUPS_BUCKET_NAME = "backups"
+LOGS_BUCKET_NAME = "logs"
+ARTIFACTS_BUCKET_NAME = "artifacts"
 
 # =============================================================================
 # LAMBDA FUNCTIONS

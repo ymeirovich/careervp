@@ -678,3 +678,108 @@ Results:
 - `cdk synth`: pass
 - infra pytest: `4 passed`
 - backend infra pytest: `1 passed`
+
+---
+
+## Step 11.4 (2026-02-18): Add Missing S3 Buckets to `ApiDbConstruct`
+
+### Implementation Completed
+- Updated `infra/careervp/constants.py`:
+  - Added bucket purpose constants:
+    - `STATIC_BUCKET_NAME = "static"`
+    - `BACKUPS_BUCKET_NAME = "backups"`
+    - `LOGS_BUCKET_NAME = "logs"`
+    - `ARTIFACTS_BUCKET_NAME = "artifacts"`
+
+- Updated `infra/careervp/api_db_construct.py`:
+  - Added four new S3 bucket properties in `ApiDbConstruct.__init__`:
+    - `self.static_bucket`
+    - `self.backups_bucket`
+    - `self.logs_bucket`
+    - `self.artifacts_bucket`
+  - Added four new bucket builder methods with inline comments:
+    - `_build_static_bucket(...)`
+    - `_build_backups_bucket(...)`
+    - `_build_logs_bucket(...)`
+    - `_build_artifacts_bucket(...)`
+  - Applied required S3 controls on all four buckets:
+    - `block_public_access=s3.BlockPublicAccess.BLOCK_ALL` (S3_001)
+    - `encryption=s3.BucketEncryption.S3_MANAGED` (SSE-S3)
+    - `enforce_ssl=True`
+  - Applied versioning and lifecycle policies:
+    - `static`: no lifecycle, `versioned=False`
+    - `backups`: `versioned=True`, lifecycle `30d -> IA`, `90d -> Glacier`
+    - `logs`: `versioned=True`, lifecycle `180d -> IA`, `365d -> Glacier`
+    - `artifacts`: `versioned=True`, lifecycle `90d -> IA`, `180d -> Glacier`
+
+### Validation Criteria
+- [x] All 4 buckets defined in `api_db_construct.py`
+- [x] Block public access on all buckets
+- [x] Versioning enabled on backups, logs, artifacts
+- [x] Lifecycle policies configured per spec
+
+### Validation Commands and Results
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/infra
+uv run ruff format careervp/api_db_construct.py careervp/constants.py
+uv run ruff check careervp/api_db_construct.py careervp/constants.py
+uv run mypy careervp/api_db_construct.py --strict
+uv run pytest tests/infrastructure/test_api_construct.py -v --tb=short
+
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+uv run pytest tests/infrastructure/test_cdk.py -v --tb=short
+```
+
+Results:
+- `ruff format`: `2 files left unchanged`
+- `ruff check`: `All checks passed`
+- `mypy --strict`: `Success: no issues found in 1 source file`
+- infra pytest: `4 passed`
+- backend infra pytest: `1 passed`
+
+### Synthesized Bucket Verification
+Command run:
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/infra
+uv run python - <<'PY'
+from aws_cdk import App, Environment
+from aws_cdk.assertions import Template
+from careervp.naming_utils import NamingUtils
+from careervp.service_stack import ServiceStack
+
+app = App()
+naming = NamingUtils(environment='dev', region='us-east-1', account_id='123456789012')
+stack = ServiceStack(
+    app,
+    'service-test-s3-check',
+    is_production_env=True,
+    naming=naming,
+    stack_feature='crud',
+    env=Environment(account='123456789012', region='us-east-1'),
+)
+template = Template.from_stack(stack).to_json()
+
+for logical_id, bucket in template['Resources'].items():
+    if bucket['Type'] != 'AWS::S3::Bucket':
+        continue
+    props = bucket['Properties']
+    name = props.get('BucketName', '')
+    if not any(tag in name for tag in ('-static-', '-backups-', '-logs-', '-artifacts-')):
+        continue
+    versioning = props.get('VersioningConfiguration', {}).get('Status', 'Disabled')
+    pab = props.get('PublicAccessBlockConfiguration', {})
+    enc = props.get('BucketEncryption', {}).get('ServerSideEncryptionConfiguration', [{}])[0].get('ServerSideEncryptionByDefault', {}).get('SSEAlgorithm')
+    lifecycle = props.get('LifecycleConfiguration', {}).get('Rules', [])
+    transitions = []
+    for rule in lifecycle:
+        for transition in rule.get('Transitions', []):
+            transitions.append((transition.get('TransitionInDays'), transition.get('StorageClass')))
+    print(f"{name}|versioning={versioning}|public_block={all(pab.get(k) for k in ['BlockPublicAcls','IgnorePublicAcls','BlockPublicPolicy','RestrictPublicBuckets'])}|enc={enc}|transitions={transitions}")
+PY
+```
+
+Output:
+- `careervp-dev-static-use1-494291|versioning=Disabled|public_block=True|enc=AES256|transitions=[]`
+- `careervp-dev-backups-use1-494291|versioning=Enabled|public_block=True|enc=AES256|transitions=[(30, 'STANDARD_IA'), (90, 'GLACIER')]`
+- `careervp-dev-logs-use1-494291|versioning=Enabled|public_block=True|enc=AES256|transitions=[(180, 'STANDARD_IA'), (365, 'GLACIER')]`
+- `careervp-dev-artifacts-use1-494291|versioning=Enabled|public_block=True|enc=AES256|transitions=[(90, 'STANDARD_IA'), (180, 'GLACIER')]`
