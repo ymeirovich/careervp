@@ -14,9 +14,7 @@ on:
       - "src/backend/careervp/models/gap*"
       - "src/backend/careervp/validation/gap*"
       - "src/backend/careervp/dal/gap*"
-      - "tests/gap-analysis/**"
-      - "infra/**"
-      - ".github/workflows/gap-analysis.yml"
+      - "src/backend/tests/**/test_gap*"
   workflow_dispatch:
     inputs:
       deploy:

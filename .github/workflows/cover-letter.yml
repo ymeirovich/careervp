@@ -12,9 +12,7 @@ on:
       - "src/backend/careervp/models/cover_letter*"
       - "src/backend/careervp/validation/cover_letter*"
       - "src/backend/careervp/dal/cover_letter*"
-      - "tests/cover-letter/**"
-      - "infra/**"
-      - ".github/workflows/cover-letter.yml"
+      - "src/backend/tests/**/test_cover_letter*"
   workflow_dispatch:
     inputs:
       deploy:

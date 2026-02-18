@@ -14,8 +14,6 @@ on:
       - "src/backend/careervp/models/company*"
       - "src/backend/tests/**/test_company*"
       - "src/backend/tests/**/test_web_*"
-      - "infra/**"
-      - ".github/workflows/company-research.yml"
   workflow_dispatch:
     inputs:
       deploy:

@@ -14,9 +14,8 @@ on:
       - "src/backend/careervp/models/fvs*"
       - "src/backend/careervp/validation/cv_tailoring*"
       - "src/backend/careervp/dal/cv_dal*"
-      - "tests/cv-tailoring/**"
-      - "infra/**"
-      - ".github/workflows/cv-tailoring.yml"
+      - "src/backend/tests/**/test_cv_tailor*"
+      - "src/backend/tests/**/test_fvs*"
   workflow_dispatch:
     inputs:
       deploy:
