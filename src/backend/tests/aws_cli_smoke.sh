@@ -41,12 +41,17 @@ require_bin jq
 require_bin python3
 require_bin base64
 
+PYTHON_CMD=(python3)
+if command -v uv >/dev/null 2>&1; then
+  PYTHON_CMD=(uv run --project "${ROOT}/src/backend" python3)
+fi
+
 log() { printf '>> %s\n' "$*"; }
 debug() { if [[ "$VERBOSE" == "1" ]]; then printf '[debug] %s\n' "$*"; fi; }
 
 decode_log_result() {
   local encoded="$1"
-  python3 - <<'PY'
+  "${PYTHON_CMD[@]}" - <<'PY'
 import base64, os, sys
 data = os.environ.get("LOG_RESULT", "")
 if not data:
@@ -153,7 +158,7 @@ _update_lambda_env_var() {
   fi
 
   # Use Python to safely construct JSON with the API key value
-  python3 - "$current" "$key" "$value" "$env_file" <<'PY'
+  "${PYTHON_CMD[@]}" - "$current" "$key" "$value" "$env_file" <<'PY'
 import sys, json
 current = json.loads(sys.argv[1])
 key = sys.argv[2]
@@ -216,7 +221,7 @@ ensure_anthropic_env() {
 
 run_verify_script() {
   log "Running verify_aws_state.py --mode deployed --env ${ENVIRONMENT}"
-  python3 "${ROOT}/src/backend/scripts/verify_aws_state.py" --mode deployed --env "$ENVIRONMENT"
+  "${PYTHON_CMD[@]}" "${ROOT}/src/backend/scripts/verify_aws_state.py" --mode deployed --env "$ENVIRONMENT"
 }
 
 test_s3_crud() {
@@ -224,7 +229,7 @@ test_s3_crud() {
   bucket="$(resolve_cv_bucket)"
   key="cli-smoke/probe-$(date +%s).txt"
   log "S3 put/head/delete s3://${bucket}/${key} (boto3)"
-  python3 - <<PY
+  "${PYTHON_CMD[@]}" - <<PY
 import os
 from botocore.config import Config
 import boto3
@@ -538,7 +543,7 @@ JSON
 
 test_anthropic_ping() {
   log "Anthropic key probe (short, low-cost)"
-  python3 - <<'PY'
+  "${PYTHON_CMD[@]}" - <<'PY'
 import os, json
 from careervp.logic.utils.llm_client import LLMRouter, TaskMode
 
