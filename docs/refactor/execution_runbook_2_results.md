@@ -1603,3 +1603,56 @@ Results:
 - [x] Unit tests pass: `pytest tests/unit/test_user_handler.py -v`
 - [x] Type check passes: `mypy careervp/handlers/user_handler.py --strict`
 - [x] Lint passes: `ruff check careervp/handlers/user_handler.py`
+
+## Step 10.3 Job CRUD Endpoints (2026-02-18)
+
+**Execution timestamp:** 2026-02-18
+**Scope:** OpenAPI jobs endpoints (`/jobs`, `/jobs/{jobId}`)
+
+### Implementation completed
+
+- Updated `src/backend/careervp/models/job.py`:
+  - Added canonical `Job` model with required fields:
+    - `job_id`, `user_id`, `title`, `company`, `description`, `status`, `created_at`
+  - Added OpenAPI-friendly serializer via `to_api_dict()`.
+  - Preserved existing `JobPosting`, `GapResponse`, and `CompanyContext` models for compatibility.
+- Updated `src/backend/careervp/dal/jobs_repository.py`:
+  - Extended `create_job()` to support both existing VPR async payloads and API job-posting payloads.
+  - Added `list_jobs(limit=20)`.
+  - Added `get_jobs_by_user(user_id, limit=20)`.
+  - Kept existing VPR methods (`get_job_by_idempotency_key`, `update_job_status`, `update_job`) intact.
+  - Uses jobs table key as `PK=job_id` through adapter mapping.
+- Added `src/backend/careervp/handlers/job_handler.py` with Powertools `@app` routes:
+  - `POST /jobs` -> `create_job()` -> `201 Created`
+  - `GET /jobs` -> `list_jobs()` -> `200 OK`
+  - `GET /jobs/{jobId}` -> `get_job()` -> `200 OK`
+  - Enforces bearer auth for all routes.
+  - Enforces owner-only access (`403`) for cross-user job reads.
+- Added `src/backend/tests/unit/test_job_handler.py`:
+  - `test_create_job_returns_201`
+  - `test_list_jobs_returns_user_jobs`
+  - Additional coverage:
+    - `test_get_job_returns_single_job`
+    - `test_users_can_only_access_own_jobs`
+
+### Validation evidence
+
+- Unit tests:
+  - Command: `uv run pytest tests/unit/test_job_handler.py -v`
+  - Result: `4 passed`
+- Type check:
+  - Command: `uv run mypy careervp/handlers/job_handler.py --strict`
+  - Result: `Success: no issues found in 1 source file`
+- Lint:
+  - Command: `uv run ruff check careervp/handlers/job_handler.py`
+  - Result: `All checks passed!`
+
+### Validation criteria
+
+- [x] POST /jobs returns 201 Created
+- [x] GET /jobs returns list of user's jobs
+- [x] GET /jobs/{jobId} returns single job
+- [x] Users can only access own jobs
+- [x] Unit tests pass: `pytest tests/unit/test_job_handler.py -v`
+- [x] Type check passes: `mypy careervp/handlers/job_handler.py --strict`
+- [x] Lint passes: `ruff check careervp/handlers/job_handler.py`

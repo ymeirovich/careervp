@@ -9,10 +9,13 @@ Per docs/specs/07-vpr-async-architecture.md
 
 from __future__ import annotations
 
+import os
+import uuid
 from datetime import datetime, timezone
 from typing import Any
 
 import boto3
+from boto3.dynamodb.conditions import Attr
 from botocore.exceptions import ClientError
 
 from careervp.dal.api_storage_adapter import ApiStorageAdapter
@@ -47,9 +50,7 @@ class JobsRepository:
 
     def _get_table_name(self) -> str:
         """Get table name from environment or use default."""
-        import os
-
-        env_table = os.environ.get('VPR_JOBS_TABLE_NAME')
+        env_table = os.environ.get('JOBS_TABLE_NAME') or os.environ.get('VPR_JOBS_TABLE_NAME')
         if env_table:
             return env_table
         # Fallback to naming convention
@@ -59,51 +60,32 @@ class JobsRepository:
     @tracer.capture_method(capture_response=False)
     def create_job(self, job_data: dict[str, Any]) -> Result[dict[str, Any]]:
         """
-        Create a new VPR job record in DynamoDB.
+        Create a new job record in DynamoDB.
 
         Args:
-            job_data: Job record dict containing:
-                - job_id: Unique job identifier (UUID)
-                - user_id: User who requested the job
-                - application_id: Application this VPR is for
-                - input_data: VPR request payload
-                - idempotency_key: Optional deduplication key
-                - ttl: TTL timestamp (optional, calculated if not provided)
-                - status: Job status (optional, defaults to PENDING)
+            job_data: Job record payload. Supports both:
+                - API jobs payload (`title`, `company_name`, `description`, ...)
+                - VPR async payload (`application_id`, `input_data`, ...)
 
         Returns:
             Result containing created job record
         """
         try:
-            now = datetime.now(timezone.utc).isoformat()
-            job_key = self._build_job_key(str(job_data['job_id']))
+            user_id = str(job_data.get('user_id', '')).strip()
+            if not user_id:
+                raise ValueError('user_id is required')
 
-            # Use provided ttl or calculate default (24 hours)
-            ttl_timestamp = job_data.get('ttl')
-            if ttl_timestamp is None:
-                ttl_timestamp = int((datetime.now(timezone.utc).timestamp() + 24 * 3600))
+            requested_job_id = str(job_data.get('job_id', '')).strip()
+            resolved_job_id = requested_job_id or str(uuid.uuid4())
 
-            record = {
-                'job_id': job_key['job_id'],
-                'status': job_data.get('status', 'PENDING'),
-                'created_at': now,
-                'user_id': job_data['user_id'],
-                'application_id': job_data['application_id'],
-                'input_data': job_data['input_data'],
-                'ttl': ttl_timestamp,
-            }
-
-            if job_data.get('idempotency_key'):
-                record['idempotency_key'] = job_data['idempotency_key']
+            if self._is_vpr_payload(job_data):
+                record = self._build_vpr_job_record(job_data=job_data, resolved_job_id=resolved_job_id, user_id=user_id)
+            else:
+                record = self._build_api_job_record(job_data=job_data, resolved_job_id=resolved_job_id, user_id=user_id)
 
             self.table.put_item(Item=record)
 
-            logger.info(
-                'Created VPR job',
-                job_id=job_data['job_id'],
-                user_id=job_data['user_id'],
-                application_id=job_data['application_id'],
-            )
+            logger.info('Created job', job_id=record.get('job_id'), user_id=user_id, status=record.get('status'))
 
             return Result(success=True, data=record, code=ResultCode.SUCCESS)
 
@@ -122,6 +104,34 @@ class JobsRepository:
                 error=error_msg,
                 code=ResultCode.DYNAMODB_ERROR,
             )
+
+    def list_jobs(self, limit: int = 20) -> list[dict[str, Any]]:
+        """List job posting records in the jobs table."""
+        safe_limit = max(1, min(limit, 100))
+        try:
+            response = self.table.scan(
+                FilterExpression=Attr('title').exists(),
+                Limit=safe_limit,
+            )
+        except ClientError as e:
+            logger.error('Failed to list jobs', error=str(e))
+            return []
+        items = response.get('Items', [])
+        return [item for item in items if isinstance(item, dict)]
+
+    def get_jobs_by_user(self, user_id: str, limit: int = 20) -> list[dict[str, Any]]:
+        """List jobs that belong to a specific user."""
+        safe_limit = max(1, min(limit, 100))
+        try:
+            response = self.table.scan(
+                FilterExpression=Attr('user_id').eq(user_id) & Attr('title').exists(),
+                Limit=safe_limit,
+            )
+        except ClientError as e:
+            logger.error('Failed to list jobs by user', user_id=user_id, error=str(e))
+            return []
+        items = response.get('Items', [])
+        return [item for item in items if isinstance(item, dict)]
 
     @tracer.capture_method(capture_response=False)
     def get_job(self, job_id: str) -> dict[str, Any] | None:
@@ -369,3 +379,60 @@ class JobsRepository:
         if not isinstance(physical_job_id, str) or not physical_job_id.strip():
             raise ValueError('Adapter returned invalid job_id for jobs table key')
         return {'job_id': physical_job_id.strip()}
+
+    @staticmethod
+    def _is_vpr_payload(job_data: dict[str, Any]) -> bool:
+        return 'application_id' in job_data or 'input_data' in job_data
+
+    def _build_vpr_job_record(self, job_data: dict[str, Any], resolved_job_id: str, user_id: str) -> dict[str, Any]:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        job_key = self._build_job_key(resolved_job_id)
+        ttl_timestamp = job_data.get('ttl')
+        if ttl_timestamp is None:
+            ttl_timestamp = int((datetime.now(timezone.utc).timestamp() + 24 * 3600))
+        record = {
+            'job_id': job_key['job_id'],
+            'status': job_data.get('status', 'PENDING'),
+            'created_at': job_data.get('created_at', now_iso),
+            'user_id': user_id,
+            'application_id': job_data.get('application_id', ''),
+            'input_data': job_data.get('input_data', {}),
+            'ttl': ttl_timestamp,
+        }
+        if job_data.get('idempotency_key'):
+            record['idempotency_key'] = job_data['idempotency_key']
+        return record
+
+    def _build_api_job_record(self, job_data: dict[str, Any], resolved_job_id: str, user_id: str) -> dict[str, Any]:
+        title = str(job_data.get('title', '')).strip()
+        company_name = str(job_data.get('company_name') or job_data.get('company') or '').strip()
+        description = str(job_data.get('description', '')).strip()
+        if not title or not company_name or not description:
+            raise ValueError('title, company_name, and description are required')
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        job_key = self._build_job_key(resolved_job_id)
+        status = str(job_data.get('status', 'active')).strip() or 'active'
+
+        requirements: list[str] = []
+        raw_requirements = job_data.get('requirements')
+        if isinstance(raw_requirements, list):
+            requirements = [str(item) for item in raw_requirements if str(item).strip()]
+
+        record: dict[str, Any] = {
+            'job_id': job_key['job_id'],
+            'user_id': user_id,
+            'title': title,
+            'company_name': company_name,
+            'company': company_name,
+            'description': description,
+            'status': status,
+            'created_at': job_data.get('created_at', now_iso),
+            'entity_type': 'JOB',
+        }
+        url_value = job_data.get('url')
+        if isinstance(url_value, str) and url_value.strip():
+            record['url'] = url_value.strip()
+        if requirements:
+            record['requirements'] = requirements
+        return record
