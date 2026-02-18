@@ -1780,3 +1780,39 @@ Results:
 - [x] GET /cv-tailoring/{cvTailoringId} returns CV status
 - [x] GET /users/me/tailored-cvs returns user's CV list
 - [x] Unit tests pass
+
+## Step 10.7 Cover Letter Status Endpoints (2026-02-18)
+
+**Execution timestamp:** 2026-02-18
+**Scope:** Cover letter status/list endpoints (`/cover-letter/{coverLetterId}`, `/users/me/cover-letters`)
+
+### Implementation completed
+
+- Updated `src/backend/careervp/handlers/cover_letter_handler.py`:
+  - Added route dispatch for:
+    - `GET /cover-letter/{coverLetterId}` -> `get_cover_letter_status()` -> `200 OK`
+    - `GET /users/me/cover-letters` -> `list_cover_letters()` -> `200 OK`
+  - Preserved existing `POST /cover-letter/generate` behavior and response shape.
+  - Added user identity extraction (authorizer claims + `AUTHORIZER_DISABLED` fallback via `x-user-id`).
+  - Added DynamoDB reads for cover letter artifacts from users table (`pk=user_id`, `sk` prefix `ARTIFACT#COVER_LETTER#`).
+  - Added status/list response shaping to align with OpenAPI models (`id`, `status`, `result`, `cover_letters`).
+- Added `src/backend/tests/unit/test_cover_letter_status.py`:
+  - `test_get_cover_letter_status_returns_cover_letter`
+  - `test_get_users_me_cover_letters_returns_users_letters`
+
+### Validation evidence
+
+- Unit tests:
+  - Command: `uv run pytest tests/unit/test_cover_letter_status.py -v`
+  - Result: `2 passed`
+- Type check (supplemental safety check):
+  - Command: `uv run mypy careervp/handlers/cover_letter_handler.py --strict`
+  - Result: `Success: no issues found in 1 source file`
+- Lint (supplemental safety check):
+  - Command: `uv run ruff check careervp/handlers/cover_letter_handler.py tests/unit/test_cover_letter_status.py`
+  - Result: `All checks passed!`
+
+### Validation criteria
+
+- [x] GET /cover-letter/{coverLetterId} returns cover letter
+- [x] GET /users/me/cover-letters returns user's letters
