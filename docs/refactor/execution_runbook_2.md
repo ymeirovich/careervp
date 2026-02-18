@@ -1748,7 +1748,7 @@ uv run mypy careervp/handlers/ careervp/models/ careervp/dal/ --strict
 **READ FIRST:**
 - `docs/refactor/specs/cdk_async_infrastructure_spec.yaml`
 - `docs/refactor/specs/cdk_e2e_validation_spec.yaml`
-- `docs/refactor/specs/prompt_optimization_cdk_spec.yaml`
+- `docs/refactor/specs/prompt_optimization_cdk_spec.yaml `
 
 ROLE: Senior AWS Infrastructure Engineer specializing in CDK, DynamoDB, and serverless
 
@@ -1796,7 +1796,7 @@ OUTPUT FORMAT: Provide implementation with inline comments. Output results to do
 """
 **READ FIRST:**
 - `docs/refactor/specs/cdk_async_infrastructure_spec.yaml`
-- `docs/refactor/specs/prompt_optimization_cdk_spec.yaml`
+- `docs/refactor/specs/prompt_optimization_cdk_spec.yaml (Rules: S3_001, S3_002, S3_003, S3_004)`
 
 ROLE: Senior AWS Infrastructure Engineer specializing in CDK and S3
 

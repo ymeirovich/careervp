@@ -18,6 +18,8 @@ class ApiDbConstruct(Construct):
     Tables:
     - Users: Single table design for user profiles and parsed CVs
     - Idempotency: For Lambda idempotency
+    - Jobs: Async VPR job tracking
+    - CVs / Applications / Gap Responses / Knowledge / Artifacts / Company Research Cache
 
     Buckets:
     - CV Bucket: Stores uploaded CV files (PDF, DOCX)
@@ -30,18 +32,26 @@ class ApiDbConstruct(Construct):
         # DynamoDB Tables
         self.users_table: dynamodb.TableV2 = self._build_users_table(id_)
         self.idempotency_db: dynamodb.TableV2 = self._build_idempotency_table(id_)
+        self.jobs_table: dynamodb.TableV2 = self._build_vpr_jobs_table(id_)
+
+        # New async/storage tables required by endpoint coverage specs.
+        self.cvs_table: dynamodb.TableV2 = self._build_cvs_table(id_)
+        self.applications_table: dynamodb.TableV2 = self._build_applications_table(id_)
+        self.gap_responses_table: dynamodb.TableV2 = self._build_gap_responses_table(
+            id_
+        )
+        self.knowledge_table: dynamodb.TableV2 = self._build_knowledge_table(id_)
+        self.artifacts_table: dynamodb.TableV2 = self._build_artifacts_table(id_)
+        self.company_research_cache_table: dynamodb.TableV2 = (
+            self._build_company_research_cache_table(id_)
+        )
 
         # S3 Buckets
         self.cv_bucket: s3.Bucket = self._build_cv_bucket(id_)
+        self.vpr_results_bucket: s3.Bucket = self._build_vpr_results_bucket(id_)
 
         # Backwards compatibility alias
         self.db = self.users_table
-
-        # VPR Async Architecture - Jobs Table
-        self.jobs_table: dynamodb.TableV2 = self._build_vpr_jobs_table(id_)
-
-        # VPR Async Architecture - Results Bucket
-        self.vpr_results_bucket: s3.Bucket = self._build_vpr_results_bucket(id_)
 
     def _build_users_table(self, id_prefix: str) -> dynamodb.TableV2:
         """
@@ -199,6 +209,198 @@ class ApiDbConstruct(Construct):
         CfnOutput(
             self, id=constants.JOBS_TABLE_OUTPUT, value=table.table_name
         ).override_logical_id(constants.JOBS_TABLE_OUTPUT)
+        return table
+
+    def _build_cvs_table(self, id_prefix: str) -> dynamodb.TableV2:
+        """CV metadata table. TTL keeps stale CV artifacts for 90 days."""
+        table_id = f"{id_prefix}CvsTable"
+        table = dynamodb.TableV2(
+            self,
+            table_id,
+            table_name=self.naming.table_name(constants.CVS_TABLE_NAME),
+            partition_key=dynamodb.Attribute(
+                name="userId", type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="cvId", type=dynamodb.AttributeType.STRING
+            ),
+            billing=dynamodb.Billing.on_demand(),
+            time_to_live_attribute="expiration",
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True,
+                recovery_period_in_days=7,
+            ),
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+        CfnOutput(
+            self, id=constants.CVS_TABLE_OUTPUT, value=table.table_name
+        ).override_logical_id(constants.CVS_TABLE_OUTPUT)
+        return table
+
+    def _build_applications_table(self, id_prefix: str) -> dynamodb.TableV2:
+        """Applications table with status-index for per-user workflow filtering."""
+        table_id = f"{id_prefix}ApplicationsTable"
+        table = dynamodb.TableV2(
+            self,
+            table_id,
+            table_name=self.naming.table_name(constants.APPLICATIONS_TABLE_NAME),
+            partition_key=dynamodb.Attribute(
+                name="userId", type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="applicationId", type=dynamodb.AttributeType.STRING
+            ),
+            billing=dynamodb.Billing.on_demand(),
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True,
+                recovery_period_in_days=7,
+            ),
+            removal_policy=RemovalPolicy.DESTROY,
+            global_secondary_indexes=[
+                dynamodb.GlobalSecondaryIndexPropsV2(
+                    index_name="status-index",
+                    partition_key=dynamodb.Attribute(
+                        name="userId", type=dynamodb.AttributeType.STRING
+                    ),
+                    sort_key=dynamodb.Attribute(
+                        name="status", type=dynamodb.AttributeType.STRING
+                    ),
+                    projection_type=dynamodb.ProjectionType.ALL,
+                ),
+            ],
+        )
+        CfnOutput(
+            self, id=constants.APPLICATIONS_TABLE_OUTPUT, value=table.table_name
+        ).override_logical_id(constants.APPLICATIONS_TABLE_OUTPUT)
+        return table
+
+    def _build_gap_responses_table(self, id_prefix: str) -> dynamodb.TableV2:
+        """Gap-analysis question/answer table with 365-day TTL for old responses."""
+        table_id = f"{id_prefix}GapResponsesTable"
+        table = dynamodb.TableV2(
+            self,
+            table_id,
+            table_name=self.naming.table_name(constants.GAP_RESPONSES_TABLE_NAME),
+            partition_key=dynamodb.Attribute(
+                name="userId", type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="questionId", type=dynamodb.AttributeType.STRING
+            ),
+            billing=dynamodb.Billing.on_demand(),
+            time_to_live_attribute="expiration",
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True,
+                recovery_period_in_days=7,
+            ),
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+        CfnOutput(
+            self, id=constants.GAP_RESPONSES_TABLE_OUTPUT, value=table.table_name
+        ).override_logical_id(constants.GAP_RESPONSES_TABLE_OUTPUT)
+        return table
+
+    def _build_knowledge_table(self, id_prefix: str) -> dynamodb.TableV2:
+        """Knowledge table with entity-index and 365-day TTL for retained entries."""
+        table_id = f"{id_prefix}KnowledgeTable"
+        table = dynamodb.TableV2(
+            self,
+            table_id,
+            table_name=self.naming.table_name(constants.KNOWLEDGE_TABLE_NAME),
+            partition_key=dynamodb.Attribute(
+                name="userEmail", type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="knowledgeType", type=dynamodb.AttributeType.STRING
+            ),
+            billing=dynamodb.Billing.on_demand(),
+            time_to_live_attribute="expiration",
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True,
+                recovery_period_in_days=7,
+            ),
+            removal_policy=RemovalPolicy.DESTROY,
+            global_secondary_indexes=[
+                dynamodb.GlobalSecondaryIndexPropsV2(
+                    index_name="entity-index",
+                    partition_key=dynamodb.Attribute(
+                        name="knowledgeType", type=dynamodb.AttributeType.STRING
+                    ),
+                    sort_key=dynamodb.Attribute(
+                        name="entityId", type=dynamodb.AttributeType.STRING
+                    ),
+                    projection_type=dynamodb.ProjectionType.ALL,
+                ),
+            ],
+        )
+        CfnOutput(
+            self, id=constants.KNOWLEDGE_TABLE_OUTPUT, value=table.table_name
+        ).override_logical_id(constants.KNOWLEDGE_TABLE_OUTPUT)
+        return table
+
+    def _build_artifacts_table(self, id_prefix: str) -> dynamodb.TableV2:
+        """Generated artifact metadata table with type-index and 90-day TTL."""
+        table_id = f"{id_prefix}ArtifactsTable"
+        table = dynamodb.TableV2(
+            self,
+            table_id,
+            table_name=self.naming.table_name(constants.ARTIFACTS_TABLE_NAME),
+            partition_key=dynamodb.Attribute(
+                name="applicationId", type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="artifactId", type=dynamodb.AttributeType.STRING
+            ),
+            billing=dynamodb.Billing.on_demand(),
+            time_to_live_attribute="expiration",
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True,
+                recovery_period_in_days=7,
+            ),
+            removal_policy=RemovalPolicy.DESTROY,
+            global_secondary_indexes=[
+                dynamodb.GlobalSecondaryIndexPropsV2(
+                    index_name="type-index",
+                    partition_key=dynamodb.Attribute(
+                        name="applicationId", type=dynamodb.AttributeType.STRING
+                    ),
+                    sort_key=dynamodb.Attribute(
+                        name="artifactType", type=dynamodb.AttributeType.STRING
+                    ),
+                    projection_type=dynamodb.ProjectionType.ALL,
+                ),
+            ],
+        )
+        CfnOutput(
+            self, id=constants.ARTIFACTS_TABLE_OUTPUT, value=table.table_name
+        ).override_logical_id(constants.ARTIFACTS_TABLE_OUTPUT)
+        return table
+
+    def _build_company_research_cache_table(self, id_prefix: str) -> dynamodb.TableV2:
+        """Company research cache table with 30-day TTL via expiresAt."""
+        table_id = f"{id_prefix}CompanyResearchCacheTable"
+        table = dynamodb.TableV2(
+            self,
+            table_id,
+            table_name=self.naming.table_name(
+                constants.COMPANY_RESEARCH_CACHE_TABLE_NAME
+            ),
+            partition_key=dynamodb.Attribute(
+                name="cacheKey", type=dynamodb.AttributeType.STRING
+            ),
+            billing=dynamodb.Billing.on_demand(),
+            time_to_live_attribute="expiresAt",
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True,
+                recovery_period_in_days=7,
+            ),
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+        CfnOutput(
+            self,
+            id=constants.COMPANY_RESEARCH_CACHE_TABLE_OUTPUT,
+            value=table.table_name,
+        ).override_logical_id(constants.COMPANY_RESEARCH_CACHE_TABLE_OUTPUT)
         return table
 
     def _build_vpr_results_bucket(self, id_prefix: str) -> s3.Bucket:

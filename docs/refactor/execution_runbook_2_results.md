@@ -570,3 +570,111 @@ Executed endpoints and HTTP results:
 - ✅ Test 4 PASS
 - ✅ Smoke tests PASS
 - ✅ All requested tests in this run passed successfully
+
+---
+
+## Step 11.3 (2026-02-18): Add Missing DynamoDB Tables to `ApiDbConstruct`
+
+### Implementation Completed
+- Updated `infra/careervp/api_db_construct.py`:
+  - Added six new table properties in `ApiDbConstruct.__init__` with inline comments:
+    - `self.cvs_table`
+    - `self.applications_table`
+    - `self.gap_responses_table`
+    - `self.knowledge_table`
+    - `self.artifacts_table`
+    - `self.company_research_cache_table`
+  - Added six new table builder methods:
+    - `_build_cvs_table(...)`
+    - `_build_applications_table(...)`
+    - `_build_gap_responses_table(...)`
+    - `_build_knowledge_table(...)`
+    - `_build_artifacts_table(...)`
+    - `_build_company_research_cache_table(...)`
+  - Applied required table settings to all six:
+    - `billing=dynamodb.Billing.on_demand()` (PAY_PER_REQUEST)
+    - `point_in_time_recovery_specification` enabled
+    - TTL attributes for ephemeral/cache tables
+    - GSIs for `status-index`, `entity-index`, and `type-index`
+  - Added `CfnOutput` exports for each new table output key.
+  - Fixed a construct ID collision by using unique construct IDs (`CvsTable`, `ApplicationsTable`, etc.) instead of reusing raw feature names.
+
+- Updated `infra/careervp/constants.py`:
+  - Added table constants:
+    - `CVS_TABLE_NAME = "cvs"`
+    - `APPLICATIONS_TABLE_NAME = "applications"`
+    - `GAP_RESPONSES_TABLE_NAME = "gap-responses"`
+    - `KNOWLEDGE_TABLE_NAME = "knowledge"`
+    - `ARTIFACTS_TABLE_NAME = "artifacts"`
+    - `COMPANY_RESEARCH_CACHE_TABLE_NAME = "company-research-cache"`
+  - Added table output constants:
+    - `CVS_TABLE_OUTPUT`
+    - `APPLICATIONS_TABLE_OUTPUT`
+    - `GAP_RESPONSES_TABLE_OUTPUT`
+    - `KNOWLEDGE_TABLE_OUTPUT`
+    - `ARTIFACTS_TABLE_OUTPUT`
+    - `COMPANY_RESEARCH_CACHE_TABLE_OUTPUT`
+
+- Updated `src/backend/tests/infrastructure/test_cdk.py`:
+  - Updated DynamoDB table count assertion from `4` to `10`.
+
+### Table Definitions Added
+- `cvs_table`
+  - PK: `userId`, SK: `cvId`
+  - TTL attribute: `expiration` (90-day policy at application layer)
+- `applications_table`
+  - PK: `userId`, SK: `applicationId`
+  - GSI: `status-index` (`userId` + `status`)
+- `gap_responses_table`
+  - PK: `userId`, SK: `questionId`
+  - TTL attribute: `expiration` (365-day policy at application layer)
+- `knowledge_table`
+  - PK: `userEmail`, SK: `knowledgeType`
+  - GSI: `entity-index` (`knowledgeType` + `entityId`)
+  - TTL attribute: `expiration` (365-day policy at application layer)
+- `artifacts_table`
+  - PK: `applicationId`, SK: `artifactId`
+  - GSI: `type-index` (`applicationId` + `artifactType`)
+  - TTL attribute: `expiration` (90-day policy at application layer)
+- `company_research_cache_table`
+  - PK: `cacheKey`
+  - TTL attribute: `expiresAt` (30-day policy at application layer)
+
+### Validation Criteria
+- [x] All 6 tables defined in `api_db_construct.py`
+- [x] Each table has correct partition key (and sort key where specified)
+- [x] PAY_PER_REQUEST billing on all tables
+- [x] PITR enabled on all tables
+- [x] TTL configured on cache/ephemeral tables
+- [x] GSIs configured where specified
+
+### Validation Commands and Results
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/infra
+uv run ruff format careervp/api_db_construct.py careervp/constants.py
+uv run ruff check careervp/api_db_construct.py careervp/constants.py --fix
+uv run mypy careervp/api_db_construct.py --strict
+uv run mypy careervp/constants.py --strict
+
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+uv run ruff format tests/infrastructure/test_cdk.py
+uv run ruff check tests/infrastructure/test_cdk.py --fix
+uv run mypy tests/infrastructure/test_cdk.py --strict
+uv run python scripts/validate_naming.py --path ../../infra --verbose
+uv run python scripts/validate_naming.py --path ../../infra --strict --verbose
+
+cd /Users/yitzchak/Documents/dev/careervp/infra
+PATH="/Users/yitzchak/Documents/dev/careervp/infra/.venv/bin:$PATH" npx cdk synth --app='python app.py'
+uv run pytest tests/infrastructure/test_api_construct.py -v --tb=short
+
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+uv run pytest tests/infrastructure/test_cdk.py -v --tb=short
+```
+
+Results:
+- `ruff`: pass
+- `mypy --strict`: pass
+- naming validator (`--verbose`, `--strict --verbose`): pass
+- `cdk synth`: pass
+- infra pytest: `4 passed`
+- backend infra pytest: `1 passed`
