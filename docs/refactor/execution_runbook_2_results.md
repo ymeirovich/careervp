@@ -1849,3 +1849,42 @@ Results:
 ### Validation criteria
 
 - [x] GET /interview-prep/{interviewPrepId} returns prep data
+
+## Step 10.9 Company Research GET Endpoint (2026-02-18)
+
+**Execution timestamp:** 2026-02-18
+**Scope:** Company research endpoint (`/company-research/{jobId}`)
+
+### Implementation completed
+
+- Updated `src/backend/careervp/handlers/company_research_handler.py`:
+  - Added route dispatch for `GET /company-research/{jobId}` -> `get_company_research()`.
+  - Added explicit GET response code behavior: always returns `200 OK` on successful fetch (never `201`).
+  - Preserved existing POST research flow compatibility (`POST /company-research/fetch` and legacy POST-like test events without `httpMethod`).
+  - Added auth identity extraction (authorizer claims + `AUTHORIZER_DISABLED` fallback via `x-user-id`).
+  - Added DynamoDB lookup support for existing storage variants:
+    - `pk=<user_id>, sk=ARTIFACT#COMPANY_RESEARCH#{jobId}`
+    - `pk=<user_id>, sk=COMPANY_RESEARCH#{jobId}`
+    - `pk=USER#{user_id}, sk=COMPANY_RESEARCH#{jobId}`
+  - Added OpenAPI-aligned response shaping for `CompanyResearchResultResponse` fields:
+    - `id`, `company_name`, `mission`, `values`, `recent_news`, `culture`, `products`, `funding_status`, `size_range`, `industry`
+- Added `src/backend/tests/unit/test_company_research_status.py`:
+  - `test_get_company_research_returns_200_ok`
+  - `test_get_company_research_matches_openapi_schema`
+
+### Validation evidence
+
+- Unit tests:
+  - Command: `uv run pytest tests/unit/test_company_research_handler.py tests/unit/test_company_research_status.py -v`
+  - Result: `7 passed`
+- Type check (supplemental safety check):
+  - Command: `uv run mypy careervp/handlers/company_research_handler.py --strict`
+  - Result: `Success: no issues found in 1 source file`
+- Lint (supplemental safety check):
+  - Command: `uv run ruff check careervp/handlers/company_research_handler.py tests/unit/test_company_research_status.py`
+  - Result: `All checks passed!`
+
+### Validation criteria
+
+- [x] GET /company-research/{jobId} returns 200 OK
+- [x] Response matches OpenAPI schema
