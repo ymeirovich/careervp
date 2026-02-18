@@ -1506,3 +1506,51 @@ Results:
 - `pytest`: `5 passed`
 - `ruff check`: `All checks passed!`
 - `mypy --strict`: `Success: no issues found in 1 source file`
+
+## Step 10.1 Auth Endpoints Implementation (2026-02-18)
+
+**Execution timestamp:** 2026-02-18
+**Scope:** OpenAPI auth endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`)
+
+### Implementation completed
+
+- Replaced `src/backend/careervp/handlers/auth_handler.py` with Powertools route handlers:
+  - `@app.post('/auth/register')` -> `register_user()` -> `201 Created`
+  - `@app.post('/auth/login')` -> `login_user()` -> `200 OK`
+  - `@app.post('/auth/refresh')` -> `refresh_token()` -> `200 OK`
+  - Preserved Lambda entrypoint pattern: `lambda_handler(event, context)` using shared `app.resolve(...)`.
+- Added `src/backend/careervp/logic/auth_service.py`:
+  - `AuthService.register_user`, `login_user`, `refresh_token`
+  - RS256 JWT mint/validate (`access` token TTL: 1 hour, `refresh` token TTL: 7 days)
+  - Password hashing/verification (bcrypt when available; secure PBKDF2 fallback when bcrypt dependency is unavailable in runtime)
+  - User profile persistence/query against users table (`pk`/`sk`, `email-index` lookup)
+- Updated `infra/careervp/api_construct.py`:
+  - Added `TABLE_NAME` env injection for `AuthApiLambda` so auth endpoints can resolve the users table in deployed environments.
+- Replaced `src/backend/tests/unit/test_auth_handler.py` with required endpoint tests:
+  - `test_register_creates_user`
+  - `test_login_returns_jwt`
+  - `test_refresh_returns_new_jwt`
+
+### Validation evidence
+
+- Unit tests:
+  - Command: `uv run pytest tests/unit/test_auth_handler.py -v`
+  - Result: `3 passed`
+- Type check:
+  - Command: `uv run mypy careervp/handlers/auth_handler.py --strict`
+  - Result: `Success: no issues found in 1 source file`
+- Lint:
+  - Command: `uv run ruff check careervp/handlers/auth_handler.py`
+  - Result: `All checks passed!`
+- JWT contract behavior validated by tests:
+  - `access_token` contains `user_id` and `exp - iat == 3600`
+  - `refresh_token` validity window `exp - iat == 604800` (7 days)
+
+### Validation criteria
+
+- [x] All 3 endpoints return correct HTTP status codes
+- [x] JWT contains user_id and expires in 1 hour
+- [x] Refresh token valid for 7 days
+- [x] Unit tests pass: `pytest tests/unit/test_auth_handler.py -v`
+- [x] Type check passes: `mypy careervp/handlers/auth_handler.py --strict`
+- [x] Lint passes: `ruff check careervp/handlers/auth_handler.py`

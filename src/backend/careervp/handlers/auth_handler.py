@@ -1,230 +1,181 @@
 """
-JWT-based API Authorization Lambda Handler.
-Per docs/specs/security_spec.yaml (SEC-001).
+Authentication API handler.
 
-This Lambda Authorizer validates JWT tokens and returns IAM policies for API Gateway.
+Implements OpenAPI endpoints:
+- POST /auth/register
+- POST /auth/login
+- POST /auth/refresh
 """
 
-from __future__ import annotations
-
-import os
+import json
+from http import HTTPStatus
 from typing import Annotated, Any
 
-import boto3
-import jwt
+from aws_lambda_powertools.event_handler import Response, content_types
 from aws_lambda_powertools.logging.correlation_paths import API_GATEWAY_REST
 from aws_lambda_powertools.utilities.typing import LambdaContext
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field, ValidationError
 
-from careervp.handlers.models.env_vars import Observability
 from careervp.handlers.utils.observability import logger, tracer
+from careervp.handlers.utils.rest_api_resolver import app
+from careervp.logic.auth_service import (
+    AuthService,
+    ConfigurationError,
+    InvalidCredentialsError,
+    InvalidTokenError,
+    UserAlreadyExistsError,
+)
+
+_auth_service: AuthService | None = None
 
 
-class AuthEnvVars(Observability):
-    """Environment variables for auth handler."""
+class RegisterRequest(BaseModel):
+    """Register request payload per OpenAPI schema."""
 
-    TOKEN_BLACKLIST_TABLE_NAME: Annotated[str, Field(min_length=1)]
-    JWT_SECRET: Annotated[str, Field(min_length=1)]
-    JWT_ALGORITHM: str = 'HS256'
-
-
-class User(BaseModel):
-    """User model extracted from JWT token."""
-
-    user_email: str
-    entity_type: str = 'USER'
+    email: EmailStr
+    password: Annotated[str, Field(min_length=8)]
+    name: Annotated[str, Field(min_length=1)]
 
 
-def _get_dynamodb_client() -> Any:
-    """Get DynamoDB client (separated for testability)."""
-    return boto3.client('dynamodb')
+class LoginRequest(BaseModel):
+    """Login request payload per OpenAPI schema."""
+
+    email: EmailStr
+    password: Annotated[str, Field(min_length=1)]
 
 
-@tracer.capture_method
-def _is_token_blacklisted(token: str, table_name: str) -> bool:
-    """
-    Check if a token is in the DynamoDB blacklist.
+class RefreshRequest(BaseModel):
+    """Optional fallback request body for refresh endpoint."""
 
-    Args:
-        token: JWT token string
-        table_name: DynamoDB table name for blacklist
+    refresh_token: Annotated[str, Field(min_length=1)]
 
-    Returns:
-        True if token is blacklisted, False otherwise
-    """
+
+def _get_auth_service() -> AuthService:
+    global _auth_service
+    if _auth_service is None:
+        _auth_service = AuthService.from_env()
+    return _auth_service
+
+
+def _reset_auth_service_cache() -> None:
+    """Testing hook to reset cached AuthService."""
+    global _auth_service
+    _auth_service = None
+
+
+def _json_response(status: HTTPStatus, body: dict[str, Any]) -> Response[str]:
+    return Response(
+        status_code=status.value,
+        content_type=content_types.APPLICATION_JSON,
+        body=json.dumps(body),
+    )
+
+
+def _extract_refresh_token() -> str | None:
+    headers = app.current_event.headers or {}
+    auth_header = headers.get('Authorization') or headers.get('authorization')
+    if isinstance(auth_header, str) and auth_header.startswith('Bearer '):
+        return auth_header[7:].strip()
+
+    # Body fallback keeps compatibility for clients that submit refresh_token in JSON.
     try:
-        client = _get_dynamodb_client()
-        response = client.get_item(
-            TableName=table_name,
-            Key={'token': {'S': token}},
-        )
-        is_blacklisted = 'Item' in response
-        if is_blacklisted:
-            logger.info('Token found in blacklist')
-        return is_blacklisted
-    except Exception as exc:
-        logger.error('Failed to check token blacklist', error=str(exc))
-        # Fail closed: treat as blacklisted on error
-        return True
-
-
-@tracer.capture_method
-def validate_token(token: str) -> bool:
-    """
-    Validate a JWT token.
-
-    Checks:
-    - JWT signature and expiration
-    - DynamoDB blacklist
-
-    Args:
-        token: JWT token string
-
-    Returns:
-        True if token is valid, False otherwise
-    """
-    try:
-        jwt_secret = os.environ['JWT_SECRET']
-        jwt_algorithm = os.environ.get('JWT_ALGORITHM', 'HS256')
-        table_name = os.environ['TOKEN_BLACKLIST_TABLE_NAME']
-
-        # Decode and verify JWT
-        jwt.decode(token, jwt_secret, algorithms=[jwt_algorithm])
-
-        # Check blacklist
-        if _is_token_blacklisted(token, table_name):
-            logger.warning('Token is blacklisted')
-            return False
-
-        logger.info('Token validated successfully')
-        return True
-
-    except jwt.ExpiredSignatureError:
-        logger.warning('Token has expired')
-        return False
-    except jwt.InvalidTokenError as exc:
-        logger.warning('Invalid token', error=str(exc))
-        return False
-    except Exception as exc:
-        logger.error('Unexpected error during token validation', error=str(exc))
-        return False
-
-
-@tracer.capture_method
-def get_user_from_token(token: str) -> User:
-    """
-    Extract user information from JWT token.
-
-    Args:
-        token: JWT token string
-
-    Returns:
-        User model with user_email and entity_type
-
-    Raises:
-        ValueError: If token is invalid or missing required fields
-    """
-    try:
-        jwt_secret = os.environ['JWT_SECRET']
-        jwt_algorithm = os.environ.get('JWT_ALGORITHM', 'HS256')
-
-        payload = jwt.decode(token, jwt_secret, algorithms=[jwt_algorithm])
-
-        user_email = payload.get('user_email')
-        if not user_email:
-            raise ValueError('Token missing user_email field')
-
-        entity_type = payload.get('entity_type', 'USER')
-
-        logger.info('Successfully extracted user from token', user_email=user_email)
-        return User(user_email=user_email, entity_type=entity_type)
-
-    except jwt.InvalidTokenError as exc:
-        logger.error('Failed to decode token', error=str(exc))
-        raise ValueError(f'Invalid token: {exc}') from exc
+        body = app.current_event.json_body
     except ValueError:
-        raise
-    except Exception as exc:
-        logger.error('Unexpected error extracting user from token', error=str(exc))
-        raise ValueError(f'Failed to extract user: {exc}') from exc
+        return None
+    if isinstance(body, dict):
+        try:
+            request = RefreshRequest.model_validate(body)
+            return request.refresh_token
+        except ValidationError:
+            return None
+    return None
 
 
-def _generate_policy(principal_id: str, effect: str, resource: str, context: dict[str, str] | None = None) -> dict[str, Any]:
-    """
-    Generate an IAM policy for API Gateway.
+@app.post('/auth/register')
+@tracer.capture_method(capture_response=False)
+def register_user() -> Response[str]:
+    """Create a new user and return access/refresh tokens."""
+    try:
+        request = RegisterRequest.model_validate(app.current_event.json_body)
+    except (ValidationError, TypeError, ValueError) as exc:
+        logger.warning('Invalid register request', error=str(exc))
+        return _json_response(
+            HTTPStatus.BAD_REQUEST,
+            {'error': 'Invalid request payload'},
+        )
 
-    Args:
-        principal_id: User identifier (user_email)
-        effect: 'Allow' or 'Deny'
-        resource: ARN of the API Gateway resource
-        context: Optional context to attach to policy
+    try:
+        tokens = _get_auth_service().register_user(
+            email=request.email,
+            password=request.password,
+            name=request.name,
+        )
+    except UserAlreadyExistsError:
+        return _json_response(HTTPStatus.BAD_REQUEST, {'error': 'User already exists'})
+    except ConfigurationError as exc:
+        logger.exception('Auth configuration error', error=str(exc))
+        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Auth service misconfigured'})
+    except Exception as exc:  # pragma: no cover - defensive safeguard.
+        logger.exception('Unexpected register failure', error=str(exc))
+        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Internal server error'})
 
-    Returns:
-        IAM policy document
-    """
-    policy: dict[str, Any] = {
-        'principalId': principal_id,
-        'policyDocument': {
-            'Version': '2012-10-17',
-            'Statement': [
-                {
-                    'Action': 'execute-api:Invoke',
-                    'Effect': effect,
-                    'Resource': resource,
-                }
-            ],
-        },
-    }
-    if context:
-        policy['context'] = context
-    return policy
+    return _json_response(HTTPStatus.CREATED, tokens.to_response())
+
+
+@app.post('/auth/login')
+@tracer.capture_method(capture_response=False)
+def login_user() -> Response[str]:
+    """Authenticate an existing user and return access/refresh tokens."""
+    try:
+        request = LoginRequest.model_validate(app.current_event.json_body)
+    except (ValidationError, TypeError, ValueError) as exc:
+        logger.warning('Invalid login request', error=str(exc))
+        return _json_response(
+            HTTPStatus.BAD_REQUEST,
+            {'error': 'Invalid request payload'},
+        )
+
+    try:
+        tokens = _get_auth_service().login_user(
+            email=request.email,
+            password=request.password,
+        )
+    except InvalidCredentialsError:
+        return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Invalid credentials'})
+    except ConfigurationError as exc:
+        logger.exception('Auth configuration error', error=str(exc))
+        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Auth service misconfigured'})
+    except Exception as exc:  # pragma: no cover - defensive safeguard.
+        logger.exception('Unexpected login failure', error=str(exc))
+        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Internal server error'})
+
+    return _json_response(HTTPStatus.OK, tokens.to_response())
+
+
+@app.post('/auth/refresh')
+@tracer.capture_method(capture_response=False)
+def refresh_token() -> Response[str]:
+    """Refresh access token using a valid refresh token."""
+    refresh_token_value = _extract_refresh_token()
+    if not refresh_token_value:
+        return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Missing refresh token'})
+
+    try:
+        tokens = _get_auth_service().refresh_token(refresh_token_value)
+    except InvalidTokenError:
+        return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Invalid refresh token'})
+    except ConfigurationError as exc:
+        logger.exception('Auth configuration error', error=str(exc))
+        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Auth service misconfigured'})
+    except Exception as exc:  # pragma: no cover - defensive safeguard.
+        logger.exception('Unexpected refresh failure', error=str(exc))
+        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Internal server error'})
+
+    return _json_response(HTTPStatus.OK, tokens.to_response())
 
 
 @logger.inject_lambda_context(correlation_id_path=API_GATEWAY_REST)
 @tracer.capture_lambda_handler(capture_response=False)
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
-    """
-    Lambda Authorizer handler for API Gateway (TOKEN type).
-
-    Validates JWT token from authorizationToken and returns IAM policy.
-
-    Args:
-        event: API Gateway TOKEN authorizer event
-        context: Lambda context
-
-    Returns:
-        IAM policy document (Allow or Deny)
-    """
-    method_arn = event.get('methodArn', '*')
-    token = event.get('authorizationToken', '')
-
-    if not token:
-        logger.warning('Missing authorizationToken')
-        return _generate_policy(principal_id='unknown', effect='Deny', resource=method_arn)
-
-    # Remove 'Bearer ' prefix if present
-    if token.startswith('Bearer '):
-        token = token[7:]
-
-    # Validate token
-    if not validate_token(token):
-        logger.warning('Token validation failed')
-        return _generate_policy(principal_id='unknown', effect='Deny', resource=method_arn)
-
-    # Extract user information
-    try:
-        user = get_user_from_token(token)
-    except ValueError:
-        logger.warning('Failed to extract user from token')
-        return _generate_policy(principal_id='unknown', effect='Deny', resource=method_arn)
-
-    # Generate Allow policy
-    policy = _generate_policy(
-        principal_id=user.user_email,
-        effect='Allow',
-        resource=method_arn,
-        context={'user_email': user.user_email, 'entity_type': user.entity_type},
-    )
-
-    logger.info('Authorization successful', user_email=user.user_email)
-    return policy
+    """Lambda entry point for auth API routes."""
+    return app.resolve(event, context)

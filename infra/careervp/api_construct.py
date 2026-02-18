@@ -1335,6 +1335,7 @@ class ApiConstruct(Construct):
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-auth-api",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
+                "TABLE_NAME": self.api_db.users_table.table_name,
                 "TOKEN_BLACKLIST_TABLE_NAME": self.api_db.idempotency_db.table_name,
                 "JWT_SECRET": "dev-placeholder-secret",
                 "JWT_ALGORITHM": "HS256",
