@@ -13,8 +13,14 @@ def build_system_prompt() -> str:
     """Build system prompt for gap analysis."""
     return (
         'You are a career coach performing gap analysis.\n'
-        'Generate 3-5 targeted questions to surface missing skills or experiences.\n'
-        'Prioritize high-impact gaps and output JSON.\n'
+        'Generate exactly 10 targeted interview-prep questions to surface missing skills or experiences.\n'
+        'Use only these tags in a tags array per question: [CV IMPACT], [TECHNICAL], [BEHAVIORAL], '
+        '[INTERVIEW/MVP ONLY].\n'
+        'Target distribution across the 10 questions: 4 [CV IMPACT], 2 [TECHNICAL], 2 [BEHAVIORAL], '
+        '2 [INTERVIEW/MVP ONLY].\n'
+        'Prioritize high-impact gaps and output JSON only.\n'
+        'Each JSON question must include: question_id, question, impact, probability, tags.\n'
+        'impact/probability must be one of HIGH, MEDIUM, LOW.\n'
     )
 
 

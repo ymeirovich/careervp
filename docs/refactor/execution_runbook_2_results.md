@@ -2,6 +2,61 @@
 
 **Generated:** 2026-02-18
 
+## Step 5.1 Re-run (2026-02-18): Gap Analysis Question Limit + Tagging + CRUD
+
+**Execution timestamp:** 2026-02-18 19:10:00Z
+
+### Implementation Completed
+
+- Updated `src/backend/careervp/logic/gap_analysis.py`
+  - Increased enforced question limit from 5 to 10 (`MAX_QUESTIONS = 10`)
+  - Added robust LLM payload parsing for list / object-with-questions / JSON-string payloads
+  - Added deterministic tag schema and distribution assignment:
+    - `[CV IMPACT]` x4
+    - `[TECHNICAL]` x2
+    - `[BEHAVIORAL]` x2
+    - `[INTERVIEW/MVP ONLY]` x2
+  - Guaranteed each returned question includes a non-empty `tags` array
+  - Added fallback generation to always return exactly 10 questions
+
+- Updated `src/backend/careervp/logic/prompts/gap_analysis_prompt.py`
+  - Prompt now instructs model to return exactly 10 questions
+  - Added explicit tag taxonomy and 4/2/2/2 target distribution requirements
+  - Added explicit JSON field contract (`question_id`, `question`, `impact`, `probability`, `tags`)
+
+- Enhanced `src/backend/careervp/handlers/gap_handler.py`
+  - Implemented endpoint handlers:
+    - `get_questions()` for `GET /gap-analysis/questions/{jobId}` (and compatibility with `/gap-analysis/{jobId}/questions`)
+    - `submit_response()` for `POST /gap-analysis/responses`
+    - `get_responses()` for `GET /gap-analysis/responses/{jobId}`
+  - Added `lambda_handler` route dispatch + CORS for `GET, POST, OPTIONS`
+  - Added DynamoDB response persistence with key `pk=user_id`, `sk=ARTIFACT#GAP_RESPONSES#{job_id}`
+
+- Updated schema/tests
+  - Updated `src/backend/careervp/models/gap_analysis.py` to include `tags` on `GapQuestion`
+  - Added new test module `tests/unit/test_gap_analysis.py` with:
+    - `test_generate_10_questions`
+    - `test_question_tagging_all_categories_present`
+    - `test_question_distribution_meets_targets`
+    - `test_response_storage_persists_correctly`
+  - Aligned existing gap-analysis unit fixtures/tests to the 10-question + tags contract
+
+### Validation Criteria
+
+- [x] Exactly 10 questions generated per request
+- [x] Each question has at least one tag
+- [x] All 4 tag categories represented
+- [x] CRUD endpoints return correct HTTP status codes
+- [x] Unit tests pass: `pytest tests/unit/test_gap_analysis.py -v`
+  - Executed in project-managed env: `uv run --project src/backend pytest tests/unit/test_gap_analysis.py -v`
+  - Result: `4 passed`
+- [x] Type check passes: `mypy careervp/logic/gap_analysis.py --strict`
+  - Executed in project-managed env: `uv run --project src/backend --directory src/backend mypy careervp/logic/gap_analysis.py --strict`
+  - Result: `Success: no issues found in 1 source file`
+- [x] Lint passes: `ruff check careervp/logic/gap_analysis.py`
+  - Executed in project-managed env: `uv run --project src/backend --directory src/backend ruff check careervp/logic/gap_analysis.py`
+  - Result: `All checks passed!`
+
 ## Step 4.1 Re-run (2026-02-18): CV Tailoring 3-Step Pipeline
 
 **Execution timestamp:** 2026-02-18 13:45:32Z

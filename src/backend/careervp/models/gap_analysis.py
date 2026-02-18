@@ -26,6 +26,7 @@ class GapQuestion(BaseModel):
     impact: Annotated[Literal['HIGH', 'MEDIUM', 'LOW'], Field(description='Impact level')]
     probability: Annotated[Literal['HIGH', 'MEDIUM', 'LOW'], Field(description='Probability level')]
     gap_score: Annotated[float, Field(ge=0.0, le=1.0)]
+    tags: Annotated[list[str], Field(min_length=1, description='Question categorization tags')]
 
 
 class GapAnalysisResponse(BaseModel):

@@ -40,11 +40,9 @@ class TestSystemPrompt:
         assert "json" in prompt.lower()
 
     def test_system_prompt_specifies_question_limit(self):
-        """Test that system prompt specifies 3-5 questions."""
+        """Test that system prompt specifies 10 questions."""
         prompt = create_gap_analysis_system_prompt()
-        assert (
-            "3-5" in prompt or "3 to 5" in prompt or ("3" in prompt and "5" in prompt)
-        )
+        assert "10" in prompt
 
     def test_system_prompt_includes_prioritization_guidance(self):
         """Test that system prompt includes prioritization guidance."""
