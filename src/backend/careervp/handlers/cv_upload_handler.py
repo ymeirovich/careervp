@@ -38,7 +38,7 @@ def _get_s3_client() -> BaseClient:
     return boto3.client('s3')
 
 
-@app.post('/api/cv')
+@app.post('/users/me/cv')
 @tracer.capture_method(capture_response=False)
 def upload_cv() -> Response[str]:
     """

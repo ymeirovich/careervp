@@ -15,6 +15,7 @@ from typing import Any
 import boto3
 from botocore.exceptions import ClientError
 
+from careervp.dal.api_storage_adapter import ApiStorageAdapter
 from careervp.handlers.utils.observability import logger, tracer
 from careervp.models.result import Result, ResultCode
 
@@ -29,6 +30,7 @@ class JobsRepository:
         self,
         table_name: str | None = None,
         idempotency_index_name: str = IDEMPOTENCY_INDEX_NAME,
+        storage_adapter: ApiStorageAdapter | None = None,
     ):
         """
         Initialize jobs repository.
@@ -41,6 +43,7 @@ class JobsRepository:
         self.table_name = table_name or self._get_table_name()
         self.table = self.dynamodb.Table(self.table_name)
         self.idempotency_index = idempotency_index_name
+        self.storage_adapter = storage_adapter or ApiStorageAdapter()
 
     def _get_table_name(self) -> str:
         """Get table name from environment or use default."""
@@ -73,6 +76,7 @@ class JobsRepository:
         """
         try:
             now = datetime.now(timezone.utc).isoformat()
+            job_key = self._build_job_key(str(job_data['job_id']))
 
             # Use provided ttl or calculate default (24 hours)
             ttl_timestamp = job_data.get('ttl')
@@ -80,7 +84,7 @@ class JobsRepository:
                 ttl_timestamp = int((datetime.now(timezone.utc).timestamp() + 24 * 3600))
 
             record = {
-                'job_id': job_data['job_id'],
+                'job_id': job_key['job_id'],
                 'status': job_data.get('status', 'PENDING'),
                 'created_at': now,
                 'user_id': job_data['user_id'],
@@ -103,8 +107,11 @@ class JobsRepository:
 
             return Result(success=True, data=record, code=ResultCode.SUCCESS)
 
-        except ClientError as e:
-            error_msg = f'DynamoDB error: {e.response["Error"]["Message"]}'
+        except (ClientError, ValueError) as e:
+            if isinstance(e, ClientError):
+                error_msg = f'DynamoDB error: {e.response["Error"]["Message"]}'
+            else:
+                error_msg = str(e)
             logger.error(
                 error_msg,
                 job_id=job_data.get('job_id'),
@@ -128,7 +135,7 @@ class JobsRepository:
             Job record dict or None if not found
         """
         try:
-            response = self.table.get_item(Key={'job_id': job_id})
+            response = self.table.get_item(Key=self._build_job_key(job_id))
             job: dict[str, Any] | None = response.get('Item')
 
             if job:
@@ -138,7 +145,7 @@ class JobsRepository:
 
             return job
 
-        except ClientError as e:
+        except (ClientError, ValueError) as e:
             logger.error(
                 'Failed to get job',
                 job_id=job_id,
@@ -213,7 +220,7 @@ class JobsRepository:
             update_expr, attr_names, attr_values = self._build_update_expression(updates)
 
             response = self.table.update_item(
-                Key={'job_id': job_id},
+                Key=self._build_job_key(job_id),
                 UpdateExpression=update_expr,
                 ExpressionAttributeNames=attr_names,
                 ExpressionAttributeValues=attr_values,
@@ -230,8 +237,11 @@ class JobsRepository:
 
             return Result(success=True, data=updated_job, code=ResultCode.SUCCESS)
 
-        except ClientError as e:
-            error_msg = f'DynamoDB error: {e.response["Error"]["Message"]}'
+        except (ClientError, ValueError) as e:
+            if isinstance(e, ClientError):
+                error_msg = f'DynamoDB error: {e.response["Error"]["Message"]}'
+            else:
+                error_msg = str(e)
             logger.error(
                 'Failed to update job status',
                 job_id=job_id,
@@ -264,7 +274,7 @@ class JobsRepository:
             update_expr, attr_names, attr_values = self._build_update_expression(updates)
 
             response = self.table.update_item(
-                Key={'job_id': job_id},
+                Key=self._build_job_key(job_id),
                 UpdateExpression=update_expr,
                 ExpressionAttributeNames=attr_names,
                 ExpressionAttributeValues=attr_values,
@@ -281,8 +291,11 @@ class JobsRepository:
 
             return Result(success=True, data=updated_job, code=ResultCode.SUCCESS)
 
-        except ClientError as e:
-            error_msg = f'DynamoDB error: {e.response["Error"]["Message"]}'
+        except (ClientError, ValueError) as e:
+            if isinstance(e, ClientError):
+                error_msg = f'DynamoDB error: {e.response["Error"]["Message"]}'
+            else:
+                error_msg = str(e)
             logger.error(
                 'Failed to update job',
                 job_id=job_id,
@@ -342,3 +355,17 @@ class JobsRepository:
         update_expr = 'SET ' + ', '.join(update_parts)
 
         return update_expr, attr_names, attr_values
+
+    def _build_job_key(self, job_id: str) -> dict[str, str]:
+        """Build DynamoDB key for the jobs table via adapter mapping."""
+        mapping = self.storage_adapter.map_logical_to_physical_keys(
+            resource_type='job',
+            logical_identifiers={'job_id': job_id},
+        )
+        jobs_table = mapping.get('jobs_table')
+        if not isinstance(jobs_table, dict):
+            raise ValueError('Adapter did not return jobs_table mapping for job resource')
+        physical_job_id = jobs_table.get('job_id')
+        if not isinstance(physical_job_id, str) or not physical_job_id.strip():
+            raise ValueError('Adapter returned invalid job_id for jobs table key')
+        return {'job_id': physical_job_id.strip()}

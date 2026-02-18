@@ -158,6 +158,11 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
     return _response(status_code, body, headers)
 
 
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
+    """Alias for standard Lambda entrypoint naming."""
+    return handler(event, context)
+
+
 def _fetch_and_tailor_cv(request: TailorCVRequest) -> Result[Any]:
     """Fetch CV from DAL and invoke tailoring logic."""
     dal = CVTable()

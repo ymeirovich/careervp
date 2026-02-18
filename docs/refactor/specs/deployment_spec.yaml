@@ -2,10 +2,11 @@
 # Source: DEPLOYMENT_OPERATIONS.md
 # Used by: Phase 0 (Security), Phase 8 (Knowledge Base)
 # Updated: NEW 2026-02-15 - Synced active deployed infra keys + storage contract mapping
+# Updated: 2026-02-18 - Synced to storage_contract_spec.yaml v2.0 focused canonical mapping
 
-spec_version: "1.3"
+spec_version: "1.4"
 date_created: "2026-02-12"
-date_updated: "2026-02-15"
+date_updated: "2026-02-18"
 
 naming_convention:
   tables: "NamingUtils.table_name(feature) -> careervp-{feature}-table-{env}"
@@ -88,6 +89,7 @@ s3:
 
 storage_contract:
   canonical_spec: "docs/refactor/specs/storage_contract_spec.yaml"
+  canonical_spec_version: "2.0"
   rule: "OpenAPI logical IDs map to physical keys via DAL adapter; do not require table replacements."
   logical_ids:
     - "cv_id"
