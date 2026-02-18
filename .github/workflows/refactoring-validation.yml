@@ -199,7 +199,7 @@ jobs:
       - name: Naming guardrail
         working-directory: src/backend
         run: |
-          ROOT=$(pwd)/..
+          ROOT=$(git rev-parse --show-toplevel)
           uv run python scripts/validate_naming.py --path "$ROOT/infra" --strict
       - name: Build Lambda code
         working-directory: src/backend
