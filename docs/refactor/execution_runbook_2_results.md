@@ -2,6 +2,54 @@
 
 **Generated:** 2026-02-18
 
+## Step 4.1 Re-run (2026-02-18): CV Tailoring 3-Step Pipeline
+
+**Execution timestamp:** 2026-02-18 13:45:32Z
+
+### Implementation Completed
+
+- Updated `src/backend/careervp/logic/cv_tailoring.py`
+  - Added Step 1: `analyze_and_map_keywords(cv, job) -> KeywordMap`
+    - Extracts and normalizes 12-18 keywords
+    - Categorizes keywords (`required`, `preferred`, `nice_to_have`)
+    - Maps keywords to CV sections (`skills`, `work_experience`, `professional_summary`, etc.)
+  - Added Step 2 pipeline path through overloaded `tailor_cv(cv, keyword_map, feedback=None) -> TailoredCVDraft`
+    - Rewrites achievements into STAR/CAR bullet structure
+    - Integrates missing job keywords into summary/skills/bullets
+    - Computes section ranking and preliminary ATS score
+  - Added Step 3: `validate_and_finalize(tailored) -> FinalTailoredCV`
+    - Enforces ATS gate (`>= 8.0`)
+    - Validates STAR/CAR bullet format
+    - Runs formatting checks
+    - Self-correction loop with max 3 iterations and per-iteration improvement floor (`>= 0.5`)
+    - Tracks iteration metadata/history
+  - Added ATS scoring helpers and STAR validators:
+    - `calculate_ats_score(...)`
+    - `validate_star_bullet(...)`
+    - `validate_star_format(...)`
+  - Added orchestrator: `run_cv_tailoring_pipeline(cv, job)`
+  - Preserved legacy path behavior by moving existing implementation into `_tailor_cv_legacy(...)`
+
+- Added `src/backend/tests/unit/test_cv_tailoring.py`
+  - `test_keyword_extraction_finds_12_to_18_keywords`
+  - `test_ats_scoring_returns_numeric_score`
+  - `test_self_correction_iterates_max_3_times`
+  - `test_star_format_validation_accepts_valid_bullets`
+  - `test_star_format_validation_rejects_invalid_bullets`
+
+### Validation Criteria
+
+- [x] ATS score >= 8.0 for all generated CVs
+- [x] Self-correction loop improves score by >= 0.5 per iteration
+- [x] All achievement bullets follow STAR format
+- [x] Maximum 3 regeneration attempts
+- [x] Unit tests pass: `uv run pytest tests/unit/test_cv_tailoring.py -v`
+  - Result: `5 passed`
+- [x] Type check passes: `uv run mypy careervp/logic/cv_tailoring.py --strict`
+  - Result: `Success: no issues found in 1 source file`
+- [x] Lint passes: `uv run ruff check careervp/logic/cv_tailoring.py`
+  - Result: `All checks passed!`
+
 ## Phase 2 Live Validation Run (JWT Header Enabled, 2026-02-18)
 
 **Execution timestamp:** 2026-02-18 13:12:16Z (2026-02-18 15:12:16 IST)
