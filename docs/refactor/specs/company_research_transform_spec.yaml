@@ -1,1578 +1,220 @@
 # Company Research Transformation Layer Specification
-
-**Document Version:** 1.0
-**Date:** 2026-02-14
-**Status:** READY FOR IMPLEMENTATION
-**Phase:** Company Research (NEW)
-
----
-
-## Table of Contents
-
-1. [Overview](#1-overview)
-2. [Architecture](#2-architecture)
-3. [Data Schemas](#3-data-schemas)
-4. [Transformation Layer](#4-transformation-layer)
-5. [Knowledge Repository Integration](#5-knowledge-repository-integration)
-6. [Constraints](#6-constraints)
-7. [Dependencies](#7-dependencies)
-8. [Validation Requirements](#8-validation-requirements)
-9. [Unit Tests](#9-unit-tests)
-10. [Integration Tests](#10-integration-tests)
-11. [E2E Tests](#11-e2e-tests)
-12. [Live Test on AWS](#12-live-test-on-aws)
-13. [Payload Files](#13-payload-files)
-14. [Reference Specifications](#14-reference-specifications)
-
----
-
-## 1. Overview
-
-### 1.1 Purpose
-
-This spec defines the Company Research Transformation Layer that bridges LLM-generated company research output to DynamoDB storage. The transformation layer handles:
-
-- **Format conversion:** LLM JSON output → DynamoDB item with JSON blob
-- **Field injection:** Adding user_email from auth context
-- **TTL management:** Setting 30-day expiration
-- **GSI support:** Enabling queries by entity_type
-
-### 1.2 Scope
-
-| In Scope | Out of Scope |
-|----------|--------------|
-| LLM output transformation | LLM prompt generation (separate file) |
-| DynamoDB storage | S3 storage |
-| GSI queries | Full-text search |
-| TTL management | Cache invalidation logic |
-| FVS validation | Content generation |
-
-### 1.3 Related Features
-
-- **Uses:** `CompanyResearchResult` model from `src/backend/careervp/models/company.py`
-- **Stores:** `careervp-knowledge-table-dev` DynamoDB table
-- **Validates:** FVS quality scores from `src/backend/careervp/logic/fvs_validator.py`
-- **Referenced by:** VPR Generator, Cover Letter Generator
-
----
-
-## 2. Architecture
-
-### 2.1 Data Flow
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                     COMPANY RESEARCH DATA FLOW                                 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌─────────────┐                                                           │
-│  │   User     │  user_email from JWT                                       │
-│  └──────┬──────┘                                                           │
-│         │                                                                   │
-│         ▼                                                                   │
-│  ┌───────────────────────────────────────────────────────────────────┐   │
-│  │              KnowledgeRepository.save_company_research()              │   │
-│  │  ┌──────────────────┐    ┌────────────────────────────────────┐  │   │
-│  │  │ Cache Check       │───▶│ if cached && !expired: return     │  │   │
-│  │  └──────────────────┘    └────────────────────────────────────┘  │   │
-│  │                              │                                      │   │
-│  │                              ▼                                      │   │
-│  │  ┌────────────────────────────────────────────────────────────┐  │   │
-│  │  │              LLM Service (Claude Haiku 4.5)               │  │   │
-│  │  │  ┌──────────────────────────────────────────────────────┐  │  │   │
-│  │  │  │ company_research_prompt.py → JSON Output            │  │  │   │
-│  │  │  │ Returns: CompanyResearchResult (6 fields)           │  │  │   │
-│  │  │  └──────────────────────────────────────────────────────┘  │  │   │
-│  │  └────────────────────────────────────────────────────────────┘  │   │
-│  │                              │                                      │   │
-│  │                              ▼                                      │   │
-│  │  ┌────────────────────────────────────────────────────────────┐  │   │
-│  │  │              FVS Validator (Quality Check)              │  │   │
-│  │  │  Grammar >= 9.0, Anti-AI >= 9.0                         │  │   │
-│  │  └────────────────────────────────────────────────────────────┘  │   │
-│  │                              │                                      │   │
-│  │                              ▼                                      │   │
-│  │  ┌────────────────────────────────────────────────────────────┐  │   │
-│  │  │         CompanyResearchTransformer                          │  │   │
-│  │  │  ┌──────────────────────────────────────────────────────┐  │  │   │
-│  │  │  │ TRANSFORMATIONS:                                     │  │  │   │
-│  │  │  │ - company_name → entity_id                           │  │  │   │
-│  │  │  │ - researched_at → cached_at                           │  │  │   │
-│  │  │  │ - All fields → research_data (JSON blob)             │  │  │   │
-│  │  │  │ - + user_email (from auth)                          │  │  │   │
-│  │  │  │ - + entity_type ("company_research")                  │  │  │   │
-│  │  │  │ - + ttl (now + 30 days, Unix timestamp)              │  │  │   │
-│  │  │  └──────────────────────────────────────────────────────┘  │  │   │
-│  │  └────────────────────────────────────────────────────────────┘  │   │
-│  │                              │                                      │   │
-│  │                              ▼                                      │   │
-│  │  ┌────────────────────────────────────────────────────────────┐  │   │
-│  │  │              DynamoDB (careervp-knowledge-table-dev)      │  │   │
-│  │  │  PK: user_email | SK: entity_type | GSI: entity-index   │  │   │
-│  │  └────────────────────────────────────────────────────────────┘  │   │
-│  │                                                                             │
-│  └─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### 2.2 Component Responsibilities
-
-| Component | Responsibility |
-|-----------|---------------|
-| `KnowledgeRepository` | Orchestrates save/get, cache check, FVS validation |
-| `CompanyResearchTransformer` | Transforms LLM output → DynamoDB item |
-| `CompanyResearchResult` (model) | LLM output schema (6 fields) |
-| `DynamoDBTable` | Stores items with TTL |
-
----
-
-## 3. Data Schemas
-
-### 3.1 LLM Output Schema (Existing)
-
-**Source:** `src/backend/careervp/models/company.py`
-
-```python
-class CompanyResearchResult(BaseModel):
-    """Company research output from LLM."""
-    company_name: str = Field(..., description="Name of the company")
-    overview: str = Field(..., description="Brief company overview")
-    values: List[str] = Field(..., description="Company core values")
-    mission: str = Field(..., description="Company mission statement")
-    strategic_priorities: List[str] = Field(default_factory=list, description="Strategic priorities")
-    recent_news: List[NewsItem] = Field(default_factory=list, description="Recent news articles")
-    financial_summary: Optional[str] = Field(None, description="Financial status summary")
-```
-
-### 3.2 DynamoDB Item Schema
-
-**Table:** `careervp-knowledge-table-dev`
-
-| Attribute | Type | Description | Source |
-|-----------|------|-------------|--------|
-| `user_email` | String | Partition Key (from auth) | Auth context |
-| `entity_type` | String | Sort Key ("company_research") | Constant |
-| `entity_id` | String | Company name | LLM output |
-| `cached_at` | String | ISO8601 timestamp | Transform |
-| `ttl` | Number | Unix timestamp (now + 30 days) | Transform |
-| `research_data` | String | JSON blob of all LLM fields | Transform |
-
-**GSI:** `entity-index`
-
-| Index Attribute | Key Type | Source |
-|----------------|----------|--------|
-| `entity_type` | Partition Key | Constant |
-| `entity_id` | Sort Key | LLM output |
-
-### 3.3 Field Mapping Table
-
-| LLM Output | DynamoDB | Transformation | Required |
-|------------|-----------|----------------|----------|
-| `company_name` | `entity_id` | Direct map | Yes |
-| `company_name` | `research_data.company_name` | JSON blob | Yes |
-| `overview` | `research_data.overview` | JSON blob | Yes |
-| `values` | `research_data.values` | JSON serialization | Yes |
-| `mission` | `research_data.mission` | JSON blob | Yes |
-| `strategic_priorities` | `research_data.strategic_priorities` | JSON serialization | No |
-| `recent_news` | `research_data.recent_news` | JSON serialization | No |
-| `financial_summary` | `research_data.financial_summary` | JSON blob | No |
-| *(injected)* | `user_email` | From auth context | Yes |
-| *(injected)* | `entity_type` | Constant: "company_research" | Yes |
-| *(generated)* | `cached_at` | Current UTC ISO8601 | Yes |
-| *(generated)* | `ttl` | now + 30 days (Unix) | Yes |
-
----
-
-## 4. Transformation Layer
-
-### 4.1 Transformer Class
-
-**File:** `src/backend/careervp/logic/company_research_transformer.py`
-
-```python
-from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, Optional
-from dataclasses import dataclass
-import json
-import uuid
-
-
-@dataclass
-class DynamoDBItem:
-    """DynamoDB item for company research storage."""
-    user_email: str
-    entity_type: str = "company_research"
-    entity_id: str = ""
-    cached_at: str = ""
-    ttl: int = 0
-    research_data: str = ""
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to DynamoDB item dict."""
-        return {
-            "user_email": self.user_email,
-            "entity_type": self.entity_type,
-            "entity_id": self.entity_id,
-            "cached_at": self.cached_at,
-            "ttl": self.ttl,
-            "research_data": self.research_data,
-        }
-
-
-class CompanyResearchTransformer:
-    """Transforms CompanyResearchResult to DynamoDB format."""
-
-    ENTITY_TYPE = "company_research"
-    TTL_DAYS = 30
-
-    def __init__(self, user_email: str):
-        """
-        Initialize transformer with user context.
-
-        Args:
-            user_email: User's email from auth context (required for PK)
-        """
-        self.user_email = user_email
-
-    def to_dynamodb_item(
-        self,
-        llm_output: Dict[str, Any],
-        entity_id: Optional[str] = None
-    ) -> DynamoDBItem:
-        """
-        Transform LLM output to DynamoDB item format.
-
-        Args:
-            llm_output: Raw LLM output (CompanyResearchResult as dict)
-            entity_id: Optional entity ID (auto-generated if not provided)
-
-        Returns:
-            DynamoDBItem ready for storage
-        """
-        # Extract company_name for entity_id
-        company_name = llm_output.get("company_name", "")
-        if not company_name:
-            raise ValueError("company_name is required in LLM output")
-
-        # Calculate TTL (30 days from now)
-        now = datetime.now(timezone.utc)
-        ttl_timestamp = int((now + timedelta(days=self.TTL_DAYS)).timestamp())
-
-        # Create research_data JSON blob
-        research_blob = json.dumps(llm_output, default=str)
-
-        return DynamoDBItem(
-            user_email=self.user_email,
-            entity_type=self.ENTITY_TYPE,
-            entity_id=entity_id or company_name,
-            cached_at=now.isoformat(),
-            ttl=ttl_timestamp,
-            research_data=research_blob,
-        )
-
-    def from_dynamodb_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Transform DynamoDB item to structured data.
-
-        Args:
-            item: DynamoDB item with research_data blob
-
-        Returns:
-            CompanyResearchResult-compatible dict
-        """
-        if "research_data" not in item:
-            raise ValueError("research_data attribute is required")
-
-        return json.loads(item["research_data"])
-
-    def calculate_ttl(self, reference_time: Optional[datetime] = None) -> int:
-        """
-        Calculate TTL Unix timestamp.
-
-        Args:
-            reference_time: Reference timestamp (defaults to now)
-
-        Returns:
-            Unix timestamp for TTL (30 days from reference)
-        """
-        reference = reference_time or datetime.now(timezone.utc)
-        expiry = reference + timedelta(days=self.TTL_DAYS)
-        return int(expiry.timestamp())
-```
-
-### 4.2 Storage Methods (for CompanyResearchResult)
-
-**Add to existing model:** `src/backend/careervp/models/company.py`
-
-```python
-class CompanyResearchResult(BaseModel):
-    """Company research output from LLM."""
-    company_name: str
-    overview: str
-    values: List[str]
-    mission: str
-    strategic_priorities: List[str] = Field(default_factory=list)
-    recent_news: List[NewsItem] = Field(default_factory=list)
-    financial_summary: Optional[str] = None
-
-    def to_research_dict(self) -> Dict[str, Any]:
-        """Extract fields for research_data JSON blob."""
-        return {
-            "company_name": self.company_name,
-            "overview": self.overview,
-            "values": self.values,
-            "mission": self.mission,
-            "strategic_priorities": self.strategic_priorities,
-            "recent_news": [n.model_dump() for n in self.recent_news],
-            "financial_summary": self.financial_summary,
-        }
-
-    @classmethod
-    def from_research_dict(cls, data: Dict[str, Any]) -> "CompanyResearchResult":
-        """Reconstruct from research_data JSON blob."""
-        recent_news = [
-            NewsItem(**item) for item in data.get("recent_news", [])
-        ]
-        return cls(
-            company_name=data["company_name"],
-            overview=data["overview"],
-            values=data["values"],
-            mission=data["mission"],
-            strategic_priorities=data.get("strategic_priorities", []),
-            recent_news=recent_news,
-            financial_summary=data.get("financial_summary"),
-        )
-```
-
----
-
-## 5. Knowledge Repository Integration
-
-### 5.1 Updated Methods
-
-**File:** `src/backend/careervp/dal/knowledge_repository.py`
-
-```python
-from datetime import datetime, timezone, timedelta
-from typing import Optional, Dict, Any
-from careervp.models.company import CompanyResearchResult
-
-
-class KnowledgeRepository:
-    """Knowledge repository with enhanced company research support."""
-
-    ENTITY_TYPE_COMPANY_RESEARCH = "company_research"
-
-    def __init__(
-        self,
-        table_name: Optional[str] = None,
-        transformer: Optional[CompanyResearchTransformer] = None,
-        fvs_validator: Optional[QualityValidator] = None
-    ):
-        """Initialize repository."""
-        self.table_name = table_name or self._get_knowledge_table_name()
-        self.transformer = transformer
-        self.fvs_validator = fvs_validator
-
-    async def save_company_research(
-        self,
-        user_email: str,
-        company_name: str,
-        llm_output: Dict[str, Any]
-    ) -> Result:
-        """
-        Save company research with transformation and validation.
-
-        Args:
-            user_email: User identifier (PK)
-            company_name: Company name for entity_id
-            llm_output: Raw LLM output (CompanyResearchResult as dict)
-
-        Returns:
-            Result with entity_id and success status
-        """
-        # 1. Check cache first
-        existing = await self.get_company_research(user_email, company_name)
-        if existing is not None:
-            return Result(
-                success=True,
-                data={"cached": True, "entity_id": company_name}
-            )
-
-        # 2. Validate with FVS if validator provided
-        if self.fvs_validator:
-            content_json = json.dumps(llm_output)
-            validation_result = self.fvs_validator.validate(content_json)
-            if not validation_result.is_valid:
-                return Result(
-                    success=False,
-                    error="FVS validation failed",
-                    data={"violations": validation_result.violations}
-                )
-
-        # 3. Transform to DynamoDB format
-        transformer = CompanyResearchTransformer(user_email)
-        item = transformer.to_dynamodb_item(
-            llm_output,
-            entity_id=company_name
-        )
-
-        # 4. Store in DynamoDB
-        try:
-            self._dynamodb_table.put_item(Item=item.to_dict())
-            return Result(
-                success=True,
-                data={"cached": False, "entity_id": company_name}
-            )
-        except ClientError as e:
-            return Result(
-                success=False,
-                error=f"DynamoDB error: {e.response['Error']['Message']}"
-            )
-
-    async def get_company_research(
-        self,
-        user_email: str,
-        company_name: str
-    ) -> Optional[CompanyResearchResult]:
-        """
-        Retrieve company research for user and company.
-
-        Args:
-            user_email: User identifier (PK)
-            company_name: Company name to look up
-
-        Returns:
-            CompanyResearchResult or None if not found/expired
-        """
-        try:
-            response = self._dynamodb_table.get_item(
-                Key={
-                    "user_email": user_email,
-                    "entity_type": self.ENTITY_TYPE_COMPANY_RESEARCH
-                }
-            )
-
-            if "Item" not in response:
-                return None
-
-            item = response["Item"]
-
-            # Check TTL expiration
-            if self._is_expired(item):
-                self._delete_expired_item(item)
-                return None
-
-            # Parse research_data blob
-            research_data = json.loads(item["research_data"])
-            return CompanyResearchResult.from_research_dict(research_data)
-
-        except ClientError:
-            return None
-
-    def _is_expired(self, item: Dict[str, Any]) -> bool:
-        """Check if item is expired based on TTL."""
-        ttl = item.get("ttl", 0)
-        if ttl == 0:
-            return False
-        return datetime.now(timezone.utc).timestamp() > ttl
-
-    def _delete_expired_item(self, item: Dict[str, Any]) -> None:
-        """Delete expired item from DynamoDB."""
-        try:
-            self._dynamodb_table.delete_item(
-                Key={
-                    "user_email": item["user_email"],
-                    "entity_type": item["entity_type"]
-                }
-            )
-        except ClientError:
-            pass  # Best effort deletion
-```
-
----
-
-## 6. Constraints
-
-### 6.1 Technical Constraints
-
-| Category | Constraint | Source |
-|----------|------------|--------|
-| **Database** | Must use `careervp-knowledge-table-dev` | dynamodb_spec.yaml |
-| **Partition Key** | `user_email` (from auth) | dynamodb_spec.yaml |
-| **Sort Key** | `entity_type` ("company_research") | dynamodb_spec.yaml |
-| **GSI** | `entity-index`: entity_type → entity_id | dynamodb_spec.yaml |
-| **TTL** | 30 days from creation | knowledge_base_spec.yaml |
-| **Field Names** | Use `cached_at`, not `researched_at` | DynamoDB naming |
-| **Storage Format** | JSON blob for all LLM fields | Efficiency |
-
-### 6.2 Code Quality Constraints
-
-| Constraint | Tool | Command |
-|------------|------|---------|
-| **Lint** | Ruff | `uv run ruff check careervp/logic/company_research_transformer.py` |
-| **Type Check** | Mypy strict | `uv run mypy careervp/logic/company_research_transformer.py --strict` |
-| **Test Coverage** | pytest-cov | `uv run pytest --cov=company_research_transformer --cov=company` |
-| **Import Pattern** | Existing | Follow patterns in `careervp/dal/` |
-
-### 6.3 Integration Constraints
-
-| Constraint | Description |
-|------------|-------------|
-| **Auth Context** | `user_email` must be extracted from JWT |
-| **FVS Validation** | Must validate before storage |
-| **Error Handling** | Must return `Result` pattern |
-| **Logging** | Use AWS Lambda Powertools |
-
----
-
-## 7. Dependencies
-
-### 7.1 Infrastructure Dependencies
-
-| Dependency | Status | Source |
-|------------|--------|--------|
-| `careervp-knowledge-table-dev` | Exists | dynamodb_spec.yaml |
-| GSI: `entity-index` | **NOT IMPLEMENTED** | dynamodb_spec.yaml |
-| `KNOWLEDGE_TABLE_NAME` constant | **NOT DEFINED** | constants.py |
-
-### 7.2 Code Dependencies
-
-| Dependency | Location | Status |
-|------------|----------|--------|
-| `CompanyResearchResult` | `src/backend/careervp/models/company.py` | Exists |
-| `QualityValidator` | `src/backend/careervp/logic/fvs_validator.py` | Exists |
-| `DynamoDBTable` | `src/backend/careervp/dal/` | Exists |
-
-### 7.3 External Dependencies
-
-| Dependency | Version | Purpose |
-|------------|---------|---------|
-| Python | >=3.13 | Runtime |
-| pydantic | v2 | Models |
-| boto3 | Latest | DynamoDB |
-| aws_lambda_powertools | Latest | Logging |
-
----
-
-## 8. Validation Requirements
-
-### 8.1 Functional Validations
-
-| Validation | Input | Expected | Error |
-|-----------|-------|----------|-------|
-| company_name required | Missing company_name | Raise ValueError | "company_name is required" |
-| research_data required | Missing research_data | Raise ValueError | "research_data is required" |
-| Valid JSON blob | research_data | Parseable | "Invalid JSON in research_data" |
-| TTL expiration | Expired TTL | Return None | Item expired |
-| FVS validation | Content | Score >= threshold | Validation failed |
-
-### 8.2 Data Integrity Validations
-
-| Field | Validation | Rule |
-|-------|------------|------|
-| `user_email` | Non-empty | Required |
-| `entity_type` | Equals "company_research" | Constant |
-| `entity_id` | Non-empty | Required |
-| `cached_at` | Valid ISO8601 | Required |
-| `ttl` | Future Unix timestamp | Calculated |
-| `research_data` | Valid JSON | Serialized |
-
-### 8.3 Query Validations
-
-| Query | Expected | Validation |
-|-------|----------|------------|
-| Query by user_email (PK) | Returns item | Primary key lookup |
-| Query by entity_type (GSI) | Returns all company research | GSI partition |
-| Query by entity_id (GSI) | Returns specific company | GSI sort key |
-
----
-
-## 9. Unit Tests
-
-### 9.1 Test File
-
-**File:** `tests/unit/test_company_research_transformer.py`
-
-### 9.2 Test Coverage
-
-| Test Category | Coverage | Examples |
-|--------------|----------|----------|
-| Transformer | 100% | All transformations |
-| Model | 100% | Serialization/deserialization |
-| Repository | 100% | Save, retrieve, cache |
-| Validation | 100% | All validation rules |
-
-### 9.3 Test Cases
-
-```python
-import pytest
-from datetime import datetime, timezone, timedelta
-from unittest.mock import Mock, patch, MagicMock
-from careervp.logic.company_research_transformer import (
-    CompanyResearchTransformer,
-    DynamoDBItem,
-)
-from careervp.models.company import CompanyResearchResult
-
-
-class TestCompanyResearchTransformer:
-    """Unit tests for CompanyResearchTransformer."""
-
-    def test_to_dynamodb_item_success(self):
-        """Test successful transformation to DynamoDB item."""
-        # Arrange
-        transformer = CompanyResearchTransformer("user@example.com")
-        llm_output = {
-            "company_name": "TechCorp",
-            "overview": "A tech company",
-            "values": ["Innovation", "Customer Focus"],
-            "mission": "To innovate",
-            "strategic_priorities": ["AI"],
-            "recent_news": [],
-            "financial_summary": "Profitable",
-        }
-
-        # Act
-        item = transformer.to_dynamodb_item(llm_output)
-
-        # Assert
-        assert isinstance(item, DynamoDBItem)
-        assert item.user_email == "user@example.com"
-        assert item.entity_type == "company_research"
-        assert item.entity_id == "TechCorp"
-        assert item.cached_at is not None
-        assert item.ttl > datetime.now(timezone.utc).timestamp()
-        assert "TechCorp" in item.research_data
-
-    def test_to_dynamodb_item_missing_company_name(self):
-        """Test validation rejects missing company_name."""
-        transformer = CompanyResearchTransformer("user@example.com")
-        llm_output = {"overview": "No company name"}
-
-        with pytest.raises(ValueError, match="company_name is required"):
-            transformer.to_dynamodb_item(llm_output)
-
-    def test_to_dynamodb_item_custom_entity_id(self):
-        """Test custom entity_id is used."""
-        transformer = CompanyResearchTransformer("user@example.com")
-        llm_output = {"company_name": "TechCorp", "overview": "Desc", "values": [], "mission": "", "strategic_priorities": [], "recent_news": [], "financial_summary": None}
-
-        item = transformer.to_dynamodb_item(llm_output, entity_id="custom-id")
-
-        assert item.entity_id == "custom-id"
-
-    def test_from_dynamodb_item_success(self):
-        """Test successful transformation from DynamoDB item."""
-        transformer = CompanyResearchTransformer("user@example.com")
-        item = {
-            "user_email": "user@example.com",
-            "entity_type": "company_research",
-            "entity_id": "TechCorp",
-            "cached_at": "2026-02-14T10:00:00Z",
-            "ttl": 1893456000,
-            "research_data": '{"company_name": "TechCorp", "overview": "Desc", "values": [], "mission": "", "strategic_priorities": [], "recent_news": [], "financial_summary": null}',
-        }
-
-        result = transformer.from_dynamodb_item(item)
-
-        assert result["company_name"] == "TechCorp"
-
-    def test_from_dynamodb_item_missing_research_data(self):
-        """Test validation rejects missing research_data."""
-        transformer = CompanyResearchTransformer("user@example.com")
-        item = {"user_email": "user@example.com", "entity_type": "company_research"}
-
-        with pytest.raises(ValueError, match="research_data is required"):
-            transformer.from_dynamodb_item(item)
-
-    def test_ttl_calculation(self):
-        """Test TTL is exactly 30 days from now."""
-        transformer = CompanyResearchTransformer("user@example.com")
-        now = datetime.now(timezone.utc)
-        ttl = transformer.calculate_ttl(now)
-
-        expected_ttl = int((now + timedelta(days=30)).timestamp())
-        assert abs(ttl - expected_ttl) < 2  # Allow 1 second tolerance
-
-
-class TestCompanyResearchResultModel:
-    """Unit tests for CompanyResearchResult model."""
-
-    def test_to_research_dict(self):
-        """Test serialization to research dict."""
-        result = CompanyResearchResult(
-            company_name="TechCorp",
-            overview="Tech company",
-            values=["Innovation"],
-            mission="To innovate",
-            strategic_priorities=["AI"],
-            recent_news=[],
-            financial_summary=None,
-        )
-
-        data = result.to_research_dict()
-
-        assert data["company_name"] == "TechCorp"
-        assert data["values"] == ["Innovation"]
-
-    def test_from_research_dict(self):
-        """Test deserialization from research dict."""
-        data = {
-            "company_name": "TechCorp",
-            "overview": "Tech company",
-            "values": ["Innovation"],
-            "mission": "To innovate",
-            "strategic_priorities": [],
-            "recent_news": [],
-            "financial_summary": "Profitable",
-        }
-
-        result = CompanyResearchResult.from_research_dict(data)
-
-        assert result.company_name == "TechCorp"
-        assert result.financial_summary == "Profitable"
-
-
-class TestKnowledgeRepository:
-    """Unit tests for KnowledgeRepository company research methods."""
-
-    @pytest.fixture
-    def mock_table(self):
-        """Create mock DynamoDB table."""
-        table = MagicMock()
-        table.put_item = MagicMock()
-        table.get_item = MagicMock(return_value={"Item": {}})
-        return table
-
-    @pytest.fixture
-    def repository(self, mock_table):
-        """Create repository with mocked dependencies."""
-        repo = KnowledgeRepository()
-        repo._dynamodb_table = mock_table
-        return repo
-
-    @pytest.mark.asyncio
-    async def test_save_company_research_new(self, repository, mock_table):
-        """Test saving new company research."""
-        llm_output = {
-            "company_name": "TechCorp",
-            "overview": "Desc",
-            "values": [],
-            "mission": "",
-            "strategic_priorities": [],
-            "recent_news": [],
-            "financial_summary": None,
-        }
-
-        # No cache hit
-        mock_table.get_item.return_value = {}
-
-        result = await repository.save_company_research(
-            "user@example.com", "TechCorp", llm_output
-        )
-
-        assert result.success
-        assert result.data["cached"] is False
-        mock_table.put_item.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_save_company_research_cache_hit(self, repository, mock_table):
-        """Test cache hit returns existing data."""
-        cached_item = {
-            "user_email": "user@example.com",
-            "entity_type": "company_research",
-            "entity_id": "TechCorp",
-            "ttl": 1893456000,
-            "research_data": '{"company_name": "TechCorp", "overview": "Cached", "values": [], "mission": "", "strategic_priorities": [], "recent_news": [], "financial_summary": null}',
-        }
-        mock_table.get_item.return_value = {"Item": cached_item}
-
-        llm_output = {"company_name": "TechCorp", "overview": "New", "values": [], "mission": "", "strategic_priorities": [], "recent_news": [], "financial_summary": None}
-
-        result = await repository.save_company_research(
-            "user@example.com", "TechCorp", llm_output
-        )
-
-        assert result.success
-        assert result.data["cached"] is True
-        mock_table.put_item.assert_not_called()
-```
-
-### 9.4 Test Execution
-
-```bash
-cd /Users/yitzchak/Documents/dev/careervp/src/backend
-
-# Run unit tests
-uv run pytest tests/unit/test_company_research_transformer.py -v --tb=short
-
-# Run with coverage
-uv run pytest tests/unit/test_company_research_transformer.py --cov=company_research_transformer --cov=company --cov-report=term-missing
-
-# Run all company research tests
-uv run pytest tests/unit/test_company_research*.py -v
-```
-
----
-
-## 10. Integration Tests
-
-### 10.1 Test File
-
-**File:** `tests/integration/test_company_research_flow.py`
-
-### 10.2 Test Cases
-
-```python
-import pytest
-from datetime import datetime, timezone
-from unittest.mock import patch, MagicMock
-import json
-
-
-class TestCompanyResearchIntegration:
-    """Integration tests for company research flow."""
-
-    @pytest.fixture
-    def dynamodb_local(self):
-        """Setup DynamoDB local for testing."""
-        # Use dynamodb-local or mock
-        with patch('boto3.resource') as mock_resource:
-            table = MagicMock()
-            mock_resource.return_value.Table.return_value = table
-            yield table
-
-    @pytest.mark.asyncio
-    async def test_full_save_retrieve_flow(self, dynamodb_local):
-        """Test complete save and retrieve flow."""
-        # Arrange
-        from careervp.logic.company_research_transformer import CompanyResearchTransformer
-        from careervp.models.company import CompanyResearchResult
-
-        transformer = CompanyResearchTransformer("test@example.com")
-
-        llm_output = {
-            "company_name": "TechCorp",
-            "overview": "Leading tech company",
-            "values": ["Innovation", "Customer Focus", "Integrity"],
-            "mission": "To transform industries through technology",
-            "strategic_priorities": ["AI/ML", "Cloud Native"],
-            "recent_news": [
-                {
-                    "title": "Series C Funding",
-                    "date": "2026-01-15",
-                    "summary": "Raised $50M in Series C"
-                }
-            ],
-            "financial_summary": "Series C, profitable",
-        }
-
-        # Mock DynamoDB
-        stored_item = {}
-        dynamodb_local.put_item = MagicMock(side_effect=lambda Item: stored_item.update(Item))
-        dynamodb_local.get_item = MagicMock(
-            return_value={"Item": stored_item} if stored_item else {}
-        )
-
-        # Act - Transform
-        item = transformer.to_dynamodb_item(llm_output)
-        dynamodb_local.put_item(Item=item.to_dict())
-
-        # Assert - Transform worked
-        assert item.user_email == "test@example.com"
-        assert item.entity_type == "company_research"
-        assert item.entity_id == "TechCorp"
-        assert "TechCorp" in item.research_data
-
-        # Act - Retrieve
-        dynamodb_local.get_item.return_value = {"Item": item.to_dict()}
-        retrieved = transformer.from_dynamodb_item(stored_item)
-
-        # Assert - Retrieve worked
-        assert retrieved["company_name"] == "TechCorp"
-        assert retrieved["mission"] == "To transform industries through technology"
-        assert len(retrieved["values"]) == 3
-
-    @pytest.mark.asyncio
-    async def test_fvs_validation_before_save(self):
-        """Test FVS validation is called before save."""
-        from careervp.logic.fvs_validator import QualityValidator
-        from careervp.logic.company_research_transformer import CompanyResearchTransformer
-
-        # Mock FVS validator
-        mock_validator = MagicMock(spec=QualityValidator)
-        mock_validator.validate = MagicMock(return_value=MagicMock(
-            is_valid=True,
-            violations=[]
-        ))
-
-        # Mock DynamoDB
-        mock_table = MagicMock()
-
-        # Create transformer with mocked FVS
-        transformer = CompanyResearchTransformer("test@example.com")
-
-        llm_output = {
-            "company_name": "TechCorp",
-            "overview": "A company",
-            "values": [],
-            "mission": "",
-            "strategic_priorities": [],
-            "recent_news": [],
-            "financial_summary": None,
-        }
-
-        # Act
-        transformer.fvs_validator = mock_validator
-
-        # Assert FVS was called
-        mock_validator.validate.assert_called()
-
-    @pytest.mark.asyncio
-    async def test_cache_prevents_duplicate_save(self):
-        """Test cache check prevents redundant LLM calls."""
-        from careervp.logic.company_research_transformer import CompanyResearchTransformer
-
-        # Mock DynamoDB with cached item
-        cached_item = {
-            "user_email": "test@example.com",
-            "entity_type": "company_research",
-            "entity_id": "TechCorp",
-            "ttl": 99999999999,  # Far future (not expired)
-            "research_data": json.dumps({
-                "company_name": "TechCorp",
-                "overview": "Cached data",
-                "values": [],
-                "mission": "",
-                "strategic_priorities": [],
-                "recent_news": [],
-                "financial_summary": None,
-            }),
-        }
-
-        mock_table = MagicMock()
-        mock_table.get_item = MagicMock(return_value={"Item": cached_item})
-        mock_table.put_item = MagicMock()
-
-        # Create transformer
-        transformer = CompanyResearchTransformer("test@example.com")
-        transformer._dynamodb_table = mock_table
-
-        llm_output = {"company_name": "TechCorp", "overview": "New data", "values": [], "mission": "", "strategic_priorities": [], "recent_news": [], "financial_summary": None}
-
-        # Act
-        result = await transformer._save_with_cache_check("test@example.com", "TechCorp", llm_output)
-
-        # Assert - Put should not be called (cache hit)
-        mock_table.put_item.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_expired_cache_triggers_resave(self):
-        """Test expired cache allows new save."""
-        from careervp.logic.company_research_transformer import CompanyResearchTransformer
-
-        # Mock DynamoDB with expired item
-        expired_item = {
-            "user_email": "test@example.com",
-            "entity_type": "company_research",
-            "entity_id": "TechCorp",
-            "ttl": 1000000000,  # Past (expired)
-            "research_data": json.dumps({
-                "company_name": "TechCorp",
-                "overview": "Old data",
-                "values": [],
-                "mission": "",
-                "strategic_priorities": [],
-                "recent_news": [],
-                "financial_summary": None,
-            }),
-        }
-
-        mock_table = MagicMock()
-        mock_table.get_item = MagicMock(return_value={"Item": expired_item})
-        mock_table.delete_item = MagicMock()
-        mock_table.put_item = MagicMock()
-
-        transformer = CompanyResearchTransformer("test@example.com")
-        transformer._dynamodb_table = mock_table
-
-        llm_output = {"company_name": "TechCorp", "overview": "New data", "values": [], "mission": "", "strategic_priorities": [], "recent_news": [], "financial_summary": None}
-
-        # Act
-        result = await transformer._save_with_cache_check("test@example.com", "TechCorp", llm_output)
-
-        # Assert - Delete and put should be called
-        mock_table.delete_item.assert_called_once()
-        mock_table.put_item.assert_called_once()
-```
-
-### 10.3 Test Execution
-
-```bash
-cd /Users/yitzchak/Documents/dev/careervp/src/backend
-
-# Run integration tests
-uv run pytest tests/integration/test_company_research_flow.py -v --tb=short
-
-# Run with DynamoDB Local
-uv run pytest tests/integration/test_company_research_flow.py -v --dynamodb-local
-```
-
----
-
-## 11. E2E Tests
-
-### 11.1 Test File
-
-**File:** `tests/e2e/test_company_research_e2e.py`
-
-### 11.2 Test Cases
-
-```python
-import pytest
-from datetime import datetime
-
-
-class TestCompanyResearchE2E:
-    """End-to-end tests for company research feature."""
-
-    @pytest.mark.e2e
-    async def test_user_researches_company_and_retrieves(self, api_client, auth_token):
-        """
-        E2E Test: User researches a company and retrieves it later.
-
-        Flow:
-        1. User calls POST /v1/company-research/fetch
-        2. System generates research via LLM
-        3. System validates with FVS
-        4. System transforms and stores in DynamoDB
-        5. User calls GET /v1/company-research/{job_id}
-        6. System retrieves and returns research
-        """
-        # Arrange
-        company_name = "TestCompany123"
-        job_id = "test-job-001"
-        user_email = "testuser@example.com"
-
-        # Act - Generate research
-        response = api_client.post(
-            "/v1/company-research/fetch",
-            json={
-                "company_name": company_name,
-                "job_id": job_id
-            },
-            headers={"Authorization": f"Bearer {auth_token}"}
-        )
-
-        # Assert - Generation successful
-        assert response.status_code == 202
-        data = response.json()
-        assert "request_id" in data
-
-        # Act - Retrieve research
-        response = api_client.get(
-            f"/v1/company-research/{job_id}",
-            headers={"Authorization": f"Bearer {auth_token}"}
-        )
-
-        # Assert - Retrieval successful
-        assert response.status_code == 200
-        data = response.json()
-        assert data["company_name"] == company_name
-
-    @pytest.mark.e2e
-    async def test_cache_hit_prevents_duplicate_generation(self, api_client, auth_token):
-        """
-        E2E Test: Second request for same company returns cached result.
-
-        Flow:
-        1. User requests company research (generates new)
-        2. User requests same company (returns cached)
-        """
-        company_name = "CachedCompany456"
-
-        # First request - generates new
-        response1 = api_client.post(
-            "/v1/company-research/fetch",
-            json={"company_name": company_name},
-            headers={"Authorization": f"Bearer {auth_token}"}
-        )
-        assert response1.status_code == 200
-        assert response1.json()["cached"] is False
-
-        # Second request - should hit cache
-        response2 = api_client.post(
-            "/v1/company-research/fetch",
-            json={"company_name": company_name},
-            headers={"Authorization": f"Bearer {auth_token}"}
-        )
-        assert response2.status_code == 200
-        assert response2.json()["cached"] is True
-
-    @pytest.mark.e2e
-    async def test_research_expires_after_ttl(self, api_client, auth_token):
-        """
-        E2E Test: Research older than 30 days triggers regeneration.
-
-        Flow:
-        1. Create expired research directly in DynamoDB
-        2. User requests company research
-        3. System detects expired TTL
-        4. System generates new research
-        """
-        company_name = "ExpiredCompany789"
-
-        # Directly insert expired item in DynamoDB (test setup)
-        await _insert_expired_research(company_name, "testuser@example.com")
-
-        # Request research
-        response = api_client.post(
-            "/v1/company-research/fetch",
-            json={"company_name": company_name},
-            headers={"Authorization": f"Bearer {auth_token}"}
-        )
-
-        # Should generate new (not return expired)
-        assert response.status_code == 200
-        data = response.json()
-        assert data["cached"] is False  # New generation
-```
-
-### 11.3 E2E Test Execution
-
-```bash
-cd /Users/yitzchak/Documents/dev/careervp/src/backend
-
-# Run E2E tests (requires deployed infrastructure)
-uv run pytest tests/e2e/test_company_research_e2e.py -v --tb=short
-
-# Run with AWS credentials
-uv run pytest tests/e2e/test_company_research_e2e.py -v --aws-profile=careervp-dev
-```
-
----
-
-## 12. Live Test on AWS
-
-### 12.1 Live Test Script
-
-**File:** `scripts/live_test_company_research.sh`
-
-```bash
-#!/bin/bash
-# Live test for Company Research Transformation Layer
-# Requires: AWS credentials, deployed infrastructure
-
-set -e
-
-# Configuration
-API_URL="${API_URL:-https://api.careervp.com/v1}"
-TOKEN="${AUTH_TOKEN:-$(get_token)}"
-COMPANY_NAME="LiveTestCompany_$(date +%s)"
-JOB_ID="job_live_test_001"
-PAYLOAD_FILE="docs/refactor/payloads/phase8_company_research_live_test.json"
-
-echo "=== Company Research Live Test ==="
-echo "API URL: $API_URL"
-echo "Company: $COMPANY_NAME"
-echo "Job ID: $JOB_ID"
-echo ""
-
-# Step 1: Generate company research
-echo "Step 1: Generating company research..."
-curl -X POST "$API_URL/company-research/fetch" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d @"$PAYLOAD_FILE" \
-  > /tmp/research_response.json
-
-cat /tmp/research_response.json | jq '.'
-
-REQUEST_ID=$(cat /tmp/research_response.json | jq -r '.request_id // "unknown"')
-echo "Request ID: $REQUEST_ID"
-echo ""
-
-# Step 2: Retrieve company research
-echo "Step 2: Retrieving company research..."
-sleep 2  # Allow for async processing
-
-curl -X GET "$API_URL/company-research/$JOB_ID" \
-  -H "Authorization: Bearer $TOKEN" \
-  > /tmp/research_retrieve.json
-
-cat /tmp/research_retrieve.json | jq '.'
-echo ""
-
-# Step 3: Verify DynamoDB storage
-echo "Step 3: Verifying DynamoDB storage..."
-aws dynamodb get-item \
-  --table-name "careervp-knowledge-table-dev" \
-  --key "{\"user_email\": {\"S\": \"test@example.com\"}, \"entity_type\": {\"S\": \"company_research\"}}" \
-  --query 'Item' \
-  --output json
-echo ""
-
-# Step 4: Verify TTL
-echo "Step 4: Verifying TTL..."
-TTL=$(aws dynamodb get-item \
-  --table-name "careervp-knowledge-table-dev" \
-  --key "{\"user_email\": {\"S\": \"test@example.com\"}, \"entity_type\": {\"S\": \"company_research\"}}" \
-  --query 'Item.ttl.N' \
-  --output text)
-echo "TTL: $TTL (should be ~30 days from now)"
-echo ""
-
-# Step 5: Cache hit test
-echo "Step 5: Testing cache hit..."
-curl -X POST "$API_URL/company-research/fetch" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d @"$PAYLOAD_FILE" \
-  > /tmp/cache_test.json
-
-CACHED=$(cat /tmp/cache_test.json | jq -r '.cached')
-echo "Second request cached: $CACHED"
-echo ""
-
-# Cleanup
-echo "Step 6: Cleanup..."
-aws dynamodb delete-item \
-  --table-name "careervp-knowledge-table-dev" \
-  --key "{\"user_email\": {\"S\": \"test@example.com\"}, \"entity_type\": {\"S\": \"company_research\"}}"
-
-echo ""
-echo "=== Live Test Complete ==="
-```
-
-### 12.2 Live Test Payload
-
-**File:** `docs/refactor/payloads/phase8_company_research_live_test.json`
-
-```json
-{
-  "name": "Company Research Live Test",
-  "description": "Test company research generation and DynamoDB storage",
-  "phase": 8,
-  "type": "live_test",
-  "endpoint": "POST /v1/company-research/fetch",
-  "payload": {
-    "company_name": "LiveTestCompany",
-    "job_id": "job_live_test_001",
-    "options": {
-      "extract_mission": true,
-      "extract_values": true,
-      "extract_recent_news": true,
-      "extract_products": true,
-      "cache_result": true,
-      "ttl_days": 30
-    },
-    "test_context": {
-      "company_description": "A fictional technology company for testing",
-      "company_type": "Technology",
-      "industry": "Enterprise Software",
-      "company_size": "500-1000 employees"
-    }
-  },
-  "expected": {
-    "status_code": 202,
-    "response_schema": {
-      "request_id": "string",
-      "status": "processing"
-    }
-  },
-  "validation": {
-    "required_fields": ["company_name", "overview", "values", "mission"],
-    "optional_fields": ["recent_news", "strategic_priorities", "financial_summary"],
-    "ttl_days": 30,
-    "cache_functionality": true
-  },
-  "live_test_steps": [
-    {
-      "step": 1,
-      "name": "Generate research",
-      "endpoint": "POST /v1/company-research/fetch",
-      "expected": {
-        "status_code": 202,
-        "cached": false
-      }
-    },
-    {
-      "step": 2,
-      "name": "Retrieve research",
-      "endpoint": "GET /v1/company-research/{job_id}",
-      "expected": {
-        "status_code": 200,
-        "fields_present": ["company_name", "overview", "values", "mission"]
-      }
-    },
-    {
-      "step": 3,
-      "name": "Cache hit test",
-      "endpoint": "POST /v1/company-research/fetch",
-      "expected": {
-        "status_code": 200,
-        "cached": true
-      }
-    },
-    {
-      "step": 4,
-      "name": "Verify DynamoDB",
-      "command": "aws dynamodb get-item --table-name careervp-knowledge-table-dev --key '{\"user_email\": {\"S\": \"test@example.com\"}, \"entity_type\": {\"S\": \"company_research\"}}'",
-      "expected": {
-        "Item.ttl.N": "future_timestamp"
-      }
-    }
-  ]
-}
-```
-
----
-
-## 13. Payload Files
-
-### 13.1 Payload Directory
-
-```
-docs/refactor/payloads/
-├── phase8_company_research_live_test.json    # Live test payload
-├── phase8_company_research_unit_test.json   # Unit test data
-└── phase8_company_research_integration.json  # Integration test data
-```
-
-### 13.2 Unit Test Payload
-
-**File:** `docs/refactor/payloads/phase8_company_research_unit_test.json`
-
-```json
-{
-  "test_cases": [
-    {
-      "name": "Basic company research",
-      "input": {
-        "company_name": "TechCorp",
-        "overview": "Leading technology company",
-        "values": ["Innovation", "Customer Focus", "Integrity"],
-        "mission": "To transform industries through technology",
-        "strategic_priorities": ["AI/ML", "Cloud Native"],
-        "recent_news": [],
-        "financial_summary": "Profitable"
-      },
-      "expected": {
-        "entity_id": "TechCorp",
-        "entity_type": "company_research",
-        "ttl_days": 30
-      }
-    },
-    {
-      "name": "Startup without financial data",
-      "input": {
-        "company_name": "StartupXYZ",
-        "overview": "Early stage startup",
-        "values": ["Speed", "Agility"],
-        "mission": "Move fast, break things",
-        "strategic_priorities": ["Product Market Fit"],
-        "recent_news": [],
-        "financial_summary": null
-      },
-      "expected": {
-        "entity_id": "StartupXYZ",
-        "financial_summary": null
-      }
-    }
-  ]
-}
-```
-
----
-
-## 14. Reference Specifications
-
-### 14.1 Internal Specifications
-
-| Spec File | Purpose | Relevance |
-|-----------|---------|-----------|
-| `docs/refactor/specs/knowledge_base_spec.yaml` | Knowledge base storage | Defines schema, TTL, methods |
-| `infra/careervp/specs/dynamodb_spec.yaml` | DynamoDB table design | PK, SK, GSI definitions |
-| `docs/refactor/specs/fvs_spec.yaml` | FVS validation | Quality thresholds |
-| `docs/refactor/specs/models_spec.yaml` | Model patterns | Pydantic v2 patterns |
-
-### 14.2 External Specifications
-
-| Source | Purpose | Relevance |
-|--------|---------|-----------|
-| `src/backend/careervp/models/company.py` | Existing model | Extend, not replace |
-| `src/backend/careervp/logic/fvs_validator.py` | Quality validator | Integration point |
-| `src/backend/careervp/dal/knowledge_repository.py` | Repository | Update methods |
-
-### 14.3 Code Standards
-
-| Standard | Source | Application |
-|----------|--------|-------------|
-| Python Style | PEP 8 | Ruff linting |
-| Type Hints | PEP 484 | Mypy strict |
-| Async | asyncio | pytest-asyncio |
-| AWS Patterns | Lambda Powertools | Logging, tracing |
-
----
-
-## 15. Execution in Runbook
-
-### 15.1 New Phase: Company Research
-
-Add to `docs/refactor/EXECUTION_RUNBOOK.md`:
-
-```markdown
-## Phase X: Company Research Transformation
-
-**Duration:** 1 day | **Effort:** 8 hours
-
-### Specs
-| Type | File | Purpose |
-|------|------|---------|
-| Mandatory | `company_research_transform_spec.yaml` | Transformation layer |
-| Reference | `knowledge_base_spec.yaml` | Storage requirements |
-| Reference | `dynamodb_spec.yaml` | DynamoDB schema |
-
-### Step X.1: Extend CompanyResearchResult Model
-
-**READ FIRST:**
-- `docs/refactor/specs/company_research_transform_spec.yaml` (section 4.2)
-- `src/backend/careervp/models/company.py` (existing model)
-
-**CODE:**
-```bash
-# VSCode + Anthropic Sonnet
-"""
-Extend CompanyResearchResult per company_research_transform_spec.yaml:
-
-1. ENHANCE: src/backend/careervp/models/company.py
-   - Add to_research_dict() method
-   - Add from_research_dict() classmethod
-   - Keep existing fields intact
-
-2. Create: tests/unit/test_company_research_model.py
-
-KNOWLEDGE: docs/refactor/specs/company_research_transform_spec.yaml (section 4.2)
-"""
-```
-
-### Step X.2: Create CompanyResearchTransformer
-
-**CODE:**
-```bash
-# VSCode + Anthropic Sonnet
-"""
-Create CompanyResearchTransformer per company_research_transform_spec.yaml:
-
-1. Create: src/backend/careervp/logic/company_research_transformer.py
-   - DynamoDBItem dataclass
-   - CompanyResearchTransformer class
-   - to_dynamodb_item() method
-   - from_dynamodb_item() method
-   - calculate_ttl() method
-
-2. Create: tests/unit/test_company_research_transformer.py
-
-KNOWLEDGE: docs/refactor/specs/company_research_transform_spec.yaml (section 4.1)
-"""
-```
-
-### Step X.3: Update KnowledgeRepository
-
-**CODE:**
-```bash
-# VSCode + Anthropic Haiku
-"""
-Update KnowledgeRepository per company_research_transform_spec.yaml:
-
-1. ENHANCE: src/backend/careervp/dal/knowledge_repository.py
-   - Add save_company_research() method
-   - Add get_company_research() method
-   - Add cache check logic
-   - Add TTL expiration check
-
-2. Create: tests/integration/test_company_research_flow.py
-
-KNOWLEDGE: docs/refactor/specs/company_research_transform_spec.yaml (section 5)
-"""
-```
-
-### Step X.4: Create Company Research Prompt
-
-**CODE:**
-```bash
-# VSCode + Anthropic Haiku
-"""
-Extract company research prompt to separate file:
-
-1. Create: src/backend/careervp/logic/prompts/company_research_prompt.py
-   - Extract inline prompt from company.py
-   - Include system prompt
-   - Include user prompt template
-   - Include output schema
-
-KNOWLEDGE: docs/refactor/specs/company_research_transform_spec.yaml (section 1)
-"""
-```
-
-### Verification
-```bash
-cd /Users/yitzchak/Documents/dev/careervp/src/backend
-
-# Run unit tests
-uv run pytest tests/unit/test_company_research_transformer.py tests/unit/test_company_research_model.py -v
-
-# Run integration tests
-uv run pytest tests/integration/test_company_research_flow.py -v
-
-# Run lint
-uv run ruff check careervp/logic/company_research_transformer.py careervp/models/company.py
-
-# Run type check
-uv run mypy careervp/logic/company_research_transformer.py --strict
-```
-
-### Live Test
-```bash
-# Run live test on AWS
-bash scripts/live_test_company_research.sh
-```
-
----
-
-## 16. Validation Commands Summary
-
-```bash
-cd /Users/yitzchak/Documents/dev/careervp/src/backend
-
-# 1. Unit tests
-uv run pytest tests/unit/test_company_research_transformer.py -v --tb=short
-uv run pytest tests/unit/test_company_research_model.py -v --tb=short
-
-# 2. Integration tests
-uv run pytest tests/integration/test_company_research_flow.py -v --tb=short
-
-# 3. E2E tests
-uv run pytest tests/e2e/test_company_research_e2e.py -v --tb=short
-
-# 4. Lint
-uv run ruff check careervp/logic/company_research_transformer.py
-uv run ruff check careervp/models/company.py
-
-# 5. Type check
-uv run mypy careervp/logic/company_research_transformer.py --strict
-uv run mypy careervp/models/company.py --strict
-
-# 6. All tests
-uv run pytest tests/unit/test_company_research*.py tests/integration/test_company_research*.py -v
-
-# 7. Live test
-bash scripts/live_test_company_research.sh
-```
-
----
-
-**Document Version:** 1.0
-**Created:** 2026-02-14
-**Last Updated:** 2026-02-14
-**Status:** READY FOR IMPLEMENTATION
+# YAML format for machine validation
+
+spec_version: "1.0"
+date_created: "2026-02-14"
+date_updated: "2026-02-14"
+status: "READY_FOR_IMPLEMENTATION"
+phase: "Company Research (NEW)"
+purpose: "Defines Company Research Transformation Layer that bridges LLM-generated company research output to DynamoDB storage"
+
+overview:
+  purpose: |
+    This spec defines the Company Research Transformation Layer that bridges LLM-generated
+    company research output to DynamoDB storage. The transformation layer handles:
+    - Format conversion: LLM JSON output → DynamoDB item with JSON blob
+    - Field injection: Adding user_email from auth context
+    - TTL management: Setting 30-day expiration
+    - GSI support: Enabling queries by entity_type
+  scope:
+    in_scope:
+      - "LLM output transformation"
+      - "DynamoDB storage"
+      - "GSI queries"
+      - "TTL management"
+      - "FVS validation"
+    out_of_scope:
+      - "LLM prompt generation"
+      - "S3 storage"
+      - "Full-text search"
+      - "Cache invalidation logic"
+      - "Content generation"
+  related_features:
+    uses: "CompanyResearchResult model from src/backend/careervp/models/company.py"
+    stores: "careervp-knowledge-table-dev DynamoDB table"
+    validates: "FVS quality scores from src/backend/careervp/logic/fvs_validator.py"
+    referenced_by: "VPR Generator, Cover Letter Generator"
+
+architecture:
+  data_flow: |
+    User (user_email from JWT) → KnowledgeRepository.save_company_research()
+    → Cache Check → LLM Service (Claude Haiku 4.5) → FVS Validator
+    → CompanyResearchTransformer → DynamoDB (careervp-knowledge-table-dev)
+  components:
+    - name: "KnowledgeRepository"
+      responsibility: "Orchestrates save/get, cache check, FVS validation"
+    - name: "CompanyResearchTransformer"
+      responsibility: "Transforms LLM output → DynamoDB item"
+    - name: "CompanyResearchResult"
+      responsibility: "LLM output schema (6 fields)"
+    - name: "DynamoDBTable"
+      responsibility: "Stores items with TTL"
+
+data_schemas:
+  llm_output:
+    source: "src/backend/careervp/models/company.py"
+    class: "CompanyResearchResult"
+    fields:
+      - name: "company_name"
+        type: "str"
+        description: "Name of the company"
+      - name: "overview"
+        type: "str"
+        description: "Brief company overview"
+      - name: "values"
+        type: "List[str]"
+        description: "Company core values"
+      - name: "mission"
+        type: "str"
+        description: "Company mission statement"
+      - name: "strategic_priorities"
+        type: "List[str]"
+        description: "Strategic priorities"
+      - name: "recent_news"
+        type: "List[NewsItem]"
+        description: "Recent news articles"
+      - name: "financial_summary"
+        type: "Optional[str]"
+        description: "Financial status summary"
+
+  dynamodb_item:
+    table: "careervp-knowledge-table-dev"
+    partition_key:
+      name: "user_email"
+      type: "String"
+      source: "Auth context"
+    sort_key:
+      name: "entity_type"
+      type: "String"
+      source: "Constant"
+    attributes:
+      - name: "entity_id"
+        type: "String"
+        source: "LLM output"
+      - name: "cached_at"
+        type: "String"
+        source: "Transform"
+      - name: "ttl"
+        type: "Number"
+        source: "Transform"
+      - name: "research_data"
+        type: "String"
+        source: "Transform (JSON blob)"
+    gsi:
+      name: "entity-index"
+      partition_key: "entity_type"
+      sort_key: "entity_id"
+
+field_mapping:
+  - llm_output: "company_name"
+    dynamodb: "entity_id"
+    transformation: "Direct map"
+    required: true
+  - llm_output: "company_name"
+    dynamodb: "research_data.company_name"
+    transformation: "JSON blob"
+    required: true
+  - llm_output: "overview"
+    dynamodb: "research_data.overview"
+    transformation: "JSON blob"
+    required: true
+  - llm_output: "values"
+    dynamodb: "research_data.values"
+    transformation: "JSON serialization"
+    required: true
+  - llm_output: "mission"
+    dynamodb: "research_data.mission"
+    transformation: "JSON blob"
+    required: true
+  - llm_output: "*(injected)"
+    dynamodb: "user_email"
+    transformation: "From auth context"
+    required: true
+  - llm_output: "*(injected)"
+    dynamodb: "entity_type"
+    transformation: 'Constant: "company_research"'
+    required: true
+  - llm_output: "*(generated)"
+    dynamodb: "cached_at"
+    transformation: "Current UTC ISO8601"
+    required: true
+  - llm_output: "*(generated)"
+    dynamodb: "ttl"
+    transformation: "now + 30 days (Unix)"
+    required: true
+
+constraints:
+  technical:
+    - category: "Database"
+      constraint: "Must use careervp-knowledge-table-dev"
+      source: "dynamodb_spec.yaml"
+    - category: "Partition Key"
+      constraint: "user_email (from auth)"
+      source: "dynamodb_spec.yaml"
+    - category: "Sort Key"
+      constraint: 'entity_type ("company_research")'
+      source: "dynamodb_spec.yaml"
+    - category: "GSI"
+      constraint: "entity-index: entity_type → entity_id"
+      source: "dynamodb_spec.yaml"
+    - category: "TTL"
+      constraint: "30 days from creation"
+      source: "knowledge_base_spec.yaml"
+    - category: "Storage Format"
+      constraint: "JSON blob for all LLM fields"
+      source: "Efficiency"
+
+dependencies:
+  infrastructure:
+    - name: "careervp-knowledge-table-dev"
+      status: "Exists"
+      source: "dynamodb_spec.yaml"
+    - name: "GSI: entity-index"
+      status: "NOT IMPLEMENTED"
+      source: "dynamodb_spec.yaml"
+    - name: "KNOWLEDGE_TABLE_NAME constant"
+      status: "NOT DEFINED"
+      source: "constants.py"
+  code:
+    - name: "CompanyResearchResult"
+      location: "src/backend/careervp/models/company.py"
+      status: "Exists"
+    - name: "QualityValidator"
+      location: "src/backend/careervp/logic/fvs_validator.py"
+      status: "Exists"
+    - name: "DynamoDBTable"
+      location: "src/backend/careervp/dal/"
+      status: "Exists"
+
+validation_requirements:
+  functional:
+    - validation: "company_name required"
+      input: "Missing company_name"
+      expected: "Raise ValueError"
+      error: "company_name is required"
+    - validation: "research_data required"
+      input: "Missing research_data"
+      expected: "Raise ValueError"
+      error: "research_data is required"
+    - validation: "Valid JSON blob"
+      input: "research_data"
+      expected: "Parseable"
+      error: "Invalid JSON in research_data"
+    - validation: "TTL expiration"
+      input: "Expired TTL"
+      expected: "Return None"
+      error: "Item expired"
+    - validation: "FVS validation"
+      input: "Content"
+      expected: "Score >= threshold"
+      error: "Validation failed"
+
+validation_commands:
+  - name: "Unit tests"
+    command: "uv run pytest tests/unit/test_company_research_transformer.py -v --tb=short"
+  - name: "Integration tests"
+    command: "uv run pytest tests/integration/test_company_research_flow.py -v --tb=short"
+  - name: "Lint"
+    command: "uv run ruff check careervp/logic/company_research_transformer.py"
+  - name: "Type check"
+    command: "uv run mypy careervp/logic/company_research_transformer.py --strict"

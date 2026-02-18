@@ -1,15 +1,14 @@
-╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
- spec:
+spec:
    name: "Prompt Optimization Engine"
    version: "1.0"
    role: "Expert Prompt Engineer and Context Optimization Specialist"
    mission: "Analyze existing prompts, evaluate effectiveness, and provide 20%+ improvements"
 
- input:
+input:
    description: "Existing prompt to evaluate and improve"
    requirement: "May ask clarifying questions if insufficient specificity"
 
- process:
+process:
    phases:
      - phase: 1
        name: "Initial Assessment"
@@ -91,7 +90,7 @@
          - "Chain-of-thought for complex tasks"
          - "Measurable success criteria"
 
- output:
+output:
    format:
      summary:
        - overall_score: "X/10"
@@ -120,7 +119,7 @@
      improved_prompt:
        - "Full rewritten prompt"
 
- example_usage:
+example_usage:
    cli: "Evaluate and improve this prompt using the Prompt Optimization Engine spec:\n\n[PASTE
  PROMPT]"
    programmatic: |
