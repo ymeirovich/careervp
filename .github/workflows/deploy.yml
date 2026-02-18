@@ -55,15 +55,14 @@ jobs:
         working-directory: src/backend
         run: uv sync
       - name: Run CDK Nag Security Scan
-        working-directory: src/backend
+        working-directory: infra
         env:
           ENVIRONMENT: ${{ github.ref == 'refs/heads/main' && 'dev' || inputs.environment || 'dev' }}
         run: |
-          # Synthesize CDK and run security scans
-          cd infra
+          # Synthesize CDK template as a security gate before deploy
           uv sync
           echo "=== Running CDK Nag Security Scan ==="
-          cdk synth --quiet || { echo "CDK synth failed"; exit 1; }
+          npx cdk synth --quiet || { echo "CDK synth failed"; exit 1; }
           echo "=== CDK Nag Security Scan passed ==="
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -158,15 +157,14 @@ jobs:
         working-directory: src/backend
         run: uv sync
       - name: Run CDK Nag Security Scan
-        working-directory: src/backend
+        working-directory: infra
         env:
           ENVIRONMENT: ${{ github.ref == 'refs/heads/main' && 'dev' || inputs.environment || 'dev' }}
         run: |
-          # Synthesize CDK and run security scans
-          cd infra
+          # Synthesize CDK template as a security gate before deploy
           uv sync
           echo "=== Running CDK Nag Security Scan ==="
-          cdk synth --quiet || { echo "CDK synth failed"; exit 1; }
+          npx cdk synth --quiet || { echo "CDK synth failed"; exit 1; }
           echo "=== CDK Nag Security Scan passed ==="
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
