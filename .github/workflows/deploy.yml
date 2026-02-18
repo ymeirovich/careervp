@@ -54,6 +54,9 @@ jobs:
       - name: Install backend dependencies
         working-directory: src/backend
         run: uv sync
+      - name: Build Lambda artifacts
+        working-directory: src/backend
+        run: make build
       - name: Run CDK Nag Security Scan
         working-directory: infra
         env:
@@ -156,6 +159,9 @@ jobs:
       - name: Install backend dependencies
         working-directory: src/backend
         run: uv sync
+      - name: Build Lambda artifacts
+        working-directory: src/backend
+        run: make build
       - name: Run CDK Nag Security Scan
         working-directory: infra
         env:
