@@ -2,14 +2,15 @@
 # Generated from: infra/careervp/specs/dynamodb_spec.yaml
 # Uses NamingUtils for consistent naming: careervp-{feature}-table-{env}
 
-import careervp.constants as constants
 from aws_cdk import (
     RemovalPolicy,
     Stack,
     aws_dynamodb as dynamodb,
 )
-from careervp.naming_utils import NamingUtils
 from constructs import Construct
+
+from . import constants
+from .naming_utils import NamingUtils
 
 
 class DynamoDBStack(Stack):

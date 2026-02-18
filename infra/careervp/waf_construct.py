@@ -5,7 +5,7 @@ from aws_cdk import aws_apigateway as apigateway
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_logs as logs
 from aws_cdk import aws_wafv2 as waf
-from careervp.naming_utils import NamingUtils
+from .naming_utils import NamingUtils
 from constructs import Construct
 
 

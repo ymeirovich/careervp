@@ -62,6 +62,7 @@ GAP_ANALYSIS_QUEUE = "gap-analysis"
 # =============================================================================
 # VPR Async Architecture buckets
 VPR_RESULTS_BUCKET = "vpr-results"
+GENERATED_BUCKET_NAME = "generated"
 STATIC_BUCKET_NAME = "static"
 BACKUPS_BUCKET_NAME = "backups"
 LOGS_BUCKET_NAME = "logs"

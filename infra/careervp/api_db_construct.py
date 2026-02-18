@@ -3,13 +3,14 @@ CareerVP Database and Storage Constructs.
 DynamoDB tables and S3 buckets for the CV processing pipeline.
 """
 
-import careervp.constants as constants
 from aws_cdk import CfnOutput, Duration, RemovalPolicy
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_s3 as s3
 from aws_cdk import aws_sqs as sqs
-from careervp.naming_utils import NamingUtils
 from constructs import Construct
+
+from . import constants
+from .naming_utils import NamingUtils
 
 
 class ApiDbConstruct(Construct):

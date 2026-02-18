@@ -164,7 +164,7 @@ VALIDATION CRITERIA (must all pass):
 - [ ] Cache key collision resistance (SHA-256)
 - [ ] TTL properly enforced (test with short TTL)
 - [ ] CDK synth succeeds: npx cdk synth --app='python ../../infra/app.py'
-- [ ] CDK-Nag security scan passes: cd infra && cdk-nag scan --app='python app.py'
+- [ ] CDK-Nag security scan passes: cd infra && uv run cdk synth --app='python app.py'
   - See prompt_optimization_cdk_spec.yaml NAG_IAM_001, NAG_S3_*, NAG_DDB_*, NAG_LAMBDA_*, NAG_SQS_001 rules
 - [ ] Lambda can access cache table (IAM policy verified via CDK-Nag)
 - [ ] Unit tests pass: pytest tests/unit/test_llm_cache.py -v
@@ -1879,7 +1879,7 @@ OUTPUT FORMAT: Provide implementation with inline comments. Output results to do
 """
 **READ FIRST:**
 - `docs/refactor/specs/cdk_async_infrastructure_spec.yaml`
-- `docs/refactor/specs/prompt_optimization_cdk_spec.yaml`
+- `docs/refactor/specs/prompt_optimization_cdk_spec.yaml`(Rules: ASYNC_004, ASYNC_005)
 
 ROLE: Senior AWS Infrastructure Engineer specializing in CDK, Lambda, and async processing
 
@@ -1924,7 +1924,7 @@ OUTPUT FORMAT: Provide implementation with inline comments. Output results to do
 """
 **READ FIRST:**
 - `docs/refactor/specs/cdk_async_infrastructure_spec.yaml`
-- `docs/refactor/specs/prompt_optimization_cdk_spec.yaml`
+- `docs/refactor/specs/prompt_optimization_cdk_spec.yaml`(Rules: IAM_001, LAMBDA_CONFIG_008)
 
 ROLE: Senior AWS Infrastructure Engineer specializing in CDK and IAM
 
@@ -1976,12 +1976,13 @@ grep -c 's3.Bucket' careervp/api_db_construct.py
 **CODE:**
 ```bash
 # Run CDK infrastructure tests
-cd /Users/yitzchak/Documents/dev/careervp/infra
-uv run pytest tests/infrastructure/test_cdk.py -v --tb=short
+cd /Users/yitzchak/Documents/dev/careervp
+uv run pytest src/backend/tests/infrastructure/test_cdk.py -v --tb=short
 
 # Run CDK Nag security scan
 # See prompt_optimization_cdk_spec.yaml NAG_* rules for compliance requirements
-cdk nag scan --app='python app.py'
+cd /Users/yitzchak/Documents/dev/careervp/infra
+uv run cdk synth --app='python app.py'
 ```
 
 ---

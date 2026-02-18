@@ -2,8 +2,9 @@ from pathlib import Path
 
 from aws_cdk import Duration
 from aws_cdk import aws_appconfig as appconfig
-from careervp.configuration.schema import FeatureFlagsConfiguration
 from constructs import Construct
+
+from .schema import FeatureFlagsConfiguration
 
 
 class ConfigurationStore(Construct):

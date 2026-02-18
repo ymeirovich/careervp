@@ -7,7 +7,7 @@ import os
 import re
 from dataclasses import dataclass
 
-from careervp import constants
+from . import constants
 
 _ENV_ALIAS = {
     "prod": "prod",

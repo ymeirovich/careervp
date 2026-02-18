@@ -2,14 +2,15 @@
 # Generated from: infra/careervp/specs/s3_spec.yaml
 # Uses NamingUtils for consistent naming: careervp-{env}-{purpose}-{region_code}-{hash}
 
-import careervp.constants as constants
 from aws_cdk import (
     RemovalPolicy,
     Stack,
     aws_s3 as s3,
 )
-from careervp.naming_utils import NamingUtils
 from constructs import Construct
+
+from . import constants
+from .naming_utils import NamingUtils
 
 
 class S3Stack(Stack):

@@ -1,4 +1,3 @@
-import careervp.constants as constants
 from aws_cdk import CfnOutput, Duration, RemovalPolicy, aws_apigateway, aws_sqs
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
@@ -7,11 +6,13 @@ from aws_cdk import aws_lambda_event_sources as eventsources
 from aws_cdk import aws_logs as logs
 from aws_cdk import aws_s3 as s3
 from aws_cdk.aws_lambda_python_alpha import PythonLayerVersion
-from careervp.api_db_construct import ApiDbConstruct
-from careervp.monitoring import CrudMonitoring
-from careervp.naming_utils import NamingUtils
-from careervp.waf_construct import WafToApiGatewayConstruct
 from constructs import Construct
+
+from . import constants
+from .api_db_construct import ApiDbConstruct
+from .monitoring import CrudMonitoring
+from .naming_utils import NamingUtils
+from .waf_construct import WafToApiGatewayConstruct
 
 
 class ApiConstruct(Construct):

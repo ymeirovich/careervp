@@ -1,9 +1,12 @@
 from typing import Any
 
 from aws_cdk import Aspects, Stack, Tags
-from careervp.api_construct import ApiConstruct
-from careervp.configuration.configuration_construct import ConfigurationStore
-from careervp.constants import (
+from cdk_nag import AwsSolutionsChecks, NagSuppressions
+from constructs import Construct
+
+from .api_construct import ApiConstruct
+from .configuration.configuration_construct import ConfigurationStore
+from .constants import (
     CONFIGURATION_NAME,
     ENVIRONMENT,
     OWNER_TAG,
@@ -11,10 +14,8 @@ from careervp.constants import (
     SERVICE_NAME_TAG,
     STACK_FEATURE,
 )
-from careervp.naming_utils import NamingUtils
-from careervp.utils import get_construct_name, get_username
-from cdk_nag import AwsSolutionsChecks, NagSuppressions
-from constructs import Construct
+from .naming_utils import NamingUtils
+from .utils import get_construct_name, get_username
 
 
 class ServiceStack(Stack):

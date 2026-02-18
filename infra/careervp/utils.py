@@ -2,8 +2,8 @@ import getpass
 import os
 from typing import cast
 
-import careervp.constants as constants
-from careervp.naming_utils import NamingUtils
+from . import constants
+from .naming_utils import NamingUtils
 
 
 def get_username() -> str:
