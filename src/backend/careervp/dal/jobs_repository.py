@@ -133,6 +133,20 @@ class JobsRepository:
         items = response.get('Items', [])
         return [item for item in items if isinstance(item, dict)]
 
+    def get_vpr_jobs_by_user(self, user_id: str, limit: int = 20) -> list[dict[str, Any]]:
+        """List VPR async jobs that belong to a specific user."""
+        safe_limit = max(1, min(limit, 100))
+        try:
+            response = self.table.scan(
+                FilterExpression=Attr('user_id').eq(user_id) & Attr('application_id').exists(),
+                Limit=safe_limit,
+            )
+        except ClientError as e:
+            logger.error('Failed to list VPR jobs by user', user_id=user_id, error=str(e))
+            return []
+        items = response.get('Items', [])
+        return [item for item in items if isinstance(item, dict)]
+
     @tracer.capture_method(capture_response=False)
     def get_job(self, job_id: str) -> dict[str, Any] | None:
         """

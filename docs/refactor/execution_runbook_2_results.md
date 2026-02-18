@@ -1656,3 +1656,50 @@ Results:
 - [x] Unit tests pass: `pytest tests/unit/test_job_handler.py -v`
 - [x] Type check passes: `mypy careervp/handlers/job_handler.py --strict`
 - [x] Lint passes: `ruff check careervp/handlers/job_handler.py`
+
+## Step 10.4 VPR Route Alignment (2026-02-18)
+
+**Execution timestamp:** 2026-02-18
+**Scope:** OpenAPI VPR endpoints (`/vpr/generate`, `/vpr/{vprId}`, `/users/me/vprs`)
+
+### Implementation completed
+
+- Updated `src/backend/careervp/handlers/vpr_submit_handler.py`:
+  - Route intent aligned to `POST /vpr/generate`.
+  - Added OpenAPI request normalization for `GenerateVPRRequest` fields:
+    - `cv_id`, `job_id`, `gap_response_ids`, `options`
+  - Preserved legacy payload compatibility while enforcing authenticated user ownership.
+  - Added bearer/authorizer-based authentication extraction.
+  - Returns `202 Accepted` with OpenAPI-aligned body keys:
+    - `request_id`, `job_id`, `status`, `estimated_time_seconds`
+- Updated `src/backend/careervp/handlers/vpr_status_handler.py`:
+  - Route handling aligned to `GET /vpr/{vprId}` (accepts `vprId` path parameter).
+  - Added `GET /users/me/vprs` list route (`list_user_vprs` behavior).
+  - Added auth enforcement and owner-only access checks.
+  - Status responses normalized to lowercase lifecycle values and include `id`.
+- Updated `src/backend/careervp/dal/jobs_repository.py`:
+  - Added `get_vpr_jobs_by_user(user_id, limit=20)` to support `/users/me/vprs` listing.
+- Added `src/backend/tests/unit/test_vpr_endpoints.py`:
+  - `test_post_vpr_generate_returns_202`
+  - `test_get_vpr_id_returns_job_status`
+  - `test_get_users_me_vprs_returns_user_vpr_list`
+
+### Validation evidence
+
+- Unit tests:
+  - Command: `uv run pytest tests/unit/test_vpr_endpoints.py -v`
+  - Result: `3 passed`
+- Type check:
+  - Command: `uv run mypy careervp/handlers/vpr_*.py --strict`
+  - Result: `Success: no issues found in 4 source files`
+- Lint (supplemental):
+  - Command: `uv run ruff check careervp/handlers/vpr_submit_handler.py careervp/handlers/vpr_status_handler.py tests/unit/test_vpr_endpoints.py`
+  - Result: `All checks passed!`
+
+### Validation criteria
+
+- [x] POST /vpr/generate returns 202 Accepted
+- [x] GET /vpr/{vprId} returns job status
+- [x] GET /users/me/vprs returns user's VPR list
+- [x] Unit tests pass: `pytest tests/unit/test_vpr_endpoints.py -v`
+- [x] Type check passes: `mypy careervp/handlers/vpr_*.py --strict`
