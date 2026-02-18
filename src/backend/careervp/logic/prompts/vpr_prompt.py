@@ -193,6 +193,170 @@ BANNED_WORDS: list[str] = [
     'synergy',
 ]
 
+# Stage-specific system prompts for 6-stage VPR pipeline.
+STAGE_1_SYSTEM_PROMPT = 'You are Stage 1 Analyzer. Extract only facts from CV/job inputs and return strict JSON. Do not invent facts.'
+STAGE_2_SYSTEM_PROMPT = 'You are Stage 2 Evidence Mapper. Map explicit CV achievements to job requirements and return strict JSON.'
+STAGE_3_SYSTEM_PROMPT = 'You are Stage 3 Synthesizer. Build a natural, evidence-grounded draft VPR in strict JSON.'
+STAGE_4_SYSTEM_PROMPT = 'You are Stage 4 Self-Corrector. Improve clarity, factual grounding, and anti-AI style in strict JSON.'
+STAGE_5_SYSTEM_PROMPT = 'You are Stage 5 Formatter. Convert corrected content into the final VPR JSON schema exactly.'
+STAGE_6_SYSTEM_PROMPT = 'You are Stage 6 Meta Evaluator. Evaluate quality and anti-AI readiness, and return strict JSON diagnostics.'
+
+STAGE_3_FEW_SHOT_EXAMPLE = """Few-shot example:
+Input evidence:
+{
+  "matches": [
+    {
+      "requirement": "Lead cross-functional teams",
+      "evidence": "Managed a 9-person team to launch two products"
+    }
+  ]
+}
+Output draft:
+{
+  "executive_summary": "The candidate has repeatedly led cross-functional teams and shipped outcomes under deadlines.",
+  "evidence_matrix": [
+    {
+      "requirement": "Lead cross-functional teams",
+      "evidence": "Managed a 9-person team to launch two products",
+      "alignment_score": "STRONG",
+      "impact_potential": "Can coordinate roadmap execution with engineering, design, and operations."
+    }
+  ],
+  "differentiators": ["Execution leadership with measurable launches"],
+  "gap_strategies": [],
+  "cultural_fit": "Collaborative and delivery-focused operating style.",
+  "talking_points": ["Share how cross-functional planning reduced launch risk."],
+  "keywords": ["Cross-functional leadership", "Product delivery"]
+}
+"""
+
+STAGE_4_FEW_SHOT_EXAMPLE = """Few-shot example:
+Input draft:
+{
+  "executive_summary": "I leverage robust strategies to streamline outcomes across the organization."
+}
+Output corrected:
+{
+  "executive_summary": "I help teams focus on the few moves that improve outcomes and keep delivery steady.",
+  "corrections_applied": ["Removed banned terms", "Reduced formulaic language"]
+}
+"""
+
+STAGE_1_USER_PROMPT_TEMPLATE = """Analyze the CV and job posting and return JSON with:
+- key_skills: list[str]
+- experience_level: str
+- job_requirements: list[str]
+- cv_achievements: list[str]
+
+CV:
+{cv_json}
+
+JOB:
+{job_json}
+"""
+
+STAGE_2_USER_PROMPT_TEMPLATE = """From this analysis JSON, map evidence to requirements and return:
+- matches: list[{{requirement, evidence, alignment_score, impact_potential}}]
+- uncovered_requirements: list[str]
+
+ANALYSIS:
+{analysis_json}
+"""
+
+STAGE_3_USER_PROMPT_TEMPLATE = """Create a draft value proposition JSON with fields:
+executive_summary, evidence_matrix, differentiators, gap_strategies, cultural_fit, talking_points, keywords.
+Stay factual and natural.
+
+{few_shot_example}
+
+EVIDENCE:
+{evidence_json}
+{feedback_block}
+"""
+
+STAGE_4_USER_PROMPT_TEMPLATE = """Self-correct this draft JSON for clarity, factual grounding, and anti-AI writing.
+Return same VPR fields plus corrections_applied: list[str].
+
+{few_shot_example}
+
+DRAFT:
+{draft_json}
+{feedback_block}
+"""
+
+STAGE_5_USER_PROMPT_TEMPLATE = """Format corrected proposition into final VPR schema JSON with:
+executive_summary, evidence_matrix, differentiators, gap_strategies, cultural_fit,
+talking_points, keywords, language, version.
+
+CORRECTED:
+{corrected_json}
+
+REQUEST_CONTEXT:
+{request_context_json}
+"""
+
+STAGE_6_USER_PROMPT_TEMPLATE = """Evaluate this VPR JSON and return diagnostics JSON:
+- anti_ai_score: float
+- issues: list[str]
+- passed_gate: bool
+
+VPR:
+{vpr_json}
+"""
+
+
+def build_stage_1_prompt(user_cv: UserCV, request: VPRRequest) -> str:
+    """Build Stage 1 analysis prompt."""
+    cv_payload = _serialize_cv_for_prompt(user_cv)
+    job_payload = request.job_posting.model_dump(mode='json')
+    return STAGE_1_USER_PROMPT_TEMPLATE.format(
+        cv_json=json.dumps(cv_payload, indent=2),
+        job_json=json.dumps(job_payload, indent=2),
+    )
+
+
+def build_stage_2_prompt(analysis_payload: dict[str, Any]) -> str:
+    """Build Stage 2 evidence extraction prompt."""
+    return STAGE_2_USER_PROMPT_TEMPLATE.format(analysis_json=json.dumps(analysis_payload, indent=2))
+
+
+def build_stage_3_prompt(evidence_payload: dict[str, Any], feedback: str | None = None) -> str:
+    """Build Stage 3 synthesis prompt with few-shot guidance."""
+    feedback_block = f'\nFEEDBACK:\n{feedback}\n' if feedback else ''
+    return STAGE_3_USER_PROMPT_TEMPLATE.format(
+        few_shot_example=STAGE_3_FEW_SHOT_EXAMPLE,
+        evidence_json=json.dumps(evidence_payload, indent=2),
+        feedback_block=feedback_block,
+    )
+
+
+def build_stage_4_prompt(draft_payload: dict[str, Any], feedback: str | None = None) -> str:
+    """Build Stage 4 self-correction prompt with few-shot guidance."""
+    feedback_block = f'\nFEEDBACK:\n{feedback}\n' if feedback else ''
+    return STAGE_4_USER_PROMPT_TEMPLATE.format(
+        few_shot_example=STAGE_4_FEW_SHOT_EXAMPLE,
+        draft_json=json.dumps(draft_payload, indent=2),
+        feedback_block=feedback_block,
+    )
+
+
+def build_stage_5_prompt(corrected_payload: dict[str, Any], request: VPRRequest) -> str:
+    """Build Stage 5 final formatting prompt."""
+    request_context = {
+        'application_id': request.application_id,
+        'user_id': request.user_id,
+        'language': request.job_posting.language,
+    }
+    return STAGE_5_USER_PROMPT_TEMPLATE.format(
+        corrected_json=json.dumps(corrected_payload, indent=2),
+        request_context_json=json.dumps(request_context, indent=2),
+    )
+
+
+def build_stage_6_prompt(vpr_payload: dict[str, Any]) -> str:
+    """Build Stage 6 meta-evaluation prompt."""
+    return STAGE_6_USER_PROMPT_TEMPLATE.format(vpr_json=json.dumps(vpr_payload, indent=2))
+
 
 def build_vpr_prompt(user_cv: UserCV, request: VPRRequest) -> str:
     """

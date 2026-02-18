@@ -43,6 +43,14 @@ class FVSValidationResult:
         return any(v.severity == 'CRITICAL' for v in self.violations)
 
 
+@dataclass(frozen=True)
+class AntiAIPatternResult:
+    """Structured anti-AI pattern assessment output."""
+
+    score: float
+    issues: list[str]
+
+
 def validate_immutable_facts(baseline: dict[str, Any], generated: UserCV) -> FVSValidationResult:  # noqa: C901 - explicit comparisons aid readability
     """
     Validate that generated CV does not modify immutable facts from baseline.
@@ -264,6 +272,23 @@ TITLE_PATTERN = re.compile(
     r'\b(?:as|serving as|served as|working as|worked as|functioning as|functioned as)\s+([A-Za-z][A-Za-z0-9&/ \-]+)',
     flags=re.IGNORECASE,
 )
+ANTI_AI_BANNED_TERMS = (
+    'leverage',
+    'delve into',
+    'landscape',
+    'robust',
+    'streamline',
+    'utilize',
+    'facilitate',
+    'implement',
+    'cutting-edge',
+    'best practices',
+    'industry-leading',
+    'game-changer',
+    'paradigm shift',
+    'synergy',
+)
+TOKEN_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9'/-]*")
 
 
 def validate_vpr_against_cv(vpr: VPR, user_cv: UserCV) -> Result[FVSValidationResult]:
@@ -373,6 +398,58 @@ def _matches_known_role(candidate: str, known_roles: Iterable[str]) -> bool:
         if SequenceMatcher(None, normalized_candidate, normalized_role).ratio() >= 0.82:
             return True
     return False
+
+
+def check_anti_anti_ai_patterns(content: str) -> AntiAIPatternResult:  # noqa: C901
+    """
+    Score content on anti-AI writing patterns.
+
+    The score is 0.0-10.0 where >=9.0 passes the quality gate.
+    """
+    normalized = content.strip()
+    if not normalized:
+        return AntiAIPatternResult(score=0.0, issues=['Content is empty'])
+
+    lowered = normalized.lower()
+    issues: list[str] = []
+    score = 10.0
+
+    matched_banned = [term for term in ANTI_AI_BANNED_TERMS if term in lowered]
+    if matched_banned:
+        score -= min(len(matched_banned) * 0.6, 4.0)
+        issues.append(f'Banned terms detected: {", ".join(sorted(matched_banned))}')
+
+    sentences = [part.strip() for part in re.split(r'[.!?]+', normalized) if part.strip()]
+    if len(sentences) < 2:
+        score -= 0.4
+        issues.append('Very short response shape; expand with more natural variation')
+
+    if sentences:
+        lengths = [len(sentence.split()) for sentence in sentences]
+        avg_sentence_len = sum(lengths) / len(lengths)
+        if avg_sentence_len > 26:
+            score -= 0.4
+            issues.append('Average sentence length is too high and sounds formulaic')
+
+        starters: list[str] = []
+        for sentence in sentences:
+            words = sentence.lower().split()
+            starters.append(' '.join(words[:2]) if len(words) >= 2 else words[0])
+        if starters:
+            repeated_start_count = max(starters.count(starter) for starter in set(starters))
+            if repeated_start_count >= 3:
+                score -= 0.4
+                issues.append('Repeated sentence openings suggest templated writing')
+
+    tokens = TOKEN_PATTERN.findall(lowered)
+    if tokens:
+        diversity = len(set(tokens)) / len(tokens)
+        if diversity < 0.42:
+            score -= 0.4
+            issues.append('Low lexical diversity suggests repetitive AI-like phrasing')
+
+    bounded_score = max(0.0, min(10.0, round(score, 2)))
+    return AntiAIPatternResult(score=bounded_score, issues=issues)
 
 
 # Phase 9 CV Tailoring helpers (delegates to cv_tailoring implementation)
