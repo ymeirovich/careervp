@@ -298,6 +298,614 @@ rules:
     description: "SnapStart reduces Lambda cold start time for Java (up to 90%)"
     applicable: "Java Lambda functions only"
 
+  # ---------------------------------------------------------------------------
+  # SQS QUEUE RULES
+  # ---------------------------------------------------------------------------
+  - id: SQS_001
+    category: sqs
+    severity: critical
+    name: "Dead Letter Queue required for async Lambda"
+    description: |
+      All Lambda functions triggered by SQS must have a DLQ configured
+      to capture messages that fail processing after max retries.
+    implementation: |
+      from aws_cdk import aws_sqs as sqs
+      dlq = sqs.Queue(self, "DLQ",
+          queue_name="my-function-dlq",
+          retention_period=Duration.days(14)
+      )
+      queue = sqs.Queue(self, "Queue",
+          dead_letter_queue=sqs.DeadLetterQueue(
+              max_receive_count=5,
+              queue=dlq
+          )
+      )
+
+  - id: SQS_002
+    category: sqs
+    severity: high
+    name: "SQS queue encryption at rest"
+    description: |
+      All SQS queues must use SSE encryption to protect data at rest.
+      Use AWS-managed KMS key or customer-managed key.
+    implementation: |
+      queue = sqs.Queue(self, "Queue",
+          encryption=sqs.QueueEncryption.KMS,  # or KMS_MANAGED
+          # Or with customer key:
+          # encryption_master_key=kms_key
+      )
+
+  - id: SQS_003
+    category: sqs
+    severity: medium
+    name: "SQS visibility timeout must exceed Lambda timeout"
+    description: |
+      Prevent message duplicates by setting visibility timeout
+      greater than Lambda execution time.
+    check: "visibility_timeout > Lambda timeout + buffer (60s)"
+
+  - id: SQS_004
+    category: sqs
+    severity: medium
+    name: "SQS FIFO queues for ordered processing"
+    description: |
+      Use FIFO queues when message ordering is critical
+      (e.g., job status updates, audit logs).
+    applicable: "When order matters for processing"
+
+  # ---------------------------------------------------------------------------
+  # ENCRYPTION RULES
+  # ---------------------------------------------------------------------------
+  - id: ENCRYPT_001
+    category: security
+    severity: critical
+    name: "DynamoDB encryption at rest"
+    description: |
+      DynamoDB tables must use encryption at rest.
+      Default: AWS-owned key. For sensitive data, use KMS.
+    implementation: |
+      # Default (AWS-owned)
+      table = dynamodb.TableV2(self, "Table",
+          encryption=dynamodb.TableEncryption.AWS_MANAGED
+      )
+      # Or with customer key
+      table = dynamodb.TableV2(self, "Table",
+          encryption=dynamodb.TableEncryption.CUSTOMER_MANAGED,
+          encryption_key=kms_key
+      )
+
+  - id: ENCRYPT_002
+    category: security
+    severity: critical
+    name: "S3 bucket encryption at rest"
+    description: |
+      All S3 buckets must have encryption enabled.
+      Use SSE-S3 (default) or SSE-KMS for sensitive data.
+    implementation: |
+      bucket = s3.Bucket(self, "Bucket",
+          encryption=s3.BucketEncryption.ENCRYPTED,
+          # Or:
+          # encryption=s3.BucketEncryption.KMS,
+          # encryption_key=kms_key
+      )
+
+  - id: ENCRYPT_003
+    category: security
+    severity: critical
+    name: "Lambda function URL requires HTTPS"
+    description: |
+      If using Lambda Function URLs (not API Gateway),
+      enforce HTTPS to protect data in transit.
+    implementation: |
+      fn_url = _lambda.FunctionUrl(self, "Url",
+          auth_type=_lambda.FunctionUrlAuthType.AWS_IAM,
+          cors=lambda_urlCors=lambda_url.Cors(
+              allow_origins=["https://example.com"],
+              allow_methods=[http.HttpMethod.GET],
+              enforce_ssl=True  # Critical
+          )
+      )
+
+  - id: ENCRYPT_004
+    category: security
+    severity: high
+    name: "API Gateway requires HTTPS"
+    description: |
+      API Gateway should enforce HTTPS for production.
+      Use edge-optimized or private endpoints with TLS.
+    check: "Custom domain or CloudFront distribution with SSL certificate"
+
+  - id: ENCRYPT_005
+    category: security
+    severity: high
+    name: "KMS key rotation for sensitive data"
+    description: |
+      Customer-managed KMS keys should have automatic rotation enabled
+      for compliance and security.
+    implementation: |
+      key = kms.Key(self, "Key",
+          enable_key_rotation=True  # Auto-rotate annually
+      )
+
+  # ---------------------------------------------------------------------------
+  # SECRETS MANAGEMENT RULES
+  # ---------------------------------------------------------------------------
+  - id: SECRETS_001
+    category: security
+    severity: critical
+    name: "Use Secrets Manager for database credentials"
+    description: |
+      Database passwords and connection strings must be stored
+      in AWS Secrets Manager, not environment variables.
+    implementation: |
+      secret = secretsmanager.Secret(self, "DbCredentials",
+          secret_name="prod/db-credentials",
+          generate_secret_string=secretsmanager.GenerateSecretString(
+              secret_string_template='{"username": "admin"}',
+              generate_string_key="password"
+          )
+      )
+
+  - id: SECRETS_002
+    category: security
+    severity: critical
+    name: "Use SSM Parameter Store for configuration"
+    description: |
+      Non-sensitive configuration (table names, feature flags)
+      should use SSM Parameter Store with SecureString for sensitive values.
+    implementation: |
+      # Non-sensitive
+      param = ssm.StringParameter(self, "TableName",
+          parameter_name="/app/table-name",
+          string_value="users-table"
+      )
+      # Sensitive
+      secure_param = ssm.StringParameter(self, "ApiKey",
+          parameter_name="/app/api-key",
+          string_value="value",
+          type=ssm.ParameterType.SECURE_STRING,
+          tier=ssm.ParameterTier.ADVANCED
+      )
+
+  - id: SECRETS_003
+    category: security
+    severity: high
+    name: "Lambda should retrieve secrets at runtime, not build time"
+    description: |
+      Lambda functions should fetch secrets from Secrets Manager
+      at runtime, not embed them in code or environment.
+    pattern: |
+      # In Lambda handler
+      import boto3
+      client = boto3.client('secretsmanager')
+      secret = client.get_secret_value(SecretId='my-secret')
+
+  # ---------------------------------------------------------------------------
+  # EVENTBRIDGE RULES
+  # ---------------------------------------------------------------------------
+  - id: EVB_001
+    category: eventbridge
+    severity: medium
+    name: "EventBridge for Lambda cross-account invoking"
+    description: |
+      Use EventBridge to trigger Lambda in different accounts
+      instead of direct invocation for security isolation.
+    applicable: "Multi-account architectures"
+
+  - id: EVB_002
+    category: eventbridge
+    severity: medium
+    name: "EventBridge dead letter target for failed events"
+    description: |
+      Failed events in EventBridge should be captured
+      in a DLQ or logged for debugging.
+    implementation: |
+      rule = events.Rule(self, "Rule",
+          targets=[events.Target(
+              lambda_function,
+              dead_letter_queue=dlq
+          )]
+      )
+
+  # ---------------------------------------------------------------------------
+  # CLOUDWATCH LOGGING RULES
+  # ---------------------------------------------------------------------------
+  - id: CW_001
+    category: monitoring
+    severity: high
+    name: "Lambda logs retention policy"
+    description: |
+      Set CloudWatch Logs retention to balance cost and debugging needs.
+      Default is unlimited, which accumulates high costs.
+    implementation: |
+      import aws_cdk.aws_logs as logs
+      log_group = logs.LogGroup(self, "LogGroup",
+          retention=logs.RetentionDays.ONE_WEEK  # Or appropriate period
+      )
+
+  - id: CW_002
+    category: monitoring
+    severity: medium
+    name: "CloudWatch alarms for error rates"
+    description: |
+      Set alarms on Lambda error rates to detect issues
+      before customers report them.
+    implementation: |
+      error_alarm = cloudwatch.Alarm(self, "ErrorAlarm",
+          metric=fn.metric_errors(),
+          threshold=5,
+          evaluation_periods=2,
+          alarm_name=f"{fn.function_name}-errors"
+      )
+
+  - id: CW_003
+    category: monitoring
+    severity: medium
+    name: "CloudWatch dashboards for operational visibility"
+    description: |
+      Create dashboards to visualize Lambda invocation counts,
+      errors, duration, and throttling.
+
+  # ---------------------------------------------------------------------------
+  # API GATEWAY SECURITY RULES
+  # ---------------------------------------------------------------------------
+  - id: APIGW_003
+    category: apigateway
+    severity: high
+    name: "API Gateway throttling and quota limits"
+    description: |
+      Prevent abuse by setting throttling limits per client/IP
+      and monthly quota for paid tiers.
+    implementation: |
+      usage_plan = apigw.UsagePlan(self, "UsagePlan",
+          throttle=apigw.ThrottleSettings(
+              rate_limit=10,  # Requests per second
+              burst_limit=20   # Max concurrent
+          ),
+          quota=apigw.QuotaSettings(
+              limit=10000,  # Monthly
+              period=apigw.Period.MONTH
+          )
+      )
+
+  - id: APIGW_004
+    category: apigateway
+    severity: high
+    name: "WAF for API Gateway protection"
+    description: |
+      Attach AWS WAF to API Gateway to protect against:
+      - SQL injection
+      - XSS attacks
+      - Geo-blocking
+      - IP rate limiting
+    implementation: |
+      waf = wafv2.CfnWebACL(self, "WAF",
+          scope="REGIONAL",
+          default_action=wafv2.CfnWebACL.DefaultActionProperty(allow={}),
+          rules=[# Add security rules]
+      )
+      apigateway = apigw.RestApi(self, "Api",
+          web_acl_arn=waf.attr_arn
+      )
+
+  - id: APIGW_005
+    category: apigateway
+    severity: medium
+    name: "CORS configuration for APIs"
+    description: |
+      Properly configure CORS to allow legitimate origins
+      while blocking malicious cross-site requests.
+    implementation: |
+      api = apigw.RestApi(self, "Api",
+          default_cors_preflight_options=apigw.CorsOptions(
+              allow_origins=["https://careervp.com"],
+              allow_methods=apigw.Cors.ALL_METHODS,
+              allow_headers=["Authorization", "Content-Type"]
+          )
+      )
+
+  # ---------------------------------------------------------------------------
+  # COGNITO AUTH RULES
+  # ---------------------------------------------------------------------------
+  - id: COGNITO_001
+    category: security
+    severity: critical
+    name: "Cognito User Pool for user authentication"
+    description: |
+      Use Cognito User Pools for managing user sign-up,
+      sign-in, and MFA.
+    implementation: |
+      user_pool = cognito.UserPool(self, "UserPool",
+          user_pool_name="careervp-users",
+          mfa=cognito.Mfa.OPTIONAL,
+          sign_in_aliases=cognito.SignInAliases(
+              email=True,
+              phone=False
+          ),
+          auto_verify=cognito.AutoVerifyAttrs(email=True)
+      )
+
+  - id: COGNITO_002
+    category: security
+    severity: high
+    name: "Cognito app client with minimal scopes"
+    description: |
+      Configure app clients with only required OAuth scopes.
+      Avoid using client credentials for user-facing apps.
+
+  # ---------------------------------------------------------------------------
+  # VPC NETWORKING RULES
+  # ---------------------------------------------------------------------------
+  - id: VPC_001
+    category: networking
+    severity: high
+    name: "VPC endpoints for private Lambda access"
+    description: |
+      If Lambda needs private AWS service access,
+      use VPC endpoints instead of public internet.
+    implementation: |
+      # S3 VPC endpoint
+      s3_endpoint = ec2.GatewayVpcEndpoint(self, "S3Endpoint",
+          service=ec2.GatewayVpcEndpointAwsService.S3,
+          vpc=vpc
+      )
+
+  # ---------------------------------------------------------------------------
+  # LAMBDA DEPLOYMENT BEST PRACTICES
+  # ---------------------------------------------------------------------------
+  - id: LAMBDA_SIZE_004
+    category: lambda
+    severity: critical
+    name: "Monitor Lambda layer size in CI/CD"
+    description: |
+      Lambda layers contribute to total deployment package size.
+      Total (function + all layers) must not exceed 250MB zipped.
+    check: |
+      1. Check each layer size independently
+      2. Sum all layer sizes + function code
+      3. Must be < 250MB when zipped
+    remediation: |
+      - Remove unused dependencies from layers
+      - Use slim wheels (e.g., orjson, httpx-sse)
+      - Split large layers into smaller focused layers
+
+  - id: LAMBDA_SIZE_005
+    category: lambda
+    severity: critical
+    name: "Enforce Lambda layer size limit in CDK validation"
+    description: |
+      Lambda layer expanded size counts toward 250MB limit.
+      AWS limit: 10GB expanded per layer.
+    check: |
+      1. Each layer: must be < 10GB expanded
+      2. Function + all layers: must be < 250MB zipped
+      3. Common layer in this project caused 283MB > 250MB limit
+    remediation: |
+      - Comment out or remove large common layers
+      - Use minimal dependencies per function
+      - Avoid bundling runtime (Lambda provides Python 3.x)
+
+  - id: LAMBDA_CONFIG_004
+    category: lambda
+    severity: high
+    name: "Set appropriate Lambda timeout per workload"
+    description: |
+      Timeout should match workload complexity:
+      - Simple CRUD: 10-30 seconds
+      - LLM/API calls: 60-120 seconds
+      - Async processing: 300 seconds (max)
+    implementation: |
+      lambda_function = _lambda.Function(
+          self, "Function",
+          timeout=Duration.seconds(60),  # Match expected workload
+          # 30s for API GW max
+      )
+
+  - id: LAMBDA_CONFIG_005
+    category: lambda
+    severity: medium
+    name: "Configure reserved concurrency for critical functions"
+    description: |
+      Prevent function starvation during high load.
+      Set reserved concurrency for critical path functions.
+    implementation: |
+      lambda_function = _lambda.Function(
+          self, "Function",
+          reserved_concurrent_executions=10,  # For critical functions
+      )
+
+  - id: LAMBDA_CONFIG_006
+    category: lambda
+    severity: medium
+    name: "Enable Lambda destinations for async invocation failure handling"
+    description: |
+      Lambda destinations route async invocation results to another service
+      (SQS, SNS, Lambda, EventBridge) for failure handling.
+    implementation: |
+      from aws_cdk import aws_lambda_destinations
+      lambda_function = _lambda.Function(
+          self, "Function",
+          on_failure=lambda_destination.SqsDestination(
+              dead_letter_queue
+          ),
+          on_success=lambda_destination.S3Destination(
+              success_bucket
+          ),
+      )
+
+  - id: LAMBDA_CONFIG_007
+    category: lambda
+    severity: medium
+    name: "Use Lambda provisioned concurrency for consistent latency"
+    description: |
+      For production APIs requiring < 1s response times,
+      use provisioned concurrency to eliminate cold starts.
+    implementation: |
+      alias = lambda_function.current_version.add_alias("live")
+      provisioned_concurrent_executions = [
+          lambda.ProvisionedConcurrencyConfig(
+              provisioner_concurrency=3,
+              qualifier=alias.alias_name
+          )
+      ]
+
+  - id: LAMBDA_CONFIG_008
+    category: lambda
+    severity: high
+    name: "Pass resource names via environment variables, not hardcoded"
+    description: |
+      Table names, bucket names, and ARNs should be injected
+      via environment variables for cross-environment portability.
+    anti_pattern: |
+      # BAD - hardcoded
+      table_name = "careervp-users-table-dev"
+    pattern: |
+      # GOOD - from CDK
+      environment={
+          "USERS_TABLE_NAME": users_table.table_name,
+          "REGION": aws_env.region
+      }
+
+  # ---------------------------------------------------------------------------
+  # DYNAMODB EXTENDED RULES
+  # ---------------------------------------------------------------------------
+  - id: DDB_003
+    category: dynamodb
+    severity: high
+    name: "Validate table exists before endpoint deployment"
+    description: |
+      Before deploying an API endpoint that requires DynamoDB,
+      ensure the table is defined in ApiDbConstruct.
+    check: "All paths in OpenAPI spec must have corresponding table in CDK"
+
+  - id: DDB_004
+    category: dynamodb
+    severity: medium
+    name: "GSI naming consistency"
+    description: |
+      Global Secondary Indexes must follow naming convention:
+      {table}-gsi-{index-name}
+    example: "applications-gsi-status-index"
+
+  - id: DDB_005
+    category: dynamodb
+    severity: high
+    name: "TTL field for cache tables"
+    description: |
+      Tables used for caching (llm-cache, company-research-cache)
+      must have TTL enabled.
+    check: "time_to_live_attribute configured"
+
+  # ---------------------------------------------------------------------------
+  # ASYNC PROCESSING RULES
+  # ---------------------------------------------------------------------------
+  - id: ASYNC_001
+    category: async
+    severity: critical
+    name: "Idempotency table for async endpoints"
+    description: |
+      All async POST endpoints must use idempotency-table
+      to prevent duplicate processing.
+    check: "idempotency-key in request header, check before creating job"
+
+  - id: ASYNC_002
+    category: async
+    severity: critical
+    name: "Job status table pattern"
+    description: |
+      Async operations use jobs-table with states:
+      PENDING -> PROCESSING -> COMPLETED/FAILED
+    check: "Status field with enum, timestamps for created/updated"
+
+  - id: ASYNC_003
+    category: async
+    severity: high
+    name: "Async result storage"
+    description: |
+      Completed async results stored in artifacts-table with signed S3 URLs.
+    check: "Result stored in DynamoDB, large payloads in S3"
+
+  - id: ASYNC_004
+    category: async
+    severity: critical
+    name: "Worker Lambda must have DLQ for failed processing"
+    description: |
+      Worker Lambda functions must have a dead letter queue
+      to capture messages that fail processing.
+    implementation: |
+      # Option 1: SQS DLQ
+      queue = sqs.Queue(self, "Queue",
+          dead_letter_queue=sqs.DeadLetterQueue(
+              max_receive_count=3,
+              queue=dlq
+          )
+      )
+
+      # Option 2: Lambda destinations
+      lambda_function = _lambda.Function(
+          self, "Worker",
+          on_failure=lambda_destination.SqsDestination(dlq)
+      )
+
+  - id: ASYNC_005
+    category: async
+    severity: high
+    name: "DynamoDB Streams must be enabled for async jobs"
+    description: |
+      Job status tables must have streams enabled
+      to trigger worker Lambda functions.
+    check: "table.stream = dynamodb.StreamViewType.NEW_AND_OLD_IMAGES"
+
+  - id: ASYNC_006
+    category: async
+    severity: medium
+    name: "Async job status polling endpoint"
+    description: |
+      Async endpoints must return jobId immediately (202 Accepted).
+      Separate GET endpoint to poll for status.
+    implementation: |
+      # POST returns: { jobId, status: "PENDING" }
+      # GET /jobs/{jobId} returns: { jobId, status, result? }
+
+  # ---------------------------------------------------------------------------
+  # S3 EXTENDED RULES
+  # ---------------------------------------------------------------------------
+  - id: S3_003
+    category: s3
+    severity: high
+    name: "CV upload bucket lifecycle"
+    description: |
+      cv-uploads bucket must have lifecycle: 90 days -> IA, 365 days -> Glacier
+    check: "Lifecycle rule configured"
+
+  - id: S3_004
+    category: s3
+    severity: high
+    name: "Artifacts bucket versioning"
+    description: |
+      artifacts bucket must have versioning enabled for audit trail.
+    check: "bucket.versioned = True"
+
+  # ---------------------------------------------------------------------------
+  # API GATEWAY EXTENDED RULES
+  # ---------------------------------------------------------------------------
+  - id: API_001
+    category: apigateway
+    severity: critical
+    name: "Route-to-Lambda mapping"
+    description: |
+      Each OpenAPI path+method must have corresponding Lambda integration.
+    check: "No orphan routes in OpenAPI without Lambda handler"
+
+  - id: API_002
+    category: apigateway
+    severity: critical
+    name: "Auth on protected routes"
+    description: |
+      All /api/* routes except /auth/register, /auth/login, /health
+      require JWT validation.
+    check: "Authorizer configured on protected routes"
+
 # =============================================================================
 # VALIDATION CHECKLIST
 # =============================================================================

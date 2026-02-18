@@ -1,6 +1,14 @@
 # execution_runbook_2_results.md
 
-**Generated:** 2026-02-17
+**Generated:** 2026-02-18
+
+## New Specs Created
+
+### Phase 11 - CDK Infrastructure Specs
+- [x] `docs/refactor/specs/cdk_async_infrastructure_spec.yaml` - Machine-readable CDK infrastructure spec
+- [x] `docs/refactor/specs/cdk_e2e_validation_spec.yaml` - Endpoint-to-resource validation rules
+
+---
 
 ## Steps Updated with Prompt Optimization Pattern
 
