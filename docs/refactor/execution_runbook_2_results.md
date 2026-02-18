@@ -1816,3 +1816,36 @@ Results:
 
 - [x] GET /cover-letter/{coverLetterId} returns cover letter
 - [x] GET /users/me/cover-letters returns user's letters
+
+## Step 10.8 Interview Prep Status Endpoint (2026-02-18)
+
+**Execution timestamp:** 2026-02-18
+**Scope:** Interview prep status endpoint (`/interview-prep/{interviewPrepId}`)
+
+### Implementation completed
+
+- Updated `src/backend/careervp/handlers/interview_prep_handler.py`:
+  - Added route dispatch for `GET /interview-prep/{interviewPrepId}` -> `get_interview_prep_status()` -> `200 OK`.
+  - Preserved existing `POST /interview-prep/generate` behavior and response shape.
+  - Added user identity extraction (authorizer claims + `AUTHORIZER_DISABLED` fallback via `x-user-id`).
+  - Added DynamoDB lookup for interview prep artifacts (`pk=user_id`, `sk` prefix `ARTIFACT#INTERVIEW_PREP#`).
+  - Added status payload shaping to align with OpenAPI response (`id`, `status`, `result.questions[]`).
+- Added `src/backend/tests/unit/test_interview_prep_status.py`:
+  - `test_get_interview_prep_status_returns_prep_data`
+  - `test_get_interview_prep_status_is_user_scoped`
+
+### Validation evidence
+
+- Unit tests:
+  - Command: `uv run pytest tests/unit/test_interview_prep_status.py -v`
+  - Result: `2 passed`
+- Type check (supplemental safety check):
+  - Command: `uv run mypy careervp/handlers/interview_prep_handler.py --strict`
+  - Result: `Success: no issues found in 1 source file`
+- Lint (supplemental safety check):
+  - Command: `uv run ruff check careervp/handlers/interview_prep_handler.py tests/unit/test_interview_prep_status.py`
+  - Result: `All checks passed!`
+
+### Validation criteria
+
+- [x] GET /interview-prep/{interviewPrepId} returns prep data
