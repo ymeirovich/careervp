@@ -7,6 +7,7 @@ import careervp.constants as constants
 from aws_cdk import CfnOutput, Duration, RemovalPolicy
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_s3 as s3
+from aws_cdk import aws_sqs as sqs
 from careervp.naming_utils import NamingUtils
 from constructs import Construct
 
@@ -23,6 +24,9 @@ class ApiDbConstruct(Construct):
 
     Buckets:
     - CV Bucket: Stores uploaded CV files (PDF, DOCX)
+
+    Queues:
+    - CV Upload / Gap Analysis: Async processing queues with DLQs
     """
 
     def __init__(self, scope: Construct, id_: str, naming: NamingUtils) -> None:
@@ -53,6 +57,16 @@ class ApiDbConstruct(Construct):
         self.backups_bucket: s3.Bucket = self._build_backups_bucket(id_)
         self.logs_bucket: s3.Bucket = self._build_logs_bucket(id_)
         self.artifacts_bucket: s3.Bucket = self._build_artifacts_bucket(id_)
+
+        # SQS queues for async endpoint processing.
+        self.cv_upload_dlq: sqs.Queue = self._build_cv_upload_dlq(id_)
+        self.cv_upload_queue: sqs.Queue = self._build_cv_upload_queue(
+            id_, self.cv_upload_dlq
+        )
+        self.gap_analysis_dlq: sqs.Queue = self._build_gap_analysis_dlq(id_)
+        self.gap_analysis_queue: sqs.Queue = self._build_gap_analysis_queue(
+            id_, self.gap_analysis_dlq
+        )
 
         # Backwards compatibility alias
         self.db = self.users_table
@@ -406,6 +420,68 @@ class ApiDbConstruct(Construct):
             value=table.table_name,
         ).override_logical_id(constants.COMPANY_RESEARCH_CACHE_TABLE_OUTPUT)
         return table
+
+    def _build_cv_upload_dlq(self, id_prefix: str) -> sqs.Queue:
+        """Dead-letter queue for failed CV upload processing jobs."""
+        return sqs.Queue(
+            self,
+            f"{id_prefix}CvUploadDlq",
+            queue_name=self.naming.dlq_name(constants.CV_UPLOAD_QUEUE),
+            # SQS_001: retain failed messages for 14 days.
+            retention_period=Duration.days(14),
+            # SQS_002: encrypt queue contents with AWS-managed KMS.
+            encryption=sqs.QueueEncryption.KMS_MANAGED,
+        )
+
+    def _build_cv_upload_queue(self, id_prefix: str, dlq: sqs.Queue) -> sqs.Queue:
+        """Primary queue for CV upload async processing."""
+        return sqs.Queue(
+            self,
+            f"{id_prefix}CvUploadQueue",
+            queue_name=self.naming.queue_name(constants.CV_UPLOAD_QUEUE),
+            # SQS_003: visibility must exceed Lambda timeout + 60s buffer.
+            visibility_timeout=Duration.seconds(390),
+            receive_message_wait_time=Duration.seconds(20),
+            # SQS_002: encrypt queue contents with AWS-managed KMS.
+            encryption=sqs.QueueEncryption.KMS_MANAGED,
+            # SQS_004: ordering is not required for independent CV jobs.
+            fifo=False,
+            dead_letter_queue=sqs.DeadLetterQueue(
+                queue=dlq,
+                max_receive_count=5,
+            ),
+        )
+
+    def _build_gap_analysis_dlq(self, id_prefix: str) -> sqs.Queue:
+        """Dead-letter queue for failed gap analysis jobs."""
+        return sqs.Queue(
+            self,
+            f"{id_prefix}GapAnalysisDlq",
+            queue_name=self.naming.dlq_name(constants.GAP_ANALYSIS_QUEUE),
+            # SQS_001: retain failed messages for 14 days.
+            retention_period=Duration.days(14),
+            # SQS_002: encrypt queue contents with AWS-managed KMS.
+            encryption=sqs.QueueEncryption.KMS_MANAGED,
+        )
+
+    def _build_gap_analysis_queue(self, id_prefix: str, dlq: sqs.Queue) -> sqs.Queue:
+        """Primary queue for gap analysis async processing."""
+        return sqs.Queue(
+            self,
+            f"{id_prefix}GapAnalysisQueue",
+            queue_name=self.naming.queue_name(constants.GAP_ANALYSIS_QUEUE),
+            # SQS_003: visibility must exceed Lambda timeout + 60s buffer.
+            visibility_timeout=Duration.seconds(390),
+            receive_message_wait_time=Duration.seconds(20),
+            # SQS_002: encrypt queue contents with AWS-managed KMS.
+            encryption=sqs.QueueEncryption.KMS_MANAGED,
+            # SQS_004: ordering is not required for independent gap-analysis jobs.
+            fifo=False,
+            dead_letter_queue=sqs.DeadLetterQueue(
+                queue=dlq,
+                max_receive_count=5,
+            ),
+        )
 
     def _build_vpr_results_bucket(self, id_prefix: str) -> s3.Bucket:
         """

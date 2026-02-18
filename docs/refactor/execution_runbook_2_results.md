@@ -783,3 +783,55 @@ Output:
 - `careervp-dev-backups-use1-494291|versioning=Enabled|public_block=True|enc=AES256|transitions=[(30, 'STANDARD_IA'), (90, 'GLACIER')]`
 - `careervp-dev-logs-use1-494291|versioning=Enabled|public_block=True|enc=AES256|transitions=[(180, 'STANDARD_IA'), (365, 'GLACIER')]`
 - `careervp-dev-artifacts-use1-494291|versioning=Enabled|public_block=True|enc=AES256|transitions=[(90, 'STANDARD_IA'), (180, 'GLACIER')]`
+
+## Step 11.2: Add Async SQS Queues to `ApiDbConstruct` (2026-02-18)
+
+### Implementation Completed
+- Updated `infra/careervp/constants.py`
+  - Added `CV_UPLOAD_QUEUE = "cv-upload"`
+  - Added `GAP_ANALYSIS_QUEUE = "gap-analysis"`
+- Updated `infra/careervp/api_db_construct.py`
+  - Imported `aws_sqs as sqs`.
+  - Added construct attributes:
+    - `self.cv_upload_queue` and `self.cv_upload_dlq`
+    - `self.gap_analysis_queue` and `self.gap_analysis_dlq`
+  - Added queue builders with inline comments tied to `SQS_001`-`SQS_004`:
+    - `_build_cv_upload_dlq(...)`
+    - `_build_cv_upload_queue(...)`
+    - `_build_gap_analysis_dlq(...)`
+    - `_build_gap_analysis_queue(...)`
+
+### Queue Configuration Applied
+- `cv_upload_queue`
+  - DLQ configured with 14-day retention (`Duration.days(14)`)
+  - Encryption set to KMS (`sqs.QueueEncryption.KMS_MANAGED`)
+  - Visibility timeout set to 390 seconds (`Duration.seconds(390)`) to exceed Lambda timeout + buffer
+  - `fifo=False` because strict ordering is not required
+- `gap_analysis_queue`
+  - DLQ configured with 14-day retention (`Duration.days(14)`)
+  - Encryption set to KMS (`sqs.QueueEncryption.KMS_MANAGED`)
+  - Visibility timeout set to 390 seconds (`Duration.seconds(390)`) to exceed Lambda timeout + buffer
+  - `fifo=False` because strict ordering is not required
+
+### Validation Criteria
+- [x] Both queues defined with KMS encryption
+  - Verified in synthesized template with `KmsMasterKeyId: alias/aws/sqs` for both queues and DLQs.
+- [x] DLQ configured for each queue
+  - Verified `RedrivePolicy` for both primary queues and dedicated DLQ resources.
+- [x] Visibility timeout >= 300 seconds
+  - Verified `VisibilityTimeout: 390` for both primary queues.
+- [x] CDK synth passes
+  - `npx cdk synth --app='python app.py'` failed in default shell Python (`ModuleNotFoundError: aws_cdk.aws_lambda_python_alpha`).
+  - `PATH="$(pwd)/.venv/bin:$PATH" npx cdk synth --app='python app.py'` succeeded.
+
+### Additional Validation Per AGENTS.md
+- `uv run ruff format careervp/api_db_construct.py careervp/constants.py`
+  - Result: files already formatted.
+- `uv run ruff check careervp/api_db_construct.py careervp/constants.py --fix`
+  - Result: all checks passed.
+- `uv run mypy careervp/api_db_construct.py careervp/constants.py --strict`
+  - Result: success, no issues found.
+- `python src/backend/scripts/validate_naming.py --path infra --verbose`
+  - Result: all naming conventions passed.
+- `python src/backend/scripts/validate_naming.py --path infra --strict`
+  - Result: exit code 0.

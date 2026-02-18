@@ -1839,7 +1839,7 @@ OUTPUT FORMAT: Provide implementation with inline comments. Output results to do
 """
 **READ FIRST:**
 - `docs/refactor/specs/cdk_async_infrastructure_spec.yaml`
-- `docs/refactor/specs/prompt_optimization_cdk_spec.yaml`
+- `docs/refactor/specs/prompt_optimization_cdk_spec.yaml`(Rules: SQS_001, SQS_002, SQS_003, SQS_004)
 
 ROLE: Senior AWS Infrastructure Engineer specializing in CDK and SQS
 

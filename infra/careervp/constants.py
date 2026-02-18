@@ -54,6 +54,8 @@ LLM_CACHE_TABLE_NAME_ENV = "LLM_CACHE_TABLE_NAME"
 # VPR Async Architecture queues
 VPR_JOBS_QUEUE = "vpr-jobs"
 VPR_JOBS_DLQ = "vpr-jobs-dlq"
+CV_UPLOAD_QUEUE = "cv-upload"
+GAP_ANALYSIS_QUEUE = "gap-analysis"
 
 # =============================================================================
 # S3 BUCKETS
