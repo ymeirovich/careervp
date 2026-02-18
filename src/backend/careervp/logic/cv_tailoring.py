@@ -10,6 +10,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Iterable, Literal, TypeAlias, cast, overload
 
 from careervp.logic import cv_tailoring_prompt
+from careervp.logic.fvs_validator import check_anti_ai_patterns
 from careervp.models.cv import UserCV as CVUserCV
 from careervp.models.cv_models import Certification, ContactInfo, Skill, UserCV, WorkExperience
 from careervp.models.cv_tailoring_models import (
@@ -29,6 +30,7 @@ STAR_ACTION_VERB_PATTERN = re.compile(r'^[A-Za-z]+')
 MIN_KEYWORDS = 12
 MAX_KEYWORDS = 18
 TARGET_ATS_SCORE = 8.0
+ANTI_AI_MIN_SCORE = 9.0
 MAX_SELF_CORRECTION_ITERATIONS = 3
 
 KeywordCategory = Literal['required', 'preferred', 'nice_to_have']
@@ -304,6 +306,18 @@ def _tailor_cv_legacy(  # noqa: C901
             data=validation.data,
         )
 
+    anti_ai_assessment = check_anti_ai_patterns(_serialize_tailored_cv_text(tailored_cv))
+    if anti_ai_assessment.score < ANTI_AI_MIN_SCORE:
+        issues_text = '; '.join(anti_ai_assessment.issues) if anti_ai_assessment.issues else 'No explicit issue details provided.'
+        return Result(
+            success=False,
+            error=(
+                f'Anti-AI score {anti_ai_assessment.score:.2f} below threshold {ANTI_AI_MIN_SCORE:.1f}. '
+                f'Regenerate tailored CV with more natural phrasing. Issues: {issues_text}'
+            ),
+            code=ResultCode.FVS_VALIDATION_FAILED,
+        )
+
     changes_made = _build_change_log(preferences, parsed.data)
     average_score = _average_score(relevance_scores)
     estimated_ats_score = int(round(average_score * 100))
@@ -493,15 +507,21 @@ def validate_and_finalize(tailored: TailoredCVDraft | TailoredCV) -> FinalTailor
     star_bullets = _collect_achievement_bullets(current.tailored_cv)
     star_valid = validate_star_format(star_bullets)
     formatting_valid = _passes_final_formatting_checks(current.tailored_cv)
+    anti_ai_assessment = check_anti_ai_patterns(_serialize_tailored_cv_text(current.tailored_cv))
+    anti_ai_valid = anti_ai_assessment.score >= ANTI_AI_MIN_SCORE
 
     iterations = 0
-    while (ats_score < TARGET_ATS_SCORE or not star_valid or not formatting_valid) and iterations < MAX_SELF_CORRECTION_ITERATIONS:
+    while (
+        ats_score < TARGET_ATS_SCORE or not star_valid or not formatting_valid or not anti_ai_valid
+    ) and iterations < MAX_SELF_CORRECTION_ITERATIONS:
         iterations += 1
         feedback = _build_improvement_feedback(
             iteration=iterations,
             ats_score=ats_score,
             star_valid=star_valid,
             formatting_valid=formatting_valid,
+            anti_ai_score=anti_ai_assessment.score,
+            anti_ai_issues=anti_ai_assessment.issues,
             current=current,
         )
 
@@ -525,6 +545,7 @@ def validate_and_finalize(tailored: TailoredCVDraft | TailoredCV) -> FinalTailor
                 'score_before': round(ats_score, 2),
                 'score_after': round(new_score, 2),
                 'improvement': round(new_score - ats_score, 2),
+                'anti_ai_before': round(anti_ai_assessment.score, 2),
                 'feedback': feedback,
             }
         )
@@ -534,6 +555,8 @@ def validate_and_finalize(tailored: TailoredCVDraft | TailoredCV) -> FinalTailor
         star_bullets = _collect_achievement_bullets(current.tailored_cv)
         star_valid = validate_star_format(star_bullets)
         formatting_valid = _passes_final_formatting_checks(current.tailored_cv)
+        anti_ai_assessment = check_anti_ai_patterns(_serialize_tailored_cv_text(current.tailored_cv))
+        anti_ai_valid = anti_ai_assessment.score >= ANTI_AI_MIN_SCORE
 
     # Final hardening pass to guarantee STAR compliance and ATS gate.
     if not star_valid:
@@ -547,12 +570,20 @@ def validate_and_finalize(tailored: TailoredCVDraft | TailoredCV) -> FinalTailor
     if ats_score < TARGET_ATS_SCORE:
         ats_score = TARGET_ATS_SCORE
 
+    if not anti_ai_valid:
+        issues_text = '; '.join(anti_ai_assessment.issues) if anti_ai_assessment.issues else 'No explicit issue details provided.'
+        raise ValueError(
+            f'Anti-AI score {anti_ai_assessment.score:.2f} below threshold {ANTI_AI_MIN_SCORE:.1f}. Regenerate tailored CV. Issues: {issues_text}'
+        )
+
     metadata = {
         **current.metadata,
         'iteration_count': iterations,
         'target_ats_score': TARGET_ATS_SCORE,
         'self_correction_history': history,
         'star_bullets_validated': len(star_bullets),
+        'anti_ai_score': round(anti_ai_assessment.score, 2),
+        'anti_ai_issues': anti_ai_assessment.issues,
     }
 
     return FinalTailoredCV(
@@ -905,6 +936,8 @@ def _build_improvement_feedback(
     ats_score: float,
     star_valid: bool,
     formatting_valid: bool,
+    anti_ai_score: float,
+    anti_ai_issues: list[str],
     current: TailoredCVDraft,
 ) -> str:
     text_blob = _serialize_tailored_cv_text(current.tailored_cv).lower()
@@ -912,6 +945,7 @@ def _build_improvement_feedback(
     feedback_chunks = [
         f'iteration={iteration}',
         f'ats_score={ats_score:.2f}',
+        f'anti_ai_score={anti_ai_score:.2f}',
     ]
     if missing_keywords:
         feedback_chunks.append('add_keywords=' + ','.join(missing_keywords))
@@ -919,6 +953,9 @@ def _build_improvement_feedback(
         feedback_chunks.append('enforce_star=all_bullets_must_include_result_with_metrics')
     if not formatting_valid:
         feedback_chunks.append('formatting=normalize_summary_and_bullets')
+    if anti_ai_score < ANTI_AI_MIN_SCORE:
+        issue_text = ','.join(anti_ai_issues[:3]) if anti_ai_issues else 'generic_tone'
+        feedback_chunks.append(f'anti_ai=remove_templated_phrases({issue_text})')
     return '; '.join(feedback_chunks)
 
 

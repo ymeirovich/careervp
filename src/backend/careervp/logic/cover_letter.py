@@ -9,6 +9,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Literal
 
+from careervp.logic.fvs_validator import check_anti_ai_patterns
 from careervp.logic.llm_client import LLMClient
 from careervp.logic.prompts.cover_letter_prompt import build_system_prompt, build_user_prompt
 from careervp.models.cover_letter import (
@@ -23,6 +24,7 @@ from careervp.models.vpr import VPRResponse
 
 WORD_COUNT_TARGETS = {'short': 250, 'standard': 350, 'long': 400}
 MAX_WORD_COUNT = 400
+ANTI_AI_MIN_SCORE = 9.0
 
 
 async def _maybe_await(value: Any) -> Any:
@@ -92,6 +94,18 @@ async def generate_cover_letter(
         return Result(
             success=False,
             error=f'Cover letter exceeds {MAX_WORD_COUNT} word limit ({cover_letter.word_count} words)',
+            code=ResultCode.FVS_VALIDATION_FAILED,
+        )
+
+    anti_ai_assessment = check_anti_ai_patterns(cover_letter.full_text)
+    if anti_ai_assessment.score < ANTI_AI_MIN_SCORE:
+        issues = '; '.join(anti_ai_assessment.issues) if anti_ai_assessment.issues else 'No issue details available.'
+        return Result(
+            success=False,
+            error=(
+                f'Anti-AI score {anti_ai_assessment.score:.2f} below threshold {ANTI_AI_MIN_SCORE:.1f}. '
+                f'Regenerate cover letter with more natural language. Issues: {issues}'
+            ),
             code=ResultCode.FVS_VALIDATION_FAILED,
         )
 

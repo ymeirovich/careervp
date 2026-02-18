@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from careervp.logic.fvs_validator import check_anti_anti_ai_patterns
+from careervp.logic.fvs_validator import check_anti_ai_patterns
 from careervp.logic.prompts.vpr_prompt import (
     STAGE_3_SYSTEM_PROMPT,
     STAGE_4_SYSTEM_PROMPT,
@@ -372,7 +372,7 @@ class VPRSixStagePipeline:
     def _final_meta_evaluation(self, vpr: VPRData) -> FinalVPRData:
         """Stage 6: anti-AI gate and final quality check."""
         content = _serialize_vpr_for_quality(vpr.vpr)
-        anti_ai_assessment = check_anti_anti_ai_patterns(content)
+        anti_ai_assessment = check_anti_ai_patterns(content)
         return FinalVPRData(
             vpr=vpr.vpr,
             anti_ai_score=anti_ai_assessment.score,

@@ -2,6 +2,79 @@
 
 **Generated:** 2026-02-18
 
+## Step 7.1 Re-run (2026-02-18): FVS Validation + Anti-AI Pipeline Gating
+
+**Execution timestamp:** 2026-02-18 20:02:00Z
+
+### Implementation Completed
+
+- Updated `src/backend/careervp/logic/fvs_validator.py`
+  - Added full validation checks with thresholds:
+    - `validate_grammar()` with `min_score=9.0`
+    - `validate_tone()` with `min_score=8.0`
+    - `check_anti_ai_patterns()` with `min_score=9.0` and explicit 8-pattern framework
+    - `validate_formatting()` with `min_score=8.0`
+    - `validate_content_structure()` with intro/body/conclusion + flow checks (`min_score=8.0`)
+  - Added ATS scoring and document-level quality orchestration:
+    - `score_ats_content()` (0-10 scale)
+    - `run_quality_validation()` returning `FVSQualityReport` including score breakdown + recommendations
+  - Added cross-document consistency checks:
+    - `check_cross_document_consistency(vpr, cv, cover_letter)` with contradiction detection across companies, years, and roles
+  - Added compatibility alias:
+    - `check_anti_anti_ai_patterns()` now delegates to canonical `check_anti_ai_patterns()`
+
+- Wired anti-AI checks into all required pipelines:
+  - `src/backend/careervp/logic/vpr_generator.py`
+    - switched Stage 6 validation to `check_anti_ai_patterns()`
+  - `src/backend/careervp/logic/cover_letter.py`
+    - added anti-AI gate (`min_score=9.0`) with `FVS_VALIDATION_FAILED` rejection and regeneration guidance
+  - `src/backend/careervp/logic/cv_tailoring.py`
+    - added anti-AI gate (`min_score=9.0`) to legacy tailoring flow
+    - added anti-AI feedback + retry integration in `validate_and_finalize()` loop
+    - final reject path raises regeneration-required error when anti-AI score remains below threshold
+
+- Added/updated tests:
+  - Created `tests/unit/test_fvs_validator.py`:
+    - `test_grammar_validation_scores_above_threshold`
+    - `test_tone_validation_detects_robotic_language`
+    - `test_anti_ai_patterns_detected`
+    - `test_ats_scoring_returns_numeric_score`
+    - `test_cross_document_consistency_check`
+  - Replaced `tests/cover-letter/unit/test_fvs_integration.py` with active integration tests:
+    - `test_fvs_integrates_with_cover_letter_pipeline`
+    - `test_rejects_cover_letter_below_thresholds`
+
+### Validation Score Details (Configured Gates)
+
+- Grammar gate: `>= 9.0`
+- Tone gate: `>= 8.0`
+- Anti-AI gate: `>= 9.0`
+- Formatting gate: `>= 8.0`
+- Structure gate: `>= 8.0`
+- ATS gate (CV / Cover Letter): `>= 8.0`
+- Cross-document consistency: pass only when contradiction-free at high score
+
+### Validation Criteria
+
+- [x] Grammar score >= 9.0 for all content (implemented gate in `validate_grammar`)
+- [x] Tone score >= 8.0 for all content (implemented gate in `validate_tone`)
+- [x] Anti-AI pattern score >= 9.0 for all content (implemented gate in `check_anti_ai_patterns`)
+- [x] Formatting score >= 8.0 for all content (implemented gate in `validate_formatting`)
+- [x] ATS score >= 8.0 for CV and cover letter (implemented in `score_ats_content` + pipeline checks)
+- [x] Cross-document consistency check passes (implemented in `check_cross_document_consistency`)
+- [x] Unit tests pass: `pytest tests/unit/test_fvs_validator.py -v`
+  - Executed with project env: `uv run --project src/backend pytest tests/unit/test_fvs_validator.py -v`
+  - Result: `5 passed`
+- [x] Integration tests pass: `pytest tests/cover-letter/unit/test_fvs_integration.py -v`
+  - Executed with project env: `uv run --project src/backend pytest tests/cover-letter/unit/test_fvs_integration.py -v`
+  - Result: `2 passed`
+- [x] Type check passes: `mypy careervp/logic/fvs_validator.py --strict`
+  - Executed with project env: `uv run --project src/backend --directory src/backend mypy careervp/logic/fvs_validator.py --strict`
+  - Result: `Success: no issues found in 1 source file`
+- [x] Lint passes: `ruff check careervp/logic/fvs_validator.py`
+  - Executed from backend directory: `cd src/backend && ruff check careervp/logic/fvs_validator.py`
+  - Result: `All checks passed!`
+
 ## Step 5.1 Re-run (2026-02-18): Gap Analysis Question Limit + Tagging + CRUD
 
 **Execution timestamp:** 2026-02-18 19:10:00Z
