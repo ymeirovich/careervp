@@ -2022,3 +2022,38 @@ Results:
 - [x] Coverage: 27/27 endpoints (100%)
 - [x] Integration tests pass: `pytest tests/integration/test_openapi_contract.py -v`
 - [x] No schema mismatches
+
+## Step T1 VPR Async E2E Polling Tests (2026-02-18)
+
+**Execution timestamp:** 2026-02-18
+**Scope:** End-to-end async lifecycle tests for VPR submit + polling flow
+
+### Implementation completed
+
+- Added `src/backend/tests/e2e/test_vpr_async_polling.py` with required tests:
+  - `test_submit_vpr_job_returns_202()`
+  - `test_poll_vpr_status_pending_to_completed()`
+  - `test_poll_vpr_status_handles_errors()`
+  - `test_vpr_timeout_handling()`
+
+- Test coverage validates async lifecycle contract for:
+  - `POST /vpr/generate` returning `202 Accepted`
+  - `GET /vpr/{vprId}` polling behavior through `pending -> processing -> completed`
+  - failed status/error payload handling
+  - timeout behavior when job does not reach terminal state
+
+- Implemented deterministic in-memory repository simulation to exercise submit and status handlers together without external AWS dependencies.
+
+### Validation evidence
+
+- Command:
+  - `cd /Users/yitzchak/Documents/dev/careervp/src/backend`
+  - `uv run pytest tests/e2e/test_vpr_async_polling.py -v --tb=short`
+- Result: `4 passed`
+
+### Validation criteria
+
+- [x] `POST /vpr/generate -> 202 Accepted`
+- [x] `GET /vpr/{vprId}` polling until completed
+- [x] Error handling validated for failed job status
+- [x] Timeout handling validated
