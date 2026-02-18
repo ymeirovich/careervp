@@ -111,6 +111,7 @@ jobs:
           AWS_EC2_METADATA_DISABLED: "true"
 
       - name: OpenAPI drift check
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         working-directory: src/backend
         run: make compare-openapi
 

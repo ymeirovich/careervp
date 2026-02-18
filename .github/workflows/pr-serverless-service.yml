@@ -59,7 +59,9 @@ jobs:
           fi
       - name: Formatting and Linting
         working-directory: src/backend
-        run: make lint
+        run: |
+          uv run ruff format --check .
+          uv run ruff check .
       - name: Complexity scan
         working-directory: src/backend
         continue-on-error: true
