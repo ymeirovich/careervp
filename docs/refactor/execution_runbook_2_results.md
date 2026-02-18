@@ -1742,3 +1742,41 @@ Results:
 - [x] All 4 endpoints return correct HTTP status codes
 - [x] Questions stored in DynamoDB
 - [x] Unit tests pass: `pytest tests/unit/test_gap_analysis_handler.py -v`
+
+## Step 10.6 CV Tailoring Status Endpoints (2026-02-18)
+
+**Execution timestamp:** 2026-02-18
+**Scope:** CV tailoring status/list endpoints (`/cv-tailoring/{cvTailoringId}`, `/users/me/tailored-cvs`)
+
+### Implementation completed
+
+- Updated `src/backend/careervp/handlers/cv_tailoring_handler.py`:
+  - Added route dispatch for `GET /cv-tailoring/{cvTailoringId}` -> `get_tailored_cv_status()` -> `200 OK`
+  - Added route dispatch for `GET /users/me/tailored-cvs` -> `list_tailored_cvs()` -> `200 OK`
+  - Added helper logic for:
+    - extracting `cvTailoringId` from path params/path
+    - querying tailored CV artifacts by `pk=user_id`, `sk` prefix `TAILORED_CV#`
+    - building OpenAPI-compatible status payload (`id`, `status`, `result`)
+    - building user-scoped list payload (`tailored_cvs`)
+  - Updated CORS methods to include `GET`.
+- Added `src/backend/tests/unit/test_cv_tailoring_status.py`:
+  - `test_get_cv_tailoring_status_returns_status_and_result`
+  - `test_get_users_me_tailored_cvs_returns_only_user_items`
+
+### Validation evidence
+
+- Unit tests:
+  - Command: `uv run pytest tests/unit/test_cv_tailoring_status.py -v`
+  - Result: `2 passed`
+- Type check (supplemental safety check):
+  - Command: `uv run mypy careervp/handlers/cv_tailoring_handler.py --strict`
+  - Result: `Success: no issues found in 1 source file`
+- Lint (supplemental safety check):
+  - Command: `uv run ruff check careervp/handlers/cv_tailoring_handler.py tests/unit/test_cv_tailoring_status.py`
+  - Result: `All checks passed!`
+
+### Validation criteria
+
+- [x] GET /cv-tailoring/{cvTailoringId} returns CV status
+- [x] GET /users/me/tailored-cvs returns user's CV list
+- [x] Unit tests pass
