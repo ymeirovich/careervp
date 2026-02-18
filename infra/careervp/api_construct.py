@@ -85,8 +85,8 @@ class ApiConstruct(Construct):
             appconfig_app_name,
         )
 
-        # VPR Worker Lambda - SQS triggered
-        self.vpr_worker_func = self._add_vpr_worker_lambda_integration(
+        # Keep the original SQS worker for existing queue-based VPR flow.
+        self.vpr_sqs_worker_func = self._add_vpr_sqs_worker_lambda_integration(
             self.lambda_role,
             self.api_db.jobs_table,
             self.api_db.vpr_results_bucket,
@@ -111,6 +111,41 @@ class ApiConstruct(Construct):
             self.api_db.db,
             appconfig_app_name,
             self.api_db.idempotency_db,
+        )
+
+        # Async worker DLQs (ASYNC_004): one DLQ per worker for failed events.
+        self.cv_upload_worker_dlq = self._build_worker_dlq("cv-upload-worker")
+        self.vpr_worker_dlq = self._build_worker_dlq("vpr-worker")
+        self.cv_tailor_worker_dlq = self._build_worker_dlq("cv-tailor-worker")
+        self.cover_letter_worker_dlq = self._build_worker_dlq("cover-letter-worker")
+        self.interview_prep_worker_dlq = self._build_worker_dlq("interview-prep-worker")
+
+        # Async workers required by Phase 11 infrastructure remediation.
+        self.cv_upload_worker_func = self._add_cv_upload_worker_lambda(
+            cv_bucket=self.api_db.cv_bucket,
+            cvs_table=self.api_db.cvs_table,
+            idempotency_table=self.api_db.idempotency_db,
+            dlq=self.cv_upload_worker_dlq,
+        )
+        self.vpr_worker_func = self._add_vpr_worker_stream_lambda(
+            jobs_table=self.api_db.jobs_table,
+            artifacts_table=self.api_db.artifacts_table,
+            dlq=self.vpr_worker_dlq,
+        )
+        self.cv_tailor_worker_func = self._add_cv_tailor_worker_lambda(
+            artifacts_table=self.api_db.artifacts_table,
+            cvs_table=self.api_db.cvs_table,
+            dlq=self.cv_tailor_worker_dlq,
+        )
+        self.cover_letter_worker_func = self._add_cover_letter_worker_lambda(
+            artifacts_table=self.api_db.artifacts_table,
+            applications_table=self.api_db.applications_table,
+            dlq=self.cover_letter_worker_dlq,
+        )
+        self.interview_prep_worker_func = self._add_interview_prep_worker_lambda(
+            artifacts_table=self.api_db.artifacts_table,
+            applications_table=self.api_db.applications_table,
+            dlq=self.interview_prep_worker_dlq,
         )
 
         self._build_swagger_endpoints(
@@ -570,6 +605,17 @@ class ApiConstruct(Construct):
             encryption=aws_sqs.QueueEncryption.SQS_MANAGED,
         )
 
+    def _build_worker_dlq(self, worker_feature: str) -> aws_sqs.Queue:
+        """Create a dedicated encrypted DLQ for a worker Lambda."""
+        worker_id = worker_feature.replace("-", " ").title().replace(" ", "")
+        return aws_sqs.Queue(
+            self,
+            f"{worker_id}Dlq",
+            queue_name=self.naming.dlq_name(worker_feature),
+            retention_period=Duration.days(14),
+            encryption=aws_sqs.QueueEncryption.KMS_MANAGED,
+        )
+
     def _add_vpr_submit_lambda_integration(
         self,
         api_resource: aws_apigateway.Resource,
@@ -684,7 +730,7 @@ class ApiConstruct(Construct):
 
         return lambda_function
 
-    def _add_vpr_worker_lambda_integration(
+    def _add_vpr_sqs_worker_lambda_integration(
         self,
         role: iam.Role,
         jobs_table: dynamodb.TableV2,
@@ -693,11 +739,11 @@ class ApiConstruct(Construct):
         queue: aws_sqs.Queue,
         appconfig_app_name: str,
     ) -> _lambda.Function:
-        """Add VPR Worker Lambda integration - SQS triggered for async processing."""
-        function_name = self.naming.lambda_name(constants.VPR_WORKER_FEATURE)
+        """Add legacy VPR SQS worker Lambda integration."""
+        function_name = self.naming.lambda_name("vpr-sqs-worker")
         log_group = logs.LogGroup(
             self,
-            f"{constants.VPR_WORKER_LAMBDA}LogGroup",
+            "VprSqsWorkerLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
             removal_policy=RemovalPolicy.DESTROY,
@@ -705,13 +751,13 @@ class ApiConstruct(Construct):
 
         lambda_function = _lambda.Function(
             self,
-            constants.VPR_WORKER_LAMBDA,
+            "VprSqsWorkerLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
             handler="careervp.handlers.vpr_worker_handler.lambda_handler",
             function_name=function_name,
             environment={
-                constants.POWERTOOLS_SERVICE_NAME: "careervp-vpr-worker",
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-vpr-sqs-worker",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": constants.ENVIRONMENT,
@@ -739,6 +785,291 @@ class ApiConstruct(Construct):
             eventsources.SqsEventSource(queue, batch_size=1)
         )
 
+        return lambda_function
+
+    def _add_cv_upload_worker_lambda(
+        self,
+        cv_bucket: s3.Bucket,
+        cvs_table: dynamodb.TableV2,
+        idempotency_table: dynamodb.TableV2,
+        dlq: aws_sqs.Queue,
+    ) -> _lambda.Function:
+        """Create cv_upload_worker (S3 event -> Lambda) with an explicit DLQ."""
+        function_name = self.naming.lambda_name("cv-upload-worker")
+        log_group = logs.LogGroup(
+            self,
+            "CvUploadWorkerLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+        lambda_function = _lambda.Function(
+            self,
+            "CvUploadWorkerLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.cv_upload_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-cv-upload-worker",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                "TABLE_NAME": cvs_table.table_name,
+                "CVS_TABLE_NAME": cvs_table.table_name,
+                "IDEMPOTENCY_TABLE_NAME": idempotency_table.table_name,
+                "CV_BUCKET_NAME": cv_bucket.bucket_name,
+                constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+            },
+            timeout=Duration.seconds(300),
+            memory_size=512,
+            tracing=_lambda.Tracing.ACTIVE,
+            dead_letter_queue_enabled=True,
+            dead_letter_queue=dlq,
+            retry_attempts=2,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+        # S3 object creation starts background parsing/normalization work.
+        lambda_function.add_event_source(
+            eventsources.S3EventSource(
+                cv_bucket,
+                events=[s3.EventType.OBJECT_CREATED],
+            )
+        )
+
+        # Least-privilege data access for this worker's responsibilities.
+        cv_bucket.grant_read(lambda_function)
+        cvs_table.grant_read_write_data(lambda_function)
+        idempotency_table.grant_read_write_data(lambda_function)
+        return lambda_function
+
+    def _add_vpr_worker_stream_lambda(
+        self,
+        jobs_table: dynamodb.TableV2,
+        artifacts_table: dynamodb.TableV2,
+        dlq: aws_sqs.Queue,
+    ) -> _lambda.Function:
+        """Create vpr_worker (DynamoDB stream -> Lambda) with stream failure DLQ."""
+        function_name = self.naming.lambda_name("vpr-worker")
+        log_group = logs.LogGroup(
+            self,
+            "VprWorkerLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+        lambda_function = _lambda.Function(
+            self,
+            "VprWorkerLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.vpr_worker_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-vpr-worker",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                "VPR_JOBS_TABLE_NAME": jobs_table.table_name,
+                "ARTIFACTS_TABLE_NAME": artifacts_table.table_name,
+                constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+            },
+            timeout=Duration.seconds(300),
+            memory_size=1024,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=2,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+        # ASYNC_004: failed stream batches are sent to a worker-specific DLQ.
+        lambda_function.add_event_source(
+            eventsources.DynamoEventSource(
+                jobs_table,
+                starting_position=_lambda.StartingPosition.LATEST,
+                batch_size=1,
+                bisect_batch_on_error=True,
+                retry_attempts=2,
+                on_failure=eventsources.SqsDlq(dlq),
+            )
+        )
+
+        jobs_table.grant_stream_read(lambda_function)
+        jobs_table.grant_read_write_data(lambda_function)
+        artifacts_table.grant_read_write_data(lambda_function)
+        return lambda_function
+
+    def _add_cv_tailor_worker_lambda(
+        self,
+        artifacts_table: dynamodb.TableV2,
+        cvs_table: dynamodb.TableV2,
+        dlq: aws_sqs.Queue,
+    ) -> _lambda.Function:
+        """Create cv_tailor_worker on artifacts table stream updates."""
+        function_name = self.naming.lambda_name("cv-tailor-worker")
+        log_group = logs.LogGroup(
+            self,
+            "CvTailorWorkerLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+        lambda_function = _lambda.Function(
+            self,
+            "CvTailorWorkerLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.cv_tailoring_handler.handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-cv-tailor-worker",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                "TABLE_NAME": cvs_table.table_name,
+                "CVS_TABLE_NAME": cvs_table.table_name,
+                "ARTIFACTS_TABLE_NAME": artifacts_table.table_name,
+                constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+            },
+            timeout=Duration.seconds(300),
+            memory_size=512,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=2,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+        lambda_function.add_event_source(
+            eventsources.DynamoEventSource(
+                artifacts_table,
+                starting_position=_lambda.StartingPosition.LATEST,
+                batch_size=1,
+                bisect_batch_on_error=True,
+                retry_attempts=2,
+                on_failure=eventsources.SqsDlq(dlq),
+            )
+        )
+
+        artifacts_table.grant_stream_read(lambda_function)
+        artifacts_table.grant_read_write_data(lambda_function)
+        cvs_table.grant_read_write_data(lambda_function)
+        return lambda_function
+
+    def _add_cover_letter_worker_lambda(
+        self,
+        artifacts_table: dynamodb.TableV2,
+        applications_table: dynamodb.TableV2,
+        dlq: aws_sqs.Queue,
+    ) -> _lambda.Function:
+        """Create cover_letter_worker on artifacts stream updates."""
+        function_name = self.naming.lambda_name("cover-letter-worker")
+        log_group = logs.LogGroup(
+            self,
+            "CoverLetterWorkerLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+        lambda_function = _lambda.Function(
+            self,
+            "CoverLetterWorkerLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.cover_letter_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-cover-letter-worker",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                "APPLICATIONS_TABLE_NAME": applications_table.table_name,
+                "ARTIFACTS_TABLE_NAME": artifacts_table.table_name,
+                constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+            },
+            timeout=Duration.seconds(300),
+            memory_size=512,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=2,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+        lambda_function.add_event_source(
+            eventsources.DynamoEventSource(
+                artifacts_table,
+                starting_position=_lambda.StartingPosition.LATEST,
+                batch_size=1,
+                bisect_batch_on_error=True,
+                retry_attempts=2,
+                on_failure=eventsources.SqsDlq(dlq),
+            )
+        )
+
+        artifacts_table.grant_stream_read(lambda_function)
+        artifacts_table.grant_read_write_data(lambda_function)
+        applications_table.grant_read_write_data(lambda_function)
+        return lambda_function
+
+    def _add_interview_prep_worker_lambda(
+        self,
+        artifacts_table: dynamodb.TableV2,
+        applications_table: dynamodb.TableV2,
+        dlq: aws_sqs.Queue,
+    ) -> _lambda.Function:
+        """Create interview_prep_worker on artifacts stream updates."""
+        function_name = self.naming.lambda_name("interview-prep-worker")
+        log_group = logs.LogGroup(
+            self,
+            "InterviewPrepWorkerLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+        lambda_function = _lambda.Function(
+            self,
+            "InterviewPrepWorkerLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.interview_prep_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-interview-prep-worker",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                "APPLICATIONS_TABLE_NAME": applications_table.table_name,
+                "ARTIFACTS_TABLE_NAME": artifacts_table.table_name,
+                constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+            },
+            timeout=Duration.seconds(300),
+            memory_size=512,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=2,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+        lambda_function.add_event_source(
+            eventsources.DynamoEventSource(
+                artifacts_table,
+                starting_position=_lambda.StartingPosition.LATEST,
+                batch_size=1,
+                bisect_batch_on_error=True,
+                retry_attempts=2,
+                on_failure=eventsources.SqsDlq(dlq),
+            )
+        )
+
+        artifacts_table.grant_stream_read(lambda_function)
+        artifacts_table.grant_read_write_data(lambda_function)
+        applications_table.grant_read_write_data(lambda_function)
         return lambda_function
 
     def _add_cv_tailoring_lambda_integration(

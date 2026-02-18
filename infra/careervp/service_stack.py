@@ -94,5 +94,9 @@ class ServiceStack(Stack):
                     "id": "AwsSolutions-SQS4",
                     "reason": "VPR async queues are internal, SSL not required",
                 },
+                {
+                    "id": "AwsSolutions-SQS3",
+                    "reason": "Worker DLQs are terminal destinations and should not chain DLQs",
+                },
             ],
         )

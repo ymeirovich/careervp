@@ -835,3 +835,58 @@ Output:
   - Result: all naming conventions passed.
 - `python src/backend/scripts/validate_naming.py --path infra --strict`
   - Result: exit code 0.
+
+## Step 11.3: Add Async Worker Lambdas to `ApiConstruct` (2026-02-18)
+
+### Implementation Completed
+- Updated `infra/careervp/api_db_construct.py`
+  - Enabled DynamoDB streams with `NEW_AND_OLD_IMAGES` on:
+    - `jobs_table` (source for `vpr_worker`)
+    - `artifacts_table` (source for `cv_tailor_worker`, `cover_letter_worker`, `interview_prep_worker`)
+  - Added inline comments referencing `ASYNC_005`.
+- Updated `infra/careervp/api_construct.py`
+  - Added 5 worker Lambdas with 300-second timeout:
+    - `cv_upload_worker` (S3 object-created events from CV bucket)
+    - `vpr_worker` (DynamoDB stream on jobs table)
+    - `cv_tailor_worker` (DynamoDB stream on artifacts table)
+    - `cover_letter_worker` (DynamoDB stream on artifacts table)
+    - `interview_prep_worker` (DynamoDB stream on artifacts table)
+  - Added a dedicated DLQ for each worker (`_build_worker_dlq`) with 14-day retention and KMS-managed encryption.
+  - Wired DLQs per `ASYNC_004`:
+    - S3 worker via Lambda `dead_letter_queue`
+    - Stream workers via `DynamoEventSource(..., on_failure=eventsources.SqsDlq(dlq))`
+  - Added environment variables with new table names (`CVS_TABLE_NAME`, `APPLICATIONS_TABLE_NAME`, `ARTIFACTS_TABLE_NAME`, `VPR_JOBS_TABLE_NAME` where applicable).
+  - Added least-privilege resource grants for each worker:
+    - Table read/write grants only for required tables
+    - Stream read grants only on stream source tables
+    - S3 read grant for CV upload worker source bucket
+  - Renamed existing queue-based worker integration to `vpr_sqs_worker` to avoid naming collision with the new stream-based `vpr_worker`.
+- Updated `infra/careervp/service_stack.py`
+  - Added `AwsSolutions-SQS3` suppression for terminal DLQ resources so CDK synth remains deployable with cdk-nag enabled.
+
+### Validation Criteria
+- [x] All 5 worker Lambdas defined
+  - Verified in `ApiConstruct.__init__` and corresponding worker builder methods.
+- [x] Event sources configured (S3 events, DynamoDB Streams)
+  - `cv_upload_worker`: `S3EventSource(... OBJECT_CREATED ...)`
+  - `vpr_worker`: `DynamoEventSource(jobs_table, ...)`
+  - `cv_tailor_worker`, `cover_letter_worker`, `interview_prep_worker`: `DynamoEventSource(artifacts_table, ...)`
+- [x] DLQ configured for each worker
+  - Dedicated worker DLQ queues + Lambda/event source failure wiring.
+- [x] IAM policies grant least-privilege access
+  - Access is granted per worker only to required tables/buckets and stream ARNs.
+
+### Validation Commands and Results
+```bash
+cd /Users/yitzchak/Documents/dev/careervp
+uv run ruff check infra/careervp/api_construct.py infra/careervp/api_db_construct.py infra/careervp/service_stack.py
+
+cd /Users/yitzchak/Documents/dev/careervp/infra
+uv run pytest tests/infrastructure/test_api_construct.py -q
+PATH="$(pwd)/.venv/bin:$PATH" npx cdk synth --app='python app.py'
+```
+
+Results:
+- `ruff check`: `All checks passed`
+- infra pytest: `4 passed`
+- `cdk synth`: succeeded (exit code `0`)
