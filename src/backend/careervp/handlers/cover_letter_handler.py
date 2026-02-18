@@ -3,25 +3,58 @@
 from __future__ import annotations
 
 import json
+import os
 from http import HTTPStatus
 from typing import Any
 
 from aws_lambda_powertools.metrics import MetricUnit
 from aws_lambda_powertools.utilities.typing import LambdaContext
+from boto3.dynamodb.conditions import Attr, Key
 from pydantic import ValidationError
 
+from careervp.dal.cv_dal import CVTable
 from careervp.handlers.utils.observability import logger, metrics, tracer
-from careervp.models.cover_letter import CoverLetterRequest
+from careervp.models.api_models import CoverLetterRequest
 from careervp.models.result import Result, ResultCode
+
+COVER_LETTER_SORT_KEY_PREFIX = 'ARTIFACT#COVER_LETTER#'
 
 
 @logger.inject_lambda_context
 @tracer.capture_lambda_handler
 @metrics.log_metrics
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
-    """Handle POST /cover-letter/generate requests."""
-    metrics.add_metric(name='CoverLetterRequests', unit=MetricUnit.Count, value=1)
+    """Handle cover letter API requests."""
+    _ = context
+    method = str(event.get('httpMethod', '')).upper()
+    path = str(event.get('path', '')).rstrip('/')
 
+    if method == 'OPTIONS':
+        return _build_response(HTTPStatus.OK, {'status': 'ok'})
+
+    if method == 'GET' and _is_cover_letter_status_path(path):
+        metrics.add_metric(name='CoverLetterStatusRequests', unit=MetricUnit.Count, value=1)
+        return get_cover_letter_status(event)
+
+    if method == 'GET' and path == '/users/me/cover-letters':
+        metrics.add_metric(name='CoverLetterListRequests', unit=MetricUnit.Count, value=1)
+        return list_cover_letters(event)
+
+    if method == 'POST' and path == '/cover-letter/generate':
+        metrics.add_metric(name='CoverLetterRequests', unit=MetricUnit.Count, value=1)
+        return _submit_cover_letter_request(event)
+
+    return _build_response(
+        HTTPStatus.NOT_FOUND,
+        {
+            'error': 'Endpoint not found',
+            'code': ResultCode.INVALID_INPUT,
+        },
+    )
+
+
+def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:
+    """Handle POST /cover-letter/generate requests."""
     request_result = _parse_request(event)
     if not request_result.success or not request_result.data:
         metrics.add_metric(name='CoverLetterFailures', unit=MetricUnit.Count, value=1)
@@ -33,8 +66,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             },
         )
 
-    # Return 202 Accepted - async pattern
-    request_id = request_result.data.job_id  # Use job_id as correlation
+    request_id = request_result.data.job_id
     metrics.add_metric(name='CoverLetterSubmitted', unit=MetricUnit.Count, value=1)
 
     return _build_response(
@@ -47,6 +79,60 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     )
 
 
+def get_cover_letter_status(event: dict[str, Any]) -> dict[str, Any]:
+    """Handle GET /cover-letter/{coverLetterId} requests."""
+    user_id = _extract_authenticated_user_id(event)
+    if not user_id:
+        return _build_response(
+            HTTPStatus.UNAUTHORIZED,
+            {
+                'error': 'Missing or invalid authentication token',
+                'code': ResultCode.UNAUTHORIZED,
+            },
+        )
+
+    cover_letter_id = _extract_cover_letter_id(event)
+    if not cover_letter_id:
+        return _build_response(
+            HTTPStatus.BAD_REQUEST,
+            {
+                'error': 'Missing coverLetterId path parameter',
+                'code': ResultCode.MISSING_REQUIRED_FIELD,
+            },
+        )
+
+    item = _get_cover_letter_item(user_id=user_id, cover_letter_id=cover_letter_id)
+    if item is None:
+        return _build_response(
+            HTTPStatus.NOT_FOUND,
+            {
+                'error': 'Cover letter not found',
+                'code': ResultCode.INVALID_INPUT,
+            },
+        )
+
+    status_payload = _build_cover_letter_status_payload(item=item, fallback_id=cover_letter_id)
+    return _build_response(HTTPStatus.OK, status_payload)
+
+
+def list_cover_letters(event: dict[str, Any]) -> dict[str, Any]:
+    """Handle GET /users/me/cover-letters requests."""
+    user_id = _extract_authenticated_user_id(event)
+    if not user_id:
+        return _build_response(
+            HTTPStatus.UNAUTHORIZED,
+            {
+                'error': 'Missing or invalid authentication token',
+                'code': ResultCode.UNAUTHORIZED,
+            },
+        )
+
+    items = _list_cover_letter_items(user_id)
+    cover_letters = [_build_cover_letter_list_item(item) for item in items]
+    cover_letters.sort(key=lambda entry: str(entry.get('created_at') or ''), reverse=True)
+    return _build_response(HTTPStatus.OK, {'cover_letters': cover_letters})
+
+
 def _parse_request(event: dict[str, Any]) -> Result[CoverLetterRequest]:
     """Parse and validate the request body."""
     body_content = event.get('body', '{}')
@@ -57,12 +143,198 @@ def _parse_request(event: dict[str, Any]) -> Result[CoverLetterRequest]:
         return Result(success=False, error='Invalid JSON request body', code=ResultCode.INVALID_INPUT)
 
     try:
-        request = CoverLetterRequest(**payload)
+        request = CoverLetterRequest.model_validate(payload)
     except ValidationError as exc:
         logger.warning('CoverLetterRequest validation failed', errors=exc.errors())
         return Result(success=False, error='Request validation failed', code=ResultCode.INVALID_INPUT)
 
     return Result(success=True, data=request, code=ResultCode.SUCCESS)
+
+
+def _is_cover_letter_status_path(path: str) -> bool:
+    return path.startswith('/cover-letter/') and path != '/cover-letter/generate'
+
+
+def _extract_claim_user_id(claims: Any) -> str | None:
+    if not isinstance(claims, dict):
+        return None
+    for claim_key in ('sub', 'user_id', 'cognito:username'):
+        claim_value = claims.get(claim_key)
+        if isinstance(claim_value, str) and claim_value.strip():
+            return claim_value.strip()
+    return None
+
+
+def _extract_user_id_from_authorizer(event: dict[str, Any]) -> str | None:
+    request_context = event.get('requestContext')
+    if not isinstance(request_context, dict):
+        return None
+
+    authorizer = request_context.get('authorizer')
+    if not isinstance(authorizer, dict):
+        return None
+
+    claim_user_id = _extract_claim_user_id(authorizer.get('claims'))
+    if claim_user_id:
+        return claim_user_id
+
+    jwt_context = authorizer.get('jwt')
+    if isinstance(jwt_context, dict):
+        jwt_claims = jwt_context.get('claims')
+        jwt_user_id = _extract_claim_user_id(jwt_claims)
+        if jwt_user_id:
+            return jwt_user_id
+
+    for direct_key in ('user_id', 'principalId', 'principal_id'):
+        direct_value = authorizer.get(direct_key)
+        if isinstance(direct_value, str) and direct_value.strip():
+            return direct_value.strip()
+    return None
+
+
+def _authorizer_disabled() -> bool:
+    return os.getenv('AUTHORIZER_DISABLED', 'false').strip().lower() == 'true'
+
+
+def _get_header_case_insensitive(headers: dict[str, Any], target_header: str) -> str | None:
+    normalized_target = target_header.lower()
+    for key, value in headers.items():
+        if isinstance(key, str) and key.lower() == normalized_target and isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _extract_authenticated_user_id(event: dict[str, Any]) -> str | None:
+    authorizer_user_id = _extract_user_id_from_authorizer(event)
+    if authorizer_user_id:
+        return authorizer_user_id
+
+    if not _authorizer_disabled():
+        return None
+
+    headers = event.get('headers')
+    if isinstance(headers, dict):
+        return _get_header_case_insensitive(headers, 'x-user-id')
+    return None
+
+
+def _extract_cover_letter_id(event: dict[str, Any]) -> str | None:
+    path_parameters = event.get('pathParameters')
+    if isinstance(path_parameters, dict):
+        for key in ('coverLetterId', 'cover_letter_id', 'id'):
+            value = path_parameters.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+
+    path = str(event.get('path', '')).rstrip('/')
+    if path.startswith('/cover-letter/'):
+        candidate = path.removeprefix('/cover-letter/').strip()
+        if candidate and candidate != 'generate':
+            return candidate
+    return None
+
+
+def _get_cover_letter_item(user_id: str, cover_letter_id: str) -> dict[str, Any] | None:
+    table = CVTable().table
+    get_response = table.get_item(Key={'pk': user_id, 'sk': cover_letter_id})
+    item = get_response.get('Item') if isinstance(get_response, dict) else None
+    if isinstance(item, dict):
+        return item
+
+    query_response = table.query(
+        KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with(COVER_LETTER_SORT_KEY_PREFIX),
+        FilterExpression=Attr('sk').contains(cover_letter_id),
+        Limit=1,
+    )
+    query_items = query_response.get('Items') if isinstance(query_response, dict) else None
+    if isinstance(query_items, list) and query_items and isinstance(query_items[0], dict):
+        return query_items[0]
+    return None
+
+
+def _list_cover_letter_items(user_id: str) -> list[dict[str, Any]]:
+    query_response = CVTable().table.query(
+        KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with(COVER_LETTER_SORT_KEY_PREFIX),
+    )
+    items_raw = query_response.get('Items') if isinstance(query_response, dict) else None
+    if not isinstance(items_raw, list):
+        return []
+    return [item for item in items_raw if isinstance(item, dict)]
+
+
+def _normalize_status(raw_status: Any) -> str:
+    normalized = str(raw_status or '').strip().lower()
+    if normalized in {'pending', 'processing', 'completed', 'failed'}:
+        return normalized
+    return 'completed'
+
+
+def _extract_cover_letter_text(cover_letter_payload: Any) -> str | None:
+    if isinstance(cover_letter_payload, str) and cover_letter_payload.strip():
+        return cover_letter_payload.strip()
+
+    if isinstance(cover_letter_payload, dict):
+        for key in ('cover_letter', 'full_text', 'text'):
+            candidate = cover_letter_payload.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+    return None
+
+
+def _extract_cover_letter_id_from_payload(cover_letter_payload: Any) -> str | None:
+    if isinstance(cover_letter_payload, dict):
+        for key in ('cover_letter_id', 'id'):
+            candidate = cover_letter_payload.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+    return None
+
+
+def _build_cover_letter_status_payload(item: dict[str, Any], fallback_id: str) -> dict[str, Any]:
+    status = _normalize_status(item.get('status'))
+    cover_letter_payload = item.get('cover_letter')
+    payload_id = _extract_cover_letter_id_from_payload(cover_letter_payload) or (str(item.get('sk')).strip() if item.get('sk') else '') or fallback_id
+
+    payload: dict[str, Any] = {
+        'id': payload_id,
+        'status': status,
+    }
+
+    if status in {'completed', 'failed'}:
+        result: dict[str, Any] = {}
+
+        cover_letter_text = _extract_cover_letter_text(cover_letter_payload)
+        if cover_letter_text:
+            result['cover_letter'] = cover_letter_text
+
+        paragraphs_value = item.get('paragraphs')
+        if paragraphs_value is None and isinstance(cover_letter_payload, dict):
+            paragraphs_value = cover_letter_payload.get('paragraphs')
+        if isinstance(paragraphs_value, dict):
+            result['paragraphs'] = paragraphs_value
+
+        fvs_validation = item.get('fvs_validation')
+        if fvs_validation is None and isinstance(cover_letter_payload, dict):
+            fvs_validation = cover_letter_payload.get('fvs_validation')
+        if isinstance(fvs_validation, dict):
+            result['fvs_validation'] = fvs_validation
+
+        if result:
+            payload['result'] = result
+    return payload
+
+
+def _build_cover_letter_list_item(item: dict[str, Any]) -> dict[str, Any]:
+    cover_letter_payload = item.get('cover_letter')
+    item_id = _extract_cover_letter_id_from_payload(cover_letter_payload) or (str(item.get('sk')).strip() if item.get('sk') else '')
+    return {
+        'id': item_id,
+        'status': _normalize_status(item.get('status')),
+        'cv_id': item.get('cv_id'),
+        'job_id': item.get('job_id'),
+        'created_at': item.get('created_at'),
+        'updated_at': item.get('updated_at'),
+    }
 
 
 def _build_response(status_code: HTTPStatus, body: dict[str, Any]) -> dict[str, Any]:

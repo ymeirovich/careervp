@@ -5,13 +5,18 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime
+from decimal import Decimal
 from http import HTTPStatus
 from typing import Any
+
+from boto3.dynamodb.conditions import Attr, Key
+from pydantic import ValidationError
 
 from careervp.dal.cv_dal import CVTable
 from careervp.logic.cv_tailoring import tailor_cv
 from careervp.logic.fvs_validator import create_fvs_baseline
 from careervp.logic.llm_client import LLMClient
+from careervp.models.api_models import CVTailoringRequest as APICVTailoringRequest
 from careervp.models.cv import UserCV
 from careervp.models.cv_tailoring_models import TailorCVRequest, TailoringPreferences
 from careervp.models.result import Result, ResultCode
@@ -43,6 +48,28 @@ except Exception:  # pragma: no cover - fallback for tests
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C901
     """Handle CV tailoring request."""
     headers = _cors_headers()
+    method = str(event.get('httpMethod', '')).upper()
+    path = str(event.get('path', '')).rstrip('/')
+
+    if method == 'OPTIONS':
+        return _response(HTTPStatus.OK, {'success': True}, headers)
+
+    if method == 'GET' and _is_tailoring_status_path(path):
+        return get_tailored_cv_status(event)
+
+    if method == 'GET' and path == '/users/me/tailored-cvs':
+        return list_tailored_cvs(event)
+
+    if method != 'POST':
+        return _response(
+            HTTPStatus.NOT_FOUND,
+            {
+                'success': False,
+                'code': ResultCode.INVALID_INPUT,
+                'message': 'Endpoint not found',
+            },
+            headers,
+        )
 
     try:
         body = json.loads(event.get('body') or '{}')
@@ -53,6 +80,19 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
                 'success': False,
                 'code': ResultCode.INVALID_JSON,
                 'message': 'Request body contains invalid JSON',
+            },
+            headers,
+        )
+
+    try:
+        _validate_openapi_cv_tailoring_payload(body)
+    except ValidationError as exc:
+        return _response(
+            HTTPStatus.BAD_REQUEST,
+            {
+                'success': False,
+                'code': ResultCode.VALIDATION_ERROR,
+                'message': f'OpenAPI payload validation failed: {exc}',
             },
             headers,
         )
@@ -156,6 +196,85 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
 
     logger.info('CV tailoring handled', request_id=context.aws_request_id)
     return _response(status_code, body, headers)
+
+
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
+    """Alias for standard Lambda entrypoint naming."""
+    return handler(event, context)
+
+
+def _validate_openapi_cv_tailoring_payload(body: dict[str, Any]) -> None:
+    """
+    Validate OpenAPI request shape when contract fields are supplied.
+
+    The existing tailoring flow still accepts the legacy `job_description` payload.
+    """
+    if {'cv_id', 'job_id', 'vpr_id'}.issubset(body):
+        APICVTailoringRequest.model_validate(body)
+
+
+def get_tailored_cv_status(event: dict[str, Any]) -> dict[str, Any]:
+    """Handle GET /cv-tailoring/{cvTailoringId} status fetch."""
+    headers = _cors_headers()
+    user_id = _get_user_id(event)
+    if not user_id:
+        return _response(
+            HTTPStatus.UNAUTHORIZED,
+            {
+                'success': False,
+                'code': ResultCode.UNAUTHORIZED,
+                'message': 'Missing or invalid authentication token',
+            },
+            headers,
+        )
+
+    cv_tailoring_id = _extract_cv_tailoring_id(event)
+    if not cv_tailoring_id:
+        return _response(
+            HTTPStatus.BAD_REQUEST,
+            {
+                'success': False,
+                'code': ResultCode.MISSING_REQUIRED_FIELD,
+                'message': 'Missing cvTailoringId path parameter',
+            },
+            headers,
+        )
+
+    item = _get_tailored_cv_item(user_id=user_id, cv_tailoring_id=cv_tailoring_id)
+    if item is None:
+        return _response(
+            HTTPStatus.NOT_FOUND,
+            {
+                'success': False,
+                'code': ResultCode.CV_NOT_FOUND,
+                'message': 'Tailored CV not found',
+            },
+            headers,
+        )
+
+    payload = _build_tailored_cv_status_payload(item, cv_tailoring_id)
+    return _response(HTTPStatus.OK, payload, headers)
+
+
+def list_tailored_cvs(event: dict[str, Any]) -> dict[str, Any]:
+    """Handle GET /users/me/tailored-cvs list fetch."""
+    headers = _cors_headers()
+    user_id = _get_user_id(event)
+    if not user_id:
+        return _response(
+            HTTPStatus.UNAUTHORIZED,
+            {
+                'success': False,
+                'code': ResultCode.UNAUTHORIZED,
+                'message': 'Missing or invalid authentication token',
+            },
+            headers,
+        )
+
+    items = _list_tailored_cv_items(user_id=user_id)
+    tailored_cvs = [_build_tailored_cv_list_item(item) for item in items]
+    tailored_cvs.sort(key=lambda entry: str(entry.get('created_at') or ''), reverse=True)
+    return _response(HTTPStatus.OK, {'tailored_cvs': tailored_cvs}, headers)
 
 
 def _fetch_and_tailor_cv(request: TailorCVRequest) -> Result[Any]:
@@ -276,6 +395,107 @@ def _get_header_case_insensitive(headers: dict[str, Any], target_header: str) ->
     return None
 
 
+def _is_tailoring_status_path(path: str) -> bool:
+    return path.startswith('/cv-tailoring/') and path != '/cv-tailoring/generate'
+
+
+def _extract_cv_tailoring_id(event: dict[str, Any]) -> str | None:
+    path_parameters = event.get('pathParameters')
+    if isinstance(path_parameters, dict):
+        for key in ('cvTailoringId', 'cv_tailoring_id', 'id'):
+            value = path_parameters.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+
+    path = str(event.get('path', '')).rstrip('/')
+    if path.startswith('/cv-tailoring/'):
+        candidate = path.removeprefix('/cv-tailoring/').strip()
+        if candidate and candidate != 'generate':
+            return candidate
+    return None
+
+
+def _get_tailored_cv_item(user_id: str, cv_tailoring_id: str) -> dict[str, Any] | None:
+    table = CVTable().table
+    key_response = table.get_item(Key={'pk': user_id, 'sk': cv_tailoring_id})
+    item = key_response.get('Item') if isinstance(key_response, dict) else None
+    if isinstance(item, dict):
+        return item
+
+    query_response = table.query(
+        KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with('TAILORED_CV#'),
+        FilterExpression=Attr('sk').contains(cv_tailoring_id),
+        Limit=1,
+    )
+    query_items = query_response.get('Items') if isinstance(query_response, dict) else []
+    if isinstance(query_items, list) and query_items and isinstance(query_items[0], dict):
+        return query_items[0]
+    return None
+
+
+def _list_tailored_cv_items(user_id: str) -> list[dict[str, Any]]:
+    response = CVTable().table.query(
+        KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with('TAILORED_CV#'),
+    )
+    items_raw = response.get('Items') if isinstance(response, dict) else None
+    if not isinstance(items_raw, list):
+        return []
+    return [item for item in items_raw if isinstance(item, dict)]
+
+
+def _normalize_tailoring_status(raw_status: Any) -> str:
+    status = str(raw_status or '').strip().lower()
+    if status in {'pending', 'processing', 'completed', 'failed'}:
+        return status
+    return 'completed'
+
+
+def _build_tailored_cv_status_payload(item: dict[str, Any], fallback_id: str) -> dict[str, Any]:
+    status = _normalize_tailoring_status(item.get('status'))
+    payload: dict[str, Any] = {
+        'id': str(item.get('sk') or fallback_id),
+        'status': status,
+    }
+
+    if status in {'completed', 'failed'}:
+        result: dict[str, Any] = {}
+        tailored_cv = item.get('tailored_cv')
+        if tailored_cv is not None:
+            result['tailored_cv'] = tailored_cv
+
+        ats_score = item.get('estimated_ats_score') or item.get('ats_score')
+        if isinstance(ats_score, (int, float, Decimal)):
+            result['ats_score'] = float(ats_score)
+
+        keyword_matches = item.get('keyword_matches')
+        if isinstance(keyword_matches, dict):
+            result['keyword_matches'] = keyword_matches
+        elif isinstance(keyword_matches, list):
+            result['keyword_matches'] = {'matched': keyword_matches, 'missing': []}
+
+        suggestions = item.get('suggestions')
+        if isinstance(suggestions, list):
+            result['suggestions'] = [str(entry) for entry in suggestions if str(entry).strip()]
+
+        fvs_validation = item.get('fvs_validation')
+        if isinstance(fvs_validation, dict):
+            result['fvs_validation'] = fvs_validation
+
+        if result:
+            payload['result'] = result
+    return payload
+
+
+def _build_tailored_cv_list_item(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        'id': str(item.get('sk') or ''),
+        'status': _normalize_tailoring_status(item.get('status')),
+        'cv_id': item.get('cv_id'),
+        'created_at': item.get('created_at'),
+        'updated_at': item.get('updated_at'),
+    }
+
+
 def _status_from_code(code: str) -> int:
     mapping = {
         ResultCode.SUCCESS: HTTPStatus.OK,
@@ -332,7 +552,7 @@ def _build_success_data(data: Any) -> dict[str, Any]:
 def _cors_headers() -> dict[str, str]:
     return {
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     }
 

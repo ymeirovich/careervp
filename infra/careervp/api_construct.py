@@ -111,6 +111,10 @@ class ApiConstruct(Construct):
             self.api_db.db,
             appconfig_app_name,
         )
+        self.auth_api_func = self._add_auth_lambda()
+        self.gap_api_func = self._add_gap_lambda()
+        self.cover_letter_api_func = self._add_cover_letter_lambda()
+        self.interview_prep_api_func = self._add_interview_prep_lambda()
 
         # CV Tailoring - POST /api/cv-tailoring
         cv_tailoring_resource = api_resource.add_resource(
@@ -158,6 +162,7 @@ class ApiConstruct(Construct):
             applications_table=self.api_db.applications_table,
             dlq=self.interview_prep_worker_dlq,
         )
+        self._add_openapi_contract_routes()
 
         self._build_swagger_endpoints(
             rest_api=self.rest_api, dest_func=self.cv_upload_func
@@ -1316,3 +1321,157 @@ class ApiConstruct(Construct):
         )
 
         return lambda_function
+
+    def _add_auth_lambda(self) -> _lambda.Function:
+        function_name = self.naming.lambda_name("auth-api")
+        return _lambda.Function(
+            self,
+            "AuthApiLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.auth_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-auth-api",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+                "TABLE_NAME": self.api_db.users_table.table_name,
+                "TOKEN_BLACKLIST_TABLE_NAME": self.api_db.idempotency_db.table_name,
+                "JWT_SECRET": "dev-placeholder-secret",
+                "JWT_ALGORITHM": "HS256",
+            },
+            timeout=Duration.seconds(30),
+            memory_size=256,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            role=self.lambda_role,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+    def _add_gap_lambda(self) -> _lambda.Function:
+        function_name = self.naming.lambda_name("gap-api")
+        return _lambda.Function(
+            self,
+            "GapApiLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.gap_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-gap-api",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+                "DYNAMODB_TABLE_NAME": self.api_db.artifacts_table.table_name,
+            },
+            timeout=Duration.seconds(30),
+            memory_size=256,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            role=self.lambda_role,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+    def _add_cover_letter_lambda(self) -> _lambda.Function:
+        function_name = self.naming.lambda_name("cover-letter-api")
+        return _lambda.Function(
+            self,
+            "CoverLetterApiLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.cover_letter_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-cover-letter-api",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+            },
+            timeout=Duration.seconds(30),
+            memory_size=256,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            role=self.lambda_role,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+    def _add_interview_prep_lambda(self) -> _lambda.Function:
+        function_name = self.naming.lambda_name("interview-prep-api")
+        return _lambda.Function(
+            self,
+            "InterviewPrepApiLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.interview_prep_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-interview-prep-api",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+            },
+            timeout=Duration.seconds(30),
+            memory_size=256,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            role=self.lambda_role,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+    def _get_or_create_path_resource(self, path: str) -> aws_apigateway.Resource:
+        current: aws_apigateway.Resource = self.rest_api.root
+        parts = [segment for segment in path.split("/") if segment]
+        for segment in parts:
+            current = current.get_resource(segment) or current.add_resource(segment)
+        return current
+
+    def _add_route_method(
+        self,
+        path: str,
+        method: str,
+        handler: _lambda.Function,
+    ) -> None:
+        resource = self._get_or_create_path_resource(path)
+        resource.add_method(
+            http_method=method,
+            integration=aws_apigateway.LambdaIntegration(handler=handler),
+        )
+
+    def _add_openapi_contract_routes(self) -> None:
+        # OpenAPI route migration (stage `/v1` remains API Gateway concern).
+        route_map: list[tuple[str, str, _lambda.Function]] = [
+            ("/auth/register", "POST", self.auth_api_func),
+            ("/auth/login", "POST", self.auth_api_func),
+            ("/auth/refresh", "POST", self.auth_api_func),
+            ("/users/me", "GET", self.cv_upload_func),
+            ("/users/me", "PUT", self.cv_upload_func),
+            ("/users/me/cv", "POST", self.cv_upload_func),
+            ("/users/me/cvs", "GET", self.cv_upload_func),
+            ("/jobs", "POST", self.cv_tailoring_func),
+            ("/jobs", "GET", self.cv_tailoring_func),
+            ("/jobs/{jobId}", "GET", self.vpr_status_func),
+            ("/vpr/generate", "POST", self.vpr_submit_func),
+            ("/vpr/{vprId}", "GET", self.vpr_status_func),
+            ("/users/me/vprs", "GET", self.vpr_status_func),
+            ("/gap-analysis/questions", "POST", self.gap_api_func),
+            ("/gap-analysis/responses", "POST", self.gap_api_func),
+            ("/gap-analysis/{jobId}/questions", "GET", self.gap_api_func),
+            ("/cv-tailoring/generate", "POST", self.cv_tailoring_func),
+            ("/cv-tailoring/{cvTailoringId}", "GET", self.cv_tailoring_func),
+            ("/users/me/tailored-cvs", "GET", self.cv_tailoring_func),
+            ("/cover-letter/generate", "POST", self.cover_letter_api_func),
+            ("/cover-letter/{coverLetterId}", "GET", self.cover_letter_api_func),
+            ("/users/me/cover-letters", "GET", self.cover_letter_api_func),
+            ("/interview-prep/generate", "POST", self.interview_prep_api_func),
+            ("/interview-prep/{interviewPrepId}", "GET", self.interview_prep_api_func),
+            ("/company-research/fetch", "POST", self.company_research_func),
+            ("/company-research/{jobId}", "GET", self.company_research_func),
+            ("/health", "GET", self.cv_upload_func),
+        ]
+        for path, method, handler in route_map:
+            self._add_route_method(path, method, handler)

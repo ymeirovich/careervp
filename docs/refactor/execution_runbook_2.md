@@ -982,18 +982,24 @@ TASK: Add OpenAPI paths as API Gateway resources without removing existing route
    - Link each new resource to corresponding handler
    - Use existing Lambda functions where handlers exist
 
-3. Preserve existing /api/* resources (do NOT remove)
+3. Preserve existing /api/* resources during additive rollout (do NOT remove in this step)
 
-4. Reuse existing IAM role, DynamoDB table, S3 bucket, SQS queue
+4. Remove old /api/* resources only AFTER all of the following are true:
+   - All 27 OpenAPI endpoints return 200 OK
+   - Smoke tests pass
+   - Migration sign-off complete
+
+5. Reuse existing IAM role, DynamoDB table, S3 bucket, SQS queue
 
 VALIDATION CRITERIA:
 - [ ] cdk synth succeeds without errors
 - [ ] All 27 OpenAPI paths have API Gateway resources
 - [ ] Existing /api/* routes still functional
+- [ ] /api/* removal is gated on endpoint+smoke+sign-off completion
 - [ ] No new DynamoDB/S3/SQS resources created
 
 OUTPUT FORMAT:
-Output results to docs/refactor/execution_runbook_2_results.md.
+Append results to docs/refactor/execution_runbook_2_results.md.
 """
 ```
 

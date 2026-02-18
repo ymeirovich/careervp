@@ -122,7 +122,7 @@ def mock_llm_success():
     return mock_result
 
 
-def generate_api_gw_event(body: dict, path: str = '/api/cv', method: str = 'POST') -> dict:
+def generate_api_gw_event(body: dict, path: str = '/users/me/cv', method: str = 'POST') -> dict:
     """Generate an API Gateway event for testing."""
     return {
         'version': '1.0',

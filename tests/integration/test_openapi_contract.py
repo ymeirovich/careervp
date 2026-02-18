@@ -1,57 +1,64 @@
-"""OpenAPI contract checks used by Phase 10 verification."""
+"""End-to-end OpenAPI contract validation for all 27 endpoints."""
 
 from __future__ import annotations
 
+import importlib.util
+import sys
 from pathlib import Path
-
-import yaml
+from types import ModuleType
 
 ROOT = Path(__file__).resolve().parents[2]
-OPENAPI_PATH = ROOT / "docs" / "swagger" / "careervp-api-v1.yaml"
-RUNBOOK_PATH = ROOT / "docs" / "refactor" / "EXECUTION_RUNBOOK.md"
+VALIDATOR_PATH = ROOT / "scripts" / "validate_openapi_coverage.py"
 
 
-ASYNC_ENDPOINTS = {
-    ("POST", "/vpr/generate"),
-    ("POST", "/cv-tailoring/generate"),
-    ("POST", "/cover-letter/generate"),
-    ("POST", "/interview-prep/generate"),
-    ("POST", "/company-research/fetch"),
-}
+def _load_validator_module() -> ModuleType:
+    spec = importlib.util.spec_from_file_location(
+        "validate_openapi_coverage", VALIDATOR_PATH
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load validator module from {VALIDATOR_PATH}")
+
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
-def test_async_endpoints_declared() -> None:
-    openapi = yaml.safe_load(OPENAPI_PATH.read_text())
+def test_all_27_endpoints_are_covered_by_handlers() -> None:
+    validator = _load_validator_module()
+    report = validator.build_validation_report()
 
-    for method, path in ASYNC_ENDPOINTS:
-        assert path in openapi["paths"]
-        assert method.lower() in openapi["paths"][path]
-
-
-def test_async_endpoints_return_202() -> None:
-    openapi = yaml.safe_load(OPENAPI_PATH.read_text())
-
-    for method, path in ASYNC_ENDPOINTS:
-        operation = openapi["paths"][path][method.lower()]
-        assert "202" in operation["responses"]
+    assert report.total_endpoints == 27
+    assert report.covered_endpoints == 27
+    assert report.missing_endpoint_mappings == []
+    assert report.missing_handlers == []
+    assert report.missing_route_markers == {}
 
 
-def test_protected_endpoints_enforce_bearer_auth() -> None:
-    openapi = yaml.safe_load(OPENAPI_PATH.read_text())
+def test_request_schemas_match_openapi_models() -> None:
+    validator = _load_validator_module()
+    report = validator.build_validation_report()
 
-    for path, methods in openapi["paths"].items():
-        for method, operation in methods.items():
-            if method.lower() not in {"get", "post", "put", "delete", "patch"}:
-                continue
-            if path.startswith("/auth/") and path in {"/auth/register", "/auth/login"}:
-                continue
-            if path == "/health":
-                continue
-            assert operation.get("security") == [{"BearerAuth": []}]
+    assert report.missing_request_schemas == []
 
 
-def test_runbook_phase_10_verification_references_contract_tests() -> None:
-    content = RUNBOOK_PATH.read_text()
+def test_response_schemas_match_openapi_models() -> None:
+    validator = _load_validator_module()
+    report = validator.build_validation_report()
 
-    assert "test_openapi_contract.py" in content
-    assert "test_api_contract_spec_sync.py" in content
+    assert report.missing_response_schemas == []
+
+
+def test_http_status_codes_match_openapi_contract() -> None:
+    validator = _load_validator_module()
+    report = validator.build_validation_report()
+
+    assert report.status_mismatches == []
+
+
+def test_authentication_requirements_match_openapi_contract() -> None:
+    validator = _load_validator_module()
+    report = validator.build_validation_report()
+
+    assert report.auth_security_mismatches == []
+    assert report.auth_handler_mismatches == {}

@@ -5,9 +5,39 @@ Per docs/specs/03-vpr-generator.md and docs/features/Job Post Example files.
 Job postings are used as input for VPR generation and CV tailoring.
 """
 
+from datetime import datetime, timezone
 from typing import Annotated, Literal
 
 from pydantic import AliasChoices, BaseModel, Field, HttpUrl
+
+
+class Job(BaseModel):
+    """Canonical job posting model for API `/jobs` endpoints."""
+
+    job_id: Annotated[str, Field(description='Unique job identifier')]
+    user_id: Annotated[str, Field(description='Owning user identifier')]
+    title: Annotated[str, Field(description='Job title')]
+    company: Annotated[str, Field(description='Company name')]
+    description: Annotated[str, Field(description='Job description')]
+    status: Annotated[str, Field(default='active', description='Job status')]
+    created_at: Annotated[datetime, Field(default_factory=lambda: datetime.now(timezone.utc))]
+    url: Annotated[str | None, Field(default=None, description='Optional source URL')] = None
+    requirements: Annotated[list[str], Field(default_factory=list, description='Optional extracted requirements')]
+
+    def to_api_dict(self) -> dict[str, object]:
+        """Serialize in OpenAPI-compatible response shape."""
+        return {
+            'id': self.job_id,
+            'job_id': self.job_id,
+            'user_id': self.user_id,
+            'title': self.title,
+            'company_name': self.company,
+            'description': self.description,
+            'status': self.status,
+            'url': self.url,
+            'requirements': self.requirements,
+            'created_at': self.created_at.isoformat(),
+        }
 
 
 class JobPosting(BaseModel):

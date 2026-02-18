@@ -4,6 +4,7 @@
 # Updated: 2026-02-10 - Added reference specs from docs/specs/
 # Updated: 2026-02-15 - Phase 10 API contract remediation mapping sync
 # Updated: NEW 2026-02-15 - Added storage contract spec and phase sync for API↔DAL↔infra mapping
+# Updated: 2026-02-18 - Storage contract spec focused to canonical logical->physical mapping v2.0
 
 specs:
   # Core specs (required for implementation)
@@ -211,8 +212,8 @@ specs:
     source: "OpenAPI + deployed infra key model reconciliation"
     category: "storage_contract"
     phases: [8, 10]
-    status: "CREATED"
-    note: "Canonical mapping of logical API IDs to physical table keys with adapter rules"
+    status: "UPDATED"
+    note: "v2.0 focused canonical logical-to-physical mapping: cv_id, job_id, vpr_id, gap_response_ids, company_research_id"
 
   - file: "prompt_library_spec.yaml"
     source: "CareerVP_Agentic_Architecture.md, PROMPT_GAP_ANALYSIS_REPORT.md, CareerVP Prompt Library.md"
