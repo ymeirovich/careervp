@@ -394,16 +394,17 @@ for endpoint in "${DEPLOYED_ENDPOINTS[@]}"; do
 done
 echo "Contract Gate A PASS (deployed routes reachable)"
 
-# Gate B: Validate target contract artifact (27-endpoint goal)
+# Gate B: Validate target contract artifact (27-operation goal)
 # This gate validates target spec readiness, not current deployment readiness.
+# Count operations (GET/POST/PUT/DELETE/PATCH), not unique path keys.
 TARGET_SPEC="docs/swagger/careervp-api-v1.yaml"
-TARGET_EXPECTED_ENDPOINTS=27
-TARGET_DEFINED_ENDPOINTS=$(grep -cE '^  /' "$TARGET_SPEC")
-echo "Target endpoint count in $TARGET_SPEC: $TARGET_DEFINED_ENDPOINTS (expected $TARGET_EXPECTED_ENDPOINTS)"
-if [[ "$TARGET_DEFINED_ENDPOINTS" -eq "$TARGET_EXPECTED_ENDPOINTS" ]]; then
-  echo "Contract Gate B PASS (target contract endpoint count met)"
+TARGET_EXPECTED_OPERATIONS=27
+TARGET_DEFINED_OPERATIONS=$(awk '/^    (get|post|put|delete|patch):$/ { count++ } END { print count+0 }' "$TARGET_SPEC")
+echo "Target operation count in $TARGET_SPEC: $TARGET_DEFINED_OPERATIONS (expected $TARGET_EXPECTED_OPERATIONS)"
+if [[ "$TARGET_DEFINED_OPERATIONS" -eq "$TARGET_EXPECTED_OPERATIONS" ]]; then
+  echo "Contract Gate B PASS (target contract operation count met)"
 else
-  echo "Contract Gate B PENDING (target contract not yet at 27 endpoints)"
+  echo "Contract Gate B PENDING (target contract not yet at 27 operations)"
 fi
 
 # ============================================================================
@@ -519,7 +520,7 @@ echo "All Phase 2 smoke tests completed"
 | Test | Expected | Validation |
 |------|----------|------------|
 | Deployed Contract Gate (/api/*) | Deployed routes are reachable | Contract Gate A checks deployed `/api/*` + `/swagger` routes |
-| Target Contract Gate (27 endpoints) | Target spec defines 27 endpoints | Contract Gate B checks endpoint count in `docs/swagger/careervp-api-v1.yaml` |
+| Target Contract Gate (27 operations) | Target spec defines 27 API operations | Contract Gate B checks operation count in `docs/swagger/careervp-api-v1.yaml` |
 | CV Summarizer | Compression is observable when exposed | Check `compression_metadata` only if response includes it |
 | LLM Cache | Cache behavior is proven by deterministic signal | Primary: CloudWatch `cache_hit=true`; timing is secondary heuristic |
 | Anthropic API | No Bedrock runtime usage in deployed lambdas | `bedrock-runtime` count = 0 across deployed `careervp` lambda log groups |
@@ -811,6 +812,7 @@ uv run mypy careervp/logic/gap_analysis.py --strict
 """
 **READ FIRST:**
 - `docs/refactor/specs/fvs_spec.yaml`
+- `docs/refactor/specs/test_strategy_spec.yaml`
 
 ROLE: Senior QA Engineer specializing in content quality validation and anti-AI detection
 
@@ -900,7 +902,7 @@ uv run mypy careervp/logic/fvs_validator.py --strict
 - `docs/swagger/careervp-api-v1.yaml` (servers section: base URL `/v1`)
 - `docs/refactor/specs/api_contract_spec.yaml`
 
-**CONTEXT:** Migrate from `/api/*` routes to OpenAPI contract paths without breaking existing clients.
+
 
 **CODE:**
 ```bash
@@ -909,6 +911,8 @@ uv run mypy careervp/logic/fvs_validator.py --strict
 **READ FIRST:**
 - `docs/swagger/careervp-api-v1.yaml` (servers section: base URL `/v1`)
 - `docs/refactor/specs/api_contract_spec.yaml`
+
+**CONTEXT:** Migrate from `/api/*` routes to OpenAPI contract paths without breaking existing clients.
 
 ROLE: DevOps Engineer specializing in API Gateway and route migration
 
