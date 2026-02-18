@@ -15,26 +15,17 @@ from typing import Any
 from aws_lambda_powertools.event_handler import Response, content_types
 from aws_lambda_powertools.logging.correlation_paths import API_GATEWAY_REST
 from aws_lambda_powertools.utilities.typing import LambdaContext
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import ValidationError
 
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.utils.observability import logger, tracer
 from careervp.handlers.utils.rest_api_resolver import app
 from careervp.logic.auth_service import AuthService, ConfigurationError, InvalidTokenError
+from careervp.models.api_models import JobCreateRequest
 from careervp.models.job import Job
 
 _auth_service: AuthService | None = None
 _jobs_repository: JobsRepository | None = None
-
-
-class JobCreateRequest(BaseModel):
-    """Request model for POST /jobs."""
-
-    title: str = Field(min_length=1)
-    company_name: str = Field(min_length=1)
-    description: str = Field(min_length=1)
-    url: str | None = None
-    requirements: list[str] = Field(default_factory=list)
 
 
 def _get_auth_service() -> AuthService:
@@ -198,7 +189,7 @@ def create_job() -> Response[str]:
             'title': request.title.strip(),
             'company_name': request.company_name.strip(),
             'description': request.description.strip(),
-            'url': request.url,
+            'url': str(request.url) if request.url else None,
             'requirements': request.requirements,
             'status': 'active',
         }

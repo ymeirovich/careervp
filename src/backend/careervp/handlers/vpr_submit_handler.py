@@ -19,17 +19,18 @@ import json
 import os
 import uuid
 from http import HTTPStatus
-from typing import Any, Literal
+from typing import Any
 
 import boto3
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from botocore.exceptions import ClientError as BotoClientError
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.auth_service import AuthService, ConfigurationError, InvalidTokenError
 from careervp.logic.utils.constants import VPR_JOBS_QUEUE_NAME
+from careervp.models.api_models import VPRGenerateRequest
 from careervp.models.vpr import VPRRequest
 
 JSON_HEADERS = {'Content-Type': 'application/json'}
@@ -37,20 +38,6 @@ JSON_HEADERS = {'Content-Type': 'application/json'}
 # Module-level SQS client for testing/mocking
 sqs = boto3.client('sqs')
 _auth_service: AuthService | None = None
-
-
-class GenerateVPROptions(BaseModel):
-    include_company_research: bool = True
-    tone: Literal['professional', 'conversational', 'formal'] | None = None
-
-
-class GenerateVPRRequest(BaseModel):
-    """OpenAPI-aligned request shape for POST /vpr/generate."""
-
-    cv_id: str
-    job_id: str
-    gap_response_ids: list[str]
-    options: GenerateVPROptions | None = None
 
 
 def _get_auth_service() -> AuthService:
@@ -157,8 +144,8 @@ def _normalize_submit_payload(request_body: dict[str, Any], user_id: str) -> dic
     - Legacy request: VPRRequest schema
     """
     if {'cv_id', 'job_id', 'gap_response_ids'}.issubset(request_body):
-        openapi_request = GenerateVPRRequest.model_validate(request_body)
-        options = openapi_request.options.model_dump() if openapi_request.options else {}
+        openapi_request = VPRGenerateRequest.model_validate(request_body)
+        options = openapi_request.options.model_dump(mode='json', exclude_none=True) if openapi_request.options else {}
         return {
             'application_id': openapi_request.job_id,
             'user_id': user_id,

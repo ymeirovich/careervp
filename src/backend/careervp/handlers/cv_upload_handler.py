@@ -23,12 +23,14 @@ from aws_lambda_powertools.utilities.parser import ValidationError, parse
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from botocore.client import BaseClient
 from botocore.exceptions import ClientError
+from pydantic import ValidationError as PydanticValidationError
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.handlers.models.env_vars import CVUploadEnvVars
 from careervp.handlers.utils.observability import logger, tracer
 from careervp.handlers.utils.rest_api_resolver import app
 from careervp.logic.cv_parser import create_cv_parse_response, parse_cv
+from careervp.models.api_models import CVUploadRequest
 from careervp.models.cv import CVParseRequest, CVParseResponse
 from careervp.models.result import ResultCode
 
@@ -58,9 +60,9 @@ def upload_cv() -> Response[str]:
 
     # Parse and validate request
     try:
-        body = app.current_event.json_body
+        body = _normalize_request_payload(app.current_event.json_body)
         request = parse(event=body, model=CVParseRequest)
-    except (ValidationError, TypeError, json.JSONDecodeError) as e:
+    except (ValidationError, PydanticValidationError, ValueError, TypeError, json.JSONDecodeError) as e:
         logger.warning('Invalid request body', error=str(e))
         response = CVParseResponse(
             success=False,
@@ -214,6 +216,68 @@ def _get_content_type(file_type: str | None) -> str:
     if file_type is None:
         return 'application/octet-stream'
     return content_types_map.get(file_type, 'application/octet-stream')
+
+
+def _normalize_request_payload(body: Any) -> dict[str, Any]:
+    """
+    Normalize request payload to legacy CVParseRequest shape.
+
+    Supports both:
+    - Legacy payload: {user_id, file_content|text_content, file_type}
+    - OpenAPI payload: {cv_content, file_name}
+    """
+    if not isinstance(body, dict):
+        raise TypeError('Request body must be a JSON object')
+
+    # OpenAPI request shape
+    if {'cv_content', 'file_name'}.issubset(body):
+        openapi_request = CVUploadRequest.model_validate(body)
+        user_id = _extract_user_id()
+        if not user_id:
+            raise ValueError('Authenticated user_id is required for /users/me/cv')
+        return {
+            'user_id': user_id,
+            'text_content': openapi_request.cv_content,
+        }
+
+    return body
+
+
+def _extract_user_id() -> str | None:
+    request_context = app.current_event.request_context
+    if isinstance(request_context, dict):
+        authorizer = request_context.get('authorizer')
+        if isinstance(authorizer, dict):
+            claim_user_id = _extract_claim_user_id(authorizer.get('claims'))
+            if claim_user_id:
+                return claim_user_id
+
+            jwt_context = authorizer.get('jwt')
+            if isinstance(jwt_context, dict):
+                jwt_user_id = _extract_claim_user_id(jwt_context.get('claims'))
+                if jwt_user_id:
+                    return jwt_user_id
+
+            for key in ('user_id', 'principalId', 'principal_id'):
+                value = authorizer.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+
+    headers = app.current_event.headers or {}
+    for key, value in headers.items():
+        if isinstance(key, str) and key.lower() == 'x-user-id' and isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _extract_claim_user_id(claims: Any) -> str | None:
+    if not isinstance(claims, dict):
+        return None
+    for key in ('sub', 'user_id', 'cognito:username'):
+        value = claims.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
 
 
 def _get_status_code_for_result_code(code: str) -> int:

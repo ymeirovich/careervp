@@ -8,11 +8,14 @@ from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from typing import Any
 
+from pydantic import ValidationError
+
 try:  # pragma: no cover - import guard for lightweight unit-test environments.
     from botocore.exceptions import ClientError
 except Exception:  # noqa: BLE001
     ClientError = Exception
 
+from careervp.models.api_models import GapQuestionRequest, GapResponseRequest
 from careervp.models.result import ResultCode
 
 QUESTION_ARTIFACT_PREFIX = 'ARTIFACT#GAP_ANALYSIS#'
@@ -73,17 +76,29 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:
     if payload is None:
         return _error_response(HTTPStatus.BAD_REQUEST, 'Invalid request body', ResultCode.INVALID_JSON)
 
+    try:
+        openapi_request = GapQuestionRequest.model_validate(
+            {
+                'cv_id': payload.get('cv_id'),
+                'job_id': payload.get('job_id') or payload.get('application_id'),
+                'max_questions': payload.get('max_questions', 10),
+                'focus_areas': payload.get('focus_areas', []),
+            }
+        )
+    except ValidationError as exc:
+        return _error_response(HTTPStatus.BAD_REQUEST, f'Invalid request payload: {exc}', ResultCode.VALIDATION_ERROR)
+
     user_id = _extract_user_id(event) or _coerce_str(payload.get('user_id'))
     if not user_id:
         return _error_response(HTTPStatus.UNAUTHORIZED, 'Missing user identity', ResultCode.UNAUTHORIZED)
 
-    cv_id = _coerce_str(payload.get('cv_id'))
-    job_id = _coerce_str(payload.get('job_id') or payload.get('application_id'))
+    cv_id = _coerce_str(openapi_request.cv_id)
+    job_id = _coerce_str(openapi_request.job_id)
     if not cv_id or not job_id:
         return _error_response(HTTPStatus.BAD_REQUEST, 'cv_id and job_id are required', ResultCode.MISSING_REQUIRED_FIELD)
 
-    max_questions = _normalize_max_questions(payload.get('max_questions'))
-    focus_areas = _normalize_focus_areas(payload.get('focus_areas'))
+    max_questions = _normalize_max_questions(openapi_request.max_questions)
+    focus_areas = _normalize_focus_areas(openapi_request.focus_areas)
     questions = _generate_gap_questions(job_id=job_id, focus_areas=focus_areas, max_questions=max_questions)
     missing_qualifications = _build_missing_qualifications(focus_areas)
 
@@ -160,6 +175,11 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
     payload = _parse_body(event)
     if payload is None:
         return _error_response(HTTPStatus.BAD_REQUEST, 'Invalid request body', ResultCode.INVALID_JSON)
+
+    try:
+        GapResponseRequest.model_validate({'responses': payload.get('responses')})
+    except ValidationError as exc:
+        return _error_response(HTTPStatus.BAD_REQUEST, f'Invalid request payload: {exc}', ResultCode.VALIDATION_ERROR)
 
     user_id = _extract_user_id(event) or _coerce_str(payload.get('user_id'))
     if not user_id:

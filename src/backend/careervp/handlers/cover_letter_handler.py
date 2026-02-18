@@ -14,7 +14,7 @@ from pydantic import ValidationError
 
 from careervp.dal.cv_dal import CVTable
 from careervp.handlers.utils.observability import logger, metrics, tracer
-from careervp.models.cover_letter import CoverLetterRequest
+from careervp.models.api_models import CoverLetterRequest
 from careervp.models.result import Result, ResultCode
 
 COVER_LETTER_SORT_KEY_PREFIX = 'ARTIFACT#COVER_LETTER#'
@@ -143,7 +143,7 @@ def _parse_request(event: dict[str, Any]) -> Result[CoverLetterRequest]:
         return Result(success=False, error='Invalid JSON request body', code=ResultCode.INVALID_INPUT)
 
     try:
-        request = CoverLetterRequest(**payload)
+        request = CoverLetterRequest.model_validate(payload)
     except ValidationError as exc:
         logger.warning('CoverLetterRequest validation failed', errors=exc.errors())
         return Result(success=False, error='Request validation failed', code=ResultCode.INVALID_INPUT)

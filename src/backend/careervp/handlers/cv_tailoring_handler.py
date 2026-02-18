@@ -10,11 +10,13 @@ from http import HTTPStatus
 from typing import Any
 
 from boto3.dynamodb.conditions import Attr, Key
+from pydantic import ValidationError
 
 from careervp.dal.cv_dal import CVTable
 from careervp.logic.cv_tailoring import tailor_cv
 from careervp.logic.fvs_validator import create_fvs_baseline
 from careervp.logic.llm_client import LLMClient
+from careervp.models.api_models import CVTailoringRequest as APICVTailoringRequest
 from careervp.models.cv import UserCV
 from careervp.models.cv_tailoring_models import TailorCVRequest, TailoringPreferences
 from careervp.models.result import Result, ResultCode
@@ -78,6 +80,19 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
                 'success': False,
                 'code': ResultCode.INVALID_JSON,
                 'message': 'Request body contains invalid JSON',
+            },
+            headers,
+        )
+
+    try:
+        _validate_openapi_cv_tailoring_payload(body)
+    except ValidationError as exc:
+        return _response(
+            HTTPStatus.BAD_REQUEST,
+            {
+                'success': False,
+                'code': ResultCode.VALIDATION_ERROR,
+                'message': f'OpenAPI payload validation failed: {exc}',
             },
             headers,
         )
@@ -186,6 +201,16 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Alias for standard Lambda entrypoint naming."""
     return handler(event, context)
+
+
+def _validate_openapi_cv_tailoring_payload(body: dict[str, Any]) -> None:
+    """
+    Validate OpenAPI request shape when contract fields are supplied.
+
+    The existing tailoring flow still accepts the legacy `job_description` payload.
+    """
+    if {'cv_id', 'job_id', 'vpr_id'}.issubset(body):
+        APICVTailoringRequest.model_validate(body)
 
 
 def get_tailored_cv_status(event: dict[str, Any]) -> dict[str, Any]:

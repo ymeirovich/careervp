@@ -1925,3 +1925,62 @@ Results:
 - [x] GET /health returns 200 OK
 - [x] No authentication required
 - [x] Response matches OpenAPI schema
+
+## Step 10.11 API Request/Response Schema Models (2026-02-18)
+
+**Execution timestamp:** 2026-02-18
+**Scope:** OpenAPI schema conformance via shared Pydantic API models and handler wiring
+
+### Implementation completed
+
+- Added `src/backend/careervp/models/api_models.py` as the canonical OpenAPI schema model module.
+  - Includes request/response models for all API domains (Auth, Users/CV, Jobs, VPR, Gap Analysis, CV Tailoring, Cover Letter, Interview Prep, Company Research, Error, Health).
+  - Added strict shared base model `APIModel` with:
+    - `from_dict()`
+    - `from_json()`
+    - `to_dict()`
+    - `to_json()`
+  - Added field-level validation for required non-empty payload fields (for example: `gap_response_ids`, `responses`, `password`, `name`).
+
+- Wired shared API models into handlers:
+  - `src/backend/careervp/handlers/cv_upload_handler.py`
+    - Added OpenAPI request normalization/validation using `CVUploadRequest` for `/users/me/cv` payloads.
+    - Preserved legacy request compatibility (`CVParseRequest`) while supporting OpenAPI shape.
+  - `src/backend/careervp/handlers/vpr_submit_handler.py`
+    - Uses `VPRGenerateRequest` for OpenAPI payload validation in submit flow.
+  - `src/backend/careervp/handlers/cv_tailoring_handler.py`
+    - Uses `CVTailoringRequest` validation for OpenAPI contract payloads when provided.
+  - `src/backend/careervp/handlers/cover_letter_handler.py`
+    - Uses `CoverLetterRequest.model_validate(...)`.
+  - `src/backend/careervp/handlers/gap_handler.py`
+    - Uses `GapQuestionRequest` and `GapResponseRequest` for payload validation.
+  - `src/backend/careervp/handlers/job_handler.py`
+    - Uses `JobCreateRequest` for POST `/jobs` payload validation.
+  - `src/backend/careervp/handlers/user_handler.py`
+    - Uses `UpdateUserRequest` for PUT `/users/me` payload validation.
+
+- Added `src/backend/tests/unit/test_api_models.py`:
+  - Validates OpenAPI operation count is 27.
+  - Verifies all schema refs used by endpoint request/response payloads map to classes in `api_models`.
+  - Validates key required-field behavior and JSON round-trip serialization/deserialization.
+
+### Validation evidence
+
+- Unit tests:
+  - Command: `uv run pytest tests/unit/test_api_models.py -v`
+  - Result: `6 passed`
+
+- Type check:
+  - Command: `uv run mypy careervp/models/api_models.py --strict`
+  - Result: `Success: no issues found in 1 source file`
+
+- Lint (supplemental safety check):
+  - Command: `uv run ruff check careervp/models/api_models.py careervp/handlers/cv_upload_handler.py careervp/handlers/vpr_submit_handler.py careervp/handlers/cv_tailoring_handler.py careervp/handlers/cover_letter_handler.py careervp/handlers/gap_handler.py careervp/handlers/job_handler.py careervp/handlers/user_handler.py tests/unit/test_api_models.py`
+  - Result: `All checks passed!`
+
+### Validation criteria
+
+- [x] All 27 endpoint schemas have Pydantic models
+- [x] Models validate input/output correctly
+- [x] Unit tests pass: `pytest tests/unit/test_api_models.py -v`
+- [x] Type check passes: `mypy careervp/models/api_models.py --strict`

@@ -18,24 +18,16 @@ from aws_lambda_powertools.event_handler import Response, content_types
 from aws_lambda_powertools.logging.correlation_paths import API_GATEWAY_REST
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from boto3.dynamodb.conditions import Key
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from careervp.dal.user_repository import UserRepository
 from careervp.handlers.utils.observability import logger, tracer
 from careervp.handlers.utils.rest_api_resolver import app
 from careervp.logic.auth_service import AuthService, ConfigurationError, InvalidTokenError
+from careervp.models.api_models import UpdateUserRequest
 
 _auth_service: AuthService | None = None
 _user_repository: UserRepository | None = None
-
-
-class UpdateCurrentUserRequest(BaseModel):
-    """Request payload for PUT /users/me."""
-
-    name: str | None = None
-    timezone: str | None = None
-    preferences: dict[str, Any] | None = None
-    user_id: str | None = None
 
 
 def _get_auth_service() -> AuthService:
@@ -218,21 +210,36 @@ def update_current_user() -> Response[str]:
         return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Authentication required'})
 
     try:
-        payload = UpdateCurrentUserRequest.model_validate(app.current_event.json_body)
+        raw_payload = app.current_event.json_body
+        if not isinstance(raw_payload, dict):
+            raise TypeError('Request body must be a JSON object')
     except (ValidationError, ValueError, TypeError) as exc:
         logger.warning('Invalid update user payload', error=str(exc))
         return _json_response(HTTPStatus.BAD_REQUEST, {'error': 'Invalid request payload'})
 
-    if payload.user_id and payload.user_id != user_id:
+    payload_user_id = raw_payload.get('user_id') if isinstance(raw_payload, dict) else None
+    if isinstance(payload_user_id, str) and payload_user_id and payload_user_id != user_id:
         return _json_response(HTTPStatus.FORBIDDEN, {'error': 'User can only update own profile'})
+
+    try:
+        payload = UpdateUserRequest.model_validate(
+            {
+                'name': raw_payload.get('name'),
+                'timezone': raw_payload.get('timezone'),
+            }
+        )
+    except (ValidationError, ValueError, TypeError) as exc:
+        logger.warning('Invalid update user payload', error=str(exc))
+        return _json_response(HTTPStatus.BAD_REQUEST, {'error': 'Invalid request payload'})
 
     update_data: dict[str, Any] = {}
     if isinstance(payload.name, str) and payload.name.strip():
         update_data['name'] = payload.name.strip()
     if isinstance(payload.timezone, str) and payload.timezone.strip():
         update_data['timezone'] = payload.timezone.strip()
-    if isinstance(payload.preferences, dict):
-        update_data['preferences'] = payload.preferences
+    payload_preferences = raw_payload.get('preferences') if isinstance(raw_payload, dict) else None
+    if isinstance(payload_preferences, dict):
+        update_data['preferences'] = payload_preferences
 
     user = _get_user_repository().update_user(user_id, update_data)
     if user is None:
