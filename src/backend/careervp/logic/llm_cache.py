@@ -6,6 +6,7 @@ import hashlib
 import os
 import time
 from collections.abc import Callable, Mapping
+from decimal import Decimal
 from typing import Any, Protocol, cast
 
 import boto3
@@ -118,6 +119,8 @@ class LLMResponseCache:
     def _to_int(value: Any) -> int | None:
         if isinstance(value, int):
             return value
+        if isinstance(value, Decimal):
+            return int(value)
         if isinstance(value, str) and value.isdigit():
             return int(value)
         return None

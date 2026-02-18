@@ -126,25 +126,25 @@ jobs:
 
           # Load DynamoDB spec
           spec = yaml.safe_load(open('infra/careervp/specs/dynamodb_spec.yaml'))
-          spec_tables = [t['name'] for t in spec['tables']]
+          spec_constants = [t['constant'] for t in spec.get('tables', [])]
 
           # Load DynamoDB stack
           with open('infra/careervp/dynamodb_stack.py') as f:
             stack_content = f.read()
 
-          stack_tables = []
-          for line in stack_content.split('\n'):
-            if 'table_name=' in line:
-              table = line.split('table_name=')[1].split(',')[0].strip().strip('\"')
-              stack_tables.append(table)
-
-          # Compare
-          for t in spec_tables:
-            if t in stack_tables:
-              print(f'{t}: ✅')
+          # Compare by constant usage in stack implementation.
+          missing = []
+          for constant in spec_constants:
+            needle = f'constants.{constant}'
+            if needle in stack_content:
+              print(f'{constant}: ✅')
             else:
-              print(f'{t}: ❌ Missing from dynamodb_stack.py')
-              exit(1)
+              print(f'{constant}: ❌ Missing from dynamodb_stack.py')
+              missing.append(constant)
+
+          if missing:
+            print(f'❌ Missing DynamoDB constants: {missing}')
+            exit(1)
 
           print('✅ DynamoDB spec matches stack')
           "
@@ -155,25 +155,25 @@ jobs:
 
           # Load S3 spec
           spec = yaml.safe_load(open('infra/careervp/specs/s3_spec.yaml'))
-          spec_buckets = [b['name'] for b in spec['buckets']]
+          spec_constants = [b['constant'] for b in spec.get('buckets', [])]
 
           # Load S3 stack
           with open('infra/careervp/s3_stack.py') as f:
             stack_content = f.read()
 
-          stack_buckets = []
-          for line in stack_content.split('\n'):
-            if 'bucket_name=' in line:
-              bucket = line.split('bucket_name=')[1].split(',')[0].strip().strip('\"')
-              stack_buckets.append(bucket)
-
-          # Compare
-          for b in spec_buckets:
-            if b in stack_buckets:
-              print(f'{b}: ✅')
+          # Compare by constant usage in stack implementation.
+          missing = []
+          for constant in spec_constants:
+            needle = f'constants.{constant}'
+            if needle in stack_content:
+              print(f'{constant}: ✅')
             else:
-              print(f'{b}: ❌ Missing from s3_stack.py')
-              exit(1)
+              print(f'{constant}: ❌ Missing from s3_stack.py')
+              missing.append(constant)
+
+          if missing:
+            print(f'❌ Missing S3 constants: {missing}')
+            exit(1)
 
           print('✅ S3 spec matches stack')
           "
@@ -188,12 +188,18 @@ jobs:
           node-version: '20'
           cache: npm
           cache-dependency-path: package-lock.json
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+          enable-cache: true
+          cache-dependency-glob: '**/uv.lock'
       - name: Install dependencies
         run: npm ci
       - name: Naming guardrail
         working-directory: src/backend
         run: |
-          ROOT=$(pwd)/..
+          ROOT=$(git rev-parse --show-toplevel)
           uv run python scripts/validate_naming.py --path "$ROOT/infra" --strict
       - name: Build Lambda code
         working-directory: src/backend

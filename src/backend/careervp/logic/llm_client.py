@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import re
@@ -19,6 +20,7 @@ from careervp.models.cv import UserCV
 # Default model: Haiku for cost efficiency (per CLAUDE.md Decision 1.2)
 DEFAULT_MODEL = 'claude-haiku-4-5-20251001'
 DEFAULT_TEMPERATURE = 0.3
+logger = logging.getLogger(__name__)
 
 
 class BedrockInvocationError(RuntimeError):
@@ -122,13 +124,18 @@ class LLMClient:
     def _check_cache(self, cache_key: str | None) -> dict[str, Any] | None:
         """Check cache and return cached value if found."""
         if cache_key is None:
+            logger.info('llm_cache_lookup cache_hit=false reason=no_cache_key')
             return None
         cached_value = self._cache.get(cache_key)
         if cached_value is not None:
+            logger.warning('llm_cache_lookup cache_hit=true')
             try:
                 return cast(dict[str, Any], json.loads(cached_value))
             except json.JSONDecodeError:
+                logger.warning('llm_cache_lookup cache_hit=true parse_error=true evicting_cache_entry')
                 self._cache.delete(cache_key)
+        else:
+            logger.info('llm_cache_lookup cache_hit=false')
         return None
 
     def _call_anthropic(self, prompt: str, model_name: str, temperature: float) -> str:
@@ -163,8 +170,10 @@ class LLMClient:
         if cache_key is not None:
             if self._is_error_response(parsed_response):
                 self._cache.delete(cache_key)
+                logger.info('llm_cache_write cache_store=false reason=error_response')
             else:
                 self._cache.set(cache_key, json.dumps(parsed_response, ensure_ascii=False))
+                logger.info('llm_cache_write cache_store=true')
         return parsed_response
 
     def _try_parse_json(self, text: str) -> dict[str, Any]:

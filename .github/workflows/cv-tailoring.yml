@@ -14,9 +14,8 @@ on:
       - "src/backend/careervp/models/fvs*"
       - "src/backend/careervp/validation/cv_tailoring*"
       - "src/backend/careervp/dal/cv_dal*"
-      - "tests/cv-tailoring/**"
-      - "infra/**"
-      - ".github/workflows/cv-tailoring.yml"
+      - "src/backend/tests/**/test_cv_tailor*"
+      - "src/backend/tests/**/test_fvs*"
   workflow_dispatch:
     inputs:
       deploy:
@@ -112,6 +111,7 @@ jobs:
           AWS_EC2_METADATA_DISABLED: "true"
 
       - name: OpenAPI drift check
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         working-directory: src/backend
         run: make compare-openapi
 

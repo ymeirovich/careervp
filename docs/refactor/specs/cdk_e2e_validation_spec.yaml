@@ -1,0 +1,329 @@
+# CDK Infrastructure Validation Specification
+# Validates that all 27 endpoints have corresponding CDK resources
+
+spec_version: "1.0"
+date_created: "2026-02-18"
+date_updated: "2026-02-18"
+purpose: "Validates endpoint-to-resource mapping compliance with CDK infrastructure"
+status: "READY_FOR_IMPLEMENTATION"
+
+validation_rules:
+  - id: E2E_001
+    name: "Endpoint DynamoDB Table Mapping"
+    description: "Each API endpoint must have its required DynamoDB table defined in CDK"
+    check: "Parse OpenAPI spec, verify each endpoint's required tables exist in api_db_construct.py"
+
+  - id: E2E_002
+    name: "Endpoint S3 Bucket Mapping"
+    description: "Each API endpoint that uses S3 must have bucket defined in CDK"
+    check: "Parse OpenAPI spec, verify each endpoint's required buckets exist"
+
+  - id: E2E_003
+    name: "Async Endpoint Worker Lambda"
+    description: "Async POST endpoints must have worker Lambda for background processing"
+    check: "Verify worker Lambda exists for each async endpoint"
+
+  - id: E2E_004
+    name: "Async Endpoint DLQ"
+    description: "Worker Lambdas must have DLQ configured per ASYNC_004"
+    check: "Verify DLQ is configured for each worker Lambda"
+
+  - id: E2E_005
+    name: "Job Status Table Pattern"
+    description: "Async operations must use jobs-table pattern per ASYNC_002"
+    check: "Verify PENDING -> PROCESSING -> COMPLETED/FAILED status flow"
+
+# =============================================================================
+# CURRENT STATE ANALYSIS
+# =============================================================================
+
+current_gaps:
+  dynamodb_tables:
+    deployed:
+      - "users_table"
+      - "idempotency_table"
+      - "jobs_table"
+      - "llm_cache_table"
+    missing:
+      - "cvs_table"
+      - "applications_table"
+      - "gap_responses_table"
+      - "knowledge_table"
+      - "artifacts_table"
+      - "company_research_cache_table"
+
+  s3_buckets:
+    deployed:
+      - "cv-uploads"
+      - "vpr-results"
+    missing:
+      - "static"
+      - "backups"
+      - "logs"
+      - "artifacts"
+
+  worker_lambdas:
+    deployed: []
+    missing:
+      - "cv_upload_worker"
+      - "vpr_worker"
+      - "cv_tailor_worker"
+      - "cover_letter_worker"
+      - "interview_prep_worker"
+
+  sqs_queues:
+    deployed: []
+    missing:
+      - "cv_upload_queue"
+      - "gap_analysis_queue"
+
+# =============================================================================
+# COMPLIANCE MATRIX
+# =============================================================================
+
+compliance_matrix:
+  # Sync endpoints (15) - Currently working
+  sync_working:
+    - endpoint: "POST /api/auth/register"
+      status: "WORKING"
+      tables: ["users_table", "idempotency_table"]
+
+    - endpoint: "POST /api/auth/login"
+      status: "WORKING"
+      tables: ["users_table"]
+
+    - endpoint: "POST /api/auth/refresh"
+      status: "WORKING"
+      tables: ["users_table"]
+
+    - endpoint: "GET /api/users/me"
+      status: "WORKING"
+      tables: ["users_table"]
+
+    - endpoint: "PUT /api/users/me"
+      status: "WORKING"
+      tables: ["users_table"]
+
+    - endpoint: "POST /api/jobs"
+      status: "WORKING"
+      tables: ["jobs_table", "idempotency_table"]
+
+    - endpoint: "GET /api/jobs"
+      status: "WORKING"
+      tables: ["jobs_table"]
+
+    - endpoint: "GET /api/jobs/{id}"
+      status: "WORKING"
+      tables: ["jobs_table"]
+
+    - endpoint: "GET /api/health"
+      status: "WORKING"
+      tables: []
+
+  # Sync endpoints - Need resources
+  sync_missing_resources:
+    - endpoint: "GET /api/cvs"
+      status: "MISSING_TABLE"
+      required_tables: ["cvs_table"]
+
+    - endpoint: "GET /api/vpr"
+      status: "MISSING_TABLE"
+      required_tables: ["vpr_jobs_table", "artifacts_table"]
+
+    - endpoint: "GET /api/gap-analysis/questions"
+      status: "MISSING_TABLE"
+      required_tables: ["gap_responses_table"]
+
+    - endpoint: "GET /api/cv-tailoring"
+      status: "MISSING_TABLE"
+      required_tables: ["artifacts_table"]
+
+    - endpoint: "GET /api/cover-letter"
+      status: "MISSING_TABLE"
+      required_tables: ["artifacts_table"]
+
+    - endpoint: "GET /api/company-research/{id}"
+      status: "MISSING_TABLE"
+      required_tables: ["company_research_cache_table"]
+
+  # Async endpoints - Need full implementation
+  async_missing:
+    - endpoint: "POST /api/cvs/upload"
+      status: "MISSING_ALL"
+      required:
+        tables: ["cvs_table"]
+        buckets: ["cv-uploads"]
+        worker: "cv_upload_worker"
+        queue: "cv_upload_queue"
+
+    - endpoint: "POST /api/vpr/generate"
+      status: "PARTIAL"
+      required:
+        tables: ["vpr_jobs_table", "artifacts_table"]
+        buckets: []
+        worker: "vpr_worker"
+        queue: null
+
+    - endpoint: "GET /api/vpr/{id}"
+      status: "PARTIAL"
+      required:
+        tables: ["vpr_jobs_table", "artifacts_table"]
+
+    - endpoint: "POST /api/gap-analysis/generate"
+      status: "MISSING_ALL"
+      required:
+        tables: ["gap_responses_table"]
+        buckets: []
+        worker: "gap_worker_lambda"
+        queue: "gap_analysis_queue"
+
+    - endpoint: "POST /api/gap-analysis/submit"
+      status: "MISSING_ALL"
+      required:
+        tables: ["gap_responses_table"]
+        buckets: []
+        worker: "gap_worker_lambda"
+        queue: "gap_analysis_queue"
+
+    - endpoint: "POST /api/cv-tailoring/generate"
+      status: "MISSING_ALL"
+      required:
+        tables: ["artifacts_table"]
+        buckets: []
+        worker: "cv_tailor_worker"
+        queue: null
+
+    - endpoint: "GET /api/cv-tailoring/{id}"
+      status: "MISSING_TABLE"
+      required_tables: ["artifacts_table"]
+
+    - endpoint: "POST /api/cover-letter/generate"
+      status: "MISSING_ALL"
+      required:
+        tables: ["artifacts_table"]
+        buckets: []
+        worker: "cover_letter_worker"
+        queue: null
+
+    - endpoint: "GET /api/cover-letter/{id}"
+      status: "MISSING_TABLE"
+      required_tables: ["artifacts_table"]
+
+    - endpoint: "POST /api/interview-prep/generate"
+      status: "MISSING_ALL"
+      required:
+        tables: ["artifacts_table"]
+        buckets: []
+        worker: "interview_prep_worker"
+        queue: null
+
+    - endpoint: "GET /api/interview-prep/{id}"
+      status: "MISSING_TABLE"
+      required_tables: ["artifacts_table"]
+
+    - endpoint: "POST /api/company-research/fetch"
+      status: "MISSING_TABLE"
+      required_tables: ["company_research_cache_table"]
+
+# =============================================================================
+# TEST SCENARIOS
+# =============================================================================
+
+test_scenarios:
+  - id: SYNC_001
+    name: "Sync endpoint returns valid response"
+    description: "All working sync endpoints return 200 with valid JSON"
+    endpoints: [
+      "POST /api/auth/register",
+      "POST /api/auth/login",
+      "GET /api/users/me",
+      "GET /api/jobs",
+      "GET /api/health"
+    ]
+
+  - id: ASYNC_001
+    name: "Async submit returns 202 with jobId"
+    description: "Async POST endpoints return 202 Accepted with jobId"
+    endpoints: [
+      "POST /api/vpr/generate",
+      "POST /api/cv-tailoring/generate",
+      "POST /api/cover-letter/generate",
+      "POST /api/interview-prep/generate"
+    ]
+
+  - id: ASYNC_002
+    name: "Async status returns job state"
+    description: "Async GET endpoints return current job status"
+    endpoints: [
+      "GET /api/vpr/{id}",
+      "GET /api/cv-tailoring/{id}",
+      "GET /api/cover-letter/{id}",
+      "GET /api/interview-prep/{id}"
+    ]
+
+  - id: ASYNC_003
+    name: "Async completion stores result"
+    description: "Worker Lambda stores result in artifacts table"
+    verification:
+      - "Query artifacts_table with applicationId"
+      - "Verify status = COMPLETED"
+      - "Verify result field contains expected data"
+
+  - id: FAILURE_001
+    name: "Worker failure routes to DLQ"
+    description: "Failed async jobs are captured in DLQ"
+    verification:
+      - "Trigger worker with invalid input"
+      - "Verify message goes to DLQ after max retries"
+      - "Verify DLQ message contains original payload"
+
+# =============================================================================
+# REMEDIATION STEPS
+# =============================================================================
+
+remediation_steps:
+  - step: 1
+    name: "Add DynamoDB tables"
+    description: "Add cvs_table, applications_table, gap_responses_table, knowledge_table, artifacts_table, company_research_cache_table"
+    files:
+      - "infra/careervp/api_db_construct.py"
+
+  - step: 2
+    name: "Add S3 buckets"
+    description: "Add static, backups, logs, artifacts buckets"
+    files:
+      - "infra/careervp/api_db_construct.py"
+
+  - step: 3
+    name: "Add SQS queues"
+    description: "Add cv_upload_queue and gap_analysis_queue with DLQ"
+    files:
+      - "infra/careervp/api_db_construct.py"
+
+  - step: 4
+    name: "Add worker Lambdas"
+    description: "Add cv_upload_worker, vpr_worker, cv_tailor_worker, cover_letter_worker, interview_prep_worker"
+    files:
+      - "infra/careervp/api_construct.py"
+
+  - step: 5
+    name: "Configure event triggers"
+    description: "Enable DynamoDB Streams, configure S3 event notifications"
+    files:
+      - "infra/careervp/api_construct.py"
+
+  - step: 6
+    name: "Update Lambda IAM"
+    description: "Add table/bucket permissions to Lambda execution roles"
+    files:
+      - "infra/careervp/api_construct.py"
+
+  - step: 7
+    name: "Verify CDK synth"
+    description: "Run cdk synth to validate CloudFormation template"
+    command: "cd infra && uv sync && cdk synth"
+
+  - step: 8
+    name: "Run infrastructure tests"
+    description: "Run CDK infrastructure tests"
+    command: "cd infra && uv run pytest tests/infrastructure/test_cdk.py -v"

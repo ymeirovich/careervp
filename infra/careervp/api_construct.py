@@ -1,4 +1,3 @@
-import careervp.constants as constants
 from aws_cdk import CfnOutput, Duration, RemovalPolicy, aws_apigateway, aws_sqs
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
@@ -7,11 +6,13 @@ from aws_cdk import aws_lambda_event_sources as eventsources
 from aws_cdk import aws_logs as logs
 from aws_cdk import aws_s3 as s3
 from aws_cdk.aws_lambda_python_alpha import PythonLayerVersion
-from careervp.api_db_construct import ApiDbConstruct
-from careervp.monitoring import CrudMonitoring
-from careervp.naming_utils import NamingUtils
-from careervp.waf_construct import WafToApiGatewayConstruct
 from constructs import Construct
+
+from . import constants
+from .api_db_construct import ApiDbConstruct
+from .monitoring import CrudMonitoring
+from .naming_utils import NamingUtils
+from .waf_construct import WafToApiGatewayConstruct
 
 
 class ApiConstruct(Construct):
@@ -42,6 +43,16 @@ class ApiConstruct(Construct):
             self.api_db.jobs_table,
             self.api_db.vpr_results_bucket,
             self.vpr_jobs_queue,
+            self.api_db.cvs_table,
+            self.api_db.applications_table,
+            self.api_db.gap_responses_table,
+            self.api_db.knowledge_table,
+            self.api_db.artifacts_table,
+            self.api_db.company_research_cache_table,
+            self.api_db.static_bucket,
+            self.api_db.backups_bucket,
+            self.api_db.logs_bucket,
+            self.api_db.artifacts_bucket,
         )
 
         api_resource: aws_apigateway.Resource = self.rest_api.root.add_resource(
@@ -85,8 +96,8 @@ class ApiConstruct(Construct):
             appconfig_app_name,
         )
 
-        # VPR Worker Lambda - SQS triggered
-        self.vpr_worker_func = self._add_vpr_worker_lambda_integration(
+        # Keep the original SQS worker for existing queue-based VPR flow.
+        self.vpr_sqs_worker_func = self._add_vpr_sqs_worker_lambda_integration(
             self.lambda_role,
             self.api_db.jobs_table,
             self.api_db.vpr_results_bucket,
@@ -111,6 +122,41 @@ class ApiConstruct(Construct):
             self.api_db.db,
             appconfig_app_name,
             self.api_db.idempotency_db,
+        )
+
+        # Async worker DLQs (ASYNC_004): one DLQ per worker for failed events.
+        self.cv_upload_worker_dlq = self._build_worker_dlq("cv-upload-worker")
+        self.vpr_worker_dlq = self._build_worker_dlq("vpr-worker")
+        self.cv_tailor_worker_dlq = self._build_worker_dlq("cv-tailor-worker")
+        self.cover_letter_worker_dlq = self._build_worker_dlq("cover-letter-worker")
+        self.interview_prep_worker_dlq = self._build_worker_dlq("interview-prep-worker")
+
+        # Async workers required by Phase 11 infrastructure remediation.
+        self.cv_upload_worker_func = self._add_cv_upload_worker_lambda(
+            cv_bucket=self.api_db.cv_bucket,
+            cvs_table=self.api_db.cvs_table,
+            idempotency_table=self.api_db.idempotency_db,
+            dlq=self.cv_upload_worker_dlq,
+        )
+        self.vpr_worker_func = self._add_vpr_worker_stream_lambda(
+            jobs_table=self.api_db.jobs_table,
+            artifacts_table=self.api_db.artifacts_table,
+            dlq=self.vpr_worker_dlq,
+        )
+        self.cv_tailor_worker_func = self._add_cv_tailor_worker_lambda(
+            artifacts_table=self.api_db.artifacts_table,
+            cvs_table=self.api_db.cvs_table,
+            dlq=self.cv_tailor_worker_dlq,
+        )
+        self.cover_letter_worker_func = self._add_cover_letter_worker_lambda(
+            artifacts_table=self.api_db.artifacts_table,
+            applications_table=self.api_db.applications_table,
+            dlq=self.cover_letter_worker_dlq,
+        )
+        self.interview_prep_worker_func = self._add_interview_prep_worker_lambda(
+            artifacts_table=self.api_db.artifacts_table,
+            applications_table=self.api_db.applications_table,
+            dlq=self.interview_prep_worker_dlq,
         )
 
         self._build_swagger_endpoints(
@@ -225,6 +271,16 @@ class ApiConstruct(Construct):
         jobs_table: dynamodb.TableV2,
         results_bucket: s3.Bucket,
         queue: aws_sqs.Queue,
+        cvs_table: dynamodb.TableV2,
+        applications_table: dynamodb.TableV2,
+        gap_responses_table: dynamodb.TableV2,
+        knowledge_table: dynamodb.TableV2,
+        artifacts_table: dynamodb.TableV2,
+        company_research_cache_table: dynamodb.TableV2,
+        static_bucket: s3.Bucket,
+        backups_bucket: s3.Bucket,
+        logs_bucket: s3.Bucket,
+        artifacts_bucket: s3.Bucket,
     ) -> iam.Role:
         return iam.Role(
             self,
@@ -255,7 +311,11 @@ class ApiConstruct(Construct):
                                 "dynamodb:UpdateItem",
                                 "dynamodb:Query",
                             ],
-                            resources=[db.table_arn, f"{db.table_arn}/index/*"],
+                            resources=[
+                                db.table_arn,
+                                f"{db.table_arn}/index/email-index",
+                                f"{db.table_arn}/index/user_id-index",
+                            ],
                             effect=iam.Effect.ALLOW,
                         )
                     ]
@@ -274,6 +334,137 @@ class ApiConstruct(Construct):
                         )
                     ]
                 ),
+                # IAM_001: scope each table policy to explicit table/index ARNs.
+                "cvs_table": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "dynamodb:PutItem",
+                                "dynamodb:GetItem",
+                                "dynamodb:UpdateItem",
+                                "dynamodb:DeleteItem",
+                                "dynamodb:Query",
+                            ],
+                            resources=[cvs_table.table_arn],
+                            effect=iam.Effect.ALLOW,
+                        ),
+                    ]
+                ),
+                "applications_table": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "dynamodb:PutItem",
+                                "dynamodb:GetItem",
+                                "dynamodb:UpdateItem",
+                                "dynamodb:DeleteItem",
+                                "dynamodb:Query",
+                            ],
+                            resources=[
+                                applications_table.table_arn,
+                                f"{applications_table.table_arn}/index/status-index",
+                            ],
+                            effect=iam.Effect.ALLOW,
+                        ),
+                    ]
+                ),
+                "gap_responses_table": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "dynamodb:PutItem",
+                                "dynamodb:GetItem",
+                                "dynamodb:UpdateItem",
+                                "dynamodb:DeleteItem",
+                                "dynamodb:Query",
+                            ],
+                            resources=[gap_responses_table.table_arn],
+                            effect=iam.Effect.ALLOW,
+                        )
+                    ]
+                ),
+                "knowledge_table": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "dynamodb:PutItem",
+                                "dynamodb:GetItem",
+                                "dynamodb:UpdateItem",
+                                "dynamodb:DeleteItem",
+                                "dynamodb:Query",
+                            ],
+                            resources=[
+                                knowledge_table.table_arn,
+                                f"{knowledge_table.table_arn}/index/entity-index",
+                            ],
+                            effect=iam.Effect.ALLOW,
+                        )
+                    ]
+                ),
+                "artifacts_table": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "dynamodb:PutItem",
+                                "dynamodb:GetItem",
+                                "dynamodb:UpdateItem",
+                                "dynamodb:DeleteItem",
+                                "dynamodb:Query",
+                            ],
+                            resources=[
+                                artifacts_table.table_arn,
+                                f"{artifacts_table.table_arn}/index/type-index",
+                            ],
+                            effect=iam.Effect.ALLOW,
+                        ),
+                    ]
+                ),
+                "company_research_cache_table": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "dynamodb:GetItem",
+                                "dynamodb:PutItem",
+                                "dynamodb:UpdateItem",
+                                "dynamodb:DeleteItem",
+                                "dynamodb:Query",
+                            ],
+                            resources=[company_research_cache_table.table_arn],
+                            effect=iam.Effect.ALLOW,
+                        ),
+                    ]
+                ),
+                "vpr_jobs_table": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "dynamodb:PutItem",
+                                "dynamodb:GetItem",
+                                "dynamodb:UpdateItem",
+                                "dynamodb:Query",
+                            ],
+                            resources=[
+                                jobs_table.table_arn,
+                                f"{jobs_table.table_arn}/index/idempotency-key-index",
+                            ],
+                            effect=iam.Effect.ALLOW,
+                        )
+                    ]
+                ),
+                "llm_cache_table": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "dynamodb:GetItem",
+                                "dynamodb:PutItem",
+                                "dynamodb:DeleteItem",
+                            ],
+                            resources=[self.llm_cache_table.table_arn],
+                            effect=iam.Effect.ALLOW,
+                        )
+                    ]
+                ),
+                # IAM_001: scope bucket access to explicit bucket ARNs.
                 "cv_bucket": iam.PolicyDocument(
                     statements=[
                         iam.PolicyStatement(
@@ -290,23 +481,6 @@ class ApiConstruct(Construct):
                             resources=[cv_bucket.bucket_arn],
                             effect=iam.Effect.ALLOW,
                         ),
-                    ]
-                ),
-                "vpr_jobs_table": iam.PolicyDocument(
-                    statements=[
-                        iam.PolicyStatement(
-                            actions=[
-                                "dynamodb:PutItem",
-                                "dynamodb:GetItem",
-                                "dynamodb:UpdateItem",
-                                "dynamodb:Query",
-                            ],
-                            resources=[
-                                jobs_table.table_arn,
-                                f"{jobs_table.table_arn}/index/*",
-                            ],
-                            effect=iam.Effect.ALLOW,
-                        )
                     ]
                 ),
                 "vpr_results_bucket": iam.PolicyDocument(
@@ -326,6 +500,42 @@ class ApiConstruct(Construct):
                         ),
                     ]
                 ),
+                "static_bucket": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=["s3:ListBucket", "s3:GetBucketLocation"],
+                            resources=[static_bucket.bucket_arn],
+                            effect=iam.Effect.ALLOW,
+                        ),
+                    ]
+                ),
+                "backups_bucket": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=["s3:ListBucket", "s3:GetBucketLocation"],
+                            resources=[backups_bucket.bucket_arn],
+                            effect=iam.Effect.ALLOW,
+                        ),
+                    ]
+                ),
+                "logs_bucket": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=["s3:ListBucket", "s3:GetBucketLocation"],
+                            resources=[logs_bucket.bucket_arn],
+                            effect=iam.Effect.ALLOW,
+                        ),
+                    ]
+                ),
+                "artifacts_bucket": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=["s3:ListBucket", "s3:GetBucketLocation"],
+                            resources=[artifacts_bucket.bucket_arn],
+                            effect=iam.Effect.ALLOW,
+                        ),
+                    ]
+                ),
                 "vpr_jobs_queue": iam.PolicyDocument(
                     statements=[
                         iam.PolicyStatement(
@@ -339,24 +549,17 @@ class ApiConstruct(Construct):
                         )
                     ]
                 ),
-                "llm_cache_table": iam.PolicyDocument(
-                    statements=[
-                        iam.PolicyStatement(
-                            actions=[
-                                "dynamodb:GetItem",
-                                "dynamodb:PutItem",
-                                "dynamodb:DeleteItem",
-                            ],
-                            resources=[self.llm_cache_table.table_arn],
-                            effect=iam.Effect.ALLOW,
-                        )
-                    ]
-                ),
                 "ssm_parameters": iam.PolicyDocument(
                     statements=[
                         iam.PolicyStatement(
                             actions=["ssm:GetParameter"],
-                            resources=["arn:aws:ssm:*:*:parameter/careervp/*"],
+                            resources=[
+                                (
+                                    f"arn:aws:ssm:{self.naming.region}:"
+                                    f"{self.naming.account_id}:parameter/"
+                                    f"{constants.ANTHROPIC_API_KEY_SSM_PARAM.lstrip('/')}"
+                                )
+                            ],
                             effect=iam.Effect.ALLOW,
                         )
                     ]
@@ -370,6 +573,20 @@ class ApiConstruct(Construct):
                 )
             ],
         )
+
+    def _build_shared_table_env(self) -> dict[str, str]:
+        """Build shared table-name environment variables for Lambda portability."""
+        return {
+            # LAMBDA_CONFIG_008: inject table names from CDK (no hardcoded names).
+            "CVS_TABLE_NAME": self.api_db.cvs_table.table_name,
+            "APPLICATIONS_TABLE_NAME": self.api_db.applications_table.table_name,
+            "GAP_RESPONSES_TABLE_NAME": self.api_db.gap_responses_table.table_name,
+            "KNOWLEDGE_TABLE_NAME": self.api_db.knowledge_table.table_name,
+            "ARTIFACTS_TABLE_NAME": self.api_db.artifacts_table.table_name,
+            "COMPANY_RESEARCH_CACHE_TABLE_NAME": (
+                self.api_db.company_research_cache_table.table_name
+            ),
+        }
 
     def _build_common_layer(self) -> PythonLayerVersion:
         return PythonLayerVersion(
@@ -413,6 +630,7 @@ class ApiConstruct(Construct):
             environment={
                 constants.POWERTOOLS_SERVICE_NAME: constants.SERVICE_NAME,
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": constants.ENVIRONMENT,
                 "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,
@@ -472,6 +690,7 @@ class ApiConstruct(Construct):
                 "DYNAMODB_TABLE_NAME": db.table_name,
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-vpr",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": constants.ENVIRONMENT,
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
@@ -522,6 +741,7 @@ class ApiConstruct(Construct):
                 "DYNAMODB_TABLE_NAME": db.table_name,
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-company-research",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": constants.ENVIRONMENT,
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
@@ -570,6 +790,17 @@ class ApiConstruct(Construct):
             encryption=aws_sqs.QueueEncryption.SQS_MANAGED,
         )
 
+    def _build_worker_dlq(self, worker_feature: str) -> aws_sqs.Queue:
+        """Create a dedicated encrypted DLQ for a worker Lambda."""
+        worker_id = worker_feature.replace("-", " ").title().replace(" ", "")
+        return aws_sqs.Queue(
+            self,
+            f"{worker_id}Dlq",
+            queue_name=self.naming.dlq_name(worker_feature),
+            retention_period=Duration.days(14),
+            encryption=aws_sqs.QueueEncryption.KMS_MANAGED,
+        )
+
     def _add_vpr_submit_lambda_integration(
         self,
         api_resource: aws_apigateway.Resource,
@@ -599,6 +830,7 @@ class ApiConstruct(Construct):
             environment={
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-vpr-submit",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": constants.ENVIRONMENT,
                 "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,
@@ -656,6 +888,7 @@ class ApiConstruct(Construct):
             environment={
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-vpr-status",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": constants.ENVIRONMENT,
                 "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,
@@ -684,7 +917,7 @@ class ApiConstruct(Construct):
 
         return lambda_function
 
-    def _add_vpr_worker_lambda_integration(
+    def _add_vpr_sqs_worker_lambda_integration(
         self,
         role: iam.Role,
         jobs_table: dynamodb.TableV2,
@@ -693,11 +926,11 @@ class ApiConstruct(Construct):
         queue: aws_sqs.Queue,
         appconfig_app_name: str,
     ) -> _lambda.Function:
-        """Add VPR Worker Lambda integration - SQS triggered for async processing."""
-        function_name = self.naming.lambda_name(constants.VPR_WORKER_FEATURE)
+        """Add legacy VPR SQS worker Lambda integration."""
+        function_name = self.naming.lambda_name("vpr-sqs-worker")
         log_group = logs.LogGroup(
             self,
-            f"{constants.VPR_WORKER_LAMBDA}LogGroup",
+            "VprSqsWorkerLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
             removal_policy=RemovalPolicy.DESTROY,
@@ -705,14 +938,15 @@ class ApiConstruct(Construct):
 
         lambda_function = _lambda.Function(
             self,
-            constants.VPR_WORKER_LAMBDA,
+            "VprSqsWorkerLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
             handler="careervp.handlers.vpr_worker_handler.lambda_handler",
             function_name=function_name,
             environment={
-                constants.POWERTOOLS_SERVICE_NAME: "careervp-vpr-worker",
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-vpr-sqs-worker",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": constants.ENVIRONMENT,
                 "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,
@@ -739,6 +973,288 @@ class ApiConstruct(Construct):
             eventsources.SqsEventSource(queue, batch_size=1)
         )
 
+        return lambda_function
+
+    def _add_cv_upload_worker_lambda(
+        self,
+        cv_bucket: s3.Bucket,
+        cvs_table: dynamodb.TableV2,
+        idempotency_table: dynamodb.TableV2,
+        dlq: aws_sqs.Queue,
+    ) -> _lambda.Function:
+        """Create cv_upload_worker (S3 event -> Lambda) with an explicit DLQ."""
+        function_name = self.naming.lambda_name("cv-upload-worker")
+        log_group = logs.LogGroup(
+            self,
+            "CvUploadWorkerLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+        lambda_function = _lambda.Function(
+            self,
+            "CvUploadWorkerLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.cv_upload_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-cv-upload-worker",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+                "TABLE_NAME": cvs_table.table_name,
+                "IDEMPOTENCY_TABLE_NAME": idempotency_table.table_name,
+                "CV_BUCKET_NAME": cv_bucket.bucket_name,
+                constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+            },
+            timeout=Duration.seconds(300),
+            memory_size=512,
+            tracing=_lambda.Tracing.ACTIVE,
+            dead_letter_queue_enabled=True,
+            dead_letter_queue=dlq,
+            retry_attempts=2,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+        # S3 object creation starts background parsing/normalization work.
+        lambda_function.add_event_source(
+            eventsources.S3EventSource(
+                cv_bucket,
+                events=[s3.EventType.OBJECT_CREATED],
+            )
+        )
+
+        # Least-privilege data access for this worker's responsibilities.
+        cv_bucket.grant_read(lambda_function)
+        cvs_table.grant_read_write_data(lambda_function)
+        idempotency_table.grant_read_write_data(lambda_function)
+        return lambda_function
+
+    def _add_vpr_worker_stream_lambda(
+        self,
+        jobs_table: dynamodb.TableV2,
+        artifacts_table: dynamodb.TableV2,
+        dlq: aws_sqs.Queue,
+    ) -> _lambda.Function:
+        """Create vpr_worker (DynamoDB stream -> Lambda) with stream failure DLQ."""
+        function_name = self.naming.lambda_name("vpr-worker")
+        log_group = logs.LogGroup(
+            self,
+            "VprWorkerLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+        lambda_function = _lambda.Function(
+            self,
+            "VprWorkerLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.vpr_worker_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-vpr-worker",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+                "VPR_JOBS_TABLE_NAME": jobs_table.table_name,
+                constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+            },
+            timeout=Duration.seconds(300),
+            memory_size=1024,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=2,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+        # ASYNC_004: failed stream batches are sent to a worker-specific DLQ.
+        lambda_function.add_event_source(
+            eventsources.DynamoEventSource(
+                jobs_table,
+                starting_position=_lambda.StartingPosition.LATEST,
+                batch_size=1,
+                bisect_batch_on_error=True,
+                retry_attempts=2,
+                on_failure=eventsources.SqsDlq(dlq),
+            )
+        )
+
+        jobs_table.grant_stream_read(lambda_function)
+        jobs_table.grant_read_write_data(lambda_function)
+        artifacts_table.grant_read_write_data(lambda_function)
+        return lambda_function
+
+    def _add_cv_tailor_worker_lambda(
+        self,
+        artifacts_table: dynamodb.TableV2,
+        cvs_table: dynamodb.TableV2,
+        dlq: aws_sqs.Queue,
+    ) -> _lambda.Function:
+        """Create cv_tailor_worker on artifacts table stream updates."""
+        function_name = self.naming.lambda_name("cv-tailor-worker")
+        log_group = logs.LogGroup(
+            self,
+            "CvTailorWorkerLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+        lambda_function = _lambda.Function(
+            self,
+            "CvTailorWorkerLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.cv_tailoring_handler.handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-cv-tailor-worker",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+                "TABLE_NAME": cvs_table.table_name,
+                constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+            },
+            timeout=Duration.seconds(300),
+            memory_size=512,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=2,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+        lambda_function.add_event_source(
+            eventsources.DynamoEventSource(
+                artifacts_table,
+                starting_position=_lambda.StartingPosition.LATEST,
+                batch_size=1,
+                bisect_batch_on_error=True,
+                retry_attempts=2,
+                on_failure=eventsources.SqsDlq(dlq),
+            )
+        )
+
+        artifacts_table.grant_stream_read(lambda_function)
+        artifacts_table.grant_read_write_data(lambda_function)
+        cvs_table.grant_read_write_data(lambda_function)
+        return lambda_function
+
+    def _add_cover_letter_worker_lambda(
+        self,
+        artifacts_table: dynamodb.TableV2,
+        applications_table: dynamodb.TableV2,
+        dlq: aws_sqs.Queue,
+    ) -> _lambda.Function:
+        """Create cover_letter_worker on artifacts stream updates."""
+        function_name = self.naming.lambda_name("cover-letter-worker")
+        log_group = logs.LogGroup(
+            self,
+            "CoverLetterWorkerLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+        lambda_function = _lambda.Function(
+            self,
+            "CoverLetterWorkerLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.cover_letter_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-cover-letter-worker",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+                constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+            },
+            timeout=Duration.seconds(300),
+            memory_size=512,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=2,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+        lambda_function.add_event_source(
+            eventsources.DynamoEventSource(
+                artifacts_table,
+                starting_position=_lambda.StartingPosition.LATEST,
+                batch_size=1,
+                bisect_batch_on_error=True,
+                retry_attempts=2,
+                on_failure=eventsources.SqsDlq(dlq),
+            )
+        )
+
+        artifacts_table.grant_stream_read(lambda_function)
+        artifacts_table.grant_read_write_data(lambda_function)
+        applications_table.grant_read_write_data(lambda_function)
+        return lambda_function
+
+    def _add_interview_prep_worker_lambda(
+        self,
+        artifacts_table: dynamodb.TableV2,
+        applications_table: dynamodb.TableV2,
+        dlq: aws_sqs.Queue,
+    ) -> _lambda.Function:
+        """Create interview_prep_worker on artifacts stream updates."""
+        function_name = self.naming.lambda_name("interview-prep-worker")
+        log_group = logs.LogGroup(
+            self,
+            "InterviewPrepWorkerLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+        lambda_function = _lambda.Function(
+            self,
+            "InterviewPrepWorkerLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.interview_prep_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-interview-prep-worker",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+                constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+            },
+            timeout=Duration.seconds(300),
+            memory_size=512,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=2,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+        lambda_function.add_event_source(
+            eventsources.DynamoEventSource(
+                artifacts_table,
+                starting_position=_lambda.StartingPosition.LATEST,
+                batch_size=1,
+                bisect_batch_on_error=True,
+                retry_attempts=2,
+                on_failure=eventsources.SqsDlq(dlq),
+            )
+        )
+
+        artifacts_table.grant_stream_read(lambda_function)
+        artifacts_table.grant_read_write_data(lambda_function)
+        applications_table.grant_read_write_data(lambda_function)
         return lambda_function
 
     def _add_cv_tailoring_lambda_integration(
@@ -769,6 +1285,7 @@ class ApiConstruct(Construct):
             environment={
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-cv-tailoring",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": constants.ENVIRONMENT,
                 "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,

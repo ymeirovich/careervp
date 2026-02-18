@@ -1,0 +1,466 @@
+# CDK Infrastructure Remediation Specification
+# Machine-readable specification for adding missing async resources
+# Complies with: prompt_optimization_cdk_spec.yaml
+
+spec_version: "1.0"
+date_created: "2026-02-18"
+date_updated: "2026-02-18"
+purpose: "Add missing DynamoDB tables, S3 buckets, and async processing resources to support all 27 API endpoints"
+status: "READY_FOR_IMPLEMENTATION"
+author: "CDK Infrastructure Remediation"
+
+compliance:
+  - spec: "prompt_optimization_cdk_spec.yaml"
+    rules_applied:
+      - "DDB_001: DynamoDB on-demand mode"
+      - "DDB_002: PITR enabled"
+      - "DDB_003: Validate table exists before endpoint deployment"
+      - "DDB_005: TTL field for cache tables"
+      - "SQS_001: Dead Letter Queue required"
+      - "SQS_002: SQS queue encryption at rest"
+      - "ASYNC_001: Idempotency table for async endpoints"
+      - "ASYNC_002: Job status table pattern"
+      - "ASYNC_004: Worker Lambda must have DLQ"
+      - "ASYNC_005: DynamoDB Streams enabled"
+      - "S3_001: Block public access"
+      - "S3_002: Enable versioning"
+      - "S3_003: CV upload bucket lifecycle"
+      - "S3_004: Artifacts bucket versioning"
+
+# =============================================================================
+# DYNAMODB TABLES TO ADD
+# =============================================================================
+
+dynamodb_tables:
+  - table: cvs_table
+    name: "careervp-cvs-table-{env}"
+    partition_key: "userId"
+    sort_key: "cvId"
+    billing: "PAY_PER_REQUEST"
+    pitr: true
+    ttl_field: "expiration"
+    ttl_days: 90
+    description: "CV metadata and parsed facts"
+    endpoints_dependent:
+      - "POST /api/cvs/upload"
+      - "GET /api/cvs"
+      - "GET /api/cvs/{id}"
+    gsi: []
+
+  - table: applications_table
+    name: "careervp-applications-table-{env}"
+    partition_key: "userId"
+    sort_key: "applicationId"
+    billing: "PAY_PER_REQUEST"
+    pitr: true
+    ttl_field: null
+    description: "Job applications and workflow state"
+    endpoints_dependent:
+      - "POST /api/cover-letter/generate"
+      - "POST /api/interview-prep/generate"
+    gsi:
+      - name: "status-index"
+        partition_key: "userId"
+        sort_key: "status"
+
+  - table: gap_responses_table
+    name: "careervp-gap-responses-table-{env}"
+    partition_key: "userId"
+    sort_key: "questionId"
+    billing: "PAY_PER_REQUEST"
+    pitr: true
+    ttl_field: "expiration"
+    ttl_days: 365
+    description: "Gap analysis questions and responses"
+    endpoints_dependent:
+      - "POST /api/gap-analysis/generate"
+      - "POST /api/gap-analysis/submit"
+      - "GET /api/gap-analysis/questions"
+    gsi: []
+
+  - table: knowledge_table
+    name: "careervp-knowledge-table-{env}"
+    partition_key: "userEmail"
+    sort_key: "knowledgeType"
+    billing: "PAY_PER_REQUEST"
+    pitr: true
+    ttl_field: "expiration"
+    ttl_days: 365
+    description: "User knowledge base for reusable facts"
+    endpoints_dependent: []
+    gsi:
+      - name: "entity-index"
+        partition_key: "knowledgeType"
+        sort_key: "entityId"
+
+  - table: artifacts_table
+    name: "careervp-artifacts-table-{env}"
+    partition_key: "applicationId"
+    sort_key: "artifactId"
+    billing: "PAY_PER_REQUEST"
+    pitr: true
+    ttl_field: "expiration"
+    ttl_days: 90
+    description: "Generated documents (VPR, CV, Cover Letter, Interview Prep)"
+    endpoints_dependent:
+      - "GET /api/vpr/{id}"
+      - "GET /api/cv-tailoring/{id}"
+      - "GET /api/cover-letter/{id}"
+      - "GET /api/interview-prep/{id}"
+    gsi:
+      - name: "type-index"
+        partition_key: "applicationId"
+        sort_key: "artifactType"
+
+  - table: company_research_cache_table
+    name: "careervp-company-research-cache-{env}"
+    partition_key: "cacheKey"
+    sort_key: null
+    billing: "PAY_PER_REQUEST"
+    pitr: false
+    ttl_field: "expiresAt"
+    ttl_days: 30
+    description: "Cached company research (30-day TTL)"
+    endpoints_dependent:
+      - "POST /api/company-research/fetch"
+      - "GET /api/company-research/{id}"
+    gsi: []
+
+# =============================================================================
+# S3 BUCKETS TO ADD
+# =============================================================================
+
+s3_buckets:
+  - bucket: static_bucket
+    name: "careervp-static-{env}"
+    purpose: "Frontend assets (SPA)"
+    versioning: false
+    lifecycle: null
+    public_access: false
+    encryption: "SSE-S3"
+
+  - bucket: backups_bucket
+    name: "careervp-backups-{env}"
+    purpose: "Database backups"
+    versioning: true
+    lifecycle:
+      - transition: "INTELLIGENT_TIERING"
+        days: 30
+      - transition: "GLACIER"
+        days: 90
+    public_access: false
+    encryption: "SSE-KMS"
+
+  - bucket: logs_bucket
+    name: "careervp-logs-{env}"
+    purpose: "CloudWatch log archive"
+    versioning: true
+    lifecycle:
+      - transition: "INTELLIGENT_TIERING"
+        days: 180
+      - transition: "GLACIER"
+        days: 365
+    public_access: false
+    encryption: "SSE-S3"
+
+# =============================================================================
+# ASYNC PROCESSING RESOURCES
+# =============================================================================
+
+sqs_queues:
+  - queue: cv_upload_queue
+    name: "careervp-cv-upload-{env}"
+    fifo: false
+    dlq_required: true
+    dlq_retention_days: 14
+    visibility_timeout_seconds: 300
+    encryption: "KMS"
+    endpoints:
+      - "POST /api/cvs/upload"
+
+  - queue: gap_analysis_queue
+    name: "careervp-gap-analysis-{env}"
+    fifo: false
+    dlq_required: true
+    dlq_retention_days: 14
+    visibility_timeout_seconds: 300
+    encryption: "KMS"
+    endpoints:
+      - "POST /api/gap-analysis/generate"
+      - "POST /api/gap-analysis/submit"
+
+worker_lambdas:
+  - lambda: cv_upload_worker
+    trigger: "S3_EVENT"
+    source_bucket: "cv-uploads"
+    tables_access:
+      - "cvs_table"
+    s3_buckets_access:
+      - "cv-uploads"
+    dlq_required: true
+    timeout_seconds: 300
+
+  - lambda: vpr_worker
+    trigger: "DYNAMODB_STREAMS"
+    source_table: "vpr_jobs_table"
+    tables_access:
+      - "vpr_jobs_table"
+      - "artifacts_table"
+    s3_buckets_access: []
+    dlq_required: true
+    timeout_seconds: 300
+
+  - lambda: cv_tailor_worker
+    trigger: "DYNAMODB_STREAMS"
+    source_table: "artifacts_table"
+    tables_access:
+      - "cvs_table"
+      - "artifacts_table"
+    s3_buckets_access: []
+    dlq_required: true
+    timeout_seconds: 300
+
+  - lambda: cover_letter_worker
+    trigger: "DYNAMODB_STREAMS"
+    source_table: "artifacts_table"
+    tables_access:
+      - "applications_table"
+      - "artifacts_table"
+    s3_buckets_access: []
+    dlq_required: true
+    timeout_seconds: 300
+
+  - lambda: interview_prep_worker
+    trigger: "DYNAMODB_STREAMS"
+    source_table: "artifacts_table"
+    tables_access:
+      - "applications_table"
+      - "artifacts_table"
+    s3_buckets_access: []
+    dlq_required: true
+    timeout_seconds: 300
+
+# =============================================================================
+# ENDPOINT RESOURCE MAPPING
+# =============================================================================
+
+endpoint_resource_mapping:
+  sync_endpoints:
+    - endpoint: "POST /api/auth/register"
+      handler: "auth_lambda"
+      tables: ["users_table", "idempotency_table"]
+      buckets: []
+
+    - endpoint: "POST /api/auth/login"
+      handler: "auth_lambda"
+      tables: ["users_table"]
+      buckets: []
+
+    - endpoint: "POST /api/auth/refresh"
+      handler: "auth_lambda"
+      tables: ["users_table"]
+      buckets: []
+
+    - endpoint: "GET /api/users/me"
+      handler: "user_lambda"
+      tables: ["users_table"]
+      buckets: []
+
+    - endpoint: "PUT /api/users/me"
+      handler: "user_lambda"
+      tables: ["users_table"]
+      buckets: []
+
+    - endpoint: "POST /api/jobs"
+      handler: "job_create_lambda"
+      tables: ["jobs_table", "idempotency_table"]
+      buckets: []
+
+    - endpoint: "GET /api/jobs"
+      handler: "job_list_lambda"
+      tables: ["jobs_table"]
+      buckets: []
+
+    - endpoint: "GET /api/jobs/{id}"
+      handler: "job_get_lambda"
+      tables: ["jobs_table"]
+      buckets: []
+
+    - endpoint: "GET /api/cvs"
+      handler: "cv_list_lambda"
+      tables: ["cvs_table"]
+      buckets: []
+
+    - endpoint: "GET /api/vpr"
+      handler: "vpr_list_lambda"
+      tables: ["vpr_jobs_table", "artifacts_table"]
+      buckets: []
+
+    - endpoint: "GET /api/gap-analysis/questions"
+      handler: "gap_questions_lambda"
+      tables: ["gap_responses_table"]
+      buckets: []
+
+    - endpoint: "GET /api/cv-tailoring"
+      handler: "cv_tailor_list_lambda"
+      tables: ["artifacts_table"]
+      buckets: []
+
+    - endpoint: "GET /api/cover-letter"
+      handler: "cover_letter_list_lambda"
+      tables: ["artifacts_table"]
+      buckets: []
+
+    - endpoint: "GET /api/company-research/{id}"
+      handler: "company_research_get_lambda"
+      tables: ["company_research_cache_table"]
+      buckets: []
+
+    - endpoint: "GET /api/health"
+      handler: null
+      tables: []
+      buckets: []
+
+  async_endpoints:
+    - endpoint: "POST /api/cvs/upload"
+      submitter_handler: "cv_upload_lambda"
+      worker_handler: "cv_upload_worker"
+      queue: "cv_upload_queue"
+      jobs_table: "cvs_table"
+      result_table: "cvs_table"
+      buckets: ["cv-uploads"]
+      requires_dlq: true
+      status_endpoint: "GET /api/cvs/{id}"
+
+    - endpoint: "POST /api/vpr/generate"
+      submitter_handler: "vpr_submit_lambda"
+      worker_handler: "vpr_worker"
+      queue: null
+      jobs_table: "vpr_jobs_table"
+      result_table: "artifacts_table"
+      buckets: []
+      requires_dlq: true
+      status_endpoint: "GET /api/vpr/{id}"
+
+    - endpoint: "GET /api/vpr/{id}"
+      submitter_handler: null
+      worker_handler: null
+      queue: null
+      jobs_table: "vpr_jobs_table"
+      result_table: "artifacts_table"
+      buckets: []
+      requires_dlq: false
+      status_endpoint: null
+
+    - endpoint: "POST /api/gap-analysis/generate"
+      submitter_handler: "gap_generate_lambda"
+      worker_handler: "gap_worker_lambda"
+      queue: "gap_analysis_queue"
+      jobs_table: "gap_responses_table"
+      result_table: "gap_responses_table"
+      buckets: []
+      requires_dlq: true
+      status_endpoint: "GET /api/gap-analysis/questions"
+
+    - endpoint: "POST /api/gap-analysis/submit"
+      submitter_handler: "gap_submit_lambda"
+      worker_handler: "gap_worker_lambda"
+      queue: "gap_analysis_queue"
+      jobs_table: "gap_responses_table"
+      result_table: "gap_responses_table"
+      buckets: []
+      requires_dlq: true
+      status_endpoint: "GET /api/gap-analysis/questions"
+
+    - endpoint: "POST /api/cv-tailoring/generate"
+      submitter_handler: "cv_tailor_lambda"
+      worker_handler: "cv_tailor_worker"
+      queue: null
+      jobs_table: "artifacts_table"
+      result_table: "artifacts_table"
+      buckets: []
+      requires_dlq: true
+      status_endpoint: "GET /api/cv-tailoring/{id}"
+
+    - endpoint: "GET /api/cv-tailoring/{id}"
+      submitter_handler: null
+      worker_handler: null
+      queue: null
+      jobs_table: "artifacts_table"
+      result_table: "artifacts_table"
+      buckets: []
+      requires_dlq: false
+      status_endpoint: null
+
+    - endpoint: "POST /api/cover-letter/generate"
+      submitter_handler: "cover_letter_lambda"
+      worker_handler: "cover_letter_worker"
+      queue: null
+      jobs_table: "artifacts_table"
+      result_table: "artifacts_table"
+      buckets: []
+      requires_dlq: true
+      status_endpoint: "GET /api/cover-letter/{id}"
+
+    - endpoint: "GET /api/cover-letter/{id}"
+      submitter_handler: null
+      worker_handler: null
+      queue: null
+      jobs_table: "artifacts_table"
+      result_table: "artifacts_table"
+      buckets: []
+      requires_dlq: false
+      status_endpoint: null
+
+    - endpoint: "POST /api/interview-prep/generate"
+      submitter_handler: "interview_prep_lambda"
+      worker_handler: "interview_prep_worker"
+      queue: null
+      jobs_table: "artifacts_table"
+      result_table: "artifacts_table"
+      buckets: []
+      requires_dlq: true
+      status_endpoint: "GET /api/interview-prep/{id}"
+
+    - endpoint: "GET /api/interview-prep/{id}"
+      submitter_handler: null
+      worker_handler: null
+      queue: null
+      jobs_table: "artifacts_table"
+      result_table: "artifacts_table"
+      buckets: []
+      requires_dlq: false
+      status_endpoint: null
+
+    - endpoint: "POST /api/company-research/fetch"
+      submitter_handler: "company_research_lambda"
+      worker_handler: null
+      queue: null
+      jobs_table: "company_research_cache_table"
+      result_table: "company_research_cache_table"
+      buckets: []
+      requires_dlq: false
+      status_endpoint: "GET /api/company-research/{id}"
+
+# =============================================================================
+# VALIDATION COMMANDS
+# =============================================================================
+
+validation_commands:
+  - name: "CDK synth succeeds"
+    command: "cdk synth"
+    required: true
+
+  - name: "DynamoDB table count"
+    command: "grep -c 'dynamodb.TableV2\\|dynamodb.Table' infra/careervp/api_db_construct.py"
+    expected: ">= 9"
+    required: true
+
+  - name: "S3 bucket count"
+    command: "grep -c 's3.Bucket' infra/careervp/api_db_construct.py"
+    expected: ">= 5"
+    required: true
+
+  - name: "CDK Nag passes"
+    command: "cdk nag scan --app='python app.py'"
+    required: false

@@ -4,7 +4,6 @@ from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_kms as kms
 from aws_cdk import aws_lambda as _lambda
-from careervp.naming_utils import NamingUtils
 from cdk_monitoring_constructs import (
     AlarmFactoryDefaults,
     CustomMetricGroup,
@@ -16,7 +15,8 @@ from cdk_monitoring_constructs import (
 )
 from constructs import Construct
 
-from careervp import constants
+from . import constants
+from .naming_utils import NamingUtils
 
 
 class CrudMonitoring(Construct):

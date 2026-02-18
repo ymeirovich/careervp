@@ -10,6 +10,7 @@
 
 1. **Quality Gaps FIRST** (Phases 2-7) - Core business logic
 2. **API Contract Gaps SECOND** (Phase 10) - HTTP endpoints
+3. **CDK Infrastructure THIRD** (Phase 11) - DynamoDB, S3, Worker Lambdas, SQS
 
 ---
 
@@ -28,6 +29,7 @@
 | Phase 8 | ✅ IMPLEMENTED | Knowledge Base |
 | Phase 9 | ✅ IMPLEMENTED | Interview Prep |
 | Phase 10 | ⚠️ ASSESSED (56%) | 12/27 endpoints |
+| Phase 11 | ⚠️ REQUIRES IMPLEMENTATION | Missing DynamoDB tables, S3 buckets, Worker Lambdas, SQS queues |
 
 ---
 
@@ -154,7 +156,7 @@ TASK: Implement LLM Cache following cost_optimization_spec.yaml caching strategy
 
 6. CDK Pre-Deploy Validation:
    - Run CDK synth to verify template generation
-   - Run cdk-nag for security scanning
+   - Run cdk-nag for security scanning (see prompt_optimization_cdk_spec.yaml NAG_* rules)
    - Verify Lambda package size stays under 250MB (per LAMBDA_SIZE_001)
 
 VALIDATION CRITERIA (must all pass):
@@ -162,7 +164,8 @@ VALIDATION CRITERIA (must all pass):
 - [ ] Cache key collision resistance (SHA-256)
 - [ ] TTL properly enforced (test with short TTL)
 - [ ] CDK synth succeeds: npx cdk synth --app='python ../../infra/app.py'
-- [ ] CDK-Nag security scan passes: cd infra && cdk-nag scan --app='python app.py'
+- [ ] CDK-Nag security scan passes: cd infra && uv run cdk synth --app='python app.py'
+  - See prompt_optimization_cdk_spec.yaml NAG_IAM_001, NAG_S3_*, NAG_DDB_*, NAG_LAMBDA_*, NAG_SQS_001 rules
 - [ ] Lambda can access cache table (IAM policy verified via CDK-Nag)
 - [ ] Unit tests pass: pytest tests/unit/test_llm_cache.py -v
 - [ ] Type check passes: mypy careervp/logic/llm_cache.py --strict
@@ -1717,7 +1720,274 @@ uv run mypy careervp/handlers/ careervp/models/ careervp/dal/ --strict
 
 ---
 
-# PART 3: TEST CREATION
+# PART 3: CDK INFRASTRUCTURE REMEDIATION
+
+## Phase 11: CDK Infrastructure for All 27 Endpoints ⚠️ REQUIRED
+
+**Duration:** 5 days | **Effort:** 32 hours
+**Status (2026-02-18):** REQUIRES IMPLEMENTATION
+
+### Specs
+| Type | File | Purpose |
+|------|------|---------|
+| Mandatory | `cdk_async_infrastructure_spec.yaml` | Missing DynamoDB tables, S3 buckets, async resources |
+| Mandatory | `cdk_e2e_validation_spec.yaml` | Endpoint-to-resource validation rules |
+| Reference | `prompt_optimization_cdk_spec.yaml` | CDK best practices compliance |
+| Reference | `storage_contract_spec.yaml` | Current storage mapping |
+
+### Step 11.1: Add Missing DynamoDB Tables
+
+**READ FIRST:**
+- `docs/refactor/specs/cdk_async_infrastructure_spec.yaml`
+- `docs/refactor/specs/cdk_e2e_validation_spec.yaml`
+- `docs/refactor/specs/prompt_optimization_cdk_spec.yaml` (Rules: DDB_001, DDB_002, DDB_003, DDB_005)
+
+**CODE:**
+```bash
+# VSCode + Anthropic Sonnet
+"""
+**READ FIRST:**
+- `docs/refactor/specs/cdk_async_infrastructure_spec.yaml`
+- `docs/refactor/specs/cdk_e2e_validation_spec.yaml`
+- `docs/refactor/specs/prompt_optimization_cdk_spec.yaml `
+
+ROLE: Senior AWS Infrastructure Engineer specializing in CDK, DynamoDB, and serverless
+
+CONTEXT: Add missing DynamoDB tables to support all 27 API endpoints.
+
+TASK: Add 6 new DynamoDB tables to api_db_construct.py
+
+1. Add to infra/careervp/api_db_construct.py:
+   - cvs_table (userId, cvId, 90-day TTL)
+   - applications_table (userId, applicationId, status-index GSI)
+   - gap_responses_table (userId, questionId, 365-day TTL)
+   - knowledge_table (userEmail, knowledgeType, entity-index GSI, 365-day TTL)
+   - artifacts_table (applicationId, artifactId, type-index GSI, 90-day TTL)
+   - company_research_cache_table (cacheKey, 30-day TTL)
+
+2. Follow existing patterns:
+   - Use PAY_PER_REQUEST billing (per DDB_001)
+   - Enable point_in_time_recovery=True (per DDB_002)
+   - Add TTL attribute for cache tables (per DDB_005)
+   - Add GSIs where specified
+
+3. Export table names via constants.py if needed
+
+VALIDATION CRITERIA:
+- [ ] All 6 tables defined in api_db_construct.py
+- [ ] Each table has correct partition key (and sort key where specified)
+- [ ] PAY_PER_REQUEST billing on all tables
+- [ ] PITR enabled on all tables
+- [ ] TTL configured on cache/ephemeral tables
+- [ ] GSIs configured where specified
+
+OUTPUT FORMAT: Provide implementation with inline comments. Output results to docs/refactor/execution_runbook_2_results.md.
+"""
+```
+
+### Step 11.2: Add Missing S3 Buckets
+
+**READ FIRST:**
+- `docs/refactor/specs/cdk_async_infrastructure_spec.yaml`
+- `docs/refactor/specs/prompt_optimization_cdk_spec.yaml` (Rules: S3_001, S3_002, S3_003, S3_004)
+
+**CODE:**
+```bash
+# VSCode + Anthropic Sonnet
+"""
+**READ FIRST:**
+- `docs/refactor/specs/cdk_async_infrastructure_spec.yaml`
+- `docs/refactor/specs/prompt_optimization_cdk_spec.yaml (Rules: S3_001, S3_002, S3_003, S3_004)`
+
+ROLE: Senior AWS Infrastructure Engineer specializing in CDK and S3
+
+CONTEXT: Add missing S3 buckets for static assets, backups, and logs.
+
+TASK: Add 4 new S3 buckets to api_db_construct.py
+
+1. Add to infra/careervp/api_db_construct.py:
+   - static-{env} (frontend SPA, no lifecycle)
+   - backups-{env} (versioning, lifecycle: 30d→IA, 90d→Glacier)
+   - logs-{env} (versioning, lifecycle: 180d→IA, 365d→Glacier)
+   - artifacts-{env} (versioning, lifecycle: 90d→IA, 180d→Glacier)
+
+2. Follow existing patterns:
+   - Block public access (per S3_001)
+   - Enable versioning for data protection (per S3_002)
+   - Configure lifecycle policies (per S3_003)
+   - Use SSE-S3 encryption
+
+VALIDATION CRITERIA:
+- [ ] All 4 buckets defined in api_db_construct.py
+- [ ] Block public access on all buckets
+- [ ] Versioning enabled on backups, logs, artifacts
+- [ ] Lifecycle policies configured per spec
+
+OUTPUT FORMAT: Provide implementation with inline comments. Output results to docs/refactor/execution_runbook_2_results.md.
+"""
+```
+
+### Step 11.3: Add SQS Queues with DLQ
+
+**READ FIRST:**
+- `docs/refactor/specs/cdk_async_infrastructure_spec.yaml`
+- `docs/refactor/specs/prompt_optimization_cdk_spec.yaml` (Rules: SQS_001, SQS_002, SQS_003, SQS_004)
+
+**CODE:**
+```bash
+# VSCode + Anthropic Sonnet
+"""
+**READ FIRST:**
+- `docs/refactor/specs/cdk_async_infrastructure_spec.yaml`
+- `docs/refactor/specs/prompt_optimization_cdk_spec.yaml`(Rules: SQS_001, SQS_002, SQS_003, SQS_004)
+
+ROLE: Senior AWS Infrastructure Engineer specializing in CDK and SQS
+
+CONTEXT: Add SQS queues for async job processing with dead letter queues.
+
+TASK: Add 2 SQS queues to api_db_construct.py
+
+1. Add to infra/careervp/api_db_construct.py:
+   - cv_upload_queue (for CV upload processing)
+   - gap_analysis_queue (for gap analysis processing)
+
+2. Configure for each queue:
+   - DLQ with 14-day retention (per SQS_001)
+   - KMS encryption (per SQS_002)
+   - Visibility timeout > Lambda timeout + buffer (per SQS_003)
+   - FIFO only if order matters (per SQS_004)
+
+VALIDATION CRITERIA:
+- [ ] Both queues defined with KMS encryption
+- [ ] DLQ configured for each queue
+- [ ] Visibility timeout >= 300 seconds
+- [ ] CDK synth passes
+
+OUTPUT FORMAT: Provide implementation with inline comments. Output results to docs/refactor/execution_runbook_2_results.md.
+"""
+```
+
+### Step 11.4: Add Worker Lambdas for Async Processing
+
+**READ FIRST:**
+- `docs/refactor/specs/cdk_async_infrastructure_spec.yaml`
+- `docs/refactor/specs/prompt_optimization_cdk_spec.yaml` (Rules: ASYNC_004, ASYNC_005)
+
+**CODE:**
+```bash
+# VSCode + Anthropic Sonnet
+"""
+**READ FIRST:**
+- `docs/refactor/specs/cdk_async_infrastructure_spec.yaml`
+- `docs/refactor/specs/prompt_optimization_cdk_spec.yaml`(Rules: ASYNC_004, ASYNC_005)
+
+ROLE: Senior AWS Infrastructure Engineer specializing in CDK, Lambda, and async processing
+
+CONTEXT: Add worker Lambda functions for background async job processing.
+
+TASK: Add 5 worker Lambda functions to api_construct.py
+
+1. Add worker Lambdas:
+   - cv_upload_worker (triggered by S3 event)
+   - vpr_worker (triggered by DynamoDB Streams)
+   - cv_tailor_worker (triggered by DynamoDB Streams)
+   - cover_letter_worker (triggered by DynamoDB Streams)
+   - interview_prep_worker (triggered by DynamoDB Streams)
+
+2. Configure for each:
+   - Enable DynamoDB Streams with NEW_AND_OLD_IMAGES (per ASYNC_005)
+   - Add DLQ for failed processing (per ASYNC_004)
+   - Set timeout 300 seconds
+   - Grant IAM access to required tables/buckets
+
+3. Update Lambda environment variables with new table names
+
+VALIDATION CRITERIA:
+- [ ] All 5 worker Lambdas defined
+- [ ] Event sources configured (S3 events, DynamoDB Streams)
+- [ ] DLQ configured for each worker
+- [ ] IAM policies grant least-privilege access
+
+OUTPUT FORMAT: Provide implementation with inline comments. Output results to docs/refactor/execution_runbook_2_results.md.
+"""
+```
+
+### Step 11.5: Update Lambda IAM and Environment Variables
+
+**READ FIRST:**
+- `docs/refactor/specs/cdk_async_infrastructure_spec.yaml`
+- `docs/refactor/specs/prompt_optimization_cdk_spec.yaml` (Rules: IAM_001, LAMBDA_CONFIG_008)
+
+**CODE:**
+```bash
+# VSCode + Anthropic Sonnet
+"""
+**READ FIRST:**
+- `docs/refactor/specs/cdk_async_infrastructure_spec.yaml`
+- `docs/refactor/specs/prompt_optimization_cdk_spec.yaml`(Rules: IAM_001, LAMBDA_CONFIG_008)
+
+ROLE: Senior AWS Infrastructure Engineer specializing in CDK and IAM
+
+CONTEXT: Update Lambda execution roles with least-privilege access to new resources.
+
+TASK: Update IAM policies and environment variables
+
+1. Update Lambda execution roles in api_construct.py:
+   - Add table ARN permissions (not wildcard) per IAM_001
+   - Add S3 bucket permissions (not wildcard) per IAM_001
+
+2. Update environment variables per LAMBDA_CONFIG_008:
+   - CVS_TABLE_NAME
+   - APPLICATIONS_TABLE_NAME
+   - GAP_RESPONSES_TABLE_NAME
+   - KNOWLEDGE_TABLE_NAME
+   - ARTIFACTS_TABLE_NAME
+   - COMPANY_RESEARCH_CACHE_TABLE_NAME
+
+VALIDATION CRITERIA:
+- [ ] No wildcard (*) in IAM policies
+- [ ] All new table names in environment variables
+- [ ] CDK synth passes
+
+OUTPUT FORMAT: Provide implementation with inline comments. Output results to docs/refactor/execution_runbook_2_results.md.
+"""
+```
+
+### Step 11.6: Verify CDK Synthesis
+
+**CODE:**
+```bash
+# CDK synth validation
+cd /Users/yitzchak/Documents/dev/careervp/infra
+uv sync
+cdk synth
+
+# Verify table count
+grep -c 'dynamodb.TableV2\|dynamodb.Table' careervp/api_db_construct.py
+# Expected: >= 9 tables
+
+# Verify bucket count
+grep -c 's3.Bucket' careervp/api_db_construct.py
+# Expected: >= 6 buckets
+```
+
+### Step 11.7: Run Infrastructure Tests
+
+**CODE:**
+```bash
+# Run CDK infrastructure tests
+cd /Users/yitzchak/Documents/dev/careervp
+uv run pytest src/backend/tests/infrastructure/test_cdk.py -v --tb=short
+
+# Run CDK Nag security scan
+# See prompt_optimization_cdk_spec.yaml NAG_* rules for compliance requirements
+cd /Users/yitzchak/Documents/dev/careervp/infra
+uv run cdk synth --app='python app.py'
+```
+
+---
+
+# PART 4: TEST CREATION
 
 ## Task T1: VPR Async E2E Test
 
@@ -1831,10 +2101,25 @@ uv run pytest tests/cover-letter/ -v
 - [ ] Phase 5: 10 question limit
 - [ ] Phase 5: Question tagging
 
-## Phase 6: Cover Letter
-- [ ] Phase 6: Cover Letter unit tests
-- [ ] Phase 6: Cover Letter integration tests
-- [ ] Phase 6: Cover Letter E2E tests
+## Phase 6: Cover Letter ✅ IMPLEMENTED
+- [x] Phase 6: Cover Letter unit tests
+- [x] Phase 6: Cover Letter integration tests
+- [x] Phase 6: Cover Letter E2E tests
+
+## Phase 7: Quality Validator (FVS)
+- [ ] Phase 7: ATS scoring
+- [ ] Phase 7: Anti-AI scoring wired
+- [ ] Phase 7: Cross-doc consistency
+
+## Phase 8: Knowledge Base ✅ IMPLEMENTED
+- [x] Phase 8: Knowledge Base CRUD
+- [x] Phase 8: Memory-aware gap analysis
+- [x] Phase 8: Knowledge table integration
+
+## Phase 9: Interview Prep ✅ IMPLEMENTED
+- [x] Phase 9: Interview prep generation
+- [x] Phase 9: Question bank integration
+- [x] Phase 9: Interview prep E2E tests
 
 ## Phase 7: Quality Validator (FVS)
 - [ ] Phase 7: ATS scoring
@@ -1860,6 +2145,18 @@ uv run pytest tests/cover-letter/ -v
 - [ ] Phase 10.10: Health check endpoint
 - [ ] Phase 10.11: Request/Response Schema Conformance
 - [ ] Phase 10.12: OpenAPI Contract Validation Suite
+
+## Phase 11: CDK Infrastructure (All 27 Endpoints)
+- [ ] Phase 11.1: Add missing DynamoDB tables (6 tables)
+- [ ] Phase 11.2: Add missing S3 buckets (4 buckets)
+- [ ] Phase 11.3: Add SQS queues with DLQ (2 queues)
+- [ ] Phase 11.4: Add Worker Lambdas (5 workers)
+- [ ] Phase 11.5: Update Lambda IAM and environment variables
+- [ ] Phase 11.6: Verify CDK synthesis
+- [ ] Phase 11.7: Run infrastructure tests
+- [ ] CDK table count >= 9
+- [ ] CDK bucket count >= 6
+- [ ] CDK Nag passes (see prompt_optimization_cdk_spec.yaml NAG_* rules for 15 compliance rules)
 
 ## Verification
 - [ ] VPR Async: E2E test

@@ -25,6 +25,12 @@ SESSIONS_TABLE_NAME = "sessions"
 JOBS_TABLE_NAME = "jobs"
 IDEMPOTENCY_TABLE_NAME = "idempotency"
 LLM_CACHE_TABLE_NAME = "llm-cache"
+CVS_TABLE_NAME = "cvs"
+APPLICATIONS_TABLE_NAME = "applications"
+GAP_RESPONSES_TABLE_NAME = "gap-responses"
+KNOWLEDGE_TABLE_NAME = "knowledge"
+ARTIFACTS_TABLE_NAME = "artifacts"
+COMPANY_RESEARCH_CACHE_TABLE_NAME = "company-research-cache"
 
 # Output keys for CDK
 TABLE_NAME_OUTPUT = "UsersTableOutput"
@@ -32,6 +38,12 @@ SESSIONS_TABLE_OUTPUT = "SessionsTableOutput"
 IDEMPOTENCY_TABLE_NAME_OUTPUT = "IdempotencyTableOutput"
 JOBS_TABLE_OUTPUT = "JobsTableOutput"
 LLM_CACHE_TABLE_OUTPUT = "LlmCacheTableOutput"
+CVS_TABLE_OUTPUT = "CvsTableOutput"
+APPLICATIONS_TABLE_OUTPUT = "ApplicationsTableOutput"
+GAP_RESPONSES_TABLE_OUTPUT = "GapResponsesTableOutput"
+KNOWLEDGE_TABLE_OUTPUT = "KnowledgeTableOutput"
+ARTIFACTS_TABLE_OUTPUT = "ArtifactsTableOutput"
+COMPANY_RESEARCH_CACHE_TABLE_OUTPUT = "CompanyResearchCacheTableOutput"
 
 # Lambda environment variable keys
 LLM_CACHE_TABLE_NAME_ENV = "LLM_CACHE_TABLE_NAME"
@@ -42,12 +54,19 @@ LLM_CACHE_TABLE_NAME_ENV = "LLM_CACHE_TABLE_NAME"
 # VPR Async Architecture queues
 VPR_JOBS_QUEUE = "vpr-jobs"
 VPR_JOBS_DLQ = "vpr-jobs-dlq"
+CV_UPLOAD_QUEUE = "cv-upload"
+GAP_ANALYSIS_QUEUE = "gap-analysis"
 
 # =============================================================================
 # S3 BUCKETS
 # =============================================================================
 # VPR Async Architecture buckets
 VPR_RESULTS_BUCKET = "vpr-results"
+GENERATED_BUCKET_NAME = "generated"
+STATIC_BUCKET_NAME = "static"
+BACKUPS_BUCKET_NAME = "backups"
+LOGS_BUCKET_NAME = "logs"
+ARTIFACTS_BUCKET_NAME = "artifacts"
 
 # =============================================================================
 # LAMBDA FUNCTIONS
