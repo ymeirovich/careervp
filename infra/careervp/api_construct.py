@@ -1044,14 +1044,14 @@ class ApiConstruct(Construct):
         function_name = self.naming.lambda_name("vpr-worker")
         log_group = logs.LogGroup(
             self,
-            "VprWorkerLogGroup",
+            "vpr-workerLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
             removal_policy=RemovalPolicy.DESTROY,
         )
         lambda_function = _lambda.Function(
             self,
-            "VprWorkerLambda",
+            "vpr-worker",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
             handler="careervp.handlers.vpr_worker_handler.lambda_handler",
