@@ -51,12 +51,13 @@ class TestGenerateGapQuestions:
         # Assert
         assert result.success is True
         assert result.code == ResultCode.GAP_QUESTIONS_GENERATED
-        assert len(result.data) == 5
+        assert len(result.data) == 10
         assert all("question_id" in q for q in result.data)
         assert all("question" in q for q in result.data)
         assert all("impact" in q for q in result.data)
         assert all("probability" in q for q in result.data)
         assert all("gap_score" in q for q in result.data)
+        assert all("tags" in q and len(q["tags"]) >= 1 for q in result.data)
 
     @pytest.mark.asyncio
     async def test_generate_gap_questions_sorted_by_score(
@@ -106,13 +107,13 @@ class TestGenerateGapQuestions:
         # Assert questions are sorted by gap_score descending
         scores = [q["gap_score"] for q in result.data]
         assert scores == sorted(scores, reverse=True)
-        assert scores == [1.0, 0.6, 0.3]
+        assert scores[:3] == [1.0, 0.6, 0.3]
 
     @pytest.mark.asyncio
-    async def test_generate_gap_questions_max_five_questions(
+    async def test_generate_gap_questions_max_ten_questions(
         self, mock_user_cv: dict[str, Any], mock_job_posting: dict[str, Any]
     ):
-        """Test that maximum 5 questions are returned even if LLM generates more."""
+        """Test that maximum 10 questions are returned even if LLM generates more."""
         mock_dal = MagicMock()
 
         # Mock LLM with 10 questions
@@ -138,11 +139,11 @@ class TestGenerateGapQuestions:
                 user_cv=mock_user_cv, job_posting=mock_job_posting, dal=mock_dal
             )
 
-        # Assert only top 5 questions returned
-        assert len(result.data) == 5
+        # Assert only top 10 questions returned
+        assert len(result.data) == 10
         # Assert they are the highest scoring ones
         assert result.data[0]["question_id"] == "q0"
-        assert result.data[4]["question_id"] == "q4"
+        assert result.data[9]["question_id"] == "q9"
 
     @pytest.mark.asyncio
     async def test_generate_gap_questions_llm_timeout(

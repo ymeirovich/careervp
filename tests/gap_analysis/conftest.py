@@ -151,6 +151,7 @@ def mock_gap_questions() -> list[dict[str, Any]]:
             "impact": "HIGH",
             "probability": "HIGH",
             "gap_score": 1.0,
+            "tags": ["[CV IMPACT]"],
         },
         {
             "question_id": f"q2-{uuid4()}",
@@ -158,6 +159,7 @@ def mock_gap_questions() -> list[dict[str, Any]]:
             "impact": "HIGH",
             "probability": "MEDIUM",
             "gap_score": 0.88,
+            "tags": ["[CV IMPACT]"],
         },
         {
             "question_id": f"q3-{uuid4()}",
@@ -165,6 +167,7 @@ def mock_gap_questions() -> list[dict[str, Any]]:
             "impact": "MEDIUM",
             "probability": "HIGH",
             "gap_score": 0.78,
+            "tags": ["[TECHNICAL]"],
         },
         {
             "question_id": f"q4-{uuid4()}",
@@ -172,6 +175,7 @@ def mock_gap_questions() -> list[dict[str, Any]]:
             "impact": "MEDIUM",
             "probability": "MEDIUM",
             "gap_score": 0.6,
+            "tags": ["[BEHAVIORAL]"],
         },
         {
             "question_id": f"q5-{uuid4()}",
@@ -179,6 +183,7 @@ def mock_gap_questions() -> list[dict[str, Any]]:
             "impact": "MEDIUM",
             "probability": "LOW",
             "gap_score": 0.51,
+            "tags": ["[INTERVIEW/MVP ONLY]"],
         },
     ]
 

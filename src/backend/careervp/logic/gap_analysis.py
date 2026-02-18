@@ -15,6 +15,25 @@ from careervp.models.result import Result, ResultCode
 
 IMPACT_SCORES = {'HIGH': 1.0, 'MEDIUM': 0.6, 'LOW': 0.3}
 PROBABILITY_SCORES = {'HIGH': 1.0, 'MEDIUM': 0.6, 'LOW': 0.3}
+MAX_QUESTIONS = 10
+
+TAG_CV_IMPACT = '[CV IMPACT]'
+TAG_TECHNICAL = '[TECHNICAL]'
+TAG_BEHAVIORAL = '[BEHAVIORAL]'
+TAG_INTERVIEW_MVP = '[INTERVIEW/MVP ONLY]'
+
+TAG_DISTRIBUTION: tuple[str, ...] = (
+    TAG_CV_IMPACT,
+    TAG_CV_IMPACT,
+    TAG_CV_IMPACT,
+    TAG_CV_IMPACT,
+    TAG_TECHNICAL,
+    TAG_TECHNICAL,
+    TAG_BEHAVIORAL,
+    TAG_BEHAVIORAL,
+    TAG_INTERVIEW_MVP,
+    TAG_INTERVIEW_MVP,
+)
 
 
 def calculate_gap_score(impact: str, probability: str) -> float:
@@ -31,6 +50,116 @@ async def _maybe_await(value: Any) -> Any:
     if asyncio.iscoroutine(value):
         return await value
     return value
+
+
+def _normalize_level(value: Any) -> str:
+    normalized = str(value).strip().upper()
+    if normalized in IMPACT_SCORES:
+        return normalized
+    return 'MEDIUM'
+
+
+def _normalize_tags(value: Any) -> list[str]:
+    if isinstance(value, str):
+        raw_tags = [value]
+    elif isinstance(value, list):
+        raw_tags = [entry for entry in value if isinstance(entry, str)]
+    else:
+        raw_tags = []
+
+    normalized_tags: list[str] = []
+    for raw in raw_tags:
+        normalized = raw.strip().upper().replace('_', ' ')
+        if 'CV' in normalized and 'IMPACT' in normalized:
+            tag = TAG_CV_IMPACT
+        elif 'TECH' in normalized:
+            tag = TAG_TECHNICAL
+        elif 'BEHAV' in normalized or 'STAR' in normalized:
+            tag = TAG_BEHAVIORAL
+        elif 'INTERVIEW' in normalized or 'MVP' in normalized:
+            tag = TAG_INTERVIEW_MVP
+        else:
+            continue
+
+        if tag not in normalized_tags:
+            normalized_tags.append(tag)
+    return normalized_tags
+
+
+def _extract_questions(payload: Any) -> list[dict[str, Any]]:
+    parsed: Any = payload
+
+    if isinstance(parsed, str):
+        parsed = json.loads(parsed)
+
+    if isinstance(parsed, dict):
+        if isinstance(parsed.get('questions'), list):
+            parsed = parsed['questions']
+        elif isinstance(parsed.get('text'), str):
+            parsed = json.loads(parsed['text'])
+        else:
+            raise ValueError('Invalid questions format')
+
+    if not isinstance(parsed, list):
+        raise ValueError('Invalid questions format')
+
+    questions: list[dict[str, Any]] = []
+    for index, entry in enumerate(parsed):
+        if not isinstance(entry, dict):
+            raise ValueError(f'Question at index {index} is not an object')
+        questions.append(dict(entry))
+    return questions
+
+
+def _coerce_gap_score(question: dict[str, Any], impact: str, probability: str) -> float:
+    raw_gap_score = question.get('gap_score')
+    if isinstance(raw_gap_score, (int, float)):
+        bounded = max(0.0, min(1.0, float(raw_gap_score)))
+        return round(bounded, 2)
+    return calculate_gap_score(impact=impact, probability=probability)
+
+
+def _normalize_question(question: dict[str, Any], index: int) -> dict[str, Any]:
+    impact = _normalize_level(question.get('impact'))
+    probability = _normalize_level(question.get('probability'))
+    question_id = str(question.get('question_id') or question.get('id') or f'q{index + 1}')
+    text = str(question.get('question') or question.get('text') or f'Provide evidence for gap area #{index + 1}.')
+    tags = _normalize_tags(question.get('tags'))
+    gap_score = _coerce_gap_score(question, impact=impact, probability=probability)
+
+    return {
+        'question_id': question_id,
+        'question': text,
+        'impact': impact,
+        'probability': probability,
+        'gap_score': gap_score,
+        'tags': tags,
+    }
+
+
+def _ensure_question_count(questions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized = questions[:MAX_QUESTIONS]
+    while len(normalized) < MAX_QUESTIONS:
+        index = len(normalized) + 1
+        fallback_impact = 'LOW'
+        fallback_probability = 'LOW'
+        normalized.append(
+            {
+                'question_id': f'generated-q{index}',
+                'question': f'What concrete evidence demonstrates fit for uncovered requirement #{index}?',
+                'impact': fallback_impact,
+                'probability': fallback_probability,
+                'gap_score': 0.0,
+                'tags': [],
+            }
+        )
+    return normalized
+
+
+def _apply_tag_distribution(questions: list[dict[str, Any]]) -> None:
+    for index, question in enumerate(questions):
+        # Keep array schema while enforcing deterministic category coverage.
+        question['tags'] = [TAG_DISTRIBUTION[index]]
 
 
 async def generate_gap_questions(
@@ -59,18 +188,14 @@ async def generate_gap_questions(
     payload = llm_result.data if isinstance(llm_result, Result) else llm_result
 
     try:
-        questions = json.loads(payload) if isinstance(payload, str) else payload
+        parsed_questions = _extract_questions(payload)
     except Exception as exc:  # noqa: BLE001
         return Result(success=False, error=f'Failed to parse LLM response: {exc}', code=ResultCode.INTERNAL_ERROR)
 
-    if not isinstance(questions, list):
-        return Result(success=False, error='Invalid questions format', code=ResultCode.INTERNAL_ERROR)
+    questions = [_normalize_question(question=question, index=index) for index, question in enumerate(parsed_questions)]
 
-    for question in questions:
-        if 'gap_score' not in question:
-            question['gap_score'] = calculate_gap_score(impact=question.get('impact', ''), probability=question.get('probability', ''))
-
-    questions.sort(key=lambda q: q.get('gap_score', 0), reverse=True)
-    questions = questions[:5]
+    questions.sort(key=lambda q: float(q.get('gap_score', 0.0)), reverse=True)
+    questions = _ensure_question_count(questions)
+    _apply_tag_distribution(questions)
 
     return Result(success=True, data=questions, code=ResultCode.GAP_QUESTIONS_GENERATED)

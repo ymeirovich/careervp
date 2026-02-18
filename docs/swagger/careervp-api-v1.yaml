@@ -64,6 +64,11 @@ tags:
   - name: Company Research
     description: Company research
 
+x-contract-metrics:
+  operation_count: 27
+  unique_path_count: 25
+  note: "/users/me and /jobs each define two operations under one path key."
+
 paths:
   # ==========================================================================
   # AUTH

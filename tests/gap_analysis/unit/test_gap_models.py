@@ -118,6 +118,7 @@ class TestGapQuestion:
             impact="HIGH",
             probability="HIGH",
             gap_score=1.0,
+            tags=["[TECHNICAL]"],
         )
 
         assert question.question_id == "q1-uuid"
@@ -125,6 +126,7 @@ class TestGapQuestion:
         assert question.impact == "HIGH"
         assert question.probability == "HIGH"
         assert question.gap_score == 1.0
+        assert question.tags == ["[TECHNICAL]"]
 
     def test_gap_question_invalid_impact(self):
         """Test that invalid impact raises ValidationError."""
@@ -135,6 +137,7 @@ class TestGapQuestion:
                 impact="INVALID",  # Not HIGH/MEDIUM/LOW
                 probability="HIGH",
                 gap_score=1.0,
+                tags=["[CV IMPACT]"],
             )
 
         assert "impact" in str(exc_info.value).lower()
@@ -148,6 +151,7 @@ class TestGapQuestion:
                 impact="HIGH",
                 probability="INVALID",  # Not HIGH/MEDIUM/LOW
                 gap_score=1.0,
+                tags=["[CV IMPACT]"],
             )
 
         assert "probability" in str(exc_info.value).lower()
@@ -161,6 +165,7 @@ class TestGapQuestion:
                 impact="HIGH",
                 probability="HIGH",
                 gap_score=1.5,  # Too high
+                tags=["[CV IMPACT]"],
             )
 
         assert "gap_score" in str(exc_info.value).lower()
@@ -174,6 +179,7 @@ class TestGapQuestion:
                 impact="HIGH",
                 probability="HIGH",
                 gap_score=-0.1,  # Too low
+                tags=["[CV IMPACT]"],
             )
 
         assert "gap_score" in str(exc_info.value).lower()
@@ -205,14 +211,14 @@ class TestGapAnalysisResponse:
 
         assert len(response.questions) == 0
 
-    def test_gap_analysis_response_max_five_questions(
+    def test_gap_analysis_response_max_ten_questions(
         self, mock_gap_questions: list[dict]
     ):
-        """Test that response accepts up to 5 questions."""
-        questions = [GapQuestion(**q) for q in mock_gap_questions[:5]]
+        """Test that response accepts up to 10 questions."""
+        questions = [GapQuestion(**q) for q in mock_gap_questions[:10]]
         response = GapAnalysisResponse(questions=questions, metadata={})
 
-        assert len(response.questions) == 5
+        assert len(response.questions) <= 10
 
     def test_gap_analysis_response_serialization(self, mock_gap_questions: list[dict]):
         """Test that response serializes to JSON correctly."""
