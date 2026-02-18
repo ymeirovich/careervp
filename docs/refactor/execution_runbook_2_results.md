@@ -1888,3 +1888,40 @@ Results:
 
 - [x] GET /company-research/{jobId} returns 200 OK
 - [x] Response matches OpenAPI schema
+
+## Step 10.10 Health Check Endpoint (2026-02-18)
+
+**Execution timestamp:** 2026-02-18
+**Scope:** Health endpoint (`/health`)
+
+### Implementation completed
+
+- Added `src/backend/careervp/handlers/health_handler.py`:
+  - `GET /health` -> `health_check()` -> `200 OK`
+  - No authentication or authorizer requirements
+  - Response payload includes:
+    - `status: "healthy"`
+    - `timestamp: <ISO8601 UTC>`
+    - `version: "1.0.0"`
+- Added `src/backend/tests/unit/test_health_handler.py`:
+  - `test_get_health_returns_200_ok`
+  - `test_health_requires_no_authentication`
+  - `test_health_response_matches_openapi_schema`
+
+### Validation evidence
+
+- Unit tests:
+  - Command: `uv run pytest tests/unit/test_health_handler.py -v`
+  - Result: `3 passed`
+- Type check (supplemental safety check):
+  - Command: `uv run mypy careervp/handlers/health_handler.py --strict`
+  - Result: `Success: no issues found in 1 source file`
+- Lint (supplemental safety check):
+  - Command: `uv run ruff check careervp/handlers/health_handler.py tests/unit/test_health_handler.py`
+  - Result: `All checks passed!`
+
+### Validation criteria
+
+- [x] GET /health returns 200 OK
+- [x] No authentication required
+- [x] Response matches OpenAPI schema
