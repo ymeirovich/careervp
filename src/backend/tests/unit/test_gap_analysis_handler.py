@@ -31,12 +31,12 @@ def gap_table() -> Generator[Any, None, None]:
         table = dynamodb.create_table(
             TableName='test-gap-table',
             KeySchema=[
-                {'AttributeName': 'pk', 'KeyType': 'HASH'},
-                {'AttributeName': 'sk', 'KeyType': 'RANGE'},
+                {'AttributeName': 'userId', 'KeyType': 'HASH'},
+                {'AttributeName': 'applicationId', 'KeyType': 'RANGE'},
             ],
             AttributeDefinitions=[
-                {'AttributeName': 'pk', 'AttributeType': 'S'},
-                {'AttributeName': 'sk', 'AttributeType': 'S'},
+                {'AttributeName': 'userId', 'AttributeType': 'S'},
+                {'AttributeName': 'applicationId', 'AttributeType': 'S'},
             ],
             BillingMode='PAY_PER_REQUEST',
         )
@@ -106,7 +106,7 @@ def test_generate_questions_returns_201_and_persists(gap_table: Any) -> None:
     assert payload['cv_id'] == 'cv-123'
     assert len(payload['questions']) == 3
 
-    stored = gap_table.get_item(Key={'pk': 'user-1', 'sk': 'ARTIFACT#GAP_ANALYSIS#cv-123#job-123'}).get('Item')
+    stored = gap_table.get_item(Key={'userId': 'user-1', 'applicationId': 'GAP_ANALYSIS#cv-123#job-123'}).get('Item')
     assert isinstance(stored, dict)
     assert stored.get('job_id') == 'job-123'
     assert len(stored.get('questions', [])) == 3
@@ -119,8 +119,8 @@ def test_get_questions_returns_200(gap_table: Any) -> None:
     now = datetime.now(timezone.utc).isoformat()
     gap_table.put_item(
         Item={
-            'pk': 'user-1',
-            'sk': 'ARTIFACT#GAP_ANALYSIS#cv-123#job-555',
+            'userId': 'user-1',
+            'applicationId': 'GAP_ANALYSIS#cv-123#job-555',
             'artifact_type': 'gap_analysis',
             'user_id': 'user-1',
             'cv_id': 'cv-123',
@@ -180,8 +180,8 @@ def test_submit_response_returns_201(gap_table: Any) -> None:
     assert payload['status'] == 'saved'
     assert payload['job_id'] == 'job-222'
 
-    stored = gap_table.get_item(Key={'pk': 'user-1', 'sk': 'ARTIFACT#GAP_RESPONSES#job-222'}).get('Item')
-    assert isinstance(stored, dict)
+    stored = gap_table.get_item(Key={'userId': 'user-1', 'applicationId': 'GAP_RESPONSES#job-222'}).get('Item')
+    assert isinstance(stored, dict), f'Expected dict but got None. Stored keys: {list(stored.keys()) if stored else "None"}'
     assert stored.get('job_id') == 'job-222'
     assert len(stored.get('responses', [])) == 1
 
@@ -193,8 +193,8 @@ def test_get_responses_returns_200(gap_table: Any) -> None:
     now = datetime.now(timezone.utc).isoformat()
     gap_table.put_item(
         Item={
-            'pk': 'user-1',
-            'sk': 'ARTIFACT#GAP_RESPONSES#job-999',
+            'userId': 'user-1',
+            'applicationId': 'GAP_RESPONSES#job-999',
             'artifact_type': 'gap_responses',
             'user_id': 'user-1',
             'job_id': 'job-999',

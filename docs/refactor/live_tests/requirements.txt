@@ -1,0 +1,42 @@
+# Live Tests Dependencies
+
+# HTTP client for API testing
+requests>=2.31.0
+
+# Test framework
+pytest>=7.4.0
+pytest-timeout>=2.2.0
+
+# For async testing (optional)
+pytest-asyncio>=0.21.0
+
+# login procedures
+
+
+⏺ The curl command may have formatting issues. Try this instead:
+
+  curl -X POST "https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod/auth/register" -H
+  "Content-Type: application/json" -d "{\"email\": \"testuser123@example.com\", \"password\":
+  \"TestPass123!\", \"name\": \"Test User\"}"
+
+
+  Or use a simpler format:
+
+  curl -X POST 'https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod/auth/register' \
+    -H 'Content-Type: application/json' \
+    -d '{"email":"testuser123@example.com","password":"TestPass123!","name":"Test User"}'
+
+
+  The issue could be:
+  1. The multi-line format with backslashes
+  2. The email "your-email@example.com" might have been flagged as invalid format
+
+  Make sure:
+  - Email is a valid format (e.g., test123@example.com)
+  - Password is at least 8 characters
+  - Name is not empty
+
+❯ the simpler format worked. rewrite the login curl request
+
+⏺ curl -X POST 'https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod/auth/login' -H
+  'Content-Type: application/json' -d '{"email":"testuser123@example.com","password":"TestPass123!"}'

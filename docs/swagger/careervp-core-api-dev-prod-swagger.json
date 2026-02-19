@@ -1,0 +1,233 @@
+{
+  "swagger" : "2.0",
+  "info" : {
+    "description" : "CareerVP API - AI-powered job application assistant",
+    "version" : "2026-02-18T22:19:08Z",
+    "title" : "careervp-core-api-dev"
+  },
+  "host" : "4xe2tdq8z6.execute-api.us-east-1.amazonaws.com",
+  "basePath" : "/prod",
+  "schemes" : [ "https" ],
+  "paths" : {
+    "/api/company-research" : {
+      "post" : {
+        "responses" : { }
+      }
+    },
+    "/api/cv" : {
+      "post" : {
+        "responses" : { }
+      }
+    },
+    "/api/cv-tailoring" : {
+      "post" : {
+        "responses" : { }
+      }
+    },
+    "/api/vpr" : {
+      "post" : {
+        "responses" : { }
+      }
+    },
+    "/api/vpr/status/{job_id}" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "job_id",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { }
+      }
+    },
+    "/auth/login" : {
+      "post" : {
+        "responses" : { }
+      }
+    },
+    "/auth/refresh" : {
+      "post" : {
+        "responses" : { }
+      }
+    },
+    "/auth/register" : {
+      "post" : {
+        "responses" : { }
+      }
+    },
+    "/company-research/fetch" : {
+      "post" : {
+        "responses" : { }
+      }
+    },
+    "/company-research/{jobId}" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "jobId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { }
+      }
+    },
+    "/cover-letter/generate" : {
+      "post" : {
+        "responses" : { }
+      }
+    },
+    "/cover-letter/{coverLetterId}" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "coverLetterId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { }
+      }
+    },
+    "/cv-tailoring/generate" : {
+      "post" : {
+        "responses" : { }
+      }
+    },
+    "/cv-tailoring/{cvTailoringId}" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "cvTailoringId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { }
+      }
+    },
+    "/gap-analysis/questions" : {
+      "post" : {
+        "responses" : { }
+      }
+    },
+    "/gap-analysis/responses" : {
+      "post" : {
+        "responses" : { }
+      }
+    },
+    "/gap-analysis/{jobId}/questions" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "jobId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { }
+      }
+    },
+    "/health" : {
+      "get" : {
+        "responses" : { }
+      }
+    },
+    "/interview-prep/generate" : {
+      "post" : {
+        "responses" : { }
+      }
+    },
+    "/interview-prep/{interviewPrepId}" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "interviewPrepId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { }
+      }
+    },
+    "/jobs" : {
+      "get" : {
+        "responses" : { }
+      },
+      "post" : {
+        "responses" : { }
+      }
+    },
+    "/jobs/{jobId}" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "jobId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { }
+      }
+    },
+    "/swagger" : {
+      "get" : {
+        "responses" : { }
+      }
+    },
+    "/swagger.css" : {
+      "get" : {
+        "responses" : { }
+      }
+    },
+    "/swagger.js" : {
+      "get" : {
+        "responses" : { }
+      }
+    },
+    "/users/me" : {
+      "get" : {
+        "responses" : { }
+      },
+      "put" : {
+        "responses" : { }
+      }
+    },
+    "/users/me/cover-letters" : {
+      "get" : {
+        "responses" : { }
+      }
+    },
+    "/users/me/cv" : {
+      "post" : {
+        "responses" : { }
+      }
+    },
+    "/users/me/cvs" : {
+      "get" : {
+        "responses" : { }
+      }
+    },
+    "/users/me/tailored-cvs" : {
+      "get" : {
+        "responses" : { }
+      }
+    },
+    "/users/me/vprs" : {
+      "get" : {
+        "responses" : { }
+      }
+    },
+    "/vpr/generate" : {
+      "post" : {
+        "responses" : { }
+      }
+    },
+    "/vpr/{vprId}" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "vprId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { }
+      }
+    }
+  },
+  "x-amazon-apigateway-security-policy" : "TLS_1_0"
+}
