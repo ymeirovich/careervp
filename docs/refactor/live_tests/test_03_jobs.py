@@ -58,10 +58,14 @@ class TestJobEndpoints:
             Looking for Python developer with AWS experience.
             """
 
+        # Get CV ID from test data
+        cv_id = test_data.get("cv_id") or f"cv_{os.getenv('TEST_USER_ID', 'test-user')}"
+
         payload = {
+            "cv_id": cv_id,
             "title": "Learning Experience Specialist",
             "company_name": "SysAid",
-            "description": job_description[:1000],  # Limit length
+            "job_description": job_description[:1000],  # Limit length
             "url": "https://www.sysaid.com/careers",
         }
 

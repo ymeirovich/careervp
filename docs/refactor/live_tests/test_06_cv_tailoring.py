@@ -45,13 +45,17 @@ class TestCVTailoringEndpoints:
 
         # Build payload using test data
         cv_id = test_data.get("cv_id") or f"cv_{TEST_USER_ID}"
-        job_id = test_data.get("job_id") or f"job_{TEST_USER_ID}"
-        vpr_id = test_data.get("vpr_id") or f"vpr_{TEST_USER_ID}"
+
+        # Use legacy flow with job_description (new flow requires real job in database)
+        job_description = """
+        Senior Software Engineer
+        Looking for a Python developer with AWS experience.
+        Must have experience with Lambda, DynamoDB, and API Gateway.
+        """
 
         payload = {
             "cv_id": cv_id,
-            "job_id": job_id,
-            "vpr_id": vpr_id,
+            "job_description": job_description.strip(),
             "options": {
                 "preserve_length": True,
                 "highlight_keywords": True,
