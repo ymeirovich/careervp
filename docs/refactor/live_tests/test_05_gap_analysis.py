@@ -103,6 +103,9 @@ class TestGapAnalysisEndpoints:
         url = f"{self.base_url}/gap-analysis/responses"
         headers = get_auth_headers()
 
+        # Get job ID from test data
+        job_id = test_data.get("job_id") or f"job_{TEST_USER_ID}"
+
         # Use generated questions or fallback
         questions = test_data.get("gap_questions", [])
 
@@ -136,7 +139,10 @@ class TestGapAnalysisEndpoints:
                     }
                 )
 
-        payload = {"responses": responses}
+        payload = {
+            "job_id": job_id,
+            "responses": responses
+        }
 
         response = requests.post(url, json=payload, headers=headers, timeout=30)
 

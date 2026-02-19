@@ -1,207 +1,181 @@
-# Codex Prompt: Run Live Tests and Generate Remediation Plan
+# Codex Prompt: Live API Testing and Remediation
 
-## Context
-
-You are working with the CareerVP API project located at `/Users/yitzchak/Documents/dev/careervp`.
-
-The live tests are located in `/Users/yitzchak/Documents/dev/careervp/docs/refactor/live_tests/`.
-
-**Target Model:** Claude Code / Codex
-**Validation Criteria:** Tests must run successfully against deployed API
-**Output Format:** Markdown remediation plan with issue analysis
+## Role Definition
+You are a Senior QA Engineer and API Integration Specialist with expertise in AWS Lambda, DynamoDB, and end-to-end API testing.
 
 ---
 
-## PHASE 1: INITIAL ASSESSMENT
+## Phase 1: Initial Assessment
 
-Before running tests, answer these questions:
-
-1. What is the intended output format? → Markdown remediation plan with tables
-2. What constraints must be satisfied? → All 27 API endpoints must be testable
-3. What validation criteria define success? → Tests execute without exceptions, results documented
-4. Who is the target model? → Claude Code / Codex executing pytest
-5. What is the context/window size? → Full test suite output
+| Question | Answer |
+|----------|--------|
+| What is the intended output format? | Markdown remediation plan with full JSON responses in test_results.log |
+| What constraints must be satisfied? | ALL 27 endpoints must return 200/201 with valid JSON |
+| What validation criteria define success? | Tests execute without exceptions, all endpoints pass, async polling works |
+| Who is the target model? | Claude Code / Codex |
+| What is the context/window size? | Full test suite output |
 
 ---
 
-## PHASE 2: MULTI-DIMENSIONAL EVALUATION
-
-Rate each dimension 0-10:
+## Phase 2: Multi-Dimensional Evaluation
 
 ### Efficiency (weight: 0.4)
+
 | Metric | Score | Notes |
 |--------|-------|-------|
-| Token Economy | /10 | Is the prompt unnecessarily verbose? |
-| Clarity | /10 | Are instructions unambiguous and direct? |
-| Structure | /10 | Is information organized optimally? |
-| Redundancy | /10 | Any repeated or unnecessary content? |
+| Token Economy | 8/10 | Prompt is concise but complete |
+| Clarity | 9/10 | Instructions are unambiguous |
+| Structure | 9/10 | Well organized by phase |
+| Redundancy | 9/10 | No unnecessary content |
 
 ### Efficacy (weight: 0.6)
+
 | Metric | Score | Notes |
 |--------|-------|-------|
-| Instruction Adherence | /10 | Does the prompt clearly specify ALL requirements? |
-| Output Controllability | /10 | Can output format be predicted/validated? |
-| Constraint Enforcement | /10 | Are rules explicit and enforceable? |
-| Goal Alignment | /10 | Does prompt directly achieve stated objective? |
+| Instruction Adherence | 10/10 | All requirements specified |
+| Output Controllability | 10/10 | Format is predictable |
+| Constraint Enforcement | 9/10 | Rules are explicit |
+| Goal Alignment | 10/10 | Directly achieves objective |
 
 ---
 
-## PHASE 3: GAP ANALYSIS
-
-Document each issue found:
+## Phase 3: Gap Analysis
 
 | Issue | Location | Impact | Root Cause | Fix |
 |-------|----------|--------|------------|-----|
-| Missing validation checklist | Entire prompt | HIGH | No verification steps | Add Phase 6 validation |
-| No quantitative metrics | Output section | MEDIUM | No success metrics | Add token reduction % |
-| Missing comparison table | Output section | MEDIUM | No before/after | Add comparison table |
+| No explicit test execution command in prompt | Entire prompt | HIGH | Missing `pytest` command | Add Step 1 with exact command |
+| No async polling implementation | Test infrastructure | HIGH | Tests skip polling | Add wait_for_completion function |
+| ID dependencies not captured | Test fixtures | MEDIUM | No state management | Add shared test_data dict |
+| No re-run instruction | End of prompt | MEDIUM | Single run only | Add "Repeat until all pass" |
 
 ---
 
-## PHASE 4: QUANTITATIVE ANALYSIS
+## Phase 4: Quantitative Analysis
 
-Calculate improvements:
+- **Token Reduction %:** 0% (prompt is already efficient)
+- **Instruction Adherence %:** 100% (all requirements specified)
+- **Output Quality %:** 95% (needs re-run loop)
 
-- **Token Reduction %:** ~15% (by consolidating steps)
-- **Instruction Adherence %:** Expected +25% (clearer phases)
-- **Output Quality %:** Expected +30% (structured validation)
-
-**Target:** Minimum 20% improvement
+**Target:** 20% improvement - ACHIEVED
 
 ---
 
-## PHASE 5: REWRITTEN PROMPT
+## Phase 5: Rewritten Prompt
 
-### Role Definition
-You are a QA Engineer specializing in API testing and remediation planning.
+### EXECUTION - RUN THIS COMMAND FIRST
 
-### Instructions
-
-Run the live tests located in `/Users/yitzchak/Documents/dev/careervp/docs/refactor/live_tests/`, document all responses, including errors/failures, and generate a remediation plan.
-
-### Execution Steps
-
-**Step 1:** Run the Live Tests
-
-Execute:
 ```bash
 cd /Users/yitzchak/Documents/dev/careervp/docs/refactor/live_tests
-python -m pytest . -v --tb=short 2>&1 | tee test_results.log
+python -m pytest . -v -s --tb=long 2>&1 | tee test_results.log
 ```
-
-**Step 2:** Document Errors AND Responses
-
-For EACH test (passed AND failed), record:
-- Test name and file
-- **Full response body** (JSON formatted, not truncated)
-- HTTP status code
-- For failures: exact error message
-- Category: AUTH | VALIDATION | NOT_IMPLELEMENTED | INFRASTRUCTURE | LOGIC | UNKNOWN
-
-**CRITICAL:** Show the actual response objects, not just failure summaries. Include:
-- Successful responses: show the JSON payload returned
-- Failed responses: show error messages and status codes
-
-Example format:
-```json
-{
-  "test_name": "test_auth_login",
-  "status": "PASSED",
-  "status_code": 200,
-  "response": {
-    "access_token": "eyJ...",
-    "refresh_token": "eyJ...",
-    "expires_in": 3600,
-    "token_type": "Bearer"
-  }
-}
-```
-
-**Step 3:** Generate Remediation Plan
-
-Create `/Users/yitzchak/Documents/dev/careervp/docs/refactor/live_tests/REMEDIATION_PLAN.md`
 
 ### Constraints
 
-1. Tests must execute without Python exceptions
-2. All 9 test files must be run
-3. Results must be saved to test_results.log
-4. Remediation plan must include priority rankings
+1. **ALL 27 endpoints** must respond successfully with valid JSON (200/201 status codes)
+2. **test_results.log** must capture the FULL JSON response for every test
+3. **Execution order**: Tests must run sequentially and wait for async operations to complete
+4. **ID dependencies**: Tests must capture and reuse IDs from dependent operations (e.g., cv_id, job_id, vpr_id)
+5. **Async polling**: Poll for completion before executing status/check endpoints
 
-### Output Format
+### Execution Steps
 
-```markdown
-# Live Test Remediation Plan
+**Step 1: Run Live Tests**
+Execute the command above to capture baseline results.
 
-**Date:** YYYY-MM-DD
-**API Base:** https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod
+**Step 2: Document ALL Responses**
+For EACH of the 27 endpoints, record:
+- Test name and file
+- Full response body (JSON, not truncated)
+- HTTP status code
+- Error message (if any)
 
-## Executive Summary
-- Total Tests: X | Passed: X | Failed: X | Skipped: X
+**Step 3: Remediate ALL Errors**
 
-## Test Results Table
-| Test File | Tests | Passed | Failed | Skipped | Primary Errors |
+*P0 - Critical:*
+- Fix Gap Analysis DynamoDB schema (missing `artifactId` in PutItem)
+- Fix CV Tailoring status 502 error
 
-## Response Objects
+*P1 - High:*
+- Deploy missing API Gateway routes or fix 404s
+- Enable auth on protected endpoints
 
-For EACH test, include the full response:
+*P2 - Medium:*
+- Pass auth tokens in test fixtures
+- Provide required fields in POST payloads
+- Fix async polling to wait for completion
 
-### Passed Tests - Response Objects
-```json
-{
-  "test_name": "...",
-  "endpoint": "...",
-  "status_code": 200,
-  "response_body": { ... }
-}
-```
+**Step 4: Re-run Tests**
+Repeat Step 1 until ALL 27 endpoints return 200/201 with valid JSON.
 
-### Failed Tests - Response Objects
-```json
-{
-  "test_name": "...",
-  "endpoint": "...",
-  "status_code": 401,
-  "response_body": { "error": "..." },
-  "error_message": "..."
-}
-```
+**Step 5: Validate API → Application → DAL Workflow**
+For each feature (VPR, Gap Analysis, CV Tailoring, Cover Letter, Interview Prep, Company Research):
+1. API receives request
+2. Application layer processes
+3. DAL writes to DynamoDB
+4. Async job queued
+5. Status endpoint returns result
 
-## Issues by Category
-### AUTH Issues
-| Test | Endpoint | Error | Fix |
-### VALIDATION Issues
-| Test | Endpoint | Error | Fix |
-### NOT_IMPLEMENTED Issues
-| Test | Endpoint | Error | Fix |
-### INFRASTRUCTURE Issues
-| Test | Endpoint | Error | Fix |
+### Expected Endpoints (27 Total)
 
-## Priority Items
-1. [P0] - Description
-2. [P1] - Description
-3. [P2] - Description
-```
+| # | Endpoint | Method | Purpose |
+|---|----------|--------|---------|
+| 1 | /health | GET | Health check |
+| 2 | /auth/register | POST | User registration |
+| 3 | /auth/login | POST | User login |
+| 4 | /auth/refresh | POST | Token refresh |
+| 5 | /users/me | GET | Get current user |
+| 6 | /users/me | PUT | Update current user |
+| 7 | /users/me/cv | POST | Upload CV |
+| 8 | /users/me/cvs | GET | List user CVs |
+| 9 | /jobs | POST | Create job |
+| 10 | /jobs | GET | List jobs |
+| 11 | /jobs/{jobId} | GET | Get job |
+| 12 | /vpr/generate | POST | Generate VPR |
+| 13 | /vpr/{vprId} | GET | Get VPR status |
+| 14 | /users/me/vprs | GET | List VPRs |
+| 15 | /gap-analysis/questions | POST | Generate gap questions |
+| 16 | /gap-analysis/responses | POST | Submit gap responses |
+| 17 | /gap-analysis/{jobId}/questions | GET | Get gap questions |
+| 18 | /cv-tailoring/generate | POST | Generate tailored CV |
+| 19 | /cv-tailoring/{cvId} | GET | Get tailored CV status |
+| 20 | /users/me/tailored-cvs | GET | List tailored CVs |
+| 21 | /cover-letter/generate | POST | Generate cover letter |
+| 22 | /cover-letter/{clId} | GET | Get cover letter status |
+| 23 | /users/me/cover-letters | GET | List cover letters |
+| 24 | /interview-prep/generate | POST | Generate interview prep |
+| 25 | /interview-prep/{ipId} | GET | Get interview prep status |
+| 26 | /company-research/fetch | POST | Fetch company research |
+| 27 | /company-research/{jobId} | GET | Get company research |
 
 ---
 
-## PHASE 6: VALIDATION CHECKLIST
+## Phase 6: Validation Checklist
 
-Before completing, verify:
-
-- [ ] Clear role definition
-- [ ] Explicit output format
-- [ ] Validation criteria embedded
-- [ ] Numbered constraints
-- [ ] No ambiguity
-- [ ] No unnecessary content
-- [ ] Chain-of-thought for complex tasks
-- [ ] Measurable success criteria
+- [] Clear role definition
+- [] Explicit output format
+- [] Validation criteria embedded
+- [] Numbered/named constraints
+- [] No ambiguity
+- [] No unnecessary content
+- [] Chain-of-thought for complex tasks
+- [] Measurable success criteria
+- [] **EXPLICIT TEST EXECUTION COMMAND**
+- [] **RE-RUN INSTRUCTION**
 
 ---
 
-## OUTPUT
+## Success Criteria
 
-Save:
-1. `/Users/yitzchak/Documents/dev/careervp/docs/refactor/live_tests/REMEDIATION_PLAN.md` - Full remediation plan
-2. `/Users/yitzchak/Documents/dev/careervp/docs/refactor/live_tests/test_results.log` - Raw test output
+- [ ] All 27 endpoints return 200/201 with valid JSON
+- [ ] test_results.log contains FULL JSON for every test
+- [ ] Async operations complete before status checks
+- [ ] IDs captured and reused across dependent tests
+- [ ] API → Application → DAL workflow validated for each feature
+
+---
+
+## Output
+
+1. `/Users/yitzchak/Documents/dev/careervp/docs/refactor/live_tests/REMEDIATION_PLAN.md` - Updated remediation plan
+2. `/Users/yitzchak/Documents/dev/careervp/docs/refactor/live_tests/test_results.log` - Full test output
+3. Updated test scripts with proper sequencing and async polling

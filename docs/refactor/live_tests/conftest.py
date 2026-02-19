@@ -292,3 +292,53 @@ TEST_DEPENDENCIES = {
     "test_interview_prep_generate": ["test_vpr_generate"],
     "test_interview_prep_get_status": ["test_interview_prep_generate"],
 }
+
+
+# Pytest Fixtures
+import pytest
+
+
+@pytest.fixture(scope="session")
+def auth_credentials():
+    """Shared test credentials"""
+    return {
+        "email": TEST_EMAIL,
+        "password": TEST_PASSWORD
+    }
+
+
+@pytest.fixture(scope="session")
+def auth_token(auth_credentials):
+    """Get a valid auth token for the test session"""
+    response = requests.post(
+        f"{API_BASE}/auth/login",
+        json=auth_credentials
+    )
+    if response.status_code == 200:
+        return response.json()["access_token"]
+    # If login fails, try register first
+    requests.post(f"{API_BASE}/auth/register", json=auth_credentials)
+    response = requests.post(f"{API_BASE}/auth/login", json=auth_credentials)
+    return response.json()["access_token"]
+
+
+@pytest.fixture
+def auth_headers(auth_token):
+    """Headers with authentication"""
+    return {
+        "Authorization": f"Bearer {auth_token}",
+        "Content-Type": "application/json"
+    }
+
+
+@pytest.fixture(scope="session")
+def test_data():
+    """Shared test data across all tests for ID dependencies"""
+    return {
+        'cv_id': None,
+        'job_id': None,
+        'vpr_id': None,
+        'tailored_cv_id': None,
+        'cover_letter_id': None,
+        'interview_prep_id': None
+    }
