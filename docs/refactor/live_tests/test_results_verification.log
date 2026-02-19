@@ -1,0 +1,1288 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.10.12, pytest-9.0.2, pluggy-1.6.0 -- /Users/yitzchak/.pyenv/versions/3.10.12/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/yitzchak/Documents/dev/careervp
+configfile: pytest.ini
+plugins: anyio-4.12.1, mock-3.15.1, typeguard-2.13.3, cov-7.0.0
+collecting ... collected 32 items
+
+test_01_auth_health.py::TestHealthEndpoint::test_health_check
+=== RESPONSE test_health_check ===
+{
+  "test_name": "test_health_check",
+  "endpoint": "GET /health",
+  "status_code": 404,
+  "response": {
+    "statusCode": 404,
+    "message": "Not found"
+  }
+}
+⚠ GET /health - Endpoint not deployed (404)
+SKIPPED
+test_01_auth_health.py::TestAuthEndpoints::test_auth_register
+=== RESPONSE test_auth_register ===
+{
+  "test_name": "test_auth_register",
+  "endpoint": "POST /auth/register",
+  "status_code": 201,
+  "response": {
+    "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiZGE0M2JhNjItMDcyZS00ZDIwLTk1MDMtZjk5YmIwZmE1ZmVjIiwiZW1haWwiOiJ0ZXN0XzE3NzE1Mzg1ODJAZXhhbXBsZS5jb20iLCJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiaWF0IjoxNzcxNTM4NTkwLCJleHAiOjE3NzE1NDIxOTB9.ZhrEWVlMjdnul-oH5RuokZznv3d0FNA3JYTESDjPvRI1KRNjqRztABp3jikuv6niqE3O8mB3NHa2zqoReb5Jg_r5kP6FyAko1bt-y3USZ7QK6aQnaWeZDcwsZ3pU9oWUEgAtX7QLNxMOog0k6VJP_iRurYosUUVJAxyxz_5Q97GgUAqgsdMyaRykPOaTKDHU5gFoW6X9dGWM7UnACK2R3WXFVh9Nu2jqAI-Wc8s8eEbbB_HzSa81h3edQoLccNdCmnuhES4oJYYZRiIx--6kxxkmiK8du5N6og7mHN2WwC7VHDf0I3rjG-u6fL0Z6kymNal6oiqjl9uKeHqcJuoAxA",
+    "refresh_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiZGE0M2JhNjItMDcyZS00ZDIwLTk1MDMtZjk5YmIwZmE1ZmVjIiwiZW1haWwiOiJ0ZXN0XzE3NzE1Mzg1ODJAZXhhbXBsZS5jb20iLCJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImlhdCI6MTc3MTUzODU5MCwiZXhwIjoxNzcyMTQzMzkwfQ.pff28GWQ7O7N37yUvGUbD0hmRZey2S_dpvu05luFUh6zwa53jB-TSm3yFPXZhosB_gwlZW68KPaQHz-bka_DcbCR8_YUJNIfW4lowMdCP-BRFBF2lRTIfSwVdCcrpFORt4n3XbRZxYYkKccjYz3_cHYZw8heN6AdBd0Lfat2GgTs7ke1k7X1xMvpCirs6DUGDSVzIlP30DRKMB1E7vRc11vWgYq_lLWoodQ_A46b2YbaVhrA4jYiqe8ozaDWo5eIVlXaraVi7Glaj3p1RXg5UHxCgKJCSBhUR1HeD8fdlzkBw32JdOmlxusJqx0TYR2GLdQ2pZPWsRMbmMQ8KDZscA",
+    "expires_in": 3600,
+    "token_type": "Bearer"
+  }
+}
+✓ POST /auth/register - Email: test_1771538582@example.com
+PASSED
+test_01_auth_health.py::TestAuthEndpoints::test_auth_login
+=== RESPONSE test_auth_login ===
+{
+  "test_name": "test_auth_login",
+  "endpoint": "POST /auth/login",
+  "status_code": 200,
+  "response": {
+    "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiN2E3ZjYzMDctMzU2Mi00ZWJjLWIyMDktNWYxOTU1OWIwNDhmIiwiZW1haWwiOiJ0ZXN0dXNlcjEyM0BleGFtcGxlLmNvbSIsInRva2VuX3R5cGUiOiJhY2Nlc3MiLCJpYXQiOjE3NzE1Mzg1OTIsImV4cCI6MTc3MTU0MjE5Mn0.A05Je8OcXUevtDYH3rQ8QR-5cLdS-pxdvq7Uw-Q7_FxtMk1u_X1pQdGLxK61l4kXytXEigAqWVf1PFoSg0ome4etd0HYb9h6BKd8aal9UfKRKYdhIn7AV0p7ZkwBGmHvSUTeqITuWECIXM1dUt9UA0HXQwTyRF6rUaVao36sQasIgz6iklly7KPKXTgVS8e6Etg5Q1lhR9lFB6CftTAqGND-hP-5welYKsPQ0Foxba293Z6WAnPagIX459iYtut49c5Jkf3WdXi5Lpmc4GodFwsFt-dGzHKx_hFymV7MC5Sw8GPZt4lpsA7IOv0NRB-Ryr9ndrpc1w29tFRbsW3Gmw",
+    "refresh_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiN2E3ZjYzMDctMzU2Mi00ZWJjLWIyMDktNWYxOTU1OWIwNDhmIiwiZW1haWwiOiJ0ZXN0dXNlcjEyM0BleGFtcGxlLmNvbSIsInRva2VuX3R5cGUiOiJyZWZyZXNoIiwiaWF0IjoxNzcxNTM4NTkyLCJleHAiOjE3NzIxNDMzOTJ9.Ij5UJ_HV0qRgCBsVtN4KW5ejpv6MhSazI4BlTlpw58h6KpLYnO86jaxc3ryk8dT4hOQ9Saqi7q31_f4DAbQLjGX-TRmoDLXLWkmveBdXUFdmbbFTQ564J9aclQ4vH_Lg3sBkllV0VGQU3rdyNxzuWW-OfyVXH_cQwgAVUvpuPgzPPhe45A5JCptmjVMvEevcpmPidCjjvnWO9q5qOJl-OgwHfunyu0tlw3gMdt8er1pBGchVfrwbMSyn6k4keGGwvBIL0Q1-nLGsu613eAX9Of5fFKsMTs1KmMBhrd1lL6MwpCXa7ML7KQ3TuY2OAxA6ko9LspTjZAH4YqaK8HKrSA",
+    "expires_in": 3600,
+    "token_type": "Bearer"
+  }
+}
+✓ POST /auth/login - Logged in successfully
+PASSED
+test_01_auth_health.py::TestAuthEndpoints::test_auth_refresh
+=== RESPONSE test_auth_refresh ===
+{
+  "test_name": "test_auth_refresh",
+  "endpoint": "POST /auth/refresh",
+  "status_code": 200,
+  "response": {
+    "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiN2E3ZjYzMDctMzU2Mi00ZWJjLWIyMDktNWYxOTU1OWIwNDhmIiwiZW1haWwiOiJ0ZXN0dXNlcjEyM0BleGFtcGxlLmNvbSIsInRva2VuX3R5cGUiOiJhY2Nlc3MiLCJpYXQiOjE3NzE1Mzg1OTUsImV4cCI6MTc3MTU0MjE5NX0.LZSFFqbDjGyRcQawL-GWmBN1yGljX0xmB_T3hsLmj0_EqFzW75kAj6qf_rRAjIrMH5oBw0qrFLHnjBrzQYk8k_ojkTGG9MUxkQS2ECg8PT0O5RuUrcZ_l98N2JSe8U6FPUpCBuG6hPJimAT8wuUsyqR22v4inBQ7czrGOqDEeJVLnmNHHLQpfhriD8-wXzUiJpFAEBGaSfdTraGV-HCizX1zqZRvgcq6RB0s5G7PZ9xf1UegG7qKqUsdLCCQxBQAsqKZ-wq9nq0CDVEDsLxEy_E12bZKQkA3XabvIiu2PdwxkYmk89iEwsBF4im4IJPvo7fRPyJLkJgVKUHBk2l0ww",
+    "refresh_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiN2E3ZjYzMDctMzU2Mi00ZWJjLWIyMDktNWYxOTU1OWIwNDhmIiwiZW1haWwiOiJ0ZXN0dXNlcjEyM0BleGFtcGxlLmNvbSIsInRva2VuX3R5cGUiOiJyZWZyZXNoIiwiaWF0IjoxNzcxNTM4NTk1LCJleHAiOjE3NzIxNDMzOTV9.auYRefdQ5JMK4INg7f3NNsWvvKw1_5EK2R9P7x8dM5E1JblIlV4byHkJBdQdvkAVcaqIc-2WAuLw-w_T5NU__2tiKbC2UpmiYNNuLjQFpYuqMy47-lm8U18t9RaLDXLipvyLV2FYopUgluHL9PB0R9GaH6DBOW-uq8s-3qTgvY25tN9QIfpIuxM1YLcRcZqAO1ZChIaBoHsRKk6aC4ULkDhSs2mbeXI1Sw8li-GHYkAVEq-EGcAs0HgZoLC8ROxbifQaAbgRDfOfWV-KYnNx6Q0wt6AbNesfvTTTOtyhtnIkOpRpVVSuuZWLBQBLADBHu755HrySGKLskkk8IrtGkA",
+    "expires_in": 3600,
+    "token_type": "Bearer"
+  }
+}
+✓ POST /auth/refresh - Token refreshed
+PASSED
+test_02_users.py::TestUserEndpoints::test_get_current_user
+=== RESPONSE test_get_current_user ===
+{
+  "test_name": "test_get_current_user",
+  "endpoint": "GET /users/me",
+  "status_code": 404,
+  "response": {
+    "statusCode": 404,
+    "message": "Not found"
+  }
+}
+⚠ GET /users/me - Status 404 (auth may be required)
+PASSED
+test_02_users.py::TestUserEndpoints::test_update_current_user
+=== RESPONSE test_update_current_user ===
+{
+  "test_name": "test_update_current_user",
+  "endpoint": "PUT /users/me",
+  "status_code": 404,
+  "response": {
+    "statusCode": 404,
+    "message": "Not found"
+  }
+}
+⚠ PUT /users/me - Status 404 (auth may be required)
+PASSED
+test_02_users.py::TestUserEndpoints::test_upload_cv
+=== RESPONSE test_upload_cv ===
+{
+  "test_name": "test_upload_cv",
+  "endpoint": "POST /users/me/cv",
+  "status_code": 200,
+  "response": {
+    "success": true,
+    "user_cv": {
+      "user_id": "test-user-e2e",
+      "full_name": "YITZCHAK MEIROVICH",
+      "cv_id": null,
+      "language": "en",
+      "contact_info": {
+        "name": "YITZCHAK MEIROVICH",
+        "phone": "052-756-3792",
+        "email": "ymeirovich@presgen.net",
+        "location": "Modiin, Israel",
+        "linkedin": "www.linkedin.com/in/ymeirovich"
+      },
+      "email": "ymeirovich@presgen.net",
+      "phone": "052-756-3792",
+      "location": "Modiin, Israel",
+      "linkedin": "www.linkedin.com/in/ymeirovich",
+      "experience": [
+        {
+          "company": "AllCloud",
+          "role": "Director of AWS Training",
+          "dates": "May 2021 \u2013 July 2025",
+          "start_date": null,
+          "end_date": null,
+          "current": false,
+          "description": null,
+          "achievements": [
+            "Led LMS setup and deployment of Cloud Academy serving 200+ internal employees and external customers; created 30+ learning plans including 8-week DevOps Bootcamp enabling 40+ new hires to achieve AWS Solutions Architect Associate certification with 90%+ pass rates",
+            "Generated $1M+ revenue within 18 months through AWS Authorized Training Partner program by designing pricing models for 40+ course catalog and selling training seats, Cloud Academy licenses, and certification exam vouchers",
+            "Architected multi-year career path programs with Beginner/Mid/Senior tiers and designed role-based certification roadmaps with custom study materials and hands-on labs",
+            "Delivered global training across 6 countries (Israel, Romania, Germany, Austria, US, Canada) with cultural adaptation strategies achieving consistent learning outcomes",
+            "Built community training portal achieving 90%+ certification pass rates through peer learning groups and community accountability"
+          ],
+          "technologies": []
+        },
+        {
+          "company": "AllCloud",
+          "role": "AI Training Lead",
+          "dates": "July 2024 \u2013 July 2025",
+          "start_date": null,
+          "end_date": null,
+          "current": false,
+          "description": null,
+          "achievements": [
+            "Developed PresGen AI platform with 4 operational modules: automated content generation, data visualization, video processing, and adaptive assessment using 5-dimensional gap analysis\u2014reducing content development time by 60-90%",
+            "Led company-wide training sessions for all employees on positioning new AI product offerings, teaching fundamentals of AI, LLMs, and value propositions to enable sales teams"
+          ],
+          "technologies": []
+        },
+        {
+          "company": "Israel Ministry of Finance",
+          "role": "AWS Solutions Architect",
+          "dates": "2009 \u2013 2021",
+          "start_date": null,
+          "end_date": null,
+          "current": false,
+          "description": null,
+          "achievements": [
+            "Designed and maintained frontend web applications for government IT infrastructure",
+            "Provided technical leadership on AWS cloud architecture decisions",
+            "Collaborated with cross-functional teams on system modernization initiatives"
+          ],
+          "technologies": []
+        }
+      ],
+      "education": [
+        {
+          "institution": "University of Maryland",
+          "degree": "B.A.",
+          "field_of_study": "Political Science",
+          "graduation_date": null,
+          "start_date": null,
+          "end_date": null,
+          "gpa": null,
+          "honors": [],
+          "dates": null
+        }
+      ],
+      "certifications": [
+        {
+          "name": "AWS Authorized Instructor (AAI)",
+          "issuer": null,
+          "issuing_organization": null,
+          "date": null,
+          "issue_date": null,
+          "expiry_date": null,
+          "credential_id": null
+        },
+        {
+          "name": "AWS Certified Solutions Architect Associate",
+          "issuer": null,
+          "issuing_organization": null,
+          "date": null,
+          "issue_date": null,
+          "expiry_date": null,
+          "credential_id": null
+        },
+        {
+          "name": "AWS Certified Developer Associate",
+          "issuer": null,
+          "issuing_organization": null,
+          "date": null,
+          "issue_date": null,
+          "expiry_date": null,
+          "credential_id": null
+        },
+        {
+          "name": "AWS Certified AI Practitioner",
+          "issuer": null,
+          "issuing_organization": null,
+          "date": null,
+          "issue_date": null,
+          "expiry_date": null,
+          "credential_id": null
+        }
+      ],
+      "skills": [
+        "LMS Implementation & Configuration (Cloud Academy, LRN, AWS Skillbuilder)",
+        "Instructional Design & Curriculum Development (ADDIE, SAM methodologies)",
+        "AI Platform Development & Content Automation",
+        "AWS Cloud Architecture & Solutions Design",
+        "Global Training Delivery & Multi-Audience Learning Design"
+      ],
+      "top_achievements": [
+        "Generated $1M+ revenue within 18 months through AWS Authorized Training Partner program, transforming L&D from cost center to profit driver",
+        "Achieved 90%+ certification pass rates across 200+ employees and external customers through structured career path programs and community learning initiatives",
+        "Reduced content development time by 60-90% through PresGen AI platform development featuring automated content generation, adaptive assessment, and video processing"
+      ],
+      "professional_summary": "Strategic Learning Experience Specialist with 27 years of technical instruction experience and proven expertise building Customer Academy infrastructure from the ground up. Demonstrated success in LMS implementation (Cloud Academy, LRN, AWS Skillbuilder), certification framework design, and revenue generation ($1M+ in training sales within 18 months). Architect of PresGen\u2014an operational AI-powered learning platform featuring automated content creation, adaptive assessment, and video processing capabilities. Excel at serving multi-audience ecosystems (external customers, partners, internal teams) with scalable learning solutions that drive measurable business outcomes. Delivered global training across 6 countries (Israel, Romania, Germany, Austria, US, Canada) achieving 90%+ certification pass rates. Proven ability to translate complex technical concepts (cloud architecture, AI, automation) into engaging hands-on labs, sandbox exercises, and interactive learning experiences. Deep expertise in instructional design, SaaS training operations, community building, and connecting educational initiatives to KPIs including MRR, product adoption, and support efficiency.",
+      "languages": [],
+      "created_at": null,
+      "updated_at": null,
+      "is_parsed": true,
+      "source_file_key": null
+    },
+    "language_detected": "en",
+    "parse_time_ms": 11862,
+    "error": null
+  }
+}
+✓ POST /users/me/cv - CV uploaded, ID: None
+PASSED
+test_02_users.py::TestUserEndpoints::test_list_user_cvs
+=== RESPONSE test_list_user_cvs ===
+{
+  "test_name": "test_list_user_cvs",
+  "endpoint": "GET /users/me/cvs",
+  "status_code": 404,
+  "response": {
+    "statusCode": 404,
+    "message": "Not found"
+  }
+}
+⚠ GET /users/me/cvs - Status 404
+PASSED
+test_03_jobs.py::TestJobEndpoints::test_create_job
+=== RESPONSE test_create_job ===
+{
+  "test_name": "test_create_job",
+  "endpoint": "POST /jobs",
+  "status_code": 200,
+  "response": {
+    "success": true,
+    "code": "CV_TAILORED_SUCCESS",
+    "message": null,
+    "data": {
+      "success": null,
+      "error_message": null,
+      "error_code": null,
+      "download_url": null,
+      "metadata": null,
+      "tailored_cv": {
+        "cv_id": "cv_test-user",
+        "user_id": "test-user-e2e",
+        "job_description_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "full_name": "YITZCHAK MEIROVICH",
+        "email": "ymeirovich@presgen.net",
+        "phone": "052-756-3792",
+        "location": "Modiin, Israel",
+        "professional_summary": "Strategic Learning Experience Specialist with 27 years of technical instruction experience and proven expertise building Customer Academy infrastructure from the ground up. Demonstrated success in LMS implementation (Cloud Academy, LRN, AWS Skillbuilder), certification framework design, and revenue generation ($1M+ in training sales within 18 months). Architect of PresGen\u2014an operational AI-powered learning platform featuring automated content creation, adaptive assessment, and video processing capabilities. Excel at serving multi-audience ecosystems (external customers, partners, internal teams) with scalable learning solutions that drive measurable business outcomes. Delivered global training across 6 countries (Israel, Romania, Germany, Austria, US, Canada) achieving 90%+ certification pass rates. Proven ability to translate complex technical concepts (cloud architecture, AI, automation) into engaging hands-on labs, sandbox exercises, and interactive learning experiences. Deep expertise in instructional design, SaaS training operations, community building, and connecting educational initiatives to KPIs including MRR, product adoption, and support efficiency.",
+        "work_experience": [
+          {
+            "company": "AllCloud",
+            "role": "Director of AWS Training",
+            "dates": "May 2021 \u2013 July 2025",
+            "start_date": null,
+            "end_date": null,
+            "current": false,
+            "description": null,
+            "achievements": [
+              "Led LMS setup and deployment of Cloud Academy serving 200+ internal employees and external customers; created 30+ learning plans including 8-week DevOps Bootcamp enabling 40+ new hires to achieve AWS Solutions Architect Associate certification with 90%+ pass rates",
+              "Generated $1M+ revenue within 18 months through AWS Authorized Training Partner program by designing pricing models for 40+ course catalog and selling training seats, Cloud Academy licenses, and certification exam vouchers",
+              "Architected multi-year career path programs with Beginner/Mid/Senior tiers and designed role-based certification roadmaps with custom study materials and hands-on labs",
+              "Delivered global training across 6 countries (Israel, Romania, Germany, Austria, US, Canada) with cultural adaptation strategies achieving consistent learning outcomes",
+              "Built community training portal achieving 90%+ certification pass rates through peer learning groups and community accountability"
+            ],
+            "technologies": []
+          },
+          {
+            "company": "AllCloud",
+            "role": "AI Training Lead",
+            "dates": "July 2024 \u2013 July 2025",
+            "start_date": null,
+            "end_date": null,
+            "current": false,
+            "description": null,
+            "achievements": [
+              "Developed PresGen AI platform with 4 operational modules: automated content generation, data visualization, video processing, and adaptive assessment using 5-dimensional gap analysis\u2014reducing content development time by 60-90%",
+              "Led company-wide training sessions for all employees on positioning new AI product offerings, teaching fundamentals of AI, LLMs, and value propositions to enable sales teams"
+            ],
+            "technologies": []
+          },
+          {
+            "company": "Israel Ministry of Finance",
+            "role": "AWS Solutions Architect",
+            "dates": "2009 \u2013 2021",
+            "start_date": null,
+            "end_date": null,
+            "current": false,
+            "description": null,
+            "achievements": [
+              "Designed and maintained frontend web applications for government IT infrastructure",
+              "Provided technical leadership on AWS cloud architecture decisions",
+              "Collaborated with cross-functional teams on system modernization initiatives"
+            ],
+            "technologies": []
+          }
+        ],
+        "education": [
+          {
+            "institution": "University of Maryland",
+            "degree": "B.A.",
+            "field_of_study": "Political Science",
+            "graduation_date": null,
+            "start_date": null,
+            "end_date": null,
+            "gpa": null,
+            "honors": [],
+            "dates": null
+          }
+        ],
+        "skills": [
+          "LMS Implementation & Configuration (Cloud Academy, LRN, AWS Skillbuilder)",
+          "Instructional Design & Curriculum Development (ADDIE, SAM methodologies)",
+          "AI Platform Development & Content Automation",
+          "AWS Cloud Architecture & Solutions Design",
+          "Global Training Delivery & Multi-Audience Learning Design"
+        ],
+        "certifications": [
+          {
+            "name": "AWS Authorized Instructor (AAI)",
+            "issuer": null,
+            "issuing_organization": null,
+            "date": null,
+            "issue_date": null,
+            "expiry_date": null,
+            "credential_id": null
+          },
+          {
+            "name": "AWS Certified Solutions Architect Associate",
+            "issuer": null,
+            "issuing_organization": null,
+            "date": null,
+            "issue_date": null,
+            "expiry_date": null,
+            "credential_id": null
+          },
+          {
+            "name": "AWS Certified Developer Associate",
+            "issuer": null,
+            "issuing_organization": null,
+            "date": null,
+            "issue_date": null,
+            "expiry_date": null,
+            "credential_id": null
+          },
+          {
+            "name": "AWS Certified AI Practitioner",
+            "issuer": null,
+            "issuing_organization": null,
+            "date": null,
+            "issue_date": null,
+            "expiry_date": null,
+            "credential_id": null
+          }
+        ],
+        "languages": [],
+        "created_at": null,
+        "contact_info": {
+          "name": "YITZCHAK MEIROVICH",
+          "phone": "052-756-3792",
+          "email": "ymeirovich@presgen.net",
+          "location": "Modiin, Israel",
+          "linkedin": null
+        }
+      },
+      "changes_made": [
+        {
+          "section": "tone",
+          "change_type": "style",
+          "description": "Applied professional tone to CV"
+        }
+      ],
+      "relevance_scores": {
+        "professional_summary": 0.23863636363636365,
+        "work_experience": 0.011363636363636364,
+        "skills": 0.07954545454545454,
+        "education": 0.0,
+        "certifications": 0.0
+      },
+      "average_relevance_score": 0.0659090909090909,
+      "keyword_matches": [
+        "About",
+        "the",
+        "job",
+        "are",
+        "looking",
+        "for",
+        "strategic",
+        "and",
+        "creative",
+        "Learning",
+        "Experience",
+        "Specialist",
+        "build",
+        "launch",
+        "SysAid",
+        "Customer",
+        "Academy.",
+        "this",
+        "pivotal",
+        "role",
+        "you",
+        "will",
+        "responsible",
+        "executing",
+        "our",
+        "vision",
+        "unified",
+        "scalable",
+        "hub",
+        "that",
+        "empowers",
+        "customers",
+        "partners",
+        "internal",
+        "teams.",
+        "not",
+        "just",
+        "creating",
+        "content",
+        "architect",
+        "educational",
+        "ecosystem",
+        "working",
+        "new",
+        "LMS",
+        "defining",
+        "certification",
+        "frameworks",
+        "designing",
+        "role-based",
+        "paths",
+        "drive",
+        "product",
+        "adoption",
+        "generate",
+        "revenue",
+        "streams.",
+        "Key",
+        "Responsibilities",
+        "Academy",
+        "Strategy",
+        "Infrastructure",
+        "Implementation",
+        "Lead",
+        "setup",
+        "Management",
+        "System",
+        "serve",
+        "foundation",
+        "Branding",
+        "Structure",
+        "Define",
+        "ensure",
+        "world-class",
+        "on-brand",
+        "user",
+        "experience.",
+        "Framework",
+        "Design",
+        "architecture",
+        "paid",
+        "free",
+        "programs",
+        "based",
+        "role.",
+        "Development",
+        "Instructional",
+        "Des"
+      ],
+      "estimated_ats_score": 7
+    }
+  }
+}
+✓ POST /jobs - Job created, ID: {'success': True, 'code': 'CV_TAILORED_SUCCESS', 'message': None, 'data': {'success': None, 'error_message': None, 'error_code': None, 'download_url': None, 'metadata': None, 'tailored_cv': {'cv_id': 'cv_test-user', 'user_id': 'test-user-e2e', 'job_description_hash': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', 'full_name': 'YITZCHAK MEIROVICH', 'email': 'ymeirovich@presgen.net', 'phone': '052-756-3792', 'location': 'Modiin, Israel', 'professional_summary': 'Strategic Learning Experience Specialist with 27 years of technical instruction experience and proven expertise building Customer Academy infrastructure from the ground up. Demonstrated success in LMS implementation (Cloud Academy, LRN, AWS Skillbuilder), certification framework design, and revenue generation ($1M+ in training sales within 18 months). Architect of PresGen—an operational AI-powered learning platform featuring automated content creation, adaptive assessment, and video processing capabilities. Excel at serving multi-audience ecosystems (external customers, partners, internal teams) with scalable learning solutions that drive measurable business outcomes. Delivered global training across 6 countries (Israel, Romania, Germany, Austria, US, Canada) achieving 90%+ certification pass rates. Proven ability to translate complex technical concepts (cloud architecture, AI, automation) into engaging hands-on labs, sandbox exercises, and interactive learning experiences. Deep expertise in instructional design, SaaS training operations, community building, and connecting educational initiatives to KPIs including MRR, product adoption, and support efficiency.', 'work_experience': [{'company': 'AllCloud', 'role': 'Director of AWS Training', 'dates': 'May 2021 – July 2025', 'start_date': None, 'end_date': None, 'current': False, 'description': None, 'achievements': ['Led LMS setup and deployment of Cloud Academy serving 200+ internal employees and external customers; created 30+ learning plans including 8-week DevOps Bootcamp enabling 40+ new hires to achieve AWS Solutions Architect Associate certification with 90%+ pass rates', 'Generated $1M+ revenue within 18 months through AWS Authorized Training Partner program by designing pricing models for 40+ course catalog and selling training seats, Cloud Academy licenses, and certification exam vouchers', 'Architected multi-year career path programs with Beginner/Mid/Senior tiers and designed role-based certification roadmaps with custom study materials and hands-on labs', 'Delivered global training across 6 countries (Israel, Romania, Germany, Austria, US, Canada) with cultural adaptation strategies achieving consistent learning outcomes', 'Built community training portal achieving 90%+ certification pass rates through peer learning groups and community accountability'], 'technologies': []}, {'company': 'AllCloud', 'role': 'AI Training Lead', 'dates': 'July 2024 – July 2025', 'start_date': None, 'end_date': None, 'current': False, 'description': None, 'achievements': ['Developed PresGen AI platform with 4 operational modules: automated content generation, data visualization, video processing, and adaptive assessment using 5-dimensional gap analysis—reducing content development time by 60-90%', 'Led company-wide training sessions for all employees on positioning new AI product offerings, teaching fundamentals of AI, LLMs, and value propositions to enable sales teams'], 'technologies': []}, {'company': 'Israel Ministry of Finance', 'role': 'AWS Solutions Architect', 'dates': '2009 – 2021', 'start_date': None, 'end_date': None, 'current': False, 'description': None, 'achievements': ['Designed and maintained frontend web applications for government IT infrastructure', 'Provided technical leadership on AWS cloud architecture decisions', 'Collaborated with cross-functional teams on system modernization initiatives'], 'technologies': []}], 'education': [{'institution': 'University of Maryland', 'degree': 'B.A.', 'field_of_study': 'Political Science', 'graduation_date': None, 'start_date': None, 'end_date': None, 'gpa': None, 'honors': [], 'dates': None}], 'skills': ['LMS Implementation & Configuration (Cloud Academy, LRN, AWS Skillbuilder)', 'Instructional Design & Curriculum Development (ADDIE, SAM methodologies)', 'AI Platform Development & Content Automation', 'AWS Cloud Architecture & Solutions Design', 'Global Training Delivery & Multi-Audience Learning Design'], 'certifications': [{'name': 'AWS Authorized Instructor (AAI)', 'issuer': None, 'issuing_organization': None, 'date': None, 'issue_date': None, 'expiry_date': None, 'credential_id': None}, {'name': 'AWS Certified Solutions Architect Associate', 'issuer': None, 'issuing_organization': None, 'date': None, 'issue_date': None, 'expiry_date': None, 'credential_id': None}, {'name': 'AWS Certified Developer Associate', 'issuer': None, 'issuing_organization': None, 'date': None, 'issue_date': None, 'expiry_date': None, 'credential_id': None}, {'name': 'AWS Certified AI Practitioner', 'issuer': None, 'issuing_organization': None, 'date': None, 'issue_date': None, 'expiry_date': None, 'credential_id': None}], 'languages': [], 'created_at': None, 'contact_info': {'name': 'YITZCHAK MEIROVICH', 'phone': '052-756-3792', 'email': 'ymeirovich@presgen.net', 'location': 'Modiin, Israel', 'linkedin': None}}, 'changes_made': [{'section': 'tone', 'change_type': 'style', 'description': 'Applied professional tone to CV'}], 'relevance_scores': {'professional_summary': 0.23863636363636365, 'work_experience': 0.011363636363636364, 'skills': 0.07954545454545454, 'education': 0.0, 'certifications': 0.0}, 'average_relevance_score': 0.0659090909090909, 'keyword_matches': ['About', 'the', 'job', 'are', 'looking', 'for', 'strategic', 'and', 'creative', 'Learning', 'Experience', 'Specialist', 'build', 'launch', 'SysAid', 'Customer', 'Academy.', 'this', 'pivotal', 'role', 'you', 'will', 'responsible', 'executing', 'our', 'vision', 'unified', 'scalable', 'hub', 'that', 'empowers', 'customers', 'partners', 'internal', 'teams.', 'not', 'just', 'creating', 'content', 'architect', 'educational', 'ecosystem', 'working', 'new', 'LMS', 'defining', 'certification', 'frameworks', 'designing', 'role-based', 'paths', 'drive', 'product', 'adoption', 'generate', 'revenue', 'streams.', 'Key', 'Responsibilities', 'Academy', 'Strategy', 'Infrastructure', 'Implementation', 'Lead', 'setup', 'Management', 'System', 'serve', 'foundation', 'Branding', 'Structure', 'Define', 'ensure', 'world-class', 'on-brand', 'user', 'experience.', 'Framework', 'Design', 'architecture', 'paid', 'free', 'programs', 'based', 'role.', 'Development', 'Instructional', 'Des'], 'estimated_ats_score': 7}}
+PASSED
+test_03_jobs.py::TestJobEndpoints::test_list_jobs
+=== RESPONSE test_list_jobs ===
+{
+  "test_name": "test_list_jobs",
+  "endpoint": "GET /jobs",
+  "status_code": 404,
+  "response": {
+    "success": false,
+    "code": "INVALID_INPUT",
+    "message": "Endpoint not found"
+  }
+}
+⚠ GET /jobs - Status 404
+PASSED
+test_03_jobs.py::TestJobEndpoints::test_get_job
+=== RESPONSE test_get_job ===
+{
+  "test_name": "test_get_job",
+  "endpoint": "GET /jobs/test-job-id",
+  "status_code": 401,
+  "response": {
+    "error": "Authentication required",
+    "status_code": 401
+  }
+}
+⚠ GET /jobs/test-job-id - Status 401
+PASSED
+test_04_vpr.py::TestVPREndpoints::test_generate_vpr
+=== RESPONSE test_generate_vpr ===
+{
+  "test_name": "test_generate_vpr",
+  "endpoint": "POST /vpr/generate",
+  "status_code": 401,
+  "response": {
+    "error": "Authentication required",
+    "status_code": 401
+  }
+}
+⚠ POST /vpr/generate - Status 401: {"error": "Authentication required", "status_code": 401}
+PASSED
+test_04_vpr.py::TestVPREndpoints::test_get_vpr_status
+=== RESPONSE test_get_vpr_status ===
+{
+  "test_name": "test_get_vpr_status",
+  "endpoint": "GET /vpr/test-vpr-id",
+  "status_code": 401,
+  "response": {
+    "error": "Authentication required",
+    "status_code": 401
+  }
+}
+⚠ GET /vpr/test-vpr-id - Status 401
+PASSED
+test_04_vpr.py::TestVPREndpoints::test_list_vprs
+=== RESPONSE test_list_vprs ===
+{
+  "test_name": "test_list_vprs",
+  "endpoint": "GET /users/me/vprs",
+  "status_code": 401,
+  "response": {
+    "error": "Authentication required",
+    "status_code": 401
+  }
+}
+⚠ GET /users/me/vprs - Status 401
+PASSED
+test_04_vpr.py::TestVPREndpoints::test_vpr_async_polling
+=== RESPONSE test_generate_vpr ===
+{
+  "test_name": "test_generate_vpr",
+  "endpoint": "POST /vpr/generate",
+  "status_code": 401,
+  "response": {
+    "error": "Authentication required",
+    "status_code": 401
+  }
+}
+⚠ POST /vpr/generate - Status 401: {"error": "Authentication required", "status_code": 401}
+SKIPPED (No...)
+test_05_gap_analysis.py::TestGapAnalysisEndpoints::test_generate_gap_questions
+=== RESPONSE test_generate_gap_questions ===
+{
+  "test_name": "test_generate_gap_questions",
+  "endpoint": "POST /gap-analysis/questions",
+  "status_code": 201,
+  "response": {
+    "job_id": "job_test-user-e2e",
+    "cv_id": "cv_test-user-e2e",
+    "questions": [
+      {
+        "id": "gap-q1",
+        "text": "What quantifiable examples show your impact in technical for job job_test-user-e2e?",
+        "tags": [
+          "technical"
+        ],
+        "strategic_intent": "Capture evidence-backed achievements for interview readiness.",
+        "evidence_gap": "Need stronger measurable evidence for technical."
+      },
+      {
+        "id": "gap-q2",
+        "text": "What quantifiable examples show your impact in leadership for job job_test-user-e2e?",
+        "tags": [
+          "leadership"
+        ],
+        "strategic_intent": "Capture evidence-backed achievements for interview readiness.",
+        "evidence_gap": "Need stronger measurable evidence for leadership."
+      },
+      {
+        "id": "gap-q3",
+        "text": "What quantifiable examples show your impact in achievements for job job_test-user-e2e?",
+        "tags": [
+          "achievements"
+        ],
+        "strategic_intent": "Capture evidence-backed achievements for interview readiness.",
+        "evidence_gap": "Need stronger measurable evidence for achievements."
+      },
+      {
+        "id": "gap-q4",
+        "text": "What quantifiable examples show your impact in core competency 4 for job job_test-user-e2e?",
+        "tags": [
+          "core competency 4"
+        ],
+        "strategic_intent": "Capture evidence-backed achievements for interview readiness.",
+        "evidence_gap": "Need stronger measurable evidence for core competency 4."
+      },
+      {
+        "id": "gap-q5",
+        "text": "What quantifiable examples show your impact in core competency 5 for job job_test-user-e2e?",
+        "tags": [
+          "core competency 5"
+        ],
+        "strategic_intent": "Capture evidence-backed achievements for interview readiness.",
+        "evidence_gap": "Need stronger measurable evidence for core competency 5."
+      },
+      {
+        "id": "gap-q6",
+        "text": "What quantifiable examples show your impact in core competency 6 for job job_test-user-e2e?",
+        "tags": [
+          "core competency 6"
+        ],
+        "strategic_intent": "Capture evidence-backed achievements for interview readiness.",
+        "evidence_gap": "Need stronger measurable evidence for core competency 6."
+      },
+      {
+        "id": "gap-q7",
+        "text": "What quantifiable examples show your impact in core competency 7 for job job_test-user-e2e?",
+        "tags": [
+          "core competency 7"
+        ],
+        "strategic_intent": "Capture evidence-backed achievements for interview readiness.",
+        "evidence_gap": "Need stronger measurable evidence for core competency 7."
+      },
+      {
+        "id": "gap-q8",
+        "text": "What quantifiable examples show your impact in core competency 8 for job job_test-user-e2e?",
+        "tags": [
+          "core competency 8"
+        ],
+        "strategic_intent": "Capture evidence-backed achievements for interview readiness.",
+        "evidence_gap": "Need stronger measurable evidence for core competency 8."
+      },
+      {
+        "id": "gap-q9",
+        "text": "What quantifiable examples show your impact in core competency 9 for job job_test-user-e2e?",
+        "tags": [
+          "core competency 9"
+        ],
+        "strategic_intent": "Capture evidence-backed achievements for interview readiness.",
+        "evidence_gap": "Need stronger measurable evidence for core competency 9."
+      },
+      {
+        "id": "gap-q10",
+        "text": "What quantifiable examples show your impact in core competency 10 for job job_test-user-e2e?",
+        "tags": [
+          "core competency 10"
+        ],
+        "strategic_intent": "Capture evidence-backed achievements for interview readiness.",
+        "evidence_gap": "Need stronger measurable evidence for core competency 10."
+      }
+    ],
+    "missing_qualifications": [
+      {
+        "skill": "technical",
+        "priority": "MEDIUM"
+      },
+      {
+        "skill": "leadership",
+        "priority": "MEDIUM"
+      },
+      {
+        "skill": "achievements",
+        "priority": "MEDIUM"
+      }
+    ]
+  }
+}
+⚠ POST /gap-analysis/questions - Status 201: {"job_id": "job_test-user-e2e", "cv_id": "cv_test-user-e2e", "questions": [{"id": "gap-q1", "text": "What quantifiable examples show your impact in technical for job job_test-user-e2e?", "tags": ["tec
+PASSED
+test_05_gap_analysis.py::TestGapAnalysisEndpoints::test_submit_gap_responses
+=== RESPONSE test_submit_gap_responses ===
+{
+  "test_name": "test_submit_gap_responses",
+  "endpoint": "POST /gap-analysis/responses",
+  "status_code": 201,
+  "response": {
+    "status": "saved",
+    "job_id": "job_test-user-e2e",
+    "responses_saved": 3
+  }
+}
+⚠ POST /gap-analysis/responses - Status 201: {"status": "saved", "job_id": "job_test-user-e2e", "responses_saved": 3}
+PASSED
+test_05_gap_analysis.py::TestGapAnalysisEndpoints::test_get_gap_questions
+=== RESPONSE test_get_gap_questions ===
+{
+  "test_name": "test_get_gap_questions",
+  "endpoint": "GET /gap-analysis/job_test-user-e2e/questions",
+  "status_code": 200,
+  "response": {
+    "job_id": "job_test-user-e2e",
+    "cv_id": "cv_test-user-e2e",
+    "questions": [
+      {
+        "strategic_intent": "Capture evidence-backed achievements for interview readiness.",
+        "id": "gap-q1",
+        "text": "What quantifiable examples show your impact in technical for job job_test-user-e2e?",
+        "evidence_gap": "Need stronger measurable evidence for technical.",
+        "tags": [
+          "technical"
+        ]
+      },
+      {
+        "strategic_intent": "Capture evidence-backed achievements for interview readiness.",
+        "id": "gap-q2",
+        "text": "What quantifiable examples show your impact in leadership for job job_test-user-e2e?",
+        "evidence_gap": "Need stronger measurable evidence for leadership.",
+        "tags": [
+          "leadership"
+        ]
+      },
+      {
+        "strategic_intent": "Capture evidence-backed achievements for interview readiness.",
+        "id": "gap-q3",
+        "text": "What quantifiable examples show your impact in achievements for job job_test-user-e2e?",
+        "evidence_gap": "Need stronger measurable evidence for achievements.",
+        "tags": [
+          "achievements"
+        ]
+      },
+      {
+        "strategic_intent": "Capture evidence-backed achievements for interview readiness.",
+        "id": "gap-q4",
+        "text": "What quantifiable examples show your impact in core competency 4 for job job_test-user-e2e?",
+        "evidence_gap": "Need stronger measurable evidence for core competency 4.",
+        "tags": [
+          "core competency 4"
+        ]
+      },
+      {
+        "strategic_intent": "Capture evidence-backed achievements for interview readiness.",
+        "id": "gap-q5",
+        "text": "What quantifiable examples show your impact in core competency 5 for job job_test-user-e2e?",
+        "evidence_gap": "Need stronger measurable evidence for core competency 5.",
+        "tags": [
+          "core competency 5"
+        ]
+      },
+      {
+        "strategic_intent": "Capture evidence-backed achievements for interview readiness.",
+        "id": "gap-q6",
+        "text": "What quantifiable examples show your impact in core competency 6 for job job_test-user-e2e?",
+        "evidence_gap": "Need stronger measurable evidence for core competency 6.",
+        "tags": [
+          "core competency 6"
+        ]
+      },
+      {
+        "strategic_intent": "Capture evidence-backed achievements for interview readiness.",
+        "id": "gap-q7",
+        "text": "What quantifiable examples show your impact in core competency 7 for job job_test-user-e2e?",
+        "evidence_gap": "Need stronger measurable evidence for core competency 7.",
+        "tags": [
+          "core competency 7"
+        ]
+      },
+      {
+        "strategic_intent": "Capture evidence-backed achievements for interview readiness.",
+        "id": "gap-q8",
+        "text": "What quantifiable examples show your impact in core competency 8 for job job_test-user-e2e?",
+        "evidence_gap": "Need stronger measurable evidence for core competency 8.",
+        "tags": [
+          "core competency 8"
+        ]
+      },
+      {
+        "strategic_intent": "Capture evidence-backed achievements for interview readiness.",
+        "id": "gap-q9",
+        "text": "What quantifiable examples show your impact in core competency 9 for job job_test-user-e2e?",
+        "evidence_gap": "Need stronger measurable evidence for core competency 9.",
+        "tags": [
+          "core competency 9"
+        ]
+      },
+      {
+        "strategic_intent": "Capture evidence-backed achievements for interview readiness.",
+        "id": "gap-q10",
+        "text": "What quantifiable examples show your impact in core competency 10 for job job_test-user-e2e?",
+        "evidence_gap": "Need stronger measurable evidence for core competency 10.",
+        "tags": [
+          "core competency 10"
+        ]
+      }
+    ]
+  }
+}
+✓ GET /gap-analysis/job_test-user-e2e/questions - Found 10 questions
+PASSED
+test_06_cv_tailoring.py::TestCVTailoringEndpoints::test_generate_tailored_cv
+=== RESPONSE test_generate_tailored_cv ===
+{
+  "test_name": "test_generate_tailored_cv",
+  "endpoint": "POST /cv-tailoring/generate",
+  "status_code": 400,
+  "response": {
+    "success": false,
+    "code": "VALIDATION_ERROR",
+    "message": "job_description is required",
+    "errors": [
+      {
+        "field": "job_description",
+        "message": "job_description is required"
+      }
+    ]
+  }
+}
+⚠ POST /cv-tailoring/generate - Status 400: {"success": false, "code": "VALIDATION_ERROR", "message": "job_description is required", "errors": [{"field": "job_description", "message": "job_description is required"}]}
+PASSED
+test_06_cv_tailoring.py::TestCVTailoringEndpoints::test_get_tailored_cv_status
+=== RESPONSE test_get_tailored_cv_status ===
+{
+  "test_name": "test_get_tailored_cv_status",
+  "endpoint": "GET /cv-tailoring/test-cv-tailoring-id",
+  "status_code": 404,
+  "response": {
+    "success": false,
+    "code": "CV_NOT_FOUND",
+    "message": "Tailored CV not found"
+  }
+}
+⚠ GET /cv-tailoring/test-cv-tailoring-id - Tailored CV not found
+PASSED
+test_06_cv_tailoring.py::TestCVTailoringEndpoints::test_list_tailored_cvs
+=== RESPONSE test_list_tailored_cvs ===
+{
+  "test_name": "test_list_tailored_cvs",
+  "endpoint": "GET /users/me/tailored-cvs",
+  "status_code": 200,
+  "response": {
+    "tailored_cvs": [
+      {
+        "id": "TAILORED_CV#cv_test-user#1771538622#v1",
+        "status": "completed",
+        "cv_id": "cv_test-user",
+        "created_at": "2026-02-19T22:03:42.264906+00:00",
+        "updated_at": "2026-02-19T22:03:42.264906+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv_test-user#1771515239#v1",
+        "status": "completed",
+        "cv_id": "cv_test-user",
+        "created_at": "2026-02-19T15:33:59.216832+00:00",
+        "updated_at": "2026-02-19T15:33:59.216832+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv_test-user#1771514593#v1",
+        "status": "completed",
+        "cv_id": "cv_test-user",
+        "created_at": "2026-02-19T15:23:13.593763+00:00",
+        "updated_at": "2026-02-19T15:23:13.593763+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv_test-user#1771514045#v1",
+        "status": "completed",
+        "cv_id": "cv_test-user",
+        "created_at": "2026-02-19T15:14:05.983434+00:00",
+        "updated_at": "2026-02-19T15:14:05.983434+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv_test-user#1771513621#v1",
+        "status": "completed",
+        "cv_id": "cv_test-user",
+        "created_at": "2026-02-19T15:07:01.584182+00:00",
+        "updated_at": "2026-02-19T15:07:01.584182+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771420332#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T13:12:12.083976+00:00",
+        "updated_at": "2026-02-18T13:12:12.083976+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771420266#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T13:11:06.976727+00:00",
+        "updated_at": "2026-02-18T13:11:06.976727+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771420265#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T13:11:05.132727+00:00",
+        "updated_at": "2026-02-18T13:11:05.132727+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771420262#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T13:11:02.579755+00:00",
+        "updated_at": "2026-02-18T13:11:02.579755+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771420261#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T13:11:01.988048+00:00",
+        "updated_at": "2026-02-18T13:11:01.988048+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771420153#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T13:09:13.173732+00:00",
+        "updated_at": "2026-02-18T13:09:13.173732+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771420078#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T13:07:58.678164+00:00",
+        "updated_at": "2026-02-18T13:07:58.678164+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771420076#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T13:07:56.772887+00:00",
+        "updated_at": "2026-02-18T13:07:56.772887+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771420074#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T13:07:54.193584+00:00",
+        "updated_at": "2026-02-18T13:07:54.193584+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771420073#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T13:07:53.572907+00:00",
+        "updated_at": "2026-02-18T13:07:53.572907+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771418902#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T12:48:22.887925+00:00",
+        "updated_at": "2026-02-18T12:48:22.887925+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771418834#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T12:47:14.305944+00:00",
+        "updated_at": "2026-02-18T12:47:14.305944+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771418832#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T12:47:12.171221+00:00",
+        "updated_at": "2026-02-18T12:47:12.171221+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771418829#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T12:47:09.530659+00:00",
+        "updated_at": "2026-02-18T12:47:09.530659+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771418828#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T12:47:08.605144+00:00",
+        "updated_at": "2026-02-18T12:47:08.605144+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771418611#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T12:43:31.889311+00:00",
+        "updated_at": "2026-02-18T12:43:31.889311+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771418609#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T12:43:29.330874+00:00",
+        "updated_at": "2026-02-18T12:43:29.330874+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771418608#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T12:43:28.810130+00:00",
+        "updated_at": "2026-02-18T12:43:28.810130+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771366396#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T22:13:16.806633+00:00",
+        "updated_at": "2026-02-17T22:13:16.806633+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771365362#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:56:02.644430+00:00",
+        "updated_at": "2026-02-17T21:56:02.644430+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771365359#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:55:59.764753+00:00",
+        "updated_at": "2026-02-17T21:55:59.764753+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771365178#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:52:58.594809+00:00",
+        "updated_at": "2026-02-17T21:52:58.594809+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771365171#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:52:51.916732+00:00",
+        "updated_at": "2026-02-17T21:52:51.916732+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771364998#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:49:58.515771+00:00",
+        "updated_at": "2026-02-17T21:49:58.515771+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771364991#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:49:51.322962+00:00",
+        "updated_at": "2026-02-17T21:49:51.322962+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771364984#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:49:44.054433+00:00",
+        "updated_at": "2026-02-17T21:49:44.054433+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771364975#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:49:35.549856+00:00",
+        "updated_at": "2026-02-17T21:49:35.549856+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771364968#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:49:28.992319+00:00",
+        "updated_at": "2026-02-17T21:49:28.992319+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771364963#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:49:23.144354+00:00",
+        "updated_at": "2026-02-17T21:49:23.144354+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771364878#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:47:58.143176+00:00",
+        "updated_at": "2026-02-17T21:47:58.143176+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771364871#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:47:51.863093+00:00",
+        "updated_at": "2026-02-17T21:47:51.863093+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771364681#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:44:41.924061+00:00",
+        "updated_at": "2026-02-17T21:44:41.924061+00:00"
+      }
+    ]
+  }
+}
+✓ GET /users/me/tailored-cvs - Found 37 tailored CV(s)
+PASSED
+test_06_cv_tailoring.py::TestCVTailoringEndpoints::test_cv_tailoring_async_polling
+=== RESPONSE test_generate_tailored_cv ===
+{
+  "test_name": "test_generate_tailored_cv",
+  "endpoint": "POST /cv-tailoring/generate",
+  "status_code": 400,
+  "response": {
+    "success": false,
+    "code": "VALIDATION_ERROR",
+    "message": "job_description is required",
+    "errors": [
+      {
+        "field": "job_description",
+        "message": "job_description is required"
+      }
+    ]
+  }
+}
+⚠ POST /cv-tailoring/generate - Status 400: {"success": false, "code": "VALIDATION_ERROR", "message": "job_description is required", "errors": [{"field": "job_description", "message": "job_description is required"}]}
+SKIPPED
+test_07_cover_letter.py::TestCoverLetterEndpoints::test_generate_cover_letter
+=== RESPONSE test_generate_cover_letter ===
+{
+  "test_name": "test_generate_cover_letter",
+  "endpoint": "POST /cover-letter/generate",
+  "status_code": 400,
+  "response": {
+    "error": "Request validation failed",
+    "code": "INVALID_INPUT"
+  }
+}
+⚠ POST /cover-letter/generate - Status 400: {"error": "Request validation failed", "code": "INVALID_INPUT"}
+PASSED
+test_07_cover_letter.py::TestCoverLetterEndpoints::test_get_cover_letter_status
+=== RESPONSE test_get_cover_letter_status ===
+{
+  "test_name": "test_get_cover_letter_status",
+  "endpoint": "GET /cover-letter/test-cover-letter-id",
+  "status_code": 401,
+  "response": {
+    "error": "Missing or invalid authentication token",
+    "code": "UNAUTHORIZED"
+  }
+}
+⚠ GET /cover-letter/test-cover-letter-id - Status 401
+PASSED
+test_07_cover_letter.py::TestCoverLetterEndpoints::test_list_cover_letters
+=== RESPONSE test_list_cover_letters ===
+{
+  "test_name": "test_list_cover_letters",
+  "endpoint": "GET /users/me/cover-letters",
+  "status_code": 401,
+  "response": {
+    "error": "Missing or invalid authentication token",
+    "code": "UNAUTHORIZED"
+  }
+}
+⚠ GET /users/me/cover-letters - Status 401
+PASSED
+test_07_cover_letter.py::TestCoverLetterEndpoints::test_cover_letter_async_polling
+=== RESPONSE test_generate_cover_letter ===
+{
+  "test_name": "test_generate_cover_letter",
+  "endpoint": "POST /cover-letter/generate",
+  "status_code": 400,
+  "response": {
+    "error": "Request validation failed",
+    "code": "INVALID_INPUT"
+  }
+}
+⚠ POST /cover-letter/generate - Status 400: {"error": "Request validation failed", "code": "INVALID_INPUT"}
+SKIPPED
+test_08_interview_prep.py::TestInterviewPrepEndpoints::test_generate_interview_prep
+=== RESPONSE test_generate_interview_prep ===
+{
+  "test_name": "test_generate_interview_prep",
+  "endpoint": "POST /interview-prep/generate",
+  "status_code": 400,
+  "response": {
+    "error": "Request validation failed",
+    "code": "INVALID_INPUT"
+  }
+}
+⚠ POST /interview-prep/generate - Status 400: {"error": "Request validation failed", "code": "INVALID_INPUT"}
+PASSED
+test_08_interview_prep.py::TestInterviewPrepEndpoints::test_get_interview_prep_status
+=== RESPONSE test_get_interview_prep_status ===
+{
+  "test_name": "test_get_interview_prep_status",
+  "endpoint": "GET /interview-prep/test-interview-prep-id",
+  "status_code": 401,
+  "response": {
+    "error": "Missing or invalid authentication token",
+    "code": "UNAUTHORIZED"
+  }
+}
+⚠ GET /interview-prep/test-interview-prep-id - Status 401
+PASSED
+test_08_interview_prep.py::TestInterviewPrepEndpoints::test_interview_prep_async_polling
+=== RESPONSE test_generate_interview_prep ===
+{
+  "test_name": "test_generate_interview_prep",
+  "endpoint": "POST /interview-prep/generate",
+  "status_code": 400,
+  "response": {
+    "error": "Request validation failed",
+    "code": "INVALID_INPUT"
+  }
+}
+⚠ POST /interview-prep/generate - Status 400: {"error": "Request validation failed", "code": "INVALID_INPUT"}
+SKIPPED
+test_09_company_research.py::TestCompanyResearchEndpoints::test_company_research_fetch
+=== RESPONSE test_company_research_fetch ===
+{
+  "test_name": "test_company_research_fetch",
+  "endpoint": "POST /company-research/fetch",
+  "status_code": 503,
+  "response": {
+    "error": "Job posting text unavailable for fallback",
+    "code": "ALL_SOURCES_FAILED"
+  }
+}
+⚠ POST /company-research/fetch - Status 503: {"error": "Job posting text unavailable for fallback", "code": "ALL_SOURCES_FAILED"}
+PASSED
+test_09_company_research.py::TestCompanyResearchEndpoints::test_company_research_get
+=== RESPONSE test_company_research_get ===
+{
+  "test_name": "test_company_research_get",
+  "endpoint": "GET /company-research/job_test-user-e2e",
+  "status_code": 401,
+  "response": {
+    "error": "Missing or invalid authentication token",
+    "code": "UNAUTHORIZED"
+  }
+}
+⚠ GET /company-research/job_test-user-e2e - Status 401
+PASSED
+test_09_company_research.py::TestCompanyResearchEndpoints::test_company_research_async_polling
+=== RESPONSE test_company_research_fetch ===
+{
+  "test_name": "test_company_research_fetch",
+  "endpoint": "POST /company-research/fetch",
+  "status_code": 503,
+  "response": {
+    "error": "Job posting text unavailable for fallback",
+    "code": "ALL_SOURCES_FAILED"
+  }
+}
+⚠ POST /company-research/fetch - Status 503: {"error": "Job posting text unavailable for fallback", "code": "ALL_SOURCES_FAILED"}
+SKIPPED
+
+=========================== short test summary info ============================
+SKIPPED [1] test_01_auth_health.py:86: Health endpoint not deployed in current stage
+SKIPPED [1] test_04_vpr.py:185: No VPR ID available for polling test
+SKIPPED [1] test_06_cv_tailoring.py:224: No CV tailoring ID available for polling test
+SKIPPED [1] test_07_cover_letter.py:228: No cover letter ID available for polling test
+SKIPPED [1] test_08_interview_prep.py:184: No interview prep ID available for polling test
+SKIPPED [1] test_09_company_research.py:159: No job ID available for company research polling test
+=================== 26 passed, 6 skipped in 81.57s (0:01:21) ===================

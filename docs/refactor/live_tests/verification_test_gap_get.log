@@ -1,0 +1,6 @@
+ImportError while loading conftest '/Users/yitzchak/Documents/dev/careervp/docs/refactor/live_tests/conftest.py'.
+__init__.py:3: in <module>
+    from .test_01_auth_health import test_data, get_test_data, update_test_data
+test_01_auth_health.py:14: in <module>
+    from conftest import (
+E   ModuleNotFoundError: No module named 'conftest'
