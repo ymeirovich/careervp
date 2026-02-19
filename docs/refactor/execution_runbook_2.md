@@ -1699,12 +1699,11 @@ Output results to docs/refactor/execution_runbook_2_results.md.
 ```bash
 cd /Users/yitzchak/Documents/dev/careervp/src/backend
 
-# Phase 10 unit tests
+# Phase 10 unit tests (status endpoints are in separate files)
 uv run pytest tests/unit/test_auth_handler.py -v --tb=short
 uv run pytest tests/unit/test_user_handler.py -v --tb=short
 uv run pytest tests/unit/test_job_handler.py -v --tb=short
 uv run pytest tests/unit/test_vpr_endpoints.py -v --tb=short
-uv run pytest tests/unit/test_status_endpoints.py -v --tb=short
 uv run pytest tests/unit/test_cv_tailoring_status.py -v --tb=short
 uv run pytest tests/unit/test_cover_letter_status.py -v --tb=short
 uv run pytest tests/unit/test_interview_prep_status.py -v --tb=short
@@ -1713,18 +1712,19 @@ uv run pytest tests/unit/test_health_handler.py -v --tb=short
 uv run pytest tests/unit/test_api_models.py -v --tb=short
 uv run pytest tests/unit/test_api_storage_adapter.py -v --tb=short
 
-# Phase 10 integration tests
+# Phase 10 integration tests (create if not exists per Step 10.0c)
 uv run pytest tests/integration/test_openapi_contract.py -v --tb=short
 
 # CDK infra validation
 cd /Users/yitzchak/Documents/dev/careervp/infra
-cdk synth
-cdk diff
+uv run cdk synth
+uv run cdk diff
 
-# Run lint
+# Run lint (from src/backend, not infra)
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
 uv run ruff check careervp/handlers/ careervp/models/ careervp/dal/
 
-# Run type check
+# Run type check (from src/backend, not infra)
 uv run mypy careervp/handlers/ careervp/models/ careervp/dal/ --strict
 ```
 

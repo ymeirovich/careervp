@@ -1,0 +1,823 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.10.12, pytest-9.0.2, pluggy-1.6.0 -- /Users/yitzchak/.pyenv/versions/3.10.12/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/yitzchak/Documents/dev/careervp
+configfile: pytest.ini
+plugins: anyio-4.12.1, mock-3.15.1, typeguard-2.13.3, cov-7.0.0
+collecting ... collected 32 items
+
+test_01_auth_health.py::TestHealthEndpoint::test_health_check
+=== RESPONSE test_health_check ===
+{
+  "test_name": "test_health_check",
+  "endpoint": "GET /health",
+  "status_code": 404,
+  "response": {
+    "statusCode": 404,
+    "message": "Not found"
+  }
+}
+⚠ GET /health - Endpoint not deployed (404)
+SKIPPED
+test_01_auth_health.py::TestAuthEndpoints::test_auth_register
+=== RESPONSE test_auth_register ===
+{
+  "test_name": "test_auth_register",
+  "endpoint": "POST /auth/register",
+  "status_code": 201,
+  "response": {
+    "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiZjBhZTcyOTItZmQwZS00ZDM2LThlZmYtZGM1YTYzOWM2N2EwIiwiZW1haWwiOiJ0ZXN0XzE3NzE1MDA0NDdAZXhhbXBsZS5jb20iLCJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiaWF0IjoxNzcxNTAwNDU0LCJleHAiOjE3NzE1MDQwNTR9.YixCB1idN5TbIbtsM9_KFy6Eoe4m-QnZQRNxXyFONiaBP9PAr5oCVHewkqqdQ6ZBDt5OUyAURsqYHiR2Lt307rf7CXpCQSSgjdjJtNxf6g2jlGeZ5gFL5Wh-4XT5rnJN2UF6BiNJDcVEqB1Rp5JuKfFNWU_6fJ2X5AKSQF6H5jB6ET0ROVIEq7MjD0xJiILy0lxZydJHV2Al8dXNWlugCrURKgDV6Zm9rlBv2KS1o_37JIlHZIDuWk78NMySjoALhwN4evfAh-bNijK0D_xt96k11jC63_RMSMXsxS9DGKloo_S7fhlGManrZ4sXjj_JbeXXBogbbuPnWQ8ctJD5HQ",
+    "refresh_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiZjBhZTcyOTItZmQwZS00ZDM2LThlZmYtZGM1YTYzOWM2N2EwIiwiZW1haWwiOiJ0ZXN0XzE3NzE1MDA0NDdAZXhhbXBsZS5jb20iLCJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImlhdCI6MTc3MTUwMDQ1NCwiZXhwIjoxNzcyMTA1MjU0fQ.PePfhLEas0HsRxtsnaddprqoLM5uUs7fVyPYtWrRgwQsOsWz67PLiMaDp7DgFFB2JhOuqXSYUrJnxcpOou3ztmpMk7GgaF2YveZ-tM_x7WBohXkbPwbjlvryCVL9uyDTJKM69NxOHs1LETozMmJlJ0jftyjAoMxQ09mg-93aDJHIuTOfsS9A1KpQrmyeBdUQvwSAY_26aiDnfYiB6rFCwq5ATHYeUAlEaXcNMM9CzzFPdH0SHdn8yPMqRbqYHXiOfxnJvfnTbtCpBTGCwWMt0UYVPbDUc_YuB80_Xd16nI7eC5g6EOVf-RQDsjxrD_vBMnXu01kkPV7bAQGLL8T8wg",
+    "expires_in": 3600,
+    "token_type": "Bearer"
+  }
+}
+✓ POST /auth/register - Email: test_1771500447@example.com
+PASSED
+test_01_auth_health.py::TestAuthEndpoints::test_auth_login
+=== RESPONSE test_auth_login ===
+{
+  "test_name": "test_auth_login",
+  "endpoint": "POST /auth/login",
+  "status_code": 200,
+  "response": {
+    "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiN2E3ZjYzMDctMzU2Mi00ZWJjLWIyMDktNWYxOTU1OWIwNDhmIiwiZW1haWwiOiJ0ZXN0dXNlcjEyM0BleGFtcGxlLmNvbSIsInRva2VuX3R5cGUiOiJhY2Nlc3MiLCJpYXQiOjE3NzE1MDA0NTYsImV4cCI6MTc3MTUwNDA1Nn0.XllPcjj5aA7AoHhn6jCnxlUnsGMftyaefIMP9lAxTr-KbXnUBL6i3vU29CeENNlunsCA4VaRaHgE7VXR-_xiNPx6qMXhsFVpMWjyzC6kXm6jprWaAlojpBXaIUVwJVwVSjk4POv9HOvTvSxTgAsBAesdHger0dmCG8eAVuGFlJgol4pPSdsgJS4HfgfDM1mo5rV3mK3UfJIZYic4L1pEq_ipEZL46WuwR4xCiPwbVnC_sIw-382ZGHcWKNVwdB7aVU27JFbPnL9d2Plj0AimO-2l66mZua0v0Xrm3ZHF20vOW73r-qDSlGgXs4UTP4cxFk48snsnU8Cv0ND81MeW_g",
+    "refresh_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiN2E3ZjYzMDctMzU2Mi00ZWJjLWIyMDktNWYxOTU1OWIwNDhmIiwiZW1haWwiOiJ0ZXN0dXNlcjEyM0BleGFtcGxlLmNvbSIsInRva2VuX3R5cGUiOiJyZWZyZXNoIiwiaWF0IjoxNzcxNTAwNDU2LCJleHAiOjE3NzIxMDUyNTZ9.KxuxQtOFsz-kqy0MjIhhXFdj1La_fwJsyGgDPiDIyl97g4vsDmYf7a1Z-kveCGKxqIaV6gqchyYFu9ggPB0cSPcRpr3bR3CgkMQeLRjZGQGExHii-ej7FFAHRsB38VeUdhh1euqpOMdz9Z_afsoVEfMk3506uTJ_r5pTIOP7gP86BO4ErfDFGyth7nCqptqbqXZLh6w6eQ3NUAD8wGr8PVu-mA34PbtIjZUs1uDU6gmzpGVI1Eao450E6fboUH9LteyEfTLmSJny_g4OX5N87i9HDczyBe4x6fs4-88vq5RDNslaoQgvNCflpMKs-RfrR0uzxolEKkEDa3xm_pz97w",
+    "expires_in": 3600,
+    "token_type": "Bearer"
+  }
+}
+✓ POST /auth/login - Logged in successfully
+PASSED
+test_01_auth_health.py::TestAuthEndpoints::test_auth_refresh
+=== RESPONSE test_auth_refresh ===
+{
+  "test_name": "test_auth_refresh",
+  "endpoint": "POST /auth/refresh",
+  "status_code": 200,
+  "response": {
+    "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiN2E3ZjYzMDctMzU2Mi00ZWJjLWIyMDktNWYxOTU1OWIwNDhmIiwiZW1haWwiOiJ0ZXN0dXNlcjEyM0BleGFtcGxlLmNvbSIsInRva2VuX3R5cGUiOiJhY2Nlc3MiLCJpYXQiOjE3NzE1MDA0NTksImV4cCI6MTc3MTUwNDA1OX0.h7C6tiWoM7UyBn0o-PKVmOa-sap9kaF5nUcjGgBpTVB7ZD3jGD2Kf_p6TJkG575MllCbaDduaWWX-kSfqdHzp8wQmQBgRNw6oyse54RRvCcFOla7ILDiBx9RHvxrxl5FsI5DSNYtciGRrlaK3FeStRR1SR5U_da6oal_YFqJIMxn-HRmkoYpV5dDMDi7zxDqGnr0WcmiHbgo3dd8pn-MSA85n1EUza3RYhhHKbUYSz_dtoY2VjZvqAC1qhNTM1NTenmRgEdTLepYDziZgRboPJV1Z7P0poR1tcaWkh3scwmDz51wVPh4KahJKA2OUEHjqkd4MO0wdyrjns7OYt6FrQ",
+    "refresh_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiN2E3ZjYzMDctMzU2Mi00ZWJjLWIyMDktNWYxOTU1OWIwNDhmIiwiZW1haWwiOiJ0ZXN0dXNlcjEyM0BleGFtcGxlLmNvbSIsInRva2VuX3R5cGUiOiJyZWZyZXNoIiwiaWF0IjoxNzcxNTAwNDU5LCJleHAiOjE3NzIxMDUyNTl9.LtpFcl_sJ7ivTtKR8VAmTJS41nCtiOXBW1-SCJu_NKig4KOyp9-vd3PKBcOD4y8mTFd7cjcKY9YK4GsbOosV0_iowedM76QB40DDEmYw4qtTCgp5If9CI6PwU57KGYbrSo6yodwCgreRFdXJ_HuA1LWNmQlJ9-N35KqEoRbom-9sfoOk6qqoG7llb6RavABi00zGxkX-lxmA_CRjnrG9-RINRT4RmXLzYxk7V3BiuabpUhKnQ1gUyiDXT4Ko428Zdj8phZJ916Y_CFlg8kCdChuq2ejumnTPI5jz80nfd_Y-WmvU8m32pN3XYqPU2U03mC_RiaQADt99HcLaqJ4kaw",
+    "expires_in": 3600,
+    "token_type": "Bearer"
+  }
+}
+✓ POST /auth/refresh - Token refreshed
+PASSED
+test_02_users.py::TestUserEndpoints::test_get_current_user
+=== RESPONSE test_get_current_user ===
+{
+  "test_name": "test_get_current_user",
+  "endpoint": "GET /users/me",
+  "status_code": 404,
+  "response": {
+    "statusCode": 404,
+    "message": "Not found"
+  }
+}
+⚠ GET /users/me - Status 404 (auth may be required)
+PASSED
+test_02_users.py::TestUserEndpoints::test_update_current_user
+=== RESPONSE test_update_current_user ===
+{
+  "test_name": "test_update_current_user",
+  "endpoint": "PUT /users/me",
+  "status_code": 404,
+  "response": {
+    "statusCode": 404,
+    "message": "Not found"
+  }
+}
+⚠ PUT /users/me - Status 404 (auth may be required)
+PASSED
+test_02_users.py::TestUserEndpoints::test_upload_cv
+=== RESPONSE test_upload_cv ===
+{
+  "test_name": "test_upload_cv",
+  "endpoint": "POST /users/me/cv",
+  "status_code": 200,
+  "response": {
+    "success": true,
+    "user_cv": {
+      "user_id": "test-user-e2e",
+      "full_name": "YITZCHAK MEIROVICH",
+      "cv_id": null,
+      "language": "en",
+      "contact_info": {
+        "name": "YITZCHAK MEIROVICH",
+        "phone": "052-756-3792",
+        "email": "ymeirovich@presgen.net",
+        "location": "Modiin, Israel",
+        "linkedin": "www.linkedin.com/in/ymeirovich"
+      },
+      "email": "ymeirovich@presgen.net",
+      "phone": "052-756-3792",
+      "location": "Modiin, Israel",
+      "linkedin": "www.linkedin.com/in/ymeirovich",
+      "experience": [
+        {
+          "company": "AllCloud",
+          "role": "Director of AWS Training",
+          "dates": "May 2021 \u2013 July 2025",
+          "start_date": null,
+          "end_date": null,
+          "current": false,
+          "description": null,
+          "achievements": [
+            "Led LMS setup and deployment of Cloud Academy serving 200+ internal employees and external customers; created 30+ learning plans including 8-week DevOps Bootcamp enabling 40+ new hires to achieve AWS Solutions Architect Associate certification with 90%+ pass rates",
+            "Generated $1M+ revenue within 18 months through AWS Authorized Training Partner program by designing pricing models for 40+ course catalog and selling training seats, Cloud Academy licenses, and certification exam vouchers",
+            "Architected multi-year career path programs featuring Beginner/Mid/Senior tiers with role-based certification roadmaps and custom study materials aligned with business needs",
+            "Delivered global training across 6 countries (Israel, Romania, Germany, Austria, US, Canada) with cultural adaptation strategies achieving consistent learning outcomes",
+            "Built community training portal achieving 90%+ certification pass rates through peer learning groups and community accountability"
+          ],
+          "technologies": []
+        },
+        {
+          "company": "AllCloud",
+          "role": "AI Training Lead",
+          "dates": "July 2024 \u2013 July 2025",
+          "start_date": null,
+          "end_date": null,
+          "current": false,
+          "description": null,
+          "achievements": [
+            "Developed PresGen AI platform with 4 operational modules (automated content generation, data visualization, video processing, adaptive assessment) reducing content development time by 60-90%",
+            "Led company-wide training sessions on AI product positioning enabling sales teams to confidently discuss AI capabilities with customers"
+          ],
+          "technologies": []
+        },
+        {
+          "company": "Israel Ministry of Finance",
+          "role": "AWS Solutions Architect",
+          "dates": "2009 \u2013 2021",
+          "start_date": null,
+          "end_date": null,
+          "current": false,
+          "description": null,
+          "achievements": [
+            "Designed and maintained frontend web applications for government IT infrastructure",
+            "Provided technical leadership on AWS cloud architecture decisions and collaborated on system modernization initiatives"
+          ],
+          "technologies": []
+        }
+      ],
+      "education": [
+        {
+          "institution": "University of Maryland",
+          "degree": "B.A.",
+          "field_of_study": "Political Science",
+          "graduation_date": null,
+          "start_date": null,
+          "end_date": null,
+          "gpa": null,
+          "honors": [],
+          "dates": null
+        }
+      ],
+      "certifications": [
+        {
+          "name": "AWS Authorized Instructor (AAI)",
+          "issuer": null,
+          "issuing_organization": null,
+          "date": null,
+          "issue_date": null,
+          "expiry_date": null,
+          "credential_id": null
+        },
+        {
+          "name": "AWS Certified Solutions Architect Associate",
+          "issuer": null,
+          "issuing_organization": null,
+          "date": null,
+          "issue_date": null,
+          "expiry_date": null,
+          "credential_id": null
+        },
+        {
+          "name": "AWS Certified Developer Associate",
+          "issuer": null,
+          "issuing_organization": null,
+          "date": null,
+          "issue_date": null,
+          "expiry_date": null,
+          "credential_id": null
+        },
+        {
+          "name": "AWS Certified AI Practitioner",
+          "issuer": null,
+          "issuing_organization": null,
+          "date": null,
+          "issue_date": null,
+          "expiry_date": null,
+          "credential_id": null
+        }
+      ],
+      "skills": [
+        "LMS Implementation & Configuration",
+        "Instructional Design (ADDIE, SAM)",
+        "AWS Cloud Architecture",
+        "AI Platform Development",
+        "Content Creation & Video Production"
+      ],
+      "top_achievements": [
+        "Generated $1M+ revenue within 18 months through AWS Authorized Training Partner program by transforming L&D from cost center to profit driver",
+        "Achieved 90%+ certification pass rates across 200+ employees and external customers through structured learning programs and community building",
+        "Reduced content development time by 60-90% through PresGen AI platform development with automated content generation and adaptive assessment capabilities"
+      ],
+      "professional_summary": "Strategic Learning Experience Specialist with 27 years of technical instruction experience and proven expertise building Customer Academy infrastructure from the ground up. Demonstrated success in LMS implementation (Cloud Academy, LRN, AWS Skillbuilder), certification framework design, and revenue generation ($1M+ in training sales within 18 months). Architect of PresGen\u2014an operational AI-powered learning platform featuring automated content creation, adaptive assessment, and video processing capabilities. Excel at serving multi-audience ecosystems (external customers, partners, internal teams) with scalable learning solutions that drive measurable business outcomes. Delivered global training across 6 countries (Israel, Romania, Germany, Austria, US, Canada) achieving 90%+ certification pass rates. Proven ability to translate complex technical concepts (cloud architecture, AI, automation) into engaging hands-on labs, sandbox exercises, and interactive learning experiences. Deep expertise in instructional design, SaaS training operations, community building, and connecting educational initiatives to KPIs including MRR, product adoption, and support efficiency.",
+      "languages": [],
+      "created_at": null,
+      "updated_at": null,
+      "is_parsed": true,
+      "source_file_key": null
+    },
+    "language_detected": "en",
+    "parse_time_ms": 11172,
+    "error": null
+  }
+}
+✓ POST /users/me/cv - CV uploaded, ID: None
+PASSED
+test_02_users.py::TestUserEndpoints::test_list_user_cvs
+=== RESPONSE test_list_user_cvs ===
+{
+  "test_name": "test_list_user_cvs",
+  "endpoint": "GET /users/me/cvs",
+  "status_code": 404,
+  "response": {
+    "statusCode": 404,
+    "message": "Not found"
+  }
+}
+⚠ GET /users/me/cvs - Status 404
+PASSED
+test_03_jobs.py::TestJobEndpoints::test_create_job
+=== RESPONSE test_create_job ===
+{
+  "test_name": "test_create_job",
+  "endpoint": "POST /jobs",
+  "status_code": 400,
+  "response": {
+    "success": false,
+    "code": "VALIDATION_ERROR",
+    "message": "cv_id is required, job_description is required",
+    "errors": [
+      {
+        "field": "cv_id",
+        "message": "cv_id is required"
+      },
+      {
+        "field": "job_description",
+        "message": "job_description is required"
+      }
+    ]
+  }
+}
+⚠ POST /jobs - Status 400: {"success": false, "code": "VALIDATION_ERROR", "message": "cv_id is required, job_description is required", "errors": [{"field": "cv_id", "message": "cv_id is required"}, {"field": "job_description",
+PASSED
+test_03_jobs.py::TestJobEndpoints::test_list_jobs
+=== RESPONSE test_list_jobs ===
+{
+  "test_name": "test_list_jobs",
+  "endpoint": "GET /jobs",
+  "status_code": 404,
+  "response": {
+    "success": false,
+    "code": "INVALID_INPUT",
+    "message": "Endpoint not found"
+  }
+}
+⚠ GET /jobs - Status 404
+PASSED
+test_03_jobs.py::TestJobEndpoints::test_get_job
+=== RESPONSE test_get_job ===
+{
+  "test_name": "test_get_job",
+  "endpoint": "GET /jobs/test-job-id",
+  "status_code": 401,
+  "response": {
+    "error": "Authentication required",
+    "status_code": 401
+  }
+}
+⚠ GET /jobs/test-job-id - Status 401
+PASSED
+test_04_vpr.py::TestVPREndpoints::test_generate_vpr
+=== RESPONSE test_generate_vpr ===
+{
+  "test_name": "test_generate_vpr",
+  "endpoint": "POST /vpr/generate",
+  "status_code": 401,
+  "response": {
+    "error": "Authentication required",
+    "status_code": 401
+  }
+}
+⚠ POST /vpr/generate - Status 401: {"error": "Authentication required", "status_code": 401}
+PASSED
+test_04_vpr.py::TestVPREndpoints::test_get_vpr_status
+=== RESPONSE test_get_vpr_status ===
+{
+  "test_name": "test_get_vpr_status",
+  "endpoint": "GET /vpr/test-vpr-id",
+  "status_code": 401,
+  "response": {
+    "error": "Authentication required",
+    "status_code": 401
+  }
+}
+⚠ GET /vpr/test-vpr-id - Status 401
+PASSED
+test_04_vpr.py::TestVPREndpoints::test_list_vprs
+=== RESPONSE test_list_vprs ===
+{
+  "test_name": "test_list_vprs",
+  "endpoint": "GET /users/me/vprs",
+  "status_code": 401,
+  "response": {
+    "error": "Authentication required",
+    "status_code": 401
+  }
+}
+⚠ GET /users/me/vprs - Status 401
+PASSED
+test_04_vpr.py::TestVPREndpoints::test_vpr_async_polling
+=== RESPONSE test_generate_vpr ===
+{
+  "test_name": "test_generate_vpr",
+  "endpoint": "POST /vpr/generate",
+  "status_code": 401,
+  "response": {
+    "error": "Authentication required",
+    "status_code": 401
+  }
+}
+⚠ POST /vpr/generate - Status 401: {"error": "Authentication required", "status_code": 401}
+SKIPPED (No...)
+test_05_gap_analysis.py::TestGapAnalysisEndpoints::test_generate_gap_questions
+=== RESPONSE test_generate_gap_questions ===
+{
+  "test_name": "test_generate_gap_questions",
+  "endpoint": "POST /gap-analysis/questions",
+  "status_code": 500,
+  "response": {
+    "error": "An error occurred (ValidationException) when calling the PutItem operation: One or more parameter values were invalid: Missing the key applicationId in the item",
+    "code": "DYNAMODB_ERROR"
+  }
+}
+⚠ POST /gap-analysis/questions - Status 500: {"error": "An error occurred (ValidationException) when calling the PutItem operation: One or more parameter values were invalid: Missing the key applicationId in the item", "code": "DYNAMODB_ERROR"}
+PASSED
+test_05_gap_analysis.py::TestGapAnalysisEndpoints::test_submit_gap_responses
+=== RESPONSE test_submit_gap_responses ===
+{
+  "test_name": "test_submit_gap_responses",
+  "endpoint": "POST /gap-analysis/responses",
+  "status_code": 400,
+  "response": {
+    "error": "job_id is required",
+    "code": "MISSING_REQUIRED_FIELD"
+  }
+}
+⚠ POST /gap-analysis/responses - Status 400: {"error": "job_id is required", "code": "MISSING_REQUIRED_FIELD"}
+PASSED
+test_05_gap_analysis.py::TestGapAnalysisEndpoints::test_get_gap_questions
+=== RESPONSE test_get_gap_questions ===
+{
+  "test_name": "test_get_gap_questions",
+  "endpoint": "GET /gap-analysis/job_test-user-e2e/questions",
+  "status_code": 500,
+  "response": {
+    "error": "An error occurred (ValidationException) when calling the Query operation: Query condition missed key schema element: applicationId",
+    "code": "DYNAMODB_ERROR"
+  }
+}
+⚠ GET /gap-analysis/job_test-user-e2e/questions - Status 500
+PASSED
+test_06_cv_tailoring.py::TestCVTailoringEndpoints::test_generate_tailored_cv
+=== RESPONSE test_generate_tailored_cv ===
+{
+  "test_name": "test_generate_tailored_cv",
+  "endpoint": "POST /cv-tailoring/generate",
+  "status_code": 400,
+  "response": {
+    "success": false,
+    "code": "VALIDATION_ERROR",
+    "message": "job_description is required",
+    "errors": [
+      {
+        "field": "job_description",
+        "message": "job_description is required"
+      }
+    ]
+  }
+}
+⚠ POST /cv-tailoring/generate - Status 400: {"success": false, "code": "VALIDATION_ERROR", "message": "job_description is required", "errors": [{"field": "job_description", "message": "job_description is required"}]}
+PASSED
+test_06_cv_tailoring.py::TestCVTailoringEndpoints::test_get_tailored_cv_status
+=== RESPONSE test_get_tailored_cv_status ===
+{
+  "test_name": "test_get_tailored_cv_status",
+  "endpoint": "GET /cv-tailoring/test-cv-tailoring-id",
+  "status_code": 502,
+  "response": {
+    "message": "Internal server error"
+  }
+}
+⚠ GET /cv-tailoring/test-cv-tailoring-id - Status 502
+PASSED
+test_06_cv_tailoring.py::TestCVTailoringEndpoints::test_list_tailored_cvs
+=== RESPONSE test_list_tailored_cvs ===
+{
+  "test_name": "test_list_tailored_cvs",
+  "endpoint": "GET /users/me/tailored-cvs",
+  "status_code": 200,
+  "response": {
+    "tailored_cvs": [
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771420332#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T13:12:12.083976+00:00",
+        "updated_at": "2026-02-18T13:12:12.083976+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771420266#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T13:11:06.976727+00:00",
+        "updated_at": "2026-02-18T13:11:06.976727+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771420265#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T13:11:05.132727+00:00",
+        "updated_at": "2026-02-18T13:11:05.132727+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771420262#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T13:11:02.579755+00:00",
+        "updated_at": "2026-02-18T13:11:02.579755+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771420261#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T13:11:01.988048+00:00",
+        "updated_at": "2026-02-18T13:11:01.988048+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771420153#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T13:09:13.173732+00:00",
+        "updated_at": "2026-02-18T13:09:13.173732+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771420078#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T13:07:58.678164+00:00",
+        "updated_at": "2026-02-18T13:07:58.678164+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771420076#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T13:07:56.772887+00:00",
+        "updated_at": "2026-02-18T13:07:56.772887+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771420074#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T13:07:54.193584+00:00",
+        "updated_at": "2026-02-18T13:07:54.193584+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771420073#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T13:07:53.572907+00:00",
+        "updated_at": "2026-02-18T13:07:53.572907+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771418902#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T12:48:22.887925+00:00",
+        "updated_at": "2026-02-18T12:48:22.887925+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771418834#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T12:47:14.305944+00:00",
+        "updated_at": "2026-02-18T12:47:14.305944+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771418832#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T12:47:12.171221+00:00",
+        "updated_at": "2026-02-18T12:47:12.171221+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771418829#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T12:47:09.530659+00:00",
+        "updated_at": "2026-02-18T12:47:09.530659+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771418828#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T12:47:08.605144+00:00",
+        "updated_at": "2026-02-18T12:47:08.605144+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771418611#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T12:43:31.889311+00:00",
+        "updated_at": "2026-02-18T12:43:31.889311+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771418609#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T12:43:29.330874+00:00",
+        "updated_at": "2026-02-18T12:43:29.330874+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771418608#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-18T12:43:28.810130+00:00",
+        "updated_at": "2026-02-18T12:43:28.810130+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771366396#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T22:13:16.806633+00:00",
+        "updated_at": "2026-02-17T22:13:16.806633+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771365362#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:56:02.644430+00:00",
+        "updated_at": "2026-02-17T21:56:02.644430+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771365359#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:55:59.764753+00:00",
+        "updated_at": "2026-02-17T21:55:59.764753+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771365178#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:52:58.594809+00:00",
+        "updated_at": "2026-02-17T21:52:58.594809+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771365171#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:52:51.916732+00:00",
+        "updated_at": "2026-02-17T21:52:51.916732+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771364998#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:49:58.515771+00:00",
+        "updated_at": "2026-02-17T21:49:58.515771+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771364991#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:49:51.322962+00:00",
+        "updated_at": "2026-02-17T21:49:51.322962+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771364984#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:49:44.054433+00:00",
+        "updated_at": "2026-02-17T21:49:44.054433+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771364975#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:49:35.549856+00:00",
+        "updated_at": "2026-02-17T21:49:35.549856+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771364968#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:49:28.992319+00:00",
+        "updated_at": "2026-02-17T21:49:28.992319+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771364963#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:49:23.144354+00:00",
+        "updated_at": "2026-02-17T21:49:23.144354+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771364878#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:47:58.143176+00:00",
+        "updated_at": "2026-02-17T21:47:58.143176+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771364871#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:47:51.863093+00:00",
+        "updated_at": "2026-02-17T21:47:51.863093+00:00"
+      },
+      {
+        "id": "TAILORED_CV#cv-test-user-e2e#1771364681#v1",
+        "status": "completed",
+        "cv_id": "cv-test-user-e2e",
+        "created_at": "2026-02-17T21:44:41.924061+00:00",
+        "updated_at": "2026-02-17T21:44:41.924061+00:00"
+      }
+    ]
+  }
+}
+✓ GET /users/me/tailored-cvs - Found 32 tailored CV(s)
+PASSED
+test_06_cv_tailoring.py::TestCVTailoringEndpoints::test_cv_tailoring_async_polling
+=== RESPONSE test_generate_tailored_cv ===
+{
+  "test_name": "test_generate_tailored_cv",
+  "endpoint": "POST /cv-tailoring/generate",
+  "status_code": 400,
+  "response": {
+    "success": false,
+    "code": "VALIDATION_ERROR",
+    "message": "job_description is required",
+    "errors": [
+      {
+        "field": "job_description",
+        "message": "job_description is required"
+      }
+    ]
+  }
+}
+⚠ POST /cv-tailoring/generate - Status 400: {"success": false, "code": "VALIDATION_ERROR", "message": "job_description is required", "errors": [{"field": "job_description", "message": "job_description is required"}]}
+SKIPPED
+test_07_cover_letter.py::TestCoverLetterEndpoints::test_generate_cover_letter
+=== RESPONSE test_generate_cover_letter ===
+{
+  "test_name": "test_generate_cover_letter",
+  "endpoint": "POST /cover-letter/generate",
+  "status_code": 400,
+  "response": {
+    "error": "Request validation failed",
+    "code": "INVALID_INPUT"
+  }
+}
+⚠ POST /cover-letter/generate - Status 400: {"error": "Request validation failed", "code": "INVALID_INPUT"}
+PASSED
+test_07_cover_letter.py::TestCoverLetterEndpoints::test_get_cover_letter_status
+=== RESPONSE test_get_cover_letter_status ===
+{
+  "test_name": "test_get_cover_letter_status",
+  "endpoint": "GET /cover-letter/test-cover-letter-id",
+  "status_code": 401,
+  "response": {
+    "error": "Missing or invalid authentication token",
+    "code": "UNAUTHORIZED"
+  }
+}
+⚠ GET /cover-letter/test-cover-letter-id - Status 401
+PASSED
+test_07_cover_letter.py::TestCoverLetterEndpoints::test_list_cover_letters
+=== RESPONSE test_list_cover_letters ===
+{
+  "test_name": "test_list_cover_letters",
+  "endpoint": "GET /users/me/cover-letters",
+  "status_code": 401,
+  "response": {
+    "error": "Missing or invalid authentication token",
+    "code": "UNAUTHORIZED"
+  }
+}
+⚠ GET /users/me/cover-letters - Status 401
+PASSED
+test_07_cover_letter.py::TestCoverLetterEndpoints::test_cover_letter_async_polling
+=== RESPONSE test_generate_cover_letter ===
+{
+  "test_name": "test_generate_cover_letter",
+  "endpoint": "POST /cover-letter/generate",
+  "status_code": 400,
+  "response": {
+    "error": "Request validation failed",
+    "code": "INVALID_INPUT"
+  }
+}
+⚠ POST /cover-letter/generate - Status 400: {"error": "Request validation failed", "code": "INVALID_INPUT"}
+SKIPPED
+test_08_interview_prep.py::TestInterviewPrepEndpoints::test_generate_interview_prep
+=== RESPONSE test_generate_interview_prep ===
+{
+  "test_name": "test_generate_interview_prep",
+  "endpoint": "POST /interview-prep/generate",
+  "status_code": 400,
+  "response": {
+    "error": "Request validation failed",
+    "code": "INVALID_INPUT"
+  }
+}
+⚠ POST /interview-prep/generate - Status 400: {"error": "Request validation failed", "code": "INVALID_INPUT"}
+PASSED
+test_08_interview_prep.py::TestInterviewPrepEndpoints::test_get_interview_prep_status
+=== RESPONSE test_get_interview_prep_status ===
+{
+  "test_name": "test_get_interview_prep_status",
+  "endpoint": "GET /interview-prep/test-interview-prep-id",
+  "status_code": 401,
+  "response": {
+    "error": "Missing or invalid authentication token",
+    "code": "UNAUTHORIZED"
+  }
+}
+⚠ GET /interview-prep/test-interview-prep-id - Status 401
+PASSED
+test_08_interview_prep.py::TestInterviewPrepEndpoints::test_interview_prep_async_polling
+=== RESPONSE test_generate_interview_prep ===
+{
+  "test_name": "test_generate_interview_prep",
+  "endpoint": "POST /interview-prep/generate",
+  "status_code": 400,
+  "response": {
+    "error": "Request validation failed",
+    "code": "INVALID_INPUT"
+  }
+}
+⚠ POST /interview-prep/generate - Status 400: {"error": "Request validation failed", "code": "INVALID_INPUT"}
+SKIPPED
+test_09_company_research.py::TestCompanyResearchEndpoints::test_company_research_fetch
+=== RESPONSE test_company_research_fetch ===
+{
+  "test_name": "test_company_research_fetch",
+  "endpoint": "POST /company-research/fetch",
+  "status_code": 503,
+  "response": {
+    "error": "Job posting text unavailable for fallback",
+    "code": "ALL_SOURCES_FAILED"
+  }
+}
+⚠ POST /company-research/fetch - Status 503: {"error": "Job posting text unavailable for fallback", "code": "ALL_SOURCES_FAILED"}
+PASSED
+test_09_company_research.py::TestCompanyResearchEndpoints::test_company_research_get
+=== RESPONSE test_company_research_get ===
+{
+  "test_name": "test_company_research_get",
+  "endpoint": "GET /company-research/job_test-user-e2e",
+  "status_code": 401,
+  "response": {
+    "error": "Missing or invalid authentication token",
+    "code": "UNAUTHORIZED"
+  }
+}
+⚠ GET /company-research/job_test-user-e2e - Status 401
+PASSED
+test_09_company_research.py::TestCompanyResearchEndpoints::test_company_research_async_polling
+=== RESPONSE test_company_research_fetch ===
+{
+  "test_name": "test_company_research_fetch",
+  "endpoint": "POST /company-research/fetch",
+  "status_code": 503,
+  "response": {
+    "error": "Job posting text unavailable for fallback",
+    "code": "ALL_SOURCES_FAILED"
+  }
+}
+⚠ POST /company-research/fetch - Status 503: {"error": "Job posting text unavailable for fallback", "code": "ALL_SOURCES_FAILED"}
+SKIPPED
+
+=========================== short test summary info ============================
+SKIPPED [1] test_01_auth_health.py:70: Health endpoint not deployed in current stage
+SKIPPED [1] test_04_vpr.py:204: No VPR ID available for polling test
+SKIPPED [1] test_06_cv_tailoring.py:210: No CV tailoring ID available for polling test
+SKIPPED [1] test_07_cover_letter.py:214: No cover letter ID available for polling test
+SKIPPED [1] test_08_interview_prep.py:168: No interview prep ID available for polling test
+SKIPPED [1] test_09_company_research.py:151: No job ID available for company research polling test
+=================== 26 passed, 6 skipped in 72.51s (0:01:12) ===================

@@ -18,9 +18,6 @@ except Exception:  # noqa: BLE001
 from careervp.models.api_models import GapQuestionRequest, GapResponseRequest
 from careervp.models.result import ResultCode
 
-QUESTION_ARTIFACT_PREFIX = 'ARTIFACT#GAP_ANALYSIS#'
-RESPONSE_ARTIFACT_PREFIX = 'ARTIFACT#GAP_RESPONSES#'
-
 
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     _ = context
@@ -103,9 +100,10 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:
     missing_qualifications = _build_missing_qualifications(focus_areas)
 
     now = datetime.now(timezone.utc).isoformat()
+    application_id = _build_gap_questions_application_id(cv_id, job_id)
     item: dict[str, Any] = {
-        'pk': user_id,
-        'sk': _build_gap_questions_sort_key(cv_id=cv_id, job_id=job_id),
+        'userId': user_id,
+        'applicationId': application_id,
         'artifact_type': 'gap_analysis',
         'user_id': user_id,
         'cv_id': cv_id,
@@ -198,9 +196,10 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
         )
 
     now = datetime.now(timezone.utc).isoformat()
+    application_id = _build_gap_responses_application_id(job_id)
     item: dict[str, Any] = {
-        'pk': user_id,
-        'sk': _build_gap_responses_sort_key(job_id),
+        'userId': user_id,
+        'applicationId': application_id,
         'artifact_type': 'gap_responses',
         'user_id': user_id,
         'job_id': job_id,
@@ -239,7 +238,8 @@ def get_responses(event: dict[str, Any]) -> dict[str, Any]:
         return _error_response(HTTPStatus.BAD_REQUEST, 'Missing jobId path parameter', ResultCode.MISSING_REQUIRED_FIELD)
 
     try:
-        response = _get_table().get_item(Key={'pk': user_id, 'sk': _build_gap_responses_sort_key(job_id)})
+        application_id = _build_gap_responses_application_id(job_id)
+        response = _get_table().get_item(Key={'userId': user_id, 'applicationId': application_id})
     except (ClientError, RuntimeError) as exc:
         return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc), ResultCode.DYNAMODB_ERROR)
 
@@ -450,11 +450,13 @@ def _normalize_submitted_response_entry(
 
 
 def _item_matches_job(item: dict[str, Any], job_id: str) -> bool:
+    # Check job_id attribute directly (preferred method)
     stored_job_id = item.get('job_id')
     if isinstance(stored_job_id, str) and stored_job_id == job_id:
         return True
-    sort_key = str(item.get('sk', ''))
-    return sort_key.endswith(f'#{job_id}')
+    # Check applicationId format: GAP_ANALYSIS#{cv_id}#{job_id} or GAP_RESPONSES#{job_id}
+    application_id = str(item.get('applicationId', ''))
+    return application_id.endswith(f'#{job_id}') or application_id == f'GAP_RESPONSES#{job_id}'
 
 
 def _item_timestamp(item: dict[str, Any]) -> str:
@@ -467,12 +469,12 @@ def _item_timestamp(item: dict[str, Any]) -> str:
     return ''
 
 
-def _build_gap_responses_sort_key(job_id: str) -> str:
-    return f'{RESPONSE_ARTIFACT_PREFIX}{job_id}'
+def _build_gap_responses_application_id(job_id: str) -> str:
+    return f'GAP_RESPONSES#{job_id}'
 
 
-def _build_gap_questions_sort_key(cv_id: str, job_id: str) -> str:
-    return f'{QUESTION_ARTIFACT_PREFIX}{cv_id}#{job_id}'
+def _build_gap_questions_application_id(cv_id: str, job_id: str) -> str:
+    return f'GAP_ANALYSIS#{cv_id}#{job_id}'
 
 
 def _build_question_query_condition(user_id: str) -> Any:
@@ -481,7 +483,7 @@ def _build_question_query_condition(user_id: str) -> Any:
     except Exception as exc:  # noqa: BLE001
         raise RuntimeError('boto3 is required for gap questions query') from exc
 
-    return Key('pk').eq(user_id) & Key('sk').begins_with(QUESTION_ARTIFACT_PREFIX)
+    return Key('userId').eq(user_id) & Key('applicationId').begins_with('GAP_ANALYSIS#')
 
 
 def _ttl_timestamp(ttl_days: int = 90) -> int:
