@@ -1,0 +1,478 @@
+{
+  "swagger" : "2.0",
+  "info" : {
+    "description" : "CareerVP API - AI-powered job application assistant",
+    "version" : "2026-02-19T23:27:48Z",
+    "title" : "careervp-core-api-dev"
+  },
+  "host" : "4xe2tdq8z6.execute-api.us-east-1.amazonaws.com",
+  "basePath" : "/prod",
+  "schemes" : [ "https" ],
+  "paths" : {
+    "/api/company-research" : {
+      "post" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-company-research-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/api/cv" : {
+      "post" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cv-parser-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/api/cv-tailoring" : {
+      "post" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cvtailor-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/api/vpr" : {
+      "post" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-submit-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/api/vpr/status/{job_id}" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "job_id",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-status-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/auth/login" : {
+      "post" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-auth-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/auth/refresh" : {
+      "post" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-auth-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/auth/register" : {
+      "post" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-auth-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/company-research/fetch" : {
+      "post" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-company-research-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/company-research/{jobId}" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "jobId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-company-research-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/cover-letter/generate" : {
+      "post" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cover-letter-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/cover-letter/{coverLetterId}" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "coverLetterId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cover-letter-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/cv-tailoring/generate" : {
+      "post" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cvtailor-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/cv-tailoring/{cvTailoringId}" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "cvTailoringId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cvtailor-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/gap-analysis/questions" : {
+      "post" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-gap-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/gap-analysis/responses" : {
+      "post" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-gap-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/gap-analysis/{jobId}/questions" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "jobId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-gap-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/health" : {
+      "get" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cv-parser-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/interview-prep/generate" : {
+      "post" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-interview-prep-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/interview-prep/{interviewPrepId}" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "interviewPrepId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-interview-prep-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/jobs" : {
+      "get" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cvtailor-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      },
+      "post" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cvtailor-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/jobs/{jobId}" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "jobId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-status-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/swagger" : {
+      "get" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cv-parser-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/swagger.css" : {
+      "get" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cv-parser-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/swagger.js" : {
+      "get" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cv-parser-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/users/me" : {
+      "get" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cv-parser-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      },
+      "put" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cv-parser-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/users/me/cover-letters" : {
+      "get" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cover-letter-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/users/me/cv" : {
+      "post" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cv-parser-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/users/me/cvs" : {
+      "get" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cv-parser-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/users/me/tailored-cvs" : {
+      "get" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cvtailor-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/users/me/vprs" : {
+      "get" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-status-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/vpr/generate" : {
+      "post" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-submit-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/vpr/{vprId}" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "vprId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-status-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    }
+  },
+  "x-amazon-apigateway-security-policy" : "TLS_1_0"
+}

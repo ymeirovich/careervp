@@ -1,0 +1,54 @@
+{
+  "description": "POST /users/me/cv - Upload CV",
+  "method": "POST",
+  "path": "/users/me/cv",
+  "headers": {
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
+  },
+  "request": {
+    "cv_content": "JOHN SMITH\nSenior Software Engineer\n\nEXPERIENCE\n\nSenior Software Engineer | TechCorp Inc. | 2020-Present\n- Led development of microservices architecture serving 5M+ daily active users\n- Reduced API response time by 40% through optimization and caching strategies\n- Mentored team of 5 junior engineers in best practices and code reviews\n- Technologies: Python, Node.js, AWS, Docker, Kubernetes\n\nSoftware Engineer | StartupXYZ | 2018-2020\n- Built RESTful APIs handling 100K+ requests per day\n- Implemented CI/CD pipeline reducing deployment time from 2 hours to 15 minutes\n- Collaborated with cross-functional teams to deliver features on tight deadlines\n- Technologies: Python, PostgreSQL, Redis, Jenkins\n\nEDUCATION\nB.S. Computer Science | University of Technology | 2018\n\nSKILLS\nProgramming: Python, JavaScript, TypeScript, Go\nFrameworks: FastAPI, Express.js, React\nCloud: AWS (Lambda, DynamoDB, S3, API Gateway), Docker, Kubernetes\nDatabases: PostgreSQL, MongoDB, Redis, DynamoDB\nTools: Git, Jenkins, GitHub Actions, Terraform",
+    "file_name": "john_smith_cv.txt"
+  },
+  "expected_response": {
+    "status_code": 201,
+    "body": {
+      "cv_id": "cv-a1b2c3d4-5678-4e9f-a0b1-c2d3e4f56789",
+      "status": "parsed",
+      "parsed_data": {
+        "name": "John Smith",
+        "title": "Senior Software Engineer",
+        "experience": [
+          {
+            "company": "TechCorp Inc.",
+            "role": "Senior Software Engineer",
+            "duration": "2020-Present",
+            "achievements": [
+              "Led development of microservices architecture serving 5M+ daily active users",
+              "Reduced API response time by 40% through optimization and caching strategies",
+              "Mentored team of 5 junior engineers"
+            ]
+          }
+        ],
+        "skills": [
+          "Python",
+          "JavaScript",
+          "TypeScript",
+          "Go",
+          "AWS",
+          "Docker",
+          "Kubernetes",
+          "FastAPI",
+          "PostgreSQL",
+          "MongoDB"
+        ],
+        "education": [
+          {
+            "degree": "B.S. Computer Science",
+            "institution": "University of Technology",
+            "year": "2018"
+          }
+        ]
+      }
+    }
+  }
+}

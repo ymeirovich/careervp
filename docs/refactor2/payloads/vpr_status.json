@@ -1,0 +1,44 @@
+{
+  "description": "GET /vpr/{vprId} - Get VPR status or result",
+  "method": "GET",
+  "path": "/vpr/{vprId}",
+  "headers": {
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
+  },
+  "path_params": {
+    "vprId": "vpr-a7b8c9d0-1234-4e5f-a6b7-890123456789"
+  },
+  "request": {},
+  "expected_response": {
+    "status_code": 200,
+    "body": {
+      "id": "vpr-a7b8c9d0-1234-4e5f-a6b7-890123456789",
+      "status": "completed",
+      "result": {
+        "uvp": "Senior software engineer who transforms complex technical requirements into scalable cloud-native solutions, with proven expertise in reducing system latency by 40% while mentoring high-performing engineering teams",
+        "differentiators": [
+          {
+            "text": "Led microservices architecture redesign serving 5M+ daily active users with 99.9% uptime",
+            "source": "cv"
+          },
+          {
+            "text": "Implemented automated deployment pipeline that reduced deployment time from 2 hours to 15 minutes, enabling 3x faster feature delivery",
+            "source": "gap_response"
+          },
+          {
+            "text": "Mentored 5 junior engineers to senior level within 18 months through structured code reviews and pair programming",
+            "source": "cv"
+          }
+        ],
+        "strategic_narrative": "Your background demonstrates both technical depth and leadership maturity that aligns perfectly with TechCorp's need for a Senior Software Engineer. The combination of hands-on cloud architecture experience and team mentorship shows you can deliver on both the individual contributor and leadership aspects of this role.",
+        "company_job_fit_score": 8.7,
+        "meta_evaluation": {
+          "persuasion_score": 9.1,
+          "completeness_score": 8.5
+        }
+      },
+      "created_at": "2024-01-20T16:00:00Z",
+      "completed_at": "2024-01-20T16:00:42Z"
+    }
+  }
+}

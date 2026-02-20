@@ -1,0 +1,353 @@
+spec_version: "1.0"
+date: "2026-02-20"
+name: "Async Processing Architecture Specification"
+description: >
+  SQS + Polling pattern for long-running operations (VPR generation, CV Tailoring).
+  Based on REFACTOR2_PLAN Section 5 and 07-vpr-async-architecture.md.
+source_documents:
+  - docs/refactor2/REFACTOR2_PLAN.md (Section 5)
+  - docs/architecture/07-vpr-async-architecture.md
+  - docs/refactor/specs/prompt_optimization_cdk_spec.yaml
+
+# =============================================================================
+# ASYNC PATTERN OVERVIEW
+# =============================================================================
+async_pattern:
+  name: "SQS + Polling"
+  description: >
+    Client submits work via POST endpoint, receives 202 Accepted with job_id.
+    Work is queued in SQS and processed by a worker Lambda. Client polls a
+    GET endpoint for status until COMPLETED or FAILED.
+  flow:
+    submit: "Client -> POST /vpr/generate -> Submit Lambda -> SQS Queue -> 202 {job_id}"
+    process: "SQS -> Worker Lambda -> Claude API -> S3 Result -> DynamoDB (COMPLETED)"
+    poll: "Client -> GET /vpr/{vprId} -> Status Lambda -> 200 {status, result_url}"
+  applicable_operations:
+    - operation: POST /vpr/generate
+      reason: "30-60s generation time exceeds API Gateway 29s timeout"
+      priority: P0
+    - operation: POST /cv-tailoring/generate
+      reason: "3-step JSA methodology may push processing to 30s+"
+      priority: P1
+
+# =============================================================================
+# AWS RESOURCES
+# =============================================================================
+resources:
+
+  sqs_queue:
+    name_template: "careervp-vpr-jobs-queue-{env}"
+    type: AWS::SQS::Queue
+    properties:
+      visibility_timeout: 300
+      message_retention_period_days: 4
+      max_receive_count: 3
+      encryption: SQS_KMS_MANAGED
+    notes: >
+      Visibility timeout must exceed worker Lambda timeout (300s) plus buffer.
+      Max receive count of 3 means failed messages retry twice before going to DLQ.
+
+  sqs_dlq:
+    name_template: "careervp-vpr-jobs-dlq-{env}"
+    type: AWS::SQS::Queue
+    properties:
+      message_retention_period_days: 14
+      encryption: SQS_KMS_MANAGED
+    notes: >
+      Dead letter queue captures messages that fail processing after max_receive_count.
+      14-day retention for debugging failed jobs.
+
+  dynamodb_table:
+    name_template: "careervp-jobs-table-{env}"
+    type: AWS::DynamoDB::Table
+    properties:
+      partition_key:
+        name: job_id
+        type: S
+      billing_mode: PAY_PER_REQUEST
+      gsi:
+        - name: user_id-index
+          partition_key:
+            name: user_id
+            type: S
+          sort_key:
+            name: created_at
+            type: S
+          projection: ALL
+      ttl:
+        attribute_name: ttl
+        expiration_days: 90
+      point_in_time_recovery: true
+      stream: NEW_AND_OLD_IMAGES
+    notes: >
+      Tracks job status (PENDING/PROCESSING/COMPLETED/FAILED).
+      GSI enables querying all jobs for a user.
+      TTL auto-deletes completed jobs after 90 days.
+
+  s3_bucket:
+    name_template: "careervp-{env}-vpr-results-{hash}"
+    type: AWS::S3::Bucket
+    properties:
+      encryption: AES256
+      block_public_access: BLOCK_ALL
+      lifecycle_rules:
+        - id: expire-results
+          expiration_days: 30
+          status: Enabled
+      versioning: false
+    notes: >
+      Stores large VPR result payloads. Presigned URLs grant temporary read access.
+      30-day lifecycle keeps costs low. Results also stored in DynamoDB for metadata.
+
+  lambdas:
+    vpr_submit_lambda:
+      name_template: "careervp-{env}-vpr-submit"
+      handler: vpr_submit_handler.handler
+      description: "Validates request, creates job record, sends SQS message, returns 202"
+      timeout_seconds: 30
+      memory_mb: 512
+      environment_variables:
+        - SQS_QUEUE_URL
+        - JOBS_TABLE_NAME
+        - DYNAMODB_TABLE_NAME
+
+    vpr_worker_lambda:
+      name_template: "careervp-{env}-vpr-worker"
+      handler: vpr_worker_handler.handler
+      description: "Consumes SQS messages, calls Claude API, stores result in S3 + DynamoDB"
+      timeout_seconds: 300
+      memory_mb: 1024
+      environment_variables:
+        - JOBS_TABLE_NAME
+        - DYNAMODB_TABLE_NAME
+        - S3_RESULTS_BUCKET
+        - ANTHROPIC_API_KEY_PARAM
+      reserved_concurrency: 5
+      event_source: SQS (batch_size: 1)
+
+    vpr_status_lambda:
+      name_template: "careervp-{env}-vpr-status"
+      handler: vpr_status_handler.handler
+      description: "Returns job status and presigned result URL if completed"
+      timeout_seconds: 30
+      memory_mb: 512
+      environment_variables:
+        - JOBS_TABLE_NAME
+        - S3_RESULTS_BUCKET
+
+# =============================================================================
+# API CONTRACTS
+# =============================================================================
+api_contracts:
+
+  submit:
+    method: POST
+    path: /vpr/generate
+    status_code: 202
+    request_body:
+      cv_id: string (required)
+      job_id: string (required)
+      gap_response_ids: array[string] (required)
+      options: object (optional)
+    response_body:
+      job_id: string (UUID)
+      status: "PENDING"
+      message: "VPR generation job submitted successfully"
+      estimated_time_seconds: 60
+    error_responses:
+      400: "Missing required fields or invalid input"
+      401: "Unauthorized - missing or invalid JWT"
+      422: "Prerequisites not met (gap analysis incomplete)"
+
+  poll_processing:
+    method: GET
+    path: /vpr/{vprId}
+    status_code: 202
+    description: "Job still processing"
+    response_body:
+      job_id: string
+      status: "PROCESSING"
+      created_at: string (ISO 8601)
+      started_at: string (ISO 8601)
+
+  poll_completed:
+    method: GET
+    path: /vpr/{vprId}
+    status_code: 200
+    description: "Job completed successfully"
+    response_body:
+      job_id: string
+      status: "COMPLETED"
+      created_at: string (ISO 8601)
+      completed_at: string (ISO 8601)
+      result_url: string (presigned S3 URL, expires in 3600s)
+      token_usage:
+        input_tokens: integer
+        output_tokens: integer
+
+  poll_failed:
+    method: GET
+    path: /vpr/{vprId}
+    status_code: 200
+    description: "Job failed"
+    response_body:
+      job_id: string
+      status: "FAILED"
+      error_message: string
+      created_at: string (ISO 8601)
+      failed_at: string (ISO 8601)
+
+# =============================================================================
+# JOB STATE MACHINE
+# =============================================================================
+job_states:
+  states:
+    - PENDING: "Job created, message sent to SQS, awaiting worker pickup"
+    - PROCESSING: "Worker Lambda picked up message, calling Claude API"
+    - COMPLETED: "Claude API response received, result stored in S3"
+    - FAILED: "Processing error, details in error_message field"
+
+  transitions:
+    - from: PENDING
+      to: PROCESSING
+      trigger: "Worker Lambda receives SQS message"
+      handler: vpr_worker_handler
+    - from: PROCESSING
+      to: COMPLETED
+      trigger: "Claude API call succeeds, result stored"
+      handler: vpr_worker_handler
+    - from: PROCESSING
+      to: FAILED
+      trigger: "Claude API error, timeout, or internal error"
+      handler: vpr_worker_handler
+    - from: PENDING
+      to: FAILED
+      trigger: "SQS message exceeds max_receive_count (sent to DLQ)"
+      handler: SQS DLQ policy
+
+  dynamodb_item_schema:
+    job_id: "string (partition key, UUID)"
+    user_id: "string (for GSI lookup)"
+    job_type: "string (VPR | CV_TAILORING)"
+    status: "string (PENDING | PROCESSING | COMPLETED | FAILED)"
+    request_payload: "map (original request body)"
+    result_s3_key: "string (S3 object key for completed result)"
+    error_message: "string (populated on FAILED)"
+    token_usage: "map ({input_tokens, output_tokens})"
+    created_at: "string (ISO 8601)"
+    started_at: "string (ISO 8601, set when PROCESSING)"
+    completed_at: "string (ISO 8601, set when COMPLETED/FAILED)"
+    ttl: "number (epoch seconds, 90 days from creation)"
+
+# =============================================================================
+# COST ESTIMATE
+# =============================================================================
+cost_estimate:
+  per_vpr:
+    sqs_message: "$0.0000004"
+    dynamodb_writes: "$0.0000025 (2 writes: create + update)"
+    dynamodb_reads: "$0.0000005 (1 read per poll)"
+    s3_put: "$0.000005"
+    lambda_submit: "$0.0000002 (512MB x 1s)"
+    lambda_worker: "$0.001042 (1024MB x 60s)"
+    lambda_status: "$0.0000002 (512MB x 1s)"
+    total_per_vpr: "~$0.0013"
+    budget_ratio: "77x under $0.10 budget"
+
+  monthly_estimate:
+    assumptions: "100 VPRs/day, 3000/month"
+    sqs: "$0.024"
+    dynamodb: "$0.40"
+    s3: "$0.01"
+    lambda_workers: "$3.75"
+    lambda_other: "$0.50"
+    total_monthly: "~$4.70 (infrastructure only, excludes Claude API)"
+
+# =============================================================================
+# FRONTEND POLLING
+# =============================================================================
+frontend_polling:
+  interval_ms: 5000
+  max_poll_duration_seconds: 300
+  backoff_strategy: "linear (5s constant)"
+  timeout_behavior: "Show error message after 5 minutes"
+  status_indicators:
+    PENDING: "Preparing your report..."
+    PROCESSING: "Generating VPR with AI..."
+    COMPLETED: "VPR ready - loading result..."
+    FAILED: "Generation failed - please try again"
+
+# =============================================================================
+# IDEMPOTENCY
+# =============================================================================
+idempotency:
+  mechanism: "Idempotency key in request header (X-Idempotency-Key)"
+  storage: "DynamoDB jobs table (check existing job_id for same user + inputs)"
+  ttl_hours: 24
+  behavior: >
+    If duplicate request detected within TTL, return existing job_id
+    instead of creating new job. Prevents double-charging for retries.
+
+# =============================================================================
+# CDK RULE REFERENCES
+# =============================================================================
+cdk_rules:
+  sqs:
+    - SQS_001: "Dead Letter Queue required for async Lambda"
+    - SQS_002: "SQS queue encryption at rest"
+    - SQS_003: "SQS visibility timeout must exceed Lambda timeout"
+    - SQS_004: "SQS FIFO queues for ordered processing (evaluate if needed)"
+  async:
+    - ASYNC_001: "Idempotency table for async endpoints"
+    - ASYNC_002: "Job status table pattern (PENDING -> PROCESSING -> COMPLETED/FAILED)"
+    - ASYNC_003: "Async result storage (DynamoDB + S3 presigned URLs)"
+    - ASYNC_004: "Worker Lambda must have DLQ for failed processing"
+    - ASYNC_005: "DynamoDB Streams for job status updates"
+    - ASYNC_006: "Async job status polling endpoint (202 Accepted)"
+  lambda:
+    - LAMBDA_CONFIG_001: "Lambda memory allocation must be cost-effective"
+    - LAMBDA_CONFIG_004: "Set appropriate Lambda timeout per workload"
+    - LAMBDA_CONFIG_005: "Configure reserved concurrency for critical functions"
+    - LAMBDA_CONFIG_006: "Enable Lambda destinations for async failure handling"
+    - LAMBDA_CONFIG_007: "Provisioned concurrency for consistent latency (evaluate)"
+    - LAMBDA_CONFIG_008: "Pass resource names via environment variables"
+
+# =============================================================================
+# ERROR HANDLING
+# =============================================================================
+error_handling:
+  worker_errors:
+    claude_api_timeout:
+      action: "Set job status to FAILED, log error, message goes to DLQ after retries"
+      retry: true
+      max_retries: 2
+    claude_api_rate_limit:
+      action: "Increase SQS visibility timeout, let message retry after cooldown"
+      retry: true
+      max_retries: 3
+    s3_upload_failure:
+      action: "Retry once, then FAILED with error message"
+      retry: true
+      max_retries: 1
+    dynamodb_write_failure:
+      action: "Log critical error, message retries via SQS"
+      retry: true
+      max_retries: 2
+    unexpected_error:
+      action: "Catch-all, set FAILED, full stack trace in CloudWatch"
+      retry: false
+
+  monitoring:
+    cloudwatch_alarms:
+      - name: "VPR-Worker-Errors"
+        metric: Lambda errors
+        threshold: 5
+        period_seconds: 300
+      - name: "VPR-DLQ-Messages"
+        metric: SQS ApproximateNumberOfMessagesVisible on DLQ
+        threshold: 1
+        period_seconds: 60
+      - name: "VPR-Processing-Duration"
+        metric: Lambda duration
+        threshold_ms: 280000
+        period_seconds: 300
