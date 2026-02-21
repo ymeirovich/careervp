@@ -87,6 +87,7 @@ jobs:
             echo "::warning::ANTHROPIC_API_KEY secret not set. Checking if SSM parameter exists..."
             aws ssm get-parameter --name "/careervp/dev/anthropic-api-key" --query "Parameter.Name" --output text || \
               echo "::warning::SSM parameter /careervp/dev/anthropic-api-key not found. Set ANTHROPIC_API_KEY secret or create manually."
+          fi
       - name: Ensure JWT SSM Parameters exist
         env:
           JWT_PRIVATE_KEY_SECRET: ${{ secrets.JWT_PRIVATE_KEY }}
@@ -113,7 +114,6 @@ jobs:
             --value "$JWT_PUBLIC_KEY" \
             --type SecureString \
             --overwrite
-          fi
       - name: CFN State Guard
         run: |
           .github/scripts/cfn-guard.sh "${{ env.STACK_NAME }}" "${{ env.AWS_REGION }}"
@@ -219,6 +219,7 @@ jobs:
             echo "::warning::ANTHROPIC_API_KEY secret not set. Checking if SSM parameter exists..."
             aws ssm get-parameter --name "/careervp/${TARGET_ENV}/anthropic-api-key" --query "Parameter.Name" --output text || \
               echo "::warning::SSM parameter /careervp/${TARGET_ENV}/anthropic-api-key not found. Set ANTHROPIC_API_KEY secret or create manually."
+          fi
       - name: Ensure JWT SSM Parameters exist
         env:
           TARGET_ENV: ${{ inputs.environment }}
@@ -246,7 +247,6 @@ jobs:
             --value "$JWT_PUBLIC_KEY" \
             --type SecureString \
             --overwrite
-          fi
       - name: CFN State Guard
         env:
           # Dynamically compute stack name for other environments
