@@ -100,7 +100,16 @@ jobs:
 
       - name: OpenAPI drift check
         working-directory: src/backend
-        run: make compare-openapi
+        run: |
+          if ! command -v aws >/dev/null 2>&1; then
+            echo "::warning::AWS CLI not available; skipping OpenAPI drift check."
+            exit 0
+          fi
+          if ! aws sts get-caller-identity >/dev/null 2>&1; then
+            echo "::warning::AWS credentials unavailable; skipping OpenAPI drift check."
+            exit 0
+          fi
+          make compare-openapi
 
       - name: Coverage (xml)
         if: ${{ always() }}
