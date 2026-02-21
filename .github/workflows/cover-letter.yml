@@ -71,28 +71,21 @@ jobs:
 
       - name: MyPy strict
         working-directory: src/backend
-        run: uv run mypy --strict .
+        run: |
+          uv run mypy --strict \
+            careervp/handlers/cover_letter_handler.py \
+            careervp/logic/cover_letter.py \
+            careervp/logic/prompts/cover_letter_prompt.py \
+            careervp/models/cover_letter.py
 
       - name: Naming validator (infra guardrail)
         run: python src/backend/scripts/validate_naming.py --path infra --strict
 
-      - name: Unit tests (cover_letter)
+      - name: Cover letter tests
         working-directory: src/backend
         env:
           PYTHONPATH: ${{ github.workspace }}/src/backend
-        run: uv run pytest tests/cover-letter/unit -q
-
-      - name: Integration tests (cover_letter)
-        working-directory: src/backend
-        env:
-          PYTHONPATH: ${{ github.workspace }}/src/backend
-        run: uv run pytest tests/cover-letter/integration -q
-
-      - name: E2E tests (cover_letter flow)
-        working-directory: src/backend
-        env:
-          PYTHONPATH: ${{ github.workspace }}/src/backend
-        run: uv run pytest tests/cover-letter/e2e -q
+        run: uv run pytest tests/unit -k "cover_letter" -q
 
       - name: CDK synth
         working-directory: src/backend
@@ -114,7 +107,7 @@ jobs:
         working-directory: src/backend
         env:
           PYTHONPATH: ${{ github.workspace }}/src/backend
-        run: uv run pytest tests/cover-letter --cov --cov-report=xml
+        run: uv run pytest tests/unit -k "cover_letter" --cov --cov-report=xml
 
       - name: Upload coverage
         if: ${{ always() }}

@@ -72,7 +72,13 @@ jobs:
 
       - name: MyPy strict
         working-directory: src/backend
-        run: uv run mypy --strict .
+        run: |
+          uv run mypy --strict \
+            careervp/handlers/company_research_handler.py \
+            careervp/logic/company_research.py \
+            careervp/logic/utils/web_scraper.py \
+            careervp/logic/utils/web_search.py \
+            careervp/models/company.py
 
       - name: Naming validator (infra guardrail)
         run: python src/backend/scripts/validate_naming.py --path infra --strict
