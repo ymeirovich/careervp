@@ -17,6 +17,7 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 from boto3.dynamodb.conditions import Attr, Key
 from pydantic import ValidationError
 
+from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.company_research import research_company
 from careervp.models.company import CompanyResearchRequest
@@ -224,17 +225,7 @@ def _get_header_case_insensitive(headers: dict[str, Any], target_header: str) ->
 
 
 def _extract_authenticated_user_id(event: dict[str, Any]) -> str | None:
-    authorizer_user_id = _extract_user_id_from_authorizer(event)
-    if authorizer_user_id:
-        return authorizer_user_id
-
-    if not _authorizer_disabled():
-        return None
-
-    headers = event.get('headers')
-    if isinstance(headers, dict):
-        return _get_header_case_insensitive(headers, 'x-user-id')
-    return None
+    return extract_user_id(event)
 
 
 def _extract_job_id(event: dict[str, Any]) -> str | None:

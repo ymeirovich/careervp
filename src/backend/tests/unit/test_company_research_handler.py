@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from http import HTTPStatus
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from careervp.handlers.company_research_handler import lambda_handler
 from careervp.models.company import CompanyResearchResult, ResearchSource
 from careervp.models.result import Result, ResultCode
@@ -30,9 +32,21 @@ def _build_company_result(source: ResearchSource) -> CompanyResearchResult:
     )
 
 
+@pytest.fixture(autouse=True)
+def company_research_auth_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('ENV', 'local')
+
+
+def _event(body: str) -> dict[str, object]:
+    return {
+        'body': body,
+        'headers': {'x-user-id': 'user-1'},
+    }
+
+
 def test_handler_success() -> None:
     """lambda_handler should return 200 when research succeeds."""
-    event = {'body': json.dumps({'company_name': 'Acme Corp', 'domain': 'acme.com'})}
+    event = _event(json.dumps({'company_name': 'Acme Corp', 'domain': 'acme.com'}))
     context = MagicMock()
 
     mock_result = Result(success=True, data=_build_company_result(ResearchSource.WEBSITE_SCRAPE), code=ResultCode.RESEARCH_COMPLETE)
@@ -49,7 +63,7 @@ def test_handler_success() -> None:
 
 def test_handler_invalid_json_returns_400() -> None:
     """Invalid JSON body should yield 400."""
-    event = {'body': '{bad json'}
+    event = _event('{bad json')
     context = MagicMock()
 
     response = lambda_handler(event, context)
@@ -59,7 +73,7 @@ def test_handler_invalid_json_returns_400() -> None:
 
 def test_handler_validation_error_returns_400() -> None:
     """Missing company_name should yield 400."""
-    event = {'body': json.dumps({'domain': 'acme.com'})}
+    event = _event(json.dumps({'domain': 'acme.com'}))
     context = MagicMock()
 
     response = lambda_handler(event, context)
@@ -69,7 +83,7 @@ def test_handler_validation_error_returns_400() -> None:
 
 def test_handler_partial_content_status() -> None:
     """When logic returns SCRAPE_FAILED code, handler should return HTTP 206."""
-    event = {'body': json.dumps({'company_name': 'Acme Corp'})}
+    event = _event(json.dumps({'company_name': 'Acme Corp'}))
     context = MagicMock()
 
     mock_result = Result(success=True, data=_build_company_result(ResearchSource.WEB_SEARCH), code=ResultCode.SCRAPE_FAILED)
@@ -84,7 +98,7 @@ def test_handler_partial_content_status() -> None:
 
 def test_handler_failure_propagates_error_code() -> None:
     """Failures from logic should respect mapped HTTP status."""
-    event = {'body': json.dumps({'company_name': 'Acme Corp'})}
+    event = _event(json.dumps({'company_name': 'Acme Corp'}))
     context = MagicMock()
 
     mock_result: Result[CompanyResearchResult] = Result(success=False, error='Service unavailable', code=ResultCode.ALL_SOURCES_FAILED)

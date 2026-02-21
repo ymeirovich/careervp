@@ -37,6 +37,7 @@ def aws_env() -> Iterator[None]:
     patcher.setenv('AWS_DEFAULT_REGION', 'us-east-1')
     patcher.setenv('POWERTOOLS_SERVICE_NAME', 'careervp-test')
     patcher.setenv('LOG_LEVEL', 'INFO')
+    patcher.setenv('ENV', 'local')
     try:
         yield
     finally:
@@ -244,7 +245,12 @@ def _build_company_research_event(
         request['job_posting_url'] = job_posting_url
     if job_posting_text:
         request['job_posting_text'] = job_posting_text
-    return {'body': json.dumps(request)}
+    return {
+        'body': json.dumps(request),
+        'headers': {
+            'x-user-id': 'user-123',
+        },
+    }
 
 
 def _build_vpr_event(
@@ -422,7 +428,10 @@ class TestCompanyResearchFlow:
 
     def test_research_invalid_request_returns_400(self, aws_env: None) -> None:
         """Test invalid request payload returns 400."""
-        event = {'body': json.dumps({'invalid_field': 'value'})}
+        event = {
+            'body': json.dumps({'invalid_field': 'value'}),
+            'headers': {'x-user-id': 'user-123'},
+        }
 
         response = company_research_handler(event, MagicMock())
 

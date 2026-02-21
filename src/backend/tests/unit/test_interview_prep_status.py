@@ -20,7 +20,7 @@ def interview_prep_status_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None
     monkeypatch.setenv('AWS_DEFAULT_REGION', 'us-east-1')
     monkeypatch.setenv('POWERTOOLS_SERVICE_NAME', 'careervp-interview-prep-status-test')
     monkeypatch.setenv('LOG_LEVEL', 'INFO')
-    monkeypatch.setenv('AUTHORIZER_DISABLED', 'true')
+    monkeypatch.setenv('ENV', 'local')
     monkeypatch.setenv('TABLE_NAME', 'test-interview-prep-table')
     yield
 
