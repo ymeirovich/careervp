@@ -104,15 +104,20 @@ TASK: Create standardized auth extraction utility
    - test_extract_user_id_handles_malformed_event
    - test_require_auth_decorator_returns_401
 
-VALIDATION CRITERIA (must all pass):
-- [ ] extract_user_id handles all 3 auth methods correctly
-- [ ] require_auth decorator returns proper 401 JSON
-- [ ] Fallback only works when AUTHORIZER_DISABLED=true
-- [ ] Unit tests pass: pytest tests/unit/test_auth_utils.py -v
-- [ ] Type check passes: mypy careervp/handlers/auth_utils.py --strict
-- [ ] Lint passes: ruff check careervp/handlers/auth_utils.py
+CONSTRAINTS:
+- DO: Use AWS Powertools logger for warnings
+- DON'T: Hardcode role names or auth paths
+- MUST: Return None (not raise exception) when auth missing
 
-OUTPUT FORMAT: Provide complete implementation with inline comments explaining auth extraction priority. Output results to docs/refactor2/execution_runbook_results.md.
+PROHIBITED (common mistakes):
+- ❌ Direct payload.get('user_id') — use priority order (JWT → Lambda → X-User-Id)
+- ❌ Enabling fallback in production — check AUTHORIZER_DISABLED env var only
+- ❌ Duplicating logic in handlers — import from auth_utils
+
+VERIFICATION:
+pytest tests/unit/test_auth_utils.py -v
+mypy careervp/handlers/auth_utils.py --strict
+ruff check careervp/handlers/auth_utils.py
 """
 ```
 
@@ -534,15 +539,27 @@ TASK: Add new methods to DynamoDalHandler following existing VPR method patterns
    - test_dal_handles_dynamodb_error
    - test_dal_sets_ttl_correctly
 
-VALIDATION CRITERIA (must all pass):
-- [ ] All new methods follow existing DynamoDalHandler patterns
-- [ ] @tracer.capture_method on every method
-- [ ] logger calls on success and failure
-- [ ] Result[T] return type with proper error codes
-- [ ] TTL set to 90 days (7776000 seconds)
-- [ ] CVTable marked @deprecated
-- [ ] Unit tests pass: pytest tests/unit/test_dal_migration.py -v
-- [ ] Type check passes: mypy careervp/dal/dynamo_dal_handler.py --strict
+CONSTRAINTS:
+- DO: Use Result[T] pattern for all return values
+- DO: Import from careervp.dal.dynamo_dal_handler only
+- DO: Use @tracer.capture_method on every method
+- MUST: Set TTL to exactly 7776000 seconds (90 days)
+- MUST: Return None (not raise exception) on errors
+- DON'T: Call table.put_item() directly — use dal methods
+- DON'T: Handle pagination manually — use dal.list_* methods
+
+PROHIBITED (common mistakes):
+- ❌ Direct boto3 table.put_item() or table.get_item() — use DynamoDalHandler methods
+- ❌ Hardcoding table names — use JOBS_TABLE_NAME env var
+- ❌ Forgetting @tracer.capture_method — required for all methods
+- ❌ Catching ClientError generically — use result.success check
+- ❌ Setting TTL without 90-day conversion — must be seconds, not datetime
+
+VERIFICATION:
+pytest tests/unit/test_dal_migration.py -v
+mypy careервp/dal/dynamo_dal_handler.py --strict
+grep -n "@tracer.capture_method" careervp/dal/dynamo_dal_handler.py | wc -l
+grep -r "table.put_item\|table.get_item" careervp/dal/ | grep -v "deprecated\|#"
 
 OUTPUT FORMAT: Provide complete method implementations. Output results to docs/refactor2/execution_runbook_results.md.
 """
@@ -727,14 +744,28 @@ TASK: Create VPR submit handler that returns 202 and queues work
    - test_submit_idempotent_for_duplicate
    - test_submit_returns_422_without_prerequisites
 
-VALIDATION CRITERIA (must all pass):
-- [ ] Returns 202 with request_id and status "processing"
-- [ ] Creates PENDING job record in DynamoDB
-- [ ] Sends SQS message with correct payload
-- [ ] Validates prerequisites (cv, gap responses exist)
-- [ ] Idempotency check prevents duplicate jobs
-- [ ] Unit tests pass: pytest tests/unit/test_vpr_submit_handler.py -v
-- [ ] Type check: mypy careervp/handlers/vpr_submit_handler.py --strict
+CONSTRAINTS:
+- MUST: Return 202 status code (not 200 or 201)
+- MUST: Set job status to PENDING (not PROCESSING or COMPLETED)
+- MUST: Generate job_id as UUID v4
+- MUST: Check prerequisites before queuing (cv_exists, gap_responses_exist)
+- MUST: Implement idempotency check (same cv_id + job_id + user_id within 5 min)
+- DON'T: Process the job synchronously — queue it immediately
+- DON'T: Return final result in 202 response — only return job_id + status
+
+PROHIBITED (common mistakes):
+- ❌ Returning 200 instead of 202 — client expects "Accepted" status
+- ❌ Setting job status to PROCESSING before queuing — worker sets this
+- ❌ Skipping idempotency check — leads to duplicate job submissions
+- ❌ Not validating prerequisites — causes downstream failures in worker
+- ❌ Sending job_id but not request_id field — client expects both
+- ❌ Blocking on SQS message confirmation — should respond immediately after send()
+
+VERIFICATION:
+pytest tests/unit/test_vpr_submit_handler.py -v
+mypy careervp/handlers/vpr_submit_handler.py --strict
+grep -n "return.*202\|status.*202" careervp/handlers/vpr_submit_handler.py
+aws sqs receive-message --queue-url $VPR_QUEUE_URL --region us-east-1 | jq '.Messages | length'
 
 OUTPUT FORMAT: Complete implementation. Output results to docs/refactor2/execution_runbook_results.md.
 """
@@ -791,14 +822,30 @@ TASK: Create VPR worker handler that processes SQS messages
    - test_worker_handles_llm_failure
    - test_worker_records_token_usage
 
-VALIDATION CRITERIA (must all pass):
-- [ ] Processes SQS message and runs VPR pipeline
-- [ ] Updates job status through PENDING → PROCESSING → COMPLETED
-- [ ] Stores result in S3 with presigned URL
-- [ ] Records token usage in job record
-- [ ] Handles errors gracefully (marks FAILED)
-- [ ] Unit tests pass: pytest tests/unit/test_vpr_worker_handler.py -v
-- [ ] Type check: mypy careervp/handlers/vpr_worker_handler.py --strict
+CONSTRAINTS:
+- MUST: Update status in order: PENDING → PROCESSING → COMPLETED (or FAILED)
+- MUST: Never skip PROCESSING state — client polls for this
+- MUST: Store result in S3 before updating job to COMPLETED
+- MUST: Set started_at when transitioning to PROCESSING
+- MUST: Handle SQS visibility timeout (300s) — save partial if < 30s remaining
+- MUST: Record token_usage {input_tokens, output_tokens}
+- DON'T: Update job status without checking current state first
+- DON'T: Return results inline — always store in S3 first
+
+PROHIBITED (common mistakes):
+- ❌ Updating job to COMPLETED without storing S3 result — data loss
+- ❌ Skipping PROCESSING state — client polling loop expects it
+- ❌ Not checking timeout remaining — leads to partial executions
+- ❌ Setting started_at after running pipeline — should be immediate on PROCESSING
+- ❌ Returning result instead of result_url — results too large for DynamoDB
+- ❌ Not catching LLM errors separately — merge them with infrastructure errors
+- ❌ Ignoring SQS message visibility — message may retry and duplicate
+
+VERIFICATION:
+pytest tests/unit/test_vpr_worker_handler.py -v
+mypy careervp/handlers/vpr_worker_handler.py --strict
+grep -n "PENDING\|PROCESSING\|COMPLETED" careervp/handlers/vpr_worker_handler.py | head -20
+aws dynamodb scan --table-name jobs --filter-expression "attribute_exists(result_url)" --region us-east-1 | jq '.Count'
 
 OUTPUT FORMAT: Complete implementation. Output results to docs/refactor2/execution_runbook_results.md.
 """
@@ -1029,13 +1076,13 @@ TASK: Deploy async processing infrastructure via CDK
    - Queue: careervp-vpr-jobs-queue-{env}
      * visibility_timeout: 300 (5 min, matches worker timeout)
      * message_retention_period: 345600 (4 days)
-     * encryption: SQS_MANAGED (per ENCRYPT_001)
+     * encryption: SQS_MANAGED (per SQS_002)
    - DLQ: careervp-vpr-jobs-dlq-{env}
      * max_receive_count: 3
      * retention: 14 days
    - SQS_001: Dead letter queue configured ✓
-   - SQS_002: Visibility timeout >= Lambda timeout ✓
-   - SQS_003: Encryption enabled ✓
+   - SQS_002: Encryption at rest ✓
+   - SQS_003: Visibility timeout >= Lambda timeout ✓
 
 2. Create DynamoDB Jobs Table (per DDB_001-005):
    - Table: careervp-jobs-table-{env}
@@ -1043,23 +1090,23 @@ TASK: Deploy async processing infrastructure via CDK
    - GSI: user-id-index (PK: user_id, SK: created_at)
    - Billing: PAY_PER_REQUEST (per DDB_001)
    - PITR: true for prod, false for dev (per DDB_002)
-   - TTL: expires_at attribute (per DDB_003)
+   - TTL: expires_at attribute (per DDB_005)
    - Encryption: AWS_OWNED (per ENCRYPT_001)
 
 3. Create S3 Results Bucket (per S3_001-004):
    - Bucket: careervp-{env}-vpr-results-{account_hash}
-   - Encryption: S3_MANAGED (per S3_001)
-   - Block public access: ALL (per S3_002)
+   - Encryption: S3_MANAGED (per ENCRYPT_002)
+   - Block public access: ALL (per S3_001)
    - Lifecycle: delete after 30 days (per S3_003)
-   - Versioning: enabled (per S3_004)
+   - Versioning: enabled (per S3_002)
 
 4. Create Worker Lambda (per LAMBDA_CONFIG_001-008):
    - Function: careervp-vpr-worker-{env}
-   - Runtime: Python 3.13 (per LAMBDA_CONFIG_001)
-   - Memory: 1024 MB (per LAMBDA_CONFIG_002)
-   - Timeout: 300s (per LAMBDA_CONFIG_003, matches SQS visibility)
-   - Tracing: ACTIVE (per LAMBDA_CONFIG_004)
-   - Log retention: 30 days (per LAMBDA_CONFIG_005)
+   - Runtime: Python 3.13 (per NAG_LAMBDA_001)
+   - Memory: 1024 MB (per LAMBDA_CONFIG_001)
+   - Timeout: 300s (per LAMBDA_CONFIG_004, matches SQS visibility)
+   - Tracing: ACTIVE (per LAMBDA_CONFIG_003)
+   - Log retention: 30 days (per CW_001)
    - SQS event source mapping with batch_size: 1
    - IAM: least privilege (DDB read/write, S3 put, SQS consume) per IAM_001
 
@@ -1074,15 +1121,36 @@ TASK: Deploy async processing infrastructure via CDK
    - VPR_QUEUE_URL
    - ANTHROPIC_API_KEY_SSM_PARAM
 
-VALIDATION CRITERIA (must all pass):
-- [ ] cdk synth succeeds: cd infra && npx cdk synth
-- [ ] cdk-nag passes all NAG_* rules
-- [ ] SQS queue has DLQ configured
-- [ ] DynamoDB table has GSI and TTL
-- [ ] S3 bucket blocks public access
-- [ ] Worker Lambda has correct timeout and memory
-- [ ] IAM roles follow least privilege
-- [ ] Lambda package size < 250MB (LAMBDA_SIZE_001)
+CONSTRAINTS:
+- MUST: SQS queue has DLQ with max receive count = 3 (per async spec)
+- MUST: DynamoDB TTL attribute = "expires_at" (per DDB_005)
+- MUST: DynamoDB PITR enabled for prod, disabled for dev (per DDB_002)
+- MUST: S3 bucket blocks ALL public access (per S3_001)
+- MUST: Lambda memory ≥ 1024 MB (per LAMBDA_CONFIG_001)
+- MUST: Lambda timeout = 300s (per LAMBDA_CONFIG_004, matches SQS visibility)
+- MUST: X-Ray tracing ACTIVE (per LAMBDA_CONFIG_003)
+- MUST: CloudWatch logs retention = 30 days (per CW_001)
+- DON'T: Make S3 bucket versioning optional — must be enabled (per S3_002)
+- DON'T: Use S3 KMS encryption in dev — S3-managed only (per ENCRYPT_002)
+
+PROHIBITED (common mistakes):
+- ❌ SQS without DLQ — messages disappear on repeated failures
+- ❌ Lambda timeout < 300s — worker gets killed mid-pipeline
+- ❌ S3 bucket versioning disabled — can't recover from accidental deletes
+- ❌ Missing DynamoDB TTL — jobs accumulate forever
+- ❌ S3 bucket with public access enabled — security breach
+- ❌ Lambda memory < 1GB — timeouts on large VPR operations
+- ❌ Lifecycle rule deleting too early — should be 30 days minimum (per S3_003)
+- ❌ IAM roles with wildcards (*) in actions — use least privilege per resource
+- ❌ Lambda package > 250MB — fails to deploy (per LAMBDA_SIZE_001)
+- ❌ Missing environment variables — worker can't access resources
+
+VERIFICATION:
+cd infra && npx cdk synth --app='python app.py' 2>&1 | tail -30
+cd infra && uv run cdk synth --app='python app.py' 2>&1 | grep -E "Error|AwsSolutions"
+grep -n "DynamoDB::Table\|VisibilityTimeout\|RedrivePolicy" cdk.out/careervp-dev.template.json
+aws s3api get-bucket-versioning --bucket careervp-dev-vpr-results-HASH --region us-east-1
+aws dynamodb describe-table --table-name jobs --region us-east-1 | jq '.Table | {TimeToLiveDescription, BillingModeSummary}'
 
 OUTPUT FORMAT: Complete CDK construct code. Output results to docs/refactor2/execution_runbook_results.md.
 """

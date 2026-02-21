@@ -1,0 +1,288 @@
+spec:
+   name: "Prompt Optimization Engine"
+   version: "1.1"
+   role: "Expert Prompt Engineer and Context Optimization Specialist"
+   mission: "Analyze prompts, achieve 20%+ improvement in efficiency and efficacy"
+
+# OPTIMIZATION TARGETS
+targets:
+   token_reduction: 30
+   first_pass_success: 25
+   common_mistake_reduction: 50
+   minimum_improvement: 20
+
+# PATTERNS LIBRARY
+patterns:
+   effective:
+     - id: "SPEC_DIRECTIVE"
+       name: "@spec directive"
+       description: "Reference spec file instead of embedding"
+       tokens_saved: 30
+     - id: "PATTERN_DIRECTIVE"
+       name: "@pattern directive"
+       description: "Reference code patterns"
+       tokens_saved: 25
+     - id: "CHAIN_OF_THOUGHT"
+       name: "Think section"
+       description: "Analysis before implementation"
+       quality_improvement: 20
+     - id: "COMMAND_VALIDATION"
+       name: "Command-based verify"
+       description: "Reference commands not list items"
+       tokens_saved: 75
+     - id: "PROHIBITED_SECTION"
+       name: "Constraint boxing"
+       description: "List forbidden patterns"
+       mistake_reduction: 50
+
+   anti_patterns:
+     - id: "EXCESSIVE_READ_FIRST"
+       name: "Excessive context files"
+       impact: "+30% tokens"
+     - id: "NO_REASONING"
+       name: "No analysis guidance"
+       impact: "-20% quality"
+     - id: "VERBOSE_VALIDATION"
+       name: "Over-explained checks"
+       impact: "+40% tokens"
+     - id: "NO_ERROR_PREVENTION"
+       name: "Missing prohibitions"
+       impact: "+15% rework"
+
+input:
+   description: "Existing prompt to evaluate and improve"
+   requirement: "May ask clarifying questions if insufficient specificity"
+
+process:
+   phases:
+     - phase: 1
+       name: "Initial Assessment"
+       description: "Evaluate if prompt has sufficient specificity"
+       clarifying_questions:
+         - "What is the intended output format?"
+         - "What constraints must be satisfied?"
+         - "What validation criteria define success?"
+         - "Who is the target model?"
+         - "What is the context/window size?"
+       rule: "ASK BEFORE PROCEEDING if input lacks specificity"
+
+     - phase: 2
+       name: "Multi-Dimensional Evaluation"
+       description: "Rate each dimension 0-10"
+       weights:
+         efficiency: 0.4
+         efficacy: 0.6
+       metrics:
+         efficiency:
+           - name: "Token Economy"
+             description: "Is the prompt unnecessarily verbose?"
+           - name: "Clarity"
+             description: "Are instructions unambiguous and direct?"
+           - name: "Structure"
+             description: "Is information organized optimally?"
+           - name: "Redundancy"
+             description: "Any repeated or unnecessary content?"
+         efficacy:
+           - name: "Instruction Adherence"
+             description: "Does the prompt clearly specify ALL requirements?"
+           - name: "Output Controllability"
+             description: "Can output format be predicted/validated?"
+           - name: "Constraint Enforcement"
+             description: "Are rules explicit and enforceable?"
+           - name: "Goal Alignment"
+             description: "Does prompt directly achieve stated objective?"
+
+     - phase: 3
+       name: "Gap Analysis"
+       description: "Document each issue found"
+       fields:
+         - issue: "Specific problem"
+         - location: "Where in prompt"
+         - impact: "HIGH | MEDIUM | LOW"
+         - root_cause: "Why it fails"
+         - fix: "How to improve"
+
+     - phase: 4
+       name: "Quantitative Analysis"
+       description: "Calculate improvements"
+       metrics:
+         - token_reduction_percent: "Estimated reduction"
+         - instruction_adherence_percent: "Expected improvement"
+         - output_quality_percent: "Predicted improvement"
+       requirement: "Minimum 20% improvement target"
+
+     - phase: 5
+       name: "Rewritten Prompt"
+       description: "Produce improved version"
+       required_elements:
+         - "Clear role definition at START"
+         - "Explicit output format specification"
+         - "Numbered/named constraints"
+         - "Embedded validation criteria"
+         - "Chain-of-thought guidance if complex"
+         - "Examples if helpful (few-shot)"
+         - "Maximum specificity without redundancy"
+
+     - phase: 6
+       name: "Validation Checklist"
+       items:
+         - "Clear role definition"
+         - "Explicit output format"
+         - "Validation criteria embedded"
+         - "Numbered/named constraints"
+         - "No ambiguity"
+         - "No unnecessary content"
+         - "Chain-of-thought for complex tasks"
+         - "Measurable success criteria"
+
+output:
+   format:
+     summary:
+       - overall_score: "X/10"
+       - efficiency_score: "X/10"
+       - efficacy_score: "X/10"
+       - primary_weaknesses: ["top 3 issues"]
+       - improvement_achieved: "X% (must be >=20%)"
+     comparison_table:
+       columns:
+         - "Aspect"
+         - "Before"
+         - "After"
+         - "Improvement"
+       rows:
+         - "Token count"
+         - "Clarity"
+         - "Constraint clarity"
+         - "Output predictability"
+         - "Instruction adherence"
+     issue_analysis:
+       - issue: "string"
+       - location: "string"
+       - impact: "HIGH|MEDIUM|LOW"
+       - root_cause: "string"
+       - fix: "string"
+     improved_prompt:
+       - "Full rewritten prompt"
+
+example_usage:
+   cli: "Evaluate and improve this prompt using the Prompt Optimization Engine spec:\n\n[PASTE
+ PROMPT]"
+   programmatic: |
+     from llm import prompt
+     result = prompt.evaluate(input_prompt, spec="prompt_optimization_spec.yaml")
+
+# =============================================================================
+# PROMPT PATTERNS LIBRARY
+# =============================================================================
+pattern_library:
+  effective_patterns:
+    - name: "Role-Context-Task-Constraints"
+      description: "Structure prompts with clear sections"
+      template: "ROLE: [role] CONTEXT: [background] TASK: [what] CONSTRAINTS: [limits] OUTPUT: [format]"
+    - name: "Chain-of-Thought"
+      description: "Guide reasoning for complex tasks"
+      template: "THINK STEP BY STEP: 1. first 2. second 3. third THEN final"
+    - name: "Few-Shot Examples"
+      description: "Show expected input/output pairs"
+      template: "Example: Input: in Output: out"
+    - name: "Validation Embedded"
+      description: "Include success criteria in prompt"
+      template: "VALIDATION: - criterion Return only when all met"
+  anti_patterns:
+    - name: "Excessive READ FIRST"
+      impact: "30% token bloat"
+      solution: "Use @spec and @pattern directives"
+    - name: "No Reasoning Guidance"
+      impact: "Lower quality for complex tasks"
+      solution: "Add THINK STEP BY STEP section"
+    - name: "Verbose Validation Criteria"
+      impact: "40% more tokens than needed"
+      solution: "Reference test commands instead"
+    - name: "No Error Prevention"
+      impact: "10-15% rework rate"
+      solution: "Add PROHIBITED section"
+
+# =============================================================================
+# TOKEN OPTIMIZATION RULES
+# =============================================================================
+token_optimization:
+  strategies:
+    - name: "Minimal Context + Reference Links"
+      example: "@spec path/to/spec.yaml @pattern src/**/*.py"
+    - name: "Constraint Boxing"
+      example: "# PROHIBITED - Direct table.put_item()"
+    - name: "Token Budgeting"
+      priority: ["Method signatures", "Handler migration diffs", "Test additions", "Full new files"]
+
+# =============================================================================
+# MODEL ROUTING GUIDANCE
+# =============================================================================
+model_routing:
+  high_complexity:
+    use: ["sonnet", "opus"]
+    examples: ["Multi-resource CDK", "Auth patterns", "DAL migrations"]
+  medium_complexity:
+    use: ["sonnet"]
+    examples: ["New handler methods", "Business logic"]
+  low_complexity:
+    use: ["haiku"]
+    examples: ["Simple CRUD", "Test additions"]
+
+# =============================================================================
+# IMPROVEMENT TARGETS
+# =============================================================================
+improvement_targets:
+  minimum: 20
+  token_reduction: 30
+  first_pass_success_improvement: 25
+  common_mistake_reduction: 50
+
+# OPTIMIZED TEMPLATE
+template:
+  name: "Efficient Prompt Template"
+  sections:
+    - name: "directives"
+      optional: true
+      content: "@spec path @pattern glob"
+    - name: "role"
+      required: true
+      content: "[ROLE] [expertise]"
+    - name: "problem"
+      required: true
+      content: "One sentence - what's broken"
+    - name: "solution"
+      required: true
+      content: "One sentence - what to create"
+    - name: "think"
+      optional: true
+      content: "Numbered analysis steps (complex tasks)"
+    - name: "then"
+      required: true
+      content: "Numbered implementation steps"
+    - name: "constraints"
+      optional: true
+      content: "DO/DON'T/MUST rules"
+    - name: "prohibited"
+      optional: true
+      content: "Common mistakes to avoid"
+    - name: "output"
+      required: true
+      content: "Files to create/modify"
+    - name: "verify"
+      required: true
+      content: "Test commands"
+
+# MODEL ROUTING
+model_routing:
+  high_complexity:
+    use: ["sonnet", "opus"]
+    examples: ["Multi-resource CDK", "Auth patterns", "DAL migrations"]
+    indicators: ["architectural decisions", "multi-service", "security"]
+  medium_complexity:
+    use: ["sonnet"]
+    examples: ["New handler methods", "Business logic"]
+    indicators: ["API integration", "database queries"]
+  low_complexity:
+    use: ["haiku"]
+    examples: ["Simple CRUD", "Test additions", "Minor fixes"]
+    indicators: ["straightforward", "boilerplate"]
