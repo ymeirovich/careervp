@@ -134,6 +134,9 @@ class AuthService:
         public_key = os.environ.get('JWT_PUBLIC_KEY')
 
         if not private_key or not public_key:
+            if os.getenv('ENV') != 'local':
+                raise ConfigurationError('JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be set in production')
+            # Only generate ephemeral keys in local dev
             private_key, public_key = _generate_ephemeral_rsa_keys()
 
         return cls(

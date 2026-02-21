@@ -210,7 +210,7 @@ def _execute_job(
     )
 
 
-@logger.inject_lambda_context(log_event=True)
+@logger.inject_lambda_context(log_event=False)
 @tracer.capture_lambda_handler(capture_response=False)
 @metrics.log_metrics(capture_cold_start_metric=True)
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:

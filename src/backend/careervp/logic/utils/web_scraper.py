@@ -5,6 +5,8 @@ Primary path per docs/specs/02-company-research.md and Task 8.2 instructions.
 
 from __future__ import annotations
 
+import ipaddress
+import socket
 from collections.abc import Callable
 from typing import Final, Iterable
 from urllib.parse import urljoin, urlparse
@@ -20,10 +22,40 @@ MIN_CONTENT_WORDS: Final[int] = 200
 ABOUT_PATHS: Final[tuple[str, ...]] = ('', 'about', 'about-us', 'company', 'company/about', 'who-we-are')
 
 
+def _is_safe_url(url: str) -> bool:
+    """Reject internal/private network addresses and non-HTTPS."""
+    parsed = urlparse(url)
+
+    # Enforce HTTPS only
+    if parsed.scheme != 'https':
+        return False
+    if not parsed.hostname:
+        return False
+
+    # Resolve hostname to IP
+    try:
+        ip = ipaddress.ip_address(socket.gethostbyname(parsed.hostname))
+    except Exception:
+        return False
+
+    # Reject private/internal ranges
+    if ip.is_private or ip.is_loopback or ip.is_link_local:
+        return False
+
+    # Reject AWS metadata endpoint
+    if str(ip) == '169.254.169.254':
+        return False
+
+    return True
+
+
 async def scrape_url(url: str, timeout: float = SCRAPE_TIMEOUT) -> Result[str]:
     """
     Fetch HTML content from a URL using httpx with defensive error handling.
     """
+    if not _is_safe_url(url):
+        raise ValueError(f'URL not allowed: {url}')
+
     try:
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
             response = await client.get(url, headers={'User-Agent': USER_AGENT})
