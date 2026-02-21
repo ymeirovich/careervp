@@ -12,6 +12,7 @@ from boto3.dynamodb.conditions import Attr, Key
 from pydantic import ValidationError
 
 from careervp.dal.cv_dal import CVTable
+from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.models.api_models import CoverLetterRequest
 from careervp.models.result import Result, ResultCode
@@ -204,17 +205,7 @@ def _get_header_case_insensitive(headers: dict[str, Any], target_header: str) ->
 
 
 def _extract_authenticated_user_id(event: dict[str, Any]) -> str | None:
-    authorizer_user_id = _extract_user_id_from_authorizer(event)
-    if authorizer_user_id:
-        return authorizer_user_id
-
-    if not _authorizer_disabled():
-        return None
-
-    headers = event.get('headers')
-    if isinstance(headers, dict):
-        return _get_header_case_insensitive(headers, 'x-user-id')
-    return None
+    return extract_user_id(event)
 
 
 def _extract_cover_letter_id(event: dict[str, Any]) -> str | None:

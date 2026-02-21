@@ -87,6 +87,32 @@ jobs:
             echo "::warning::ANTHROPIC_API_KEY secret not set. Checking if SSM parameter exists..."
             aws ssm get-parameter --name "/careervp/dev/anthropic-api-key" --query "Parameter.Name" --output text || \
               echo "::warning::SSM parameter /careervp/dev/anthropic-api-key not found. Set ANTHROPIC_API_KEY secret or create manually."
+      - name: Ensure JWT SSM Parameters exist
+        env:
+          JWT_PRIVATE_KEY_SECRET: ${{ secrets.JWT_PRIVATE_KEY }}
+          JWT_PUBLIC_KEY_SECRET: ${{ secrets.JWT_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          JWT_PRIVATE_KEY="${JWT_PRIVATE_KEY_SECRET:-}"
+          JWT_PUBLIC_KEY="${JWT_PUBLIC_KEY_SECRET:-}"
+          if [ -z "$JWT_PRIVATE_KEY" ] || [ -z "$JWT_PUBLIC_KEY" ]; then
+            TMP_DIR="$(mktemp -d)"
+            openssl genrsa -out "$TMP_DIR/jwt-private.pem" 2048 >/dev/null 2>&1
+            openssl rsa -in "$TMP_DIR/jwt-private.pem" -pubout -out "$TMP_DIR/jwt-public.pem" >/dev/null 2>&1
+            JWT_PRIVATE_KEY="$(cat "$TMP_DIR/jwt-private.pem")"
+            JWT_PUBLIC_KEY="$(cat "$TMP_DIR/jwt-public.pem")"
+            echo "::warning::JWT_PRIVATE_KEY/JWT_PUBLIC_KEY secrets not set. Generated ephemeral dev keys for deployment."
+          fi
+          aws ssm put-parameter \
+            --name "/careervp/dev/jwt-private-key" \
+            --value "$JWT_PRIVATE_KEY" \
+            --type SecureString \
+            --overwrite
+          aws ssm put-parameter \
+            --name "/careervp/dev/jwt-public-key" \
+            --value "$JWT_PUBLIC_KEY" \
+            --type SecureString \
+            --overwrite
           fi
       - name: CFN State Guard
         run: |
@@ -193,6 +219,33 @@ jobs:
             echo "::warning::ANTHROPIC_API_KEY secret not set. Checking if SSM parameter exists..."
             aws ssm get-parameter --name "/careervp/${TARGET_ENV}/anthropic-api-key" --query "Parameter.Name" --output text || \
               echo "::warning::SSM parameter /careervp/${TARGET_ENV}/anthropic-api-key not found. Set ANTHROPIC_API_KEY secret or create manually."
+      - name: Ensure JWT SSM Parameters exist
+        env:
+          TARGET_ENV: ${{ inputs.environment }}
+          JWT_PRIVATE_KEY_SECRET: ${{ secrets.JWT_PRIVATE_KEY }}
+          JWT_PUBLIC_KEY_SECRET: ${{ secrets.JWT_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          JWT_PRIVATE_KEY="${JWT_PRIVATE_KEY_SECRET:-}"
+          JWT_PUBLIC_KEY="${JWT_PUBLIC_KEY_SECRET:-}"
+          if [ -z "$JWT_PRIVATE_KEY" ] || [ -z "$JWT_PUBLIC_KEY" ]; then
+            TMP_DIR="$(mktemp -d)"
+            openssl genrsa -out "$TMP_DIR/jwt-private.pem" 2048 >/dev/null 2>&1
+            openssl rsa -in "$TMP_DIR/jwt-private.pem" -pubout -out "$TMP_DIR/jwt-public.pem" >/dev/null 2>&1
+            JWT_PRIVATE_KEY="$(cat "$TMP_DIR/jwt-private.pem")"
+            JWT_PUBLIC_KEY="$(cat "$TMP_DIR/jwt-public.pem")"
+            echo "::warning::JWT_PRIVATE_KEY/JWT_PUBLIC_KEY secrets not set. Generated ephemeral keys for ${TARGET_ENV} deployment."
+          fi
+          aws ssm put-parameter \
+            --name "/careervp/${TARGET_ENV}/jwt-private-key" \
+            --value "$JWT_PRIVATE_KEY" \
+            --type SecureString \
+            --overwrite
+          aws ssm put-parameter \
+            --name "/careervp/${TARGET_ENV}/jwt-public-key" \
+            --value "$JWT_PUBLIC_KEY" \
+            --type SecureString \
+            --overwrite
           fi
       - name: CFN State Guard
         env:

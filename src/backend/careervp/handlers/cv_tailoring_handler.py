@@ -12,6 +12,7 @@ from boto3.dynamodb.conditions import Attr, Key
 from pydantic import ValidationError
 
 from careervp.dal.cv_dal import CVTable
+from careervp.handlers.auth_utils import extract_user_id
 from careervp.logic.cv_tailoring import tailor_cv
 from careervp.logic.fvs_validator import create_fvs_baseline
 from careervp.logic.llm_client import LLMClient
@@ -324,13 +325,8 @@ def _fetch_and_tailor_cv(request: TailorCVRequest) -> Result[Any]:
 
 
 def _get_user_id(event: dict[str, Any], body: dict[str, Any] | None = None) -> str | None:
-    authorizer_user_id = _get_user_id_from_authorizer(event)
-    if authorizer_user_id:
-        return authorizer_user_id
-
-    if _authorizer_disabled():
-        return _get_user_id_from_unprotected_request(event, body)
-    return None
+    _ = body
+    return extract_user_id(event)
 
 
 def _get_user_id_from_authorizer(event: dict[str, Any]) -> str | None:

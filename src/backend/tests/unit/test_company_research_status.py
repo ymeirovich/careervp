@@ -20,7 +20,7 @@ def company_research_status_env(monkeypatch: pytest.MonkeyPatch) -> Generator[No
     monkeypatch.setenv('AWS_DEFAULT_REGION', 'us-east-1')
     monkeypatch.setenv('POWERTOOLS_SERVICE_NAME', 'careervp-company-research-status-test')
     monkeypatch.setenv('LOG_LEVEL', 'INFO')
-    monkeypatch.setenv('AUTHORIZER_DISABLED', 'true')
+    monkeypatch.setenv('ENV', 'local')
     monkeypatch.setenv('DYNAMODB_TABLE_NAME', 'test-company-research-table')
     yield
 
