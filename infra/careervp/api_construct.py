@@ -1338,10 +1338,10 @@ class ApiConstruct(Construct):
                 **self._build_shared_table_env(),
                 "TABLE_NAME": self.api_db.users_table.table_name,
                 "TOKEN_BLACKLIST_TABLE_NAME": self.api_db.idempotency_db.table_name,
-                "JWT_PRIVATE_KEY": ssm.StringParameter.value_from_lookup(
+                "JWT_PRIVATE_KEY": ssm.StringParameter.value_for_string_parameter(
                     self, f"/careervp/{constants.ENVIRONMENT}/jwt-private-key"
                 ),
-                "JWT_PUBLIC_KEY": ssm.StringParameter.value_from_lookup(
+                "JWT_PUBLIC_KEY": ssm.StringParameter.value_for_string_parameter(
                     self, f"/careervp/{constants.ENVIRONMENT}/jwt-public-key"
                 ),
             },
