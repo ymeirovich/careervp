@@ -175,6 +175,33 @@ jobs:
           role-session-name: vpr-async-deploy-${{ github.run_id }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Ensure JWT SSM Parameters exist
+        env:
+          JWT_PRIVATE_KEY_SECRET: ${{ secrets.JWT_PRIVATE_KEY }}
+          JWT_PUBLIC_KEY_SECRET: ${{ secrets.JWT_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          JWT_PRIVATE_KEY="${JWT_PRIVATE_KEY_SECRET:-}"
+          JWT_PUBLIC_KEY="${JWT_PUBLIC_KEY_SECRET:-}"
+          if [ -z "$JWT_PRIVATE_KEY" ] || [ -z "$JWT_PUBLIC_KEY" ]; then
+            TMP_DIR="$(mktemp -d)"
+            openssl genrsa -out "$TMP_DIR/jwt-private.pem" 2048 >/dev/null 2>&1
+            openssl rsa -in "$TMP_DIR/jwt-private.pem" -pubout -out "$TMP_DIR/jwt-public.pem" >/dev/null 2>&1
+            JWT_PRIVATE_KEY="$(cat "$TMP_DIR/jwt-private.pem")"
+            JWT_PUBLIC_KEY="$(cat "$TMP_DIR/jwt-public.pem")"
+            echo "::warning::JWT_PRIVATE_KEY/JWT_PUBLIC_KEY secrets not set. Generated ephemeral dev keys for VPR async deploy."
+          fi
+          aws ssm put-parameter \
+            --name "/careervp/dev/jwt-private-key" \
+            --value "$JWT_PRIVATE_KEY" \
+            --type SecureString \
+            --overwrite
+          aws ssm put-parameter \
+            --name "/careervp/dev/jwt-public-key" \
+            --value "$JWT_PUBLIC_KEY" \
+            --type SecureString \
+            --overwrite
+
       - name: Clean up stuck changesets
         run: |
           STACK_NAME="CareerVpVprAsyncDev"
