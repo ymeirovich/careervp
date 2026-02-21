@@ -94,6 +94,21 @@ jobs:
           JWT_PUBLIC_KEY_SECRET: ${{ secrets.JWT_PUBLIC_KEY }}
         run: |
           set -euo pipefail
+          ensure_string_parameter() {
+            local param_name="$1"
+            local param_value="$2"
+            local existing_type
+            existing_type="$(aws ssm get-parameter --name "$param_name" --query 'Parameter.Type' --output text 2>/dev/null || echo 'MISSING')"
+            if [ "$existing_type" != "MISSING" ] && [ "$existing_type" != "String" ]; then
+              echo "::warning::Recreating $param_name as String for CloudFormation compatibility (was $existing_type)."
+              aws ssm delete-parameter --name "$param_name"
+            fi
+            aws ssm put-parameter \
+              --name "$param_name" \
+              --value "$param_value" \
+              --type String \
+              --overwrite
+          }
           JWT_PRIVATE_KEY="${JWT_PRIVATE_KEY_SECRET:-}"
           JWT_PUBLIC_KEY="${JWT_PUBLIC_KEY_SECRET:-}"
           if [ -z "$JWT_PRIVATE_KEY" ] || [ -z "$JWT_PUBLIC_KEY" ]; then
@@ -104,16 +119,8 @@ jobs:
             JWT_PUBLIC_KEY="$(cat "$TMP_DIR/jwt-public.pem")"
             echo "::warning::JWT_PRIVATE_KEY/JWT_PUBLIC_KEY secrets not set. Generated ephemeral dev keys for deployment."
           fi
-          aws ssm put-parameter \
-            --name "/careervp/dev/jwt-private-key" \
-            --value "$JWT_PRIVATE_KEY" \
-            --type SecureString \
-            --overwrite
-          aws ssm put-parameter \
-            --name "/careervp/dev/jwt-public-key" \
-            --value "$JWT_PUBLIC_KEY" \
-            --type SecureString \
-            --overwrite
+          ensure_string_parameter "/careervp/dev/jwt-private-key" "$JWT_PRIVATE_KEY"
+          ensure_string_parameter "/careervp/dev/jwt-public-key" "$JWT_PUBLIC_KEY"
       - name: CFN State Guard
         run: |
           .github/scripts/cfn-guard.sh "${{ env.STACK_NAME }}" "${{ env.AWS_REGION }}"
@@ -227,6 +234,21 @@ jobs:
           JWT_PUBLIC_KEY_SECRET: ${{ secrets.JWT_PUBLIC_KEY }}
         run: |
           set -euo pipefail
+          ensure_string_parameter() {
+            local param_name="$1"
+            local param_value="$2"
+            local existing_type
+            existing_type="$(aws ssm get-parameter --name "$param_name" --query 'Parameter.Type' --output text 2>/dev/null || echo 'MISSING')"
+            if [ "$existing_type" != "MISSING" ] && [ "$existing_type" != "String" ]; then
+              echo "::warning::Recreating $param_name as String for CloudFormation compatibility (was $existing_type)."
+              aws ssm delete-parameter --name "$param_name"
+            fi
+            aws ssm put-parameter \
+              --name "$param_name" \
+              --value "$param_value" \
+              --type String \
+              --overwrite
+          }
           JWT_PRIVATE_KEY="${JWT_PRIVATE_KEY_SECRET:-}"
           JWT_PUBLIC_KEY="${JWT_PUBLIC_KEY_SECRET:-}"
           if [ -z "$JWT_PRIVATE_KEY" ] || [ -z "$JWT_PUBLIC_KEY" ]; then
@@ -237,16 +259,8 @@ jobs:
             JWT_PUBLIC_KEY="$(cat "$TMP_DIR/jwt-public.pem")"
             echo "::warning::JWT_PRIVATE_KEY/JWT_PUBLIC_KEY secrets not set. Generated ephemeral keys for ${TARGET_ENV} deployment."
           fi
-          aws ssm put-parameter \
-            --name "/careervp/${TARGET_ENV}/jwt-private-key" \
-            --value "$JWT_PRIVATE_KEY" \
-            --type SecureString \
-            --overwrite
-          aws ssm put-parameter \
-            --name "/careervp/${TARGET_ENV}/jwt-public-key" \
-            --value "$JWT_PUBLIC_KEY" \
-            --type SecureString \
-            --overwrite
+          ensure_string_parameter "/careervp/${TARGET_ENV}/jwt-private-key" "$JWT_PRIVATE_KEY"
+          ensure_string_parameter "/careervp/${TARGET_ENV}/jwt-public-key" "$JWT_PUBLIC_KEY"
       - name: CFN State Guard
         env:
           # Dynamically compute stack name for other environments
