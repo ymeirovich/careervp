@@ -275,13 +275,18 @@ BS Computer Science - Stanford University (2010)"
   # Build proper API Gateway event with required fields for Powertools
   local event
   event="$(jq -cn --arg body "$body_json" '{
+    version: "1.0",
+    resource: "/users/me/cv",
     body: $body,
-    path: "/api/cv",
+    path: "/users/me/cv",
     httpMethod: "POST",
-    headers: {"Content-Type": "application/json"},
+    headers: {"Content-Type": "application/json", "X-User-Id": "cli-smoke-user"},
     requestContext: {
       requestId: "smoke-test-request",
-      stage: "prod"
+      stage: "prod",
+      httpMethod: "POST",
+      resourcePath: "/users/me/cv",
+      path: "/prod/users/me/cv"
     },
     isBase64Encoded: false
   }')"
