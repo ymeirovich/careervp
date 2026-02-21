@@ -431,13 +431,18 @@ test_company_research_lambda() {
   # Build proper API Gateway event with required fields for Powertools
   local event
   event="$(jq -cn --arg body "$body_json" '{
+    version: "1.0",
+    resource: "/api/company-research",
     body: $body,
     path: "/api/company-research",
     httpMethod: "POST",
     headers: {"Content-Type": "application/json"},
     requestContext: {
       requestId: "smoke-test-company-research",
-      stage: "prod"
+      stage: "prod",
+      authorizer: {
+        principalId: "cli-smoke-user"
+      }
     },
     isBase64Encoded: false
   }')"
