@@ -193,7 +193,7 @@ def _extract_user_id_from_authorizer(event: dict[str, Any]) -> str | None:
 
 
 def _authorizer_disabled() -> bool:
-    return os.getenv('AUTHORIZER_DISABLED', 'false').strip().lower() == 'true'
+    return False
 
 
 def _get_header_case_insensitive(headers: dict[str, Any], target_header: str) -> str | None:

@@ -1,0 +1,67 @@
+{
+  "description": "POST /cv-tailoring/generate - Generate tailored CV (async)",
+  "method": "POST",
+  "path": "/cv-tailoring/generate",
+  "headers": {
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
+  },
+  "request": {
+    "cv_id": "cv-a1b2c3d4-5678-4e9f-a0b1-c2d3e4f56789",
+    "job_id": "job-c3d4e5f6-7890-4a1b-c2d3-e4f567890123",
+    "vpr_id": "vpr-a7b8c9d0-1234-4e5f-a6b7-890123456789",
+    "options": {
+      "preserve_length": true,
+      "highlight_keywords": true,
+      "target_ats": "standard"
+    }
+  },
+  "expected_response": {
+    "status_code": 202,
+    "body": {
+      "request_id": "cv-tail-f2a3b4c5-6789-4d0e-f1a2-345678901234",
+      "status": "processing",
+      "estimated_time_seconds": 30
+    }
+  },
+  "completed_response": {
+    "status_code": 200,
+    "body": {
+      "id": "cv-tail-f2a3b4c5-6789-4d0e-f1a2-345678901234",
+      "status": "completed",
+      "result": {
+        "tailored_cv": "JOHN SMITH\nSenior Software Engineer | Cloud Architecture & Team Leadership\n\nPROFESSIONAL SUMMARY\nResults-driven Senior Software Engineer with 5+ years of experience designing and implementing scalable cloud-native solutions. Proven expertise in microservices architecture, serverless computing, and team mentorship. Strong track record of optimizing high-traffic systems and leading cross-functional engineering teams.\n\nEXPERIENCE\n\nSenior Software Engineer | TechCorp Inc. | 2020-Present\n• Architected and deployed serverless data processing pipeline using AWS Lambda, Step Functions, and DynamoDB, handling 50,000 events/min with 60% cost reduction and 80% latency improvement (500ms → 100ms)\n• Led microservices architecture redesign serving 5M+ daily active users with 99.9% uptime\n• Reduced API response time by 40% through strategic optimization, caching strategies, and database indexing\n• Mentored team of 5 junior engineers to senior level within 18 months through structured program achieving 100% retention\n• Implemented CI/CD pipeline using Jenkins and Docker, reducing deployment time from 2 hours to 15 minutes\n• Technologies: Python, Node.js, AWS (Lambda, DynamoDB, S3, API Gateway), Docker, Kubernetes\n\nSoftware Engineer | StartupXYZ | 2018-2020\n• Built RESTful APIs handling 100K+ requests per day with PostgreSQL and Redis\n• Collaborated with cross-functional teams to deliver features on tight deadlines\n• Established automated testing framework improving code coverage from 40% to 85%\n• Technologies: Python, PostgreSQL, Redis, Jenkins\n\nEDUCATION\nB.S. Computer Science | University of Technology | 2018\n\nTECHNICAL SKILLS\nProgramming Languages: Python, JavaScript, TypeScript, Node.js, Go\nCloud Platforms: AWS (Lambda, DynamoDB, S3, API Gateway, Step Functions), Docker, Kubernetes\nDatabases: PostgreSQL, MongoDB, Redis, DynamoDB (SQL and NoSQL)\nFrameworks: FastAPI, Express.js, React\nDevOps: CI/CD, Jenkins, GitHub Actions, Terraform, Docker, Kubernetes",
+        "ats_score": 9.2,
+        "keyword_matches": {
+          "matched": [
+            "Python",
+            "Node.js",
+            "AWS",
+            "Docker",
+            "Kubernetes",
+            "microservices",
+            "serverless",
+            "PostgreSQL",
+            "MongoDB",
+            "CI/CD",
+            "API",
+            "cloud",
+            "mentoring",
+            "scalable"
+          ],
+          "missing": [
+            "event-driven architecture"
+          ]
+        },
+        "suggestions": [
+          "Consider adding specific examples of event-driven architecture if you have experience",
+          "Quantified achievements added based on gap analysis responses",
+          "Keywords optimized for ATS matching on cloud platforms and containerization"
+        ],
+        "fvs_validation": {
+          "is_valid": true,
+          "violations": []
+        }
+      }
+    }
+  }
+}

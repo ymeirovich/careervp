@@ -1,0 +1,617 @@
+spec_version: "1.0"
+date: "2026-02-20"
+name: "JSA Capability Alignment Specification"
+description: >
+  Job Search Assistant capability alignment requirements. Maps each JSA
+  requirement to implementation details, prompt requirements, validation
+  criteria, and file changes. Based on REFACTOR2_PLAN Section 7 and
+  prompt_library_spec.yaml.
+source_documents:
+  - docs/refactor2/REFACTOR2_PLAN.md (Section 7)
+  - docs/refactor/specs/prompt_library_spec.yaml
+  - docs/architecture/05-jsa-skill-alignment.md
+
+# =============================================================================
+# REQUIREMENTS
+# =============================================================================
+requirements:
+
+  # ---------------------------------------------------------------------------
+  # VPR-001: 6-Stage Methodology (P0)
+  # ---------------------------------------------------------------------------
+  - id: VPR-001
+    name: "6-Stage VPR Methodology"
+    priority: P0
+    current_state: "Direct output prompt - single pass generation"
+    target_state: "Staged thinking with self-correction and 20% enhancement"
+
+    implementation_details:
+      stages:
+        - stage: 1
+          name: "Strategic Alignment"
+          description: "Map 3-5 company priorities and 5-7 role success criteria"
+          inputs: [company_research_json, job_requirements_json]
+          output: "Internal - strategic priorities list + role criteria"
+
+        - stage: 2
+          name: "Candidate Analysis"
+          description: "Extract achievements, 3-5 core differentiators, career narrative"
+          inputs: [cv_facts_json, gap_responses_json]
+          output: "Internal - differentiators list + career narrative"
+
+        - stage: 3
+          name: "Alignment Matrix"
+          description: "Create 5-7 minimum alignment mappings (Need -> Evidence -> Impact)"
+          inputs: [stage_1_output, stage_2_output]
+          output: "Internal - complete alignment matrix table"
+
+        - stage: 4
+          name: "Meta-Review"
+          description: "Self-correction: unsupported claims? logic consistent? persuasive?"
+          inputs: [stage_3_output]
+          output: "Internal - critique notes + refinements applied"
+
+        - stage: 5
+          name: "Structured Report"
+          description: "Generate full VPR with 6 sections (1500-2000 words)"
+          sections:
+            - "Executive Summary (200-250 words)"
+            - "Evidence & Alignment Matrix (600-800 words)"
+            - "Strategic Differentiators (300-400 words)"
+            - "Gap Mitigation Strategies (200-300 words)"
+            - "Cultural Fit Analysis (150-200 words)"
+            - "Recommended Talking Points (150-200 words)"
+          output: "Draft VPR report"
+
+        - stage: 6
+          name: "20% Enhancement"
+          description: "Ask 'How could this be 20% more persuasive?' and apply improvements"
+          inputs: [stage_5_output]
+          output: "Final refined VPR"
+
+    prompt_requirements:
+      source: prompt_library_spec.yaml (prompts.vpr_generation)
+      model_routing: strategic (claude-sonnet-4-5-20250929)
+      temperature: 0.7
+      max_tokens: 4000
+      fvs_tier: IMMUTABLE
+      anti_ai_detection:
+        - no_leverage
+        - no_delve
+        - no_landscape
+        - no_robust
+        - no_streamline
+        - vary_sentence_length
+        - natural_transitions
+        - conversational_phrases
+        - approximations_not_exact
+        - mix_voice
+
+    validation_criteria:
+      - "VPR output contains all 6 sections with correct word counts"
+      - "Alignment matrix has 5-7 mappings minimum"
+      - "Zero banned words in output (check_anti_ai_patterns passes)"
+      - "All facts verifiable against CV and gap responses"
+      - "Meta-review evidence present (self-correction applied)"
+      - "Word count 1500-2000 total"
+
+    file_changes:
+      - file: src/backend/careervp/logic/prompts/vpr_prompt.py
+        action: modify
+        description: "Update system prompt with 6-stage methodology"
+      - file: src/backend/careervp/handlers/vpr_handler.py
+        action: modify
+        description: "Refactor to vpr_submit_handler.py for async pattern"
+      - file: src/backend/careervp/handlers/vpr_worker_handler.py
+        action: create
+        description: "SQS worker that executes 6-stage VPR generation"
+
+  # ---------------------------------------------------------------------------
+  # CVT-001: 3-Step Verification (P0)
+  # ---------------------------------------------------------------------------
+  - id: CVT-001
+    name: "3-Step CV Tailoring Verification"
+    priority: P0
+    current_state: "Utility-based tailoring - single pass without self-verification"
+    target_state: "Analysis -> Verification -> Final output with ATS >= 8"
+
+    implementation_details:
+      steps:
+        - step: 1
+          name: "Draft CV"
+          description: >
+            Extract UVP and top 3 differentiators from VPR.
+            Extract 12-18 keywords from job posting.
+            Include company research keywords for ATS.
+            Format all bullets in CAR/STAR format with quantified metrics.
+          output: "Internal - draft tailored CV"
+
+        - step: 2
+          name: "Self-Verify"
+          description: >
+            Verification Check 1 (ATS): Rate keyword match 1-10, list 3 missing keywords.
+            Verification Check 2 (Hiring Manager): Does summary align with UVP from VPR?
+            If ATS score < 7, plan keyword revisions.
+          output: "Internal - verification results + revision plan"
+
+        - step: 3
+          name: "Final Output"
+          description: >
+            Apply revisions from verification checks.
+            Add missing keywords naturally.
+            Rewrite summary if needed.
+            Ensure ATS score >= 8 and strategic VPR alignment.
+          output: "Final tailored CV with ATS score"
+
+      new_parameters:
+        - company_keywords: "list[str] - extracted from company research"
+        - vpr_differentiators: "list[str] - top 3 differentiators from VPR"
+
+      ats_formatting_rules:
+        - "Standard headers only: Professional Experience, Education, Skills"
+        - "Simple bullets using bullet character"
+        - "No tables or columns"
+        - "Standard fonts only"
+        - "Length: 1-2 pages (max 3)"
+
+    prompt_requirements:
+      source: prompt_library_spec.yaml (prompts.cv_tailoring)
+      model_routing: template (claude-haiku-4-5-20251001)
+      temperature: 0.5
+      max_tokens: 2000
+      fvs_tier: VERIFIABLE
+      anti_ai_detection:
+        - natural_transitions
+        - vary_sentence_length
+        - brief_personal_touch
+        - no_leverage
+        - no_delve
+        - no_robust
+        - no_streamline
+        - approximations_not_exact
+
+    validation_criteria:
+      - "ATS score >= 8 in output"
+      - "12-18 keywords from job posting present in CV"
+      - "Company research keywords integrated"
+      - "All bullets in CAR/STAR format"
+      - "Zero hallucinated facts"
+      - "Word count within 1-2 page equivalent"
+
+    file_changes:
+      - file: src/backend/careervp/logic/prompts/cv_tailoring_prompt.py
+        action: modify
+        description: "Update with 3-step verification methodology"
+      - file: src/backend/careervp/handlers/cv_tailoring_handler.py
+        action: modify
+        description: "Support workflow pattern, use DynamoDalHandler"
+      - file: src/backend/careervp/models/api_models.py
+        action: modify
+        description: "Update CVTailoringRequest to accept workflow + legacy fields"
+
+  # ---------------------------------------------------------------------------
+  # CL-001: Reference Class Priming (P0)
+  # ---------------------------------------------------------------------------
+  - id: CL-001
+    name: "Cover Letter Reference Class Priming"
+    priority: P0
+    current_state: "Missing - no scaffolded structure for cover letters"
+    target_state: "3-paragraph scaffolded structure with reference class priming"
+
+    implementation_details:
+      structure:
+        paragraph_1:
+          name: "The Hook"
+          word_count: "80-100 words"
+          requirements:
+            - "State role and immediately reference UVP from VPR"
+            - "Show research: mention specific company goal, product, or announcement"
+            - "Link candidate background to that goal"
+
+        paragraph_2:
+          name: "The Proof Points"
+          word_count: "120-140 words"
+          requirements:
+            - "Identify top 3 non-negotiable requirements from job posting"
+            - "For each: Sentence 1 = Assert skill using VPR language"
+            - "For each: Sentence 2 = Specific quantified CV achievement as proof"
+            - "Format: Requirement Claim + Proof, repeated 3 times"
+
+        paragraph_3:
+          name: "The Close"
+          word_count: "60-80 words"
+          requirements:
+            - "Express enthusiasm"
+            - "Clear, confident call to action"
+            - "Position as time-saver for the company"
+
+      reference_class_priming: >
+        Before drafting, the model internally describes the structure and tone
+        of an exemplary cover letter that focuses on VALUE to company,
+        uses strategic VPR claims, and provides concrete proof points.
+
+    prompt_requirements:
+      source: prompt_library_spec.yaml (prompts.cover_letter)
+      model_routing: template (claude-haiku-4-5-20251001)
+      temperature: 0.5
+      max_tokens: 1000
+      fvs_tier: VERIFIABLE
+      anti_ai_detection:
+        - natural_transitions
+        - vary_sentence_length
+        - brief_personal_touch
+        - no_leverage
+        - no_delve
+        - no_robust
+        - no_streamline
+        - approximations_not_exact
+
+    validation_criteria:
+      - "Exactly 3 paragraphs"
+      - "Total word count under 400"
+      - "Paragraph 1: 80-100 words, contains UVP and company reference"
+      - "Paragraph 2: 120-140 words, 3 requirements with claim+proof"
+      - "Paragraph 3: 60-80 words, contains CTA"
+      - "Zero hallucinated facts"
+      - "No banned AI words"
+
+    file_changes:
+      - file: src/backend/careervp/logic/prompts/cover_letter_prompt.py
+        action: modify
+        description: "Add reference class priming and 3-paragraph scaffold"
+      - file: src/backend/careervp/handlers/cover_letter_handler.py
+        action: modify
+        description: "Support workflow pattern, use DynamoDalHandler"
+      - file: src/backend/careervp/models/api_models.py
+        action: modify
+        description: "Update CoverLetterRequest for workflow fields"
+
+  # ---------------------------------------------------------------------------
+  # GA-001: Contextual Tagging (P0)
+  # ---------------------------------------------------------------------------
+  - id: GA-001
+    name: "Gap Analysis Contextual Tagging"
+    priority: P0
+    current_state: "Basic 3-5 questions without tags or strategic metadata"
+    target_state: "Max 10 tagged questions with [CV IMPACT] / [INTERVIEW ONLY] destinations"
+
+    implementation_details:
+      question_format:
+        fields:
+          - requirement: "Exact quote from job posting"
+          - question: "Targeted question emphasizing quantification"
+          - destination: "[CV IMPACT] or [INTERVIEW/MVP ONLY]"
+          - strategic_intent: "Why asking this question, how answer will be used"
+          - evidence_gap: "What is missing from CV for this requirement"
+          - priority: "CRITICAL | IMPORTANT | OPTIONAL"
+
+      distribution:
+        cv_impact_questions: "5-7 questions (must ask for numbers)"
+        interview_only_questions: "3-5 questions (philosophy, approach, process)"
+
+      memory_awareness:
+        parameter: recurring_themes
+        type: "list[str]"
+        behavior: "Skip topics that appear in recurring_themes from knowledge base"
+
+    prompt_requirements:
+      source: prompt_library_spec.yaml (prompts.gap_analysis)
+      model_routing: strategic (claude-sonnet-4-5-20250929)
+      temperature: 0.5
+      max_tokens: 3000
+      fvs_tier: VERIFIABLE
+      anti_ai_detection:
+        - no_leverage
+        - no_delve
+        - no_landscape
+        - no_robust
+        - no_streamline
+        - vary_sentence_length
+        - natural_transitions
+        - conversational_phrases
+        - approximations_not_exact
+        - mix_voice
+
+    validation_criteria:
+      - "Max 10 questions generated"
+      - "Each question has all 6 metadata fields"
+      - "5-7 questions tagged [CV IMPACT] with quantification emphasis"
+      - "3-5 questions tagged [INTERVIEW/MVP ONLY]"
+      - "Recurring themes are skipped"
+      - "Priority levels assigned (CRITICAL, IMPORTANT, OPTIONAL)"
+
+    file_changes:
+      - file: src/backend/careervp/logic/prompts/gap_analysis_prompt.py
+        action: modify
+        description: "Add contextual tagging, max 10 questions, priority levels"
+      - file: src/backend/careervp/handlers/gap_handler.py
+        action: modify
+        description: "Use DynamoDalHandler, pass recurring_themes parameter"
+
+  # ---------------------------------------------------------------------------
+  # IP-001: Interview Prep Complete (P1)
+  # ---------------------------------------------------------------------------
+  - id: IP-001
+    name: "Interview Prep Complete Implementation"
+    priority: P1
+    current_state: "Handler exists but no logic implementation"
+    target_state: "10-15 STAR-formatted questions with guidance across 4 categories"
+
+    implementation_details:
+      categories:
+        - name: "Technical Competency"
+          question_count: "4-5"
+          source: "Job requirements"
+        - name: "Behavioral/Cultural Fit"
+          question_count: "4-5"
+          source: "STAR method required"
+        - name: "Company-Specific"
+          question_count: "2-3"
+          source: "Company research"
+        - name: "Gap Questions"
+          question_count: "2-3"
+          source: "Address potential weaknesses"
+
+      star_response_format:
+        situation: "Brief context (2-3 sentences)"
+        task: "Your responsibility (1-2 sentences)"
+        action: "Specific steps (3-4 bullet points with metrics)"
+        result: "Quantified outcome (2-3 sentences with metrics)"
+        key_points: "Specific metric, relevant skill, transferable learning"
+
+      additional_sections:
+        - "Questions to Ask Interviewer (5-7)"
+        - "Salary Negotiation Guidance"
+        - "Pre-Interview Checklist"
+
+    prompt_requirements:
+      source: prompt_library_spec.yaml (prompts.interview_prep)
+      model_routing: template (claude-haiku-4-5-20251001)
+      temperature: 0.5
+      max_tokens: 3000
+      fvs_tier: VERIFIABLE
+      anti_ai_detection: []
+
+    validation_criteria:
+      - "10-15 predicted questions generated"
+      - "All 4 categories represented"
+      - "Each question has STAR-formatted response"
+      - "5-7 questions to ask interviewer included"
+      - "All facts from CV and gap responses only"
+
+    file_changes:
+      - file: src/backend/careervp/logic/interview_prep.py
+        action: create
+        description: "Interview prep generation logic"
+      - file: src/backend/careervp/logic/prompts/interview_prep_prompt.py
+        action: create
+        description: "STAR-formatted interview prep prompt"
+      - file: src/backend/careervp/handlers/interview_prep_handler.py
+        action: modify
+        description: "Complete handler implementation"
+
+  # ---------------------------------------------------------------------------
+  # QV-001: Quality Validator (P1)
+  # ---------------------------------------------------------------------------
+  - id: QV-001
+    name: "Quality Validator Agent"
+    priority: P1
+    current_state: "Missing - no quality validation system"
+    target_state: "6-check validation agent integrated into VPR flow"
+
+    implementation_details:
+      checks:
+        - check: 1
+          name: "Fact Verification"
+          description: "Cross-reference all claims against source CV and gap responses"
+          pass_criteria: "Zero hallucinations detected"
+
+        - check: 2
+          name: "ATS Compatibility"
+          description: "Keyword match score against job posting"
+          pass_criteria: "ATS score >= 8.0"
+
+        - check: 3
+          name: "Anti-AI Detection"
+          description: "Scan for banned words and AI-generated patterns"
+          pass_criteria: "Anti-AI score >= 9.0"
+
+        - check: 4
+          name: "Cross-Document Consistency"
+          description: "Verify CV, VPR, and Cover Letter tell consistent story"
+          pass_criteria: "No contradictory claims between documents"
+
+        - check: 5
+          name: "Completeness"
+          description: "Check word counts, section counts, required elements"
+          pass_criteria: "All required sections present with correct word counts"
+
+        - check: 6
+          name: "Language Quality"
+          description: "Grammar, spelling, tone appropriateness"
+          pass_criteria: "Grammar >= 9.0, Tone >= 8.0"
+
+      integration_point: "Final step in VPR generation flow (after Stage 6)"
+
+    prompt_requirements:
+      source: prompt_library_spec.yaml (prompts.quality_validation)
+      model_routing: strategic (claude-sonnet-4-5-20250929)
+      temperature: 0.1
+      max_tokens: 2048
+      fvs_tier: VERIFIABLE
+      anti_ai_detection: []
+
+    validation_criteria:
+      - "All 6 checks produce pass/fail result"
+      - "Scores returned for each dimension"
+      - "Failed checks include specific remediation guidance"
+      - "Overall pass requires all individual checks passing"
+
+    file_changes:
+      - file: src/backend/careervp/logic/quality_validator.py
+        action: create
+        description: "6-check quality validation agent"
+      - file: src/backend/careervp/logic/prompts/quality_validation_prompt.py
+        action: create
+        description: "Quality validation prompt with sub-agent prompts"
+
+  # ---------------------------------------------------------------------------
+  # KB-001: Knowledge Base (P1)
+  # ---------------------------------------------------------------------------
+  - id: KB-001
+    name: "Knowledge Base - User Memory System"
+    priority: P1
+    current_state: "Missing - no persistent user memory across applications"
+    target_state: "DynamoDB user memory system tracking themes, responses, differentiators"
+
+    implementation_details:
+      dynamodb_table:
+        name: "careervp-knowledge-base-{env}"
+        partition_key: "userEmail (S)"
+        sort_key: "knowledgeType (S)"
+        ttl_days: 365
+        billing: PAY_PER_REQUEST
+
+      knowledge_types:
+        - type: recurring_themes
+          description: "Topics to skip in gap analysis (already answered)"
+          example: "['team leadership', 'system design', 'cost optimization']"
+
+        - type: gap_responses
+          description: "Previous gap analysis answers for reuse"
+          example: "{'q1': 'Led team of 8...', 'q2': 'Reduced costs by 40%...'}"
+
+        - type: differentiators
+          description: "VPR-identified unique strengths"
+          example: "['distributed systems expertise', 'cross-functional leadership']"
+
+        - type: applications_count
+          description: "Track number of job applications"
+          example: "{'total': 5, 'last_30_days': 2}"
+
+      integration_points:
+        - "Gap Analysis: Skip recurring_themes in question generation"
+        - "VPR Generation: Pre-populate differentiators from previous VPRs"
+        - "Cover Letter: Reuse proven proof points from previous applications"
+
+    prompt_requirements:
+      source: prompt_library_spec.yaml (prompts.knowledge_base)
+      model_routing: template (claude-haiku-4-5-20251001)
+      temperature: 0.3
+      max_tokens: 1000
+      fvs_tier: IMMUTABLE
+      anti_ai_detection: []
+
+    validation_criteria:
+      - "Knowledge base table deployed and accessible"
+      - "CRUD operations work for all 4 knowledge types"
+      - "Gap analysis successfully skips recurring themes"
+      - "TTL auto-deletes entries after 365 days"
+      - "Knowledge persists across multiple applications for same user"
+
+    file_changes:
+      - file: src/backend/careervp/dal/knowledge_base_repository.py
+        action: create
+        description: "Knowledge base CRUD operations"
+      - file: src/backend/careervp/logic/knowledge_base.py
+        action: create
+        description: "Knowledge base business logic"
+      - file: infra/careervp/api_db_construct.py
+        action: modify
+        description: "Add knowledge base DynamoDB table"
+
+# =============================================================================
+# ANTI-AI DETECTION (Global Rules)
+# =============================================================================
+anti_ai_detection:
+  banned_words:
+    - leverage
+    - "delve into"
+    - landscape
+    - robust
+    - streamline
+    - utilize
+    - facilitate
+    - cutting-edge
+    - "best practices"
+    - "industry-leading"
+    - game-changer
+    - "paradigm shift"
+    - synergy
+    - spearheaded
+    - "passionate about"
+    - "proven track record"
+
+  patterns:
+    - id: ANTI-1
+      name: "Avoid AI Cliches"
+      rule: "Never use banned words. Use specific, concrete verbs from CV."
+    - id: ANTI-2
+      name: "Vary Sentence Length"
+      rule: "Mix short (8 words or less) with longer (20+ words)."
+    - id: ANTI-3
+      name: "Include Imperfections"
+      rule: "Add one minor stylistic variation per section."
+    - id: ANTI-4
+      name: "Avoid Perfect Parallelism"
+      rule: "Bullet points should NOT all follow same grammatical pattern."
+    - id: ANTI-5
+      name: "Conversational Tone"
+      rule: "Match candidate experience level. Junior vs Senior language."
+    - id: ANTI-6
+      name: "Use Domain Terminology"
+      rule: "Incorporate jargon from job posting with surrounding context."
+    - id: ANTI-7
+      name: "Use Contractions"
+      rule: "20-30% contractions. 'I've managed' not 'I have managed'."
+    - id: ANTI-8
+      name: "Mirror User Style"
+      rule: "Preserve candidate's original phrasing patterns."
+
+  validation_function:
+    name: check_anti_ai_patterns
+    location: src/backend/careervp/logic/prompts/vpr_prompt.py
+    action: "Return list of banned words found in generated content"
+
+# =============================================================================
+# FVS QUALITY GATES
+# =============================================================================
+fvs_quality_gates:
+  minimum_scores:
+    grammar: 9.0
+    tone: 8.0
+    anti_ai: 9.0
+    formatting: 8.0
+    ats: 8.0
+    fact_accuracy: 10.0
+  cross_document_consistency:
+    description: "CV, VPR, and Cover Letter must tell consistent story"
+    checks:
+      - "No contradictory claims between documents"
+      - "Differentiators in VPR match those highlighted in CV and Cover Letter"
+      - "Dates and facts consistent across all generated content"
+  tier_classification:
+    IMMUTABLE: "Copy exactly as-is (dates, titles, company names, degrees)"
+    VERIFIABLE: "Copy, reorder by relevance, highlight (skills, tools, certs)"
+    FLEXIBLE: "Rephrase to match requirements, optimize language (summaries, bullets)"
+
+# =============================================================================
+# MODEL ROUTING
+# =============================================================================
+model_routing:
+  strategic_tasks:
+    model: "claude-sonnet-4-5-20250929"
+    task_mode: STRATEGIC
+    used_for:
+      - VPR generation (VPR-001)
+      - Gap analysis (GA-001)
+      - Quality validation (QV-001)
+
+  template_tasks:
+    model: "claude-haiku-4-5-20251001"
+    task_mode: TEMPLATE
+    used_for:
+      - CV tailoring (CVT-001)
+      - Cover letter (CL-001)
+      - Interview prep (IP-001)
+      - Knowledge base (KB-001)

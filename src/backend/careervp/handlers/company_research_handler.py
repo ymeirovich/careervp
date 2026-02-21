@@ -57,6 +57,16 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
 def _fetch_company_research(event: dict[str, Any]) -> dict[str, Any]:
     """Handle POST /company-research/fetch requests."""
+    user_id = _extract_authenticated_user_id(event)
+    if not user_id:
+        return _build_response(
+            HTTPStatus.UNAUTHORIZED,
+            {
+                'error': 'Authentication required',
+                'code': ResultCode.UNAUTHORIZED,
+            },
+        )
+
     request_result = _parse_request(event)
     if not request_result.success or not request_result.data:
         metrics.add_metric(name='CompanyResearchFailures', unit=MetricUnit.Count, value=1)
@@ -202,7 +212,7 @@ def _extract_user_id_from_authorizer(event: dict[str, Any]) -> str | None:
 
 
 def _authorizer_disabled() -> bool:
-    return os.getenv('AUTHORIZER_DISABLED', 'false').strip().lower() == 'true'
+    return False
 
 
 def _get_header_case_insensitive(headers: dict[str, Any], target_header: str) -> str | None:

@@ -1,0 +1,616 @@
+# CareerVP Code Quality & Security Specification
+# Machine-readable YAML format for automated validation
+
+spec_version: "1.0"
+date: "2026-02-20"
+purpose: "Mandatory coding standards to prevent security vulnerabilities and logic bugs"
+enforcement: "All new code must pass these checks; existing code to be remediated"
+
+# =============================================================================
+# SECTION 1: AUTHENTICATION & AUTHORIZATION
+# =============================================================================
+authentication_authorization:
+  section: "1. Authentication & Authorization"
+
+  rule_1_1:
+    id: "AUTH_NEVER_TRUST_PAYLOAD"
+    name: "Never Trust User Input for Identity"
+    severity: "critical"
+    description: "Always derive user identity from authentication context, never from request payload"
+    status: "required"
+
+    forbidden_patterns:
+      - pattern: "payload.get('user_id')"
+        description: "Extracting user_id directly from request payload"
+      - pattern: "extract_user_id(event) or payload.get"
+        description: "Fallback to payload user_id"
+      - pattern: "event.get('user_id')"
+        description: "Any user_id from event body/params"
+
+    required_patterns:
+      - pattern: "extract_user_id(event)"
+        description: "Extract user_id only from auth context"
+      - pattern: "if not user_id: return 401"
+        description: "Return 401 if auth extraction fails"
+
+    linters:
+      - id: "no-user-id-from-payload"
+        message: "user_id must be extracted from authentication context, not payload"
+
+  rule_1_2:
+    id: "AUTH_REQUIRE_OWNERSHIP_CHECK"
+    name: "Authorization Pattern - Ownership Validation"
+    severity: "critical"
+    description: "Validate ownership of resources before access"
+    status: "required"
+
+    required_patterns:
+      - pattern: "if resource.user_id != user_id: return 403"
+        description: "Check ownership before returning resource"
+
+  rule_1_3:
+    id: "AUTH_NO_BYPASS"
+    name: "Remove Debug Authentication Bypass"
+    severity: "critical"
+    description: "Production code must never contain authentication bypass mechanisms"
+    status: "required"
+
+    forbidden_patterns:
+      - pattern: "AUTHORIZER_DISABLED"
+        description: "Environment variable that disables auth"
+      - pattern: "_authorizer_disabled"
+        description: "Function that checks bypass flag"
+      - pattern: "os.getenv.*DISABLED"
+        description: "Any environment-based auth disable"
+
+    enforcement:
+      - tool: "grep"
+        command: "grep -r 'DISABLED' src/backend/careervp/handlers/"
+        expected: "0 matches"
+
+  rule_1_4:
+    id: "AUTH_USE_MIDDLEWARE"
+    name: "Require Auth Decorator"
+    severity: "high"
+    description: "Use standardized auth middleware on all protected endpoints"
+    status: "required"
+
+    required_patterns:
+      - pattern: "@require_auth"
+        description: "Decorator for auth protection"
+      - pattern: "from careervp.handlers.auth_middleware import"
+        description: "Import from centralized auth module"
+
+# =============================================================================
+# SECTION 2: INPUT VALIDATION
+# =============================================================================
+input_validation:
+  section: "2. Input Validation"
+
+  rule_2_1:
+    id: "VALIDATE_REQUIRED_FIELDS"
+    name: "Validate Required Fields - Type and Format"
+    severity: "high"
+    description: "Check both existence AND type/format of required fields"
+    status: "required"
+
+    forbidden_patterns:
+      - pattern: "if not payload.get"
+        description: "Only checks existence, empty string passes"
+
+    required_patterns:
+      - pattern: "isinstance(value, expected_type)"
+        description: "Validate type"
+      - pattern: "if not isinstance(...) or not value"
+        description: "Check type AND non-empty"
+
+  rule_2_2:
+    id: "VALIDATE_URL_PARAMS"
+    name: "Validate URL/URI Parameters"
+    severity: "medium"
+    description: "Validate external inputs before parsing"
+    status: "required"
+
+    forbidden_patterns:
+      - pattern: "str(request."
+        description: "Blind str() conversion on request objects"
+
+    required_patterns:
+      - pattern: "isinstance(request.field, str)"
+        description: "Type check before conversion"
+
+# =============================================================================
+# SECTION 3: NULL SAFETY
+# =============================================================================
+null_safety:
+  section: "3. Null Safety"
+
+  rule_3_1:
+    id: "NULL_CHECK_OPTIONAL"
+    name: "Defensive Access on Optional Values"
+    severity: "critical"
+    description: "Always check for None before attribute access on optional types"
+    status: "required"
+
+    forbidden_patterns:
+      - pattern: "result.data.job_id"
+        description: "Direct access on result.data without null check"
+
+    required_patterns:
+      - pattern: "if result.data is None"
+        description: "Null check before attribute access"
+
+  rule_3_2:
+    id: "NULL_SAFE_COLLECTION"
+    name: "Safe Collection Access"
+    severity: "critical"
+    description: "Handle empty collections explicitly"
+    status: "required"
+
+    forbidden_patterns:
+      - pattern: "max(items, key"
+        description: "max() on list without empty check"
+
+    required_patterns:
+      - pattern: "if not items:"
+        description: "Check for empty before iteration"
+      - pattern: "ResultCode.NOT_FOUND"
+        description: "Return proper not found result"
+
+  rule_3_3:
+    id: "NULL_CONTEXT_ATTR"
+    name: "Context Attribute Access"
+    severity: "high"
+    description: "Never assume context has attributes"
+    status: "required"
+
+    forbidden_patterns:
+      - pattern: "context.aws_request_id"
+        description: "Direct attribute access on context"
+
+    required_patterns:
+      - pattern: "getattr(context,"
+        description: "Safe attribute access with default"
+
+# =============================================================================
+# SECTION 4: ERROR HANDLING
+# =============================================================================
+error_handling:
+  section: "4. Error Handling"
+
+  rule_4_1:
+    id: "ERR_NO_BARE_EXCEPT"
+    name: "No Bare Except"
+    severity: "high"
+    description: "Never use bare except - catch specific exceptions"
+    status: "required"
+
+    forbidden_patterns:
+      - pattern: "except:"
+        description: "Bare except catches everything"
+      - pattern: "except Exception:"
+        without_logging: true
+        description: "Catches Exception without logging"
+
+    required_patterns:
+      - pattern: "except ClientError"
+        description: "Specific exception type"
+      - pattern: "except (ValueError, TypeError)"
+        description: "Specific exception tuple"
+
+  rule_4_2:
+    id: "ERR_ALWAYS_LOG"
+    name: "Always Log Exceptions"
+    severity: "high"
+    description: "Never swallow errors without logging"
+    status: "required"
+
+    forbidden_patterns:
+      - pattern: "except Exception:\\n.*={}"
+        description: "Silent exception handling"
+
+    required_patterns:
+      - pattern: "logger.exception"
+        description: "Log exception with traceback"
+      - pattern: "logger.error.*exc"
+        description: "Log error with context"
+
+  rule_4_3:
+    id: "ERR_PRESERVE_CONTEXT"
+    name: "Preserve Error Context"
+    severity: "medium"
+    description: "Don't mask the real error cause"
+    status: "required"
+
+    forbidden_patterns:
+      - pattern: "except ValueError:\\n.*return generic"
+        description: "Generic error without context"
+
+    required_patterns:
+      - pattern: "logger.warning.*record.get"
+        description: "Log relevant context"
+      - pattern: "Result(success=False, error=f"
+        description: "Include error detail"
+
+# =============================================================================
+# SECTION 5: RACE CONDITIONS
+# =============================================================================
+race_conditions:
+  section: "5. Race Conditions"
+
+  rule_5_1:
+    id: "RACE_IDEMPOTENT_SQS"
+    name: "Idempotent SQS Processing"
+    severity: "high"
+    description: "Check job status before processing"
+    status: "required"
+
+    required_patterns:
+      - pattern: "if job.status in ('COMPLETED', 'FAILED')"
+        description: "Check terminal status first"
+      - pattern: "ConditionExpression="
+        description: "Use conditional updates"
+
+  rule_5_2:
+    id: "RACE_CONDITIONAL_UPDATES"
+    name: "Conditional Updates"
+    severity: "high"
+    description: "Use DynamoDB conditional writes to prevent races"
+    status: "required"
+
+    required_patterns:
+      - pattern: "ConditionExpression="
+        description: "Conditional write for status updates"
+
+# =============================================================================
+# SECTION 6: SECURITY CONFIGURATION
+# =============================================================================
+security_configuration:
+  section: "6. Security Configuration"
+
+  rule_6_1:
+    id: "SEC_CORS_RESTRICTION"
+    name: "CORS Restriction"
+    severity: "medium"
+    description: "Never use wildcard origin in production"
+    status: "required"
+
+    forbidden_patterns:
+      - pattern: "'Access-Control-Allow-Origin': '*'"
+        description: "Wildcard CORS origin"
+
+    required_patterns:
+      - pattern: "ALLOWED_ORIGINS"
+        description: "Config-based allowed origins"
+      - pattern: "if origin in ALLOWED_ORIGINS"
+        description: "Validate against allowed list"
+
+  rule_6_2:
+    id: "SEC_NO_EVENT_LOGGING"
+    name: "Disable Sensitive Event Logging"
+    severity: "medium"
+    description: "Never log full request/response in production"
+    status: "required"
+
+    forbidden_patterns:
+      - pattern: "log_event=True"
+        description: "Logs full API event including tokens"
+
+    required_patterns:
+      - pattern: "log_event=False"
+        description: "Disable event logging"
+
+  rule_6_3:
+    id: "SEC_FAIL_FAST_CONFIG"
+    name: "Fail Fast on Missing Configuration"
+    severity: "medium"
+    description: "Validate required configuration at startup"
+    status: "required"
+
+    forbidden_patterns:
+      - pattern: "_generate_ephemeral_keys()"
+        description: "Auto-generate keys in production"
+
+    required_patterns:
+      - pattern: "raise ConfigurationError"
+        description: "Fail if keys missing in prod"
+
+# =============================================================================
+# SECTION 7: TYPE SAFETY
+# =============================================================================
+type_safety:
+  section: "7. Type Safety"
+
+  rule_7_1:
+    id: "TYPE_HINTS_REQUIRED"
+    name: "Always Use Type Hints"
+    severity: "medium"
+    description: "All functions must have type hints"
+    status: "required"
+
+    enforcement:
+      - tool: "mypy"
+        command: "mypy careervp/ --strict"
+        expected: "0 errors"
+
+  rule_7_2:
+    id: "TYPE_HANDLE_OPTIONAL"
+    name: "Handle Optional Types"
+    severity: "medium"
+    description: "Use Optional and handle None explicitly"
+    status: "required"
+
+    forbidden_patterns:
+      - pattern: "int(item.get("
+        description: "Blind conversion without null check"
+
+    required_patterns:
+      - pattern: "if version is None:"
+        description: "Explicit None handling"
+
+# =============================================================================
+# SECTION 8: PAGINATION
+# =============================================================================
+pagination:
+  section: "8. Pagination"
+
+  rule_8_1:
+    id: "PAGE_IMPLEMENT"
+    name: "Implement Proper Pagination"
+    severity: "medium"
+    description: "Never use scan without pagination"
+    status: "required"
+
+    forbidden_patterns:
+      - pattern: "table.scan(Limit="
+        description: "Scan without pagination"
+
+    required_patterns:
+      - pattern: "LastEvaluatedKey"
+        description: "Handle pagination token"
+      - pattern: "ExclusiveStartKey"
+        description: "Use pagination key"
+
+# =============================================================================
+# SECTION 9: TESTING REQUIREMENTS
+# =============================================================================
+testing_requirements:
+  section: "9. Testing Requirements"
+
+  coverage_requirements:
+    authentication: 100
+    authorization: 100
+    null_handling: 100
+    error_handling: 100
+
+  required_test_cases:
+    authentication:
+      - "test_handler_returns_401_without_auth"
+      - "test_handler_returns_401_with_invalid_token"
+      - "test_handler_extracts_user_id_from_jwt"
+
+    authorization:
+      - "test_handler_returns_403_for_other_user_resource"
+
+    null_safety:
+      - "test_handler_handles_none_result"
+      - "test_handler_handles_empty_list"
+
+# =============================================================================
+# SECTION 10: LINTING & TYPE CHECKING
+# =============================================================================
+linting_type_checking:
+  section: "10. Linting & Type Checking"
+
+  mandatory_checks:
+    - tool: "ruff"
+      command: "ruff check careervp/"
+      pass_required: 0
+
+    - tool: "mypy"
+      command: "mypy careervp/ --strict"
+      pass_required: 0
+
+    - tool: "bandit"
+      command: "bandit -r careervp/"
+      pass_required: 0
+      exclude_severities: ["low", "medium"]
+
+  pre_commit_config: |
+    repos:
+      - repo: https://github.com/astral-sh/ruff-pre-commit
+        hooks:
+          - id: ruff
+          - id: ruff-format
+
+      - repo: https://pre-commit.com/mirrors-mypy
+        hooks:
+          - id: mypy
+            args: ['careervp/', '--strict', '--ignore-missing-imports']
+
+# =============================================================================
+# SECTION 11: CODE REVIEW CHECKLIST
+# =============================================================================
+code_review_checklist:
+  section: "11. Code Review Checklist"
+
+  checklist:
+    - item: "user_id comes only from extract_user_id(), never from payload"
+      category: "auth"
+
+    - item: "No AUTHORIZER_DISABLED or similar bypasses"
+      category: "auth"
+
+    - item: "All handlers use @require_auth or equivalent"
+      category: "auth"
+
+    - item: "Resources checked for user ownership before access"
+      category: "ownership"
+
+    - item: "All result.data access null-checked"
+      category: "null"
+
+    - item: "All optional parameters handled"
+      category: "null"
+
+    - item: "No bare except:"
+      category: "error"
+
+    - item: "All exceptions logged"
+      category: "error"
+
+    - item: "No Access-Control-Allow-Origin: *"
+      category: "security"
+
+    - item: "log_event=False on Lambda decorators"
+      category: "security"
+
+    - item: "All functions have type hints"
+      category: "types"
+
+    - item: "Auth/authorization paths tested"
+      category: "tests"
+
+# =============================================================================
+# SECTION 12: SEVERITY CLASSIFICATION
+# =============================================================================
+severity_classification:
+  section: "12. Severity Classification"
+
+  levels:
+    critical:
+      definition: "Auth bypass, data breach, injection"
+      response_time: "Immediate hotfix"
+
+    high:
+      definition: "Access control flaw, race condition"
+      response_time: "24 hours"
+
+    medium:
+      definition: "Error swallowing, weak validation"
+      response_time: "1 week"
+
+    low:
+      definition: "Inconsistent patterns, style"
+      response_time: "Next sprint"
+
+# =============================================================================
+# AUTOMATED VALIDATION RULES (for CI/CD)
+# =============================================================================
+validation_rules:
+  # AST-based patterns that can be detected automatically
+  ast_patterns:
+    - id: "AST_AUTH_BYPASS"
+      pattern_type: "forbidden"
+      description: "Detect user_id extraction from event payload"
+      detection:
+        - "Call(func=Name(id='get'))"
+          with_arg: "user_id"
+
+    - id: "AST_BARE_EXCEPT"
+      pattern_type: "forbidden"
+      description: "Detect bare except statements"
+      detection:
+        - "ExceptHandler(type=None)"
+
+    - id: "AST_LOG_EVENT_TRUE"
+      pattern_type: "forbidden"
+      description: "Detect log_event=True"
+      detection:
+        - "Keyword(arg='log_event', value=Constant(value=True))"
+
+    - id: "AST_CORS_WILDCARD"
+      pattern_type: "forbidden"
+      description: "Detect wildcard CORS"
+      detection:
+        - "Dict(elts=[keyword(arg='Access-Control-Allow-Origin', value=Constant(value='*'))])"
+
+  # Grep-based patterns (simpler detection)
+  grep_patterns:
+    - id: "GREP_AUTH_BYPASS"
+      pattern: "AUTHORIZER_DISABLED|DISABLED.*auth"
+      severity: "critical"
+      files: "src/backend/careervp/handlers/*.py"
+
+    - id: "GREP_CORS_WILDCARD"
+      pattern: "Allow-Origin.*\\*"
+      severity: "medium"
+      files: "src/backend/careervp/handlers/*.py"
+
+    - id: "GREP_LOG_EVENT"
+      pattern: "log_event.*True"
+      severity: "medium"
+      files: "src/backend/careervp/handlers/*.py"
+
+    - id: "GREP_BARE_EXCEPT"
+      pattern: "^\\s*except:\\s*$"
+      severity: "high"
+      files: "src/backend/careervp/**/*.py"
+
+    - id: "GREP_USER_ID_PAYLOAD"
+      pattern: "payload.*user_id|user_id.*payload"
+      severity: "critical"
+      files: "src/backend/careervp/handlers/*.py"
+
+# =============================================================================
+# FILE PATTERN RULES
+# =============================================================================
+file_rules:
+  handler_patterns:
+    - pattern: "src/backend/careervp/handlers/*_handler.py"
+      required_imports:
+        - "from careervp.handlers.auth_middleware import require_auth"
+      required_decorators:
+        - "@require_auth"
+
+  dal_patterns:
+    - pattern: "src/backend/careervp/dal/*.py"
+      required_decorators:
+        - "@tracer.capture_method"
+      required_logging:
+        - "logger.info"
+        - "logger.exception"
+
+  test_patterns:
+    - pattern: "tests/unit/test_*_handler.py"
+      required_tests:
+        - "test_.*_returns_401"
+        - "test_.*_handles_none"
+
+# =============================================================================
+# ENFORCEMENT CONFIGURATION
+# =============================================================================
+enforcement:
+  pre_commit:
+    enabled: true
+    checks:
+      - "ruff"
+      - "ruff-format"
+      - "mypy"
+      - "custom-secrets-scan"
+
+  ci_pipeline:
+    enabled: true
+    stages:
+      - name: "lint"
+        commands:
+          - "ruff check careervp/"
+          - "ruff format --check careervp/"
+
+      - name: "typecheck"
+        commands:
+          - "mypy careervp/ --strict"
+
+      - name: "security"
+        commands:
+          - "bandit -r careervp/ -ll"
+
+      - name: "test"
+        commands:
+          - "pytest tests/unit/ -v"
+
+  fail_on_violations:
+    critical: true
+    high: true
+    medium: false
+    low: false

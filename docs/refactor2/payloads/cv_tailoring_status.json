@@ -1,0 +1,45 @@
+{
+  "description": "GET /cv-tailoring/{cvTailoringId} - Get tailored CV status or result",
+  "method": "GET",
+  "path": "/cv-tailoring/{cvTailoringId}",
+  "headers": {
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
+  },
+  "path_params": {
+    "cvTailoringId": "cv-tail-f2a3b4c5-6789-4d0e-f1a2-345678901234"
+  },
+  "request": {},
+  "expected_response": {
+    "status_code": 200,
+    "body": {
+      "id": "cv-tail-f2a3b4c5-6789-4d0e-f1a2-345678901234",
+      "status": "completed",
+      "result": {
+        "tailored_cv": "JOHN SMITH\nSenior Software Engineer | Cloud Architecture & Team Leadership\n\n[Full tailored CV text...]",
+        "ats_score": 9.2,
+        "keyword_matches": {
+          "matched": [
+            "Python",
+            "Node.js",
+            "AWS",
+            "Docker",
+            "Kubernetes",
+            "microservices",
+            "serverless"
+          ],
+          "missing": [
+            "event-driven architecture"
+          ]
+        },
+        "suggestions": [
+          "Consider adding specific examples of event-driven architecture if you have experience",
+          "Quantified achievements added based on gap analysis responses"
+        ],
+        "fvs_validation": {
+          "is_valid": true,
+          "violations": []
+        }
+      }
+    }
+  }
+}

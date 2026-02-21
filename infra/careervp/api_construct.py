@@ -5,6 +5,7 @@ from aws_cdk import aws_lambda as _lambda
 from aws_cdk import aws_lambda_event_sources as eventsources
 from aws_cdk import aws_logs as logs
 from aws_cdk import aws_s3 as s3
+from aws_cdk import aws_ssm as ssm
 from aws_cdk.aws_lambda_python_alpha import PythonLayerVersion
 from constructs import Construct
 
@@ -1337,8 +1338,12 @@ class ApiConstruct(Construct):
                 **self._build_shared_table_env(),
                 "TABLE_NAME": self.api_db.users_table.table_name,
                 "TOKEN_BLACKLIST_TABLE_NAME": self.api_db.idempotency_db.table_name,
-                "JWT_SECRET": "dev-placeholder-secret",
-                "JWT_ALGORITHM": "HS256",
+                "JWT_PRIVATE_KEY": ssm.StringParameter.value_from_lookup(
+                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-private-key"
+                ),
+                "JWT_PUBLIC_KEY": ssm.StringParameter.value_from_lookup(
+                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-public-key"
+                ),
             },
             timeout=Duration.seconds(30),
             memory_size=256,
