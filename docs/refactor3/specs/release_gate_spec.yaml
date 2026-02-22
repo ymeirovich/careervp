@@ -1,0 +1,709 @@
+spec_version: "1.0"
+date: "2026-02-20"
+name: "API Contract Specification"
+description: >
+  Complete API contract for all 27 CareerVP operations organized by tag.
+  Maps current error status, required fixes, and target behavior for REFACTOR2.
+source_documents:
+  - docs/swagger/careervp-api-v1.yaml
+  - docs/refactor2/REFACTOR2_PLAN.md
+
+# =============================================================================
+# AUTH (3 operations)
+# =============================================================================
+endpoints:
+
+  # ---------------------------------------------------------------------------
+  # Tag: Auth
+  # ---------------------------------------------------------------------------
+  - tag: Auth
+    path: /auth/register
+    method: POST
+    operation_id: registerUser
+    request_schema:
+      required_fields:
+        - email: string (format: email)
+        - password: string (minLength: 8)
+        - name: string
+    response_schema:
+      fields:
+        - access_token: string
+        - refresh_token: string
+        - expires_in: integer
+        - token_type: string (default: Bearer)
+    current_status: working
+    required_fix: none
+    target_status_code: 201
+    auth_required: false
+    async_pattern: false
+
+  - tag: Auth
+    path: /auth/login
+    method: POST
+    operation_id: loginUser
+    request_schema:
+      required_fields:
+        - email: string (format: email)
+        - password: string
+    response_schema:
+      fields:
+        - access_token: string
+        - refresh_token: string
+        - expires_in: integer
+        - token_type: string
+    current_status: working
+    required_fix: none
+    target_status_code: 200
+    auth_required: false
+    async_pattern: false
+
+  - tag: Auth
+    path: /auth/refresh
+    method: POST
+    operation_id: refreshToken
+    request_schema:
+      required_fields: []
+      notes: "Uses refresh token from Authorization header"
+    response_schema:
+      fields:
+        - access_token: string
+        - refresh_token: string
+        - expires_in: integer
+        - token_type: string
+    current_status: working
+    required_fix: none
+    target_status_code: 200
+    auth_required: true
+    async_pattern: false
+
+  # ---------------------------------------------------------------------------
+  # Tag: Users
+  # ---------------------------------------------------------------------------
+  - tag: Users
+    path: /users/me
+    method: GET
+    operation_id: getCurrentUser
+    request_schema:
+      required_fields: []
+    response_schema:
+      fields:
+        - id: string
+        - email: string (format: email)
+        - name: string
+        - created_at: string (format: date-time)
+    current_status: 404_not_deployed
+    required_fix: >
+      Implement GET /users/me handler in user_handler.py.
+      Add route to api_construct.py with JWT authorizer.
+    target_status_code: 200
+    auth_required: true
+    async_pattern: false
+
+  - tag: Users
+    path: /users/me
+    method: PUT
+    operation_id: updateCurrentUser
+    request_schema:
+      required_fields: []
+      optional_fields:
+        - name: string
+        - timezone: string
+    response_schema:
+      fields:
+        - id: string
+        - email: string
+        - name: string
+        - created_at: string (format: date-time)
+    current_status: 404_not_deployed
+    required_fix: >
+      Implement PUT /users/me handler in user_handler.py.
+      Add route to api_construct.py with JWT authorizer.
+    target_status_code: 200
+    auth_required: true
+    async_pattern: false
+
+  - tag: Users
+    path: /users/me/cv
+    method: POST
+    operation_id: uploadCV
+    request_schema:
+      required_fields:
+        - cv_content: string
+        - file_name: string
+    response_schema:
+      fields:
+        - cv_id: string
+        - status: string (enum: processing, parsed, failed)
+        - parsed_data: object
+    current_status: working
+    required_fix: none
+    target_status_code: 201
+    auth_required: true
+    async_pattern: false
+
+  - tag: Users
+    path: /users/me/cvs
+    method: GET
+    operation_id: listUserCVs
+    request_schema:
+      required_fields: []
+      query_params:
+        - limit: integer (default: 20)
+        - cursor: string
+    response_schema:
+      fields:
+        - cvs: array (items: {id, file_name, uploaded_at})
+        - cursor: string
+    current_status: 404_not_deployed
+    required_fix: >
+      Implement GET /users/me/cvs handler.
+      Add route to api_construct.py with JWT authorizer.
+    target_status_code: 200
+    auth_required: true
+    async_pattern: false
+
+  # ---------------------------------------------------------------------------
+  # Tag: Jobs
+  # ---------------------------------------------------------------------------
+  - tag: Jobs
+    path: /jobs
+    method: POST
+    operation_id: createJob
+    request_schema:
+      required_fields:
+        - title: string
+        - company_name: string
+        - description: string
+      optional_fields:
+        - url: string (format: uri)
+    response_schema:
+      fields:
+        - id: string
+        - title: string
+        - company_name: string
+        - description: string
+        - url: string
+        - requirements: array[string]
+        - created_at: string (format: date-time)
+    current_status: working
+    required_fix: none
+    target_status_code: 201
+    auth_required: true
+    async_pattern: false
+
+  - tag: Jobs
+    path: /jobs
+    method: GET
+    operation_id: listJobs
+    request_schema:
+      required_fields: []
+      query_params:
+        - limit: integer (default: 20)
+    response_schema:
+      fields:
+        - jobs: array (items: JobResponse)
+    current_status: 404_not_deployed
+    required_fix: >
+      Implement GET /jobs handler in job_handler.py.
+      Add route to api_construct.py with JWT authorizer.
+    target_status_code: 200
+    auth_required: true
+    async_pattern: false
+
+  - tag: Jobs
+    path: /jobs/{jobId}
+    method: GET
+    operation_id: getJob
+    request_schema:
+      required_fields: []
+      path_params:
+        - jobId: string
+    response_schema:
+      fields:
+        - id: string
+        - title: string
+        - company_name: string
+        - description: string
+        - url: string
+        - requirements: array[string]
+        - created_at: string (format: date-time)
+    current_status: 401_auth_failure
+    required_fix: >
+      Add JWT authorizer to /jobs/{jobId} GET route in api_construct.py.
+      Standardize handler auth extraction via auth_utils.extract_user_id().
+    target_status_code: 200
+    auth_required: true
+    async_pattern: false
+
+  # ---------------------------------------------------------------------------
+  # Tag: VPR
+  # ---------------------------------------------------------------------------
+  - tag: VPR
+    path: /vpr/generate
+    method: POST
+    operation_id: generateVPR
+    request_schema:
+      required_fields:
+        - cv_id: string
+        - job_id: string
+        - gap_response_ids: array[string]
+      optional_fields:
+        - options:
+            include_company_research: boolean (default: true)
+            tone: string (enum: professional, conversational, formal)
+    response_schema:
+      fields:
+        - request_id: string
+        - status: string (enum: processing)
+        - estimated_time_seconds: integer
+        - webhook_url: string
+    current_status: 401_auth_failure
+    required_fix: >
+      Add JWT authorizer to /vpr/generate POST route.
+      Refactor to async pattern: return 202 with job_id.
+      Standardize auth extraction via auth_utils.extract_user_id().
+    target_status_code: 202
+    auth_required: true
+    async_pattern: true
+
+  - tag: VPR
+    path: /vpr/{vprId}
+    method: GET
+    operation_id: getVPR
+    request_schema:
+      required_fields: []
+      path_params:
+        - vprId: string
+    response_schema:
+      fields:
+        - id: string
+        - status: string (enum: pending, processing, completed, failed)
+        - result:
+            uvp: string
+            differentiators: array (items: {text, source})
+            strategic_narrative: string
+            company_job_fit_score: number
+            meta_evaluation: {persuasion_score, completeness_score}
+        - created_at: string (format: date-time)
+        - completed_at: string (format: date-time)
+    current_status: 401_auth_failure
+    required_fix: >
+      Add JWT authorizer to /vpr/{vprId} GET route.
+      Standardize auth extraction.
+    target_status_code: 200
+    auth_required: true
+    async_pattern: false
+
+  - tag: VPR
+    path: /users/me/vprs
+    method: GET
+    operation_id: listUserVPRs
+    request_schema:
+      required_fields: []
+    response_schema:
+      fields:
+        - vprs: array (items: {id, job_title, company_name, created_at})
+    current_status: 401_auth_failure
+    required_fix: >
+      Add JWT authorizer to /users/me/vprs GET route.
+      Standardize auth extraction.
+    target_status_code: 200
+    auth_required: true
+    async_pattern: false
+
+  # ---------------------------------------------------------------------------
+  # Tag: Gap Analysis
+  # ---------------------------------------------------------------------------
+  - tag: Gap Analysis
+    path: /gap-analysis/questions
+    method: POST
+    operation_id: generateGapQuestions
+    request_schema:
+      required_fields:
+        - cv_id: string
+        - job_id: string
+      optional_fields:
+        - max_questions: integer (default: 10)
+        - focus_areas: array[string]
+    response_schema:
+      fields:
+        - questions: array (items: {id, text, tags, strategic_intent, evidence_gap})
+        - missing_qualifications: array (items: {skill, priority})
+    current_status: working
+    required_fix: none
+    target_status_code: 200
+    auth_required: true
+    async_pattern: false
+
+  - tag: Gap Analysis
+    path: /gap-analysis/responses
+    method: POST
+    operation_id: submitGapResponses
+    request_schema:
+      required_fields:
+        - responses: array (items: {question_id, response, quantifiable_data})
+    response_schema:
+      fields:
+        - status: string
+        - impact_statements: array (items: {text, evidence_type, usable_in})
+    current_status: working
+    required_fix: none
+    target_status_code: 200
+    auth_required: true
+    async_pattern: false
+
+  - tag: Gap Analysis
+    path: /gap-analysis/{jobId}/questions
+    method: GET
+    operation_id: getGapQuestions
+    request_schema:
+      required_fields: []
+      path_params:
+        - jobId: string
+    response_schema:
+      fields:
+        - questions: array
+    current_status: working
+    required_fix: none
+    target_status_code: 200
+    auth_required: true
+    async_pattern: false
+
+  # ---------------------------------------------------------------------------
+  # Tag: CV Tailoring
+  # ---------------------------------------------------------------------------
+  - tag: CV Tailoring
+    path: /cv-tailoring/generate
+    method: POST
+    operation_id: generateTailoredCV
+    request_schema:
+      required_fields:
+        - cv_id: string
+        - job_id: string
+        - vpr_id: string
+      optional_fields:
+        - options:
+            preserve_length: boolean (default: true)
+            highlight_keywords: boolean (default: true)
+            target_ats: string (default: standard)
+    response_schema:
+      fields:
+        - request_id: string
+        - status: string (enum: processing)
+        - estimated_time_seconds: integer
+    current_status: 400_validation_error
+    required_fix: >
+      Update CVTailoringRequest model to accept workflow fields (job_id, vpr_id)
+      and legacy fields (job_description). Remove extra='forbid' or add missing
+      fields. Add model_validator for flow detection.
+    target_status_code: 202
+    auth_required: true
+    async_pattern: true
+
+  - tag: CV Tailoring
+    path: /cv-tailoring/{cvTailoringId}
+    method: GET
+    operation_id: getTailoredCV
+    request_schema:
+      required_fields: []
+      path_params:
+        - cvTailoringId: string
+    response_schema:
+      fields:
+        - id: string
+        - status: string (enum: pending, processing, completed, failed)
+        - result:
+            tailored_cv: string
+            ats_score: number
+            keyword_matches: {matched: array[string], missing: array[string]}
+            suggestions: array[string]
+            fvs_validation: {is_valid: boolean, violations: array[string]}
+    current_status: 401_auth_failure
+    required_fix: >
+      Add JWT authorizer and standardize auth extraction.
+      Note: This endpoint is implied by the async pattern but not explicitly
+      listed in the test error results. Include for completeness.
+    target_status_code: 200
+    auth_required: true
+    async_pattern: false
+
+  - tag: CV Tailoring
+    path: /users/me/tailored-cvs
+    method: GET
+    operation_id: listTailoredCVs
+    request_schema:
+      required_fields: []
+    response_schema:
+      fields:
+        - tailored_cvs: array
+    current_status: 401_auth_failure
+    required_fix: >
+      Add JWT authorizer and standardize auth extraction.
+    target_status_code: 200
+    auth_required: true
+    async_pattern: false
+
+  # ---------------------------------------------------------------------------
+  # Tag: Cover Letter
+  # ---------------------------------------------------------------------------
+  - tag: Cover Letter
+    path: /cover-letter/generate
+    method: POST
+    operation_id: generateCoverLetter
+    request_schema:
+      required_fields:
+        - cv_id: string
+        - job_id: string
+        - vpr_id: string
+        - gap_response_ids: array[string]
+        - company_research_id: string
+      optional_fields:
+        - options:
+            tone: string (enum: professional, conversational, formal)
+            length: string (enum: short, standard, long)
+            include_portfolio_link: boolean (default: false)
+    response_schema:
+      fields:
+        - request_id: string
+        - status: string (enum: processing)
+        - estimated_time_seconds: integer
+    current_status: 400_validation_error
+    required_fix: >
+      Update CoverLetterRequest model to accept workflow fields.
+      Remove extra='forbid' or add missing fields to Pydantic model.
+    target_status_code: 202
+    auth_required: true
+    async_pattern: false
+
+  - tag: Cover Letter
+    path: /cover-letter/{coverLetterId}
+    method: GET
+    operation_id: getCoverLetter
+    request_schema:
+      required_fields: []
+      path_params:
+        - coverLetterId: string
+    response_schema:
+      fields:
+        - id: string
+        - status: string
+        - result:
+            cover_letter: string
+            paragraphs:
+              hook: {word_count: integer, includes_uvp: boolean, includes_company_reference: boolean}
+              proof_points: {requirements_matched: integer, claims_verified: boolean, quantified_evidence: boolean}
+              close: {word_count: integer, includes_cta: boolean}
+            fvs_validation: {is_valid: boolean, violations: array[string]}
+    current_status: 401_auth_failure
+    required_fix: >
+      Add JWT authorizer to /cover-letter/{coverLetterId} GET route.
+      Standardize auth extraction.
+    target_status_code: 200
+    auth_required: true
+    async_pattern: false
+
+  - tag: Cover Letter
+    path: /users/me/cover-letters
+    method: GET
+    operation_id: listCoverLetters
+    request_schema:
+      required_fields: []
+    response_schema:
+      fields:
+        - cover_letters: array
+    current_status: 401_auth_failure
+    required_fix: >
+      Add JWT authorizer to /users/me/cover-letters GET route.
+      Standardize auth extraction.
+    target_status_code: 200
+    auth_required: true
+    async_pattern: false
+
+  # ---------------------------------------------------------------------------
+  # Tag: Interview Prep
+  # ---------------------------------------------------------------------------
+  - tag: Interview Prep
+    path: /interview-prep/generate
+    method: POST
+    operation_id: generateInterviewPrep
+    request_schema:
+      required_fields:
+        - vpr_id: string
+        - gap_response_ids: array[string]
+      optional_fields:
+        - focus_areas: array[string]
+        - question_count: integer (default: 5)
+    response_schema:
+      fields:
+        - request_id: string
+        - status: string
+    current_status: 400_validation_error
+    required_fix: >
+      Update InterviewPrepRequest model to accept workflow fields.
+      Remove extra='forbid' or add missing fields.
+      Complete handler implementation with STAR-formatted responses.
+    target_status_code: 202
+    auth_required: true
+    async_pattern: false
+
+  - tag: Interview Prep
+    path: /interview-prep/{interviewPrepId}
+    method: GET
+    operation_id: getInterviewPrep
+    request_schema:
+      required_fields: []
+      path_params:
+        - interviewPrepId: string
+    response_schema:
+      fields:
+        - id: string
+        - status: string
+        - result:
+            questions: array (items: {id, text, suggested_answer: {format, situation, task, action, result}})
+    current_status: 401_auth_failure
+    required_fix: >
+      Add JWT authorizer to /interview-prep/{interviewPrepId} GET route.
+      Standardize auth extraction.
+    target_status_code: 200
+    auth_required: true
+    async_pattern: false
+
+  # ---------------------------------------------------------------------------
+  # Tag: Company Research
+  # ---------------------------------------------------------------------------
+  - tag: Company Research
+    path: /company-research/fetch
+    method: POST
+    operation_id: fetchCompanyResearch
+    request_schema:
+      required_fields:
+        - job_id: string
+      optional_fields:
+        - url: string (format: uri)
+        - company_name: string
+    response_schema:
+      fields:
+        - request_id: string
+        - status: string
+    current_status: 503_external
+    required_fix: >
+      Add retry logic and fallback for external scraping failures.
+      Implement graceful degradation when external service unavailable.
+      Consider caching successful results in DynamoDB.
+    target_status_code: 202
+    auth_required: true
+    async_pattern: false
+
+  - tag: Company Research
+    path: /company-research/{jobId}
+    method: GET
+    operation_id: getCompanyResearch
+    request_schema:
+      required_fields: []
+      path_params:
+        - jobId: string
+    response_schema:
+      fields:
+        - id: string
+        - company_name: string
+        - mission: string
+        - values: array[string]
+        - recent_news: array (items: {title, date})
+        - culture: string
+        - products: array[string]
+        - funding_status: string
+        - size_range: string
+        - industry: string
+    current_status: 401_auth_failure
+    required_fix: >
+      Add JWT authorizer to /company-research/{jobId} GET route.
+      Standardize auth extraction.
+    target_status_code: 200
+    auth_required: true
+    async_pattern: false
+
+  # ---------------------------------------------------------------------------
+  # Tag: Health
+  # ---------------------------------------------------------------------------
+  - tag: Health
+    path: /health
+    method: GET
+    operation_id: healthCheck
+    request_schema:
+      required_fields: []
+    response_schema:
+      fields:
+        - status: string (enum: healthy, degraded, unhealthy)
+        - timestamp: string (format: date-time)
+        - version: string
+        - services: {dynamodb: string, lambda: string, bedrock: string}
+    current_status: 404_not_deployed
+    required_fix: >
+      Implement /health endpoint handler.
+      Add route to api_construct.py (no authorizer required).
+      Should check DynamoDB, Lambda, and Bedrock connectivity.
+    target_status_code: 200
+    auth_required: false
+    async_pattern: false
+
+# =============================================================================
+# STATUS SUMMARY
+# =============================================================================
+status_summary:
+  total_operations: 27
+  working: 8
+  auth_failure_401: 8
+  not_deployed_404: 5
+  validation_error_400: 3
+  external_503: 1
+  implied_auth_issues: 2
+
+  by_status:
+    working:
+      - POST /auth/register
+      - POST /auth/login
+      - POST /auth/refresh
+      - POST /users/me/cv
+      - POST /jobs
+      - POST /gap-analysis/questions
+      - POST /gap-analysis/responses
+      - GET /gap-analysis/{jobId}/questions
+
+    auth_failure_401:
+      - POST /vpr/generate
+      - GET /vpr/{vprId}
+      - GET /users/me/vprs
+      - GET /cover-letter/{coverLetterId}
+      - GET /users/me/cover-letters
+      - GET /interview-prep/{interviewPrepId}
+      - GET /company-research/{jobId}
+      - GET /jobs/{jobId}
+
+    not_deployed_404:
+      - GET /users/me
+      - PUT /users/me
+      - GET /users/me/cvs
+      - GET /jobs
+      - GET /health
+
+    validation_error_400:
+      - POST /cv-tailoring/generate
+      - POST /cover-letter/generate
+      - POST /interview-prep/generate
+
+    external_503:
+      - POST /company-research/fetch
+
+  fix_categories:
+    jwt_authorizer_deployment:
+      description: "Add JWT authorizer to API Gateway routes"
+      affected_count: 8
+    missing_endpoint_implementation:
+      description: "Create handler + add route to CDK"
+      affected_count: 5
+    pydantic_validation_fix:
+      description: "Update request models to accept workflow fields"
+      affected_count: 3
+    external_dependency_hardening:
+      description: "Add retry/fallback for external services"
+      affected_count: 1

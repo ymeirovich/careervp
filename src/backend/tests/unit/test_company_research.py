@@ -50,7 +50,7 @@ def _build_company_result(source: ResearchSource) -> CompanyResearchResult:
         recent_news=['Won award'],
         financial_summary=None,
         source=source,
-        source_urls=['https://acme.com/about'],
+        source_urls=['https://www.sysaid.com/about'],
         confidence_score=0.9,
         research_timestamp=datetime.now(timezone.utc),
     )

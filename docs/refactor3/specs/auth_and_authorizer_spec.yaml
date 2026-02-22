@@ -1,0 +1,412 @@
+spec_version: "1.0"
+date: "2026-02-20"
+name: "Authentication Fix Specification"
+description: >
+  Authentication strategy for REFACTOR2. Fixes JWT authorizer deployment
+  across all protected routes and standardizes handler auth extraction.
+  Based on REFACTOR2_PLAN Section 3.
+source_documents:
+  - docs/refactor2/REFACTOR2_PLAN.md (Section 3)
+  - docs/refactor/specs/prompt_optimization_cdk_spec.yaml (COGNITO_001, COGNITO_002, API_002)
+
+# =============================================================================
+# CURRENT STATE
+# =============================================================================
+current_state:
+  description: >
+    Inconsistent authentication across handlers. Some routes have JWT authorizer
+    configured in API Gateway, others do not. Handler auth extraction logic
+    varies between handlers, causing 401 errors on 8 endpoints.
+
+  handlers:
+    auth_handler:
+      auth_method: "Direct (no authorizer needed)"
+      routes:
+        - POST /auth/register
+        - POST /auth/login
+        - POST /auth/refresh
+      status: WORKING
+      notes: "Auth endpoints handle their own authentication logic"
+
+    cv_upload_handler:
+      auth_method: "X-User-Id header fallback"
+      routes:
+        - POST /users/me/cv
+      status: WORKING
+      notes: "Uses header-based fallback, works but not standardized"
+
+    gap_handler:
+      auth_method: "X-User-Id header"
+      routes:
+        - POST /gap-analysis/questions
+        - POST /gap-analysis/responses
+        - GET /gap-analysis/{jobId}/questions
+      status: WORKING
+      notes: "Uses header-based auth, works but not standardized"
+
+    vpr_handler:
+      auth_method: "event['requestContext']['authorizer']['userId']"
+      routes:
+        - POST /vpr/generate
+        - GET /vpr/{vprId}
+        - GET /users/me/vprs
+      status: FAILING_401
+      notes: "Expects authorizer context that is not present (no JWT authorizer on route)"
+
+    cover_letter_handler:
+      auth_method: "Complex extraction with AUTHORIZER_DISABLED env var"
+      routes:
+        - POST /cover-letter/generate
+        - GET /cover-letter/{coverLetterId}
+        - GET /users/me/cover-letters
+      status: FAILING_401
+      notes: "Has fallback mechanism but AUTHORIZER_DISABLED not set, returns 401"
+
+    interview_prep_handler:
+      auth_method: "Requires authorizer context"
+      routes:
+        - POST /interview-prep/generate
+        - GET /interview-prep/{interviewPrepId}
+      status: FAILING_401
+      notes: "Same issue as VPR handler"
+
+    company_research_handler:
+      auth_method: "Requires authorizer context"
+      routes:
+        - GET /company-research/{jobId}
+      status: FAILING_401
+      notes: "Missing JWT authorizer on route"
+
+    job_handler:
+      auth_method: "Requires authorizer context"
+      routes:
+        - GET /jobs/{jobId}
+      status: FAILING_401
+      notes: "POST /jobs works (different auth path), GET fails"
+
+  error_evidence:
+    test_provides:
+      headers:
+        Authorization: "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+    handler_expects:
+      request_context:
+        authorizer:
+          userId: "7a7f6307-3562-4ebc-b209-5f19559b048f"
+    actual_at_runtime:
+      request_context:
+        authorizer: null
+
+# =============================================================================
+# ROOT CAUSE
+# =============================================================================
+root_cause:
+  summary: "API Gateway routes missing JWT authorizer configuration"
+  detail: >
+    Tests provide valid JWT tokens via Authorization header, but API Gateway
+    does not have a JWT authorizer configured on the affected routes.
+    Without the authorizer, API Gateway does not decode the JWT and does not
+    populate event['requestContext']['authorizer'] with user claims.
+    Handlers that expect authorizer context receive null and return 401.
+
+  code_evidence:
+    api_construct:
+      file: infra/careervp/api_construct.py
+      issue: >
+        Route definitions for VPR, Cover Letter, Interview Prep, Company Research,
+        and Jobs GET do not include an authorizer parameter.
+      current_code: |
+        route_map = [
+            ("/vpr/generate", "POST", self.vpr_api_func),
+            ("/cover-letter/generate", "POST", self.cover_letter_api_func),
+            ("/interview-prep/generate", "POST", self.interview_prep_api_func),
+            # No authorizer= parameter on these routes
+        ]
+
+    handler_code:
+      vpr_handler:
+        file: src/backend/careervp/handlers/vpr_handler.py
+        extraction: "user_id = event['requestContext']['authorizer']['userId']"
+        fails_when: "authorizer is None"
+
+      cover_letter_handler:
+        file: src/backend/careervp/handlers/cover_letter_handler.py
+        extraction: |
+          def _extract_authenticated_user_id(event):
+              authorizer_user_id = _extract_user_id_from_authorizer(event)
+              if authorizer_user_id:
+                  return authorizer_user_id
+              if not _authorizer_disabled():
+                  return None  # Returns None -> 401
+              # Fallback to X-User-Id header (only if AUTHORIZER_DISABLED=true)
+        fails_when: "Authorizer is None AND AUTHORIZER_DISABLED env var not set"
+
+# =============================================================================
+# SOLUTION
+# =============================================================================
+solution:
+
+  jwt_authorizer:
+    description: "Deploy HttpJwtAuthorizer on all protected API Gateway routes"
+    cdk_construct: "aws_cdk.aws_apigatewayv2_authorizers.HttpJwtAuthorizer"
+    configuration:
+      name: "CareerVpJwtAuthorizer"
+      jwt_audience:
+        - "careervp-api"
+      jwt_issuer: "https://cognito-idp.{region}.amazonaws.com/{user_pool_id}"
+    notes: >
+      The JWT issuer URL depends on whether Cognito is used. If using a
+      different JWT provider (Auth0, Firebase), update the issuer URL accordingly.
+
+  protected_routes:
+    description: "All routes that require JWT authentication"
+    routes:
+      - path: /vpr/generate
+        method: POST
+      - path: /vpr/{vprId}
+        method: GET
+      - path: /users/me/vprs
+        method: GET
+      - path: /users/me
+        method: GET
+      - path: /users/me
+        method: PUT
+      - path: /users/me/cv
+        method: POST
+      - path: /users/me/cvs
+        method: GET
+      - path: /users/me/tailored-cvs
+        method: GET
+      - path: /users/me/cover-letters
+        method: GET
+      - path: /jobs
+        method: GET
+      - path: /jobs/{jobId}
+        method: GET
+      - path: /cv-tailoring/generate
+        method: POST
+      - path: /cv-tailoring/{cvTailoringId}
+        method: GET
+      - path: /cover-letter/generate
+        method: POST
+      - path: /cover-letter/{coverLetterId}
+        method: GET
+      - path: /interview-prep/generate
+        method: POST
+      - path: /interview-prep/{interviewPrepId}
+        method: GET
+      - path: /company-research/fetch
+        method: POST
+      - path: /company-research/{jobId}
+        method: GET
+      - path: /gap-analysis/questions
+        method: POST
+      - path: /gap-analysis/responses
+        method: POST
+      - path: /gap-analysis/{jobId}/questions
+        method: GET
+
+  unprotected_routes:
+    description: "Routes that do NOT require authentication"
+    routes:
+      - path: /auth/register
+        method: POST
+        reason: "User registration (no token yet)"
+      - path: /auth/login
+        method: POST
+        reason: "User login (no token yet)"
+      - path: /health
+        method: GET
+        reason: "Health check for monitoring"
+
+  handler_extraction:
+    description: "Standardized extract_user_id() function for all handlers"
+    file: src/backend/careervp/handlers/auth_utils.py
+    action: create
+
+    function_spec:
+      name: extract_user_id
+      signature: "(event: dict[str, Any]) -> str | None"
+      description: "Extract user_id from JWT authorizer context with fallbacks"
+      extraction_order:
+        - step: 1
+          source: "HTTP API v2 JWT authorizer claims"
+          path: "event.requestContext.authorizer.jwt.claims.sub"
+          notes: "Primary path when HttpJwtAuthorizer is configured"
+
+        - step: 2
+          source: "Lambda authorizer principalId"
+          path: "event.requestContext.authorizer.principalId"
+          notes: "Fallback if using Lambda authorizer instead of JWT"
+
+        - step: 3
+          source: "X-User-Id header (dev/test only)"
+          path: "event.headers.x-user-id or event.headers.X-User-Id"
+          condition: "Only when AUTHORIZER_DISABLED=true environment variable is set"
+          notes: "Development fallback for local testing without Cognito"
+
+      return_value:
+        success: "string - the user_id (UUID)"
+        failure: "None - caller should return 401 Unauthorized"
+
+  fallback_mechanism:
+    description: "X-User-Id header fallback for development environments"
+    env_var: AUTHORIZER_DISABLED
+    value: "true"
+    behavior: >
+      When AUTHORIZER_DISABLED=true, handlers accept X-User-Id header as
+      authentication source. This allows local development and integration
+      testing without a full Cognito deployment.
+    security_notes:
+      - "NEVER set AUTHORIZER_DISABLED=true in production"
+      - "CDK should only set this env var for dev stage"
+      - "Integration tests should use this fallback"
+
+# =============================================================================
+# HANDLER MIGRATION CHECKLIST
+# =============================================================================
+handler_migration:
+  description: >
+    Each handler must be updated to use the standardized extract_user_id()
+    function from auth_utils.py instead of custom auth extraction logic.
+
+  handlers_to_update:
+    - handler: vpr_handler.py
+      current: "event['requestContext']['authorizer']['userId']"
+      target: "auth_utils.extract_user_id(event)"
+      priority: P0
+
+    - handler: cover_letter_handler.py
+      current: "_extract_authenticated_user_id(event) with AUTHORIZER_DISABLED"
+      target: "auth_utils.extract_user_id(event)"
+      remove: "_extract_authenticated_user_id, _extract_user_id_from_authorizer, _authorizer_disabled"
+      priority: P0
+
+    - handler: interview_prep_handler.py
+      current: "Expects authorizer context directly"
+      target: "auth_utils.extract_user_id(event)"
+      priority: P0
+
+    - handler: cv_tailoring_handler.py
+      current: "Varies (needs investigation)"
+      target: "auth_utils.extract_user_id(event)"
+      priority: P0
+
+    - handler: gap_handler.py
+      current: "X-User-Id header extraction"
+      target: "auth_utils.extract_user_id(event)"
+      priority: P1
+      notes: "Currently working but should use standardized function"
+
+    - handler: cv_upload_handler.py
+      current: "X-User-Id header fallback"
+      target: "auth_utils.extract_user_id(event)"
+      priority: P1
+      notes: "Currently working but should use standardized function"
+
+    - handler: job_handler.py
+      current: "POST works, GET extraction needs fix"
+      target: "auth_utils.extract_user_id(event)"
+      priority: P0
+
+    - handler: company_research_handler.py
+      current: "Expects authorizer context"
+      target: "auth_utils.extract_user_id(event)"
+      priority: P1
+
+# =============================================================================
+# ACCEPTANCE CRITERIA
+# =============================================================================
+acceptance_criteria:
+  - "All protected endpoints return 200/201/202 with valid JWT token"
+  - "Unauthorized requests (no token) return 401 with clear error message"
+  - "Expired tokens return 401 with 'Token expired' message"
+  - "Invalid tokens return 401 with 'Invalid token' message"
+  - "All handlers use auth_utils.extract_user_id() for auth extraction"
+  - "No custom auth extraction logic remains in individual handlers"
+  - "AUTHORIZER_DISABLED fallback works in dev environment"
+  - "AUTHORIZER_DISABLED is NOT set in production CDK configuration"
+  - "Test suite updated with proper auth headers for all protected endpoints"
+
+# =============================================================================
+# CDK RULES REFERENCE
+# =============================================================================
+cdk_rules:
+  - id: COGNITO_001
+    name: "Cognito User Pool for user authentication"
+    relevance: >
+      If using Cognito as JWT issuer, User Pool must be configured with
+      email sign-in, auto-verify, and optional MFA.
+
+  - id: COGNITO_002
+    name: "Cognito app client with minimal scopes"
+    relevance: >
+      App client should have only required OAuth scopes configured.
+      Avoid using client credentials for user-facing application.
+
+  - id: API_002
+    name: "Auth on protected routes"
+    relevance: >
+      All routes except /auth/register, /auth/login, /health require
+      JWT validation. This is the primary rule being enforced by this spec.
+
+# =============================================================================
+# FILE CHANGES SUMMARY
+# =============================================================================
+file_changes:
+  - file: infra/careervp/api_construct.py
+    action: modify
+    description: >
+      Add HttpJwtAuthorizer to all protected routes.
+      Configure JWT audience and issuer.
+      Separate protected and unprotected route definitions.
+
+  - file: src/backend/careervp/handlers/auth_utils.py
+    action: create
+    description: >
+      New module with standardized extract_user_id() function.
+      Handles JWT authorizer context, Lambda authorizer, and dev fallback.
+
+  - file: src/backend/careervp/handlers/vpr_handler.py
+    action: modify
+    description: "Replace direct authorizer access with auth_utils.extract_user_id()"
+
+  - file: src/backend/careervp/handlers/cover_letter_handler.py
+    action: modify
+    description: "Remove custom auth extraction, use auth_utils.extract_user_id()"
+
+  - file: src/backend/careervp/handlers/interview_prep_handler.py
+    action: modify
+    description: "Use auth_utils.extract_user_id()"
+
+  - file: src/backend/careervp/handlers/cv_tailoring_handler.py
+    action: modify
+    description: "Use auth_utils.extract_user_id()"
+
+  - file: src/backend/careervp/handlers/gap_handler.py
+    action: modify
+    description: "Standardize to auth_utils.extract_user_id()"
+
+  - file: src/backend/careervp/handlers/job_handler.py
+    action: modify
+    description: "Fix GET route auth, use auth_utils.extract_user_id()"
+
+  - file: src/backend/careervp/handlers/company_research_handler.py
+    action: modify
+    description: "Use auth_utils.extract_user_id()"
+
+# =============================================================================
+# TESTING STRATEGY
+# =============================================================================
+testing:
+  unit_tests:
+    - "test_extract_user_id_jwt_authorizer: Valid JWT claims extraction"
+    - "test_extract_user_id_lambda_authorizer: Lambda authorizer principalId"
+    - "test_extract_user_id_header_fallback: X-User-Id header when AUTHORIZER_DISABLED"
+    - "test_extract_user_id_no_auth: Returns None when no auth present"
+    - "test_extract_user_id_disabled_without_env: Returns None when env var not set"
+
+  integration_tests:
+    - "test_all_protected_endpoints_401_without_token"
+    - "test_all_protected_endpoints_200_with_valid_token"
+    - "test_unprotected_endpoints_200_without_token"
+    - "test_expired_token_returns_401"

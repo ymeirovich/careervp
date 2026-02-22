@@ -1,0 +1,20 @@
+{
+  "description": "POST /company-research/fetch - Fetch company research (async)",
+  "method": "POST",
+  "path": "/company-research/fetch",
+  "headers": {
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
+  },
+  "request": {
+    "job_id": "job-c3d4e5f6-7890-4a1b-c2d3-e4f567890123",
+    "url": "https://jobs.techcorp.com/positions/senior-software-engineer-backend",
+    "company_name": "TechCorp"
+  },
+  "expected_response": {
+    "status_code": 202,
+    "body": {
+      "request_id": "comp-res-b4c5d6e7-8901-4f2a-c3d4-567890123456",
+      "status": "processing"
+    }
+  }
+}

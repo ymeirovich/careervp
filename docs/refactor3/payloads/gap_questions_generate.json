@@ -1,0 +1,66 @@
+{
+  "description": "POST /gap-analysis/questions - Generate gap questions",
+  "method": "POST",
+  "path": "/gap-analysis/questions",
+  "headers": {
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
+  },
+  "request": {
+    "cv_id": "cv-a1b2c3d4-5678-4e9f-a0b1-c2d3e4f56789",
+    "job_id": "job-c3d4e5f6-7890-4a1b-c2d3-e4f567890123",
+    "max_questions": 10,
+    "focus_areas": [
+      "cloud_architecture",
+      "team_leadership",
+      "scalability"
+    ]
+  },
+  "expected_response": {
+    "status_code": 200,
+    "body": {
+      "questions": [
+        {
+          "id": "gap-q-c9d0e1f2-3456-4a7b-c8d9-012345678901",
+          "text": "The job requires experience with serverless architectures. Can you describe a specific project where you designed and deployed serverless solutions? What were the performance metrics and cost savings achieved?",
+          "tags": [
+            "cloud_architecture",
+            "aws",
+            "serverless"
+          ],
+          "strategic_intent": "Validate hands-on serverless experience and quantify business impact",
+          "evidence_gap": "CV mentions AWS experience but lacks specific serverless implementation details"
+        },
+        {
+          "id": "gap-q-d0e1f2a3-4567-4b8c-d9e0-123456789012",
+          "text": "You mentioned mentoring 5 junior engineers. What specific methodology did you use, and how did you measure their growth? What was the retention rate of your mentees?",
+          "tags": [
+            "team_leadership",
+            "mentorship"
+          ],
+          "strategic_intent": "Quantify leadership impact and demonstrate structured approach to team development",
+          "evidence_gap": "Mentorship mentioned but lacks specific outcomes and methodology"
+        },
+        {
+          "id": "gap-q-e1f2a3b4-5678-4c9d-e0f1-234567890123",
+          "text": "The role requires optimizing systems for 5M+ daily active users. Can you walk through a specific scalability challenge you faced at that scale? What metrics did you track and what were the improvements?",
+          "tags": [
+            "scalability",
+            "performance"
+          ],
+          "strategic_intent": "Demonstrate experience at target scale with quantified results",
+          "evidence_gap": "CV shows 5M+ users but lacks detail on specific scalability challenges addressed"
+        }
+      ],
+      "missing_qualifications": [
+        {
+          "skill": "Event-driven architectures",
+          "priority": "nice_to_have"
+        },
+        {
+          "skill": "CI/CD pipeline optimization",
+          "priority": "required"
+        }
+      ]
+    }
+  }
+}

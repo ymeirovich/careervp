@@ -1,0 +1,412 @@
+spec_version: "1.0"
+date: "2026-02-20"
+name: "DAL Migration Specification"
+description: >
+  Handler-to-DAL separation plan. Migrates all handlers from CVTable to
+  DynamoDalHandler for consistent error handling, observability, and type safety.
+  Based on REFACTOR2_PLAN Section 6.
+source_documents:
+  - docs/refactor2/REFACTOR2_PLAN.md (Section 6)
+
+# =============================================================================
+# CURRENT STATE
+# =============================================================================
+current_state:
+  description: >
+    Inconsistent DAL usage across handlers. VPR uses DynamoDalHandler (good).
+    Gap Analysis, CV Tailoring, and Cover Letter use CVTable (poor).
+    Interview Prep has no DAL implementation.
+
+  handlers:
+    vpr_handler:
+      dal: DynamoDalHandler
+      assessment: GOOD
+      features:
+        error_handling: true
+        logging: true (AWS Powertools)
+        observability: true (X-Ray tracer)
+        type_safety: true (Pydantic models)
+        key_generation: true (helper methods)
+
+    gap_handler:
+      dal: CVTable
+      assessment: POOR
+      features:
+        error_handling: false (returns empty dict on error)
+        logging: false
+        observability: false
+        type_safety: false (dict[str, Any])
+        key_generation: false (hardcoded strings)
+
+    cv_tailoring_handler:
+      dal: CVTable
+      assessment: POOR
+      features:
+        error_handling: false
+        logging: false
+        observability: false
+        type_safety: false
+        key_generation: false
+
+    cover_letter_handler:
+      dal: CVTable
+      assessment: POOR
+      features:
+        error_handling: false
+        logging: false
+        observability: false
+        type_safety: false
+        key_generation: false
+
+    interview_prep_handler:
+      dal: None
+      assessment: NOT_IMPLEMENTED
+      features:
+        error_handling: false
+        logging: false
+        observability: false
+        type_safety: false
+        key_generation: false
+
+  cvtable_analysis:
+    location: src/backend/careervp/dal/cv_dal.py
+    docstring: "Compatibility DAL for CV retrieval used by integration tests."
+    purpose: "Temporary compatibility layer, not intended for production"
+    problems:
+      - "Silent failure: returns empty dict on error instead of raising"
+      - "No logging or tracing"
+      - "No type safety - dict[str, Any] throughout"
+      - "No key generation helpers - hardcoded sort key strings"
+      - "No schema validation"
+      - "No TTL management"
+
+# =============================================================================
+# TARGET STATE
+# =============================================================================
+target_state:
+  description: >
+    All handlers use DynamoDalHandler with proper error handling,
+    observability, and type safety. CVTable deprecated with removal in REFACTOR3.
+
+  all_handlers_use: DynamoDalHandler
+  location: src/backend/careervp/dal/dynamo_dal_handler.py
+
+  features:
+    error_handling: "Result[T] pattern with ResultCode enum"
+    logging: "AWS Powertools logger on all operations"
+    observability: "@tracer.capture_method decorator on all methods"
+    type_safety: "Pydantic models for all input/output"
+    key_generation: "Helper methods for partition/sort keys"
+    ttl_management: "Automatic TTL calculation (90 days default)"
+
+# =============================================================================
+# MIGRATION PLAN
+# =============================================================================
+migration_plan:
+
+  gap_analysis:
+    handler_file: src/backend/careervp/handlers/gap_handler.py
+    current_dal: CVTable
+    target_dal: DynamoDalHandler
+    priority: P0
+    new_methods:
+      - name: save_gap_analysis
+        signature: "(self, user_id: str, job_id: str, gap: GapAnalysis) -> Result[None]"
+        parameters:
+          - user_id: "str - authenticated user ID"
+          - job_id: "str - job posting ID"
+          - gap: "GapAnalysis - Pydantic model with questions and metadata"
+        return_type: "Result[None]"
+        sort_key_pattern: "ARTIFACT#GAP_ANALYSIS#{job_id}#{timestamp}"
+        description: "Save gap analysis questions with proper error handling and observability"
+
+      - name: get_gap_analysis
+        signature: "(self, user_id: str, job_id: str) -> Result[GapAnalysis | None]"
+        parameters:
+          - user_id: "str - authenticated user ID"
+          - job_id: "str - job posting ID"
+        return_type: "Result[GapAnalysis | None]"
+        query_pattern: "pk=user_id, sk begins_with ARTIFACT#GAP_ANALYSIS#{job_id}"
+        description: "Retrieve latest gap analysis for user+job, returns None if not found"
+
+    migration_steps:
+      - "Add GapAnalysis Pydantic model to models/"
+      - "Add save_gap_analysis method to DynamoDalHandler"
+      - "Add get_gap_analysis method to DynamoDalHandler"
+      - "Update gap_handler.py imports: CVTable -> DynamoDalHandler"
+      - "Replace table.put_item() calls with dal.save_gap_analysis()"
+      - "Replace table.get_item() calls with dal.get_gap_analysis()"
+      - "Add Result error handling in handler response logic"
+      - "Test with existing gap analysis integration tests"
+
+  cv_tailoring:
+    handler_file: src/backend/careervp/handlers/cv_tailoring_handler.py
+    current_dal: CVTable
+    target_dal: DynamoDalHandler
+    priority: P0
+    new_methods:
+      - name: save_tailored_cv
+        signature: "(self, user_id: str, tailored_cv: TailoredCV) -> Result[None]"
+        parameters:
+          - user_id: "str - authenticated user ID"
+          - tailored_cv: "TailoredCV - Pydantic model with tailored content and ATS score"
+        return_type: "Result[None]"
+        sort_key_pattern: "ARTIFACT#TAILORED_CV#{job_id}#{timestamp}"
+        description: "Save tailored CV artifact with ATS score and keyword matches"
+
+      - name: get_tailored_cv
+        signature: "(self, user_id: str, tailored_cv_id: str) -> Result[TailoredCV | None]"
+        parameters:
+          - user_id: "str - authenticated user ID"
+          - tailored_cv_id: "str - tailored CV artifact ID"
+        return_type: "Result[TailoredCV | None]"
+        query_pattern: "pk=user_id, sk=ARTIFACT#TAILORED_CV#{tailored_cv_id}"
+        description: "Retrieve specific tailored CV by ID"
+
+      - name: list_tailored_cvs
+        signature: "(self, user_id: str, limit: int = 20) -> Result[list[TailoredCV]]"
+        parameters:
+          - user_id: "str - authenticated user ID"
+          - limit: "int - max results (default 20)"
+        return_type: "Result[list[TailoredCV]]"
+        query_pattern: "pk=user_id, sk begins_with ARTIFACT#TAILORED_CV#"
+        description: "List all tailored CVs for a user"
+
+    migration_steps:
+      - "Add TailoredCV Pydantic model to models/"
+      - "Add save_tailored_cv method to DynamoDalHandler"
+      - "Add get_tailored_cv method to DynamoDalHandler"
+      - "Add list_tailored_cvs method to DynamoDalHandler"
+      - "Update cv_tailoring_handler.py imports"
+      - "Replace CVTable calls with DynamoDalHandler methods"
+      - "Add Result error handling"
+      - "Test with existing CV tailoring tests"
+
+  cover_letter:
+    handler_file: src/backend/careervp/handlers/cover_letter_handler.py
+    current_dal: CVTable
+    target_dal: DynamoDalHandler
+    priority: P1
+    new_methods:
+      - name: save_cover_letter
+        signature: "(self, user_id: str, cover_letter: CoverLetter) -> Result[None]"
+        parameters:
+          - user_id: "str - authenticated user ID"
+          - cover_letter: "CoverLetter - Pydantic model with paragraphs and FVS validation"
+        return_type: "Result[None]"
+        sort_key_pattern: "ARTIFACT#COVER_LETTER#{job_id}#{timestamp}"
+        description: "Save cover letter artifact with paragraph structure metadata"
+
+      - name: get_cover_letter
+        signature: "(self, user_id: str, cover_letter_id: str) -> Result[CoverLetter | None]"
+        parameters:
+          - user_id: "str - authenticated user ID"
+          - cover_letter_id: "str - cover letter artifact ID"
+        return_type: "Result[CoverLetter | None]"
+        query_pattern: "pk=user_id, sk=ARTIFACT#COVER_LETTER#{cover_letter_id}"
+        description: "Retrieve specific cover letter by ID"
+
+      - name: list_cover_letters
+        signature: "(self, user_id: str, limit: int = 20) -> Result[list[CoverLetter]]"
+        parameters:
+          - user_id: "str - authenticated user ID"
+          - limit: "int - max results (default 20)"
+        return_type: "Result[list[CoverLetter]]"
+        query_pattern: "pk=user_id, sk begins_with ARTIFACT#COVER_LETTER#"
+        description: "List all cover letters for a user"
+
+    migration_steps:
+      - "Add CoverLetter Pydantic model to models/"
+      - "Add save_cover_letter method to DynamoDalHandler"
+      - "Add get_cover_letter method to DynamoDalHandler"
+      - "Add list_cover_letters method to DynamoDalHandler"
+      - "Update cover_letter_handler.py imports"
+      - "Replace CVTable calls with DynamoDalHandler methods"
+      - "Add Result error handling"
+      - "Test with existing cover letter tests"
+
+  interview_prep:
+    handler_file: src/backend/careervp/handlers/interview_prep_handler.py
+    current_dal: None
+    target_dal: DynamoDalHandler
+    priority: P1
+    new_methods:
+      - name: save_interview_prep
+        signature: "(self, user_id: str, interview_prep: InterviewPrep) -> Result[None]"
+        parameters:
+          - user_id: "str - authenticated user ID"
+          - interview_prep: "InterviewPrep - Pydantic model with STAR-formatted questions"
+        return_type: "Result[None]"
+        sort_key_pattern: "ARTIFACT#INTERVIEW_PREP#{job_id}#{timestamp}"
+        description: "Save interview prep artifact with predicted questions and STAR responses"
+
+      - name: get_interview_prep
+        signature: "(self, user_id: str, interview_prep_id: str) -> Result[InterviewPrep | None]"
+        parameters:
+          - user_id: "str - authenticated user ID"
+          - interview_prep_id: "str - interview prep artifact ID"
+        return_type: "Result[InterviewPrep | None]"
+        query_pattern: "pk=user_id, sk=ARTIFACT#INTERVIEW_PREP#{interview_prep_id}"
+        description: "Retrieve specific interview prep by ID"
+
+    migration_steps:
+      - "Add InterviewPrep Pydantic model to models/"
+      - "Add save_interview_prep method to DynamoDalHandler"
+      - "Add get_interview_prep method to DynamoDalHandler"
+      - "Implement handler logic (currently stub)"
+      - "Wire up DynamoDalHandler in handler"
+      - "Test with new interview prep tests"
+
+# =============================================================================
+# ERROR HANDLING PATTERN
+# =============================================================================
+error_handling:
+  result_pattern:
+    description: >
+      All DAL methods return Result[T] which wraps success/failure state,
+      optional data, error message, and ResultCode enum.
+
+    result_class:
+      location: src/backend/careervp/dal/dynamo_dal_handler.py
+      fields:
+        - success: "bool - whether the operation succeeded"
+        - data: "T | None - the returned data (generic type)"
+        - error: "str | None - error message if failed"
+        - code: "ResultCode - enum indicating error category"
+
+    result_codes:
+      - SUCCESS: "Operation completed successfully"
+      - DYNAMODB_ERROR: "DynamoDB client error (throttle, capacity, etc.)"
+      - VALIDATION_ERROR: "Pydantic model validation failed"
+      - NOT_FOUND: "Requested item does not exist"
+      - INVALID_INPUT: "Input parameters failed validation"
+      - INTERNAL_ERROR: "Unexpected internal error"
+
+    usage_example: |
+      result = dal.save_gap_analysis(user_id, job_id, gap)
+      if not result.success:
+          logger.error("DAL error", code=result.code, error=result.error)
+          return _build_error_response(result.error, HTTPStatus.INTERNAL_SERVER_ERROR)
+
+# =============================================================================
+# OBSERVABILITY
+# =============================================================================
+observability:
+  logger:
+    library: "aws_lambda_powertools.logging"
+    usage: "All DAL methods log operation start, success, and failure"
+    fields:
+      - operation: "method name (save_gap_analysis, get_tailored_cv, etc.)"
+      - user_id: "authenticated user (for correlation)"
+      - artifact_id: "unique artifact identifier"
+      - duration_ms: "operation duration"
+
+  tracer:
+    library: "aws_lambda_powertools.tracing"
+    usage: "@tracer.capture_method decorator on all public DAL methods"
+    subsegment_name: "DynamoDalHandler.{method_name}"
+
+  metrics:
+    library: "aws_lambda_powertools.metrics"
+    custom_metrics:
+      - name: DALOperationCount
+        dimensions: [operation, status]
+      - name: DALOperationDuration
+        dimensions: [operation]
+        unit: Milliseconds
+
+# =============================================================================
+# DEPRECATION PLAN
+# =============================================================================
+deprecation_plan:
+  cvtable:
+    file: src/backend/careervp/dal/cv_dal.py
+    class: CVTable
+    action: "Mark with @deprecated decorator"
+    deprecation_message: "Use DynamoDalHandler instead. Will be removed in REFACTOR3."
+    removal_timeline: REFACTOR3
+    migration_checklist:
+      - "All handlers migrated to DynamoDalHandler"
+      - "Integration tests updated to use DynamoDalHandler"
+      - "No remaining imports of CVTable in handler code"
+      - "CVTable kept only for backward compatibility during transition"
+
+# =============================================================================
+# NEW PYDANTIC MODELS REQUIRED
+# =============================================================================
+new_models:
+  - name: GapAnalysis
+    location: src/backend/careervp/models/gap_analysis.py
+    fields:
+      - artifact_id: str
+      - cv_id: str
+      - job_id: str
+      - questions: list[GapQuestion]
+      - missing_qualifications: list[MissingQualification]
+      - created_at: str (ISO 8601)
+
+  - name: GapQuestion
+    location: src/backend/careervp/models/gap_analysis.py
+    fields:
+      - id: str
+      - text: str
+      - tags: list[str]
+      - destination: str (CV_IMPACT | INTERVIEW_MVP_ONLY)
+      - strategic_intent: str
+      - evidence_gap: str
+      - priority: str (HIGH | MEDIUM | LOW)
+
+  - name: TailoredCV
+    location: src/backend/careervp/models/tailored_cv.py
+    fields:
+      - artifact_id: str
+      - cv_id: str
+      - job_id: str
+      - vpr_id: str
+      - tailored_content: str
+      - ats_score: float
+      - keyword_matches: KeywordMatches
+      - fvs_validation: FVSValidation
+      - created_at: str (ISO 8601)
+
+  - name: CoverLetter
+    location: src/backend/careervp/models/cover_letter.py
+    fields:
+      - artifact_id: str
+      - cv_id: str
+      - job_id: str
+      - vpr_id: str
+      - content: str
+      - word_count: int
+      - paragraphs: ParagraphMetadata
+      - fvs_validation: FVSValidation
+      - created_at: str (ISO 8601)
+
+  - name: InterviewPrep
+    location: src/backend/careervp/models/interview_prep.py
+    fields:
+      - artifact_id: str
+      - vpr_id: str
+      - job_id: str
+      - predicted_questions: list[InterviewQuestion]
+      - questions_to_ask: list[str]
+      - salary_guidance: str
+      - pre_interview_checklist: list[str]
+      - created_at: str (ISO 8601)
+
+  - name: InterviewQuestion
+    location: src/backend/careervp/models/interview_prep.py
+    fields:
+      - id: str
+      - question: str
+      - category: str (TECHNICAL | BEHAVIORAL | COMPANY_SPECIFIC | GAP)
+      - star_response: STARResponse
+
+  - name: STARResponse
+    location: src/backend/careervp/models/interview_prep.py
+    fields:
+      - situation: str
+      - task: str
+      - action: str
+      - result: str
+      - key_points: list[str]
