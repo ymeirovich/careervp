@@ -217,9 +217,9 @@ def update_current_user() -> Response[str]:
         logger.warning('Invalid update user payload', error=str(exc))
         return _json_response(HTTPStatus.BAD_REQUEST, {'error': 'Invalid request payload'})
 
-    payload_user_id = raw_payload.get('user_id') if isinstance(raw_payload, dict) else None
+    payload_user_id = raw_payload.get('user_id')
     if isinstance(payload_user_id, str) and payload_user_id and payload_user_id != user_id:
-        return _json_response(HTTPStatus.FORBIDDEN, {'error': 'User can only update own profile'})
+        return _json_response(HTTPStatus.FORBIDDEN, {'error': 'Cannot modify another user profile'})
 
     try:
         payload = UpdateUserRequest.model_validate(
