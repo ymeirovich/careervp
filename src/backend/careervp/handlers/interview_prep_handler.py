@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 from careervp.dal.cv_dal import CVTable
 from careervp.handlers.auth_utils import extract_user_id
+from careervp.handlers.cors_utils import get_cors_headers
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.models.interview_prep import InterviewPrepRequest
 from careervp.models.result import Result, ResultCode
@@ -114,55 +115,6 @@ def _parse_request(event: dict[str, Any]) -> Result[InterviewPrepRequest]:
 
 def _is_interview_prep_status_path(path: str) -> bool:
     return path.startswith('/interview-prep/') and path != '/interview-prep/generate'
-
-
-def _extract_claim_user_id(claims: Any) -> str | None:
-    if not isinstance(claims, dict):
-        return None
-    for claim_key in ('sub', 'user_id', 'cognito:username'):
-        claim_value = claims.get(claim_key)
-        if isinstance(claim_value, str) and claim_value.strip():
-            return claim_value.strip()
-    return None
-
-
-def _extract_user_id_from_authorizer(event: dict[str, Any]) -> str | None:
-    request_context = event.get('requestContext')
-    if not isinstance(request_context, dict):
-        return None
-
-    authorizer = request_context.get('authorizer')
-    if not isinstance(authorizer, dict):
-        return None
-
-    claim_user_id = _extract_claim_user_id(authorizer.get('claims'))
-    if claim_user_id:
-        return claim_user_id
-
-    jwt_context = authorizer.get('jwt')
-    if isinstance(jwt_context, dict):
-        jwt_claims = jwt_context.get('claims')
-        jwt_user_id = _extract_claim_user_id(jwt_claims)
-        if jwt_user_id:
-            return jwt_user_id
-
-    for direct_key in ('user_id', 'principalId', 'principal_id'):
-        direct_value = authorizer.get(direct_key)
-        if isinstance(direct_value, str) and direct_value.strip():
-            return direct_value.strip()
-    return None
-
-
-def _authorizer_disabled() -> bool:
-    return False
-
-
-def _get_header_case_insensitive(headers: dict[str, Any], target_header: str) -> str | None:
-    normalized_target = target_header.lower()
-    for key, value in headers.items():
-        if isinstance(key, str) and key.lower() == normalized_target and isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
 
 
 def _extract_authenticated_user_id(event: dict[str, Any]) -> str | None:
@@ -284,9 +236,11 @@ def _build_interview_prep_status_payload(item: dict[str, Any], fallback_id: str)
 
 def _build_response(status_code: HTTPStatus, body: dict[str, Any]) -> dict[str, Any]:
     """Build API Gateway response."""
+    headers = get_cors_headers(None)
+    headers['Content-Type'] = 'application/json'
     return {
         'statusCode': status_code.value,
-        'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+        'headers': headers,
         'body': json.dumps(body, default=str),
     }
 

@@ -15,9 +15,11 @@ import boto3
 from aws_lambda_powertools.metrics import MetricUnit
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from boto3.dynamodb.conditions import Attr, Key
+from botocore.exceptions import ClientError
 from pydantic import ValidationError
 
 from careervp.handlers.auth_utils import extract_user_id
+from careervp.handlers.cors_utils import get_cors_headers
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.company_research import research_company
 from careervp.models.company import CompanyResearchRequest
@@ -175,55 +177,6 @@ def _is_get_company_research_path(path: str, event: dict[str, Any]) -> bool:
     return isinstance(path_parameters, dict) and isinstance(path_parameters.get('jobId'), str)
 
 
-def _extract_claim_user_id(claims: Any) -> str | None:
-    if not isinstance(claims, dict):
-        return None
-    for claim_key in ('sub', 'user_id', 'cognito:username'):
-        claim_value = claims.get(claim_key)
-        if isinstance(claim_value, str) and claim_value.strip():
-            return claim_value.strip()
-    return None
-
-
-def _extract_user_id_from_authorizer(event: dict[str, Any]) -> str | None:
-    request_context = event.get('requestContext')
-    if not isinstance(request_context, dict):
-        return None
-
-    authorizer = request_context.get('authorizer')
-    if not isinstance(authorizer, dict):
-        return None
-
-    claim_user_id = _extract_claim_user_id(authorizer.get('claims'))
-    if claim_user_id:
-        return claim_user_id
-
-    jwt_context = authorizer.get('jwt')
-    if isinstance(jwt_context, dict):
-        jwt_claims = jwt_context.get('claims')
-        jwt_user_id = _extract_claim_user_id(jwt_claims)
-        if jwt_user_id:
-            return jwt_user_id
-
-    for direct_key in ('user_id', 'principalId', 'principal_id'):
-        direct_value = authorizer.get(direct_key)
-        if isinstance(direct_value, str) and direct_value.strip():
-            return direct_value.strip()
-    return None
-
-
-def _authorizer_disabled() -> bool:
-    return False
-
-
-def _get_header_case_insensitive(headers: dict[str, Any], target_header: str) -> str | None:
-    normalized_target = target_header.lower()
-    for key, value in headers.items():
-        if isinstance(key, str) and key.lower() == normalized_target and isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
-
-
 def _extract_authenticated_user_id(event: dict[str, Any]) -> str | None:
     return extract_user_id(event)
 
@@ -275,8 +228,9 @@ def _get_item_from_table(table_name: str, user_id: str, job_id: str) -> dict[str
     for key in candidate_keys:
         try:
             response = table.get_item(Key=key)
-        except Exception:
-            response = {}
+        except ClientError:
+            logger.exception('Failed to get item: %s', key)
+            raise
         item = response.get('Item') if isinstance(response, dict) else None
         if isinstance(item, dict):
             return item
@@ -399,12 +353,11 @@ def _map_result_code_to_status(code: str | None) -> HTTPStatus:
 
 def _build_response(status_code: HTTPStatus, body: dict[str, Any]) -> dict[str, Any]:
     """Build an API Gateway compatible response."""
+    headers = get_cors_headers(None)
+    headers['Content-Type'] = 'application/json'
     return {
         'statusCode': status_code.value,
-        'headers': {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-        },
+        'headers': headers,
         'body': json.dumps(body, default=str),
     }
 

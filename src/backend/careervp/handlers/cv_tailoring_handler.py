@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 from careervp.dal.cv_dal import CVTable
 from careervp.handlers.auth_utils import extract_user_id
+from careervp.handlers.cors_utils import get_cors_headers
 from careervp.logic.cv_tailoring import tailor_cv
 from careervp.logic.fvs_validator import create_fvs_baseline
 from careervp.logic.llm_client import LLMClient
@@ -166,7 +167,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
     try:
         result = _fetch_and_tailor_cv(request)
     except Exception as exc:  # noqa: BLE001
-        logger.info('CV tailoring failed', request_id=context.aws_request_id)
+        logger.info('CV tailoring failed', request_id=getattr(context, 'aws_request_id', 'unknown'))
         return _response(
             HTTPStatus.INTERNAL_SERVER_ERROR,
             {
@@ -194,7 +195,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
             'data': _serialize_result_data(result.data) if result.data is not None else None,
         }
 
-    logger.info('CV tailoring handled', request_id=context.aws_request_id)
+    logger.info('CV tailoring handled', request_id=getattr(context, 'aws_request_id', 'unknown'))
     return _response(status_code, body, headers)
 
 
@@ -327,67 +328,6 @@ def _fetch_and_tailor_cv(request: TailorCVRequest) -> Result[Any]:
 def _get_user_id(event: dict[str, Any], body: dict[str, Any] | None = None) -> str | None:
     _ = body
     return extract_user_id(event)
-
-
-def _get_user_id_from_authorizer(event: dict[str, Any]) -> str | None:
-    request_context = event.get('requestContext', {})
-    authorizer = request_context.get('authorizer')
-    if not isinstance(authorizer, dict):
-        return None
-
-    claims = authorizer.get('claims')
-    claim_user_id = _extract_user_id_from_claims(claims)
-    if claim_user_id:
-        return claim_user_id
-
-    jwt_context = authorizer.get('jwt')
-    if isinstance(jwt_context, dict):
-        jwt_claims = jwt_context.get('claims')
-        jwt_user_id = _extract_user_id_from_claims(jwt_claims)
-        if jwt_user_id:
-            return jwt_user_id
-
-    for direct_key in ('user_id', 'principalId', 'principal_id'):
-        direct_value = authorizer.get(direct_key)
-        if isinstance(direct_value, str) and direct_value.strip():
-            return direct_value.strip()
-    return None
-
-
-def _authorizer_disabled() -> bool:
-    return False
-
-
-def _get_user_id_from_unprotected_request(event: dict[str, Any], body: dict[str, Any] | None) -> str | None:
-    headers = event.get('headers')
-    if isinstance(headers, dict):
-        header_user_id = _get_header_case_insensitive(headers, 'x-user-id')
-        if header_user_id:
-            return header_user_id
-
-    if isinstance(body, dict):
-        body_user_id = body.get('user_id')
-        if isinstance(body_user_id, str) and body_user_id.strip():
-            return body_user_id.strip()
-    return None
-
-
-def _extract_user_id_from_claims(claims: Any) -> str | None:
-    if not isinstance(claims, dict):
-        return None
-    for claim_key in ('sub', 'user_id', 'cognito:username'):
-        claim_value = claims.get(claim_key)
-        if isinstance(claim_value, str) and claim_value.strip():
-            return claim_value.strip()
-    return None
-
-
-def _get_header_case_insensitive(headers: dict[str, Any], target_header: str) -> str | None:
-    normalized_target = target_header.lower()
-    for key, value in headers.items():
-        if isinstance(key, str) and key.lower() == normalized_target and isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
 
 
 def _is_tailoring_status_path(path: str) -> bool:
@@ -545,11 +485,10 @@ def _build_success_data(data: Any) -> dict[str, Any]:
 
 
 def _cors_headers() -> dict[str, str]:
-    return {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    }
+    headers = get_cors_headers(None)
+    headers.setdefault('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    headers.setdefault('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    return headers
 
 
 def _response(status: int | HTTPStatus, body: dict[str, Any], headers: dict[str, str]) -> dict[str, Any]:
