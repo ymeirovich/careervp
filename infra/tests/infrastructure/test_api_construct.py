@@ -119,3 +119,59 @@ def test_lambda_role_has_llm_cache_permissions(synthesized_template: Template) -
     assert cache_policy_found, (
         "No least-privilege IAM policy found for LLM cache table access"
     )
+
+
+def test_rest_api_has_token_authorizer(synthesized_template: Template) -> None:
+    """Ensure API Gateway has a TOKEN Lambda authorizer for protected endpoints."""
+    authorizers = synthesized_template.find_resources("AWS::ApiGateway::Authorizer")
+    token_authorizers = [
+        props
+        for props in authorizers.values()
+        if props["Properties"].get("Type") == "TOKEN"
+    ]
+    assert token_authorizers, "API Gateway TOKEN authorizer was not synthesized"
+
+
+def test_protected_methods_use_custom_authorization(
+    synthesized_template: Template,
+) -> None:
+    """Ensure protected REST methods require CUSTOM authorization."""
+    methods = synthesized_template.find_resources("AWS::ApiGateway::Method")
+    custom_methods = [
+        props
+        for props in methods.values()
+        if props["Properties"].get("AuthorizationType") == "CUSTOM"
+    ]
+    assert custom_methods, "No protected API Gateway methods use CUSTOM authorization"
+
+
+def test_api_gateway_stage_has_access_logs_and_tracing(
+    synthesized_template: Template,
+) -> None:
+    """Ensure API Gateway stage has CloudWatch access logs and X-Ray tracing."""
+    stages = synthesized_template.find_resources("AWS::ApiGateway::Stage")
+    assert stages, "No API Gateway stage synthesized"
+
+    assert any(
+        stage["Properties"].get("TracingEnabled") is True for stage in stages.values()
+    ), "API Gateway stage tracing is not enabled"
+
+    assert any(
+        isinstance(stage["Properties"].get("AccessLogSetting"), dict)
+        and stage["Properties"]["AccessLogSetting"].get("DestinationArn")
+        for stage in stages.values()
+    ), "API Gateway stage access logs are not configured"
+
+
+def test_lambda_log_groups_are_kms_encrypted(synthesized_template: Template) -> None:
+    """Ensure Lambda CloudWatch log groups are encrypted with a KMS key."""
+    log_groups = synthesized_template.find_resources("AWS::Logs::LogGroup")
+    lambda_log_groups = [
+        props
+        for props in log_groups.values()
+        if str(props["Properties"].get("LogGroupName", "")).startswith("/aws/lambda/")
+    ]
+    assert lambda_log_groups, "No Lambda log groups were synthesized"
+    assert all("KmsKeyId" in props["Properties"] for props in lambda_log_groups), (
+        "One or more Lambda log groups are missing KMS encryption"
+    )

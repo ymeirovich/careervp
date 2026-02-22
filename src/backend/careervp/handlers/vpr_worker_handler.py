@@ -105,11 +105,19 @@ def _execute_job(
     """Execute the VPR generation job."""
     # Update status to PROCESSING
     now = datetime.now(timezone.utc).isoformat()
-    jobs_repo.update_job_status(
+    processing_update = jobs_repo.update_job_status(
         job_id=job_id,
         status='PROCESSING',
+        expected_current_status='PENDING',
         started_at=now,
     )
+    if not processing_update.success:
+        logger.info(
+            'Skipping job: failed atomic transition to PROCESSING',
+            job_id=job_id,
+            expected_current_status='PENDING',
+        )
+        return
 
     # Get CV for this user
     user_id: str = job.get('user_id', '')
