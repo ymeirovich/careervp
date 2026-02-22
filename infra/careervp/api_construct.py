@@ -117,6 +117,9 @@ class ApiConstruct(Construct):
             appconfig_app_name,
         )
         self.auth_api_func = self._add_auth_lambda()
+        self.health_api_func = self._add_health_lambda()
+        self.user_api_func = self._add_user_lambda()
+        self.job_api_func = self._add_job_lambda()
         self.gap_api_func = self._add_gap_lambda()
         self.cover_letter_api_func = self._add_cover_letter_lambda()
         self.interview_prep_api_func = self._add_interview_prep_lambda()
@@ -312,7 +315,9 @@ class ApiConstruct(Construct):
             "ApiTokenAuthorizer",
             handler=authorizer_lambda,
             validation_regex=r"^Bearer [-0-9A-Za-z\\._~\\+/]+=*$",
-            results_cache_ttl=Duration.minutes(5),
+            # Disable policy caching to avoid stale method-level Allow policies
+            # being reused across different protected routes.
+            results_cache_ttl=Duration.seconds(0),
         )
 
     def _build_llm_cache_table(self, is_production_env: bool) -> dynamodb.TableV2:
@@ -714,6 +719,12 @@ class ApiConstruct(Construct):
                 constants.POWERTOOLS_SERVICE_NAME: constants.SERVICE_NAME,
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
+                "JWT_PRIVATE_KEY": ssm.StringParameter.value_for_string_parameter(
+                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-private-key"
+                ),
+                "JWT_PUBLIC_KEY": ssm.StringParameter.value_for_string_parameter(
+                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-public-key"
+                ),
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": constants.ENVIRONMENT,
                 "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,
@@ -1108,6 +1119,12 @@ class ApiConstruct(Construct):
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-cv-upload-worker",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
+                "JWT_PRIVATE_KEY": ssm.StringParameter.value_for_string_parameter(
+                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-private-key"
+                ),
+                "JWT_PUBLIC_KEY": ssm.StringParameter.value_for_string_parameter(
+                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-public-key"
+                ),
                 "TABLE_NAME": cvs_table.table_name,
                 "IDEMPOTENCY_TABLE_NAME": idempotency_table.table_name,
                 "CV_BUCKET_NAME": cv_bucket.bucket_name,
@@ -1471,6 +1488,119 @@ class ApiConstruct(Construct):
             architecture=_lambda.Architecture.X86_64,
         )
 
+    def _add_health_lambda(self) -> _lambda.Function:
+        function_name = self.naming.lambda_name("health-api")
+        log_group = logs.LogGroup(
+            self,
+            "HealthApiLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
+        return _lambda.Function(
+            self,
+            "HealthApiLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.health_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-health-api",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+            },
+            timeout=Duration.seconds(10),
+            memory_size=128,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            role=self.lambda_role,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+    def _add_user_lambda(self) -> _lambda.Function:
+        function_name = self.naming.lambda_name("user-api")
+        log_group = logs.LogGroup(
+            self,
+            "UserApiLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
+        return _lambda.Function(
+            self,
+            "UserApiLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.user_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-user-api",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+                "TABLE_NAME": self.api_db.users_table.table_name,
+                "USERS_TABLE_NAME": self.api_db.users_table.table_name,
+                "JWT_PRIVATE_KEY": ssm.StringParameter.value_for_string_parameter(
+                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-private-key"
+                ),
+                "JWT_PUBLIC_KEY": ssm.StringParameter.value_for_string_parameter(
+                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-public-key"
+                ),
+            },
+            timeout=Duration.seconds(30),
+            memory_size=256,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            role=self.lambda_role,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+    def _add_job_lambda(self) -> _lambda.Function:
+        function_name = self.naming.lambda_name("job-api")
+        log_group = logs.LogGroup(
+            self,
+            "JobApiLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
+        return _lambda.Function(
+            self,
+            "JobApiLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.job_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-job-api",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+                "JOBS_TABLE_NAME": self.api_db.jobs_table.table_name,
+                "JWT_PRIVATE_KEY": ssm.StringParameter.value_for_string_parameter(
+                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-private-key"
+                ),
+                "JWT_PUBLIC_KEY": ssm.StringParameter.value_for_string_parameter(
+                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-public-key"
+                ),
+            },
+            timeout=Duration.seconds(30),
+            memory_size=256,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            role=self.lambda_role,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
     def _add_api_authorizer_lambda(self) -> _lambda.Function:
         function_name = self.naming.lambda_name("api-authorizer")
         return _lambda.Function(
@@ -1483,6 +1613,9 @@ class ApiConstruct(Construct):
             environment={
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-api-authorizer",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                "JWT_PRIVATE_KEY": ssm.StringParameter.value_for_string_parameter(
+                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-private-key"
+                ),
                 "JWT_PUBLIC_KEY": ssm.StringParameter.value_for_string_parameter(
                     self, f"/careervp/{constants.ENVIRONMENT}/jwt-public-key"
                 ),
@@ -1633,13 +1766,13 @@ class ApiConstruct(Construct):
             ("/auth/register", "POST", self.auth_api_func),
             ("/auth/login", "POST", self.auth_api_func),
             ("/auth/refresh", "POST", self.auth_api_func),
-            ("/users/me", "GET", self.cv_upload_func),
-            ("/users/me", "PUT", self.cv_upload_func),
+            ("/users/me", "GET", self.user_api_func),
+            ("/users/me", "PUT", self.user_api_func),
             ("/users/me/cv", "POST", self.cv_upload_func),
-            ("/users/me/cvs", "GET", self.cv_upload_func),
-            ("/jobs", "POST", self.cv_tailoring_func),
-            ("/jobs", "GET", self.cv_tailoring_func),
-            ("/jobs/{jobId}", "GET", self.vpr_status_func),
+            ("/users/me/cvs", "GET", self.user_api_func),
+            ("/jobs", "POST", self.job_api_func),
+            ("/jobs", "GET", self.job_api_func),
+            ("/jobs/{jobId}", "GET", self.job_api_func),
             ("/vpr/generate", "POST", self.vpr_submit_func),
             ("/vpr/{vprId}", "GET", self.vpr_status_func),
             ("/users/me/vprs", "GET", self.vpr_status_func),
@@ -1656,7 +1789,7 @@ class ApiConstruct(Construct):
             ("/interview-prep/{interviewPrepId}", "GET", self.interview_prep_api_func),
             ("/company-research/fetch", "POST", self.company_research_func),
             ("/company-research/{jobId}", "GET", self.company_research_func),
-            ("/health", "GET", self.cv_upload_func),
+            ("/health", "GET", self.health_api_func),
         ]
         for path, method, handler in route_map:
             self._add_route_method(path, method, handler)

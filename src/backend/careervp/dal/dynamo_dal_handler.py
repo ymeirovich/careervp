@@ -42,7 +42,8 @@ class DynamoDalHandler(DalHandler):
         logger.info('saving CV to DynamoDB')
         try:
             table = self._get_db_handler(self.table_name)
-            item = user_cv.model_dump()
+            # Exclude nulls to avoid DynamoDB GSI key-type validation errors (e.g. email-index expects S, not NULL).
+            item = user_cv.model_dump(exclude_none=True)
             item['pk'] = user_cv.user_id
             item['sk'] = 'CV'
             table.put_item(Item=item)

@@ -30,15 +30,25 @@ from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.handlers.models.env_vars import CVUploadEnvVars
 from careervp.handlers.utils.observability import logger, tracer
 from careervp.handlers.utils.rest_api_resolver import app
+from careervp.logic.auth_service import AuthService, ConfigurationError, InvalidTokenError
 from careervp.logic.cv_parser import create_cv_parse_response, parse_cv
 from careervp.models.api_models import CVUploadRequest
 from careervp.models.cv import CVParseRequest, CVParseResponse
 from careervp.models.result import ResultCode
 
+_auth_service: AuthService | None = None
+
 
 def _get_s3_client() -> BaseClient:
     """Get S3 client (separated for testability)."""
     return boto3.client('s3')
+
+
+def _get_auth_service() -> AuthService:
+    global _auth_service
+    if _auth_service is None:
+        _auth_service = AuthService.from_env()
+    return _auth_service
 
 
 @app.post('/users/me/cv')
@@ -200,10 +210,25 @@ def upload_cv() -> Response[str]:
 
     logger.info('CV upload completed successfully', parse_time_ms=parse_time_ms)
 
+    parsed_data = _build_openapi_parsed_data(response)
+    cv_id = None
+    if response.user_cv is not None and isinstance(response.user_cv.cv_id, str):
+        cv_id = response.user_cv.cv_id
+    if not cv_id:
+        cv_id = str(uuid.uuid4())
+
     return Response(
-        status_code=HTTPStatus.OK.value,
+        status_code=HTTPStatus.CREATED.value,
         content_type=content_types.APPLICATION_JSON,
-        body=response.model_dump_json(),
+        body=json.dumps(
+            {
+                **response.model_dump(mode='json'),
+                'cv_id': cv_id,
+                'status': 'parsed',
+                'parsed_data': parsed_data,
+            },
+            default=str,
+        ),
     )
 
 
@@ -244,6 +269,21 @@ def _normalize_request_payload(body: Any) -> dict[str, Any]:
     return body
 
 
+def _extract_bearer_token() -> str | None:
+    headers = app.current_event.headers or {}
+    auth_header = None
+    for key, value in headers.items():
+        if isinstance(key, str) and key.lower() == 'authorization':
+            auth_header = value
+            break
+    if not isinstance(auth_header, str):
+        return None
+    if not auth_header.startswith('Bearer '):
+        return None
+    token = auth_header[7:].strip()
+    return token if token else None
+
+
 def _extract_user_id() -> str | None:
     request_context = app.current_event.request_context
     if isinstance(request_context, dict):
@@ -252,6 +292,16 @@ def _extract_user_id() -> str | None:
             authorizer_user_id = _extract_user_id_from_authorizer(authorizer)
             if authorizer_user_id:
                 return authorizer_user_id
+
+    token = _extract_bearer_token()
+    if token:
+        try:
+            payload = _get_auth_service().validate_token(token, expected_token_type='access')
+        except (InvalidTokenError, ConfigurationError):
+            payload = {}
+        user_id = payload.get('user_id') or payload.get('sub') if isinstance(payload, dict) else None
+        if isinstance(user_id, str) and user_id.strip():
+            return user_id.strip()
 
     if os.getenv('ENV', '').strip().lower() == 'local':
         headers = app.current_event.headers or {}
@@ -299,6 +349,61 @@ def _get_status_code_for_result_code(code: str) -> int:
         ResultCode.LLM_TIMEOUT: HTTPStatus.GATEWAY_TIMEOUT.value,
     }
     return error_mapping.get(code, HTTPStatus.INTERNAL_SERVER_ERROR.value)
+
+
+def _build_openapi_parsed_data(response: CVParseResponse) -> dict[str, Any]:
+    user_cv = response.user_cv
+    if user_cv is None:
+        return {
+            'name': '',
+            'title': '',
+            'experience': [],
+            'skills': [],
+            'education': [],
+        }
+
+    name = user_cv.full_name
+    title = ''
+    experience: list[dict[str, Any]] = []
+    for idx, item in enumerate(user_cv.experience):
+        if idx == 0 and isinstance(item.role, str):
+            title = item.role
+        experience.append(
+            {
+                'company': item.company,
+                'role': item.role,
+                'duration': item.dates or '',
+                'achievements': item.achievements or [],
+            }
+        )
+
+    skills = []
+    for skill in user_cv.skills:
+        if isinstance(skill, str):
+            skills.append(skill)
+        elif hasattr(skill, 'name'):
+            skill_name = getattr(skill, 'name', '')
+            if isinstance(skill_name, str) and skill_name:
+                skills.append(skill_name)
+
+    education: list[dict[str, Any]] = []
+    for item in user_cv.education:
+        year = item.graduation_date or item.end_date or item.dates or ''
+        education.append(
+            {
+                'degree': item.degree,
+                'institution': item.institution,
+                'year': year,
+            }
+        )
+
+    return {
+        'name': name,
+        'title': title,
+        'experience': experience,
+        'skills': skills,
+        'education': education,
+    }
 
 
 @logger.inject_lambda_context(correlation_id_path=API_GATEWAY_REST)

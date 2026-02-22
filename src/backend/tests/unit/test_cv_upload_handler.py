@@ -326,12 +326,15 @@ class TestCVUploadWithTextContent:
 
             response = lambda_handler(event, context)
 
-            assert response['statusCode'] == 200
+            assert response['statusCode'] == 201
             body = json.loads(response['body'])
             assert body['success'] is True
             assert body['user_cv'] is not None
             assert body['user_cv']['full_name'] == 'John Doe'
             assert body['language_detected'] == 'en'
+            assert body['cv_id']
+            assert body['status'] == 'parsed'
+            assert isinstance(body['parsed_data'], dict)
 
     @mock_aws
     def test_text_content_too_short_fails(self):
@@ -428,7 +431,7 @@ class TestCVUploadWithFileContent:
 
             response = lambda_handler(event, context)
 
-            assert response['statusCode'] == 200
+            assert response['statusCode'] == 201
             body = json.loads(response['body'])
             assert body['success'] is True
             assert body['user_cv'] is not None
@@ -496,13 +499,64 @@ class TestCVUploadDynamoDBPersistence:
 
             response = lambda_handler(event, context)
 
-            assert response['statusCode'] == 200
+            assert response['statusCode'] == 201
 
             # Verify CV was saved to DynamoDB
             saved_item = table.get_item(Key={'pk': 'test-user-123', 'sk': 'CV'})
             assert 'Item' in saved_item
             assert saved_item['Item']['full_name'] == 'John Doe'
             assert saved_item['Item']['is_parsed'] is True
+
+    @mock_aws
+    def test_openapi_payload_uses_bearer_token_for_user_id(self, mock_llm_success):
+        """OpenAPI payload should resolve authenticated user_id from bearer token claims."""
+        boto3.client('s3', region_name='us-east-1').create_bucket(Bucket='test-cv-bucket')
+        dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+        dynamodb.create_table(
+            TableName='test-users-table',
+            KeySchema=[
+                {'AttributeName': 'pk', 'KeyType': 'HASH'},
+                {'AttributeName': 'sk', 'KeyType': 'RANGE'},
+            ],
+            AttributeDefinitions=[
+                {'AttributeName': 'pk', 'AttributeType': 'S'},
+                {'AttributeName': 'sk', 'AttributeType': 'S'},
+            ],
+            BillingMode='PAY_PER_REQUEST',
+        )
+
+        mock_auth_service = MagicMock()
+        mock_auth_service.validate_token.return_value = {'sub': 'token-user-123'}
+
+        with patch('careervp.logic.cv_parser.get_llm_router') as mock_router:
+            mock_router.return_value.invoke.return_value = mock_llm_success
+            with patch('careervp.handlers.cv_upload_handler._get_auth_service', return_value=mock_auth_service):
+                from careervp.handlers.cv_upload_handler import lambda_handler
+
+                event = generate_api_gw_event(
+                    {
+                        'cv_content': (
+                            'John Smith Senior Software Engineer with 8 years experience in Python, AWS, '
+                            'distributed systems, mentoring teams, API optimization, CI/CD delivery, and '
+                            'microservices architecture across high-scale production platforms.'
+                        ),
+                        'file_name': 'john_smith_cv.txt',
+                    }
+                )
+                event['headers'] = {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer test-access-token',
+                }
+                event['requestContext']['authorizer'] = {}
+                context = generate_lambda_context()
+
+                response = lambda_handler(event, context)
+
+                assert response['statusCode'] == 201
+                body = json.loads(response['body'])
+                assert body['success'] is True
+                assert body['status'] == 'parsed'
+                assert body['cv_id']
 
 
 class TestCVUploadErrorHandling:
