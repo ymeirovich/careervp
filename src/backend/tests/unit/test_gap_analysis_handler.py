@@ -125,8 +125,8 @@ def test_get_questions_returns_200(gap_table: Any) -> None:
     now = datetime.now(timezone.utc).isoformat()
     gap_table.put_item(
         Item={
-            'applicationId': 'GAP_ANALYSIS#cv-123#job-555',
-            'artifactId': 'QUESTION_SET',
+            'applicationId': 'GAP_ANALYSIS_BY_JOB#job-555',
+            'artifactId': 'QUESTION_SET#user-1',
             'artifactType': 'gap_analysis',
             'user_id': 'user-1',
             'cv_id': 'cv-123',

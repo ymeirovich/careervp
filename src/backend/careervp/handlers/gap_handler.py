@@ -118,9 +118,16 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:
         'updated_at': now,
         'expiration': _ttl_timestamp(),
     }
+    by_job_item = {
+        **item,
+        'applicationId': _build_gap_questions_by_job_application_id(job_id),
+        'artifactId': _build_gap_questions_by_job_artifact_id(user_id),
+    }
 
     try:
-        _get_table().put_item(Item=item)
+        table = _get_table()
+        table.put_item(Item=item)
+        table.put_item(Item=by_job_item)
     except (ClientError, RuntimeError) as exc:
         return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc), ResultCode.DYNAMODB_ERROR)
 
@@ -145,40 +152,23 @@ def get_questions(event: dict[str, Any]) -> dict[str, Any]:
         return _error_response(HTTPStatus.BAD_REQUEST, 'Missing jobId path parameter', ResultCode.MISSING_REQUIRED_FIELD)
 
     try:
-        table = _get_table()
-        response = table.scan(
-            FilterExpression='artifactType = :artifact_type AND user_id = :user_id AND job_id = :job_id',
-            ExpressionAttributeValues={
-                ':artifact_type': 'gap_analysis',
-                ':user_id': user_id,
-                ':job_id': job_id,
-            },
+        response = _get_table().get_item(
+            Key={
+                'applicationId': _build_gap_questions_by_job_application_id(job_id),
+                'artifactId': _build_gap_questions_by_job_artifact_id(user_id),
+            }
         )
-        items = list(response.get('Items', []))
-        while 'LastEvaluatedKey' in response:
-            response = table.scan(
-                FilterExpression='artifactType = :artifact_type AND user_id = :user_id AND job_id = :job_id',
-                ExpressionAttributeValues={
-                    ':artifact_type': 'gap_analysis',
-                    ':user_id': user_id,
-                    ':job_id': job_id,
-                },
-                ExclusiveStartKey=response['LastEvaluatedKey'],
-            )
-            items.extend(response.get('Items', []))
     except (ClientError, RuntimeError) as exc:
         return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc), ResultCode.DYNAMODB_ERROR)
-
-    if not items:
+    item = response.get('Item')
+    if not item:
         return _error_response(HTTPStatus.NOT_FOUND, 'Gap questions not found', ResultCode.INVALID_INPUT)
-
-    latest = max(items, key=_item_timestamp)
     return _json_response(
         HTTPStatus.OK,
         {
             'job_id': job_id,
-            'cv_id': latest.get('cv_id'),
-            'questions': latest.get('questions') or [],
+            'cv_id': item.get('cv_id'),
+            'questions': item.get('questions') or [],
         },
     )
 
@@ -439,6 +429,14 @@ def _build_gap_responses_application_id(job_id: str) -> str:
 
 def _build_gap_questions_application_id(cv_id: str, job_id: str) -> str:
     return f'GAP_ANALYSIS#{cv_id}#{job_id}'
+
+
+def _build_gap_questions_by_job_application_id(job_id: str) -> str:
+    return f'GAP_ANALYSIS_BY_JOB#{job_id}'
+
+
+def _build_gap_questions_by_job_artifact_id(user_id: str) -> str:
+    return f'QUESTION_SET#{user_id}'
 
 
 def _resolve_latest_job_id_for_user(user_id: str) -> str | None:
