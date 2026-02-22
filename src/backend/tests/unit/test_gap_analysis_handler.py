@@ -197,6 +197,68 @@ def test_submit_response_returns_200(gap_table: Any) -> None:
     assert len(stored.get('responses', [])) == 1
 
 
+def test_submit_response_infers_job_id_from_latest_questions(gap_table: Any) -> None:
+    """POST /gap-analysis/responses infers missing job_id from latest question set."""
+    from careervp.handlers.gap_handler import lambda_handler
+
+    now = datetime.now(timezone.utc).isoformat()
+    gap_table.put_item(
+        Item={
+            'applicationId': 'GAP_ANALYSIS#cv-older#job-older',
+            'artifactId': 'QUESTION_SET',
+            'artifactType': 'gap_analysis',
+            'user_id': 'user-1',
+            'cv_id': 'cv-older',
+            'job_id': 'job-older',
+            'questions': [{'id': 'gap-q1', 'text': 'older'}],
+            'created_at': now,
+            'updated_at': '2024-01-01T00:00:00+00:00',
+            'expiration': 9999999999,
+        }
+    )
+    gap_table.put_item(
+        Item={
+            'applicationId': 'GAP_ANALYSIS#cv-latest#job-latest',
+            'artifactId': 'QUESTION_SET',
+            'artifactType': 'gap_analysis',
+            'user_id': 'user-1',
+            'cv_id': 'cv-latest',
+            'job_id': 'job-latest',
+            'questions': [{'id': 'gap-q1', 'text': 'latest'}],
+            'created_at': now,
+            'updated_at': '2026-01-01T00:00:00+00:00',
+            'expiration': 9999999999,
+        }
+    )
+
+    event = _event(
+        path='/gap-analysis/responses',
+        method='POST',
+        body={
+            'responses': [
+                {
+                    'question_id': 'gap-q1',
+                    'response': 'Evidence-backed response.',
+                }
+            ],
+        },
+    )
+
+    response = lambda_handler(event, _context())
+    assert response['statusCode'] == 200
+    payload = json.loads(response['body'])
+    assert payload['job_id'] == 'job-latest'
+
+    stored = gap_table.get_item(
+        Key={
+            'applicationId': 'GAP_RESPONSES#job-latest',
+            'artifactId': 'RESPONSE_SET',
+        }
+    ).get('Item')
+    assert isinstance(stored, dict)
+    assert stored.get('job_id') == 'job-latest'
+
+
 def test_get_responses_returns_200(gap_table: Any) -> None:
     """GET /gap-analysis/responses/{jobId} returns saved responses."""
     from careervp.handlers.gap_handler import lambda_handler

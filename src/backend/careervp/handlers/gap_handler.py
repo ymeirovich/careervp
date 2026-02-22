@@ -199,6 +199,8 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
 
     job_id = _coerce_str(payload.get('job_id') or payload.get('application_id'))
     if not job_id:
+        job_id = _resolve_latest_job_id_for_user(user_id)
+    if not job_id:
         return _error_response(HTTPStatus.BAD_REQUEST, 'job_id is required', ResultCode.MISSING_REQUIRED_FIELD)
 
     normalized_responses, validation_error = _normalize_submitted_responses(payload.get('responses'))
@@ -436,6 +438,36 @@ def _build_gap_responses_application_id(job_id: str) -> str:
 
 def _build_gap_questions_application_id(cv_id: str, job_id: str) -> str:
     return f'GAP_ANALYSIS#{cv_id}#{job_id}'
+
+
+def _resolve_latest_job_id_for_user(user_id: str) -> str | None:
+    try:
+        table = _get_table()
+        response = table.scan(
+            FilterExpression='artifactType = :artifact_type AND user_id = :user_id',
+            ExpressionAttributeValues={
+                ':artifact_type': 'gap_analysis',
+                ':user_id': user_id,
+            },
+        )
+        items = list(response.get('Items', []))
+        while 'LastEvaluatedKey' in response:
+            response = table.scan(
+                FilterExpression='artifactType = :artifact_type AND user_id = :user_id',
+                ExpressionAttributeValues={
+                    ':artifact_type': 'gap_analysis',
+                    ':user_id': user_id,
+                },
+                ExclusiveStartKey=response['LastEvaluatedKey'],
+            )
+            items.extend(response.get('Items', []))
+    except (ClientError, RuntimeError):
+        return None
+
+    if not items:
+        return None
+    latest = max(items, key=_item_timestamp)
+    return _coerce_str(latest.get('job_id'))
 
 
 def _ttl_timestamp(ttl_days: int = 90) -> int:
