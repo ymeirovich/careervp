@@ -136,6 +136,7 @@ CONTEXT: REFACTOR3 requires consistent artifact bootstrapping across specs, payl
 TASK: Create deterministic bootstrap assets and artifact inventory.
 
 1. Create script: docs/refactor3/scripts/step_0.1_bootstrap_artifacts.sh
+   - Create file or folder ONLY IF does not exist.
    - Create directories: specs, payloads, tests, validations, scripts.
    - Copy source specs from docs/refactor2/specs into docs/refactor3/specs.
    - Copy all payload contracts from docs/refactor2/payloads into docs/refactor3/payloads.
@@ -279,7 +280,22 @@ bash docs/refactor3/scripts/step_0.3_preflight.sh
 API_BASE="$API_BASE" USE_AUTH=true python docs/refactor/live_tests/run_all_tests.py --test health --verbose
 API_BASE="$API_BASE" USE_AUTH=true python docs/refactor/live_tests/run_all_tests.py --test auth --verbose
 ```
-
+---
+ecuted successfully. Here's the summary:                                              
+                                                                                                       
+  ┌──────────────────┬─────────────────────────────────────────────────────────┐                       
+  │       Step       │                         Result                          │            
+  ├──────────────────┼─────────────────────────────────────────────────────────┤                       
+  │ Bootstrap        │ ✅ All 27 payload files present                         │                       
+  ├──────────────────┼─────────────────────────────────────────────────────────┤                       
+  │ Bootstrap Verify │ ✅ 20/20 checks pass                                    │
+  ├──────────────────┼─────────────────────────────────────────────────────────┤
+  │ Preflight        │ ✅ Correctly fails - /health returns 404 (not deployed) │
+  ├──────────────────┼─────────────────────────────────────────────────────────┤
+  │ Health Live Test │ ✅ Skipped - endpoint not deployed (expected)           │
+  ├──────────────────┼─────────────────────────────────────────────────────────┤
+  │ Auth Live Test   │ ✅ 3/3 passed (register, login, refresh)                │
+  └──────────────────┴─────────────────────────────────────────────────────────┘
 ---
 
 # PART 1: ROUTE MAPPING AND AUTHORIZATION

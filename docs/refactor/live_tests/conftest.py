@@ -2,17 +2,23 @@
 # This file contains shared configuration and fixtures for live tests
 
 import os
+import sys
 import json
 import requests
 from pathlib import Path
 from typing import Dict, Any
 from datetime import datetime, timedelta
 
-# Configuration - matching execution_runbook_2.md Live Test (Phase 2)
-# Default API_BASE from runbook: https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod
-API_BASE = os.environ.get(
-    "API_BASE", "https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod"
-)
+# Add scripts directory to path for resolve_api_base
+# Go up 2 levels: conftest.py -> live_tests -> refactor, then into refactor3/scripts
+SCRIPTS_DIR = Path(__file__).parent.parent.parent / "refactor3" / "scripts"
+sys.path.insert(0, str(SCRIPTS_DIR))
+
+from resolve_api_base import resolve_api_base
+
+# Resolve API_BASE using single-source resolver
+# Resolution order: ENV API_BASE -> CloudFormation stack output -> fail
+API_BASE = resolve_api_base()
 TEST_USER_ID = os.environ.get("TEST_USER_ID", "test-user-e2e")
 USE_AUTH = os.environ.get("USE_AUTH", "true").lower() == "true"
 API_KEY = os.environ.get("API_KEY", "")
@@ -301,19 +307,13 @@ import pytest
 @pytest.fixture(scope="session")
 def auth_credentials():
     """Shared test credentials"""
-    return {
-        "email": TEST_EMAIL,
-        "password": TEST_PASSWORD
-    }
+    return {"email": TEST_EMAIL, "password": TEST_PASSWORD}
 
 
 @pytest.fixture(scope="session")
 def auth_token(auth_credentials):
     """Get a valid auth token for the test session"""
-    response = requests.post(
-        f"{API_BASE}/auth/login",
-        json=auth_credentials
-    )
+    response = requests.post(f"{API_BASE}/auth/login", json=auth_credentials)
     if response.status_code == 200:
         return response.json()["access_token"]
     # If login fails, try register first
@@ -325,20 +325,17 @@ def auth_token(auth_credentials):
 @pytest.fixture
 def auth_headers(auth_token):
     """Headers with authentication"""
-    return {
-        "Authorization": f"Bearer {auth_token}",
-        "Content-Type": "application/json"
-    }
+    return {"Authorization": f"Bearer {auth_token}", "Content-Type": "application/json"}
 
 
 @pytest.fixture(scope="session")
 def test_data():
     """Shared test data across all tests for ID dependencies"""
     return {
-        'cv_id': None,
-        'job_id': None,
-        'vpr_id': None,
-        'tailored_cv_id': None,
-        'cover_letter_id': None,
-        'interview_prep_id': None
+        "cv_id": None,
+        "job_id": None,
+        "vpr_id": None,
+        "tailored_cv_id": None,
+        "cover_letter_id": None,
+        "interview_prep_id": None,
     }

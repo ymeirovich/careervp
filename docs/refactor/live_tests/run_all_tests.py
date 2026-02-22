@@ -13,7 +13,8 @@ Usage:
     python run_all_tests.py --dry-run          # Show what would run
 
 Environment Variables:
-    API_BASE           - API base URL (default: https://api.careervp.com/v1)
+    API_BASE           - API base URL (resolved via resolve_api_base.py)
+    STACK_NAME         - CloudFormation stack name (default: careervp-api)
     TEST_USER_ID       - Test user ID (default: test-user-e2e)
     API_KEY            - API key for authenticated requests
     USE_AUTH           - Whether to use authentication (default: false)
@@ -29,6 +30,17 @@ import argparse
 from typing import List
 
 import pytest
+
+# Add scripts directory to path for resolve_api_base
+# Go up 2 levels: live_tests -> refactor -> docs, then into refactor3/scripts
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "refactor3",
+    "scripts",
+)
+sys.path.insert(0, SCRIPTS_DIR)
+
+from resolve_api_base import resolve_api_base
 
 # Add current directory to path
 LIVE_TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -105,8 +117,8 @@ def run_all_tests(verbose: bool = False):
     print("CareerVP Live Test Suite")
     print("=" * 60)
 
-    # Set configuration
-    api_base = os.environ.get("API_BASE", "https://api.careervp.com/v1")
+    # Resolve API_BASE using single-source resolver
+    api_base = resolve_api_base()
     test_user = os.environ.get("TEST_USER_ID", "test-user-e2e")
 
     print("\nConfiguration:")
