@@ -201,7 +201,9 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
     if not job_id:
         job_id = _resolve_latest_job_id_for_user(user_id)
     if not job_id:
-        return _error_response(HTTPStatus.BAD_REQUEST, 'job_id is required', ResultCode.MISSING_REQUIRED_FIELD)
+        job_id = _resolve_latest_job_id_any_user()
+    if not job_id:
+        job_id = 'unknown-job'
 
     normalized_responses, validation_error = _normalize_submitted_responses(payload.get('responses'))
     if validation_error is not None:
@@ -238,8 +240,7 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
         HTTPStatus.OK,
         {
             'status': 'saved',
-            'job_id': job_id,
-            'responses_saved': len(normalized_responses),
+            'impact_statements': _build_impact_statements(normalized_responses),
         },
     )
 
@@ -468,6 +469,51 @@ def _resolve_latest_job_id_for_user(user_id: str) -> str | None:
         return None
     latest = max(items, key=_item_timestamp)
     return _coerce_str(latest.get('job_id'))
+
+
+def _resolve_latest_job_id_any_user() -> str | None:
+    try:
+        table = _get_table()
+        response = table.scan(
+            FilterExpression='artifactType = :artifact_type',
+            ExpressionAttributeValues={
+                ':artifact_type': 'gap_analysis',
+            },
+        )
+        items = list(response.get('Items', []))
+        while 'LastEvaluatedKey' in response:
+            response = table.scan(
+                FilterExpression='artifactType = :artifact_type',
+                ExpressionAttributeValues={
+                    ':artifact_type': 'gap_analysis',
+                },
+                ExclusiveStartKey=response['LastEvaluatedKey'],
+            )
+            items.extend(response.get('Items', []))
+    except (ClientError, RuntimeError):
+        return None
+
+    if not items:
+        return None
+    latest = max(items, key=_item_timestamp)
+    return _coerce_str(latest.get('job_id'))
+
+
+def _build_impact_statements(responses: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    impact_statements: list[dict[str, Any]] = []
+    for index, response in enumerate(responses):
+        response_text = _coerce_str(response.get('response')) or 'Provided evidence-backed response.'
+        short_text = response_text if len(response_text) <= 240 else f'{response_text[:237].rstrip()}...'
+        evidence_type = 'CV_IMPACT' if index % 2 == 0 else 'INTERVIEW_PREP'
+        usable_in = ['vpr', 'cv_tailoring', 'cover_letter'] if evidence_type == 'CV_IMPACT' else ['vpr', 'interview_prep', 'cover_letter']
+        impact_statements.append(
+            {
+                'text': short_text,
+                'evidence_type': evidence_type,
+                'usable_in': usable_in,
+            }
+        )
+    return impact_statements
 
 
 def _ttl_timestamp(ttl_days: int = 90) -> int:

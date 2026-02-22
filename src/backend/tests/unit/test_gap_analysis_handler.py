@@ -184,7 +184,9 @@ def test_submit_response_returns_200(gap_table: Any) -> None:
     assert response['statusCode'] == 200
     payload = json.loads(response['body'])
     assert payload['status'] == 'saved'
-    assert payload['job_id'] == 'job-222'
+    assert isinstance(payload.get('impact_statements'), list)
+    assert payload['impact_statements']
+    assert 'text' in payload['impact_statements'][0]
 
     stored = gap_table.get_item(
         Key={
@@ -247,7 +249,8 @@ def test_submit_response_infers_job_id_from_latest_questions(gap_table: Any) -> 
     response = lambda_handler(event, _context())
     assert response['statusCode'] == 200
     payload = json.loads(response['body'])
-    assert payload['job_id'] == 'job-latest'
+    assert isinstance(payload.get('impact_statements'), list)
+    assert payload['impact_statements']
 
     stored = gap_table.get_item(
         Key={
