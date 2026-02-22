@@ -224,6 +224,7 @@ class JobsRepository:
         self,
         job_id: str,
         status: str,
+        expected_current_status: str | None = None,
         **kwargs: Any,
     ) -> Result[dict[str, Any]]:
         """
@@ -232,6 +233,7 @@ class JobsRepository:
         Args:
             job_id: Unique job identifier
             status: New status (PENDING | PROCESSING | COMPLETED | FAILED)
+            expected_current_status: Optional required current status for atomic transition
             **kwargs: Optional fields (started_at, completed_at, error, result_key, etc.)
 
         Returns:
@@ -243,13 +245,19 @@ class JobsRepository:
 
             update_expr, attr_names, attr_values = self._build_update_expression(updates)
 
-            response = self.table.update_item(
-                Key=self._build_job_key(job_id),
-                UpdateExpression=update_expr,
-                ExpressionAttributeNames=attr_names,
-                ExpressionAttributeValues=attr_values,
-                ReturnValues='ALL_NEW',
-            )
+            update_kwargs: dict[str, Any] = {
+                'Key': self._build_job_key(job_id),
+                'UpdateExpression': update_expr,
+                'ExpressionAttributeNames': attr_names,
+                'ExpressionAttributeValues': attr_values,
+                'ReturnValues': 'ALL_NEW',
+            }
+            if expected_current_status:
+                update_kwargs['ConditionExpression'] = '#status = :expected_status'
+                attr_names['#status'] = 'status'
+                attr_values[':expected_status'] = expected_current_status
+
+            response = self.table.update_item(**update_kwargs)
 
             updated_job = response.get('Attributes', {})
 
@@ -270,6 +278,7 @@ class JobsRepository:
                 'Failed to update job status',
                 job_id=job_id,
                 status=status,
+                expected_current_status=expected_current_status,
                 error=str(e),
             )
             return Result(
