@@ -29,6 +29,7 @@ from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.vpr_generator import generate_vpr
+from careervp.models.job import GapResponse, JobPosting
 from careervp.models.vpr import VPR, VPRRequest
 
 # Module-level S3 client for testing/mocking
@@ -56,6 +57,87 @@ def _generate_presigned_url(result_key: str) -> str:
     )
     assert isinstance(url, str), 'S3 presigned URL should return a string'
     return url
+
+
+def _build_job_posting_input(
+    jobs_repo: JobsRepository,
+    input_data: dict[str, Any],
+) -> dict[str, Any]:
+    """Build VPRRequest-compatible job_posting from OpenAPI or legacy payloads."""
+    raw_job_posting = input_data.get('job_posting')
+    if isinstance(raw_job_posting, dict):
+        company_name = raw_job_posting.get('company_name') or raw_job_posting.get('company')
+        role_title = raw_job_posting.get('role_title') or raw_job_posting.get('title')
+        if company_name and role_title:
+            return raw_job_posting
+
+    job_id = str(input_data.get('job_id', '')).strip()
+    if not job_id:
+        return raw_job_posting if isinstance(raw_job_posting, dict) else {}
+
+    job_record = jobs_repo.get_job(job_id) or {}
+    company_name = str(job_record.get('company_name') or job_record.get('company') or '').strip()
+    role_title = str(job_record.get('title') or '').strip()
+
+    if not company_name or not role_title:
+        return raw_job_posting if isinstance(raw_job_posting, dict) else {}
+
+    requirements: list[str] = []
+    raw_requirements = job_record.get('requirements')
+    if isinstance(raw_requirements, list):
+        requirements = [str(item) for item in raw_requirements if str(item).strip()]
+
+    posting: dict[str, Any] = {
+        'company_name': company_name,
+        'role_title': role_title,
+        'description': job_record.get('description'),
+        'requirements': requirements,
+    }
+    source_url = job_record.get('url')
+    if isinstance(source_url, str) and source_url.strip():
+        posting['source_url'] = source_url.strip()
+    return posting
+
+
+def _build_gap_responses_input(input_data: dict[str, Any]) -> list[dict[str, str]]:
+    """Build GapResponse-compatible list from legacy/openapi VPR submit payloads."""
+    raw_gap_responses = input_data.get('gap_responses')
+    if isinstance(raw_gap_responses, list):
+        normalized: list[dict[str, str]] = []
+        for item in raw_gap_responses:
+            if not isinstance(item, dict):
+                continue
+            question_id = str(item.get('question_id', '')).strip()
+            question = str(item.get('question', '')).strip()
+            answer = str(item.get('answer', '')).strip()
+            if question_id and question and answer:
+                normalized.append(
+                    {
+                        'question_id': question_id,
+                        'question': question,
+                        'answer': answer,
+                    }
+                )
+        if normalized:
+            return normalized
+
+    raw_gap_response_ids = input_data.get('gap_response_ids')
+    if not isinstance(raw_gap_response_ids, list):
+        return []
+
+    fallback: list[dict[str, str]] = []
+    for idx, response_id in enumerate(raw_gap_response_ids):
+        response_id_str = str(response_id).strip()
+        if not response_id_str:
+            continue
+        fallback.append(
+            {
+                'question_id': response_id_str,
+                'question': f'gap_response_{idx + 1}',
+                'answer': 'Provided via gap_response_ids in async submit payload.',
+            }
+        )
+    return fallback
 
 
 def _process_job_record(
@@ -138,13 +220,24 @@ def _execute_job(
         return
 
     # Generate VPR
-    vpr_request = VPRRequest(
-        application_id=job.get('application_id', ''),
-        user_id=user_id,
-        job_posting=input_data.get('job_posting', {}),
-        gap_responses=input_data.get('gap_responses', []),
-        company_context=input_data.get('company_context'),
-    )
+    try:
+        job_posting = JobPosting.model_validate(_build_job_posting_input(jobs_repo, input_data))
+        gap_responses = [GapResponse.model_validate(item) for item in _build_gap_responses_input(input_data)]
+        vpr_request = VPRRequest(
+            application_id=job.get('application_id', ''),
+            user_id=user_id,
+            job_posting=job_posting,
+            gap_responses=gap_responses,
+            company_context=input_data.get('company_context'),
+        )
+    except Exception as e:
+        jobs_repo.update_job_status(
+            job_id=job_id,
+            status='FAILED',
+            error=f'Invalid VPR request payload: {str(e)}',
+        )
+        logger.exception('Failed to build VPR request', job_id=job_id, error=str(e))
+        return
 
     result = generate_vpr(vpr_request, user_cv, cv_dal)
 
