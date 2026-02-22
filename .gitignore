@@ -43,3 +43,6 @@ node_modules
 temp
 .omc/*
 docs/architecture/prompt-improvement/
+
+# payloads
+careervp/docs/refactor2/payloads/*

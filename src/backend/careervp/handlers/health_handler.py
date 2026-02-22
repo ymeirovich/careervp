@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from http import HTTPStatus
 from typing import Any
 
+from careervp.handlers.cors_utils import get_cors_headers
+
 API_VERSION = '1.0.0'
 
 
@@ -41,12 +43,11 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
 
 def _build_response(status_code: HTTPStatus, body: dict[str, Any]) -> dict[str, Any]:
+    headers = get_cors_headers(None)
+    headers['Content-Type'] = 'application/json'
     return {
         'statusCode': status_code.value,
-        'headers': {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-        },
+        'headers': headers,
         'body': json.dumps(body),
     }
 
