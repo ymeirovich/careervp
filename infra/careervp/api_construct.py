@@ -635,6 +635,18 @@ class ApiConstruct(Construct):
                         )
                     ]
                 ),
+                "sqs_kms_access": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey",
+                            ],
+                            resources=["*"],
+                            effect=iam.Effect.ALLOW,
+                        )
+                    ]
+                ),
                 "ssm_parameters": iam.PolicyDocument(
                     statements=[
                         iam.PolicyStatement(
