@@ -1611,7 +1611,11 @@ class ApiConstruct(Construct):
         handler: _lambda.Function,
     ) -> None:
         resource = self._get_or_create_path_resource(path)
-        is_public_route = path.startswith("/auth/") or path == "/health"
+        # Per auth_and_authorizer_spec.yaml:
+        # - Public (unprotected): /health, /auth/register, /auth/login
+        # - Protected: /auth/refresh and all other routes
+        public_paths = {"/health", "/auth/register", "/auth/login"}
+        is_public_route = path in public_paths
         resource.add_method(
             http_method=method,
             integration=aws_apigateway.LambdaIntegration(handler=handler),

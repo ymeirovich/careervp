@@ -177,7 +177,9 @@ def test_lambda_log_groups_are_kms_encrypted(synthesized_template: Template) -> 
     )
 
 
-def test_openapi_route_matrix_matches_payload_contracts(synthesized_template: Template) -> None:
+def test_openapi_route_matrix_matches_payload_contracts(
+    synthesized_template: Template,
+) -> None:
     """Validate that API Gateway route matrix covers all 27 payload contracts.
 
     This test verifies that:
@@ -233,3 +235,139 @@ def test_openapi_route_matrix_matches_payload_contracts(synthesized_template: Te
 
     # Verify vpr route exists
     assert "vpr" in resource_paths, "VPR route not found in API Gateway"
+
+
+# =============================================================================
+# Route Authorization Policy Tests
+# =============================================================================
+
+
+def _get_method_paths(methods: dict, resources: dict) -> list[tuple[str, str, dict]]:
+    """Helper to get method paths with their properties.
+
+    Returns list of (http_method, path_part, method_props).
+    """
+    results = []
+
+    # Build path part lookup from resource Ref
+    resource_to_path = {}
+    for logical_id, props in resources.items():
+        path_part = props["Properties"].get("PathPart", "")
+        if path_part:
+            resource_to_path[logical_id] = path_part
+
+    # For nested paths, we need to trace the parent resources
+    # This is complex for deep paths, so we'll use a simpler approach:
+    # Build parent-child relationships
+    resource_hierarchy = {}
+    for logical_id, props in resources.items():
+        parent_id = props["Properties"].get("ParentId", {}).get("Ref")
+        if parent_id:
+            parent_path = resource_to_path.get(parent_id, "")
+            current_path = props["Properties"].get("PathPart", "")
+            if parent_path and current_path:
+                resource_hierarchy[logical_id] = f"{parent_path}/{current_path}"
+            elif current_path:
+                resource_hierarchy[logical_id] = current_path
+        else:
+            # Root or top-level resource
+            resource_hierarchy[logical_id] = props["Properties"].get("PathPart", "")
+
+    # Now map methods to their full paths
+    for method_props in methods.values():
+        http_method = method_props["Properties"].get("HttpMethod", "")
+        resource_id = method_props["Properties"].get("ResourceId", {})
+        path_ref = resource_id.get("Ref", "")
+
+        # Get path from hierarchy
+        full_path = resource_hierarchy.get(path_ref, "")
+
+        results.append((http_method, full_path, method_props))
+
+    return results
+
+
+def test_public_routes_have_no_authorizer(synthesized_template: Template) -> None:
+    """Ensure public routes (no auth required) do not use authorizer.
+
+    Per auth_and_authorizer_spec.yaml:
+    - Public: /auth/register, /auth/login, /health
+    """
+    methods = synthesized_template.find_resources("AWS::ApiGateway::Method")
+    resources = synthesized_template.find_resources("AWS::ApiGateway::Resource")
+
+    # Get all method paths
+    method_paths = _get_method_paths(methods, resources)
+
+    # Define expected public route paths (without leading slashes)
+    public_paths = {"health", "auth/register", "auth/login"}
+
+    public_methods_found = []
+    for http_method, path, method_props in method_paths:
+        # Check if this is a public route
+        is_public = path in public_paths
+
+        if is_public:
+            auth_type = method_props["Properties"].get("AuthorizationType")
+            authorizer = method_props["Properties"].get("AuthorizerId")
+            public_methods_found.append((http_method, path))
+            assert auth_type == "NONE", (
+                f"Public route {http_method} {path} should have "
+                f"AuthorizationType=NONE, got {auth_type}"
+            )
+            assert authorizer is None, (
+                f"Public route {http_method} {path} should have no AuthorizerId, "
+                f"got {authorizer}"
+            )
+
+    assert len(public_methods_found) >= 3, (
+        f"Expected at least 3 public routes, found {len(public_methods_found)}: "
+        f"{public_methods_found}"
+    )
+
+
+def test_protected_routes_require_authorizer(synthesized_template: Template) -> None:
+    """Ensure protected routes require authorizer.
+
+    Per auth_and_authorizer_spec.yaml:
+    - Protected: all routes except /auth/register, /auth/login, /health
+    """
+    methods = synthesized_template.find_resources("AWS::ApiGateway::Method")
+    resources = synthesized_template.find_resources("AWS::ApiGateway::Resource")
+
+    # Get all method paths
+    method_paths = _get_method_paths(methods, resources)
+
+    # Define public routes to exclude (without leading slashes)
+    public_paths = {"health", "auth/register", "auth/login"}
+
+    protected_methods = []
+    no_auth_methods = []
+
+    for http_method, path, method_props in method_paths:
+        # Skip swagger and other non-API routes
+        if path in ["swagger", "swagger.css", "swagger.js"] or path in [""]:
+            continue
+
+        # Check if this is a public route
+        if path in public_paths:
+            continue
+
+        # Check if this route requires authorization
+        auth_type = method_props["Properties"].get("AuthorizationType")
+        authorizer = method_props["Properties"].get("AuthorizerId")
+
+        if auth_type == "NONE" or authorizer is None:
+            no_auth_methods.append((http_method, path))
+        else:
+            protected_methods.append((http_method, path))
+
+    assert len(no_auth_methods) == 0, (
+        f"Found {len(no_auth_methods)} protected routes without authorizer: "
+        f"{no_auth_methods}"
+    )
+
+    # Should have at least 20 protected API routes
+    assert len(protected_methods) >= 20, (
+        f"Expected at least 20 protected routes, found {len(protected_methods)}"
+    )

@@ -219,3 +219,146 @@ Output summary:
 - [x] Bootstrap script is idempotent.
 - [x] Payload contract count is exactly 27.
 - [x] Unit tests pass.
+
+---
+
+## Phase 1.2 Route Authorization Policy Validation (2026-02-22)
+
+### Problem Statement
+Public endpoints must stay public; all protected endpoints must require valid auth. Route authorization was incorrectly treating `/auth/refresh` as public when it should be protected.
+
+### Solution: Route-Level Auth Policy Implementation
+
+#### Updated Files
+- `infra/careervp/api_construct.py` - Fixed `_add_route_method` to use explicit public routes list
+
+#### Code Change
+Before:
+```python
+is_public_route = path.startswith("/auth/") or path == "/health"
+```
+
+After:
+```python
+# Per auth_and_authorizer_spec.yaml:
+# - Public (unprotected): /health, /auth/register, /auth/login
+# - Protected: /auth/refresh and all other routes
+public_paths = {"/health", "/auth/register", "/auth/login"}
+is_public_route = path in public_paths
+```
+
+### Test Results
+
+#### Infra Tests
+Command:
+```bash
+cd infra && uv run pytest tests/infrastructure/test_api_construct.py::test_public_routes_have_no_authorizer tests/infrastructure/test_api_construct.py::test_protected_routes_require_authorizer -v
+```
+
+Output:
+```
+test_public_routes_have_no_authorizer PASSED
+test_protected_routes_require_authorizer PASSED
+```
+
+#### Unit Tests
+Command:
+```bash
+cd src/backend && uv run pytest tests/unit/test_route_authorizer_policy.py -v
+```
+
+Output summary:
+- `9 passed`
+- Tests:
+  - `test_payload_contracts_loaded`
+  - `test_auth_spec_defines_public_routes`
+  - `test_auth_spec_defines_protected_routes`
+  - `test_total_route_count`
+  - `test_public_routes_in_payloads`
+  - `test_auth_refresh_is_protected`
+  - `test_public_routes_defined_in_spec`
+  - `test_public_routes_defined`
+  - `test_no_public_routes_protected`
+
+### Authorization Policy Summary
+
+| Route | Method | Auth Required | Status |
+|-------|--------|---------------|--------|
+| /health | GET | false | Public |
+| /auth/register | POST | false | Public |
+| /auth/login | POST | false | Public |
+| /auth/refresh | POST | true | Protected |
+| All other routes | * | true | Protected |
+
+**Total:** 27 routes = 3 public + 24 protected
+
+### Validation Criteria Check
+- [x] Public routes do not require authorizer (3 routes verified)
+- [x] Protected routes require authorizer (24 routes verified)
+- [x] /auth/refresh correctly requires auth (fixed from public)
+- [x] Unit tests pass
+- [x] Infra tests pass
+
+---
+
+## Phase 1.3 Route Smoke Script (2026-02-22)
+
+### Problem Statement
+Route fixes must be validated via API calls during implementation, not only at the end. Need deterministic smoke tests that use payload contracts.
+
+### Solution: Route Smoke Script
+
+#### Created Files
+- `docs/refactor3/scripts/step_1.3_route_smoke.sh` - Route smoke test script
+
+#### Script Features
+1. **Phase 1: Preflight** - Tests public routes first (/health, /auth/login)
+2. **Phase 2: Authentication** - Gets auth token via login
+3. **Phase 3: Protected Routes** - Tests protected endpoints with token
+4. **Fail-fast** - Exits on first failure
+
+#### Usage
+```bash
+# With arguments
+./docs/refactor3/scripts/step_1.3_route_smoke.sh https://api.example.com test@example.com password123
+
+# With environment variables
+export API_BASE=https://api.example.com
+export TEST_EMAIL=test@example.com
+export TEST_PASSWORD=password123
+./docs/refactor3/scripts/step_1.3_route_smoke.sh
+```
+
+#### Test Endpoints
+- **Public:** GET /health, POST /auth/login
+- **Protected:** GET /jobs, POST /jobs, GET /users/me, POST /gap-analysis/questions, POST /vpr/generate
+
+### Unit Tests
+Command:
+```bash
+cd src/backend && uv run pytest tests/unit/test_route_smoke_script.py -v
+```
+
+Output summary:
+- `15 passed`
+- Tests:
+  - `test_payloads_directory_exists`
+  - `test_payloads_count`
+  - `test_health_payload_structure`
+  - `test_job_list_payload_structure`
+  - `test_auth_login_payload_structure`
+  - `test_public_routes_in_payloads`
+  - `test_smoke_script_exists`
+  - `test_smoke_script_is_executable`
+  - `test_script_fails_without_api_base`
+  - `test_script_fails_without_credentials`
+  - `test_script_uses_payloads_directory`
+  - `test_script_has_fail_fast_logic`
+  - `test_health_payload_has_expected_status`
+  - `test_auth_login_payload_has_expected_status`
+  - `test_protected_routes_have_auth_headers`
+
+### Validation Criteria Check
+- [x] Script reads payload contracts from docs/refactor3/payloads
+- [x] Script fails on first route mismatch (fail-fast)
+- [x] Unit tests pass
