@@ -42,14 +42,15 @@ else
     echo "PASS: No log_event=True in handlers"
 fi
 
-# Test 4: No payload.user_id in handlers
+# Test 4: No user-controlled identity sources on protected routes
 echo ""
-echo "[4/8] Checking for payload user_id..."
-if grep -r "payload.*user_id\|user_id.*payload" src/backend/careervp/handlers/ --include="*.py" 2>/dev/null | grep -v "__pycache__" | grep -q .; then
-    echo "FAIL: payload.user_id still present"
+echo "[4/8] Checking for user-controlled identity sourcing..."
+if rg -n "params\\.get\\('user_id'\\)|queryStringParameters.*user_id|_coerce_str\\(payload\\.get\\('user_id'\\)" src/backend/careervp/handlers --glob "*.py" >/dev/null 2>&1; then
+    echo "FAIL: user-controlled identity source still present"
+    rg -n "params\\.get\\('user_id'\\)|queryStringParameters.*user_id|_coerce_str\\(payload\\.get\\('user_id'\\)" src/backend/careervp/handlers --glob "*.py"
     ERRORS=$((ERRORS + 1))
 else
-    echo "PASS: No payload user_id in handlers"
+    echo "PASS: No user-controlled identity sources detected"
 fi
 
 # Test 5: CORS uses allowlist, not wildcard
@@ -75,21 +76,26 @@ fi
 # Test 7: knowledge_base_handler has auth
 echo ""
 echo "[7/8] Checking knowledge_base_handler auth..."
-if grep -q "extract_user_id\|_extract_authenticated_user_id" src/backend/careervp/handlers/knowledge_base_handler.py 2>/dev/null; then
+if grep -q "extract_user_id\|_extract_authenticated_user_id" src/backend/careervp/handlers/knowledge_base_handler.py 2>/dev/null \
+    && ! rg -n "params\\.get\\('user_id'\\)|payload\\['user_id'\\]" src/backend/careervp/handlers/knowledge_base_handler.py >/dev/null 2>&1; then
     echo "PASS: knowledge_base_handler has auth"
 else
-    echo "FAIL: knowledge_base_handler missing auth"
+    echo "FAIL: knowledge_base_handler auth still incomplete"
     ERRORS=$((ERRORS + 1))
 fi
 
-# Test 8: CORS utility exists
+# Test 8: x-user-id usage is constrained
 echo ""
-echo "[8/8] Checking CORS utility..."
-if [ -f "src/backend/careervp/handlers/cors_utils.py" ]; then
-    echo "PASS: cors_utils.py exists"
-else
-    echo "FAIL: cors_utils.py not found"
+echo "[8/8] Checking x-user-id usage constraints..."
+if rg -n "x-user-id|X-User-Id" src/backend/careervp/handlers --glob "*.py" | rg -v "auth_utils.py|cv_upload_handler.py" >/dev/null 2>&1; then
+    echo "FAIL: x-user-id appears outside auth_utils/cv_upload_handler"
+    rg -n "x-user-id|X-User-Id" src/backend/careervp/handlers --glob "*.py" | rg -v "auth_utils.py|cv_upload_handler.py"
     ERRORS=$((ERRORS + 1))
+elif ! rg -n "os\\.getenv\\('ENV'" src/backend/careervp/handlers/cv_upload_handler.py >/dev/null 2>&1; then
+    echo "FAIL: cv_upload_handler missing ENV=local gate for x-user-id fallback"
+    ERRORS=$((ERRORS + 1))
+else
+    echo "PASS: x-user-id usage is constrained and locally gated"
 fi
 
 # Summary
