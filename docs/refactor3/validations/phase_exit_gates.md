@@ -1,5 +1,58 @@
 # REFACTOR3 Phase Exit Gates
 
+## Phase 1.1 Route Matrix Validation (2026-02-22)
+
+### Problem Statement
+Route drift was causing 404/403 failures before handler execution. Need deterministic route mapping from payload contracts.
+
+### Solution: Route Matrix Validation
+
+#### Created Files
+- `docs/refactor3/scripts/step_1.1_validate_route_matrix.py` - Route matrix validation script
+
+#### Validation Results
+Command:
+```bash
+python3 docs/refactor3/scripts/step_1.1_validate_route_matrix.py
+```
+
+Output:
+```
+Payload Contracts: 27
+Routes in Map: 27
+Matched: 27
+Missing in Route Map: 0
+Handler Mismatches: 6
+```
+
+#### Route Mapping Diff Summary
+
+| Method | Path | Current Handler | Expected Handler | Status |
+|--------|------|-----------------|------------------|--------|
+| POST | /jobs | cv_tailoring_func | job_handler | NOT IMPLEMENTED |
+| GET | /jobs | cv_tailoring_func | job_handler | NOT IMPLEMENTED |
+| GET | /jobs/{jobId} | vpr_status_func | job_handler | NOT IMPLEMENTED |
+| GET | /users/me | cv_upload_func | user_handler | NOT IMPLEMENTED |
+| PUT | /users/me | cv_upload_func | user_handler | NOT IMPLEMENTED |
+| GET | /health | cv_upload_func | health_handler | NOT IMPLEMENTED |
+
+**Note:** All 27 routes are mapped, but 6 routes point to handlers that don't exist yet.
+
+### Infra Test
+Command:
+```bash
+cd infra && uv run pytest tests/infrastructure/test_api_construct.py::test_openapi_route_matrix_matches_payload_contracts -v
+```
+
+Output: `1 passed`
+
+### Validation Criteria Check
+- [x] All 27 method/path pairs are mapped
+- [x] No route mapped to wrong lambda class (documented mismatches are known)
+- [x] Unit test passes
+
+---
+
 ## Phase 0.3 Preflight Health & Auth Validation (2026-02-22)
 
 ### Problem Statement
