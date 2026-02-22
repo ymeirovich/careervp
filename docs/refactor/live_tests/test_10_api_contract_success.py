@@ -91,10 +91,16 @@ def _load_refactor2_payload(filename: str) -> dict[str, Any]:
 
 def _load_legacy_context() -> dict[str, dict[str, Any]]:
     return {
-        "phase1_vpr": _load_json(LEGACY_PAYLOADS_DIR / "phase1_vpr_generator_test.json"),
+        "phase1_vpr": _load_json(
+            LEGACY_PAYLOADS_DIR / "phase1_vpr_generator_test.json"
+        ),
         "phase2_gap": _load_json(LEGACY_PAYLOADS_DIR / "phase2_gap_analysis_test.json"),
-        "phase3_tailoring": _load_json(LEGACY_PAYLOADS_DIR / "phase3_cv_tailoring_test.json"),
-        "phase4_cover": _load_json(LEGACY_PAYLOADS_DIR / "phase4_cover_letter_test.json"),
+        "phase3_tailoring": _load_json(
+            LEGACY_PAYLOADS_DIR / "phase3_cv_tailoring_test.json"
+        ),
+        "phase4_cover": _load_json(
+            LEGACY_PAYLOADS_DIR / "phase4_cover_letter_test.json"
+        ),
         "phase6_interview": _load_json(
             LEGACY_PAYLOADS_DIR / "phase6_interview_prep_test.json"
         ),
@@ -167,9 +173,7 @@ def _hydrate_request(
     body = copy.deepcopy(request_body)
 
     if payload_file == "auth_register.json":
-        unique_email = (
-            f"strict_{int(time.time())}_{uuid.uuid4().hex[:8]}@example.com"
-        )
+        unique_email = f"strict_{int(time.time())}_{uuid.uuid4().hex[:8]}@example.com"
         password = os.environ.get("TEST_PASSWORD", "TestPass123!")
         body["email"] = unique_email
         body["password"] = password
@@ -210,7 +214,10 @@ def _hydrate_request(
 
 
 def _update_state(
-    payload_file: str, request_body: dict[str, Any], response_data: dict[str, Any], state: dict[str, Any]
+    payload_file: str,
+    request_body: dict[str, Any],
+    response_data: dict[str, Any],
+    state: dict[str, Any],
 ) -> None:
     if payload_file in {"auth_register.json", "auth_login.json"}:
         if response_data.get("access_token"):
@@ -261,8 +268,8 @@ def _update_state(
         state["vpr_id"] = response_data["id"]
 
     if payload_file == "cv_tailoring_generate.json":
-        state["cv_tailoring_id"] = (
-            response_data.get("request_id") or response_data.get("id")
+        state["cv_tailoring_id"] = response_data.get("request_id") or response_data.get(
+            "id"
         )
 
     if payload_file == "cv_tailoring_status.json" and response_data.get("id"):
@@ -277,9 +284,9 @@ def _update_state(
         state["cover_letter_id"] = response_data["id"]
 
     if payload_file == "interview_prep_generate.json":
-        state["interview_prep_id"] = response_data.get("request_id") or response_data.get(
-            "id"
-        )
+        state["interview_prep_id"] = response_data.get(
+            "request_id"
+        ) or response_data.get("id")
 
     if payload_file == "interview_prep_status.json" and response_data.get("id"):
         state["interview_prep_id"] = response_data["id"]
@@ -334,7 +341,9 @@ def _build_headers(payload_file: str, state: dict[str, Any]) -> dict[str, str]:
         return headers
 
     access_token = state.get("access_token")
-    assert access_token, f"Missing access_token for authenticated payload {payload_file}"
+    assert access_token, (
+        f"Missing access_token for authenticated payload {payload_file}"
+    )
     headers["Authorization"] = (
         access_token
         if str(access_token).startswith("Bearer ")
@@ -384,8 +393,7 @@ def _execute_payload(
 
     expected_status = payload["expected_response"]["status_code"]
     assert response.status_code == expected_status, (
-        f"{payload_file}: expected HTTP {expected_status}, "
-        f"got {response.status_code}"
+        f"{payload_file}: expected HTTP {expected_status}, got {response.status_code}"
     )
     _assert_shape(payload["expected_response"]["body"], response_data)
 
@@ -471,7 +479,9 @@ def _validate_quality(
         )
         for q in questions:
             assert q.get("tags"), "each gap question must include tags"
-            assert q.get("strategic_intent"), "each gap question must include strategic_intent"
+            assert q.get("strategic_intent"), (
+                "each gap question must include strategic_intent"
+            )
 
     if payload_file == "vpr_status.json":
         result = response_data.get("result", {})
@@ -486,7 +496,9 @@ def _validate_quality(
             assert result["ats_score"] >= 8.0, "cv-tailoring ats_score must be >= 8.0"
         fvs_validation = result.get("fvs_validation")
         if isinstance(fvs_validation, dict) and "is_valid" in fvs_validation:
-            assert fvs_validation["is_valid"] is True, "cv-tailoring fvs_validation must pass"
+            assert fvs_validation["is_valid"] is True, (
+                "cv-tailoring fvs_validation must pass"
+            )
 
     if payload_file == "cover_letter_status.json":
         cover_context = legacy["phase4_cover"]
@@ -497,7 +509,9 @@ def _validate_quality(
         )
         result = response_data.get("result", {})
         paragraphs = result.get("paragraphs", {})
-        assert isinstance(paragraphs, dict), "cover-letter result must include paragraphs"
+        assert isinstance(paragraphs, dict), (
+            "cover-letter result must include paragraphs"
+        )
 
         hook = paragraphs.get("hook", {})
         hook_min = int(paragraph_rules.get("hook", {}).get("min_word_count", 80))
@@ -513,7 +527,9 @@ def _validate_quality(
 
     if payload_file == "interview_prep_status.json":
         interview_context = legacy["phase6_interview"]
-        min_questions = int(interview_context.get("validation", {}).get("min_questions", 8))
+        min_questions = int(
+            interview_context.get("validation", {}).get("min_questions", 8)
+        )
         result = response_data.get("result", {})
         questions = result.get("questions", [])
         assert isinstance(questions, list), "interview-prep questions must be an array"
@@ -529,9 +545,13 @@ def _validate_quality(
 
     if payload_file == "company_research_get.json":
         company_context = legacy["phase8_company"]
-        required_fields = company_context.get("validation", {}).get("required_fields", [])
+        required_fields = company_context.get("validation", {}).get(
+            "required_fields", []
+        )
         for field in required_fields:
-            assert response_data.get(field), f"company-research missing required field: {field}"
+            assert response_data.get(field), (
+                f"company-research missing required field: {field}"
+            )
 
 
 class TestAPIContractSuccess:

@@ -54,7 +54,10 @@ TEST_MODULES = {
     "company-research": ("test_09_company_research", ["TestCompanyResearchEndpoints"]),
     "contract": ("test_10_api_contract_success", ["TestAPIContractSuccess"]),
     "strict": ("test_10_api_contract_success", ["TestAPIContractSuccess"]),
-    "api-contract-success": ("test_10_api_contract_success", ["TestAPIContractSuccess"]),
+    "api-contract-success": (
+        "test_10_api_contract_success",
+        ["TestAPIContractSuccess"],
+    ),
 }
 
 
@@ -184,7 +187,9 @@ def main():
             if args.dry_run:
                 module_name, class_names = TEST_MODULES[test_key]
                 module_file = os.path.join(LIVE_TESTS_DIR, f"{module_name}.py")
-                node_ids = [f"{module_file}::{class_name}" for class_name in class_names]
+                node_ids = [
+                    f"{module_file}::{class_name}" for class_name in class_names
+                ]
                 print(f"Would run: {', '.join(node_ids)}")
             else:
                 module_name, class_names = TEST_MODULES[test_key]
