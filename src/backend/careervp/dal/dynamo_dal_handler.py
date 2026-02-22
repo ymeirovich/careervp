@@ -173,7 +173,7 @@ class DynamoDalHandler(DalHandler):
                 items.extend(response.get('Items', []))
 
             if not items:
-                return Result(success=True, data=None, code=ResultCode.NOT_FOUND)
+                return Result(success=True, data=None, code=ResultCode.SUCCESS)
 
             def _parse_record_version(record: dict[str, Any]) -> int:
                 try:
@@ -274,7 +274,7 @@ class DynamoDalHandler(DalHandler):
                 response = table.query(KeyConditionExpression=key_condition)
                 items = response.get('Items', [])
                 if not items:
-                    return Result(success=True, data=None, code=ResultCode.NOT_FOUND)
+                    return Result(success=True, data=None, code=ResultCode.SUCCESS)
                 latest_item = max(items, key=lambda item: self._parse_version_from_sk(item.get('sk', '')))
                 payload = latest_item.get('tailored_cv') or latest_item
             else:
@@ -369,7 +369,7 @@ class DynamoDalHandler(DalHandler):
                 response = table.query(KeyConditionExpression=key_condition)
                 items = response.get('Items', [])
                 if not items:
-                    return Result(success=True, data=None, code=ResultCode.NOT_FOUND)
+                    return Result(success=True, data=None, code=ResultCode.SUCCESS)
                 latest_item = max(items, key=lambda item: self._parse_version_from_sk(item.get('sk', '')))
                 payload = latest_item.get('cover_letter') or latest_item
             else:
@@ -516,7 +516,7 @@ class DynamoDalHandler(DalHandler):
                 response = table.query(KeyConditionExpression=key_condition)
                 items = response.get('Items', [])
                 if not items:
-                    return Result(success=True, data=None, code=ResultCode.NOT_FOUND)
+                    return Result(success=True, data=None, code=ResultCode.SUCCESS)
                 latest_item = max(items, key=lambda item: self._parse_version_from_sk(item.get('sk', '')))
                 payload = latest_item.get('responses') or []
             else:
