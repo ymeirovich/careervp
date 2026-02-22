@@ -235,6 +235,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
                     'job_id': existing_job_id,
                     'status': existing_status,
                     'estimated_time_seconds': 120,
+                    'webhook_url': f'/vpr/{existing_job_id}',
                 }
             ),
         }
@@ -321,6 +322,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
                 'job_id': job_id,
                 'status': 'processing',
                 'estimated_time_seconds': 120,
+                'webhook_url': f'/vpr/{job_id}',
             }
         ),
     }
