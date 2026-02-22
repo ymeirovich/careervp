@@ -1,0 +1,34 @@
+{
+  "description": "GET /interview-prep/{interviewPrepId} - Get interview prep status or result",
+  "method": "GET",
+  "path": "/interview-prep/{interviewPrepId}",
+  "headers": {
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
+  },
+  "path_params": {
+    "interviewPrepId": "int-prep-e7f8a9b0-1234-4c5d-f6a7-890123456789"
+  },
+  "request": {},
+  "expected_response": {
+    "status_code": 200,
+    "body": {
+      "id": "int-prep-e7f8a9b0-1234-4c5d-f6a7-890123456789",
+      "status": "completed",
+      "result": {
+        "questions": [
+          {
+            "id": "int-q-f8a9b0c1-2345-4d6e-a7b8-901234567890",
+            "text": "Tell me about a time when you had to optimize a system serving millions of users. What was your approach and what were the results?",
+            "suggested_answer": {
+              "format": "STAR",
+              "situation": "At TechCorp, our API was experiencing latency issues with response times averaging 500ms, impacting 5M+ daily active users.",
+              "task": "I was tasked with reducing API response time by at least 30% while maintaining system stability.",
+              "action": "I conducted a comprehensive performance audit, implemented strategic caching with Redis, optimized database indexes, and refactored N+1 queries.",
+              "result": "Reduced API response time by 40% (from 500ms to 300ms), improved user satisfaction scores by 25%."
+            }
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "description": "POST /jobs - Create job",
+  "method": "POST",
+  "path": "/jobs",
+  "headers": {
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
+  },
+  "request": {
+    "title": "Senior Software Engineer",
+    "company_name": "TechCorp",
+    "description": "We are seeking an experienced Senior Software Engineer to join our growing engineering team. You will be responsible for designing and implementing scalable backend services, mentoring junior developers, and driving technical excellence across the organization.\n\nResponsibilities:\n- Design and build high-performance RESTful APIs and microservices\n- Lead architecture decisions for new features and systems\n- Mentor and guide junior engineers through code reviews and pair programming\n- Collaborate with product managers and designers to deliver exceptional user experiences\n- Optimize existing systems for performance, scalability, and maintainability\n\nRequirements:\n- 5+ years of professional software development experience\n- Strong proficiency in Python and/or Node.js\n- Experience with cloud platforms (AWS, GCP, or Azure)\n- Solid understanding of database design (SQL and NoSQL)\n- Experience with containerization (Docker, Kubernetes)\n- Strong communication and collaboration skills\n- Bachelor's degree in Computer Science or equivalent experience\n\nNice to have:\n- Experience with serverless architectures\n- Knowledge of CI/CD best practices\n- Contributions to open-source projects\n- Experience with event-driven architectures",
+    "url": "https://jobs.techcorp.com/positions/senior-software-engineer-backend"
+  },
+  "expected_response": {
+    "status_code": 201,
+    "body": {
+      "id": "job-c3d4e5f6-7890-4a1b-c2d3-e4f567890123",
+      "title": "Senior Software Engineer",
+      "company_name": "TechCorp",
+      "description": "We are seeking an experienced Senior Software Engineer to join our growing engineering team...",
+      "url": "https://jobs.techcorp.com/positions/senior-software-engineer-backend",
+      "requirements": [
+        "5+ years of professional software development experience",
+        "Strong proficiency in Python and/or Node.js",
+        "Experience with cloud platforms (AWS, GCP, or Azure)",
+        "Solid understanding of database design (SQL and NoSQL)",
+        "Experience with containerization (Docker, Kubernetes)"
+      ],
+      "created_at": "2024-01-20T15:00:00Z"
+    }
+  }
+}

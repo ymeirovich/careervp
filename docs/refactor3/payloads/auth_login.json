@@ -1,0 +1,18 @@
+{
+  "description": "POST /auth/login - Login user",
+  "method": "POST",
+  "path": "/auth/login",
+  "request": {
+    "email": "testuser@careervp.com",
+    "password": "SecureP@ss123!"
+  },
+  "expected_response": {
+    "status_code": 200,
+    "body": {
+      "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYiLCJleHAiOjE3MDk4NTYwMDB9.example",
+      "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYiLCJ0eXBlIjoicmVmcmVzaCJ9.example",
+      "expires_in": 3600,
+      "token_type": "Bearer"
+    }
+  }
+}

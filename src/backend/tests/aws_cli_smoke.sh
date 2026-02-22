@@ -423,8 +423,8 @@ JSON
 test_company_research_lambda() {
   local body_json
   body_json="$(jq -n '{
-    company_name:"Acme Corp",
-    domain:"acme.com",
+    company_name:"SysAid",
+    domain:"www.sysaid.com",
     job_posting_text:"We are hiring to scale values-driven products.",
     max_sources:2
   }')"

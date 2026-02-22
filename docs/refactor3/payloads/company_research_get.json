@@ -1,0 +1,50 @@
+{
+  "description": "GET /company-research/{jobId} - Get company research",
+  "method": "GET",
+  "path": "/company-research/{jobId}",
+  "headers": {
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
+  },
+  "path_params": {
+    "jobId": "job-c3d4e5f6-7890-4a1b-c2d3-e4f567890123"
+  },
+  "request": {},
+  "expected_response": {
+    "status_code": 200,
+    "body": {
+      "id": "comp-res-b4c5d6e7-8901-4f2a-c3d4-567890123456",
+      "company_name": "TechCorp",
+      "mission": "To empower businesses worldwide with innovative cloud-native solutions that scale effortlessly and deliver exceptional user experiences.",
+      "values": [
+        "Innovation First",
+        "Customer Obsession",
+        "Technical Excellence",
+        "Collaborative Growth",
+        "Data-Driven Decisions"
+      ],
+      "recent_news": [
+        {
+          "title": "TechCorp raises $50M Series B to expand cloud platform",
+          "date": "2024-01-10"
+        },
+        {
+          "title": "TechCorp achieves SOC 2 Type II certification",
+          "date": "2023-12-15"
+        },
+        {
+          "title": "TechCorp launches new AI-powered analytics platform",
+          "date": "2023-11-20"
+        }
+      ],
+      "culture": "TechCorp fosters a culture of continuous learning and innovation. The company values work-life balance, offers remote work flexibility, and encourages employees to contribute to open-source projects. Engineering teams follow agile methodologies with bi-weekly sprints and emphasize code quality through rigorous peer reviews.",
+      "products": [
+        "CloudScale Platform - Enterprise cloud infrastructure management",
+        "DataFlow Analytics - Real-time data processing and analytics",
+        "SecureAPI Gateway - API management and security platform"
+      ],
+      "funding_status": "Series B funded ($50M)",
+      "size_range": "201-500 employees",
+      "industry": "Cloud Infrastructure & SaaS"
+    }
+  }
+}

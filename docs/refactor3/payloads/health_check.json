@@ -1,0 +1,19 @@
+{
+  "description": "GET /health - API health check",
+  "method": "GET",
+  "path": "/health",
+  "request": {},
+  "expected_response": {
+    "status_code": 200,
+    "body": {
+      "status": "healthy",
+      "timestamp": "2024-01-20T18:00:00Z",
+      "version": "1.0.0",
+      "services": {
+        "dynamodb": "healthy",
+        "lambda": "healthy",
+        "bedrock": "healthy"
+      }
+    }
+  }
+}

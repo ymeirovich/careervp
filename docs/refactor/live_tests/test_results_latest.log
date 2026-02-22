@@ -1,0 +1,612 @@
+
+============================================================
+CareerVP Live Test Suite
+============================================================
+
+Configuration:
+  API Base: https://api.careervp.com/v1
+  Test User: test-user-e2e
+  Auth Enabled: false
+
+============================================================
+Running: test_01_auth_health
+============================================================
+============================= test session starts ==============================
+platform darwin -- Python 3.10.12, pytest-9.0.2, pluggy-1.6.0 -- /Users/yitzchak/.pyenv/versions/3.10.12/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/yitzchak/Documents/dev/careervp
+configfile: pytest.ini
+plugins: anyio-4.12.1, mock-3.15.1, typeguard-2.13.3, cov-7.0.0
+collecting ... collected 1 item
+
+docs/refactor/live_tests/test_01_auth_health.py::TestHealthEndpoint::test_health_check 
+=== RESPONSE test_health_check ===
+{
+  "test_name": "test_health_check",
+  "endpoint": "GET /health",
+  "status_code": 404,
+  "response": {
+    "statusCode": 404,
+    "message": "Not found"
+  }
+}
+⚠ GET /health - Endpoint not deployed (404)
+SKIPPED
+
+=========================== short test summary info ============================
+SKIPPED [1] docs/refactor/live_tests/test_01_auth_health.py:86: Health endpoint not deployed in current stage
+============================== 1 skipped in 0.64s ==============================
+  ✓ test_01_auth_health passed
+
+============================================================
+Running: test_01_auth_health
+============================================================
+============================= test session starts ==============================
+platform darwin -- Python 3.10.12, pytest-9.0.2, pluggy-1.6.0 -- /Users/yitzchak/.pyenv/versions/3.10.12/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/yitzchak/Documents/dev/careervp
+configfile: pytest.ini
+plugins: anyio-4.12.1, mock-3.15.1, typeguard-2.13.3, cov-7.0.0
+collecting ... collected 3 items
+
+docs/refactor/live_tests/test_01_auth_health.py::TestAuthEndpoints::test_auth_register 
+=== RESPONSE test_auth_register ===
+{
+  "test_name": "test_auth_register",
+  "endpoint": "POST /auth/register",
+  "status_code": 201,
+  "response": {
+    "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNWNkZWJjNzYtNTZhNC00OWE1LTgwMTgtOWQ4ZTBiNDQ3NGE2IiwiZW1haWwiOiJ0ZXN0XzE3NzE3NjU5NDVAZXhhbXBsZS5jb20iLCJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiaWF0IjoxNzcxNzY1OTUyLCJleHAiOjE3NzE3Njk1NTJ9.kV9kf7NjtH2EozBSKsVYPPPzzAL1VJs2cxE6w6ZeUEdbaDOBeCt1gwffM4_nzrK9YQ-TFTBYqL2BwJiXypOpL72Bo-C21SCdfwI5ctr6c_YOZyr0bltx4F1UA4WaRoyUHnb9Q4SRJX1S7njfSKtHsqBuFrzHpV_nogpn6TLrWLy7MmeIYoXZBtxpzUk5qos2PHCZp0W9maOLwz8pWXifX-cbv6d56DtOCT8yozD_WXtIUBRUp7e9KY_FKVKNC_5DsjiMFVu13DP-4t_LUGCpzRN6E7UUJipqiCggHne0cX0PvEfpbpCXhiMYLtvX4qfN92803ejD19H7MOdkyclSqg",
+    "refresh_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNWNkZWJjNzYtNTZhNC00OWE1LTgwMTgtOWQ4ZTBiNDQ3NGE2IiwiZW1haWwiOiJ0ZXN0XzE3NzE3NjU5NDVAZXhhbXBsZS5jb20iLCJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImlhdCI6MTc3MTc2NTk1MiwiZXhwIjoxNzcyMzcwNzUyfQ.bmQVlWFhZxmxPmSPr3hPpjXAtd2BUfjxlUSJRjtr16B8cfdnCmyLCiYChCqxzXIKBPXDQGSkcsyGMFDoNbztYzQzfVS50OkhLOTJsOxLoyIWftRa4sC8v18oXWkkIjUfJVr3z7_AcpLdrtVaSgtCydopkDifomMbfe3o_swcazpfes6vV1Vb24AMCS-3fSTV1AsYvsgnjBeOaN5DJHfyHHQh816Amt9E8RhC0MKaU2M4R6BQ9fSnFa2jmv6vaT78bY9BYN2P9SExN3bSuKD2KxnquoHGa1QyGlcNHrEB85iVAScMTlERChXhWoNRG8cPqvI7gn8630h_12gi4fvf6g",
+    "expires_in": 3600,
+    "token_type": "Bearer"
+  }
+}
+✓ POST /auth/register - Email: test_1771765945@example.com
+PASSED
+docs/refactor/live_tests/test_01_auth_health.py::TestAuthEndpoints::test_auth_login 
+=== RESPONSE test_auth_login ===
+{
+  "test_name": "test_auth_login",
+  "endpoint": "POST /auth/login",
+  "status_code": 200,
+  "response": {
+    "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiN2E3ZjYzMDctMzU2Mi00ZWJjLWIyMDktNWYxOTU1OWIwNDhmIiwiZW1haWwiOiJ0ZXN0dXNlcjEyM0BleGFtcGxlLmNvbSIsInRva2VuX3R5cGUiOiJhY2Nlc3MiLCJpYXQiOjE3NzE3NjU5NTQsImV4cCI6MTc3MTc2OTU1NH0.RgJFDyA1xgf4YBnToH_8DtqZ69PlC1OynrbmFkjkeTR4lMKyjdHibhw2VdsfB-GqF7-JfOamYmw1KTakHsAAFdgzw_sTwDQ0BM8FPu597q-ikvrsIDkvcfJpsQrVRlq3K563G-amWY-mdjKCeErjlX7ssGyYV2FldAAdHlvd7rQzq3cUViE4j64ye4sPPDO462O4MP158B8m2Lzc-c-GyXJknKvWpaVzhJi5XCSKOwQ1Qp0fVP18yGa7FpS8vd3OPep7MsQE2zjRjK3euHTJJaLW0wxYt-_fEN0Nlx_S6hEUGtz1xAMt--d58c3jKJ9Vq4BZYu4pe5cKNHpkqgpuPg",
+    "refresh_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiN2E3ZjYzMDctMzU2Mi00ZWJjLWIyMDktNWYxOTU1OWIwNDhmIiwiZW1haWwiOiJ0ZXN0dXNlcjEyM0BleGFtcGxlLmNvbSIsInRva2VuX3R5cGUiOiJyZWZyZXNoIiwiaWF0IjoxNzcxNzY1OTU0LCJleHAiOjE3NzIzNzA3NTR9.Ip53Kk1EtvUITaGoqhQV0HIfRBG1nmD7s9xw9bErmYrnxqpKX7ChlaOGzcuHxt0QYDopVKpPSaaroDy7k_x0cItgylYhwTh5A9H9P_--PwoQFUs5XM_bzEAF4q1hIx64i425_BGdViqfFRkOTgSZAXTIpdD0QRWuD01c4FqPN46Htby07RZza6grpwBO6Xza44o5rFH93SkYgBoHd0bNDEWZ_zJ12wmB5G_D5OZG18H1iOV5gIE2Dznx6j3fyB12NLuPDfqREp-Jy79GMTKiEthxrKf2IL32WVkZVQiLGn3VciVMF-ceUKrzlpTokK-0tkNIdUNnEF5HEYmdC8aMiQ",
+    "expires_in": 3600,
+    "token_type": "Bearer"
+  }
+}
+✓ POST /auth/login - Logged in successfully
+PASSED
+docs/refactor/live_tests/test_01_auth_health.py::TestAuthEndpoints::test_auth_refresh 
+=== RESPONSE test_auth_refresh ===
+{
+  "test_name": "test_auth_refresh",
+  "endpoint": "POST /auth/refresh",
+  "status_code": 200,
+  "response": {
+    "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiN2E3ZjYzMDctMzU2Mi00ZWJjLWIyMDktNWYxOTU1OWIwNDhmIiwiZW1haWwiOiJ0ZXN0dXNlcjEyM0BleGFtcGxlLmNvbSIsInRva2VuX3R5cGUiOiJhY2Nlc3MiLCJpYXQiOjE3NzE3NjU5NTcsImV4cCI6MTc3MTc2OTU1N30.QJ-N48yd6q4ynd4MLcefsIgPiu2lEqNBXq_3K1Piqzh3T4Mg_FoitxsmWDeYU2ZtlifS5bNgjpOq_xD5qRehJ3cj-WgIZYPUijjQ5FNqcByC8oycCyHMmQg4MQYh1wX2g2G-nP-5NfCLtSPwLMWTMj67wXXV5xU1wAnDQRm8glXeNXvdwRlWU4xS61J7JYQUplgOTJVK5i-ln4pALT4GCQSe1JoMwCpddH9z3blf-fg9UzZZEZfp8-ghwis0-Qv-vALtQBU0sZm61Pxvd14gUlTteVJOlektnpch8XVDzed5OJg90_VIZD-a4mc35w2RYUvgWw13f8l4YfKnmTUUag",
+    "refresh_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiN2E3ZjYzMDctMzU2Mi00ZWJjLWIyMDktNWYxOTU1OWIwNDhmIiwiZW1haWwiOiJ0ZXN0dXNlcjEyM0BleGFtcGxlLmNvbSIsInRva2VuX3R5cGUiOiJyZWZyZXNoIiwiaWF0IjoxNzcxNzY1OTU3LCJleHAiOjE3NzIzNzA3NTd9.xWy9AvESXBNJbwIukIzrSC9bmYRGCjEC30cDDuY8DHAOuBQ4klfPJtwtlnGq8BgQn03L20-_Y0cMMfciLAgzCx2wHGuJbZ1r9BB4GTc0Pfhvr2YkzyBZWuR3fyTtVXb91D59uvtvG3ga5rzhg_flVpXZQBsHSmGdjLOicgQ1lz2NcB2xfSzIq5RlbyuuHMaY1ydWTAEWhbzcsC0zK_2qn-F5DdLE5sUuCPjmQr_2D1ZU-uYBQZAmYlvCaW-f2LxDngrBtKZP0zfWW5LHeK2TAoSuz3leivr9bqHDWlQFLfF4ZEWmVayAZlA3sJlx4ZU_Emn2DB5P5ocV9usm_iF9PQ",
+    "expires_in": 3600,
+    "token_type": "Bearer"
+  }
+}
+✓ POST /auth/refresh - Token refreshed
+PASSED
+
+============================== 3 passed in 12.66s ==============================
+  ✓ test_01_auth_health passed
+
+============================================================
+Running: test_02_users
+============================================================
+============================= test session starts ==============================
+platform darwin -- Python 3.10.12, pytest-9.0.2, pluggy-1.6.0 -- /Users/yitzchak/.pyenv/versions/3.10.12/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/yitzchak/Documents/dev/careervp
+configfile: pytest.ini
+plugins: anyio-4.12.1, mock-3.15.1, typeguard-2.13.3, cov-7.0.0
+collecting ... collected 4 items
+
+docs/refactor/live_tests/test_02_users.py::TestUserEndpoints::test_get_current_user 
+=== RESPONSE test_get_current_user ===
+{
+  "test_name": "test_get_current_user",
+  "endpoint": "GET /users/me",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource with an explicit deny in an identity-based policy"
+  }
+}
+⚠ GET /users/me - Status 403 (auth may be required)
+PASSED
+docs/refactor/live_tests/test_02_users.py::TestUserEndpoints::test_update_current_user 
+=== RESPONSE test_update_current_user ===
+{
+  "test_name": "test_update_current_user",
+  "endpoint": "PUT /users/me",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ PUT /users/me - Status 403 (auth may be required)
+PASSED
+docs/refactor/live_tests/test_02_users.py::TestUserEndpoints::test_upload_cv 
+=== RESPONSE test_upload_cv ===
+{
+  "test_name": "test_upload_cv",
+  "endpoint": "POST /users/me/cv",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ POST /users/me/cv - Status 403: {"Message":"User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"}
+PASSED
+docs/refactor/live_tests/test_02_users.py::TestUserEndpoints::test_list_user_cvs 
+=== RESPONSE test_list_user_cvs ===
+{
+  "test_name": "test_list_user_cvs",
+  "endpoint": "GET /users/me/cvs",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ GET /users/me/cvs - Status 403
+PASSED
+
+============================== 4 passed in 6.41s ===============================
+  ✓ test_02_users passed
+
+============================================================
+Running: test_03_jobs
+============================================================
+============================= test session starts ==============================
+platform darwin -- Python 3.10.12, pytest-9.0.2, pluggy-1.6.0 -- /Users/yitzchak/.pyenv/versions/3.10.12/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/yitzchak/Documents/dev/careervp
+configfile: pytest.ini
+plugins: anyio-4.12.1, mock-3.15.1, typeguard-2.13.3, cov-7.0.0
+collecting ... collected 3 items
+
+docs/refactor/live_tests/test_03_jobs.py::TestJobEndpoints::test_create_job 
+=== RESPONSE test_create_job ===
+{
+  "test_name": "test_create_job",
+  "endpoint": "POST /jobs",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ POST /jobs - Status 403: {"Message":"User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"}
+PASSED
+docs/refactor/live_tests/test_03_jobs.py::TestJobEndpoints::test_list_jobs 
+=== RESPONSE test_list_jobs ===
+{
+  "test_name": "test_list_jobs",
+  "endpoint": "GET /jobs",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ GET /jobs - Status 403
+PASSED
+docs/refactor/live_tests/test_03_jobs.py::TestJobEndpoints::test_get_job 
+=== RESPONSE test_get_job ===
+{
+  "test_name": "test_get_job",
+  "endpoint": "GET /jobs/test-job-id",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ GET /jobs/test-job-id - Status 403
+PASSED
+
+============================== 3 passed in 1.58s ===============================
+  ✓ test_03_jobs passed
+
+============================================================
+Running: test_09_company_research
+============================================================
+============================= test session starts ==============================
+platform darwin -- Python 3.10.12, pytest-9.0.2, pluggy-1.6.0 -- /Users/yitzchak/.pyenv/versions/3.10.12/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/yitzchak/Documents/dev/careervp
+configfile: pytest.ini
+plugins: anyio-4.12.1, mock-3.15.1, typeguard-2.13.3, cov-7.0.0
+collecting ... collected 3 items
+
+docs/refactor/live_tests/test_09_company_research.py::TestCompanyResearchEndpoints::test_company_research_fetch 
+=== RESPONSE test_company_research_fetch ===
+{
+  "test_name": "test_company_research_fetch",
+  "endpoint": "POST /company-research/fetch",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ POST /company-research/fetch - Status 403: {"Message":"User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"}
+PASSED
+docs/refactor/live_tests/test_09_company_research.py::TestCompanyResearchEndpoints::test_company_research_get 
+=== RESPONSE test_company_research_get ===
+{
+  "test_name": "test_company_research_get",
+  "endpoint": "GET /company-research/job_test-user-e2e",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ GET /company-research/job_test-user-e2e - Status 403
+PASSED
+docs/refactor/live_tests/test_09_company_research.py::TestCompanyResearchEndpoints::test_company_research_async_polling 
+=== RESPONSE test_company_research_fetch ===
+{
+  "test_name": "test_company_research_fetch",
+  "endpoint": "POST /company-research/fetch",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ POST /company-research/fetch - Status 403: {"Message":"User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"}
+SKIPPED
+
+=========================== short test summary info ============================
+SKIPPED [1] docs/refactor/live_tests/test_09_company_research.py:159: No job ID available for company research polling test
+========================= 2 passed, 1 skipped in 1.51s =========================
+  ✓ test_09_company_research passed
+
+============================================================
+Running: test_04_vpr
+============================================================
+============================= test session starts ==============================
+platform darwin -- Python 3.10.12, pytest-9.0.2, pluggy-1.6.0 -- /Users/yitzchak/.pyenv/versions/3.10.12/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/yitzchak/Documents/dev/careervp
+configfile: pytest.ini
+plugins: anyio-4.12.1, mock-3.15.1, typeguard-2.13.3, cov-7.0.0
+collecting ... collected 4 items
+
+docs/refactor/live_tests/test_04_vpr.py::TestVPREndpoints::test_generate_vpr 
+=== RESPONSE test_generate_vpr ===
+{
+  "test_name": "test_generate_vpr",
+  "endpoint": "POST /vpr/generate",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ POST /vpr/generate - Status 403: {"Message":"User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"}
+PASSED
+docs/refactor/live_tests/test_04_vpr.py::TestVPREndpoints::test_get_vpr_status 
+=== RESPONSE test_get_vpr_status ===
+{
+  "test_name": "test_get_vpr_status",
+  "endpoint": "GET /vpr/test-vpr-id",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ GET /vpr/test-vpr-id - Status 403
+PASSED
+docs/refactor/live_tests/test_04_vpr.py::TestVPREndpoints::test_list_vprs 
+=== RESPONSE test_list_vprs ===
+{
+  "test_name": "test_list_vprs",
+  "endpoint": "GET /users/me/vprs",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ GET /users/me/vprs - Status 403
+PASSED
+docs/refactor/live_tests/test_04_vpr.py::TestVPREndpoints::test_vpr_async_polling 
+=== RESPONSE test_generate_vpr ===
+{
+  "test_name": "test_generate_vpr",
+  "endpoint": "POST /vpr/generate",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ POST /vpr/generate - Status 403: {"Message":"User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"}
+SKIPPED
+
+=========================== short test summary info ============================
+SKIPPED [1] docs/refactor/live_tests/test_04_vpr.py:185: No VPR ID available for polling test
+========================= 3 passed, 1 skipped in 1.83s =========================
+  ✓ test_04_vpr passed
+
+============================================================
+Running: test_05_gap_analysis
+============================================================
+============================= test session starts ==============================
+platform darwin -- Python 3.10.12, pytest-9.0.2, pluggy-1.6.0 -- /Users/yitzchak/.pyenv/versions/3.10.12/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/yitzchak/Documents/dev/careervp
+configfile: pytest.ini
+plugins: anyio-4.12.1, mock-3.15.1, typeguard-2.13.3, cov-7.0.0
+collecting ... collected 3 items
+
+docs/refactor/live_tests/test_05_gap_analysis.py::TestGapAnalysisEndpoints::test_generate_gap_questions 
+=== RESPONSE test_generate_gap_questions ===
+{
+  "test_name": "test_generate_gap_questions",
+  "endpoint": "POST /gap-analysis/questions",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ POST /gap-analysis/questions - Status 403: {"Message":"User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"}
+PASSED
+docs/refactor/live_tests/test_05_gap_analysis.py::TestGapAnalysisEndpoints::test_submit_gap_responses 
+=== RESPONSE test_submit_gap_responses ===
+{
+  "test_name": "test_submit_gap_responses",
+  "endpoint": "POST /gap-analysis/responses",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ POST /gap-analysis/responses - Status 403: {"Message":"User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"}
+PASSED
+docs/refactor/live_tests/test_05_gap_analysis.py::TestGapAnalysisEndpoints::test_get_gap_questions 
+=== RESPONSE test_get_gap_questions ===
+{
+  "test_name": "test_get_gap_questions",
+  "endpoint": "GET /gap-analysis/job_test-user-e2e/questions",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ GET /gap-analysis/job_test-user-e2e/questions - Status 403
+PASSED
+
+============================== 3 passed in 1.09s ===============================
+  ✓ test_05_gap_analysis passed
+
+============================================================
+Running: test_06_cv_tailoring
+============================================================
+============================= test session starts ==============================
+platform darwin -- Python 3.10.12, pytest-9.0.2, pluggy-1.6.0 -- /Users/yitzchak/.pyenv/versions/3.10.12/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/yitzchak/Documents/dev/careervp
+configfile: pytest.ini
+plugins: anyio-4.12.1, mock-3.15.1, typeguard-2.13.3, cov-7.0.0
+collecting ... collected 4 items
+
+docs/refactor/live_tests/test_06_cv_tailoring.py::TestCVTailoringEndpoints::test_generate_tailored_cv 
+=== RESPONSE test_generate_tailored_cv ===
+{
+  "test_name": "test_generate_tailored_cv",
+  "endpoint": "POST /cv-tailoring/generate",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ POST /cv-tailoring/generate - Status 403: {"Message":"User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"}
+PASSED
+docs/refactor/live_tests/test_06_cv_tailoring.py::TestCVTailoringEndpoints::test_get_tailored_cv_status 
+=== RESPONSE test_get_tailored_cv_status ===
+{
+  "test_name": "test_get_tailored_cv_status",
+  "endpoint": "GET /cv-tailoring/test-cv-tailoring-id",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ GET /cv-tailoring/test-cv-tailoring-id - Status 403
+PASSED
+docs/refactor/live_tests/test_06_cv_tailoring.py::TestCVTailoringEndpoints::test_list_tailored_cvs 
+=== RESPONSE test_list_tailored_cvs ===
+{
+  "test_name": "test_list_tailored_cvs",
+  "endpoint": "GET /users/me/tailored-cvs",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ GET /users/me/tailored-cvs - Status 403
+PASSED
+docs/refactor/live_tests/test_06_cv_tailoring.py::TestCVTailoringEndpoints::test_cv_tailoring_async_polling 
+=== RESPONSE test_generate_tailored_cv ===
+{
+  "test_name": "test_generate_tailored_cv",
+  "endpoint": "POST /cv-tailoring/generate",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ POST /cv-tailoring/generate - Status 403: {"Message":"User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"}
+SKIPPED
+
+=========================== short test summary info ============================
+SKIPPED [1] docs/refactor/live_tests/test_06_cv_tailoring.py:228: No CV tailoring ID available for polling test
+========================= 3 passed, 1 skipped in 2.01s =========================
+  ✓ test_06_cv_tailoring passed
+
+============================================================
+Running: test_07_cover_letter
+============================================================
+============================= test session starts ==============================
+platform darwin -- Python 3.10.12, pytest-9.0.2, pluggy-1.6.0 -- /Users/yitzchak/.pyenv/versions/3.10.12/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/yitzchak/Documents/dev/careervp
+configfile: pytest.ini
+plugins: anyio-4.12.1, mock-3.15.1, typeguard-2.13.3, cov-7.0.0
+collecting ... collected 4 items
+
+docs/refactor/live_tests/test_07_cover_letter.py::TestCoverLetterEndpoints::test_generate_cover_letter 
+=== RESPONSE test_generate_cover_letter ===
+{
+  "test_name": "test_generate_cover_letter",
+  "endpoint": "POST /cover-letter/generate",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ POST /cover-letter/generate - Status 403: {"Message":"User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"}
+PASSED
+docs/refactor/live_tests/test_07_cover_letter.py::TestCoverLetterEndpoints::test_get_cover_letter_status 
+=== RESPONSE test_get_cover_letter_status ===
+{
+  "test_name": "test_get_cover_letter_status",
+  "endpoint": "GET /cover-letter/test-cover-letter-id",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ GET /cover-letter/test-cover-letter-id - Status 403
+PASSED
+docs/refactor/live_tests/test_07_cover_letter.py::TestCoverLetterEndpoints::test_list_cover_letters 
+=== RESPONSE test_list_cover_letters ===
+{
+  "test_name": "test_list_cover_letters",
+  "endpoint": "GET /users/me/cover-letters",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ GET /users/me/cover-letters - Status 403
+PASSED
+docs/refactor/live_tests/test_07_cover_letter.py::TestCoverLetterEndpoints::test_cover_letter_async_polling 
+=== RESPONSE test_generate_cover_letter ===
+{
+  "test_name": "test_generate_cover_letter",
+  "endpoint": "POST /cover-letter/generate",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ POST /cover-letter/generate - Status 403: {"Message":"User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"}
+SKIPPED
+
+=========================== short test summary info ============================
+SKIPPED [1] docs/refactor/live_tests/test_07_cover_letter.py:228: No cover letter ID available for polling test
+========================= 3 passed, 1 skipped in 1.74s =========================
+  ✓ test_07_cover_letter passed
+
+============================================================
+Running: test_08_interview_prep
+============================================================
+============================= test session starts ==============================
+platform darwin -- Python 3.10.12, pytest-9.0.2, pluggy-1.6.0 -- /Users/yitzchak/.pyenv/versions/3.10.12/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/yitzchak/Documents/dev/careervp
+configfile: pytest.ini
+plugins: anyio-4.12.1, mock-3.15.1, typeguard-2.13.3, cov-7.0.0
+collecting ... collected 3 items
+
+docs/refactor/live_tests/test_08_interview_prep.py::TestInterviewPrepEndpoints::test_generate_interview_prep 
+=== RESPONSE test_generate_interview_prep ===
+{
+  "test_name": "test_generate_interview_prep",
+  "endpoint": "POST /interview-prep/generate",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ POST /interview-prep/generate - Status 403: {"Message":"User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"}
+PASSED
+docs/refactor/live_tests/test_08_interview_prep.py::TestInterviewPrepEndpoints::test_get_interview_prep_status 
+=== RESPONSE test_get_interview_prep_status ===
+{
+  "test_name": "test_get_interview_prep_status",
+  "endpoint": "GET /interview-prep/test-interview-prep-id",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ GET /interview-prep/test-interview-prep-id - Status 403
+PASSED
+docs/refactor/live_tests/test_08_interview_prep.py::TestInterviewPrepEndpoints::test_interview_prep_async_polling 
+=== RESPONSE test_generate_interview_prep ===
+{
+  "test_name": "test_generate_interview_prep",
+  "endpoint": "POST /interview-prep/generate",
+  "status_code": 403,
+  "response": {
+    "Message": "User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"
+  }
+}
+⚠ POST /interview-prep/generate - Status 403: {"Message":"User is not authorized to access this resource because no identity-based policy allows the execute-api:Invoke action"}
+SKIPPED
+
+=========================== short test summary info ============================
+SKIPPED [1] docs/refactor/live_tests/test_08_interview_prep.py:184: No interview prep ID available for polling test
+========================= 2 passed, 1 skipped in 1.46s =========================
+  ✓ test_08_interview_prep passed
+
+============================================================
+Running: test_10_api_contract_success
+============================================================
+============================= test session starts ==============================
+platform darwin -- Python 3.10.12, pytest-9.0.2, pluggy-1.6.0 -- /Users/yitzchak/.pyenv/versions/3.10.12/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/yitzchak/Documents/dev/careervp
+configfile: pytest.ini
+plugins: anyio-4.12.1, mock-3.15.1, typeguard-2.13.3, cov-7.0.0
+collecting ... collected 1 item
+
+docs/refactor/live_tests/test_10_api_contract_success.py::TestAPIContractSuccess::test_api_contract_success_for_all_27_endpoints 
+=== STRICT CONTRACT RESPONSE health_check.json ===
+{
+  "payload_file": "health_check.json",
+  "endpoint": "/health",
+  "method": "GET",
+  "request": {},
+  "status_code": 404,
+  "response": {
+    "statusCode": 404,
+    "message": "Not found"
+  }
+}
+FAILED
+
+=================================== FAILURES ===================================
+____ TestAPIContractSuccess.test_api_contract_success_for_all_27_endpoints _____
+docs/refactor/live_tests/test_10_api_contract_success.py:548: in test_api_contract_success_for_all_27_endpoints
+    payload, request_body, response_data = _execute_payload(payload_file, state)
+docs/refactor/live_tests/test_10_api_contract_success.py:386: in _execute_payload
+    assert response.status_code == expected_status, (
+E   AssertionError: health_check.json: expected HTTP 200, got 404
+E   assert 404 == 200
+E    +  where 404 = <Response [404]>.status_code
+=========================== short test summary info ============================
+FAILED docs/refactor/live_tests/test_10_api_contract_success.py::TestAPIContractSuccess::test_api_contract_success_for_all_27_endpoints
+============================== 1 failed in 0.35s ===============================
+  ✗ test_10_api_contract_success failed with pytest exit code 1
+
+============================================================
+Test Suite Complete
+  Modules Passed: 10
+  Modules Failed: 1
+============================================================
+

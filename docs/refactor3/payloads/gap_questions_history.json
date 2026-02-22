@@ -1,0 +1,40 @@
+{
+  "description": "GET /gap-analysis/{jobId}/questions - Get previous gap questions",
+  "method": "GET",
+  "path": "/gap-analysis/{jobId}/questions",
+  "headers": {
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
+  },
+  "path_params": {
+    "jobId": "job-c3d4e5f6-7890-4a1b-c2d3-e4f567890123"
+  },
+  "request": {},
+  "expected_response": {
+    "status_code": 200,
+    "body": {
+      "questions": [
+        {
+          "id": "gap-q-c9d0e1f2-3456-4a7b-c8d9-012345678901",
+          "text": "The job requires experience with serverless architectures. Can you describe a specific project where you designed and deployed serverless solutions?",
+          "tags": [
+            "cloud_architecture",
+            "aws",
+            "serverless"
+          ],
+          "strategic_intent": "Validate hands-on serverless experience and quantify business impact",
+          "evidence_gap": "CV mentions AWS experience but lacks specific serverless implementation details"
+        },
+        {
+          "id": "gap-q-d0e1f2a3-4567-4b8c-d9e0-123456789012",
+          "text": "You mentioned mentoring 5 junior engineers. What specific methodology did you use, and how did you measure their growth?",
+          "tags": [
+            "team_leadership",
+            "mentorship"
+          ],
+          "strategic_intent": "Quantify leadership impact and demonstrate structured approach to team development",
+          "evidence_gap": "Mentorship mentioned but lacks specific outcomes and methodology"
+        }
+      ]
+    }
+  }
+}

@@ -13,7 +13,8 @@ Usage:
     python run_all_tests.py --dry-run          # Show what would run
 
 Environment Variables:
-    API_BASE           - API base URL (default: https://api.careervp.com/v1)
+    API_BASE           - API base URL (resolved via resolve_api_base.py)
+    STACK_NAME         - CloudFormation stack name (default: careervp-api)
     TEST_USER_ID       - Test user ID (default: test-user-e2e)
     API_KEY            - API key for authenticated requests
     USE_AUTH           - Whether to use authentication (default: false)
@@ -26,10 +27,24 @@ Examples:
 import os
 import sys
 import argparse
-import importlib
+from typing import List
+
+import pytest
+
+# Add scripts directory to path for resolve_api_base
+# Go up 2 levels: live_tests -> refactor -> docs, then into refactor3/scripts
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "refactor3",
+    "scripts",
+)
+sys.path.insert(0, SCRIPTS_DIR)
+
+from resolve_api_base import resolve_api_base
 
 # Add current directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+LIVE_TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, LIVE_TESTS_DIR)
 
 
 # Test module mapping
@@ -49,6 +64,12 @@ TEST_MODULES = {
     "interview-prep": ("test_08_interview_prep", ["TestInterviewPrepEndpoints"]),
     "company": ("test_09_company_research", ["TestCompanyResearchEndpoints"]),
     "company-research": ("test_09_company_research", ["TestCompanyResearchEndpoints"]),
+    "contract": ("test_10_api_contract_success", ["TestAPIContractSuccess"]),
+    "strict": ("test_10_api_contract_success", ["TestAPIContractSuccess"]),
+    "api-contract-success": (
+        "test_10_api_contract_success",
+        ["TestAPIContractSuccess"],
+    ),
 }
 
 
@@ -66,59 +87,28 @@ def list_tests():
 
 
 def run_test_module(module_name: str, class_names: list, verbose: bool = False):
-    """Run tests from a specific module."""
+    """Run tests from a specific module/class list with pytest."""
     print(f"\n{'=' * 60}")
     print(f"Running: {module_name}")
     print(f"{'=' * 60}")
 
-    try:
-        module = importlib.import_module(module_name)
+    module_file = os.path.join(LIVE_TESTS_DIR, f"{module_name}.py")
+    node_ids = [f"{module_file}::{class_name}" for class_name in class_names]
+    pytest_args: List[str] = ["-s"]
+    pytest_args.extend(node_ids)
 
-        for class_name in class_names:
-            cls = getattr(module, class_name)
+    if verbose:
+        pytest_args.insert(0, "-v")
+    else:
+        pytest_args.insert(0, "-q")
 
-            # Get all test methods
-            test_methods = [m for m in dir(cls) if m.startswith("test_")]
+    exit_code = pytest.main(pytest_args)
+    if exit_code != 0:
+        print(f"  ✗ {module_name} failed with pytest exit code {exit_code}")
+        return False
 
-            for method_name in test_methods:
-                method = getattr(cls, method_name)
-
-                # Create instance and run
-                instance = cls()
-
-                # Setup if exists
-                if hasattr(instance, "setup"):
-                    instance.setup()
-                elif hasattr(instance, "setup_method"):
-                    instance.setup_method(None)
-
-                try:
-                    if verbose:
-                        print(f"\n  Running: {method_name}")
-
-                    method()
-
-                    if verbose:
-                        print("    ✓ Passed")
-
-                except Exception as e:
-                    print(f"    ✗ Failed: {e}")
-                    if verbose:
-                        import traceback
-
-                        traceback.print_exc()
-
-                # Teardown if exists
-                if hasattr(instance, "teardown"):
-                    try:
-                        instance.teardown()
-                    except Exception:
-                        pass
-
-    except ImportError as e:
-        print(f"  Error importing {module_name}: {e}")
-    except Exception as e:
-        print(f"  Error running {module_name}: {e}")
+    print(f"  ✓ {module_name} passed")
+    return True
 
 
 def run_all_tests(verbose: bool = False):
@@ -127,8 +117,8 @@ def run_all_tests(verbose: bool = False):
     print("CareerVP Live Test Suite")
     print("=" * 60)
 
-    # Set configuration
-    api_base = os.environ.get("API_BASE", "https://api.careervp.com/v1")
+    # Resolve API_BASE using single-source resolver
+    api_base = resolve_api_base()
     test_user = os.environ.get("TEST_USER_ID", "test-user-e2e")
 
     print("\nConfiguration:")
@@ -148,6 +138,7 @@ def run_all_tests(verbose: bool = False):
         "tailoring",
         "cover-letter",
         "interview",
+        "contract",
     ]
 
     passed = 0
@@ -157,8 +148,11 @@ def run_all_tests(verbose: bool = False):
         if test_name in TEST_MODULES:
             try:
                 module_name, class_names = TEST_MODULES[test_name]
-                run_test_module(module_name, class_names, verbose)
-                passed += 1
+                ok = run_test_module(module_name, class_names, verbose)
+                if ok:
+                    passed += 1
+                else:
+                    failed += 1
             except Exception as e:
                 print(f"Error in {test_name}: {e}")
                 failed += 1
@@ -204,10 +198,16 @@ def main():
         if test_key in TEST_MODULES:
             if args.dry_run:
                 module_name, class_names = TEST_MODULES[test_key]
-                print(f"Would run: {module_name}.{class_names}")
+                module_file = os.path.join(LIVE_TESTS_DIR, f"{module_name}.py")
+                node_ids = [
+                    f"{module_file}::{class_name}" for class_name in class_names
+                ]
+                print(f"Would run: {', '.join(node_ids)}")
             else:
                 module_name, class_names = TEST_MODULES[test_key]
-                run_test_module(module_name, class_names, args.verbose)
+                ok = run_test_module(module_name, class_names, args.verbose)
+                if not ok:
+                    sys.exit(1)
         else:
             print(f"Unknown test: {args.test}")
             print("Use --list to see available tests")
@@ -215,9 +215,32 @@ def main():
     else:
         if args.dry_run:
             print("Would run all tests:")
-            for name in TEST_MODULES.keys():
-                module_name, class_names = TEST_MODULES[name]
-                print(f"  {name} -> {module_name}.{class_names}")
+            seen = set()
+            test_order = [
+                "health",
+                "auth",
+                "users",
+                "jobs",
+                "company",
+                "vpr",
+                "gap",
+                "tailoring",
+                "cover-letter",
+                "interview",
+                "contract",
+            ]
+            for name in test_order:
+                if name in TEST_MODULES:
+                    module_name, class_names = TEST_MODULES[name]
+                    key = (module_name, tuple(class_names))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    module_file = os.path.join(LIVE_TESTS_DIR, f"{module_name}.py")
+                    node_ids = [
+                        f"{module_file}::{class_name}" for class_name in class_names
+                    ]
+                    print(f"  {name} -> {', '.join(node_ids)}")
         else:
             run_all_tests(args.verbose)
 

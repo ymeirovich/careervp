@@ -1,0 +1,72 @@
+{
+  "description": "POST /interview-prep/generate - Generate interview prep (async)",
+  "method": "POST",
+  "path": "/interview-prep/generate",
+  "headers": {
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
+  },
+  "request": {
+    "vpr_id": "vpr-a7b8c9d0-1234-4e5f-a6b7-890123456789",
+    "gap_response_ids": [
+      "gap-resp-e5f6a7b8-9012-4c3d-e4f5-678901234567",
+      "gap-resp-f6a7b8c9-0123-4d4e-f5a6-789012345678"
+    ],
+    "focus_areas": [
+      "cloud_architecture",
+      "team_leadership",
+      "system_design"
+    ],
+    "question_count": 10
+  },
+  "expected_response": {
+    "status_code": 202,
+    "body": {
+      "request_id": "int-prep-e7f8a9b0-1234-4c5d-f6a7-890123456789",
+      "status": "processing"
+    }
+  },
+  "completed_response": {
+    "status_code": 200,
+    "body": {
+      "id": "int-prep-e7f8a9b0-1234-4c5d-f6a7-890123456789",
+      "status": "completed",
+      "result": {
+        "questions": [
+          {
+            "id": "int-q-f8a9b0c1-2345-4d6e-a7b8-901234567890",
+            "text": "Tell me about a time when you had to optimize a system serving millions of users. What was your approach and what were the results?",
+            "suggested_answer": {
+              "format": "STAR",
+              "situation": "At TechCorp, our API was experiencing latency issues with response times averaging 500ms, impacting 5M+ daily active users and causing customer complaints.",
+              "task": "I was tasked with reducing API response time by at least 30% while maintaining system stability and not adding infrastructure costs.",
+              "action": "I conducted a comprehensive performance audit, identified database query inefficiencies, implemented strategic caching with Redis, optimized database indexes, and refactored N+1 queries. I also added performance monitoring dashboards to track improvements in real-time.",
+              "result": "Reduced API response time by 40% (from 500ms to 300ms), improved user satisfaction scores by 25%, and the optimizations required no additional infrastructure spend. The monitoring system I implemented continues to help the team identify performance regressions early."
+            }
+          },
+          {
+            "id": "int-q-a9b0c1d2-3456-4e7f-b8c9-012345678901",
+            "text": "Describe your experience mentoring junior engineers. How do you measure success in mentorship?",
+            "suggested_answer": {
+              "format": "STAR",
+              "situation": "I joined TechCorp's engineering team and noticed that junior engineers were struggling with inconsistent guidance and unclear growth paths, leading to slow skill development.",
+              "task": "I was asked to develop and implement a structured mentorship program for a team of 5 junior engineers to accelerate their growth and improve retention.",
+              "action": "I created a comprehensive program with bi-weekly 1-on-1s, personalized learning paths based on each engineer's career goals, monthly goal-setting sessions, and quarterly performance reviews. I tracked progress through code review metrics, project ownership milestones, and peer feedback scores.",
+              "result": "Within 18 months, all 5 mentees were promoted to senior level positions, and we achieved 100% retention. The program was adopted company-wide and has since been used to mentor 20+ additional engineers."
+            }
+          },
+          {
+            "id": "int-q-b0c1d2e3-4567-4f8a-c9d0-123456789012",
+            "text": "Walk me through a complex serverless architecture you've designed. What were the key decisions and trade-offs?",
+            "suggested_answer": {
+              "format": "STAR",
+              "situation": "Our team needed to process user analytics data in real-time but our EC2-based solution was expensive to maintain and couldn't scale efficiently during traffic spikes.",
+              "task": "Design and implement a cost-effective, auto-scaling solution that could handle peak loads of 50,000 events per minute while reducing operational costs.",
+              "action": "I architected a serverless pipeline using AWS Lambda for compute, Step Functions for orchestration, and DynamoDB for storage. I chose Lambda for its automatic scaling and pay-per-use model, Step Functions to manage complex workflows with built-in error handling, and DynamoDB for its single-digit millisecond latency. I also implemented dead letter queues for failed events and CloudWatch alarms for monitoring.",
+              "result": "The solution achieved 60% cost reduction compared to our EC2 infrastructure, improved processing latency from 500ms to under 100ms, and scaled automatically during traffic spikes without any manual intervention. The system has been running in production for 2+ years with 99.9% uptime."
+            }
+          }
+        ]
+      }
+    }
+  }
+}

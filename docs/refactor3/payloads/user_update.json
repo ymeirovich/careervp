@@ -1,0 +1,21 @@
+{
+  "description": "PUT /users/me - Update current user profile",
+  "method": "PUT",
+  "path": "/users/me",
+  "headers": {
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
+  },
+  "request": {
+    "name": "Test User Updated",
+    "timezone": "America/New_York"
+  },
+  "expected_response": {
+    "status_code": 200,
+    "body": {
+      "id": "7a7f6307-3562-4ebc-b209-5f19559b048f",
+      "email": "testuser@careervp.com",
+      "name": "Test User Updated",
+      "created_at": "2024-01-15T10:30:00Z"
+    }
+  }
+}
