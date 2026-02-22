@@ -7,6 +7,7 @@ Handles CV upload requests, orchestrates parsing and storage.
 
 import base64
 import json
+import os
 import time
 import uuid
 from http import HTTPStatus
@@ -248,24 +249,32 @@ def _extract_user_id() -> str | None:
     if isinstance(request_context, dict):
         authorizer = request_context.get('authorizer')
         if isinstance(authorizer, dict):
-            claim_user_id = _extract_claim_user_id(authorizer.get('claims'))
-            if claim_user_id:
-                return claim_user_id
+            authorizer_user_id = _extract_user_id_from_authorizer(authorizer)
+            if authorizer_user_id:
+                return authorizer_user_id
 
-            jwt_context = authorizer.get('jwt')
-            if isinstance(jwt_context, dict):
-                jwt_user_id = _extract_claim_user_id(jwt_context.get('claims'))
-                if jwt_user_id:
-                    return jwt_user_id
+    if os.getenv('ENV', '').strip().lower() == 'local':
+        headers = app.current_event.headers or {}
+        for key, value in headers.items():
+            if isinstance(key, str) and key.lower() == 'x-user-id' and isinstance(value, str) and value.strip():
+                return value.strip()
+    return None
 
-            for key in ('user_id', 'principalId', 'principal_id'):
-                value = authorizer.get(key)
-                if isinstance(value, str) and value.strip():
-                    return value.strip()
 
-    headers = app.current_event.headers or {}
-    for key, value in headers.items():
-        if isinstance(key, str) and key.lower() == 'x-user-id' and isinstance(value, str) and value.strip():
+def _extract_user_id_from_authorizer(authorizer: dict[str, Any]) -> str | None:
+    claim_user_id = _extract_claim_user_id(authorizer.get('claims'))
+    if claim_user_id:
+        return claim_user_id
+
+    jwt_context = authorizer.get('jwt')
+    if isinstance(jwt_context, dict):
+        jwt_user_id = _extract_claim_user_id(jwt_context.get('claims'))
+        if jwt_user_id:
+            return jwt_user_id
+
+    for key in ('user_id', 'principalId', 'principal_id'):
+        value = authorizer.get(key)
+        if isinstance(value, str) and value.strip():
             return value.strip()
     return None
 
