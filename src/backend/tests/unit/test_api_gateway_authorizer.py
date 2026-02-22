@@ -55,3 +55,43 @@ def test_authorizer_denies_request_without_bearer_token() -> None:
 
     assert result['principalId'] == 'unauthorized'
     assert result['policyDocument']['Statement'][0]['Effect'] == 'Deny'
+
+
+def test_authorizer_uses_refresh_token_for_refresh_route() -> None:
+    auth_service = Mock()
+    auth_service.validate_token.return_value = {'user_id': 'user-refresh'}
+    api_gateway_authorizer._auth_service = auth_service
+
+    result = api_gateway_authorizer.lambda_handler(
+        {
+            'authorizationToken': 'Bearer refresh-token',
+            'methodArn': 'arn:aws:execute-api:us-east-1:123456789012:api/prod/POST/auth/refresh',
+        },
+        None,
+    )
+
+    assert result['principalId'] == 'user-refresh'
+    auth_service.validate_token.assert_called_once_with(
+        'refresh-token',
+        expected_token_type='refresh',
+    )
+
+
+def test_authorizer_uses_access_token_for_non_refresh_route() -> None:
+    auth_service = Mock()
+    auth_service.validate_token.return_value = {'user_id': 'user-access'}
+    api_gateway_authorizer._auth_service = auth_service
+
+    result = api_gateway_authorizer.lambda_handler(
+        {
+            'authorizationToken': 'Bearer access-token',
+            'methodArn': 'arn:aws:execute-api:us-east-1:123456789012:api/prod/GET/jobs',
+        },
+        None,
+    )
+
+    assert result['principalId'] == 'user-access'
+    auth_service.validate_token.assert_called_once_with(
+        'access-token',
+        expected_token_type='access',
+    )

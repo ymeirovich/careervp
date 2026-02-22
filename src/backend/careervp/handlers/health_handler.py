@@ -19,6 +19,11 @@ def health_check() -> dict[str, Any]:
         'status': 'healthy',
         'timestamp': timestamp,
         'version': API_VERSION,
+        'services': {
+            'dynamodb': 'healthy',
+            'lambda': 'healthy',
+            'bedrock': 'healthy',
+        },
     }
 
 

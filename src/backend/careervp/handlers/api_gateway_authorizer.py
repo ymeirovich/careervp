@@ -43,6 +43,15 @@ def _build_policy(principal_id: str, method_arn: str, effect: str) -> dict[str, 
     }
 
 
+def _expected_token_type(method_arn: str) -> str:
+    """Return required token type for the requested REST route."""
+    arn_parts = method_arn.split('/')
+    route = '/' + '/'.join(arn_parts[3:]) if len(arn_parts) >= 4 else ''
+    if route == '/auth/refresh':
+        return 'refresh'
+    return 'access'
+
+
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     _ = context
     method_arn = str(event.get('methodArn') or '*')
@@ -52,7 +61,10 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         return _build_policy('unauthorized', method_arn, 'Deny')
 
     try:
-        claims = _get_auth_service().validate_token(token, expected_token_type='access')
+        claims = _get_auth_service().validate_token(
+            token,
+            expected_token_type=_expected_token_type(method_arn),
+        )
     except (InvalidTokenError, ConfigurationError) as exc:
         logger.warning('Authorizer reject: invalid token', error=str(exc))
         return _build_policy('unauthorized', method_arn, 'Deny')

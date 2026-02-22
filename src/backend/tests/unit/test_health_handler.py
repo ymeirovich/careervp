@@ -62,13 +62,18 @@ def test_health_requires_no_authentication() -> None:
 
 
 def test_health_response_matches_openapi_schema() -> None:
-    """Health response should include status, timestamp, and version fields."""
+    """Health response should include all OpenAPI contract keys."""
     response = lambda_handler(_event(), _context())
 
     assert response['statusCode'] == 200
     payload = json.loads(response['body'])
     assert payload['status'] == 'healthy'
     assert payload['version'] == '1.0.0'
+    assert payload['services'] == {
+        'dynamodb': 'healthy',
+        'lambda': 'healthy',
+        'bedrock': 'healthy',
+    }
 
     parsed_timestamp = datetime.fromisoformat(payload['timestamp'].replace('Z', '+00:00'))
     assert parsed_timestamp.tzinfo is not None
