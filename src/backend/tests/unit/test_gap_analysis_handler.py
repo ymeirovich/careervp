@@ -31,12 +31,12 @@ def gap_table() -> Generator[Any, None, None]:
         table = dynamodb.create_table(
             TableName='test-gap-table',
             KeySchema=[
-                {'AttributeName': 'userId', 'KeyType': 'HASH'},
-                {'AttributeName': 'applicationId', 'KeyType': 'RANGE'},
+                {'AttributeName': 'applicationId', 'KeyType': 'HASH'},
+                {'AttributeName': 'artifactId', 'KeyType': 'RANGE'},
             ],
             AttributeDefinitions=[
-                {'AttributeName': 'userId', 'AttributeType': 'S'},
                 {'AttributeName': 'applicationId', 'AttributeType': 'S'},
+                {'AttributeName': 'artifactId', 'AttributeType': 'S'},
             ],
             BillingMode='PAY_PER_REQUEST',
         )
@@ -84,8 +84,8 @@ def _context() -> Any:
     return context
 
 
-def test_generate_questions_returns_201_and_persists(gap_table: Any) -> None:
-    """POST /gap-analysis/questions returns 201 and stores generated questions."""
+def test_generate_questions_returns_200_and_persists(gap_table: Any) -> None:
+    """POST /gap-analysis/questions returns 200 and stores generated questions."""
     from careervp.handlers.gap_handler import lambda_handler
 
     event = _event(
@@ -101,13 +101,18 @@ def test_generate_questions_returns_201_and_persists(gap_table: Any) -> None:
 
     response = lambda_handler(event, _context())
 
-    assert response['statusCode'] == 201
+    assert response['statusCode'] == 200
     payload = json.loads(response['body'])
     assert payload['job_id'] == 'job-123'
     assert payload['cv_id'] == 'cv-123'
     assert len(payload['questions']) == 3
 
-    stored = gap_table.get_item(Key={'userId': 'user-1', 'applicationId': 'GAP_ANALYSIS#cv-123#job-123'}).get('Item')
+    stored = gap_table.get_item(
+        Key={
+            'applicationId': 'GAP_ANALYSIS#cv-123#job-123',
+            'artifactId': 'QUESTION_SET',
+        }
+    ).get('Item')
     assert isinstance(stored, dict)
     assert stored.get('job_id') == 'job-123'
     assert len(stored.get('questions', [])) == 3
@@ -120,9 +125,9 @@ def test_get_questions_returns_200(gap_table: Any) -> None:
     now = datetime.now(timezone.utc).isoformat()
     gap_table.put_item(
         Item={
-            'userId': 'user-1',
             'applicationId': 'GAP_ANALYSIS#cv-123#job-555',
-            'artifact_type': 'gap_analysis',
+            'artifactId': 'QUESTION_SET',
+            'artifactType': 'gap_analysis',
             'user_id': 'user-1',
             'cv_id': 'cv-123',
             'job_id': 'job-555',
@@ -137,7 +142,7 @@ def test_get_questions_returns_200(gap_table: Any) -> None:
             ],
             'created_at': now,
             'updated_at': now,
-            'ttl': 9999999999,
+            'expiration': 9999999999,
         }
     )
 
@@ -155,8 +160,8 @@ def test_get_questions_returns_200(gap_table: Any) -> None:
     assert len(payload['questions']) == 1
 
 
-def test_submit_response_returns_201(gap_table: Any) -> None:
-    """POST /gap-analysis/responses returns 201 and persists responses."""
+def test_submit_response_returns_200(gap_table: Any) -> None:
+    """POST /gap-analysis/responses returns 200 and persists responses."""
     from careervp.handlers.gap_handler import lambda_handler
 
     event = _event(
@@ -176,12 +181,17 @@ def test_submit_response_returns_201(gap_table: Any) -> None:
 
     response = lambda_handler(event, _context())
 
-    assert response['statusCode'] == 201
+    assert response['statusCode'] == 200
     payload = json.loads(response['body'])
     assert payload['status'] == 'saved'
     assert payload['job_id'] == 'job-222'
 
-    stored = gap_table.get_item(Key={'userId': 'user-1', 'applicationId': 'GAP_RESPONSES#job-222'}).get('Item')
+    stored = gap_table.get_item(
+        Key={
+            'applicationId': 'GAP_RESPONSES#job-222',
+            'artifactId': 'RESPONSE_SET',
+        }
+    ).get('Item')
     assert isinstance(stored, dict), f'Expected dict but got None. Stored keys: {list(stored.keys()) if stored else "None"}'
     assert stored.get('job_id') == 'job-222'
     assert len(stored.get('responses', [])) == 1
@@ -194,9 +204,9 @@ def test_get_responses_returns_200(gap_table: Any) -> None:
     now = datetime.now(timezone.utc).isoformat()
     gap_table.put_item(
         Item={
-            'userId': 'user-1',
             'applicationId': 'GAP_RESPONSES#job-999',
-            'artifact_type': 'gap_responses',
+            'artifactId': 'RESPONSE_SET',
+            'artifactType': 'gap_responses',
             'user_id': 'user-1',
             'job_id': 'job-999',
             'responses': [
@@ -204,7 +214,7 @@ def test_get_responses_returns_200(gap_table: Any) -> None:
             ],
             'created_at': now,
             'updated_at': now,
-            'ttl': 9999999999,
+            'expiration': 9999999999,
         }
     )
 

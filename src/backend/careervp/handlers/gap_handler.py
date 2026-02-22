@@ -20,6 +20,9 @@ from careervp.handlers.cors_utils import get_cors_headers
 from careervp.models.api_models import GapQuestionRequest, GapResponseRequest
 from careervp.models.result import ResultCode
 
+GAP_QUESTIONS_ARTIFACT_ID = 'QUESTION_SET'
+GAP_RESPONSES_ARTIFACT_ID = 'RESPONSE_SET'
+
 
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     _ = context
@@ -103,9 +106,9 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:
     now = datetime.now(timezone.utc).isoformat()
     application_id = _build_gap_questions_application_id(cv_id, job_id)
     item: dict[str, Any] = {
-        'userId': user_id,
         'applicationId': application_id,
-        'artifact_type': 'gap_analysis',
+        'artifactId': GAP_QUESTIONS_ARTIFACT_ID,
+        'artifactType': 'gap_analysis',
         'user_id': user_id,
         'cv_id': cv_id,
         'job_id': job_id,
@@ -113,7 +116,7 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:
         'missing_qualifications': missing_qualifications,
         'created_at': now,
         'updated_at': now,
-        'ttl': _ttl_timestamp(),
+        'expiration': _ttl_timestamp(),
     }
 
     try:
@@ -122,7 +125,7 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:
         return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc), ResultCode.DYNAMODB_ERROR)
 
     return _json_response(
-        HTTPStatus.CREATED,
+        HTTPStatus.OK,
         {
             'job_id': job_id,
             'cv_id': cv_id,
@@ -143,23 +146,33 @@ def get_questions(event: dict[str, Any]) -> dict[str, Any]:
 
     try:
         table = _get_table()
-        condition = _build_question_query_condition(user_id)
-        response = table.query(KeyConditionExpression=condition)
+        response = table.scan(
+            FilterExpression='artifactType = :artifact_type AND user_id = :user_id AND job_id = :job_id',
+            ExpressionAttributeValues={
+                ':artifact_type': 'gap_analysis',
+                ':user_id': user_id,
+                ':job_id': job_id,
+            },
+        )
         items = list(response.get('Items', []))
         while 'LastEvaluatedKey' in response:
-            response = table.query(
-                KeyConditionExpression=condition,
+            response = table.scan(
+                FilterExpression='artifactType = :artifact_type AND user_id = :user_id AND job_id = :job_id',
+                ExpressionAttributeValues={
+                    ':artifact_type': 'gap_analysis',
+                    ':user_id': user_id,
+                    ':job_id': job_id,
+                },
                 ExclusiveStartKey=response['LastEvaluatedKey'],
             )
             items.extend(response.get('Items', []))
     except (ClientError, RuntimeError) as exc:
         return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc), ResultCode.DYNAMODB_ERROR)
 
-    matched = [item for item in items if _item_matches_job(item, job_id)]
-    if not matched:
+    if not items:
         return _error_response(HTTPStatus.NOT_FOUND, 'Gap questions not found', ResultCode.INVALID_INPUT)
 
-    latest = max(matched, key=_item_timestamp)
+    latest = max(items, key=_item_timestamp)
     return _json_response(
         HTTPStatus.OK,
         {
@@ -199,15 +212,15 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
     now = datetime.now(timezone.utc).isoformat()
     application_id = _build_gap_responses_application_id(job_id)
     item: dict[str, Any] = {
-        'userId': user_id,
         'applicationId': application_id,
-        'artifact_type': 'gap_responses',
+        'artifactId': GAP_RESPONSES_ARTIFACT_ID,
+        'artifactType': 'gap_responses',
         'user_id': user_id,
         'job_id': job_id,
         'responses': normalized_responses,
         'created_at': now,
         'updated_at': now,
-        'ttl': _ttl_timestamp(),
+        'expiration': _ttl_timestamp(),
     }
 
     cv_id = _coerce_str(payload.get('cv_id'))
@@ -220,7 +233,7 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
         return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc), ResultCode.DYNAMODB_ERROR)
 
     return _json_response(
-        HTTPStatus.CREATED,
+        HTTPStatus.OK,
         {
             'status': 'saved',
             'job_id': job_id,
@@ -240,7 +253,12 @@ def get_responses(event: dict[str, Any]) -> dict[str, Any]:
 
     try:
         application_id = _build_gap_responses_application_id(job_id)
-        response = _get_table().get_item(Key={'userId': user_id, 'applicationId': application_id})
+        response = _get_table().get_item(
+            Key={
+                'applicationId': application_id,
+                'artifactId': GAP_RESPONSES_ARTIFACT_ID,
+            }
+        )
     except (ClientError, RuntimeError) as exc:
         return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc), ResultCode.DYNAMODB_ERROR)
 
@@ -402,16 +420,6 @@ def _normalize_submitted_response_entry(
     return normalized, None
 
 
-def _item_matches_job(item: dict[str, Any], job_id: str) -> bool:
-    # Check job_id attribute directly (preferred method)
-    stored_job_id = item.get('job_id')
-    if isinstance(stored_job_id, str) and stored_job_id == job_id:
-        return True
-    # Check applicationId format: GAP_ANALYSIS#{cv_id}#{job_id} or GAP_RESPONSES#{job_id}
-    application_id = str(item.get('applicationId', ''))
-    return application_id.endswith(f'#{job_id}') or application_id == f'GAP_RESPONSES#{job_id}'
-
-
 def _item_timestamp(item: dict[str, Any]) -> str:
     updated = item.get('updated_at')
     if isinstance(updated, str):
@@ -428,15 +436,6 @@ def _build_gap_responses_application_id(job_id: str) -> str:
 
 def _build_gap_questions_application_id(cv_id: str, job_id: str) -> str:
     return f'GAP_ANALYSIS#{cv_id}#{job_id}'
-
-
-def _build_question_query_condition(user_id: str) -> Any:
-    try:
-        from boto3.dynamodb.conditions import Key
-    except Exception as exc:  # noqa: BLE001
-        raise RuntimeError('boto3 is required for gap questions query') from exc
-
-    return Key('userId').eq(user_id) & Key('applicationId').begins_with('GAP_ANALYSIS#')
 
 
 def _ttl_timestamp(ttl_days: int = 90) -> int:
