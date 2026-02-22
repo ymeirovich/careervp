@@ -11,8 +11,20 @@ from aws_lambda_powertools.metrics import MetricUnit
 from aws_lambda_powertools.utilities.typing import LambdaContext
 
 from careervp.dal.knowledge_repository import KnowledgeRepository
+from careervp.handlers.auth_utils import extract_user_id
+from careervp.handlers.cors_utils import get_cors_headers
 from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.logic.auth_service import AuthService, ConfigurationError, InvalidTokenError
 from careervp.models.result import Result
+
+_auth_service: AuthService | None = None
+
+
+def _get_auth_service() -> AuthService:
+    global _auth_service
+    if _auth_service is None:
+        _auth_service = AuthService.from_env()
+    return _auth_service
 
 
 @logger.inject_lambda_context
@@ -35,13 +47,13 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
 def _handle_get(event: dict[str, Any], repo: KnowledgeRepository) -> dict[str, Any]:
     """Handle GET requests for knowledge base queries."""
+    user_id = _extract_authenticated_user_id(event)
+    if not user_id:
+        return _build_response(HTTPStatus.UNAUTHORIZED, {'error': 'Authentication required'})
+
     params = event.get('queryStringParameters') or {}
-    user_id = params.get('user_id', '')
     job_id = params.get('job_id')
     entity_type = params.get('entity_type')
-
-    if not user_id:
-        return _build_response(HTTPStatus.BAD_REQUEST, {'error': 'user_id is required'})
 
     metrics.add_metric(name='KnowledgeBaseQueries', unit=MetricUnit.Count, value=1)
 
@@ -66,6 +78,10 @@ def _handle_get(event: dict[str, Any], repo: KnowledgeRepository) -> dict[str, A
 
 def _handle_post(event: dict[str, Any], repo: KnowledgeRepository) -> dict[str, Any]:
     """Handle POST requests to save knowledge entries."""
+    user_id = _extract_authenticated_user_id(event)
+    if not user_id:
+        return _build_response(HTTPStatus.UNAUTHORIZED, {'error': 'Authentication required'})
+
     body_content = event.get('body', '{}')
     try:
         payload = json.loads(body_content or '{}')
@@ -74,31 +90,37 @@ def _handle_post(event: dict[str, Any], repo: KnowledgeRepository) -> dict[str, 
 
     entity_type = payload.get('entity_type', '')
 
-    required_gap = ('user_id', 'job_id', 'cv_id', 'question_id', 'response_id', 'response_text')
-    required_research = ('user_id', 'job_id', 'company_research_id', 'company_name', 'research_data')
+    required_gap = {'job_id': str, 'cv_id': str}
+    required_research = ('job_id', 'company_research_id', 'company_name', 'research_data')
 
     if entity_type == 'GAP_RESPONSE':
-        missing = [f for f in required_gap if not payload.get(f)]
+        for field, expected_type in required_gap.items():
+            value = payload.get(field)
+            if not isinstance(value, expected_type) or not value:
+                return _build_response(HTTPStatus.BAD_REQUEST, {'error': f'Invalid or missing field: {field}'})
+
+        required_gap_fields = ('question_id', 'response_id', 'response_text')
+        missing = [f for f in required_gap_fields if not payload.get(f)]
         if missing:
             return _build_response(HTTPStatus.BAD_REQUEST, {'error': f'Missing required fields: {", ".join(missing)}'})
         result = repo.save_gap_response(
-            user_id=payload['user_id'],
-            job_id=payload['job_id'],
-            cv_id=payload['cv_id'],
-            question_id=payload['question_id'],
-            response_id=payload['response_id'],
-            response_text=payload['response_text'],
+            user_id=user_id,
+            job_id=str(payload.get('job_id') or ''),
+            cv_id=str(payload.get('cv_id') or ''),
+            question_id=str(payload.get('question_id') or ''),
+            response_id=str(payload.get('response_id') or ''),
+            response_text=str(payload.get('response_text') or ''),
         )
     elif entity_type == 'COMPANY_RESEARCH':
         missing = [f for f in required_research if not payload.get(f)]
         if missing:
             return _build_response(HTTPStatus.BAD_REQUEST, {'error': f'Missing required fields: {", ".join(missing)}'})
         result = repo.save_company_research(
-            user_id=payload['user_id'],
-            job_id=payload['job_id'],
-            company_research_id=payload['company_research_id'],
-            company_name=payload['company_name'],
-            research_data=payload['research_data'],
+            user_id=user_id,
+            job_id=str(payload.get('job_id') or ''),
+            company_research_id=str(payload.get('company_research_id') or ''),
+            company_name=str(payload.get('company_name') or ''),
+            research_data=payload.get('research_data'),
         )
     else:
         return _build_response(HTTPStatus.BAD_REQUEST, {'error': f'Unknown entity_type: {entity_type}'})
@@ -112,11 +134,46 @@ def _handle_post(event: dict[str, Any], repo: KnowledgeRepository) -> dict[str, 
 
 def _build_response(status_code: HTTPStatus, body: dict[str, Any]) -> dict[str, Any]:
     """Build API Gateway response."""
+    headers = get_cors_headers(None)
+    headers['Content-Type'] = 'application/json'
     return {
         'statusCode': status_code.value,
-        'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+        'headers': headers,
         'body': json.dumps(body, default=str),
     }
+
+
+def _extract_bearer_token(event: dict[str, Any]) -> str | None:
+    headers = event.get('headers')
+    if not isinstance(headers, dict):
+        return None
+
+    auth_header = headers.get('Authorization') or headers.get('authorization')
+    if not isinstance(auth_header, str) or not auth_header.startswith('Bearer '):
+        return None
+
+    token = auth_header[7:].strip()
+    return token if token else None
+
+
+def _extract_authenticated_user_id(event: dict[str, Any]) -> str | None:
+    user_id = extract_user_id(event)
+    if user_id:
+        return user_id
+
+    token = _extract_bearer_token(event)
+    if not token:
+        return None
+
+    try:
+        payload = _get_auth_service().validate_token(token, expected_token_type='access')
+    except (InvalidTokenError, ConfigurationError):
+        return None
+
+    raw_user_id = payload.get('user_id') or payload.get('sub')
+    if isinstance(raw_user_id, str) and raw_user_id.strip():
+        return raw_user_id.strip()
+    return None
 
 
 __all__ = ['lambda_handler']

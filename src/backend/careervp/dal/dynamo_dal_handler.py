@@ -11,7 +11,7 @@ from careervp.dal.db_handler import DalHandler
 from careervp.handlers.utils.observability import logger, tracer
 from careervp.models.cv import UserCV
 from careervp.models.cv_tailoring_models import TailoredCV
-from careervp.models.exceptions import InternalServerException
+from careervp.models.exceptions import InternalServerException, InvalidVersionError
 from careervp.models.job import GapResponse
 from careervp.models.result import Result, ResultCode
 from careervp.models.vpr import VPR
@@ -173,12 +173,20 @@ class DynamoDalHandler(DalHandler):
                 items.extend(response.get('Items', []))
 
             if not items:
-                return Result(success=True, data=None, code=ResultCode.SUCCESS)
+                return Result(success=True, data=None, code=ResultCode.NOT_FOUND)
 
-            latest_item = max(items, key=lambda record: int(record.get('version', 0)))
+            def _parse_record_version(record: dict[str, Any]) -> int:
+                try:
+                    version = int(record.get('version', 0))
+                except (ValueError, TypeError) as e:
+                    logger.warning('Invalid version: %s', record.get('version'))
+                    raise InvalidVersionError(f'Invalid version: {e}') from e
+                return version
+
+            latest_item = max(items, key=_parse_record_version)
             vpr = VPR.model_validate(latest_item)
             return Result(success=True, data=vpr, code=ResultCode.SUCCESS)
-        except (ClientError, ValidationError):
+        except (ClientError, ValidationError, InvalidVersionError):
             error_msg = 'failed to get latest VPR'
             logger.exception(error_msg, application_id=application_id)
             return Result(success=False, error=error_msg, code=ResultCode.DYNAMODB_ERROR)
@@ -266,7 +274,7 @@ class DynamoDalHandler(DalHandler):
                 response = table.query(KeyConditionExpression=key_condition)
                 items = response.get('Items', [])
                 if not items:
-                    return Result(success=True, data=None, code=ResultCode.SUCCESS)
+                    return Result(success=True, data=None, code=ResultCode.NOT_FOUND)
                 latest_item = max(items, key=lambda item: self._parse_version_from_sk(item.get('sk', '')))
                 payload = latest_item.get('tailored_cv') or latest_item
             else:
@@ -361,7 +369,7 @@ class DynamoDalHandler(DalHandler):
                 response = table.query(KeyConditionExpression=key_condition)
                 items = response.get('Items', [])
                 if not items:
-                    return Result(success=True, data=None, code=ResultCode.SUCCESS)
+                    return Result(success=True, data=None, code=ResultCode.NOT_FOUND)
                 latest_item = max(items, key=lambda item: self._parse_version_from_sk(item.get('sk', '')))
                 payload = latest_item.get('cover_letter') or latest_item
             else:
@@ -508,7 +516,7 @@ class DynamoDalHandler(DalHandler):
                 response = table.query(KeyConditionExpression=key_condition)
                 items = response.get('Items', [])
                 if not items:
-                    return Result(success=True, data=[], code=ResultCode.SUCCESS)
+                    return Result(success=True, data=None, code=ResultCode.NOT_FOUND)
                 latest_item = max(items, key=lambda item: self._parse_version_from_sk(item.get('sk', '')))
                 payload = latest_item.get('responses') or []
             else:

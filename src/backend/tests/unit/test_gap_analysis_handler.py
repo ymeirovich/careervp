@@ -70,6 +70,7 @@ def _event(
             'path': path,
             'stage': 'test',
             'requestId': 'req-1',
+            'authorizer': {'principalId': user_id},
         },
         'body': json.dumps(body) if body is not None else None,
         'isBase64Encoded': False,

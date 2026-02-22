@@ -592,6 +592,7 @@ class ApiConstruct(Construct):
             "COMPANY_RESEARCH_CACHE_TABLE_NAME": (
                 self.api_db.company_research_cache_table.table_name
             ),
+            "ALLOWED_ORIGINS": "https://careervp.app,https://www.careervp.app",
         }
 
     def _build_common_layer(self) -> PythonLayerVersion:
