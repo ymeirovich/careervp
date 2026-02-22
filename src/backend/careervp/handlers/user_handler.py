@@ -258,9 +258,10 @@ def list_user_cvs() -> Response[str]:
     limit = _parse_limit()
     cursor = _parse_cursor()
     cvs, next_cursor = _list_user_cvs(user_id=user_id, limit=limit, cursor=cursor)
-    body: dict[str, Any] = {'cvs': cvs}
-    if next_cursor:
-        body['cursor'] = next_cursor
+    body: dict[str, Any] = {
+        'cvs': cvs,
+        'cursor': next_cursor or '',
+    }
     return _json_response(HTTPStatus.OK, body)
 
 
