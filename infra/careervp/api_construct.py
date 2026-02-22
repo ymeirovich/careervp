@@ -271,12 +271,38 @@ class ApiConstruct(Construct):
         return rest_api
 
     def _build_logs_kms_key(self) -> kms.Key:
-        return kms.Key(
+        key = kms.Key(
             self,
             "CloudWatchLogsKey",
             enable_key_rotation=True,
             removal_policy=RemovalPolicy.RETAIN,
         )
+        key.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="AllowCloudWatchLogsUseOfKey",
+                effect=iam.Effect.ALLOW,
+                principals=[
+                    iam.ServicePrincipal(f"logs.{self.naming.region}.amazonaws.com")
+                ],
+                actions=[
+                    "kms:Encrypt",
+                    "kms:Decrypt",
+                    "kms:ReEncrypt*",
+                    "kms:GenerateDataKey*",
+                    "kms:DescribeKey",
+                ],
+                resources=["*"],
+                conditions={
+                    "ArnLike": {
+                        "kms:EncryptionContext:aws:logs:arn": (
+                            f"arn:aws:logs:{self.naming.region}:"
+                            f"{self.naming.account_id}:log-group:*"
+                        )
+                    }
+                },
+            )
+        )
+        return key
 
     def _build_api_authorizer(
         self, authorizer_lambda: _lambda.Function
