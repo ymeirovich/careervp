@@ -1,0 +1,48 @@
+name: Security Audit
+on: [pull_request, push]
+
+jobs:
+  python-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit Python dependencies
+        run: |
+          cd src/backend
+          uvx pip-audit -r lambda_requirements.txt
+
+  node-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit Node dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+  iac-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Synthesize CDK
+        run: cd infra && npx cdk synth
+      - name: Run Checkov
+        run: uvx checkov -d infra/cdk.out --framework cloudformation
+
+  code-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Bandit
+        run: |
+          cd src/backend
+          uvx bandit -r careervp/ -ll
+
+  auth-enforcement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for auth bypasses
+        run: |
+          ! grep -r "AUTHORIZER_DISABLED" src/backend/careervp/handlers/
+          ! rg -n "params\\.get\\('user_id'\\)|queryStringParameters.*user_id|_coerce_str\\(payload\\.get\\('user_id'\\)\\)|request\\.user_id" src/backend/careervp/handlers --glob '*.py'
+          ! grep -r "log_event.*True" src/backend/careervp/handlers/
+          ! grep -r "Access-Control-Allow-Origin.*\*" src/backend/careervp/handlers/
