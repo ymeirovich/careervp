@@ -1,6 +1,7 @@
 from aws_cdk import CfnOutput, Duration, RemovalPolicy, aws_apigateway, aws_sqs
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
+from aws_cdk import aws_kms as kms
 from aws_cdk import aws_lambda as _lambda
 from aws_cdk import aws_lambda_event_sources as eventsources
 from aws_cdk import aws_logs as logs
@@ -30,6 +31,7 @@ class ApiConstruct(Construct):
         self.naming = naming
         self.api_db = ApiDbConstruct(self, f"{id_}db", naming=naming)
         self.llm_cache_table = self._build_llm_cache_table(is_production_env)
+        self.logs_kms_key = self._build_logs_kms_key()
         self.rest_api = self._build_api_gw()
 
         # VPR Async Architecture - DLQ first, then Queue (DLQ must exist first)
@@ -55,6 +57,8 @@ class ApiConstruct(Construct):
             self.api_db.logs_bucket,
             self.api_db.artifacts_bucket,
         )
+        self.api_authorizer_func = self._add_api_authorizer_lambda()
+        self.api_authorizer = self._build_api_authorizer(self.api_authorizer_func)
 
         api_resource: aws_apigateway.Resource = self.rest_api.root.add_resource(
             constants.API_ROOT_RESOURCE
@@ -203,6 +207,7 @@ class ApiConstruct(Construct):
         swagger_resource.add_method(
             http_method="GET",
             integration=aws_apigateway.LambdaIntegration(handler=dest_func),
+            authorization_type=aws_apigateway.AuthorizationType.NONE,
         )
         # GET /swagger.css
         swagger_resource_css = rest_api.root.add_resource(
@@ -211,12 +216,14 @@ class ApiConstruct(Construct):
         swagger_resource_css.add_method(
             http_method="GET",
             integration=aws_apigateway.LambdaIntegration(handler=dest_func),
+            authorization_type=aws_apigateway.AuthorizationType.NONE,
         )
         # GET /swagger.js
         swagger_resource_js = rest_api.root.add_resource(constants.SWAGGER_JS_RESOURCE)
         swagger_resource_js.add_method(
             http_method="GET",
             integration=aws_apigateway.LambdaIntegration(handler=dest_func),
+            authorization_type=aws_apigateway.AuthorizationType.NONE,
         )
 
         CfnOutput(
@@ -224,21 +231,63 @@ class ApiConstruct(Construct):
         ).override_logical_id(constants.SWAGGER_URL)
 
     def _build_api_gw(self) -> aws_apigateway.RestApi:
+        access_log_group = logs.LogGroup(
+            self,
+            "ApiGatewayAccessLogGroup",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
         rest_api: aws_apigateway.RestApi = aws_apigateway.RestApi(
             self,
             "service-rest-api",
             rest_api_name=self.naming.api_name(constants.API_FEATURE),
             description="CareerVP API - AI-powered job application assistant",
             deploy_options=aws_apigateway.StageOptions(
-                throttling_rate_limit=2, throttling_burst_limit=10
+                throttling_rate_limit=2,
+                throttling_burst_limit=10,
+                tracing_enabled=True,
+                access_log_destination=aws_apigateway.LogGroupLogDestination(
+                    access_log_group
+                ),
+                access_log_format=aws_apigateway.AccessLogFormat.json_with_standard_fields(
+                    caller=True,
+                    http_method=True,
+                    ip=True,
+                    protocol=True,
+                    request_time=True,
+                    resource_path=True,
+                    response_length=True,
+                    status=True,
+                    user=True,
+                ),
             ),
-            cloud_watch_role=False,
+            cloud_watch_role=True,
         )
 
         CfnOutput(
             self, id=constants.APIGATEWAY, value=rest_api.url
         ).override_logical_id(constants.APIGATEWAY)
         return rest_api
+
+    def _build_logs_kms_key(self) -> kms.Key:
+        return kms.Key(
+            self,
+            "CloudWatchLogsKey",
+            enable_key_rotation=True,
+            removal_policy=RemovalPolicy.RETAIN,
+        )
+
+    def _build_api_authorizer(
+        self, authorizer_lambda: _lambda.Function
+    ) -> aws_apigateway.TokenAuthorizer:
+        return aws_apigateway.TokenAuthorizer(
+            self,
+            "ApiTokenAuthorizer",
+            handler=authorizer_lambda,
+            validation_regex=r"^Bearer [-0-9A-Za-z\\._~\\+/]+=*$",
+            results_cache_ttl=Duration.minutes(5),
+        )
 
     def _build_llm_cache_table(self, is_production_env: bool) -> dynamodb.TableV2:
         table = dynamodb.TableV2(
@@ -625,6 +674,7 @@ class ApiConstruct(Construct):
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
             removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
         )
 
         lambda_function = _lambda.Function(
@@ -666,6 +716,8 @@ class ApiConstruct(Construct):
         api_resource.add_method(
             http_method="POST",
             integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
+            authorizer=self.api_authorizer,
+            authorization_type=aws_apigateway.AuthorizationType.CUSTOM,
         )
         return lambda_function
 
@@ -683,6 +735,7 @@ class ApiConstruct(Construct):
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
             removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
         )
 
         lambda_function = _lambda.Function(
@@ -717,6 +770,8 @@ class ApiConstruct(Construct):
         api_resource.add_method(
             http_method="POST",
             integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
+            authorizer=self.api_authorizer,
+            authorization_type=aws_apigateway.AuthorizationType.CUSTOM,
         )
 
         return lambda_function
@@ -735,6 +790,7 @@ class ApiConstruct(Construct):
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
             removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
         )
 
         lambda_function = _lambda.Function(
@@ -768,19 +824,28 @@ class ApiConstruct(Construct):
         api_resource.add_method(
             http_method="POST",
             integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
+            authorizer=self.api_authorizer,
+            authorization_type=aws_apigateway.AuthorizationType.CUSTOM,
         )
 
         return lambda_function
 
     def _build_vpr_jobs_queue(self, dlq: aws_sqs.Queue) -> aws_sqs.Queue:
         """Build SQS queue for VPR async job processing."""
+        sqs_key = kms.Key(
+            self,
+            "SQSKey",
+            enable_key_rotation=True,
+            removal_policy=RemovalPolicy.RETAIN,
+        )
         queue = aws_sqs.Queue(
             self,
             constants.VPR_JOBS_QUEUE,
             queue_name=self.naming.queue_name(constants.VPR_JOBS_QUEUE),
             visibility_timeout=Duration.seconds(300),  # 5 minutes for worker timeout
             receive_message_wait_time=Duration.seconds(20),  # Long polling
-            encryption=aws_sqs.QueueEncryption.SQS_MANAGED,
+            encryption=aws_sqs.QueueEncryption.KMS,
+            encryption_master_key=sqs_key,
             dead_letter_queue=aws_sqs.DeadLetterQueue(
                 queue=dlq,
                 max_receive_count=3,
@@ -825,6 +890,7 @@ class ApiConstruct(Construct):
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
             removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
         )
 
         lambda_function = _lambda.Function(
@@ -863,6 +929,8 @@ class ApiConstruct(Construct):
         api_resource.add_method(
             http_method="POST",
             integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
+            authorizer=self.api_authorizer,
+            authorization_type=aws_apigateway.AuthorizationType.CUSTOM,
         )
 
         return lambda_function
@@ -883,6 +951,7 @@ class ApiConstruct(Construct):
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
             removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
         )
 
         lambda_function = _lambda.Function(
@@ -920,6 +989,8 @@ class ApiConstruct(Construct):
         api_resource.add_method(
             http_method="GET",
             integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
+            authorizer=self.api_authorizer,
+            authorization_type=aws_apigateway.AuthorizationType.CUSTOM,
         )
 
         return lambda_function
@@ -941,6 +1012,7 @@ class ApiConstruct(Construct):
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
             removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
         )
 
         lambda_function = _lambda.Function(
@@ -997,6 +1069,7 @@ class ApiConstruct(Construct):
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
             removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
         )
         lambda_function = _lambda.Function(
             self,
@@ -1055,6 +1128,7 @@ class ApiConstruct(Construct):
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
             removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
         )
         lambda_function = _lambda.Function(
             self,
@@ -1112,6 +1186,7 @@ class ApiConstruct(Construct):
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
             removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
         )
         lambda_function = _lambda.Function(
             self,
@@ -1168,6 +1243,7 @@ class ApiConstruct(Construct):
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
             removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
         )
         lambda_function = _lambda.Function(
             self,
@@ -1223,6 +1299,7 @@ class ApiConstruct(Construct):
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
             removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
         )
         lambda_function = _lambda.Function(
             self,
@@ -1280,6 +1357,7 @@ class ApiConstruct(Construct):
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
             removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
         )
 
         lambda_function = _lambda.Function(
@@ -1320,12 +1398,22 @@ class ApiConstruct(Construct):
         api_resource.add_method(
             http_method="POST",
             integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
+            authorizer=self.api_authorizer,
+            authorization_type=aws_apigateway.AuthorizationType.CUSTOM,
         )
 
         return lambda_function
 
     def _add_auth_lambda(self) -> _lambda.Function:
         function_name = self.naming.lambda_name("auth-api")
+        log_group = logs.LogGroup(
+            self,
+            "AuthApiLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
         return _lambda.Function(
             self,
             "AuthApiLambda",
@@ -1351,6 +1439,33 @@ class ApiConstruct(Construct):
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=0,
             role=self.lambda_role,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+    def _add_api_authorizer_lambda(self) -> _lambda.Function:
+        function_name = self.naming.lambda_name("api-authorizer")
+        return _lambda.Function(
+            self,
+            "ApiAuthorizerLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.api_gateway_authorizer.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-api-authorizer",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                "JWT_PUBLIC_KEY": ssm.StringParameter.value_for_string_parameter(
+                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-public-key"
+                ),
+            },
+            timeout=Duration.seconds(10),
+            memory_size=256,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            role=self.lambda_role,
             logging_format=_lambda.LoggingFormat.JSON,
             system_log_level_v2=_lambda.SystemLogLevel.INFO,
             architecture=_lambda.Architecture.X86_64,
@@ -1358,6 +1473,14 @@ class ApiConstruct(Construct):
 
     def _add_gap_lambda(self) -> _lambda.Function:
         function_name = self.naming.lambda_name("gap-api")
+        log_group = logs.LogGroup(
+            self,
+            "GapApiLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
         return _lambda.Function(
             self,
             "GapApiLambda",
@@ -1376,6 +1499,7 @@ class ApiConstruct(Construct):
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=0,
             role=self.lambda_role,
+            log_group=log_group,
             logging_format=_lambda.LoggingFormat.JSON,
             system_log_level_v2=_lambda.SystemLogLevel.INFO,
             architecture=_lambda.Architecture.X86_64,
@@ -1383,6 +1507,14 @@ class ApiConstruct(Construct):
 
     def _add_cover_letter_lambda(self) -> _lambda.Function:
         function_name = self.naming.lambda_name("cover-letter-api")
+        log_group = logs.LogGroup(
+            self,
+            "CoverLetterApiLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
         return _lambda.Function(
             self,
             "CoverLetterApiLambda",
@@ -1400,6 +1532,7 @@ class ApiConstruct(Construct):
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=0,
             role=self.lambda_role,
+            log_group=log_group,
             logging_format=_lambda.LoggingFormat.JSON,
             system_log_level_v2=_lambda.SystemLogLevel.INFO,
             architecture=_lambda.Architecture.X86_64,
@@ -1407,6 +1540,14 @@ class ApiConstruct(Construct):
 
     def _add_interview_prep_lambda(self) -> _lambda.Function:
         function_name = self.naming.lambda_name("interview-prep-api")
+        log_group = logs.LogGroup(
+            self,
+            "InterviewPrepApiLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
         return _lambda.Function(
             self,
             "InterviewPrepApiLambda",
@@ -1424,6 +1565,7 @@ class ApiConstruct(Construct):
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=0,
             role=self.lambda_role,
+            log_group=log_group,
             logging_format=_lambda.LoggingFormat.JSON,
             system_log_level_v2=_lambda.SystemLogLevel.INFO,
             architecture=_lambda.Architecture.X86_64,
@@ -1443,9 +1585,16 @@ class ApiConstruct(Construct):
         handler: _lambda.Function,
     ) -> None:
         resource = self._get_or_create_path_resource(path)
+        is_public_route = path.startswith("/auth/") or path == "/health"
         resource.add_method(
             http_method=method,
             integration=aws_apigateway.LambdaIntegration(handler=handler),
+            authorizer=None if is_public_route else self.api_authorizer,
+            authorization_type=(
+                aws_apigateway.AuthorizationType.NONE
+                if is_public_route
+                else aws_apigateway.AuthorizationType.CUSTOM
+            ),
         )
 
     def _add_openapi_contract_routes(self) -> None:

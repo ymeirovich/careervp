@@ -1086,6 +1086,34 @@ result = table.update_item(
     ReturnValues='ALL_NEW',
 )
 ```
+---
+Implemented Step `2.1.2` race-condition fix with atomic status transition.
+
+### What changed
+
+1. `src/backend/careervp/dal/jobs_repository.py`
+- Extended `update_job_status(...)` to accept `expected_current_status`.
+- When provided, DynamoDB `update_item` now includes:
+  - `ConditionExpression='#status = :expected_status'`
+  - `ExpressionAttributeValues[':expected_status'] = expected_current_status`
+- This makes `PENDING -> PROCESSING` transition atomic.
+
+2. `src/backend/careervp/handlers/vpr_worker_handler.py`
+- Updated worker transition call to:
+  - `expected_current_status='PENDING'`
+- Added guard: if conditional update fails, worker logs and returns early (skips duplicate processing).
+
+3. `tests/vpr-async/unit/test_jobs_dal.py`
+- Added a unit test for conditional transition behavior.
+- Updated `MockJobsRepository.update_job_status` to emulate `expected_current_status` semantics.
+
+### Verification run
+
+- `uv run pytest tests/vpr-async/unit/test_jobs_dal.py -q`
+  - Passed: `33 passed`
+- `uv run ruff check src/backend/careervp/dal/jobs_repository.py src/backend/careervp/handlers/vpr_worker_handler.py tests/vpr-async/unit/test_jobs_dal.py`
+  - Passed: `All checks passed`
+---
 
 ### Step 2.1.3: Create VPR Status Handler (Polling Endpoint)
 *(Same as v3.0)*
@@ -1112,16 +1140,57 @@ result = table.update_item(
 ### Step 3.1.1: API Gateway Authorizer Decision + Deployment Gate
 
 **Decision gate (must complete before Step 1.1.2C):**
-1. Confirm API Gateway mode (`REST API` currently in use).
-2. Choose authorizer strategy compatible with current runtime:
-   - Lambda authorizer for existing JWT contract, or
-   - Cognito/User Pool authorizer with explicit token-claim migration plan.
-3. Validate claim contract (`user_id` vs `sub`) and backward compatibility.
-4. Deploy authorizer on protected routes.
-5. Validate that handler auth extraction receives populated authorizer context.
+1. Confirm API Gateway mode (`REST API` currently in use). ✅
+2. Choose authorizer strategy compatible with current runtime. ✅
+   - **Decision:** `Lambda TOKEN authorizer` (keeps existing RS256 JWT contract without Cognito migration).
+3. Validate claim contract (`user_id` vs `sub`) and backward compatibility. ✅
+   - Authorizer context emits both `user_id` and `sub` (same value) and sets `principalId`.
+4. Deploy authorizer on protected routes. ✅
+   - Protected methods use `AuthorizationType=CUSTOM`; `/auth/*`, `/health`, `/swagger*` remain public.
+5. Validate that handler auth extraction receives populated authorizer context. ✅
+   - `auth_utils.extract_user_id()` remains backward compatible via `principalId`.
 
 **Only after this gate passes:**
 - Migrate deferred handlers in Step 1.1.2C to centralized extraction.
+
+---
+Implemented Step 3.1.1 in code and docs with a REST-compatible Lambda authorizer gate.
+
+### What I changed
+- Confirmed current API mode is `AWS::ApiGateway::RestApi` and wired a REST TOKEN authorizer path.
+- Added a new authorizer Lambda that validates existing RS256 access tokens and emits backward-compatible identity context:
+  - `principalId`
+  - `context.user_id`
+  - `context.sub`
+- Attached authorizer to protected routes and kept public routes open (`/auth/*`, `/health`, `/swagger*`).
+
+### Files updated
+- `careervp/infra/careervp/api_construct.py:58`
+- `careervp/infra/careervp/api_construct.py:248`
+- `careervp/infra/careervp/api_construct.py:1387`
+- `careervp/infra/careervp/api_construct.py:1493`
+- `careervp/src/backend/careervp/handlers/api_gateway_authorizer.py:1`
+- `careervp/infra/tests/infrastructure/test_api_construct.py:124`
+- `careervp/src/backend/tests/unit/test_api_gateway_authorizer.py:1`
+- `careervp/docs/refactor2/execution_runbook.md:1140`
+
+### Validation run
+- `cd careervp/src/backend && uv run pytest tests/unit/test_api_gateway_authorizer.py tests/unit/test_auth_utils.py -q`
+  - `9 passed`
+- `cd careervp/infra && uv run pytest tests/infrastructure/test_api_construct.py -q`
+  - `6 passed`
+
+### Gate outcome
+Step 3.1.1 is implemented as:
+- `REST API` confirmed.
+- Strategy chosen: Lambda TOKEN authorizer (no Cognito migration required now).
+- `user_id` vs `sub` compatibility preserved.
+- Protected routes require `CUSTOM` authorization.
+- Handler extraction remains compatible via `principalId` and context keys.
+
+Natural next step:
+1. Deploy CDK (`cd careervp/infra && npx cdk deploy`) and run live auth probes to verify authorizer context in deployed API events.
+---
 
 ### Step 3.1.2: Deploy Async Processing Infrastructure
 
@@ -1140,6 +1209,21 @@ encryption_master_key: kms.Key(self, 'SQSKey',
     removal_policy=RemovalPolicy.RETAIN,
 )
 ```
+---
+Updated Step 3.1.2 in CDK.
+
+### Change made
+- Switched VPR async queue encryption from `SQS_MANAGED` to `KMS_MANAGED`.
+- Added explicit KMS key with rotation + retain policy, and attached it as `encryption_master_key`.
+
+File:
+- `careervp/infra/careervp/api_construct.py:4`
+- `careervp/infra/careervp/api_construct.py:815`
+
+### Verification
+- Ran: `cd careervp/infra && uv run pytest tests/infrastructure/test_api_construct.py -q`
+- Result: `6 passed`
+---
 
 ### Step 3.1.3: Wire New Lambda Functions to API Gateway Routes
 *(Same as v3.0)*
@@ -1151,6 +1235,43 @@ ADD to infrastructure:
 2. API Gateway X-Ray tracing: `tracing_enabled=True`
 3. CloudWatch log group encryption for Lambda functions
 
+---
+Implemented Step 3.1.4 in infrastructure.
+
+### Changes made
+1. API Gateway access logs enabled
+- `cloud_watch_role=True`
+- Stage access log destination configured to a CloudWatch Log Group
+- JSON access log format enabled
+
+File: `careervp/infra/careervp/api_construct.py:233`
+
+2. API Gateway X-Ray tracing enabled
+- `tracing_enabled=True` in stage deploy options
+
+File: `careervp/infra/careervp/api_construct.py:249`
+
+3. CloudWatch log group encryption for Lambda functions
+- Added a shared KMS key for logs with rotation + retain:
+  - `CloudWatchLogsKey`
+- Applied `encryption_key=self.logs_kms_key` to all explicit Lambda log groups (including auth/gap/cover-letter/interview-prep APIs and existing worker/API lambdas)
+- Also encrypted API Gateway access log group
+
+Files:
+- `careervp/infra/careervp/api_construct.py:34`
+- `careervp/infra/careervp/api_construct.py:273`
+- `careervp/infra/careervp/api_construct.py:1407`
+
+### Validation
+Ran infra tests:
+- `cd careervp/infra && uv run pytest tests/infrastructure/test_api_construct.py -q`
+- Result: `8 passed`
+
+Also added assertions for this gate:
+- API Gateway stage has tracing + access log settings
+- Lambda log groups include KMS encryption
+
+File: `careervp/infra/tests/infrastructure/test_api_construct.py:146`
 ---
 
 # PART 4: LIVE TESTS + COMPLETION (Phase 4)
