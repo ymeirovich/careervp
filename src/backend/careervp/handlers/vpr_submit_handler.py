@@ -117,17 +117,17 @@ def _extract_authenticated_user_id(event: dict[str, Any]) -> str | None:
 
 
 def _get_sqs_queue_url() -> str:
-    """Get SQS queue URL from environment or construct from name."""
-    queue_name = os.environ.get('SQS_QUEUE_NAME', VPR_JOBS_QUEUE_NAME)
+    """Resolve SQS queue URL deterministically from env or queue name lookup."""
     queue_url = os.environ.get('SQS_QUEUE_URL')
-
     if queue_url:
         return queue_url
 
-    # Construct URL from name
-    region = os.environ.get('AWS_REGION', 'us-east-1')
-    account_id = os.environ.get('AWS_ACCOUNT_ID', '000000000000')
-    return f'https://sqs.{region}.amazonaws.com/{account_id}/{queue_name}'
+    queue_name = os.environ.get('SQS_QUEUE_NAME', VPR_JOBS_QUEUE_NAME)
+    response = sqs.get_queue_url(QueueName=queue_name)
+    resolved_url = response.get('QueueUrl')
+    if not isinstance(resolved_url, str) or not resolved_url:
+        raise RuntimeError(f'Unable to resolve SQS queue URL for queue {queue_name}')
+    return resolved_url
 
 
 def _build_idempotency_key(user_id: str, application_id: str) -> str:
