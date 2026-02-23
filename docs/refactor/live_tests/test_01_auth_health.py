@@ -11,7 +11,7 @@ from typing import Dict, Any
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from conftest import (
+from .conftest import (
     API_BASE,
     TEST_USER_ID,
     load_test_ids,

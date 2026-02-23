@@ -13,13 +13,16 @@ No hardcoded production default URL.
 
 import os
 import sys
-import boto3
-import botocore.exceptions
 from typing import Optional
 
+import boto3
+import botocore.exceptions
 
-# Default stack name - can be overridden via ENV
-STACK_NAME = os.environ.get("STACK_NAME", "careervp-api")
+
+# Default stack name - can be overridden via ENV.
+# Keep common stack names for local runs where STACK_NAME is not set.
+STACK_NAME = os.environ.get("STACK_NAME", "CareerVpCrudDev")
+FALLBACK_STACK_NAMES = ("CareerVpCrudDev", "careervp-api")
 
 
 def get_api_base_from_environment() -> Optional[str]:
@@ -28,6 +31,34 @@ def get_api_base_from_environment() -> Optional[str]:
     if api_base:
         return api_base.rstrip("/")
     return None
+
+
+def _extract_api_base_from_outputs(outputs: list[dict[str, str]]) -> Optional[str]:
+    """Extract API base URL from CloudFormation outputs."""
+    # Look for ApiGateway first (REST API), then Apigateway (HTTP API)
+    for output_key in ["ApiGateway", "Apigateway", "ApiUrl", "Endpoint"]:
+        for output in outputs:
+            if output.get("OutputKey") == output_key:
+                url = output.get("OutputValue")
+                if url:
+                    return url.rstrip("/")
+
+    # Also check for any output containing API Gateway host pattern
+    for output in outputs:
+        url = output.get("OutputValue", "")
+        if "execute-api" in url:
+            return url.rstrip("/")
+
+    return None
+
+
+def _candidate_stack_names() -> list[str]:
+    """Build ordered unique stack-name candidates for lookup."""
+    candidates: list[str] = []
+    for name in (STACK_NAME, *FALLBACK_STACK_NAMES):
+        if name and name not in candidates:
+            candidates.append(name)
+    return candidates
 
 
 def get_api_base_from_cloudformation(stack_name: str = STACK_NAME) -> Optional[str]:
@@ -47,34 +78,38 @@ def get_api_base_from_cloudformation(stack_name: str = STACK_NAME) -> Optional[s
     Raises:
         RuntimeError: If AWS credentials are missing or stack doesn't exist
     """
-    try:
-        client = boto3.client("cloudformation", region_name="us-east-1")
-        response = client.describe_stacks(StackName=stack_name)
-    except botocore.exceptions.BotoCoreError as e:
-        raise RuntimeError(
-            f"Failed to describe CloudFormation stack '{stack_name}': {e}"
-        ) from e
+    client = boto3.client("cloudformation", region_name="us-east-1")
+    # Preserve explicit caller arg first, then try common fallbacks.
+    stack_candidates = [stack_name, *_candidate_stack_names()]
+    deduped_candidates: list[str] = []
+    for candidate in stack_candidates:
+        if candidate and candidate not in deduped_candidates:
+            deduped_candidates.append(candidate)
 
-    stacks = response.get("Stacks", [])
-    if not stacks:
-        raise RuntimeError(f"Stack '{stack_name}' not found")
+    for candidate in deduped_candidates:
+        try:
+            response = client.describe_stacks(StackName=candidate)
+        except botocore.exceptions.ClientError as e:
+            code = e.response.get("Error", {}).get("Code", "")
+            if code == "ValidationError":
+                # Stack name not found. Continue to next candidate.
+                continue
+            raise RuntimeError(
+                f"Failed to describe CloudFormation stack '{candidate}': {e}"
+            ) from e
+        except botocore.exceptions.BotoCoreError as e:
+            raise RuntimeError(
+                f"Failed to describe CloudFormation stack '{candidate}': {e}"
+            ) from e
 
-    stack = stacks[0]
-    outputs = stack.get("Outputs", [])
+        stacks = response.get("Stacks", [])
+        if not stacks:
+            continue
 
-    # Look for ApiGateway first (REST API), then Apigateway (HTTP API)
-    for output_key in ["ApiGateway", "Apigateway", "ApiUrl", "Endpoint"]:
-        for output in outputs:
-            if output.get("OutputKey") == output_key:
-                url = output.get("OutputValue")
-                if url:
-                    return url.rstrip("/")
-
-    # Also check for any output containing "execute-api" (API Gateway URL pattern)
-    for output in outputs:
-        url = output.get("OutputValue", "")
-        if "execute-api" in url:
-            return url.rstrip("/")
+        outputs = stacks[0].get("Outputs", [])
+        api_base = _extract_api_base_from_outputs(outputs)
+        if api_base:
+            return api_base
 
     return None
 

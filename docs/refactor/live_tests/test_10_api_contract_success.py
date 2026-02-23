@@ -16,8 +16,8 @@ import requests
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from conftest import API_BASE, save_test_ids
-from test_01_auth_health import test_data
+from .conftest import API_BASE, save_test_ids
+from .test_01_auth_health import test_data
 
 
 DOCS_ROOT = Path(__file__).resolve().parents[2]  # docs/

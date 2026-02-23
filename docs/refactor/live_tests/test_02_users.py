@@ -11,7 +11,7 @@ from typing import Any
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from conftest import (
+from .conftest import (
     API_BASE,
     get_auth_headers,
     SAMPLE_CV_PATH,
@@ -20,7 +20,7 @@ from conftest import (
 )
 
 # Import test data from auth tests
-from test_01_auth_health import test_data
+from .test_01_auth_health import test_data
 
 
 def print_response(test_name: str, endpoint: str, status_code: int, response_data: Any):
