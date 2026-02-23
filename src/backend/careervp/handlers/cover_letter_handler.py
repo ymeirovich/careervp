@@ -178,19 +178,22 @@ def _extract_cover_letter_id(event: dict[str, Any]) -> str | None:
 
 def _get_cover_letter_item(user_id: str, cover_letter_id: str) -> dict[str, Any] | None:
     table = CVTable().table
-    get_response = table.get_item(Key={'pk': user_id, 'sk': cover_letter_id})
-    item = get_response.get('Item') if isinstance(get_response, dict) else None
-    if isinstance(item, dict):
-        return item
-
+    # Query-only lookup to avoid requiring dynamodb:GetItem IAM permission.
     query_response = table.query(
         KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with(COVER_LETTER_SORT_KEY_PREFIX),
         FilterExpression=Attr('sk').contains(cover_letter_id),
-        Limit=1,
+        Limit=25,
     )
     query_items = query_response.get('Items') if isinstance(query_response, dict) else None
-    if isinstance(query_items, list) and query_items and isinstance(query_items[0], dict):
-        return query_items[0]
+    if isinstance(query_items, list):
+        for item in query_items:
+            if not isinstance(item, dict):
+                continue
+            sk_value = str(item.get('sk') or '')
+            if sk_value.endswith(cover_letter_id) or sk_value == cover_letter_id:
+                return item
+        if query_items and isinstance(query_items[0], dict):
+            return query_items[0]
     return None
 
 
