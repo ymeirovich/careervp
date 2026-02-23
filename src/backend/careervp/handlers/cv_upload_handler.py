@@ -53,7 +53,7 @@ def _get_auth_service() -> AuthService:
 
 @app.post('/users/me/cv')
 @tracer.capture_method(capture_response=False)
-def upload_cv() -> Response[str]:
+def upload_cv() -> Response[str]:  # noqa: C901
     """
     Handle CV upload and parsing request.
 
@@ -387,12 +387,12 @@ def _build_openapi_parsed_data(response: CVParseResponse) -> dict[str, Any]:
                 skills.append(skill_name)
 
     education: list[dict[str, Any]] = []
-    for item in user_cv.education:
-        year = item.graduation_date or item.end_date or item.dates or ''
+    for education_item in user_cv.education:
+        year = education_item.graduation_date or education_item.end_date or education_item.dates or ''
         education.append(
             {
-                'degree': item.degree,
-                'institution': item.institution,
+                'degree': education_item.degree,
+                'institution': education_item.institution,
                 'year': year,
             }
         )

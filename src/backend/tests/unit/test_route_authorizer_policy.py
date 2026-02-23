@@ -10,7 +10,6 @@ Tests:
 """
 
 import json
-import sys
 from pathlib import Path
 
 import pytest
@@ -150,36 +149,8 @@ class TestApiConstructRouteMapping:
         assert ('POST', '/auth/register') in public_routes
         assert ('POST', '/auth/login') in public_routes
 
-    def test_all_routes_accounted_for(self):
-        """Verify route counts match.
-
-        - Total routes in payloads: 27
-        - Public routes (in spec): 3
-        - Protected routes (in spec): 22
-        - Gap: 2 routes not in spec (should be in spec)
-        """
-        assert len(EXPECTED_PUBLIC_ROUTES) == 3
-        # 27 total - 3 public = 24, but spec only lists 22 protected
-
-
-class TestApiConstructRouteMapping:
-    """Tests for api_construct.py route mapping."""
-
-    def test_public_routes_defined(self):
-        """Verify api_construct defines correct public routes."""
-        # This tests the expected public routes based on the spec
-        # The actual implementation is tested via CDK synthesis
-
-        public_routes = EXPECTED_PUBLIC_ROUTES
-        assert ('GET', '/health') in public_routes
-        assert ('POST', '/auth/register') in public_routes
-        assert ('POST', '/auth/login') in public_routes
-
     def test_no_public_routes_protected(self):
         """Ensure public routes are not incorrectly marked as protected."""
-        # Verify none of the public routes would be protected
-        protected_only_routes = {route for route in EXPECTED_PUBLIC_ROUTES if route[0] != 'GET' or route[1] != '/health'}
-
         # All three should be in the public set
         assert ('GET', '/health') in EXPECTED_PUBLIC_ROUTES
         assert ('POST', '/auth/register') in EXPECTED_PUBLIC_ROUTES

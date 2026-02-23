@@ -10,11 +10,7 @@ Tests the smoke script's ability to:
 import json
 import os
 import subprocess
-import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 # Paths
 SCRIPT_DIR = Path(__file__).parent.parent.parent.parent.parent / 'docs' / 'refactor3' / 'scripts'

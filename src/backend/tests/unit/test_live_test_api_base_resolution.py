@@ -4,6 +4,7 @@ Unit tests for live_test_api_base_resolution module.
 Tests the resolve_api_base helper used by run_all_tests.py and conftest.py.
 """
 
+import importlib.util
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -15,11 +16,16 @@ import pytest
 SCRIPTS_DIR = Path(__file__).parent.parent.parent.parent.parent / 'docs' / 'refactor3' / 'scripts'
 sys.path.insert(0, str(SCRIPTS_DIR))
 
-from resolve_api_base import (
-    get_api_base_from_cloudformation,
-    get_api_base_from_environment,
-    resolve_api_base,
-)
+_MODULE_PATH = SCRIPTS_DIR / 'resolve_api_base.py'
+_SPEC = importlib.util.spec_from_file_location('resolve_api_base', _MODULE_PATH)
+if _SPEC is None or _SPEC.loader is None:
+    raise RuntimeError(f'Unable to load module from {_MODULE_PATH}')
+_MODULE = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(_MODULE)
+
+get_api_base_from_cloudformation = _MODULE.get_api_base_from_cloudformation
+get_api_base_from_environment = _MODULE.get_api_base_from_environment
+resolve_api_base = _MODULE.resolve_api_base
 
 
 class TestGetApiBaseFromEnvironment:
