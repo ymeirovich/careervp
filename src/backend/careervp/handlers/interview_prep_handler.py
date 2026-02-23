@@ -15,7 +15,7 @@ from careervp.dal.cv_dal import CVTable
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers
 from careervp.handlers.utils.observability import logger, metrics, tracer
-from careervp.models.interview_prep import InterviewPrepRequest
+from careervp.models.api_models import InterviewPrepRequest
 from careervp.models.result import Result, ResultCode
 
 INTERVIEW_PREP_SORT_KEY_PREFIX = 'ARTIFACT#INTERVIEW_PREP#'

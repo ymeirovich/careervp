@@ -9,7 +9,7 @@ from decimal import Decimal
 from http import HTTPStatus
 from typing import Any
 
-from boto3.dynamodb.conditions import Attr, Key
+from boto3.dynamodb.conditions import Key
 from pydantic import ValidationError
 
 from careervp.dal.cv_dal import CVTable
@@ -57,7 +57,15 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
         return _response(HTTPStatus.OK, {'success': True}, headers)
 
     if method == 'GET' and _is_tailoring_status_path(path):
-        return get_tailored_cv_status(event)
+        try:
+            return get_tailored_cv_status(event)
+        except Exception:  # noqa: BLE001
+            logger.exception('Error in get_tailored_cv_status')
+            return _response(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                {'success': False, 'message': 'Internal server error'},
+                headers,
+            )
 
     if method == 'GET' and path == '/users/me/tailored-cvs':
         return list_tailored_cvs(event)
@@ -122,16 +130,33 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
             headers,
         )
 
-    if {'cv_id', 'job_id', 'vpr_id'}.issubset(body):
+    # Detect which API flow is being used
+    using_new_api = {'cv_id', 'job_id', 'vpr_id'}.issubset(body)
+    if using_new_api:
         return _handle_openapi_async_generate(event, body, headers, user_id)
 
     cv_id = body.get('cv_id')
+    job_id = body.get('job_id')
     job_description = body.get('job_description')
+
+    # If using new API flow, fetch job_description from job_id
+    if using_new_api and job_description is None and job_id:
+        try:
+            cv_table = CVTable()
+            response = cv_table.table.get_item(
+                Key={'userId': user_id, 'applicationId': f'JOB#{job_id}'}
+            )
+            if 'Item' in response:
+                job_description = response['Item'].get('job_description') or response['Item'].get('description')
+        except Exception as exc:  # noqa: BLE001
+            logger.warning('Failed to fetch job for new API flow', job_id=job_id, error=str(exc))
 
     validation_errors = []
     if not cv_id:
         validation_errors.append({'field': 'cv_id', 'message': 'cv_id is required'})
-    if job_description is None:
+
+    # Only require job_description for legacy flow (not new API flow)
+    if not using_new_api and job_description is None:
         validation_errors.append({'field': 'job_description', 'message': 'job_description is required'})
 
     if job_description is not None:
@@ -416,19 +441,16 @@ def _extract_cv_tailoring_id(event: dict[str, Any]) -> str | None:
 
 def _get_tailored_cv_item(user_id: str, cv_tailoring_id: str) -> dict[str, Any] | None:
     table = CVTable().table
-    key_response = table.get_item(Key={'pk': user_id, 'sk': cv_tailoring_id})
-    item = key_response.get('Item') if isinstance(key_response, dict) else None
-    if isinstance(item, dict):
-        return item
 
-    query_response = table.query(
-        KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with('TAILORED_CV#'),
-        FilterExpression=Attr('sk').contains(cv_tailoring_id),
-        Limit=1,
-    )
-    query_items = query_response.get('Items') if isinstance(query_response, dict) else []
-    if isinstance(query_items, list) and query_items and isinstance(query_items[0], dict):
-        return query_items[0]
+    # Try direct get_item first
+    try:
+        key_response = table.get_item(Key={'pk': user_id, 'sk': cv_tailoring_id})
+        item = key_response.get('Item') if isinstance(key_response, dict) else None
+        if isinstance(item, dict):
+            return item
+    except Exception:  # noqa: BLE001
+        pass
+
     return None
 
 

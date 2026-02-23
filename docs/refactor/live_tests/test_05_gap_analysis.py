@@ -139,10 +139,7 @@ class TestGapAnalysisEndpoints:
                     }
                 )
 
-        payload = {
-            "job_id": job_id,
-            "responses": responses
-        }
+        payload = {"job_id": job_id, "responses": responses}
 
         response = requests.post(url, json=payload, headers=headers, timeout=30)
 

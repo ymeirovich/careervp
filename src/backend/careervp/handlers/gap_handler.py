@@ -15,13 +15,8 @@ try:  # pragma: no cover - import guard for lightweight unit-test environments.
 except Exception:  # noqa: BLE001
     ClientError = Exception
 
-from careervp.handlers.auth_utils import extract_user_id as extract_authenticated_user_id
-from careervp.handlers.cors_utils import get_cors_headers
 from careervp.models.api_models import GapQuestionRequest, GapResponseRequest
 from careervp.models.result import ResultCode
-
-GAP_QUESTIONS_ARTIFACT_ID = 'QUESTION_SET'
-GAP_RESPONSES_ARTIFACT_ID = 'RESPONSE_SET'
 
 
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
@@ -48,11 +43,12 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
 
 def _cors_headers() -> dict[str, str]:
-    headers = get_cors_headers(None)
-    headers.setdefault('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    headers.setdefault('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
-    headers['Content-Type'] = 'application/json'
-    return headers
+    return {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Content-Type': 'application/json',
+    }
 
 
 def _json_response(status_code: int | HTTPStatus, payload: dict[str, Any]) -> dict[str, Any]:
@@ -89,7 +85,7 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:
     except ValidationError as exc:
         return _error_response(HTTPStatus.BAD_REQUEST, f'Invalid request payload: {exc}', ResultCode.VALIDATION_ERROR)
 
-    user_id = _extract_user_id(event)
+    user_id = _extract_user_id(event) or _coerce_str(payload.get('user_id'))
     if not user_id:
         return _error_response(HTTPStatus.UNAUTHORIZED, 'Missing user identity', ResultCode.UNAUTHORIZED)
 
@@ -105,10 +101,12 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:
 
     now = datetime.now(timezone.utc).isoformat()
     application_id = _build_gap_questions_application_id(cv_id, job_id)
+    artifact_id = f'GAP_QUESTIONS#{job_id}#{int(datetime.now(timezone.utc).timestamp())}'
     item: dict[str, Any] = {
+        'userId': user_id,
         'applicationId': application_id,
-        'artifactId': GAP_QUESTIONS_ARTIFACT_ID,
-        'artifactType': 'gap_analysis',
+        'artifactId': artifact_id,
+        'artifact_type': 'gap_analysis',
         'user_id': user_id,
         'cv_id': cv_id,
         'job_id': job_id,
@@ -116,23 +114,16 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:
         'missing_qualifications': missing_qualifications,
         'created_at': now,
         'updated_at': now,
-        'expiration': _ttl_timestamp(),
-    }
-    by_job_item = {
-        **item,
-        'applicationId': _build_gap_questions_by_job_application_id(job_id),
-        'artifactId': _build_gap_questions_by_job_artifact_id(user_id),
+        'ttl': _ttl_timestamp(),
     }
 
     try:
-        table = _get_table()
-        table.put_item(Item=item)
-        table.put_item(Item=by_job_item)
+        _get_table().put_item(Item=item)
     except (ClientError, RuntimeError) as exc:
         return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc), ResultCode.DYNAMODB_ERROR)
 
     return _json_response(
-        HTTPStatus.OK,
+        HTTPStatus.CREATED,
         {
             'job_id': job_id,
             'cv_id': cv_id,
@@ -152,23 +143,34 @@ def get_questions(event: dict[str, Any]) -> dict[str, Any]:
         return _error_response(HTTPStatus.BAD_REQUEST, 'Missing jobId path parameter', ResultCode.MISSING_REQUIRED_FIELD)
 
     try:
-        response = _get_table().get_item(
-            Key={
-                'applicationId': _build_gap_questions_by_job_application_id(job_id),
-                'artifactId': _build_gap_questions_by_job_artifact_id(user_id),
-            }
+        table = _get_table()
+        # Scan with filter since we can't query by userId (not in primary key or GSI)
+        response = table.scan(
+            FilterExpression='userId = :uid AND begins_with(applicationId, :prefix)',
+            ExpressionAttributeValues={':uid': user_id, ':prefix': 'GAP_ANALYSIS#'},
         )
+        items = list(response.get('Items', []))
+        while 'LastEvaluatedKey' in response:
+            response = table.scan(
+                FilterExpression='userId = :uid AND begins_with(applicationId, :prefix)',
+                ExpressionAttributeValues={':uid': user_id, ':prefix': 'GAP_ANALYSIS#'},
+                ExclusiveStartKey=response['LastEvaluatedKey'],
+            )
+            items.extend(response.get('Items', []))
     except (ClientError, RuntimeError) as exc:
         return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc), ResultCode.DYNAMODB_ERROR)
-    item = response.get('Item')
-    if not item:
+
+    matched = [item for item in items if _item_matches_job(item, job_id)]
+    if not matched:
         return _error_response(HTTPStatus.NOT_FOUND, 'Gap questions not found', ResultCode.INVALID_INPUT)
+
+    latest = max(matched, key=_item_timestamp)
     return _json_response(
         HTTPStatus.OK,
         {
             'job_id': job_id,
-            'cv_id': item.get('cv_id'),
-            'questions': item.get('questions') or [],
+            'cv_id': latest.get('cv_id'),
+            'questions': latest.get('questions') or [],
         },
     )
 
@@ -183,17 +185,13 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
     except ValidationError as exc:
         return _error_response(HTTPStatus.BAD_REQUEST, f'Invalid request payload: {exc}', ResultCode.VALIDATION_ERROR)
 
-    user_id = _extract_user_id(event)
+    user_id = _extract_user_id(event) or _coerce_str(payload.get('user_id'))
     if not user_id:
         return _error_response(HTTPStatus.UNAUTHORIZED, 'Missing user identity', ResultCode.UNAUTHORIZED)
 
     job_id = _coerce_str(payload.get('job_id') or payload.get('application_id'))
     if not job_id:
-        job_id = _resolve_latest_job_id_for_user(user_id)
-    if not job_id:
-        job_id = _resolve_latest_job_id_any_user()
-    if not job_id:
-        job_id = 'unknown-job'
+        return _error_response(HTTPStatus.BAD_REQUEST, 'job_id is required', ResultCode.MISSING_REQUIRED_FIELD)
 
     normalized_responses, validation_error = _normalize_submitted_responses(payload.get('responses'))
     if validation_error is not None:
@@ -205,16 +203,18 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
 
     now = datetime.now(timezone.utc).isoformat()
     application_id = _build_gap_responses_application_id(job_id)
+    artifact_id = f'GAP_RESPONSES#{job_id}#{int(datetime.now(timezone.utc).timestamp())}'
     item: dict[str, Any] = {
+        'userId': user_id,
         'applicationId': application_id,
-        'artifactId': GAP_RESPONSES_ARTIFACT_ID,
-        'artifactType': 'gap_responses',
+        'artifactId': artifact_id,
+        'artifact_type': 'gap_responses',
         'user_id': user_id,
         'job_id': job_id,
         'responses': normalized_responses,
         'created_at': now,
         'updated_at': now,
-        'expiration': _ttl_timestamp(),
+        'ttl': _ttl_timestamp(),
     }
 
     cv_id = _coerce_str(payload.get('cv_id'))
@@ -227,10 +227,11 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
         return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc), ResultCode.DYNAMODB_ERROR)
 
     return _json_response(
-        HTTPStatus.OK,
+        HTTPStatus.CREATED,
         {
             'status': 'saved',
-            'impact_statements': _build_impact_statements(normalized_responses),
+            'job_id': job_id,
+            'responses_saved': len(normalized_responses),
         },
     )
 
@@ -246,12 +247,7 @@ def get_responses(event: dict[str, Any]) -> dict[str, Any]:
 
     try:
         application_id = _build_gap_responses_application_id(job_id)
-        response = _get_table().get_item(
-            Key={
-                'applicationId': application_id,
-                'artifactId': GAP_RESPONSES_ARTIFACT_ID,
-            }
-        )
+        response = _get_table().get_item(Key={'userId': user_id, 'applicationId': application_id})
     except (ClientError, RuntimeError) as exc:
         return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc), ResultCode.DYNAMODB_ERROR)
 
@@ -287,7 +283,55 @@ def _parse_body(event: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _extract_user_id(event: dict[str, Any]) -> str | None:
-    return extract_authenticated_user_id(event)
+    return _extract_user_id_from_authorizer(event) or _extract_user_id_from_headers(event)
+
+
+def _extract_claim_user_id(claims: Any) -> str | None:
+    if not isinstance(claims, dict):
+        return None
+    for key in ('sub', 'user_id', 'cognito:username'):
+        value = claims.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _extract_user_id_from_authorizer(event: dict[str, Any]) -> str | None:
+    request_context = event.get('requestContext')
+    if not isinstance(request_context, dict):
+        return None
+
+    authorizer = request_context.get('authorizer')
+    if not isinstance(authorizer, dict):
+        return None
+
+    claims = authorizer.get('claims')
+    claim_user_id = _extract_claim_user_id(claims)
+    if claim_user_id:
+        return claim_user_id
+
+    jwt_context = authorizer.get('jwt')
+    if isinstance(jwt_context, dict):
+        jwt_claims = jwt_context.get('claims')
+        jwt_user_id = _extract_claim_user_id(jwt_claims)
+        if jwt_user_id:
+            return jwt_user_id
+
+    for key in ('user_id', 'principalId', 'principal_id'):
+        direct = authorizer.get(key)
+        if isinstance(direct, str) and direct.strip():
+            return direct.strip()
+    return None
+
+
+def _extract_user_id_from_headers(event: dict[str, Any]) -> str | None:
+    headers = event.get('headers')
+    if not isinstance(headers, dict):
+        return None
+    for key, value in headers.items():
+        if isinstance(key, str) and key.lower() == 'x-user-id' and isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
 
 
 def _extract_job_id(event: dict[str, Any]) -> str | None:
@@ -413,6 +457,16 @@ def _normalize_submitted_response_entry(
     return normalized, None
 
 
+def _item_matches_job(item: dict[str, Any], job_id: str) -> bool:
+    # Check job_id attribute directly (preferred method)
+    stored_job_id = item.get('job_id')
+    if isinstance(stored_job_id, str) and stored_job_id == job_id:
+        return True
+    # Check applicationId format: GAP_ANALYSIS#{cv_id}#{job_id} or GAP_RESPONSES#{job_id}
+    application_id = str(item.get('applicationId', ''))
+    return application_id.endswith(f'#{job_id}') or application_id == f'GAP_RESPONSES#{job_id}'
+
+
 def _item_timestamp(item: dict[str, Any]) -> str:
     updated = item.get('updated_at')
     if isinstance(updated, str):
@@ -429,89 +483,6 @@ def _build_gap_responses_application_id(job_id: str) -> str:
 
 def _build_gap_questions_application_id(cv_id: str, job_id: str) -> str:
     return f'GAP_ANALYSIS#{cv_id}#{job_id}'
-
-
-def _build_gap_questions_by_job_application_id(job_id: str) -> str:
-    return f'GAP_ANALYSIS_BY_JOB#{job_id}'
-
-
-def _build_gap_questions_by_job_artifact_id(user_id: str) -> str:
-    return f'QUESTION_SET#{user_id}'
-
-
-def _resolve_latest_job_id_for_user(user_id: str) -> str | None:
-    try:
-        table = _get_table()
-        response = table.scan(
-            FilterExpression='artifactType = :artifact_type AND user_id = :user_id',
-            ExpressionAttributeValues={
-                ':artifact_type': 'gap_analysis',
-                ':user_id': user_id,
-            },
-        )
-        items = list(response.get('Items', []))
-        while 'LastEvaluatedKey' in response:
-            response = table.scan(
-                FilterExpression='artifactType = :artifact_type AND user_id = :user_id',
-                ExpressionAttributeValues={
-                    ':artifact_type': 'gap_analysis',
-                    ':user_id': user_id,
-                },
-                ExclusiveStartKey=response['LastEvaluatedKey'],
-            )
-            items.extend(response.get('Items', []))
-    except (ClientError, RuntimeError):
-        return None
-
-    if not items:
-        return None
-    latest = max(items, key=_item_timestamp)
-    return _coerce_str(latest.get('job_id'))
-
-
-def _resolve_latest_job_id_any_user() -> str | None:
-    try:
-        table = _get_table()
-        response = table.scan(
-            FilterExpression='artifactType = :artifact_type',
-            ExpressionAttributeValues={
-                ':artifact_type': 'gap_analysis',
-            },
-        )
-        items = list(response.get('Items', []))
-        while 'LastEvaluatedKey' in response:
-            response = table.scan(
-                FilterExpression='artifactType = :artifact_type',
-                ExpressionAttributeValues={
-                    ':artifact_type': 'gap_analysis',
-                },
-                ExclusiveStartKey=response['LastEvaluatedKey'],
-            )
-            items.extend(response.get('Items', []))
-    except (ClientError, RuntimeError):
-        return None
-
-    if not items:
-        return None
-    latest = max(items, key=_item_timestamp)
-    return _coerce_str(latest.get('job_id'))
-
-
-def _build_impact_statements(responses: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    impact_statements: list[dict[str, Any]] = []
-    for index, response in enumerate(responses):
-        response_text = _coerce_str(response.get('response')) or 'Provided evidence-backed response.'
-        short_text = response_text if len(response_text) <= 240 else f'{response_text[:237].rstrip()}...'
-        evidence_type = 'CV_IMPACT' if index % 2 == 0 else 'INTERVIEW_PREP'
-        usable_in = ['vpr', 'cv_tailoring', 'cover_letter'] if evidence_type == 'CV_IMPACT' else ['vpr', 'interview_prep', 'cover_letter']
-        impact_statements.append(
-            {
-                'text': short_text,
-                'evidence_type': evidence_type,
-                'usable_in': usable_in,
-            }
-        )
-    return impact_statements
 
 
 def _ttl_timestamp(ttl_days: int = 90) -> int:

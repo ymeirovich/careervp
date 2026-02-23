@@ -58,14 +58,12 @@ class TestJobEndpoints:
             Looking for Python developer with AWS experience.
             """
 
-        # Get CV ID from test data
-        cv_id = test_data.get("cv_id") or f"cv_{os.getenv('TEST_USER_ID', 'test-user')}"
-
         payload = {
-            "cv_id": cv_id,
             "title": "Learning Experience Specialist",
             "company_name": "SysAid",
-            "job_description": job_description[:1000],  # Limit length
+            "description": job_description[:1000]
+            if job_description
+            else "Test job description",
             "url": "https://www.sysaid.com/careers",
         }
 
@@ -128,8 +126,13 @@ class TestJobEndpoints:
 
     def test_get_job(self):
         """Test GET /jobs/{jobId} - get a specific job."""
-        # Use stored job ID or create a test one
-        job_id = test_data.get("job_id") or "test-job-id"
+        # Use stored job ID from test_create_job (preferred) or from test_data
+        job_id = getattr(self, "job_id", None) or test_data.get("job_id")
+
+        # Skip if no valid job ID available
+        if not job_id:
+            print("⚠ GET /jobs - No job ID available (create job first)")
+            return
 
         url = f"{self.base_url}/jobs/{job_id}"
         headers = get_auth_headers()

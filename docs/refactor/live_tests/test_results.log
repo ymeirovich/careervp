@@ -26,13 +26,13 @@ test_01_auth_health.py::TestAuthEndpoints::test_auth_register
   "endpoint": "POST /auth/register",
   "status_code": 201,
   "response": {
-    "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiZjBhZTcyOTItZmQwZS00ZDM2LThlZmYtZGM1YTYzOWM2N2EwIiwiZW1haWwiOiJ0ZXN0XzE3NzE1MDA0NDdAZXhhbXBsZS5jb20iLCJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiaWF0IjoxNzcxNTAwNDU0LCJleHAiOjE3NzE1MDQwNTR9.YixCB1idN5TbIbtsM9_KFy6Eoe4m-QnZQRNxXyFONiaBP9PAr5oCVHewkqqdQ6ZBDt5OUyAURsqYHiR2Lt307rf7CXpCQSSgjdjJtNxf6g2jlGeZ5gFL5Wh-4XT5rnJN2UF6BiNJDcVEqB1Rp5JuKfFNWU_6fJ2X5AKSQF6H5jB6ET0ROVIEq7MjD0xJiILy0lxZydJHV2Al8dXNWlugCrURKgDV6Zm9rlBv2KS1o_37JIlHZIDuWk78NMySjoALhwN4evfAh-bNijK0D_xt96k11jC63_RMSMXsxS9DGKloo_S7fhlGManrZ4sXjj_JbeXXBogbbuPnWQ8ctJD5HQ",
-    "refresh_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiZjBhZTcyOTItZmQwZS00ZDM2LThlZmYtZGM1YTYzOWM2N2EwIiwiZW1haWwiOiJ0ZXN0XzE3NzE1MDA0NDdAZXhhbXBsZS5jb20iLCJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImlhdCI6MTc3MTUwMDQ1NCwiZXhwIjoxNzcyMTA1MjU0fQ.PePfhLEas0HsRxtsnaddprqoLM5uUs7fVyPYtWrRgwQsOsWz67PLiMaDp7DgFFB2JhOuqXSYUrJnxcpOou3ztmpMk7GgaF2YveZ-tM_x7WBohXkbPwbjlvryCVL9uyDTJKM69NxOHs1LETozMmJlJ0jftyjAoMxQ09mg-93aDJHIuTOfsS9A1KpQrmyeBdUQvwSAY_26aiDnfYiB6rFCwq5ATHYeUAlEaXcNMM9CzzFPdH0SHdn8yPMqRbqYHXiOfxnJvfnTbtCpBTGCwWMt0UYVPbDUc_YuB80_Xd16nI7eC5g6EOVf-RQDsjxrD_vBMnXu01kkPV7bAQGLL8T8wg",
+    "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNGFhMjhmOTUtMjBiYS00ODRhLWFkY2UtM2U1ZTNkZDNlMTkzIiwiZW1haWwiOiJ0ZXN0XzE3NzE1MTIwNTFAZXhhbXBsZS5jb20iLCJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiaWF0IjoxNzcxNTEyMDU4LCJleHAiOjE3NzE1MTU2NTh9.1iyCGnT5wE9puQeP5z5p1Y4d-VhWljLiUDrKPCpNILrHXPceMVUpQ2__LCk49aruHF1Saki4thjLI8OwxiBwkQ5iVfTyTyHjezA4oF4SbWQlGTKu_rWPL35iX41tM77Qky0f_iFaYLpyKmfSOfvkcWXHbtka4B9S-xF-dHAKMJN0_H-B03gEm6Nm1mwTyp01MlnHBB9nWh__WsLRCeTPgg7_ybYLgEKf-PFHUkdGHT6wg71gKOC8GKORPlKmG4VqaiDzZk1jEBQCPySqC-OuWuIiI03zAfkAYbPfaWNcWmBCN4CFJjcibBnnt-Afn2kXD9Z_VnAdEv7kJyY8Nqy_xg",
+    "refresh_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNGFhMjhmOTUtMjBiYS00ODRhLWFkY2UtM2U1ZTNkZDNlMTkzIiwiZW1haWwiOiJ0ZXN0XzE3NzE1MTIwNTFAZXhhbXBsZS5jb20iLCJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImlhdCI6MTc3MTUxMjA1OCwiZXhwIjoxNzcyMTE2ODU4fQ.WdPqKiaGLxTJcOgDmP2K659UshIhys6dbkyjVkkCvL_whELr3QJgo4-d4W89FKe1oGM57c0c7YxYYG4Hw2lYyvrYvU5A1MzzuGhXgmYaIO5YpuJgUk1s78Iez17hm0x6X19iSMLSvpJ4Gkbs_a12mdc5J_Yxe0U9UKzGsQ8BVSfFUIrhA8LikiItYJufvPu2yZnly8E56KcRp8X88DGe4fBeATMMAEWR7TKan5l6DjPwWBFGWHdP7dMAvgCxo8pmxppKykugPPglhZG8Key2lJJvKyo0QTjg3JPZevcJoxMjjVJ0k5rxu-DlEkH8-L2Q_KodHD3TmEbo92IMCPJPwA",
     "expires_in": 3600,
     "token_type": "Bearer"
   }
 }
-✓ POST /auth/register - Email: test_1771500447@example.com
+✓ POST /auth/register - Email: test_1771512051@example.com
 PASSED
 test_01_auth_health.py::TestAuthEndpoints::test_auth_login
 === RESPONSE test_auth_login ===
@@ -41,8 +41,8 @@ test_01_auth_health.py::TestAuthEndpoints::test_auth_login
   "endpoint": "POST /auth/login",
   "status_code": 200,
   "response": {
-    "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiN2E3ZjYzMDctMzU2Mi00ZWJjLWIyMDktNWYxOTU1OWIwNDhmIiwiZW1haWwiOiJ0ZXN0dXNlcjEyM0BleGFtcGxlLmNvbSIsInRva2VuX3R5cGUiOiJhY2Nlc3MiLCJpYXQiOjE3NzE1MDA0NTYsImV4cCI6MTc3MTUwNDA1Nn0.XllPcjj5aA7AoHhn6jCnxlUnsGMftyaefIMP9lAxTr-KbXnUBL6i3vU29CeENNlunsCA4VaRaHgE7VXR-_xiNPx6qMXhsFVpMWjyzC6kXm6jprWaAlojpBXaIUVwJVwVSjk4POv9HOvTvSxTgAsBAesdHger0dmCG8eAVuGFlJgol4pPSdsgJS4HfgfDM1mo5rV3mK3UfJIZYic4L1pEq_ipEZL46WuwR4xCiPwbVnC_sIw-382ZGHcWKNVwdB7aVU27JFbPnL9d2Plj0AimO-2l66mZua0v0Xrm3ZHF20vOW73r-qDSlGgXs4UTP4cxFk48snsnU8Cv0ND81MeW_g",
-    "refresh_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiN2E3ZjYzMDctMzU2Mi00ZWJjLWIyMDktNWYxOTU1OWIwNDhmIiwiZW1haWwiOiJ0ZXN0dXNlcjEyM0BleGFtcGxlLmNvbSIsInRva2VuX3R5cGUiOiJyZWZyZXNoIiwiaWF0IjoxNzcxNTAwNDU2LCJleHAiOjE3NzIxMDUyNTZ9.KxuxQtOFsz-kqy0MjIhhXFdj1La_fwJsyGgDPiDIyl97g4vsDmYf7a1Z-kveCGKxqIaV6gqchyYFu9ggPB0cSPcRpr3bR3CgkMQeLRjZGQGExHii-ej7FFAHRsB38VeUdhh1euqpOMdz9Z_afsoVEfMk3506uTJ_r5pTIOP7gP86BO4ErfDFGyth7nCqptqbqXZLh6w6eQ3NUAD8wGr8PVu-mA34PbtIjZUs1uDU6gmzpGVI1Eao450E6fboUH9LteyEfTLmSJny_g4OX5N87i9HDczyBe4x6fs4-88vq5RDNslaoQgvNCflpMKs-RfrR0uzxolEKkEDa3xm_pz97w",
+    "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiN2E3ZjYzMDctMzU2Mi00ZWJjLWIyMDktNWYxOTU1OWIwNDhmIiwiZW1haWwiOiJ0ZXN0dXNlcjEyM0BleGFtcGxlLmNvbSIsInRva2VuX3R5cGUiOiJhY2Nlc3MiLCJpYXQiOjE3NzE1MTIwNjAsImV4cCI6MTc3MTUxNTY2MH0.2qqWWwtTWqUKxmvQp0ZFH2NP9zLgndcV_IzRACPYVpHam9UyRRhTBWLgOrDnE_JyLXlNsah9V82LJL_l6rcQHZITtmE1znXtzA3Ca0n6KjYHGH1AZZTu3TfOfKFeud5FOQ0L3N_Ne30l5rnfaVNQ_UoC08_hxskbV8wop6Ms7C5UYiTox81dx0uJmSwIcRjIRdc9EhxDx8dFF4w5IGRmKsC5PhcjTsTqyPcFSFZh9VebN74GNg7CPjXESyxZCQYk4FcTopxFIeBPp1K5jiEa-ikD1cESuKDGLT-NQroAKug07tiYeKEu-MRYoVtcfnBOV1uAUHgVB0pdBMgahQg_Vw",
+    "refresh_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiN2E3ZjYzMDctMzU2Mi00ZWJjLWIyMDktNWYxOTU1OWIwNDhmIiwiZW1haWwiOiJ0ZXN0dXNlcjEyM0BleGFtcGxlLmNvbSIsInRva2VuX3R5cGUiOiJyZWZyZXNoIiwiaWF0IjoxNzcxNTEyMDYwLCJleHAiOjE3NzIxMTY4NjB9.eqxKVgT4KHcP90AWB8XI_rcJNB7fEoi3lF37RQ4uy8KPPZ6NMJiO7mZt2YPJY_OFjQD3OCGFczsxqD_rd1uGbhE_h9KJz6I6etvUCa39hUF6OjIU76yRUyxh6DqOr8BFqBiQSUVMWORv7IlIPXjPgCDKvj69PJc3ABnY2XOYJTAIGpdkqzJt8K-mbjj8C-u1fejzJUDLG5i8MdLS_PU4MlpoMMLCvmPrseHCisjchsYMEvrk6sL25zicEOTnYNjiyZO2N8zE93Cq3UR9GOhmQX1GpFNoAU3g4RYLc_Pr8FiXaI6tsMpZdJEUs2KD_wlD5ypTASuigLm2s3CyXshZ6A",
     "expires_in": 3600,
     "token_type": "Bearer"
   }
@@ -56,8 +56,8 @@ test_01_auth_health.py::TestAuthEndpoints::test_auth_refresh
   "endpoint": "POST /auth/refresh",
   "status_code": 200,
   "response": {
-    "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiN2E3ZjYzMDctMzU2Mi00ZWJjLWIyMDktNWYxOTU1OWIwNDhmIiwiZW1haWwiOiJ0ZXN0dXNlcjEyM0BleGFtcGxlLmNvbSIsInRva2VuX3R5cGUiOiJhY2Nlc3MiLCJpYXQiOjE3NzE1MDA0NTksImV4cCI6MTc3MTUwNDA1OX0.h7C6tiWoM7UyBn0o-PKVmOa-sap9kaF5nUcjGgBpTVB7ZD3jGD2Kf_p6TJkG575MllCbaDduaWWX-kSfqdHzp8wQmQBgRNw6oyse54RRvCcFOla7ILDiBx9RHvxrxl5FsI5DSNYtciGRrlaK3FeStRR1SR5U_da6oal_YFqJIMxn-HRmkoYpV5dDMDi7zxDqGnr0WcmiHbgo3dd8pn-MSA85n1EUza3RYhhHKbUYSz_dtoY2VjZvqAC1qhNTM1NTenmRgEdTLepYDziZgRboPJV1Z7P0poR1tcaWkh3scwmDz51wVPh4KahJKA2OUEHjqkd4MO0wdyrjns7OYt6FrQ",
-    "refresh_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiN2E3ZjYzMDctMzU2Mi00ZWJjLWIyMDktNWYxOTU1OWIwNDhmIiwiZW1haWwiOiJ0ZXN0dXNlcjEyM0BleGFtcGxlLmNvbSIsInRva2VuX3R5cGUiOiJyZWZyZXNoIiwiaWF0IjoxNzcxNTAwNDU5LCJleHAiOjE3NzIxMDUyNTl9.LtpFcl_sJ7ivTtKR8VAmTJS41nCtiOXBW1-SCJu_NKig4KOyp9-vd3PKBcOD4y8mTFd7cjcKY9YK4GsbOosV0_iowedM76QB40DDEmYw4qtTCgp5If9CI6PwU57KGYbrSo6yodwCgreRFdXJ_HuA1LWNmQlJ9-N35KqEoRbom-9sfoOk6qqoG7llb6RavABi00zGxkX-lxmA_CRjnrG9-RINRT4RmXLzYxk7V3BiuabpUhKnQ1gUyiDXT4Ko428Zdj8phZJ916Y_CFlg8kCdChuq2ejumnTPI5jz80nfd_Y-WmvU8m32pN3XYqPU2U03mC_RiaQADt99HcLaqJ4kaw",
+    "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiN2E3ZjYzMDctMzU2Mi00ZWJjLWIyMDktNWYxOTU1OWIwNDhmIiwiZW1haWwiOiJ0ZXN0dXNlcjEyM0BleGFtcGxlLmNvbSIsInRva2VuX3R5cGUiOiJhY2Nlc3MiLCJpYXQiOjE3NzE1MTIwNjMsImV4cCI6MTc3MTUxNTY2M30.A2_6frRiijoL38TSu2QitRaKSmgczbLrRXW9RuKBb_lD3aGM_3uilSZebPfGaZU2AUriSOwugEeG16vjbi0sTK0Xb58RSvNy_Vmd65ljDHa1A_jV7AvOX6e6fGnAU77Niyw8N1vIFb7VOIZTJQPCT-LRYrlRTNKtSM-s4fbF8I441kfhjo8nwaGS5ai1RilaTwV5op6dFaIX3moUg7NimepQL7gFIu0QgANB2KWGX3Ox8iq84iUlpL8lxJlkRbooce3n-Ixaw81MHLxlaXK8ok9RGO3rOCftm1_SS8tLe3HQ1Pg9JzrUMF5piqMYVKyx1zHWSWVXjO1WG1RKZ-hTDw",
+    "refresh_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiN2E3ZjYzMDctMzU2Mi00ZWJjLWIyMDktNWYxOTU1OWIwNDhmIiwiZW1haWwiOiJ0ZXN0dXNlcjEyM0BleGFtcGxlLmNvbSIsInRva2VuX3R5cGUiOiJyZWZyZXNoIiwiaWF0IjoxNzcxNTEyMDYzLCJleHAiOjE3NzIxMTY4NjN9.2rccRpW17W011TOsEPVmclZ6QypcgMnhthSNP325EvnXaIrlLXYHzICn-1JwT00y-FKMsGrDl_R8sLTWDwe1PM7plH8pfqInkiS-2Z4nHkrFrToJ-4pTxqEoATt40M0XVQCxI01HNQ9kn3MFzRnUxjYmCRHSy1fzW4h1_9jKCa4I1tQuedsS9XNlKJFW1Xaz4IdtmqYHPXLVAaEAQKGtSLRIhYCMiwJhR5ocIHctypAi2xMnzO9OG60ds1gvVw1tzM4IPg1nICLBKRD6SPmH6VdX81FjkrLjbtjjZxMde8JImVHPgmPLWO2R-5SrxvJk9Mr45tWiIdcrCxxJuzDDxw",
     "expires_in": 3600,
     "token_type": "Bearer"
   }
@@ -124,11 +124,11 @@ test_02_users.py::TestUserEndpoints::test_upload_cv
           "current": false,
           "description": null,
           "achievements": [
-            "Led LMS setup and deployment of Cloud Academy serving 200+ internal employees and external customers; created 30+ learning plans including 8-week DevOps Bootcamp enabling 40+ new hires to achieve AWS Solutions Architect Associate certification with 90%+ pass rates",
-            "Generated $1M+ revenue within 18 months through AWS Authorized Training Partner program by designing pricing models for 40+ course catalog and selling training seats, Cloud Academy licenses, and certification exam vouchers",
-            "Architected multi-year career path programs featuring Beginner/Mid/Senior tiers with role-based certification roadmaps and custom study materials aligned with business needs",
-            "Delivered global training across 6 countries (Israel, Romania, Germany, Austria, US, Canada) with cultural adaptation strategies achieving consistent learning outcomes",
-            "Built community training portal achieving 90%+ certification pass rates through peer learning groups and community accountability"
+            "Generated $1M+ revenue within 18 months through AWS Authorized Training Partner program",
+            "Created 30+ learning plans including 8-week DevOps Bootcamp enabling 40+ new hires to achieve AWS Solutions Architect Associate certification with 90%+ pass rates",
+            "Delivered global training across 6 countries (Israel, Romania, Germany, Austria, US, Canada) with cultural adaptation strategies",
+            "Designed and delivered hands-on labs for 140+ employees on Google Gemini automation workflows and 20+ Israeli Army students on GitHub Copilot AI workflows",
+            "Built community training portal achieving 90%+ certification pass rates through peer learning groups"
           ],
           "technologies": []
         },
@@ -141,8 +141,8 @@ test_02_users.py::TestUserEndpoints::test_upload_cv
           "current": false,
           "description": null,
           "achievements": [
-            "Developed PresGen AI platform with 4 operational modules (automated content generation, data visualization, video processing, adaptive assessment) reducing content development time by 60-90%",
-            "Led company-wide training sessions on AI product positioning enabling sales teams to confidently discuss AI capabilities with customers"
+            "Developed PresGen AI platform with 4 operational modules reducing content development time by 60-90%",
+            "Led company-wide training sessions on AI product positioning for all employees enabling sales teams to confidently discuss AI capabilities with customers"
           ],
           "technologies": []
         },
@@ -156,7 +156,8 @@ test_02_users.py::TestUserEndpoints::test_upload_cv
           "description": null,
           "achievements": [
             "Designed and maintained frontend web applications for government IT infrastructure",
-            "Provided technical leadership on AWS cloud architecture decisions and collaborated on system modernization initiatives"
+            "Provided technical leadership on AWS cloud architecture decisions",
+            "Collaborated with cross-functional teams on system modernization initiatives"
           ],
           "technologies": []
         }
@@ -214,15 +215,15 @@ test_02_users.py::TestUserEndpoints::test_upload_cv
       ],
       "skills": [
         "LMS Implementation & Configuration",
-        "Instructional Design (ADDIE, SAM)",
-        "AWS Cloud Architecture",
+        "Instructional Design & Curriculum Development",
         "AI Platform Development",
+        "Cloud Architecture (AWS)",
         "Content Creation & Video Production"
       ],
       "top_achievements": [
-        "Generated $1M+ revenue within 18 months through AWS Authorized Training Partner program by transforming L&D from cost center to profit driver",
-        "Achieved 90%+ certification pass rates across 200+ employees and external customers through structured learning programs and community building",
-        "Reduced content development time by 60-90% through PresGen AI platform development with automated content generation and adaptive assessment capabilities"
+        "Generated $1M+ revenue within 18 months through AWS Authorized Training Partner program, transforming L&D from cost center to profit driver",
+        "Achieved 90%+ certification pass rates across 200+ internal employees and external customers through comprehensive learning programs",
+        "Developed PresGen AI platform reducing content development time by 60-90% while improving learning outcomes through personalized remediation pathways"
       ],
       "professional_summary": "Strategic Learning Experience Specialist with 27 years of technical instruction experience and proven expertise building Customer Academy infrastructure from the ground up. Demonstrated success in LMS implementation (Cloud Academy, LRN, AWS Skillbuilder), certification framework design, and revenue generation ($1M+ in training sales within 18 months). Architect of PresGen\u2014an operational AI-powered learning platform featuring automated content creation, adaptive assessment, and video processing capabilities. Excel at serving multi-audience ecosystems (external customers, partners, internal teams) with scalable learning solutions that drive measurable business outcomes. Delivered global training across 6 countries (Israel, Romania, Germany, Austria, US, Canada) achieving 90%+ certification pass rates. Proven ability to translate complex technical concepts (cloud architecture, AI, automation) into engaging hands-on labs, sandbox exercises, and interactive learning experiences. Deep expertise in instructional design, SaaS training operations, community building, and connecting educational initiatives to KPIs including MRR, product adoption, and support efficiency.",
       "languages": [],
@@ -232,7 +233,7 @@ test_02_users.py::TestUserEndpoints::test_upload_cv
       "source_file_key": null
     },
     "language_detected": "en",
-    "parse_time_ms": 11172,
+    "parse_time_ms": 11762,
     "error": null
   }
 }
@@ -361,11 +362,11 @@ test_05_gap_analysis.py::TestGapAnalysisEndpoints::test_generate_gap_questions
   "endpoint": "POST /gap-analysis/questions",
   "status_code": 500,
   "response": {
-    "error": "An error occurred (ValidationException) when calling the PutItem operation: One or more parameter values were invalid: Missing the key applicationId in the item",
+    "error": "An error occurred (ValidationException) when calling the PutItem operation: One or more parameter values were invalid: Missing the key artifactId in the item",
     "code": "DYNAMODB_ERROR"
   }
 }
-⚠ POST /gap-analysis/questions - Status 500: {"error": "An error occurred (ValidationException) when calling the PutItem operation: One or more parameter values were invalid: Missing the key applicationId in the item", "code": "DYNAMODB_ERROR"}
+⚠ POST /gap-analysis/questions - Status 500: {"error": "An error occurred (ValidationException) when calling the PutItem operation: One or more parameter values were invalid: Missing the key artifactId in the item", "code": "DYNAMODB_ERROR"}
 PASSED
 test_05_gap_analysis.py::TestGapAnalysisEndpoints::test_submit_gap_responses
 === RESPONSE test_submit_gap_responses ===
@@ -387,7 +388,7 @@ test_05_gap_analysis.py::TestGapAnalysisEndpoints::test_get_gap_questions
   "endpoint": "GET /gap-analysis/job_test-user-e2e/questions",
   "status_code": 500,
   "response": {
-    "error": "An error occurred (ValidationException) when calling the Query operation: Query condition missed key schema element: applicationId",
+    "error": "An error occurred (ValidationException) when calling the Query operation: Query key condition not supported",
     "code": "DYNAMODB_ERROR"
   }
 }
@@ -814,10 +815,10 @@ test_09_company_research.py::TestCompanyResearchEndpoints::test_company_research
 SKIPPED
 
 =========================== short test summary info ============================
-SKIPPED [1] test_01_auth_health.py:70: Health endpoint not deployed in current stage
-SKIPPED [1] test_04_vpr.py:204: No VPR ID available for polling test
-SKIPPED [1] test_06_cv_tailoring.py:210: No CV tailoring ID available for polling test
-SKIPPED [1] test_07_cover_letter.py:214: No cover letter ID available for polling test
-SKIPPED [1] test_08_interview_prep.py:168: No interview prep ID available for polling test
-SKIPPED [1] test_09_company_research.py:151: No job ID available for company research polling test
-=================== 26 passed, 6 skipped in 72.51s (0:01:12) ===================
+SKIPPED [1] test_01_auth_health.py:86: Health endpoint not deployed in current stage
+SKIPPED [1] test_04_vpr.py:185: No VPR ID available for polling test
+SKIPPED [1] test_06_cv_tailoring.py:224: No CV tailoring ID available for polling test
+SKIPPED [1] test_07_cover_letter.py:228: No cover letter ID available for polling test
+SKIPPED [1] test_08_interview_prep.py:184: No interview prep ID available for polling test
+SKIPPED [1] test_09_company_research.py:159: No job ID available for company research polling test
+=================== 26 passed, 6 skipped in 72.62s (0:01:12) ===================
