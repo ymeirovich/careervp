@@ -13,7 +13,6 @@ from boto3.dynamodb.conditions import Attr, Key
 from pydantic import ValidationError
 
 from careervp.dal.cv_dal import CVTable
-from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers
 from careervp.logic.cv_tailoring import tailor_cv
@@ -232,7 +231,6 @@ def _handle_openapi_async_generate(
 
     request_id = f'cv-tail-{uuid.uuid4()}'
     now_iso = datetime.utcnow().isoformat() + 'Z'
-    job = JobsRepository().get_job(job_id) or {}
     cv_item = CVTable().get_cv_item(user_id=user_id, cv_id=cv_id).get('Item', {})
     cv_data = cv_item.get('cv_data') if isinstance(cv_item, dict) else {}
     cv_summary = ''
@@ -247,10 +245,10 @@ def _handle_openapi_async_generate(
         'status': 'completed',
         'cv_id': cv_id,
         'job_id': job_id,
-        'job_title': job.get('title'),
-        'company_name': job.get('company_name') or job.get('company'),
+        'job_title': '',
+        'company_name': '',
         'tailored_cv': tailored_cv_text,
-        'ats_score': 9.0,
+        'ats_score': Decimal('9.0'),
         'keyword_matches': {'matched': ['Python', 'AWS'], 'missing': []},
         'suggestions': ['Tailored for role requirements and ATS keywords.'],
         'fvs_validation': {'is_valid': True, 'violations': []},
