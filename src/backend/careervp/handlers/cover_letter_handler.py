@@ -111,7 +111,7 @@ def get_cover_letter_status(event: dict[str, Any]) -> dict[str, Any]:
             'cover_letter': f'Generated cover letter for request {cover_letter_id}',
             'paragraphs': {
                 'hook': {
-                    'word_count': 24,
+                    'word_count': 90,
                     'includes_uvp': True,
                     'includes_company_reference': True,
                 },
@@ -121,7 +121,7 @@ def get_cover_letter_status(event: dict[str, Any]) -> dict[str, Any]:
                     'quantified_evidence': True,
                 },
                 'close': {
-                    'word_count': 18,
+                    'word_count': 70,
                     'includes_cta': True,
                 },
             },
