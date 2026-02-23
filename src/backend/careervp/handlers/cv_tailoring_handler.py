@@ -143,9 +143,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
     if using_new_api and job_description is None and job_id:
         try:
             cv_table = CVTable()
-            response = cv_table.table.get_item(
-                Key={'userId': user_id, 'applicationId': f'JOB#{job_id}'}
-            )
+            response = cv_table.table.get_item(Key={'userId': user_id, 'applicationId': f'JOB#{job_id}'})
             if 'Item' in response:
                 job_description = response['Item'].get('job_description') or response['Item'].get('description')
         except Exception as exc:  # noqa: BLE001

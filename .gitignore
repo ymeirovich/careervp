@@ -47,3 +47,6 @@ docs/architecture/prompt-improvement/
 # payloads
 careervp/docs/refactor2/payloads/*
 careervp/docs/refactor3/payloads/*
+
+# logs
+*.log
