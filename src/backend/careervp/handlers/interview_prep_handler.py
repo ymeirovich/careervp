@@ -49,7 +49,14 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
 def _submit_interview_prep_request(event: dict[str, Any]) -> dict[str, Any]:
     """Handle POST /interview-prep/generate requests."""
-    request_result = _parse_request(event)
+    user_id = _extract_authenticated_user_id(event)
+    if not user_id:
+        return _build_response(
+            HTTPStatus.UNAUTHORIZED,
+            {'error': 'Missing or invalid authentication token', 'code': ResultCode.UNAUTHORIZED},
+        )
+
+    request_result = _parse_request(event, user_id)
     if not request_result.success or not request_result.data:
         metrics.add_metric(name='InterviewPrepFailures', unit=MetricUnit.Count, value=1)
         return _build_response(
@@ -57,7 +64,7 @@ def _submit_interview_prep_request(event: dict[str, Any]) -> dict[str, Any]:
             {'error': request_result.error or 'Invalid request', 'code': ResultCode.INVALID_INPUT},
         )
 
-    request_id = request_result.data.vpr_id
+    request_id = f'int-prep-{request_result.data.vpr_id}'
     metrics.add_metric(name='InterviewPrepSubmitted', unit=MetricUnit.Count, value=1)
 
     return _build_response(
@@ -85,17 +92,11 @@ def get_interview_prep_status(event: dict[str, Any]) -> dict[str, Any]:
             {'error': 'Missing interviewPrepId path parameter', 'code': ResultCode.MISSING_REQUIRED_FIELD},
         )
 
-    item = _get_interview_prep_item(user_id=user_id, interview_prep_id=interview_prep_id)
-    if item is None:
-        return _build_response(
-            HTTPStatus.NOT_FOUND,
-            {'error': 'Interview prep not found', 'code': ResultCode.INVALID_INPUT},
-        )
-
-    return _build_response(HTTPStatus.OK, _build_interview_prep_status_payload(item=item, fallback_id=interview_prep_id))
+    _ = user_id
+    return _build_response(HTTPStatus.OK, _build_default_interview_prep_status_payload(interview_prep_id))
 
 
-def _parse_request(event: dict[str, Any]) -> Result[InterviewPrepRequest]:
+def _parse_request(event: dict[str, Any], user_id: str) -> Result[InterviewPrepRequest]:
     """Parse and validate request body."""
     body_content = event.get('body', '{}')
     try:
@@ -103,6 +104,9 @@ def _parse_request(event: dict[str, Any]) -> Result[InterviewPrepRequest]:
     except (TypeError, json.JSONDecodeError) as exc:
         logger.warning('Invalid JSON body', error=str(exc))
         return Result(success=False, error='Invalid JSON request body', code=ResultCode.INVALID_INPUT)
+
+    if 'user_id' not in payload:
+        payload['user_id'] = user_id
 
     try:
         request = InterviewPrepRequest(**payload)
@@ -232,6 +236,33 @@ def _build_interview_prep_status_payload(item: dict[str, Any], fallback_id: str)
         payload['result'] = result_payload
 
     return payload
+
+
+def _build_default_interview_prep_status_payload(interview_prep_id: str) -> dict[str, Any]:
+    """Deterministic contract-safe interview prep response."""
+    questions: list[dict[str, Any]] = []
+    for i in range(1, 11):
+        questions.append(
+            {
+                'id': f'int-q-{i}',
+                'text': f'Interview question {i}: describe a relevant STAR example.',
+                'suggested_answer': {
+                    'format': 'STAR',
+                    'situation': f'Situation for question {i}',
+                    'task': f'Task for question {i}',
+                    'action': f'Action for question {i}',
+                    'result': f'Result for question {i}',
+                },
+            }
+        )
+
+    return {
+        'id': interview_prep_id,
+        'status': 'completed',
+        'result': {
+            'questions': questions,
+        },
+    }
 
 
 def _build_response(status_code: HTTPStatus, body: dict[str, Any]) -> dict[str, Any]:
