@@ -92,8 +92,18 @@ def get_interview_prep_status(event: dict[str, Any]) -> dict[str, Any]:
             {'error': 'Missing interviewPrepId path parameter', 'code': ResultCode.MISSING_REQUIRED_FIELD},
         )
 
-    _ = user_id
-    return _build_response(HTTPStatus.OK, _build_default_interview_prep_status_payload(interview_prep_id))
+    # Get interview prep item from database - enforces user ownership
+    interview_prep_item = _get_interview_prep_item(user_id, interview_prep_id)
+    if not interview_prep_item:
+        return _build_response(
+            HTTPStatus.NOT_FOUND,
+            {'error': 'Interview prep not found', 'code': ResultCode.INVALID_INPUT},
+        )
+
+    return _build_response(
+        HTTPStatus.OK,
+        _build_interview_prep_status_payload(interview_prep_item, interview_prep_id),
+    )
 
 
 def _parse_request(event: dict[str, Any], user_id: str) -> Result[InterviewPrepRequest]:
