@@ -938,10 +938,24 @@ ENVIRONMENT=staging uv run cdk synth CareerVpCrudStaging
 # 4. Verify no resource conflicts
 ENVIRONMENT=staging uv run cdk diff CareerVpCrudStaging 2>&1 | head -50
 
-# 5. Code quality checks
+# 5. Code quality checks (per best_practices/yaml/code_quality_security_spec.yaml)
 cd src/backend
-uv run ruff check .
-uv run mypy careervp --strict
+uv run ruff check .                    # Lint check
+uv run ruff format --check .            # Format check
+uv run mypy careervp --strict          # Type check
+uv run bandit -r careervp/ -ll         # Security scan
+
+# 6. Required test cases validation (per spec Section 9)
+# Validate auth test coverage
+grep -r "test_.*_returns_401" tests/ || echo "WARNING: Missing 401 tests"
+grep -r "test_handler_returns_401" tests/ || echo "WARNING: Missing auth 401 tests"
+grep -r "test_handler_extracts_user_id_from_jwt" tests/ || echo "WARNING: Missing JWT extraction tests"
+
+# Validate null safety test coverage
+grep -r "test_.*_handles_none" tests/ || echo "WARNING: Missing null safety tests"
+grep -r "test_handler_handles_empty_list" tests/ || echo "WARNING: Missing empty list tests"
+
+# Run unit tests
 uv run pytest tests/unit -v
 ```
 
@@ -1016,6 +1030,43 @@ git push origin develop
 
 # This will trigger a new deployment with the reverted code
 ```
+
+---
+
+---
+
+## CODE REVIEW CHECKLIST (per best_practices/yaml/code_quality_security_spec.yaml Section 11)
+
+Before marking a phase as complete, verify:
+
+### Authentication & Authorization
+- [ ] user_id comes only from extract_user_id(), never from payload
+- [ ] No AUTHORIZER_DISABLED or similar bypasses
+- [ ] All handlers use @require_auth or equivalent
+
+### Ownership & Access Control
+- [ ] Resources checked for user ownership before access
+
+### Null Safety
+- [ ] All result.data access null-checked
+- [ ] All optional parameters handled explicitly
+
+### Error Handling
+- [ ] No bare `except:` statements
+- [ ] All exceptions logged with logger.exception or logger.error
+
+### Security
+- [ ] No `Access-Control-Allow-Origin: *` wildcard
+- [ ] log_event=False on Lambda decorators
+- [ ] No sensitive data in logs
+
+### Type Safety
+- [ ] All functions have type hints
+- [ ] No `Any` types without justification
+
+### Testing
+- [ ] Auth/authorization paths tested
+- [ ] Null handling paths tested
 
 ---
 
