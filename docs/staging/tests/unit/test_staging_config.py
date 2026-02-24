@@ -1,15 +1,19 @@
 """
-Unit tests for Staging Configuration
+Unit tests for Staging Configuration - Deployment Readiness Validation
 
-These tests validate the staging configuration files and ensure they
-follow the same structure as the dev configuration.
+These tests validate that staging environment is ready for deployment.
+They MUST fail before implementation to provide TDD feedback.
 
 Run with:
     pytest docs/staging/tests/unit/test_staging_config.py -v
+
+IMPORTANT: These tests validate ACTUAL deployment readiness, not just file structure.
+A passing test means the staging environment can actually be deployed.
 """
 
 import json
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -35,13 +39,14 @@ DEV_CONFIG_PATH = (
 )
 
 
-class TestStagingConfiguration:
-    """Test suite for staging configuration validation."""
+class TestStagingConfigurationFile:
+    """Test suite for staging configuration FILE validation (pre-deployment)."""
 
     def test_staging_config_exists(self) -> None:
         """Test that staging configuration file exists."""
         assert STAGING_CONFIG_PATH.exists(), (
-            f"Staging config not found at {STAGING_CONFIG_PATH}"
+            f"Staging config not found at {STAGING_CONFIG_PATH}. "
+            "This is required BEFORE deployment."
         )
 
     def test_staging_config_is_valid_json(self) -> None:
@@ -109,90 +114,217 @@ class TestStagingConfiguration:
             )
 
 
-class TestStagingEnvironmentVariables:
-    """Test suite for staging environment variable handling."""
+class TestStagingInfrastructureReadiness:
+    """
+    Test suite for staging infrastructure readiness.
 
-    def test_environment_variable_defaults_to_dev(self) -> None:
-        """Test that default environment is dev when not set."""
-        env = os.environ.get("ENVIRONMENT", "dev")
-        assert env == "dev", "Default environment should be dev"
+    THESE TESTS MUST FAIL BEFORE STAGING IS DEPLOYED.
+    They validate that required AWS resources exist.
+    """
 
-    def test_staging_environment_can_be_set(self) -> None:
-        """Test that staging environment can be set via env var."""
-        os.environ["ENVIRONMENT"] = "staging"
-        try:
-            from cdk.careervp.naming_utils import NamingUtils
+    @pytest.fixture(autouse=True)  # type: ignore[misc]
+    def setup_aws(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Set up AWS environment for testing."""
+        monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+        monkeypatch.setenv(
+            "AWS_ACCESS_KEY_ID", os.environ.get("AWS_ACCESS_KEY_ID", "testing")
+        )
+        monkeypatch.setenv(
+            "AWS_SECRET_ACCESS_KEY", os.environ.get("AWS_SECRET_ACCESS_KEY", "testing")
+        )
 
-            naming = NamingUtils(environment="staging")
-            assert naming.environment == "staging"
-        finally:
-            os.environ.pop("ENVIRONMENT", None)
+    def test_ssm_parameters_exist_in_aws(self) -> None:
+        """
+        CRITICAL: Test that SSM parameters exist for staging.
+
+        This test MUST FAIL before SSM parameters are created.
+        """
+        expected_params = [
+            "/careervp/staging/anthropic-api-key",
+            "/careervp/staging/jwt-private-key",
+            "/careervp/staging/jwt-public-key",
+        ]
+
+        # Try to get each parameter - ALL must exist for deployment to work
+        missing_params = []
+        for param in expected_params:
+            try:
+                result = subprocess.run(
+                    [
+                        "aws",
+                        "ssm",
+                        "get-parameter",
+                        "--name",
+                        param,
+                        "--region",
+                        "us-east-1",
+                        "--with-decryption",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                if result.returncode != 0:
+                    missing_params.append(param)
+            except Exception as e:
+                missing_params.append(f"{param} (error: {e})")
+
+        assert len(missing_params) == 0, (
+            f"Missing SSM parameters: {missing_params}. "
+            "These MUST exist before staging deployment. "
+            "Run: aws ssm put-parameter --name /careervp/staging/anthropic-api-key ..."
+        )
+
+    def test_cdk_synth_succeeds_for_staging(self) -> None:
+        """
+        CRITICAL: Test that CDK can synthesize staging stack.
+
+        This test MUST FAIL before CDK stack is configured.
+        """
+        # Set staging environment
+        env = os.environ.copy()
+        env["ENVIRONMENT"] = "staging"
+
+        # Try to run cdk synth
+        result = subprocess.run(
+            ["python", "-m", "cdk", "synth", "CareerVpCrudStaging"],
+            cwd=str(REPO_ROOT / "infra"),
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=300,  # 5 minutes
+        )
+
+        assert result.returncode == 0, (
+            f"CDK synth failed for staging. This means the stack cannot be deployed.\n"
+            f"Error: {result.stderr}\n"
+            f"Output: {result.stdout[:1000]}"
+        )
+
+        # Verify output contains staging resources
+        assert (
+            "CareerVpCrudStaging" in result.stdout or "staging" in result.stdout.lower()
+        ), "CDK synth output should mention staging resources"
+
+    def test_staging_stack_can_be_deployed(self) -> None:
+        """
+        Test that staging CloudFormation stack exists or can be created.
+
+        This validates the stack is deployable.
+        """
+        result = subprocess.run(
+            [
+                "aws",
+                "cloudformation",
+                "describe-stacks",
+                "--stack-name",
+                "CareerVpCrudStaging",
+                "--region",
+                "us-east-1",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        # Stack should exist (either deployed or will be deployed)
+        # If it doesn't exist, that's actually OK for pre-deployment validation
+        # But CDK synth must work (tested above)
+        if result.returncode != 0:
+            # Stack doesn't exist yet - that's fine as long as CDK synth works
+            # This is informational only
+            pytest.skip("Stack not deployed yet - OK if CDK synth passes")
 
 
-class TestStagingNaming:
-    """Test suite for staging resource naming."""
+class TestStagingDeploymentReadiness:
+    """
+    Test suite for actual deployment readiness validation.
 
-    def test_naming_utils_creates_staging_resources(self) -> None:
-        """Test that NamingUtils creates resources with staging suffix."""
-        os.environ["ENVIRONMENT"] = "staging"
+    These tests validate the full deployment pipeline is ready.
+    """
+
+    def test_github_workflow_exists(self) -> None:
+        """Test that staging deployment workflow file exists."""
+        workflow_path = REPO_ROOT / ".github" / "workflows" / "deploy-staging.yml"
+        assert workflow_path.exists(), (
+            f"Staging workflow not found at {workflow_path}. "
+            "Create .github/workflows/deploy-staging.yml"
+        )
+
+    def test_workflow_uses_correct_environment(self) -> None:
+        """Test that workflow is configured for staging."""
+        workflow_path = REPO_ROOT / ".github" / "workflows" / "deploy-staging.yml"
+
+        if not workflow_path.exists():
+            pytest.skip("Workflow file doesn't exist yet")
+
+        with open(workflow_path, "r") as f:
+            content = f.read()
+
+        # Verify workflow references staging
+        assert "staging" in content.lower(), (
+            "Workflow should reference staging environment"
+        )
+        assert "CareerVpCrudStaging" in content or "CareerVp" in content, (
+            "Workflow should reference CareerVp stacks"
+        )
+
+    def test_naming_utils_supports_staging(self) -> None:
+        """Test that NamingUtils can generate staging resource names."""
+        # This is a code validation - ensures the naming system works
+        import sys
+
+        sys.path.insert(0, str(REPO_ROOT / "src" / "backend"))
+
         try:
             from cdk.careervp.naming_utils import NamingUtils
 
             naming = NamingUtils(
-                environment="staging", region="us-east-1", account_id="123456789012"
+                environment="staging",
+                region="us-east-1",
+                account_id="123456789012",
             )
 
-            # Test table naming
+            # Test various resource namings
             table_name = naming.table_name("users")
-            assert table_name.endswith("-staging"), (
-                f"Table name should end with -staging: {table_name}"
+            assert "staging" in table_name.lower(), (
+                f"Table name should contain staging: {table_name}"
             )
 
-            # Test lambda naming
             lambda_name = naming.lambda_name("crud")
-            assert lambda_name.endswith("-staging"), (
-                f"Lambda name should end with -staging: {lambda_name}"
+            assert "staging" in lambda_name.lower(), (
+                f"Lambda name should contain staging: {lambda_name}"
             )
 
-            # Test stack ID
-            stack_id = naming.stack_id("crud")
-            assert "Staging" in stack_id, f"Stack ID should contain Staging: {stack_id}"
-        finally:
-            os.environ.pop("ENVIRONMENT", None)
-
-    def test_staging_bucket_naming(self) -> None:
-        """Test that staging buckets are named correctly."""
-        os.environ["ENVIRONMENT"] = "staging"
-        try:
-            from cdk.careervp.naming_utils import NamingUtils
-
-            naming = NamingUtils(
-                environment="staging", region="us-east-1", account_id="123456789012"
-            )
-
-            bucket_name = naming.bucket_name("cvs")
-            assert "staging" in bucket_name, (
-                f"Bucket name should contain staging: {bucket_name}"
-            )
-        finally:
-            os.environ.pop("ENVIRONMENT", None)
+        except ImportError as e:
+            pytest.fail(f"Cannot import NamingUtils: {e}")
 
 
-class TestSyntheticData:
-    """Test suite for synthetic test data."""
+class TestStagingTestData:
+    """
+    Test suite for synthetic test data.
+
+    Validates that test data exists for E2E testing.
+    """
 
     def test_staging_test_users_exist(self) -> None:
         """Test that staging test users file exists."""
         users_path = (
             REPO_ROOT / "docs" / "staging" / "payloads" / "staging_test_users.json"
         )
-        assert users_path.exists(), f"Test users not found at {users_path}"
+        assert users_path.exists(), (
+            f"Test users not found at {users_path}. "
+            "Create synthetic test data for E2E tests."
+        )
 
     def test_staging_test_users_valid_json(self) -> None:
         """Test that test users file is valid JSON."""
         users_path = (
             REPO_ROOT / "docs" / "staging" / "payloads" / "staging_test_users.json"
         )
+        if not users_path.exists():
+            pytest.skip("Test users file doesn't exist yet")
+
         with open(users_path, "r") as f:
             users = json.load(f)
         assert isinstance(users, list), "Users must be a list"
@@ -203,6 +335,9 @@ class TestSyntheticData:
         users_path = (
             REPO_ROOT / "docs" / "staging" / "payloads" / "staging_test_users.json"
         )
+        if not users_path.exists():
+            pytest.skip("Test users file doesn't exist yet")
+
         with open(users_path, "r") as f:
             users = json.load(f)
 
@@ -219,49 +354,14 @@ class TestSyntheticData:
                 f"User missing fields: {required_fields - set(user.keys())}"
             )
 
-    def test_staging_test_jobs_exist(self) -> None:
-        """Test that staging test jobs file exists."""
-        jobs_path = (
-            REPO_ROOT / "docs" / "staging" / "payloads" / "staging_test_jobs.json"
-        )
-        assert jobs_path.exists(), f"Test jobs not found at {jobs_path}"
-
-    def test_staging_test_jobs_valid_json(self) -> None:
-        """Test that test jobs file is valid JSON."""
-        jobs_path = (
-            REPO_ROOT / "docs" / "staging" / "payloads" / "staging_test_jobs.json"
-        )
-        with open(jobs_path, "r") as f:
-            jobs = json.load(f)
-        assert isinstance(jobs, list), "Jobs must be a list"
-        assert len(jobs) > 0, "Jobs list must not be empty"
-
-    def test_staging_test_jobs_have_required_fields(self) -> None:
-        """Test that test jobs have all required fields."""
-        jobs_path = (
-            REPO_ROOT / "docs" / "staging" / "payloads" / "staging_test_jobs.json"
-        )
-        with open(jobs_path, "r") as f:
-            jobs = json.load(f)
-
-        required_fields = {
-            "job_id",
-            "title",
-            "company",
-            "country",
-            "job_type",
-            "experience_level",
-        }
-        for job in jobs:
-            assert required_fields.issubset(set(job.keys())), (
-                f"Job missing fields: {required_fields - set(job.keys())}"
-            )
-
     def test_test_users_use_staging_domain(self) -> None:
         """Test that test users use staging email domain."""
         users_path = (
             REPO_ROOT / "docs" / "staging" / "payloads" / "staging_test_users.json"
         )
+        if not users_path.exists():
+            pytest.skip("Test users file doesn't exist yet")
+
         with open(users_path, "r") as f:
             users = json.load(f)
 

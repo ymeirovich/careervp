@@ -1,26 +1,34 @@
 """
-E2E Live Tests for Staging Environment
+E2E Live Tests for Staging Environment - Production-Like Validation
 
-These tests run against the deployed staging environment to validate:
-1. Health endpoint is accessible
-2. Authentication flow works
+These tests run against the DEPLOYED staging environment to validate:
+1. Health endpoint is accessible and returns correct status
+2. Authentication flow works correctly
 3. CRUD operations work correctly
 4. Async flows (VPR, CV Tailoring) work
 
+CRITICAL: These tests MUST FAIL before staging is fully deployed.
+They validate ACTUAL API responses, not mocks.
+
 Prerequisites:
-- Staging environment must be deployed
-- ANTHROPIC_API_KEY must be set
+- Staging environment MUST be deployed
+- ANTHROPIC_API_KEY must be set in SSM
 - AWS credentials configured
 
 Run with:
     pytest docs/staging/tests/e2e/test_staging_live.py -v
+
+To skip tests that require deployment:
+    pytest docs/staging/tests/e2e/ -v -m "not e2e"  # Won't work, all are e2e
 """
 
 import os
+import subprocess
 import time
+from typing import NoReturn
 
 import pytest
-import requests
+import requests  # type: ignore[import-untyped]
 
 
 # Configure pytest
@@ -28,23 +36,13 @@ pytestmark = pytest.mark.e2e
 
 
 # Test configuration
-STAGING_API_URL = os.environ.get(
-    "STAGING_API_URL",
-    # Default: fetch from CloudFormation
-    None,
-)
+STAGING_API_URL = os.environ.get("STAGING_API_URL", None)
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 
-
-def get_staging_api_url() -> str:
-    """Get the staging API URL from CloudFormation or environment."""
-    if STAGING_API_URL:
-        return STAGING_API_URL
-
+# Required for tests - fail fast if not configured
+if not STAGING_API_URL:
     # Try to get from CloudFormation
-    import subprocess
-
     try:
         result = subprocess.run(
             [
@@ -56,30 +54,62 @@ def get_staging_api_url() -> str:
                 "--region",
                 AWS_REGION,
                 "--query",
-                "Stacks[0].Outputs[0].OutputValue",
+                "Stacks[0].Outputs[?OutputKey=='ApiGatewayUrl'].OutputValue",
                 "--output",
                 "text",
             ],
             capture_output=True,
             text=True,
-            check=True,
+            timeout=30,
+            check=False,
         )
-        return result.stdout.strip() + "prod"
-    except Exception as e:
-        pytest.skip(f"Cannot get staging API URL: {e}")
+        if result.returncode == 0 and result.stdout.strip():
+            STAGING_API_URL = result.stdout.strip() + "prod"
+    except Exception:
+        pass
 
 
-@pytest.fixture(scope="module")
+def get_staging_api_url() -> str | NoReturn:
+    """Get the staging API URL - FAIL if not available."""
+    if STAGING_API_URL:
+        return STAGING_API_URL
+
+    pytest.fail(
+        "STAGING_API_URL environment variable not set and could not be fetched from CloudFormation. "
+        "Staging must be deployed before running E2E tests. "
+        "Run: aws cloudformation describe-stacks --stack-name CareerVpCrudStaging"
+    )
+
+
+def check_api_reachable(url: str) -> bool:
+    """Check if the API is reachable."""
+    try:
+        response = requests.get(f"{url}/health", timeout=10)
+        return response.status_code == 200
+    except Exception:  # broad-except necessary for network errors
+        return False
+
+
+@pytest.fixture(scope="module")  # type: ignore[misc]
 def api_url() -> str:
-    """Get the staging API URL."""
+    """Get the staging API URL - FAIL FAST if not available."""
     url = get_staging_api_url()
     print(f"\nUsing staging API URL: {url}")
+
+    # Verify API is reachable BEFORE running tests
+    if not check_api_reachable(url):
+        pytest.fail(
+            f"Staging API is not reachable at {url}. "
+            "This likely means staging is not deployed. "
+            "Deploy staging first: cd infra && ENVIRONMENT=staging python -m cdk deploy CareerVpCrudStaging"
+        )
+
     return url
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="module")  # type: ignore[misc]
 def auth_token(api_url: str) -> str:
-    """Get an authentication token for testing."""
+    """Get an authentication token for testing - FAIL if auth doesn't work."""
     # Register a test user
     test_email = f"e2e.test.{int(time.time())}@staging.careervp.com"
 
@@ -95,30 +125,47 @@ def auth_token(api_url: str) -> str:
         f"{api_url}/api/auth/register", json=register_data, timeout=30
     )
 
+    token: str | None = None
     if response.status_code == 201:
+        # Newly registered
+        token = response.json().get("access_token")
+    elif response.status_code == 200:
         # Already registered, try to login
         login_data = {"email": test_email, "password": "TestPass123!"}
         login_response = requests.post(
             f"{api_url}/api/auth/login", json=login_data, timeout=30
         )
         if login_response.status_code == 200:
-            return login_response.json().get("access_token")
+            token = login_response.json().get("access_token")
+        else:
+            pytest.fail(
+                f"Cannot authenticate test user. Login failed: {login_response.status_code} - {login_response.text}"
+            )
+    else:
+        pytest.fail(
+            f"Cannot authenticate test user. Register failed: {response.status_code} - {response.text}"
+        )
 
-    elif response.status_code == 200:
-        return response.json().get("access_token")
+    if not token:
+        pytest.fail("No access token received from authentication")
 
-    pytest.skip(f"Cannot authenticate: {response.status_code} - {response.text}")
+    return token
 
 
 class TestHealthEndpoint:
-    """Test suite for health endpoint."""
+    """
+    Test suite for health endpoint - CRITICAL.
+
+    If health fails, nothing else will work.
+    """
 
     def test_health_endpoint_returns_200(self, api_url: str) -> None:
         """Test that health endpoint returns 200 OK."""
         response = requests.get(f"{api_url}/health", timeout=10)
 
         assert response.status_code == 200, (
-            f"Health endpoint should return 200, got {response.status_code}"
+            f"Health endpoint should return 200, got {response.status_code}. "
+            f"Response: {response.text}"
         )
 
     def test_health_endpoint_returns_healthy_status(self, api_url: str) -> None:
@@ -126,17 +173,30 @@ class TestHealthEndpoint:
         response = requests.get(f"{api_url}/health", timeout=10)
         data = response.json()
 
-        assert "status" in data, "Health response should include status"
+        assert "status" in data, "Health response should include status field"
         assert data["status"] == "healthy", (
             f"Health status should be healthy, got {data.get('status')}"
         )
 
+    def test_health_endpoint_is_reachable(self, api_url: str) -> None:
+        """Test that health endpoint is reachable and responds quickly."""
+        start = time.time()
+        response = requests.get(f"{api_url}/health", timeout=10)
+        elapsed = time.time() - start
+
+        assert response.status_code == 200
+        assert elapsed < 2.0, f"Health endpoint took {elapsed:.2f}s, should be under 2s"
+
 
 class TestAuthentication:
-    """Test suite for authentication flow."""
+    """
+    Test suite for authentication - CRITICAL.
+
+    All protected endpoints require valid authentication.
+    """
 
     def test_register_new_user(self, api_url: str) -> None:
-        """Test that a new user can register."""
+        """Test that a new user can register successfully."""
         # Use unique email for this test
         test_email = f"register.test.{int(time.time())}@staging.careervp.com"
 
@@ -170,7 +230,12 @@ class TestAuthentication:
             "country": "USA",
         }
 
-        requests.post(f"{api_url}/api/auth/register", json=register_data, timeout=30)
+        reg_response = requests.post(
+            f"{api_url}/api/auth/register", json=register_data, timeout=30
+        )
+        assert reg_response.status_code in [200, 201], (
+            f"Registration failed: {reg_response.status_code}"
+        )
 
         # Then login
         login_data = {"email": test_email, "password": "TestPass123!"}
@@ -186,10 +251,10 @@ class TestAuthentication:
         data = response.json()
         assert "access_token" in data, "Login response should include access_token"
 
-    def test_login_invalid_credentials(self, api_url: str) -> None:
-        """Test that login fails with invalid credentials."""
+    def test_login_invalid_credentials_returns_401(self, api_url: str) -> None:
+        """Test that login fails with 401 for invalid credentials."""
         login_data = {
-            "email": "nonexistent@staging.careervp.com",
+            "email": "nonexistent.staging.user@example.com",
             "password": "WrongPassword123!",
         }
 
@@ -198,12 +263,16 @@ class TestAuthentication:
         )
 
         assert response.status_code == 401, (
-            f"Login with invalid credentials should fail with 401, got {response.status_code}"
+            f"Login with invalid credentials should return 401, got {response.status_code}"
         )
 
 
 class TestCRUDOperations:
-    """Test suite for CRUD operations."""
+    """
+    Test suite for CRUD operations.
+
+    Validates core functionality works.
+    """
 
     def test_get_user_profile(self, api_url: str, auth_token: str) -> None:
         """Test that user can get their profile."""
@@ -212,7 +281,7 @@ class TestCRUDOperations:
         response = requests.get(f"{api_url}/api/users/me", headers=headers, timeout=10)
 
         assert response.status_code == 200, (
-            f"Get profile should succeed, got {response.status_code}"
+            f"Get profile should succeed, got {response.status_code}: {response.text}"
         )
 
         data = response.json()
@@ -220,19 +289,19 @@ class TestCRUDOperations:
             "Profile response should include user info"
         )
 
-    def test_list_jobs(self, api_url: str, auth_token: str) -> None:
-        """Test that user can list jobs."""
+    def test_list_jobs_authenticated(self, api_url: str, auth_token: str) -> None:
+        """Test that authenticated user can list jobs."""
         headers = {"Authorization": f"Bearer {auth_token}"}
 
         response = requests.get(f"{api_url}/api/jobs", headers=headers, timeout=10)
 
-        # Accept 200 (success) or 404 (endpoint not found - acceptable for initial deployment)
+        # Accept 200 (success) - 404 means endpoint not implemented
         assert response.status_code in [200, 404], (
-            f"List jobs should succeed or return 404, got {response.status_code}"
+            f"List jobs should return 200 or 404, got {response.status_code}"
         )
 
-    def test_create_job(self, api_url: str, auth_token: str) -> None:
-        """Test that user can create a job listing."""
+    def test_create_job_authenticated(self, api_url: str, auth_token: str) -> None:
+        """Test that authenticated user can create a job listing."""
         headers = {
             "Authorization": f"Bearer {auth_token}",
             "Content-Type": "application/json",
@@ -244,7 +313,7 @@ class TestCRUDOperations:
             "country": "USA",
             "job_type": "FULL_TIME",
             "experience_level": "MID",
-            "description": "Test job description",
+            "description": "Test job description for E2E testing",
             "requirements": ["3+ years experience"],
         }
 
@@ -254,12 +323,16 @@ class TestCRUDOperations:
 
         # Accept 201 (created), 200 (success), or 404 (not implemented)
         assert response.status_code in [200, 201, 404], (
-            f"Create job should succeed or return 404, got {response.status_code}"
+            f"Create job should return 200/201/404, got {response.status_code}: {response.text}"
         )
 
 
 class TestAsyncFlows:
-    """Test suite for async flows (VPR, CV Tailoring)."""
+    """
+    Test suite for async flows (VPR, CV Tailoring).
+
+    These are the core AI features.
+    """
 
     def test_vpr_endpoint_accepts_request(self, api_url: str, auth_token: str) -> None:
         """Test that VPR endpoint accepts a request."""
@@ -278,14 +351,13 @@ class TestAsyncFlows:
             f"{api_url}/api/vpr", json=vpr_data, headers=headers, timeout=30
         )
 
-        # Accept 202 (accepted), 200 (success), or 404 (not implemented)
+        # Accept 202 (accepted), 200 (success) - 404 means not implemented
         assert response.status_code in [200, 202, 404], (
-            f"VPR should accept request or return 404, got {response.status_code}"
+            f"VPR should accept request, got {response.status_code}: {response.text}"
         )
 
         if response.status_code in [200, 202]:
             data = response.json()
-            # For async flows, we expect a job_id to poll for status
             assert "job_id" in data or "status" in data, (
                 "VPR response should include job_id or status"
             )
@@ -308,32 +380,33 @@ class TestAsyncFlows:
             timeout=30,
         )
 
-        # Accept 202 (accepted), 200 (success), or 404 (not implemented)
+        # Accept 202 (accepted), 200 (success) - 404 means not implemented
         assert response.status_code in [200, 202, 404], (
-            f"CV Tailoring should accept request or return 404, got {response.status_code}"
+            f"CV Tailoring should accept request, got {response.status_code}: {response.text}"
         )
 
 
 class TestStagingIsolation:
-    """Test suite to verify staging is isolated from other environments."""
+    """
+    Test suite for staging environment isolation.
 
-    def test_staging_has_separate_database(self, api_url: str, auth_token: str) -> None:
+    Validates staging is separate from dev/prod.
+    """
+
+    def test_staging_uses_staging_database(self, api_url: str, auth_token: str) -> None:
         """Test that staging uses separate database tables."""
         headers = {"Authorization": f"Bearer {auth_token}"}
 
-        # Get user profile
+        # Get user profile - if this works, we're using the correct database
         response = requests.get(f"{api_url}/api/users/me", headers=headers, timeout=10)
 
-        if response.status_code == 200:
-            _ = response.json()  # Verify valid JSON response
-            # If we can get a user profile, we're using the correct database
-            assert True, "Staging is using its own database"
-        else:
-            pytest.skip("Cannot verify database isolation - endpoint not accessible")
+        assert response.status_code == 200, (
+            f"Cannot access user profile - database may not be configured: {response.status_code}"
+        )
 
-    def test_staging_data_does_not_pollute_dev(self, api_url: str) -> None:
-        """Test that staging data is separate from dev."""
-        # Register a new user in staging
+    def test_staging_data_isolation(self, api_url: str) -> None:
+        """Test that staging data doesn't pollute other environments."""
+        # Register a unique user in staging
         test_email = f"isolation.test.{int(time.time())}@staging.careervp.com"
 
         register_data = {
@@ -348,15 +421,17 @@ class TestStagingIsolation:
             f"{api_url}/api/auth/register", json=register_data, timeout=30
         )
 
-        # The key test is that this succeeds in staging
-        # (it would also succeed in dev, but with different data)
         assert response.status_code in [200, 201], (
             f"Registration should work in staging, got {response.status_code}"
         )
 
 
 class TestStagingPerformance:
-    """Test suite for staging performance validation."""
+    """
+    Test suite for staging performance validation.
+
+    Validates acceptable response times.
+    """
 
     def test_health_endpoint_response_time(self, api_url: str) -> None:
         """Test that health endpoint responds quickly."""
@@ -377,12 +452,12 @@ class TestStagingPerformance:
         }
 
         start = time.time()
-        _ = requests.post(
+        _response = requests.post(
             f"{api_url}/api/auth/login", json=login_data, timeout=30
         )
         elapsed = time.time() - start
 
-        # Login can be slower due to JWT generation, but should still be reasonable
+        # Login can be slower but should still be reasonable
         assert elapsed < 5.0, (
             f"Auth endpoint should respond in under 5 seconds, took {elapsed:.2f}s"
         )

@@ -101,6 +101,7 @@ gh api repos/{owner}/{repo}/protection/branches/develop \
   -f allow_force_pushes=false \
   -f allow_deletions=false
 ```
+//correction: repos/{owner}/{repo}/branches/develop/protection
 
 **VALIDATION CRITERIA:**
 - [ ] PRIMARY GOAL: Does this phase deploy Dev code to Staging? **NO** - This phase configures branch protection
@@ -143,7 +144,7 @@ gh api repos/{owner}/{repo}/environments/staging \
 # Option A: Use same Anthropic key as dev (for testing)
 aws ssm put-parameter \
   --name "/careervp/staging/anthropic-api-key" \
-  --value "$ANTHROPIC_API_KEY" \
+  --value "$ANTHROPIC_API_KEY_STAGING" \
   --type SecureString \
   --overwrite \
   --region us-east-1
