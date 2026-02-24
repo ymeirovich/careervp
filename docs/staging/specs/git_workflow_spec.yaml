@@ -1,0 +1,250 @@
+# Git Workflow Specification
+
+**Version:** 1.0
+**Date:** 2026-02-24
+**Purpose:** Define Git branch and deployment workflow for CareerVP staging environment
+
+---
+
+## Overview
+
+This specification defines the Git workflow for deploying the CareerVP staging environment. The workflow uses a branch-based strategy where the `develop` branch triggers automatic deployments to staging.
+
+---
+
+## Specification
+
+## Branch Strategy
+
+### Branch Structure
+
+| Branch | Purpose | Deployment Target | Protection |
+|--------|---------|-------------------|------------|
+| `main` | Production code | Dev (auto) | Required |
+| `develop` | Staging code | Staging (auto) | Required |
+| `feature/*` | New features | None | None |
+
+### Branch Flow
+
+```
+feature/* → develop → main
+                ↓
+           staging (auto-deploy)
+```
+
+### Branch Naming Conventions
+
+| Branch Type | Pattern | Example |
+|-------------|---------|---------|
+| Feature | `feature/<ticket>-<description>` | feature/123-add-vpr |
+| Bugfix | `bugfix/<ticket>-<description>` | bugfix/456-fix-auth |
+| Hotfix | `hotfix/<ticket>-<description>` | hotfix/789-security-patch |
+
+---
+
+## GitHub Workflows
+
+### Workflow 1: deploy.yml (Existing)
+
+**Trigger:** Push to `main` branch
+**Purpose:** Auto-deploy to Dev environment
+**Environment:** Dev
+
+```yaml
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy (dev, staging, prod)'
+        required: true
+        default: dev
+```
+
+### Workflow 2: deploy-staging.yml (New)
+
+**Trigger:**
+- Push to `develop` branch
+- Manual dispatch (`workflow_dispatch`)
+
+**Purpose:** Deploy to Staging environment
+**Environment:** Staging
+
+```yaml
+name: Deploy to Staging
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+```
+
+### Environment Configuration
+
+| Environment | Branch | GitHub Environment | Auto-Deploy |
+|-------------|--------|-------------------|-------------|
+| Dev | main | dev | Yes |
+| Staging | develop | staging | Yes |
+| Prod | release tags | prod | Manual |
+
+---
+
+## GitHub Environments
+
+### Dev Environment
+
+| Setting | Value |
+|---------|-------|
+| **Name** | dev |
+| **Wait Timer** | 0 minutes |
+| **Required Reviewers** | None |
+| **Deployment Branch** | main |
+
+### Staging Environment
+
+| Setting | Value |
+|---------|-------|
+| **Name** | staging |
+| **Wait Timer** | 0 minutes |
+| **Required Reviewers** | None (for auto-deploy) |
+| **Deployment Branch** | develop |
+
+### Production Environment
+
+| Setting | Value |
+|---------|-------|
+| **Name** | prod |
+| **Wait Timer** | 5 minutes |
+| **Required Reviewers** | 1 |
+| **Deployment Branch** | release/* |
+
+---
+
+## Deployment Flow
+
+### Automatic Deployment to Staging
+
+1. Developer pushes to `develop` branch
+2. GitHub Actions triggers `deploy-staging.yml`
+3. Workflow runs quality gates:
+   - Lint check (ruff)
+   - Type check (mypy)
+   - Unit tests (pytest)
+4. CDK synth validates infrastructure
+5. CDK Nag security scan
+6. AWS credentials configured
+7. SSM parameters synced
+8. Stack deployed via CDK
+9. Smoke tests run
+10. Deployment complete
+
+### Manual Deployment to Staging
+
+1. Navigate to Actions → Deploy to Staging
+2. Click "Run workflow"
+3. Select staging environment (if prompted)
+4. Click "Run workflow"
+5. Follow deployment progress
+
+---
+
+## Quality Gates
+
+All deployments must pass the following quality gates:
+
+| Gate | Tool | Command | Timeout |
+|------|------|---------|---------|
+| Lint | ruff | `ruff check .` | 60s |
+| Format | ruff | `ruff format --check .` | 60s |
+| Type Check | mypy | `mypy careervp --strict` | 120s |
+| Unit Tests | pytest | `pytest tests/unit -v` | 300s |
+| CDK Synth | CDK | `cdk synth` | 180s |
+| Security Scan | CDK Nag | `cdk synth \| cfn-guard` | 120s |
+
+---
+
+## Rollback Procedures
+
+### Via Git (Recommended)
+
+```bash
+# Revert the develop branch to previous commit
+git checkout develop
+git log --oneline -5  # Find the previous good commit
+git revert <commit-sha>
+git push origin develop
+```
+
+### Via CloudFormation
+
+```bash
+# Rollback to previous stack state
+aws cloudformation rollback-stack \
+  --stack-name CareerVpCrudStaging \
+  --region us-east-1
+```
+
+### Via GitHub
+
+1. Navigate to Actions → Deploy to Staging
+2. Find the previous successful workflow run
+3. Click "Re-run all jobs"
+
+---
+
+## Security Considerations
+
+1. **Branch Protection**: All main branches protected from direct push
+2. **Required Reviews**: Production requires 1 reviewer
+3. **Secret Management**: AWS credentials via OIDC (no long-lived keys)
+4. **SSM Security**: API keys stored as SecureString
+5. **Audit Trail**: All deployments logged in GitHub Actions
+
+---
+
+## Monitoring
+
+### GitHub Actions Metrics
+
+| Metric | Description |
+|--------|-------------|
+| Deployment Frequency | How often staging is deployed |
+| Lead Time | Time from commit to deployment |
+| Change Failure Rate | Failed deployments |
+| MTTR | Mean time to recovery |
+
+### CloudWatch Metrics
+
+| Metric | Description |
+|--------|-------------|
+| DeploymentDuration | Time to complete deployment |
+| StackEvents | CloudFormation events |
+| APILatency | API response times |
+
+---
+
+## Specification Validation
+
+### Pre-Implementation Checks
+
+- [ ] `develop` branch exists and contains dev code
+- [ ] GitHub "staging" environment configured
+- [ ] deploy-staging.yml workflow created
+- [ ] Branch protection rules applied
+
+### Post-Implementation Checks
+
+- [ ] Push to `develop` triggers deployment
+- [ ] Deployment completes successfully
+- [ ] Smoke tests pass
+- [ ] API accessible at staging endpoint
+
+---
+
+**Specification Status:** APPROVED
+**Review Frequency:** Annual or on workflow changes

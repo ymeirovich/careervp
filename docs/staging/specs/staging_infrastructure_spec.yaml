@@ -1,0 +1,188 @@
+# Staging Infrastructure Specification
+
+**Version:** 1.0
+**Date:** 2026-02-24
+**Purpose:** Define infrastructure requirements for the CareerVP staging environment
+
+---
+
+## Overview
+
+This specification defines the AWS infrastructure components required for the CareerVP staging environment. The staging environment is a near-production clone used for pre-production testing.
+
+---
+
+## Specification
+
+### Stack Configuration
+
+| Property | Value |
+|----------|-------|
+| **Stack Name** | CareerVpCrudStaging |
+| **AWS Region** | us-east-1 |
+| **Environment** | staging |
+| **CDK App** | infra/app.py |
+
+### SSM Parameters
+
+| Parameter Name | Type | Description | Required |
+|---------------|------|-------------|----------|
+| `/careervp/staging/anthropic-api-key` | SecureString | Anthropic API key for AI features | Yes |
+| `/careervp/staging/jwt-private-key` | String | JWT private key for auth | Yes |
+| `/careervp/staging/jwt-public-key` | String | JWT public key for auth | Yes |
+
+### DynamoDB Tables
+
+All tables follow the naming pattern: `careervp-{feature}-staging`
+
+| Table Name | Purpose | Billing Mode |
+|------------|---------|--------------|
+| `careervp-users-staging` | User profiles and auth | PAY_PER_REQUEST |
+| `careervp-jobs-staging` | Job listings | PAY_PER_REQUEST |
+| `careervp-cv-staging` | CV/resume storage | PAY_PER_REQUEST |
+| `careervp-vpr-staging` | VPR results | PAY_PER_REQUEST |
+| `careervp-gapanalysis-staging` | Gap analysis results | PAY_PER_REQUEST |
+| `careervp-interviewprep-staging` | Interview prep results | PAY_PER_REQUEST |
+| `careervp-coverletter-staging` | Cover letter results | PAY_PER_REQUEST |
+| `careervp-llm-cache-staging` | LLM response cache | PAY_PER_REQUEST |
+| `careervp-idempotency-staging` | Idempotency keys | PAY_PER_REQUEST |
+
+**Note:** All tables use PAY_PER_REQUEST billing and have TTL enabled where appropriate.
+
+### S3 Buckets
+
+All buckets follow the naming pattern: `careervp-{environment}-{purpose}-{region}-{hash}`
+
+| Bucket Name | Purpose |
+|-------------|---------|
+| `careervp-staging-cvs-{hash}` | CV file storage |
+| `careervp-staging-results-{hash}` | Async operation results |
+
+### Lambda Functions
+
+All Lambda functions follow the naming pattern: `careervp-{feature}-lambda-{environment}`
+
+| Function Name | Purpose | Runtime |
+|---------------|---------|---------|
+| `careervp-crud-lambda-staging` | Main API handler | Python 3.13 |
+| `careervp-vpr-lambda-staging` | VPR async worker | Python 3.13 |
+| `careervp-cv-tailoring-lambda-staging` | CV tailoring worker | Python 3.13 |
+| `careervp-cover-letter-lambda-staging` | Cover letter worker | Python 3.13 |
+| `careervp-gap-analysis-lambda-staging` | Gap analysis worker | Python 3.13 |
+| `careervp-interview-prep-lambda-staging` | Interview prep worker | Python 3.13 |
+| `careervp-company-research-lambda-staging` | Company research worker | Python 3.13 |
+
+### API Gateway
+
+| Property | Value |
+|----------|-------|
+| **API Name** | careervp-api-staging |
+| **Stage** | prod |
+| **Endpoint Type** | Regional |
+| **Throttling** | 1000 requests/second |
+| **Burst Limit** | 2000 requests |
+
+### CloudWatch
+
+| Component | Configuration |
+|-----------|---------------|
+| **Log Groups** | `/aws/lambda/careervp-*-staging` |
+| **Retention** | 7 days |
+| **Alarms** | Same as production (see monitoring spec) |
+
+---
+
+## Configuration Files
+
+### staging_configuration.json
+
+Location: `infra/careervp/configuration/json/staging_configuration.json`
+
+```json
+{
+    "features": {
+        "premium_features": {
+            "default": false,
+            "rules": {
+                "enable premium features for this specific customer name": {
+                    "when_match": true,
+                    "conditions": [
+                        {
+                            "action": "EQUALS",
+                            "key": "customer_name",
+                            "value": "RanTheBuilder"
+                        }
+                    ]
+                }
+            }
+        },
+        "ten_percent_off_campaign": {
+            "default": true
+        }
+    },
+    "countries": [
+        "ISRAEL",
+        "USA"
+    ]
+}
+```
+
+---
+
+## Deployment Validation
+
+### Pre-Deployment Checks
+
+1. **SSM Parameters**: Verify all required SSM parameters exist
+2. **Configuration**: Verify staging_configuration.json is valid JSON
+3. **CDK Synth**: Verify CDK can synthesize staging stack
+4. **Code Quality**: Verify code passes lint and type checks
+
+### Post-Deployment Checks
+
+1. **Stack Status**: Verify stack is in CREATE_COMPLETE or UPDATE_COMPLETE state
+2. **API Health**: Verify `/health` endpoint returns 200 OK
+3. **Resources**: Verify all DynamoDB tables and S3 buckets exist
+4. **Logs**: Verify CloudWatch log groups are created
+
+---
+
+## Rollback Procedure
+
+If staging deployment fails:
+
+```bash
+# CloudFormation rollback
+aws cloudformation rollback-stack \
+  --stack-name CareerVpCrudStaging \
+  --region us-east-1
+
+# Or delete stack entirely
+aws cloudformation delete-stack \
+  --stack-name CareerVpCrudStaging \
+  --region us-east-1
+```
+
+---
+
+## Security Considerations
+
+1. **Secrets Management**: All secrets stored in SSM with appropriate IAM policies
+2. **VPC**: Staging runs in same VPC as production (if applicable)
+3. **IAM**: Least-privilege IAM roles for Lambda functions
+4. **Encryption**: All DynamoDB tables and S3 buckets have encryption at rest enabled
+5. **Access**: Staging accessible only via API Gateway (no direct Lambda access)
+
+---
+
+## Cost Optimization
+
+1. **PAY_PER_REQUEST**: All DynamoDB tables use on-demand billing
+2. **TTL**: Appropriate TTL on cache tables to reduce storage costs
+3. **Log Retention**: 7-day log retention (vs 30 days for production)
+4. **CloudWatch**: Basic metrics only (no detailed monitoring)
+
+---
+
+**Specification Status:** APPROVED
+**Review Frequency:** Annual or on infrastructure changes
