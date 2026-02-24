@@ -1,0 +1,176 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+# Concurrency control: prevents multiple deployments from running simultaneously
+# on the same stack. New pushes will cancel in-progress runs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  deployments: write
+  id-token: write  # Required for OIDC
+
+env:
+  PYTHON_VERSION: '3.13'
+  NODE_VERSION: '22'
+  AWS_REGION: 'us-east-1'
+  UV_VERSION: '0.5.21'
+  ENVIRONMENT: 'staging'
+  STACK_NAME: 'CareerVpCrudStaging'
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: '**/uv.lock'
+
+      - name: Install Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install backend dependencies
+        working-directory: src/backend
+        run: uv sync
+
+      - name: Build Lambda artifacts
+        working-directory: src/backend
+        run: make build
+
+      - name: Run CDK Nag Security Scan
+        working-directory: infra
+        run: |
+          uv sync
+          echo "=== Running CDK Nag Security Scan ==="
+          npx cdk synth --quiet || { echo "CDK synth failed"; exit 1; }
+          echo "=== CDK Nag Security Scan passed ==="
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          role-session-name: deploy-staging-${{ github.sha }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Ensure SSM Parameter exists
+        env:
+          ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -n "$ANTHROPIC_KEY" ]; then
+            aws ssm put-parameter \
+              --name "/careervp/staging/anthropic-api-key" \
+              --value "$ANTHROPIC_KEY" \
+              --type SecureString \
+              --overwrite \
+              --region ${{ env.AWS_REGION }}
+          else
+            echo "::warning::ANTHROPIC_API_KEY secret not set."
+          fi
+
+      - name: Ensure JWT SSM Parameters exist
+        env:
+          JWT_PRIVATE_KEY_SECRET: ${{ secrets.JWT_PRIVATE_KEY }}
+          JWT_PUBLIC_KEY_SECRET: ${{ secrets.JWT_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          ensure_string_parameter() {
+            local param_name="$1"
+            local param_value="$2"
+            local existing_type
+            existing_type="$(aws ssm get-parameter --name "$param_name" --query 'Parameter.Type' --output text 2>/dev/null || echo 'MISSING')"
+            if [ "$existing_type" != "MISSING" ] && [ "$existing_type" != "String" ]; then
+              echo "::warning::Recreating $param_name as String for CloudFormation compatibility (was $existing_type)."
+              aws ssm delete-parameter --name "$param_name"
+            fi
+            aws ssm put-parameter \
+              --name "$param_name" \
+              --value "$param_value" \
+              --type String \
+              --overwrite \
+              --region ${{ env.AWS_REGION }}
+          }
+          JWT_PRIVATE_KEY="${JWT_PRIVATE_KEY_SECRET:-}"
+          JWT_PUBLIC_KEY="${JWT_PUBLIC_KEY_SECRET:-}"
+          if [ -z "$JWT_PRIVATE_KEY" ] || [ -z "$JWT_PUBLIC_KEY" ]; then
+            TMP_DIR="$(mktemp -d)"
+            openssl genrsa -out "$TMP_DIR/jwt-private.pem" 2048 >/dev/null 2>&1
+            openssl rsa -in "$TMP_DIR/jwt-private.pem" -pubout -out "$TMP_DIR/jwt-public.pem" >/dev/null 2>&1
+            JWT_PRIVATE_KEY="$(cat "$TMP_DIR/jwt-private.pem")"
+            JWT_PUBLIC_KEY="$(cat "$TMP_DIR/jwt-public.pem")"
+            echo "::warning::JWT keys not set. Generated ephemeral keys for staging deployment."
+          fi
+          ensure_string_parameter "/careervp/staging/jwt-private-key" "$JWT_PRIVATE_KEY"
+          ensure_string_parameter "/careervp/staging/jwt-public-key" "$JWT_PUBLIC_KEY"
+
+      - name: CFN State Guard
+        run: |
+          .github/scripts/cfn-guard.sh "${{ env.STACK_NAME }}" "${{ env.AWS_REGION }}"
+
+      - name: Build and Deploy
+        working-directory: src/backend
+        env:
+          ENVIRONMENT: ${{ env.ENVIRONMENT }}
+        run: |
+          set -o pipefail
+          make deploy 2>&1 | tee /tmp/deploy.log || {
+            if grep -Eq "(_IN_PROGRESS state and can not be updated|UPDATE_COMPLETE_CLEANUP_IN_PROGRESS|is in .*_IN_PROGRESS state)" /tmp/deploy.log; then
+              echo "::warning::Stack update lock detected. Re-running CFN guard and retrying deploy..."
+              .github/scripts/cfn-guard.sh "${{ env.STACK_NAME }}" "${{ env.AWS_REGION }}"
+              make deploy
+            else
+              exit 1
+            fi
+          }
+
+      - name: Wait for Stack Stability
+        run: |
+          echo "Waiting for CloudFormation stack to stabilize..."
+          aws cloudformation wait stack-create-complete \
+            --stack-name ${{ env.STACK_NAME }} \
+            --region ${{ env.AWS_REGION }} 2>/dev/null || \
+          aws cloudformation wait stack-update-complete \
+            --stack-name ${{ env.STACK_NAME }} \
+            --region ${{ env.AWS_REGION }} 2>/dev/null || true
+
+      - name: Wait for API Availability
+        run: |
+          .github/scripts/wait-for-api.sh "${{ env.AWS_REGION }}" "${{ env.STACK_NAME }}"
+
+      - name: Smoke test
+        working-directory: src/backend
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AUTO_SET_LAMBDA_ENV: '1'
+          AWS_REGION: us-east-1
+        run: |
+          # Wait for IAM propagation (AWS credentials can take 5-10s to settle)
+          echo "=== IAM PROPAGATION WAIT (15s) ==="
+          sleep 15
+
+          # Use uv's Python for inline scripts
+          export PATH="${PWD}/.venv/bin:${PATH}"
+          bash tests/aws_cli_smoke.sh staging

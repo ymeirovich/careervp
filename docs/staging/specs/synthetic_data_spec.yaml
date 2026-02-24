@@ -1,0 +1,315 @@
+# Synthetic Data Generator Specification
+
+**Version:** 1.0
+**Date:** 2026-02-24
+**Purpose:** Define synthetic data generation for CareerVP staging environment testing
+
+---
+
+## Overview
+
+This specification defines the synthetic data generator for creating realistic test data in the CareerVP staging environment. Synthetic data enables testing without relying on production data or manual creation.
+
+---
+
+## Specification
+
+## Data Types
+
+### 1. Test Users
+
+| Field | Type | Description | Example |
+|-------|------|-------------|---------|
+| `user_id` | UUID | Unique user identifier | `550e8400-e29b-41d4-a716-446655440000` |
+| `email` | string | User email address | `test.user1@staging.careervp.com` |
+| `first_name` | string | First name | `John` |
+| `last_name` | string | Last name | `Smith` |
+| `country` | enum | Country code | `USA`, `ISRAEL` |
+| `subscription_tier` | enum | Subscription level | `free`, `premium`, `trial` |
+| `is_active` | boolean | Account status | `true` |
+| `created_at` | ISO8601 | Creation timestamp | `2026-01-15T10:30:00Z` |
+| `updated_at` | ISO8601 | Last update timestamp | `2026-02-20T14:45:00Z` |
+
+**Generation Rules:**
+- 10 test users generated
+- Email uses `@staging.careervp.com` domain
+- Mix of subscription tiers: 50% free, 30% trial, 20% premium
+- Created within last 90 days
+
+### 2. Test Jobs
+
+| Field | Type | Description | Example |
+|-------|------|-------------|---------|
+| `job_id` | UUID | Unique job identifier | `550e8400-e29b-41d4-a716-446655440001` |
+| `title` | string | Job title | `Software Engineer` |
+| `company` | string | Company name | `TechCorp` |
+| `country` | enum | Country code | `USA`, `ISRAEL` |
+| `job_type` | enum | Employment type | `FULL_TIME`, `PART_TIME`, `CONTRACT`, `INTERNSHIP` |
+| `experience_level` | enum | Experience level | `ENTRY`, `MID`, `SENIOR`, `LEAD`, `EXECUTIVE` |
+| `description` | string | Job description | `Looking for a talented...` |
+| `requirements` | array[string] | Job requirements | `["3+ years experience", ...]` |
+| `is_active` | boolean | Job status | `true` |
+| `created_at` | ISO8601 | Creation timestamp | `2026-01-20T08:00:00Z` |
+| `updated_at` | ISO8601 | Last update timestamp | `2026-02-15T12:00:00Z` |
+
+**Generation Rules:**
+- 20 test jobs generated
+- Mix of job titles: software roles, data roles, design roles
+- Mix of experience levels: 20% entry, 40% mid, 30% senior, 10% lead
+- Mix of job types: 70% full-time, 15% contract, 10% internship, 5% part-time
+- Created within last 30 days
+
+### 3. Test CVs
+
+| Field | Type | Description | Example |
+|-------|------|-------------|---------|
+| `cv_id` | UUID | Unique CV identifier | `550e8400-e29b-41d4-a716-446655440002` |
+| `user_id` | UUID | Owner user ID | `550e8400-e29b-41d4-a716-446655440000` |
+| `file_name` | string | Original file name | `software_engineer_resume.pdf` |
+| `file_type` | string | MIME type | `application/pdf` |
+| `summary` | string | CV summary | `Experienced software engineer...` |
+| `experience` | array[object] | Work experience | See below |
+| `skills` | array[string] | Skills list | `["Python", "JavaScript", ...]` |
+| `education` | array[object] | Education history | See below |
+| `created_at` | ISO8601 | Creation timestamp | `2026-02-01T09:00:00Z` |
+
+**Experience Object:**
+```json
+{
+  "title": "Software Engineer",
+  "company": "TechCorp",
+  "start_date": "2020-01",
+  "end_date": "Present",
+  "description": "Developed microservices..."
+}
+```
+
+**Education Object:**
+```json
+{
+  "degree": "B.Sc. Computer Science",
+  "institution": "Technion",
+  "year": 2018
+}
+```
+
+**Generation Rules:**
+- 5 diverse CVs generated
+- Different profiles: software engineer, data scientist, product manager, etc.
+- Realistic experience and education entries
+
+---
+
+## Data Generation Script
+
+### Script Location
+
+`docs/staging/scripts/generate_synthetic_data.py`
+
+### Script Requirements
+
+1. **Python 3.13+**: Compatible with project Python version
+2. **No External Dependencies**: Uses only standard library
+3. **JSON Output**: Generates JSON files for easy consumption
+4. **Idempotent**: Can be run multiple times without side effects
+5. **Documented**: Clear docstrings and usage instructions
+
+### Usage
+
+```bash
+# Generate all synthetic data
+python3 docs/staging/scripts/generate_synthetic_data.py
+
+# Output:
+# Generated 10 test users -> docs/staging/payloads/staging_test_users.json
+# Generated 20 test jobs -> docs/staging/payloads/staging_test_jobs.json
+# Generated 5 test CVs -> docs/staging/payloads/staging_test_cvs.json
+```
+
+---
+
+## Output Files
+
+### File 1: staging_test_users.json
+
+```json
+[
+  {
+    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "test.user1@staging.careervp.com",
+    "first_name": "John",
+    "last_name": "Smith",
+    "country": "USA",
+    "subscription_tier": "free",
+    "is_active": true,
+    "created_at": "2026-01-15T10:30:00Z",
+    "updated_at": "2026-02-20T14:45:00Z"
+  }
+]
+```
+
+### File 2: staging_test_jobs.json
+
+```json
+[
+  {
+    "job_id": "550e8400-e29b-41d4-a716-446655440001",
+    "title": "Software Engineer",
+    "company": "TechCorp",
+    "country": "USA",
+    "job_type": "FULL_TIME",
+    "experience_level": "MID",
+    "description": "Looking for a talented Software Engineer...",
+    "requirements": [
+      "3+ years of experience",
+      "Bachelor's degree or equivalent",
+      "Strong communication skills"
+    ],
+    "is_active": true,
+    "created_at": "2026-01-20T08:00:00Z",
+    "updated_at": "2026-02-15T12:00:00Z"
+  }
+]
+```
+
+### File 3: staging_test_cvs.json
+
+```json
+[
+  {
+    "cv_id": "550e8400-e29b-41d4-a716-446655440002",
+    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+    "file_name": "software_engineer_resume.pdf",
+    "file_type": "application/pdf",
+    "summary": "Experienced software engineer with 5 years...",
+    "experience": [
+      {
+        "title": "Software Engineer",
+        "company": "TechCorp",
+        "start_date": "2020-01",
+        "end_date": "Present",
+        "description": "Developed microservices using Python..."
+      }
+    ],
+    "skills": ["Python", "JavaScript", "React", "AWS"],
+    "education": [
+      {
+        "degree": "B.Sc. Computer Science",
+        "institution": "Technion",
+        "year": 2018
+      }
+    ],
+    "created_at": "2026-02-01T09:00:00Z"
+  }
+]
+```
+
+---
+
+## Data Seeding Strategy
+
+### Option A: API-Based Seeding (Recommended)
+
+1. Deploy staging environment
+2. Run synthetic data generator
+3. Use API calls to create users, jobs, and upload CVs
+
+```bash
+# Example API calls for seeding
+API_URL="https://api-id.execute-api.us-east-1.amazonaws.com/prod"
+
+# Register test users
+for user in $(cat staging_test_users.json | jq -r '.[].email'); do
+  curl -X POST "${API_URL}/api/auth/register" \
+    -H "Content-Type: application/json" \
+    -d "{\"email\": \"$user\", \"password\": \"TestPass123!\", ...}"
+done
+```
+
+### Option B: Direct Database Seeding
+
+Use AWS CLI or scripts to directly insert data into DynamoDB tables.
+
+```bash
+# Example: Insert test user
+aws dynamodb put-item \
+  --table-name careervp-users-staging \
+  --item '{"user_id": {"S": "..."}, ...}'
+```
+
+---
+
+## Validation
+
+### Data Quality Checks
+
+| Check | Description |
+|-------|-------------|
+| Valid JSON | All output files are valid JSON |
+| Required Fields | All required fields present |
+| UUID Format | IDs follow UUID v4 format |
+| Email Format | Emails use `@staging.careervp.com` domain |
+| ISO8601 | Timestamps in ISO8601 format |
+| No Duplicates | No duplicate IDs or emails |
+
+### Test Execution
+
+```bash
+# Validate JSON files
+python3 -c "import json; json.load(open('staging_test_users.json'))"
+python3 -c "import json; json.load(open('staging_test_jobs.json'))"
+python3 -c "import json; json.load(open('staging_test_cvs.json'))"
+
+# Count records
+jq 'length' staging_test_users.json  # Should be 10
+jq 'length' staging_test_jobs.json  # Should be 20
+jq 'length' staging_test_cvs.json   # Should be 5
+```
+
+---
+
+## Maintenance
+
+### Regular Updates
+
+- Regenerate synthetic data quarterly
+- Update job listings with current market data
+- Refresh CVs with new skills/technologies
+
+### Version Control
+
+- Commit generated data files to repository
+- Track changes in CHANGELOG.md
+- Tag releases with data version
+
+---
+
+## Security Considerations
+
+1. **No Real PII**: All data is synthetic
+2. **Staging Domain**: Use `@staging.careervp.com` emails
+3. **Isolated Data**: Staging data separate from dev/prod
+4. **Auto-Cleanup**: Consider TTL for test data
+
+---
+
+## Specification Validation
+
+### Pre-Implementation Checks
+
+- [ ] Generator script created
+- [ ] Script runs without errors
+- [ ] Output files are valid JSON
+- [ ] Data meets quality requirements
+
+### Post-Implementation Checks
+
+- [ ] Users can be created via API
+- [ ] Jobs can be listed
+- [ ] CVs can be uploaded
+- [ ] Async flows work with test data
+
+---
+
+**Specification Status:** APPROVED
+**Review Frequency:** Annual or on data requirements change
