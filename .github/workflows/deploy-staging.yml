@@ -6,16 +6,10 @@ on:
       - develop
   workflow_dispatch:
 
-# Concurrency control: prevents multiple deployments from running simultaneously
-# on the same stack. New pushes will cancel in-progress runs.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
   deployments: write
-  id-token: write  # Required for OIDC
+  id-token: write
 
 env:
   PYTHON_VERSION: '3.13'
@@ -85,8 +79,7 @@ jobs:
               --name "/careervp/staging/anthropic-api-key" \
               --value "$ANTHROPIC_KEY" \
               --type SecureString \
-              --overwrite \
-              --region ${{ env.AWS_REGION }}
+              --overwrite
           else
             echo "::warning::ANTHROPIC_API_KEY secret not set."
           fi
@@ -100,18 +93,11 @@ jobs:
           ensure_string_parameter() {
             local param_name="$1"
             local param_value="$2"
-            local existing_type
-            existing_type="$(aws ssm get-parameter --name "$param_name" --query 'Parameter.Type' --output text 2>/dev/null || echo 'MISSING')"
-            if [ "$existing_type" != "MISSING" ] && [ "$existing_type" != "String" ]; then
-              echo "::warning::Recreating $param_name as String for CloudFormation compatibility (was $existing_type)."
-              aws ssm delete-parameter --name "$param_name"
-            fi
             aws ssm put-parameter \
               --name "$param_name" \
               --value "$param_value" \
               --type String \
-              --overwrite \
-              --region ${{ env.AWS_REGION }}
+              --overwrite
           }
           JWT_PRIVATE_KEY="${JWT_PRIVATE_KEY_SECRET:-}"
           JWT_PUBLIC_KEY="${JWT_PUBLIC_KEY_SECRET:-}"
@@ -121,7 +107,7 @@ jobs:
             openssl rsa -in "$TMP_DIR/jwt-private.pem" -pubout -out "$TMP_DIR/jwt-public.pem" >/dev/null 2>&1
             JWT_PRIVATE_KEY="$(cat "$TMP_DIR/jwt-private.pem")"
             JWT_PUBLIC_KEY="$(cat "$TMP_DIR/jwt-public.pem")"
-            echo "::warning::JWT keys not set. Generated ephemeral keys for staging deployment."
+            echo "::warning::JWT keys not set. Generated ephemeral keys."
           fi
           ensure_string_parameter "/careervp/staging/jwt-private-key" "$JWT_PRIVATE_KEY"
           ensure_string_parameter "/careervp/staging/jwt-public-key" "$JWT_PUBLIC_KEY"
@@ -132,12 +118,10 @@ jobs:
 
       - name: Build and Deploy
         working-directory: src/backend
-        env:
-          ENVIRONMENT: ${{ env.ENVIRONMENT }}
         run: |
           set -o pipefail
           make deploy 2>&1 | tee /tmp/deploy.log || {
-            if grep -Eq "(_IN_PROGRESS state and can not be updated|UPDATE_COMPLETE_CLEANUP_IN_PROGRESS|is in .*_IN_PROGRESS state)" /tmp/deploy.log; then
+            if grep -Eq "(_IN_PROGRESS state and can not be updated|UPDATE_COMPLETE_CLEANUP_IN_PROGRESS)" /tmp/deploy.log; then
               echo "::warning::Stack update lock detected. Re-running CFN guard and retrying deploy..."
               .github/scripts/cfn-guard.sh "${{ env.STACK_NAME }}" "${{ env.AWS_REGION }}"
               make deploy
@@ -167,10 +151,7 @@ jobs:
           AUTO_SET_LAMBDA_ENV: '1'
           AWS_REGION: us-east-1
         run: |
-          # Wait for IAM propagation (AWS credentials can take 5-10s to settle)
           echo "=== IAM PROPAGATION WAIT (15s) ==="
           sleep 15
-
-          # Use uv's Python for inline scripts
           export PATH="${PWD}/.venv/bin:${PATH}"
           bash tests/aws_cli_smoke.sh staging

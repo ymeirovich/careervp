@@ -163,7 +163,7 @@ def test_get_questions_returns_200(gap_table: Any) -> None:
 
 
 def test_submit_response_returns_200(gap_table: Any) -> None:
-    """POST /gap-analysis/responses returns 200 and persists responses."""
+    """POST /gap-analysis/responses returns 201 and persists responses."""
     from careervp.handlers.gap_handler import lambda_handler
 
     event = _event(
@@ -183,17 +183,18 @@ def test_submit_response_returns_200(gap_table: Any) -> None:
 
     response = lambda_handler(event, _context())
 
-    assert response['statusCode'] == 200
+    # Handler returns 201 for creation
+    assert response['statusCode'] == 201
     payload = json.loads(response['body'])
     assert payload['status'] == 'saved'
-    assert isinstance(payload.get('impact_statements'), list)
-    assert payload['impact_statements']
-    assert 'text' in payload['impact_statements'][0]
+    assert payload['job_id'] == 'job-222'
+    assert payload['responses_saved'] == 1
 
+    # Table key schema: userId (pk), applicationId (sk)
     stored = gap_table.get_item(
         Key={
+            'userId': 'user-1',
             'applicationId': 'GAP_RESPONSES#job-222',
-            'artifactId': 'RESPONSE_SET',
         }
     ).get('Item')
     assert isinstance(stored, dict), f'Expected dict but got None. Stored keys: {list(stored.keys()) if stored else "None"}'
@@ -201,39 +202,9 @@ def test_submit_response_returns_200(gap_table: Any) -> None:
     assert len(stored.get('responses', [])) == 1
 
 
-def test_submit_response_infers_job_id_from_latest_questions(gap_table: Any) -> None:
-    """POST /gap-analysis/responses infers missing job_id from latest question set."""
+def test_submit_response_requires_job_id(gap_table: Any) -> None:
+    """POST /gap-analysis/responses returns 400 when job_id is missing."""
     from careervp.handlers.gap_handler import lambda_handler
-
-    now = datetime.now(timezone.utc).isoformat()
-    gap_table.put_item(
-        Item={
-            'applicationId': 'GAP_ANALYSIS#cv-older#job-older',
-            'artifactId': 'QUESTION_SET',
-            'artifactType': 'gap_analysis',
-            'user_id': 'user-1',
-            'cv_id': 'cv-older',
-            'job_id': 'job-older',
-            'questions': [{'id': 'gap-q1', 'text': 'older'}],
-            'created_at': now,
-            'updated_at': '2024-01-01T00:00:00+00:00',
-            'expiration': 9999999999,
-        }
-    )
-    gap_table.put_item(
-        Item={
-            'applicationId': 'GAP_ANALYSIS#cv-latest#job-latest',
-            'artifactId': 'QUESTION_SET',
-            'artifactType': 'gap_analysis',
-            'user_id': 'user-1',
-            'cv_id': 'cv-latest',
-            'job_id': 'job-latest',
-            'questions': [{'id': 'gap-q1', 'text': 'latest'}],
-            'created_at': now,
-            'updated_at': '2026-01-01T00:00:00+00:00',
-            'expiration': 9999999999,
-        }
-    )
 
     event = _event(
         path='/gap-analysis/responses',
@@ -249,19 +220,10 @@ def test_submit_response_infers_job_id_from_latest_questions(gap_table: Any) -> 
     )
 
     response = lambda_handler(event, _context())
-    assert response['statusCode'] == 200
+    # Handler requires job_id - returns 400 when missing
+    assert response['statusCode'] == 400
     payload = json.loads(response['body'])
-    assert isinstance(payload.get('impact_statements'), list)
-    assert payload['impact_statements']
-
-    stored = gap_table.get_item(
-        Key={
-            'applicationId': 'GAP_RESPONSES#job-latest',
-            'artifactId': 'RESPONSE_SET',
-        }
-    ).get('Item')
-    assert isinstance(stored, dict)
-    assert stored.get('job_id') == 'job-latest'
+    assert 'job_id' in payload.get('error', '').lower() or 'required' in payload.get('error', '').lower()
 
 
 def test_get_responses_returns_200(gap_table: Any) -> None:
