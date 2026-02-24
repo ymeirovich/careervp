@@ -1,112 +1,112 @@
 [
   {
-    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+    "user_id": "d1be9377-ad5b-4ff6-93ed-7a0ef977afdb",
     "email": "test.user1@staging.careervp.com",
-    "first_name": "John",
+    "first_name": "Lisa",
     "last_name": "Smith",
     "country": "USA",
-    "subscription_tier": "free",
+    "subscription_tier": "premium",
     "is_active": true,
-    "created_at": "2026-01-15T10:30:00Z",
-    "updated_at": "2026-02-20T14:45:00Z"
+    "created_at": "2026-02-12T13:00:43.247753",
+    "updated_at": "2026-02-24T13:00:43.247768"
   },
   {
-    "user_id": "550e8400-e29b-41d4-a716-446655440001",
+    "user_id": "ee2e2101-05f3-4c35-8dc5-d6a0fba92eea",
     "email": "test.user2@staging.careervp.com",
-    "first_name": "Jane",
-    "last_name": "Johnson",
+    "first_name": "Jennifer",
+    "last_name": "Martinez",
     "country": "ISRAEL",
     "subscription_tier": "trial",
     "is_active": true,
-    "created_at": "2026-01-20T08:00:00Z",
-    "updated_at": "2026-02-19T12:00:00Z"
+    "created_at": "2026-01-28T13:00:43.247780",
+    "updated_at": "2026-02-24T13:00:43.247783"
   },
   {
-    "user_id": "550e8400-e29b-41d4-a716-446655440002",
+    "user_id": "11904cea-57c9-4438-8fa7-14f590af9cc7",
     "email": "test.user3@staging.careervp.com",
-    "first_name": "Michael",
-    "last_name": "Williams",
-    "country": "USA",
-    "subscription_tier": "free",
-    "is_active": true,
-    "created_at": "2026-01-25T14:15:00Z",
-    "updated_at": "2026-02-18T09:30:00Z"
-  },
-  {
-    "user_id": "550e8400-e29b-41d4-a716-446655440003",
-    "email": "test.user4@staging.careervp.com",
-    "first_name": "Sarah",
-    "last_name": "Brown",
-    "country": "ISRAEL",
-    "subscription_tier": "premium",
-    "is_active": true,
-    "created_at": "2026-02-01T11:00:00Z",
-    "updated_at": "2026-02-21T16:00:00Z"
-  },
-  {
-    "user_id": "550e8400-e29b-41d4-a716-446655440004",
-    "email": "test.user5@staging.careervp.com",
-    "first_name": "David",
-    "last_name": "Jones",
-    "country": "USA",
-    "subscription_tier": "free",
-    "is_active": true,
-    "created_at": "2026-02-05T09:45:00Z",
-    "updated_at": "2026-02-20T10:15:00Z"
-  },
-  {
-    "user_id": "550e8400-e29b-41d4-a716-446655440005",
-    "email": "test.user6@staging.careervp.com",
-    "first_name": "Emily",
+    "first_name": "John",
     "last_name": "Garcia",
     "country": "USA",
     "subscription_tier": "trial",
     "is_active": true,
-    "created_at": "2026-02-08T13:20:00Z",
-    "updated_at": "2026-02-19T15:45:00Z"
+    "created_at": "2025-12-03T13:00:43.247791",
+    "updated_at": "2026-02-24T13:00:43.247793"
   },
   {
-    "user_id": "550e8400-e29b-41d4-a716-446655440006",
-    "email": "test.user7@staging.careervp.com",
-    "first_name": "Robert",
-    "last_name": "Miller",
-    "country": "ISRAEL",
-    "subscription_tier": "free",
-    "is_active": true,
-    "created_at": "2026-02-10T10:00:00Z",
-    "updated_at": "2026-02-18T11:30:00Z"
-  },
-  {
-    "user_id": "550e8400-e29b-41d4-a716-446655440007",
-    "email": "test.user8@staging.careervp.com",
-    "first_name": "Lisa",
-    "last_name": "Davis",
+    "user_id": "589f7bc7-a718-44ef-941f-0259ed2232aa",
+    "email": "test.user4@staging.careervp.com",
+    "first_name": "Jennifer",
+    "last_name": "Johnson",
     "country": "USA",
-    "subscription_tier": "premium",
+    "subscription_tier": "trial",
     "is_active": true,
-    "created_at": "2026-02-12T08:30:00Z",
-    "updated_at": "2026-02-21T14:00:00Z"
+    "created_at": "2025-12-04T13:00:43.247800",
+    "updated_at": "2026-02-24T13:00:43.247802"
   },
   {
-    "user_id": "550e8400-e29b-41d4-a716-446655440008",
-    "email": "test.user9@staging.careervp.com",
-    "first_name": "William",
-    "last_name": "Rodriguez",
+    "user_id": "3a882634-34b8-4031-b0cf-a1fe7a0866b7",
+    "email": "test.user5@staging.careervp.com",
+    "first_name": "Sarah",
+    "last_name": "Williams",
     "country": "ISRAEL",
     "subscription_tier": "trial",
     "is_active": true,
-    "created_at": "2026-02-15T16:45:00Z",
-    "updated_at": "2026-02-20T08:20:00Z"
+    "created_at": "2025-11-26T13:00:43.247810",
+    "updated_at": "2026-02-24T13:00:43.247812"
   },
   {
-    "user_id": "550e8400-e29b-41d4-a716-446655440009",
-    "email": "test.user10@staging.careervp.com",
-    "first_name": "Jennifer",
-    "last_name": "Martinez",
+    "user_id": "7023d981-adda-413a-9170-d314c7c1e1a9",
+    "email": "test.user6@staging.careervp.com",
+    "first_name": "William",
+    "last_name": "Jones",
+    "country": "ISRAEL",
+    "subscription_tier": "trial",
+    "is_active": true,
+    "created_at": "2025-11-30T13:00:43.247819",
+    "updated_at": "2026-02-24T13:00:43.247821"
+  },
+  {
+    "user_id": "aef75620-e80f-4e93-92b1-7f3805f05b09",
+    "email": "test.user7@staging.careervp.com",
+    "first_name": "Sarah",
+    "last_name": "Brown",
+    "country": "USA",
+    "subscription_tier": "trial",
+    "is_active": true,
+    "created_at": "2026-01-02T13:00:43.247827",
+    "updated_at": "2026-02-24T13:00:43.247829"
+  },
+  {
+    "user_id": "c7d10a68-a824-4cff-be14-74d15869aaaa",
+    "email": "test.user8@staging.careervp.com",
+    "first_name": "Robert",
+    "last_name": "Smith",
     "country": "USA",
     "subscription_tier": "free",
     "is_active": true,
-    "created_at": "2026-02-18T12:00:00Z",
-    "updated_at": "2026-02-19T17:30:00Z"
+    "created_at": "2026-01-03T13:00:43.247838",
+    "updated_at": "2026-02-24T13:00:43.247840"
+  },
+  {
+    "user_id": "780d4d15-b306-45a9-8fd8-3551f9c8da80",
+    "email": "test.user9@staging.careervp.com",
+    "first_name": "Jennifer",
+    "last_name": "Jones",
+    "country": "USA",
+    "subscription_tier": "premium",
+    "is_active": true,
+    "created_at": "2025-12-05T13:00:43.247847",
+    "updated_at": "2026-02-24T13:00:43.247849"
+  },
+  {
+    "user_id": "113dc9a2-c445-4f99-b387-5633f66f8f86",
+    "email": "test.user10@staging.careervp.com",
+    "first_name": "Robert",
+    "last_name": "Miller",
+    "country": "ISRAEL",
+    "subscription_tier": "trial",
+    "is_active": true,
+    "created_at": "2026-01-17T13:00:43.247856",
+    "updated_at": "2026-02-24T13:00:43.247858"
   }
 ]
