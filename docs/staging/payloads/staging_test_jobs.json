@@ -1,342 +1,342 @@
 [
   {
-    "job_id": "660e8400-e29b-41d4-a716-446655440000",
-    "title": "Software Engineer",
-    "company": "TechCorp",
-    "country": "USA",
+    "job_id": "5404d7ef-bf1b-4e32-aaf1-42506df549bc",
+    "title": "Technical Lead",
+    "company": "DigitalFirst",
+    "country": "ISRAEL",
     "job_type": "FULL_TIME",
     "experience_level": "MID",
-    "description": "Looking for a talented Software Engineer to join our growing team.",
+    "description": "Looking for a talented Technical Lead to join our team.",
     "requirements": [
       "3+ years of experience",
       "Bachelor's degree or equivalent",
       "Strong communication skills"
     ],
     "is_active": true,
-    "created_at": "2026-02-01T08:00:00Z",
-    "updated_at": "2026-02-15T12:00:00Z"
+    "created_at": "2026-02-05T13:00:43.248176",
+    "updated_at": "2026-02-24T13:00:43.248179"
   },
   {
-    "job_id": "660e8400-e29b-41d4-a716-446655440001",
-    "title": "Senior Software Engineer",
-    "company": "InnovateTech",
-    "country": "ISRAEL",
-    "job_type": "FULL_TIME",
-    "experience_level": "SENIOR",
-    "description": "Join our team as a Senior Software Engineer and help build next-generation products.",
-    "requirements": [
-      "5+ years of experience",
-      "Experience with microservices architecture",
-      "Strong leadership skills"
-    ],
-    "is_active": true,
-    "created_at": "2026-02-02T09:00:00Z",
-    "updated_at": "2026-02-16T14:00:00Z"
-  },
-  {
-    "job_id": "660e8400-e29b-41d4-a716-446655440002",
-    "title": "Full Stack Developer",
+    "job_id": "7ab6ce2d-5532-42fa-8d35-240d16781f38",
+    "title": "Backend Developer",
     "company": "CloudSystems",
     "country": "USA",
     "job_type": "FULL_TIME",
-    "experience_level": "MID",
-    "description": "We're seeking a Full Stack Developer to build scalable web applications.",
-    "requirements": [
-      "3+ years of full-stack development",
-      "Proficiency in React and Node.js",
-      "Experience with cloud platforms"
-    ],
-    "is_active": true,
-    "created_at": "2026-02-03T10:00:00Z",
-    "updated_at": "2026-02-17T11:00:00Z"
-  },
-  {
-    "job_id": "660e8400-e29b-41d4-a716-446655440003",
-    "title": "Backend Developer",
-    "company": "DataDriven Inc",
-    "country": "ISRAEL",
-    "job_type": "FULL_TIME",
-    "experience_level": "MID",
-    "description": "Backend Developer needed to design and implement API services.",
-    "requirements": [
-      "3+ years of backend development",
-      "Strong Python or Java skills",
-      "Experience with databases"
-    ],
-    "is_active": true,
-    "created_at": "2026-02-04T08:30:00Z",
-    "updated_at": "2026-02-18T10:30:00Z"
-  },
-  {
-    "job_id": "660e8400-e29b-41d4-a716-446655440004",
-    "title": "Frontend Developer",
-    "company": "SecureNet",
-    "country": "USA",
-    "job_type": "CONTRACT",
     "experience_level": "ENTRY",
-    "description": "Contract Frontend Developer for a 6-month project.",
+    "description": "Looking for a talented QA Engineer to join our team.",
     "requirements": [
-      "1+ years of frontend experience",
-      "Proficiency in React",
-      "Understanding of responsive design"
+      "3+ years of experience",
+      "Bachelor's degree or equivalent",
+      "Strong communication skills"
     ],
     "is_active": true,
-    "created_at": "2026-02-05T11:00:00Z",
-    "updated_at": "2026-02-19T13:00:00Z"
+    "created_at": "2026-02-09T13:00:43.248188",
+    "updated_at": "2026-02-24T13:00:43.248190"
   },
   {
-    "job_id": "660e8400-e29b-41d4-a716-446655440005",
+    "job_id": "1b14f348-5e7e-4d57-8ec0-afdbc24d4465",
     "title": "DevOps Engineer",
-    "company": "AIVentures",
-    "country": "ISRAEL",
-    "job_type": "FULL_TIME",
-    "experience_level": "SENIOR",
-    "description": "DevOps Engineer to manage our cloud infrastructure and CI/CD pipelines.",
-    "requirements": [
-      "4+ years of DevOps experience",
-      "Strong AWS or GCP experience",
-      "Experience with Kubernetes"
-    ],
-    "is_active": true,
-    "created_at": "2026-02-06T09:15:00Z",
-    "updated_at": "2026-02-20T15:15:00Z"
-  },
-  {
-    "job_id": "660e8400-e29b-41d4-a716-446655440006",
-    "title": "Data Scientist",
-    "company": "DigitalFirst",
-    "country": "USA",
-    "job_type": "FULL_TIME",
-    "experience_level": "MID",
-    "description": "Data Scientist to build predictive models and analyze data.",
-    "requirements": [
-      "3+ years in data science",
-      "Strong Python and SQL skills",
-      "Experience with ML frameworks"
-    ],
-    "is_active": true,
-    "created_at": "2026-02-07T10:45:00Z",
-    "updated_at": "2026-02-21T12:45:00Z"
-  },
-  {
-    "job_id": "660e8400-e29b-41d4-a716-446655440007",
-    "title": "Product Manager",
-    "company": "FutureSoft",
-    "country": "ISRAEL",
-    "job_type": "FULL_TIME",
-    "experience_level": "LEAD",
-    "description": "Product Manager to lead product strategy and roadmap.",
-    "requirements": [
-      "5+ years of product management",
-      "Strong analytical skills",
-      "Experience with agile methodologies"
-    ],
-    "is_active": true,
-    "created_at": "2026-02-08T08:00:00Z",
-    "updated_at": "2026-02-22T14:00:00Z"
-  },
-  {
-    "job_id": "660e8400-e29b-41d4-a716-446655440008",
-    "title": "UX Designer",
     "company": "NextGen Labs",
     "country": "USA",
     "job_type": "FULL_TIME",
-    "experience_level": "MID",
-    "description": "UX Designer to create intuitive user experiences.",
+    "experience_level": "ENTRY",
+    "description": "Looking for a talented QA Engineer to join our team.",
     "requirements": [
-      "3+ years of UX design",
-      "Proficiency in Figma",
-      "Strong portfolio"
+      "3+ years of experience",
+      "Bachelor's degree or equivalent",
+      "Strong communication skills"
     ],
     "is_active": true,
-    "created_at": "2026-02-09T11:30:00Z",
-    "updated_at": "2026-02-23T09:30:00Z"
+    "created_at": "2026-01-28T13:00:43.248197",
+    "updated_at": "2026-02-24T13:00:43.248200"
   },
   {
-    "job_id": "660e8400-e29b-41d4-a716-446655440009",
-    "title": "QA Engineer",
-    "company": "QuantumCode",
+    "job_id": "3ddd30b6-309f-495a-b584-d2d791fb2d42",
+    "title": "Senior Software Engineer",
+    "company": "AIVentures",
     "country": "ISRAEL",
     "job_type": "FULL_TIME",
     "experience_level": "ENTRY",
-    "description": "QA Engineer to develop and execute test plans.",
+    "description": "Looking for a talented QA Engineer to join our team.",
     "requirements": [
-      "1+ years of QA experience",
-      "Knowledge of testing methodologies",
-      "Strong attention to detail"
+      "3+ years of experience",
+      "Bachelor's degree or equivalent",
+      "Strong communication skills"
     ],
     "is_active": true,
-    "created_at": "2026-02-10T09:00:00Z",
-    "updated_at": "2026-02-24T11:00:00Z"
+    "created_at": "2026-02-16T13:00:43.248207",
+    "updated_at": "2026-02-24T13:00:43.248209"
   },
   {
-    "job_id": "660e8400-e29b-41d4-a716-446655440010",
+    "job_id": "045eb18b-c2c2-45fb-9d65-3d5fdf21c1d2",
     "title": "Machine Learning Engineer",
-    "company": "TechCorp",
-    "country": "USA",
-    "job_type": "FULL_TIME",
-    "experience_level": "SENIOR",
-    "description": "ML Engineer to develop and deploy machine learning models.",
-    "requirements": [
-      "4+ years of ML experience",
-      "Strong Python and TensorFlow",
-      "Experience with MLOps"
-    ],
-    "is_active": true,
-    "created_at": "2026-02-11T10:00:00Z",
-    "updated_at": "2026-02-24T14:00:00Z"
-  },
-  {
-    "job_id": "660e8400-e29b-41d4-a716-446655440011",
-    "title": "Security Engineer",
-    "company": "SecureNet",
+    "company": "QuantumCode",
     "country": "ISRAEL",
     "job_type": "FULL_TIME",
-    "experience_level": "SENIOR",
-    "description": "Security Engineer to protect our systems and data.",
+    "experience_level": "MID",
+    "description": "Looking for a talented Backend Developer to join our team.",
     "requirements": [
-      "5+ years of security experience",
-      "CISSP or equivalent preferred",
-      "Experience with penetration testing"
+      "3+ years of experience",
+      "Bachelor's degree or equivalent",
+      "Strong communication skills"
     ],
     "is_active": true,
-    "created_at": "2026-02-12T08:00:00Z",
-    "updated_at": "2026-02-24T12:00:00Z"
+    "created_at": "2026-01-28T13:00:43.248216",
+    "updated_at": "2026-02-24T13:00:43.248218"
   },
   {
-    "job_id": "660e8400-e29b-41d4-a716-446655440012",
-    "title": "Cloud Architect",
+    "job_id": "67077809-60c8-4c51-8cc6-75a3ad8d1abc",
+    "title": "Machine Learning Engineer",
+    "company": "AIVentures",
+    "country": "ISRAEL",
+    "job_type": "INTERNSHIP",
+    "experience_level": "SENIOR",
+    "description": "Looking for a talented Cloud Architect to join our team.",
+    "requirements": [
+      "3+ years of experience",
+      "Bachelor's degree or equivalent",
+      "Strong communication skills"
+    ],
+    "is_active": true,
+    "created_at": "2026-01-29T13:00:43.248226",
+    "updated_at": "2026-02-24T13:00:43.248227"
+  },
+  {
+    "job_id": "f87bf4c0-51cc-4423-9a2b-e846d2c4ed9b",
+    "title": "Senior Software Engineer",
+    "company": "SecureNet",
+    "country": "USA",
+    "job_type": "INTERNSHIP",
+    "experience_level": "EXECUTIVE",
+    "description": "Looking for a talented Software Engineer to join our team.",
+    "requirements": [
+      "3+ years of experience",
+      "Bachelor's degree or equivalent",
+      "Strong communication skills"
+    ],
+    "is_active": true,
+    "created_at": "2026-02-16T13:00:43.248235",
+    "updated_at": "2026-02-24T13:00:43.248237"
+  },
+  {
+    "job_id": "8bb14f8d-c417-4bf9-bc66-8ea4916b750e",
+    "title": "Full Stack Developer",
     "company": "CloudSystems",
     "country": "USA",
     "job_type": "CONTRACT",
     "experience_level": "EXECUTIVE",
-    "description": "Cloud Architect for a 12-month engagement to design cloud strategy.",
+    "description": "Looking for a talented Backend Developer to join our team.",
     "requirements": [
-      "7+ years of cloud architecture",
-      "AWS Solutions Architect certified",
+      "3+ years of experience",
+      "Bachelor's degree or equivalent",
       "Strong communication skills"
     ],
     "is_active": true,
-    "created_at": "2026-02-13T09:30:00Z",
-    "updated_at": "2026-02-24T15:30:00Z"
+    "created_at": "2026-02-02T13:00:43.248244",
+    "updated_at": "2026-02-24T13:00:43.248245"
   },
   {
-    "job_id": "660e8400-e29b-41d4-a716-446655440013",
+    "job_id": "0908c7c5-050e-4fb9-bb55-0ae7e07c5139",
+    "title": "Security Engineer",
+    "company": "NextGen Labs",
+    "country": "USA",
+    "job_type": "PART_TIME",
+    "experience_level": "EXECUTIVE",
+    "description": "Looking for a talented Backend Developer to join our team.",
+    "requirements": [
+      "3+ years of experience",
+      "Bachelor's degree or equivalent",
+      "Strong communication skills"
+    ],
+    "is_active": true,
+    "created_at": "2026-02-16T13:00:43.248253",
+    "updated_at": "2026-02-24T13:00:43.248255"
+  },
+  {
+    "job_id": "cce45728-d77b-4564-b845-b5ea02be7f6b",
+    "title": "Security Engineer",
+    "company": "InnovateTech",
+    "country": "USA",
+    "job_type": "CONTRACT",
+    "experience_level": "SENIOR",
+    "description": "Looking for a talented Data Scientist to join our team.",
+    "requirements": [
+      "3+ years of experience",
+      "Bachelor's degree or equivalent",
+      "Strong communication skills"
+    ],
+    "is_active": true,
+    "created_at": "2026-02-08T13:00:43.248262",
+    "updated_at": "2026-02-24T13:00:43.248264"
+  },
+  {
+    "job_id": "d228b6cd-d30d-4dad-beb3-1f9137bff4d0",
+    "title": "Frontend Developer",
+    "company": "AIVentures",
+    "country": "ISRAEL",
+    "job_type": "FULL_TIME",
+    "experience_level": "ENTRY",
+    "description": "Looking for a talented QA Engineer to join our team.",
+    "requirements": [
+      "3+ years of experience",
+      "Bachelor's degree or equivalent",
+      "Strong communication skills"
+    ],
+    "is_active": true,
+    "created_at": "2026-02-21T13:00:43.248271",
+    "updated_at": "2026-02-24T13:00:43.248273"
+  },
+  {
+    "job_id": "e32d8617-af04-42f9-ab29-4a5276c8cbfa",
+    "title": "Machine Learning Engineer",
+    "company": "AIVentures",
+    "country": "USA",
+    "job_type": "PART_TIME",
+    "experience_level": "EXECUTIVE",
+    "description": "Looking for a talented Security Engineer to join our team.",
+    "requirements": [
+      "3+ years of experience",
+      "Bachelor's degree or equivalent",
+      "Strong communication skills"
+    ],
+    "is_active": true,
+    "created_at": "2026-01-29T13:00:43.248280",
+    "updated_at": "2026-02-24T13:00:43.248282"
+  },
+  {
+    "job_id": "bd567e2b-2df4-40ae-ae04-6332c018efda",
     "title": "Technical Lead",
     "company": "AIVentures",
     "country": "ISRAEL",
     "job_type": "FULL_TIME",
-    "experience_level": "LEAD",
-    "description": "Technical Lead to guide development teams on complex projects.",
+    "experience_level": "ENTRY",
+    "description": "Looking for a talented Backend Developer to join our team.",
     "requirements": [
-      "6+ years of development experience",
-      "2+ years of leadership",
-      "Strong technical background"
+      "3+ years of experience",
+      "Bachelor's degree or equivalent",
+      "Strong communication skills"
     ],
     "is_active": true,
-    "created_at": "2026-02-14T11:00:00Z",
-    "updated_at": "2026-02-24T13:00:00Z"
+    "created_at": "2026-01-29T13:00:43.248289",
+    "updated_at": "2026-02-24T13:00:43.248290"
   },
   {
-    "job_id": "660e8400-e29b-41d4-a716-446655440014",
-    "title": "Engineering Manager",
-    "company": "DataDriven Inc",
+    "job_id": "da791482-b021-4824-8548-ffff3c396ae4",
+    "title": "Backend Developer",
+    "company": "NextGen Labs",
     "country": "USA",
-    "job_type": "FULL_TIME",
-    "experience_level": "EXECUTIVE",
-    "description": "Engineering Manager to lead multiple development teams.",
-    "requirements": [
-      "8+ years of engineering experience",
-      "3+ years of management",
-      "MBA preferred"
-    ],
-    "is_active": true,
-    "created_at": "2026-02-15T10:00:00Z",
-    "updated_at": "2026-02-24T14:00:00Z"
-  },
-  {
-    "job_id": "660e8400-e29b-41d4-a716-446655440015",
-    "title": "Junior Software Engineer",
-    "company": "DigitalFirst",
-    "country": "ISRAEL",
     "job_type": "INTERNSHIP",
     "experience_level": "ENTRY",
-    "description": "Summer internship for computer science students.",
+    "description": "Looking for a talented Backend Developer to join our team.",
     "requirements": [
-      "Currently pursuing CS degree",
-      "Knowledge of at least one programming language",
-      "Eagerness to learn"
+      "3+ years of experience",
+      "Bachelor's degree or equivalent",
+      "Strong communication skills"
     ],
     "is_active": true,
-    "created_at": "2026-02-16T08:00:00Z",
-    "updated_at": "2026-02-24T10:00:00Z"
+    "created_at": "2026-02-21T13:00:43.248298",
+    "updated_at": "2026-02-24T13:00:43.248299"
   },
   {
-    "job_id": "660e8400-e29b-41d4-a716-446655440016",
-    "title": "Data Analyst",
-    "company": "FutureSoft",
-    "country": "USA",
-    "job_type": "PART_TIME",
-    "experience_level": "ENTRY",
-    "description": "Part-time Data Analyst for business intelligence.",
-    "requirements": [
-      "1+ years of data analysis",
-      "Strong Excel and SQL skills",
-      "Experience with BI tools"
-    ],
-    "is_active": true,
-    "created_at": "2026-02-17T09:00:00Z",
-    "updated_at": "2026-02-24T11:00:00Z"
-  },
-  {
-    "job_id": "660e8400-e29b-41d4-a716-446655440017",
-    "title": "Site Reliability Engineer",
-    "company": "NextGen Labs",
-    "country": "ISRAEL",
-    "job_type": "FULL_TIME",
-    "experience_level": "SENIOR",
-    "description": "SRE to ensure system reliability and performance.",
-    "requirements": [
-      "4+ years of SRE experience",
-      "Strong Linux and scripting",
-      "Experience with monitoring tools"
-    ],
-    "is_active": true,
-    "created_at": "2026-02-18T10:00:00Z",
-    "updated_at": "2026-02-24T12:00:00Z"
-  },
-  {
-    "job_id": "660e8400-e29b-41d4-a716-446655440018",
-    "title": "Mobile Developer",
+    "job_id": "ee9cbae3-14b3-42a9-b0ad-8ad5c3a61aaa",
+    "title": "Cloud Architect",
     "company": "QuantumCode",
     "country": "USA",
-    "job_type": "CONTRACT",
+    "job_type": "PART_TIME",
     "experience_level": "MID",
-    "description": "Mobile developer for iOS and Android apps.",
+    "description": "Looking for a talented Frontend Developer to join our team.",
     "requirements": [
-      "3+ years of mobile development",
-      "Swift and Kotlin experience",
-      "Published apps preferred"
+      "3+ years of experience",
+      "Bachelor's degree or equivalent",
+      "Strong communication skills"
     ],
     "is_active": true,
-    "created_at": "2026-02-19T11:00:00Z",
-    "updated_at": "2026-02-24T13:00:00Z"
+    "created_at": "2026-02-15T13:00:43.248307",
+    "updated_at": "2026-02-24T13:00:43.248308"
   },
   {
-    "job_id": "660e8400-e29b-41d4-a716-446655440019",
-    "title": "Business Analyst",
-    "company": "TechCorp",
+    "job_id": "62e04356-7e74-401e-8b78-84dfd15d630c",
+    "title": "QA Engineer",
+    "company": "SecureNet",
     "country": "ISRAEL",
-    "job_type": "FULL_TIME",
-    "experience_level": "MID",
-    "description": "Business Analyst to bridge business and technology.",
+    "job_type": "PART_TIME",
+    "experience_level": "LEAD",
+    "description": "Looking for a talented Full Stack Developer to join our team.",
     "requirements": [
-      "3+ years of business analysis",
-      "Strong analytical skills",
-      "Experience with requirements gathering"
+      "3+ years of experience",
+      "Bachelor's degree or equivalent",
+      "Strong communication skills"
     ],
     "is_active": true,
-    "created_at": "2026-02-20T08:30:00Z",
-    "updated_at": "2026-02-24T10:30:00Z"
+    "created_at": "2026-02-02T13:00:43.248316",
+    "updated_at": "2026-02-24T13:00:43.248318"
+  },
+  {
+    "job_id": "20c264de-4ea0-43b1-9bf7-e30425db6bd2",
+    "title": "QA Engineer",
+    "company": "TechCorp",
+    "country": "USA",
+    "job_type": "CONTRACT",
+    "experience_level": "ENTRY",
+    "description": "Looking for a talented DevOps Engineer to join our team.",
+    "requirements": [
+      "3+ years of experience",
+      "Bachelor's degree or equivalent",
+      "Strong communication skills"
+    ],
+    "is_active": true,
+    "created_at": "2026-02-12T13:00:43.248325",
+    "updated_at": "2026-02-24T13:00:43.248326"
+  },
+  {
+    "job_id": "d49e83e1-4c16-4abd-b55f-04afe8c2f9e2",
+    "title": "UX Designer",
+    "company": "QuantumCode",
+    "country": "ISRAEL",
+    "job_type": "FULL_TIME",
+    "experience_level": "LEAD",
+    "description": "Looking for a talented DevOps Engineer to join our team.",
+    "requirements": [
+      "3+ years of experience",
+      "Bachelor's degree or equivalent",
+      "Strong communication skills"
+    ],
+    "is_active": true,
+    "created_at": "2026-02-20T13:00:43.248333",
+    "updated_at": "2026-02-24T13:00:43.248335"
+  },
+  {
+    "job_id": "61952a29-e30c-4d1d-ba01-ba36df01d1d4",
+    "title": "Software Engineer",
+    "company": "NextGen Labs",
+    "country": "USA",
+    "job_type": "FULL_TIME",
+    "experience_level": "SENIOR",
+    "description": "Looking for a talented Full Stack Developer to join our team.",
+    "requirements": [
+      "3+ years of experience",
+      "Bachelor's degree or equivalent",
+      "Strong communication skills"
+    ],
+    "is_active": true,
+    "created_at": "2026-02-08T13:00:43.248342",
+    "updated_at": "2026-02-24T13:00:43.248344"
+  },
+  {
+    "job_id": "79261f6d-4221-4979-8261-9ed40bdb2c1f",
+    "title": "Engineering Manager",
+    "company": "CloudSystems",
+    "country": "ISRAEL",
+    "job_type": "INTERNSHIP",
+    "experience_level": "MID",
+    "description": "Looking for a talented UX Designer to join our team.",
+    "requirements": [
+      "3+ years of experience",
+      "Bachelor's degree or equivalent",
+      "Strong communication skills"
+    ],
+    "is_active": true,
+    "created_at": "2026-02-23T13:00:43.248351",
+    "updated_at": "2026-02-24T13:00:43.248353"
   }
 ]
