@@ -1,0 +1,351 @@
+
+Job Search Assistant
+/
+In generating the CV does the Job Search Assistant Skill use company research? What tools/information is used in generating the CV, Cover Letter and Value Proposition report? How are the CV, Job Description and web search synthesized to generate the artifacts?
+
+11:18 AM
+I'll analyze the job search assistant skill and the technical features document to answer your questions about information synthesis and artifact generation.
+
+
+Used sequential-thinking integration, viewed 2 files
+
+
+
+
+
+
+I can see from F-JOB-002 in the technical document that company research uses:
+
+Primary: Web scraping of company website
+Fallback: Perplexity API
+Caches results for 30 days
+This aligns with the job search assistant skill's use of web_search, but your implementation is more sophisticated with the hybrid approach.
+
+
+Sequential Thinking
+
+Based on my analysis of both the job search assistant skill and your technical features document, here's how company research and other information sources are synthesized across artifacts:
+
+Information Sources & Synthesis
+Value Proposition Report (VPR)
+Uses full company research data:
+
+CV parsed facts
+Job description
+Complete company research (mission, recent news, culture, products, funding info)
+Gap analysis responses (your enhancement)
+Previous application artifacts
+Synthesis: Claude Sonnet creates strategic alignment matrix mapping CV evidence to company needs/priorities, identifies differentiators, and generates UVP statement.
+
+CV Tailoring
+Uses company research keywords only:
+
+CV parsed facts (source of truth)
+Job description (target requirements)
+VPR strategic differentiators (prioritization guide)
+Company research keywords (for ATS optimization)
+Synthesis: Claude Haiku prioritizes relevant experience, reorders sections, and incorporates job-specific keywords while maintaining factual accuracy. The VPR differentiators guide which achievements to emphasize.
+
+Cover Letter
+Uses company culture & specifics:
+
+CV parsed facts (evidence)
+Job description (requirements to address)
+VPR strategic differentiators (key messages)
+Company research culture (tone matching and company-specific hooks)
+Synthesis: Claude Haiku creates narrative connecting candidate value to company goals, using cultural insights for personalization and VPR claims for strategic positioning.
+
+Key Insights
+Company research flows through ALL artifacts but in different forms:
+VPR: Full research for strategic analysis
+CV: Extracted keywords for ATS optimization
+Cover Letter: Culture/specifics for personalization
+VPR acts as the strategic hub - it processes all inputs (CV + job + company research) and outputs differentiators that guide CV and cover letter creation
+Your implementation enhances the skill by:
+Adding gap analysis responses to VPR (more quantified evidence)
+Extracting specific elements from company research for downstream use (keywords for CV, culture for cover letter)
+Caching company research for efficiency
+Web search integration happens via company-research-v1 Lambda using hybrid approach (web scraping + Perplexity fallback), not direct web_search tool calls during artifact generation
+The synthesis creates a "waterfall" effect: Company Research → VPR (strategic analysis) → CV + Cover Letter (tactical execution), with each artifact building on insights from previous stages.
+
+
+CareerVP Prompt Library.md
+md
+
+Do ALL prompts in the prompt library map exactly to the Job Search Assistant Skill prompts and incorporate company research? This prompt library is required to be an exact replica of the Job Search Assistant Skill. Are there any additional instructions for HOW the Skill accomplishes its task that I should replicate in code?
+
+11:24 AM
+
+Viewed 9 files, used sequential-thinking integration, ran 2 commands
+
+
+
+
+
+
+
+
+Critical Analysis: Prompt Library vs. Job Search Assistant Skill
+Answer: NO - Your prompt library does NOT exactly replicate the Job Search Assistant Skill. There are significant gaps in methodology, company research integration, and self-correction mechanisms.
+
+🚨 CRITICAL GAPS REQUIRING IMMEDIATE FIXES
+1. MISSING: Company Research Prompt
+Problem: No dedicated prompt for company research generation From Technical Doc: F-JOB-002 specifies Perplexity API with specific research categories Impact: Company research is referenced everywhere but never actually generated
+
+You Need:
+
+python
+COMPANY_RESEARCH_PROMPT = """Research the following company and provide structured intelligence.
+
+COMPANY: {company_name}
+WEBSITE: {company_website}
+
+RESEARCH CATEGORIES:
+1. Mission & Vision
+2. Products/Services (top 3-5)
+3. Recent News (last 6 months)
+4. Company Culture & Values
+5. Growth Stage & Funding
+6. Current Challenges (inferred from news/job postings)
+
+OUTPUT: JSON structure with confidence scores"""
+2. VPR Prompt - Missing 6-Stage Methodology
+Current State: Your prompt has structure but lacks the explicit staged process
+
+Missing from Skill:
+
+❌ Stage 1: Company & Role Research (3-5 strategic priorities extraction) ❌ Stage 2: Candidate Analysis (career narrative, 3-5 differentiators) ❌ Stage 3: Alignment Mapping (table format specified) ❌ Stage 4: Self-Correction & Meta Review (CRITICAL - quality control) ❌ Stage 6: Final Meta Evaluation (20% improvement prompt)
+
+What You Have: Direct structure without iterative thinking process
+
+Fix Required:
+
+python
+VPR_GENERATION_PROMPT = """You are an expert career strategist. Follow this 6-STAGE PROCESS:
+
+STAGE 1: COMPANY & ROLE RESEARCH
+- Identify 3-5 strategic priorities from company research
+- Extract 5-7 role success criteria from job posting
+
+STAGE 2: CANDIDATE ANALYSIS
+- Parse CV for achievements with quantified outcomes
+- Identify 3-5 core differentiators
+- Summarize career narrative in ONE sentence
+
+STAGE 3: ALIGNMENT MAPPING
+Create reasoning scaffold table:
+| Company/Role Need | Candidate Evidence | Business Impact |
+Map 5-7 alignments minimum
+
+STAGE 4: SELF-CORRECTION & META REVIEW
+Before proceeding, ask:
+- Logical consistency check?
+- Unsupported claims?
+- Would this persuade senior hiring manager?
+Refine arguments based on critique
+
+STAGE 5: GENERATE REPORT
+[Your current structure is fine here]
+
+STAGE 6: FINAL META EVALUATION
+Ask: "How could this be 20% more persuasive, specific, or actionable?"
+Apply improvements and output final version
+
+[Rest of your prompt...]
+"""
+3. CV Tailoring - Missing Company Research Keywords
+From Technical Doc (F-JOB-006):
+
+yaml
+Input Data:
+  - Company research keywords
+Your Prompt Has:
+
+python
+CV FACTS:
+{cv_facts_json}
+
+JOB REQUIREMENTS:
+{job_requirements_json}
+
+VPR STRATEGIC DIFFERENTIATORS:
+{vpr_differentiators}
+Missing:
+
+python
+COMPANY RESEARCH KEYWORDS:
+{company_keywords}  # ❌ NOT IN YOUR PROMPT
+Also Missing: 3-Step Verification Process
+
+From Skill:
+
+Step 1: Analysis & Keyword Mapping
+Step 2: Self-Correction & Verification (ATS score 1-10, missing keywords check)
+Step 3: Final Output
+Your prompt jumps straight to output without verification steps.
+
+Fix Required:
+
+python
+CV_TAILORING_PROMPT = """...
+
+INPUT:
+CV FACTS: {cv_facts_json}
+JOB REQUIREMENTS: {job_requirements_json}
+VPR STRATEGIC DIFFERENTIATORS: {vpr_differentiators}
+COMPANY RESEARCH KEYWORDS: {company_keywords}  # ✅ ADD THIS
+LANGUAGE: {language}
+
+---
+
+PROCESS:
+
+STEP 1: ANALYSIS & KEYWORD MAPPING
+- Extract core UVP and top 3 Key Differentiators from VPR
+- Analyze job posting: extract 12-18 key skills/technologies
+- Include company research keywords for ATS optimization
+- Draft CV with CAR/STAR format bullets
+
+STEP 2: SELF-CORRECTION & VERIFICATION
+
+**Verification Check 1 (ATS):**
+- Rate keyword match score (1-10) against job posting
+- List 3 most critical missing/underrepresented keywords
+
+**Verification Check 2 (Hiring Manager & Strategy):**
+- Does Professional Summary align with UVP from VPR?
+- Does it address Company's Core Problem from job posting?
+- If not, rewrite summary
+
+STEP 3: FINAL OUTPUT
+Based on verification checks, make revisions to address gaps.
+
+[Rest of your prompt...]
+"""
+```
+
+---
+
+### 4. **Cover Letter - Missing Reference Class Priming**
+
+**From Skill:**
+```
+Before drafting, describe structure and tone of exemplary, 
+modern, persuasive cover letter for competitive job market 
+(focuses on value over interest, leverages strategic claims).
+```
+
+**Your Prompt:** Jumps straight to structure
+
+**Also Missing: Scaffolded Proof Points Structure**
+
+From Skill (very specific):
+```
+Paragraph 2 (The Proof Points):
+- Identify top 3 non-negotiable requirements from job posting
+- For each requirement:
+  - 1 sentence: Assert skill using VPR language/claims
+  - 1 sentence: Detail quantified achievement from CV as proof
+- Format: Req 1 Claim + Proof. Req 2 Claim + Proof. Req 3 Claim + Proof.
+Your prompt has general body paragraph guidance but lacks this explicit claim+proof scaffolding.
+
+Fix Required:
+
+python
+COVER_LETTER_PROMPT = """...
+
+PROCESS:
+
+STEP 1: REFERENCE CLASS PRIMING
+Before drafting, internally describe the structure and tone of an 
+exemplary, modern, persuasive cover letter for a competitive job market 
+that focuses on value over interest and leverages strategic claims.
+
+STEP 2: DRAFT LETTER
+
+**Paragraph 1 (The Hook) - 80-100 words:**
+- State role and IMMEDIATELY reference UVP from VPR
+- Show research: mention specific company goal/product/announcement
+- Link candidate's background to that goal
+
+**Paragraph 2 (The Proof Points) - 120-140 words:**
+Identify top 3 non-negotiable requirements from job posting.
+For EACH requirement:
+- Sentence 1: Assert candidate's skill using VPR language/claims
+- Sentence 2: Detail specific quantified achievement from CV as proof
+
+Format: Req 1 Claim + Proof. Req 2 Claim + Proof. Req 3 Claim + Proof.
+
+**Paragraph 3 (The Close) - 60-80 words:**
+- Express enthusiasm
+- Clear, confident call to action
+- Position as time-saver (e.g., "I look forward to discussing how my 
+  experience in [Key Skill from UVP] can immediately reduce your team's 
+  ramp-up time.")
+
+[Rest of your prompt...]
+"""
+✅ WHAT YOUR PROMPTS HAVE CORRECT
+Gap Analysis Questions - Enhanced version with contextual tagging is EXCELLENT
+Interview Prep - Structure is solid with STAR format
+Anti-AI Detection - Well covered
+Company Research Integration - Present in all prompt inputs (even if generation missing)
+Language Support - Properly handled
+Fact Verification - Good checklist in VPR
+📋 IMPLEMENTATION CHECKLIST
+Immediate Priority (Sprint 3-4)
+ Create Company Research Prompt with Perplexity API integration
+ Add 6-stage methodology to VPR prompt with self-correction steps
+ Add company keywords parameter to CV tailoring prompt
+ Add 3-step verification process to CV tailoring prompt
+ Add reference class priming to cover letter prompt
+ Add scaffolded proof points structure to cover letter prompt
+Code Implementation Notes
+Company Research Function:
+python
+def get_company_research(company_name: str, company_website: str = None) -> dict:
+    """
+    Hybrid approach: Web scraping → Perplexity fallback
+    """
+    # Try web scraping first
+    scraped_data = scrape_company_website(company_website)
+    
+    if is_sufficient(scraped_data):
+        return cache_and_return(scraped_data)
+    
+    # Fallback to Perplexity
+    perplexity_data = query_perplexity(
+        f"Provide overview of {company_name}: mission, products, "
+        f"recent news, culture, growth"
+    )
+    
+    return cache_and_return(perplexity_data)
+Extract Keywords from Company Research:
+python
+def extract_company_keywords(company_research: dict) -> list:
+    """
+    Extract ATS-relevant keywords from company research
+    """
+    keywords = []
+    keywords.extend(company_research.get('products', []))
+    keywords.extend(company_research.get('technologies', []))
+    keywords.extend(company_research.get('industry_terms', []))
+    return list(set(keywords))[:15]  # Top 15 unique keywords
+Self-Correction in VPR: The model should actually PAUSE and critique itself mid-generation, not just say it did. Consider using chain-of-thought prompting or explicit "BEFORE CONTINUING, CRITIQUE YOUR WORK ABOVE" instructions.
+🎯 KEY TAKEAWAY
+Your prompts have good content structure but are missing the iterative thinking methodology that makes the Job Search Assistant Skill produce high-quality outputs. The skill uses:
+
+Staged processes (not direct output)
+Self-correction loops (critique before finalizing)
+Verification steps (check quality before delivery)
+Meta-evaluation (how to improve 20%?)
+These methodological steps should be explicit instructions in the prompts, not assumptions about how Claude will work.
+
+
+
+
+
+
+Claude is AI and can make mistakes. Please double-check responses.
+
+
