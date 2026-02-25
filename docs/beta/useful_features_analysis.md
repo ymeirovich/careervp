@@ -220,39 +220,155 @@ Generated: 2026-02-25
 
 ### Must Complete Before Beta Launch
 
-1. **Security Fixes** (from `docs/audit/`)
-   - Fix auth bypass vulnerabilities
-   - Address all security bugs
+---
 
-2. **Staging Environment** (from `docs/staging/`)
-   - Deploy staging
-   - Validate all endpoints
+### 1. Security Fixes (from `docs/audit/`)
 
-3. **Feature Completion** (from `docs/refactor*/`)
-   - Complete Phase 2 & 3 runbooks
-   - Fix endpoint 2XX issues
+**Why critical:** Beta users will have real credentials. Security vulnerabilities could expose user data.
 
-4. **Operational Docs** (from `docs/refactor/`)
-   - Deployment operations
-   - Route mapping
+**Specific items:**
+| Issue | Source Doc | Action |
+|-------|------------|--------|
+| Auth bypass in `gap_handler.py` | `security_bug_audit.md` | Fix user_id extraction from payload |
+| Auth bypass in `cv_upload_handler.py` | `security_bug_audit.md` | Fix user_id extraction from payload |
+| Auth bypass in `knowledge_base_handler.py` | `security_bug_audit.md` | Fix user_id extraction from payload |
+| Missing idempotency (7 handlers) | `spec_compliance_analysis.md` | Add idempotency keys |
+| No auth middleware on some routes | `SECURITY_ACTION_PLAN.md` | Ensure consistent `@require_auth` |
+
+**Estimated effort:** 2-3 days
+
+---
+
+### 2. Staging Environment (from `docs/staging/`)
+
+**Why critical:** You need a production-like environment to test beta features before launch.
+
+**Specific items:**
+| Item | Source Doc | Action |
+|------|------------|--------|
+| Deploy staging stack | `execution_runbook.md` | Run CDK deploy to staging |
+| Set up SSM parameters | `stage_migration_plan.md` | Create `/careervp/staging/*` secrets |
+| Validate API endpoints | `execution_runbook.md` | Test all Swagger endpoints |
+| Configure custom domain | `BETA_PLAN_DESIGN.md` | Map `stage.careervp.com` |
+| CI/CD for staging | `execution_runbook.md` | Auto-deploy on develop branch |
+
+**Estimated effort:** 2-3 days
+
+---
+
+### 3. Feature Completion (from `docs/refactor*/`)
+
+**Why critical:** Beta users need working features - incomplete features = bad UX.
+
+**Features to validate:**
+| Feature | Source Doc | Status |
+|---------|------------|--------|
+| VPR generation | `execution_runbook_2_results.md` | Needs validation |
+| CV Tailoring | `execution_runbook_2_results.md` | Needs validation |
+| Cover Letter | `execution_runbook_2_results.md` | Needs validation |
+| Interview Prep | `execution_runbook_2_results.md` | Needs validation |
+| Gap Analysis | `execution_runbook_3.md` | Needs validation |
+| Company Research | `execution_runbook_3.md` | Needs validation |
+
+**Specific issues to fix (from `spec_compliance_analysis.md`):**
+- 11 handlers missing Powertools decorators
+- 4 handlers missing @metrics.log_metrics
+- 4 handlers missing capture_cold_start_metric
+- Query vs Scan violations in jobs_repository.py
+
+**Estimated effort:** 4-5 days
+
+---
+
+### 4. Operational Docs (from `docs/refactor/`)
+
+**Why critical:** You need to run the system during beta without guessing.
+
+**Specific items:**
+| Doc | Purpose | Action Needed |
+|-----|---------|---------------|
+| `DEPLOYMENT_OPERATIONS.md` | How to deploy | Verify current |
+| `route_mapping.md` | API routes | Verify accuracy |
+| `CRITICAL_CORRECTIONS.md` | Known issues | Review for beta |
+
+**Estimated effort:** 1 day
+
+---
+
+### Timeline Summary
+
+| Week | Focus | Deliverable |
+|------|-------|-------------|
+| Week 1 | Security + Staging | Deployable staging env |
+| Week 2 | Feature completion + Testing | Working beta |
 
 ---
 
 ## Recommendations
 
-### Immediate Actions
+### Immediate Actions (Do Now)
 
-1. **Consolidate Beta Docs:** Create a single `docs/beta/README.md` linking to all beta-critical docs
-2. **Archive Historical:** Move Phase 0/1 tasks and backups to `docs/archive/`
-3. **Update Runbooks:** Ensure all runbooks are current and executable
+#### 1. Consolidate Beta Docs
+Create `docs/beta/README.md` that links to:
 
-### Documentation Gaps for Beta
+```
+docs/beta/
+├── README.md                    # This file
+├── BETA_PLAN_DESIGN.md         # Beta goals
+├── useful_features_analysis.md  # This analysis
+├── docs_gaps/
+│   ├── user_guide.md           # User-facing (created)
+│   ├── api_error_codes.md      # User-facing (created)
+│   └── trial_usage_enforcement.md  # Internal (created)
+└── [other beta-critical docs]
+```
 
-| Gap | Priority | Suggestion |
-|-----|----------|------------|
-| User-facing quickstart | High | Create guided walkthrough docs |
-| API error code reference | Medium | Document common errors |
-| Trial/usage enforcement | High | Document how 3-app limit works |
+#### 2. Archive Historical
+Move to `docs/archive/`:
+- `docs/refactor/PHASE_0_TASKS.md`
+- `docs/refactor/PHASE_1_TASKS.md`
+- `docs/refactor/EXECUTION_RUNBOOK.md.backup`
+- `docs/refactor2/REFACTOR2_PLAN.md`
+- `docs/refactor3/RUNBOOK3_GENERATION_PROMPT.md`
+
+#### 3. Update Runbooks
+Verify these are executable:
+- `docs/staging/execution_runbook.md`
+- `docs/refactor/execution_runbook_2.md`
+- `docs/refactor3/execution_runbook3.md`
+
+---
+
+### Documentation Gaps (Create)
+
+| Gap | Priority | Contents | Status |
+|-----|----------|----------|--------|
+| **User Guide** | HIGH | Step-by-step walkthrough | ✅ Created (docs_gaps/) |
+| **Trial Enforcement** | HIGH | 14-day, 3-app logic | ✅ Created (docs_gaps/) |
+| **API Errors** | MEDIUM | Error codes & resolutions | ✅ Created (docs_gaps/) |
+| **Admin Runbook** | MEDIUM | How to manage beta | ❌ Not created |
+| **On-Call Guide** | LOW | What to do when things break | ❌ Not created |
+
+---
+
+### Recommended Additional Docs
+
+#### Admin Runbook (Medium Priority)
+**For:** You during beta operations
+- How to check system health
+- How to view logs
+- How to restart a Lambda
+- How to check CloudWatch metrics
+- How to rollback a deployment
+- Emergency contacts
+
+#### On-Call Guide (Low Priority)
+**For:** You during off-hours
+- Alert definitions
+- Severity levels
+- Escalation procedure
+- Common issues & resolutions
+- Runbooks for specific failures
 
 ---
 
