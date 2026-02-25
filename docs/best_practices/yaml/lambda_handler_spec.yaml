@@ -1,0 +1,425 @@
+# CareerVP Lambda Handler Specification
+# Machine-readable YAML format for automated validation
+
+spec_version: "1.0"
+date: "2026-02-25"
+purpose: "Lambda function development standards combining codebase conventions with AWS Well-Architected Framework"
+enforcement: "All new Lambda handlers must follow these patterns"
+
+# =============================================================================
+# SECTION 1: HANDLER STRUCTURE
+# =============================================================================
+handler_structure:
+  section: "1. Handler Structure"
+
+  rule_1_1:
+    id: "HANDLER_USE_POWERTOOLS"
+    name: "Use AWS Lambda Powertools"
+    severity: "required"
+    description: "Use Powertools for observability (Logger, Tracer, Metrics)"
+    status: "required"
+
+    required_patterns:
+      - pattern: "from aws_lambda_powertools"
+        description: "Import Powertools modules"
+      - pattern: "@logger.inject_lambda_context"
+        description: "Decorate handler with lambda_context"
+      - pattern: "@tracer.capture_lambda_handler"
+        description: "Enable handler tracing"
+      - pattern: "@metrics.log_metrics"
+        description: "Enable metrics collection"
+
+    codebase_example: |
+      from aws_lambda_powertools import Logger, Tracer, Metrics
+      from aws_lambda_powertools.logging import HTTPStatus
+
+      logger = Logger()
+      tracer = Tracer()
+      metrics = Metrics(namespace="careervp_kpi")
+
+      @logger.inject_lambda_context(log_event=False)
+      @tracer.capture_lambda_handler(capture_response=False)
+      @metrics.log_metrics(capture_cold_start_metric=True)
+      def lambda_handler(event, context):
+          pass
+
+    aws_waf_note: "AWS Serverless Lens - Operational Excellence: Use structured logging for faster debugging"
+
+  rule_1_2:
+    id: "HANDLER_CHOOSE_ROUTING"
+    name: "Choose Appropriate Routing Pattern"
+    severity: "required"
+    description: "Use APIGatewayRestResolver for REST APIs, direct routing for simple handlers"
+    status: "required"
+
+    patterns:
+      - type: "APIGatewayRestResolver"
+        use_when: "Multiple REST endpoints, OpenAPI compatibility needed"
+        example: "from aws_lambda_powertools.event_handler import APIGatewayRestResolver"
+      - type: "Direct Routing"
+        use_when: "Single endpoint, SQS trigger, or simple health checks"
+        example: "method = event.get('httpMethod'); path = event.get('path')"
+
+    codebase_examples:
+      - file: "auth_handler.py"
+        pattern: "APIGatewayRestResolver with @app.post() decorators"
+      - file: "health_handler.py"
+        pattern: "Direct httpMethod/path routing"
+
+  rule_1_3:
+    id: "HANDLER_DECORATOR_ORDER"
+    name: "Decorator Order Convention"
+    severity: "recommended"
+    description: "Apply decorators in consistent order"
+    status: "required"
+
+    required_order:
+      - "1. @logger.inject_lambda_context"
+      - "2. @tracer.capture_lambda_handler"
+      - "3. @metrics.log_metrics"
+
+# =============================================================================
+# SECTION 2: REQUEST RESPONSE
+# =============================================================================
+request_response:
+  section: "2. Request/Response Patterns"
+
+  rule_2_1:
+    id: "REQ_VALIDATE_INPUT"
+    name: "Validate Input with Pydantic"
+    severity: "required"
+    description: "Use Pydantic models for request validation"
+    status: "required"
+
+    required_patterns:
+      - pattern: "from pydantic import BaseModel"
+        description: "Import Pydantic"
+      - pattern: "Request.model_validate"
+        description: "Validate request body"
+      - pattern: "ValidationError"
+        description: "Catch validation errors"
+
+    codebase_example: |
+      class RegisterRequest(BaseModel):
+          email: EmailStr
+          password: Annotated[str, Field(min_length=8)]
+          name: Annotated[str, Field(min_length=1)]
+
+      try:
+          request = RegisterRequest.model_validate(app.current_event.json_body)
+      except (ValidationError, TypeError, ValueError) as exc:
+          return _json_response(HTTPStatus.BAD_REQUEST, {'error': 'Invalid request'})
+
+    aws_waf_note: "AWS Serverless Lens - Security: Validate all inputs to prevent injection attacks"
+
+  rule_2_2:
+    id: "RESPONSE_STANDARD_FORMAT"
+    name: "Standardize Response Format"
+    severity: "required"
+    description: "Use consistent response structure"
+    status: "required"
+
+    required_structure:
+      statusCode: "HTTP status integer"
+      headers: "Content-Type, CORS headers"
+      body: "JSON string"
+
+    codebase_example: |
+      def _build_response(status: HTTPStatus, data: dict) -> dict:
+          return {
+              'statusCode': int(status),
+              'headers': {'Content-Type': 'application/json'},
+              'body': json.dumps(data)
+          }
+
+  rule_2_3:
+    id: "RESPONSE_ERROR_DETAILS"
+    name: "Include Error Details"
+    severity: "recommended"
+    description: "Return appropriate error details without exposing internals"
+    status: "required"
+
+    forbidden_patterns:
+      - pattern: "str(exception)"
+        description: "Don't expose raw exception messages to users"
+      - pattern: "traceback"
+        description: "Never expose stack traces"
+
+    required_patterns:
+      - pattern: "'error': 'Internal server error'"
+        description: "Generic user-facing error"
+      - pattern: "logger.exception"
+        description: "Log full details server-side"
+
+# =============================================================================
+# SECTION 3: ERROR HANDLING
+# =============================================================================
+error_handling:
+  section: "3. Error Handling"
+
+  rule_3_1:
+    id: "ERROR_SPECIFIC_CATCHING"
+    name: "Catch Specific Exceptions First"
+    severity: "required"
+    description: "Handle specific exceptions before generic ones"
+    status: "required"
+
+    required_patterns:
+      - pattern: "except SpecificError:"
+        description: "Handle specific errors first"
+      - pattern: "except Exception as exc:"
+        description: "Generic catch-all last"
+
+    codebase_example: |
+      try:
+          result = service.operation()
+      except UserNotFoundError:
+          return 404
+      except ConfigurationError:
+          logger.exception("Config error")
+          return 500
+      except Exception as exc:
+          logger.exception("Unexpected error")
+          return 500
+
+    aws_waf_note: "AWS Serverless Lens - Reliability: Implement proper error handling to prevent cascading failures"
+
+  rule_3_2:
+    id: "ERROR_RESULT_MAPPING"
+    name: "Use Result Pattern for Domain Errors"
+    severity: "recommended"
+    description: "Map domain result codes to HTTP statuses consistently"
+    status: "recommended"
+
+    required_patterns:
+      - pattern: "ResultCode enum"
+        description: "Define result codes"
+      - pattern: "_map_result_code_to_http_status"
+        description: "Centralize status mapping"
+
+    codebase_example: |
+      def _map_result_code_to_http_status(code: ResultCode) -> HTTPStatus:
+          mapping = {
+              ResultCode.SUCCESS: HTTPStatus.OK,
+              ResultCode.INVALID_INPUT: HTTPStatus.BAD_REQUEST,
+              ResultCode.LLM_TIMEOUT: HTTPStatus.GATEWAY_TIMEOUT,
+          }
+          return mapping.get(code, HTTPStatus.INTERNAL_SERVER_ERROR)
+
+# =============================================================================
+# SECTION 4: AUTHENTICATION
+# =============================================================================
+authentication:
+  section: "4. Authentication"
+
+  rule_4_1:
+    id: "AUTH_EXTRACT_FROM_CONTEXT"
+    name: "Extract User Identity from Auth Context"
+    severity: "critical"
+    description: "Never trust user_id from request payload"
+    status: "required"
+
+    required_patterns:
+      - pattern: "extract_user_id(event)"
+        description: "Extract from auth context only"
+      - pattern: "if not user_id: return 401"
+        description: "Reject unauthenticated requests"
+
+    forbidden_patterns:
+      - pattern: "event.get('user_id')"
+        description: "Don't read from event body"
+      - pattern: "payload.get('user_id')"
+        description: "Don't trust payload"
+
+    aws_waf_note: "AWS Well-Architected - Security: Implement proper identity verification"
+
+  rule_4_2:
+    id: "AUTH_OWNERSHIP_CHECK"
+    name: "Validate Resource Ownership"
+    severity: "critical"
+    description: "Verify user owns resource before access"
+    status: "required"
+
+    required_patterns:
+      - pattern: "if resource.user_id != user_id: return 403"
+        description: "Ownership check before return"
+
+# =============================================================================
+# SECTION 5: AWS LAMBDA BEST PRACTICES
+# =============================================================================
+aws_lambda_optimization:
+  section: "5. AWS Lambda Optimization"
+
+  rule_5_1:
+    id: "LAMBDA_MEMORY_SIZING"
+    name: "Right-Size Memory Allocation"
+    severity: "recommended"
+    description: "Configure memory based on performance requirements"
+    status: "recommended"
+
+    recommendations:
+      - memory: "128-256 MB"
+        use_when: "Simple handlers, I/O bound"
+      - memory: "512-1024 MB"
+        use_when: "Standard processing"
+      - memory: "1024+ MB"
+        use_when: "Compute intensive, AI/ML"
+
+    aws_waf_note: "AWS Lambda best practice: Memory also affects CPU allocation - more memory = more CPU"
+
+  rule_5_2:
+    id: "LAMBDA_TIMEOUT"
+    name: "Set Appropriate Timeout"
+    severity: "required"
+    description: "Configure timeout based on expected execution time"
+    status: "required"
+
+    recommendations:
+      - timeout: "3-10 seconds"
+        use_when: "Synchronous API calls"
+      - timeout: "30-60 seconds"
+        use_when: "AI generation, file processing"
+      - timeout: "15 minutes max"
+        use_when: "Long-running async jobs"
+
+    aws_waf_note: "AWS Lambda max timeout is 15 minutes"
+
+  rule_5_3:
+    id: "LAMBDA_COLD_START"
+    name: "Address Cold Start Latency"
+    severity: "recommended"
+    description: "Implement strategies to reduce cold start impact"
+    status: "recommended"
+
+    strategies:
+      - name: "Provisioned Concurrency"
+        description: "Pre-warm environments for consistent latency"
+        when: "Production only - user-facing, latency-sensitive endpoints"
+        applicability: "Production only - not needed for dev/staging"
+        reason_to_skip: "Adds significant cost. Cold starts acceptable in non-production."
+      - name: "SnapStart"
+        description: "Use Lambda SnapStart for Java functions"
+        when: "Java runtime, production only"
+      - name: "Minify Dependencies"
+        description: "Reduce package size to speed initialization"
+        always: true
+      - name: "Lazy Loading"
+        description: "Import heavy modules inside handler"
+        when: "Modules not needed for every invocation"
+
+    aws_waf_note: "AWS Serverless Lens - Performance: Cold starts affect user experience - plan accordingly"
+
+  rule_5_4:
+    id: "LAMBDA_IDEMPOTENCY"
+    name: "Implement Idempotency"
+    severity: "required"
+    description: "Ensure operations can be safely retried"
+    status: "required"
+
+    required_for:
+      - "POST requests that modify state"
+      - "Payment operations"
+      - "Async job submissions"
+
+    implementation_patterns:
+      - pattern: "idempotency_key"
+        description: "Generate unique key from request payload"
+      - pattern: "check existing before create"
+        description: "Check for duplicate before processing"
+
+    codebase_example: |
+      idempotency_key = f"{user_id}:{application_id}"
+      existing = jobs_repo.get_job_by_idempotency_key(idempotency_key)
+      if existing:
+          return 200, existing_job
+
+    aws_waf_note: "AWS Well-Architected - Reliability: Idempotent operations enable safe retries"
+
+# =============================================================================
+# SECTION 6: OBSERVABILITY
+# =============================================================================
+observability:
+  section: "6. Observability"
+
+  rule_6_1:
+    id: "OBS_LOG_STRUCTURED"
+    name: "Log Structured JSON"
+    severity: "required"
+    description: "Use Powertools Logger for structured JSON logs"
+    status: "required"
+
+    required_patterns:
+      - pattern: "logger.info/danger/error"
+        description: "Use structured logging methods"
+      - pattern: "logger.append_keys"
+        description: "Add correlation context"
+
+    aws_waf_note: "AWS Serverless Lens - Operational Excellence: Structured logs enable efficient debugging"
+
+  rule_6_2:
+    id: "OBS_TRACK_METRICS"
+    name: "Emit Business Metrics"
+    severity: "recommended"
+    description: "Track KPIs with CloudWatch Metrics"
+    status: "recommended"
+
+    recommended_metrics:
+      - "RequestCount"
+      - "ErrorCount"
+      - "Latency"
+      - "Custom business metrics"
+
+    codebase_example: |
+      metrics.add_metric(name="VPRGenerated", unit="Count", value=1)
+      metrics.add_metric(name="VPRCostUSD", unit="None", value=cost)
+
+  rule_6_3:
+    id: "OBS_COLD_START_METRIC"
+    name: "Track Cold Start Metrics"
+    severity: "recommended"
+    description: "Monitor cold start frequency and impact"
+    status: "recommended"
+
+    required_patterns:
+      - pattern: "capture_cold_start_metric=True"
+        description: "Enable cold start metric in metrics decorator"
+
+# =============================================================================
+# SECTION 7: CORS HANDLING
+# =============================================================================
+cors_handling:
+  section: "7. CORS Configuration"
+
+  rule_7_1:
+    id: "CORS_VALIDATE_ORIGIN"
+    name: "Validate Origin Against Allowlist"
+    severity: "required"
+    description: "Don't echo back arbitrary origins"
+    status: "required"
+
+    required_patterns:
+      - pattern: "ALLOWED_ORIGINS env var"
+        description: "Configure allowed origins"
+      - pattern: "if origin in ALLOWED_ORIGINS"
+        description: "Validate before echo"
+
+    forbidden_patterns:
+      - pattern: "Access-Control-Allow-Origin: *"
+        description: "Don't allow all origins (security)"
+      - pattern: "echo origin directly"
+        description: "Don't reflect arbitrary origins"
+
+    aws_waf_note: "AWS Well-Architected - Security: CORS misconfiguration is a common vulnerability"
+
+  rule_7_2:
+    id: "CORS_HANDLE_PREFLIGHT"
+    name: "Handle OPTIONS Preflight"
+    severity: "required"
+    description: "Properly handle CORS preflight requests"
+    status: "required"
+
+    required_patterns:
+      - pattern: "method == 'OPTIONS'"
+        description: "Handle OPTIONS explicitly"
+      - pattern: "200 OK with headers"
+        description: "Return success with CORS headers"
