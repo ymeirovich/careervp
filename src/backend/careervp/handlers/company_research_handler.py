@@ -405,9 +405,7 @@ def _persist_company_research_item(user_id: str, job_id: str, payload: dict[str,
         logger.warning('Company research persistence failed', error=str(exc), table_name=table_name, job_id=job_id)
 
 
-def _build_persisted_company_research_payload(
-    company_research_id: str, company_name: str, result_data: dict[str, Any]
-) -> dict[str, Any]:
+def _build_persisted_company_research_payload(company_research_id: str, company_name: str, result_data: dict[str, Any]) -> dict[str, Any]:
     values = _coerce_list_of_strings(result_data.get('values'))
     products = _coerce_list_of_strings(result_data.get('strategic_priorities'))
     recent_news = _normalize_recent_news(result_data.get('recent_news'))
