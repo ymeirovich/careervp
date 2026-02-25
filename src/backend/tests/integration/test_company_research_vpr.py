@@ -712,7 +712,7 @@ class TestCompanyResearchVPRIntegration:
                 assert field in body, f'Missing required field: {field}'
 
             optional_fields = ['mission', 'strategic_priorities', 'recent_news', 'financial_summary']
-            for field in optional_fields:
+            for _field in optional_fields:
                 # Optional fields may or may not be present
                 pass
 
