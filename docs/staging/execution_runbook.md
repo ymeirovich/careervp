@@ -720,13 +720,13 @@ STACK_NAME="CareerVpCrudStaging"
 API_URL=$(aws cloudformation describe-stacks \
   --stack-name "$STACK_NAME" \
   --region us-east-1 \
-  --query "Stacks[0].Outputs[?OutputKey=='ApiGatewayUrl'].OutputValue" \
+  --query "Stacks[0].Outputs[?OutputKey=='Apigateway'].OutputValue" \
   --output text)
 
-echo "Staging API: ${API_URL}prod"
+echo "Staging API: ${API_URL}"
 
 # Test health endpoint
-curl -s "${API_URL}prod/health" | jq '.'
+curl -s "${API_URL}health" | jq '.'
 ```
 
 **VALIDATION CRITERIA:**
@@ -747,10 +747,10 @@ curl -s "${API_URL}prod/health" | jq '.'
 API_URL=$(aws cloudformation describe-stacks \
   --stack-name CareerVpCrudStaging \
   --region us-east-1 \
-  --query "Stacks[0].Outputs[0].OutputValue" \
+  --query "Stacks[0].Outputs[?OutputKey=='Apigateway'].OutputValue" \
   --output text)
 
-curl -s "${API_URL}prod/health" | jq '.'
+curl -s "${API_URL}health" | jq '.'
 ```
 
 **VALIDATION CRITERIA:**
@@ -766,22 +766,20 @@ curl -s "${API_URL}prod/health" | jq '.'
 API_URL=$(aws cloudformation describe-stacks \
   --stack-name CareerVpCrudStaging \
   --region us-east-1 \
-  --query "Stacks[0].Outputs[0].OutputValue" \
+  --query "Stacks[0].Outputs[?OutputKey=='Apigateway'].OutputValue" \
   --output text)
 
 # Register a new user
-curl -s -X POST "${API_URL}prod/api/auth/register" \
+curl -s -X POST "${API_URL}auth/register" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "test@staging.careervp.com",
     "password": "TestPassword123!",
-    "first_name": "Test",
-    "last_name": "User",
-    "country": "USA"
+    "name": "Test User"
   }' | jq '.'
 
 # Login
-curl -s -X POST "${API_URL}prod/api/auth/login" \
+curl -s -X POST "${API_URL}auth/login" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "test@staging.careervp.com",
@@ -803,18 +801,18 @@ curl -s -X POST "${API_URL}prod/api/auth/login" \
 API_URL=$(aws cloudformation describe-stacks \
   --stack-name CareerVpCrudStaging \
   --region us-east-1 \
-  --query "Stacks[0].Outputs[0].OutputValue" \
+  --query "Stacks[0].Outputs[?OutputKey=='Apigateway'].OutputValue" \
   --output text)
 
 # Get auth token first (see Step 7.2)
 TOKEN="YOUR_ACCESS_TOKEN"
 
 # Test user profile
-curl -s "${API_URL}prod/api/users/me" \
+curl -s "${API_URL}users/me" \
   -H "Authorization: Bearer $TOKEN" | jq '.'
 
 # Test jobs list
-curl -s "${API_URL}prod/api/jobs" \
+curl -s "${API_URL}jobs" \
   -H "Authorization: Bearer $TOKEN" | jq '.'
 ```
 
@@ -832,13 +830,13 @@ curl -s "${API_URL}prod/api/jobs" \
 API_URL=$(aws cloudformation describe-stacks \
   --stack-name CareerVpCrudStaging \
   --region us-east-1 \
-  --query "Stacks[0].Outputs[0].OutputValue" \
+  --query "Stacks[0].Outputs[?OutputKey=='Apigateway'].OutputValue" \
   --output text)
 
 TOKEN="YOUR_ACCESS_TOKEN"
 
 # Test VPR generation
-curl -s -X POST "${API_URL}prod/api/vpr" \
+curl -s -X POST "${API_URL}vpr/generate" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -849,7 +847,7 @@ curl -s -X POST "${API_URL}prod/api/vpr" \
 
 # Note: VPR is async, poll for status
 # Test CV Tailoring
-curl -s -X POST "${API_URL}prod/api/cv-tailoring" \
+curl -s -X POST "${API_URL}cv-tailoring/generate" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -974,13 +972,13 @@ STACK_NAME="CareerVpCrudStaging"
 API_URL=$(aws cloudformation describe-stacks \
   --stack-name "$STACK_NAME" \
   --region us-east-1 \
-  --query "Stacks[0].Outputs[?OutputKey=='ApiGatewayUrl'].OutputValue" \
+  --query "Stacks[0].Outputs[?OutputKey=='Apigateway'].OutputValue" \
   --output text)
 
-echo "API URL: ${API_URL}prod"
+echo "API URL: ${API_URL}"
 
 # 3. Test health endpoint
-curl -s "${API_URL}prod/health" | jq '.'
+curl -s "${API_URL}health" | jq '.'
 
 # 4. Verify resources
 echo "=== DynamoDB Tables ==="
