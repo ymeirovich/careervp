@@ -1,0 +1,446 @@
+# CareerVP DynamoDB Modeling Specification
+# Machine-readable YAML format for automated validation
+
+spec_version: "1.0"
+date: "2026-02-25"
+purpose: "DynamoDB data modeling standards combining codebase conventions with AWS Well-Architected Framework"
+enforcement: "All new DynamoDB tables and access patterns must follow these patterns"
+
+# =============================================================================
+# SECTION 1: TABLE DESIGN
+# =============================================================================
+table_design:
+  section: "1. Table Design"
+
+  rule_1_1:
+    id: "DB_SINGLE_TABLE"
+    name: "Use Single Table Design"
+    severity: "required"
+    description: "Design for single table to minimize latency and cost"
+    status: "required"
+
+    rationale: "Single table design reduces the number of round trips and simplifies data access patterns"
+
+    codebase_example: |
+      # Users table stores multiple entity types
+      pk: "USER#user_id" or "APPLICATION#app_id"
+      sk: "PROFILE", "ARTIFACT#VPR#v1", "ARTIFACT#CV_TAILORED#"
+
+    aws_waf_note: "AWS DynamoDB Best Practice: Single table design optimizes for latency and cost"
+
+  rule_1_2:
+    id: "DB_TABLE_NAMING"
+    name: "Consistent Table Naming"
+    severity: "required"
+    description: "Follow naming conventions for tables"
+    status: "required"
+
+    pattern: "careervp-{feature}-table-{environment}"
+
+    examples:
+      - "careervp-users-table-dev"
+      - "careervp-jobs-table-prod"
+      - "careervp-cvs-table-staging"
+
+# =============================================================================
+# SECTION 2: KEY SCHEMA
+# =============================================================================
+key_schema:
+  section: "2. Key Schema Design"
+
+  rule_2_1:
+    id: "DB_PK_NAMING"
+    name: "Partition Key Naming Convention"
+    severity: "required"
+    description: "Use 'pk' for partition key"
+    status: "required"
+
+    required_pattern:
+      partition_key: "pk"
+      sort_key: "sk"
+
+  rule_2_2:
+    id: "DB_SK_PREFIX_PATTERN"
+    name: "Sort Key Prefix Pattern"
+    severity: "required"
+    description: "Use prefixes to identify entity types in sort key"
+    status: "required"
+
+    required_prefixes:
+      - "USER#"
+      - "APPLICATION#"
+      - "ARTIFACT#VPR#"
+      - "ARTIFACT#CV_TAILORED#"
+      - "ARTIFACT#COVER_LETTER#"
+
+    codebase_example: |
+      # From dynamo_dal_handler.py
+      VPR_SORT_KEY_PREFIX = 'ARTIFACT#VPR#v'
+      TAILORED_CV_SORT_KEY_PREFIX = 'ARTIFACT#CV_TAILORED#'
+
+  rule_2_3:
+    id: "DB_KEY_ENCODE"
+    name: "Properly Encode Key Values"
+    severity: "required"
+    description: "Use URL-safe base64 for binary data in keys"
+    status: "required"
+
+    forbidden_patterns:
+      - pattern: "Raw binary data in keys"
+        description: "Don't use raw binary - encode first"
+
+# =============================================================================
+# SECTION 3: GLOBAL SECONDARY INDEXES
+# =============================================================================
+gsi_design:
+  section: "3. GSI Design"
+
+  rule_3_1:
+    id: "DB_GSI_NAMING"
+    name: "GSI Naming Convention"
+    severity: "required"
+    description: "Use descriptive names for GSIs"
+    status: "required"
+
+    pattern: "{field}-index" or "{purpose}-index"
+
+    examples:
+      - "email-index"
+      - "user_id-index"
+      - "idempotency-key-index"
+      - "status-index"
+
+  rule_3_2:
+    id: "DB_GSI_PROJECTION"
+    name: "Optimize GSI Projection"
+    severity: "recommended"
+    description: "Project only necessary attributes to reduce cost"
+    status: "recommended"
+
+    projection_types:
+      - type: "ALL"
+        use_when: "Need all attributes"
+      - type: "KEYS_ONLY"
+        use_when: "Only need keys for further queries"
+      - type: "INCLUDE"
+        use_when: "Specific attributes needed"
+
+    recommendation: "Start with KEYS_ONLY, add attributes as needed"
+
+    aws_waf_note: "AWS DynamoDB Best Practice: GSI projection affects read cost - project minimally"
+
+  rule_3_3:
+    id: "DB_GSI_ON_DEMAND"
+    name: "GSI Capacity Mode"
+    severity: "recommended"
+    description: "Use on-demand capacity for GSIs"
+    status: "recommended"
+
+    recommendation: "Default to on-demand unless predictable traffic patterns exist"
+
+# =============================================================================
+# SECTION 4: ACCESS PATTERNS
+# =============================================================================
+access_patterns:
+  section: "4. Access Pattern Design"
+
+  rule_4_1:
+    id: "DB_QUERY_OVER_SCAN"
+    name: "Prefer Query Over Scan"
+    severity: "critical"
+    description: "Design access patterns that use Query, not Scan"
+    status: "required"
+
+    forbidden_patterns:
+      - pattern: "table.scan()"
+        description: "Scan is expensive and slow"
+
+    required_patterns:
+      - pattern: "table.query(KeyConditionExpression=...)"
+        description: "Use query with key conditions"
+
+    aws_waf_note: "AWS Well-Architected - Performance: Scans read entire table - always prefer queries"
+
+  rule_4_2:
+    id: "DB_FILTER_EXPRESSIONS"
+    name: "Use Filter Expressions Judiciously"
+    severity: "recommended"
+    description: "Filters don't reduce consumed capacity - design keys instead"
+    status: "recommended"
+
+    guidance: "Use GSI with different partition key rather than filtering"
+
+  rule_4_3:
+    id: "DB_PAGINATION"
+    name: "Handle Pagination"
+    severity: "required"
+    description: "Properly handle paginated results"
+    status: "required"
+
+    required_pattern: |
+      while 'LastEvaluatedKey' in response:
+          response = table.query(
+              KeyConditionExpression=...,
+              ExclusiveStartKey=response['LastEvaluatedKey']
+          )
+
+# =============================================================================
+# SECTION 5: ITEM DESIGN
+# =============================================================================
+item_design:
+  section: "5. Item Design"
+
+  rule_5_1:
+    id: "DB_ENTITY_TYPE"
+    name: "Include Entity Type"
+    severity: "required"
+    description: "Add entity_type attribute for clarity"
+    status: "required"
+
+    required_pattern:
+      - "entity_type: GAP_RESPONSE"
+      - "entity_type: COMPANY_RESEARCH"
+      - "entity_type: CV_TAILORING"
+
+  rule_5_2:
+    id: "DB_VERSION_TRACKING"
+    name: "Track Version in Sort Key"
+    severity: "recommended"
+    description: "Include version in sort key for artifacts"
+    status: "recommended"
+
+    pattern: "ARTIFACT#TYPE#v{version}"
+
+    codebase_example: |
+      @staticmethod
+      def _parse_version_from_sk(sk: str) -> int:
+          if '#v' not in sk:
+              return 0
+          try:
+              return int(sk.split('#v')[-1])
+          except ValueError:
+              return 0
+
+  rule_5_3:
+    id: "DB_RESERVED_WORDS"
+    name: "Handle Reserved Keywords"
+    severity: "required"
+    description: "Escape DynamoDB reserved words in expressions"
+    status: "required"
+
+    reserved_words:
+      - "status"
+      - "error"
+      - "name"
+      - "data"
+      - "type"
+      - "value"
+      - "timestamp"
+      - "date"
+
+    required_pattern: |
+      if key.lower() in reserved_keywords:
+          attr_name = f'#{key}'
+          attr_names[attr_name] = key
+
+# =============================================================================
+# SECTION 6: TTL (TIME TO LIVE)
+# =============================================================================
+ttl_design:
+  section: "6. TTL Design"
+
+  rule_6_1:
+    id: "DB_TTL_USAGE"
+    name: "Use TTL for Automatic Expiration"
+    severity: "recommended"
+    description: "Implement TTL for data that expires"
+    status: "recommended"
+
+    use_cases:
+      - "Cache entries"
+      - "Session data"
+      - "Temporary artifacts"
+      - "Rate limiting data"
+
+    aws_waf_note: "AWS DynamoDB Best Practice: TTL auto-deletes expired items - no code needed"
+
+  rule_6_2:
+    id: "DB_TTL_ATTRIBUTE"
+    name: "Consistent TTL Attribute"
+    severity: "required"
+    description: "Use consistent attribute name for TTL"
+    status: "required"
+
+    recommended_names:
+      - "ttl" (Unix timestamp seconds)
+      - "expiresAt" (Unix timestamp)
+      - "expiration"
+
+    required_pattern: |
+      @staticmethod
+      def _ttl_timestamp(ttl_days: int = 90) -> int:
+          now = datetime.now(timezone.utc)
+          return int((now + timedelta(days=ttl_days)).timestamp())
+
+  rule_6_3:
+    id: "DB_TTL_VALUES"
+    name: "Set Appropriate TTL Values"
+    severity: "recommended"
+    description: "Configure TTL based on data retention requirements"
+    status: "recommended"
+
+    recommendations:
+      - ttl: "30 days"
+        use_when: "Cache data, temporary computations"
+      - ttl: "90 days"
+        use_when: "User activity logs"
+      - ttl: "2 years"
+        use_when: "Important user artifacts"
+
+# =============================================================================
+# SECTION 7: CAPACITY AND SCALING
+# =============================================================================
+capacity_scaling:
+  section: "7. Capacity and Scaling"
+
+  rule_7_1:
+    id: "DB_CAPACITY_MODE"
+    name: "Choose Appropriate Capacity Mode"
+    severity: "required"
+    description: "Select on-demand or provisioned based on traffic"
+    status: "required"
+
+    modes:
+      - name: "On-Demand"
+        use_when: "Unpredictable or variable traffic"
+        recommendation: "Default for new tables"
+      - name: "Provisioned"
+        use_when: "Predictable, consistent traffic"
+        benefit: "Cost savings at scale"
+
+    aws_waf_note: "AWS Well-Architected - Cost Optimization: On-demand is cost-effective for unpredictable workloads"
+
+  rule_7_2:
+    id: "DB_AUTO_SCALING"
+    name: "Configure Auto-Scaling for Provisioned"
+    severity: "recommended"
+    description: "Set up auto-scaling if using provisioned capacity"
+    status: "recommended"
+
+    configuration:
+      - min_capacity: "1-5 RCU/WCU"
+      - max_capacity: "Based on peak traffic"
+      - target_utilization: "70%"
+
+# =============================================================================
+# SECTION 8: CONDITIONAL WRITES
+# =============================================================================
+conditional_writes:
+  section: "8. Conditional Writes"
+
+  rule_8_1:
+    id: "DB_CONDITIONAL_UPDATE"
+    name: "Use Conditional Writes for Concurrency"
+    severity: "recommended"
+    description: "Prevent overwrites with ConditionExpression"
+    status: "recommended"
+
+    use_cases:
+      - "Status transitions (only update if current status is X)"
+      - "Idempotent creates (only put if not exists)"
+      - "Version/optimistic locking"
+
+    required_pattern: |
+      update_kwargs['ConditionExpression'] = '#status = :expected_status'
+      attr_names['#status'] = 'status'
+      attr_values[':expected_status'] = expected_current_status
+
+  rule_8_2:
+    id: "DB_ATOMIC_COUNTERS"
+    name: "Use Atomic Counters for Statistics"
+    severity: "recommended"
+    description: "Use atomic increments for counters"
+    status: "recommended"
+
+    pattern: |
+      table.update_item(
+          Key={'pk': pk, 'sk': sk},
+          UpdateExpression='SET view_count = view_count + :inc',
+          ExpressionAttributeValues={':inc': 1}
+      )
+
+# =============================================================================
+# SECTION 9: SECURITY
+# =============================================================================
+security:
+  section: "9. Security"
+
+  rule_9_1:
+    id: "DB_ENCRYPTION_AT_REST"
+    name: "Enable Encryption at Rest"
+    severity: "critical"
+    description: "All tables must have encryption enabled"
+    status: "required"
+
+    aws_waf_note: "AWS Well-Architected - Security: Enable encryption at rest for all sensitive data"
+
+  rule_9_2:
+    id: "DB_VPC_ENDPOINT"
+    name: "Use VPC Endpoint for Private Access"
+    severity: "optional"
+    description: "Access DynamoDB from private subnets via VPC endpoint"
+    status: "optional"
+
+    applicability: "Production environments with high security requirements only"
+    reason_to_skip: "Lambda → DynamoDB over public internet is already encrypted with HTTPS. Adds complexity without significant benefit for most use cases."
+
+    when_to_use:
+      - "Regulatory compliance (PCI-DSS, HIPAA)"
+      - "High security requirements"
+      - "Enterprise customers with strict data residency"
+
+    aws_waf_note: "AWS Well-Architected - Security: Keep traffic within AWS network (optional for most serverless workloads)"
+
+  rule_9_3:
+    id: "DB_IAM_ACCESS"
+    name: "Use IAM for Access Control"
+    severity: "required"
+    description: "Grant least-privilege IAM permissions"
+    status: "required"
+
+    pattern: "Use resource-based policies or IAM roles, not API keys"
+
+# =============================================================================
+# SECTION 10: BACKUP AND RECOVERY
+# =============================================================================
+backup_recovery:
+  section: "10. Backup and Recovery"
+
+  rule_10_1:
+    id: "DB_POINT_IN_TIME_RECOVERY"
+    name: "Enable Point-in-Time Recovery"
+    severity: "recommended"
+    description: "Enable PITR for production tables"
+    status: "recommended"
+
+    applicability: "Production environments only - not needed for dev/staging"
+
+    configuration:
+      - point_in_time_recovery: true
+
+    retention: "35 days (maximum)"
+
+    reason_to_skip_for_non_prod: "Dev/staging data can be recreated from scratch or Production data. Saves cost."
+
+    aws_waf_note: "AWS Well-Architected - Reliability: PITR enables recovery from accidental writes/deletes"
+
+  rule_10_2:
+    id: "DB_ON_DEMAND_BACKUP"
+    name: "Configure On-Demand Backups"
+    severity: "recommended"
+    description: "Set up scheduled backups for critical tables"
+    status: "recommended"
+
+    use_cases:
+      - "Compliance requirements"
+      - "Cross-region backup"

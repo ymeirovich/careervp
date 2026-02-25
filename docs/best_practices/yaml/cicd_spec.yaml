@@ -1,0 +1,504 @@
+# CareerVP CI/CD Specification
+# Machine-readable YAML format for automated validation
+
+spec_version: "1.0"
+date: "2026-02-25"
+purpose: "CI/CD pipeline standards combining codebase conventions with AWS Well-Architected Framework"
+enforcement: "All deployment pipelines must follow these patterns"
+
+# =============================================================================
+# SECTION 1: PIPELINE STRUCTURE
+# =============================================================================
+pipeline_structure:
+  section: "1. Pipeline Structure"
+
+  rule_1_1:
+    id: "CICD_PIPELINE_STAGES"
+    name: "Define Pipeline Stages"
+    severity: "required"
+    description: "Organize pipeline into clear stages"
+    status: "required"
+
+    stages:
+      - name: "Source"
+        description: "Code checkout, dependency download"
+        tools: "GitHub Actions, CodeCommit"
+      - name: "Build"
+        description: "Compile, bundle, containerize"
+        tools: "CodeBuild, GitHub Actions"
+      - name: "Test"
+        description: "Unit, integration, security tests"
+        tools: "pytest, npm test, security scanners"
+      - name: "Deploy"
+        description: "Deploy to environment"
+        tools: "CDK, Terraform, CodeDeploy"
+      - name: "Verify"
+        description: "Smoke tests, health checks"
+        tools: "API tests, canary deployment"
+
+    aws_waf_note: "AWS Well-Architected - Operational Excellence: Automated pipelines reduce human error"
+
+  rule_1_2:
+    id: "CICD_PARALLEL_STAGES"
+    name: "Run Independent Stages in Parallel"
+    severity: "recommended"
+    description: "Maximize pipeline speed with parallelization"
+    status: "recommended"
+
+    example: |
+      # Run lint, unit tests, and security scan in parallel
+      - lint
+      - unit-tests
+      - security-scan
+
+# =============================================================================
+# SECTION 2: SOURCE CONTROL
+# =============================================================================
+source_control:
+  section: "2. Source Control Integration"
+
+  rule_2_1:
+    id: "CICD_PR_REQUIREMENTS"
+    name: "Require Pull Request Reviews"
+    severity: "required"
+    description: "All changes must go through PR"
+    status: "required"
+
+    requirements:
+      - "At least 1 approval required"
+      - "Required reviewers for sensitive changes"
+      - "Branch protection rules"
+
+    aws_waf_note: "AWS Well-Architected - Security: Code review catches defects before production"
+
+  rule_2_2:
+    id: "CICD_BRANCH_STRATEGY"
+    name: "Use Git Flow or Trunk-Based"
+    severity: "required"
+    description: "Define branching strategy"
+    status: "required"
+
+    strategies:
+      - name: "Git Flow"
+        use_when: "Scheduled releases, multiple versions"
+        branches: "main, develop, feature/*, release/*"
+      - name: "Trunk-Based"
+        use_when: "Continuous deployment"
+        branches: "main, short-lived feature branches"
+
+  rule_2_3:
+    id: "CICD_COMMIT_MESSAGES"
+    name: "Enforce Commit Message Format"
+    severity: "recommended"
+    description: "Standardize commit messages"
+    status: "recommended"
+
+    pattern: |
+      Conventional Commits:
+      <type>(<scope>): <description>
+
+      Types: feat, fix, docs, style, refactor, test, chore
+
+# =============================================================================
+# SECTION 3: BUILD PROCESS
+# =============================================================================
+build_process:
+  section: "3. Build Process"
+
+  rule_3_1:
+    id: "CICD_DEPENDENCY_CACHING"
+    name: "Cache Dependencies"
+    severity: "required"
+    description: "Speed up builds with caching"
+    status: "required"
+
+    patterns:
+      - "Cache node_modules"
+      - "Cache Python packages"
+      - "Cache Docker layers"
+
+    example: |
+      - name: Cache pip packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+
+  rule_3_2:
+    id: "CICD_BUILD_ARTIFACTS"
+    name: "Publish Build Artifacts"
+    severity: "required"
+    description: "Store build outputs for deployment"
+    status: "required"
+
+    artifacts:
+      - "Lambda function zip"
+      - "Docker image"
+      - "CloudFormation template"
+
+    storage: "S3, ECR, or GitHub Actions artifacts"
+
+  rule_3_3:
+    id: "CICD_DETERMINISTIC_BUILD"
+    name: "Ensure Reproducible Builds"
+    severity: "required"
+    description: "Use lock files for dependencies"
+    status: "required"
+
+    requirements:
+      - "package-lock.json (npm)"
+      - "poetry.lock or Pipfile.lock (Python)"
+      - "Pin Docker base images"
+
+# =============================================================================
+# SECTION 4: TESTING IN CI
+# =============================================================================
+testing_in_ci:
+  section: "4. Testing in CI"
+
+  rule_4_1:
+    id: "CICD_RUN_UNIT_TESTS"
+    name: "Run Unit Tests in CI"
+    severity: "required"
+    description: "Execute unit tests on every commit"
+    status: "required"
+
+    configuration:
+      - "Fail build on test failure"
+      - "Collect code coverage"
+      - "Publish coverage report"
+
+  rule_4_2:
+    id: "CICD_STATIC_ANALYSIS"
+    name: "Run Static Analysis"
+    severity: "required"
+    description: "Run linters and type checkers"
+    status: "required"
+
+    tools:
+      - "Ruff / ESLint (linting)"
+      - "Mypy / TypeScript (type checking)"
+      - "Prettier (formatting)"
+
+    enforcement:
+      - "Fail on lint errors"
+      - "Warn on style violations"
+
+  rule_4_3:
+    id: "CICD_SECURITY_SCAN"
+    name: "Run Security Scans"
+    severity: "required"
+    description: "Scan for vulnerabilities"
+    status: "required"
+
+    scans:
+      - name: "Dependency scanning"
+        tools: "npm audit, pip-audit, Dependabot"
+      - name: "SAST (Static)"
+        tools: "Bandit (Python), Semgrep"
+      - name: "Secret scanning"
+        tools: "GitLeaks, TruffleHog"
+
+    aws_waf_note: "AWS Well-Architected - Security: Security scans catch vulnerabilities early"
+
+  rule_4_4:
+    id: "CICD_INTEGRATION_TESTS"
+    name: "Run Integration Tests"
+    severity: "recommended"
+    description: "Execute integration tests in CI"
+    status: "recommended"
+
+    configuration:
+      - "Use isolated test database"
+      - "Mock external services"
+      - "Clean up after tests"
+
+# =============================================================================
+# SECTION 5: SECURITY
+# =============================================================================
+security:
+  section: "5. Pipeline Security"
+
+  rule_5_1:
+    id: "CICD_SECRET_MANAGEMENT"
+    name: "Manage Secrets Securely"
+    severity: "critical"
+    description: "Never expose secrets in pipeline"
+    status: "required"
+
+    requirements:
+      - "Use AWS Secrets Manager"
+      - "Use GitHub Secrets"
+      - "Environment variables in CI settings"
+
+    forbidden_patterns:
+      - "Hardcoded credentials in code"
+      - "Secrets in logs"
+      - "Secrets in commit history"
+
+  rule_5_2:
+    id: "CICD_LEAST_PRIVILEGE"
+    name: "Use Least Privilege IAM"
+    severity: "required"
+    description: "Grant minimal permissions to CI/CD"
+    status: "required"
+
+    iam_principles:
+      - "Service-specific credentials"
+      - "Environment-specific roles"
+      - "No wildcard (*) permissions"
+
+    aws_waf_note: "AWS Well-Architected - Security: Compromised CI/CD is a common attack vector"
+
+  rule_5_3:
+    id: "CICD_BUILD_ISOLATION"
+    name: "Isolate Build Environment"
+    severity: "required"
+    description: "Use ephemeral build environments"
+    status: "required"
+
+    configuration:
+      - "Ephemeral containers"
+      - "No persistent state between builds"
+      - "Clean workspace on each run"
+
+# =============================================================================
+# SECTION 6: DEPLOYMENT STRATEGIES
+# =============================================================================
+deployment_strategies:
+  section: "6. Deployment Strategies"
+
+  rule_6_1:
+    id: "CICD_DEPLOY_ENVIRONMENTS"
+    name: "Use Multiple Environments"
+    severity: "required"
+    description: "Deploy through environments"
+    status: "required"
+
+    environments:
+      - name: "Development"
+        purpose: "Developer testing"
+        auto_deploy: true
+      - name: "Staging"
+        purpose: "Integration testing"
+        auto_deploy: true
+      - name: "Production"
+        purpose: "Live traffic"
+        auto_deploy: false
+
+  rule_6_2:
+    id: "CICD_BLUE_GREEN"
+    name: "Use Blue/Green or Canary"
+    severity: "recommended"
+    description: "Reduce deployment risk"
+    status: "recommended"
+
+    strategies:
+      - name: "Blue/Green"
+        description: "Swap between identical environments"
+      - name: "Canary"
+        description: "Gradually shift traffic"
+      - name: "Rolling"
+        description: "Update instances incrementally"
+
+    aws_waf_note: "AWS Well-Architected - Reliability: Safe deployment reduces blast radius"
+
+  rule_6_3:
+    id: "CICD_ROLLBACK"
+    name: "Implement Automatic Rollback"
+    severity: "required"
+    description: "Auto-rollback on failure"
+    status: "required"
+
+    triggers:
+      - "Health check failures"
+      - "Error rate threshold exceeded"
+      - "Manual trigger"
+
+  rule_6_4:
+    id: "CICD_SMOKE_TESTS"
+    name: "Run Smoke Tests Post-Deploy"
+    severity: "required"
+    description: "Verify deployment success"
+    status: "required"
+
+    tests:
+      - "Health endpoint check"
+      - "Basic functionality test"
+      - "Database connectivity"
+
+# =============================================================================
+# SECTION 7: INFRASTRUCTURE AS CODE
+# =============================================================================
+infrastructure_as_code:
+  section: "7. Infrastructure as Code"
+
+  rule_7_1:
+    id: "CICD_CDK_SYNTH"
+    name: "Synthesize CDK Before Deploy"
+    severity: "required"
+    description: "Run cdk synth to validate templates"
+    status: "required"
+
+    command: "cdk synth --no-validate"
+
+    checks:
+      - "No CloudFormation errors"
+      - "Template size limits"
+      - "Required parameters"
+
+  rule_7_2:
+    id: "CICD_DIFF_CHECK"
+    name: "Review CloudFormation Diff"
+    severity: "required"
+    description: "Show diff before deployment"
+    status: "required"
+
+    command: "cdk diff"
+
+    requirement: "Human review for production"
+
+  rule_7_3:
+    id: "CICD_DRIFT_DETECTION"
+    name: "Detect Configuration Drift"
+    severity: "recommended"
+    description: "Identify manual infrastructure changes"
+    status: "recommended"
+
+    tools:
+      - "CloudFormation drift detection"
+      - "Terraform state refresh"
+
+    aws_waf_note: "AWS Well-Architected - Operational Excellence: Drift detection maintains infrastructure integrity"
+
+# =============================================================================
+# SECTION 8: MONITORING
+# =============================================================================
+monitoring:
+  section: "8. Pipeline Monitoring"
+
+  rule_8_1:
+    id: "CICD_NOTIFICATIONS"
+    name: "Send Pipeline Notifications"
+    severity: "required"
+    description: "Alert on pipeline events"
+    status: "required"
+
+    events:
+      - "Build failure"
+      - "Deployment failure"
+      - "Deployment success (production)"
+
+    channels:
+      - "Slack/Teams"
+      - "Email"
+
+  rule_8_2:
+    id: "CICD_METRICS"
+    name: "Track Pipeline Metrics"
+    severity: "recommended"
+    description: "Monitor pipeline health"
+    status: "recommended"
+
+    metrics:
+      - "Build duration"
+      - "Failure rate"
+      - "Time to deploy"
+
+    tools:
+      - "CloudWatch"
+      - "Datadog"
+
+# =============================================================================
+# SECTION 9: VERSIONING
+# =============================================================================
+versioning:
+  section: "9. Versioning"
+
+  rule_9_1:
+    id: "CICD_SEMANTIC_VERSIONING"
+    name: "Use Semantic Versioning"
+    severity: "required"
+    description: "Tag releases with semantic versions"
+    status: "required"
+
+    format: "MAJOR.MINOR.PATCH"
+
+    rules:
+      - "MAJOR: Breaking changes"
+      - "MINOR: New features (backward compatible)"
+      - "PATCH: Bug fixes"
+
+  rule_9_2:
+    id: "CICD_GIT_TAGS"
+    name: "Tag Releases in Git"
+    severity: "required"
+    description: "Create git tags for releases"
+    status: "required"
+
+    pattern: "v{version}"
+
+    example: "v1.2.3"
+
+# =============================================================================
+# SECTION 10: ARTIFACT MANAGEMENT
+# =============================================================================
+artifact_management:
+  section: "10. Artifact Management"
+
+  rule_10_1:
+    id: "CICD_ARTIFACT_REGISTRY"
+    name: "Use Artifact Registry"
+    severity: "required"
+    description: "Store build artifacts centrally"
+    status: "required"
+
+    storage:
+      - "Lambda: S3"
+      - "Docker: ECR"
+      - "npm: CodeArtifact/NPM registry"
+
+  rule_10_2:
+    id: "CICD_RETENTION_POLICY"
+    name: "Set Artifact Retention Policy"
+    severity: "required"
+    description: "Clean up old artifacts"
+    status: "required"
+
+    retention:
+      - "Build artifacts: 30 days"
+      - "Deployment artifacts: Until next deployment"
+      - "Logs: 90 days"
+
+# =============================================================================
+# SECTION 11: COMPLIANCE
+# =============================================================================
+compliance:
+  section: "11. Compliance"
+
+  rule_11_1:
+    id: "CICD_AUDIT_LOGGING"
+    name: "Enable Audit Logging"
+    severity: "required"
+    description: "Log all pipeline actions"
+    status: "required"
+
+    logged_events:
+      - "Who triggered the pipeline"
+      - "What was changed"
+      - "When it happened"
+      - "What was the result"
+
+    aws_waf_note: "AWS Well-Architected - Security: Audit logs support compliance and forensics"
+
+  rule_11_2:
+    id: "CICD_COMPLIANCE_SCANS"
+    name: "Run Compliance Scans"
+    severity: "recommended"
+    description: "Validate against compliance rules"
+    status: "recommended"
+
+    tools:
+      - "cfn-guard (CloudFormation)"
+      - "Checkov (Terraform)"
+      - "OPA Conftest"
