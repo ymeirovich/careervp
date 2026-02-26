@@ -65,26 +65,41 @@ def is_trial_expired(user) -> bool:
 
 ### 2.1 Application Count
 
-An "application" is created when a user generates any of:
-- VPR (Visual Past Resume)
-- Gap Analysis
-- CV Tailoring
-- Cover Letter
-- Interview Prep
+An "application" is created when a user initiates the Gap Analysis question generation. This is the trigger point that counts toward the 3-application limit.
 
-**Each generation counts as 1 application.**
+**Application Flow:**
+1. User creates a Job Application (no charge)
+2. User answers Gap Analysis questions → **This triggers the application count**
+3. CV + VPR are generated together (within same application)
+4. Cover Letter can be generated (within same application)
+5. Interview Prep can be generated (within same application)
+
+**Key principle:** Once Gap Questions are generated, all subsequent artifacts (CV, VPR, Cover Letter, Interview Prep) for that same job are included in that one application - no additional charges.
 
 ```python
-# Application is created when user initiates generation
+# Application is created when user initiates gap analysis
 class Application:
     user_id: str
     job_id: str
     created_at: datetime
-    generations: list[GenerationType]
+    gap_questions_generated: bool = False
+    cv_generated: bool = False
+    vpr_generated: bool = False
+    cover_letter_generated: bool = False
+    interview_prep_generated: bool = False
 
-    def increment_usage(self, gen_type: GenerationType):
-        self.generations.append(gen_type)
+    def start_application(self):
+        """Called when gap analysis questions are generated"""
+        self.gap_questions_generated = True
         user.applications_used += 1
+
+    def generate_artifact(self, artifact_type: ArtifactType):
+        """Called for subsequent artifacts - no additional charge"""
+        if artifact_type == ArtifactType.CV:
+            self.cv_generated = True
+        elif artifact_type == ArtifactType.VPR:
+            self.vpr_generated = True
+        # ... etc - no charge, within same application
 ```
 
 ### 2.2 Counting Logic
@@ -109,16 +124,26 @@ def can_create_application(user) -> tuple[bool, str]:
 
 ### 2.3 What Counts as Usage?
 
-| Action | Counts as Application? |
-|--------|----------------------|
-| Register account | No |
-| Upload CV | No |
-| Create job (no generation) | No |
-| Generate VPR | Yes |
-| Generate Gap Analysis | Yes |
-| Generate Tailored CV | Yes |
-| Generate Cover Letter | Yes |
-| Generate Interview Prep | Yes |
+**Trigger:** Gap Analysis question generation is the trigger that creates an "application" and counts toward the 3-application limit.
+
+| Action | Counts as Application? | Notes |
+|--------|----------------------|-------|
+| Register account | No | Free |
+| Upload CV | No | Free |
+| Create job application | No | Free - just creates the job record |
+| **Generate Gap Questions** | **Yes (1 application)** | **This is the trigger** |
+| Generate CV (after Gap Questions) | No | Included in same application |
+| Generate VPR (after Gap Questions) | No | Included in same application |
+| Generate Cover Letter | No | Included in same application |
+| Generate Interview Prep | No | Included in same application |
+
+**Example:**
+- User creates Job A → 0 applications used
+- User generates Gap Questions for Job A → 1 application used
+- User generates CV, VPR, Cover Letter for Job A → still 1 application (all included)
+- User creates Job B → still 1 application
+- User generates Gap Questions for Job B → 2 applications used
+- User generates Gap Questions for Job C → 3 applications used (LIMIT REACHED)
 
 ---
 
@@ -245,8 +270,12 @@ def check_trial_status(handler):
 
 | Plan | Price | Applications |
 |------|-------|--------------|
-| Monthly | $20/month | Unlimited |
-| Annual | $192/year ($16/month) | Unlimited |
+| Monthly | $29.95/month | Unlimited |
+| Quarterly | $24.95/month | Unlimited |
+
+**Default Opt-Out:** If the user does not cancel, they will be automatically enrolled in the Monthly $29.95/month plan.
+
+**Upgrade Options:** Users can choose either Monthly or Quarterly when they click "Upgrade".
 
 ### 5.2 Upgrade Endpoint
 
@@ -258,7 +287,7 @@ POST /billing/subscribe
 **Request:**
 ```json
 {
-  "plan": "monthly" | "annual",
+  "plan": "monthly" | "quarterly",
   "payment_token": "tok_xxx"
 }
 ```
@@ -372,14 +401,17 @@ curl -X POST /vpr/generate -H "Authorization: Bearer $TOKEN" \
 
 ### Issue: User says they have applications but system says limit reached
 
-**Possible causes:**
-1. Application was created but failed to count
-2. Cache inconsistency
+**Clarification:** Users can continue generating artifacts (CV, VPR, Cover Letter, Interview Prep) within the SAME job application even after hitting the 3-application limit. The limit applies to creating NEW job applications, not to completing artifacts within existing applications.
 
-**Resolution:**
+**Example:**
+- User has 3/3 applications used
+- User CAN still generate Cover Letter for Job A (if Gap Questions were already generated)
+- User CANNOT create Job D (would be 4th application)
+
+**If truly blocked:**
 1. Check DynamoDB user record
 2. Verify applications_used value
-3. Clear cache if necessary
+3. Check if user is trying to create new Job vs. completing existing Job
 
 ### Issue: Trial shows as expired but 14 days not passed
 
