@@ -131,11 +131,26 @@ The analysis shows:
 
 ---
 
-## 5. Generating VPR
+## 5. Generating VPR (Value Proposition Report)
 
 ### 5.1 What is VPR?
 
-VPR (Visual Past Resume) is a visual representation of your professional background, optimized for ATS (Applicant Tracking Systems) and recruiters.
+**VPR = Value Proposition Report**
+
+VPR is a synthesis document that illustrates the value a candidate proposes to a targeted company. It combines:
+- Your CV
+- The job description
+- Company Research report (if available)
+
+The VPR includes these key components:
+- **Executive Summary** - Career narrative and summary
+- **Alignment Matrix** - How your experience matches company needs
+- **Core Value Proposition Statement** - Your unique value to the company
+- **Key Differentiators** - What sets you apart from other candidates
+- **ATS & Recruiter Keywords** - Keywords to include in your CV
+- **Verification Summary** - Confidence level in the match
+
+For a complete example, see: `docs/features/01_SysAid_Value_Proposition_Report_Yitzchak_Meirovich.docx`
 
 ### 5.2 Generating a VPR
 
