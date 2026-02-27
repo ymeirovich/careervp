@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from datetime import datetime, timedelta, timezone
@@ -15,6 +16,8 @@ try:  # pragma: no cover - import guard for lightweight unit-test environments.
 except Exception:  # noqa: BLE001
     ClientError = Exception
 
+from careervp.handlers.auth_utils import extract_user_id
+from careervp.logic.gap_analysis import generate_gap_questions
 from careervp.models.api_models import GapQuestionRequest, GapResponseRequest
 from careervp.models.result import ResultCode
 
@@ -96,7 +99,28 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:
 
     max_questions = _normalize_max_questions(openapi_request.max_questions)
     focus_areas = _normalize_focus_areas(openapi_request.focus_areas)
-    questions = _generate_gap_questions(job_id=job_id, focus_areas=focus_areas, max_questions=max_questions)
+    user_cv = _build_user_cv_prompt_payload(cv_id=cv_id, focus_areas=focus_areas)
+    job_posting = _build_job_prompt_payload(job_id=job_id, focus_areas=focus_areas)
+    generation_result = asyncio.run(
+        generate_gap_questions(
+            user_cv=user_cv,
+            job_posting=job_posting,
+            dal=None,
+        )
+    )
+    if not generation_result.success or generation_result.data is None:
+        status = HTTPStatus.SERVICE_UNAVAILABLE if generation_result.code in {
+            ResultCode.LLM_TIMEOUT,
+            ResultCode.LLM_API_ERROR,
+            ResultCode.TIMEOUT,
+        } else HTTPStatus.INTERNAL_SERVER_ERROR
+        return _error_response(
+            status,
+            generation_result.error or 'Gap question generation failed',
+            generation_result.code,
+        )
+
+    questions = generation_result.data[:max_questions]
     missing_qualifications = _build_missing_qualifications(focus_areas)
 
     now = datetime.now(timezone.utc).isoformat()
@@ -283,7 +307,7 @@ def _parse_body(event: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _extract_user_id(event: dict[str, Any]) -> str | None:
-    return _extract_user_id_from_authorizer(event) or _extract_user_id_from_headers(event)
+    return extract_user_id(event)
 
 
 def _extract_claim_user_id(claims: Any) -> str | None:
@@ -332,6 +356,23 @@ def _extract_user_id_from_headers(event: dict[str, Any]) -> str | None:
         if isinstance(key, str) and key.lower() == 'x-user-id' and isinstance(value, str) and value.strip():
             return value.strip()
     return None
+
+
+def _build_user_cv_prompt_payload(cv_id: str, focus_areas: list[str]) -> dict[str, Any]:
+    return {
+        'personal_info': {'full_name': 'Candidate'},
+        'skills': focus_areas,
+        'work_experience': [{'company': 'Current Company', 'role': 'Engineer', 'cv_id': cv_id}],
+    }
+
+
+def _build_job_prompt_payload(job_id: str, focus_areas: list[str]) -> dict[str, Any]:
+    return {
+        'company_name': f'Company for {job_id}',
+        'role_title': f'Role for {job_id}',
+        'requirements': focus_areas or ['Core competency'],
+        'responsibilities': ['Deliver measurable business impact'],
+    }
 
 
 def _extract_job_id(event: dict[str, Any]) -> str | None:

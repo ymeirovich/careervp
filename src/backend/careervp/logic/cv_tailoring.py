@@ -332,11 +332,24 @@ def _tailor_cv_legacy(  # noqa: C901
     )
 
     if dal is not None:
-        if _has_defined_attr(dal, 'save_tailored_cv_artifact'):
+        if _has_defined_attr(dal, 'save_tailored_cv'):
+            save_result = _maybe_await(
+                dal.save_tailored_cv(
+                    tailored_cv=tailored_cv,
+                    job_id=tailored_cv.job_description_hash,
+                )
+            )
+            if isinstance(save_result, Result) and not save_result.success:
+                return Result(
+                    success=False,
+                    error=save_result.error or 'Failed to persist tailored CV',
+                    code=save_result.code,
+                )
+        elif _has_defined_attr(dal, 'save_tailored_cv_artifact'):
             _maybe_await(
                 dal.save_tailored_cv_artifact(
                     user_id=master_cv.user_id,
-                    cv_id=master_cv.cv_id,
+                    cv_id=tailored_cv.cv_id or master_cv.cv_id or 'unknown',
                     job_description=job_description,
                     tailored_cv=tailored_cv,
                 )
@@ -345,7 +358,7 @@ def _tailor_cv_legacy(  # noqa: C901
             dal.put_item(
                 Item={
                     'user_id': master_cv.user_id,
-                    'cv_id': master_cv.cv_id,
+                    'cv_id': tailored_cv.cv_id or master_cv.cv_id,
                     'tailored_cv': tailored_cv.model_dump(),
                 }
             )
@@ -1514,9 +1527,14 @@ def _build_tailored_cv(master_cv: CVUserCV | UserCV, payload: dict[str, Any]) ->
     professional_summary = payload.get('professional_summary') or master_cv.professional_summary
 
     job_hash = hashlib.sha256(payload.get('job_description', '').encode('utf-8') if payload.get('job_description') else b'').hexdigest()
+    payload_cv_id = payload.get('cv_id')
+    resolved_payload_cv_id = ''
+    if isinstance(payload_cv_id, str) and payload_cv_id.strip():
+        resolved_payload_cv_id = payload_cv_id.strip()
+    resolved_cv_id = master_cv.cv_id or resolved_payload_cv_id or f'cv-{job_hash[:12]}'
 
     return TailoredCV(
-        cv_id=master_cv.cv_id,
+        cv_id=resolved_cv_id,
         user_id=master_cv.user_id,
         job_description_hash=job_hash,
         full_name=payload.get('full_name') or master_cv.full_name,

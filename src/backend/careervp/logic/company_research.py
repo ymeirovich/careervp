@@ -12,6 +12,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from careervp.handlers.utils.observability import logger
+from careervp.logic.llm_cache import DEFAULT_CACHE_TTL_SECONDS, LLMResponseCache
 from careervp.logic.utils.llm_client import TaskMode, get_llm_router
 from careervp.logic.utils.web_scraper import MIN_CONTENT_WORDS, count_words, scrape_company_about_page
 from careervp.logic.utils.web_search import aggregate_search_content, search_company_info
@@ -182,6 +183,14 @@ async def _structure_raw_content(
     word_count: int,
     context_hint: ContextHint,
 ) -> Result[CompanyResearchResult]:
+    cache = LLMResponseCache()
+    cache_key = _company_cache_key(company_name)
+    cached_value = cache.get(cache_key)
+    if cached_value:
+        cached_result = _parse_cached_company_research(cached_value)
+        if cached_result is not None:
+            return Result(success=True, data=cached_result, code=ResultCode.RESEARCH_COMPLETE)
+
     trimmed_text = _truncate_text(raw_text, max_words=MAX_PROMPT_WORDS)
     user_prompt = _build_structure_prompt(company_name, trimmed_text, context_hint)
     router = get_llm_router()
@@ -223,6 +232,12 @@ async def _structure_raw_content(
         research_timestamp=datetime.now(timezone.utc),
     )
 
+    cache.set(
+        cache_key,
+        result_model.model_dump_json(),
+        ttl_seconds=DEFAULT_CACHE_TTL_SECONDS,
+    )
+
     return Result(success=True, data=result_model, code=ResultCode.RESEARCH_COMPLETE)
 
 
@@ -252,6 +267,25 @@ def _parse_llm_payload(raw_output: str) -> dict[str, Any] | None:
         return payload
     logger.warning('LLM response was not a JSON object')
     return None
+
+
+def _company_cache_key(company_name: str) -> str:
+    return company_name.strip().lower()
+
+
+def _parse_cached_company_research(cached_value: str) -> CompanyResearchResult | None:
+    try:
+        payload = json.loads(cached_value)
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(payload, dict):
+        return None
+
+    try:
+        return CompanyResearchResult.model_validate(payload)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _truncate_text(raw_text: str, max_words: int) -> str:

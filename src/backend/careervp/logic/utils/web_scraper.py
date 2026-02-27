@@ -20,6 +20,7 @@ USER_AGENT: Final[str] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
 SCRAPE_TIMEOUT: Final[float] = 10.0
 MIN_CONTENT_WORDS: Final[int] = 200
 ABOUT_PATHS: Final[tuple[str, ...]] = ('', 'about', 'about-us', 'company', 'company/about', 'who-we-are')
+MAX_SCRAPE_URLS: Final[int] = 3
 
 
 def _is_safe_url(url: str) -> bool:
@@ -98,7 +99,7 @@ async def scrape_company_about_page(base_url: str, on_success: Callable[[str], N
     Attempt to scrape the most relevant "About" style page for a company.
     Tries a set of known path variants and returns the first successful extraction.
     """
-    candidate_urls = list(_build_candidate_urls(base_url))
+    candidate_urls = list(_build_candidate_urls(base_url))[:MAX_SCRAPE_URLS]
     if not candidate_urls:
         return Result(success=False, error='Invalid base URL for scraping', code=ResultCode.INVALID_INPUT)
 
@@ -171,6 +172,7 @@ def _join_url(base: str, path: str) -> str:
 __all__ = [
     'ABOUT_PATHS',
     'MIN_CONTENT_WORDS',
+    'MAX_SCRAPE_URLS',
     'SCRAPE_TIMEOUT',
     'scrape_url',
     'scrape_company_about_page',

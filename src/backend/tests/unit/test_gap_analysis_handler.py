@@ -4,7 +4,7 @@ import json
 from collections.abc import Generator
 from datetime import datetime, timezone
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import boto3
 import pytest
@@ -88,6 +88,7 @@ def _context() -> Any:
 def test_generate_questions_returns_200_and_persists(gap_table: Any) -> None:
     """POST /gap-analysis/questions returns 200 and stores generated questions."""
     from careervp.handlers.gap_handler import lambda_handler
+    from careervp.models.result import Result, ResultCode
 
     event = _event(
         path='/gap-analysis/questions',
@@ -100,7 +101,24 @@ def test_generate_questions_returns_200_and_persists(gap_table: Any) -> None:
         },
     )
 
-    response = lambda_handler(event, _context())
+    generated_questions = [
+        {
+            'question_id': f'gap-q{i+1}',
+            'question': 'Describe a measurable impact example.',
+            'impact': 'HIGH',
+            'probability': 'MEDIUM',
+            'tags': ['[CV IMPACT]'],
+        }
+        for i in range(10)
+    ]
+
+    with patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate:
+        mock_generate.return_value = Result(
+            success=True,
+            data=generated_questions,
+            code=ResultCode.GAP_QUESTIONS_GENERATED,
+        )
+        response = lambda_handler(event, _context())
 
     # Handler returns 201 for creation, accept both 200 and 201
     assert response['statusCode'] in [200, 201]

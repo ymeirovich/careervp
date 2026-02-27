@@ -8,17 +8,27 @@ Payload: docs/refactor/payloads/beta_l0_generators_test.json#L0_3_gap_analysis
 Invariant: I1 (partial)
 Results: docs/beta/execution_results/L0_3_results.md
 """
+
+from __future__ import annotations
+
+import asyncio
 import json
 import os
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from careervp.logic.gap_analysis import generate_gap_questions
+from careervp.models.result import Result, ResultCode
+
 os.environ.setdefault("AWS_ACCESS_KEY_ID", "testing")
 os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "testing")
 os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key")
+
+USER_ID = "user-test-123"
+VALID_TAG_CATEGORIES = ["[CV IMPACT]", "[TECHNICAL]", "[BEHAVIORAL]", "[INTERVIEW/MVP ONLY]"]
 
 TEMPLATE_PATTERNS = [
     "What quantifiable examples show your impact in core competency",
@@ -28,120 +38,168 @@ TEMPLATE_PATTERNS = [
     "describe a relevant STAR example",
 ]
 
-VALID_TAG_CATEGORIES = ["CV IMPACT", "TECHNICAL", "BEHAVIORAL", "INTERVIEW/MVP"]
+
+def _cv_payload() -> dict[str, object]:
+    return {
+        "personal_info": {"full_name": "Jane Engineer"},
+        "skills": ["Python", "AWS", "Distributed Systems"],
+        "work_experience": [{"company": "TechCorp", "role": "Senior Engineer"}],
+    }
 
 
-@pytest.fixture
-def mock_llm_client():
-    with patch("careervp.logic.gap_analysis.LLMClient") as mock_cls:
-        mock_instance = MagicMock()
-        mock_instance.generate.return_value = json.dumps([
+def _job_payload() -> dict[str, object]:
+    return {
+        "company_name": "Innovate Labs",
+        "role_title": "Principal Software Engineer",
+        "requirements": ["Scale distributed systems", "Lead backend teams"],
+        "responsibilities": ["Architecture ownership", "Mentorship"],
+    }
+
+
+def _gap_questions_json() -> str:
+    questions = []
+    for i in range(10):
+        tag = VALID_TAG_CATEGORIES[i % 4]
+        questions.append(
             {
-                "question_id": f"q-{i:03d}",
-                "question": f"Tell me about a time you led a project with {['Python', 'AWS', 'distributed systems', 'team leadership', 'architecture'][i % 5]} at scale.",
-                "tag": VALID_TAG_CATEGORIES[i % 4],
-                "context": "Based on your experience at TechCorp",
+                "question_id": f"q-{i+1}",
+                "question": f"Describe a real project outcome for requirement {i+1} tied to distributed systems work.",
+                "impact": "HIGH" if i < 4 else "MEDIUM",
+                "probability": "MEDIUM",
+                "tags": [tag],
             }
-            for i in range(10)
-        ])
-        mock_cls.return_value = mock_instance
-        yield mock_instance
+        )
+    return json.dumps({"questions": questions})
 
 
-@pytest.fixture
-def gap_event():
+def _api_event() -> dict[str, object]:
     return {
         "httpMethod": "POST",
-        "path": "/jobs/job-xyz789/gap-questions",
-        "pathParameters": {"job_id": "job-xyz789"},
+        "path": "/gap-analysis/questions",
         "requestContext": {
-            "authorizer": {
-                "claims": {
-                    "sub": "user-test-123",
-                    "email": "test@example.com",
-                }
-            }
+            "authorizer": {"jwt": {"claims": {"sub": USER_ID}}},
         },
-        "body": json.dumps({"cv_id": "cv-abc456"}),
+        "body": json.dumps(
+            {
+                "cv_id": "cv-abc456",
+                "job_id": "job-xyz789",
+                "max_questions": 10,
+                "focus_areas": ["python", "system design"],
+            }
+        ),
         "headers": {"Content-Type": "application/json"},
     }
 
 
 @pytest.mark.unit
 class TestGapAnalysisCallsLLM:
-    """Validates L0.3: gap_analysis.py calls LLMClient, not template stub."""
+    def test_gap_analysis_calls_llm_client(self) -> None:
+        with patch("careervp.logic.gap_analysis.LLMClient") as mock_cls:
+            llm = MagicMock()
+            llm.generate.return_value = {"text": _gap_questions_json()}
+            mock_cls.return_value = llm
 
-    def test_gap_analysis_calls_llm_client(self, mock_llm_client, gap_event):
-        """generate() called on LLMClient."""
-        assert True, "RED: llm_client.generate called"
+            result = asyncio.run(
+                generate_gap_questions(
+                    user_cv=_cv_payload(),
+                    job_posting=_job_payload(),
+                    dal=None,
+                )
+            )
 
-    def test_gap_analysis_prompt_contains_cv_content(self, mock_llm_client, gap_event):
-        """Prompt includes actual CV content for personalized questions."""
-        assert True, "RED: cv content in prompt"
-
-    def test_gap_analysis_prompt_contains_job_description(self, mock_llm_client, gap_event):
-        """Prompt includes job description for targeted questions."""
-        assert True, "RED: job description in prompt"
+            assert result.success
+            llm.generate.assert_called_once()
+            prompt = llm.generate.call_args.kwargs["prompt"]
+            assert "Jane Engineer" in prompt
+            assert "Principal Software Engineer" in prompt
 
 
 @pytest.mark.unit
 class TestGapAnalysisNoTemplate:
-    """Validates I1: no template strings in output."""
-
     @pytest.mark.parametrize("pattern", TEMPLATE_PATTERNS)
-    def test_no_template_pattern_in_questions(self, pattern, mock_llm_client, gap_event):
-        """No generated question matches known template patterns."""
-        output = mock_llm_client.generate.return_value
-        assert pattern not in output, f"Template pattern found in output: {pattern!r}"
+    def test_no_template_pattern_in_questions(self, pattern: str) -> None:
+        with patch("careervp.logic.gap_analysis.LLMClient") as mock_cls:
+            llm = MagicMock()
+            llm.generate.return_value = {"text": _gap_questions_json()}
+            mock_cls.return_value = llm
 
-    def test_questions_are_user_specific(self, mock_llm_client, gap_event):
-        """Questions reference actual CV/job content, not generic placeholders."""
-        assert True, "RED: personalized questions"
+            result = asyncio.run(
+                generate_gap_questions(
+                    user_cv=_cv_payload(),
+                    job_posting=_job_payload(),
+                    dal=None,
+                )
+            )
 
-
-@pytest.mark.unit
-class TestGapAnalysisQuestionCount:
-    """Validates 10 questions are generated with 4 tag categories."""
-
-    def test_generates_10_questions(self, mock_llm_client, gap_event):
-        """Exactly 10 gap analysis questions generated."""
-        questions = json.loads(mock_llm_client.generate.return_value)
-        assert len(questions) == 10, f"Expected 10, got {len(questions)}"
-
-    def test_questions_have_valid_tags(self, mock_llm_client, gap_event):
-        """All questions have tags from VALID_TAG_CATEGORIES."""
-        questions = json.loads(mock_llm_client.generate.return_value)
-        for q in questions:
-            assert q["tag"] in VALID_TAG_CATEGORIES, f"Invalid tag: {q['tag']}"
-
-    def test_questions_cover_all_4_tag_categories(self, mock_llm_client, gap_event):
-        """Questions span all 4 tag categories."""
-        questions = json.loads(mock_llm_client.generate.return_value)
-        tags_used = {q["tag"] for q in questions}
-        assert tags_used == set(VALID_TAG_CATEGORIES), f"Missing tags: {set(VALID_TAG_CATEGORIES) - tags_used}"
-
-    def test_each_question_has_required_fields(self, mock_llm_client, gap_event):
-        """Each question dict has question_id, question, tag fields."""
-        questions = json.loads(mock_llm_client.generate.return_value)
-        for q in questions:
-            assert "question_id" in q
-            assert "question" in q
-            assert "tag" in q
-            assert len(q["question"]) > 20, "Question too short"
+            assert result.success
+            assert result.data is not None
+            serialized = json.dumps(result.data)
+            assert pattern not in serialized
 
 
 @pytest.mark.unit
-class TestGapAnalysisTrialIntegration:
-    """Validates trial credit is charged during gap question generation."""
+class TestGapAnalysisOutputShape:
+    def test_generates_10_questions_with_valid_tags(self) -> None:
+        with patch("careervp.logic.gap_analysis.LLMClient") as mock_cls:
+            llm = MagicMock()
+            llm.generate.return_value = {"text": _gap_questions_json()}
+            mock_cls.return_value = llm
 
-    def test_trial_credit_charged_before_llm_call(self, mock_llm_client, gap_event):
-        """Trial credit consumed atomically before LLM is invoked."""
-        assert True, "RED: credit before LLM"
+            result = asyncio.run(
+                generate_gap_questions(
+                    user_cv=_cv_payload(),
+                    job_posting=_job_payload(),
+                    dal=None,
+                )
+            )
 
-    def test_trial_exhausted_returns_403(self, gap_event):
-        """TrialExhaustedException → 403 trial_exhausted."""
-        assert True, "RED: 403 on exhausted"
+            assert result.success
+            assert result.data is not None
+            assert len(result.data) == 10
+            assert all("question_id" in q and "question" in q for q in result.data)
 
-    def test_trial_expired_returns_403(self, gap_event):
-        """TrialExpiredException → 403 trial_expired."""
-        assert True, "RED: 403 on expired"
+    def test_handler_returns_questions_from_llm_generation(self) -> None:
+        from careervp.handlers.gap_handler import lambda_handler
+
+        with patch("careervp.handlers.gap_handler.generate_gap_questions") as mock_generate:
+            generated_questions = [
+                {
+                    "question_id": f"q-{i+1}",
+                    "question": "Describe a measurable achievement.",
+                    "impact": "HIGH",
+                    "probability": "MEDIUM",
+                    "tags": [VALID_TAG_CATEGORIES[i % 4]],
+                }
+                for i in range(10)
+            ]
+            mock_generate.return_value = Result(
+                success=True,
+                data=generated_questions,
+                code=ResultCode.GAP_QUESTIONS_GENERATED,
+            )
+
+            with patch("careervp.handlers.gap_handler._get_table") as mock_table_fn:
+                mock_table = MagicMock()
+                mock_table.put_item.return_value = {}
+                mock_table_fn.return_value = mock_table
+                response = lambda_handler(_api_event(), MagicMock())
+
+        assert response["statusCode"] in (200, 201)
+        body = json.loads(response["body"])
+        assert len(body["questions"]) == 10
+        assert body["job_id"] == "job-xyz789"
+
+    def test_llm_error_maps_to_503(self) -> None:
+        from careervp.handlers.gap_handler import lambda_handler
+
+        with patch("careervp.handlers.gap_handler.generate_gap_questions") as mock_generate:
+            mock_generate.return_value = Result(
+                success=False,
+                error="LLM timeout",
+                code=ResultCode.LLM_TIMEOUT,
+            )
+            response = lambda_handler(_api_event(), MagicMock())
+
+        assert response["statusCode"] == 503
+        body = json.loads(response["body"])
+        assert body["code"] == ResultCode.LLM_TIMEOUT

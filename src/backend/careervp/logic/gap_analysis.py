@@ -92,13 +92,14 @@ def _extract_questions(payload: Any) -> list[dict[str, Any]]:
     if isinstance(parsed, str):
         parsed = json.loads(parsed)
 
-    if isinstance(parsed, dict):
+    while isinstance(parsed, dict):
         if isinstance(parsed.get('questions'), list):
             parsed = parsed['questions']
-        elif isinstance(parsed.get('text'), str):
+            break
+        if isinstance(parsed.get('text'), str):
             parsed = json.loads(parsed['text'])
-        else:
-            raise ValueError('Invalid questions format')
+            continue
+        raise ValueError('Invalid questions format')
 
     if not isinstance(parsed, list):
         raise ValueError('Invalid questions format')

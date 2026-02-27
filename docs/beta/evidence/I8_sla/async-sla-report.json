@@ -1,0 +1,26 @@
+{
+  "generated_at": "2026-02-27T13:41:21Z",
+  "environment": "local-test",
+  "scope": "L0.5 company research latency controls",
+  "runs": [
+    {
+      "operation": "company_research_structure_cache_miss",
+      "duration_seconds": 0.2577,
+      "threshold_seconds": 90.0,
+      "sla_met": true,
+      "notes": "Injected 250ms router latency for deterministic local profiling."
+    },
+    {
+      "operation": "company_research_structure_cache_hit",
+      "duration_seconds": 0.0001,
+      "threshold_seconds": 90.0,
+      "sla_met": true,
+      "notes": "Cached structured payload returned without router invocation."
+    }
+  ],
+  "controls": {
+    "web_scrape_max_urls": 3,
+    "web_scrape_timeout_seconds": 10.0,
+    "cache_ttl_seconds": 604800
+  }
+}

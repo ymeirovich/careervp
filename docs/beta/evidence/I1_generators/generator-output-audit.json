@@ -1,0 +1,37 @@
+[
+  {
+    "generator": "cover_letter",
+    "run_id": "local-unit-2026-02-27-l0-1",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Manager, I led backend platform modernization initiatives...",
+    "environment": "local-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "local-unit-2026-02-27-l0-2",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Tell me about a time you led an architecture migration...",
+    "environment": "local-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "local-unit-2026-02-27-l0-3",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real project outcome for requirement 1 tied to distributed systems work.",
+    "environment": "local-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "local-unit-2026-02-27-l0-4",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Engineering leader with deep AWS and Kubernetes delivery history, focused on measurable outcomes.",
+    "environment": "local-test",
+    "cv_id_non_null": true,
+    "ats_score": 8.73,
+    "anti_ai_score": 9.4
+  }
+]

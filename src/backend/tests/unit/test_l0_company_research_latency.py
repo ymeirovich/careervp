@@ -1,129 +1,145 @@
-"""
-L0.5 — Company Research Latency Unit Tests
+"""L0.5 real unit tests for company research latency controls."""
 
-Validates: p95 latency < 90s, timeout on web requests, cache hit skips LLM, max 3 URLs
-Spec: docs/best_practices/yaml/lambda_handler_spec.yaml
-Payload: docs/refactor/payloads/beta_l0_generators_test.json#L0_5_company_research
-Invariant: I8
-Results: docs/beta/execution_results/L0_5_results.md
-"""
-import os
-from unittest.mock import MagicMock, patch
+from __future__ import annotations
 
-import pytest
+import asyncio
+import json
+from datetime import datetime, timezone
+from unittest.mock import AsyncMock, MagicMock, patch
 
-os.environ.setdefault("AWS_ACCESS_KEY_ID", "testing")
-os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "testing")
-os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
-os.environ.setdefault("DYNAMODB_TABLE_NAME", "careervp-users-table-test")
-os.environ.setdefault("ENVIRONMENT", "test")
+from careervp.logic.company_research import _structure_raw_content
+from careervp.logic.llm_cache import DEFAULT_CACHE_TTL_SECONDS
+from careervp.logic.utils.web_scraper import SCRAPE_TIMEOUT, scrape_company_about_page, scrape_url
+from careervp.models.company import ResearchSource
+from careervp.models.result import Result, ResultCode
 
 
-@pytest.fixture
-def mock_requests_get():
-    with patch("requests.get") as mock_get:
+def test_web_scraper_has_timeout() -> None:
+    """scrape_url configures the HTTP client with an explicit timeout."""
+
+    async def run() -> None:
         mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.text = "<html><body>Company content</body></html>"
-        mock_get.return_value = mock_response
-        yield mock_get
+        mock_response.text = '<html><body>ok</body></html>'
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_response
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+
+        with (
+            patch('careervp.logic.utils.web_scraper._is_safe_url', return_value=True),
+            patch('careervp.logic.utils.web_scraper.httpx.AsyncClient', return_value=mock_client) as async_client_cls,
+        ):
+            result = await scrape_url('https://example.com/about')
+
+        assert result.success is True
+        assert async_client_cls.call_args.kwargs['timeout'] == SCRAPE_TIMEOUT
+
+    asyncio.run(run())
 
 
-@pytest.fixture
-def mock_llm_client():
-    with patch("careervp.logic.llm_client.LLMClient") as mock_cls:
-        mock_instance = MagicMock()
-        mock_instance.generate.return_value = "Company research summary"
-        mock_cls.return_value = mock_instance
-        yield mock_instance
+def test_web_scraper_limits_to_3_urls() -> None:
+    """scrape_company_about_page attempts at most 3 candidate URLs."""
+
+    async def run() -> None:
+        candidate_urls = [f'https://example.com/path-{idx}' for idx in range(10)]
+        with (
+            patch('careervp.logic.utils.web_scraper._build_candidate_urls', return_value=candidate_urls),
+            patch('careervp.logic.utils.web_scraper.scrape_url', new_callable=AsyncMock) as mock_scrape,
+        ):
+            mock_scrape.return_value = Result(success=False, error='not found', code=ResultCode.SCRAPE_FAILED)
+            await scrape_company_about_page('https://example.com')
+
+        assert mock_scrape.await_count == 3
+
+    asyncio.run(run())
 
 
-@pytest.fixture
-def mock_cache():
-    with patch("careervp.logic.llm_cache.LLMResponseCache") as mock_cls:
-        mock_instance = MagicMock()
-        mock_instance.get.return_value = None  # cache miss by default
-        mock_instance.set.return_value = None
-        mock_cls.return_value = mock_instance
-        yield mock_instance
+def test_cache_hit_skips_llm_call() -> None:
+    """Cache hit returns immediately without invoking the LLM router."""
+
+    async def run() -> None:
+        cached_payload = {
+            'company_name': 'Acme Corp',
+            'overview': 'Cached overview',
+            'values': ['Ownership'],
+            'mission': 'Serve customers',
+            'strategic_priorities': ['Scale'],
+            'recent_news': ['Cached news'],
+            'financial_summary': None,
+            'source': 'website_scrape',
+            'source_urls': ['https://acme.com/about'],
+            'confidence_score': 0.88,
+            'research_timestamp': datetime.now(timezone.utc).isoformat(),
+        }
+        cache = MagicMock()
+        cache.get.return_value = json.dumps(cached_payload)
+
+        router = MagicMock()
+        router.invoke.return_value = Result(success=True, data={'text': '{}'}, code=ResultCode.SUCCESS)
+
+        with (
+            patch('careervp.logic.company_research.LLMResponseCache', return_value=cache),
+            patch('careervp.logic.company_research.get_llm_router', return_value=router),
+        ):
+            result = await _structure_raw_content(
+                company_name='Acme Corp',
+                raw_text=' '.join(['content'] * 250),
+                source=ResearchSource.WEB_SEARCH,
+                source_urls=['https://acme.com/about'],
+                word_count=250,
+                context_hint='test',
+            )
+
+        assert result.success is True
+        router.invoke.assert_not_called()
+
+    asyncio.run(run())
 
 
-@pytest.mark.unit
-class TestWebScraperTimeout:
-    """Web scraper must use timeout on all HTTP requests (never block indefinitely)."""
+def test_cache_miss_calls_llm_and_stores_result() -> None:
+    """Cache miss invokes LLM and stores response with 7-day TTL."""
 
-    def test_web_scraper_has_timeout(self, mock_requests_get):
-        """requests.get() called with a timeout kwarg."""
-        assert True, "RED: requests.get called with timeout kwarg"
+    async def run() -> None:
+        cache = MagicMock()
+        cache.get.return_value = None
+        cache.set.return_value = True
 
-    def test_web_scraper_timeout_is_reasonable(self, mock_requests_get):
-        """timeout kwarg is between 5 and 15 seconds."""
-        assert True, "RED: timeout between 5 and 15 seconds"
+        router = MagicMock()
+        router.invoke.return_value = Result(
+            success=True,
+            data={
+                'text': json.dumps(
+                    {
+                        'overview': 'Acme overview',
+                        'values': ['Innovation'],
+                        'mission': 'Grow responsibly',
+                        'strategic_priorities': ['Scale'],
+                        'recent_news': ['Expanded to EU'],
+                        'financial_summary': 'Private',
+                    }
+                )
+            },
+            code=ResultCode.SUCCESS,
+        )
 
-    def test_web_scraper_handles_timeout_gracefully(self, mock_requests_get):
-        """requests.Timeout exception caught and request skipped, not propagated."""
-        assert True, "RED: Timeout exception caught gracefully"
+        with (
+            patch('careervp.logic.company_research.LLMResponseCache', return_value=cache),
+            patch('careervp.logic.company_research.get_llm_router', return_value=router),
+        ):
+            result = await _structure_raw_content(
+                company_name='Acme Corp',
+                raw_text=' '.join(['content'] * 280),
+                source=ResearchSource.WEBSITE_SCRAPE,
+                source_urls=['https://acme.com/about'],
+                word_count=280,
+                context_hint='test',
+            )
 
+        assert result.success is True
+        router.invoke.assert_called_once()
+        cache.set.assert_called_once()
+        assert cache.set.call_args.kwargs['ttl_seconds'] == DEFAULT_CACHE_TTL_SECONDS
 
-@pytest.mark.unit
-class TestWebScraperURLLimit:
-    """Web scraper must limit to max 3 URLs (never unbounded scraping)."""
-
-    def test_web_scraper_limits_to_3_urls(self, mock_requests_get):
-        """With 10 search results, scraper only fetches 3 URLs."""
-        assert True, "RED: max 3 URLs scraped"
-
-    def test_web_scraper_limits_to_5_urls_max(self, mock_requests_get):
-        """Hard upper bound: never more than 5 URLs regardless of input."""
-        assert True, "RED: hard cap of 5 URLs"
-
-
-@pytest.mark.unit
-class TestCompanyResearchCache:
-    """LLM cache must be checked before calling LLM for company research."""
-
-    def test_cache_hit_skips_llm_call(self, mock_llm_client, mock_cache):
-        """When cache returns a hit for company_name, LLM generate() is NOT called."""
-        assert True, "RED: cache hit → LLM not invoked"
-
-    def test_cache_miss_calls_llm(self, mock_llm_client, mock_cache):
-        """When cache returns None (miss), LLM generate() IS called."""
-        assert True, "RED: cache miss → LLM invoked"
-
-    def test_cache_miss_stores_result(self, mock_llm_client, mock_cache):
-        """After LLM call on cache miss, result is stored in cache."""
-        assert True, "RED: cache.set called after LLM call"
-
-    def test_cache_key_is_company_name(self, mock_llm_client, mock_cache):
-        """Cache key is derived from company_name (normalized/lowercased)."""
-        assert True, "RED: cache key based on company_name"
-
-    def test_cache_ttl_is_7_days(self, mock_llm_client, mock_cache):
-        """Cache TTL is 7 days (604800 seconds)."""
-        assert True, "RED: cache TTL = 604800 seconds"
-
-
-@pytest.mark.unit
-class TestCompanyResearchCVSummarizer:
-    """Large CVs must be summarized before inclusion in prompt."""
-
-    def test_large_cv_is_summarized(self, mock_llm_client):
-        """CV > 3000 tokens triggers cv_summarizer before company research."""
-        assert True, "RED: CV > 3000 tokens → summarize first"
-
-    def test_small_cv_not_summarized(self, mock_llm_client):
-        """CV <= 3000 tokens does NOT trigger cv_summarizer."""
-        assert True, "RED: CV <= 3000 tokens → no summarization"
-
-
-@pytest.mark.unit
-class TestCompanyResearchOutput:
-    """Company research output must be non-empty and template-free."""
-
-    def test_company_research_returns_non_empty_string(self, mock_llm_client, mock_cache):
-        """Company research returns non-empty string result."""
-        assert True, "RED: non-empty result"
-
-    def test_no_template_strings_in_output(self, mock_llm_client, mock_cache):
-        """Output contains no unresolved {placeholder} patterns."""
-        assert True, "RED: no template strings in output"
+    asyncio.run(run())
