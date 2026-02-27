@@ -14,17 +14,7 @@ from careervp.dal.knowledge_repository import KnowledgeRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers
 from careervp.handlers.utils.observability import logger, metrics, tracer
-from careervp.logic.auth_service import AuthService, ConfigurationError, InvalidTokenError
 from careervp.models.result import Result
-
-_auth_service: AuthService | None = None
-
-
-def _get_auth_service() -> AuthService:
-    global _auth_service
-    if _auth_service is None:
-        _auth_service = AuthService.from_env()
-    return _auth_service
 
 
 @logger.inject_lambda_context
@@ -143,37 +133,8 @@ def _build_response(status_code: HTTPStatus, body: dict[str, Any]) -> dict[str, 
     }
 
 
-def _extract_bearer_token(event: dict[str, Any]) -> str | None:
-    headers = event.get('headers')
-    if not isinstance(headers, dict):
-        return None
-
-    auth_header = headers.get('Authorization') or headers.get('authorization')
-    if not isinstance(auth_header, str) or not auth_header.startswith('Bearer '):
-        return None
-
-    token = auth_header[7:].strip()
-    return token if token else None
-
-
 def _extract_authenticated_user_id(event: dict[str, Any]) -> str | None:
-    user_id = extract_user_id(event)
-    if user_id:
-        return user_id
-
-    token = _extract_bearer_token(event)
-    if not token:
-        return None
-
-    try:
-        payload = _get_auth_service().validate_token(token, expected_token_type='access')
-    except (InvalidTokenError, ConfigurationError):
-        return None
-
-    raw_user_id = payload.get('user_id') or payload.get('sub')
-    if isinstance(raw_user_id, str) and raw_user_id.strip():
-        return raw_user_id.strip()
-    return None
+    return extract_user_id(event)
 
 
 __all__ = ['lambda_handler']

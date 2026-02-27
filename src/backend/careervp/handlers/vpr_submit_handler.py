@@ -27,8 +27,8 @@ from botocore.exceptions import ClientError as BotoClientError
 from pydantic import ValidationError
 
 from careervp.dal.jobs_repository import JobsRepository
+from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.utils.observability import logger, metrics, tracer
-from careervp.logic.auth_service import AuthService, ConfigurationError, InvalidTokenError
 from careervp.logic.utils.constants import VPR_JOBS_QUEUE_NAME
 from careervp.models.api_models import VPRGenerateRequest
 from careervp.models.vpr import VPRRequest
@@ -37,83 +37,10 @@ JSON_HEADERS = {'Content-Type': 'application/json'}
 
 # Module-level SQS client for testing/mocking
 sqs = boto3.client('sqs')
-_auth_service: AuthService | None = None
-
-
-def _get_auth_service() -> AuthService:
-    global _auth_service
-    if _auth_service is None:
-        _auth_service = AuthService.from_env()
-    return _auth_service
-
-
-def _extract_claim_user_id(claims: Any) -> str | None:
-    if not isinstance(claims, dict):
-        return None
-    for key in ('sub', 'user_id', 'cognito:username'):
-        value = claims.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
-
-
-def _extract_user_id_from_authorizer(event: dict[str, Any]) -> str | None:
-    request_context = event.get('requestContext')
-    if not isinstance(request_context, dict):
-        return None
-
-    authorizer = request_context.get('authorizer')
-    if not isinstance(authorizer, dict):
-        return None
-
-    claims = authorizer.get('claims')
-    claim_user_id = _extract_claim_user_id(claims)
-    if claim_user_id:
-        return claim_user_id
-
-    jwt_context = authorizer.get('jwt')
-    if isinstance(jwt_context, dict):
-        jwt_claims = jwt_context.get('claims')
-        jwt_user_id = _extract_claim_user_id(jwt_claims)
-        if jwt_user_id:
-            return jwt_user_id
-
-    for key in ('user_id', 'principalId', 'principal_id'):
-        value = authorizer.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
-
-
-def _extract_bearer_token(event: dict[str, Any]) -> str | None:
-    headers = event.get('headers')
-    if not isinstance(headers, dict):
-        return None
-    auth_header = headers.get('Authorization') or headers.get('authorization')
-    if not isinstance(auth_header, str) or not auth_header.startswith('Bearer '):
-        return None
-    token = auth_header[7:].strip()
-    return token if token else None
 
 
 def _extract_authenticated_user_id(event: dict[str, Any]) -> str | None:
-    authorizer_user_id = _extract_user_id_from_authorizer(event)
-    if authorizer_user_id:
-        return authorizer_user_id
-
-    token = _extract_bearer_token(event)
-    if not token:
-        return None
-
-    try:
-        payload = _get_auth_service().validate_token(token, expected_token_type='access')
-    except (InvalidTokenError, ConfigurationError):
-        return None
-
-    user_id = payload.get('user_id') or payload.get('sub')
-    if isinstance(user_id, str) and user_id.strip():
-        return user_id.strip()
-    return None
+    return extract_user_id(event)
 
 
 def _get_sqs_queue_url() -> str:
@@ -135,16 +62,16 @@ def _build_idempotency_key(user_id: str, application_id: str) -> str:
     return f'vpr#{user_id}#{application_id}'
 
 
-def _normalize_submit_payload(request_body: dict[str, Any], user_id: str) -> dict[str, Any]:
+def _normalize_submit_request(request_data: dict[str, Any], user_id: str) -> dict[str, Any]:
     """
-    Normalize request payload into internal submit shape.
+    Normalize request data into internal submit shape.
 
     Supports:
     - OpenAPI request: {cv_id, job_id, gap_response_ids, options}
     - Legacy request: VPRRequest schema
     """
-    if {'cv_id', 'job_id', 'gap_response_ids'}.issubset(request_body):
-        openapi_request = VPRGenerateRequest.model_validate(request_body)
+    if {'cv_id', 'job_id', 'gap_response_ids'}.issubset(request_data):
+        openapi_request = VPRGenerateRequest.model_validate(request_data)
         options = openapi_request.options.model_dump(mode='json', exclude_none=True) if openapi_request.options else {}
         return {
             'application_id': openapi_request.job_id,
@@ -157,13 +84,13 @@ def _normalize_submit_payload(request_body: dict[str, Any], user_id: str) -> dic
             },
         }
 
-    legacy_request = VPRRequest.model_validate(request_body)
+    legacy_request = VPRRequest.model_validate(request_data)
     if legacy_request.user_id != user_id:
         raise PermissionError('User can only submit VPR for own identity')
     return {
         'application_id': legacy_request.application_id,
         'user_id': legacy_request.user_id,
-        'input_data': request_body,
+        'input_data': request_data,
     }
 
 
@@ -195,8 +122,8 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
     try:
         # Parse request body
-        request_body = _parse_body(event)
-        normalized_payload = _normalize_submit_payload(request_body, authenticated_user_id)
+        request_data = _parse_body(event)
+        normalized_request = _normalize_submit_request(request_data, authenticated_user_id)
     except PermissionError as exc:
         logger.warning('Forbidden VPR submit request', error=str(exc))
         return _build_error_response('User can only access own data', HTTPStatus.FORBIDDEN)
@@ -205,14 +132,14 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         return _build_error_response('Invalid request body', HTTPStatus.BAD_REQUEST)
 
     logger.append_keys(
-        user_id=normalized_payload['user_id'],
-        application_id=normalized_payload['application_id'],
+        user_id=normalized_request['user_id'],
+        application_id=normalized_request['application_id'],
     )
 
     # Check idempotency
     idempotency_key = _build_idempotency_key(
-        str(normalized_payload['user_id']),
-        str(normalized_payload['application_id']),
+        str(normalized_request['user_id']),
+        str(normalized_request['application_id']),
     )
     existing_job = jobs_repo.get_job_by_idempotency_key(idempotency_key)
 
@@ -244,7 +171,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     job_id = str(uuid.uuid4())
 
     # Use the original request body as input_data for exact match with test expectations
-    input_data = request_body  # Store original request body for test compatibility
+    input_data = request_data  # Store original request body for test compatibility
 
     # Create job record - pass as single dict for test compatibility
     # Calculate TTL timestamp (24 hours from now)
@@ -254,8 +181,8 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
     job_record = {
         'job_id': job_id,
-        'user_id': normalized_payload['user_id'],
-        'application_id': normalized_payload['application_id'],
+        'user_id': normalized_request['user_id'],
+        'application_id': normalized_request['application_id'],
         'input_data': input_data if isinstance(input_data, dict) else {},
         'idempotency_key': idempotency_key,
         'status': 'PENDING',  # Included for test compatibility
@@ -279,14 +206,14 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             MessageBody=json.dumps(
                 {
                     'job_id': job_id,
-                    'user_id': normalized_payload['user_id'],
-                    'application_id': normalized_payload['application_id'],
+                    'user_id': normalized_request['user_id'],
+                    'application_id': normalized_request['application_id'],
                 }
             ),
             MessageAttributes={
                 'job_type': {'StringValue': 'vpr_generation', 'DataType': 'String'},
                 'job_id': {'StringValue': job_id, 'DataType': 'String'},
-                'user_id': {'StringValue': str(normalized_payload['user_id']), 'DataType': 'String'},
+                'user_id': {'StringValue': str(normalized_request['user_id']), 'DataType': 'String'},
             },
         )
         logger.info('Job queued successfully', job_id=job_id, queue_url=queue_url)

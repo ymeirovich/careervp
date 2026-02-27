@@ -78,6 +78,17 @@ def _lambda_context() -> Any:
     return context
 
 
+def _request_context(user_id: str, email: str) -> dict[str, Any]:
+    return {
+        'authorizer': {
+            'claims': {
+                'sub': user_id,
+                'email': email,
+            }
+        }
+    }
+
+
 def test_post_vpr_generate_returns_202() -> None:
     """POST /vpr/generate should return 202 with request_id/job_id."""
     from careervp.handlers.vpr_submit_handler import lambda_handler
@@ -87,6 +98,7 @@ def test_post_vpr_generate_returns_202() -> None:
         'httpMethod': 'POST',
         'path': '/vpr/generate',
         'headers': {'Content-Type': 'application/json', 'Authorization': f'Bearer {access_token}'},
+        'requestContext': _request_context('user-123', 'user@example.com'),
         'body': json.dumps(
             {
                 'cv_id': 'cv-1',
@@ -127,6 +139,7 @@ def test_get_vpr_id_returns_job_status() -> None:
         'path': '/vpr/vpr-123',
         'pathParameters': {'vprId': 'vpr-123'},
         'headers': {'Authorization': f'Bearer {access_token}'},
+        'requestContext': _request_context('user-123', 'user@example.com'),
     }
 
     with patch('careervp.handlers.vpr_status_handler.JobsRepository') as repo_cls:
@@ -155,6 +168,7 @@ def test_get_users_me_vprs_returns_user_vpr_list() -> None:
         'httpMethod': 'GET',
         'path': '/users/me/vprs',
         'headers': {'Authorization': f'Bearer {access_token}'},
+        'requestContext': _request_context('user-123', 'user@example.com'),
     }
 
     with patch('careervp.handlers.vpr_status_handler.JobsRepository') as repo_cls:

@@ -89,7 +89,7 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:
     except ValidationError as exc:
         return _error_response(HTTPStatus.BAD_REQUEST, f'Invalid request payload: {exc}', ResultCode.VALIDATION_ERROR)
 
-    user_id = _extract_user_id(event) or _coerce_str(payload.get('user_id'))
+    user_id = _extract_user_id(event)
     if not user_id:
         return _error_response(HTTPStatus.UNAUTHORIZED, 'Missing user identity', ResultCode.UNAUTHORIZED)
 
@@ -110,11 +110,16 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:
         )
     )
     if not generation_result.success or generation_result.data is None:
-        status = HTTPStatus.SERVICE_UNAVAILABLE if generation_result.code in {
-            ResultCode.LLM_TIMEOUT,
-            ResultCode.LLM_API_ERROR,
-            ResultCode.TIMEOUT,
-        } else HTTPStatus.INTERNAL_SERVER_ERROR
+        status = (
+            HTTPStatus.SERVICE_UNAVAILABLE
+            if generation_result.code
+            in {
+                ResultCode.LLM_TIMEOUT,
+                ResultCode.LLM_API_ERROR,
+                ResultCode.TIMEOUT,
+            }
+            else HTTPStatus.INTERNAL_SERVER_ERROR
+        )
         return _error_response(
             status,
             generation_result.error or 'Gap question generation failed',
@@ -207,7 +212,7 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
     except ValidationError as exc:
         return _error_response(HTTPStatus.BAD_REQUEST, f'Invalid request payload: {exc}', ResultCode.VALIDATION_ERROR)
 
-    user_id = _extract_user_id(event) or _coerce_str(payload.get('user_id'))
+    user_id = _extract_user_id(event)
     if not user_id:
         return _error_response(HTTPStatus.UNAUTHORIZED, 'Missing user identity', ResultCode.UNAUTHORIZED)
 
@@ -306,54 +311,6 @@ def _parse_body(event: dict[str, Any]) -> dict[str, Any] | None:
 
 def _extract_user_id(event: dict[str, Any]) -> str | None:
     return extract_user_id(event)
-
-
-def _extract_claim_user_id(claims: Any) -> str | None:
-    if not isinstance(claims, dict):
-        return None
-    for key in ('sub', 'user_id', 'cognito:username'):
-        value = claims.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
-
-
-def _extract_user_id_from_authorizer(event: dict[str, Any]) -> str | None:
-    request_context = event.get('requestContext')
-    if not isinstance(request_context, dict):
-        return None
-
-    authorizer = request_context.get('authorizer')
-    if not isinstance(authorizer, dict):
-        return None
-
-    claims = authorizer.get('claims')
-    claim_user_id = _extract_claim_user_id(claims)
-    if claim_user_id:
-        return claim_user_id
-
-    jwt_context = authorizer.get('jwt')
-    if isinstance(jwt_context, dict):
-        jwt_claims = jwt_context.get('claims')
-        jwt_user_id = _extract_claim_user_id(jwt_claims)
-        if jwt_user_id:
-            return jwt_user_id
-
-    for key in ('user_id', 'principalId', 'principal_id'):
-        direct = authorizer.get(key)
-        if isinstance(direct, str) and direct.strip():
-            return direct.strip()
-    return None
-
-
-def _extract_user_id_from_headers(event: dict[str, Any]) -> str | None:
-    headers = event.get('headers')
-    if not isinstance(headers, dict):
-        return None
-    for key, value in headers.items():
-        if isinstance(key, str) and key.lower() == 'x-user-id' and isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
 
 
 def _build_user_cv_prompt_payload(cv_id: str, focus_areas: list[str]) -> dict[str, Any]:

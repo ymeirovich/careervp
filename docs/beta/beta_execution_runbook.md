@@ -71,6 +71,24 @@ L8 (Operational Readiness) — requires all layers complete
 
 ---
 
+## Frontend Dependency Map
+
+Use marker `[FE]` for sections that require `src/frontend` and UI/E2E flows.
+
+| Scope | Sections | Can Defer? | Current Status |
+|------|----------|------------|----------------|
+| Cognito client integration | L2.4 `[FE]` | Yes (backend can continue) | ⛔ Blocked (`src/frontend` missing) |
+| UI workflow implementation | Phase 7 L7.1–L7.5 `[FE]` | Yes (run later as one wave) | ⛔ Deferred |
+| Frontend reload invariant | I6 / E6 `[FE]` | No for final sign-off | Pending until frontend exists |
+
+**Backend-first sequencing when frontend is unavailable:**
+1. Complete L0, L1, L2.1–L2.3, L2.5, L3, L5, L6
+2. Generate backend evidence (E1, E2, E3, E4, E5, E7, E8 where applicable)
+3. Defer all `[FE]` sections (L2.4 + Phase 7 + E6)
+4. Execute one frontend closure wave later, then re-run final evidence/sign-off
+
+---
+
 ---
 
 # Phase 1: Generator Reality (Layer 0)
@@ -955,6 +973,8 @@ OUTPUT FORMAT:
 **Duration:** 1.5 hours
 **Invariant(s) Satisfied:** I4 (no identity fallback)
 **Precondition(s) Resolved:** PC3
+**Status:** ✅ Completed (2026-02-27, strict test-first RED → GREEN on `beta/exec-runbook3.1`)
+**Execution Result:** `docs/beta/execution_results/L2_3_results.md`
 
 **READ FIRST:**
 - `@spec docs/best_practices/yaml/cognito_spec.yaml`
@@ -1027,10 +1047,12 @@ OUTPUT FORMAT:
 
 ---
 
-### Step L2.4: Update Frontend with Cognito SDK
+### Step L2.4 [FE]: Update Frontend with Cognito SDK
 
 **Duration:** 2 hours
 **Invariant(s) Satisfied:** I3 (frontend sends valid JWT)
+**Status:** ⛔ Blocked (2026-02-27, `src/frontend` not present in this repository)
+**Execution Result:** _Not executable in current workspace_
 
 **READ FIRST:**
 - `@spec docs/best_practices/yaml/cognito_spec.yaml`
@@ -1095,6 +1117,8 @@ OUTPUT FORMAT:
 **Duration:** 1 hour
 **Invariant(s) Satisfied:** I3 (all 4 scenarios), I4
 **Precondition(s) Resolved:** PC3
+**Status:** ✅ Completed (2026-02-27, test-first RED → GREEN on `beta/exec-runbook3.1`)
+**Execution Result:** `docs/beta/execution_results/L2_5_results.md`
 
 **READ FIRST:**
 - `@spec docs/best_practices/yaml/cognito_spec.yaml`
@@ -1848,14 +1872,14 @@ OUTPUT FORMAT:
 
 ---
 
-# Phase 7: Frontend Integration (Layer 6)
+# Phase 7 [FE]: Frontend Integration (Layer 6)
 
 **Purpose:** Complete user workflow with page reload recovery at every step
 **Invariant:** I6
 
 ---
 
-### Step L7.1: Implement Cognito Auth Flow
+### Step L7.1 [FE]: Implement Cognito Auth Flow
 
 **Duration:** 2 hours
 **Invariant(s) Satisfied:** I3 (frontend sends valid JWT)
@@ -1910,7 +1934,7 @@ OUTPUT FORMAT:
 
 ---
 
-### Step L7.2: Implement CV Upload Workflow
+### Step L7.2 [FE]: Implement CV Upload Workflow
 
 **Duration:** 1.5 hours
 **Invariant(s) Satisfied:** I6 (step: cv_selected state)
@@ -1953,7 +1977,7 @@ OUTPUT FORMAT:
 
 ---
 
-### Step L7.3: Implement Job Application Workflow
+### Step L7.3 [FE]: Implement Job Application Workflow
 
 **Duration:** 1.5 hours
 **Invariant(s) Satisfied:** I6 (steps: created, gap_questions states)
@@ -1994,7 +2018,7 @@ OUTPUT FORMAT:
 
 ---
 
-### Step L7.4: Implement Artifact Polling
+### Step L7.4 [FE]: Implement Artifact Polling
 
 **Duration:** 1.5 hours
 **Invariant(s) Satisfied:** I8 (polling confirms status transitions)
@@ -2035,7 +2059,7 @@ OUTPUT FORMAT:
 
 ---
 
-### Step L7.5: Implement State Recovery on Reload
+### Step L7.5 [FE]: Implement State Recovery on Reload
 
 **Duration:** 1 hour
 **Invariant(s) Satisfied:** I6 (all 7 steps)
@@ -2083,7 +2107,7 @@ OUTPUT FORMAT:
 
 ---
 
-### Phase 7 Integration Test
+### Phase 7 [FE] Integration Test
 
 **Description:** Full E2E workflow with page reloads at each of 7 steps
 
@@ -2248,7 +2272,7 @@ IMPLEMENTATION DETAILS:
    Format: {test_name, expected_outcome, actual_outcome, pass}
    Save: docs/beta/evidence/I5_trial/trial-enforcement-report.json
 
-6. E6 — state-recovery-matrix.json (proves I6):
+6. E6 [FE] — state-recovery-matrix.json (proves I6):
    At each of 7 workflow steps: reload → assert correct state restored
    Format: {step_name, pre_reload_state, post_reload_state, data_preserved, pass}
    Save: docs/beta/evidence/I6_state/state-recovery-matrix.json
@@ -2347,12 +2371,55 @@ python scripts/generate_evidence_bundle.py --env staging --runs 50
 |-------|-------|-------|------------------|----------|--------|
 | Phase 1: Generator Reality | L0 | L0.1–L0.5 | ✓ test_l0_phase_integration.py | E1 | ✅ Completed (L0.1–L0.5 + integration + E1 evidence) |
 | Phase 2: Persistence | L1 | L1.1–L1.4 | ✓ test_l1_phase_integration.py | E2 | ✅ Completed (L1.1–L1.4 + integration + E2 evidence) |
-| Phase 3: Auth Migration | L2 | L2.1–L2.5 | ✓ test_l2_auth_integration.py | E3, E4 | 🟡 In progress (L2.1–L2.2 complete; L2.3–L2.5 pending) |
-| Phase 4: Application State | L3 | L3.1–L3.4 | ✓ test_l3_state_recovery.py | E6 (partial) | ⬜ |
+| Phase 3: Auth Migration | L2 | L2.1–L2.5 | ✓ test_l2_auth_integration.py | E3, E4 | 🟡 In progress (L2.1–L2.3 + L2.5 complete; L2.4 [FE] blocked: no frontend workspace) |
+| Phase 4: Application State | L3 | L3.1–L3.4 | ✓ test_l3_state_recovery.py | E6 (partial, [FE]) | ⬜ |
 | Phase 5: Trial Enforcement | L5 | L5.1–L5.4 | ✓ test_l5_trial_integration.py | E5 | ⬜ |
-| Phase 6: Route Cleanup | L6 | L6.1–L6.4 | ✓ route surface diff | E7 | ⬜ |
-| Phase 7: Frontend | L7 | L7.1–L7.5 | ✓ Playwright E2E | E6 | ⬜ |
+| Phase 6: Route Cleanup | L6 | L6.1–L6.4 | ✓ route surface diff | E7 | 🟡 In progress (L6.2 + L6.4 evidence-backed; L6.1 + L6.3 pending) |
+| Phase 7: Frontend | L7 | L7.1–L7.5 [FE] | ✓ Playwright E2E | E6 [FE] | ⛔ Deferred (frontend workspace not available) |
 | Phase 8: Operational Readiness | L8 | L8.1–L8.4 | ✓ staging smoke tests | E1–E8 | ⬜ |
+
+---
+
+# Claude Code Audit Snapshot (2026-02-27)
+
+This section records the Claude Code implementation audit summary provided in-session.
+Use it as a historical implementation-confidence view (implemented vs scaffolded), not as a replacement for current branch verification.
+
+## Actually Implemented (Production Code Changes)
+
+| Step | Audit Finding |
+|------|---------------|
+| L1.2 | CVTable removed from handlers; DynamoDalHandler used exclusively (`0` CVTable grep matches) |
+| L1.3 | Health handler reports `anthropic` + `dynamodb` (no stale `bedrock/lambda`) |
+| L1.4 (partial) | `list_tailored_cvs` DAL returns raw dicts with preserved `sk/status`; list path works end-to-end |
+| L2.3 (partial) | `auth_utils.py` reads user id from `requestContext.authorizer.jwt.claims.sub` |
+| I7 evidence | `docs/beta/evidence/I7_routes/frozen_spec.json` + `docs/beta/evidence/I7_routes/route-surface-diff.txt` generated |
+
+## Test Scaffolding Marked GREEN (Audit Caveat)
+
+Claude audit identified multiple GREEN suites that were primarily scaffold assertions (`assert True`) at audit time:
+
+- L0.1–L0.5 test files
+- L1.1 and parts of L1.4
+- L3.1–L3.4 test files
+
+Audit conclusion at that time: many test files were structurally complete but did not yet guarantee production behavior.
+
+## Audit-Flagged Stub Modules
+
+- `careervp/logic/trial_service.py` (`TrialService` shell, `NotImplementedError`)
+- `careervp/dal/application_repository.py` (repository shell)
+
+## Audit-Flagged Not Started Areas (at snapshot time)
+
+- L0 real LLM fixes (beyond scaffold confidence)
+- L2.1–L2.2 Cognito infra/authorizer rollout
+- L3 real state machine + repository hardening
+- L5 trial enforcement implementation
+- L6.1–L6.3 route cleanup/documentation updates
+- L7 frontend
+- L8 staging deploy/sign-off
+- Missing evidence at snapshot time: E1–E6, E8
 
 ---
 
@@ -2389,7 +2456,7 @@ python scripts/evidence/generate_e5_trial_enforcement.py \
   --api-url https://stage.careervp.com \
   --output docs/beta/evidence/I5_trial/trial-enforcement-report.json
 
-# E6: State recovery matrix (requires E2E test runner)
+# E6 [FE]: State recovery matrix (requires frontend + E2E test runner)
 npx playwright test src/frontend/e2e/state-recovery.spec.ts \
   --reporter=json > docs/beta/evidence/I6_state/state-recovery-matrix.json
 

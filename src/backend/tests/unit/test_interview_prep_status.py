@@ -66,6 +66,7 @@ def _event(path: str, method: str, user_id: str = 'user-1', path_parameters: dic
             'path': path,
             'stage': 'test',
             'requestId': 'req-1',
+            'authorizer': {'claims': {'sub': user_id}},
         },
         'body': None,
         'isBase64Encoded': False,
