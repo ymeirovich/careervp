@@ -1,0 +1,87 @@
+{
+  "description": "Phase 4 (Layer 3) — Application State Model test payloads",
+  "invariant": "I6",
+  "canonical_states": ["created", "cv_selected", "gap_questions_pending", "gap_questions_ready", "gap_responses_submitted", "artifacts_generating", "artifacts_completed"],
+  "steps": {
+    "L3_1_schema": {
+      "step_id": "L3.1",
+      "test_file": "src/backend/tests/unit/test_l3_application_schema.py",
+      "sample_application_record": {
+        "pk": "USER#user-test-123",
+        "sk": "APP#app-xyz789",
+        "application_id": "app-xyz789",
+        "user_id": "user-test-123",
+        "job_id": "job-abc456",
+        "cv_id": null,
+        "state": "created",
+        "created_at": "2026-02-26T10:00:00Z",
+        "updated_at": "2026-02-26T10:00:00Z",
+        "trial_credit_consumed": false,
+        "artifact_statuses": {
+          "vpr": "pending",
+          "cv_tailored": "pending",
+          "cover_letter": "pending",
+          "interview_prep": "pending",
+          "gap_analysis": "pending"
+        },
+        "entity_type": "APPLICATION",
+        "ttl": 1756310400
+      }
+    },
+    "L3_2_recovery_endpoint": {
+      "step_id": "L3.2",
+      "test_file": "src/backend/tests/unit/test_l3_application_recovery.py",
+      "request_event": {
+        "httpMethod": "GET",
+        "path": "/applications/app-xyz789",
+        "pathParameters": {"application_id": "app-xyz789"},
+        "requestContext": {
+          "authorizer": {
+            "claims": {
+              "sub": "user-test-123",
+              "email": "testuser@example.com"
+            }
+          }
+        }
+      },
+      "expected_response_shape": {
+        "application": {"application_id": "string", "state": "string"},
+        "job": {"job_id": "string", "title": "string"},
+        "cv": {"cv_id": "string_or_null"},
+        "gap_analysis": {"questions": "array_or_null", "responses": "array_or_null"},
+        "artifacts": {
+          "vpr": {"status": "string", "artifact_id": "string_or_null"},
+          "cv_tailored": {"status": "string", "artifact_id": "string_or_null"},
+          "cover_letter": {"status": "string", "artifact_id": "string_or_null"},
+          "interview_prep": {"status": "string", "artifact_id": "string_or_null"},
+          "gap_analysis": {"status": "string", "artifact_id": "string_or_null"}
+        }
+      },
+      "ownership_check_test": {
+        "wrong_user_id": "user-wrong-456",
+        "expected_status": 403
+      }
+    },
+    "L3_3_trial_credit_charging": {
+      "step_id": "L3.3",
+      "test_file": "src/backend/tests/unit/test_l3_trial_credit_charging.py",
+      "trigger_endpoint": "POST /jobs/{job_id}/gap-questions",
+      "assertions": {
+        "credit_charged_before_llm_call": true,
+        "application_state_transitions_to": "gap_questions_pending",
+        "dynamodb_conditional_write_used": true
+      }
+    },
+    "L3_4_state_recovery": {
+      "step_id": "L3.4",
+      "test_file": "src/backend/tests/unit/test_l3_state_recovery.py",
+      "reload_scenarios": [
+        {"state": "created", "expected_frontend_route": "/applications/new/cv-select"},
+        {"state": "cv_selected", "expected_frontend_route": "/applications/{id}/gap-questions"},
+        {"state": "gap_questions_ready", "expected_frontend_route": "/applications/{id}/gap-form"},
+        {"state": "gap_responses_submitted", "expected_frontend_route": "/applications/{id}/generating"},
+        {"state": "artifacts_completed", "expected_frontend_route": "/applications/{id}/results"}
+      ]
+    }
+  }
+}

@@ -1,0 +1,125 @@
+{
+  "description": "Phase 3 (Layer 2) — Auth Migration test payloads",
+  "invariants": ["I3", "I4"],
+  "protected_routes": [
+    {"method": "GET", "path": "/users/me"},
+    {"method": "GET", "path": "/users/me/usage"},
+    {"method": "POST", "path": "/jobs"},
+    {"method": "GET", "path": "/jobs"},
+    {"method": "POST", "path": "/jobs/{job_id}/gap-questions"},
+    {"method": "POST", "path": "/jobs/{job_id}/gap-responses"},
+    {"method": "POST", "path": "/vpr/generate"},
+    {"method": "GET", "path": "/vprs"},
+    {"method": "POST", "path": "/cover-letter/generate"},
+    {"method": "GET", "path": "/cover-letters"},
+    {"method": "POST", "path": "/cv-tailoring/generate"},
+    {"method": "GET", "path": "/cv-tailorings"},
+    {"method": "POST", "path": "/interview-prep/generate"},
+    {"method": "GET", "path": "/interview-preps"},
+    {"method": "GET", "path": "/applications/{id}"}
+  ],
+  "auth_scenarios": {
+    "no_token": {
+      "description": "Request with no Authorization header",
+      "event_override": {"headers": {}},
+      "expected_status": 401,
+      "expected_body": {"error": "Unauthorized"}
+    },
+    "expired_token": {
+      "description": "Request with expired JWT (exp in past)",
+      "event_override": {
+        "requestContext": {
+          "authorizer": null
+        }
+      },
+      "note": "API Gateway rejects expired tokens before Lambda; Lambda test mocks missing claims",
+      "expected_status": 401
+    },
+    "wrong_user_token": {
+      "description": "Valid token for user-A accessing user-B resource",
+      "setup": "Create resource owned by user-B; send request with user-A token",
+      "requestContext": {
+        "authorizer": {
+          "claims": {
+            "sub": "user-A-id",
+            "email": "usera@example.com"
+          }
+        }
+      },
+      "resource_owner": "user-B-id",
+      "expected_status": 403,
+      "expected_body": {"error": "Forbidden"}
+    },
+    "valid_token": {
+      "description": "Valid JWT for authorized user accessing own resource",
+      "requestContext": {
+        "authorizer": {
+          "claims": {
+            "sub": "user-test-123",
+            "email": "testuser@example.com"
+          }
+        }
+      },
+      "expected_status": 200
+    }
+  },
+  "identity_extraction_audit": {
+    "description": "Static grep to find forbidden identity extraction patterns",
+    "grep_commands": [
+      "grep -r 'X-User-Id' src/backend/careervp/handlers/",
+      "grep -r \"event.get('body').*user_id\" src/backend/careervp/handlers/",
+      "grep -r \"payload.*user_id\" src/backend/careervp/handlers/",
+      "grep -r \"event.get('requestContext', {}).get('identity')\" src/backend/careervp/handlers/"
+    ],
+    "pass_criterion": "All greps return empty output (0 matches)",
+    "evidence_artifact": "docs/beta/evidence/I4_identity/identity-extraction-audit.txt"
+  },
+  "steps": {
+    "L2_1_cognito_user_pool": {
+      "step_id": "L2.1",
+      "test_file": "src/backend/tests/infrastructure/test_l2_cognito_user_pool.py",
+      "cdk_assertions": {
+        "resource_type": "AWS::Cognito::UserPool",
+        "properties": {
+          "UserPoolName": {"Fn::Sub": "careervp-users-${Environment}"},
+          "AutoVerifiedAttributes": ["email"],
+          "Policies": {
+            "PasswordPolicy": {
+              "MinimumLength": 8,
+              "RequireUppercase": true,
+              "RequireLowercase": true,
+              "RequireNumbers": true
+            }
+          }
+        }
+      }
+    },
+    "L2_2_api_gateway_authorizer": {
+      "step_id": "L2.2",
+      "test_file": "src/backend/tests/infrastructure/test_l2_api_gateway_authorizer.py",
+      "cdk_assertions": {
+        "resource_type": "AWS::ApiGateway::Authorizer",
+        "properties": {
+          "Type": "COGNITO_USER_POOLS",
+          "IdentitySource": "method.request.header.Authorization"
+        }
+      }
+    },
+    "L2_3_identity_extraction": {
+      "step_id": "L2.3",
+      "test_file": "src/backend/tests/unit/test_l2_identity_extraction.py",
+      "canonical_extraction_pattern": "event['requestContext']['authorizer']['claims']['sub']",
+      "forbidden_patterns": [
+        "X-User-Id",
+        "event.get('body').*user_id",
+        "payload.*user_id"
+      ]
+    },
+    "L2_5_auth_integration": {
+      "step_id": "L2.5",
+      "test_file": "src/backend/tests/integration/test_l2_auth_integration.py",
+      "scenarios_to_test": ["no_token", "expired_token", "wrong_user_token", "valid_token"],
+      "evidence_artifact": "docs/beta/evidence/I3_auth/auth-abuse-matrix.json"
+    }
+  }
+}

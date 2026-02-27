@@ -1,0 +1,166 @@
+{
+  "description": "Phase 5 (Layer 5) — Trial Enforcement test payloads",
+  "invariant": "I5",
+  "trial_parameters": {
+    "duration_days": 14,
+    "max_applications": 3
+  },
+  "steps": {
+    "L5_1_trial_expiry": {
+      "step_id": "L5.1",
+      "test_file": "src/backend/tests/unit/test_l5_trial_expiry.py",
+      "test_cases": [
+        {
+          "name": "trial_active_day_1",
+          "user_created_at_offset_days": -1,
+          "application_count": 0,
+          "expected_state": "ACTIVE",
+          "expected_days_remaining": 13
+        },
+        {
+          "name": "trial_active_day_13",
+          "user_created_at_offset_days": -13,
+          "application_count": 2,
+          "expected_state": "ACTIVE",
+          "expected_days_remaining": 1,
+          "expected_credits_remaining": 1
+        },
+        {
+          "name": "trial_expired_day_14",
+          "user_created_at_offset_days": -14,
+          "application_count": 0,
+          "expected_state": "EXPIRED",
+          "expected_http_status": 403,
+          "expected_error_code": "trial_expired"
+        },
+        {
+          "name": "trial_expired_day_15",
+          "user_created_at_offset_days": -15,
+          "application_count": 0,
+          "expected_state": "EXPIRED",
+          "expected_http_status": 403,
+          "expected_error_code": "trial_expired"
+        }
+      ]
+    },
+    "L5_2_app_counter": {
+      "step_id": "L5.2",
+      "test_file": "src/backend/tests/unit/test_l5_app_counter.py",
+      "test_cases": [
+        {
+          "name": "first_application_succeeds",
+          "initial_count": 0,
+          "days_elapsed": 3,
+          "expected_new_count": 1,
+          "expected_success": true
+        },
+        {
+          "name": "third_application_succeeds",
+          "initial_count": 2,
+          "days_elapsed": 3,
+          "expected_new_count": 3,
+          "expected_success": true
+        },
+        {
+          "name": "fourth_application_blocked",
+          "initial_count": 3,
+          "days_elapsed": 3,
+          "expected_http_status": 403,
+          "expected_error_code": "trial_exhausted",
+          "expected_success": false
+        },
+        {
+          "name": "concurrent_requests_at_limit",
+          "initial_count": 2,
+          "concurrent_requests": 5,
+          "expected_success_count": 1,
+          "expected_failure_count": 4,
+          "failure_error_code": "trial_exhausted",
+          "note": "Validates atomic DynamoDB ConditionExpression prevents overcount"
+        }
+      ],
+      "dynamodb_condition": {
+        "UpdateExpression": "SET application_count = application_count + :inc",
+        "ConditionExpression": "application_count < :max AND trial_active = :true",
+        "ExpressionAttributeValues": {
+          ":inc": {"N": "1"},
+          ":max": {"N": "3"},
+          ":true": {"BOOL": true}
+        }
+      }
+    },
+    "L5_3_usage_endpoint": {
+      "step_id": "L5.3",
+      "test_file": "src/backend/tests/unit/test_l5_usage_endpoint.py",
+      "request_event": {
+        "httpMethod": "GET",
+        "path": "/users/me/usage",
+        "requestContext": {
+          "authorizer": {
+            "claims": {
+              "sub": "user-test-123",
+              "email": "testuser@example.com"
+            }
+          }
+        }
+      },
+      "mock_user_trial_record": {
+        "pk": "USER#user-test-123",
+        "sk": "TRIAL",
+        "created_at": "2026-02-22T10:00:00Z",
+        "application_count": 1,
+        "trial_active": true
+      },
+      "expected_response": {
+        "trial": {
+          "is_active": true,
+          "days_remaining": 10,
+          "days_elapsed": 4,
+          "trial_ends_at": "2026-03-08T10:00:00Z",
+          "applications": {
+            "used": 1,
+            "remaining": 2,
+            "max": 3
+          }
+        },
+        "subscription": {
+          "status": "trial",
+          "plan": null
+        }
+      }
+    },
+    "L5_4_trial_integration": {
+      "step_id": "L5.4",
+      "test_file": "src/backend/tests/integration/test_l5_trial_integration.py",
+      "scenarios": [
+        {
+          "name": "exhaust_3_applications_block_4th",
+          "steps": [
+            "create_user",
+            "generate_application_1 → assert 200",
+            "generate_application_2 → assert 200",
+            "generate_application_3 → assert 200",
+            "generate_application_4 → assert 403 trial_exhausted"
+          ]
+        },
+        {
+          "name": "day_15_expiry_blocks_all",
+          "steps": [
+            "create_user_with_created_at_15_days_ago",
+            "attempt_any_protected_action → assert 403 trial_expired"
+          ]
+        },
+        {
+          "name": "concurrent_at_boundary",
+          "steps": [
+            "create_user_with_2_applications",
+            "send_5_concurrent_create_requests",
+            "assert_exactly_1_success",
+            "assert_exactly_4_get_trial_exhausted"
+          ]
+        }
+      ],
+      "evidence_artifact": "docs/beta/evidence/I5_trial/trial-enforcement-report.json"
+    }
+  }
+}

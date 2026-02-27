@@ -1,0 +1,62 @@
+{
+  "description": "Phase 6 (Layer 5) — Route Surface Cleanup test payloads",
+  "invariant": "I7",
+  "canonical_routes": [
+    {"method": "GET",  "path": "/health"},
+    {"method": "POST", "path": "/auth/register"},
+    {"method": "POST", "path": "/auth/login"},
+    {"method": "POST", "path": "/auth/refresh"},
+    {"method": "GET",  "path": "/users/me"},
+    {"method": "PUT",  "path": "/users/me"},
+    {"method": "GET",  "path": "/users/me/usage"},
+    {"method": "POST", "path": "/users/me/cv"},
+    {"method": "GET",  "path": "/users/me/cv"},
+    {"method": "POST", "path": "/jobs"},
+    {"method": "GET",  "path": "/jobs"},
+    {"method": "GET",  "path": "/jobs/{job_id}"},
+    {"method": "POST", "path": "/jobs/{job_id}/gap-questions"},
+    {"method": "GET",  "path": "/jobs/{job_id}/gap-questions"},
+    {"method": "POST", "path": "/jobs/{job_id}/gap-responses"},
+    {"method": "GET",  "path": "/applications/{application_id}"},
+    {"method": "POST", "path": "/vpr/generate"},
+    {"method": "GET",  "path": "/vpr/{job_id}/status"},
+    {"method": "GET",  "path": "/vprs"},
+    {"method": "POST", "path": "/cv-tailoring/generate"},
+    {"method": "GET",  "path": "/cv-tailoring/{job_id}/status"},
+    {"method": "GET",  "path": "/cv-tailorings"},
+    {"method": "POST", "path": "/cover-letter/generate"},
+    {"method": "GET",  "path": "/cover-letter/{job_id}/status"},
+    {"method": "GET",  "path": "/cover-letters"},
+    {"method": "POST", "path": "/interview-prep/generate"},
+    {"method": "GET",  "path": "/interview-prep/{job_id}/status"},
+    {"method": "GET",  "path": "/interview-preps"},
+    {"method": "GET",  "path": "/company-research/{company_name}"},
+    {"method": "GET",  "path": "/knowledge-base"}
+  ],
+  "deprecated_routes_to_remove": [
+    "/api/cv",
+    "/api/vpr",
+    "/api/cover-letter",
+    "/api/interview-prep",
+    "/api/gap-analysis"
+  ],
+  "steps": {
+    "L6_2_route_dedup": {
+      "step_id": "L6.2",
+      "test_file": "src/backend/tests/unit/test_l6_route_dedup.py",
+      "assertions": {
+        "no_api_prefix_routes": true,
+        "no_duplicate_operations": true,
+        "total_route_count": 30
+      }
+    },
+    "L6_4_route_surface": {
+      "step_id": "L6.4",
+      "test_file": "src/backend/tests/unit/test_l6_route_surface.py",
+      "verification_command": "aws apigateway get-resources --rest-api-id $API_ID | jq '[.items[] | {path: .path, methods: (.resourceMethods // {} | keys)}]'",
+      "diff_command": "diff <(aws apigateway get-resources ...) docs/beta/evidence/I7_routes/frozen_spec.json",
+      "evidence_artifact": "docs/beta/evidence/I7_routes/route-surface-diff.txt",
+      "pass_criterion": "Empty diff output"
+    }
+  }
+}

@@ -1,0 +1,141 @@
+{
+  "description": "Phase 1 (Layer 0) — Generator Reality test payloads",
+  "invariant": "I1",
+  "template_regex_patterns": [
+    "Generated cover letter for request \\{id\\}",
+    "What quantifiable examples show your impact in core competency \\d",
+    "Situation for question \\d",
+    "describe a relevant STAR example",
+    "\\[COMPANY_NAME\\]",
+    "\\[YOUR_NAME\\]",
+    "\\{job_title\\}",
+    "\\{company\\}"
+  ],
+  "steps": {
+    "L0_1_cover_letter": {
+      "step_id": "L0.1",
+      "handler": "cover_letter_handler",
+      "test_file": "src/backend/tests/unit/test_l0_cover_letter_generation.py",
+      "request_event": {
+        "httpMethod": "POST",
+        "path": "/cover-letter/generate",
+        "requestContext": {
+          "authorizer": {
+            "claims": {
+              "sub": "user-test-123",
+              "email": "testuser@example.com"
+            }
+          }
+        },
+        "body": "{\"cv_id\": \"cv-abc456\", \"job_id\": \"job-xyz789\"}"
+      },
+      "mock_cv_data": {
+        "cv_id": "cv-abc456",
+        "user_id": "user-test-123",
+        "content": "John Doe\nSenior Software Engineer with 8 years experience in Python and AWS.\nExperience: Led team of 5 engineers at TechCorp, built microservices serving 1M users.",
+        "skills": ["Python", "AWS", "DynamoDB", "Lambda", "Docker"]
+      },
+      "mock_job_data": {
+        "job_id": "job-xyz789",
+        "user_id": "user-test-123",
+        "title": "Principal Software Engineer",
+        "company": "Innovate Labs",
+        "description": "We are looking for a Principal Engineer to lead backend architecture..."
+      },
+      "assertions": {
+        "response_status": 200,
+        "body_must_not_contain": [
+          "Generated cover letter for request",
+          "{id}",
+          "[YOUR_NAME]",
+          "[COMPANY_NAME]"
+        ],
+        "body_must_contain_fields": ["artifact_id", "status"],
+        "llm_client_must_be_called": true,
+        "min_content_length": 200
+      }
+    },
+    "L0_2_interview_prep": {
+      "step_id": "L0.2",
+      "handler": "interview_prep_handler",
+      "test_file": "src/backend/tests/unit/test_l0_interview_prep_generation.py",
+      "request_event": {
+        "httpMethod": "POST",
+        "path": "/interview-prep/generate",
+        "requestContext": {
+          "authorizer": {
+            "claims": {
+              "sub": "user-test-123",
+              "email": "testuser@example.com"
+            }
+          }
+        },
+        "body": "{\"cv_id\": \"cv-abc456\", \"job_id\": \"job-xyz789\"}"
+      },
+      "assertions": {
+        "response_status": 200,
+        "body_must_not_contain": [
+          "describe a relevant STAR example",
+          "Situation for question",
+          "STAR example for competency"
+        ],
+        "llm_client_must_be_called": true
+      }
+    },
+    "L0_3_gap_analysis": {
+      "step_id": "L0.3",
+      "handler": "gap_handler",
+      "test_file": "src/backend/tests/unit/test_l0_gap_analysis_generation.py",
+      "request_event": {
+        "httpMethod": "POST",
+        "path": "/jobs/job-xyz789/gap-questions",
+        "requestContext": {
+          "authorizer": {
+            "claims": {
+              "sub": "user-test-123",
+              "email": "testuser@example.com"
+            }
+          }
+        },
+        "pathParameters": {"job_id": "job-xyz789"},
+        "body": "{\"cv_id\": \"cv-abc456\"}"
+      },
+      "assertions": {
+        "response_status": 200,
+        "body_must_not_contain": [
+          "What quantifiable examples show your impact in core competency",
+          "core competency N",
+          "\\{question_number\\}"
+        ],
+        "question_count": {"min": 5, "max": 10},
+        "llm_client_must_be_called": true
+      }
+    },
+    "L0_4_cv_tailoring": {
+      "step_id": "L0.4",
+      "handler": "cv_tailoring_handler",
+      "test_file": "src/backend/tests/unit/test_l0_cv_tailoring_scores.py",
+      "assertions": {
+        "ats_score_min": 8.0,
+        "cv_id_must_not_be_null": true,
+        "fvs_anti_ai_min": 9.0
+      }
+    },
+    "L0_5_company_research": {
+      "step_id": "L0.5",
+      "handler": "company_research_handler",
+      "test_file": "src/backend/tests/unit/test_l0_company_research_latency.py",
+      "sla": {
+        "p95_ms": 90000,
+        "p99_ms": 120000,
+        "timeout_ms": 150000
+      }
+    }
+  },
+  "phase_integration_test": {
+    "test_file": "src/backend/tests/integration/test_l0_phase_integration.py",
+    "description": "Run all 5 generators, scan all outputs for template regex patterns, assert 0 matches",
+    "run_count": 50,
+    "pass_criterion": "0 template_pattern matches across all 50 × 5 = 250 generator runs"
+  }
+}
