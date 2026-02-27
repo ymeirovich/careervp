@@ -63,8 +63,7 @@ def test_health_requires_no_authentication() -> None:
 
 def test_health_response_matches_openapi_schema() -> None:
     """Health response should include all OpenAPI contract keys (anthropic + dynamodb)."""
-    with patch('anthropic.Anthropic') as mock_anthropic, \
-         patch('boto3.client') as mock_boto:
+    with patch('anthropic.Anthropic') as mock_anthropic, patch('boto3.client') as mock_boto:
         mock_anthropic.return_value.models.list.return_value = MagicMock()
         mock_boto.return_value.describe_table.return_value = {'Table': {'TableStatus': 'ACTIVE'}}
         response = lambda_handler(_event(), _context())
