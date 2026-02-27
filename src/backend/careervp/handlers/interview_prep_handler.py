@@ -48,6 +48,10 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         metrics.add_metric(name='InterviewPrepStatusRequests', unit=MetricUnit.Count, value=1)
         return get_interview_prep_status(event)
 
+    if method == 'GET' and path == '/interview-preps':
+        metrics.add_metric(name='InterviewPrepListRequests', unit=MetricUnit.Count, value=1)
+        return list_interview_preps(event)
+
     if method == 'POST' and path == '/interview-prep/generate':
         metrics.add_metric(name='InterviewPrepRequests', unit=MetricUnit.Count, value=1)
         return _submit_interview_prep_request(event)
@@ -147,6 +151,42 @@ def get_interview_prep_status(event: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def list_interview_preps(event: dict[str, Any]) -> dict[str, Any]:
+    """Handle GET /interview-preps requests."""
+    user_id = _extract_authenticated_user_id(event)
+    if not user_id:
+        return _build_response(
+            HTTPStatus.UNAUTHORIZED,
+            {'error': 'Missing or invalid authentication token', 'code': ResultCode.UNAUTHORIZED},
+        )
+
+    dal = _get_dal()
+    table = dal._get_db_handler(dal.table_name)
+    response = table.query(
+        KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with(INTERVIEW_PREP_SORT_KEY_PREFIX),
+        Limit=50,
+    )
+    items = response.get('Items', []) if isinstance(response, dict) else []
+    payload: list[dict[str, Any]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        prep_payload = item.get('interview_prep')
+        prep_id = _extract_prep_id_from_payload(prep_payload)
+        if not prep_id:
+            prep_id = str(item.get('sk', '')).replace(INTERVIEW_PREP_SORT_KEY_PREFIX, '')
+        payload.append(
+            {
+                'id': prep_id,
+                'status': _normalize_status(item.get('status')),
+                'created_at': item.get('created_at'),
+                'updated_at': item.get('updated_at'),
+            }
+        )
+
+    return _build_response(HTTPStatus.OK, {'interview_preps': payload})
+
+
 def _parse_request(event: dict[str, Any]) -> Result[InterviewPrepRequest]:
     """Parse and validate request body."""
     body_content = event.get('body', '{}')
@@ -176,7 +216,7 @@ def _extract_authenticated_user_id(event: dict[str, Any]) -> str | None:
 def _extract_interview_prep_id(event: dict[str, Any]) -> str | None:
     path_parameters = event.get('pathParameters')
     if isinstance(path_parameters, dict):
-        for key in ('interviewPrepId', 'interview_prep_id', 'id'):
+        for key in ('interviewPrepId', 'interview_prep_id', 'id', 'job_id', 'jobId'):
             value = path_parameters.get(key)
             if isinstance(value, str) and value.strip():
                 return value.strip()
@@ -184,6 +224,8 @@ def _extract_interview_prep_id(event: dict[str, Any]) -> str | None:
     path = str(event.get('path', '')).rstrip('/')
     if path.startswith('/interview-prep/'):
         candidate = path.removeprefix('/interview-prep/').strip()
+        if candidate.endswith('/status'):
+            candidate = candidate[: -len('/status')]
         if candidate and candidate != 'generate':
             return candidate
     return None

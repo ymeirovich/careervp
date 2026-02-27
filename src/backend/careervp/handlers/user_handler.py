@@ -4,7 +4,8 @@ User profile management handler.
 Implements OpenAPI endpoints:
 - GET /users/me
 - PUT /users/me
-- GET /users/me/cvs
+- GET /users/me/cv
+- GET /users/me/usage
 """
 
 import base64
@@ -187,7 +188,8 @@ def update_current_user() -> Response[str]:
     return _json_response(HTTPStatus.OK, user.to_api_dict())
 
 
-@app.get('/users/me/cvs')
+@app.get('/users/me/cv')
+@app.get('/users/me/cvs')  # Backward-compatible alias.
 @tracer.capture_method(capture_response=False)
 def list_user_cvs() -> Response[str]:
     """List current user's CV records."""
@@ -203,6 +205,24 @@ def list_user_cvs() -> Response[str]:
         'cursor': next_cursor or '',
     }
     return _json_response(HTTPStatus.OK, body)
+
+
+@app.get('/users/me/usage')
+@tracer.capture_method(capture_response=False)
+def get_usage_snapshot() -> Response[str]:
+    """Return user usage snapshot for the authenticated user."""
+    user_id = _get_authenticated_user_id()
+    if not user_id:
+        return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Authentication required'})
+
+    return _json_response(
+        HTTPStatus.OK,
+        {
+            'limits': {'trial_applications': 3},
+            'current': {'applications': 0},
+            'remaining': {'applications': 3},
+        },
+    )
 
 
 @logger.inject_lambda_context(correlation_id_path=API_GATEWAY_REST)

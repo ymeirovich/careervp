@@ -4,7 +4,8 @@ Job CRUD handler for OpenAPI `/jobs` endpoints.
 Implements:
 - POST /jobs
 - GET /jobs
-- GET /jobs/{jobId}
+- GET /jobs/{job_id}
+- GET /applications/{application_id}
 """
 
 import json
@@ -156,14 +157,19 @@ def list_jobs() -> Response[str]:
 
 
 @app.get('/jobs/<jobId>')
+@app.get('/jobs/<job_id>')
 @tracer.capture_method(capture_response=False)
-def get_job(jobId: str) -> Response[str]:
+def get_job(jobId: str | None = None, job_id: str | None = None) -> Response[str]:
     """Fetch one job by id, enforcing owner access."""
+    resolved_job_id = (jobId or job_id or '').strip()
+    if not resolved_job_id:
+        return _json_response(HTTPStatus.BAD_REQUEST, {'error': 'Job id is required'})
+
     user_id = _get_authenticated_user_id()
     if not user_id:
         return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Authentication required'})
 
-    job_record = _get_jobs_repository().get_job(jobId)
+    job_record = _get_jobs_repository().get_job(resolved_job_id)
     if job_record is None:
         return _json_response(HTTPStatus.NOT_FOUND, {'error': 'Job not found'})
     if str(job_record.get('user_id', '')) != user_id:
@@ -173,6 +179,13 @@ def get_job(jobId: str) -> Response[str]:
 
     job = _record_to_job(job_record)
     return _json_response(HTTPStatus.OK, job.to_api_dict())
+
+
+@app.get('/applications/<application_id>')
+@tracer.capture_method(capture_response=False)
+def get_application(application_id: str) -> Response[str]:
+    """Compatibility endpoint that resolves application_id through jobs repository."""
+    return get_job(job_id=application_id)
 
 
 @logger.inject_lambda_context(correlation_id_path=API_GATEWAY_REST)

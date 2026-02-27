@@ -1,0 +1,124 @@
+{
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/applications/{application_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/company-research/{company_name}"
+    },
+    {
+      "method": "GET",
+      "path": "/cover-letter/{job_id}/status"
+    },
+    {
+      "method": "GET",
+      "path": "/cover-letters"
+    },
+    {
+      "method": "GET",
+      "path": "/cv-tailoring/{job_id}/status"
+    },
+    {
+      "method": "GET",
+      "path": "/cv-tailorings"
+    },
+    {
+      "method": "GET",
+      "path": "/health"
+    },
+    {
+      "method": "GET",
+      "path": "/interview-prep/{job_id}/status"
+    },
+    {
+      "method": "GET",
+      "path": "/interview-preps"
+    },
+    {
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "method": "GET",
+      "path": "/jobs/{job_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/jobs/{job_id}/gap-questions"
+    },
+    {
+      "method": "GET",
+      "path": "/knowledge-base"
+    },
+    {
+      "method": "GET",
+      "path": "/users/me"
+    },
+    {
+      "method": "GET",
+      "path": "/users/me/cv"
+    },
+    {
+      "method": "GET",
+      "path": "/users/me/usage"
+    },
+    {
+      "method": "GET",
+      "path": "/vpr/{job_id}/status"
+    },
+    {
+      "method": "GET",
+      "path": "/vprs"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/login"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/refresh"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/register"
+    },
+    {
+      "method": "POST",
+      "path": "/cover-letter/generate"
+    },
+    {
+      "method": "POST",
+      "path": "/cv-tailoring/generate"
+    },
+    {
+      "method": "POST",
+      "path": "/interview-prep/generate"
+    },
+    {
+      "method": "POST",
+      "path": "/jobs"
+    },
+    {
+      "method": "POST",
+      "path": "/jobs/{job_id}/gap-questions"
+    },
+    {
+      "method": "POST",
+      "path": "/jobs/{job_id}/gap-responses"
+    },
+    {
+      "method": "POST",
+      "path": "/users/me/cv"
+    },
+    {
+      "method": "POST",
+      "path": "/vpr/generate"
+    },
+    {
+      "method": "PUT",
+      "path": "/users/me"
+    }
+  ]
+}

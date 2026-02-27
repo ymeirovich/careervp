@@ -64,7 +64,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         metrics.add_metric(name='CoverLetterStatusRequests', unit=MetricUnit.Count, value=1)
         return get_cover_letter_status(event)
 
-    if method == 'GET' and path == '/users/me/cover-letters':
+    if method == 'GET' and path in {'/users/me/cover-letters', '/cover-letters'}:
         metrics.add_metric(name='CoverLetterListRequests', unit=MetricUnit.Count, value=1)
         return list_cover_letters(event)
 
@@ -250,7 +250,7 @@ def _extract_authenticated_user_id(event: dict[str, Any]) -> str | None:
 def _extract_cover_letter_id(event: dict[str, Any]) -> str | None:
     path_parameters = event.get('pathParameters')
     if isinstance(path_parameters, dict):
-        for key in ('coverLetterId', 'cover_letter_id', 'id'):
+        for key in ('coverLetterId', 'cover_letter_id', 'id', 'job_id', 'jobId'):
             value = path_parameters.get(key)
             if isinstance(value, str) and value.strip():
                 return value.strip()
@@ -258,6 +258,8 @@ def _extract_cover_letter_id(event: dict[str, Any]) -> str | None:
     path = str(event.get('path', '')).rstrip('/')
     if path.startswith('/cover-letter/'):
         candidate = path.removeprefix('/cover-letter/').strip()
+        if candidate.endswith('/status'):
+            candidate = candidate[: -len('/status')]
         if candidate and candidate != 'generate':
             return candidate
     return None

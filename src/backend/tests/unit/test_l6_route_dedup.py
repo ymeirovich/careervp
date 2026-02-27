@@ -8,17 +8,59 @@ Invariant: I7
 Results: docs/beta/execution_results/L6_2_results.md
 """
 
+import json
 import os
 import re
+from pathlib import Path
 
 import pytest
 
 INFRA_DIR = '/Users/yitzchak/Documents/dev/careervp/infra'
 API_CONSTRUCT_PATH = f'{INFRA_DIR}/careervp/api_construct.py'
 EXPECTED_CANONICAL_ROUTE_COUNT = 30
+FROZEN_SPEC_PATH = '/Users/yitzchak/Documents/dev/careervp/docs/beta/evidence/I7_routes/frozen_spec.json'
 
 # Deprecated route prefixes that must not appear in CDK
 DEPRECATED_PREFIXES = ['/api/cv', '/api/jobs', '/api/users', '/api/vpr', '/api/']
+
+PATH_NORMALIZATION_OVERRIDES = {
+    '/company-research/{jobId}': '/company-research/{company_name}',
+}
+
+PATH_PARAMETER_REPLACEMENTS = {
+    '{jobId}': '{job_id}',
+    '{vprId}': '{job_id}',
+    '{cvTailoringId}': '{job_id}',
+    '{coverLetterId}': '{job_id}',
+    '{interviewPrepId}': '{job_id}',
+}
+
+
+def _read_api_construct() -> str:
+    return Path(API_CONSTRUCT_PATH).read_text()
+
+
+def _normalize_route_path(path: str) -> str:
+    normalized = PATH_NORMALIZATION_OVERRIDES.get(path, path)
+    for legacy, canonical in PATH_PARAMETER_REPLACEMENTS.items():
+        normalized = normalized.replace(legacy, canonical)
+    return normalized
+
+
+def _extract_route_map_operations() -> set[tuple[str, str]]:
+    content = _read_api_construct()
+    # Match route tuples in _add_openapi_contract_routes:
+    # ("/path", "METHOD", self.handler_func)
+    matches = re.findall(
+        r'\(\s*"([^"]+)"\s*,\s*"([A-Z]+)"\s*,\s*self\.[a-zA-Z0-9_]+\s*\)',
+        content,
+    )
+    return {(method, _normalize_route_path(path)) for path, method in matches}
+
+
+def _load_frozen_operations() -> set[tuple[str, str]]:
+    spec = json.loads(Path(FROZEN_SPEC_PATH).read_text())
+    return {(str(route['method']), str(route['path'])) for route in spec.get('routes', [])}
 
 
 @pytest.mark.unit
@@ -59,22 +101,16 @@ class TestCanonicalRouteCount:
 
     def test_canonical_route_count_is_30(self):
         """frozen_spec.json has exactly 30 canonical routes."""
-        frozen_spec_path = '/Users/yitzchak/Documents/dev/careervp/docs/beta/evidence/I7_routes/frozen_spec.json'
-        assert os.path.exists(frozen_spec_path), f'Missing: {frozen_spec_path}'
-        import json
-
-        with open(frozen_spec_path) as f:
+        assert os.path.exists(FROZEN_SPEC_PATH), f'Missing: {FROZEN_SPEC_PATH}'
+        with open(FROZEN_SPEC_PATH) as f:
             spec = json.load(f)
         count = len(spec.get('routes', []))
         assert count == EXPECTED_CANONICAL_ROUTE_COUNT, f'Expected {EXPECTED_CANONICAL_ROUTE_COUNT} canonical routes, got {count}'
 
     def test_all_canonical_routes_present(self):
         """frozen_spec.json routes all have method and path fields."""
-        frozen_spec_path = '/Users/yitzchak/Documents/dev/careervp/docs/beta/evidence/I7_routes/frozen_spec.json'
-        assert os.path.exists(frozen_spec_path), f'Missing: {frozen_spec_path}'
-        import json
-
-        with open(frozen_spec_path) as f:
+        assert os.path.exists(FROZEN_SPEC_PATH), f'Missing: {FROZEN_SPEC_PATH}'
+        with open(FROZEN_SPEC_PATH) as f:
             spec = json.load(f)
         for route in spec.get('routes', []):
             assert 'method' in route, f"Route missing 'method' field: {route}"
@@ -82,14 +118,43 @@ class TestCanonicalRouteCount:
 
     def test_no_extra_routes_beyond_canonical(self):
         """frozen_spec.json has no /api/ prefix routes (canonical routes are clean)."""
-        frozen_spec_path = '/Users/yitzchak/Documents/dev/careervp/docs/beta/evidence/I7_routes/frozen_spec.json'
-        assert os.path.exists(frozen_spec_path), f'Missing: {frozen_spec_path}'
-        import json
-
-        with open(frozen_spec_path) as f:
+        assert os.path.exists(FROZEN_SPEC_PATH), f'Missing: {FROZEN_SPEC_PATH}'
+        with open(FROZEN_SPEC_PATH) as f:
             spec = json.load(f)
         api_prefix = [r for r in spec.get('routes', []) if '/api/' in r.get('path', '')]
         assert api_prefix == [], f'Routes with /api/ prefix in canonical spec: {api_prefix}'
+
+
+@pytest.mark.unit
+class TestCdkRouteMapMatchesFrozenSpec:
+    """CDK route_map should exactly match frozen canonical operations."""
+
+    def test_route_map_operation_count_is_30(self):
+        route_map_ops = _extract_route_map_operations()
+        assert len(route_map_ops) == EXPECTED_CANONICAL_ROUTE_COUNT, (
+            f'Expected {EXPECTED_CANONICAL_ROUTE_COUNT} CDK route operations, got {len(route_map_ops)}'
+        )
+
+    def test_route_map_equals_frozen_spec(self):
+        route_map_ops = _extract_route_map_operations()
+        frozen_ops = _load_frozen_operations()
+        missing = sorted(frozen_ops - route_map_ops)
+        extra = sorted(route_map_ops - frozen_ops)
+        assert missing == [], f'CDK route map missing canonical operations: {missing}'
+        assert extra == [], f'CDK route map has non-canonical operations: {extra}'
+
+    def test_route_map_contains_no_legacy_endpoints(self):
+        route_map_ops = _extract_route_map_operations()
+        legacy_paths = sorted(
+            {
+                path
+                for _method, path in route_map_ops
+                if '/api/' in path
+                or path.startswith('/gap-analysis')
+                or path in {'/users/me/cvs', '/users/me/vprs', '/users/me/tailored-cvs', '/users/me/cover-letters'}
+            }
+        )
+        assert legacy_paths == [], f'Legacy route paths still present in CDK route map: {legacy_paths}'
 
 
 @pytest.mark.unit
