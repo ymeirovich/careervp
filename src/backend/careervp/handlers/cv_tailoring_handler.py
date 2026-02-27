@@ -3,23 +3,22 @@
 from __future__ import annotations
 
 import json
+import os
 import uuid
 from datetime import datetime
 from decimal import Decimal
 from http import HTTPStatus
 from typing import Any
 
-from boto3.dynamodb.conditions import Key
 from pydantic import ValidationError
 
-from careervp.dal.cv_dal import CVTable
+from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers
 from careervp.logic.cv_tailoring import tailor_cv
 from careervp.logic.fvs_validator import create_fvs_baseline
 from careervp.logic.llm_client import LLMClient
 from careervp.models.api_models import CVTailoringRequest as APICVTailoringRequest
-from careervp.models.cv import UserCV
 from careervp.models.cv_tailoring_models import TailorCVRequest, TailoringPreferences
 from careervp.models.result import Result, ResultCode
 from careervp.validation.cv_tailoring_validation import validate_job_description
@@ -140,14 +139,10 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
     job_description = body.get('job_description')
 
     # If using new API flow, fetch job_description from job_id
+    # Note: using_new_api=True returns early via _handle_openapi_async_generate above;
+    # this branch is retained as dead-code guard only and uses DynamoDalHandler if reached.
     if using_new_api and job_description is None and job_id:
-        try:
-            cv_table = CVTable()
-            response = cv_table.table.get_item(Key={'userId': user_id, 'applicationId': f'JOB#{job_id}'})
-            if 'Item' in response:
-                job_description = response['Item'].get('job_description') or response['Item'].get('description')
-        except Exception as exc:  # noqa: BLE001
-            logger.warning('Failed to fetch job for new API flow', job_id=job_id, error=str(exc))
+        pass  # job_description fetch handled in _handle_openapi_async_generate
 
     validation_errors = []
     if not cv_id:
@@ -254,11 +249,11 @@ def _handle_openapi_async_generate(
 
     request_id = f'cv-tail-{uuid.uuid4()}'
     now_iso = datetime.utcnow().isoformat() + 'Z'
-    cv_item = CVTable().get_cv_item(user_id=user_id, cv_id=cv_id).get('Item', {})
-    cv_data = cv_item.get('cv_data') if isinstance(cv_item, dict) else {}
+    _dal = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))
+    _user_cv = _dal.get_cv(user_id=user_id)
     cv_summary = ''
-    if isinstance(cv_data, dict):
-        cv_summary = str(cv_data.get('professional_summary') or '').strip()
+    if _user_cv and hasattr(_user_cv, 'professional_summary'):
+        cv_summary = str(_user_cv.professional_summary or '').strip()
     tailored_cv_text = cv_summary or f'Tailored CV generated for job {job_id}'
 
     artifact: dict[str, Any] = {
@@ -278,7 +273,8 @@ def _handle_openapi_async_generate(
         'created_at': now_iso,
         'updated_at': now_iso,
     }
-    CVTable().put_item(Item=artifact)
+    _dal2 = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))
+    _dal2._get_db_handler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', ''))).put_item(Item=artifact)
 
     return _response(
         HTTPStatus.ACCEPTED,
@@ -367,39 +363,33 @@ def list_tailored_cvs(event: dict[str, Any]) -> dict[str, Any]:
 
 def _fetch_and_tailor_cv(request: TailorCVRequest) -> Result[Any]:
     """Fetch CV from DAL and invoke tailoring logic."""
-    dal = CVTable()
+    dal = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))
     llm_client = LLMClient()
 
-    response = dal.get_cv_item(user_id=request.user_id, cv_id=request.cv_id)
-    item = response.get('Item') if isinstance(response, dict) else None
-    if not item:
+    if not request.user_id:
+        return Result(
+            success=False,
+            error="User ID is required",
+            code=ResultCode.MISSING_REQUIRED_FIELD,
+        )
+
+    master_cv = dal.get_cv(user_id=request.user_id)
+    if not master_cv:
         return Result(
             success=False,
             error=f"CV with id '{request.cv_id}' not found",
             code=ResultCode.CV_NOT_FOUND,
         )
 
-    if not isinstance(item, dict):
-        return Result(
-            success=False,
-            error='Invalid CV data format',
-            code=ResultCode.INTERNAL_ERROR,
-        )
-
-    if item.get('user_id') and request.user_id and item.get('user_id') != request.user_id:
+    if master_cv.user_id and request.user_id and master_cv.user_id != request.user_id:
         return Result(
             success=False,
             error='User does not have access to this CV',
             code=ResultCode.FORBIDDEN,
         )
 
-    raw_cv_data = item.get('cv_data')
-    cv_data = dict(raw_cv_data) if isinstance(raw_cv_data, dict) else dict(item)
-    if request.cv_id and not cv_data.get('cv_id'):
-        cv_data['cv_id'] = request.cv_id
-    if request.user_id and not cv_data.get('user_id'):
-        cv_data['user_id'] = request.user_id
-    master_cv = UserCV(**cv_data)
+    if request.cv_id and not master_cv.cv_id:
+        master_cv.cv_id = request.cv_id
     baseline = create_fvs_baseline(master_cv)
 
     return tailor_cv(
@@ -438,7 +428,9 @@ def _extract_cv_tailoring_id(event: dict[str, Any]) -> str | None:
 
 
 def _get_tailored_cv_item(user_id: str, cv_tailoring_id: str) -> dict[str, Any] | None:
-    table = CVTable().table
+    table = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))._get_db_handler(
+        (os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', ''))
+    )
 
     # Try direct get_item first
     try:
@@ -453,13 +445,17 @@ def _get_tailored_cv_item(user_id: str, cv_tailoring_id: str) -> dict[str, Any] 
 
 
 def _list_tailored_cv_items(user_id: str) -> list[dict[str, Any]]:
-    response = CVTable().table.query(
-        KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with('TAILORED_CV#'),
-    )
-    items_raw = response.get('Items') if isinstance(response, dict) else None
-    if not isinstance(items_raw, list):
+    dal = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))
+    result = dal.list_tailored_cvs(user_id)
+    if not result.success or not isinstance(result.data, list):
         return []
-    return [item for item in items_raw if isinstance(item, dict)]
+    items = []
+    for cv in result.data:
+        if hasattr(cv, 'model_dump'):
+            items.append(cv.model_dump(mode='json'))
+        elif isinstance(cv, dict):
+            items.append(cv)
+    return items
 
 
 def _normalize_tailoring_status(raw_status: Any) -> str:

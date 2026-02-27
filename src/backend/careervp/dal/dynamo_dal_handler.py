@@ -296,7 +296,7 @@ class DynamoDalHandler(DalHandler):
             return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
 
     @tracer.capture_method(capture_response=False)
-    def list_tailored_cvs(self, user_id: str) -> Result[list[TailoredCV]]:
+    def list_tailored_cvs(self, user_id: str) -> Result[list[dict[str, Any]]]:
         logger.append_keys(user_id=user_id)
         logger.info('listing tailored CVs for user from DynamoDB')
         try:
@@ -311,9 +311,9 @@ class DynamoDalHandler(DalHandler):
                     ExclusiveStartKey=response['LastEvaluatedKey'],
                 )
                 items.extend(response.get('Items', []))
-            results = [TailoredCV.model_validate(item.get('tailored_cv') or item) for item in items]
-            return Result(success=True, data=results, code=ResultCode.SUCCESS)
-        except (ClientError, ValidationError) as exc:
+            # Return raw items as dicts for backward compatibility
+            return Result(success=True, data=items, code=ResultCode.SUCCESS)
+        except ClientError as exc:
             error_msg = 'failed to list tailored CVs'
             logger.exception(error_msg, user_id=user_id)
             return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
