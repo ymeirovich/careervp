@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 import boto3
-from boto3.dynamodb.conditions import Attr
+from boto3.dynamodb.conditions import Attr, Key
 from botocore.exceptions import BotoCoreError, ClientError
 
 
@@ -78,21 +78,23 @@ class CVTable:
         if isinstance(legacy_response.get('Item'), Mapping):
             return legacy_response
 
-        # Compatibility fallback when cv_id is an attribute but not part of key schema.
-        try:
-            scan_response = cast(
-                dict[str, Any],
-                self.table.scan(
-                    FilterExpression=Attr('cv_id').eq(cv_id),
-                    Limit=1,
-                ),
-            )
-        except (BotoCoreError, ClientError):
-            return {}
+        # Compatibility fallback: prefer a partition-bounded query when user_id is available.
+        if user_id:
+            try:
+                query_response = cast(
+                    dict[str, Any],
+                    self.table.query(
+                        KeyConditionExpression=Key('pk').eq(user_id),
+                        FilterExpression=Attr('cv_id').eq(cv_id),
+                        Limit=1,
+                    ),
+                )
+            except (BotoCoreError, ClientError):
+                return {}
 
-        items = scan_response.get('Items')
-        if isinstance(items, list) and items:
-            first_item = items[0]
-            if isinstance(first_item, Mapping):
-                return {'Item': dict(first_item)}
+            items = query_response.get('Items')
+            if isinstance(items, list) and items:
+                first_item = items[0]
+                if isinstance(first_item, Mapping):
+                    return {'Item': dict(first_item)}
         return {}

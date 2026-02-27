@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from typing import Any
 
+from boto3.dynamodb.conditions import Key
 from pydantic import ValidationError
 
 try:  # pragma: no cover - import guard for lightweight unit-test environments.
@@ -168,16 +169,13 @@ def get_questions(event: dict[str, Any]) -> dict[str, Any]:
 
     try:
         table = _get_table()
-        # Scan with filter since we can't query by userId (not in primary key or GSI)
-        response = table.scan(
-            FilterExpression='userId = :uid AND begins_with(applicationId, :prefix)',
-            ExpressionAttributeValues={':uid': user_id, ':prefix': 'GAP_ANALYSIS#'},
+        response = table.query(
+            KeyConditionExpression=Key('userId').eq(user_id) & Key('applicationId').begins_with('GAP_ANALYSIS#'),
         )
         items = list(response.get('Items', []))
         while 'LastEvaluatedKey' in response:
-            response = table.scan(
-                FilterExpression='userId = :uid AND begins_with(applicationId, :prefix)',
-                ExpressionAttributeValues={':uid': user_id, ':prefix': 'GAP_ANALYSIS#'},
+            response = table.query(
+                KeyConditionExpression=Key('userId').eq(user_id) & Key('applicationId').begins_with('GAP_ANALYSIS#'),
                 ExclusiveStartKey=response['LastEvaluatedKey'],
             )
             items.extend(response.get('Items', []))

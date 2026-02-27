@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import boto3
-from boto3.dynamodb.conditions import Attr
+from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
 from careervp.dal.api_storage_adapter import ApiStorageAdapter
@@ -24,6 +24,8 @@ from careervp.models.result import Result, ResultCode
 
 # GSI name for idempotency key lookup
 IDEMPOTENCY_INDEX_NAME = 'idempotency-key-index'
+USER_ID_INDEX_NAME = 'user_id-index'
+ENTITY_TYPE_INDEX_NAME = 'entity_type-index'
 
 
 class JobsRepository:
@@ -109,8 +111,9 @@ class JobsRepository:
         """List job posting records in the jobs table."""
         safe_limit = max(1, min(limit, 100))
         try:
-            response = self.table.scan(
-                FilterExpression=Attr('title').exists(),
+            response = self.table.query(
+                IndexName=ENTITY_TYPE_INDEX_NAME,
+                KeyConditionExpression=Key('entity_type').eq('JOB'),
                 Limit=safe_limit,
             )
         except ClientError as e:
@@ -123,29 +126,31 @@ class JobsRepository:
         """List jobs that belong to a specific user."""
         safe_limit = max(1, min(limit, 100))
         try:
-            response = self.table.scan(
-                FilterExpression=Attr('user_id').eq(user_id) & Attr('title').exists(),
+            response = self.table.query(
+                IndexName=USER_ID_INDEX_NAME,
+                KeyConditionExpression=Key('user_id').eq(user_id),
                 Limit=safe_limit,
             )
         except ClientError as e:
             logger.error('Failed to list jobs by user', user_id=user_id, error=str(e))
             return []
         items = response.get('Items', [])
-        return [item for item in items if isinstance(item, dict)]
+        return [item for item in items if isinstance(item, dict) and item.get('title')]
 
     def get_vpr_jobs_by_user(self, user_id: str, limit: int = 20) -> list[dict[str, Any]]:
         """List VPR async jobs that belong to a specific user."""
         safe_limit = max(1, min(limit, 100))
         try:
-            response = self.table.scan(
-                FilterExpression=Attr('user_id').eq(user_id) & Attr('application_id').exists(),
+            response = self.table.query(
+                IndexName=USER_ID_INDEX_NAME,
+                KeyConditionExpression=Key('user_id').eq(user_id),
                 Limit=safe_limit,
             )
         except ClientError as e:
             logger.error('Failed to list VPR jobs by user', user_id=user_id, error=str(e))
             return []
         items = response.get('Items', [])
-        return [item for item in items if isinstance(item, dict)]
+        return [item for item in items if isinstance(item, dict) and item.get('application_id')]
 
     @tracer.capture_method(capture_response=False)
     def get_job(self, job_id: str) -> dict[str, Any] | None:

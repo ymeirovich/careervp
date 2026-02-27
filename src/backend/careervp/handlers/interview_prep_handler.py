@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from typing import Any
 
@@ -233,6 +233,7 @@ def _generate_interview_prep_result(
 def _persist_interview_prep(dal: DynamoDalHandler, user_id: str, prep_payload: dict[str, Any]) -> Result[None]:
     table = dal._get_db_handler(dal.table_name)
     prep_id = str(prep_payload.get("prep_id", "")).strip()
+    ttl = int((datetime.now(timezone.utc) + timedelta(days=730)).timestamp())
     item = {
         "pk": user_id,
         "sk": f"{INTERVIEW_PREP_SORT_KEY_PREFIX}{prep_id}",
@@ -242,6 +243,7 @@ def _persist_interview_prep(dal: DynamoDalHandler, user_id: str, prep_payload: d
         "interview_prep": prep_payload,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
+        "ttl": ttl,
     }
     table.put_item(Item=item)
     return Result(success=True, data=None, code=ResultCode.SUCCESS)

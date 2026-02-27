@@ -5,11 +5,12 @@ from __future__ import annotations
 import json
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from http import HTTPStatus
 from typing import Any
 
+from boto3.dynamodb.conditions import Attr, Key
 from pydantic import ValidationError
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
@@ -248,7 +249,9 @@ def _handle_openapi_async_generate(
         )
 
     request_id = f'cv-tail-{uuid.uuid4()}'
-    now_iso = datetime.utcnow().isoformat() + 'Z'
+    now_iso = datetime.now(timezone.utc).isoformat()
+    artifact_sk = f'ARTIFACT#CV_TAILORED#{request_id}'
+    ttl = int((datetime.now(timezone.utc) + timedelta(days=730)).timestamp())
     _dal = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))
     _user_cv = _dal.get_cv(user_id=user_id)
     cv_summary = ''
@@ -258,8 +261,10 @@ def _handle_openapi_async_generate(
 
     artifact: dict[str, Any] = {
         'pk': user_id,
-        'sk': request_id,
+        'sk': artifact_sk,
+        'request_id': request_id,
         'entity_type': 'CV_TAILORING',
+        'artifact_type': 'cv_tailored',
         'status': 'completed',
         'cv_id': cv_id,
         'job_id': job_id,
@@ -272,6 +277,7 @@ def _handle_openapi_async_generate(
         'fvs_validation': {'is_valid': True, 'violations': []},
         'created_at': now_iso,
         'updated_at': now_iso,
+        'ttl': ttl,
     }
     _dal2 = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))
     _dal2._get_db_handler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', ''))).put_item(Item=artifact)
@@ -441,6 +447,26 @@ def _get_tailored_cv_item(user_id: str, cv_tailoring_id: str) -> dict[str, Any] 
     except Exception:  # noqa: BLE001
         pass
 
+    try:
+        prefixed_response = table.get_item(Key={'pk': user_id, 'sk': f'ARTIFACT#CV_TAILORED#{cv_tailoring_id}'})
+        prefixed_item = prefixed_response.get('Item') if isinstance(prefixed_response, dict) else None
+        if isinstance(prefixed_item, dict):
+            return prefixed_item
+    except Exception:  # noqa: BLE001
+        pass
+
+    try:
+        query_response = table.query(
+            KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with('ARTIFACT#CV_TAILORED#'),
+            FilterExpression=Attr('request_id').eq(cv_tailoring_id),
+            Limit=1,
+        )
+        query_items = query_response.get('Items') if isinstance(query_response, dict) else None
+        if isinstance(query_items, list) and query_items and isinstance(query_items[0], dict):
+            return query_items[0]
+    except Exception:  # noqa: BLE001
+        pass
+
     return None
 
 
@@ -468,7 +494,7 @@ def _normalize_tailoring_status(raw_status: Any) -> str:
 def _build_tailored_cv_status_payload(item: dict[str, Any], fallback_id: str) -> dict[str, Any]:
     status = _normalize_tailoring_status(item.get('status'))
     payload: dict[str, Any] = {
-        'id': str(item.get('sk') or fallback_id),
+        'id': str(item.get('request_id') or item.get('sk') or fallback_id),
         'status': status,
     }
 
@@ -503,7 +529,7 @@ def _build_tailored_cv_status_payload(item: dict[str, Any], fallback_id: str) ->
 
 def _build_tailored_cv_list_item(item: dict[str, Any]) -> dict[str, Any]:
     return {
-        'id': str(item.get('sk') or ''),
+        'id': str(item.get('request_id') or item.get('sk') or ''),
         'status': _normalize_tailoring_status(item.get('status')),
         'cv_id': item.get('cv_id'),
         'created_at': item.get('created_at'),

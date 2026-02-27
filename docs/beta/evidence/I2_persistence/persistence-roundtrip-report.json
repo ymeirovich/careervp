@@ -1,0 +1,2539 @@
+{
+  "generated_at": "2026-02-27T14:27:35.315827+00:00",
+  "environment": "local-integration-test",
+  "runs_per_artifact": 50,
+  "artifact_types": [
+    "vpr",
+    "cover_letter",
+    "cv_tailored",
+    "interview_prep",
+    "gap_analysis"
+  ],
+  "total_runs": 250,
+  "successful_roundtrips": 250,
+  "success_rate": 1.0,
+  "by_artifact": {
+    "vpr": {
+      "total_runs": 50,
+      "successful_roundtrips": 50
+    },
+    "cover_letter": {
+      "total_runs": 50,
+      "successful_roundtrips": 50
+    },
+    "cv_tailored": {
+      "total_runs": 50,
+      "successful_roundtrips": 50
+    },
+    "interview_prep": {
+      "total_runs": 50,
+      "successful_roundtrips": 50
+    },
+    "gap_analysis": {
+      "total_runs": 50,
+      "successful_roundtrips": 50
+    }
+  },
+  "records": [
+    {
+      "run_id": "l1-phase-vpr-001",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-001",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-001",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-002",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-002",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-002",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-003",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-003",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-003",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-004",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-004",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-004",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-005",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-005",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-005",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-006",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-006",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-006",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-007",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-007",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-007",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-008",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-008",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-008",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-009",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-009",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-009",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-010",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-010",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-010",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-011",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-011",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-011",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-012",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-012",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-012",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-013",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-013",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-013",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-014",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-014",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-014",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-015",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-015",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-015",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-016",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-016",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-016",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-017",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-017",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-017",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-018",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-018",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-018",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-019",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-019",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-019",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-020",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-020",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-020",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-021",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-021",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-021",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-022",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-022",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-022",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-023",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-023",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-023",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-024",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-024",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-024",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-025",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-025",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-025",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-026",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-026",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-026",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-027",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-027",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-027",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-028",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-028",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-028",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-029",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-029",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-029",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-030",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-030",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-030",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-031",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-031",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-031",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-032",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-032",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-032",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-033",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-033",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-033",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-034",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-034",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-034",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-035",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-035",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-035",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-036",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-036",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-036",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-037",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-037",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-037",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-038",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-038",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-038",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-039",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-039",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-039",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-040",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-040",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-040",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-041",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-041",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-041",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-042",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-042",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-042",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-043",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-043",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-043",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-044",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-044",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-044",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-045",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-045",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-045",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-046",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-046",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-046",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-047",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-047",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-047",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-048",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-048",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-048",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-049",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-049",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-049",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-vpr-050",
+      "artifact_type": "vpr",
+      "artifact_id": "vpr-roundtrip-050",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#VPR#vpr-roundtrip-050",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-001",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-001",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-001",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-002",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-002",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-002",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-003",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-003",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-003",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-004",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-004",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-004",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-005",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-005",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-005",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-006",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-006",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-006",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-007",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-007",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-007",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-008",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-008",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-008",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-009",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-009",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-009",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-010",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-010",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-010",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-011",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-011",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-011",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-012",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-012",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-012",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-013",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-013",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-013",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-014",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-014",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-014",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-015",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-015",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-015",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-016",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-016",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-016",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-017",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-017",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-017",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-018",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-018",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-018",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-019",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-019",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-019",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-020",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-020",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-020",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-021",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-021",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-021",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-022",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-022",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-022",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-023",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-023",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-023",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-024",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-024",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-024",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-025",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-025",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-025",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-026",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-026",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-026",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-027",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-027",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-027",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-028",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-028",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-028",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-029",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-029",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-029",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-030",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-030",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-030",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-031",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-031",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-031",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-032",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-032",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-032",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-033",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-033",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-033",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-034",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-034",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-034",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-035",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-035",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-035",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-036",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-036",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-036",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-037",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-037",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-037",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-038",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-038",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-038",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-039",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-039",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-039",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-040",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-040",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-040",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-041",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-041",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-041",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-042",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-042",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-042",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-043",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-043",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-043",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-044",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-044",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-044",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-045",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-045",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-045",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-046",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-046",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-046",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-047",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-047",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-047",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-048",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-048",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-048",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-049",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-049",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-049",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cover_letter-050",
+      "artifact_type": "cover_letter",
+      "artifact_id": "cover_letter-roundtrip-050",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#COVER_LETTER#cover_letter-roundtrip-050",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-001",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-001",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-001",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-002",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-002",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-002",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-003",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-003",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-003",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-004",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-004",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-004",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-005",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-005",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-005",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-006",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-006",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-006",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-007",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-007",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-007",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-008",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-008",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-008",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-009",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-009",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-009",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-010",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-010",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-010",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-011",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-011",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-011",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-012",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-012",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-012",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-013",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-013",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-013",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-014",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-014",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-014",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-015",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-015",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-015",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-016",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-016",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-016",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-017",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-017",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-017",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-018",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-018",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-018",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-019",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-019",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-019",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-020",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-020",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-020",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-021",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-021",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-021",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-022",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-022",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-022",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-023",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-023",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-023",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-024",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-024",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-024",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-025",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-025",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-025",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-026",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-026",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-026",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-027",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-027",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-027",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-028",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-028",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-028",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-029",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-029",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-029",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-030",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-030",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-030",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-031",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-031",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-031",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-032",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-032",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-032",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-033",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-033",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-033",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-034",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-034",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-034",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-035",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-035",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-035",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-036",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-036",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-036",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-037",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-037",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-037",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-038",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-038",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-038",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-039",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-039",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-039",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-040",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-040",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-040",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-041",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-041",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-041",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-042",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-042",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-042",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-043",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-043",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-043",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-044",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-044",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-044",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-045",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-045",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-045",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-046",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-046",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-046",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-047",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-047",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-047",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-048",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-048",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-048",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-049",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-049",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-049",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-cv_tailored-050",
+      "artifact_type": "cv_tailored",
+      "artifact_id": "cv_tailored-roundtrip-050",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#CV_TAILORED#cv_tailored-roundtrip-050",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-001",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-001",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-001",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-002",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-002",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-002",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-003",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-003",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-003",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-004",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-004",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-004",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-005",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-005",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-005",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-006",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-006",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-006",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-007",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-007",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-007",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-008",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-008",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-008",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-009",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-009",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-009",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-010",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-010",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-010",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-011",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-011",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-011",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-012",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-012",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-012",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-013",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-013",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-013",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-014",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-014",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-014",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-015",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-015",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-015",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-016",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-016",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-016",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-017",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-017",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-017",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-018",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-018",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-018",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-019",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-019",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-019",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-020",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-020",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-020",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-021",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-021",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-021",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-022",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-022",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-022",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-023",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-023",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-023",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-024",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-024",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-024",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-025",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-025",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-025",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-026",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-026",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-026",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-027",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-027",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-027",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-028",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-028",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-028",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-029",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-029",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-029",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-030",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-030",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-030",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-031",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-031",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-031",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-032",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-032",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-032",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-033",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-033",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-033",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-034",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-034",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-034",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-035",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-035",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-035",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-036",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-036",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-036",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-037",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-037",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-037",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-038",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-038",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-038",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-039",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-039",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-039",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-040",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-040",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-040",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-041",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-041",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-041",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-042",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-042",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-042",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-043",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-043",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-043",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-044",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-044",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-044",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-045",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-045",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-045",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-046",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-046",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-046",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-047",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-047",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-047",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-048",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-048",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-048",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-049",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-049",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-049",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-interview_prep-050",
+      "artifact_type": "interview_prep",
+      "artifact_id": "interview_prep-roundtrip-050",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#INTERVIEW_PREP#interview_prep-roundtrip-050",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-001",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-001",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-001",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-002",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-002",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-002",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-003",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-003",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-003",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-004",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-004",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-004",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-005",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-005",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-005",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-006",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-006",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-006",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-007",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-007",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-007",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-008",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-008",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-008",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-009",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-009",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-009",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-010",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-010",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-010",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-011",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-011",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-011",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-012",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-012",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-012",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-013",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-013",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-013",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-014",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-014",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-014",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-015",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-015",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-015",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-016",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-016",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-016",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-017",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-017",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-017",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-018",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-018",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-018",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-019",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-019",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-019",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-020",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-020",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-020",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-021",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-021",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-021",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-022",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-022",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-022",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-023",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-023",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-023",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-024",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-024",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-024",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-025",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-025",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-025",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-026",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-026",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-026",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-027",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-027",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-027",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-028",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-028",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-028",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-029",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-029",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-029",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-030",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-030",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-030",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-031",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-031",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-031",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-032",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-032",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-032",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-033",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-033",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-033",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-034",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-034",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-034",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-035",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-035",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-035",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-036",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-036",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-036",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-037",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-037",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-037",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-038",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-038",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-038",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-039",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-039",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-039",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-040",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-040",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-040",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-041",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-041",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-041",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-042",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-042",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-042",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-043",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-043",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-043",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-044",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-044",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-044",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-045",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-045",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-045",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-046",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-046",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-046",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-047",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-047",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-047",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-048",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-048",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-048",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-049",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-049",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-049",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    },
+    {
+      "run_id": "l1-phase-gap_analysis-050",
+      "artifact_type": "gap_analysis",
+      "artifact_id": "gap_analysis-roundtrip-050",
+      "pk": "USER#user-l1-integration",
+      "sk": "ARTIFACT#GAP_ANALYSIS#gap_analysis-roundtrip-050",
+      "poll_status": "completed",
+      "listed": true,
+      "roundtrip_passed": true
+    }
+  ]
+}

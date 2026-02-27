@@ -66,7 +66,17 @@ def jobs_table() -> Generator[Any, None, None]:
         table = dynamodb.create_table(
             TableName='test-jobs-table',
             KeySchema=[{'AttributeName': 'job_id', 'KeyType': 'HASH'}],
-            AttributeDefinitions=[{'AttributeName': 'job_id', 'AttributeType': 'S'}],
+            AttributeDefinitions=[
+                {'AttributeName': 'job_id', 'AttributeType': 'S'},
+                {'AttributeName': 'user_id', 'AttributeType': 'S'},
+            ],
+            GlobalSecondaryIndexes=[
+                {
+                    'IndexName': 'user_id-index',
+                    'KeySchema': [{'AttributeName': 'user_id', 'KeyType': 'HASH'}],
+                    'Projection': {'ProjectionType': 'ALL'},
+                },
+            ],
             BillingMode='PAY_PER_REQUEST',
         )
         table.meta.client.get_waiter('table_exists').wait(TableName='test-jobs-table')

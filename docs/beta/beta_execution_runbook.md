@@ -470,6 +470,8 @@ OUTPUT FORMAT:
 ### Phase 1 Integration Test
 
 **Description:** Run all 5 generators, scan all outputs for template patterns, assert 0 matches
+**Status:** ✅ Completed (2026-02-27, integration audit GREEN on `beta/exec-runbk`)
+**Execution Result:** `docs/beta/execution_results/L0_phase_integration_results.md`
 
 **TEST:** `src/backend/tests/integration/test_l0_phase_integration.py`
 **PAYLOAD:** `docs/refactor/payloads/beta_l0_generators_test.json` (key: `phase_integration_test`)
@@ -498,6 +500,8 @@ cd src/backend && uv run pytest tests/integration/test_l0_phase_integration.py -
 **Duration:** 2 hours
 **Invariant(s) Satisfied:** I2 (partial — persistence write)
 **Precondition(s) Resolved:** PC2 (partial)
+**Status:** ✅ Completed (2026-02-27, test-first RED → GREEN on `beta/exec-runbk`)
+**Execution Result:** `docs/beta/execution_results/L1_1_results.md`
 
 **READ FIRST:**
 - `@spec docs/best_practices/yaml/dynamodb_modeling_spec.yaml`
@@ -587,6 +591,8 @@ OUTPUT FORMAT:
 **Duration:** 1.5 hours
 **Invariant(s) Satisfied:** I2 (silent failure eliminated)
 **Precondition(s) Resolved:** PC6
+**Status:** ✅ Completed (2026-02-27, strict test-first validation GREEN on `beta/exec-runbk`)
+**Execution Result:** `docs/beta/execution_results/L1_2_results.md`
 
 **READ FIRST:**
 - `@spec docs/best_practices/yaml/dynamodb_modeling_spec.yaml`
@@ -652,6 +658,8 @@ OUTPUT FORMAT:
 **Duration:** 30 minutes
 **Invariant(s) Satisfied:** I2 (health check accuracy)
 **Precondition(s) Resolved:** PC5
+**Status:** ✅ Completed (2026-02-27, strict test-first validation GREEN on `beta/exec-runbk`)
+**Execution Result:** `docs/beta/execution_results/L1_3_results.md`
 
 **READ FIRST:**
 - `@spec docs/best_practices/yaml/lambda_handler_spec.yaml`
@@ -715,6 +723,8 @@ OUTPUT FORMAT:
 **Duration:** 1 hour
 **Invariant(s) Satisfied:** I2 (list endpoint roundtrip)
 **Precondition(s) Resolved:** PC2
+**Status:** ✅ Completed (2026-02-27, strict test-first validation GREEN on `beta/exec-runbk`)
+**Execution Result:** `docs/beta/execution_results/L1_4_results.md`
 
 **READ FIRST:**
 - `@spec docs/best_practices/yaml/dynamodb_modeling_spec.yaml`
@@ -780,6 +790,8 @@ OUTPUT FORMAT:
 ### Phase 2 Integration Test
 
 **Description:** Generate artifact → poll complete → list → assert artifact_id in response
+**Status:** ✅ Completed (2026-02-27, strict test-first integration GREEN on `beta/exec-runbk`)
+**Execution Result:** `docs/beta/execution_results/L1_phase_integration_results.md`
 
 **TEST:** `src/backend/tests/integration/test_l1_phase_integration.py`
 **PAYLOAD:** `docs/refactor/payloads/beta_l1_persistence_test.json` (key: `phase_integration_test`)
@@ -2329,8 +2341,8 @@ python scripts/generate_evidence_bundle.py --env staging --runs 50
 
 | Phase | Layer | Steps | Integration Test | Evidence | Status |
 |-------|-------|-------|------------------|----------|--------|
-| Phase 1: Generator Reality | L0 | L0.1–L0.5 | ✓ test_l0_phase_integration.py | E1 | 🟡 In progress (L0.1–L0.5 complete, phase integration pending) |
-| Phase 2: Persistence | L1 | L1.1–L1.4 | ✓ test_l1_phase_integration.py | E2 | ⬜ |
+| Phase 1: Generator Reality | L0 | L0.1–L0.5 | ✓ test_l0_phase_integration.py | E1 | ✅ Completed (L0.1–L0.5 + integration + E1 evidence) |
+| Phase 2: Persistence | L1 | L1.1–L1.4 | ✓ test_l1_phase_integration.py | E2 | ✅ Completed (L1.1–L1.4 + integration + E2 evidence) |
 | Phase 3: Auth Migration | L2 | L2.1–L2.5 | ✓ test_l2_auth_integration.py | E3, E4 | ⬜ |
 | Phase 4: Application State | L3 | L3.1–L3.4 | ✓ test_l3_state_recovery.py | E6 (partial) | ⬜ |
 | Phase 5: Trial Enforcement | L5 | L5.1–L5.4 | ✓ test_l5_trial_integration.py | E5 | ⬜ |
