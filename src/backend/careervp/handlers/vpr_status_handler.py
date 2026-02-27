@@ -2,8 +2,8 @@
 VPR Status Handler for Async Architecture.
 
 Endpoints:
-- GET /vpr/{vprId}
-- GET /users/me/vprs
+- GET /vpr/{job_id}/status
+- GET /vprs
 Flow:
   1. Authenticate request
   2. Fetch VPR job(s) from DynamoDB
@@ -212,6 +212,8 @@ def _extract_vpr_id(event: dict[str, Any]) -> str | None:
     path_value = str(event.get('path', ''))
     if path_value.startswith('/vpr/'):
         candidate = path_value.removeprefix('/vpr/').strip('/')
+        if candidate.endswith('/status'):
+            candidate = candidate[: -len('/status')]
         if candidate:
             return candidate
     return None
@@ -220,7 +222,7 @@ def _extract_vpr_id(event: dict[str, Any]) -> str | None:
 def _is_list_user_vprs_request(event: dict[str, Any]) -> bool:
     method = str(event.get('httpMethod', '')).upper()
     path = str(event.get('path', '')).rstrip('/')
-    return method == 'GET' and path == '/users/me/vprs'
+    return method == 'GET' and path in {'/users/me/vprs', '/vprs'}
 
 
 def _parse_limit(event: dict[str, Any]) -> int:

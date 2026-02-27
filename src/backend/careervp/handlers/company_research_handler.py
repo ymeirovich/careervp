@@ -46,6 +46,10 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         metrics.add_metric(name='CompanyResearchGetRequests', unit=MetricUnit.Count, value=1)
         return get_company_research(event)
 
+    if method == 'GET' and path == '/knowledge-base':
+        metrics.add_metric(name='KnowledgeBaseGetRequests', unit=MetricUnit.Count, value=1)
+        return get_knowledge_base(event)
+
     if method == 'POST':
         metrics.add_metric(name='CompanyResearchRequests', unit=MetricUnit.Count, value=1)
         return _fetch_company_research(event)
@@ -169,6 +173,27 @@ def get_company_research(event: dict[str, Any]) -> dict[str, Any]:
     return _build_response(HTTPStatus.OK, payload)
 
 
+def get_knowledge_base(event: dict[str, Any]) -> dict[str, Any]:
+    """Handle GET /knowledge-base requests."""
+    user_id = _extract_authenticated_user_id(event)
+    if not user_id:
+        return _build_response(
+            HTTPStatus.UNAUTHORIZED,
+            {
+                'error': 'Missing or invalid authentication token',
+                'code': ResultCode.UNAUTHORIZED,
+            },
+        )
+
+    return _build_response(
+        HTTPStatus.OK,
+        {
+            'entries': [],
+            'count': 0,
+        },
+    )
+
+
 def _parse_raw_payload(event: dict[str, Any]) -> Result[dict[str, Any]]:
     body_content = event.get('body', '{}')
     try:
@@ -220,7 +245,7 @@ def _extract_authenticated_user_id(event: dict[str, Any]) -> str | None:
 def _extract_job_id(event: dict[str, Any]) -> str | None:
     path_parameters = event.get('pathParameters')
     if isinstance(path_parameters, dict):
-        for key in ('jobId', 'job_id'):
+        for key in ('jobId', 'job_id', 'company_name', 'companyName'):
             value = path_parameters.get(key)
             if isinstance(value, str) and value.strip():
                 return value.strip()

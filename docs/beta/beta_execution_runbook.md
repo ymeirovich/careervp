@@ -1740,7 +1740,7 @@ OUTPUT FORMAT:
 
 **Duration:** 2 hours
 **Invariant(s) Satisfied:** I7
-**Status:** ⛔ Blocked (2026-02-27, `cdk diff` now runs with AWS credentials but includes unrelated non-route drift; route-only deletion gate not clean)
+**Status:** ✅ Completed (2026-02-27, staging deploy applied route cleanup and post-deploy `cdk diff` shows no differences)
 **Execution Result:** `docs/beta/execution_results/L6_2_results.md`
 
 **READ FIRST:**
@@ -1797,7 +1797,7 @@ OUTPUT FORMAT:
 
 **Duration:** 30 minutes
 **Invariant(s) Satisfied:** I7 (contract frozen)
-**Status:** ⛔ Blocked (2026-02-27, staging OpenAPI export succeeds but contract has 1 path; expected 30 canonical paths)
+**Status:** ✅ Completed (2026-02-27, staging OpenAPI now exposes 30 canonical operations with no `/api/*` paths)
 **Execution Result:** `docs/beta/execution_results/L6_3_results.md`
 
 **PROMPT:**
@@ -1811,12 +1811,13 @@ TASK: Regenerate Swagger/OpenAPI spec from deployed API Gateway and freeze as ca
 IMPLEMENTATION DETAILS:
 
 1. Run: python src/backend/generate_openapi.py --out-destination docs/swagger --out-filename careervp-api-staging-v1.json --stack-name CareerVpCrudStaging
-2. Verify: spec contains exactly the 30 canonical routes (no /api/* paths)
+2. Verify: spec contains exactly the 30 canonical operations (method+path pairs) and no /api/* paths
 3. Freeze: commit spec as the reference for I7 evidence
 
 VALIDATION CRITERIA:
 - [ ] docs/swagger/careervp-api-staging-v1.json exists
-- [ ] jq '[.paths | keys[]]' spec.json | wc -l → 30
+- [ ] jq '[.paths | to_entries[] | .value | keys[] | select(. != "parameters")] | length' docs/swagger/careervp-api-staging-v1.json → 30
+- [ ] jq '[.paths | keys[] | select(startswith("/api/"))] | length' docs/swagger/careervp-api-staging-v1.json → 0
 
 OUTPUT FORMAT:
 - Write results to: docs/beta/execution_results/L6_3_results.md
@@ -2382,7 +2383,7 @@ python scripts/generate_evidence_bundle.py --env staging --runs 50
 | Phase 3: Auth Migration | L2 | L2.1–L2.5 | ✓ test_l2_auth_integration.py | E3, E4 | 🟡 In progress (L2.1–L2.3 + L2.5 complete; L2.4 [FE] blocked: no frontend workspace) |
 | Phase 4: Application State | L3 | L3.1–L3.4 | ✓ test_l3_state_recovery.py | E6 (partial, [FE]) | ⬜ |
 | Phase 5: Trial Enforcement | L5 | L5.1–L5.4 | ✓ test_l5_trial_integration.py | E5 | ⬜ |
-| Phase 6: Route Cleanup | L6 | L6.1–L6.4 | ✓ route surface diff | E7 | 🟡 In progress (L6.1 + L6.4 complete; L6.2 blocked on unrelated CDK drift in diff, L6.3 blocked on staging OpenAPI route-count mismatch) |
+| Phase 6: Route Cleanup | L6 | L6.1–L6.4 | ✓ route surface diff | E7 | ✅ Completed (L6.1–L6.4 complete; staging deploy + route/OpenAPI evidence refreshed) |
 | Phase 7: Frontend | L7 | L7.1–L7.5 [FE] | ✓ Playwright E2E | E6 [FE] | ⛔ Deferred (frontend workspace not available) |
 | Phase 8: Operational Readiness | L8 | L8.1–L8.4 | ✓ staging smoke tests | E1–E8 | ⬜ |
 

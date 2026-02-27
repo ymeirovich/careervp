@@ -67,7 +67,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
                 headers,
             )
 
-    if method == 'GET' and path == '/users/me/tailored-cvs':
+    if method == 'GET' and path in {'/users/me/tailored-cvs', '/cv-tailorings'}:
         return list_tailored_cvs(event)
 
     if method != 'POST':
@@ -420,7 +420,7 @@ def _is_tailoring_status_path(path: str) -> bool:
 def _extract_cv_tailoring_id(event: dict[str, Any]) -> str | None:
     path_parameters = event.get('pathParameters')
     if isinstance(path_parameters, dict):
-        for key in ('cvTailoringId', 'cv_tailoring_id', 'id'):
+        for key in ('cvTailoringId', 'cv_tailoring_id', 'id', 'job_id', 'jobId'):
             value = path_parameters.get(key)
             if isinstance(value, str) and value.strip():
                 return value.strip()
@@ -428,6 +428,8 @@ def _extract_cv_tailoring_id(event: dict[str, Any]) -> str | None:
     path = str(event.get('path', '')).rstrip('/')
     if path.startswith('/cv-tailoring/'):
         candidate = path.removeprefix('/cv-tailoring/').strip()
+        if candidate.endswith('/status'):
+            candidate = candidate[: -len('/status')]
         if candidate and candidate != 'generate':
             return candidate
     return None

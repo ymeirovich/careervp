@@ -31,13 +31,13 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     if method == 'OPTIONS':
         return _json_response(HTTPStatus.OK, {'status': 'ok'})
 
-    if method == 'POST' and path == '/gap-analysis/questions':
+    if method == 'POST' and (path == '/gap-analysis/questions' or _is_post_questions_path(path)):
         return generate_questions(event)
 
     if method == 'GET' and _is_get_questions_path(path):
         return get_questions(event)
 
-    if method == 'POST' and path == '/gap-analysis/responses':
+    if method == 'POST' and (path == '/gap-analysis/responses' or _is_post_responses_path(path)):
         return submit_response(event)
 
     if method == 'GET' and _is_get_responses_path(path):
@@ -81,7 +81,7 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:
         openapi_request = GapQuestionRequest.model_validate(
             {
                 'cv_id': payload.get('cv_id'),
-                'job_id': payload.get('job_id') or payload.get('application_id'),
+                'job_id': payload.get('job_id') or payload.get('application_id') or _extract_job_id(event),
                 'max_questions': payload.get('max_questions', 10),
                 'focus_areas': payload.get('focus_areas', []),
             }
@@ -216,7 +216,7 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
     if not user_id:
         return _error_response(HTTPStatus.UNAUTHORIZED, 'Missing user identity', ResultCode.UNAUTHORIZED)
 
-    job_id = _coerce_str(payload.get('job_id') or payload.get('application_id'))
+    job_id = _coerce_str(payload.get('job_id') or payload.get('application_id') or _extract_job_id(event))
     if not job_id:
         return _error_response(HTTPStatus.BAD_REQUEST, 'job_id is required', ResultCode.MISSING_REQUIRED_FIELD)
 
@@ -348,6 +348,9 @@ def _extract_job_id(event: dict[str, Any]) -> str | None:
             return parts[2]
         if len(parts) >= 3 and parts[2] in {'questions', 'responses'}:
             return parts[1]
+    if len(parts) >= 4 and parts[0] == 'jobs':
+        if parts[2] in {'gap-questions', 'gap-responses'}:
+            return parts[1]
     return None
 
 
@@ -356,11 +359,23 @@ def _is_get_questions_path(path: str) -> bool:
         return True
 
     parts = path.strip('/').split('/')
-    return len(parts) == 3 and parts[0] == 'gap-analysis' and parts[2] == 'questions'
+    if len(parts) == 3 and parts[0] == 'gap-analysis' and parts[2] == 'questions':
+        return True
+    return len(parts) == 3 and parts[0] == 'jobs' and parts[2] == 'gap-questions'
 
 
 def _is_get_responses_path(path: str) -> bool:
     return path.startswith('/gap-analysis/responses/')
+
+
+def _is_post_questions_path(path: str) -> bool:
+    parts = path.strip('/').split('/')
+    return len(parts) == 3 and parts[0] == 'jobs' and parts[2] == 'gap-questions'
+
+
+def _is_post_responses_path(path: str) -> bool:
+    parts = path.strip('/').split('/')
+    return len(parts) == 3 and parts[0] == 'jobs' and parts[2] == 'gap-responses'
 
 
 def _coerce_str(value: Any) -> str | None:

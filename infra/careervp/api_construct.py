@@ -761,13 +761,8 @@ class ApiConstruct(Construct):
             architecture=_lambda.Architecture.X86_64,
         )
 
-        # POST /api/cv - CV upload endpoint
-        api_resource.add_method(
-            http_method="POST",
-            integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
-            authorizer=self.api_authorizer,
-            authorization_type=aws_apigateway.AuthorizationType.COGNITO,
-        )
+        # Legacy /api/* routes removed. Canonical route registration lives in
+        # _add_openapi_contract_routes().
         return lambda_function
 
     def _add_vpr_lambda_integration(
@@ -816,13 +811,8 @@ class ApiConstruct(Construct):
             architecture=_lambda.Architecture.X86_64,
         )
 
-        api_resource.add_method(
-            http_method="POST",
-            integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
-            authorizer=self.api_authorizer,
-            authorization_type=aws_apigateway.AuthorizationType.COGNITO,
-        )
-
+        # Legacy /api/* routes removed. Canonical route registration lives in
+        # _add_openapi_contract_routes().
         return lambda_function
 
     def _add_company_research_lambda_integration(
@@ -870,13 +860,8 @@ class ApiConstruct(Construct):
             architecture=_lambda.Architecture.X86_64,
         )
 
-        api_resource.add_method(
-            http_method="POST",
-            integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
-            authorizer=self.api_authorizer,
-            authorization_type=aws_apigateway.AuthorizationType.COGNITO,
-        )
-
+        # Legacy /api/* routes removed. Canonical route registration lives in
+        # _add_openapi_contract_routes().
         return lambda_function
 
     def _build_vpr_jobs_queue(self, dlq: aws_sqs.Queue) -> aws_sqs.Queue:
@@ -974,14 +959,8 @@ class ApiConstruct(Construct):
             architecture=_lambda.Architecture.X86_64,
         )
 
-        # POST /api/vpr
-        api_resource.add_method(
-            http_method="POST",
-            integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
-            authorizer=self.api_authorizer,
-            authorization_type=aws_apigateway.AuthorizationType.COGNITO,
-        )
-
+        # Legacy /api/* routes removed. Canonical route registration lives in
+        # _add_openapi_contract_routes().
         return lambda_function
 
     def _add_vpr_status_lambda_integration(
@@ -1034,14 +1013,8 @@ class ApiConstruct(Construct):
             architecture=_lambda.Architecture.X86_64,
         )
 
-        # GET /api/vpr/status/{job_id}
-        api_resource.add_method(
-            http_method="GET",
-            integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
-            authorizer=self.api_authorizer,
-            authorization_type=aws_apigateway.AuthorizationType.COGNITO,
-        )
-
+        # Legacy /api/* routes removed. Canonical route registration lives in
+        # _add_openapi_contract_routes().
         return lambda_function
 
     def _add_vpr_sqs_worker_lambda_integration(
@@ -1449,14 +1422,8 @@ class ApiConstruct(Construct):
             architecture=_lambda.Architecture.X86_64,
         )
 
-        # POST /api/cv-tailoring
-        api_resource.add_method(
-            http_method="POST",
-            integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
-            authorizer=self.api_authorizer,
-            authorization_type=aws_apigateway.AuthorizationType.COGNITO,
-        )
-
+        # Legacy /api/* routes removed. Canonical route registration lives in
+        # _add_openapi_contract_routes().
         return lambda_function
 
     def _add_auth_lambda(self) -> _lambda.Function:
@@ -1773,35 +1740,38 @@ class ApiConstruct(Construct):
         )
 
     def _add_openapi_contract_routes(self) -> None:
-        # OpenAPI route migration (stage `/v1` remains API Gateway concern).
+        # Canonical route surface (I7): exactly 30 method+path operations.
         route_map: list[tuple[str, str, _lambda.Function]] = [
+            ("/health", "GET", self.health_api_func),
             ("/auth/register", "POST", self.auth_api_func),
             ("/auth/login", "POST", self.auth_api_func),
             ("/auth/refresh", "POST", self.auth_api_func),
             ("/users/me", "GET", self.user_api_func),
             ("/users/me", "PUT", self.user_api_func),
+            ("/users/me/usage", "GET", self.user_api_func),
             ("/users/me/cv", "POST", self.cv_upload_func),
-            ("/users/me/cvs", "GET", self.user_api_func),
+            ("/users/me/cv", "GET", self.user_api_func),
             ("/jobs", "POST", self.job_api_func),
             ("/jobs", "GET", self.job_api_func),
             ("/jobs/{jobId}", "GET", self.job_api_func),
+            ("/jobs/{jobId}/gap-questions", "POST", self.gap_api_func),
+            ("/jobs/{jobId}/gap-questions", "GET", self.gap_api_func),
+            ("/jobs/{jobId}/gap-responses", "POST", self.gap_api_func),
+            ("/applications/{application_id}", "GET", self.job_api_func),
             ("/vpr/generate", "POST", self.vpr_submit_func),
-            ("/vpr/{vprId}", "GET", self.vpr_status_func),
-            ("/users/me/vprs", "GET", self.vpr_status_func),
-            ("/gap-analysis/questions", "POST", self.gap_api_func),
-            ("/gap-analysis/responses", "POST", self.gap_api_func),
-            ("/gap-analysis/{jobId}/questions", "GET", self.gap_api_func),
+            ("/vpr/{vprId}/status", "GET", self.vpr_status_func),
+            ("/vprs", "GET", self.vpr_status_func),
             ("/cv-tailoring/generate", "POST", self.cv_tailoring_func),
-            ("/cv-tailoring/{cvTailoringId}", "GET", self.cv_tailoring_func),
-            ("/users/me/tailored-cvs", "GET", self.cv_tailoring_func),
+            ("/cv-tailoring/{cvTailoringId}/status", "GET", self.cv_tailoring_func),
+            ("/cv-tailorings", "GET", self.cv_tailoring_func),
             ("/cover-letter/generate", "POST", self.cover_letter_api_func),
-            ("/cover-letter/{coverLetterId}", "GET", self.cover_letter_api_func),
-            ("/users/me/cover-letters", "GET", self.cover_letter_api_func),
+            ("/cover-letter/{coverLetterId}/status", "GET", self.cover_letter_api_func),
+            ("/cover-letters", "GET", self.cover_letter_api_func),
             ("/interview-prep/generate", "POST", self.interview_prep_api_func),
-            ("/interview-prep/{interviewPrepId}", "GET", self.interview_prep_api_func),
-            ("/company-research/fetch", "POST", self.company_research_func),
+            ("/interview-prep/{interviewPrepId}/status", "GET", self.interview_prep_api_func),
+            ("/interview-preps", "GET", self.interview_prep_api_func),
             ("/company-research/{jobId}", "GET", self.company_research_func),
-            ("/health", "GET", self.health_api_func),
+            ("/knowledge-base", "GET", self.company_research_func),
         ]
         for path, method, handler in route_map:
             self._add_route_method(path, method, handler)
