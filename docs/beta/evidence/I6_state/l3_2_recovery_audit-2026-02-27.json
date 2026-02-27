@@ -1,0 +1,46 @@
+{
+  "step_id": "L3.2",
+  "date": "2026-02-27",
+  "invariant": "I6",
+  "status": "PASS",
+  "strict_test_first": {
+    "red": {
+      "command": "cd src/backend && uv run pytest tests/unit/test_l3_application_recovery.py -v --tb=short",
+      "result": "FAILED",
+      "failure": "ModuleNotFoundError: No module named 'careervp.handlers.application_handler'"
+    },
+    "green": {
+      "command": "cd src/backend && uv run pytest tests/unit/test_l3_application_recovery.py -v --tb=short",
+      "result": "PASSED",
+      "summary": {
+        "passed": 10,
+        "failed": 0,
+        "errors": 0
+      }
+    }
+  },
+  "validation": {
+    "ruff": {
+      "command": "cd src/backend && uv run ruff check careervp/handlers/application_handler.py",
+      "result": "PASSED"
+    },
+    "mypy": {
+      "command": "cd src/backend && uv run mypy careervp/handlers/application_handler.py --strict",
+      "result": "PASSED"
+    }
+  },
+  "api_route": {
+    "path": "/applications/{application_id}",
+    "method": "GET",
+    "registered_in": "infra/careervp/api_construct.py"
+  },
+  "security_checks": {
+    "identity_source": "requestContext.authorizer.claims.sub / jwt.claims.sub",
+    "ownership_enforced": true
+  },
+  "artifacts": [
+    "src/backend/careervp/handlers/application_handler.py",
+    "src/backend/tests/unit/test_l3_application_recovery.py",
+    "infra/careervp/api_construct.py"
+  ]
+}

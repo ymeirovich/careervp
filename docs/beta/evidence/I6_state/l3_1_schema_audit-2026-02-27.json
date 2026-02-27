@@ -1,0 +1,48 @@
+{
+  "step_id": "L3.1",
+  "date": "2026-02-27",
+  "invariant": "I6",
+  "status": "PASS",
+  "strict_test_first": {
+    "red": {
+      "command": "cd src/backend && uv run pytest tests/unit/test_l3_application_schema.py -v --tb=short",
+      "result": "FAILED",
+      "failure": "ModuleNotFoundError: No module named 'careervp.models.application'"
+    },
+    "green": {
+      "command": "cd src/backend && uv run pytest tests/unit/test_l3_application_schema.py -v --tb=short",
+      "result": "PASSED",
+      "summary": {
+        "passed": 22,
+        "failed": 0,
+        "errors": 0
+      }
+    }
+  },
+  "validation": {
+    "ruff": {
+      "command": "cd src/backend && uv run ruff check careervp/dal/application_repository.py",
+      "result": "PASSED"
+    },
+    "mypy": {
+      "command": "cd src/backend && uv run mypy careervp/dal/application_repository.py --strict",
+      "result": "PASSED"
+    }
+  },
+  "schema_checks": {
+    "pk_format": "USER#{user_id}",
+    "sk_format": "APP#{application_id}",
+    "state_index": {
+      "file": "infra/careervp/api_db_construct.py",
+      "index_name": "state-index",
+      "partition_key": "state",
+      "sort_key": "updated_at"
+    }
+  },
+  "artifacts": [
+    "src/backend/careervp/dal/application_repository.py",
+    "src/backend/careervp/models/application.py",
+    "src/backend/tests/unit/test_l3_application_schema.py",
+    "infra/careervp/api_db_construct.py"
+  ]
+}

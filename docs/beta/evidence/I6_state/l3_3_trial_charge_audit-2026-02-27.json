@@ -1,0 +1,50 @@
+{
+  "step_id": "L3.3",
+  "date": "2026-02-27",
+  "invariants": [
+    "I5",
+    "I6"
+  ],
+  "status": "PASS",
+  "strict_test_first": {
+    "red": {
+      "command": "cd src/backend && uv run pytest tests/unit/test_l3_trial_credit_charging.py -v --tb=short",
+      "result": "FAILED",
+      "failure": "ImportError: cannot import name 'TrialExhaustedException' from 'careervp.logic.trial_service'"
+    },
+    "green": {
+      "command": "cd src/backend && uv run pytest tests/unit/test_l3_trial_credit_charging.py -v --tb=short",
+      "result": "PASSED",
+      "summary": {
+        "passed": 6,
+        "failed": 0,
+        "errors": 0
+      }
+    }
+  },
+  "validation": {
+    "ruff": {
+      "command": "cd src/backend && uv run ruff check careervp/logic/trial_service.py",
+      "result": "PASSED"
+    },
+    "mypy": {
+      "command": "cd src/backend && uv run mypy careervp/logic/trial_service.py --strict",
+      "result": "PASSED"
+    }
+  },
+  "ordering_assertions": {
+    "enforcement_route": "POST /jobs/{job_id}/gap-questions",
+    "order": [
+      "check_trial_status",
+      "consume_credit",
+      "state->gap_questions_pending",
+      "generate_gap_questions",
+      "state->gap_questions_ready"
+    ]
+  },
+  "artifacts": [
+    "src/backend/careervp/logic/trial_service.py",
+    "src/backend/careervp/handlers/gap_handler.py",
+    "src/backend/tests/unit/test_l3_trial_credit_charging.py"
+  ]
+}
