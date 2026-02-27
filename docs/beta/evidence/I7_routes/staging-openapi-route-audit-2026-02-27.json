@@ -1,0 +1,8 @@
+{
+  "generated_file": "docs/swagger/careervp-api-staging-v1.json",
+  "route_count": 1,
+  "has_api_prefix": false,
+  "paths": [
+    "/users/me/cv"
+  ]
+}

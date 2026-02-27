@@ -3,7 +3,7 @@
 **Date:** 2026-02-27  
 **Step:** L6.3  
 **Invariant:** I7  
-**Status:** ⛔ Blocked (staging OpenAPI fetch unavailable in this environment)
+**Status:** ⛔ Blocked (staging OpenAPI fetch works, but route count is 1; expected 30 canonical routes)
 
 ## Compliance Rules Reviewed
 
@@ -15,15 +15,23 @@
 
 ## Validation Executed
 
-- Attempted generation from deployed/staging stack:
+- Attempt with runbook stack name:
   - `python src/backend/generate_openapi.py --out-destination docs/swagger --out-filename careervp-api-staging-v1.json --stack-name CareervpStack-staging`
-  - Result: failed (`EndpointConnectionError` to CloudFormation endpoint)
+  - Result: failed (`ValidationError`: stack does not exist)
+- Regeneration from actual staging stack:
+  - `python src/backend/generate_openapi.py --out-destination docs/swagger --out-filename careervp-api-staging-v1.json --stack-name CareerVpCrudStaging`
+  - Result: success (`Swagger JSON saved to docs/swagger/careervp-api-staging-v1.json`)
+- Contract checks:
+  - `jq '.paths | keys | length' docs/swagger/careervp-api-staging-v1.json` -> `1`
+  - `jq -r '.paths | keys[]' docs/swagger/careervp-api-staging-v1.json | rg '^/api/'` -> no matches
+  - Evidence: `docs/beta/evidence/I7_routes/staging-openapi-route-audit-2026-02-27.json`
 
 ## Local Artifact State
 
 - Existing file present: `docs/swagger/careervp-api-staging-v1.json`
-- This run did not successfully refresh it from deployed infrastructure.
+- File refreshed successfully from deployed staging stack.
+- Current staging contract contains only one path: `/users/me/cv`.
 
 ## Conclusion
 
-- L6.3 cannot be marked complete until the OpenAPI contract is regenerated from a reachable deployed API/stack and re-validated against canonical route criteria.
+- L6.3 remains blocked until deployed staging route surface matches the 30-route canonical contract required by I7.
