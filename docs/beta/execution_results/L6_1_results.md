@@ -4,4 +4,9 @@
 **Generated At (UTC):** 2026-02-27T19:46:50Z  
 **Branch:** `beta/exec-runbook6`
 
-## Commands\n- Generated `docs/beta/canonical_routes.md` from payload contract.\n- Validated exactly 30 canonical route lines.\n\n## Gate Result\n- PASS
+## Commands
+- Generated `docs/beta/canonical_routes.md` from payload contract.
+- Validated exactly 30 canonical route lines.
+
+## Gate Result
+- PASS
