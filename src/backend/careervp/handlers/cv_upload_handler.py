@@ -7,7 +7,6 @@ Handles CV upload requests, orchestrates parsing and storage.
 
 import base64
 import json
-import os
 import time
 import uuid
 from http import HTTPStatus
@@ -27,28 +26,19 @@ from botocore.exceptions import ClientError
 from pydantic import ValidationError as PydanticValidationError
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.models.env_vars import CVUploadEnvVars
 from careervp.handlers.utils.observability import logger, tracer
 from careervp.handlers.utils.rest_api_resolver import app
-from careervp.logic.auth_service import AuthService, ConfigurationError, InvalidTokenError
 from careervp.logic.cv_parser import create_cv_parse_response, parse_cv
 from careervp.models.api_models import CVUploadRequest
 from careervp.models.cv import CVParseRequest, CVParseResponse
 from careervp.models.result import ResultCode
 
-_auth_service: AuthService | None = None
-
 
 def _get_s3_client() -> BaseClient:
     """Get S3 client (separated for testability)."""
     return boto3.client('s3')
-
-
-def _get_auth_service() -> AuthService:
-    global _auth_service
-    if _auth_service is None:
-        _auth_service = AuthService.from_env()
-    return _auth_service
 
 
 @app.post('/users/me/cv')
@@ -249,8 +239,8 @@ def _normalize_request_payload(body: Any) -> dict[str, Any]:
     Normalize request payload to legacy CVParseRequest shape.
 
     Supports both:
-    - Legacy payload: {user_id, file_content|text_content, file_type}
-    - OpenAPI payload: {cv_content, file_name}
+    - Legacy request: {request_user, file_content|text_content, file_type}
+    - OpenAPI request: {cv_content, file_name}
     """
     if not isinstance(body, dict):
         raise TypeError('Request body must be a JSON object')
@@ -269,74 +259,22 @@ def _normalize_request_payload(body: Any) -> dict[str, Any]:
     return body
 
 
-def _extract_bearer_token() -> str | None:
-    headers = app.current_event.headers or {}
-    auth_header = None
-    for key, value in headers.items():
-        if isinstance(key, str) and key.lower() == 'authorization':
-            auth_header = value
-            break
-    if not isinstance(auth_header, str):
-        return None
-    if not auth_header.startswith('Bearer '):
-        return None
-    token = auth_header[7:].strip()
-    return token if token else None
-
-
 def _extract_user_id() -> str | None:
+    # Try raw_event first (contains original event dict)
+    raw_event = getattr(app.current_event, 'raw_event', None)
+    if isinstance(raw_event, dict):
+        user_id = extract_user_id(raw_event)
+        if user_id:
+            return user_id
+
+    # Fallback: try request_context (Powertools object)
     request_context = app.current_event.request_context
     if isinstance(request_context, dict):
-        authorizer = request_context.get('authorizer')
-        if isinstance(authorizer, dict):
-            authorizer_user_id = _extract_user_id_from_authorizer(authorizer)
-            if authorizer_user_id:
-                return authorizer_user_id
+        return extract_user_id({'requestContext': request_context})
 
-    token = _extract_bearer_token()
-    if token:
-        try:
-            payload = _get_auth_service().validate_token(token, expected_token_type='access')
-        except (InvalidTokenError, ConfigurationError):
-            payload = {}
-        user_id = payload.get('user_id') or payload.get('sub') if isinstance(payload, dict) else None
-        if isinstance(user_id, str) and user_id.strip():
-            return user_id.strip()
-
-    if os.getenv('ENV', '').strip().lower() == 'local':
-        headers = app.current_event.headers or {}
-        for key, value in headers.items():
-            if isinstance(key, str) and key.lower() == 'x-user-id' and isinstance(value, str) and value.strip():
-                return value.strip()
-    return None
-
-
-def _extract_user_id_from_authorizer(authorizer: dict[str, Any]) -> str | None:
-    claim_user_id = _extract_claim_user_id(authorizer.get('claims'))
-    if claim_user_id:
-        return claim_user_id
-
-    jwt_context = authorizer.get('jwt')
-    if isinstance(jwt_context, dict):
-        jwt_user_id = _extract_claim_user_id(jwt_context.get('claims'))
-        if jwt_user_id:
-            return jwt_user_id
-
-    for key in ('user_id', 'principalId', 'principal_id'):
-        value = authorizer.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
-
-
-def _extract_claim_user_id(claims: Any) -> str | None:
-    if not isinstance(claims, dict):
-        return None
-    for key in ('sub', 'user_id', 'cognito:username'):
-        value = claims.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
+    # Convert Powertools object to dict
+    rc_dict = dict(request_context)
+    return extract_user_id({'requestContext': rc_dict})
 
 
 def _get_status_code_for_result_code(code: str) -> int:

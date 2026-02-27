@@ -82,7 +82,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
         )
 
     try:
-        body = json.loads(event.get('body') or '{}')
+        request_data = json.loads(event.get('body') or '{}')
     except json.JSONDecodeError:
         return _response(
             HTTPStatus.BAD_REQUEST,
@@ -95,7 +95,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
         )
 
     try:
-        _validate_openapi_cv_tailoring_payload(body)
+        _validate_openapi_cv_tailoring_payload(request_data)
     except ValidationError as exc:
         return _response(
             HTTPStatus.BAD_REQUEST,
@@ -107,7 +107,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
             headers,
         )
 
-    user_id = _get_user_id(event, body)
+    user_id = _get_user_id(event, request_data)
     if not user_id:
         return _response(
             HTTPStatus.UNAUTHORIZED,
@@ -119,7 +119,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
             headers,
         )
 
-    if 'preferences' in body and not isinstance(body['preferences'], dict):
+    if 'preferences' in request_data and not isinstance(request_data['preferences'], dict):
         return _response(
             HTTPStatus.BAD_REQUEST,
             {
@@ -131,13 +131,13 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
         )
 
     # Detect which API flow is being used
-    using_new_api = {'cv_id', 'job_id', 'vpr_id'}.issubset(body)
+    using_new_api = {'cv_id', 'job_id', 'vpr_id'}.issubset(request_data)
     if using_new_api:
-        return _handle_openapi_async_generate(event, body, headers, user_id)
+        return _handle_openapi_async_generate(event, request_data, headers, user_id)
 
-    cv_id = body.get('cv_id')
-    job_id = body.get('job_id')
-    job_description = body.get('job_description')
+    cv_id = request_data.get('cv_id')
+    job_id = request_data.get('job_id')
+    job_description = request_data.get('job_description')
 
     # If using new API flow, fetch job_description from job_id
     # Note: using_new_api=True returns early via _handle_openapi_async_generate above;
@@ -177,8 +177,8 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
         )
 
     preferences = None
-    if isinstance(body.get('preferences'), dict):
-        preferences = TailoringPreferences(**body['preferences'])
+    if isinstance(request_data.get('preferences'), dict):
+        preferences = TailoringPreferences(**request_data['preferences'])
 
     request = TailorCVRequest(
         cv_id=cv_id,
@@ -229,14 +229,14 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
 def _handle_openapi_async_generate(
     event: dict[str, Any],
-    body: dict[str, Any],
+    request_data: dict[str, Any],
     headers: dict[str, str],
     user_id: str,
 ) -> dict[str, Any]:
     """Handle OpenAPI async cv-tailoring payloads with deterministic artifact writes."""
     _ = event
-    cv_id = str(body.get('cv_id') or '').strip()
-    job_id = str(body.get('job_id') or '').strip()
+    cv_id = str(request_data.get('cv_id') or '').strip()
+    job_id = str(request_data.get('job_id') or '').strip()
     if not cv_id or not job_id:
         return _response(
             HTTPStatus.BAD_REQUEST,
@@ -375,7 +375,7 @@ def _fetch_and_tailor_cv(request: TailorCVRequest) -> Result[Any]:
     if not request.user_id:
         return Result(
             success=False,
-            error="User ID is required",
+            error='User ID is required',
             code=ResultCode.MISSING_REQUIRED_FIELD,
         )
 
@@ -408,8 +408,8 @@ def _fetch_and_tailor_cv(request: TailorCVRequest) -> Result[Any]:
     )
 
 
-def _get_user_id(event: dict[str, Any], body: dict[str, Any] | None = None) -> str | None:
-    _ = body
+def _get_user_id(event: dict[str, Any], request_data: dict[str, Any] | None = None) -> str | None:
+    _ = request_data
     return extract_user_id(event)
 
 

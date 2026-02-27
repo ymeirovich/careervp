@@ -23,90 +23,17 @@ import boto3
 from aws_lambda_powertools.utilities.typing import LambdaContext
 
 from careervp.dal.jobs_repository import JobsRepository
+from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.utils.observability import logger, metrics, tracer
-from careervp.logic.auth_service import AuthService, ConfigurationError, InvalidTokenError
 
 JSON_HEADERS = {'Content-Type': 'application/json'}
 
 # Module-level S3 client for testing/mocking
 s3 = boto3.client('s3')
-_auth_service: AuthService | None = None
-
-
-def _get_auth_service() -> AuthService:
-    global _auth_service
-    if _auth_service is None:
-        _auth_service = AuthService.from_env()
-    return _auth_service
-
-
-def _extract_claim_user_id(claims: Any) -> str | None:
-    if not isinstance(claims, dict):
-        return None
-    for key in ('sub', 'user_id', 'cognito:username'):
-        value = claims.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
-
-
-def _extract_user_id_from_authorizer(event: dict[str, Any]) -> str | None:
-    request_context = event.get('requestContext')
-    if not isinstance(request_context, dict):
-        return None
-
-    authorizer = request_context.get('authorizer')
-    if not isinstance(authorizer, dict):
-        return None
-
-    claims = authorizer.get('claims')
-    claim_user_id = _extract_claim_user_id(claims)
-    if claim_user_id:
-        return claim_user_id
-
-    jwt_context = authorizer.get('jwt')
-    if isinstance(jwt_context, dict):
-        jwt_claims = jwt_context.get('claims')
-        jwt_user_id = _extract_claim_user_id(jwt_claims)
-        if jwt_user_id:
-            return jwt_user_id
-
-    for key in ('user_id', 'principalId', 'principal_id'):
-        value = authorizer.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
-
-
-def _extract_bearer_token(event: dict[str, Any]) -> str | None:
-    headers = event.get('headers')
-    if not isinstance(headers, dict):
-        return None
-    auth_header = headers.get('Authorization') or headers.get('authorization')
-    if not isinstance(auth_header, str) or not auth_header.startswith('Bearer '):
-        return None
-    token = auth_header[7:].strip()
-    return token if token else None
 
 
 def _extract_authenticated_user_id(event: dict[str, Any]) -> str | None:
-    authorizer_user_id = _extract_user_id_from_authorizer(event)
-    if authorizer_user_id:
-        return authorizer_user_id
-
-    token = _extract_bearer_token(event)
-    if not token:
-        return None
-
-    try:
-        payload = _get_auth_service().validate_token(token, expected_token_type='access')
-    except (InvalidTokenError, ConfigurationError):
-        return None
-
-    user_id = payload.get('user_id') or payload.get('sub')
-    if isinstance(user_id, str) and user_id.strip():
-        return user_id.strip()
-    return None
+    return extract_user_id(event)
 
 
 def _get_results_bucket() -> str:

@@ -37,10 +37,13 @@ def company_research_auth_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv('ENV', 'local')
 
 
-def _event(body: str) -> dict[str, object]:
+def _event(body: str, user_id: str = 'user-1') -> dict[str, object]:
     return {
         'body': body,
-        'headers': {'x-user-id': 'user-1'},
+        'headers': {'x-user-id': user_id},
+        'requestContext': {
+            'authorizer': {'claims': {'sub': user_id}},
+        },
     }
 
 

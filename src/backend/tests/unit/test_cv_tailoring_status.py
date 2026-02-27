@@ -58,7 +58,6 @@ def _event(
         'httpMethod': method,
         'headers': {
             'Content-Type': 'application/json',
-            'x-user-id': user_id,
         },
         'multiValueHeaders': {},
         'queryStringParameters': None,
@@ -71,6 +70,11 @@ def _event(
             'path': path,
             'stage': 'test',
             'requestId': 'req-1',
+            'authorizer': {
+                'claims': {
+                    'sub': user_id,
+                }
+            },
         },
         'body': None,
         'isBase64Encoded': False,

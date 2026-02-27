@@ -71,7 +71,7 @@ def _event(
             'path': path,
             'stage': 'test',
             'requestId': 'req-1',
-            'authorizer': {'principalId': user_id},
+            'authorizer': {'claims': {'sub': user_id}},
         },
         'body': json.dumps(body) if body is not None else None,
         'isBase64Encoded': False,
@@ -103,7 +103,7 @@ def test_generate_questions_returns_200_and_persists(gap_table: Any) -> None:
 
     generated_questions = [
         {
-            'question_id': f'gap-q{i+1}',
+            'question_id': f'gap-q{i + 1}',
             'question': 'Describe a measurable impact example.',
             'impact': 'HIGH',
             'probability': 'MEDIUM',
