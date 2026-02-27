@@ -3,22 +3,24 @@
 from __future__ import annotations
 
 import json
+import os
 from http import HTTPStatus
 from typing import Any
 
 from aws_lambda_powertools.metrics import MetricUnit
 from aws_lambda_powertools.utilities.typing import LambdaContext
-from boto3.dynamodb.conditions import Attr, Key
 from pydantic import ValidationError
 
-from careervp.dal.cv_dal import CVTable
+from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.models.api_models import CoverLetterRequest
 from careervp.models.result import Result, ResultCode
 
-COVER_LETTER_SORT_KEY_PREFIX = 'ARTIFACT#COVER_LETTER#'
+
+def _get_dal() -> DynamoDalHandler:
+    return DynamoDalHandler(os.environ.get('DYNAMODB_TABLE_NAME', ''))
 
 
 @logger.inject_lambda_context
@@ -193,35 +195,20 @@ def _extract_cover_letter_id(event: dict[str, Any]) -> str | None:
     return None
 
 
-def _get_cover_letter_item(user_id: str, cover_letter_id: str) -> dict[str, Any] | None:
-    table = CVTable().table
-    # Query-only lookup to avoid requiring dynamodb:GetItem IAM permission.
-    query_response = table.query(
-        KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with(COVER_LETTER_SORT_KEY_PREFIX),
-        FilterExpression=Attr('sk').contains(cover_letter_id),
-        Limit=25,
-    )
-    query_items = query_response.get('Items') if isinstance(query_response, dict) else None
-    if isinstance(query_items, list):
-        for item in query_items:
-            if not isinstance(item, dict):
-                continue
-            sk_value = str(item.get('sk') or '')
-            if sk_value.endswith(cover_letter_id) or sk_value == cover_letter_id:
-                return item
-        if query_items and isinstance(query_items[0], dict):
-            return query_items[0]
+def _get_cover_letter_item(user_id: str, cv_id: str, job_id: str) -> dict[str, Any] | None:
+    dal = _get_dal()
+    result = dal.get_cover_letter(user_id, cv_id, job_id)
+    if result.success and isinstance(result.data, dict):
+        return result.data
     return None
 
 
 def _list_cover_letter_items(user_id: str) -> list[dict[str, Any]]:
-    query_response = CVTable().table.query(
-        KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with(COVER_LETTER_SORT_KEY_PREFIX),
-    )
-    items_raw = query_response.get('Items') if isinstance(query_response, dict) else None
-    if not isinstance(items_raw, list):
-        return []
-    return [item for item in items_raw if isinstance(item, dict)]
+    dal = _get_dal()
+    result = dal.list_cover_letters(user_id)
+    if result.success and isinstance(result.data, list):
+        return [item for item in result.data if isinstance(item, dict)]
+    return []
 
 
 def _normalize_status(raw_status: Any) -> str:

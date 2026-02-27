@@ -22,6 +22,7 @@ def cv_tailoring_status_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, 
     monkeypatch.setenv('LOG_LEVEL', 'INFO')
     monkeypatch.setenv('ENV', 'local')
     monkeypatch.setenv('TABLE_NAME', 'test-tailoring-table')
+    monkeypatch.setenv('DYNAMODB_TABLE_NAME', 'test-tailoring-table')
     yield
 
 
@@ -131,7 +132,7 @@ def test_get_users_me_tailored_cvs_returns_only_user_items(tailoring_table: Any)
     tailoring_table.put_item(
         Item={
             'pk': 'user-1',
-            'sk': 'TAILORED_CV#cv-1#1700000000#v1',
+            'sk': 'ARTIFACT#CV_TAILORED#cv-1#1700000000#v1',
             'entity_type': 'CV_TAILORING',
             'cv_id': 'cv-1',
             'status': 'completed',
@@ -143,7 +144,7 @@ def test_get_users_me_tailored_cvs_returns_only_user_items(tailoring_table: Any)
     tailoring_table.put_item(
         Item={
             'pk': 'user-1',
-            'sk': 'TAILORED_CV#cv-2#1700000001#v1',
+            'sk': 'ARTIFACT#CV_TAILORED#cv-2#1700000001#v1',
             'entity_type': 'CV_TAILORING',
             'cv_id': 'cv-2',
             'status': 'processing',
@@ -155,7 +156,7 @@ def test_get_users_me_tailored_cvs_returns_only_user_items(tailoring_table: Any)
     tailoring_table.put_item(
         Item={
             'pk': 'other-user',
-            'sk': 'TAILORED_CV#cv-9#1700000002#v1',
+            'sk': 'ARTIFACT#CV_TAILORED#cv-9#1700000002#v1',
             'entity_type': 'CV_TAILORING',
             'cv_id': 'cv-9',
             'status': 'completed',
@@ -172,7 +173,7 @@ def test_get_users_me_tailored_cvs_returns_only_user_items(tailoring_table: Any)
     payload = json.loads(response['body'])
     ids = {entry['id'] for entry in payload['tailored_cvs']}
     assert ids == {
-        'TAILORED_CV#cv-1#1700000000#v1',
-        'TAILORED_CV#cv-2#1700000001#v1',
+        'ARTIFACT#CV_TAILORED#cv-1#1700000000#v1',
+        'ARTIFACT#CV_TAILORED#cv-2#1700000001#v1',
     }
     assert all(entry['status'] in {'completed', 'processing'} for entry in payload['tailored_cvs'])

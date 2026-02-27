@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from http import HTTPStatus
 from typing import Any
 
@@ -11,7 +12,7 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 from boto3.dynamodb.conditions import Attr, Key
 from pydantic import ValidationError
 
-from careervp.dal.cv_dal import CVTable
+from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers
 from careervp.handlers.utils.observability import logger, metrics, tracer
@@ -152,7 +153,8 @@ def _extract_interview_prep_id(event: dict[str, Any]) -> str | None:
 
 
 def _get_interview_prep_item(user_id: str, interview_prep_id: str) -> dict[str, Any] | None:
-    table = CVTable().table
+    dal = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))
+    table = dal._get_db_handler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))
     get_response = table.get_item(Key={'pk': user_id, 'sk': interview_prep_id})
     item = get_response.get('Item') if isinstance(get_response, dict) else None
     if isinstance(item, dict):

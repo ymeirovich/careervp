@@ -59,7 +59,7 @@ class DalHandler(ABC, metaclass=_SingletonMeta):
     ) -> Result[TailoredCV | None]: ...  # pragma: no cover
 
     @abstractmethod
-    def list_tailored_cvs(self, user_id: str) -> Result[list[TailoredCV]]: ...  # pragma: no cover
+    def list_tailored_cvs(self, user_id: str) -> Result[list[dict[str, Any]]]: ...  # pragma: no cover
 
     @abstractmethod
     def save_cover_letter(

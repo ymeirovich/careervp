@@ -22,6 +22,7 @@ def interview_prep_status_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None
     monkeypatch.setenv('LOG_LEVEL', 'INFO')
     monkeypatch.setenv('ENV', 'local')
     monkeypatch.setenv('TABLE_NAME', 'test-interview-prep-table')
+    monkeypatch.setenv('DYNAMODB_TABLE_NAME', 'test-interview-prep-table')
     yield
 
 

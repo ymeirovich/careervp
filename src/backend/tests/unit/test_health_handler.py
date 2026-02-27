@@ -3,7 +3,7 @@
 import json
 from datetime import datetime
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from careervp.handlers.health_handler import lambda_handler
 
@@ -62,18 +62,24 @@ def test_health_requires_no_authentication() -> None:
 
 
 def test_health_response_matches_openapi_schema() -> None:
-    """Health response should include all OpenAPI contract keys."""
-    response = lambda_handler(_event(), _context())
+    """Health response should include all OpenAPI contract keys (anthropic + dynamodb)."""
+    with patch('anthropic.Anthropic') as mock_anthropic, \
+         patch('boto3.client') as mock_boto:
+        mock_anthropic.return_value.models.list.return_value = MagicMock()
+        mock_boto.return_value.describe_table.return_value = {'Table': {'TableStatus': 'ACTIVE'}}
+        response = lambda_handler(_event(), _context())
 
     assert response['statusCode'] == 200
     payload = json.loads(response['body'])
     assert payload['status'] == 'healthy'
     assert payload['version'] == '1.0.0'
-    assert payload['services'] == {
-        'dynamodb': 'healthy',
-        'lambda': 'healthy',
-        'bedrock': 'healthy',
-    }
+    # New health_handler reports anthropic + dynamodb (bedrock/lambda removed)
+    assert 'anthropic' in payload['services']
+    assert 'dynamodb' in payload['services']
+    assert 'bedrock' not in payload['services']
+    assert 'lambda' not in payload['services']
+    assert payload['services']['anthropic'] == 'healthy'
+    assert payload['services']['dynamodb'] == 'healthy'
 
     parsed_timestamp = datetime.fromisoformat(payload['timestamp'].replace('Z', '+00:00'))
     assert parsed_timestamp.tzinfo is not None
