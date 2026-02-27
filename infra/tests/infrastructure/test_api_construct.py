@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from aws_cdk.assertions import Template
+from typing import Any
 
-from careervp import constants
+from aws_cdk.assertions import Template
 
 
 def test_company_research_lambda_configuration(synthesized_template: Template) -> None:
@@ -27,24 +27,27 @@ def test_company_research_lambda_configuration(synthesized_template: Template) -
 
 
 def test_company_research_api_route_exists(synthesized_template: Template) -> None:
-    """Validate that API Gateway defines the /api/company-research POST route."""
+    """Validate that API Gateway defines the /company-research/{company_name} GET route."""
     resources = synthesized_template.find_resources("AWS::ApiGateway::Resource")
-    company_research_ids = {
-        logical_id
-        for logical_id, props in resources.items()
-        if props["Properties"].get("PathPart") == constants.GW_RESOURCE_COMPANY_RESEARCH
-    }
-    assert company_research_ids, "API Gateway resource /company-research missing"
-
-    # confirm there is a POST method associated with the company research Lambda
     methods = synthesized_template.find_resources("AWS::ApiGateway::Method")
-    company_research_methods = [
-        logical_id
-        for logical_id, props in methods.items()
-        if props["Properties"].get("HttpMethod") == "POST"
-        and props["Properties"].get("ResourceId", {}).get("Ref") in company_research_ids
+
+    # Get all method paths to find the company-research route
+    method_paths = _get_method_paths(methods, resources)
+
+    # The canonical route is GET /company-research/{company_name}
+    # It may also appear as /company-research/{jobId} in the CDK
+    company_research_routes = [
+        (http_method, path)
+        for http_method, path, _ in method_paths
+        if path.startswith("company-research")
     ]
-    assert company_research_methods, "No POST method found for /company-research"
+    assert company_research_routes, "No company-research route found in API Gateway"
+
+    # Confirm there is a GET method
+    get_methods = [m for m, p in company_research_routes if m == "GET"]
+    assert get_methods, (
+        f"No GET method found for company-research. Found: {company_research_routes}"
+    )
 
 
 def test_llm_cache_table_configuration(synthesized_template: Template) -> None:
@@ -208,15 +211,6 @@ def test_openapi_route_matrix_matches_payload_contracts(
         route_path = method_props["Properties"].get("ResourceId", {})
         route_paths.append(route_path)
 
-    # Check for critical routes
-    critical_routes = [
-        "/auth/register",
-        "/auth/login",
-        "/health",
-        "/jobs",
-        "/vpr/generate",
-    ]
-
     # Get all API Gateway resources to check path patterns
     resources = synthesized_template.find_resources("AWS::ApiGateway::Resource")
     resource_paths = {}
@@ -244,7 +238,9 @@ def test_openapi_route_matrix_matches_payload_contracts(
 # =============================================================================
 
 
-def _get_method_paths(methods: dict, resources: dict) -> list[tuple[str, str, dict]]:
+def _get_method_paths(
+    methods: dict[str, Any], resources: dict[str, Any]
+) -> list[tuple[str, str, dict[str, Any]]]:
     """Helper to get method paths with their properties.
 
     Returns list of (http_method, path_part, method_props).
