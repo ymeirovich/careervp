@@ -24,74 +24,74 @@ from careervp.models.cover_letter import CoverLetterRequest
 from careervp.models.cv import UserCV
 from careervp.models.result import Result, ResultCode
 
-os.environ.setdefault("AWS_ACCESS_KEY_ID", "testing")
-os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "testing")
-os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
-os.environ.setdefault("ENVIRONMENT", "test")
-os.environ.setdefault("ANTHROPIC_API_KEY", "test-key")
+os.environ.setdefault('AWS_ACCESS_KEY_ID', 'testing')
+os.environ.setdefault('AWS_SECRET_ACCESS_KEY', 'testing')
+os.environ.setdefault('AWS_DEFAULT_REGION', 'us-east-1')
+os.environ.setdefault('ENVIRONMENT', 'test')
+os.environ.setdefault('ANTHROPIC_API_KEY', 'test-key')
 
-USER_ID = "user-test-123"
-OTHER_USER_ID = "user-other-999"
+USER_ID = 'user-test-123'
+OTHER_USER_ID = 'user-other-999'
 
 TEMPLATE_PATTERNS = [
-    "Generated cover letter for request",
-    "{id}",
-    "[YOUR_NAME]",
-    "[COMPANY_NAME]",
-    "{job_title}",
-    "{company}",
+    'Generated cover letter for request',
+    '{id}',
+    '[YOUR_NAME]',
+    '[COMPANY_NAME]',
+    '{job_title}',
+    '{company}',
 ]
 
 
 def _logic_request() -> CoverLetterRequest:
     return CoverLetterRequest(
         user_id=USER_ID,
-        cv_id="cv-abc456",
-        job_id="job-xyz789",
-        vpr_id="vpr-001",
-        company_name="Innovate Labs",
-        job_title="Principal Software Engineer",
-        job_description="Lead backend architecture and mentor engineering teams.",
-        gap_response_ids=["gap-001"],
+        cv_id='cv-abc456',
+        job_id='job-xyz789',
+        vpr_id='vpr-001',
+        company_name='Innovate Labs',
+        job_title='Principal Software Engineer',
+        job_description='Lead backend architecture and mentor engineering teams.',
+        gap_response_ids=['gap-001'],
     )
 
 
 def _api_event(
     user_id: str = USER_ID,
-    cv_id: str = "cv-abc456",
-    job_id: str = "job-xyz789",
+    cv_id: str = 'cv-abc456',
+    job_id: str = 'job-xyz789',
 ) -> dict[str, object]:
     body = {
-        "cv_id": cv_id,
-        "job_id": job_id,
-        "vpr_id": "vpr-001",
-        "gap_response_ids": ["gap-001"],
-        "company_research_id": "company-r-001",
-        "options": {"tone": "professional", "length": "standard", "include_portfolio_link": False},
+        'cv_id': cv_id,
+        'job_id': job_id,
+        'vpr_id': 'vpr-001',
+        'gap_response_ids': ['gap-001'],
+        'company_research_id': 'company-r-001',
+        'options': {'tone': 'professional', 'length': 'standard', 'include_portfolio_link': False},
     }
     return {
-        "httpMethod": "POST",
-        "path": "/cover-letter/generate",
-        "requestContext": {"authorizer": {"jwt": {"claims": {"sub": user_id}}}},
-        "headers": {"Content-Type": "application/json"},
-        "body": json.dumps(body),
+        'httpMethod': 'POST',
+        'path': '/cover-letter/generate',
+        'requestContext': {'authorizer': {'jwt': {'claims': {'sub': user_id}}}},
+        'headers': {'Content-Type': 'application/json'},
+        'body': json.dumps(body),
     }
 
 
 def _user_cv(user_id: str = USER_ID) -> UserCV:
     return UserCV(
         user_id=user_id,
-        cv_id="cv-abc456",
-        full_name="Jane Engineer",
-        email="jane@example.com",
-        professional_summary="Backend engineer with distributed systems experience.",
+        cv_id='cv-abc456',
+        full_name='Jane Engineer',
+        email='jane@example.com',
+        professional_summary='Backend engineer with distributed systems experience.',
     )
 
 
 def _mock_vpr_response() -> MagicMock:
     vpr = MagicMock()
     vpr.model_dump.return_value = {
-        "summary": "Strong distributed systems experience with measurable impact.",
+        'summary': 'Strong distributed systems experience with measurable impact.',
     }
     return vpr
 
@@ -102,13 +102,13 @@ class TestCoverLetterCallsLLM:
 
     def test_cover_letter_calls_llm_client_generate(self) -> None:
         request = _logic_request()
-        with patch("careervp.logic.cover_letter.LLMClient") as mock_cls:
+        with patch('careervp.logic.cover_letter.LLMClient') as mock_cls:
             mock_llm = MagicMock()
             mock_llm.generate.return_value = {
-                "text": (
-                    "Dear Hiring Manager,\n\nI led backend platform modernization initiatives "
-                    "that reduced deployment time by 45% while improving reliability.\n\n"
-                    "I would welcome the opportunity to contribute this experience to Innovate Labs."
+                'text': (
+                    'Dear Hiring Manager,\n\nI led backend platform modernization initiatives '
+                    'that reduced deployment time by 45% while improving reliability.\n\n'
+                    'I would welcome the opportunity to contribute this experience to Innovate Labs.'
                 )
             }
             mock_cls.return_value = mock_llm
@@ -123,25 +123,25 @@ class TestCoverLetterCallsLLM:
 
             assert result.success
             mock_llm.generate.assert_called_once()
-            call_prompt = mock_llm.generate.call_args.kwargs["prompt"]
-            assert "Jane Engineer" in call_prompt
-            assert "Lead backend architecture" in call_prompt
+            call_prompt = mock_llm.generate.call_args.kwargs['prompt']
+            assert 'Jane Engineer' in call_prompt
+            assert 'Lead backend architecture' in call_prompt
 
 
 @pytest.mark.unit
 class TestCoverLetterNoTemplate:
     """Validates I1: output contains no known template strings."""
 
-    @pytest.mark.parametrize("pattern", TEMPLATE_PATTERNS)
+    @pytest.mark.parametrize('pattern', TEMPLATE_PATTERNS)
     def test_output_does_not_match_template_pattern(self, pattern: str) -> None:
         request = _logic_request()
-        with patch("careervp.logic.cover_letter.LLMClient") as mock_cls:
+        with patch('careervp.logic.cover_letter.LLMClient') as mock_cls:
             mock_llm = MagicMock()
             mock_llm.generate.return_value = {
-                "text": (
-                    "Dear Hiring Manager,\n\nI am excited to apply for the Principal Software "
-                    "Engineer role and bring proven impact in reliability and throughput.\n\n"
-                    "Thank you for your consideration."
+                'text': (
+                    'Dear Hiring Manager,\n\nI am excited to apply for the Principal Software '
+                    'Engineer role and bring proven impact in reliability and throughput.\n\n'
+                    'Thank you for your consideration.'
                 )
             }
             mock_cls.return_value = mock_llm
@@ -166,17 +166,17 @@ class TestCoverLetterHandlerFlow:
     def test_returns_artifact_id(self) -> None:
         from careervp.handlers.cover_letter_handler import lambda_handler
 
-        with patch("careervp.handlers.cover_letter_handler._get_dal") as mock_get_dal:
+        with patch('careervp.handlers.cover_letter_handler._get_dal') as mock_get_dal:
             mock_dal = MagicMock()
             mock_dal.get_cv.return_value = _user_cv()
             mock_get_dal.return_value = mock_dal
 
-            with patch("careervp.handlers.cover_letter_handler.generate_cover_letter") as mock_generate:
+            with patch('careervp.handlers.cover_letter_handler.generate_cover_letter') as mock_generate:
                 cover_letter_payload = {
-                    "cover_letter_id": "cl-001",
-                    "full_text": "Real generated cover letter text.",
-                    "word_count": 120,
-                    "paragraphs": [],
+                    'cover_letter_id': 'cl-001',
+                    'full_text': 'Real generated cover letter text.',
+                    'word_count': 120,
+                    'paragraphs': [],
                 }
                 mock_generate.return_value = Result(
                     success=True,
@@ -186,60 +186,60 @@ class TestCoverLetterHandlerFlow:
 
                 response = lambda_handler(_api_event(), MagicMock())
 
-        assert response["statusCode"] == 200
-        body = json.loads(response["body"])
-        assert body["artifact_id"] == "cl-001"
-        assert body["status"] == "completed"
+        assert response['statusCode'] == 200
+        body = json.loads(response['body'])
+        assert body['artifact_id'] == 'cl-001'
+        assert body['status'] == 'completed'
 
     def test_llm_error_returns_503(self) -> None:
         from careervp.handlers.cover_letter_handler import lambda_handler
 
-        with patch("careervp.handlers.cover_letter_handler._get_dal") as mock_get_dal:
+        with patch('careervp.handlers.cover_letter_handler._get_dal') as mock_get_dal:
             mock_dal = MagicMock()
             mock_dal.get_cv.return_value = _user_cv()
             mock_get_dal.return_value = mock_dal
 
-            with patch("careervp.handlers.cover_letter_handler.generate_cover_letter") as mock_generate:
+            with patch('careervp.handlers.cover_letter_handler.generate_cover_letter') as mock_generate:
                 mock_generate.return_value = Result(
                     success=False,
-                    error="LLM timed out",
+                    error='LLM timed out',
                     code=ResultCode.LLM_TIMEOUT,
                 )
                 response = lambda_handler(_api_event(), MagicMock())
 
-        assert response["statusCode"] == 503
-        body = json.loads(response["body"])
-        assert body["code"] == ResultCode.LLM_TIMEOUT
+        assert response['statusCode'] == 503
+        body = json.loads(response['body'])
+        assert body['code'] == ResultCode.LLM_TIMEOUT
 
     def test_wrong_user_cv_returns_403(self) -> None:
         from careervp.handlers.cover_letter_handler import lambda_handler
 
-        with patch("careervp.handlers.cover_letter_handler._get_dal") as mock_get_dal:
+        with patch('careervp.handlers.cover_letter_handler._get_dal') as mock_get_dal:
             mock_dal = MagicMock()
             mock_dal.get_cv.return_value = _user_cv(user_id=OTHER_USER_ID)
             mock_get_dal.return_value = mock_dal
 
             response = lambda_handler(_api_event(), MagicMock())
 
-        assert response["statusCode"] == 403
-        body = json.loads(response["body"])
-        assert body["code"] == ResultCode.FORBIDDEN
+        assert response['statusCode'] == 403
+        body = json.loads(response['body'])
+        assert body['code'] == ResultCode.FORBIDDEN
 
     def test_cover_letter_generated_metric_emitted(self) -> None:
         from careervp.handlers.cover_letter_handler import lambda_handler
 
-        with patch("careervp.handlers.cover_letter_handler._get_dal") as mock_get_dal:
+        with patch('careervp.handlers.cover_letter_handler._get_dal') as mock_get_dal:
             mock_dal = MagicMock()
             mock_dal.get_cv.return_value = _user_cv()
             mock_get_dal.return_value = mock_dal
 
-            with patch("careervp.handlers.cover_letter_handler.generate_cover_letter") as mock_generate:
+            with patch('careervp.handlers.cover_letter_handler.generate_cover_letter') as mock_generate:
                 cover_letter_payload = {
-                    "cover_letter_id": "cl-001",
-                    "full_text": "Generated text",
-                    "word_count": 100,
-                    "paragraphs": [],
-                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    'cover_letter_id': 'cl-001',
+                    'full_text': 'Generated text',
+                    'word_count': 100,
+                    'paragraphs': [],
+                    'created_at': datetime.now(timezone.utc).isoformat(),
                 }
                 mock_generate.return_value = Result(
                     success=True,
@@ -247,9 +247,9 @@ class TestCoverLetterHandlerFlow:
                     code=ResultCode.COVER_LETTER_GENERATED,
                 )
 
-                with patch("careervp.handlers.cover_letter_handler.metrics.add_metric") as mock_metric:
+                with patch('careervp.handlers.cover_letter_handler.metrics.add_metric') as mock_metric:
                     response = lambda_handler(_api_event(), MagicMock())
 
-        assert response["statusCode"] == 200
-        metric_names = [call.kwargs.get("name") for call in mock_metric.call_args_list]
-        assert "CoverLetterGenerated" in metric_names
+        assert response['statusCode'] == 200
+        metric_names = [call.kwargs.get('name') for call in mock_metric.call_args_list]
+        assert 'CoverLetterGenerated' in metric_names

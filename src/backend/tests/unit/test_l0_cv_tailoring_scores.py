@@ -77,9 +77,7 @@ def _sample_keyword_map() -> KeywordMap:
 
 def _sample_llm_payload() -> dict[str, object]:
     return {
-        'professional_summary': (
-            'Engineering leader with deep AWS and Kubernetes delivery history, focused on measurable outcomes.'
-        ),
+        'professional_summary': ('Engineering leader with deep AWS and Kubernetes delivery history, focused on measurable outcomes.'),
         'work_experience': [
             {
                 'company': 'Nimbus Labs',
@@ -96,9 +94,7 @@ def _sample_llm_payload() -> dict[str, object]:
         ],
         'skills': ['Python', 'AWS', 'Kubernetes', 'Leadership', 'Automation'],
         'changes_made': [{'section': 'summary', 'change_type': 'rewrite', 'description': 'Added ATS keywords'}],
-        'job_description': (
-            'Required: Python AWS Kubernetes automation scalability leadership reliability observability architecture.'
-        ),
+        'job_description': ('Required: Python AWS Kubernetes automation scalability leadership reliability observability architecture.'),
     }
 
 
@@ -141,9 +137,7 @@ def test_cv_tailoring_returns_non_null_cv_id_and_persists_with_dal() -> None:
 
     result = tailor_cv(
         master_cv=cv,
-        job_description=(
-            'Required: Python AWS Kubernetes automation scalability leadership reliability observability architecture.'
-        ),
+        job_description=('Required: Python AWS Kubernetes automation scalability leadership reliability observability architecture.'),
         dal=dal_stub,
         llm_client=mock_llm,
     )
