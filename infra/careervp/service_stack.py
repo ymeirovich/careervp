@@ -1,10 +1,11 @@
 from typing import Any
 
-from aws_cdk import Aspects, Stack, Tags
+from aws_cdk import Aspects, CfnOutput, Stack, Tags
 from cdk_nag import AwsSolutionsChecks, NagSuppressions
 from constructs import Construct
 
 from .api_construct import ApiConstruct
+from .cognito_construct import CognitoConstruct
 from .configuration.configuration_construct import ConfigurationStore
 from .constants import (
     CONFIGURATION_NAME,
@@ -43,13 +44,22 @@ class ServiceStack(Stack):
             SERVICE_NAME,
             CONFIGURATION_NAME,
         )
+        self.cognito = CognitoConstruct(
+            self,
+            get_construct_name(stack_prefix=id, construct_name="Cognito"),
+            environment=self.naming.environment,
+        )
         self.api = ApiConstruct(
             self,
             get_construct_name(stack_prefix=id, construct_name="Crud"),
             self.dynamic_configuration.app_name,
             is_production_env=is_production_env,
             naming=self.naming,
+            user_pool=self.cognito.user_pool,
         )
+
+        CfnOutput(self, "UserPoolId", value=self.cognito.user_pool_id)
+        CfnOutput(self, "ClientId", value=self.cognito.client_id)
 
         # add security check
         self._add_security_tests()
@@ -85,7 +95,18 @@ class ServiceStack(Stack):
                     "id": "AwsSolutions-APIG4",
                     "reason": "authorization not mandatory in a sample blueprint",
                 },
-                {"id": "AwsSolutions-COG4", "reason": "not using cognito"},
+                {
+                    "id": "AwsSolutions-COG1",
+                    "reason": "Beta policy intentionally allows no-symbol passwords for UX.",
+                },
+                {
+                    "id": "AwsSolutions-COG3",
+                    "reason": "Advanced security mode rollout deferred for beta hardening phase.",
+                },
+                {
+                    "id": "AwsSolutions-COG4",
+                    "reason": "Public auth/health/swagger routes are intentionally unauthenticated.",
+                },
                 {"id": "AwsSolutions-L1", "reason": "False positive"},
                 {
                     "id": "AwsSolutions-S1",

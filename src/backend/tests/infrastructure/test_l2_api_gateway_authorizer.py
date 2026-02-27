@@ -1,146 +1,154 @@
-"""
-L2.2 — API Gateway Cognito Authorizer Infrastructure Tests
+"""L2.2 infrastructure tests for API Gateway Cognito authorizer wiring."""
 
-Validates: Cognito authorizer on all protected routes, public routes have NONE auth
-Spec: docs/best_practices/yaml/cognito_spec.yaml
-Payload: docs/refactor/payloads/beta_l2_auth_scenarios_test.json#L2_2_api_gateway_authorizer
-Invariant: I3, I4
-Results: docs/beta/execution_results/L2_2_results.md
-"""
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+from typing import Any
 
 import pytest
 
+os.environ.setdefault("JSII_RUNTIME_PACKAGE_CACHE", "/tmp/jsii-cache")
+
 try:
-    import aws_cdk as cdk
-    from aws_cdk import assertions
+    from aws_cdk import App, Environment
+    from aws_cdk.assertions import Template
+
     CDK_AVAILABLE = True
-except ImportError:
+except Exception:
     CDK_AVAILABLE = False
 
-pytestmark = pytest.mark.skipif(
-    not CDK_AVAILABLE,
-    reason="aws-cdk-lib not installed — run: pip install aws-cdk-lib"
-)
+pytestmark = pytest.mark.skipif(not CDK_AVAILABLE, reason="aws-cdk not available")
 
-INFRA_DIR = "/Users/yitzchak/Documents/dev/careervp/infra"
+REPO_ROOT = Path(__file__).resolve().parents[4]
+INFRA_SRC = str(REPO_ROOT / "infra")
 
-# Routes that MUST be public (AuthorizationType: NONE)
-PUBLIC_ROUTES = [
+PUBLIC_ROUTES = {
     ("GET", "/health"),
     ("POST", "/auth/register"),
     ("POST", "/auth/login"),
     ("POST", "/auth/refresh"),
-]
-
-# Routes that MUST have Cognito auth
-PROTECTED_ROUTE_SAMPLES = [
-    ("GET", "/users/me"),
-    ("POST", "/jobs"),
-    ("POST", "/vprs"),
-    ("GET", "/vprs"),
-    ("POST", "/cover-letters"),
-    ("POST", "/gap-questions"),
-    ("GET", "/applications/{application_id}"),
-]
+}
 
 
-def _get_template():
-    """Synthesize CDK stack and return assertions.Template."""
-    if not CDK_AVAILABLE:
-        pytest.skip("aws-cdk-lib not installed")
-    import sys
-    sys.path.insert(0, INFRA_DIR)
-    try:
-        from careervp.service_stack import CareervpStack
-        app = cdk.App()
-        stack = CareervpStack(app, "CareervpStack-test", env_name="test")
-        return assertions.Template.from_stack(stack)
-    except Exception as e:
-        pytest.skip(f"CDK synth failed: {e}")
+def _template() -> Template:
+    if INFRA_SRC not in sys.path:
+        sys.path.insert(0, INFRA_SRC)
+
+    from careervp.naming_utils import NamingUtils
+    from careervp.service_stack import ServiceStack
+
+    app = App()
+    naming = NamingUtils(environment="test", region="us-east-1", account_id="123456789012")
+    stack = ServiceStack(
+        scope=app,
+        id=naming.stack_id("crud"),
+        env=Environment(account="123456789012", region="us-east-1"),
+        is_production_env=False,
+        naming=naming,
+        stack_feature="crud",
+    )
+    return Template.from_stack(stack)
 
 
-@pytest.mark.infrastructure
-class TestCognitoAuthorizerCreated:
-    """Cognito authorizer resource must be created in API Gateway."""
+def _resolve_paths(template: Template) -> dict[str, str]:
+    resources = template.find_resources("AWS::ApiGateway::Resource")
+    memo: dict[str, str] = {}
 
-    def test_cognito_authorizer_created(self):
-        """Template has AWS::ApiGateway::Authorizer with Type COGNITO_USER_POOLS."""
-        assert True, "RED: Cognito authorizer not yet created — GREEN will assert it exists"
+    def resolve(logical_id: str) -> str:
+        if logical_id in memo:
+            return memo[logical_id]
+        props = resources[logical_id]["Properties"]
+        part = str(props.get("PathPart", "")).strip("/")
+        parent = props.get("ParentId", {})
+        parent_ref = parent.get("Ref") if isinstance(parent, dict) else None
+        if isinstance(parent_ref, str) and parent_ref in resources:
+            parent_path = resolve(parent_ref)
+        else:
+            parent_path = ""
+        if parent_path and part:
+            full = f"{parent_path}/{part}"
+        elif part:
+            full = f"/{part}"
+        else:
+            full = parent_path or "/"
+        memo[logical_id] = full
+        return full
 
-    def test_authorizer_identity_source_is_authorization_header(self):
-        """Authorizer IdentitySource = method.request.header.Authorization."""
-        assert True, "RED: IdentitySource = Authorization header"
-
-    def test_authorizer_references_user_pool(self):
-        """Authorizer ProviderARNs references the Cognito UserPool ARN."""
-        assert True, "RED: Authorizer references UserPool"
-
-    def test_no_custom_lambda_authorizer_exists(self):
-        """No AWS::ApiGateway::Authorizer with Type TOKEN (custom Lambda) exists."""
-        assert True, "RED: no custom Lambda authorizer remains"
-
-
-@pytest.mark.infrastructure
-class TestProtectedRoutesHaveAuth:
-    """Protected routes must reference Cognito authorizer."""
-
-    def test_authorizer_on_protected_routes(self):
-        """All protected route methods reference the Cognito authorizer."""
-        assert True, "RED: protected routes have Cognito authorizer"
-
-    @pytest.mark.parametrize("method,path", PROTECTED_ROUTE_SAMPLES)
-    def test_protected_route_has_cognito_auth(self, method, path):
-        """Protected route uses Cognito authorization type."""
-        assert True, f"RED: {method} {path} has Cognito auth"
-
-    def test_no_protected_route_has_none_auth(self):
-        """No protected route accidentally has AuthorizationType NONE."""
-        assert True, "RED: no protected route has NONE auth"
+    return {logical_id: resolve(logical_id) for logical_id in resources}
 
 
-@pytest.mark.infrastructure
-class TestPublicRoutesHaveNoAuth:
-    """Public routes must explicitly use AuthorizationType NONE."""
-
-    def test_health_route_has_no_auth(self):
-        """GET /health has AuthorizationType NONE."""
-        assert True, "RED: GET /health has NONE auth"
-
-    def test_auth_routes_have_no_auth(self):
-        """POST /auth/* have AuthorizationType NONE."""
-        assert True, "RED: POST /auth/* have NONE auth"
-
-    @pytest.mark.parametrize("method,path", PUBLIC_ROUTES)
-    def test_public_route_has_none_auth(self, method, path):
-        """Public route has no authorization requirement."""
-        assert True, f"RED: {method} {path} has NONE auth"
-
-
-@pytest.mark.infrastructure
-class TestAuthorizerConfiguration:
-    """Cognito authorizer must be correctly configured."""
-
-    def test_authorizer_ttl_is_set(self):
-        """AuthorizerResultTtlInSeconds is set (non-zero for performance)."""
-        assert True, "RED: authorizer TTL configured"
-
-    def test_authorizer_type_is_cognito(self):
-        """Type is COGNITO_USER_POOLS (not TOKEN or REQUEST)."""
-        assert True, "RED: Type = COGNITO_USER_POOLS"
-
-    def test_no_hardcoded_user_pool_id(self):
-        """ProviderARNs uses parameter reference, not hardcoded ARN."""
-        assert True, "RED: UserPool ARN from parameter reference"
+def _method_records(template: Template) -> list[dict[str, Any]]:
+    methods = template.find_resources("AWS::ApiGateway::Method")
+    resource_paths = _resolve_paths(template)
+    records: list[dict[str, Any]] = []
+    for method in methods.values():
+        props = method["Properties"]
+        resource_ref = props.get("ResourceId", {}).get("Ref")
+        path = resource_paths.get(resource_ref, "")
+        records.append(
+            {
+                "http_method": props.get("HttpMethod"),
+                "path": path,
+                "authorization_type": props.get("AuthorizationType"),
+                "authorizer_id": props.get("AuthorizerId"),
+            }
+        )
+    return records
 
 
-@pytest.mark.infrastructure
-class TestCDKDiffOnlyDeletions:
-    """CDK diff after authorizer migration should only show deletions (no new routes)."""
+def test_cognito_authorizer_resource_created() -> None:
+    template = _template()
+    authorizers = template.find_resources("AWS::ApiGateway::Authorizer")
+    assert authorizers
+    assert any(a["Properties"].get("Type") == "COGNITO_USER_POOLS" for a in authorizers.values())
+    assert all(a["Properties"].get("Type") != "TOKEN" for a in authorizers.values())
 
-    def test_cdk_synth_with_cognito_authorizer_succeeds(self):
-        """cdk synth succeeds after adding Cognito authorizer."""
-        assert True, "RED: cdk synth succeeds"
 
-    def test_no_new_unexpected_resources(self):
-        """CDK diff shows no new unexpected resources (only authorizer changes)."""
-        assert True, "RED: diff clean"
+def test_cognito_authorizer_uses_authorization_header() -> None:
+    template = _template()
+    authorizers = template.find_resources("AWS::ApiGateway::Authorizer")
+    cognito_authorizers = [
+        a for a in authorizers.values() if a["Properties"].get("Type") == "COGNITO_USER_POOLS"
+    ]
+    assert cognito_authorizers
+    assert all(
+        a["Properties"].get("IdentitySource") == "method.request.header.Authorization"
+        for a in cognito_authorizers
+    )
+
+
+def test_public_routes_are_unauthenticated() -> None:
+    template = _template()
+    methods = _method_records(template)
+    for public_method, public_path in PUBLIC_ROUTES:
+        matches = [
+            m
+            for m in methods
+            if m["http_method"] == public_method and m["path"] == public_path
+        ]
+        assert matches, f"missing route {public_method} {public_path}"
+        assert all(m["authorization_type"] == "NONE" for m in matches)
+
+
+def test_protected_routes_use_cognito_auth() -> None:
+    template = _template()
+    methods = _method_records(template)
+    protected = [
+        m
+        for m in methods
+        if m["http_method"] != "OPTIONS"
+        and m["path"]
+        and not m["path"].startswith("/swagger")
+        and (m["http_method"], m["path"]) not in PUBLIC_ROUTES
+    ]
+    assert protected
+    assert all(m["authorization_type"] == "COGNITO_USER_POOLS" for m in protected)
+    assert all(m["authorizer_id"] is not None for m in protected)
+
+
+def test_no_custom_authorization_type_remains() -> None:
+    template = _template()
+    methods = _method_records(template)
+    assert all(m["authorization_type"] != "CUSTOM" for m in methods)

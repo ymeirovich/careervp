@@ -1,4 +1,5 @@
 from aws_cdk import CfnOutput, Duration, RemovalPolicy, aws_apigateway, aws_sqs
+from aws_cdk import aws_cognito as cognito
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_kms as kms
@@ -25,6 +26,7 @@ class ApiConstruct(Construct):
         appconfig_app_name: str,
         is_production_env: bool,
         naming: NamingUtils,
+        user_pool: cognito.IUserPool,
     ) -> None:
         super().__init__(scope, id_)
         self.id_ = id_
@@ -57,8 +59,7 @@ class ApiConstruct(Construct):
             self.api_db.logs_bucket,
             self.api_db.artifacts_bucket,
         )
-        self.api_authorizer_func = self._add_api_authorizer_lambda()
-        self.api_authorizer = self._build_api_authorizer(self.api_authorizer_func)
+        self.api_authorizer = self._build_api_authorizer(user_pool)
 
         api_resource: aws_apigateway.Resource = self.rest_api.root.add_resource(
             constants.API_ROOT_RESOURCE
@@ -308,16 +309,14 @@ class ApiConstruct(Construct):
         return key
 
     def _build_api_authorizer(
-        self, authorizer_lambda: _lambda.Function
-    ) -> aws_apigateway.TokenAuthorizer:
-        return aws_apigateway.TokenAuthorizer(
+        self,
+        user_pool: cognito.IUserPool,
+    ) -> aws_apigateway.CognitoUserPoolsAuthorizer:
+        return aws_apigateway.CognitoUserPoolsAuthorizer(
             self,
-            "ApiTokenAuthorizer",
-            handler=authorizer_lambda,
-            validation_regex=r"^Bearer [-0-9A-Za-z\\._~\\+/]+=*$",
-            # Disable policy caching to avoid stale method-level Allow policies
-            # being reused across different protected routes.
-            results_cache_ttl=Duration.seconds(0),
+            "CognitoAuth",
+            cognito_user_pools=[user_pool],
+            identity_source="method.request.header.Authorization",
         )
 
     def _build_llm_cache_table(self, is_production_env: bool) -> dynamodb.TableV2:
@@ -767,7 +766,7 @@ class ApiConstruct(Construct):
             http_method="POST",
             integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
             authorizer=self.api_authorizer,
-            authorization_type=aws_apigateway.AuthorizationType.CUSTOM,
+            authorization_type=aws_apigateway.AuthorizationType.COGNITO,
         )
         return lambda_function
 
@@ -821,7 +820,7 @@ class ApiConstruct(Construct):
             http_method="POST",
             integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
             authorizer=self.api_authorizer,
-            authorization_type=aws_apigateway.AuthorizationType.CUSTOM,
+            authorization_type=aws_apigateway.AuthorizationType.COGNITO,
         )
 
         return lambda_function
@@ -875,7 +874,7 @@ class ApiConstruct(Construct):
             http_method="POST",
             integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
             authorizer=self.api_authorizer,
-            authorization_type=aws_apigateway.AuthorizationType.CUSTOM,
+            authorization_type=aws_apigateway.AuthorizationType.COGNITO,
         )
 
         return lambda_function
@@ -980,7 +979,7 @@ class ApiConstruct(Construct):
             http_method="POST",
             integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
             authorizer=self.api_authorizer,
-            authorization_type=aws_apigateway.AuthorizationType.CUSTOM,
+            authorization_type=aws_apigateway.AuthorizationType.COGNITO,
         )
 
         return lambda_function
@@ -1040,7 +1039,7 @@ class ApiConstruct(Construct):
             http_method="GET",
             integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
             authorizer=self.api_authorizer,
-            authorization_type=aws_apigateway.AuthorizationType.CUSTOM,
+            authorization_type=aws_apigateway.AuthorizationType.COGNITO,
         )
 
         return lambda_function
@@ -1455,7 +1454,7 @@ class ApiConstruct(Construct):
             http_method="POST",
             integration=aws_apigateway.LambdaIntegration(handler=lambda_function),
             authorizer=self.api_authorizer,
-            authorization_type=aws_apigateway.AuthorizationType.CUSTOM,
+            authorization_type=aws_apigateway.AuthorizationType.COGNITO,
         )
 
         return lambda_function
@@ -1760,7 +1759,7 @@ class ApiConstruct(Construct):
         # Per auth_and_authorizer_spec.yaml:
         # - Public (unprotected): /health, /auth/register, /auth/login
         # - Protected: /auth/refresh and all other routes
-        public_paths = {"/health", "/auth/register", "/auth/login"}
+        public_paths = {"/health", "/auth/register", "/auth/login", "/auth/refresh"}
         is_public_route = path in public_paths
         resource.add_method(
             http_method=method,
@@ -1769,7 +1768,7 @@ class ApiConstruct(Construct):
             authorization_type=(
                 aws_apigateway.AuthorizationType.NONE
                 if is_public_route
-                else aws_apigateway.AuthorizationType.CUSTOM
+                else aws_apigateway.AuthorizationType.COGNITO
             ),
         )
 

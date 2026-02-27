@@ -32,7 +32,10 @@ def test_scrape_url_success() -> None:
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
 
-        with patch('careervp.logic.utils.web_scraper.httpx.AsyncClient', return_value=mock_client):
+        with (
+            patch('careervp.logic.utils.web_scraper._is_safe_url', return_value=True),
+            patch('careervp.logic.utils.web_scraper.httpx.AsyncClient', return_value=mock_client),
+        ):
             result = await scrape_url('https://example.com/about')
 
         assert result.success is True
@@ -50,7 +53,10 @@ def test_scrape_url_timeout() -> None:
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
 
-        with patch('careervp.logic.utils.web_scraper.httpx.AsyncClient', return_value=mock_client):
+        with (
+            patch('careervp.logic.utils.web_scraper._is_safe_url', return_value=True),
+            patch('careervp.logic.utils.web_scraper.httpx.AsyncClient', return_value=mock_client),
+        ):
             result = await scrape_url('https://example.com/about')
 
         assert result.success is False

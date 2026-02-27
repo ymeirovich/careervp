@@ -816,6 +816,8 @@ OUTPUT FORMAT:
 **Duration:** 1.5 hours
 **Invariant(s) Satisfied:** I3 (Cognito infrastructure)
 **Precondition(s) Resolved:** PC4
+**Status:** ✅ Completed (2026-02-27, strict test-first RED → GREEN on `beta/exec-runbook3`)
+**Execution Result:** `docs/beta/execution_results/L2_1_results.md`
 
 **READ FIRST:**
 - `@spec docs/best_practices/yaml/cognito_spec.yaml`
@@ -890,6 +892,8 @@ OUTPUT FORMAT:
 **Duration:** 1 hour
 **Invariant(s) Satisfied:** I3 (authorizer configured)
 **Precondition(s) Resolved:** PC3, PC4
+**Status:** ✅ Completed (2026-02-27, strict test-first RED → GREEN on `beta/exec-runbook3`)
+**Execution Result:** `docs/beta/execution_results/L2_2_results.md`
 
 **READ FIRST:**
 - `@spec docs/best_practices/yaml/cognito_spec.yaml`
@@ -2343,7 +2347,7 @@ python scripts/generate_evidence_bundle.py --env staging --runs 50
 |-------|-------|-------|------------------|----------|--------|
 | Phase 1: Generator Reality | L0 | L0.1–L0.5 | ✓ test_l0_phase_integration.py | E1 | ✅ Completed (L0.1–L0.5 + integration + E1 evidence) |
 | Phase 2: Persistence | L1 | L1.1–L1.4 | ✓ test_l1_phase_integration.py | E2 | ✅ Completed (L1.1–L1.4 + integration + E2 evidence) |
-| Phase 3: Auth Migration | L2 | L2.1–L2.5 | ✓ test_l2_auth_integration.py | E3, E4 | ⬜ |
+| Phase 3: Auth Migration | L2 | L2.1–L2.5 | ✓ test_l2_auth_integration.py | E3, E4 | 🟡 In progress (L2.1–L2.2 complete; L2.3–L2.5 pending) |
 | Phase 4: Application State | L3 | L3.1–L3.4 | ✓ test_l3_state_recovery.py | E6 (partial) | ⬜ |
 | Phase 5: Trial Enforcement | L5 | L5.1–L5.4 | ✓ test_l5_trial_integration.py | E5 | ⬜ |
 | Phase 6: Route Cleanup | L6 | L6.1–L6.4 | ✓ route surface diff | E7 | ⬜ |

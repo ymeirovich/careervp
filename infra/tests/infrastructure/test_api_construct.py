@@ -121,28 +121,30 @@ def test_lambda_role_has_llm_cache_permissions(synthesized_template: Template) -
     )
 
 
-def test_rest_api_has_token_authorizer(synthesized_template: Template) -> None:
-    """Ensure API Gateway has a TOKEN Lambda authorizer for protected endpoints."""
+def test_rest_api_has_cognito_authorizer(synthesized_template: Template) -> None:
+    """Ensure API Gateway has a Cognito authorizer for protected endpoints."""
     authorizers = synthesized_template.find_resources("AWS::ApiGateway::Authorizer")
-    token_authorizers = [
+    cognito_authorizers = [
         props
         for props in authorizers.values()
-        if props["Properties"].get("Type") == "TOKEN"
+        if props["Properties"].get("Type") == "COGNITO_USER_POOLS"
     ]
-    assert token_authorizers, "API Gateway TOKEN authorizer was not synthesized"
+    assert cognito_authorizers, "API Gateway Cognito authorizer was not synthesized"
 
 
-def test_protected_methods_use_custom_authorization(
+def test_protected_methods_use_cognito_authorization(
     synthesized_template: Template,
 ) -> None:
-    """Ensure protected REST methods require CUSTOM authorization."""
+    """Ensure protected REST methods require Cognito authorization."""
     methods = synthesized_template.find_resources("AWS::ApiGateway::Method")
-    custom_methods = [
+    cognito_methods = [
         props
         for props in methods.values()
-        if props["Properties"].get("AuthorizationType") == "CUSTOM"
+        if props["Properties"].get("AuthorizationType") == "COGNITO_USER_POOLS"
     ]
-    assert custom_methods, "No protected API Gateway methods use CUSTOM authorization"
+    assert cognito_methods, (
+        "No protected API Gateway methods use COGNITO_USER_POOLS authorization"
+    )
 
 
 def test_api_gateway_stage_has_access_logs_and_tracing(
@@ -330,7 +332,7 @@ def test_protected_routes_require_authorizer(synthesized_template: Template) -> 
     """Ensure protected routes require authorizer.
 
     Per auth_and_authorizer_spec.yaml:
-    - Protected: all routes except /auth/register, /auth/login, /health
+    - Protected: all routes except /auth/register, /auth/login, /auth/refresh, /health
     """
     methods = synthesized_template.find_resources("AWS::ApiGateway::Method")
     resources = synthesized_template.find_resources("AWS::ApiGateway::Resource")
@@ -339,7 +341,7 @@ def test_protected_routes_require_authorizer(synthesized_template: Template) -> 
     method_paths = _get_method_paths(methods, resources)
 
     # Define public routes to exclude (without leading slashes)
-    public_paths = {"health", "auth/register", "auth/login"}
+    public_paths = {"health", "auth/register", "auth/login", "auth/refresh"}
 
     protected_methods = []
     no_auth_methods = []
