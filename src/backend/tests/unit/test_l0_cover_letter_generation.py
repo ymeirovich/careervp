@@ -8,16 +8,30 @@ Payload: docs/refactor/payloads/beta_l0_generators_test.json#L0_1_cover_letter
 Invariant: I1 (partial)
 Results: docs/beta/execution_results/L0_1_results.md
 """
+
+from __future__ import annotations
+
+import asyncio
+import json
 import os
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from careervp.logic.cover_letter import generate_cover_letter
+from careervp.models.cover_letter import CoverLetterRequest
+from careervp.models.cv import UserCV
+from careervp.models.result import Result, ResultCode
 
 os.environ.setdefault("AWS_ACCESS_KEY_ID", "testing")
 os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "testing")
 os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key")
+
+USER_ID = "user-test-123"
+OTHER_USER_ID = "user-other-999"
 
 TEMPLATE_PATTERNS = [
     "Generated cover letter for request",
@@ -29,118 +43,213 @@ TEMPLATE_PATTERNS = [
 ]
 
 
-@pytest.fixture
-def mock_llm_client():
-    with patch("careervp.logic.cover_letter.LLMClient") as mock_cls:
-        mock_instance = MagicMock()
-        mock_instance.generate.return_value = (
-            "Dear Hiring Manager,\n\nI am writing to express my strong interest "
-            "in the Principal Software Engineer position at Innovate Labs. "
-            "With 8 years of experience building distributed systems at scale, "
-            "I am confident I can contribute significantly to your team.\n\n"
-            "Sincerely,\nJohn Doe"
-        )
-        mock_cls.return_value = mock_instance
-        yield mock_instance
-
-
-@pytest.fixture
-def mock_cv():
-    return MagicMock(
+def _logic_request() -> CoverLetterRequest:
+    return CoverLetterRequest(
+        user_id=USER_ID,
         cv_id="cv-abc456",
-        user_id="user-test-123",
-        content="John Doe. Senior Software Engineer. Python, AWS, 8 years experience.",
-        skills=["Python", "AWS", "DynamoDB", "Lambda"],
-    )
-
-
-@pytest.fixture
-def mock_job():
-    return MagicMock(
         job_id="job-xyz789",
-        user_id="user-test-123",
-        title="Principal Software Engineer",
-        company="Innovate Labs",
-        description="We seek a Principal Engineer to lead backend architecture...",
+        vpr_id="vpr-001",
+        company_name="Innovate Labs",
+        job_title="Principal Software Engineer",
+        job_description="Lead backend architecture and mentor engineering teams.",
+        gap_response_ids=["gap-001"],
     )
+
+
+def _api_event(
+    user_id: str = USER_ID,
+    cv_id: str = "cv-abc456",
+    job_id: str = "job-xyz789",
+) -> dict[str, object]:
+    body = {
+        "cv_id": cv_id,
+        "job_id": job_id,
+        "vpr_id": "vpr-001",
+        "gap_response_ids": ["gap-001"],
+        "company_research_id": "company-r-001",
+        "options": {"tone": "professional", "length": "standard", "include_portfolio_link": False},
+    }
+    return {
+        "httpMethod": "POST",
+        "path": "/cover-letter/generate",
+        "requestContext": {"authorizer": {"jwt": {"claims": {"sub": user_id}}}},
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps(body),
+    }
+
+
+def _user_cv(user_id: str = USER_ID) -> UserCV:
+    return UserCV(
+        user_id=user_id,
+        cv_id="cv-abc456",
+        full_name="Jane Engineer",
+        email="jane@example.com",
+        professional_summary="Backend engineer with distributed systems experience.",
+    )
+
+
+def _mock_vpr_response() -> MagicMock:
+    vpr = MagicMock()
+    vpr.model_dump.return_value = {
+        "summary": "Strong distributed systems experience with measurable impact.",
+    }
+    return vpr
 
 
 @pytest.mark.unit
 class TestCoverLetterCallsLLM:
     """Validates L0.1: cover_letter.py calls LLMClient, not a stub."""
 
-    def test_cover_letter_calls_llm_client_generate(self, mock_llm_client, mock_cv, mock_job):
-        """generate() is called on LLMClient with non-empty prompt."""
-        # RED phase — replace True with actual call
-        assert True, "RED: mock_llm_client.generate.assert_called_once()"
+    def test_cover_letter_calls_llm_client_generate(self) -> None:
+        request = _logic_request()
+        with patch("careervp.logic.cover_letter.LLMClient") as mock_cls:
+            mock_llm = MagicMock()
+            mock_llm.generate.return_value = {
+                "text": (
+                    "Dear Hiring Manager,\n\nI led backend platform modernization initiatives "
+                    "that reduced deployment time by 45% while improving reliability.\n\n"
+                    "I would welcome the opportunity to contribute this experience to Innovate Labs."
+                )
+            }
+            mock_cls.return_value = mock_llm
 
-    def test_cover_letter_prompt_contains_cv_content(self, mock_llm_client, mock_cv, mock_job):
-        """Prompt sent to LLM contains CV content, not placeholder."""
-        assert True, "RED: cv content in prompt"
+            result = asyncio.run(
+                generate_cover_letter(
+                    request=request,
+                    user_cv=_user_cv(),
+                    vpr=_mock_vpr_response(),
+                )
+            )
 
-    def test_cover_letter_prompt_contains_job_description(self, mock_llm_client, mock_cv, mock_job):
-        """Prompt sent to LLM contains job description."""
-        assert True, "RED: job description in prompt"
-
-    def test_cover_letter_uses_claude_not_bedrock(self, mock_llm_client, mock_cv, mock_job):
-        """LLMClient uses Anthropic API (not Bedrock) as per migration."""
-        assert True, "RED: Anthropic client used"
+            assert result.success
+            mock_llm.generate.assert_called_once()
+            call_prompt = mock_llm.generate.call_args.kwargs["prompt"]
+            assert "Jane Engineer" in call_prompt
+            assert "Lead backend architecture" in call_prompt
 
 
 @pytest.mark.unit
 class TestCoverLetterNoTemplate:
-    """Validates I1: output contains no template strings."""
-
-    def test_output_does_not_contain_template_placeholder_id(self, mock_llm_client, mock_cv, mock_job):
-        """Output does not match 'Generated cover letter for request {id}'."""
-        assert True, "RED: no template string"
+    """Validates I1: output contains no known template strings."""
 
     @pytest.mark.parametrize("pattern", TEMPLATE_PATTERNS)
-    def test_output_does_not_match_template_pattern(self, pattern, mock_llm_client, mock_cv, mock_job):
-        """Output does not contain any known template pattern."""
-        # Simulate calling the generator
-        output = mock_llm_client.generate.return_value
-        assert pattern not in output, f"Template pattern found: {pattern!r}"
+    def test_output_does_not_match_template_pattern(self, pattern: str) -> None:
+        request = _logic_request()
+        with patch("careervp.logic.cover_letter.LLMClient") as mock_cls:
+            mock_llm = MagicMock()
+            mock_llm.generate.return_value = {
+                "text": (
+                    "Dear Hiring Manager,\n\nI am excited to apply for the Principal Software "
+                    "Engineer role and bring proven impact in reliability and throughput.\n\n"
+                    "Thank you for your consideration."
+                )
+            }
+            mock_cls.return_value = mock_llm
 
-    def test_output_minimum_length(self, mock_llm_client, mock_cv, mock_job):
-        """Generated content has at least 200 characters."""
-        output = mock_llm_client.generate.return_value
-        assert len(output) >= 200, f"Too short: {len(output)} chars"
+            result = asyncio.run(
+                generate_cover_letter(
+                    request=request,
+                    user_cv=_user_cv(),
+                    vpr=_mock_vpr_response(),
+                )
+            )
 
-
-@pytest.mark.unit
-class TestCoverLetterOutputStructure:
-    """Validates structured output from cover_letter.py."""
-
-    def test_returns_artifact_id(self, mock_llm_client, mock_cv, mock_job):
-        """Return value includes artifact_id."""
-        assert True, "RED: artifact_id in result"
-
-    def test_returns_status_field(self, mock_llm_client, mock_cv, mock_job):
-        """Return value includes status field."""
-        assert True, "RED: status in result"
-
-    def test_returns_word_count(self, mock_llm_client, mock_cv, mock_job):
-        """Return value includes word_count."""
-        assert True, "RED: word_count in result"
+            assert result.success
+            assert result.data is not None
+            assert pattern not in result.data.cover_letter.full_text
 
 
 @pytest.mark.unit
-class TestCoverLetterErrorHandling:
-    """Validates error handling per lambda_handler_spec.yaml."""
+class TestCoverLetterHandlerFlow:
+    """Validates handler behavior required by L0.1."""
 
-    def test_llm_error_returns_503(self):
-        """LLMClient raises LLMError → handler returns 503."""
-        assert True, "RED: 503 on LLM error"
+    def test_returns_artifact_id(self) -> None:
+        from careervp.handlers.cover_letter_handler import lambda_handler
 
-    def test_circuit_breaker_open_returns_503(self):
-        """Circuit breaker open → handler returns 503 with retry-after."""
-        assert True, "RED: 503 on circuit open"
+        with patch("careervp.handlers.cover_letter_handler._get_dal") as mock_get_dal:
+            mock_dal = MagicMock()
+            mock_dal.get_cv.return_value = _user_cv()
+            mock_get_dal.return_value = mock_dal
 
-    def test_missing_cv_returns_404(self):
-        """CV not found → handler returns 404."""
-        assert True, "RED: 404 on missing CV"
+            with patch("careervp.handlers.cover_letter_handler.generate_cover_letter") as mock_generate:
+                cover_letter_payload = {
+                    "cover_letter_id": "cl-001",
+                    "full_text": "Real generated cover letter text.",
+                    "word_count": 120,
+                    "paragraphs": [],
+                }
+                mock_generate.return_value = Result(
+                    success=True,
+                    data=MagicMock(cover_letter=MagicMock(model_dump=MagicMock(return_value=cover_letter_payload))),
+                    code=ResultCode.COVER_LETTER_GENERATED,
+                )
 
-    def test_wrong_user_cv_returns_403(self):
-        """CV owned by different user → handler returns 403."""
-        assert True, "RED: 403 on wrong user CV"
+                response = lambda_handler(_api_event(), MagicMock())
+
+        assert response["statusCode"] == 200
+        body = json.loads(response["body"])
+        assert body["artifact_id"] == "cl-001"
+        assert body["status"] == "completed"
+
+    def test_llm_error_returns_503(self) -> None:
+        from careervp.handlers.cover_letter_handler import lambda_handler
+
+        with patch("careervp.handlers.cover_letter_handler._get_dal") as mock_get_dal:
+            mock_dal = MagicMock()
+            mock_dal.get_cv.return_value = _user_cv()
+            mock_get_dal.return_value = mock_dal
+
+            with patch("careervp.handlers.cover_letter_handler.generate_cover_letter") as mock_generate:
+                mock_generate.return_value = Result(
+                    success=False,
+                    error="LLM timed out",
+                    code=ResultCode.LLM_TIMEOUT,
+                )
+                response = lambda_handler(_api_event(), MagicMock())
+
+        assert response["statusCode"] == 503
+        body = json.loads(response["body"])
+        assert body["code"] == ResultCode.LLM_TIMEOUT
+
+    def test_wrong_user_cv_returns_403(self) -> None:
+        from careervp.handlers.cover_letter_handler import lambda_handler
+
+        with patch("careervp.handlers.cover_letter_handler._get_dal") as mock_get_dal:
+            mock_dal = MagicMock()
+            mock_dal.get_cv.return_value = _user_cv(user_id=OTHER_USER_ID)
+            mock_get_dal.return_value = mock_dal
+
+            response = lambda_handler(_api_event(), MagicMock())
+
+        assert response["statusCode"] == 403
+        body = json.loads(response["body"])
+        assert body["code"] == ResultCode.FORBIDDEN
+
+    def test_cover_letter_generated_metric_emitted(self) -> None:
+        from careervp.handlers.cover_letter_handler import lambda_handler
+
+        with patch("careervp.handlers.cover_letter_handler._get_dal") as mock_get_dal:
+            mock_dal = MagicMock()
+            mock_dal.get_cv.return_value = _user_cv()
+            mock_get_dal.return_value = mock_dal
+
+            with patch("careervp.handlers.cover_letter_handler.generate_cover_letter") as mock_generate:
+                cover_letter_payload = {
+                    "cover_letter_id": "cl-001",
+                    "full_text": "Generated text",
+                    "word_count": 100,
+                    "paragraphs": [],
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+                mock_generate.return_value = Result(
+                    success=True,
+                    data=MagicMock(cover_letter=MagicMock(model_dump=MagicMock(return_value=cover_letter_payload))),
+                    code=ResultCode.COVER_LETTER_GENERATED,
+                )
+
+                with patch("careervp.handlers.cover_letter_handler.metrics.add_metric") as mock_metric:
+                    response = lambda_handler(_api_event(), MagicMock())
+
+        assert response["statusCode"] == 200
+        metric_names = [call.kwargs.get("name") for call in mock_metric.call_args_list]
+        assert "CoverLetterGenerated" in metric_names

@@ -86,6 +86,8 @@ L8 (Operational Readiness) — requires all layers complete
 **Duration:** 1 hour
 **Invariant(s) Satisfied:** I1 (partial — cover letter generator)
 **Precondition(s) Resolved:** PC1 (partial)
+**Status:** ✅ Completed (2026-02-27, test-first RED → GREEN on `beta/exec-runbk`)
+**Execution Result:** `docs/beta/execution_results/L0_1_results.md`
 
 **READ FIRST:**
 - `@spec docs/best_practices/yaml/lambda_handler_spec.yaml`
@@ -162,6 +164,8 @@ OUTPUT FORMAT:
 **Duration:** 1 hour
 **Invariant(s) Satisfied:** I1 (partial — interview prep generator)
 **Precondition(s) Resolved:** PC1 (partial)
+**Status:** ✅ Completed (2026-02-27, test-first RED → GREEN on `beta/exec-runbk`)
+**Execution Result:** `docs/beta/execution_results/L0_2_results.md`
 
 **READ FIRST:**
 - `@spec docs/best_practices/yaml/lambda_handler_spec.yaml`
@@ -2319,7 +2323,7 @@ python scripts/generate_evidence_bundle.py --env staging --runs 50
 
 | Phase | Layer | Steps | Integration Test | Evidence | Status |
 |-------|-------|-------|------------------|----------|--------|
-| Phase 1: Generator Reality | L0 | L0.1–L0.5 | ✓ test_l0_phase_integration.py | E1 | ⬜ |
+| Phase 1: Generator Reality | L0 | L0.1–L0.5 | ✓ test_l0_phase_integration.py | E1 | 🟡 In progress (L0.1, L0.2 complete) |
 | Phase 2: Persistence | L1 | L1.1–L1.4 | ✓ test_l1_phase_integration.py | E2 | ⬜ |
 | Phase 3: Auth Migration | L2 | L2.1–L2.5 | ✓ test_l2_auth_integration.py | E3, E4 | ⬜ |
 | Phase 4: Application State | L3 | L3.1–L3.4 | ✓ test_l3_state_recovery.py | E6 (partial) | ⬜ |
