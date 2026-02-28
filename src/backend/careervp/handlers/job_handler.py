@@ -5,10 +5,10 @@ Implements:
 - POST /jobs
 - GET /jobs
 - GET /jobs/{job_id}
-- GET /applications/{application_id}
 """
 
 import json
+import os
 from datetime import datetime, timezone
 from http import HTTPStatus
 from typing import Any
@@ -18,14 +18,17 @@ from aws_lambda_powertools.logging.correlation_paths import API_GATEWAY_REST
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from pydantic import ValidationError
 
+from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.utils.observability import logger, tracer
 from careervp.handlers.utils.rest_api_resolver import app
+from careervp.logic.trial_service import TrialExhaustedException, TrialExpiredException, TrialService
 from careervp.models.api_models import JobCreateRequest
 from careervp.models.job import Job
 
 _jobs_repository: JobsRepository | None = None
+_trial_service: TrialService | None = None
 
 
 def _get_jobs_repository() -> JobsRepository:
@@ -37,8 +40,9 @@ def _get_jobs_repository() -> JobsRepository:
 
 def _reset_handler_caches() -> None:
     """Testing hook to reset module dependency caches."""
-    global _jobs_repository
+    global _jobs_repository, _trial_service
     _jobs_repository = None
+    _trial_service = None
 
 
 def _json_response(status: HTTPStatus, body: dict[str, Any]) -> Response[str]:
@@ -47,6 +51,17 @@ def _json_response(status: HTTPStatus, body: dict[str, Any]) -> Response[str]:
         content_type=content_types.APPLICATION_JSON,
         body=json.dumps(body, default=str),
     )
+
+
+def _get_trial_service() -> TrialService | None:
+    global _trial_service
+    if _trial_service is not None:
+        return _trial_service
+    table_name = os.getenv('USERS_TABLE_NAME') or os.getenv('TABLE_NAME')
+    if not table_name:
+        return None
+    _trial_service = TrialService(dal=DynamoDalHandler(table_name=table_name))
+    return _trial_service
 
 
 def _get_authenticated_user_id() -> str | None:
@@ -115,6 +130,15 @@ def create_job() -> Response[str]:
     if not user_id:
         return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Authentication required'})
 
+    trial_service = _get_trial_service()
+    if trial_service is not None:
+        try:
+            trial_service.check_trial_status(user_id)
+        except TrialExpiredException:
+            return _json_response(HTTPStatus.FORBIDDEN, {'error': 'trial_expired'})
+        except TrialExhaustedException:
+            return _json_response(HTTPStatus.FORBIDDEN, {'error': 'trial_exhausted'})
+
     try:
         raw_body = app.current_event.json_body
         if isinstance(raw_body, dict) and 'company_name' not in raw_body and 'company' in raw_body:
@@ -179,13 +203,6 @@ def get_job(jobId: str | None = None, job_id: str | None = None) -> Response[str
 
     job = _record_to_job(job_record)
     return _json_response(HTTPStatus.OK, job.to_api_dict())
-
-
-@app.get('/applications/<application_id>')
-@tracer.capture_method(capture_response=False)
-def get_application(application_id: str) -> Response[str]:
-    """Compatibility endpoint that resolves application_id through jobs repository."""
-    return get_job(job_id=application_id)
 
 
 @logger.inject_lambda_context(correlation_id_path=API_GATEWAY_REST)

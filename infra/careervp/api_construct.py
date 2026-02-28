@@ -121,6 +121,7 @@ class ApiConstruct(Construct):
         self.health_api_func = self._add_health_lambda()
         self.user_api_func = self._add_user_lambda()
         self.job_api_func = self._add_job_lambda()
+        self.application_api_func = self._add_application_lambda()
         self.gap_api_func = self._add_gap_lambda()
         self.cover_letter_api_func = self._add_cover_letter_lambda()
         self.interview_prep_api_func = self._add_interview_prep_lambda()
@@ -1580,6 +1581,40 @@ class ApiConstruct(Construct):
             architecture=_lambda.Architecture.X86_64,
         )
 
+    def _add_application_lambda(self) -> _lambda.Function:
+        function_name = self.naming.lambda_name("application-api")
+        log_group = logs.LogGroup(
+            self,
+            "ApplicationApiLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
+        return _lambda.Function(
+            self,
+            "ApplicationApiLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.application_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-application-api",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+                "JOBS_TABLE_NAME": self.api_db.jobs_table.table_name,
+            },
+            timeout=Duration.seconds(30),
+            memory_size=256,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            role=self.lambda_role,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
     def _add_api_authorizer_lambda(self) -> _lambda.Function:
         function_name = self.naming.lambda_name("api-authorizer")
         return _lambda.Function(
@@ -1757,7 +1792,7 @@ class ApiConstruct(Construct):
             ("/jobs/{jobId}/gap-questions", "POST", self.gap_api_func),
             ("/jobs/{jobId}/gap-questions", "GET", self.gap_api_func),
             ("/jobs/{jobId}/gap-responses", "POST", self.gap_api_func),
-            ("/applications/{application_id}", "GET", self.job_api_func),
+            ("/applications/{application_id}", "GET", self.application_api_func),
             ("/vpr/generate", "POST", self.vpr_submit_func),
             ("/vpr/{vprId}/status", "GET", self.vpr_status_func),
             ("/vprs", "GET", self.vpr_status_func),

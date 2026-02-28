@@ -240,10 +240,17 @@ def test_gap_analysis_generation_persists_item_with_non_null_artifact_id() -> No
     with (
         patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate,
         patch('careervp.handlers.gap_handler._get_table') as mock_get_table,
+        patch('careervp.handlers.gap_handler._get_trial_service') as mock_trial_service,
+        patch('careervp.handlers.gap_handler._get_application_repository') as mock_application_repository,
     ):
         table = MagicMock()
         mock_get_table.return_value = table
         mock_generate.return_value = Result(success=True, data=generated_questions, code=ResultCode.GAP_QUESTIONS_GENERATED)
+        trial_service = MagicMock()
+        trial_service.check_trial_status.return_value = {'is_active': True}
+        trial_service.consume_credit.return_value = None
+        mock_trial_service.return_value = trial_service
+        mock_application_repository.return_value = MagicMock()
         response = lambda_handler(_gap_event(), MagicMock())
 
     assert response['statusCode'] == 201

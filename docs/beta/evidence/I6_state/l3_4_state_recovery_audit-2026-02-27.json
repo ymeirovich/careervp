@@ -3,13 +3,14 @@
   "date": "2026-02-27",
   "invariant": "I6",
   "status": "PASS",
+  "branch": "beta/fix-gaps1",
   "strict_test_first": {
-    "note": "Placeholder tests were replaced with concrete assertions; first execution after replacement was GREEN because prerequisite implementation from L3.1-L3.3 was already in place.",
+    "note": "Placeholder assertions in test_application_state.py and test_l3_state_recovery.py were replaced with concrete checks.",
     "green": {
       "command": "cd src/backend && uv run pytest tests/unit/test_application_state.py tests/unit/test_l3_state_recovery.py -v --tb=short",
       "result": "PASSED",
       "summary": {
-        "passed": 17,
+        "passed": 28,
         "failed": 0,
         "errors": 0
       }
@@ -23,7 +24,7 @@
     "mypy": {
       "command": "cd src/backend && uv run mypy careervp/ --strict",
       "result": "PASSED",
-      "scope": "96 source files"
+      "scope": "95 source files"
     }
   },
   "artifacts": [

@@ -1,6 +1,7 @@
 {
   "invariant": "I6",
   "date": "2026-02-27",
+  "branch": "beta/fix-gaps1",
   "source_tests": [
     "src/backend/tests/unit/test_application_state.py",
     "src/backend/tests/unit/test_l3_state_recovery.py"
@@ -45,7 +46,8 @@
   "summary": {
     "total_states": 7,
     "passed_states": 7,
-    "failed_states": 0
+    "failed_states": 0,
+    "backend_test_count": 28
   },
   "frontend_validation": {
     "status": "deferred",

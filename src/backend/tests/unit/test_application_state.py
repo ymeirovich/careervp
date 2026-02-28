@@ -1,22 +1,20 @@
 """
-Application State Model Unit Tests — CareerVP Beta
-
-Tests for:
-- 7-state lifecycle (created → artifacts_completed)
-- State transitions with validation
-- GET /applications/{id} recovery endpoint
-- Ownership checks
-- Conditional writes for concurrency safety
+Application state model and recovery tests.
 
 Spec: docs/best_practices/yaml/application_state_spec.yaml
 Payload: docs/refactor/payloads/beta_l3_application_state_test.json
 Invariant: I6
 """
 
+from __future__ import annotations
+
 import json
 import os
+from unittest.mock import MagicMock, patch
 
 import pytest
+
+from careervp.dal.application_repository import APPLICATION_STATES, VALID_TRANSITIONS, ApplicationRepository
 
 os.environ.setdefault('AWS_ACCESS_KEY_ID', 'testing')
 os.environ.setdefault('AWS_SECRET_ACCESS_KEY', 'testing')
@@ -24,46 +22,33 @@ os.environ.setdefault('AWS_DEFAULT_REGION', 'us-east-1')
 os.environ.setdefault('DYNAMODB_TABLE_NAME', 'careervp-users-table-test')
 os.environ.setdefault('ENVIRONMENT', 'test')
 
-CANONICAL_STATES = [
-    'created',
-    'cv_selected',
-    'gap_questions_pending',
-    'gap_questions_ready',
-    'gap_responses_submitted',
-    'artifacts_generating',
-    'artifacts_completed',
-]
 
-VALID_TRANSITIONS = {
-    'created': ['cv_selected'],
-    'cv_selected': ['gap_questions_pending'],
-    'gap_questions_pending': ['gap_questions_ready'],
-    'gap_questions_ready': ['gap_responses_submitted'],
-    'gap_responses_submitted': ['artifacts_generating'],
-    'artifacts_generating': ['artifacts_completed', 'artifacts_failed'],
-    'artifacts_completed': [],
-    'artifacts_failed': ['artifacts_generating'],
-}
+def _event(user_id: str | None, application_id: str = 'app-xyz789') -> dict[str, object]:
+    request_context: dict[str, object] = {}
+    if user_id is not None:
+        request_context = {'authorizer': {'claims': {'sub': user_id}}}
+    return {
+        'httpMethod': 'GET',
+        'path': f'/applications/{application_id}',
+        'pathParameters': {'application_id': application_id},
+        'requestContext': request_context,
+        'headers': {'Content-Type': 'application/json'},
+        'body': None,
+    }
 
 
-def _make_application_record(
-    application_id: str = 'app-xyz789',
-    user_id: str = 'user-test-123',
-    state: str = 'created',
-    trial_credit_consumed: bool = False,
-) -> dict:
-    """Factory for application DynamoDB records."""
+def _application_record(state: str = 'created', user_id: str = 'user-test-123') -> dict[str, object]:
     return {
         'pk': f'USER#{user_id}',
-        'sk': f'APP#{application_id}',
-        'application_id': application_id,
+        'sk': 'APP#app-xyz789',
+        'application_id': 'app-xyz789',
         'user_id': user_id,
         'job_id': 'job-abc456',
-        'cv_id': None,
+        'cv_id': 'cv-001' if state != 'created' else None,
         'state': state,
-        'created_at': '2026-02-26T10:00:00Z',
-        'updated_at': '2026-02-26T10:00:00Z',
-        'trial_credit_consumed': trial_credit_consumed,
+        'created_at': '2026-02-26T10:00:00+00:00',
+        'updated_at': '2026-02-26T10:10:00+00:00',
+        'trial_credit_consumed': state != 'created',
         'artifact_statuses': {
             'vpr': 'pending',
             'cv_tailored': 'pending',
@@ -71,194 +56,164 @@ def _make_application_record(
             'interview_prep': 'pending',
             'gap_analysis': 'pending',
         },
-        'entity_type': 'APPLICATION',
-        'ttl': 1756310400,
     }
 
 
-def _make_cognito_event(
-    method: str = 'GET',
-    path: str = '/applications/app-xyz789',
-    user_id: str = 'user-test-123',
-    path_params: dict | None = None,
-    body: dict | None = None,
-) -> dict:
-    """Factory for API Gateway event with Cognito claims."""
-    return {
-        'httpMethod': method,
-        'path': path,
-        'pathParameters': path_params or {'application_id': 'app-xyz789'},
-        'requestContext': {
-            'authorizer': {
-                'claims': {
-                    'sub': user_id,
-                    'email': f'{user_id}@example.com',
-                }
-            }
-        },
-        'headers': {'Content-Type': 'application/json'},
-        'body': json.dumps(body) if body else None,
-    }
-
-
-# =============================================================================
-# SECTION 1: STATE MODEL TESTS
-# =============================================================================
+@pytest.fixture
+def repository() -> ApplicationRepository:
+    table = MagicMock()
+    table.put_item.return_value = {}
+    table.update_item.return_value = {}
+    table.get_item.return_value = {}
+    dal = MagicMock()
+    dal.table_name = 'careervp-users-table-test'
+    dal._get_db_handler.return_value = table
+    repo = ApplicationRepository(dal=dal)
+    repo._test_table = table  # type: ignore[attr-defined]
+    return repo
 
 
 @pytest.mark.unit
 class TestApplicationStateModel:
-    """Tests for the canonical 7-state application lifecycle."""
+    def test_all_7_states_are_canonical(self) -> None:
+        expected = (
+            'created',
+            'cv_selected',
+            'gap_questions_pending',
+            'gap_questions_ready',
+            'gap_responses_submitted',
+            'artifacts_generating',
+            'artifacts_completed',
+        )
+        assert APPLICATION_STATES == expected
 
-    def test_application_created_on_job_post(self):
-        """POST /jobs creates application record in 'created' state."""
-        assert True, 'RED: job creation triggers application in created state'
+    def test_valid_transitions_cover_all_states(self) -> None:
+        assert set(VALID_TRANSITIONS.keys()) == set(APPLICATION_STATES)
 
-    def test_application_initial_state_is_created(self):
-        """New application always starts in 'created' state."""
-        assert True, 'RED: initial state'
+    def test_invalid_transition_raises_error(self, repository: ApplicationRepository) -> None:
+        with pytest.raises(ValueError, match='Invalid state transition'):
+            repository.update_state(
+                application_id='app-xyz789',
+                user_id='user-test-123',
+                expected_state='artifacts_completed',
+                new_state='created',
+            )
 
-    def test_all_7_states_are_canonical(self):
-        """Verify the 7 canonical states are defined and recognized."""
-        assert len(CANONICAL_STATES) == 7
-        for state in CANONICAL_STATES:
-            assert isinstance(state, str), f'State must be string: {state}'
-
-    def test_valid_transitions_cover_all_states(self):
-        """Every canonical state has a defined transition map."""
-        for state in CANONICAL_STATES:
-            assert state in VALID_TRANSITIONS, f'Missing transitions for: {state}'
-
-    def test_created_transitions_to_cv_selected(self):
-        """created → cv_selected is valid."""
-        assert 'cv_selected' in VALID_TRANSITIONS['created']
-
-    def test_artifacts_completed_has_no_transitions(self):
-        """artifacts_completed is a terminal state."""
-        assert VALID_TRANSITIONS['artifacts_completed'] == []
-
-    def test_invalid_transition_raises_error(self):
-        """Backward transition (e.g., artifacts_completed → created) raises."""
-        assert True, 'RED: InvalidStateTransitionError raised'
-
-    def test_backward_transition_blocked(self):
-        """gap_questions_pending → created raises InvalidStateTransitionError."""
-        assert True, 'RED: backward blocked'
-
-    def test_state_transition_uses_conditional_write(self):
-        """update_application_state uses DynamoDB ConditionExpression."""
-        assert True, 'RED: conditional write'
-
-    def test_concurrent_state_update_one_succeeds(self):
-        """Concurrent updates to same state → only valid one wins."""
-        assert True, 'RED: conditional write prevents double update'
-
-
-# =============================================================================
-# SECTION 2: RECOVERY ENDPOINT TESTS
-# =============================================================================
+    def test_state_transition_uses_conditional_write(self, repository: ApplicationRepository) -> None:
+        repository.update_state(
+            application_id='app-xyz789',
+            user_id='user-test-123',
+            expected_state='created',
+            new_state='cv_selected',
+        )
+        table = repository._test_table  # type: ignore[attr-defined]
+        kwargs = table.update_item.call_args.kwargs
+        assert '#state = :expected_state' in kwargs['ConditionExpression']
 
 
 @pytest.mark.unit
 class TestApplicationRecovery:
-    """Tests for GET /applications/{id} recovery endpoint."""
+    def test_recovery_returns_200_for_owner(self) -> None:
+        from careervp.handlers.application_handler import lambda_handler
 
-    def test_recovery_returns_200_for_own_application(self):
-        """Owner user gets 200 with full state."""
-        assert True, 'RED: 200 for owner'
+        with (
+            patch('careervp.handlers.application_handler._get_application_repository') as mock_repo_factory,
+            patch('careervp.handlers.application_handler._get_jobs_repository') as mock_jobs_factory,
+        ):
+            mock_repo = MagicMock()
+            mock_repo.get.return_value = _application_record(user_id='user-test-123')
+            mock_repo_factory.return_value = mock_repo
+            mock_jobs = MagicMock()
+            mock_jobs.get_job.return_value = {'job_id': 'job-abc456', 'title': 'Engineer'}
+            mock_jobs_factory.return_value = mock_jobs
+            response = lambda_handler(_event('user-test-123'), MagicMock())
 
-    def test_recovery_returns_403_for_wrong_user(self):
-        """Non-owner user gets 403 Forbidden."""
-        assert True, 'RED: 403 for wrong user'
+        assert response['statusCode'] == 200
+        payload = json.loads(response['body'])
+        assert payload['application']['application_id'] == 'app-xyz789'
 
-    def test_recovery_returns_404_for_missing_application(self):
-        """Non-existent application_id gets 404."""
-        assert True, 'RED: 404 for missing'
+    def test_recovery_returns_403_for_wrong_user(self) -> None:
+        from careervp.handlers.application_handler import lambda_handler
 
-    def test_recovery_response_contains_application_field(self):
-        """Response includes application: {application_id, state, ...}."""
-        assert True, 'RED: application field'
+        with patch('careervp.handlers.application_handler._get_application_repository') as mock_repo_factory:
+            mock_repo = MagicMock()
+            mock_repo.get.return_value = _application_record(user_id='owner-user')
+            mock_repo_factory.return_value = mock_repo
+            response = lambda_handler(_event('other-user'), MagicMock())
+        assert response['statusCode'] == 403
 
-    def test_recovery_response_contains_job_field(self):
-        """Response includes job: {job_id, title, company, ...}."""
-        assert True, 'RED: job field'
+    def test_recovery_returns_404_for_missing_application(self) -> None:
+        from careervp.handlers.application_handler import lambda_handler
 
-    def test_recovery_response_contains_cv_field(self):
-        """Response includes cv: {cv_id, filename} or null."""
-        assert True, 'RED: cv field'
-
-    def test_recovery_response_contains_artifact_statuses(self):
-        """Response includes artifacts dict with all 5 types."""
-        assert True, 'RED: artifacts field'
-
-    def test_recovery_response_null_gap_questions_when_not_generated(self):
-        """Application in 'created' state → gap_analysis.questions is null."""
-        assert True, 'RED: null questions'
-
-    def test_recovery_response_contains_gap_questions_when_ready(self):
-        """Application in 'gap_questions_ready' → questions array populated."""
-        assert True, 'RED: questions populated'
-
-    def test_recovery_extracts_user_id_from_cognito_only(self):
-        """User ID comes from requestContext.authorizer.claims.sub."""
-        assert True, 'RED: Cognito identity only'
-
-
-# =============================================================================
-# SECTION 3: STATE TRANSITIONS WITH ARTIFACT TRACKING
-# =============================================================================
+        with patch('careervp.handlers.application_handler._get_application_repository') as mock_repo_factory:
+            mock_repo = MagicMock()
+            mock_repo.get.return_value = None
+            mock_repo_factory.return_value = mock_repo
+            response = lambda_handler(_event('user-test-123'), MagicMock())
+        assert response['statusCode'] == 404
 
 
 @pytest.mark.unit
 class TestArtifactStatusTracking:
-    """Tests for artifact_statuses updates within application record."""
+    def test_artifact_status_updates_on_worker_complete(self, repository: ApplicationRepository) -> None:
+        repository.update_artifact_status(
+            application_id='app-xyz789',
+            user_id='user-test-123',
+            artifact_type='vpr',
+            status='completed',
+        )
+        table = repository._test_table  # type: ignore[attr-defined]
+        kwargs = table.update_item.call_args.kwargs
+        assert kwargs['ExpressionAttributeNames']['#artifact_type'] == 'vpr'
+        assert kwargs['ExpressionAttributeValues'][':status'] == 'completed'
 
-    def test_all_artifacts_start_as_pending(self):
-        """New application has all 5 artifact statuses as 'pending'."""
-        record = _make_application_record()
-        for artifact_type in ['vpr', 'cv_tailored', 'cover_letter', 'interview_prep', 'gap_analysis']:
-            assert record['artifact_statuses'][artifact_type] == 'pending'
-
-    def test_artifact_status_updates_on_worker_complete(self):
-        """Worker completion updates artifact_statuses[type] to 'completed'."""
-        assert True, 'RED: artifact status update'
-
-    def test_artifact_status_updates_on_worker_fail(self):
-        """Worker failure updates artifact_statuses[type] to 'failed'."""
-        assert True, 'RED: artifact failure status'
-
-    def test_all_completed_transitions_application_to_artifacts_completed(self):
-        """When all 5 artifacts complete → application state = artifacts_completed."""
-        assert True, 'RED: auto-transition on all complete'
-
-
-# =============================================================================
-# SECTION 4: RELOAD RECOVERY SCENARIOS
-# =============================================================================
+    def test_artifact_status_updates_on_worker_fail(self, repository: ApplicationRepository) -> None:
+        repository.update_artifact_status(
+            application_id='app-xyz789',
+            user_id='user-test-123',
+            artifact_type='cover_letter',
+            status='failed',
+        )
+        table = repository._test_table  # type: ignore[attr-defined]
+        kwargs = table.update_item.call_args.kwargs
+        assert kwargs['ExpressionAttributeNames']['#artifact_type'] == 'cover_letter'
+        assert kwargs['ExpressionAttributeValues'][':status'] == 'failed'
 
 
 @pytest.mark.unit
 class TestReloadRecovery:
-    """Tests that page reload at any workflow step restores correct state.
-
-    Validates I6: Frontend state survives page reload at every workflow step.
-    """
-
     @pytest.mark.parametrize(
-        'state,expected_recovery_field',
+        'state,expected_prefix',
         [
-            ('created', 'application'),
-            ('cv_selected', 'cv'),
-            ('gap_questions_ready', 'gap_analysis'),
-            ('gap_responses_submitted', 'gap_analysis'),
-            ('artifacts_generating', 'artifacts'),
-            ('artifacts_completed', 'artifacts'),
+            ('created', '/applications'),
+            ('cv_selected', '/applications'),
+            ('gap_questions_ready', '/gap-questions'),
+            ('gap_responses_submitted', '/gap-questions'),
+            ('artifacts_generating', '/artifacts'),
+            ('artifacts_completed', '/artifacts'),
         ],
     )
-    def test_reload_returns_correct_state_field(self, state: str, expected_recovery_field: str):
-        """GET /applications/{id} returns the data needed to restore the given workflow step."""
-        assert True, f'RED: {state} → {expected_recovery_field} populated in response'
+    def test_reload_returns_correct_state_field(self, state: str, expected_prefix: str) -> None:
+        from careervp.handlers.application_handler import lambda_handler
 
-    def test_trial_credit_not_double_charged_on_reload(self):
-        """Page reload during gap_questions_pending does not re-charge credit."""
-        assert True, 'RED: trial_credit_consumed=True prevents re-charge'
+        with patch('careervp.handlers.application_handler._get_application_repository') as mock_repo_factory:
+            mock_repo = MagicMock()
+            mock_repo.get.return_value = _application_record(state=state)
+            mock_repo_factory.return_value = mock_repo
+            response = lambda_handler(_event('user-test-123'), MagicMock())
+
+        assert response['statusCode'] == 200
+        payload = json.loads(response['body'])
+        assert payload['reload_route'].startswith(expected_prefix)
+
+    def test_trial_credit_not_double_charged_on_reload(self) -> None:
+        from careervp.handlers.application_handler import lambda_handler
+
+        with patch('careervp.handlers.application_handler._get_application_repository') as mock_repo_factory:
+            mock_repo = MagicMock()
+            mock_repo.get.return_value = _application_record(state='gap_questions_pending')
+            mock_repo_factory.return_value = mock_repo
+            response = lambda_handler(_event('user-test-123'), MagicMock())
+
+        payload = json.loads(response['body'])
+        assert payload['application']['trial_credit_consumed'] is True

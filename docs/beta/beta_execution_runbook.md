@@ -89,6 +89,29 @@ Use marker `[FE]` for sections that require `src/frontend` and UI/E2E flows.
 
 ---
 
+## Strict Step Completion Contract
+
+Apply these gates to every step before marking `✅ Completed`:
+
+- [ ] No production stubs in step-owned files (`NotImplementedError` must be `0` matches).
+- [ ] No scaffold-only assertions in step-owned tests (`assert True` placeholder checks must be `0` matches).
+- [ ] Required unit/integration tests pass in the same run used to update status.
+- [ ] Execution result markdown updated with exact command output and pass/fail gate.
+- [ ] Required evidence artifact written/updated for the step.
+- [ ] `docs/beta/beta_execution_runbook.md` status updated in the same change.
+
+Upon `COMPLETE/PASS` for any step:
+- [ ] Update status in `docs/beta/beta_execution_runbook.md`.
+- [ ] Update step evidence artifact(s) under `docs/beta/evidence/`.
+- [ ] Update step execution results under `docs/beta/execution_results/`.
+
+Status rules:
+- Use `🟡 In progress (scaffold-only)` when tests are GREEN but behavior is still stubbed or placeholder-driven.
+- Use `✅ Completed` only when behavior, tests, and evidence gates all pass.
+- Evidence generated in `local`/`dev` is useful for development, but does not satisfy final beta sign-off gates.
+
+---
+
 ---
 
 # Phase 1: Generator Reality (Layer 0)
@@ -254,7 +277,7 @@ OUTPUT FORMAT:
 **Duration:** 1.5 hours
 **Invariant(s) Satisfied:** I1 (partial), I5 (credit charge wired)
 **Precondition(s) Resolved:** PC1 (partial)
-**Status:** ✅ Completed (2026-02-27, test-first RED → GREEN on `beta/exec-runbk`)
+**Status:** ✅ Completed (2026-02-27, strict test-first rerun GREEN on `beta/fix-gaps1`; removed template fallback path from `gap_handler`)
 **Execution Result:** `docs/beta/execution_results/L0_3_results.md`
 
 **READ FIRST:**
@@ -488,7 +511,7 @@ OUTPUT FORMAT:
 ### Phase 1 Integration Test
 
 **Description:** Run all 5 generators, scan all outputs for template patterns, assert 0 matches
-**Status:** ✅ Completed (2026-02-27, integration audit GREEN on `beta/exec-runbk`)
+**Status:** ✅ Completed (2026-02-27, integration rerun GREEN on `beta/fix-gaps1`)
 **Execution Result:** `docs/beta/execution_results/L0_phase_integration_results.md`
 
 **TEST:** `src/backend/tests/integration/test_l0_phase_integration.py`
@@ -1195,6 +1218,7 @@ cd src/backend && uv run pytest tests/integration/test_l2_auth_integration.py -v
 
 **Duration:** 1 hour
 **Invariant(s) Satisfied:** I6 (state storage foundation)
+**Status:** ✅ Completed (2026-02-27, strict test-first RED → GREEN on `beta/fix-gaps1`; repository stub replaced with real implementation)
 
 **READ FIRST:**
 - `@spec docs/best_practices/yaml/dynamodb_modeling_spec.yaml`
@@ -1248,6 +1272,8 @@ VALIDATION CRITERIA (ALL MUST PASS):
 - [ ] Run: cd src/backend && uv run pytest tests/unit/test_l3_application_schema.py -v --tb=short
 - [ ] Run: cd src/backend && uv run ruff check careervp/dal/application_repository.py
 - [ ] Run: cd src/backend && uv run mypy careervp/dal/application_repository.py --strict
+- [ ] grep -n "NotImplementedError" src/backend/careervp/dal/application_repository.py | wc -l → 0
+- [ ] grep -n "assert True" src/backend/tests/unit/test_l3_application_schema.py | wc -l → 0
 
 OUTPUT FORMAT:
 - Write results to: docs/beta/execution_results/L3_1_results.md
@@ -1263,6 +1289,7 @@ OUTPUT FORMAT:
 
 **Duration:** 1.5 hours
 **Invariant(s) Satisfied:** I6 (recovery endpoint)
+**Status:** ✅ Completed (2026-02-27, strict test-first RED → GREEN on `beta/fix-gaps1`; dedicated application handler + route wiring landed)
 
 **READ FIRST:**
 - `@spec docs/best_practices/yaml/lambda_handler_spec.yaml`
@@ -1316,6 +1343,8 @@ VALIDATION CRITERIA (ALL MUST PASS):
 - [ ] Run: cd src/backend && uv run ruff check careervp/handlers/application_handler.py
 - [ ] Run: cd src/backend && uv run mypy careervp/handlers/application_handler.py --strict
 - [ ] Manual: curl GET /applications/{id} with valid token → 200 with full state
+- [ ] grep -n "(\"/applications/{application_id}\", \"GET\", self.job_api_func)" infra/careervp/api_construct.py | wc -l → 0
+- [ ] grep -n "@app.get('/applications/<application_id>')" src/backend/careervp/handlers/job_handler.py | wc -l → 0
 
 OUTPUT FORMAT:
 - Write results to: docs/beta/execution_results/L3_2_results.md
@@ -1331,6 +1360,7 @@ OUTPUT FORMAT:
 
 **Duration:** 1 hour
 **Invariant(s) Satisfied:** I5 (credit charge wired), I6 (state transition)
+**Status:** ✅ Completed (2026-02-27, strict test-first RED → GREEN on `beta/fix-gaps1`; TrialService + gap flow ordering implemented)
 
 **READ FIRST:**
 - `@spec docs/best_practices/yaml/trial_enforcement_spec.yaml`
@@ -1398,6 +1428,7 @@ OUTPUT FORMAT:
 
 **Duration:** 1 hour
 **Invariant(s) Satisfied:** I6
+**Status:** ✅ Completed (2026-02-27, strict test-first rework on `beta/fix-gaps1`; placeholder recovery assertions replaced with concrete tests)
 
 **READ FIRST:**
 - `@spec docs/best_practices/yaml/application_state_spec.yaml`
@@ -1433,6 +1464,8 @@ VALIDATION CRITERIA (ALL MUST PASS):
 - [ ] Run: cd src/backend && uv run pytest tests/unit/test_application_state.py tests/unit/test_l3_state_recovery.py -v --tb=short
 - [ ] Run: cd src/backend && uv run ruff check careervp/
 - [ ] Run: cd src/backend && uv run mypy careervp/ --strict
+- [ ] grep -n "assert True" src/backend/tests/unit/test_application_state.py src/backend/tests/unit/test_l3_state_recovery.py | wc -l → 0
+- [ ] If frontend is unavailable, mark this step backend-partial and keep Phase 4 status at `🟡` until FE reload validation is complete
 
 OUTPUT FORMAT:
 - Write results to: docs/beta/execution_results/L3_4_results.md
@@ -1466,6 +1499,8 @@ OUTPUT FORMAT:
 
 **Duration:** 1.5 hours
 **Invariant(s) Satisfied:** I5 (partial — expiry check)
+**Status:** ✅ Completed (2026-02-27, strict unit/lint/type gates GREEN on `beta/fix-gaps1`)
+**Execution Result:** `docs/beta/execution_results/L5_1_results.md`
 
 **READ FIRST:**
 - `@spec docs/best_practices/yaml/trial_enforcement_spec.yaml`
@@ -1526,6 +1561,8 @@ OUTPUT FORMAT:
 
 **Duration:** 1.5 hours
 **Invariant(s) Satisfied:** I5 (atomic counter, race condition safe)
+**Status:** ✅ Completed (2026-02-27, atomic counter + race-condition tests GREEN on `beta/fix-gaps1`)
+**Execution Result:** `docs/beta/execution_results/L5_2_results.md`
 
 **READ FIRST:**
 - `@spec docs/best_practices/yaml/trial_enforcement_spec.yaml`
@@ -1587,6 +1624,8 @@ OUTPUT FORMAT:
 
 **Duration:** 1 hour
 **Invariant(s) Satisfied:** I5 (usage visibility)
+**Status:** ✅ Completed (2026-02-27, TrialService-backed usage endpoint validated on `beta/fix-gaps1`)
+**Execution Result:** `docs/beta/execution_results/L5_3_results.md`
 
 **READ FIRST:**
 - `@spec docs/best_practices/yaml/trial_enforcement_spec.yaml`
@@ -1639,6 +1678,8 @@ OUTPUT FORMAT:
 
 **Duration:** 1 hour
 **Invariant(s) Satisfied:** I5 (all 3 sub-tests)
+**Status:** 🟡 In progress (2026-02-27, local unit+integration gates + full backend regression suite are GREEN; staging metadata refresh still pending for final sign-off)
+**Execution Result:** `docs/beta/execution_results/L5_4_results.md`
 
 **READ FIRST:**
 - `@spec docs/best_practices/yaml/trial_enforcement_spec.yaml`
@@ -1666,6 +1707,9 @@ IMPLEMENTATION DETAILS:
 VALIDATION CRITERIA (ALL MUST PASS):
 - [ ] Run: cd src/backend && uv run pytest tests/unit/test_trial_enforcement.py -v --tb=short
 - [ ] Evidence: docs/beta/evidence/I5_trial/trial-enforcement-report.json exists and all pass=true
+- [ ] grep -n "NotImplementedError" src/backend/careervp/logic/trial_service.py | wc -l → 0
+- [ ] grep -n "assert True" src/backend/tests/unit/test_trial_enforcement.py src/backend/tests/integration/test_l5_trial_integration.py | wc -l → 0
+- [ ] Evidence metadata includes `environment=staging` and deployed commit SHA
 
 OUTPUT FORMAT:
 - Write results to: docs/beta/execution_results/L5_4_results.md
@@ -2378,11 +2422,11 @@ python scripts/generate_evidence_bundle.py --env staging --runs 50
 
 | Phase | Layer | Steps | Integration Test | Evidence | Status |
 |-------|-------|-------|------------------|----------|--------|
-| Phase 1: Generator Reality | L0 | L0.1–L0.5 | ✓ test_l0_phase_integration.py | E1 | ✅ Completed (L0.1–L0.5 + integration + E1 evidence) |
+| Phase 1: Generator Reality | L0 | L0.1–L0.5 | ✓ test_l0_phase_integration.py | E1 | ✅ Completed (L0.3 fallback removed; unit + integration rerun GREEN. E1 currently local-integration evidence; refresh on staging required for final L8 sign-off) |
 | Phase 2: Persistence | L1 | L1.1–L1.4 | ✓ test_l1_phase_integration.py | E2 | ✅ Completed (L1.1–L1.4 + integration + E2 evidence) |
 | Phase 3: Auth Migration | L2 | L2.1–L2.5 | ✓ test_l2_auth_integration.py | E3, E4 | 🟡 In progress (L2.1–L2.3 + L2.5 complete; L2.4 [FE] blocked: no frontend workspace) |
-| Phase 4: Application State | L3 | L3.1–L3.4 | ✓ test_l3_state_recovery.py | E6 (partial, [FE]) | ⬜ |
-| Phase 5: Trial Enforcement | L5 | L5.1–L5.4 | ✓ test_l5_trial_integration.py | E5 | ⬜ |
+| Phase 4: Application State | L3 | L3.1–L3.4 | ✓ test_l3_state_recovery.py | E6 (partial, [FE]) | 🟡 In progress (L3.1–L3.4 backend complete; frontend reload validation/evidence closure still deferred) |
+| Phase 5: Trial Enforcement | L5 | L5.1–L5.4 | ✓ test_l5_trial_integration.py | E5 | 🟡 In progress (L5.1–L5.3 complete; L5.4 local integration/evidence GREEN. Staging evidence refresh still required for final sign-off.) |
 | Phase 6: Route Cleanup | L6 | L6.1–L6.4 | ✓ route surface diff | E7 | ✅ Completed (L6.1–L6.4 complete; staging deploy + route/OpenAPI evidence refreshed) |
 | Phase 7: Frontend | L7 | L7.1–L7.5 [FE] | ✓ Playwright E2E | E6 [FE] | ⛔ Deferred (frontend workspace not available) |
 | Phase 8: Operational Readiness | L8 | L8.1–L8.4 | ✓ staging smoke tests | E1–E8 | ⬜ |
