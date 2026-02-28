@@ -39,9 +39,16 @@ class TestAuthBootstrap:
             "auth_token_claims",
             "fixture/auth_headers",
             0,
-            {"token_use": claims.get("token_use"), "iss": claims.get("iss"), "aud": claims.get("aud"), "client_id": claims.get("client_id")},
+            {
+                "token_use": claims.get("token_use"),
+                "iss": claims.get("iss"),
+                "aud": claims.get("aud"),
+                "client_id": claims.get("client_id"),
+            },
         )
-        response = requests.get(f"{API_BASE}/users/me/usage", headers=auth_headers, timeout=20)
+        response = requests.get(
+            f"{API_BASE}/users/me/usage", headers=auth_headers, timeout=20
+        )
         try:
             data = response.json()
         except Exception:

@@ -118,7 +118,10 @@ class TestVPREndpoints:
                 data = {"raw_text": response.text}
 
             print_response(
-                "test_get_vpr_status", f"GET /vpr/{vpr_id}/status", response.status_code, data
+                "test_get_vpr_status",
+                f"GET /vpr/{vpr_id}/status",
+                response.status_code,
+                data,
             )
 
             status = data.get("status", "unknown")
@@ -130,7 +133,10 @@ class TestVPREndpoints:
                 data = {"raw_text": response.text}
 
             print_response(
-                "test_get_vpr_status", f"GET /vpr/{vpr_id}/status", response.status_code, data
+                "test_get_vpr_status",
+                f"GET /vpr/{vpr_id}/status",
+                response.status_code,
+                data,
             )
             print(f"⚠ GET /vpr/{vpr_id}/status - VPR not found")
         else:
@@ -140,7 +146,10 @@ class TestVPREndpoints:
                 data = {"raw_text": response.text}
 
             print_response(
-                "test_get_vpr_status", f"GET /vpr/{vpr_id}/status", response.status_code, data
+                "test_get_vpr_status",
+                f"GET /vpr/{vpr_id}/status",
+                response.status_code,
+                data,
             )
             print(f"⚠ GET /vpr/{vpr_id}/status - Status {response.status_code}")
 
@@ -158,9 +167,7 @@ class TestVPREndpoints:
             except Exception:
                 data = {"raw_text": response.text}
 
-            print_response(
-                "test_list_vprs", "GET /vprs", response.status_code, data
-            )
+            print_response("test_list_vprs", "GET /vprs", response.status_code, data)
 
             vprs = data.get("vprs", [])
             print(f"✓ GET /vprs - Found {len(vprs)} VPR(s)")
@@ -170,9 +177,7 @@ class TestVPREndpoints:
             except Exception:
                 data = {"raw_text": response.text}
 
-            print_response(
-                "test_list_vprs", "GET /vprs", response.status_code, data
-            )
+            print_response("test_list_vprs", "GET /vprs", response.status_code, data)
             print(f"⚠ GET /vprs - Status {response.status_code}")
 
     def test_vpr_async_polling(self):

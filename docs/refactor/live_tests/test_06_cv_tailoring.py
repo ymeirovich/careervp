@@ -133,7 +133,9 @@ class TestCVTailoringEndpoints:
                 list_data = list_response.json()
                 tailored_cvs = list_data.get("tailored_cvs", [])
                 if tailored_cvs:
-                    cv_tailoring_id = tailored_cvs[0].get("id") or tailored_cvs[0].get("cv_id")
+                    cv_tailoring_id = tailored_cvs[0].get("id") or tailored_cvs[0].get(
+                        "cv_id"
+                    )
 
         # Fallback if still no valid ID
         if not cv_tailoring_id:
@@ -168,7 +170,9 @@ class TestCVTailoringEndpoints:
                     f"✓ GET /cv-tailoring/{cv_tailoring_id}/status - Status: {status}, ATS Score: {ats_score}"
                 )
             else:
-                print(f"✓ GET /cv-tailoring/{cv_tailoring_id}/status - Status: {status}")
+                print(
+                    f"✓ GET /cv-tailoring/{cv_tailoring_id}/status - Status: {status}"
+                )
         elif response.status_code == 404:
             try:
                 data = response.json()
@@ -181,7 +185,9 @@ class TestCVTailoringEndpoints:
                 response.status_code,
                 data,
             )
-            print(f"⚠ GET /cv-tailoring/{cv_tailoring_id}/status - Tailored CV not found")
+            print(
+                f"⚠ GET /cv-tailoring/{cv_tailoring_id}/status - Tailored CV not found"
+            )
         else:
             try:
                 data = response.json()
@@ -220,9 +226,7 @@ class TestCVTailoringEndpoints:
             )
 
             tailored_cvs = data.get("tailored_cvs", [])
-            print(
-                f"✓ GET /cv-tailorings - Found {len(tailored_cvs)} tailored CV(s)"
-            )
+            print(f"✓ GET /cv-tailorings - Found {len(tailored_cvs)} tailored CV(s)")
         else:
             try:
                 data = response.json()

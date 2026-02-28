@@ -46,7 +46,9 @@ class TestCompanyResearchEndpoints:
 
     def test_company_research_fetch(self):
         """Test POST /company-research/fetch - SKIPPED: route not registered in API Gateway."""
-        pytest.skip("POST /company-research/fetch is not registered in API Gateway - only GET /company-research/{jobId} exists")
+        pytest.skip(
+            "POST /company-research/fetch is not registered in API Gateway - only GET /company-research/{jobId} exists"
+        )
         url = f"{self.base_url}/company-research/fetch"
         headers = get_auth_headers()
 
@@ -151,7 +153,9 @@ class TestCompanyResearchEndpoints:
 
     def test_company_research_async_polling(self):
         """Test company research async polling lifecycle - SKIPPED: depends on POST /company-research/fetch which is not registered."""
-        pytest.skip("Depends on POST /company-research/fetch which is not registered in API Gateway")
+        pytest.skip(
+            "Depends on POST /company-research/fetch which is not registered in API Gateway"
+        )
         # First, submit a company research request
         self.test_company_research_fetch()
 

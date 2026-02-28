@@ -173,8 +173,10 @@ def run_all_tests(verbose: bool = False, mode: str = "full") -> int:
     print(f"  Modules Failed: {failed}")
     print("=" * 60 + "\n")
 
+    return 0 if failed == 0 else 1
 
-def main():
+
+def main() -> None:
     """Main entry point."""
     parser = argparse.ArgumentParser(
         description="CareerVP Live Test Runner",
@@ -264,7 +266,8 @@ def main():
                     ]
                     print(f"  {name} -> {', '.join(node_ids)}")
         else:
-            run_all_tests(args.verbose, args.mode)
+            exit_code = run_all_tests(args.verbose, args.mode)
+            sys.exit(exit_code)
 
 
 if __name__ == "__main__":

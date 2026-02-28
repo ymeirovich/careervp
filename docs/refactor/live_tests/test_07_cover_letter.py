@@ -149,9 +149,13 @@ class TestCoverLetterEndpoints:
             result = data.get("result", {})
             if result:
                 result.get("paragraphs", {})
-                print(f"✓ GET /cover-letter/{cover_letter_id}/status - Status: {status}")
+                print(
+                    f"✓ GET /cover-letter/{cover_letter_id}/status - Status: {status}"
+                )
             else:
-                print(f"✓ GET /cover-letter/{cover_letter_id}/status - Status: {status}")
+                print(
+                    f"✓ GET /cover-letter/{cover_letter_id}/status - Status: {status}"
+                )
         elif response.status_code == 404:
             try:
                 data = response.json()
@@ -164,7 +168,9 @@ class TestCoverLetterEndpoints:
                 response.status_code,
                 data,
             )
-            print(f"⚠ GET /cover-letter/{cover_letter_id}/status - Cover letter not found")
+            print(
+                f"⚠ GET /cover-letter/{cover_letter_id}/status - Cover letter not found"
+            )
         else:
             try:
                 data = response.json()
@@ -203,9 +209,7 @@ class TestCoverLetterEndpoints:
             )
 
             cover_letters = data.get("cover_letters", [])
-            print(
-                f"✓ GET /cover-letters - Found {len(cover_letters)} cover letter(s)"
-            )
+            print(f"✓ GET /cover-letters - Found {len(cover_letters)} cover letter(s)")
         else:
             try:
                 data = response.json()

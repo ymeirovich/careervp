@@ -215,9 +215,7 @@ class TestGapAnalysisEndpoints:
                 response.status_code,
                 data,
             )
-            print(
-                f"⚠ GET /jobs/{job_id}/gap-questions - No questions found for job"
-            )
+            print(f"⚠ GET /jobs/{job_id}/gap-questions - No questions found for job")
         else:
             try:
                 data = response.json()
@@ -230,6 +228,4 @@ class TestGapAnalysisEndpoints:
                 response.status_code,
                 data,
             )
-            print(
-                f"⚠ GET /jobs/{job_id}/gap-questions - Status {response.status_code}"
-            )
+            print(f"⚠ GET /jobs/{job_id}/gap-questions - Status {response.status_code}")

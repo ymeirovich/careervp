@@ -144,7 +144,9 @@ class TestInterviewPrepEndpoints:
                     f"✓ GET /interview-prep/{interview_prep_id}/status - Status: {status}, Questions: {len(questions)}"
                 )
             else:
-                print(f"✓ GET /interview-prep/{interview_prep_id}/status - Status: {status}")
+                print(
+                    f"✓ GET /interview-prep/{interview_prep_id}/status - Status: {status}"
+                )
         elif response.status_code == 404:
             try:
                 data = response.json()
