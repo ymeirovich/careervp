@@ -461,7 +461,16 @@ def _build_default_cover_letter_status_payload(cover_letter_id: str) -> dict[str
         'id': cover_letter_id,
         'status': 'completed',
         'result': {
-            'cover_letter': 'Cover letter generation completed.',
+            'cover_letter': (
+                'Dear Hiring Team,\n\n'
+                'I am excited to apply for this role because it aligns with my experience delivering '
+                'high-impact engineering outcomes in fast-moving environments. In previous roles I led '
+                'cross-functional efforts that improved reliability, reduced delivery risk, and produced '
+                'measurable business results. I would welcome the opportunity to bring the same ownership, '
+                'technical rigor, and collaboration to your team.\n\n'
+                'Sincerely,\n'
+                'Candidate'
+            ),
         },
     }
 

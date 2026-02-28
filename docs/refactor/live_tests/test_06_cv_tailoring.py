@@ -14,6 +14,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from .conftest import API_BASE, TEST_USER_ID, get_auth_headers, save_test_ids
+from .quality_assertions import assert_tailored_cv_quality
 
 # Import test data from previous tests
 from .test_01_auth_health import test_data
@@ -131,61 +132,22 @@ class TestCVTailoringEndpoints:
 
         response = requests.get(url, headers=headers, timeout=10)
 
-        # Accept 200 (success), 404 (not found), or 401 (auth required)
-        if response.status_code == 200:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw_text": response.text}
 
-            print_response(
-                "test_get_tailored_cv_status",
-                f"GET /cv-tailoring/{cv_tailoring_id}/status",
-                response.status_code,
-                data,
-            )
-
-            status = data.get("status", "unknown")
-            result = data.get("result", {})
-            if result:
-                ats_score = result.get("ats_score", "N/A")
-                print(
-                    f"✓ GET /cv-tailoring/{cv_tailoring_id}/status - Status: {status}, ATS Score: {ats_score}"
-                )
-            else:
-                print(
-                    f"✓ GET /cv-tailoring/{cv_tailoring_id}/status - Status: {status}"
-                )
-        elif response.status_code == 404:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
-
-            print_response(
-                "test_get_tailored_cv_status",
-                f"GET /cv-tailoring/{cv_tailoring_id}/status",
-                response.status_code,
-                data,
-            )
-            print(
-                f"⚠ GET /cv-tailoring/{cv_tailoring_id}/status - Tailored CV not found"
-            )
-        else:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
-
-            print_response(
-                "test_get_tailored_cv_status",
-                f"GET /cv-tailoring/{cv_tailoring_id}/status",
-                response.status_code,
-                data,
-            )
-            print(
-                f"⚠ GET /cv-tailoring/{cv_tailoring_id}/status - Status {response.status_code}"
-            )
+        print_response(
+            "test_get_tailored_cv_status",
+            f"GET /cv-tailoring/{cv_tailoring_id}/status",
+            response.status_code,
+            data,
+        )
+        assert response.status_code == 200, f"GET /cv-tailoring/{cv_tailoring_id}/status returned {response.status_code}"
+        assert_tailored_cv_quality(data)
+        status = data.get("status", "unknown")
+        ats_score = data.get("result", {}).get("ats_score", "N/A")
+        print(f"✓ GET /cv-tailoring/{cv_tailoring_id}/status - Status: {status}, ATS Score: {ats_score}")
 
     def test_list_tailored_cvs(self):
         """Test GET /cv-tailorings - list user's tailored CVs."""
@@ -194,35 +156,20 @@ class TestCVTailoringEndpoints:
 
         response = requests.get(url, headers=headers, timeout=10)
 
-        # Accept 200 (success) or 401 (auth required)
-        if response.status_code == 200:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw_text": response.text}
 
-            print_response(
-                "test_list_tailored_cvs",
-                "GET /cv-tailorings",
-                response.status_code,
-                data,
-            )
-
-            tailored_cvs = data.get("tailored_cvs", [])
-            print(f"✓ GET /cv-tailorings - Found {len(tailored_cvs)} tailored CV(s)")
-        else:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
-
-            print_response(
-                "test_list_tailored_cvs",
-                "GET /cv-tailorings",
-                response.status_code,
-                data,
-            )
-            print(f"⚠ GET /cv-tailorings - Status {response.status_code}")
+        print_response(
+            "test_list_tailored_cvs",
+            "GET /cv-tailorings",
+            response.status_code,
+            data,
+        )
+        assert response.status_code == 200, f"GET /cv-tailorings returned {response.status_code}"
+        tailored_cvs = data.get("tailored_cvs", [])
+        print(f"✓ GET /cv-tailorings - Found {len(tailored_cvs)} tailored CV(s)")
 
     def test_cv_tailoring_async_polling(self):
         """Test CV tailoring async polling lifecycle."""
@@ -261,6 +208,7 @@ class TestCVTailoringEndpoints:
                 status = data.get("status", "")
 
                 if status == "completed":
+                    assert_tailored_cv_quality(data)
                     result = data.get("result", {})
                     ats_score = result.get("ats_score", "N/A")
                     print(
@@ -277,4 +225,4 @@ class TestCVTailoringEndpoints:
 
             time.sleep(poll_interval)
 
-        print(f"⚠ CV tailoring polling - Timeout after {max_attempts * poll_interval}s")
+        pytest.fail(f"CV tailoring polling timed out after {max_attempts * poll_interval}s")

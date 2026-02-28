@@ -13,6 +13,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from .conftest import API_BASE, TEST_USER_ID, get_auth_headers, save_test_ids
+from .quality_assertions import assert_cover_letter_quality
 
 # Import test data from previous tests
 from .test_01_auth_health import test_data
@@ -131,61 +132,21 @@ class TestCoverLetterEndpoints:
 
         response = requests.get(url, headers=headers, timeout=10)
 
-        # Accept 200 (success), 404 (not found), or 401 (auth required)
-        if response.status_code == 200:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw_text": response.text}
 
-            print_response(
-                "test_get_cover_letter_status",
-                f"GET /cover-letter/{cover_letter_id}/status",
-                response.status_code,
-                data,
-            )
-
-            status = data.get("status", "unknown")
-            result = data.get("result", {})
-            if result:
-                result.get("paragraphs", {})
-                print(
-                    f"✓ GET /cover-letter/{cover_letter_id}/status - Status: {status}"
-                )
-            else:
-                print(
-                    f"✓ GET /cover-letter/{cover_letter_id}/status - Status: {status}"
-                )
-        elif response.status_code == 404:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
-
-            print_response(
-                "test_get_cover_letter_status",
-                f"GET /cover-letter/{cover_letter_id}/status",
-                response.status_code,
-                data,
-            )
-            print(
-                f"⚠ GET /cover-letter/{cover_letter_id}/status - Cover letter not found"
-            )
-        else:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
-
-            print_response(
-                "test_get_cover_letter_status",
-                f"GET /cover-letter/{cover_letter_id}/status",
-                response.status_code,
-                data,
-            )
-            print(
-                f"⚠ GET /cover-letter/{cover_letter_id}/status - Status {response.status_code}"
-            )
+        print_response(
+            "test_get_cover_letter_status",
+            f"GET /cover-letter/{cover_letter_id}/status",
+            response.status_code,
+            data,
+        )
+        assert response.status_code == 200, f"GET /cover-letter/{cover_letter_id}/status returned {response.status_code}"
+        assert_cover_letter_quality(data)
+        status = data.get("status", "unknown")
+        print(f"✓ GET /cover-letter/{cover_letter_id}/status - Status: {status}")
 
     def test_list_cover_letters(self):
         """Test GET /cover-letters - list user's cover letters."""
@@ -194,35 +155,20 @@ class TestCoverLetterEndpoints:
 
         response = requests.get(url, headers=headers, timeout=10)
 
-        # Accept 200 (success) or 401 (auth required)
-        if response.status_code == 200:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw_text": response.text}
 
-            print_response(
-                "test_list_cover_letters",
-                "GET /cover-letters",
-                response.status_code,
-                data,
-            )
-
-            cover_letters = data.get("cover_letters", [])
-            print(f"✓ GET /cover-letters - Found {len(cover_letters)} cover letter(s)")
-        else:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
-
-            print_response(
-                "test_list_cover_letters",
-                "GET /cover-letters",
-                response.status_code,
-                data,
-            )
-            print(f"⚠ GET /cover-letters - Status {response.status_code}")
+        print_response(
+            "test_list_cover_letters",
+            "GET /cover-letters",
+            response.status_code,
+            data,
+        )
+        assert response.status_code == 200, f"GET /cover-letters returned {response.status_code}"
+        cover_letters = data.get("cover_letters", [])
+        print(f"✓ GET /cover-letters - Found {len(cover_letters)} cover letter(s)")
 
     def test_cover_letter_async_polling(self):
         """Test cover letter async polling lifecycle."""
@@ -259,8 +205,7 @@ class TestCoverLetterEndpoints:
                 status = data.get("status", "")
 
                 if status == "completed":
-                    result = data.get("result", {})
-                    result.get("paragraphs", {})
+                    assert_cover_letter_quality(data)
                     print(
                         f"✓ Cover letter polling - Completed after {attempt * poll_interval}s"
                     )
@@ -275,4 +220,4 @@ class TestCoverLetterEndpoints:
 
             time.sleep(poll_interval)
 
-        print(f"⚠ Cover letter polling - Timeout after {max_attempts * poll_interval}s")
+        pytest.fail(f"Cover letter polling timed out after {max_attempts * poll_interval}s")

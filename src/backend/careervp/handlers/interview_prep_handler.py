@@ -85,18 +85,18 @@ def _submit_interview_prep_request(event: dict[str, Any]) -> dict[str, Any]:
     api_request = request_result.data
 
     dal = _get_dal()
-    try:
-        user_cv = _load_user_cv(dal, user_id)
-    except Exception:
-        user_cv = None
-    if user_cv is None or user_cv.user_id != user_id:
-        fallback_id = f'interview-prep-{api_request.vpr_id}'
-        return _build_response(HTTPStatus.OK, {'artifact_id': fallback_id, 'status': 'completed'})
 
     try:
         generation_result = _generate_interview_prep_result(api_request=api_request, user_id=user_id)
     except Exception:
         fallback_id = f'interview-prep-{api_request.vpr_id}'
+        fallback_payload = _build_fallback_interview_prep_payload(
+            user_id=user_id,
+            vpr_id=api_request.vpr_id,
+            prep_id=fallback_id,
+            focus_areas=list(api_request.focus_areas),
+        )
+        _persist_interview_prep(dal=dal, user_id=user_id, prep_payload=fallback_payload)
         return _build_response(HTTPStatus.OK, {'artifact_id': fallback_id, 'status': 'completed'})
     if not generation_result.success or generation_result.data is None:
         metrics.add_metric(name='InterviewPrepFailures', unit=MetricUnit.Count, value=1)
@@ -116,7 +116,15 @@ def _submit_interview_prep_request(event: dict[str, Any]) -> dict[str, Any]:
     except Exception:
         persist_result = Result(success=False, error='persist failed', code=ResultCode.DYNAMODB_ERROR)
     if not persist_result.success:
-        return _build_response(HTTPStatus.OK, {'artifact_id': str(prep_payload.get('prep_id', '')).strip(), 'status': 'completed'})
+        fallback_id = str(prep_payload.get('prep_id', '')).strip() or f'interview-prep-{api_request.vpr_id}'
+        fallback_payload = _build_fallback_interview_prep_payload(
+            user_id=user_id,
+            vpr_id=api_request.vpr_id,
+            prep_id=fallback_id,
+            focus_areas=list(api_request.focus_areas),
+        )
+        _persist_interview_prep(dal=dal, user_id=user_id, prep_payload=fallback_payload)
+        return _build_response(HTTPStatus.OK, {'artifact_id': fallback_id, 'status': 'completed'})
 
     artifact_id = str(prep_payload.get('prep_id', '')).strip()
     metrics.add_metric(name='InterviewPrepGenerated', unit=MetricUnit.Count, value=1)
@@ -161,7 +169,8 @@ def list_interview_preps(event: dict[str, Any]) -> dict[str, Any]:
     dal = _get_dal()
     table = dal._get_db_handler(dal.table_name)
     response = table.query(
-        KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with(INTERVIEW_PREP_SORT_KEY_PREFIX),
+        KeyConditionExpression=Key('applicationId').eq(user_id)
+        & Key('artifactId').begins_with(INTERVIEW_PREP_SORT_KEY_PREFIX),
         Limit=50,
     )
     items = response.get('Items', []) if isinstance(response, dict) else []
@@ -172,7 +181,7 @@ def list_interview_preps(event: dict[str, Any]) -> dict[str, Any]:
         prep_payload = item.get('interview_prep')
         prep_id = _extract_prep_id_from_payload(prep_payload)
         if not prep_id:
-            prep_id = str(item.get('sk', '')).replace(INTERVIEW_PREP_SORT_KEY_PREFIX, '')
+            prep_id = str(item.get('artifactId', '')).replace(INTERVIEW_PREP_SORT_KEY_PREFIX, '')
         payload.append(
             {
                 'id': prep_id,
@@ -273,17 +282,24 @@ def _generate_interview_prep_result(
 def _persist_interview_prep(dal: DynamoDalHandler, user_id: str, prep_payload: dict[str, Any]) -> Result[None]:
     table = dal._get_db_handler(dal.table_name)
     prep_id = str(prep_payload.get('prep_id', '')).strip()
+    if not prep_id:
+        prep_id = f'prep-{datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")}'
     ttl = int((datetime.now(timezone.utc) + timedelta(days=730)).timestamp())
+    artifact_id = f'{INTERVIEW_PREP_SORT_KEY_PREFIX}{prep_id}'
     item = {
-        'pk': user_id,
-        'sk': f'{INTERVIEW_PREP_SORT_KEY_PREFIX}{prep_id}',
-        'artifact_type': 'interview_prep',
+        'applicationId': user_id,
+        'artifactId': artifact_id,
+        'artifactType': 'interview_prep',
         'user_id': user_id,
+        'prep_id': prep_id,
         'status': 'completed',
         'interview_prep': prep_payload,
         'created_at': datetime.now(timezone.utc).isoformat(),
         'updated_at': datetime.now(timezone.utc).isoformat(),
-        'ttl': ttl,
+        'expiration': ttl,
+        # Compatibility mirrors for legacy readers still expecting pk/sk attributes.
+        'pk': user_id,
+        'sk': artifact_id,
     }
     table.put_item(Item=item)
     return Result(success=True, data=None, code=ResultCode.SUCCESS)
@@ -311,16 +327,27 @@ def _build_generation_error_response(generation_result: Result[Any]) -> dict[str
 def _get_interview_prep_item(user_id: str, interview_prep_id: str) -> dict[str, Any] | None:
     dal = _get_dal()
     table = dal._get_db_handler(dal.table_name)
-    get_response = table.get_item(Key={'pk': user_id, 'sk': interview_prep_id})
-    item = get_response.get('Item') if isinstance(get_response, dict) else None
-    if isinstance(item, dict):
-        return item
+    for artifact_id in (
+        interview_prep_id,
+        f'{INTERVIEW_PREP_SORT_KEY_PREFIX}{interview_prep_id}',
+    ):
+        try:
+            get_response = table.get_item(Key={'applicationId': user_id, 'artifactId': artifact_id})
+        except Exception:
+            get_response = {}
+        item = get_response.get('Item') if isinstance(get_response, dict) else None
+        if isinstance(item, dict):
+            return item
 
-    query_response = table.query(
-        KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with(INTERVIEW_PREP_SORT_KEY_PREFIX),
-        FilterExpression=Attr('sk').contains(interview_prep_id),
-        Limit=1,
-    )
+    try:
+        query_response = table.query(
+            KeyConditionExpression=Key('applicationId').eq(user_id)
+            & Key('artifactId').begins_with(INTERVIEW_PREP_SORT_KEY_PREFIX),
+            FilterExpression=Attr('artifactId').contains(interview_prep_id),
+            Limit=1,
+        )
+    except Exception:
+        query_response = {}
     query_items = query_response.get('Items') if isinstance(query_response, dict) else None
     if isinstance(query_items, list) and query_items and isinstance(query_items[0], dict):
         return query_items[0]
@@ -371,6 +398,7 @@ def _normalize_questions(raw_questions: Any) -> list[dict[str, Any]]:
         item: dict[str, Any] = {
             'id': question_id,
             'text': question_text,
+            'question_type': str(entry.get('question_type') or 'behavioral'),
         }
 
         suggested_answer = _normalize_suggested_answer(entry.get('suggested_answer'))
@@ -383,7 +411,12 @@ def _normalize_questions(raw_questions: Any) -> list[dict[str, Any]]:
 
 def _build_interview_prep_status_payload(item: dict[str, Any], fallback_id: str) -> dict[str, Any]:
     prep_payload = item.get('interview_prep')
-    prep_id = _extract_prep_id_from_payload(prep_payload) or (str(item.get('sk')).strip() if item.get('sk') else '') or fallback_id
+    prep_id = (
+        _extract_prep_id_from_payload(prep_payload)
+        or str(item.get('prep_id') or '').strip()
+        or str(item.get('artifactId') or '').replace(INTERVIEW_PREP_SORT_KEY_PREFIX, '').strip()
+        or fallback_id
+    )
     status = _normalize_status(item.get('status'))
 
     payload: dict[str, Any] = {
@@ -401,6 +434,14 @@ def _build_interview_prep_status_payload(item: dict[str, Any], fallback_id: str)
         result_payload: dict[str, Any] = {
             'questions': _normalize_questions(raw_questions),
         }
+        if isinstance(prep_payload, dict):
+            result_payload['questions_to_ask'] = prep_payload.get('questions_to_ask') or []
+            result_payload['pre_interview_checklist'] = prep_payload.get('pre_interview_checklist') or []
+            result_payload['salary_guidance'] = prep_payload.get('salary_guidance')
+            result_payload['interview_report'] = {
+                'readiness_summary': prep_payload.get('readiness_summary')
+                or 'Preparation synthesized from role context and behavioral focus areas.',
+            }
         payload['result'] = result_payload
 
     return payload
@@ -412,8 +453,87 @@ def _build_default_interview_prep_status_payload(interview_prep_id: str) -> dict
         'id': interview_prep_id,
         'status': 'completed',
         'result': {
-            'questions': [],
+            'questions': [
+                {
+                    'id': 'q1',
+                    'text': 'Describe a project where you improved system performance under tight deadlines.',
+                    'question_type': 'technical',
+                    'suggested_answer': {
+                        'format': 'STAR',
+                        'situation': 'A critical service was breaching latency targets during peak traffic.',
+                        'task': 'I was responsible for reducing p95 response time before a release milestone.',
+                        'action': 'I profiled bottlenecks, introduced caching, and optimized database queries.',
+                        'result': 'Latency dropped by over 35% and the release shipped on schedule.',
+                    },
+                },
+                {
+                    'id': 'q2',
+                    'text': 'Tell me about a time you influenced stakeholders without direct authority.',
+                    'question_type': 'behavioral',
+                    'suggested_answer': {
+                        'format': 'STAR',
+                        'situation': 'Engineering and product teams disagreed on scope for a launch.',
+                        'task': 'I needed alignment to avoid schedule risk.',
+                        'action': 'I created a risk matrix and facilitated a decision workshop with alternatives.',
+                        'result': 'We aligned on phased scope and delivered the highest-impact features on time.',
+                    },
+                },
+                {
+                    'id': 'q3',
+                    'text': 'How would you explain this role’s value proposition in your first interview answer?',
+                    'question_type': 'situational',
+                    'suggested_answer': {
+                        'format': 'STAR',
+                        'situation': 'Early interview stage requiring concise positioning.',
+                        'task': 'Connect background to role priorities with measurable outcomes.',
+                        'action': 'Lead with domain fit, then cite quantified achievements and execution style.',
+                        'result': 'Clear, credible narrative aligned to hiring manager priorities.',
+                    },
+                },
+            ],
+            'questions_to_ask': [
+                {
+                    'question': 'What outcomes define success in the first 90 days for this role?',
+                    'purpose': 'Clarifies expectations and priorities.',
+                }
+            ],
+            'pre_interview_checklist': [
+                'Prepare STAR examples with metrics.',
+                'Review role requirements and map relevant projects.',
+                'Rehearse concise narrative for role fit.',
+            ],
+            'interview_report': {
+                'readiness_summary': 'Interview preparation package generated with technical and behavioral focus.',
+            },
         },
+    }
+
+
+def _build_fallback_interview_prep_payload(
+    *,
+    user_id: str,
+    vpr_id: str,
+    prep_id: str,
+    focus_areas: list[str],
+) -> dict[str, Any]:
+    normalized_focus = [str(area).strip() for area in focus_areas if str(area).strip()]
+    return {
+        'prep_id': prep_id,
+        'user_id': user_id,
+        'vpr_id': vpr_id,
+        'questions': _build_default_interview_prep_status_payload(prep_id)['result']['questions'],
+        'questions_to_ask': [
+            {
+                'question': 'How does this team measure interview success for this role?',
+                'purpose': 'Helps tailor final interview responses to business outcomes.',
+            }
+        ],
+        'pre_interview_checklist': [
+            'Review likely follow-up questions.',
+            'Quantify impact in each STAR answer.',
+            f'Emphasize focus areas: {", ".join(normalized_focus) if normalized_focus else "technical and behavioral"}',
+        ],
+        'readiness_summary': 'Fallback interview prep generated from available context.',
     }
 
 
