@@ -40,6 +40,9 @@ This document maps each live test to its corresponding feature in the execution 
 | `test_09_company_research.py` | `TestCompanyResearchEndpoints` | Fetch Company Research | `/company-research/fetch` | POST | Phase 10.9, Company Research Feature |
 | `test_09_company_research.py` | `TestCompanyResearchEndpoints` | Get Company Research | `/company-research/{jobId}` | GET | Phase 10.9 |
 | `test_09_company_research.py` | `TestCompanyResearchEndpoints` | Company Research Async | `/company-research/{jobId}` | GET | Phase 10.9 |
+| `test_11_api_error_contracts.py` | `TestAPIErrorContracts` | Missing auth / invalid token error contracts | `/users/me`, `/users/me/usage`, `/auth/refresh` | GET/POST | Error-contract validation |
+| `test_11_api_error_contracts.py` | `TestAPIErrorContracts` | Validation/resource error contracts | `/jobs`, `/jobs/{jobId}` | POST/GET | Error-contract validation |
+| `test_11_api_error_contracts.py` | `TestAPIErrorContracts` | Application recovery auth/not-found checks | `/applications/{application_id}` | GET | New route validation |
 
 ## Feature Coverage Summary
 
@@ -57,10 +60,10 @@ This document maps each live test to its corresponding feature in the execution 
 
 | Metric | Count |
 |--------|-------|
-| **Total Test Files** | 9 |
-| **Total Test Classes** | 9 |
-| **Total Test Methods** | 32 |
-| **API Endpoints Covered** | 27/27 (100%) |
+| **Total Test Files** | 11 |
+| **Total Test Classes** | 11 |
+| **Total Test Methods** | 41 |
+| **API Endpoints Covered** | 29 (27 strict success + 2 new/updated routes) |
 | **Features Covered** | 7/7 (100%) |
 
 ## Workflow Integration Tests

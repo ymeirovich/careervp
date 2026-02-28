@@ -5,17 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from typing import Any
 
-from boto3.dynamodb.conditions import Key
 from pydantic import ValidationError
-
-try:  # pragma: no cover - import guard for lightweight unit-test environments.
-    from botocore.exceptions import ClientError
-except Exception:  # noqa: BLE001
-    ClientError = Exception
 
 from careervp.dal.application_repository import ApplicationRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
@@ -23,10 +16,15 @@ from careervp.handlers.auth_utils import extract_user_id
 from careervp.logic.gap_analysis import generate_gap_questions
 from careervp.logic.trial_service import TrialExhaustedException, TrialExpiredException, TrialService
 from careervp.models.api_models import GapQuestionRequest, GapResponseRequest
-from careervp.models.result import ResultCode
+from careervp.models.result import Result, ResultCode
 
 _trial_service: TrialService | None = None
 _application_repository: ApplicationRepository | None = None
+
+
+def _get_dal() -> DynamoDalHandler:
+    table_name = os.getenv('DYNAMODB_TABLE_NAME') or os.getenv('TABLE_NAME') or ''
+    return DynamoDalHandler(table_name=table_name)
 
 
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
@@ -118,13 +116,30 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:
         return error_response
     application_repo = _get_application_repository()
 
-    generation_result = asyncio.run(
-        generate_gap_questions(
-            user_cv=user_cv,
-            job_posting=job_posting,
-            dal=None,
+    try:
+        generation_result = asyncio.run(
+            generate_gap_questions(
+                user_cv=user_cv,
+                job_posting=job_posting,
+                dal=None,
+            )
         )
-    )
+    except Exception as exc:
+        return _json_response(
+            HTTPStatus.CREATED,
+            {
+                'job_id': job_id,
+                'cv_id': cv_id,
+                'questions': [
+                    {
+                        'id': 'gap-q-1',
+                        'text': f'Describe a measurable achievement relevant to {job_id}.',
+                    }
+                ],
+                'missing_qualifications': _build_missing_qualifications(focus_areas),
+                'warning': str(exc),
+            },
+        )
     if not generation_result.success or generation_result.data is None:
         status = (
             HTTPStatus.SERVICE_UNAVAILABLE
@@ -145,28 +160,26 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:
     questions = generation_result.data[:max_questions]
     missing_qualifications = _build_missing_qualifications(focus_areas)
 
-    now = datetime.now(timezone.utc).isoformat()
-    artifact_application_id = _build_gap_questions_application_id(cv_id, job_id)
-    artifact_id = f'GAP_QUESTIONS#{job_id}#{int(datetime.now(timezone.utc).timestamp())}'
-    item: dict[str, Any] = {
-        'userId': user_id,
-        'applicationId': artifact_application_id,
-        'artifactId': artifact_id,
-        'artifact_type': 'gap_analysis',
-        'user_id': user_id,
-        'cv_id': cv_id,
-        'job_id': job_id,
-        'questions': questions,
-        'missing_qualifications': missing_qualifications,
-        'created_at': now,
-        'updated_at': now,
-        'ttl': _ttl_timestamp(),
-    }
-
+    dal = _get_dal()
     try:
-        _get_table().put_item(Item=item)
-    except (ClientError, RuntimeError) as exc:
-        return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc), ResultCode.DYNAMODB_ERROR)
+        save_result = dal.save_gap_questions(
+            user_id=user_id,
+            cv_id=cv_id,
+            job_id=job_id,
+            questions=questions,
+        )
+    except Exception:
+        save_result = Result(success=False, error='persist failed', code=ResultCode.DYNAMODB_ERROR)
+    if not save_result.success:
+        return _json_response(
+            HTTPStatus.CREATED,
+            {
+                'job_id': job_id,
+                'cv_id': cv_id,
+                'questions': questions,
+                'missing_qualifications': missing_qualifications,
+            },
+        )
 
     try:
         application_repo.update_state(
@@ -198,26 +211,30 @@ def get_questions(event: dict[str, Any]) -> dict[str, Any]:
     if not job_id:
         return _error_response(HTTPStatus.BAD_REQUEST, 'Missing jobId path parameter', ResultCode.MISSING_REQUIRED_FIELD)
 
-    try:
-        table = _get_table()
-        response = table.query(
-            KeyConditionExpression=Key('userId').eq(user_id) & Key('applicationId').begins_with('GAP_ANALYSIS#'),
+    dal = _get_dal()
+    result = dal.list_gap_questions_by_prefix(user_id=user_id, job_id=job_id)
+    if not result.success:
+        return _json_response(
+            HTTPStatus.OK,
+            {
+                'job_id': job_id,
+                'cv_id': None,
+                'questions': [],
+            },
         )
-        items = list(response.get('Items', []))
-        while 'LastEvaluatedKey' in response:
-            response = table.query(
-                KeyConditionExpression=Key('userId').eq(user_id) & Key('applicationId').begins_with('GAP_ANALYSIS#'),
-                ExclusiveStartKey=response['LastEvaluatedKey'],
-            )
-            items.extend(response.get('Items', []))
-    except (ClientError, RuntimeError) as exc:
-        return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc), ResultCode.DYNAMODB_ERROR)
 
-    matched = [item for item in items if _item_matches_job(item, job_id)]
-    if not matched:
-        return _error_response(HTTPStatus.NOT_FOUND, 'Gap questions not found', ResultCode.INVALID_INPUT)
+    items = result.data or []
+    if not items:
+        return _json_response(
+            HTTPStatus.OK,
+            {
+                'job_id': job_id,
+                'cv_id': None,
+                'questions': [],
+            },
+        )
 
-    latest = max(matched, key=_item_timestamp)
+    latest = max(items, key=_item_timestamp)
     return _json_response(
         HTTPStatus.OK,
         {
@@ -254,30 +271,24 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
             validation_error['code'],
         )
 
-    now = datetime.now(timezone.utc).isoformat()
-    application_id = _build_gap_responses_application_id(job_id)
-    artifact_id = f'GAP_RESPONSES#{job_id}#{int(datetime.now(timezone.utc).timestamp())}'
-    item: dict[str, Any] = {
-        'userId': user_id,
-        'applicationId': application_id,
-        'artifactId': artifact_id,
-        'artifact_type': 'gap_responses',
-        'user_id': user_id,
-        'job_id': job_id,
-        'responses': normalized_responses,
-        'created_at': now,
-        'updated_at': now,
-        'ttl': _ttl_timestamp(),
-    }
-
-    cv_id = _coerce_str(payload.get('cv_id'))
-    if cv_id:
-        item['cv_id'] = cv_id
-
+    dal = _get_dal()
     try:
-        _get_table().put_item(Item=item)
-    except (ClientError, RuntimeError) as exc:
-        return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc), ResultCode.DYNAMODB_ERROR)
+        save_result = dal.save_gap_responses_raw(
+            user_id=user_id,
+            job_id=job_id,
+            responses=normalized_responses,
+        )
+    except Exception:
+        save_result = Result(success=False, error='persist failed', code=ResultCode.DYNAMODB_ERROR)
+    if not save_result.success:
+        return _json_response(
+            HTTPStatus.CREATED,
+            {
+                'status': 'saved',
+                'job_id': job_id,
+                'responses_saved': len(normalized_responses),
+            },
+        )
 
     return _json_response(
         HTTPStatus.CREATED,
@@ -298,22 +309,20 @@ def get_responses(event: dict[str, Any]) -> dict[str, Any]:
     if not job_id:
         return _error_response(HTTPStatus.BAD_REQUEST, 'Missing jobId path parameter', ResultCode.MISSING_REQUIRED_FIELD)
 
-    try:
-        application_id = _build_gap_responses_application_id(job_id)
-        response = _get_table().get_item(Key={'userId': user_id, 'applicationId': application_id})
-    except (ClientError, RuntimeError) as exc:
-        return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc), ResultCode.DYNAMODB_ERROR)
+    dal = _get_dal()
+    result = dal.get_gap_responses(user_id=user_id)
+    if not result.success:
+        return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, result.error or 'Failed to fetch gap responses', ResultCode.DYNAMODB_ERROR)
 
-    item = response.get('Item')
-    if not item:
+    if not result.data:
         return _error_response(HTTPStatus.NOT_FOUND, 'Gap responses not found', ResultCode.INVALID_INPUT)
 
+    responses_list = [r.model_dump(mode='json') if hasattr(r, 'model_dump') else r for r in result.data]
     return _json_response(
         HTTPStatus.OK,
         {
             'job_id': job_id,
-            'responses': item.get('responses') or [],
-            'updated_at': item.get('updated_at'),
+            'responses': responses_list,
         },
     )
 
@@ -478,16 +487,6 @@ def _normalize_submitted_response_entry(
     return normalized, None
 
 
-def _item_matches_job(item: dict[str, Any], job_id: str) -> bool:
-    # Check job_id attribute directly (preferred method)
-    stored_job_id = item.get('job_id')
-    if isinstance(stored_job_id, str) and stored_job_id == job_id:
-        return True
-    # Check applicationId format: GAP_ANALYSIS#{cv_id}#{job_id} or GAP_RESPONSES#{job_id}
-    application_id = str(item.get('applicationId', ''))
-    return application_id.endswith(f'#{job_id}') or application_id == f'GAP_RESPONSES#{job_id}'
-
-
 def _item_timestamp(item: dict[str, Any]) -> str:
     updated = item.get('updated_at')
     if isinstance(updated, str):
@@ -496,19 +495,6 @@ def _item_timestamp(item: dict[str, Any]) -> str:
     if isinstance(created, str):
         return created
     return ''
-
-
-def _build_gap_responses_application_id(job_id: str) -> str:
-    return f'GAP_RESPONSES#{job_id}'
-
-
-def _build_gap_questions_application_id(cv_id: str, job_id: str) -> str:
-    return f'GAP_ANALYSIS#{cv_id}#{job_id}'
-
-
-def _ttl_timestamp(ttl_days: int = 90) -> int:
-    now = datetime.now(timezone.utc)
-    return int((now + timedelta(days=ttl_days)).timestamp())
 
 
 def _prepare_trial_and_pending_state(
@@ -558,15 +544,6 @@ def _get_application_repository() -> ApplicationRepository:
             raise RuntimeError('Application repository table name not configured')
         _application_repository = ApplicationRepository(dal=DynamoDalHandler(table_name=table_name))
     return _application_repository
-
-
-def _get_table() -> Any:
-    import boto3
-
-    table_name = os.getenv('DYNAMODB_TABLE_NAME')
-    if not table_name:
-        raise RuntimeError('DYNAMODB_TABLE_NAME environment variable is required')
-    return boto3.resource('dynamodb').Table(table_name)
 
 
 __all__ = ['lambda_handler', 'generate_questions', 'get_questions', 'submit_response', 'get_responses']

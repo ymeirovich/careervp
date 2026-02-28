@@ -155,9 +155,9 @@ def get_current_user() -> Response[str]:
     if not user_id:
         return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Authentication required'})
 
-    user = _get_user_repository().get_user(user_id)
+    user = _get_user_repository().ensure_user(user_id)
     if user is None:
-        return _json_response(HTTPStatus.NOT_FOUND, {'error': 'User profile not found'})
+        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Failed to initialize user profile'})
     return _json_response(HTTPStatus.OK, user.to_api_dict())
 
 
@@ -197,9 +197,9 @@ def update_current_user() -> Response[str]:
     if isinstance(payload_preferences, dict):
         update_data['preferences'] = payload_preferences
 
-    user = _get_user_repository().update_user(user_id, update_data)
+    user = _get_user_repository().ensure_user(user_id, update_data)
     if user is None:
-        return _json_response(HTTPStatus.NOT_FOUND, {'error': 'User profile not found'})
+        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Failed to update user profile'})
     return _json_response(HTTPStatus.OK, user.to_api_dict())
 
 

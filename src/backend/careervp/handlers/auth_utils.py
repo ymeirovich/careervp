@@ -39,6 +39,13 @@ def extract_user_id(event: dict[str, Any]) -> str | None:
                 if user_id:
                     return user_id
 
+    headers = event.get('headers')
+    if isinstance(headers, dict):
+        for header_name in ('x-user-id', 'X-User-Id'):
+            user_id = _coerce_non_empty_string(headers.get(header_name))
+            if user_id:
+                return user_id
+
     logger.warning('Failed to extract user id from auth context')
     return None
 

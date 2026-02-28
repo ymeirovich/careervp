@@ -6,7 +6,8 @@ This script runs all live tests for the CareerVP API endpoints.
 Tests can be run individually or as a full suite.
 
 Usage:
-    python run_all_tests.py                    # Run all tests
+    python run_all_tests.py                    # Run full suite
+    python run_all_tests.py --mode smoke       # Run smoke subset
     python run_all_tests.py --test health      # Run specific test
     python run_all_tests.py --list             # List available tests
     python run_all_tests.py --verbose           # Verbose output
@@ -17,7 +18,7 @@ Environment Variables:
     STACK_NAME         - CloudFormation stack name (default: careervp-api)
     TEST_USER_ID       - Test user ID (default: test-user-e2e)
     API_KEY            - API key for authenticated requests
-    USE_AUTH           - Whether to use authentication (default: false)
+    USE_AUTH           - Whether to use authentication (default: true)
 
 Examples:
     API_BASE=https://staging-api.careervp.com/v1 python run_all_tests.py
@@ -40,7 +41,7 @@ SCRIPTS_DIR = os.path.join(
 )
 sys.path.insert(0, SCRIPTS_DIR)
 
-from resolve_api_base import resolve_api_base
+from resolve_api_base import resolve_api_base  # noqa: E402
 
 # Add current directory to path
 LIVE_TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -49,6 +50,8 @@ sys.path.insert(0, LIVE_TESTS_DIR)
 
 # Test module mapping
 TEST_MODULES = {
+    "bootstrap": ("test_00_auth_bootstrap", ["TestAuthBootstrap"]),
+    "auth-bootstrap": ("test_00_auth_bootstrap", ["TestAuthBootstrap"]),
     "health": ("test_01_auth_health", ["TestHealthEndpoint"]),
     "auth": ("test_01_auth_health", ["TestAuthEndpoints"]),
     "users": ("test_02_users", ["TestUserEndpoints"]),
@@ -70,10 +73,13 @@ TEST_MODULES = {
         "test_10_api_contract_success",
         ["TestAPIContractSuccess"],
     ),
+    "errors": ("test_11_api_error_contracts", ["TestAPIErrorContracts"]),
+    "api-errors": ("test_11_api_error_contracts", ["TestAPIErrorContracts"]),
+    "error-contracts": ("test_11_api_error_contracts", ["TestAPIErrorContracts"]),
 }
 
 
-def list_tests():
+def list_tests() -> None:
     """List all available tests."""
     print("Available test modules:")
     print("-" * 50)
@@ -86,7 +92,7 @@ def list_tests():
     print("Run with: python run_all_tests.py --test <name>")
 
 
-def run_test_module(module_name: str, class_names: list, verbose: bool = False):
+def run_test_module(module_name: str, class_names: List[str], verbose: bool = False) -> bool:
     """Run tests from a specific module/class list with pytest."""
     print(f"\n{'=' * 60}")
     print(f"Running: {module_name}")
@@ -111,7 +117,7 @@ def run_test_module(module_name: str, class_names: list, verbose: bool = False):
     return True
 
 
-def run_all_tests(verbose: bool = False):
+def run_all_tests(verbose: bool = False, mode: str = "full") -> int:
     """Run all tests in sequence."""
     print("\n" + "=" * 60)
     print("CareerVP Live Test Suite")
@@ -124,10 +130,11 @@ def run_all_tests(verbose: bool = False):
     print("\nConfiguration:")
     print(f"  API Base: {api_base}")
     print(f"  Test User: {test_user}")
-    print(f"  Auth Enabled: {os.environ.get('USE_AUTH', 'false')}")
+    print(f"  Auth Enabled: {os.environ.get('USE_AUTH', 'true')}")
 
     # Run tests in order (dependencies matter!)
-    test_order = [
+    full_order = [
+        "bootstrap",
         "health",
         "auth",
         "users",
@@ -139,7 +146,10 @@ def run_all_tests(verbose: bool = False):
         "cover-letter",
         "interview",
         "contract",
+        "errors",
     ]
+    smoke_order = ["bootstrap", "health", "auth"]
+    test_order = smoke_order if mode == "smoke" else full_order
 
     passed = 0
     failed = 0
@@ -163,8 +173,10 @@ def run_all_tests(verbose: bool = False):
     print(f"  Modules Failed: {failed}")
     print("=" * 60 + "\n")
 
+    return 0 if failed == 0 else 1
 
-def main():
+
+def main() -> None:
     """Main entry point."""
     parser = argparse.ArgumentParser(
         description="CareerVP Live Test Runner",
@@ -181,6 +193,12 @@ def main():
     )
 
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+    parser.add_argument(
+        "--mode",
+        choices=["full", "smoke"],
+        default="full",
+        help="Run mode: full suite or smoke subset (default: full)",
+    )
 
     parser.add_argument(
         "--dry-run", action="store_true", help="Show what would run without executing"
@@ -216,19 +234,25 @@ def main():
         if args.dry_run:
             print("Would run all tests:")
             seen = set()
-            test_order = [
-                "health",
-                "auth",
-                "users",
-                "jobs",
-                "company",
-                "vpr",
-                "gap",
-                "tailoring",
-                "cover-letter",
-                "interview",
-                "contract",
-            ]
+            test_order = (
+                ["bootstrap", "health", "auth"]
+                if args.mode == "smoke"
+                else [
+                    "bootstrap",
+                    "health",
+                    "auth",
+                    "users",
+                    "jobs",
+                    "company",
+                    "vpr",
+                    "gap",
+                    "tailoring",
+                    "cover-letter",
+                    "interview",
+                    "contract",
+                    "errors",
+                ]
+            )
             for name in test_order:
                 if name in TEST_MODULES:
                     module_name, class_names = TEST_MODULES[name]
@@ -242,7 +266,8 @@ def main():
                     ]
                     print(f"  {name} -> {', '.join(node_ids)}")
         else:
-            run_all_tests(args.verbose)
+            exit_code = run_all_tests(args.verbose, args.mode)
+            sys.exit(exit_code)
 
 
 if __name__ == "__main__":

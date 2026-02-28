@@ -1,5 +1,5 @@
 # Live Tests - VPR (Value Proposition Report) Endpoints
-# Tests: POST /vpr/generate, GET /vpr/{vprId}, GET /users/me/vprs
+# Tests: POST /vpr/generate, GET /vpr/{vprId}/status, GET /vprs
 
 import os
 import json
@@ -102,10 +102,10 @@ class TestVPREndpoints:
             )
 
     def test_get_vpr_status(self):
-        """Test GET /vpr/{vprId} - poll VPR status."""
+        """Test GET /vpr/{vprId}/status - poll VPR status."""
         vpr_id = test_data.get("vpr_id") or "test-vpr-id"
 
-        url = f"{self.base_url}/vpr/{vpr_id}"
+        url = f"{self.base_url}/vpr/{vpr_id}/status"
         headers = get_auth_headers()
 
         response = requests.get(url, headers=headers, timeout=10)
@@ -118,11 +118,14 @@ class TestVPREndpoints:
                 data = {"raw_text": response.text}
 
             print_response(
-                "test_get_vpr_status", f"GET /vpr/{vpr_id}", response.status_code, data
+                "test_get_vpr_status",
+                f"GET /vpr/{vpr_id}/status",
+                response.status_code,
+                data,
             )
 
             status = data.get("status", "unknown")
-            print(f"✓ GET /vpr/{vpr_id} - Status: {status}")
+            print(f"✓ GET /vpr/{vpr_id}/status - Status: {status}")
         elif response.status_code == 404:
             try:
                 data = response.json()
@@ -130,9 +133,12 @@ class TestVPREndpoints:
                 data = {"raw_text": response.text}
 
             print_response(
-                "test_get_vpr_status", f"GET /vpr/{vpr_id}", response.status_code, data
+                "test_get_vpr_status",
+                f"GET /vpr/{vpr_id}/status",
+                response.status_code,
+                data,
             )
-            print(f"⚠ GET /vpr/{vpr_id} - VPR not found")
+            print(f"⚠ GET /vpr/{vpr_id}/status - VPR not found")
         else:
             try:
                 data = response.json()
@@ -140,13 +146,16 @@ class TestVPREndpoints:
                 data = {"raw_text": response.text}
 
             print_response(
-                "test_get_vpr_status", f"GET /vpr/{vpr_id}", response.status_code, data
+                "test_get_vpr_status",
+                f"GET /vpr/{vpr_id}/status",
+                response.status_code,
+                data,
             )
-            print(f"⚠ GET /vpr/{vpr_id} - Status {response.status_code}")
+            print(f"⚠ GET /vpr/{vpr_id}/status - Status {response.status_code}")
 
     def test_list_vprs(self):
-        """Test GET /users/me/vprs - list user's VPRs."""
-        url = f"{self.base_url}/users/me/vprs"
+        """Test GET /vprs - list user's VPRs."""
+        url = f"{self.base_url}/vprs"
         headers = get_auth_headers()
 
         response = requests.get(url, headers=headers, timeout=10)
@@ -158,22 +167,18 @@ class TestVPREndpoints:
             except Exception:
                 data = {"raw_text": response.text}
 
-            print_response(
-                "test_list_vprs", "GET /users/me/vprs", response.status_code, data
-            )
+            print_response("test_list_vprs", "GET /vprs", response.status_code, data)
 
             vprs = data.get("vprs", [])
-            print(f"✓ GET /users/me/vprs - Found {len(vprs)} VPR(s)")
+            print(f"✓ GET /vprs - Found {len(vprs)} VPR(s)")
         else:
             try:
                 data = response.json()
             except Exception:
                 data = {"raw_text": response.text}
 
-            print_response(
-                "test_list_vprs", "GET /users/me/vprs", response.status_code, data
-            )
-            print(f"⚠ GET /users/me/vprs - Status {response.status_code}")
+            print_response("test_list_vprs", "GET /vprs", response.status_code, data)
+            print(f"⚠ GET /vprs - Status {response.status_code}")
 
     def test_vpr_async_polling(self):
         """Test VPR async polling lifecycle."""
@@ -184,7 +189,7 @@ class TestVPREndpoints:
         if not vpr_id:
             pytest.skip("No VPR ID available for polling test")
 
-        url = f"{self.base_url}/vpr/{vpr_id}"
+        url = f"{self.base_url}/vpr/{vpr_id}/status"
         headers = get_auth_headers()
 
         # Poll for completion (max 2 minutes)
@@ -202,7 +207,7 @@ class TestVPREndpoints:
 
                 print_response(
                     "test_vpr_async_polling",
-                    f"GET /vpr/{vpr_id}",
+                    f"GET /vpr/{vpr_id}/status",
                     response.status_code,
                     data,
                 )

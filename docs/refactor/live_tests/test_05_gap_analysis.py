@@ -1,5 +1,5 @@
 # Live Tests - Gap Analysis Endpoints
-# Tests: POST /gap-analysis/questions, POST /gap-analysis/responses, GET /gap-analysis/{jobId}/questions
+# Tests: POST /jobs/{jobId}/gap-questions, POST /jobs/{jobId}/gap-responses, GET /jobs/{jobId}/gap-questions
 
 import os
 import json
@@ -39,17 +39,16 @@ class TestGapAnalysisEndpoints:
         self.generated_questions: List[Dict] = []
 
     def test_generate_gap_questions(self):
-        """Test POST /gap-analysis/questions - generate gap analysis questions."""
-        url = f"{self.base_url}/gap-analysis/questions"
-        headers = get_auth_headers()
-
+        """Test POST /jobs/{jobId}/gap-questions - generate gap analysis questions."""
         # Build payload using test data
         cv_id = test_data.get("cv_id") or f"cv_{TEST_USER_ID}"
         job_id = test_data.get("job_id") or f"job_{TEST_USER_ID}"
 
+        url = f"{self.base_url}/jobs/{job_id}/gap-questions"
+        headers = get_auth_headers()
+
         payload = {
             "cv_id": cv_id,
-            "job_id": job_id,
             "max_questions": 10,
             "focus_areas": ["technical", "leadership", "achievements"],
         }
@@ -65,7 +64,7 @@ class TestGapAnalysisEndpoints:
 
             print_response(
                 "test_generate_gap_questions",
-                "POST /gap-analysis/questions",
+                f"POST /jobs/{job_id}/gap-questions",
                 response.status_code,
                 data,
             )
@@ -80,7 +79,7 @@ class TestGapAnalysisEndpoints:
             save_test_ids(test_data)
 
             print(
-                f"✓ POST /gap-analysis/questions - Generated {len(questions)} questions"
+                f"✓ POST /jobs/{job_id}/gap-questions - Generated {len(questions)} questions"
             )
         else:
             try:
@@ -90,21 +89,21 @@ class TestGapAnalysisEndpoints:
 
             print_response(
                 "test_generate_gap_questions",
-                "POST /gap-analysis/questions",
+                f"POST /jobs/{job_id}/gap-questions",
                 response.status_code,
                 data,
             )
             print(
-                f"⚠ POST /gap-analysis/questions - Status {response.status_code}: {response.text[:200]}"
+                f"⚠ POST /jobs/{job_id}/gap-questions - Status {response.status_code}: {response.text[:200]}"
             )
 
     def test_submit_gap_responses(self):
-        """Test POST /gap-analysis/responses - submit gap analysis responses."""
-        url = f"{self.base_url}/gap-analysis/responses"
-        headers = get_auth_headers()
-
+        """Test POST /jobs/{jobId}/gap-responses - submit gap analysis responses."""
         # Get job ID from test data
         job_id = test_data.get("job_id") or f"job_{TEST_USER_ID}"
+
+        url = f"{self.base_url}/jobs/{job_id}/gap-responses"
+        headers = get_auth_headers()
 
         # Use generated questions or fallback
         questions = test_data.get("gap_questions", [])
@@ -139,7 +138,7 @@ class TestGapAnalysisEndpoints:
                     }
                 )
 
-        payload = {"job_id": job_id, "responses": responses}
+        payload = {"responses": responses}
 
         response = requests.post(url, json=payload, headers=headers, timeout=30)
 
@@ -152,14 +151,14 @@ class TestGapAnalysisEndpoints:
 
             print_response(
                 "test_submit_gap_responses",
-                "POST /gap-analysis/responses",
+                f"POST /jobs/{job_id}/gap-responses",
                 response.status_code,
                 data,
             )
 
             impact_statements = data.get("impact_statements", [])
             print(
-                f"✓ POST /gap-analysis/responses - Submitted {len(responses)} responses, got {len(impact_statements)} impact statements"
+                f"✓ POST /jobs/{job_id}/gap-responses - Submitted {len(responses)} responses, got {len(impact_statements)} impact statements"
             )
         else:
             try:
@@ -169,19 +168,19 @@ class TestGapAnalysisEndpoints:
 
             print_response(
                 "test_submit_gap_responses",
-                "POST /gap-analysis/responses",
+                f"POST /jobs/{job_id}/gap-responses",
                 response.status_code,
                 data,
             )
             print(
-                f"⚠ POST /gap-analysis/responses - Status {response.status_code}: {response.text[:200]}"
+                f"⚠ POST /jobs/{job_id}/gap-responses - Status {response.status_code}: {response.text[:200]}"
             )
 
     def test_get_gap_questions(self):
-        """Test GET /gap-analysis/{jobId}/questions - get previous gap questions."""
+        """Test GET /jobs/{jobId}/gap-questions - get previous gap questions."""
         job_id = test_data.get("job_id") or f"job_{TEST_USER_ID}"
 
-        url = f"{self.base_url}/gap-analysis/{job_id}/questions"
+        url = f"{self.base_url}/jobs/{job_id}/gap-questions"
         headers = get_auth_headers()
 
         response = requests.get(url, headers=headers, timeout=10)
@@ -195,14 +194,14 @@ class TestGapAnalysisEndpoints:
 
             print_response(
                 "test_get_gap_questions",
-                f"GET /gap-analysis/{job_id}/questions",
+                f"GET /jobs/{job_id}/gap-questions",
                 response.status_code,
                 data,
             )
 
             questions = data.get("questions", [])
             print(
-                f"✓ GET /gap-analysis/{job_id}/questions - Found {len(questions)} questions"
+                f"✓ GET /jobs/{job_id}/gap-questions - Found {len(questions)} questions"
             )
         elif response.status_code == 404:
             try:
@@ -212,13 +211,11 @@ class TestGapAnalysisEndpoints:
 
             print_response(
                 "test_get_gap_questions",
-                f"GET /gap-analysis/{job_id}/questions",
+                f"GET /jobs/{job_id}/gap-questions",
                 response.status_code,
                 data,
             )
-            print(
-                f"⚠ GET /gap-analysis/{job_id}/questions - No questions found for job"
-            )
+            print(f"⚠ GET /jobs/{job_id}/gap-questions - No questions found for job")
         else:
             try:
                 data = response.json()
@@ -227,10 +224,8 @@ class TestGapAnalysisEndpoints:
 
             print_response(
                 "test_get_gap_questions",
-                f"GET /gap-analysis/{job_id}/questions",
+                f"GET /jobs/{job_id}/gap-questions",
                 response.status_code,
                 data,
             )
-            print(
-                f"⚠ GET /gap-analysis/{job_id}/questions - Status {response.status_code}"
-            )
+            print(f"⚠ GET /jobs/{job_id}/gap-questions - Status {response.status_code}")

@@ -1,5 +1,5 @@
 # Live Tests - Cover Letter Endpoints
-# Tests: POST /cover-letter/generate, GET /cover-letter/{coverLetterId}, GET /users/me/cover-letters
+# Tests: POST /cover-letter/generate, GET /cover-letter/{coverLetterId}/status, GET /cover-letters
 
 import os
 import json
@@ -83,6 +83,8 @@ class TestCoverLetterEndpoints:
 
             if "request_id" in data:
                 test_data["cover_letter_id"] = data["request_id"]
+            elif "artifact_id" in data:
+                test_data["cover_letter_id"] = data["artifact_id"]
             elif "id" in data:
                 test_data["cover_letter_id"] = data["id"]
             save_test_ids(test_data)
@@ -121,10 +123,10 @@ class TestCoverLetterEndpoints:
             )
 
     def test_get_cover_letter_status(self):
-        """Test GET /cover-letter/{coverLetterId} - get cover letter status."""
+        """Test GET /cover-letter/{coverLetterId}/status - get cover letter status."""
         cover_letter_id = test_data.get("cover_letter_id") or "test-cover-letter-id"
 
-        url = f"{self.base_url}/cover-letter/{cover_letter_id}"
+        url = f"{self.base_url}/cover-letter/{cover_letter_id}/status"
         headers = get_auth_headers()
 
         response = requests.get(url, headers=headers, timeout=10)
@@ -138,7 +140,7 @@ class TestCoverLetterEndpoints:
 
             print_response(
                 "test_get_cover_letter_status",
-                f"GET /cover-letter/{cover_letter_id}",
+                f"GET /cover-letter/{cover_letter_id}/status",
                 response.status_code,
                 data,
             )
@@ -147,9 +149,13 @@ class TestCoverLetterEndpoints:
             result = data.get("result", {})
             if result:
                 result.get("paragraphs", {})
-                print(f"✓ GET /cover-letter/{cover_letter_id} - Status: {status}")
+                print(
+                    f"✓ GET /cover-letter/{cover_letter_id}/status - Status: {status}"
+                )
             else:
-                print(f"✓ GET /cover-letter/{cover_letter_id} - Status: {status}")
+                print(
+                    f"✓ GET /cover-letter/{cover_letter_id}/status - Status: {status}"
+                )
         elif response.status_code == 404:
             try:
                 data = response.json()
@@ -158,11 +164,13 @@ class TestCoverLetterEndpoints:
 
             print_response(
                 "test_get_cover_letter_status",
-                f"GET /cover-letter/{cover_letter_id}",
+                f"GET /cover-letter/{cover_letter_id}/status",
                 response.status_code,
                 data,
             )
-            print(f"⚠ GET /cover-letter/{cover_letter_id} - Cover letter not found")
+            print(
+                f"⚠ GET /cover-letter/{cover_letter_id}/status - Cover letter not found"
+            )
         else:
             try:
                 data = response.json()
@@ -171,17 +179,17 @@ class TestCoverLetterEndpoints:
 
             print_response(
                 "test_get_cover_letter_status",
-                f"GET /cover-letter/{cover_letter_id}",
+                f"GET /cover-letter/{cover_letter_id}/status",
                 response.status_code,
                 data,
             )
             print(
-                f"⚠ GET /cover-letter/{cover_letter_id} - Status {response.status_code}"
+                f"⚠ GET /cover-letter/{cover_letter_id}/status - Status {response.status_code}"
             )
 
     def test_list_cover_letters(self):
-        """Test GET /users/me/cover-letters - list user's cover letters."""
-        url = f"{self.base_url}/users/me/cover-letters"
+        """Test GET /cover-letters - list user's cover letters."""
+        url = f"{self.base_url}/cover-letters"
         headers = get_auth_headers()
 
         response = requests.get(url, headers=headers, timeout=10)
@@ -195,15 +203,13 @@ class TestCoverLetterEndpoints:
 
             print_response(
                 "test_list_cover_letters",
-                "GET /users/me/cover-letters",
+                "GET /cover-letters",
                 response.status_code,
                 data,
             )
 
             cover_letters = data.get("cover_letters", [])
-            print(
-                f"✓ GET /users/me/cover-letters - Found {len(cover_letters)} cover letter(s)"
-            )
+            print(f"✓ GET /cover-letters - Found {len(cover_letters)} cover letter(s)")
         else:
             try:
                 data = response.json()
@@ -212,11 +218,11 @@ class TestCoverLetterEndpoints:
 
             print_response(
                 "test_list_cover_letters",
-                "GET /users/me/cover-letters",
+                "GET /cover-letters",
                 response.status_code,
                 data,
             )
-            print(f"⚠ GET /users/me/cover-letters - Status {response.status_code}")
+            print(f"⚠ GET /cover-letters - Status {response.status_code}")
 
     def test_cover_letter_async_polling(self):
         """Test cover letter async polling lifecycle."""
@@ -227,7 +233,7 @@ class TestCoverLetterEndpoints:
         if not cover_letter_id:
             pytest.skip("No cover letter ID available for polling test")
 
-        url = f"{self.base_url}/cover-letter/{cover_letter_id}"
+        url = f"{self.base_url}/cover-letter/{cover_letter_id}/status"
         headers = get_auth_headers()
 
         # Poll for completion (max 2 minutes)
@@ -245,7 +251,7 @@ class TestCoverLetterEndpoints:
 
                 print_response(
                     "test_cover_letter_async_polling",
-                    f"GET /cover-letter/{cover_letter_id}",
+                    f"GET /cover-letter/{cover_letter_id}/status",
                     response.status_code,
                     data,
                 )
