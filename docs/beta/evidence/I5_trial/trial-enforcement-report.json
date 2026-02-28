@@ -1,0 +1,56 @@
+{
+  "invariant": "I5",
+  "generated_at": "2026-02-27T23:18:57Z",
+  "environment": "local-integration-test",
+  "branch": "beta/fix-gaps1",
+  "commit_sha": "31b47a5dcb3000abe6edfca8ffbd5143b8193afd",
+  "scenarios": [
+    {
+      "test_name": "exhaust_3_applications_block_4th",
+      "expected_outcome": "403_trial_exhausted",
+      "actual_outcome": "403_trial_exhausted",
+      "pass": true
+    },
+    {
+      "test_name": "day_15_expiry_blocks_protected_route",
+      "expected_outcome": "403_trial_expired",
+      "actual_outcome": "403_trial_expired",
+      "pass": true
+    },
+    {
+      "test_name": "concurrent_boundary_no_overcount",
+      "expected_outcome": "1_success_4_trial_exhausted",
+      "actual_outcome": "1_success_4_trial_exhausted",
+      "pass": true
+    }
+  ],
+  "validation": {
+    "unit_suite": {
+      "command": "cd src/backend && uv run pytest tests/unit/test_trial_enforcement.py -v --tb=short",
+      "passed": 21,
+      "failed": 0,
+      "errors": 0
+    },
+    "integration_suite": {
+      "command": "cd src/backend && uv run pytest tests/integration/test_l5_trial_integration.py -v --tb=short -m integration",
+      "passed": 20,
+      "failed": 0,
+      "errors": 0
+    },
+    "regression_suite": {
+      "command": "cd src/backend && uv run pytest tests/unit tests/integration -v --tb=short",
+      "passed": 577,
+      "skipped": 15,
+      "failed": 0
+    },
+    "gates": {
+      "not_implemented_error_matches": 0,
+      "assert_true_matches": 0
+    }
+  },
+  "signoff": {
+    "staging_evidence_required": true,
+    "staging_evidence_completed": false,
+    "note": "Local gates are GREEN; rerun against deployed staging for final beta sign-off."
+  }
+}

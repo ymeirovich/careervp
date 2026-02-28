@@ -112,7 +112,14 @@ def test_generate_questions_returns_200_and_persists(gap_table: Any) -> None:
         for i in range(10)
     ]
 
-    with patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate:
+    with (
+        patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate,
+        patch('careervp.handlers.gap_handler._get_trial_service') as mock_trial_service,
+    ):
+        trial_service = MagicMock()
+        trial_service.check_trial_status.return_value = {'is_active': True}
+        trial_service.consume_credit.return_value = None
+        mock_trial_service.return_value = trial_service
         mock_generate.return_value = Result(
             success=True,
             data=generated_questions,

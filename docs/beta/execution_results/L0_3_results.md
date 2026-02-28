@@ -5,6 +5,56 @@
 **Test file:** `tests/unit/test_l0_gap_analysis_generation.py`  
 **Invariants:** I1 (partial)
 
+## Re-validation (template fallback closure)
+
+**Date:** 2026-02-27  
+**Branch:** `beta/fix-gaps1`
+
+### RED Gate (tests first)
+
+Added test: `test_gap_handler_has_no_template_fallback_markers` in
+`src/backend/tests/unit/test_l0_gap_analysis_generation.py`.
+
+Command:
+
+```bash
+cd src/backend && uv run pytest tests/unit/test_l0_gap_analysis_generation.py -v --tb=short
+```
+
+Observed outcome:
+
+- `1 failed, 9 passed`
+- Failure was expected and detected forbidden template marker text in `src/backend/careervp/handlers/gap_handler.py`
+
+### GREEN Gate (implementation)
+
+Implementation change:
+
+- Removed dead template fallback helper `_generate_gap_questions(...)` from
+  `src/backend/careervp/handlers/gap_handler.py`
+
+Command:
+
+```bash
+cd src/backend && uv run pytest tests/unit/test_l0_gap_analysis_generation.py -v --tb=short
+```
+
+Observed outcome:
+
+- `10 passed`
+
+Verification:
+
+```bash
+rg -n "What quantifiable examples show|core competency N" \
+  src/backend/careervp/handlers/gap_handler.py \
+  src/backend/careervp/logic/gap_analysis.py
+```
+
+Observed outcome:
+
+- No matches
+
 ## Files Updated
 
 - `src/backend/tests/unit/test_l0_gap_analysis_generation.py`

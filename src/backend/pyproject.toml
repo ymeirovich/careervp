@@ -87,6 +87,10 @@ skip-excluded-dirs = true
 
 [tool.pytest.ini_options]
 testpaths = "tests"
+markers = [
+    "unit: unit-level tests",
+    "integration: integration-level tests",
+]
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.

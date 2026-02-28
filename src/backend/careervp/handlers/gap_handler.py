@@ -17,10 +17,16 @@ try:  # pragma: no cover - import guard for lightweight unit-test environments.
 except Exception:  # noqa: BLE001
     ClientError = Exception
 
+from careervp.dal.application_repository import ApplicationRepository
+from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.logic.gap_analysis import generate_gap_questions
+from careervp.logic.trial_service import TrialExhaustedException, TrialExpiredException, TrialService
 from careervp.models.api_models import GapQuestionRequest, GapResponseRequest
 from careervp.models.result import ResultCode
+
+_trial_service: TrialService | None = None
+_application_repository: ApplicationRepository | None = None
 
 
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
@@ -102,6 +108,16 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:
     focus_areas = _normalize_focus_areas(openapi_request.focus_areas)
     user_cv = _build_user_cv_prompt_payload(cv_id=cv_id, focus_areas=focus_areas)
     job_posting = _build_job_prompt_payload(job_id=job_id, focus_areas=focus_areas)
+
+    application_id, error_response = _prepare_trial_and_pending_state(
+        payload=payload,
+        user_id=user_id,
+        job_id=job_id,
+    )
+    if error_response is not None:
+        return error_response
+    application_repo = _get_application_repository()
+
     generation_result = asyncio.run(
         generate_gap_questions(
             user_cv=user_cv,
@@ -130,11 +146,11 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:
     missing_qualifications = _build_missing_qualifications(focus_areas)
 
     now = datetime.now(timezone.utc).isoformat()
-    application_id = _build_gap_questions_application_id(cv_id, job_id)
+    artifact_application_id = _build_gap_questions_application_id(cv_id, job_id)
     artifact_id = f'GAP_QUESTIONS#{job_id}#{int(datetime.now(timezone.utc).timestamp())}'
     item: dict[str, Any] = {
         'userId': user_id,
-        'applicationId': application_id,
+        'applicationId': artifact_application_id,
         'artifactId': artifact_id,
         'artifact_type': 'gap_analysis',
         'user_id': user_id,
@@ -151,6 +167,16 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:
         _get_table().put_item(Item=item)
     except (ClientError, RuntimeError) as exc:
         return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc), ResultCode.DYNAMODB_ERROR)
+
+    try:
+        application_repo.update_state(
+            application_id=application_id,
+            user_id=user_id,
+            new_state='gap_questions_ready',
+            expected_state='gap_questions_pending',
+        )
+    except Exception:
+        pass
 
     return _json_response(
         HTTPStatus.CREATED,
@@ -403,22 +429,6 @@ def _normalize_focus_areas(value: Any) -> list[str]:
     return normalized
 
 
-def _generate_gap_questions(job_id: str, focus_areas: list[str], max_questions: int) -> list[dict[str, Any]]:
-    questions: list[dict[str, Any]] = []
-    for index in range(max_questions):
-        focus_area = focus_areas[index] if index < len(focus_areas) else f'core competency {index + 1}'
-        questions.append(
-            {
-                'id': f'gap-q{index + 1}',
-                'text': f'What quantifiable examples show your impact in {focus_area} for job {job_id}?',
-                'tags': [focus_area],
-                'strategic_intent': 'Capture evidence-backed achievements for interview readiness.',
-                'evidence_gap': f'Need stronger measurable evidence for {focus_area}.',
-            }
-        )
-    return questions
-
-
 def _build_missing_qualifications(focus_areas: list[str]) -> list[dict[str, str]]:
     if not focus_areas:
         return []
@@ -499,6 +509,60 @@ def _build_gap_questions_application_id(cv_id: str, job_id: str) -> str:
 def _ttl_timestamp(ttl_days: int = 90) -> int:
     now = datetime.now(timezone.utc)
     return int((now + timedelta(days=ttl_days)).timestamp())
+
+
+def _prepare_trial_and_pending_state(
+    payload: dict[str, Any],
+    user_id: str,
+    job_id: str,
+) -> tuple[str, dict[str, Any] | None]:
+    trial_service = _get_trial_service()
+    if trial_service is not None:
+        try:
+            trial_service.check_trial_status(user_id)
+            trial_service.consume_credit(user_id)
+        except TrialExpiredException:
+            return '', _error_response(HTTPStatus.FORBIDDEN, 'Trial expired', 'trial_expired')
+        except TrialExhaustedException:
+            return '', _error_response(HTTPStatus.FORBIDDEN, 'Trial exhausted', 'trial_exhausted')
+
+    application_id = _coerce_str(payload.get('application_id')) or job_id
+    application_repo = _get_application_repository()
+    try:
+        application_repo.update_state(
+            application_id=application_id,
+            user_id=user_id,
+            new_state='gap_questions_pending',
+            expected_state='cv_selected',
+        )
+    except Exception:
+        pass
+    return application_id, None
+
+
+def _get_trial_service() -> TrialService | None:
+    global _trial_service
+    if _trial_service is None:
+        table_name = os.getenv('USERS_TABLE_NAME') or os.getenv('TABLE_NAME') or ''
+        if not table_name:
+            return None
+        _trial_service = TrialService(dal=DynamoDalHandler(table_name=table_name))
+    return _trial_service
+
+
+def _get_application_repository() -> ApplicationRepository:
+    global _application_repository
+    if _application_repository is None:
+        table_name = (
+            os.getenv('APPLICATIONS_TABLE_NAME')
+            or os.getenv('DYNAMODB_TABLE_NAME')
+            or os.getenv('TABLE_NAME')
+            or ''
+        )
+        if not table_name:
+            raise RuntimeError('Application repository table name not configured')
+        _application_repository = ApplicationRepository(dal=DynamoDalHandler(table_name=table_name))
+    return _application_repository
 
 
 def _get_table() -> Any:

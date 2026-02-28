@@ -27,7 +27,7 @@ cd src/backend && uv run pytest \
 
 ## Result
 
-- `55 passed`
+- `82 passed`
 - `0 failed`
 - `0 errors`
 

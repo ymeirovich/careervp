@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -37,6 +38,8 @@ TEMPLATE_PATTERNS = [
     'Situation for question',
     'describe a relevant STAR example',
 ]
+
+GAP_HANDLER_PATH = Path(__file__).resolve().parents[2] / 'careervp' / 'handlers' / 'gap_handler.py'
 
 
 def _cv_payload() -> dict[str, object]:
@@ -178,10 +181,19 @@ class TestGapAnalysisOutputShape:
                 code=ResultCode.GAP_QUESTIONS_GENERATED,
             )
 
-            with patch('careervp.handlers.gap_handler._get_table') as mock_table_fn:
+            with (
+                patch('careervp.handlers.gap_handler._get_table') as mock_table_fn,
+                patch('careervp.handlers.gap_handler._get_trial_service') as mock_trial_service,
+                patch('careervp.handlers.gap_handler._get_application_repository') as mock_application_repository,
+            ):
                 mock_table = MagicMock()
                 mock_table.put_item.return_value = {}
                 mock_table_fn.return_value = mock_table
+                trial_service = MagicMock()
+                trial_service.check_trial_status.return_value = {'is_active': True}
+                trial_service.consume_credit.return_value = None
+                mock_trial_service.return_value = trial_service
+                mock_application_repository.return_value = MagicMock()
                 response = lambda_handler(_api_event(), MagicMock())
 
         assert response['statusCode'] in (200, 201)
@@ -192,14 +204,34 @@ class TestGapAnalysisOutputShape:
     def test_llm_error_maps_to_503(self) -> None:
         from careervp.handlers.gap_handler import lambda_handler
 
-        with patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate:
+        with (
+            patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate,
+            patch('careervp.handlers.gap_handler._get_trial_service') as mock_trial_service,
+            patch('careervp.handlers.gap_handler._get_application_repository') as mock_application_repository,
+        ):
             mock_generate.return_value = Result(
                 success=False,
                 error='LLM timeout',
                 code=ResultCode.LLM_TIMEOUT,
             )
+            trial_service = MagicMock()
+            trial_service.check_trial_status.return_value = {'is_active': True}
+            trial_service.consume_credit.return_value = None
+            mock_trial_service.return_value = trial_service
+            mock_application_repository.return_value = MagicMock()
             response = lambda_handler(_api_event(), MagicMock())
 
         assert response['statusCode'] == 503
         body = json.loads(response['body'])
         assert body['code'] == ResultCode.LLM_TIMEOUT
+
+
+@pytest.mark.unit
+def test_gap_handler_has_no_template_fallback_markers() -> None:
+    source = GAP_HANDLER_PATH.read_text(encoding='utf-8')
+    forbidden_markers = (
+        'What quantifiable examples show your impact in',
+        'core competency',
+    )
+    for marker in forbidden_markers:
+        assert marker not in source

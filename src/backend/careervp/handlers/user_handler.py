@@ -21,13 +21,16 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 from boto3.dynamodb.conditions import Key
 from pydantic import ValidationError
 
+from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.user_repository import UserRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.utils.observability import logger, tracer
 from careervp.handlers.utils.rest_api_resolver import app
+from careervp.logic.trial_service import TrialService
 from careervp.models.api_models import UpdateUserRequest
 
 _user_repository: UserRepository | None = None
+_trial_service: TrialService | None = None
 
 
 def _get_user_repository() -> UserRepository:
@@ -39,8 +42,9 @@ def _get_user_repository() -> UserRepository:
 
 def _reset_handler_caches() -> None:
     """Testing hook to reset module-level dependency caches."""
-    global _user_repository
+    global _user_repository, _trial_service
     _user_repository = None
+    _trial_service = None
 
 
 def _json_response(status: HTTPStatus, body: dict[str, Any]) -> Response[str]:
@@ -49,6 +53,17 @@ def _json_response(status: HTTPStatus, body: dict[str, Any]) -> Response[str]:
         content_type=content_types.APPLICATION_JSON,
         body=json.dumps(body, default=str),
     )
+
+
+def _get_trial_service() -> TrialService | None:
+    global _trial_service
+    if _trial_service is not None:
+        return _trial_service
+    table_name = os.getenv('USERS_TABLE_NAME') or os.getenv('TABLE_NAME')
+    if not table_name:
+        return None
+    _trial_service = TrialService(dal=DynamoDalHandler(table_name=table_name))
+    return _trial_service
 
 
 def _extract_user_id_from_authorizer() -> str | None:
@@ -215,12 +230,38 @@ def get_usage_snapshot() -> Response[str]:
     if not user_id:
         return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Authentication required'})
 
+    trial_service = _get_trial_service()
+    if trial_service is None:
+        return _json_response(
+            HTTPStatus.OK,
+            {
+                'trial': {
+                    'active': True,
+                    'days_elapsed': 0,
+                    'days_remaining': 14,
+                    'ends_at': None,
+                },
+                'applications': {
+                    'used': 0,
+                    'remaining': 3,
+                },
+            },
+        )
+
+    usage = trial_service.get_usage(user_id)
     return _json_response(
         HTTPStatus.OK,
         {
-            'limits': {'trial_applications': 3},
-            'current': {'applications': 0},
-            'remaining': {'applications': 3},
+            'trial': {
+                'active': bool(usage.get('trial_active', False)),
+                'days_elapsed': int(usage.get('days_elapsed', 0)),
+                'days_remaining': int(usage.get('days_remaining', 0)),
+                'ends_at': usage.get('trial_ends_at'),
+            },
+            'applications': {
+                'used': int(usage.get('applications_used', 0)),
+                'remaining': int(usage.get('credits_remaining', 0)),
+            },
         },
     )
 

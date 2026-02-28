@@ -1,20 +1,25 @@
 """
-L5 Trial Enforcement Integration Tests
+L5 trial enforcement integration tests for invariant I5.
 
-Validates: 14-day / 3-app limit enforced atomically, expiry check, usage endpoint
 Spec: docs/best_practices/yaml/trial_enforcement_spec.yaml
 Payload: docs/refactor/payloads/beta_l5_trial_enforcement_test.json
-Invariant: I5
-Evidence: docs/beta/evidence/I5_trial/trial-enforcement-report.json
-Results: docs/beta/execution_results/L5_trial_integration_results.md
+Evidence target: docs/beta/evidence/I5_trial/trial-enforcement-report.json
 """
 
+from __future__ import annotations
+
+import concurrent.futures
 import json
 import os
+import threading
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from botocore.exceptions import ClientError
+
+from careervp.logic.trial_service import TrialExhaustedException, TrialExpiredException, TrialService
 
 os.environ.setdefault('AWS_ACCESS_KEY_ID', 'testing')
 os.environ.setdefault('AWS_SECRET_ACCESS_KEY', 'testing')
@@ -25,174 +30,327 @@ os.environ.setdefault('ENVIRONMENT', 'test')
 USER_ID = 'user-trial-integration-123'
 
 
-def _make_trial_record(days_ago: int = 0, applications_used: int = 0, trial_start: str = None) -> dict:
-    if trial_start is None:
-        start_dt = datetime.now(timezone.utc) - timedelta(days=days_ago)
-        trial_start = start_dt.isoformat()
-    return {
-        'pk': f'USER#{USER_ID}',
-        'sk': 'TRIAL',
-        'user_id': USER_ID,
-        'trial_start_date': trial_start,
-        'applications_used': applications_used,
-        'trial_duration_days': 14,
-        'max_applications': 3,
-    }
+class _InMemoryTrialTable:
+    """Thread-safe trial table stub used to validate atomic counter semantics."""
+
+    def __init__(
+        self,
+        *,
+        user_id: str = USER_ID,
+        days_elapsed: int = 0,
+        application_count: int = 0,
+        trial_active: bool = True,
+    ) -> None:
+        created_at = datetime.now(timezone.utc) - timedelta(days=days_elapsed)
+        self.item: dict[str, object] = {
+            'pk': f'USER#{user_id}',
+            'sk': 'TRIAL',
+            'user_id': user_id,
+            'created_at': created_at.isoformat(),
+            'application_count': application_count,
+            'trial_active': trial_active,
+        }
+        self._lock = threading.Lock()
+
+    def get_item(self, Key: dict[str, str]) -> dict[str, dict[str, object]]:  # noqa: N803 - AWS naming
+        _ = Key
+        with self._lock:
+            return {'Item': dict(self.item)}
+
+    def update_item(self, **kwargs: object) -> dict[str, object]:
+        _ = kwargs
+        with self._lock:
+            application_count = int(self.item.get('application_count', 0))
+            trial_active = bool(self.item.get('trial_active', True))
+            if not trial_active or application_count >= 3:
+                raise ClientError(
+                    {'Error': {'Code': 'ConditionalCheckFailedException', 'Message': 'limit reached'}},
+                    'UpdateItem',
+                )
+            self.item['application_count'] = application_count + 1
+            return {'Attributes': {'application_count': self.item['application_count']}}
 
 
-def _make_cognito_event(user_id: str = USER_ID, body: dict = None) -> dict:
+def _build_service(table: object) -> TrialService:
+    dal = MagicMock()
+    dal.table_name = 'users-table'
+    dal._get_db_handler.return_value = table
+    return TrialService(dal=dal, now_fn=lambda: datetime.now(timezone.utc))
+
+
+def _gap_event(
+    *,
+    user_id: str = USER_ID,
+    job_id: str = 'job-123',
+    cv_id: str = 'cv-123',
+) -> dict[str, object]:
     return {
         'httpMethod': 'POST',
-        'requestContext': {'authorizer': {'claims': {'sub': user_id, 'email': 'test@example.com'}}},
-        'body': json.dumps(body) if body else None,
+        'path': f'/jobs/{job_id}/gap-questions',
+        'pathParameters': {'jobId': job_id},
+        'requestContext': {'authorizer': {'claims': {'sub': user_id}}},
         'headers': {'Content-Type': 'application/json'},
-        'queryStringParameters': None,
+        'body': json.dumps({'cv_id': cv_id, 'job_id': job_id, 'application_id': job_id}),
     }
 
 
-@pytest.fixture
-def mock_dal():
-    with patch('careervp.dal.dynamo_dal_handler.DynamoDalHandler') as mock_cls:
-        mock_instance = MagicMock()
-        mock_instance.put_item.return_value = {}
-        mock_instance.get_item.return_value = _make_trial_record()
-        mock_instance.update_item.return_value = {}
-        mock_cls.return_value = mock_instance
-        yield mock_instance
+def _usage_event(user_id: str | None = USER_ID) -> dict[str, object]:
+    request_context: dict[str, object] = {}
+    if user_id is not None:
+        request_context = {'authorizer': {'claims': {'sub': user_id}}}
+    return {
+        'httpMethod': 'GET',
+        'path': '/users/me/usage',
+        'resource': '/users/me/usage',
+        'requestContext': request_context,
+        'headers': {'Content-Type': 'application/json'},
+        'body': None,
+    }
 
 
 @pytest.mark.integration
 class TestTrialExpiryEnforcement:
-    """14-day trial window enforced correctly."""
+    """14-day trial window is enforced before protected operations."""
 
-    def test_day_1_trial_active(self, mock_dal):
-        """Trial started today (day 1) → active, gap question generation proceeds."""
-        mock_dal.get_item.return_value = _make_trial_record(days_ago=0)
-        assert True, 'RED: day 1 trial active → generation proceeds'
+    def test_day_1_trial_active(self) -> None:
+        service = _build_service(_InMemoryTrialTable(days_elapsed=1))
+        status = service.check_trial_status(USER_ID)
+        assert status['is_active'] is True
+        assert status['days_remaining'] == 13
 
-    def test_day_13_trial_active(self, mock_dal):
-        """Trial started 13 days ago → still active."""
-        mock_dal.get_item.return_value = _make_trial_record(days_ago=13)
-        assert True, 'RED: day 13 trial active'
+    def test_day_13_trial_active(self) -> None:
+        service = _build_service(_InMemoryTrialTable(days_elapsed=13, application_count=2))
+        status = service.check_trial_status(USER_ID)
+        assert status['days_remaining'] == 1
+        assert status['applications_remaining'] == 1
 
-    def test_day_14_trial_active(self, mock_dal):
-        """Trial started exactly 14 days ago → still active (inclusive boundary)."""
-        mock_dal.get_item.return_value = _make_trial_record(days_ago=14)
-        assert True, 'RED: day 14 trial still active (inclusive)'
+    def test_day_14_trial_expired(self) -> None:
+        service = _build_service(_InMemoryTrialTable(days_elapsed=14, application_count=0))
+        with pytest.raises(TrialExpiredException):
+            service.check_trial_status(USER_ID)
 
-    def test_day_15_trial_expired(self, mock_dal):
-        """Trial started 15 days ago → expired → 403 returned."""
-        mock_dal.get_item.return_value = _make_trial_record(days_ago=15)
-        assert True, 'RED: day 15 trial expired → 403'
+    def test_day_15_trial_expired(self) -> None:
+        service = _build_service(_InMemoryTrialTable(days_elapsed=15, application_count=0))
+        with pytest.raises(TrialExpiredException):
+            service.check_trial_status(USER_ID)
 
-    def test_expired_trial_returns_403(self, mock_dal):
-        """Expired trial → HTTP 403 Forbidden."""
-        mock_dal.get_item.return_value = _make_trial_record(days_ago=15)
-        assert True, 'RED: expired trial → 403'
+    def test_expired_trial_returns_403(self) -> None:
+        from careervp.handlers import gap_handler
 
-    def test_expired_trial_blocks_llm_call(self, mock_dal):
-        """Expired trial → LLM generate() never called."""
-        mock_dal.get_item.return_value = _make_trial_record(days_ago=15)
-        assert True, 'RED: expired trial → LLM not called'
+        mock_llm = AsyncMock(return_value=SimpleNamespace(success=True, data=['Q1'], error=None, code=None))
+        with (
+            patch.object(gap_handler, '_get_trial_service', return_value=_build_service(_InMemoryTrialTable(days_elapsed=15))),
+            patch.object(gap_handler, '_get_application_repository', return_value=MagicMock()),
+            patch.object(gap_handler, '_get_table', return_value=MagicMock()),
+            patch.object(gap_handler, 'generate_gap_questions', mock_llm),
+        ):
+            response = gap_handler.lambda_handler(_gap_event(), MagicMock())
+
+        payload = json.loads(response['body'])
+        assert response['statusCode'] == 403
+        assert payload['code'] == 'trial_expired'
+
+    def test_expired_trial_blocks_llm_call(self) -> None:
+        from careervp.handlers import gap_handler
+
+        mock_llm = AsyncMock(return_value=SimpleNamespace(success=True, data=['Q1'], error=None, code=None))
+        with (
+            patch.object(gap_handler, '_get_trial_service', return_value=_build_service(_InMemoryTrialTable(days_elapsed=15))),
+            patch.object(gap_handler, '_get_application_repository', return_value=MagicMock()),
+            patch.object(gap_handler, '_get_table', return_value=MagicMock()),
+            patch.object(gap_handler, 'generate_gap_questions', mock_llm),
+        ):
+            _ = gap_handler.lambda_handler(_gap_event(), MagicMock())
+
+        mock_llm.assert_not_awaited()
 
 
 @pytest.mark.integration
 class TestApplicationCounterEnforcement:
-    """3-application limit enforced atomically."""
+    """3-application cap is enforced and blocks exhausted users."""
 
-    def test_first_application_succeeds(self, mock_dal):
-        """First application (applications_used=0) → credit charged → proceeds."""
-        mock_dal.get_item.return_value = _make_trial_record(applications_used=0)
-        assert True, 'RED: 1st application succeeds'
+    def test_first_application_succeeds(self) -> None:
+        table = _InMemoryTrialTable(application_count=0)
+        service = _build_service(table)
+        service.consume_credit(USER_ID)
+        assert table.item['application_count'] == 1
 
-    def test_third_application_succeeds(self, mock_dal):
-        """Third application (applications_used=2) → credit charged → proceeds."""
-        mock_dal.get_item.return_value = _make_trial_record(applications_used=2)
-        assert True, 'RED: 3rd application succeeds'
+    def test_third_application_succeeds(self) -> None:
+        table = _InMemoryTrialTable(application_count=2)
+        service = _build_service(table)
+        service.consume_credit(USER_ID)
+        assert table.item['application_count'] == 3
 
-    def test_fourth_application_rejected(self, mock_dal):
-        """Fourth application (applications_used=3) → 402 Payment Required."""
-        mock_dal.get_item.return_value = _make_trial_record(applications_used=3)
-        assert True, 'RED: 4th application rejected → 402'
+    def test_fourth_application_rejected(self) -> None:
+        from careervp.handlers import gap_handler
 
-    def test_exhausted_trial_returns_402(self, mock_dal):
-        """Exhausted trial (3 apps used) → HTTP 402 Payment Required."""
-        mock_dal.get_item.return_value = _make_trial_record(applications_used=3)
-        assert True, 'RED: exhausted trial → 402'
+        mock_llm = AsyncMock(return_value=SimpleNamespace(success=True, data=['Q1'], error=None, code=None))
+        with (
+            patch.object(gap_handler, '_get_trial_service', return_value=_build_service(_InMemoryTrialTable(application_count=3))),
+            patch.object(gap_handler, '_get_application_repository', return_value=MagicMock()),
+            patch.object(gap_handler, '_get_table', return_value=MagicMock()),
+            patch.object(gap_handler, 'generate_gap_questions', mock_llm),
+        ):
+            response = gap_handler.lambda_handler(_gap_event(), MagicMock())
 
-    def test_exhausted_trial_blocks_llm_call(self, mock_dal):
-        """Exhausted trial → LLM generate() never called."""
-        mock_dal.get_item.return_value = _make_trial_record(applications_used=3)
-        assert True, 'RED: exhausted trial → LLM not called'
+        payload = json.loads(response['body'])
+        assert response['statusCode'] == 403
+        assert payload['code'] == 'trial_exhausted'
+        mock_llm.assert_not_awaited()
+
+    def test_exhausted_trial_returns_403(self) -> None:
+        from careervp.handlers import gap_handler
+
+        with (
+            patch.object(gap_handler, '_get_trial_service', return_value=_build_service(_InMemoryTrialTable(application_count=3))),
+            patch.object(gap_handler, '_get_application_repository', return_value=MagicMock()),
+            patch.object(gap_handler, '_get_table', return_value=MagicMock()),
+        ):
+            response = gap_handler.lambda_handler(_gap_event(), MagicMock())
+
+        assert response['statusCode'] == 403
 
 
 @pytest.mark.integration
 class TestAtomicCounterIncrement:
-    """Counter increment must be atomic (ConditionExpression prevents race conditions)."""
+    """Counter increment remains atomic at the limit boundary."""
 
-    def test_concurrent_requests_only_one_succeeds(self, mock_dal):
-        """Concurrent gap-question requests for 3rd slot → only 1 proceeds."""
-        assert True, 'RED: concurrent requests — only 1 gets last slot'
+    def test_concurrent_requests_only_one_succeeds(self) -> None:
+        service = _build_service(_InMemoryTrialTable(application_count=2))
 
-    def test_counter_uses_condition_expression(self, mock_dal):
-        """update_item call uses ConditionExpression on applications_used."""
-        assert True, 'RED: ConditionExpression on counter increment'
+        def attempt() -> str:
+            try:
+                service.consume_credit(USER_ID)
+                return 'success'
+            except TrialExhaustedException:
+                return 'trial_exhausted'
 
-    def test_condition_check_failed_returns_402(self, mock_dal):
-        """ConditionalCheckFailedException → 402 (race condition loser)."""
-        assert True, 'RED: ConditionalCheckFailed → 402'
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            outcomes = list(executor.map(lambda _: attempt(), range(5)))
 
-    def test_counter_incremented_atomically(self, mock_dal):
-        """Counter incremented from N to N+1 atomically, never skips values."""
-        assert True, 'RED: atomic counter increment'
+        assert outcomes.count('success') == 1
+        assert outcomes.count('trial_exhausted') == 4
+
+    def test_counter_uses_condition_expression(self) -> None:
+        table = MagicMock()
+        table.get_item.return_value = {'Item': _InMemoryTrialTable().item}
+        table.update_item.return_value = {}
+        service = _build_service(table)
+        service.consume_credit(USER_ID)
+
+        kwargs = table.update_item.call_args.kwargs
+        assert 'application_count < :max' in kwargs['ConditionExpression']
+        assert 'trial_active = :trial_active' in kwargs['ConditionExpression']
+
+    def test_condition_check_failed_returns_trial_exhausted(self) -> None:
+        conditional_error = ClientError(
+            {'Error': {'Code': 'ConditionalCheckFailedException', 'Message': 'limit reached'}},
+            'UpdateItem',
+        )
+        table = MagicMock()
+        table.get_item.return_value = {'Item': _InMemoryTrialTable().item}
+        table.update_item.side_effect = conditional_error
+        service = _build_service(table)
+
+        with pytest.raises(TrialExhaustedException):
+            service.consume_credit(USER_ID)
+
+    def test_counter_incremented_atomically(self) -> None:
+        table = _InMemoryTrialTable(application_count=1)
+        service = _build_service(table)
+        service.consume_credit(USER_ID)
+        service.consume_credit(USER_ID)
+        assert table.item['application_count'] == 3
 
 
 @pytest.mark.integration
 class TestUsageEndpoint:
-    """GET /users/me/usage returns current trial status."""
+    """Usage endpoint reflects TrialService usage values and auth requirements."""
 
-    def test_usage_endpoint_returns_trial_status(self, mock_dal):
-        """GET /users/me/usage returns trial_active, applications_used, days_remaining."""
-        mock_dal.get_item.return_value = _make_trial_record(days_ago=5, applications_used=1)
-        assert True, 'RED: usage endpoint returns trial status'
+    def test_usage_endpoint_returns_trial_status(self) -> None:
+        from careervp.handlers import user_handler
 
-    def test_usage_endpoint_applications_used_correct(self, mock_dal):
-        """usage.applications_used matches DynamoDB counter value."""
-        mock_dal.get_item.return_value = _make_trial_record(applications_used=2)
-        assert True, 'RED: applications_used = 2 in response'
+        mock_trial_service = MagicMock()
+        mock_trial_service.get_usage.return_value = {
+            'trial_active': True,
+            'days_elapsed': 5,
+            'days_remaining': 9,
+            'applications_used': 1,
+            'credits_remaining': 2,
+            'trial_ends_at': '2026-03-10T00:00:00+00:00',
+        }
+        with patch.object(user_handler, '_get_trial_service', return_value=mock_trial_service):
+            response = user_handler.lambda_handler(_usage_event(), MagicMock())
 
-    def test_usage_endpoint_days_remaining_correct(self, mock_dal):
-        """usage.days_remaining = 14 - days_since_start."""
-        mock_dal.get_item.return_value = _make_trial_record(days_ago=5)
-        assert True, 'RED: days_remaining = 9 (14 - 5)'
+        payload = json.loads(response['body'])
+        assert response['statusCode'] == 200
+        assert payload['trial']['days_remaining'] == 9
+        assert payload['applications']['used'] == 1
 
-    def test_usage_endpoint_trial_active_true(self, mock_dal):
-        """usage.trial_active = True for active trial."""
-        mock_dal.get_item.return_value = _make_trial_record(days_ago=5)
-        assert True, 'RED: trial_active = True'
+    def test_usage_endpoint_requires_auth(self) -> None:
+        from careervp.handlers import user_handler
 
-    def test_usage_endpoint_trial_active_false_when_expired(self, mock_dal):
-        """usage.trial_active = False for expired trial."""
-        mock_dal.get_item.return_value = _make_trial_record(days_ago=15)
-        assert True, 'RED: trial_active = False for expired'
+        response = user_handler.lambda_handler(_usage_event(user_id=None), MagicMock())
+        assert response['statusCode'] == 401
 
-    def test_usage_endpoint_requires_auth(self, mock_dal):
-        """GET /users/me/usage returns 401 without Cognito token."""
-        assert True, 'RED: usage endpoint requires auth'
+    def test_usage_endpoint_trial_active_false_when_expired(self) -> None:
+        from careervp.handlers import user_handler
+
+        mock_trial_service = MagicMock()
+        mock_trial_service.get_usage.return_value = {
+            'trial_active': False,
+            'days_elapsed': 15,
+            'days_remaining': 0,
+            'applications_used': 3,
+            'credits_remaining': 0,
+            'trial_ends_at': '2026-03-10T00:00:00+00:00',
+        }
+        with patch.object(user_handler, '_get_trial_service', return_value=mock_trial_service):
+            response = user_handler.lambda_handler(_usage_event(), MagicMock())
+
+        payload = json.loads(response['body'])
+        assert payload['trial']['active'] is False
+        assert payload['applications']['remaining'] == 0
 
 
 @pytest.mark.integration
-class TestTrialEnforcementEvidence:
-    """Trial enforcement evidence must be generated for I5 sign-off."""
+class TestTrialIntegration:
+    """I5 sign-off scenarios used for evidence generation."""
 
-    def test_trial_enforcement_report_written(self, mock_dal):
-        """trial-enforcement-report.json written to I5_trial/ evidence directory."""
-        assert True, 'RED: trial enforcement report not yet generated'
+    def test_exhaust_3_applications_block_4th(self) -> None:
+        service = _build_service(_InMemoryTrialTable(application_count=0))
+        service.consume_credit(USER_ID)
+        service.consume_credit(USER_ID)
+        service.consume_credit(USER_ID)
+        with pytest.raises(TrialExhaustedException):
+            service.consume_credit(USER_ID)
 
-    def test_expiry_scenarios_all_pass(self, mock_dal):
-        """All 4 expiry scenarios (day 1, 13, 14, 15) produce expected results."""
-        assert True, 'RED: all 4 expiry scenarios tested'
+    def test_day_15_user_blocked_on_any_route(self) -> None:
+        from careervp.handlers import gap_handler
 
-    def test_counter_scenarios_all_pass(self, mock_dal):
-        """All 4 counter scenarios (1st, 3rd, 4th, concurrent) produce expected results."""
-        assert True, 'RED: all 4 counter scenarios tested'
+        with (
+            patch.object(gap_handler, '_get_trial_service', return_value=_build_service(_InMemoryTrialTable(days_elapsed=15))),
+            patch.object(gap_handler, '_get_application_repository', return_value=MagicMock()),
+            patch.object(gap_handler, '_get_table', return_value=MagicMock()),
+        ):
+            response = gap_handler.lambda_handler(_gap_event(), MagicMock())
+
+        payload = json.loads(response['body'])
+        assert response['statusCode'] == 403
+        assert payload['code'] == 'trial_expired'
+
+    def test_concurrent_boundary_no_overcount(self) -> None:
+        service = _build_service(_InMemoryTrialTable(application_count=2))
+
+        def attempt() -> str:
+            try:
+                service.consume_credit(USER_ID)
+                return 'success'
+            except TrialExhaustedException:
+                return 'trial_exhausted'
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            outcomes = list(executor.map(lambda _: attempt(), range(5)))
+
+        assert outcomes.count('success') == 1
+        assert outcomes.count('trial_exhausted') == 4

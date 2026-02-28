@@ -3,17 +3,18 @@
   "date": "2026-02-27",
   "invariant": "I6",
   "status": "PASS",
+  "branch": "beta/fix-gaps1",
   "strict_test_first": {
     "red": {
       "command": "cd src/backend && uv run pytest tests/unit/test_l3_application_schema.py -v --tb=short",
       "result": "FAILED",
-      "failure": "ModuleNotFoundError: No module named 'careervp.models.application'"
+      "failure": "ImportError: cannot import name 'APPLICATION_STATES' from careervp.dal.application_repository"
     },
     "green": {
       "command": "cd src/backend && uv run pytest tests/unit/test_l3_application_schema.py -v --tb=short",
       "result": "PASSED",
       "summary": {
-        "passed": 22,
+        "passed": 30,
         "failed": 0,
         "errors": 0
       }
@@ -21,7 +22,7 @@
   },
   "validation": {
     "ruff": {
-      "command": "cd src/backend && uv run ruff check careervp/dal/application_repository.py",
+      "command": "cd src/backend && uv run ruff check careervp/dal/application_repository.py tests/unit/test_l3_application_schema.py",
       "result": "PASSED"
     },
     "mypy": {
@@ -32,17 +33,18 @@
   "schema_checks": {
     "pk_format": "USER#{user_id}",
     "sk_format": "APP#{application_id}",
-    "state_index": {
-      "file": "infra/careervp/api_db_construct.py",
-      "index_name": "state-index",
-      "partition_key": "state",
-      "sort_key": "updated_at"
-    }
+    "states": [
+      "created",
+      "cv_selected",
+      "gap_questions_pending",
+      "gap_questions_ready",
+      "gap_responses_submitted",
+      "artifacts_generating",
+      "artifacts_completed"
+    ]
   },
   "artifacts": [
     "src/backend/careervp/dal/application_repository.py",
-    "src/backend/careervp/models/application.py",
-    "src/backend/tests/unit/test_l3_application_schema.py",
-    "infra/careervp/api_db_construct.py"
+    "src/backend/tests/unit/test_l3_application_schema.py"
   ]
 }

@@ -6,6 +6,28 @@
 **Invariant:** I1  
 **Evidence:** `docs/beta/evidence/I1_generators/generator-output-audit.json`
 
+## Re-validation
+
+**Date:** 2026-02-27  
+**Branch:** `beta/fix-gaps1`
+
+Command:
+
+```bash
+cd src/backend && uv run pytest tests/integration/test_l0_phase_integration.py -v --tb=short -m integration
+```
+
+Observed outcome:
+
+- `1 passed`
+
+Evidence re-check:
+
+- `docs/beta/evidence/I1_generators/generator-output-audit.json`
+- Record count: `250`
+- Template matches (`is_template=true`): `0`
+- Environment in evidence rows: `local-integration-test`
+
 ## Scope
 
 - Execute all 5 generators (`cover_letter`, `interview_prep`, `gap_analysis`, `cv_tailoring`, `vpr`)
