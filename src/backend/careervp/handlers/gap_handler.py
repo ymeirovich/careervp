@@ -553,12 +553,7 @@ def _get_trial_service() -> TrialService | None:
 def _get_application_repository() -> ApplicationRepository:
     global _application_repository
     if _application_repository is None:
-        table_name = (
-            os.getenv('APPLICATIONS_TABLE_NAME')
-            or os.getenv('DYNAMODB_TABLE_NAME')
-            or os.getenv('TABLE_NAME')
-            or ''
-        )
+        table_name = os.getenv('APPLICATIONS_TABLE_NAME') or os.getenv('DYNAMODB_TABLE_NAME') or os.getenv('TABLE_NAME') or ''
         if not table_name:
             raise RuntimeError('Application repository table name not configured')
         _application_repository = ApplicationRepository(dal=DynamoDalHandler(table_name=table_name))
