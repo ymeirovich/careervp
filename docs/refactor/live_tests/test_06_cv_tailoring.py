@@ -1,5 +1,5 @@
 # Live Tests - CV Tailoring Endpoints
-# Tests: POST /cv-tailoring/generate, GET /cv-tailoring/{cvTailoringId}, GET /users/me/tailored-cvs
+# Tests: POST /cv-tailoring/generate, GET /cv-tailoring/{cvTailoringId}/status, GET /cv-tailorings
 
 import os
 import json
@@ -120,23 +120,20 @@ class TestCVTailoringEndpoints:
             )
 
     def test_get_tailored_cv_status(self):
-        """Test GET /cv-tailoring/{cvTailoringId} - get tailored CV status."""
+        """Test GET /cv-tailoring/{cvTailoringId}/status - get tailored CV status."""
         # Try to get a valid ID from test data, or fetch from list
         cv_tailoring_id = test_data.get("cv_tailoring_id")
 
         # If no valid ID stored, try to get one from the list endpoint
         if not cv_tailoring_id or cv_tailoring_id == "test-cv-tailoring-id":
-            list_url = f"{self.base_url}/users/me/tailored-cvs"
+            list_url = f"{self.base_url}/cv-tailorings"
             headers = get_auth_headers()
             list_response = requests.get(list_url, headers=headers, timeout=10)
             if list_response.status_code == 200:
                 list_data = list_response.json()
                 tailored_cvs = list_data.get("tailored_cvs", [])
                 if tailored_cvs:
-                    # Use cv_id instead of full ID to avoid 502
-                    cv_tailoring_id = (
-                        tailored_cvs[0].get("cv_id") or tailored_cvs[0]["id"]
-                    )
+                    cv_tailoring_id = tailored_cvs[0].get("id") or tailored_cvs[0].get("cv_id")
 
         # Fallback if still no valid ID
         if not cv_tailoring_id:
@@ -144,7 +141,7 @@ class TestCVTailoringEndpoints:
 
         # URL-encode the ID to handle # characters properly
         encoded_id = quote(cv_tailoring_id, safe="")
-        url = f"{self.base_url}/cv-tailoring/{encoded_id}"
+        url = f"{self.base_url}/cv-tailoring/{encoded_id}/status"
         headers = get_auth_headers()
 
         response = requests.get(url, headers=headers, timeout=10)
@@ -158,7 +155,7 @@ class TestCVTailoringEndpoints:
 
             print_response(
                 "test_get_tailored_cv_status",
-                f"GET /cv-tailoring/{cv_tailoring_id}",
+                f"GET /cv-tailoring/{cv_tailoring_id}/status",
                 response.status_code,
                 data,
             )
@@ -168,10 +165,10 @@ class TestCVTailoringEndpoints:
             if result:
                 ats_score = result.get("ats_score", "N/A")
                 print(
-                    f"✓ GET /cv-tailoring/{cv_tailoring_id} - Status: {status}, ATS Score: {ats_score}"
+                    f"✓ GET /cv-tailoring/{cv_tailoring_id}/status - Status: {status}, ATS Score: {ats_score}"
                 )
             else:
-                print(f"✓ GET /cv-tailoring/{cv_tailoring_id} - Status: {status}")
+                print(f"✓ GET /cv-tailoring/{cv_tailoring_id}/status - Status: {status}")
         elif response.status_code == 404:
             try:
                 data = response.json()
@@ -180,11 +177,11 @@ class TestCVTailoringEndpoints:
 
             print_response(
                 "test_get_tailored_cv_status",
-                f"GET /cv-tailoring/{cv_tailoring_id}",
+                f"GET /cv-tailoring/{cv_tailoring_id}/status",
                 response.status_code,
                 data,
             )
-            print(f"⚠ GET /cv-tailoring/{cv_tailoring_id} - Tailored CV not found")
+            print(f"⚠ GET /cv-tailoring/{cv_tailoring_id}/status - Tailored CV not found")
         else:
             try:
                 data = response.json()
@@ -193,17 +190,17 @@ class TestCVTailoringEndpoints:
 
             print_response(
                 "test_get_tailored_cv_status",
-                f"GET /cv-tailoring/{cv_tailoring_id}",
+                f"GET /cv-tailoring/{cv_tailoring_id}/status",
                 response.status_code,
                 data,
             )
             print(
-                f"⚠ GET /cv-tailoring/{cv_tailoring_id} - Status {response.status_code}"
+                f"⚠ GET /cv-tailoring/{cv_tailoring_id}/status - Status {response.status_code}"
             )
 
     def test_list_tailored_cvs(self):
-        """Test GET /users/me/tailored-cvs - list user's tailored CVs."""
-        url = f"{self.base_url}/users/me/tailored-cvs"
+        """Test GET /cv-tailorings - list user's tailored CVs."""
+        url = f"{self.base_url}/cv-tailorings"
         headers = get_auth_headers()
 
         response = requests.get(url, headers=headers, timeout=10)
@@ -217,14 +214,14 @@ class TestCVTailoringEndpoints:
 
             print_response(
                 "test_list_tailored_cvs",
-                "GET /users/me/tailored-cvs",
+                "GET /cv-tailorings",
                 response.status_code,
                 data,
             )
 
             tailored_cvs = data.get("tailored_cvs", [])
             print(
-                f"✓ GET /users/me/tailored-cvs - Found {len(tailored_cvs)} tailored CV(s)"
+                f"✓ GET /cv-tailorings - Found {len(tailored_cvs)} tailored CV(s)"
             )
         else:
             try:
@@ -234,11 +231,11 @@ class TestCVTailoringEndpoints:
 
             print_response(
                 "test_list_tailored_cvs",
-                "GET /users/me/tailored-cvs",
+                "GET /cv-tailorings",
                 response.status_code,
                 data,
             )
-            print(f"⚠ GET /users/me/tailored-cvs - Status {response.status_code}")
+            print(f"⚠ GET /cv-tailorings - Status {response.status_code}")
 
     def test_cv_tailoring_async_polling(self):
         """Test CV tailoring async polling lifecycle."""
@@ -251,7 +248,7 @@ class TestCVTailoringEndpoints:
 
         # URL-encode the ID to handle # characters properly
         encoded_id = quote(cv_tailoring_id, safe="")
-        url = f"{self.base_url}/cv-tailoring/{encoded_id}"
+        url = f"{self.base_url}/cv-tailoring/{encoded_id}/status"
         headers = get_auth_headers()
 
         # Poll for completion (max 2 minutes)
@@ -269,7 +266,7 @@ class TestCVTailoringEndpoints:
 
                 print_response(
                     "test_cv_tailoring_async_polling",
-                    f"GET /cv-tailoring/{cv_tailoring_id}",
+                    f"GET /cv-tailoring/{cv_tailoring_id}/status",
                     response.status_code,
                     data,
                 )

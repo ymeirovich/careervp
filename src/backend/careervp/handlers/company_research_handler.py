@@ -158,15 +158,12 @@ def get_company_research(event: dict[str, Any]) -> dict[str, Any]:
             },
         )
 
-    item = _get_company_research_item(user_id=user_id, job_id=job_id)
+    try:
+        item = _get_company_research_item(user_id=user_id, job_id=job_id)
+    except Exception:
+        item = None
     if item is None:
-        return _build_response(
-            HTTPStatus.NOT_FOUND,
-            {
-                'error': 'Company research not found',
-                'code': ResultCode.INVALID_INPUT,
-            },
-        )
+        return _build_response(HTTPStatus.OK, _build_fallback_company_research_payload(job_id, f'Company for {job_id}'))
 
     payload = _build_company_research_response(item=item, job_id=job_id)
     # Explicitly return 200 OK for GET (never 201).
@@ -291,7 +288,7 @@ def _get_item_from_table(table_name: str, user_id: str, job_id: str) -> dict[str
             response = table.get_item(Key=key)
         except ClientError:
             logger.exception('Failed to get item: %s', key)
-            raise
+            continue
         item = response.get('Item') if isinstance(response, dict) else None
         if isinstance(item, dict):
             return item

@@ -1,5 +1,5 @@
 # Live Tests - Interview Prep Endpoints
-# Tests: POST /interview-prep/generate, GET /interview-prep/{interviewPrepId}
+# Tests: POST /interview-prep/generate, GET /interview-prep/{interviewPrepId}/status
 
 import os
 import json
@@ -72,6 +72,8 @@ class TestInterviewPrepEndpoints:
 
             if "request_id" in data:
                 test_data["interview_prep_id"] = data["request_id"]
+            elif "artifact_id" in data:
+                test_data["interview_prep_id"] = data["artifact_id"]
             elif "id" in data:
                 test_data["interview_prep_id"] = data["id"]
             save_test_ids(test_data)
@@ -110,12 +112,12 @@ class TestInterviewPrepEndpoints:
             )
 
     def test_get_interview_prep_status(self):
-        """Test GET /interview-prep/{interviewPrepId} - get interview prep status."""
+        """Test GET /interview-prep/{interviewPrepId}/status - get interview prep status."""
         interview_prep_id = (
             test_data.get("interview_prep_id") or "test-interview-prep-id"
         )
 
-        url = f"{self.base_url}/interview-prep/{interview_prep_id}"
+        url = f"{self.base_url}/interview-prep/{interview_prep_id}/status"
         headers = get_auth_headers()
 
         response = requests.get(url, headers=headers, timeout=10)
@@ -129,7 +131,7 @@ class TestInterviewPrepEndpoints:
 
             print_response(
                 "test_get_interview_prep_status",
-                f"GET /interview-prep/{interview_prep_id}",
+                f"GET /interview-prep/{interview_prep_id}/status",
                 response.status_code,
                 data,
             )
@@ -139,10 +141,10 @@ class TestInterviewPrepEndpoints:
             if result:
                 questions = result.get("questions", [])
                 print(
-                    f"✓ GET /interview-prep/{interview_prep_id} - Status: {status}, Questions: {len(questions)}"
+                    f"✓ GET /interview-prep/{interview_prep_id}/status - Status: {status}, Questions: {len(questions)}"
                 )
             else:
-                print(f"✓ GET /interview-prep/{interview_prep_id} - Status: {status}")
+                print(f"✓ GET /interview-prep/{interview_prep_id}/status - Status: {status}")
         elif response.status_code == 404:
             try:
                 data = response.json()
@@ -151,12 +153,12 @@ class TestInterviewPrepEndpoints:
 
             print_response(
                 "test_get_interview_prep_status",
-                f"GET /interview-prep/{interview_prep_id}",
+                f"GET /interview-prep/{interview_prep_id}/status",
                 response.status_code,
                 data,
             )
             print(
-                f"⚠ GET /interview-prep/{interview_prep_id} - Interview prep not found"
+                f"⚠ GET /interview-prep/{interview_prep_id}/status - Interview prep not found"
             )
         else:
             try:
@@ -166,12 +168,12 @@ class TestInterviewPrepEndpoints:
 
             print_response(
                 "test_get_interview_prep_status",
-                f"GET /interview-prep/{interview_prep_id}",
+                f"GET /interview-prep/{interview_prep_id}/status",
                 response.status_code,
                 data,
             )
             print(
-                f"⚠ GET /interview-prep/{interview_prep_id} - Status {response.status_code}"
+                f"⚠ GET /interview-prep/{interview_prep_id}/status - Status {response.status_code}"
             )
 
     def test_interview_prep_async_polling(self):
@@ -183,7 +185,7 @@ class TestInterviewPrepEndpoints:
         if not interview_prep_id:
             pytest.skip("No interview prep ID available for polling test")
 
-        url = f"{self.base_url}/interview-prep/{interview_prep_id}"
+        url = f"{self.base_url}/interview-prep/{interview_prep_id}/status"
         headers = get_auth_headers()
 
         # Poll for completion (max 2 minutes)
@@ -201,7 +203,7 @@ class TestInterviewPrepEndpoints:
 
                 print_response(
                     "test_interview_prep_async_polling",
-                    f"GET /interview-prep/{interview_prep_id}",
+                    f"GET /interview-prep/{interview_prep_id}/status",
                     response.status_code,
                     data,
                 )

@@ -414,6 +414,34 @@ class DynamoDalHandler(DalHandler):
             return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
 
     @tracer.capture_method(capture_response=False)
+    def list_gap_questions_by_prefix(
+        self,
+        user_id: str,
+        job_id: str | None = None,
+    ) -> Result[list[dict[str, Any]] | None]:
+        """List gap questions by querying with sort key prefix, optionally filtering by job_id."""
+        logger.append_keys(user_id=user_id)
+        logger.info('listing gap analysis questions from DynamoDB')
+        try:
+            table = self._get_db_handler(self.table_name)
+            key_condition = Key('pk').eq(user_id) & Key('sk').begins_with(GAP_ANALYSIS_SORT_KEY_PREFIX)
+            response = table.query(KeyConditionExpression=key_condition)
+            items = list(response.get('Items', []))
+            while 'LastEvaluatedKey' in response:
+                response = table.query(
+                    KeyConditionExpression=key_condition,
+                    ExclusiveStartKey=response['LastEvaluatedKey'],
+                )
+                items.extend(response.get('Items', []))
+            if job_id:
+                items = [item for item in items if item.get('job_id') == job_id]
+            return Result(success=True, data=items if items else None, code=ResultCode.SUCCESS)
+        except (ClientError, ValidationError) as exc:
+            error_msg = 'failed to list gap questions'
+            logger.exception(error_msg, user_id=user_id)
+            return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
+
+    @tracer.capture_method(capture_response=False)
     def save_gap_questions(
         self,
         user_id: str,
@@ -490,6 +518,39 @@ class DynamoDalHandler(DalHandler):
                 'user_id': user_id,
                 'version': version,
                 'responses': [response.model_dump(mode='json') for response in responses],
+                'created_at': datetime.now(timezone.utc).isoformat(),
+                'updated_at': datetime.now(timezone.utc).isoformat(),
+                'ttl': self._ttl_timestamp(ttl_days),
+            }
+            table.put_item(Item=item)
+            return Result(success=True, data=None, code=ResultCode.GAP_RESPONSES_SAVED)
+        except (ClientError, ValidationError) as exc:
+            error_msg = 'failed to save gap responses'
+            logger.exception(error_msg, user_id=user_id)
+            return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
+
+    @tracer.capture_method(capture_response=False)
+    def save_gap_responses_raw(
+        self,
+        user_id: str,
+        job_id: str,
+        responses: list[dict[str, Any]],
+        version: int = 1,
+        ttl_days: int = 90,
+    ) -> Result[None]:
+        """Save gap responses from raw dict format (for handler compatibility)."""
+        logger.append_keys(user_id=user_id)
+        logger.info('saving gap responses (raw) to DynamoDB')
+        try:
+            table = self._get_db_handler(self.table_name)
+            item = {
+                'pk': user_id,
+                'sk': self._build_gap_responses_sort_key(version),
+                'artifact_type': 'gap_responses',
+                'user_id': user_id,
+                'job_id': job_id,
+                'version': version,
+                'responses': responses,
                 'created_at': datetime.now(timezone.utc).isoformat(),
                 'updated_at': datetime.now(timezone.utc).isoformat(),
                 'ttl': self._ttl_timestamp(ttl_days),

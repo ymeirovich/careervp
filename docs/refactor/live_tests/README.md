@@ -9,6 +9,7 @@ live_tests/
 ├── conftest.py                    # Configuration and shared fixtures
 ├── run_all_tests.py               # Test runner script
 ├── README.md                      # This file
+├── test_00_auth_bootstrap.py      # Cognito/auth bootstrap validation
 ├── test_01_auth_health.py         # Health & Auth endpoints
 ├── test_02_users.py               # User management endpoints
 ├── test_03_jobs.py                # Job management endpoints
@@ -17,7 +18,9 @@ live_tests/
 ├── test_06_cv_tailoring.py        # CV Tailoring endpoints
 ├── test_07_cover_letter.py        # Cover Letter endpoints
 ├── test_08_interview_prep.py      # Interview Prep endpoints
-└── test_09_company_research.py    # Company Research endpoints
+├── test_09_company_research.py    # Company Research endpoints
+├── test_10_api_contract_success.py# Strict 27-endpoint contract suite
+└── test_11_api_error_contracts.py # Error-contract and new-route live tests
 ```
 
 ## Running Tests
@@ -63,15 +66,22 @@ python docs/refactor/live_tests/run_all_tests.py --dry-run
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `API_BASE` | API base URL | `https://api.careervp.com/v1` |
+| `API_BASE` | API base URL (resolved from CloudFormation if unset) | (auto) |
 | `TEST_USER_ID` | Test user ID | `test-user-e2e` |
 | `API_KEY` | API key for authentication | (empty) |
-| `USE_AUTH` | Whether to use authentication | `false` |
+| `USE_AUTH` | Whether to use authentication | `true` |
+| `STRICT_AUTH` | Fail (instead of skip) when protected auth bootstrap is unavailable | `false` |
+| `COGNITO_REGION` | Cognito region for live JWT auth | (auto from stack) |
+| `COGNITO_USER_POOL_ID` | Cognito user pool ID | (auto from stack) |
+| `COGNITO_APP_CLIENT_ID` | Cognito app client ID | (auto from stack) |
+| `COGNITO_APP_CLIENT_SECRET` | Cognito app client secret (if required) | (empty) |
+| `COGNITO_TOKEN_USE` | Token used for bearer auth (`id` or `access`) | `id` |
+| `STACK_NAME` | CloudFormation stack for auto-discovery | `CareerVpCrudDev` |
 
 ### Example: Run against staging
 
 ```bash
-API_BASE=https://staging-api.careervp.com/v1 pytest docs/refactor/live_tests/ -v
+API_BASE=https://staging.careervp.com/v1 pytest docs/refactor/live_tests/ -v
 ```
 
 ## Test Coverage
@@ -107,6 +117,8 @@ This test suite covers all 27 API endpoints defined in the OpenAPI spec:
 | 25 | `/interview-prep/{interviewPrepId}` | GET | test_08_interview_prep.py |
 | 26 | `/company-research/fetch` | POST | test_09_company_research.py |
 | 27 | `/company-research/{jobId}` | GET | test_09_company_research.py |
+| 28 | `/users/me/usage` | GET | test_11_api_error_contracts.py |
+| 29 | `/applications/{application_id}` | GET | test_11_api_error_contracts.py |
 
 ## Feature Coverage
 
@@ -158,3 +170,6 @@ Tests reference payloads from the `docs/refactor/payloads/` directory:
 - Some endpoints may return 401/404 in dev environment without full deployment
 - Async endpoints include polling logic with timeout
 - Test data is shared across test files via module imports
+- `test_11_api_error_contracts.py` intentionally triggers error paths aligned to `docs/beta/docs_gaps/api_error_codes.md` (401/400/404/422 scenarios).
+- Default `run_all_tests.py` run is a live-success smoke path (`bootstrap`, `health`, `auth`) and should emit 2xx status codes.
+- Run protected/full suites explicitly after Cognito auth flow compatibility is confirmed for the deployed app client.
