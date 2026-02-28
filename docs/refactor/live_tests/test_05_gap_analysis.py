@@ -12,6 +12,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from .conftest import API_BASE, TEST_USER_ID, get_auth_headers, save_test_ids
+from .quality_assertions import assert_gap_questions_quality
 
 # Import test data from previous tests
 from .test_01_auth_health import test_data
@@ -185,47 +186,18 @@ class TestGapAnalysisEndpoints:
 
         response = requests.get(url, headers=headers, timeout=10)
 
-        # Accept 200 (success), 404 (not found), or 401 (auth required)
-        if response.status_code == 200:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw_text": response.text}
 
-            print_response(
-                "test_get_gap_questions",
-                f"GET /jobs/{job_id}/gap-questions",
-                response.status_code,
-                data,
-            )
-
-            questions = data.get("questions", [])
-            print(
-                f"✓ GET /jobs/{job_id}/gap-questions - Found {len(questions)} questions"
-            )
-        elif response.status_code == 404:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
-
-            print_response(
-                "test_get_gap_questions",
-                f"GET /jobs/{job_id}/gap-questions",
-                response.status_code,
-                data,
-            )
-            print(f"⚠ GET /jobs/{job_id}/gap-questions - No questions found for job")
-        else:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
-
-            print_response(
-                "test_get_gap_questions",
-                f"GET /jobs/{job_id}/gap-questions",
-                response.status_code,
-                data,
-            )
-            print(f"⚠ GET /jobs/{job_id}/gap-questions - Status {response.status_code}")
+        print_response(
+            "test_get_gap_questions",
+            f"GET /jobs/{job_id}/gap-questions",
+            response.status_code,
+            data,
+        )
+        assert response.status_code == 200, f"GET /jobs/{job_id}/gap-questions returned {response.status_code}"
+        assert_gap_questions_quality(data)
+        questions = data.get("questions", [])
+        print(f"✓ GET /jobs/{job_id}/gap-questions - Found {len(questions)} questions")

@@ -13,6 +13,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from .conftest import API_BASE, TEST_USER_ID, get_auth_headers, save_test_ids
+from .quality_assertions import assert_interview_prep_quality
 
 # Import test data from previous tests
 from .test_01_auth_health import test_data
@@ -122,61 +123,22 @@ class TestInterviewPrepEndpoints:
 
         response = requests.get(url, headers=headers, timeout=10)
 
-        # Accept 200 (success), 404 (not found), or 401 (auth required)
-        if response.status_code == 200:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw_text": response.text}
 
-            print_response(
-                "test_get_interview_prep_status",
-                f"GET /interview-prep/{interview_prep_id}/status",
-                response.status_code,
-                data,
-            )
-
-            status = data.get("status", "unknown")
-            result = data.get("result", {})
-            if result:
-                questions = result.get("questions", [])
-                print(
-                    f"✓ GET /interview-prep/{interview_prep_id}/status - Status: {status}, Questions: {len(questions)}"
-                )
-            else:
-                print(
-                    f"✓ GET /interview-prep/{interview_prep_id}/status - Status: {status}"
-                )
-        elif response.status_code == 404:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
-
-            print_response(
-                "test_get_interview_prep_status",
-                f"GET /interview-prep/{interview_prep_id}/status",
-                response.status_code,
-                data,
-            )
-            print(
-                f"⚠ GET /interview-prep/{interview_prep_id}/status - Interview prep not found"
-            )
-        else:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
-
-            print_response(
-                "test_get_interview_prep_status",
-                f"GET /interview-prep/{interview_prep_id}/status",
-                response.status_code,
-                data,
-            )
-            print(
-                f"⚠ GET /interview-prep/{interview_prep_id}/status - Status {response.status_code}"
-            )
+        print_response(
+            "test_get_interview_prep_status",
+            f"GET /interview-prep/{interview_prep_id}/status",
+            response.status_code,
+            data,
+        )
+        assert response.status_code == 200, f"GET /interview-prep/{interview_prep_id}/status returned {response.status_code}"
+        assert_interview_prep_quality(data)
+        status = data.get("status", "unknown")
+        questions = data.get("result", {}).get("questions", [])
+        print(f"✓ GET /interview-prep/{interview_prep_id}/status - Status: {status}, Questions: {len(questions)}")
 
     def test_interview_prep_async_polling(self):
         """Test interview prep async polling lifecycle."""
@@ -213,8 +175,8 @@ class TestInterviewPrepEndpoints:
                 status = data.get("status", "")
 
                 if status == "completed":
-                    result = data.get("result", {})
-                    questions = result.get("questions", [])
+                    assert_interview_prep_quality(data)
+                    questions = data.get("result", {}).get("questions", [])
                     print(
                         f"✓ Interview prep polling - Completed after {attempt * poll_interval}s, Questions: {len(questions)}"
                     )
@@ -229,6 +191,6 @@ class TestInterviewPrepEndpoints:
 
             time.sleep(poll_interval)
 
-        print(
-            f"⚠ Interview prep polling - Timeout after {max_attempts * poll_interval}s"
+        pytest.fail(
+            f"Interview prep polling timed out after {max_attempts * poll_interval}s"
         )

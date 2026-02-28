@@ -13,6 +13,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from .conftest import API_BASE, TEST_USER_ID, get_auth_headers, save_test_ids
+from .quality_assertions import assert_vpr_quality
 
 # Import test data from previous tests
 from .test_01_auth_health import test_data
@@ -110,48 +111,22 @@ class TestVPREndpoints:
 
         response = requests.get(url, headers=headers, timeout=10)
 
-        # Accept 200 (success), 404 (not found), or 401 (auth required)
-        if response.status_code == 200:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw_text": response.text}
 
-            print_response(
-                "test_get_vpr_status",
-                f"GET /vpr/{vpr_id}/status",
-                response.status_code,
-                data,
-            )
-
-            status = data.get("status", "unknown")
-            print(f"✓ GET /vpr/{vpr_id}/status - Status: {status}")
-        elif response.status_code == 404:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
-
-            print_response(
-                "test_get_vpr_status",
-                f"GET /vpr/{vpr_id}/status",
-                response.status_code,
-                data,
-            )
-            print(f"⚠ GET /vpr/{vpr_id}/status - VPR not found")
-        else:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
-
-            print_response(
-                "test_get_vpr_status",
-                f"GET /vpr/{vpr_id}/status",
-                response.status_code,
-                data,
-            )
-            print(f"⚠ GET /vpr/{vpr_id}/status - Status {response.status_code}")
+        print_response(
+            "test_get_vpr_status",
+            f"GET /vpr/{vpr_id}/status",
+            response.status_code,
+            data,
+        )
+        assert response.status_code == 200, f"GET /vpr/{vpr_id}/status returned {response.status_code}"
+        status = data.get("status", "unknown")
+        if status == "completed":
+            assert_vpr_quality(data)
+        print(f"✓ GET /vpr/{vpr_id}/status - Status: {status}")
 
     def test_list_vprs(self):
         """Test GET /vprs - list user's VPRs."""
@@ -160,25 +135,15 @@ class TestVPREndpoints:
 
         response = requests.get(url, headers=headers, timeout=10)
 
-        # Accept 200 (success) or 401 (auth required)
-        if response.status_code == 200:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw_text": response.text}
 
-            print_response("test_list_vprs", "GET /vprs", response.status_code, data)
-
-            vprs = data.get("vprs", [])
-            print(f"✓ GET /vprs - Found {len(vprs)} VPR(s)")
-        else:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
-
-            print_response("test_list_vprs", "GET /vprs", response.status_code, data)
-            print(f"⚠ GET /vprs - Status {response.status_code}")
+        print_response("test_list_vprs", "GET /vprs", response.status_code, data)
+        assert response.status_code == 200, f"GET /vprs returned {response.status_code}"
+        vprs = data.get("vprs", [])
+        print(f"✓ GET /vprs - Found {len(vprs)} VPR(s)")
 
     def test_vpr_async_polling(self):
         """Test VPR async polling lifecycle."""
@@ -215,6 +180,7 @@ class TestVPREndpoints:
                 status = data.get("status", "")
 
                 if status == "completed":
+                    assert_vpr_quality(data)
                     print(f"✓ VPR polling - Completed after {attempt * poll_interval}s")
                     return
                 elif status in ["failed", "error"]:
@@ -227,4 +193,4 @@ class TestVPREndpoints:
 
             time.sleep(poll_interval)
 
-        print(f"⚠ VPR polling - Timeout after {max_attempts * poll_interval}s")
+        pytest.fail(f"VPR polling timed out after {max_attempts * poll_interval}s")

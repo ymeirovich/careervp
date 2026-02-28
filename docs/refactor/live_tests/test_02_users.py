@@ -18,6 +18,7 @@ from .conftest import (
     read_sample_file,
     save_test_ids,
 )
+from .quality_assertions import assert_cv_list_quality
 
 # Import test data from auth tests
 from .test_01_auth_health import test_data
@@ -159,9 +160,7 @@ class TestUserEndpoints:
             "test_list_user_cvs", "GET /users/me/cv", response.status_code, data
         )
 
-        # Accept 200 (success) or 401 (auth required)
-        if response.status_code == 200:
-            cvs = data.get("cvs", [])
-            print(f"✓ GET /users/me/cv - Found {len(cvs)} CV(s)")
-        else:
-            print(f"⚠ GET /users/me/cv - Status {response.status_code}")
+        assert response.status_code == 200, f"GET /users/me/cv returned {response.status_code}"
+        assert_cv_list_quality(data)
+        cvs = data.get("cvs", [])
+        print(f"✓ GET /users/me/cv - Found {len(cvs)} CV(s)")
