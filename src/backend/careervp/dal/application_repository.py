@@ -39,12 +39,13 @@ class ApplicationRepository:
         application_id = str(uuid4())
         now = self._now_iso()
         item: dict[str, Any] = {
-            'pk': self._pk(user_id),
-            'sk': self._sk(application_id),
+            'userId': user_id,
+            'applicationId': application_id,
             'application_id': application_id,
             'user_id': user_id,
             'job_id': job_id,
             'state': 'created',
+            'status': 'created',
             'created_at': now,
             'updated_at': now,
             'trial_credit_consumed': False,
@@ -57,8 +58,8 @@ class ApplicationRepository:
     def get(self, application_id: str, user_id: str) -> dict[str, Any] | None:
         response = self._table().get_item(
             Key={
-                'pk': self._pk(user_id),
-                'sk': self._sk(application_id),
+                'userId': user_id,
+                'applicationId': application_id,
             }
         )
         item = response.get('Item')
@@ -68,12 +69,12 @@ class ApplicationRepository:
         self._ensure_valid_transition(expected_state=expected_state, new_state=new_state)
         self._table().update_item(
             Key={
-                'pk': self._pk(user_id),
-                'sk': self._sk(application_id),
+                'userId': user_id,
+                'applicationId': application_id,
             },
-            UpdateExpression='SET #state = :new_state, updated_at = :updated_at',
-            ConditionExpression='attribute_exists(pk) AND attribute_exists(sk) AND #state = :expected_state',
-            ExpressionAttributeNames={'#state': 'state'},
+            UpdateExpression='SET #state = :new_state, #status = :new_state, updated_at = :updated_at',
+            ConditionExpression='attribute_exists(userId) AND attribute_exists(applicationId) AND #state = :expected_state',
+            ExpressionAttributeNames={'#state': 'state', '#status': 'status'},
             ExpressionAttributeValues={
                 ':new_state': new_state,
                 ':expected_state': expected_state,
@@ -84,11 +85,11 @@ class ApplicationRepository:
     def update_cv(self, application_id: str, user_id: str, cv_id: str) -> None:
         self._table().update_item(
             Key={
-                'pk': self._pk(user_id),
-                'sk': self._sk(application_id),
+                'userId': user_id,
+                'applicationId': application_id,
             },
             UpdateExpression='SET cv_id = :cv_id, updated_at = :updated_at',
-            ConditionExpression='attribute_exists(pk) AND attribute_exists(sk)',
+            ConditionExpression='attribute_exists(userId) AND attribute_exists(applicationId)',
             ExpressionAttributeValues={
                 ':cv_id': cv_id,
                 ':updated_at': self._now_iso(),
@@ -100,11 +101,11 @@ class ApplicationRepository:
             raise ValueError('artifact_type is required')
         self._table().update_item(
             Key={
-                'pk': self._pk(user_id),
-                'sk': self._sk(application_id),
+                'userId': user_id,
+                'applicationId': application_id,
             },
             UpdateExpression='SET artifact_statuses.#artifact_type = :status, updated_at = :updated_at',
-            ConditionExpression='attribute_exists(pk) AND attribute_exists(sk)',
+            ConditionExpression='attribute_exists(userId) AND attribute_exists(applicationId)',
             ExpressionAttributeNames={'#artifact_type': artifact_type},
             ExpressionAttributeValues={
                 ':status': status,
@@ -121,14 +122,6 @@ class ApplicationRepository:
 
     def _table(self) -> Any:
         return self._dal._get_db_handler(self._dal.table_name)
-
-    @staticmethod
-    def _pk(user_id: str) -> str:
-        return f'USER#{user_id}'
-
-    @staticmethod
-    def _sk(application_id: str) -> str:
-        return f'APP#{application_id}'
 
     @staticmethod
     def _now_iso() -> str:

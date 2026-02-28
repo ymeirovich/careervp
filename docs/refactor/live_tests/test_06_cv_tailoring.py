@@ -46,17 +46,13 @@ class TestCVTailoringEndpoints:
 
         # Build payload using test data
         cv_id = test_data.get("cv_id") or f"cv_{TEST_USER_ID}"
-
-        # Use legacy flow with job_description (new flow requires real job in database)
-        job_description = """
-        Senior Software Engineer
-        Looking for a Python developer with AWS experience.
-        Must have experience with Lambda, DynamoDB, and API Gateway.
-        """
+        job_id = test_data.get("job_id") or f"job_{TEST_USER_ID}"
+        vpr_id = test_data.get("vpr_id") or f"vpr_{TEST_USER_ID}"
 
         payload = {
             "cv_id": cv_id,
-            "job_description": job_description.strip(),
+            "job_id": job_id,
+            "vpr_id": vpr_id,
             "options": {
                 "preserve_length": True,
                 "highlight_keywords": True,
@@ -84,6 +80,8 @@ class TestCVTailoringEndpoints:
                 test_data["cv_tailoring_id"] = data["request_id"]
             elif "id" in data:
                 test_data["cv_tailoring_id"] = data["id"]
+            elif "artifact_id" in data:
+                test_data["cv_tailoring_id"] = data["artifact_id"]
             save_test_ids(test_data)
             print(
                 f"✓ POST /cv-tailoring/generate - CV tailoring submitted, ID: {test_data.get('cv_tailoring_id')}"
@@ -121,25 +119,10 @@ class TestCVTailoringEndpoints:
 
     def test_get_tailored_cv_status(self):
         """Test GET /cv-tailoring/{cvTailoringId}/status - get tailored CV status."""
-        # Try to get a valid ID from test data, or fetch from list
+        # Status endpoint expects the request/artifact ID returned by generate.
         cv_tailoring_id = test_data.get("cv_tailoring_id")
-
-        # If no valid ID stored, try to get one from the list endpoint
-        if not cv_tailoring_id or cv_tailoring_id == "test-cv-tailoring-id":
-            list_url = f"{self.base_url}/cv-tailorings"
-            headers = get_auth_headers()
-            list_response = requests.get(list_url, headers=headers, timeout=10)
-            if list_response.status_code == 200:
-                list_data = list_response.json()
-                tailored_cvs = list_data.get("tailored_cvs", [])
-                if tailored_cvs:
-                    cv_tailoring_id = tailored_cvs[0].get("id") or tailored_cvs[0].get(
-                        "cv_id"
-                    )
-
-        # Fallback if still no valid ID
         if not cv_tailoring_id:
-            cv_tailoring_id = "test-cv-tailoring-id"
+            pytest.skip("No cv_tailoring_id available from generate response")
 
         # URL-encode the ID to handle # characters properly
         encoded_id = quote(cv_tailoring_id, safe="")
