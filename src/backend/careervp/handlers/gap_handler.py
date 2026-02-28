@@ -76,7 +76,7 @@ def _error_response(status_code: int | HTTPStatus, message: str, code: str) -> d
     }
 
 
-def generate_questions(event: dict[str, Any]) -> dict[str, Any]:
+def generate_questions(event: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
     payload = _parse_body(event)
     if payload is None:
         return _error_response(HTTPStatus.BAD_REQUEST, 'Invalid request body', ResultCode.INVALID_JSON)
