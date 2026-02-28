@@ -29,7 +29,11 @@ from careervp.models.result import Result, ResultCode
 
 
 def _get_dal() -> DynamoDalHandler:
-    table_name = os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')
+    table_name = (
+        os.environ.get('DYNAMODB_TABLE_NAME')
+        or os.environ.get('ARTIFACTS_TABLE_NAME')
+        or os.environ.get('TABLE_NAME', '')
+    )
     return DynamoDalHandler(table_name)
 
 
