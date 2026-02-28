@@ -44,9 +44,7 @@ class TestCreditChargedBeforeLLM:
 
         call_order: list[str] = []
         trial_service = MagicMock()
-        trial_service.check_trial_status.side_effect = lambda user_id: call_order.append('check_trial_status') or {
-            'is_active': True
-        }
+        trial_service.check_trial_status.side_effect = lambda user_id: call_order.append('check_trial_status') or {'is_active': True}
         trial_service.consume_credit.side_effect = lambda user_id: call_order.append('consume_credit')
 
         app_repo = MagicMock()

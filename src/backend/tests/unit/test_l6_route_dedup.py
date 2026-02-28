@@ -51,8 +51,9 @@ def _extract_route_map_operations() -> set[tuple[str, str]]:
     content = _read_api_construct()
     # Match route tuples in _add_openapi_contract_routes:
     # ("/path", "METHOD", self.handler_func)
+    # Handle both single-line and multi-line tuple formats
     matches = re.findall(
-        r'\(\s*"([^"]+)"\s*,\s*"([A-Z]+)"\s*,\s*self\.[a-zA-Z0-9_]+\s*\)',
+        r'\(\s*"([^"]+)"\s*,\s*"([A-Z]+)"\s*,',
         content,
     )
     return {(method, _normalize_route_path(path)) for path, method in matches}

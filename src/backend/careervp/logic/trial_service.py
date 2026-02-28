@@ -62,14 +62,8 @@ class TrialService:
         try:
             self._table().update_item(
                 Key={'pk': self._pk(user_id), 'sk': 'TRIAL'},
-                UpdateExpression=(
-                    'SET application_count = if_not_exists(application_count, :zero) + :inc, '
-                    'updated_at = :updated_at'
-                ),
-                ConditionExpression=(
-                    'attribute_exists(pk) AND attribute_exists(sk) AND '
-                    'trial_active = :trial_active AND application_count < :max'
-                ),
+                UpdateExpression=('SET application_count = if_not_exists(application_count, :zero) + :inc, updated_at = :updated_at'),
+                ConditionExpression=('attribute_exists(pk) AND attribute_exists(sk) AND trial_active = :trial_active AND application_count < :max'),
                 ExpressionAttributeValues={
                     ':zero': 0,
                     ':inc': 1,

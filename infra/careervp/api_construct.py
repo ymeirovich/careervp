@@ -1803,7 +1803,11 @@ class ApiConstruct(Construct):
             ("/cover-letter/{coverLetterId}/status", "GET", self.cover_letter_api_func),
             ("/cover-letters", "GET", self.cover_letter_api_func),
             ("/interview-prep/generate", "POST", self.interview_prep_api_func),
-            ("/interview-prep/{interviewPrepId}/status", "GET", self.interview_prep_api_func),
+            (
+                "/interview-prep/{interviewPrepId}/status",
+                "GET",
+                self.interview_prep_api_func,
+            ),
             ("/interview-preps", "GET", self.interview_prep_api_func),
             ("/company-research/{jobId}", "GET", self.company_research_func),
             ("/knowledge-base", "GET", self.company_research_func),

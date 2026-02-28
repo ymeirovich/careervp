@@ -94,9 +94,7 @@ class TestApplicationCreation:
 
 @pytest.mark.unit
 class TestApplicationStateTransitions:
-    def test_state_transition_uses_condition_expression(
-        self, repository: ApplicationRepository, mock_table: MagicMock
-    ) -> None:
+    def test_state_transition_uses_condition_expression(self, repository: ApplicationRepository, mock_table: MagicMock) -> None:
         repository.update_state(
             application_id='app-123',
             user_id='user-123',
@@ -169,9 +167,7 @@ class TestApplicationStateModel:
 
 @pytest.mark.unit
 class TestApplicationArtifactStatus:
-    def test_update_artifact_status_stores_status(
-        self, repository: ApplicationRepository, mock_table: MagicMock
-    ) -> None:
+    def test_update_artifact_status_stores_status(self, repository: ApplicationRepository, mock_table: MagicMock) -> None:
         repository.update_artifact_status(
             application_id='app-123',
             user_id='user-123',
@@ -183,9 +179,7 @@ class TestApplicationArtifactStatus:
         assert kwargs['ExpressionAttributeNames']['#artifact_type'] == 'vpr'
         assert kwargs['ExpressionAttributeValues'][':status'] == 'completed'
 
-    def test_update_artifact_status_does_not_affect_other_types(
-        self, repository: ApplicationRepository, mock_table: MagicMock
-    ) -> None:
+    def test_update_artifact_status_does_not_affect_other_types(self, repository: ApplicationRepository, mock_table: MagicMock) -> None:
         repository.update_artifact_status(
             application_id='app-123',
             user_id='user-123',
