@@ -104,7 +104,15 @@ class TestVPREndpoints:
 
     def test_get_vpr_status(self):
         """Test GET /vpr/{vprId}/status - poll VPR status."""
-        vpr_id = test_data.get("vpr_id") or "test-vpr-id"
+        # Auto-generate VPR if none exists
+        if not test_data.get("vpr_id"):
+            print("No VPR found, generating first...")
+            self.test_generate_vpr()
+            # Wait for async processing
+            import time
+            time.sleep(15)
+
+        vpr_id = test_data.get("vpr_id")
 
         url = f"{self.base_url}/vpr/{vpr_id}/status"
         headers = get_auth_headers()

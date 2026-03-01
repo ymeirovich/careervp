@@ -120,6 +120,14 @@ class TestCVTailoringEndpoints:
 
     def test_get_tailored_cv_status(self):
         """Test GET /cv-tailoring/{cvTailoringId}/status - get tailored CV status."""
+        # Auto-generate tailored CV if none exists
+        if not test_data.get("cv_tailoring_id"):
+            print("No tailored CV found, generating first...")
+            self.test_generate_tailored_cv()
+            # Wait for async processing
+            import time
+            time.sleep(15)
+
         # Status endpoint expects the request/artifact ID returned by generate.
         cv_tailoring_id = test_data.get("cv_tailoring_id")
         if not cv_tailoring_id:

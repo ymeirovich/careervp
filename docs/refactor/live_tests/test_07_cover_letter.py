@@ -125,7 +125,15 @@ class TestCoverLetterEndpoints:
 
     def test_get_cover_letter_status(self):
         """Test GET /cover-letter/{coverLetterId}/status - get cover letter status."""
-        cover_letter_id = test_data.get("cover_letter_id") or "test-cover-letter-id"
+        # Auto-generate cover letter if none exists
+        if not test_data.get("cover_letter_id"):
+            print("No cover letter found, generating first...")
+            self.test_generate_cover_letter()
+            # Wait for async processing
+            import time
+            time.sleep(15)
+
+        cover_letter_id = test_data.get("cover_letter_id")
 
         url = f"{self.base_url}/cover-letter/{cover_letter_id}/status"
         headers = get_auth_headers()

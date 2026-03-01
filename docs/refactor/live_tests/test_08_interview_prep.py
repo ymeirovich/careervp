@@ -114,9 +114,15 @@ class TestInterviewPrepEndpoints:
 
     def test_get_interview_prep_status(self):
         """Test GET /interview-prep/{interviewPrepId}/status - get interview prep status."""
-        interview_prep_id = (
-            test_data.get("interview_prep_id") or "test-interview-prep-id"
-        )
+        # Auto-generate interview prep if none exists
+        if not test_data.get("interview_prep_id"):
+            print("No interview prep found, generating first...")
+            self.test_generate_interview_prep()
+            # Wait for async processing
+            import time
+            time.sleep(15)
+
+        interview_prep_id = test_data.get("interview_prep_id")
 
         url = f"{self.base_url}/interview-prep/{interview_prep_id}/status"
         headers = get_auth_headers()
