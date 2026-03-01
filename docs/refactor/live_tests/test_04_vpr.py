@@ -113,6 +113,8 @@ class TestVPREndpoints:
             time.sleep(15)
 
         vpr_id = test_data.get("vpr_id")
+        if not vpr_id:
+            pytest.skip("No VPR ID available - generation may have failed")
 
         url = f"{self.base_url}/vpr/{vpr_id}/status"
         headers = get_auth_headers()

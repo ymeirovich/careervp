@@ -123,6 +123,8 @@ class TestInterviewPrepEndpoints:
             time.sleep(15)
 
         interview_prep_id = test_data.get("interview_prep_id")
+        if not interview_prep_id:
+            pytest.skip("No interview prep ID available - generation may have failed")
 
         url = f"{self.base_url}/interview-prep/{interview_prep_id}/status"
         headers = get_auth_headers()

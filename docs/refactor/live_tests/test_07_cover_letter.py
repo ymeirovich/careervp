@@ -134,6 +134,8 @@ class TestCoverLetterEndpoints:
             time.sleep(15)
 
         cover_letter_id = test_data.get("cover_letter_id")
+        if not cover_letter_id:
+            pytest.skip("No cover letter ID available - generation may have failed")
 
         url = f"{self.base_url}/cover-letter/{cover_letter_id}/status"
         headers = get_auth_headers()

@@ -131,7 +131,7 @@ class TestCVTailoringEndpoints:
         # Status endpoint expects the request/artifact ID returned by generate.
         cv_tailoring_id = test_data.get("cv_tailoring_id")
         if not cv_tailoring_id:
-            pytest.skip("No cv_tailoring_id available from generate response")
+            pytest.skip("No cv_tailoring_id available - generation may have failed")
 
         # URL-encode the ID to handle # characters properly
         encoded_id = quote(cv_tailoring_id, safe="")
