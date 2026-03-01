@@ -34,6 +34,7 @@ class CognitoConstruct(Construct):
             generate_secret=False,
             auth_flows=cognito.AuthFlow(
                 user_srp=True,
+                user_password=True,
             ),
             access_token_validity=Duration.hours(1),
             id_token_validity=Duration.hours(1),
