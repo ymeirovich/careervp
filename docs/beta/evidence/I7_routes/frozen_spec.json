@@ -27,6 +27,11 @@
     },
     {
       "method": "POST",
+      "path": "/company-research/fetch",
+      "auth": "COGNITO"
+    },
+    {
+      "method": "POST",
       "path": "/cover-letter/generate",
       "auth": "COGNITO"
     },

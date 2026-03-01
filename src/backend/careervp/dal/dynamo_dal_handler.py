@@ -45,7 +45,8 @@ class DynamoDalHandler(DalHandler):
             # Exclude nulls to avoid DynamoDB GSI key-type validation errors (e.g. email-index expects S, not NULL).
             item = user_cv.model_dump(exclude_none=True)
             item['pk'] = user_cv.user_id
-            item['sk'] = 'CV'
+            # Use CV#{cv_id} to support multiple CVs per user
+            item['sk'] = f"CV#{user_cv.cv_id}"
             table.put_item(Item=item)
         except (ClientError, ValidationError) as exc:  # pragma: no cover
             error_msg = 'failed to save CV'

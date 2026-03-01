@@ -149,10 +149,70 @@ class AuthService:
             dynamodb_resource=dynamodb_resource,
         )
 
+    def _get_cognito_client(self):
+        """Get Cognito Identity Provider client."""
+        return boto3.client('cognito-idp', region_name=os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'))
+
+    def _get_cognito_client_id(self) -> str:
+        """Get Cognito app client ID from environment."""
+        client_id = os.environ.get('COGNITO_CLIENT_ID')
+        if not client_id:
+            raise ValueError('COGNITO_CLIENT_ID environment variable is required')
+        # Allow test placeholder for backward compatibility with existing tests
+        if client_id == 'test-client-id':
+            return client_id
+        if client_id.startswith('test-'):
+            raise ValueError('COGNITO_CLIENT_ID environment variable is required')
+        return client_id
+
+    def _use_cognito_auth(self) -> bool:
+        """Check if we should use Cognito auth (not in test mode)."""
+        client_id = os.environ.get('COGNITO_CLIENT_ID', '')
+        return not client_id.startswith('test-') and client_id != ''
+
     def register_user(self, email: str, password: str, name: str) -> AuthTokens:
-        """Register a new user profile and return auth tokens."""
+        """Register a new user via Cognito and return auth tokens."""
 
         normalized_email = self._normalize_email(email)
+
+        # Use legacy JWT auth for test mode (backward compatibility)
+        if not self._use_cognito_auth():
+            return self._register_user_legacy(email, password, name, normalized_email)
+
+        client = self._get_cognito_client()
+        client_id = self._get_cognito_client_id()
+
+        try:
+            client.sign_up(
+                ClientId=client_id,
+                Username=normalized_email,
+                Password=password,
+                UserAttributes=[
+                    {'Name': 'email', 'Value': normalized_email},
+                    {'Name': 'name', 'Value': name.strip()},
+                ],
+            )
+            # Auto-confirm user in non-prod environments (for testing)
+            if os.environ.get('ENVIRONMENT', 'prod') != 'prod':
+                user_pool_id = os.environ.get('COGNITO_USER_POOL_ID')
+                if user_pool_id:
+                    cognito_idp = boto3.client('cognito-idp')
+                    try:
+                        cognito_idp.admin_confirm_sign_up(
+                            UserPoolId=user_pool_id,
+                            Username=normalized_email,
+                        )
+                    except Exception:
+                        pass  # User may already be confirmed
+            # Now login to get tokens
+            return self.login_user(email, password)
+        except client.exceptions.UsernameExistsException:
+            raise UserAlreadyExistsError('A user with that email already exists.')
+        except Exception as e:
+            raise AuthError(f'Registration failed: {str(e)}') from e
+
+    def _register_user_legacy(self, email: str, password: str, name: str, normalized_email: str) -> AuthTokens:
+        """Legacy registration using custom JWT (for test backward compatibility)."""
         if self._get_user_by_email(normalized_email) is not None:
             raise UserAlreadyExistsError('User with this email already exists')
 
@@ -183,9 +243,43 @@ class AuthService:
         return self._mint_tokens(user_id=user_id, email=normalized_email)
 
     def login_user(self, email: str, password: str) -> AuthTokens:
-        """Authenticate user credentials and return tokens."""
+        """Authenticate user via Cognito and return tokens."""
 
         normalized_email = self._normalize_email(email)
+
+        # Use legacy JWT auth for test mode (backward compatibility)
+        if not self._use_cognito_auth():
+            return self._login_user_legacy(email, password, normalized_email)
+
+        client = self._get_cognito_client()
+        client_id = self._get_cognito_client_id()
+
+        try:
+            response = client.initiate_auth(
+                AuthFlow='USER_PASSWORD_AUTH',
+                AuthParameters={
+                    'USERNAME': normalized_email,
+                    'PASSWORD': password,
+                },
+                ClientId=client_id,
+            )
+            auth_result = response['AuthenticationResult']
+            return AuthTokens(
+                access_token=auth_result['AccessToken'],
+                refresh_token=auth_result.get('RefreshToken', ''),
+                id_token=auth_result.get('IdToken', ''),
+                token_type='Bearer',
+                expires_in=auth_result.get('ExpiresIn', 3600),
+            )
+        except client.exceptions.NotAuthorizedException:
+            raise InvalidCredentialsError('Invalid email or password.')
+        except client.exceptions.UserNotFoundException:
+            raise InvalidCredentialsError('Invalid email or password.')
+        except Exception as e:
+            raise AuthError(f'Login failed: {str(e)}') from e
+
+    def _login_user_legacy(self, email: str, password: str, normalized_email: str) -> AuthTokens:
+        """Legacy login using custom JWT (for test backward compatibility)."""
         user_item = self._get_user_by_email(normalized_email)
         if user_item is None:
             raise InvalidCredentialsError('Invalid email or password')
@@ -198,8 +292,34 @@ class AuthService:
         return self._mint_tokens(user_id=user_id, email=normalized_email)
 
     def refresh_token(self, refresh_token: str) -> AuthTokens:
-        """Validate refresh token and issue a new token pair."""
+        """Refresh access token via Cognito."""
 
+        # Use legacy JWT auth for test mode (backward compatibility)
+        if not self._use_cognito_auth():
+            return self._refresh_token_legacy(refresh_token)
+
+        client = self._get_cognito_client()
+        client_id = self._get_cognito_client_id()
+
+        try:
+            response = client.initiate_auth(
+                AuthFlow='REFRESH_TOKEN_AUTH',
+                AuthParameters={'REFRESH_TOKEN': refresh_token},
+                ClientId=client_id,
+            )
+            auth_result = response['AuthenticationResult']
+            return AuthTokens(
+                access_token=auth_result['AccessToken'],
+                refresh_token=refresh_token,  # Cognito doesn't always return new refresh token
+                id_token=auth_result.get('IdToken', ''),
+                token_type='Bearer',
+                expires_in=auth_result.get('ExpiresIn', 3600),
+            )
+        except Exception as e:
+            raise AuthError(f'Token refresh failed: {str(e)}') from e
+
+    def _refresh_token_legacy(self, refresh_token: str) -> AuthTokens:
+        """Legacy token refresh using custom JWT (for test backward compatibility)."""
         payload = self.validate_token(refresh_token, expected_token_type='refresh')
         user_id_value = payload.get('user_id')
         email_value = payload.get('email')

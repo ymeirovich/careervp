@@ -28,16 +28,16 @@ def gap_test_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]
 def gap_table() -> Generator[Any, None, None]:
     with mock_aws():
         dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
-        # Table schema must match handler's query keys: userId, applicationId
+        # Table schema must match DynamoDalHandler's pk/sk schema
         table = dynamodb.create_table(
             TableName='test-gap-table',
             KeySchema=[
-                {'AttributeName': 'userId', 'KeyType': 'HASH'},
-                {'AttributeName': 'applicationId', 'KeyType': 'RANGE'},
+                {'AttributeName': 'pk', 'KeyType': 'HASH'},
+                {'AttributeName': 'sk', 'KeyType': 'RANGE'},
             ],
             AttributeDefinitions=[
-                {'AttributeName': 'userId', 'AttributeType': 'S'},
-                {'AttributeName': 'applicationId', 'AttributeType': 'S'},
+                {'AttributeName': 'pk', 'AttributeType': 'S'},
+                {'AttributeName': 'sk', 'AttributeType': 'S'},
             ],
             BillingMode='PAY_PER_REQUEST',
         )
@@ -136,8 +136,8 @@ def test_generate_questions_returns_200_and_persists(gap_table: Any) -> None:
 
     stored = gap_table.get_item(
         Key={
-            'userId': 'user-1',
-            'applicationId': 'GAP_ANALYSIS#cv-123#job-123',
+            'pk': 'user-1',
+            'sk': 'ARTIFACT#GAP_ANALYSIS#cv-123#job-123',
         }
     ).get('Item')
     assert isinstance(stored, dict)
@@ -153,8 +153,8 @@ def test_get_questions_returns_200(gap_table: Any) -> None:
     # Table key schema: userId (pk), applicationId (sk)
     gap_table.put_item(
         Item={
-            'userId': 'user-1',
-            'applicationId': 'GAP_ANALYSIS#cv-123#job-555',
+            'pk': 'user-1',
+            'sk': 'ARTIFACT#GAP_ANALYSIS#cv-123#job-555',
             'artifactType': 'gap_analysis',
             'cv_id': 'cv-123',
             'job_id': 'job-555',
@@ -215,11 +215,11 @@ def test_submit_response_returns_200(gap_table: Any) -> None:
     assert payload['job_id'] == 'job-222'
     assert payload['responses_saved'] == 1
 
-    # Table key schema: userId (pk), applicationId (sk)
+    # Table key schema: pk/sk
     stored = gap_table.get_item(
         Key={
-            'userId': 'user-1',
-            'applicationId': 'GAP_RESPONSES#job-222',
+            'pk': 'user-1',
+            'sk': 'ARTIFACT#GAP_RESPONSES#v1',
         }
     ).get('Item')
     assert isinstance(stored, dict), f'Expected dict but got None. Stored keys: {list(stored.keys()) if stored else "None"}'
@@ -256,15 +256,15 @@ def test_get_responses_returns_200(gap_table: Any) -> None:
     from careervp.handlers.gap_handler import lambda_handler
 
     now = datetime.now(timezone.utc).isoformat()
-    # Table key schema: userId (pk), applicationId (sk)
+    # Table key schema: pk/sk
     gap_table.put_item(
         Item={
-            'userId': 'user-1',
-            'applicationId': 'GAP_RESPONSES#job-999',
+            'pk': 'user-1',
+            'sk': 'ARTIFACT#GAP_RESPONSES#v1',
             'artifactType': 'gap_responses',
             'job_id': 'job-999',
             'responses': [
-                {'question_id': 'q9', 'response': 'Built distributed systems.'},
+                {'question_id': 'q9', 'question': 'What is your experience?', 'answer': 'Built distributed systems.'},
             ],
             'created_at': now,
             'updated_at': now,

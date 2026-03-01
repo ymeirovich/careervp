@@ -502,10 +502,19 @@ class TestCVUploadDynamoDBPersistence:
             assert response['statusCode'] == 201
 
             # Verify CV was saved to DynamoDB
-            saved_item = table.get_item(Key={'pk': 'test-user-123', 'sk': 'CV'})
-            assert 'Item' in saved_item
-            assert saved_item['Item']['full_name'] == 'John Doe'
-            assert saved_item['Item']['is_parsed'] is True
+            # Query for items with pk='test-user-123' and sk starts with 'CV#'
+            client = boto3.client('dynamodb', region_name='us-east-1')
+            response = client.query(
+                TableName='test-users-table',
+                KeyConditionExpression='pk = :pk AND begins_with(sk, :sk)',
+                ExpressionAttributeValues={':pk': {'S': 'test-user-123'}, ':sk': {'S': 'CV#'}}
+            )
+            items = response.get('Items', [])
+            assert len(items) == 1, f"Expected 1 CV item, got {len(items)}"
+            # Convert DynamoDB format to plain dict
+            saved_item = {k: list(v.values())[0] for k, v in items[0].items()}
+            assert saved_item['full_name'] == 'John Doe'
+            assert saved_item['is_parsed'] is True
 
     @mock_aws
     def test_openapi_payload_uses_bearer_token_for_user_id(self, mock_llm_success):

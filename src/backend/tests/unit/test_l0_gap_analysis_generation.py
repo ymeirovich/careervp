@@ -182,13 +182,13 @@ class TestGapAnalysisOutputShape:
             )
 
             with (
-                patch('careervp.handlers.gap_handler._get_table') as mock_table_fn,
+                patch('careervp.handlers.gap_handler._get_dal') as mock_get_dal,
                 patch('careervp.handlers.gap_handler._get_trial_service') as mock_trial_service,
                 patch('careervp.handlers.gap_handler._get_application_repository') as mock_application_repository,
             ):
-                mock_table = MagicMock()
-                mock_table.put_item.return_value = {}
-                mock_table_fn.return_value = mock_table
+                dal = MagicMock()
+                dal.save_gap_questions.return_value = Result(success=True, data=None, code=ResultCode.GAP_QUESTIONS_GENERATED)
+                mock_get_dal.return_value = dal
                 trial_service = MagicMock()
                 trial_service.check_trial_status.return_value = {'is_active': True}
                 trial_service.consume_credit.return_value = None

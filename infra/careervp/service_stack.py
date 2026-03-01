@@ -56,6 +56,7 @@ class ServiceStack(Stack):
             is_production_env=is_production_env,
             naming=self.naming,
             user_pool=self.cognito.user_pool,
+            cognito_client_id=self.cognito.client_id,
         )
 
         CfnOutput(self, "UserPoolId", value=self.cognito.user_pool_id)

@@ -39,8 +39,8 @@ class ApplicationRepository:
         application_id = str(uuid4())
         now = self._now_iso()
         item: dict[str, Any] = {
-            'userId': user_id,
-            'applicationId': application_id,
+            'pk': user_id,
+            'sk': f'APP#{application_id}',
             'application_id': application_id,
             'user_id': user_id,
             'job_id': job_id,
@@ -58,8 +58,8 @@ class ApplicationRepository:
     def get(self, application_id: str, user_id: str) -> dict[str, Any] | None:
         response = self._table().get_item(
             Key={
-                'userId': user_id,
-                'applicationId': application_id,
+                'pk': user_id,
+                'sk': f'APP#{application_id}',
             }
         )
         item = response.get('Item')
@@ -69,8 +69,8 @@ class ApplicationRepository:
         self._ensure_valid_transition(expected_state=expected_state, new_state=new_state)
         self._table().update_item(
             Key={
-                'userId': user_id,
-                'applicationId': application_id,
+                'pk': user_id,
+                'sk': f'APP#{application_id}',
             },
             UpdateExpression='SET #state = :new_state, #status = :new_state, updated_at = :updated_at',
             ConditionExpression='attribute_exists(userId) AND attribute_exists(applicationId) AND #state = :expected_state',

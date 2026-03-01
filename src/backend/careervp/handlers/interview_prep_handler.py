@@ -149,7 +149,10 @@ def get_interview_prep_status(event: dict[str, Any]) -> dict[str, Any]:
 
     interview_prep_item = _get_interview_prep_item(user_id, interview_prep_id)
     if not interview_prep_item:
-        return _build_response(HTTPStatus.OK, _build_default_interview_prep_status_payload(interview_prep_id))
+        return _build_response(
+            HTTPStatus.NOT_FOUND,
+            {'error': 'Interview prep not found', 'code': ResultCode.CV_NOT_FOUND},
+        )
 
     return _build_response(
         HTTPStatus.OK,
@@ -332,7 +335,7 @@ def _get_interview_prep_item(user_id: str, interview_prep_id: str) -> dict[str, 
         f'{INTERVIEW_PREP_SORT_KEY_PREFIX}{interview_prep_id}',
     ):
         try:
-            get_response = table.get_item(Key={'applicationId': user_id, 'artifactId': artifact_id})
+            get_response = table.get_item(Key={'pk': user_id, 'sk': artifact_id})
         except Exception:
             get_response = {}
         item = get_response.get('Item') if isinstance(get_response, dict) else None
@@ -341,9 +344,9 @@ def _get_interview_prep_item(user_id: str, interview_prep_id: str) -> dict[str, 
 
     try:
         query_response = table.query(
-            KeyConditionExpression=Key('applicationId').eq(user_id)
-            & Key('artifactId').begins_with(INTERVIEW_PREP_SORT_KEY_PREFIX),
-            FilterExpression=Attr('artifactId').contains(interview_prep_id),
+            KeyConditionExpression=Key('pk').eq(user_id)
+            & Key('sk').begins_with(INTERVIEW_PREP_SORT_KEY_PREFIX),
+            FilterExpression=Attr('sk').contains(interview_prep_id),
             Limit=1,
         )
     except Exception:

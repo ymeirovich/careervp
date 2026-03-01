@@ -1,0 +1,13 @@
+Gate: G2 - Protected Success Suite
+Spec: cognito-test-fixes/PLAN.md G2 / SPEC.md FIX C-E
+Command: pytest docs/refactor/live_tests/test_10_api_contract_success.py -q
+Required: Zero 401s on protected routes (requires P2-C deployed)
+Dependency: G1 must PASS first
+
+Date: (fill in after run)
+Result: (PASS / FAIL)
+Tests: (e.g., "27 passed, 0 failed in 45.2s")
+Auth source: (cognito / api)
+
+--- pytest output ---
+(paste full output here)

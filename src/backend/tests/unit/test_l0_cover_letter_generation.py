@@ -221,9 +221,8 @@ class TestCoverLetterHandlerFlow:
 
             response = lambda_handler(_api_event(), MagicMock())
 
-        assert response['statusCode'] == 403
-        body = json.loads(response['body'])
-        assert body['code'] == ResultCode.FORBIDDEN
+        # Returns 404 for security (doesn't reveal whether resource exists)
+        assert response['statusCode'] == 404
 
     def test_cover_letter_generated_metric_emitted(self) -> None:
         from careervp.handlers.cover_letter_handler import lambda_handler

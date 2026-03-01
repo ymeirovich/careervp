@@ -1,0 +1,11 @@
+Gate: G1 - Auth Bootstrap
+Spec: cognito-test-fixes/PLAN.md G1 / SPEC.md FIX C-E
+Command: pytest docs/refactor/live_tests/test_00_auth_bootstrap.py -q
+Required: BOTH tests pass before proceeding to G2
+
+Date: (fill in after run)
+Result: (PASS / FAIL)
+Tests: (e.g., "2 passed in 3.45s")
+
+--- pytest output ---
+(paste full output here)

@@ -530,8 +530,10 @@ def _build_tailored_cv_status_payload(item: dict[str, Any], fallback_id: str) ->
 
 
 def _build_tailored_cv_list_item(item: dict[str, Any]) -> dict[str, Any]:
+    # Use the full SK as the ID for uniqueness
+    sk = item.get('sk', '')
     return {
-        'id': str(item.get('request_id') or item.get('sk') or ''),
+        'id': str(sk or ''),
         'status': _normalize_tailoring_status(item.get('status')),
         'cv_id': item.get('cv_id'),
         'created_at': item.get('created_at'),

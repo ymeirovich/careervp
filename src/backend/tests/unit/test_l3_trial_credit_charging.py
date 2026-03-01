@@ -53,10 +53,12 @@ class TestCreditChargedBeforeLLM:
         with (
             patch('careervp.handlers.gap_handler._get_trial_service', return_value=trial_service),
             patch('careervp.handlers.gap_handler._get_application_repository', return_value=app_repo),
-            patch('careervp.handlers.gap_handler._get_table') as mock_table,
+            patch('careervp.handlers.gap_handler._get_dal') as mock_get_dal,
             patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate,
         ):
-            mock_table.return_value = MagicMock()
+            dal = MagicMock()
+            dal.save_gap_questions.return_value = Result(success=True, data=None, code=ResultCode.GAP_QUESTIONS_GENERATED)
+            mock_get_dal.return_value = dal
             mock_generate.side_effect = lambda **_: call_order.append('generate_gap_questions') or Result(
                 success=True,
                 data=[{'question_id': 'q-1', 'question': 'Describe impact', 'tags': ['[CV IMPACT]']}],
@@ -108,11 +110,13 @@ class TestCreditChargedBeforeLLM:
         with (
             patch('careervp.handlers.gap_handler._get_trial_service', return_value=trial_service),
             patch('careervp.handlers.gap_handler._get_application_repository') as mock_repo_factory,
-            patch('careervp.handlers.gap_handler._get_table') as mock_table,
+            patch('careervp.handlers.gap_handler._get_dal') as mock_get_dal,
             patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate,
         ):
             mock_repo_factory.return_value = MagicMock()
-            mock_table.return_value = MagicMock()
+            dal = MagicMock()
+            dal.save_gap_questions.return_value = Result(success=True, data=None, code=ResultCode.GAP_QUESTIONS_GENERATED)
+            mock_get_dal.return_value = dal
             mock_generate.return_value = Result(
                 success=True,
                 data=[{'question_id': 'q-1', 'question': 'Describe impact', 'tags': ['[CV IMPACT]']}],

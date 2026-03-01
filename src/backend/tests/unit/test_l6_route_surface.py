@@ -17,7 +17,7 @@ CANONICAL_ROUTES_PATH = '/Users/yitzchak/Documents/dev/careervp/docs/beta/canoni
 FROZEN_SPEC_PATH = '/Users/yitzchak/Documents/dev/careervp/docs/beta/evidence/I7_routes/frozen_spec.json'
 ROUTE_DIFF_PATH = '/Users/yitzchak/Documents/dev/careervp/docs/beta/evidence/I7_routes/route-surface-diff.txt'
 
-EXPECTED_ROUTE_COUNT = 30
+EXPECTED_ROUTE_COUNT = 31
 
 # Deprecated routes that must NOT be in the deployed surface
 DEPRECATED_ROUTES = [
@@ -58,6 +58,7 @@ CANONICAL_ROUTES = [
     'GET /interview-preps/{interview_prep_id}',
     'GET /applications/{application_id}',
     'POST /company-research',
+    'POST /company-research/fetch',
     'GET /company-research/{research_id}',
     'GET /company-research',
 ]
@@ -67,8 +68,8 @@ CANONICAL_ROUTES = [
 class TestRouteSurfaceMatchesSpec:
     """Deployed route surface must exactly match canonical spec."""
 
-    def test_route_count_is_30(self):
-        """Exactly 30 routes in canonical spec."""
+    def test_route_count_is_31(self):
+        """Exactly 31 routes in canonical spec."""
         assert len(CANONICAL_ROUTES) == EXPECTED_ROUTE_COUNT, f'Expected {EXPECTED_ROUTE_COUNT} canonical routes, got {len(CANONICAL_ROUTES)}'
 
     @pytest.mark.parametrize('route', CANONICAL_ROUTES)
@@ -101,13 +102,13 @@ class TestRouteSurfaceDiffEmpty:
         """frozen_spec.json evidence file exists."""
         assert os.path.exists(FROZEN_SPEC_PATH), f'frozen_spec.json missing at {FROZEN_SPEC_PATH}'
 
-    def test_frozen_spec_has_30_routes(self):
-        """frozen_spec.json contains exactly 30 routes."""
+    def test_frozen_spec_has_31_routes(self):
+        """frozen_spec.json contains exactly 31 routes."""
         assert os.path.exists(FROZEN_SPEC_PATH), f'Missing: {FROZEN_SPEC_PATH}'
         with open(FROZEN_SPEC_PATH) as f:
             spec = json.load(f)
         routes = spec.get('routes', [])
-        assert len(routes) == 30, f'Expected 30 routes in frozen spec, got {len(routes)}'
+        assert len(routes) == 31, f'Expected 31 routes in frozen spec, got {len(routes)}'
 
 
 @pytest.mark.unit

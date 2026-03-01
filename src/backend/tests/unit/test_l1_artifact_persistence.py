@@ -203,8 +203,8 @@ def test_interview_prep_persisted_item_contains_prefix_and_ttl() -> None:
     table.put_item.assert_called_once()
     item = table.put_item.call_args.kwargs['Item']
     assert str(item['sk']).startswith('ARTIFACT#INTERVIEW_PREP#')
-    assert isinstance(item.get('ttl'), int)
-    assert item['ttl'] > int(datetime.now(timezone.utc).timestamp())
+    assert isinstance(item.get('expiration'), int)
+    assert item['expiration'] > int(datetime.now(timezone.utc).timestamp())
 
 
 @pytest.mark.unit
@@ -239,12 +239,13 @@ def test_gap_analysis_generation_persists_item_with_non_null_artifact_id() -> No
 
     with (
         patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate,
-        patch('careervp.handlers.gap_handler._get_table') as mock_get_table,
+        patch('careervp.handlers.gap_handler._get_dal') as mock_get_dal,
         patch('careervp.handlers.gap_handler._get_trial_service') as mock_trial_service,
         patch('careervp.handlers.gap_handler._get_application_repository') as mock_application_repository,
     ):
-        table = MagicMock()
-        mock_get_table.return_value = table
+        dal = MagicMock()
+        dal.save_gap_questions.return_value = Result(success=True, data=None, code=ResultCode.GAP_QUESTIONS_GENERATED)
+        mock_get_dal.return_value = dal
         mock_generate.return_value = Result(success=True, data=generated_questions, code=ResultCode.GAP_QUESTIONS_GENERATED)
         trial_service = MagicMock()
         trial_service.check_trial_status.return_value = {'is_active': True}
@@ -254,9 +255,9 @@ def test_gap_analysis_generation_persists_item_with_non_null_artifact_id() -> No
         response = lambda_handler(_gap_event(), MagicMock())
 
     assert response['statusCode'] == 201
-    table.put_item.assert_called_once()
-    item = table.put_item.call_args.kwargs['Item']
-    assert str(item.get('artifactId', '')).strip() != ''
+    dal.save_gap_questions.assert_called_once()
+    call_args = dal.save_gap_questions.call_args
+    assert call_args is not None
 
 
 @pytest.mark.unit

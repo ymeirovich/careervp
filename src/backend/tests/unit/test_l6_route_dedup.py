@@ -17,7 +17,7 @@ import pytest
 
 INFRA_DIR = '/Users/yitzchak/Documents/dev/careervp/infra'
 API_CONSTRUCT_PATH = f'{INFRA_DIR}/careervp/api_construct.py'
-EXPECTED_CANONICAL_ROUTE_COUNT = 30
+EXPECTED_CANONICAL_ROUTE_COUNT = 31
 FROZEN_SPEC_PATH = '/Users/yitzchak/Documents/dev/careervp/docs/beta/evidence/I7_routes/frozen_spec.json'
 
 # Deprecated route prefixes that must not appear in CDK

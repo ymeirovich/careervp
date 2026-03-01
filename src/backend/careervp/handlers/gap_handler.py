@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from careervp.dal.application_repository import ApplicationRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.handlers.auth_utils import extract_user_id
+from careervp.handlers.utils.observability import logger
 from careervp.logic.gap_analysis import generate_gap_questions
 from careervp.logic.trial_service import TrialExhaustedException, TrialExpiredException, TrialService
 from careervp.models.api_models import GapQuestionRequest, GapResponseRequest
@@ -125,19 +126,17 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
             )
         )
     except Exception as exc:
+        logger.error(
+            'Gap question generation failed',
+            job_id=job_id,
+            error=str(exc),
+            exc_info=True,
+        )
         return _json_response(
-            HTTPStatus.CREATED,
+            HTTPStatus.SERVICE_UNAVAILABLE,
             {
-                'job_id': job_id,
-                'cv_id': cv_id,
-                'questions': [
-                    {
-                        'id': 'gap-q-1',
-                        'text': f'Describe a measurable achievement relevant to {job_id}.',
-                    }
-                ],
-                'missing_qualifications': _build_missing_qualifications(focus_areas),
-                'warning': str(exc),
+                'error': 'Gap question generation failed. Please try again.',
+                'detail': 'The AI service is temporarily unavailable.',
             },
         )
     if not generation_result.success or generation_result.data is None:
@@ -171,13 +170,11 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
     except Exception:
         save_result = Result(success=False, error='persist failed', code=ResultCode.DYNAMODB_ERROR)
     if not save_result.success:
+        logger.error('Failed to persist gap questions', job_id=job_id)
         return _json_response(
-            HTTPStatus.CREATED,
+            HTTPStatus.INTERNAL_SERVER_ERROR,
             {
-                'job_id': job_id,
-                'cv_id': cv_id,
-                'questions': questions,
-                'missing_qualifications': missing_qualifications,
+                'error': 'Failed to save gap questions. Please try again.',
             },
         )
 
@@ -281,12 +278,11 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
     except Exception:
         save_result = Result(success=False, error='persist failed', code=ResultCode.DYNAMODB_ERROR)
     if not save_result.success:
+        logger.error('Failed to persist gap responses', job_id=job_id)
         return _json_response(
-            HTTPStatus.CREATED,
+            HTTPStatus.INTERNAL_SERVER_ERROR,
             {
-                'status': 'saved',
-                'job_id': job_id,
-                'responses_saved': len(normalized_responses),
+                'error': 'Failed to save gap responses. Please try again.',
             },
         )
 

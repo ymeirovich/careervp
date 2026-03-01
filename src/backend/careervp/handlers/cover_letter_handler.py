@@ -113,11 +113,17 @@ def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:
     dal = _get_dal()
     try:
         user_cv = _load_user_cv(dal=dal, user_id=user_id)
-    except Exception:
-        user_cv = None
+    except Exception as e:
+        logger.error('Failed to load user CV for cover letter', user_id=user_id, error=str(e))
+        return _build_response(
+            HTTPStatus.UNPROCESSABLE_ENTITY,
+            {'error': 'Could not load your CV. Please upload a CV before generating a cover letter.'}
+        )
     if user_cv is None or user_cv.user_id != user_id:
-        fallback_id = f'cover-letter-{api_request.job_id}'
-        return _build_response(HTTPStatus.OK, {'artifact_id': fallback_id, 'status': 'completed'})
+        return _build_response(
+            HTTPStatus.NOT_FOUND,
+            {'error': 'No CV found for your account. Please upload a CV first.'}
+        )
 
     try:
         generation_result = _generate_cover_letter_result(
@@ -125,9 +131,12 @@ def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:
             user_id=user_id,
             user_cv=user_cv,
         )
-    except Exception:
-        fallback_id = f'cover-letter-{api_request.job_id}'
-        return _build_response(HTTPStatus.OK, {'artifact_id': fallback_id, 'status': 'completed'})
+    except Exception as e:
+        logger.error('Cover letter generation failed', user_id=user_id, error=str(e), exc_info=True)
+        return _build_response(
+            HTTPStatus.SERVICE_UNAVAILABLE,
+            {'error': 'Cover letter generation failed. Please try again.'}
+        )
     if not generation_result.success or generation_result.data is None:
         metrics.add_metric(name='CoverLetterFailures', unit=MetricUnit.Count, value=1)
         return _build_generation_error_response(generation_result)

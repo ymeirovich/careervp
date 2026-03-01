@@ -27,10 +27,13 @@ class ApiConstruct(Construct):
         is_production_env: bool,
         naming: NamingUtils,
         user_pool: cognito.IUserPool,
+        cognito_client_id: str,
     ) -> None:
         super().__init__(scope, id_)
         self.id_ = id_
         self.naming = naming
+        self.cognito_client_id = cognito_client_id
+        self.cognito_user_pool = user_pool
         self.api_db = ApiDbConstruct(self, f"{id_}db", naming=naming)
         self.llm_cache_table = self._build_llm_cache_table(is_production_env)
         self.logs_kms_key = self._build_logs_kms_key()
@@ -533,6 +536,7 @@ class ApiConstruct(Construct):
                             resources=[
                                 jobs_table.table_arn,
                                 f"{jobs_table.table_arn}/index/idempotency-key-index",
+                                f"{jobs_table.table_arn}/index/user_id-index",
                             ],
                             effect=iam.Effect.ALLOW,
                         )
@@ -1456,6 +1460,8 @@ class ApiConstruct(Construct):
                 "JWT_PUBLIC_KEY": ssm.StringParameter.value_for_string_parameter(
                     self, f"/careervp/{constants.ENVIRONMENT}/jwt-public-key"
                 ),
+                "COGNITO_CLIENT_ID": self.cognito_client_id,
+                "COGNITO_USER_POOL_ID": self.cognito_user_pool.user_pool_id,
             },
             timeout=Duration.seconds(30),
             memory_size=256,
@@ -1488,6 +1494,8 @@ class ApiConstruct(Construct):
             environment={
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-health-api",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                "DYNAMODB_TABLE_NAME": self.api_db.users_table.table_name,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
             timeout=Duration.seconds(10),
             memory_size=128,
@@ -1666,6 +1674,7 @@ class ApiConstruct(Construct):
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
                 "DYNAMODB_TABLE_NAME": self.api_db.artifacts_table.table_name,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
             timeout=Duration.seconds(30),
             memory_size=256,
@@ -1700,6 +1709,7 @@ class ApiConstruct(Construct):
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
                 "DYNAMODB_TABLE_NAME": self.api_db.artifacts_table.table_name,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
             timeout=Duration.seconds(30),
             memory_size=256,
@@ -1734,6 +1744,7 @@ class ApiConstruct(Construct):
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
                 "DYNAMODB_TABLE_NAME": self.api_db.artifacts_table.table_name,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
             timeout=Duration.seconds(30),
             memory_size=256,
@@ -1812,6 +1823,7 @@ class ApiConstruct(Construct):
             ),
             ("/interview-preps", "GET", self.interview_prep_api_func),
             ("/company-research/{jobId}", "GET", self.company_research_func),
+            ("/company-research/fetch", "POST", self.company_research_func),
             ("/knowledge-base", "GET", self.company_research_func),
         ]
         for path, method, handler in route_map:

@@ -123,13 +123,16 @@ def _encode_cursor(last_evaluated_key: dict[str, Any] | None) -> str | None:
 
 
 def _list_user_cvs(user_id: str, limit: int, cursor: dict[str, Any] | None) -> tuple[list[dict[str, Any]], str | None]:
-    table_name = os.environ.get('CVS_TABLE_NAME')
+    # Use the same table as cv_upload_handler (TABLE_NAME from env)
+    table_name = os.environ.get('TABLE_NAME')
     if not table_name:
+        logger.warning('TABLE_NAME not configured for CV list')
         return [], None
 
     table = boto3.resource('dynamodb').Table(table_name)
+    # Query using pk=user_id and sk begins_with 'CV#' (same schema as DynamoDalHandler.save_cv)
     query_args: dict[str, Any] = {
-        'KeyConditionExpression': Key('userId').eq(user_id),
+        'KeyConditionExpression': Key('pk').eq(user_id) & Key('sk').begins_with('CV#'),
         'Limit': limit,
     }
     if cursor:

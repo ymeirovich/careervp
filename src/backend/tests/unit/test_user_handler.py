@@ -240,9 +240,10 @@ def test_list_user_cvs_returns_own_records(db_tables: dict[str, Any]) -> None:
     _insert_user(db_tables['users'], user_id=user_id, email=email, name='CV User')
     access_token = _create_access_token(user_id=user_id, email=email)
 
-    db_tables['cvs'].put_item(Item={'userId': user_id, 'cvId': 'cv-1', 'fileName': 'resume-1.pdf'})
-    db_tables['cvs'].put_item(Item={'userId': user_id, 'cvId': 'cv-2', 'fileName': 'resume-2.pdf'})
-    db_tables['cvs'].put_item(Item={'userId': other_user_id, 'cvId': 'cv-3', 'fileName': 'other.pdf'})
+    # Put CVs into TABLE_NAME with pk/sk schema (matching DynamoDalHandler.save_cv)
+    db_tables['users'].put_item(Item={'pk': user_id, 'sk': 'CV#cv-1', 'cvId': 'cv-1', 'fileName': 'resume-1.pdf'})
+    db_tables['users'].put_item(Item={'pk': user_id, 'sk': 'CV#cv-2', 'cvId': 'cv-2', 'fileName': 'resume-2.pdf'})
+    db_tables['users'].put_item(Item={'pk': other_user_id, 'sk': 'CV#cv-3', 'cvId': 'cv-3', 'fileName': 'other.pdf'})
 
     event = _generate_api_gw_event(
         path='/users/me/cvs',
@@ -254,7 +255,7 @@ def test_list_user_cvs_returns_own_records(db_tables: dict[str, Any]) -> None:
 
     assert response['statusCode'] == 200
     payload = json.loads(response['body'])
-    returned_ids = {item['cvId'] for item in payload['cvs']}
+    returned_ids = {item.get('cvId') or item.get('sk', '').replace('CV#', '') for item in payload['cvs']}
     assert returned_ids == {'cv-1', 'cv-2'}
 
 

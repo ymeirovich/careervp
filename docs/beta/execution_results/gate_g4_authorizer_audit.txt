@@ -1,0 +1,13 @@
+Gate: G4 - Route Authorizer Audit
+Spec: cognito-test-fixes/PLAN.md G4 / SPEC.md FIX C-C
+Command: python docs/beta/scripts/route_authorizer_audit.py
+Required: Zero mismatches. Report written to docs/beta/evidence/I3_auth/route-authorizer-audit.json
+
+Date: (fill in after run)
+Result: (PASS / FAIL)
+Routes checked: (e.g., 28)
+Mismatches: (e.g., 0)
+Unchecked routes: (e.g., 0)
+
+--- script output ---
+(paste full output here)
