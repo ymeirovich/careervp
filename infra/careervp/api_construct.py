@@ -1624,6 +1624,7 @@ class ApiConstruct(Construct):
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
                 "JOBS_TABLE_NAME": self.api_db.jobs_table.table_name,
+                "APPLICATIONS_TABLE_NAME": self.api_db.applications_table.table_name,
             },
             timeout=Duration.seconds(30),
             memory_size=256,
