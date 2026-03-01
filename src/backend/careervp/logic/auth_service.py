@@ -220,8 +220,8 @@ class AuthService:
                         pass  # User may already be confirmed
             # Now login to get tokens
             return self.login_user(email, password)
-        except client.exceptions.UsernameExistsException:
-            raise UserAlreadyExistsError('A user with that email already exists.')
+        except client.exceptions.UsernameExistsException as e:
+            raise UserAlreadyExistsError('A user with that email already exists.') from e
         except Exception as e:
             raise AuthError(f'Registration failed: {str(e)}') from e
 
@@ -285,10 +285,10 @@ class AuthService:
                 token_type='Bearer',
                 expires_in=auth_result.get('ExpiresIn', 3600),
             )
-        except client.exceptions.NotAuthorizedException:
-            raise InvalidCredentialsError('Invalid email or password.')
-        except client.exceptions.UserNotFoundException:
-            raise InvalidCredentialsError('Invalid email or password.')
+        except client.exceptions.NotAuthorizedException as e:
+            raise InvalidCredentialsError('Invalid email or password.') from e
+        except client.exceptions.UserNotFoundException as e:
+            raise InvalidCredentialsError('Invalid email or password.') from e
         except Exception as e:
             raise AuthError(f'Login failed: {str(e)}') from e
 

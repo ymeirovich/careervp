@@ -47,7 +47,7 @@ def _get_anthropic_client() -> Anthropic:
                 response = ssm_client.get_parameter(Name=ssm_param, WithDecryption=True)
                 api_key = response['Parameter']['Value']
             except Exception as e:
-                raise ValueError(f'ANTHROPIC_API_KEY SSM parameter not found: {ssm_param}. Error: {e}')
+                raise ValueError(f'ANTHROPIC_API_KEY SSM parameter not found: {ssm_param}. Error: {e}') from e
 
     if not api_key:
         raise ValueError('ANTHROPIC_API_KEY not found in environment or SSM')
