@@ -64,6 +64,7 @@ class AuthTokens:
 
     access_token: str
     refresh_token: str
+    id_token: str = ''  # Cognito ID token (used when authenticating with Cognito)
     expires_in: int = ACCESS_TOKEN_TTL_SECONDS
     token_type: str = 'Bearer'
 
@@ -72,6 +73,7 @@ class AuthTokens:
         return {
             'access_token': self.access_token,
             'refresh_token': self.refresh_token,
+            'id_token': self.id_token,
             'expires_in': self.expires_in,
             'token_type': self.token_type,
         }
@@ -130,14 +132,26 @@ class AuthService:
         """Create AuthService from Lambda environment variables."""
 
         users_table_name = os.environ.get('TABLE_NAME') or os.environ.get('USERS_TABLE_NAME')
+
+        # Check if we should use Cognito auth
+        cognito_client_id = os.environ.get('COGNITO_CLIENT_ID', '')
+        use_cognito = cognito_client_id and not cognito_client_id.startswith('test-')
+
+        # Only require JWT keys if NOT using Cognito auth
         private_key = os.environ.get('JWT_PRIVATE_KEY')
         public_key = os.environ.get('JWT_PUBLIC_KEY')
 
-        if not private_key or not public_key:
-            if os.getenv('ENV') != 'local':
-                raise ConfigurationError('JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be set in production')
-            # Only generate ephemeral keys in local dev
-            private_key, public_key = _generate_ephemeral_rsa_keys()
+        if use_cognito:
+            # Cognito auth - JWT keys are optional (can use ephemeral for legacy fallback)
+            if not private_key or not public_key:
+                private_key, public_key = _generate_ephemeral_rsa_keys()
+        else:
+            # Legacy JWT auth - JWT keys are required
+            if not private_key or not public_key:
+                if os.getenv('ENV') != 'local':
+                    raise ConfigurationError('JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be set in production')
+                # Only generate ephemeral keys in local dev
+                private_key, public_key = _generate_ephemeral_rsa_keys()
 
         return cls(
             users_table_name=users_table_name,

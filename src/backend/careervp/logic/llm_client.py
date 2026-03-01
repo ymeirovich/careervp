@@ -42,9 +42,12 @@ def _get_anthropic_client() -> Anthropic:
     if not api_key:
         ssm_param = os.environ.get('ANTHROPIC_API_KEY_SSM_PARAM')
         if ssm_param:
-            ssm_client = boto3.client('ssm')
-            response = ssm_client.get_parameter(Name=ssm_param, WithDecryption=True)
-            api_key = response['Parameter']['Value']
+            try:
+                ssm_client = boto3.client('ssm')
+                response = ssm_client.get_parameter(Name=ssm_param, WithDecryption=True)
+                api_key = response['Parameter']['Value']
+            except Exception as e:
+                raise ValueError(f'ANTHROPIC_API_KEY SSM parameter not found: {ssm_param}. Error: {e}')
 
     if not api_key:
         raise ValueError('ANTHROPIC_API_KEY not found in environment or SSM')
