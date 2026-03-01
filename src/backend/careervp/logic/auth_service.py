@@ -329,6 +329,11 @@ class AuthService:
                 token_type='Bearer',
                 expires_in=auth_result.get('ExpiresIn', 3600),
             )
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', '')
+            if error_code in ('NotAuthorizedException', 'InvalidParameterException', 'UserNotFoundException'):
+                raise InvalidTokenError(f'Invalid refresh token: {str(e)}') from e
+            raise AuthError(f'Token refresh failed: {str(e)}') from e
         except Exception as e:
             raise AuthError(f'Token refresh failed: {str(e)}') from e
 

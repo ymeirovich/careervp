@@ -667,6 +667,18 @@ class ApiConstruct(Construct):
                         )
                     ]
                 ),
+                "cognito_admin": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "cognito-idp:AdminConfirmSignUp",
+                                "cognito-idp:AdminGetUser",
+                            ],
+                            resources=[self.cognito_user_pool.user_pool_arn],
+                            effect=iam.Effect.ALLOW,
+                        )
+                    ]
+                ),
             },
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name(
@@ -1462,6 +1474,7 @@ class ApiConstruct(Construct):
                 ),
                 "COGNITO_CLIENT_ID": self.cognito_client_id,
                 "COGNITO_USER_POOL_ID": self.cognito_user_pool.user_pool_id,
+                "ENVIRONMENT": constants.ENVIRONMENT,
             },
             timeout=Duration.seconds(30),
             memory_size=256,
