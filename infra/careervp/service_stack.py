@@ -1,6 +1,5 @@
 from typing import Any
 
-import aws_cdk.aws_ssm as ssm
 from aws_cdk import Aspects, CfnOutput, Stack, Tags
 from cdk_nag import AwsSolutionsChecks, NagSuppressions
 from constructs import Construct
@@ -63,29 +62,8 @@ class ServiceStack(Stack):
         CfnOutput(self, "UserPoolId", value=self.cognito.user_pool_id)
         CfnOutput(self, "ClientId", value=self.cognito.client_id)
 
-        # Create SSM parameter for Anthropic API key if it doesn't exist
-        # Note: In production, use Secrets Manager or CDK Context to pass the actual key
-        self._create_ssm_parameters()
-
         # add security check
         self._add_security_tests()
-
-    def _create_ssm_parameters(self) -> None:
-        """Create SSM parameters for secrets that are referenced by Lambda functions.
-
-        The actual values should be updated via CLI or injected via CDK Context.
-        For dev: cdk deploy -c anthropic_api_key=<key>
-        """
-        # Try to get API key from CDK Context, otherwise use placeholder
-        anthropic_key = self.node.try_get_context("anthropic_api_key")
-
-        ssm.StringParameter(
-            self,
-            "AnthropicApiKey",
-            parameter_name=f"/careervp/{ENVIRONMENT}/anthropic-api-key",
-            string_value=anthropic_key or "PLACEHOLDER_UPDATE_ME",
-            tier=ssm.ParameterTier.STANDARD,
-        )
 
     def _add_stack_tags(self) -> None:
         # best practice to help identify resources in the console
