@@ -139,7 +139,11 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         return _response(HTTPStatus.BAD_REQUEST, {'error': 'application_id is required'})
 
     repository = _get_application_repository()
-    application = repository.get(application_id=application_id, user_id=user_id)
+    try:
+        application = repository.get(application_id=application_id, user_id=user_id)
+    except Exception as e:
+        logger.exception('Failed to retrieve application', application_id=application_id, error=str(e))
+        return _response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Failed to retrieve application'})
     if application is None:
         return _response(HTTPStatus.NOT_FOUND, {'error': 'Application not found'})
 
