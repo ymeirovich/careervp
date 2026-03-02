@@ -41,8 +41,12 @@ node_modules
 
 # omc
 temp
-.omc/*
-#docs/architecture/prompt-improvement/
+*/.omc/*
+.omc/sessions/*
+.omc/state/checkpoints/*
+docs/refactor/.omc/state/checkpoints/*
+.omc/state/*
+src/backend/.omc/sessions/*
 
 # payloads
 careervp/docs/refactor2/payloads/*
@@ -50,3 +54,5 @@ careervp/docs/refactor3/payloads/*
 
 # logs
 *.log
+
+.gitignore

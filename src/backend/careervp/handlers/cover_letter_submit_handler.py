@@ -42,10 +42,12 @@ def _extract_authenticated_user_id(event: dict[str, Any]) -> str | None:
 def _get_sqs_queue_url() -> str:
     """Resolve SQS queue URL deterministically from env or queue name lookup."""
     queue_url = os.environ.get('SQS_QUEUE_URL')
-    if queue_url:
-        return queue_url
+    if isinstance(queue_url, str) and queue_url.strip():
+        return queue_url.strip()
 
-    queue_name = os.environ.get('SQS_QUEUE_NAME', COVER_LETTER_JOBS_QUEUE_NAME)
+    queue_name = str(os.environ.get('SQS_QUEUE_NAME', COVER_LETTER_JOBS_QUEUE_NAME)).strip()
+    if not queue_name:
+        raise RuntimeError('SQS queue name is required')
     response = sqs.get_queue_url(QueueName=queue_name)
     resolved_url = response.get('QueueUrl')
     if not isinstance(resolved_url, str) or not resolved_url:
@@ -54,7 +56,11 @@ def _get_sqs_queue_url() -> str:
 
 
 def _get_artifacts_table_name() -> str:
-    return os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('TABLE_NAME', '')
+    for env_key in ('ARTIFACTS_TABLE_NAME', 'DYNAMODB_TABLE_NAME', 'TABLE_NAME'):
+        value = os.environ.get(env_key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    raise RuntimeError('Artifacts table environment variable is not configured')
 
 
 @logger.inject_lambda_context(log_event=False)
@@ -97,7 +103,13 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
     # Write PENDING artifact record to DynamoDB
     try:
-        table = dynamodb_resource.Table(_get_artifacts_table_name())
+        table_name = _get_artifacts_table_name()
+    except RuntimeError:
+        logger.exception('Artifacts table configuration error')
+        return _build_error_response('Internal server error', HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    try:
+        table = dynamodb_resource.Table(table_name)
         table.put_item(
             Item={
                 'pk': authenticated_user_id,

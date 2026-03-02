@@ -23,15 +23,27 @@ _trial_service: TrialService | None = None
 _application_repository: ApplicationRepository | None = None
 
 
+def _resolve_table_name(*env_keys: str) -> str:
+    for env_key in env_keys:
+        value = os.getenv(env_key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    raise RuntimeError(f'Missing required table configuration: {", ".join(env_keys)}')
+
+
+def _configuration_error_response() -> dict[str, Any]:
+    return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, 'Internal server error', ResultCode.INTERNAL_ERROR)
+
+
 def _get_questions_dal() -> DynamoDalHandler:
     """DAL for gap questions — stored in the artifacts table."""
-    table_name = os.getenv('DYNAMODB_TABLE_NAME') or os.getenv('TABLE_NAME') or ''
+    table_name = _resolve_table_name('ARTIFACTS_TABLE_NAME', 'DYNAMODB_TABLE_NAME', 'TABLE_NAME')
     return DynamoDalHandler(table_name=table_name)
 
 
 def _get_responses_dal() -> DynamoDalHandler:
     """DAL for gap responses — stored in the dedicated gap_responses table."""
-    table_name = os.getenv('GAP_RESPONSES_TABLE_NAME') or os.getenv('DYNAMODB_TABLE_NAME') or os.getenv('TABLE_NAME') or ''
+    table_name = _resolve_table_name('GAP_RESPONSES_TABLE_NAME')
     return DynamoDalHandler(table_name=table_name)
 
 
@@ -166,7 +178,11 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
     questions = generation_result.data[:max_questions]
     missing_qualifications = _build_missing_qualifications(focus_areas)
 
-    dal = _get_questions_dal()
+    try:
+        dal = _get_questions_dal()
+    except RuntimeError:
+        logger.exception('Gap questions table configuration error')
+        return _configuration_error_response()
     try:
         save_result = dal.save_gap_questions(
             user_id=user_id,
@@ -215,7 +231,11 @@ def get_questions(event: dict[str, Any]) -> dict[str, Any]:
     if not job_id:
         return _error_response(HTTPStatus.BAD_REQUEST, 'Missing jobId path parameter', ResultCode.MISSING_REQUIRED_FIELD)
 
-    dal = _get_questions_dal()
+    try:
+        dal = _get_questions_dal()
+    except RuntimeError:
+        logger.exception('Gap questions table configuration error')
+        return _configuration_error_response()
     result = dal.list_gap_questions_by_prefix(user_id=user_id, job_id=job_id)
     if not result.success:
         return _json_response(
@@ -275,7 +295,11 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
             validation_error['code'],
         )
 
-    dal = _get_responses_dal()
+    try:
+        dal = _get_responses_dal()
+    except RuntimeError:
+        logger.exception('Gap responses table configuration error')
+        return _configuration_error_response()
     try:
         save_result = dal.save_gap_responses_raw(
             user_id=user_id,
@@ -312,7 +336,11 @@ def get_responses(event: dict[str, Any]) -> dict[str, Any]:
     if not job_id:
         return _error_response(HTTPStatus.BAD_REQUEST, 'Missing jobId path parameter', ResultCode.MISSING_REQUIRED_FIELD)
 
-    dal = _get_responses_dal()
+    try:
+        dal = _get_responses_dal()
+    except RuntimeError:
+        logger.exception('Gap responses table configuration error')
+        return _configuration_error_response()
     result = dal.get_gap_responses(user_id=user_id)
     if not result.success:
         return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, result.error or 'Failed to fetch gap responses', ResultCode.DYNAMODB_ERROR)

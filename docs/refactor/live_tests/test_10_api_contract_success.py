@@ -222,6 +222,16 @@ def _update_state(
     if payload_file in {"auth_register.json", "auth_login.json"}:
         if response_data.get("access_token"):
             state["access_token"] = response_data["access_token"]
+        if response_data.get("id_token"):
+            state["id_token"] = response_data["id_token"]
+        if response_data.get("refresh_token"):
+            state["refresh_token"] = response_data["refresh_token"]
+
+    if payload_file == "auth_refresh.json":
+        if response_data.get("access_token"):
+            state["access_token"] = response_data["access_token"]
+        if response_data.get("id_token"):
+            state["id_token"] = response_data["id_token"]
         if response_data.get("refresh_token"):
             state["refresh_token"] = response_data["refresh_token"]
 
@@ -299,6 +309,8 @@ def _sync_with_shared_test_data(state: dict[str, Any]) -> None:
 
     if state.get("access_token"):
         tokens["access"] = state["access_token"]
+    if state.get("id_token"):
+        tokens["id"] = state["id_token"]
     if state.get("refresh_token"):
         tokens["refresh"] = state["refresh_token"]
 
@@ -340,14 +352,12 @@ def _build_headers(payload_file: str, state: dict[str, Any]) -> dict[str, str]:
         )
         return headers
 
-    access_token = state.get("access_token")
-    assert access_token, (
-        f"Missing access_token for authenticated payload {payload_file}"
+    auth_token = state.get("id_token") or state.get("access_token")
+    assert auth_token, (
+        f"Missing id_token/access_token for authenticated payload {payload_file}"
     )
     headers["Authorization"] = (
-        access_token
-        if str(access_token).startswith("Bearer ")
-        else f"Bearer {access_token}"
+        auth_token if str(auth_token).startswith("Bearer ") else f"Bearer {auth_token}"
     )
     if state.get("user_id"):
         headers["X-User-Id"] = str(state["user_id"])
