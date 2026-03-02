@@ -1,3 +1,6 @@
+import json
+from typing import cast
+
 from aws_cdk import CfnOutput, Duration, RemovalPolicy, aws_apigateway, aws_sqs
 from aws_cdk import aws_cognito as cognito
 from aws_cdk import aws_dynamodb as dynamodb
@@ -38,6 +41,7 @@ class ApiConstruct(Construct):
         self.llm_cache_table = self._build_llm_cache_table(is_production_env)
         self.logs_kms_key = self._build_logs_kms_key()
         self.rest_api = self._build_api_gw()
+        self._add_gateway_error_responses(self.rest_api)
 
         # VPR Async Architecture - DLQ first, then Queue (DLQ must exist first)
         self.vpr_jobs_dlq = self._build_vpr_jobs_dlq()
@@ -205,6 +209,9 @@ class ApiConstruct(Construct):
                 self.vpr_submit_func,
                 self.company_research_func,
                 self.cv_tailoring_func,
+                self.gap_api_func,
+                self.cover_letter_api_func,
+                self.interview_prep_api_func,
             ],
             naming=naming,
         )
@@ -269,19 +276,30 @@ class ApiConstruct(Construct):
                 throttling_rate_limit=2,
                 throttling_burst_limit=10,
                 tracing_enabled=True,
+                metrics_enabled=True,
+                logging_level=aws_apigateway.MethodLoggingLevel.INFO,
                 access_log_destination=aws_apigateway.LogGroupLogDestination(
                     access_log_group
                 ),
-                access_log_format=aws_apigateway.AccessLogFormat.json_with_standard_fields(
-                    caller=True,
-                    http_method=True,
-                    ip=True,
-                    protocol=True,
-                    request_time=True,
-                    resource_path=True,
-                    response_length=True,
-                    status=True,
-                    user=True,
+                access_log_format=aws_apigateway.AccessLogFormat.custom(
+                    json.dumps(
+                        {
+                            "requestId": "$context.requestId",
+                            "extendedRequestId": "$context.extendedRequestId",
+                            "ip": "$context.identity.sourceIp",
+                            "caller": "$context.identity.caller",
+                            "user": "$context.identity.user",
+                            "requestTime": "$context.requestTime",
+                            "httpMethod": "$context.httpMethod",
+                            "resourcePath": "$context.resourcePath",
+                            "status": "$context.status",
+                            "protocol": "$context.protocol",
+                            "responseLength": "$context.responseLength",
+                            "integrationStatus": "$context.integration.status",
+                            "integrationErrorMessage": "$context.integrationErrorMessage",
+                            "authorizerError": "$context.authorizer.error",
+                        }
+                    )
                 ),
             ),
             cloud_watch_role=True,
@@ -291,6 +309,39 @@ class ApiConstruct(Construct):
             self, id=constants.APIGATEWAY, value=rest_api.url
         ).override_logical_id(constants.APIGATEWAY)
         return rest_api
+
+    def _add_gateway_error_responses(self, rest_api: aws_apigateway.RestApi) -> None:
+        response_types = (
+            ("Default4xx", aws_apigateway.ResponseType.DEFAULT_4_XX, "DEFAULT_4XX"),
+            ("Default5xx", aws_apigateway.ResponseType.DEFAULT_5_XX, "DEFAULT_5XX"),
+            ("Unauthorized", aws_apigateway.ResponseType.UNAUTHORIZED, "UNAUTHORIZED"),
+            (
+                "AccessDenied",
+                aws_apigateway.ResponseType.ACCESS_DENIED,
+                "ACCESS_DENIED",
+            ),
+        )
+        for response_id, response_type, response_code in response_types:
+            aws_apigateway.GatewayResponse(
+                self,
+                f"GatewayResponse{response_id}",
+                rest_api=rest_api,
+                type=response_type,
+                response_headers={
+                    "Access-Control-Allow-Origin": "'*'",
+                    "Access-Control-Allow-Headers": "'Content-Type,Authorization'",
+                    "Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+                },
+                templates={
+                    "application/json": json.dumps(
+                        {
+                            "error": response_code,
+                            "code": response_code,
+                            "request_id": "$context.requestId",
+                        }
+                    )
+                },
+            )
 
     def _build_logs_kms_key(self) -> kms.Key:
         key = kms.Key(
@@ -1920,11 +1971,11 @@ class ApiConstruct(Construct):
         )
 
     def _get_or_create_path_resource(self, path: str) -> aws_apigateway.Resource:
-        current: aws_apigateway.Resource = self.rest_api.root
+        current: aws_apigateway.IResource = self.rest_api.root
         parts = [segment for segment in path.split("/") if segment]
         for segment in parts:
             current = current.get_resource(segment) or current.add_resource(segment)
-        return current
+        return cast(aws_apigateway.Resource, current)
 
     def _add_route_method(
         self,

@@ -103,3 +103,55 @@ def test_interview_prep_submit_handler_validates_and_queues_with_sqs_queue_url()
     mock_sqs.send_message.assert_called_once()
     mock_sqs.get_queue_url.assert_not_called()
     mock_table.put_item.assert_called_once()
+
+
+def test_cover_letter_submit_handler_returns_structured_validation_errors() -> None:
+    from careervp.handlers import cover_letter_submit_handler as module
+
+    event = _event('/cover-letter/generate', {'cv_id': 'cv-1'})
+    event['requestContext']['requestId'] = 'api-req-1'
+    context = _lambda_context('cover-letter-submit')
+
+    with (
+        patch.object(module, 'sqs') as mock_sqs,
+        patch.object(module, 'dynamodb_resource') as mock_dynamo,
+    ):
+        response = module.lambda_handler(event, context)
+
+    assert response['statusCode'] == 400
+    body = json.loads(str(response['body']))
+    assert body['error'] == 'Invalid request body'
+    assert body['code'] == 'VALIDATION_ERROR'
+    assert body['request_id'] == 'api-req-1'
+    assert isinstance(body['validation_errors'], list)
+    assert body['validation_errors']
+    assert body['validation_errors'][0]['code'] == 'VALIDATION_ERROR'
+    assert 'field' in body['validation_errors'][0]
+    assert 'message' in body['validation_errors'][0]
+    mock_sqs.send_message.assert_not_called()
+    mock_dynamo.Table.assert_not_called()
+
+
+def test_interview_prep_submit_handler_returns_structured_validation_errors() -> None:
+    from careervp.handlers import interview_prep_submit_handler as module
+
+    event = _event('/interview-prep/generate', {'vpr_id': 'vpr-1'})
+    event['requestContext']['requestId'] = 'api-req-2'
+    context = _lambda_context('interview-prep-submit')
+
+    with (
+        patch.object(module, 'sqs') as mock_sqs,
+        patch.object(module, 'dynamodb_resource') as mock_dynamo,
+    ):
+        response = module.lambda_handler(event, context)
+
+    assert response['statusCode'] == 400
+    body = json.loads(str(response['body']))
+    assert body['error'] == 'Invalid request body'
+    assert body['code'] == 'VALIDATION_ERROR'
+    assert body['request_id'] == 'api-req-2'
+    assert isinstance(body['validation_errors'], list)
+    assert body['validation_errors']
+    assert body['validation_errors'][0]['code'] == 'VALIDATION_ERROR'
+    mock_sqs.send_message.assert_not_called()
+    mock_dynamo.Table.assert_not_called()

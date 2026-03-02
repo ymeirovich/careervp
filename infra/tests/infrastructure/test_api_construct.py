@@ -167,6 +167,64 @@ def test_api_gateway_stage_has_access_logs_and_tracing(
         for stage in stages.values()
     ), "API Gateway stage access logs are not configured"
 
+    assert any(
+        isinstance(stage["Properties"].get("MethodSettings"), list)
+        and any(
+            method.get("MetricsEnabled") is True
+            and method.get("LoggingLevel") in {"INFO", "ERROR"}
+            for method in stage["Properties"]["MethodSettings"]
+            if isinstance(method, dict)
+        )
+        for stage in stages.values()
+    ), "API Gateway method metrics/logging are not configured"
+
+    access_log_formats = [
+        stage["Properties"]["AccessLogSetting"].get("Format", "")
+        for stage in stages.values()
+        if isinstance(stage["Properties"].get("AccessLogSetting"), dict)
+    ]
+    assert any("$context.extendedRequestId" in fmt for fmt in access_log_formats), (
+        "API Gateway access logs must include extendedRequestId"
+    )
+    assert any("$context.integration.status" in fmt for fmt in access_log_formats), (
+        "API Gateway access logs must include integration status"
+    )
+    assert any(
+        "$context.integrationErrorMessage" in fmt for fmt in access_log_formats
+    ), "API Gateway access logs must include integration error message"
+    assert any("$context.authorizer.error" in fmt for fmt in access_log_formats), (
+        "API Gateway access logs must include authorizer error field"
+    )
+
+
+def test_api_gateway_gateway_responses_include_request_id(
+    synthesized_template: Template,
+) -> None:
+    """Ensure API Gateway default error responses use a consistent request_id envelope."""
+    gateway_responses = synthesized_template.find_resources(
+        "AWS::ApiGateway::GatewayResponse"
+    )
+    assert gateway_responses, (
+        "No API Gateway GatewayResponse resources were synthesized"
+    )
+
+    required_response_types = {
+        "DEFAULT_4XX",
+        "DEFAULT_5XX",
+        "UNAUTHORIZED",
+        "ACCESS_DENIED",
+    }
+    present_response_types = {
+        props["Properties"].get("ResponseType") for props in gateway_responses.values()
+    }
+    missing = required_response_types - present_response_types
+    assert not missing, f"Missing required API Gateway responses: {sorted(missing)}"
+
+    assert all(
+        "$context.requestId" in str(props["Properties"].get("ResponseTemplates", {}))
+        for props in gateway_responses.values()
+    ), "Gateway responses must include request_id in the response body"
+
 
 def test_lambda_log_groups_are_kms_encrypted(synthesized_template: Template) -> None:
     """Ensure Lambda CloudWatch log groups are encrypted with a KMS key."""

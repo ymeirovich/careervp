@@ -31,6 +31,7 @@ from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.utils.constants import VPR_JOBS_QUEUE_NAME
 from careervp.models.api_models import VPRGenerateRequest
+from careervp.models.result import ResultCode
 from careervp.models.vpr import VPRRequest
 
 JSON_HEADERS = {'Content-Type': 'application/json'}
@@ -116,9 +117,16 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         500 Internal Server Error: Infrastructure error
     """
     jobs_repo = JobsRepository()
+    endpoint = str(event.get('path', ''))
+    tracer.put_annotation(key='endpoint', value=endpoint)
     authenticated_user_id = _extract_authenticated_user_id(event)
     if not authenticated_user_id:
-        return _build_error_response('Authentication required', HTTPStatus.UNAUTHORIZED)
+        metrics.add_metric(name='UnauthorizedError', unit='Count', value=1)
+        return _build_error_response(
+            'Authentication required', HTTPStatus.UNAUTHORIZED, code=ResultCode.UNAUTHORIZED, request_id=_get_request_id(event, context)
+        )
+
+    tracer.put_annotation(key='user_id', value=authenticated_user_id)
 
     try:
         # Parse request body
@@ -126,10 +134,24 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         normalized_request = _normalize_submit_request(request_data, authenticated_user_id)
     except PermissionError as exc:
         logger.warning('Forbidden VPR submit request', error=str(exc))
-        return _build_error_response('User can only access own data', HTTPStatus.FORBIDDEN)
-    except (ValueError, json.JSONDecodeError, ValidationError) as exc:
+        metrics.add_metric(name='ForbiddenError', unit='Count', value=1)
+        return _build_error_response(
+            'User can only access own data', HTTPStatus.FORBIDDEN, code=ResultCode.FORBIDDEN, request_id=_get_request_id(event, context)
+        )
+    except ValidationError as exc:
         logger.warning('Invalid request body', error=str(exc))
-        return _build_error_response('Invalid request body', HTTPStatus.BAD_REQUEST)
+        metrics.add_metric(name='ValidationError', unit='Count', value=1)
+        return _build_validation_error_response(exc, event, context)
+    except (ValueError, json.JSONDecodeError) as exc:
+        logger.warning('Invalid request body', error=str(exc))
+        metrics.add_metric(name='ValidationError', unit='Count', value=1)
+        return _build_error_response(
+            'Invalid request body',
+            HTTPStatus.BAD_REQUEST,
+            code=ResultCode.INVALID_JSON,
+            request_id=_get_request_id(event, context),
+            validation_errors=[{'code': ResultCode.INVALID_JSON, 'field': 'body', 'message': str(exc)}],
+        )
 
     logger.append_keys(
         user_id=normalized_request['user_id'],
@@ -169,6 +191,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
     # Generate new job_id
     job_id = str(uuid.uuid4())
+    tracer.put_annotation(key='job_id', value=job_id)
 
     # Use the original request body as input_data for exact match with test expectations
     input_data = request_data  # Store original request body for test compatibility
@@ -193,6 +216,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
     if not create_result.success:
         logger.error('Failed to create job record', error=create_result.error if hasattr(create_result, 'error') else 'Unknown error')
+        metrics.add_metric(name='DynamoValidationException', unit='Count', value=1)
         return _build_error_response(
             'Failed to create job',
             HTTPStatus.INTERNAL_SERVER_ERROR,
@@ -230,6 +254,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             status='FAILED',
             error='Failed to queue for processing',
         )
+        metrics.add_metric(name='SqsError', unit='Count', value=1)
         return _build_error_response(
             'Failed to queue job for processing',
             HTTPStatus.INTERNAL_SERVER_ERROR,
@@ -277,15 +302,68 @@ def _parse_body(event: dict[str, Any]) -> dict[str, Any]:
     return parsed
 
 
-def _build_error_response(message: str, status: HTTPStatus) -> dict[str, Any]:
+def _build_error_response(
+    message: str,
+    status: HTTPStatus,
+    code: str | None = None,
+    request_id: str | None = None,
+    validation_errors: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
     """Construct a standardized error response."""
+    payload: dict[str, Any] = {
+        'error': message,
+        'status_code': int(status),
+    }
+    if code:
+        payload['code'] = code
+    if request_id:
+        payload['request_id'] = request_id
+    if validation_errors is not None:
+        payload['validation_errors'] = validation_errors
     return {
         'statusCode': int(status),
         'headers': JSON_HEADERS,
-        'body': json.dumps(
-            {
-                'error': message,
-                'status_code': int(status),
-            }
-        ),
+        'body': json.dumps(payload),
     }
+
+
+def _validation_errors(exc: ValidationError) -> list[dict[str, str]]:
+    errors: list[dict[str, str]] = []
+    for err in exc.errors():
+        location = err.get('loc', ())
+        field = '.'.join(str(part) for part in location) if isinstance(location, tuple) else str(location)
+        errors.append(
+            {
+                'code': ResultCode.VALIDATION_ERROR,
+                'field': field,
+                'message': str(err.get('msg', 'Invalid value')),
+            }
+        )
+    return errors
+
+
+def _get_request_id(event: dict[str, Any], context: LambdaContext | None) -> str | None:
+    request_context = event.get('requestContext')
+    if isinstance(request_context, dict):
+        request_id = request_context.get('requestId')
+        if isinstance(request_id, str) and request_id:
+            return request_id
+    if context is not None:
+        request_id = getattr(context, 'aws_request_id', None)
+        if isinstance(request_id, str) and request_id:
+            return request_id
+    return None
+
+
+def _build_validation_error_response(
+    exc: ValidationError,
+    event: dict[str, Any],
+    context: LambdaContext,
+) -> dict[str, Any]:
+    return _build_error_response(
+        message='Invalid request body',
+        status=HTTPStatus.BAD_REQUEST,
+        code=ResultCode.VALIDATION_ERROR,
+        request_id=_get_request_id(event, context),
+        validation_errors=_validation_errors(exc),
+    )

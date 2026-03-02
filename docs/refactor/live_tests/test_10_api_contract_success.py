@@ -197,8 +197,12 @@ def _hydrate_request(
         if request_field in body and state.get(state_key):
             body[request_field] = state[state_key]
 
-    if "gap_response_ids" in body and state.get("gap_response_ids"):
-        body["gap_response_ids"] = state["gap_response_ids"]
+    if "gap_response_ids" in body:
+        state_gap_ids = state.get("gap_response_ids")
+        if isinstance(state_gap_ids, list):
+            non_empty_ids = [item for item in state_gap_ids if item]
+            if non_empty_ids:
+                body["gap_response_ids"] = non_empty_ids
 
     if payload_file == "gap_responses_submit.json":
         responses = body.get("responses", [])

@@ -30,6 +30,48 @@ class DynamoDalHandler(DalHandler):
     def __init__(self, table_name: str):
         self.table_name = table_name
 
+    @staticmethod
+    def _client_error_details(exc: Exception) -> tuple[str, str]:
+        if isinstance(exc, ClientError):
+            error = exc.response.get('Error', {})
+            return str(error.get('Code', 'ClientError')), str(error.get('Message', str(exc)))
+        return exc.__class__.__name__, str(exc)
+
+    def _map_dal_error_code(self, exc: Exception, error_message: str) -> str:
+        if isinstance(exc, ValidationError):
+            return ResultCode.VALIDATION
+        if isinstance(exc, ClientError):
+            error_code, _ = self._client_error_details(exc)
+            if error_code == 'ValidationException':
+                if 'schema' in error_message.lower() or 'key element' in error_message.lower():
+                    return ResultCode.TABLE_SCHEMA_MISMATCH
+                return ResultCode.DYNAMODB_VALIDATION_EXCEPTION
+        return ResultCode.DYNAMODB_ERROR
+
+    def _dal_failure_result(
+        self,
+        *,
+        operation: str,
+        exc: Exception,
+        key_names: list[str],
+    ) -> Result[Any]:
+        error_code, error_message = self._client_error_details(exc)
+        mapped_code = self._map_dal_error_code(exc, error_message)
+        logger.error(
+            'DynamoDB DAL operation failed',
+            table_name=self.table_name,
+            operation=operation,
+            key_names=key_names,
+            error_code=error_code,
+            error_message=error_message,
+            exc_info=True,
+        )
+        return Result(
+            success=False,
+            error=(f'table_name={self.table_name} operation={operation} error_code={error_code} message={error_message}'),
+            code=mapped_code,
+        )
+
     def _get_db_handler(self, table_name: str) -> Any:
         logger.info('opening connection to dynamodb table', table_name=table_name)
         session = boto3.session.Session()
@@ -470,9 +512,11 @@ class DynamoDalHandler(DalHandler):
             table.put_item(Item=item)
             return Result(success=True, data=None, code=ResultCode.SUCCESS)
         except (ClientError, ValidationError) as exc:
-            error_msg = 'failed to save gap questions'
-            logger.exception(error_msg, user_id=user_id)
-            return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
+            return self._dal_failure_result(
+                operation='save_gap_questions',
+                exc=exc,
+                key_names=['pk', 'sk'],
+            )
 
     @tracer.capture_method(capture_response=False)
     def get_gap_questions(
@@ -526,9 +570,11 @@ class DynamoDalHandler(DalHandler):
             table.put_item(Item=item)
             return Result(success=True, data=None, code=ResultCode.GAP_RESPONSES_SAVED)
         except (ClientError, ValidationError) as exc:
-            error_msg = 'failed to save gap responses'
-            logger.exception(error_msg, user_id=user_id)
-            return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
+            return self._dal_failure_result(
+                operation='save_gap_responses',
+                exc=exc,
+                key_names=['userId', 'questionId'],
+            )
 
     @tracer.capture_method(capture_response=False)
     def save_gap_responses_raw(
@@ -559,9 +605,11 @@ class DynamoDalHandler(DalHandler):
             table.put_item(Item=item)
             return Result(success=True, data=None, code=ResultCode.GAP_RESPONSES_SAVED)
         except (ClientError, ValidationError) as exc:
-            error_msg = 'failed to save gap responses'
-            logger.exception(error_msg, user_id=user_id)
-            return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
+            return self._dal_failure_result(
+                operation='save_gap_responses_raw',
+                exc=exc,
+                key_names=['userId', 'questionId'],
+            )
 
     @tracer.capture_method(capture_response=False)
     def get_gap_responses(
@@ -589,6 +637,8 @@ class DynamoDalHandler(DalHandler):
             parsed = [GapResponse.model_validate(item) for item in payload]
             return Result(success=True, data=parsed, code=ResultCode.SUCCESS)
         except (ClientError, ValidationError) as exc:
-            error_msg = 'failed to get gap responses'
-            logger.exception(error_msg, user_id=user_id)
-            return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
+            return self._dal_failure_result(
+                operation='get_gap_responses',
+                exc=exc,
+                key_names=['userId', 'questionId'],
+            )
