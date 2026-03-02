@@ -163,7 +163,7 @@ class AuthService:
             dynamodb_resource=dynamodb_resource,
         )
 
-    def _get_cognito_client(self):
+    def _get_cognito_client(self) -> 'boto3.client':
         """Get Cognito Identity Provider client."""
         return boto3.client('cognito-idp', region_name=os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'))
 
