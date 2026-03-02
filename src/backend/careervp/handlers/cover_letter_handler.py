@@ -29,11 +29,7 @@ from careervp.models.result import Result, ResultCode
 
 
 def _get_dal() -> DynamoDalHandler:
-    table_name = (
-        os.environ.get('DYNAMODB_TABLE_NAME')
-        or os.environ.get('ARTIFACTS_TABLE_NAME')
-        or os.environ.get('TABLE_NAME', '')
-    )
+    table_name = os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('TABLE_NAME', '')
     return DynamoDalHandler(table_name)
 
 
@@ -56,8 +52,16 @@ class _FallbackVPR:
 @tracer.capture_lambda_handler
 @metrics.log_metrics
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
-    """Handle cover letter API requests."""
+    """Handle cover letter API requests and SQS worker events."""
     _ = context
+
+    # SQS worker dispatch: if triggered by SQS, process async jobs
+    records = event.get('Records', [])
+    if records and isinstance(records, list):
+        first_source = (records[0] or {}).get('eventSource', '') if records else ''
+        if first_source == 'aws:sqs':
+            return _process_sqs_event(event)
+
     method = str(event.get('httpMethod', '')).upper()
     path = str(event.get('path', '')).rstrip('/')
 
@@ -83,6 +87,123 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             'code': ResultCode.INVALID_INPUT,
         },
     )
+
+
+def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
+    """Process SQS messages for async cover letter generation."""
+    for record in event.get('Records', []):
+        body = json.loads(record.get('body', '{}'))
+        job_id = body.get('job_id', '')
+        user_id = body.get('user_id', '')
+        request_data = body.get('request_data', {})
+
+        if not job_id or not user_id:
+            logger.error('SQS message missing job_id or user_id', body=body)
+            continue
+
+        logger.append_keys(job_id=job_id, user_id=user_id)
+        logger.info('Processing cover letter SQS job', job_id=job_id)
+
+        try:
+            _generate_and_persist_from_sqs(job_id=job_id, user_id=user_id, request_data=request_data)
+        except Exception as exc:
+            logger.error('Cover letter SQS job failed', job_id=job_id, error=str(exc), exc_info=True)
+            _update_artifact_status(user_id=user_id, job_id=job_id, status='FAILED')
+            raise
+
+    return {'statusCode': 200, 'body': 'OK'}
+
+
+def _generate_and_persist_from_sqs(
+    job_id: str,
+    user_id: str,
+    request_data: dict[str, Any],
+) -> None:
+    """Load pending record, generate cover letter, persist result."""
+    dal = _get_dal()
+
+    # Update status to PROCESSING
+    _update_artifact_status(user_id=user_id, job_id=job_id, status='PROCESSING')
+
+    # Validate the request data
+    api_request = CoverLetterRequest.model_validate(request_data)
+
+    # Load user CV
+    user_cv = _load_user_cv(dal=dal, user_id=user_id)
+    if user_cv is None or user_cv.user_id != user_id:
+        raise ValueError(f'No CV found for user {user_id}')
+
+    # Generate cover letter using existing logic
+    generation_result = _generate_cover_letter_result(
+        api_request=api_request,
+        user_id=user_id,
+        user_cv=user_cv,
+    )
+
+    if not generation_result.success or generation_result.data is None:
+        raise RuntimeError(f'Cover letter generation failed: {generation_result.error}')
+
+    cover_letter_model = generation_result.data.cover_letter
+    if cover_letter_model is None:
+        raise RuntimeError('Cover letter generation returned no content')
+
+    # Persist the result
+    cover_letter_payload = cover_letter_model.model_dump(mode='json')
+    try:
+        dal.save_cover_letter(
+            cover_letter=cover_letter_payload,
+            user_id=user_id,
+            cv_id=api_request.cv_id,
+            job_id=api_request.job_id,
+        )
+    except Exception:
+        logger.warning('save_cover_letter failed, updating artifact directly', job_id=job_id)
+
+    # Update the artifact record to COMPLETED
+    _update_artifact_status(
+        user_id=user_id,
+        job_id=job_id,
+        status='COMPLETED',
+        result_data=cover_letter_payload,
+    )
+
+    metrics.add_metric(name='CoverLetterWorkerGenerated', unit=MetricUnit.Count, value=1)
+    logger.info('Cover letter SQS job completed', job_id=job_id)
+
+
+def _update_artifact_status(
+    user_id: str,
+    job_id: str,
+    status: str,
+    result_data: dict[str, Any] | None = None,
+) -> None:
+    """Update cover letter artifact status in DynamoDB."""
+    import datetime as _dt
+
+    import boto3 as _boto3
+
+    table_name = os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('TABLE_NAME', '')
+    table = _boto3.resource('dynamodb').Table(table_name)
+    now = _dt.datetime.now(_dt.timezone.utc).isoformat()
+
+    update_expr = 'SET #s = :status, updated_at = :now'
+    attr_names: dict[str, str] = {'#s': 'status'}
+    attr_values: dict[str, Any] = {':status': status, ':now': now}
+
+    if result_data is not None:
+        update_expr += ', cover_letter = :result'
+        attr_values[':result'] = result_data
+
+    try:
+        table.update_item(
+            Key={'pk': user_id, 'sk': f'ARTIFACT#COVER_LETTER#{job_id}'},
+            UpdateExpression=update_expr,
+            ExpressionAttributeNames=attr_names,
+            ExpressionAttributeValues=attr_values,
+        )
+    except Exception as exc:
+        logger.error('Failed to update artifact status', job_id=job_id, error=str(exc))
+        raise
 
 
 def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:
@@ -116,14 +237,10 @@ def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:
     except Exception as e:
         logger.error('Failed to load user CV for cover letter', user_id=user_id, error=str(e))
         return _build_response(
-            HTTPStatus.UNPROCESSABLE_ENTITY,
-            {'error': 'Could not load your CV. Please upload a CV before generating a cover letter.'}
+            HTTPStatus.UNPROCESSABLE_ENTITY, {'error': 'Could not load your CV. Please upload a CV before generating a cover letter.'}
         )
     if user_cv is None or user_cv.user_id != user_id:
-        return _build_response(
-            HTTPStatus.NOT_FOUND,
-            {'error': 'No CV found for your account. Please upload a CV first.'}
-        )
+        return _build_response(HTTPStatus.NOT_FOUND, {'error': 'No CV found for your account. Please upload a CV first.'})
 
     try:
         generation_result = _generate_cover_letter_result(
@@ -133,10 +250,7 @@ def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:
         )
     except Exception as e:
         logger.error('Cover letter generation failed', user_id=user_id, error=str(e), exc_info=True)
-        return _build_response(
-            HTTPStatus.SERVICE_UNAVAILABLE,
-            {'error': 'Cover letter generation failed. Please try again.'}
-        )
+        return _build_response(HTTPStatus.SERVICE_UNAVAILABLE, {'error': 'Cover letter generation failed. Please try again.'})
     if not generation_result.success or generation_result.data is None:
         metrics.add_metric(name='CoverLetterFailures', unit=MetricUnit.Count, value=1)
         return _build_generation_error_response(generation_result)

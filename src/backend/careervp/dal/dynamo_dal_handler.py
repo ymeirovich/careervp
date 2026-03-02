@@ -46,7 +46,7 @@ class DynamoDalHandler(DalHandler):
             item = user_cv.model_dump(exclude_none=True)
             item['pk'] = user_cv.user_id
             # Use CV#{cv_id} to support multiple CVs per user
-            item['sk'] = f"CV#{user_cv.cv_id}"
+            item['sk'] = f'CV#{user_cv.cv_id}'
             table.put_item(Item=item)
         except (ClientError, ValidationError) as exc:  # pragma: no cover
             error_msg = 'failed to save CV'
@@ -513,8 +513,8 @@ class DynamoDalHandler(DalHandler):
         try:
             table = self._get_db_handler(self.table_name)
             item = {
-                'pk': user_id,
-                'sk': self._build_gap_responses_sort_key(version),
+                'userId': user_id,
+                'questionId': self._build_gap_responses_sort_key(version),
                 'artifact_type': 'gap_responses',
                 'user_id': user_id,
                 'version': version,
@@ -545,8 +545,8 @@ class DynamoDalHandler(DalHandler):
         try:
             table = self._get_db_handler(self.table_name)
             item = {
-                'pk': user_id,
-                'sk': self._build_gap_responses_sort_key(version),
+                'userId': user_id,
+                'questionId': self._build_gap_responses_sort_key(version),
                 'artifact_type': 'gap_responses',
                 'user_id': user_id,
                 'job_id': job_id,
@@ -575,15 +575,15 @@ class DynamoDalHandler(DalHandler):
             table = self._get_db_handler(self.table_name)
             if version is None:
                 prefix = self._build_gap_responses_sort_key(version=0).replace('#v0', '#v')
-                key_condition = Key('pk').eq(user_id) & Key('sk').begins_with(prefix)
+                key_condition = Key('userId').eq(user_id) & Key('questionId').begins_with(prefix)
                 response = table.query(KeyConditionExpression=key_condition)
                 items = response.get('Items', [])
                 if not items:
                     return Result(success=True, data=None, code=ResultCode.SUCCESS)
-                latest_item = max(items, key=lambda item: self._parse_version_from_sk(item.get('sk', '')))
+                latest_item = max(items, key=lambda item: self._parse_version_from_sk(item.get('questionId', '')))
                 payload = latest_item.get('responses') or []
             else:
-                response = table.get_item(Key={'pk': user_id, 'sk': self._build_gap_responses_sort_key(version)})
+                response = table.get_item(Key={'userId': user_id, 'questionId': self._build_gap_responses_sort_key(version)})
                 item = response.get('Item')
                 payload = item.get('responses') if item else []
             parsed = [GapResponse.model_validate(item) for item in payload]

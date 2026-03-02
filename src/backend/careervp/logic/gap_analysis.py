@@ -86,18 +86,53 @@ def _normalize_tags(value: Any) -> list[str]:
     return normalized_tags
 
 
+def _strip_markdown_fences(text: str) -> str:
+    """Strip markdown code fences from LLM response text."""
+    stripped = text.strip()
+    if stripped.startswith('```'):
+        # Remove opening fence (```json, ```JSON, ``` etc.)
+        first_newline = stripped.find('\n')
+        if first_newline != -1:
+            stripped = stripped[first_newline + 1 :]
+        # Remove closing fence
+        if stripped.rstrip().endswith('```'):
+            stripped = stripped.rstrip()[:-3].rstrip()
+    return stripped
+
+
+def _find_json_in_text(text: str) -> Any:
+    """Find and parse the first valid JSON object or array embedded in text."""
+    stripped = _strip_markdown_fences(text)
+    # Try parsing the whole string first (fast path)
+    try:
+        return json.loads(stripped)
+    except json.JSONDecodeError:
+        pass
+    # Scan for JSON object or array starting positions
+    for start_char in ('{', '['):
+        pos = stripped.find(start_char)
+        if pos == -1:
+            continue
+        candidate = stripped[pos:]
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+    raise ValueError(f'No valid JSON found in LLM response (first 200 chars): {text[:200]!r}')
+
+
 def _extract_questions(payload: Any) -> list[dict[str, Any]]:
     parsed: Any = payload
 
     if isinstance(parsed, str):
-        parsed = json.loads(parsed)
+        parsed = _find_json_in_text(parsed)
 
     while isinstance(parsed, dict):
         if isinstance(parsed.get('questions'), list):
             parsed = parsed['questions']
             break
         if isinstance(parsed.get('text'), str):
-            parsed = json.loads(parsed['text'])
+            parsed = _find_json_in_text(parsed['text'])
             continue
         raise ValueError('Invalid questions format')
 
@@ -190,8 +225,9 @@ async def generate_gap_questions(
 
     try:
         parsed_questions = _extract_questions(payload)
-    except Exception as exc:  # noqa: BLE001
-        return Result(success=False, error=f'Failed to parse LLM response: {exc}', code=ResultCode.INTERNAL_ERROR)
+    except Exception:  # noqa: BLE001
+        # LLM returned non-parseable content; fall back to generated questions
+        parsed_questions = []
 
     questions = [_normalize_question(question=question, index=index) for index, question in enumerate(parsed_questions)]
 

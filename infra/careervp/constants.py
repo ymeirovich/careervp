@@ -56,6 +56,10 @@ VPR_JOBS_QUEUE = "vpr-jobs"
 VPR_JOBS_DLQ = "vpr-jobs-dlq"
 CV_UPLOAD_QUEUE = "cv-upload"
 GAP_ANALYSIS_QUEUE = "gap-analysis"
+COVER_LETTER_JOBS_QUEUE = "cover-letter-jobs"
+COVER_LETTER_JOBS_DLQ = "cover-letter-jobs-dlq"
+INTERVIEW_PREP_JOBS_QUEUE = "interview-prep-jobs"
+INTERVIEW_PREP_JOBS_DLQ = "interview-prep-jobs-dlq"
 
 # =============================================================================
 # S3 BUCKETS

@@ -43,6 +43,18 @@ class ApiConstruct(Construct):
         self.vpr_jobs_dlq = self._build_vpr_jobs_dlq()
         self.vpr_jobs_queue = self._build_vpr_jobs_queue(self.vpr_jobs_dlq)
 
+        # Cover Letter Async Architecture
+        self.cover_letter_jobs_dlq = self._build_cover_letter_jobs_dlq()
+        self.cover_letter_jobs_queue = self._build_cover_letter_jobs_queue(
+            self.cover_letter_jobs_dlq
+        )
+
+        # Interview Prep Async Architecture
+        self.interview_prep_jobs_dlq = self._build_interview_prep_jobs_dlq()
+        self.interview_prep_jobs_queue = self._build_interview_prep_jobs_queue(
+            self.interview_prep_jobs_dlq
+        )
+
         # Create Lambda role BEFORE lambdas that need it
         self.lambda_role = self._build_lambda_role(
             self.api_db.db,
@@ -127,7 +139,9 @@ class ApiConstruct(Construct):
         self.application_api_func = self._add_application_lambda()
         self.gap_api_func = self._add_gap_lambda()
         self.cover_letter_api_func = self._add_cover_letter_lambda()
+        self.cover_letter_status_func = self._add_cover_letter_status_lambda()
         self.interview_prep_api_func = self._add_interview_prep_lambda()
+        self.interview_prep_status_func = self._add_interview_prep_status_lambda()
 
         # CV Tailoring - POST /api/cv-tailoring
         cv_tailoring_resource = api_resource.add_resource(
@@ -913,6 +927,68 @@ class ApiConstruct(Construct):
             encryption=aws_sqs.QueueEncryption.SQS_MANAGED,
         )
 
+    def _build_cover_letter_jobs_dlq(self) -> aws_sqs.Queue:
+        """Build SQS dead letter queue for failed cover letter jobs."""
+        return aws_sqs.Queue(
+            self,
+            constants.COVER_LETTER_JOBS_DLQ,
+            queue_name=self.naming.dlq_name(constants.COVER_LETTER_JOBS_DLQ),
+            encryption=aws_sqs.QueueEncryption.SQS_MANAGED,
+        )
+
+    def _build_cover_letter_jobs_queue(self, dlq: aws_sqs.Queue) -> aws_sqs.Queue:
+        """Build SQS queue for cover letter async job processing."""
+        sqs_key = kms.Key(
+            self,
+            "CoverLetterSQSKey",
+            enable_key_rotation=True,
+            removal_policy=RemovalPolicy.RETAIN,
+        )
+        return aws_sqs.Queue(
+            self,
+            constants.COVER_LETTER_JOBS_QUEUE,
+            queue_name=self.naming.queue_name(constants.COVER_LETTER_JOBS_QUEUE),
+            visibility_timeout=Duration.seconds(300),
+            receive_message_wait_time=Duration.seconds(20),
+            encryption=aws_sqs.QueueEncryption.KMS,
+            encryption_master_key=sqs_key,
+            dead_letter_queue=aws_sqs.DeadLetterQueue(
+                queue=dlq,
+                max_receive_count=3,
+            ),
+        )
+
+    def _build_interview_prep_jobs_dlq(self) -> aws_sqs.Queue:
+        """Build SQS dead letter queue for failed interview prep jobs."""
+        return aws_sqs.Queue(
+            self,
+            constants.INTERVIEW_PREP_JOBS_DLQ,
+            queue_name=self.naming.dlq_name(constants.INTERVIEW_PREP_JOBS_DLQ),
+            encryption=aws_sqs.QueueEncryption.SQS_MANAGED,
+        )
+
+    def _build_interview_prep_jobs_queue(self, dlq: aws_sqs.Queue) -> aws_sqs.Queue:
+        """Build SQS queue for interview prep async job processing."""
+        sqs_key = kms.Key(
+            self,
+            "InterviewPrepSQSKey",
+            enable_key_rotation=True,
+            removal_policy=RemovalPolicy.RETAIN,
+        )
+        return aws_sqs.Queue(
+            self,
+            constants.INTERVIEW_PREP_JOBS_QUEUE,
+            queue_name=self.naming.queue_name(constants.INTERVIEW_PREP_JOBS_QUEUE),
+            visibility_timeout=Duration.seconds(300),
+            receive_message_wait_time=Duration.seconds(20),
+            encryption=aws_sqs.QueueEncryption.KMS,
+            encryption_master_key=sqs_key,
+            dead_letter_queue=aws_sqs.DeadLetterQueue(
+                queue=dlq,
+                max_receive_count=3,
+            ),
+        )
+
     def _build_worker_dlq(self, worker_feature: str) -> aws_sqs.Queue:
         """Create a dedicated encrypted DLQ for a worker Lambda."""
         worker_id = worker_feature.replace("-", " ").title().replace(" ", "")
@@ -1280,7 +1356,7 @@ class ApiConstruct(Construct):
         applications_table: dynamodb.TableV2,
         dlq: aws_sqs.Queue,
     ) -> _lambda.Function:
-        """Create cover_letter_worker on artifacts stream updates."""
+        """Create cover_letter_worker triggered by SQS queue."""
         function_name = self.naming.lambda_name("cover-letter-worker")
         log_group = logs.LogGroup(
             self,
@@ -1301,6 +1377,7 @@ class ApiConstruct(Construct):
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-cover-letter-worker",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
+                "DYNAMODB_TABLE_NAME": artifacts_table.table_name,
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
                 constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
@@ -1315,17 +1392,13 @@ class ApiConstruct(Construct):
         )
 
         lambda_function.add_event_source(
-            eventsources.DynamoEventSource(
-                artifacts_table,
-                starting_position=_lambda.StartingPosition.LATEST,
+            eventsources.SqsEventSource(
+                self.cover_letter_jobs_queue,
                 batch_size=1,
-                bisect_batch_on_error=True,
-                retry_attempts=2,
-                on_failure=eventsources.SqsDlq(dlq),
             )
         )
 
-        artifacts_table.grant_stream_read(lambda_function)
+        self.cover_letter_jobs_queue.grant_consume_messages(lambda_function)
         artifacts_table.grant_read_write_data(lambda_function)
         applications_table.grant_read_write_data(lambda_function)
         return lambda_function
@@ -1336,7 +1409,7 @@ class ApiConstruct(Construct):
         applications_table: dynamodb.TableV2,
         dlq: aws_sqs.Queue,
     ) -> _lambda.Function:
-        """Create interview_prep_worker on artifacts stream updates."""
+        """Create interview_prep_worker triggered by SQS queue."""
         function_name = self.naming.lambda_name("interview-prep-worker")
         log_group = logs.LogGroup(
             self,
@@ -1357,6 +1430,7 @@ class ApiConstruct(Construct):
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-interview-prep-worker",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
+                "DYNAMODB_TABLE_NAME": artifacts_table.table_name,
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
                 constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
@@ -1371,17 +1445,13 @@ class ApiConstruct(Construct):
         )
 
         lambda_function.add_event_source(
-            eventsources.DynamoEventSource(
-                artifacts_table,
-                starting_position=_lambda.StartingPosition.LATEST,
+            eventsources.SqsEventSource(
+                self.interview_prep_jobs_queue,
                 batch_size=1,
-                bisect_batch_on_error=True,
-                retry_attempts=2,
-                on_failure=eventsources.SqsDlq(dlq),
             )
         )
 
-        artifacts_table.grant_stream_read(lambda_function)
+        self.interview_prep_jobs_queue.grant_consume_messages(lambda_function)
         artifacts_table.grant_read_write_data(lambda_function)
         applications_table.grant_read_write_data(lambda_function)
         return lambda_function
@@ -1711,15 +1781,92 @@ class ApiConstruct(Construct):
             removal_policy=RemovalPolicy.DESTROY,
             encryption_key=self.logs_kms_key,
         )
-        return _lambda.Function(
+        lambda_function = _lambda.Function(
             self,
             "CoverLetterApiLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.cover_letter_submit_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-cover-letter-api",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+                "DYNAMODB_TABLE_NAME": self.api_db.artifacts_table.table_name,
+                "SQS_QUEUE_URL": self.cover_letter_jobs_queue.queue_url,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+            },
+            timeout=Duration.seconds(60),
+            memory_size=256,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            role=self.lambda_role,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+        self.cover_letter_jobs_queue.grant_send_messages(lambda_function)
+        return lambda_function
+
+    def _add_interview_prep_lambda(self) -> _lambda.Function:
+        function_name = self.naming.lambda_name("interview-prep-api")
+        log_group = logs.LogGroup(
+            self,
+            "InterviewPrepApiLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
+        lambda_function = _lambda.Function(
+            self,
+            "InterviewPrepApiLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.interview_prep_submit_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-interview-prep-api",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+                "DYNAMODB_TABLE_NAME": self.api_db.artifacts_table.table_name,
+                "SQS_QUEUE_URL": self.interview_prep_jobs_queue.queue_url,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+            },
+            timeout=Duration.seconds(60),
+            memory_size=256,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            role=self.lambda_role,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+        self.interview_prep_jobs_queue.grant_send_messages(lambda_function)
+        return lambda_function
+
+    def _add_cover_letter_status_lambda(self) -> _lambda.Function:
+        """Lambda for GET /cover-letter/* status and list routes."""
+        function_name = self.naming.lambda_name("cover-letter-status")
+        log_group = logs.LogGroup(
+            self,
+            "CoverLetterStatusLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
+        return _lambda.Function(
+            self,
+            "CoverLetterStatusLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
             handler="careervp.handlers.cover_letter_handler.lambda_handler",
             function_name=function_name,
             environment={
-                constants.POWERTOOLS_SERVICE_NAME: "careervp-cover-letter-api",
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-cover-letter-status",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
                 "DYNAMODB_TABLE_NAME": self.api_db.artifacts_table.table_name,
@@ -1736,11 +1883,12 @@ class ApiConstruct(Construct):
             architecture=_lambda.Architecture.X86_64,
         )
 
-    def _add_interview_prep_lambda(self) -> _lambda.Function:
-        function_name = self.naming.lambda_name("interview-prep-api")
+    def _add_interview_prep_status_lambda(self) -> _lambda.Function:
+        """Lambda for GET /interview-prep/* status and list routes."""
+        function_name = self.naming.lambda_name("interview-prep-status")
         log_group = logs.LogGroup(
             self,
-            "InterviewPrepApiLogGroup",
+            "InterviewPrepStatusLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
             removal_policy=RemovalPolicy.DESTROY,
@@ -1748,13 +1896,13 @@ class ApiConstruct(Construct):
         )
         return _lambda.Function(
             self,
-            "InterviewPrepApiLambda",
+            "InterviewPrepStatusLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
             handler="careervp.handlers.interview_prep_handler.lambda_handler",
             function_name=function_name,
             environment={
-                constants.POWERTOOLS_SERVICE_NAME: "careervp-interview-prep-api",
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-interview-prep-status",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
                 "DYNAMODB_TABLE_NAME": self.api_db.artifacts_table.table_name,
@@ -1827,15 +1975,19 @@ class ApiConstruct(Construct):
             ("/cv-tailoring/{cvTailoringId}/status", "GET", self.cv_tailoring_func),
             ("/cv-tailorings", "GET", self.cv_tailoring_func),
             ("/cover-letter/generate", "POST", self.cover_letter_api_func),
-            ("/cover-letter/{coverLetterId}/status", "GET", self.cover_letter_api_func),
-            ("/cover-letters", "GET", self.cover_letter_api_func),
+            (
+                "/cover-letter/{coverLetterId}/status",
+                "GET",
+                self.cover_letter_status_func,
+            ),
+            ("/cover-letters", "GET", self.cover_letter_status_func),
             ("/interview-prep/generate", "POST", self.interview_prep_api_func),
             (
                 "/interview-prep/{interviewPrepId}/status",
                 "GET",
-                self.interview_prep_api_func,
+                self.interview_prep_status_func,
             ),
-            ("/interview-preps", "GET", self.interview_prep_api_func),
+            ("/interview-preps", "GET", self.interview_prep_status_func),
             ("/company-research/{jobId}", "GET", self.company_research_func),
             ("/company-research/fetch", "POST", self.company_research_func),
             ("/knowledge-base", "GET", self.company_research_func),
