@@ -13,7 +13,7 @@ def _coerce_non_empty_string(value: object) -> str | None:
     return None
 
 
-def extract_user_id(event: dict[str, Any]) -> str | None:
+def extract_user_id(event: dict[str, Any]) -> str | None:  # noqa: C901
     """
     Extract user id from Cognito claims only.
 
