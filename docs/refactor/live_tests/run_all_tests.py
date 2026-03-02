@@ -119,6 +119,27 @@ def run_test_module(
     return True
 
 
+def _reset_trial(api_base: str) -> None:
+    """Reset trial credits before the test run to prevent trial_exhausted 403s."""
+    try:
+        import requests as _requests
+
+        sys.path.insert(0, LIVE_TESTS_DIR)
+        from conftest import get_auth_headers  # noqa: PLC0415
+
+        resp = _requests.post(
+            f"{api_base}/users/me/trial/reset",
+            headers=get_auth_headers(),
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            print("  ✓ Trial reset")
+        else:
+            print(f"  ⚠ Trial reset returned {resp.status_code} — continuing anyway")
+    except Exception as exc:
+        print(f"  ⚠ Trial reset skipped: {exc}")
+
+
 def run_all_tests(verbose: bool = False, mode: str = "full") -> int:
     """Run all tests in sequence."""
     print("\n" + "=" * 60)
@@ -133,6 +154,10 @@ def run_all_tests(verbose: bool = False, mode: str = "full") -> int:
     print(f"  API Base: {api_base}")
     print(f"  Test User: {test_user}")
     print(f"  Auth Enabled: {os.environ.get('USE_AUTH', 'true')}")
+
+    # Reset trial credits so tests are never blocked by exhausted limits
+    print("\nPre-flight:")
+    _reset_trial(api_base)
 
     # Run tests in order (dependencies matter!)
     full_order = [

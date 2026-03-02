@@ -46,7 +46,7 @@ class TestInterviewPrepEndpoints:
 
         # Build payload using test data
         vpr_id = test_data.get("vpr_id") or f"vpr_{TEST_USER_ID}"
-        gap_response_ids = test_data.get("gap_response_ids", ["gap_test_001"])
+        gap_response_ids = test_data.get("gap_response_ids") or ["gap_test_001"]
 
         payload = {
             "vpr_id": vpr_id,

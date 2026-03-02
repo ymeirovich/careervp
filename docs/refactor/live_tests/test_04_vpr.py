@@ -47,7 +47,7 @@ class TestVPREndpoints:
         # Build payload using test data from previous tests
         cv_id = test_data.get("cv_id") or f"cv_{TEST_USER_ID}"
         job_id = test_data.get("job_id") or f"job_{TEST_USER_ID}"
-        gap_response_ids = test_data.get("gap_response_ids", ["gap_test_001"])
+        gap_response_ids = test_data.get("gap_response_ids") or ["gap_test_001"]
 
         payload = {
             "cv_id": cv_id,

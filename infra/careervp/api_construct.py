@@ -2012,6 +2012,7 @@ class ApiConstruct(Construct):
             ("/users/me", "GET", self.user_api_func),
             ("/users/me", "PUT", self.user_api_func),
             ("/users/me/usage", "GET", self.user_api_func),
+            ("/users/me/trial/reset", "POST", self.user_api_func),
             ("/users/me/cv", "POST", self.cv_upload_func),
             ("/users/me/cv", "GET", self.user_api_func),
             ("/jobs", "POST", self.job_api_func),
