@@ -28,11 +28,7 @@ INTERVIEW_PREP_SORT_KEY_PREFIX = 'ARTIFACT#INTERVIEW_PREP#'
 
 
 def _get_dal() -> DynamoDalHandler:
-    table_name = (
-        os.environ.get('DYNAMODB_TABLE_NAME')
-        or os.environ.get('ARTIFACTS_TABLE_NAME')
-        or os.environ.get('TABLE_NAME', '')
-    )
+    table_name = os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('TABLE_NAME', '')
     return DynamoDalHandler(table_name)
 
 
@@ -40,8 +36,16 @@ def _get_dal() -> DynamoDalHandler:
 @tracer.capture_lambda_handler
 @metrics.log_metrics
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
-    """Handle interview prep API requests."""
+    """Handle interview prep API requests and SQS worker events."""
     _ = context
+
+    # SQS worker dispatch: if triggered by SQS, process async jobs
+    records = event.get('Records', [])
+    if records and isinstance(records, list):
+        first_source = (records[0] or {}).get('eventSource', '') if records else ''
+        if first_source == 'aws:sqs':
+            return _process_sqs_event(event)
+
     method = str(event.get('httpMethod', '')).upper()
     path = str(event.get('path', '')).rstrip('/')
 
@@ -64,6 +68,112 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         HTTPStatus.NOT_FOUND,
         {'error': 'Endpoint not found', 'code': ResultCode.INVALID_INPUT},
     )
+
+
+def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
+    """Process SQS messages for async interview prep generation."""
+    for record in event.get('Records', []):
+        body = json.loads(record.get('body', '{}'))
+        job_id = body.get('job_id', '')
+        user_id = body.get('user_id', '')
+        request_data = body.get('request_data', {})
+
+        if not job_id or not user_id:
+            logger.error('SQS message missing job_id or user_id', body=body)
+            continue
+
+        logger.append_keys(job_id=job_id, user_id=user_id)
+        logger.info('Processing interview prep SQS job', job_id=job_id)
+
+        try:
+            _generate_and_persist_from_sqs(job_id=job_id, user_id=user_id, request_data=request_data)
+        except Exception as exc:
+            logger.error('Interview prep SQS job failed', job_id=job_id, error=str(exc), exc_info=True)
+            _update_artifact_status(user_id=user_id, job_id=job_id, status='FAILED')
+            raise
+
+    return {'statusCode': 200, 'body': 'OK'}
+
+
+def _generate_and_persist_from_sqs(
+    job_id: str,
+    user_id: str,
+    request_data: dict[str, Any],
+) -> None:
+    """Load pending record, generate interview prep, persist result."""
+    dal = _get_dal()
+
+    # Update status to PROCESSING
+    _update_artifact_status(user_id=user_id, job_id=job_id, status='PROCESSING')
+
+    # Validate the request data
+    api_request = InterviewPrepRequest.model_validate(request_data)
+
+    # Generate interview prep using existing logic
+    generation_result = _generate_interview_prep_result(
+        api_request=api_request,
+        user_id=user_id,
+    )
+
+    if not generation_result.success or generation_result.data is None:
+        raise RuntimeError(f'Interview prep generation failed: {generation_result.error}')
+
+    prep_model = generation_result.data.interview_prep
+    if prep_model is None:
+        raise RuntimeError('Interview prep generation returned no content')
+
+    # Persist the result
+    prep_payload = prep_model.model_dump(mode='json')
+    try:
+        _persist_interview_prep(dal=dal, user_id=user_id, prep_payload=prep_payload)
+    except Exception:
+        logger.warning('_persist_interview_prep failed, updating artifact directly', job_id=job_id)
+
+    # Update the artifact record to COMPLETED
+    _update_artifact_status(
+        user_id=user_id,
+        job_id=job_id,
+        status='COMPLETED',
+        result_data=prep_payload,
+    )
+
+    metrics.add_metric(name='InterviewPrepWorkerGenerated', unit=MetricUnit.Count, value=1)
+    logger.info('Interview prep SQS job completed', job_id=job_id)
+
+
+def _update_artifact_status(
+    user_id: str,
+    job_id: str,
+    status: str,
+    result_data: dict[str, Any] | None = None,
+) -> None:
+    """Update interview prep artifact status in DynamoDB."""
+    import datetime as _dt
+
+    import boto3 as _boto3
+
+    table_name = os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('TABLE_NAME', '')
+    table = _boto3.resource('dynamodb').Table(table_name)
+    now = _dt.datetime.now(_dt.timezone.utc).isoformat()
+
+    update_expr = 'SET #s = :status, updated_at = :now'
+    attr_names: dict[str, str] = {'#s': 'status'}
+    attr_values: dict[str, Any] = {':status': status, ':now': now}
+
+    if result_data is not None:
+        update_expr += ', interview_prep = :result'
+        attr_values[':result'] = result_data
+
+    try:
+        table.update_item(
+            Key={'pk': user_id, 'sk': f'ARTIFACT#INTERVIEW_PREP#{job_id}'},
+            UpdateExpression=update_expr,
+            ExpressionAttributeNames=attr_names,
+            ExpressionAttributeValues=attr_values,
+        )
+    except Exception as exc:
+        logger.error('Failed to update artifact status', job_id=job_id, error=str(exc))
+        raise
 
 
 def _submit_interview_prep_request(event: dict[str, Any]) -> dict[str, Any]:
@@ -172,8 +282,7 @@ def list_interview_preps(event: dict[str, Any]) -> dict[str, Any]:
     dal = _get_dal()
     table = dal._get_db_handler(dal.table_name)
     response = table.query(
-        KeyConditionExpression=Key('applicationId').eq(user_id)
-        & Key('artifactId').begins_with(INTERVIEW_PREP_SORT_KEY_PREFIX),
+        KeyConditionExpression=Key('applicationId').eq(user_id) & Key('artifactId').begins_with(INTERVIEW_PREP_SORT_KEY_PREFIX),
         Limit=50,
     )
     items = response.get('Items', []) if isinstance(response, dict) else []
@@ -344,8 +453,7 @@ def _get_interview_prep_item(user_id: str, interview_prep_id: str) -> dict[str, 
 
     try:
         query_response = table.query(
-            KeyConditionExpression=Key('pk').eq(user_id)
-            & Key('sk').begins_with(INTERVIEW_PREP_SORT_KEY_PREFIX),
+            KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with(INTERVIEW_PREP_SORT_KEY_PREFIX),
             FilterExpression=Attr('sk').contains(interview_prep_id),
             Limit=1,
         )
@@ -442,8 +550,7 @@ def _build_interview_prep_status_payload(item: dict[str, Any], fallback_id: str)
             result_payload['pre_interview_checklist'] = prep_payload.get('pre_interview_checklist') or []
             result_payload['salary_guidance'] = prep_payload.get('salary_guidance')
             result_payload['interview_report'] = {
-                'readiness_summary': prep_payload.get('readiness_summary')
-                or 'Preparation synthesized from role context and behavioral focus areas.',
+                'readiness_summary': prep_payload.get('readiness_summary') or 'Preparation synthesized from role context and behavioral focus areas.',
             }
         payload['result'] = result_payload
 

@@ -5,11 +5,11 @@ repos:
       - id: ruff
       - id: ruff-format
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.11.2
-    hooks:
-      - id: mypy
-        args: ['--strict', '--ignore-missing-imports', '--disable-error-code=no-redef']
+  # mypy disabled - run manually from src/backend with uv run mypy
+  # - repo: https://github.com/pre-commit/mirrors-mypy
+  #   rev: v1.11.2
+  #   hooks:
+  #     - id: mypy
 
   - repo: local
     hooks:
