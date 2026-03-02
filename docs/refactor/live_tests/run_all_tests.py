@@ -184,6 +184,9 @@ def run_all_tests(verbose: bool = False, mode: str = "full") -> int:
     for test_name in test_order:
         if test_name in TEST_MODULES:
             try:
+                if test_name == "contract":
+                    print("\nPre-contract reset:")
+                    _reset_trial(api_base)
                 module_name, class_names = TEST_MODULES[test_name]
                 ok = run_test_module(module_name, class_names, verbose)
                 if ok:
