@@ -26,3 +26,28 @@ def test_monitoring_sns_topic_encrypted(synthesized_template: Template) -> None:
         if props["Properties"].get("KmsMasterKeyId") is not None
     ]
     assert encrypted_topics, "Monitoring SNS topic missing KMS encryption"
+
+
+def test_monitoring_includes_dynamodb_validation_exception_alarm(
+    synthesized_template: Template,
+) -> None:
+    """Ensure monitoring captures DynamoDB ValidationException spikes from Lambda logs."""
+    metric_filters = synthesized_template.find_resources("AWS::Logs::MetricFilter")
+    assert metric_filters, (
+        "Expected CloudWatch metric filters for Lambda error patterns"
+    )
+
+    validation_filters = [
+        props
+        for props in metric_filters.values()
+        if "ValidationException" in str(props["Properties"].get("FilterPattern", ""))
+    ]
+    assert validation_filters, (
+        "No CloudWatch metric filter found for DynamoDB ValidationException"
+    )
+
+    alarms = synthesized_template.find_resources("AWS::CloudWatch::Alarm")
+    assert any(
+        "DynamoValidationException" in str(props["Properties"].get("AlarmName", ""))
+        for props in alarms.values()
+    ), "No CloudWatch alarm found for DynamoDB ValidationException spikes"

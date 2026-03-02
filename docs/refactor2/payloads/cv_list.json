@@ -1,7 +1,7 @@
 {
-  "description": "GET /users/me/cvs - List user's CVs",
+  "description": "GET /users/me/cv - List user's CVs",
   "method": "GET",
-  "path": "/users/me/cvs",
+  "path": "/users/me/cv",
   "headers": {
     "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
   },
@@ -13,18 +13,8 @@
     "status_code": 200,
     "body": {
       "cvs": [
-        {
-          "id": "cv-a1b2c3d4-5678-4e9f-a0b1-c2d3e4f56789",
-          "file_name": "john_smith_cv.txt",
-          "uploaded_at": "2024-01-20T14:30:00Z"
-        },
-        {
-          "id": "cv-b2c3d4e5-6789-4f0a-b1c2-d3e4f5678901",
-          "file_name": "john_smith_cv_v2.txt",
-          "uploaded_at": "2024-01-18T09:15:00Z"
-        }
-      ],
-      "cursor": "eyJsYXN0X2lkIjoiY3YtYjJjM2Q0ZTUtNjc4OS00ZjBhLWIxYzItZDNlNGY1Njc4OTAxIn0="
+        {}
+      ]
     }
   }
 }

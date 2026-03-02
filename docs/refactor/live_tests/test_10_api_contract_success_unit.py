@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from .test_10_api_contract_success import _build_headers, _update_state
+from .test_10_api_contract_success import (
+    _build_headers,
+    _hydrate_request,
+    _update_state,
+)
 
 
 def test_build_headers_prefers_id_token_for_protected_routes() -> None:
@@ -40,3 +44,27 @@ def test_update_state_persists_id_token_from_auth_login() -> None:
     )
 
     assert state["id_token"] == "id.jwt.token"
+
+
+def test_hydrate_request_keeps_payload_gap_ids_when_state_ids_empty() -> None:
+    request_body = {
+        "cv_id": "cv-1",
+        "job_id": "job-1",
+        "gap_response_ids": ["payload-gap-1"],
+    }
+    state = {"gap_response_ids": []}
+
+    hydrated = _hydrate_request("vpr_generate.json", request_body, state)
+    assert hydrated["gap_response_ids"] == ["payload-gap-1"]
+
+
+def test_hydrate_request_uses_state_gap_ids_when_non_empty() -> None:
+    request_body = {
+        "cv_id": "cv-1",
+        "job_id": "job-1",
+        "gap_response_ids": ["payload-gap-1"],
+    }
+    state = {"gap_response_ids": ["state-gap-1", "state-gap-2"]}
+
+    hydrated = _hydrate_request("vpr_generate.json", request_body, state)
+    assert hydrated["gap_response_ids"] == ["state-gap-1", "state-gap-2"]

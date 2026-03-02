@@ -60,10 +60,55 @@ def test_submit_gap_responses_returns_500_when_gap_table_env_missing(
 def test_get_questions_dal_prefers_artifacts_table_name(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from careervp.handlers.gap_handler import _get_questions_dal
+    from careervp.handlers import gap_handler
 
     monkeypatch.setenv('ARTIFACTS_TABLE_NAME', 'artifacts-table')
     monkeypatch.setenv('DYNAMODB_TABLE_NAME', 'legacy-table')
 
-    dal = _get_questions_dal()
+    with patch.object(gap_handler, '_validate_table_schema'):
+        dal = gap_handler._get_questions_dal()
     assert dal.table_name == 'artifacts-table'
+
+
+def test_get_responses_dal_uses_gap_responses_table_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from careervp.handlers import gap_handler
+
+    monkeypatch.setenv('ARTIFACTS_TABLE_NAME', 'artifacts-table')
+    monkeypatch.setenv('GAP_RESPONSES_TABLE_NAME', 'gap-responses-table')
+
+    with patch.object(gap_handler, '_validate_table_schema'):
+        dal = gap_handler._get_responses_dal()
+    assert dal.table_name == 'gap-responses-table'
+
+
+def test_submit_gap_responses_returns_500_on_schema_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from careervp.handlers import gap_handler
+    from careervp.models.result import Result, ResultCode
+
+    monkeypatch.setenv('GAP_RESPONSES_TABLE_NAME', 'gap-responses-table')
+    event = _event(
+        '/jobs/job-1/gap-responses',
+        'POST',
+        {
+            'job_id': 'job-1',
+            'responses': [{'question_id': 'q1', 'response': 'Answer'}],
+        },
+    )
+    fake_result = Result(
+        success=False,
+        data=None,
+        error='table_name=gap-responses-table operation=save_gap_responses_raw',
+        code=ResultCode.TABLE_SCHEMA_MISMATCH,
+    )
+    dal = SimpleNamespace(save_gap_responses_raw=lambda **_: fake_result)
+
+    with patch.object(gap_handler, '_get_responses_dal', return_value=dal):
+        response = gap_handler.lambda_handler(event, SimpleNamespace(function_name='gap-handler'))
+
+    assert response['statusCode'] == 500
+    payload = json.loads(str(response['body']))
+    assert payload['code'] == ResultCode.TABLE_SCHEMA_MISMATCH

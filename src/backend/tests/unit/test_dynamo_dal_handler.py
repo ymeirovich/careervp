@@ -8,9 +8,11 @@ from typing import Iterator
 
 import boto3
 import pytest
+from botocore.exceptions import ClientError
 from moto import mock_aws
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+from careervp.models.result import ResultCode
 from careervp.models.vpr import VPR, EvidenceItem, GapStrategy
 
 TABLE_NAME = 'test-vpr-table'
@@ -150,3 +152,56 @@ class TestDynamoDalHandlerVPR:
         missing_result = handler.get_vpr(application_id='missing', version=1)
         assert missing_result.success is True
         assert missing_result.data is None
+
+    def test_save_gap_questions_returns_schema_mismatch_code_on_validation_exception(self, mocker) -> None:
+        handler = DynamoDalHandler(TABLE_NAME)
+        mock_table = mocker.Mock()
+        mock_table.put_item.side_effect = ClientError(
+            error_response={
+                'Error': {
+                    'Code': 'ValidationException',
+                    'Message': 'The provided key element does not match the schema',
+                }
+            },
+            operation_name='PutItem',
+        )
+        mocker.patch.object(handler, '_get_db_handler', return_value=mock_table)
+
+        result = handler.save_gap_questions(
+            user_id='user-1',
+            cv_id='cv-1',
+            job_id='job-1',
+            questions=[{'question_id': 'q1', 'question': 'Example'}],
+        )
+
+        assert result.success is False
+        assert result.code == ResultCode.TABLE_SCHEMA_MISMATCH
+        assert result.error is not None
+        assert 'table_name' in result.error
+        assert 'operation=save_gap_questions' in result.error
+
+    def test_save_gap_responses_raw_includes_table_and_operation_on_failure(self, mocker) -> None:
+        handler = DynamoDalHandler(TABLE_NAME)
+        mock_table = mocker.Mock()
+        mock_table.put_item.side_effect = ClientError(
+            error_response={
+                'Error': {
+                    'Code': 'ProvisionedThroughputExceededException',
+                    'Message': 'rate exceeded',
+                }
+            },
+            operation_name='PutItem',
+        )
+        mocker.patch.object(handler, '_get_db_handler', return_value=mock_table)
+
+        result = handler.save_gap_responses_raw(
+            user_id='user-1',
+            job_id='job-1',
+            responses=[{'question_id': 'q1', 'response': 'A'}],
+        )
+
+        assert result.success is False
+        assert result.code == ResultCode.DYNAMODB_ERROR
+        assert result.error is not None
+        assert f'table_name={TABLE_NAME}' in result.error
+        assert 'operation=save_gap_responses_raw' in result.error

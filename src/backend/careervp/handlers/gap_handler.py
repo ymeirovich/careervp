@@ -21,6 +21,7 @@ from careervp.models.result import Result, ResultCode
 
 _trial_service: TrialService | None = None
 _application_repository: ApplicationRepository | None = None
+_validated_table_schemas: set[str] = set()
 
 
 def _resolve_table_name(*env_keys: str) -> str:
@@ -32,18 +33,39 @@ def _resolve_table_name(*env_keys: str) -> str:
 
 
 def _configuration_error_response() -> dict[str, Any]:
-    return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, 'Internal server error', ResultCode.INTERNAL_ERROR)
+    return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, 'Internal server error', ResultCode.MISSING_ENV)
+
+
+def _validate_table_schema(table_name: str, expected_keys: set[str]) -> None:
+    if table_name in _validated_table_schemas:
+        return
+
+    dal = DynamoDalHandler(table_name=table_name)
+    table = dal._get_db_handler(table_name)
+    key_schema = getattr(table, 'key_schema', [])
+    actual_keys = {
+        attribute_name
+        for entry in key_schema
+        if isinstance(entry, dict)
+        for attribute_name in [entry.get('AttributeName')]
+        if isinstance(attribute_name, str)
+    }
+    if not expected_keys.issubset(actual_keys):
+        raise RuntimeError(f'Table schema mismatch for {table_name}: expected keys {sorted(expected_keys)}, got {sorted(actual_keys)}')
+    _validated_table_schemas.add(table_name)
 
 
 def _get_questions_dal() -> DynamoDalHandler:
     """DAL for gap questions — stored in the artifacts table."""
     table_name = _resolve_table_name('ARTIFACTS_TABLE_NAME', 'DYNAMODB_TABLE_NAME', 'TABLE_NAME')
+    _validate_table_schema(table_name=table_name, expected_keys={'pk', 'sk'})
     return DynamoDalHandler(table_name=table_name)
 
 
 def _get_responses_dal() -> DynamoDalHandler:
     """DAL for gap responses — stored in the dedicated gap_responses table."""
     table_name = _resolve_table_name('GAP_RESPONSES_TABLE_NAME')
+    _validate_table_schema(table_name=table_name, expected_keys={'userId', 'questionId'})
     return DynamoDalHandler(table_name=table_name)
 
 
@@ -190,15 +212,15 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
             job_id=job_id,
             questions=questions,
         )
-    except Exception:
+    except Exception as exc:
+        logger.exception('Unexpected DAL exception while saving gap questions', error=str(exc), job_id=job_id)
         save_result = Result(success=False, error='persist failed', code=ResultCode.DYNAMODB_ERROR)
     if not save_result.success:
-        logger.error('Failed to persist gap questions', job_id=job_id)
-        return _json_response(
+        logger.error('Failed to persist gap questions', job_id=job_id, code=save_result.code, error=save_result.error)
+        return _error_response(
             HTTPStatus.INTERNAL_SERVER_ERROR,
-            {
-                'error': 'Failed to save gap questions. Please try again.',
-            },
+            'Failed to save gap questions. Please try again.',
+            save_result.code,
         )
 
     try:
@@ -306,15 +328,15 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
             job_id=job_id,
             responses=normalized_responses,
         )
-    except Exception:
+    except Exception as exc:
+        logger.exception('Unexpected DAL exception while saving gap responses', error=str(exc), job_id=job_id)
         save_result = Result(success=False, error='persist failed', code=ResultCode.DYNAMODB_ERROR)
     if not save_result.success:
-        logger.error('Failed to persist gap responses', job_id=job_id)
-        return _json_response(
+        logger.error('Failed to persist gap responses', job_id=job_id, code=save_result.code, error=save_result.error)
+        return _error_response(
             HTTPStatus.INTERNAL_SERVER_ERROR,
-            {
-                'error': 'Failed to save gap responses. Please try again.',
-            },
+            'Failed to save gap responses. Please try again.',
+            save_result.code,
         )
 
     return _json_response(
@@ -343,7 +365,7 @@ def get_responses(event: dict[str, Any]) -> dict[str, Any]:
         return _configuration_error_response()
     result = dal.get_gap_responses(user_id=user_id)
     if not result.success:
-        return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, result.error or 'Failed to fetch gap responses', ResultCode.DYNAMODB_ERROR)
+        return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, result.error or 'Failed to fetch gap responses', result.code)
 
     if not result.data:
         return _error_response(HTTPStatus.NOT_FOUND, 'Gap responses not found', ResultCode.INVALID_INPUT)

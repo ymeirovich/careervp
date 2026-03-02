@@ -196,3 +196,30 @@ def test_get_users_me_vprs_returns_user_vpr_list() -> None:
     assert payload['vprs'][0]['id'] == 'vpr-1'
     assert payload['vprs'][0]['job_title'] == 'Engineer'
     assert payload['vprs'][0]['company_name'] == 'Acme'
+
+
+def test_post_vpr_generate_returns_structured_validation_error() -> None:
+    """POST /vpr/generate should return structured validation details for invalid payloads."""
+    from careervp.handlers.vpr_submit_handler import lambda_handler
+
+    access_token = _create_access_token(user_id='user-123', email='user@example.com')
+    event = {
+        'httpMethod': 'POST',
+        'path': '/vpr/generate',
+        'headers': {'Content-Type': 'application/json', 'Authorization': f'Bearer {access_token}'},
+        'requestContext': {
+            **_request_context('user-123', 'user@example.com'),
+            'requestId': 'api-req-vpr-1',
+        },
+        'body': json.dumps({'cv_id': 'cv-1'}),
+    }
+
+    response = lambda_handler(event, _lambda_context())
+
+    assert response['statusCode'] == 400
+    payload = json.loads(response['body'])
+    assert payload['error'] == 'Invalid request body'
+    assert payload['code'] == 'VALIDATION_ERROR'
+    assert payload['request_id'] == 'api-req-vpr-1'
+    assert isinstance(payload['validation_errors'], list)
+    assert payload['validation_errors']
