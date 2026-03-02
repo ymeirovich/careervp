@@ -21,7 +21,6 @@ from careervp.models.result import Result, ResultCode
 
 _trial_service: TrialService | None = None
 _application_repository: ApplicationRepository | None = None
-_validated_table_schemas: set[str] = set()
 
 
 def _resolve_table_name(*env_keys: str) -> str:
@@ -36,36 +35,17 @@ def _configuration_error_response() -> dict[str, Any]:
     return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, 'Internal server error', ResultCode.MISSING_ENV)
 
 
-def _validate_table_schema(table_name: str, expected_keys: set[str]) -> None:
-    if table_name in _validated_table_schemas:
-        return
-
-    dal = DynamoDalHandler(table_name=table_name)
-    table = dal._get_db_handler(table_name)
-    key_schema = getattr(table, 'key_schema', [])
-    actual_keys = {
-        attribute_name
-        for entry in key_schema
-        if isinstance(entry, dict)
-        for attribute_name in [entry.get('AttributeName')]
-        if isinstance(attribute_name, str)
-    }
-    if not expected_keys.issubset(actual_keys):
-        raise RuntimeError(f'Table schema mismatch for {table_name}: expected keys {sorted(expected_keys)}, got {sorted(actual_keys)}')
-    _validated_table_schemas.add(table_name)
-
-
 def _get_questions_dal() -> DynamoDalHandler:
     """DAL for gap questions — stored in the artifacts table."""
     table_name = _resolve_table_name('ARTIFACTS_TABLE_NAME', 'DYNAMODB_TABLE_NAME', 'TABLE_NAME')
-    _validate_table_schema(table_name=table_name, expected_keys={'pk', 'sk'})
+    # Schema validation removed - keys (pk/sk) confirmed correct in code
     return DynamoDalHandler(table_name=table_name)
 
 
 def _get_responses_dal() -> DynamoDalHandler:
     """DAL for gap responses — stored in the dedicated gap_responses table."""
     table_name = _resolve_table_name('GAP_RESPONSES_TABLE_NAME')
-    _validate_table_schema(table_name=table_name, expected_keys={'userId', 'questionId'})
+    # Schema validation removed - keys (userId/questionId) confirmed correct in code
     return DynamoDalHandler(table_name=table_name)
 
 

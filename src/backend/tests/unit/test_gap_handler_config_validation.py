@@ -65,8 +65,7 @@ def test_get_questions_dal_prefers_artifacts_table_name(
     monkeypatch.setenv('ARTIFACTS_TABLE_NAME', 'artifacts-table')
     monkeypatch.setenv('DYNAMODB_TABLE_NAME', 'legacy-table')
 
-    with patch.object(gap_handler, '_validate_table_schema'):
-        dal = gap_handler._get_questions_dal()
+    dal = gap_handler._get_questions_dal()
     assert dal.table_name == 'artifacts-table'
 
 
@@ -78,8 +77,7 @@ def test_get_responses_dal_uses_gap_responses_table_only(
     monkeypatch.setenv('ARTIFACTS_TABLE_NAME', 'artifacts-table')
     monkeypatch.setenv('GAP_RESPONSES_TABLE_NAME', 'gap-responses-table')
 
-    with patch.object(gap_handler, '_validate_table_schema'):
-        dal = gap_handler._get_responses_dal()
+    dal = gap_handler._get_responses_dal()
     assert dal.table_name == 'gap-responses-table'
 
 
