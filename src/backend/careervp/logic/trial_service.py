@@ -97,6 +97,20 @@ class TrialService:
             'trial_ends_at': trial_ends_at.isoformat(),
         }
 
+    def reset_trial(self, user_id: str) -> None:
+        """Reset trial to a fresh state: zero credits, active, clock restarted."""
+        now = self._now_fn()
+        self._table().put_item(
+            Item={
+                'pk': self._pk(user_id),
+                'sk': 'TRIAL',
+                'created_at': now.isoformat(),
+                'application_count': 0,
+                'trial_active': True,
+                'updated_at': now.isoformat(),
+            }
+        )
+
     def _load_trial_record(self, user_id: str) -> dict[str, Any]:
         response = self._table().get_item(Key={'pk': self._pk(user_id), 'sk': 'TRIAL'})
         item = response.get('Item')

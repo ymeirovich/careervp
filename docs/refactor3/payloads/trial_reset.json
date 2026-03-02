@@ -1,0 +1,16 @@
+{
+  "description": "POST /users/me/trial/reset - Reset trial credits to zero (test/admin use)",
+  "method": "POST",
+  "path": "/users/me/trial/reset",
+  "headers": {
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
+  },
+  "request": {},
+  "expected_response": {
+    "status_code": 200,
+    "body": {
+      "status": "reset",
+      "message": "Trial reset successfully"
+    }
+  }
+}

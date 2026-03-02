@@ -269,6 +269,27 @@ def get_usage_snapshot() -> Response[str]:
     )
 
 
+@app.post('/users/me/trial/reset')
+@tracer.capture_method(capture_response=False)
+def reset_user_trial() -> Response[str]:
+    """Reset trial usage for the authenticated user (test/admin use)."""
+    user_id = _get_authenticated_user_id()
+    if not user_id:
+        return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Authentication required'})
+
+    trial_service = _get_trial_service()
+    if trial_service is None:
+        return _json_response(HTTPStatus.SERVICE_UNAVAILABLE, {'error': 'Trial service unavailable'})
+
+    try:
+        trial_service.reset_trial(user_id)
+    except Exception as exc:
+        logger.exception('Failed to reset trial', user_id=user_id, error=str(exc))
+        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Failed to reset trial'})
+
+    return _json_response(HTTPStatus.OK, {'status': 'reset', 'message': 'Trial reset successfully'})
+
+
 @logger.inject_lambda_context(correlation_id_path=API_GATEWAY_REST)
 @tracer.capture_lambda_handler(capture_response=False)
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
