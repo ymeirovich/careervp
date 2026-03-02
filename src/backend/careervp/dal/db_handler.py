@@ -13,11 +13,11 @@ from careervp.models.vpr import VPR
 
 
 class _SingletonMeta(ABCMeta):
-    _instances: dict[tuple, DalHandler] = {}
+    _instances: dict[tuple[Any, ...], DalHandler] = {}
 
     def __call__(cls, *args: Any, **kwargs: Any) -> DalHandler:
         try:
-            key: tuple = (cls, args, tuple(sorted(kwargs.items())))
+            key: tuple[Any, ...] = (cls, args, tuple(sorted(kwargs.items())))
         except TypeError:
             key = (cls,)
         if key not in cls._instances:

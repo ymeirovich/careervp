@@ -13,7 +13,6 @@ Current Status: ALL TESTS SHOULD FAIL - No implementation exists yet
 """
 
 
-
 class TestCoverLetterLambdaConfiguration:
     """
     RED PHASE: Lambda configuration tests

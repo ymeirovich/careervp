@@ -7,7 +7,6 @@ DO NOT modify these tests to make them pass - implement the models instead.
 """
 
 
-
 # =============================================================================
 # CoverLetterPreferences Tests (9 tests)
 # =============================================================================
