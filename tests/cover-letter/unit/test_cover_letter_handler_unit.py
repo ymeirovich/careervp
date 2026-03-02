@@ -7,7 +7,7 @@ These tests are in RED phase - they will FAIL until implementation exists.
 
 import pytest
 import json
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock
 
 # Note: These imports will fail until implementation exists (RED phase)
 # from careervp.handlers.cover_letter_handler import lambda_handler
@@ -17,19 +17,21 @@ from unittest.mock import Mock, AsyncMock, patch
 def sample_api_gateway_event():
     """Sample API Gateway event with cover letter request."""
     return {
-        'headers': {
-            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoidXNlcjEyMyJ9.xxx'
+        "headers": {
+            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoidXNlcjEyMyJ9.xxx"
         },
-        'body': json.dumps({
-            'cv_id': 'cv_123',
-            'job_posting_id': 'job_456',
-            'vpr_data': {
-                'role_title': 'Senior Software Engineer',
-                'company_name': 'TechCorp',
-                'key_requirements': ['Python', 'AWS', '5+ years'],
-                'culture_keywords': ['innovation', 'collaboration']
+        "body": json.dumps(
+            {
+                "cv_id": "cv_123",
+                "job_posting_id": "job_456",
+                "vpr_data": {
+                    "role_title": "Senior Software Engineer",
+                    "company_name": "TechCorp",
+                    "key_requirements": ["Python", "AWS", "5+ years"],
+                    "culture_keywords": ["innovation", "collaboration"],
+                },
             }
-        })
+        ),
     }
 
 
@@ -37,8 +39,8 @@ def sample_api_gateway_event():
 def mock_lambda_context():
     """Mock AWS Lambda context."""
     context = Mock()
-    context.function_name = 'cover-letter-generator'
-    context.request_id = 'req-123'
+    context.function_name = "cover-letter-generator"
+    context.request_id = "req-123"
     context.get_remaining_time_in_millis = Mock(return_value=30000)
     return context
 
@@ -47,21 +49,20 @@ def mock_lambda_context():
 def sample_cover_letter_response():
     """Sample cover letter generation response."""
     return {
-        'cover_letter': 'Dear Hiring Manager,\n\nI am writing to...',
-        'quality_score': 8.5,
-        'fvs_validation': {
-            'is_valid': True,
-            'violations': []
-        },
-        'processing_time_ms': 1234,
-        'cost_estimate': 0.045
+        "cover_letter": "Dear Hiring Manager,\n\nI am writing to...",
+        "quality_score": 8.5,
+        "fvs_validation": {"is_valid": True, "violations": []},
+        "processing_time_ms": 1234,
+        "cost_estimate": 0.045,
     }
 
 
 class TestRequestHandling:
     """Tests for request handling."""
 
-    def test_handler_success_response(self, sample_api_gateway_event, mock_lambda_context):
+    def test_handler_success_response(
+        self, sample_api_gateway_event, mock_lambda_context
+    ):
         """Test handler returns 200 on success."""
         # response = lambda_handler(sample_api_gateway_event, mock_lambda_context)
         # assert response["statusCode"] == 200
@@ -70,7 +71,9 @@ class TestRequestHandling:
         # assert "cover_letter" in body
         assert True
 
-    def test_handler_parses_request_body(self, sample_api_gateway_event, mock_lambda_context):
+    def test_handler_parses_request_body(
+        self, sample_api_gateway_event, mock_lambda_context
+    ):
         """Test handler correctly parses JSON request body."""
         # with patch('careervp.handlers.cover_letter_handler.generate_cover_letter') as mock_gen:
         #     mock_gen.return_value = {"cover_letter": "test"}
@@ -83,7 +86,9 @@ class TestRequestHandling:
         #     assert "vpr_data" in call_args
         assert True
 
-    def test_handler_extracts_user_id_from_jwt(self, sample_api_gateway_event, mock_lambda_context):
+    def test_handler_extracts_user_id_from_jwt(
+        self, sample_api_gateway_event, mock_lambda_context
+    ):
         """Test handler extracts user_id from JWT token."""
         # with patch('careervp.handlers.cover_letter_handler.decode_jwt') as mock_jwt:
         #     mock_jwt.return_value = {"user_id": "user123"}
@@ -97,7 +102,9 @@ class TestRequestHandling:
         #         assert call_args["user_id"] == "user123"
         assert True
 
-    def test_handler_validates_request(self, sample_api_gateway_event, mock_lambda_context):
+    def test_handler_validates_request(
+        self, sample_api_gateway_event, mock_lambda_context
+    ):
         """Test handler validates request before processing."""
         # Invalid request - missing cv_id
         # invalid_event = sample_api_gateway_event.copy()
@@ -110,7 +117,9 @@ class TestRequestHandling:
         # assert "cv_id" in body["error"].lower()
         assert True
 
-    def test_handler_calls_logic_layer(self, sample_api_gateway_event, mock_lambda_context):
+    def test_handler_calls_logic_layer(
+        self, sample_api_gateway_event, mock_lambda_context
+    ):
         """Test handler delegates to logic layer."""
         # with patch('careervp.handlers.cover_letter_handler.generate_cover_letter') as mock_gen:
         #     mock_gen.return_value = {"cover_letter": "test", "quality_score": 8.0}
@@ -121,7 +130,9 @@ class TestRequestHandling:
         #     assert response["statusCode"] == 200
         assert True
 
-    def test_handler_returns_correct_status_code(self, sample_api_gateway_event, mock_lambda_context):
+    def test_handler_returns_correct_status_code(
+        self, sample_api_gateway_event, mock_lambda_context
+    ):
         """Test handler returns appropriate HTTP status codes."""
         # with patch('careervp.handlers.cover_letter_handler.generate_cover_letter') as mock_gen:
         #     mock_gen.return_value = {"cover_letter": "test"}
@@ -135,7 +146,9 @@ class TestRequestHandling:
 class TestErrorHandling:
     """Tests for error handling."""
 
-    def test_handler_returns_401_missing_auth(self, sample_api_gateway_event, mock_lambda_context):
+    def test_handler_returns_401_missing_auth(
+        self, sample_api_gateway_event, mock_lambda_context
+    ):
         """Test handler returns 401 when Authorization header is missing."""
         # event_no_auth = sample_api_gateway_event.copy()
         # event_no_auth["headers"] = {}
@@ -147,7 +160,9 @@ class TestErrorHandling:
         # assert "authorization" in body["error"].lower()
         assert True
 
-    def test_handler_returns_400_invalid_request(self, sample_api_gateway_event, mock_lambda_context):
+    def test_handler_returns_400_invalid_request(
+        self, sample_api_gateway_event, mock_lambda_context
+    ):
         """Test handler returns 400 for invalid request format."""
         # Invalid JSON
         # invalid_event = sample_api_gateway_event.copy()
@@ -160,7 +175,9 @@ class TestErrorHandling:
         # assert "invalid" in body["error"].lower()
         assert True
 
-    def test_handler_returns_404_cv_not_found(self, sample_api_gateway_event, mock_lambda_context):
+    def test_handler_returns_404_cv_not_found(
+        self, sample_api_gateway_event, mock_lambda_context
+    ):
         """Test handler returns 404 when CV is not found."""
         # with patch('careervp.handlers.cover_letter_handler.generate_cover_letter') as mock_gen:
         #     from careervp.exceptions import CVNotFoundException
@@ -173,7 +190,9 @@ class TestErrorHandling:
         #     assert "cv_123" in body["error"]
         assert True
 
-    def test_handler_returns_400_vpr_not_found(self, sample_api_gateway_event, mock_lambda_context):
+    def test_handler_returns_400_vpr_not_found(
+        self, sample_api_gateway_event, mock_lambda_context
+    ):
         """Test handler returns 400 when VPR data is not found."""
         # with patch('careervp.handlers.cover_letter_handler.generate_cover_letter') as mock_gen:
         #     from careervp.exceptions import VPRNotFoundException
@@ -186,7 +205,9 @@ class TestErrorHandling:
         #     assert "vpr" in body["error"].lower()
         assert True
 
-    def test_handler_returns_400_fvs_violation(self, sample_api_gateway_event, mock_lambda_context):
+    def test_handler_returns_400_fvs_violation(
+        self, sample_api_gateway_event, mock_lambda_context
+    ):
         """Test handler returns 400 when FVS validation fails."""
         # with patch('careervp.handlers.cover_letter_handler.generate_cover_letter') as mock_gen:
         #     from careervp.exceptions import FVSViolationException
@@ -203,7 +224,9 @@ class TestErrorHandling:
         #     assert "violations" in body
         assert True
 
-    def test_handler_returns_504_timeout(self, sample_api_gateway_event, mock_lambda_context):
+    def test_handler_returns_504_timeout(
+        self, sample_api_gateway_event, mock_lambda_context
+    ):
         """Test handler returns 504 when generation times out."""
         # with patch('careervp.handlers.cover_letter_handler.generate_cover_letter') as mock_gen:
         #     from careervp.exceptions import TimeoutException
@@ -216,7 +239,9 @@ class TestErrorHandling:
         #     assert "timeout" in body["error"].lower()
         assert True
 
-    def test_handler_returns_500_internal_error(self, sample_api_gateway_event, mock_lambda_context):
+    def test_handler_returns_500_internal_error(
+        self, sample_api_gateway_event, mock_lambda_context
+    ):
         """Test handler returns 500 for unexpected errors."""
         # with patch('careervp.handlers.cover_letter_handler.generate_cover_letter') as mock_gen:
         #     mock_gen.side_effect = Exception("Unexpected database error")
@@ -232,7 +257,12 @@ class TestErrorHandling:
 class TestResponseFormatting:
     """Tests for response formatting."""
 
-    def test_response_includes_cover_letter(self, sample_api_gateway_event, mock_lambda_context, sample_cover_letter_response):
+    def test_response_includes_cover_letter(
+        self,
+        sample_api_gateway_event,
+        mock_lambda_context,
+        sample_cover_letter_response,
+    ):
         """Test response includes generated cover letter text."""
         # with patch('careervp.handlers.cover_letter_handler.generate_cover_letter') as mock_gen:
         #     mock_gen.return_value = sample_cover_letter_response
@@ -243,7 +273,12 @@ class TestResponseFormatting:
         #     assert body["cover_letter"] == sample_cover_letter_response["cover_letter"]
         assert True
 
-    def test_response_includes_quality_score(self, sample_api_gateway_event, mock_lambda_context, sample_cover_letter_response):
+    def test_response_includes_quality_score(
+        self,
+        sample_api_gateway_event,
+        mock_lambda_context,
+        sample_cover_letter_response,
+    ):
         """Test response includes quality score."""
         # with patch('careervp.handlers.cover_letter_handler.generate_cover_letter') as mock_gen:
         #     mock_gen.return_value = sample_cover_letter_response
@@ -255,7 +290,12 @@ class TestResponseFormatting:
         #     assert 0 <= body["quality_score"] <= 10
         assert True
 
-    def test_response_includes_fvs_validation(self, sample_api_gateway_event, mock_lambda_context, sample_cover_letter_response):
+    def test_response_includes_fvs_validation(
+        self,
+        sample_api_gateway_event,
+        mock_lambda_context,
+        sample_cover_letter_response,
+    ):
         """Test response includes FVS validation results."""
         # with patch('careervp.handlers.cover_letter_handler.generate_cover_letter') as mock_gen:
         #     mock_gen.return_value = sample_cover_letter_response
@@ -268,7 +308,12 @@ class TestResponseFormatting:
         #     assert isinstance(body["fvs_validation"]["violations"], list)
         assert True
 
-    def test_response_includes_processing_time(self, sample_api_gateway_event, mock_lambda_context, sample_cover_letter_response):
+    def test_response_includes_processing_time(
+        self,
+        sample_api_gateway_event,
+        mock_lambda_context,
+        sample_cover_letter_response,
+    ):
         """Test response includes processing time."""
         # with patch('careervp.handlers.cover_letter_handler.generate_cover_letter') as mock_gen:
         #     mock_gen.return_value = sample_cover_letter_response
@@ -280,7 +325,12 @@ class TestResponseFormatting:
         #     assert body["processing_time_ms"] > 0
         assert True
 
-    def test_response_includes_cost_estimate(self, sample_api_gateway_event, mock_lambda_context, sample_cover_letter_response):
+    def test_response_includes_cost_estimate(
+        self,
+        sample_api_gateway_event,
+        mock_lambda_context,
+        sample_cover_letter_response,
+    ):
         """Test response includes cost estimate."""
         # with patch('careervp.handlers.cover_letter_handler.generate_cover_letter') as mock_gen:
         #     mock_gen.return_value = sample_cover_letter_response
@@ -292,7 +342,12 @@ class TestResponseFormatting:
         #     assert body["cost_estimate"] >= 0
         assert True
 
-    def test_response_json_serializable(self, sample_api_gateway_event, mock_lambda_context, sample_cover_letter_response):
+    def test_response_json_serializable(
+        self,
+        sample_api_gateway_event,
+        mock_lambda_context,
+        sample_cover_letter_response,
+    ):
         """Test response body is valid JSON."""
         # with patch('careervp.handlers.cover_letter_handler.generate_cover_letter') as mock_gen:
         #     mock_gen.return_value = sample_cover_letter_response

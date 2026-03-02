@@ -6,14 +6,12 @@ All tests will FAIL until models are implemented.
 DO NOT modify these tests to make them pass - implement the models instead.
 """
 
-import pytest
-from datetime import datetime
-from pydantic import ValidationError
 
 
 # =============================================================================
 # CoverLetterPreferences Tests (9 tests)
 # =============================================================================
+
 
 def test_preferences_default_values():
     """Test CoverLetterPreferences has correct default values."""
@@ -99,6 +97,7 @@ def test_preferences_emphasis_areas_max_10():
 # =============================================================================
 # GenerateCoverLetterRequest Tests (9 tests)
 # =============================================================================
+
 
 def test_request_valid_request():
     """Test GenerateCoverLetterRequest accepts valid request data."""
@@ -239,6 +238,7 @@ def test_request_max_length_255():
 # TailoredCoverLetter Tests (5 tests)
 # =============================================================================
 
+
 def test_cover_letter_valid_cover_letter():
     """Test TailoredCoverLetter accepts valid cover letter data."""
     # from app.models.cover_letter import TailoredCoverLetter
@@ -324,6 +324,7 @@ def test_cover_letter_word_count_non_negative():
 # =============================================================================
 # TailoredCoverLetterResponse Tests (4 tests)
 # =============================================================================
+
 
 def test_response_success_response():
     """Test TailoredCoverLetterResponse handles success case."""

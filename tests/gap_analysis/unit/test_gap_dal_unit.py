@@ -24,8 +24,16 @@ def dal_with_table():
 @pytest.fixture
 def mock_gap_questions():
     return [
-        {"question_id": "q1", "question": "What is your experience?", "category": "experience"},
-        {"question_id": "q2", "question": "Describe a project.", "category": "projects"},
+        {
+            "question_id": "q1",
+            "question": "What is your experience?",
+            "category": "experience",
+        },
+        {
+            "question_id": "q2",
+            "question": "Describe a project.",
+            "category": "projects",
+        },
     ]
 
 
@@ -79,7 +87,12 @@ def test_get_gap_questions_not_found(dal_with_table):
 def test_save_gap_questions_handles_dynamodb_error(dal_with_table, mock_gap_questions):
     dal, table = dal_with_table
     table.put_item.side_effect = ClientError(
-        {"Error": {"Code": "ProvisionedThroughputExceededException", "Message": "Throttled"}},
+        {
+            "Error": {
+                "Code": "ProvisionedThroughputExceededException",
+                "Message": "Throttled",
+            }
+        },
         "PutItem",
     )
 
@@ -97,11 +110,23 @@ def test_save_gap_questions_handles_dynamodb_error(dal_with_table, mock_gap_ques
 def test_save_and_get_gap_responses(dal_with_table):
     dal, table = dal_with_table
     responses = [
-        GapResponse(question_id="q1", question="Question 1", answer="Answer 1", destination="CV_IMPACT"),
-        GapResponse(question_id="q2", question="Question 2", answer="Answer 2", destination="CV_IMPACT"),
+        GapResponse(
+            question_id="q1",
+            question="Question 1",
+            answer="Answer 1",
+            destination="CV_IMPACT",
+        ),
+        GapResponse(
+            question_id="q2",
+            question="Question 2",
+            answer="Answer 2",
+            destination="CV_IMPACT",
+        ),
     ]
 
-    save_result = dal.save_gap_responses(user_id="user-123", responses=responses, version=1)
+    save_result = dal.save_gap_responses(
+        user_id="user-123", responses=responses, version=1
+    )
     assert save_result.success is True
     assert save_result.code == ResultCode.GAP_RESPONSES_SAVED
 

@@ -131,6 +131,7 @@ class TestCoverLetterEndpoints:
             self.test_generate_cover_letter()
             # Wait for async processing
             import time
+
             time.sleep(15)
 
         cover_letter_id = test_data.get("cover_letter_id")
@@ -153,7 +154,9 @@ class TestCoverLetterEndpoints:
             response.status_code,
             data,
         )
-        assert response.status_code == 200, f"GET /cover-letter/{cover_letter_id}/status returned {response.status_code}"
+        assert response.status_code == 200, (
+            f"GET /cover-letter/{cover_letter_id}/status returned {response.status_code}"
+        )
         assert_cover_letter_quality(data)
         status = data.get("status", "unknown")
         print(f"✓ GET /cover-letter/{cover_letter_id}/status - Status: {status}")
@@ -176,7 +179,9 @@ class TestCoverLetterEndpoints:
             response.status_code,
             data,
         )
-        assert response.status_code == 200, f"GET /cover-letters returned {response.status_code}"
+        assert response.status_code == 200, (
+            f"GET /cover-letters returned {response.status_code}"
+        )
         cover_letters = data.get("cover_letters", [])
         print(f"✓ GET /cover-letters - Found {len(cover_letters)} cover letter(s)")
 
@@ -230,4 +235,6 @@ class TestCoverLetterEndpoints:
 
             time.sleep(poll_interval)
 
-        pytest.fail(f"Cover letter polling timed out after {max_attempts * poll_interval}s")
+        pytest.fail(
+            f"Cover letter polling timed out after {max_attempts * poll_interval}s"
+        )

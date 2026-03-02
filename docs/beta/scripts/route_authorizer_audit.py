@@ -25,35 +25,35 @@ from pathlib import Path
 # NONE      = no authorizer (public route)
 # COGNITO_USER_POOLS = Cognito User Pools authorizer (protected route)
 EXPECTED_AUTHORIZERS: dict[tuple[str, str], str] = {
-    ("GET",  "/health"):                            "NONE",
-    ("POST", "/auth/register"):                     "NONE",
-    ("POST", "/auth/login"):                        "NONE",
-    ("POST", "/auth/refresh"):                      "NONE",
-    ("GET",  "/users/me"):                          "COGNITO_USER_POOLS",
-    ("PUT",  "/users/me"):                          "COGNITO_USER_POOLS",
-    ("POST", "/users/me/cv"):                       "COGNITO_USER_POOLS",
-    ("GET",  "/users/me/cvs"):                      "COGNITO_USER_POOLS",
-    ("GET",  "/users/me/vprs"):                     "COGNITO_USER_POOLS",
-    ("GET",  "/users/me/tailored-cvs"):             "COGNITO_USER_POOLS",
-    ("GET",  "/users/me/cover-letters"):            "COGNITO_USER_POOLS",
-    ("GET",  "/users/me/usage"):                    "COGNITO_USER_POOLS",
-    ("POST", "/jobs"):                              "COGNITO_USER_POOLS",
-    ("GET",  "/jobs"):                              "COGNITO_USER_POOLS",
-    ("GET",  "/jobs/{jobId}"):                      "COGNITO_USER_POOLS",
-    ("POST", "/company-research/fetch"):            "COGNITO_USER_POOLS",
-    ("GET",  "/company-research/{jobId}"):          "COGNITO_USER_POOLS",
-    ("POST", "/gap-analysis/questions"):            "COGNITO_USER_POOLS",
-    ("POST", "/gap-analysis/responses"):            "COGNITO_USER_POOLS",
-    ("GET",  "/gap-analysis/{jobId}/questions"):    "COGNITO_USER_POOLS",
-    ("POST", "/vpr/generate"):                      "COGNITO_USER_POOLS",
-    ("GET",  "/vpr/{vprId}"):                       "COGNITO_USER_POOLS",
-    ("POST", "/cv-tailoring/generate"):             "COGNITO_USER_POOLS",
-    ("GET",  "/cv-tailoring/{cvTailoringId}"):      "COGNITO_USER_POOLS",
-    ("POST", "/cover-letter/generate"):             "COGNITO_USER_POOLS",
-    ("GET",  "/cover-letter/{coverLetterId}"):      "COGNITO_USER_POOLS",
-    ("POST", "/interview-prep/generate"):           "COGNITO_USER_POOLS",
-    ("GET",  "/interview-prep/{interviewPrepId}"):  "COGNITO_USER_POOLS",
-    ("GET",  "/applications/{applicationId}"):      "COGNITO_USER_POOLS",
+    ("GET", "/health"): "NONE",
+    ("POST", "/auth/register"): "NONE",
+    ("POST", "/auth/login"): "NONE",
+    ("POST", "/auth/refresh"): "NONE",
+    ("GET", "/users/me"): "COGNITO_USER_POOLS",
+    ("PUT", "/users/me"): "COGNITO_USER_POOLS",
+    ("POST", "/users/me/cv"): "COGNITO_USER_POOLS",
+    ("GET", "/users/me/cvs"): "COGNITO_USER_POOLS",
+    ("GET", "/users/me/vprs"): "COGNITO_USER_POOLS",
+    ("GET", "/users/me/tailored-cvs"): "COGNITO_USER_POOLS",
+    ("GET", "/users/me/cover-letters"): "COGNITO_USER_POOLS",
+    ("GET", "/users/me/usage"): "COGNITO_USER_POOLS",
+    ("POST", "/jobs"): "COGNITO_USER_POOLS",
+    ("GET", "/jobs"): "COGNITO_USER_POOLS",
+    ("GET", "/jobs/{jobId}"): "COGNITO_USER_POOLS",
+    ("POST", "/company-research/fetch"): "COGNITO_USER_POOLS",
+    ("GET", "/company-research/{jobId}"): "COGNITO_USER_POOLS",
+    ("POST", "/gap-analysis/questions"): "COGNITO_USER_POOLS",
+    ("POST", "/gap-analysis/responses"): "COGNITO_USER_POOLS",
+    ("GET", "/gap-analysis/{jobId}/questions"): "COGNITO_USER_POOLS",
+    ("POST", "/vpr/generate"): "COGNITO_USER_POOLS",
+    ("GET", "/vpr/{vprId}"): "COGNITO_USER_POOLS",
+    ("POST", "/cv-tailoring/generate"): "COGNITO_USER_POOLS",
+    ("GET", "/cv-tailoring/{cvTailoringId}"): "COGNITO_USER_POOLS",
+    ("POST", "/cover-letter/generate"): "COGNITO_USER_POOLS",
+    ("GET", "/cover-letter/{coverLetterId}"): "COGNITO_USER_POOLS",
+    ("POST", "/interview-prep/generate"): "COGNITO_USER_POOLS",
+    ("GET", "/interview-prep/{interviewPrepId}"): "COGNITO_USER_POOLS",
+    ("GET", "/applications/{applicationId}"): "COGNITO_USER_POOLS",
 }
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -66,7 +66,9 @@ def _discover_api_id(cfn_client, stack_name: str) -> str:
         o["OutputKey"]: o["OutputValue"]
         for o in response["Stacks"][0].get("Outputs", [])
     }
-    api_id = outputs.get("ApiId") or outputs.get("RestApiId") or outputs.get("ApiGatewayId")
+    api_id = (
+        outputs.get("ApiId") or outputs.get("RestApiId") or outputs.get("ApiGatewayId")
+    )
     if not api_id:
         available = list(outputs.keys())
         raise RuntimeError(
@@ -94,7 +96,9 @@ def _build_authorizer_map(apigw_client, api_id: str) -> dict[str, dict]:
     return {a["id"]: a for a in resp.get("items", [])}
 
 
-def _route_matches_expected(actual_auth: str, expected: str, authorizer_name: str | None) -> bool:
+def _route_matches_expected(
+    actual_auth: str, expected: str, authorizer_name: str | None
+) -> bool:
     if actual_auth == expected:
         return True
     # A COGNITO_USER_POOLS route may appear as CUSTOM if a Lambda authorizer is used.
@@ -111,7 +115,9 @@ def audit_routes() -> dict:
         print("ERROR: boto3 not installed. Run: pip install boto3", file=sys.stderr)
         sys.exit(1)
 
-    region = os.environ.get("AWS_REGION") or os.environ.get("COGNITO_REGION") or "us-east-1"
+    region = (
+        os.environ.get("AWS_REGION") or os.environ.get("COGNITO_REGION") or "us-east-1"
+    )
     stack_name = os.environ.get("STACK_NAME", "CareerVpCrudDev")
 
     print(f"Connecting to region={region!r}, stack={stack_name!r} ...")
@@ -149,7 +155,9 @@ def audit_routes() -> dict:
                     httpMethod=method,
                 )
             except Exception as exc:
-                print(f"  WARN: Could not fetch {method} {path}: {exc}", file=sys.stderr)
+                print(
+                    f"  WARN: Could not fetch {method} {path}: {exc}", file=sys.stderr
+                )
                 continue
 
             actual_auth = full_method.get("authorizationType", "NONE")
@@ -175,15 +183,17 @@ def audit_routes() -> dict:
                     mismatches += 1
                 status = "OK" if match else "MISMATCH"
 
-            results.append({
-                "method": method,
-                "path": path,
-                "actual_auth_type": actual_auth,
-                "authorizer_name": authorizer_name,
-                "expected_auth_type": expected,
-                "match": match,
-                "status": status,
-            })
+            results.append(
+                {
+                    "method": method,
+                    "path": path,
+                    "actual_auth_type": actual_auth,
+                    "authorizer_name": authorizer_name,
+                    "expected_auth_type": expected,
+                    "match": match,
+                    "status": status,
+                }
+            )
 
     results.sort(key=lambda r: (r["path"], r["method"]))
 
@@ -212,7 +222,7 @@ def main() -> None:
     total = report["total_routes_checked"]
     unchecked = report["unchecked_routes"]
 
-    print(f"\nRoute Authorizer Audit Summary")
+    print("\nRoute Authorizer Audit Summary")
     print(f"  Total routes checked : {total}")
     print(f"  Mismatches           : {mismatch_count}")
     print(f"  Unchecked (new)      : {unchecked}")

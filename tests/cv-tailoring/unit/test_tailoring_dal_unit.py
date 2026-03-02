@@ -4,7 +4,7 @@ Unit tests for CV Tailoring DAL methods on DynamoDalHandler.
 Verifies SK construction, TTL handling, and basic CRUD behavior.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
@@ -145,7 +145,12 @@ def test_save_tailored_cv_handles_dynamodb_error(dal_with_table, sample_tailored
     """Test save_tailored_cv handles DynamoDB errors gracefully."""
     dal, table = dal_with_table
     table.put_item.side_effect = ClientError(
-        {"Error": {"Code": "ProvisionedThroughputExceededException", "Message": "Throttled"}},
+        {
+            "Error": {
+                "Code": "ProvisionedThroughputExceededException",
+                "Message": "Throttled",
+            }
+        },
         "PutItem",
     )
 

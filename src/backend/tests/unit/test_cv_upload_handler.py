@@ -507,10 +507,10 @@ class TestCVUploadDynamoDBPersistence:
             response = client.query(
                 TableName='test-users-table',
                 KeyConditionExpression='pk = :pk AND begins_with(sk, :sk)',
-                ExpressionAttributeValues={':pk': {'S': 'test-user-123'}, ':sk': {'S': 'CV#'}}
+                ExpressionAttributeValues={':pk': {'S': 'test-user-123'}, ':sk': {'S': 'CV#'}},
             )
             items = response.get('Items', [])
-            assert len(items) == 1, f"Expected 1 CV item, got {len(items)}"
+            assert len(items) == 1, f'Expected 1 CV item, got {len(items)}'
             # Convert DynamoDB format to plain dict
             saved_item = {k: list(v.values())[0] for k, v in items[0].items()}
             assert saved_item['full_name'] == 'John Doe'

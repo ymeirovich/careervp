@@ -6,9 +6,7 @@ These tests are in RED phase - they will FAIL until implementation exists.
 """
 
 import pytest
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
-from datetime import datetime
-from typing import Dict, Any
+from unittest.mock import AsyncMock
 
 # Note: These imports will fail until implementation exists (RED phase)
 # from careervp.logic.cover_letter_generator import (
@@ -24,6 +22,7 @@ from typing import Dict, Any
 # Test Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def mock_dal_handler():
     """Mock DAL handler for database operations."""
@@ -31,47 +30,47 @@ def mock_dal_handler():
 
     # Mock CV data
     dal.get_cv.return_value = {
-        'id': 'cv-123',
-        'user_id': 'user-123',
-        'work_experience': [
+        "id": "cv-123",
+        "user_id": "user-123",
+        "work_experience": [
             {
-                'title': 'Senior Developer',
-                'company': 'Tech Corp',
-                'duration': '2020-2023',
-                'achievements': ['Led team of 5', 'Improved performance by 40%']
+                "title": "Senior Developer",
+                "company": "Tech Corp",
+                "duration": "2020-2023",
+                "achievements": ["Led team of 5", "Improved performance by 40%"],
             }
         ],
-        'skills': ['Python', 'React', 'AWS'],
-        'education': [{'degree': 'BS Computer Science', 'school': 'MIT'}]
+        "skills": ["Python", "React", "AWS"],
+        "education": [{"degree": "BS Computer Science", "school": "MIT"}],
     }
 
     # Mock VPR data
     dal.get_vpr.return_value = {
-        'id': 'vpr-123',
-        'user_id': 'user-123',
-        'accomplishments': [
+        "id": "vpr-123",
+        "user_id": "user-123",
+        "accomplishments": [
             {
-                'title': 'Cloud Migration',
-                'impact': 'Reduced costs by $100k annually',
-                'metrics': '40% performance improvement'
+                "title": "Cloud Migration",
+                "impact": "Reduced costs by $100k annually",
+                "metrics": "40% performance improvement",
             }
-        ]
+        ],
     }
 
     # Mock job posting data
     dal.get_job_posting.return_value = {
-        'id': 'job-123',
-        'title': 'Senior Software Engineer',
-        'company': 'Acme Inc',
-        'requirements': ['5+ years Python', 'Cloud experience'],
-        'description': "We're looking for a senior engineer..."
+        "id": "job-123",
+        "title": "Senior Software Engineer",
+        "company": "Acme Inc",
+        "requirements": ["5+ years Python", "Cloud experience"],
+        "description": "We're looking for a senior engineer...",
     }
 
     # Mock company research
     dal.get_company_research.return_value = {
-        'company_name': 'Acme Inc',
-        'culture': 'Innovation-focused startup',
-        'recent_news': ['Series B funding', 'New product launch']
+        "company_name": "Acme Inc",
+        "culture": "Innovation-focused startup",
+        "recent_news": ["Series B funding", "New product launch"],
     }
 
     return dal
@@ -82,9 +81,9 @@ def mock_llm_client():
     """Mock LLM client for generation."""
     client = AsyncMock()
     client.generate.return_value = {
-        'content': 'Dear Hiring Manager,\n\nI am excited to apply...',
-        'tokens_used': 450,
-        'model': 'gpt-4'
+        "content": "Dear Hiring Manager,\n\nI am excited to apply...",
+        "tokens_used": 450,
+        "model": "gpt-4",
     }
     return client
 
@@ -93,11 +92,11 @@ def mock_llm_client():
 def sample_preferences():
     """Sample generation preferences."""
     return {
-        'tone': 'professional',
-        'emphasis_areas': ['technical_skills', 'leadership'],
-        'length': 'medium',  # ~300 words
-        'include_salary_expectations': False,
-        'use_tailored_cv': True
+        "tone": "professional",
+        "emphasis_areas": ["technical_skills", "leadership"],
+        "length": "medium",  # ~300 words
+        "include_salary_expectations": False,
+        "use_tailored_cv": True,
     }
 
 
@@ -105,10 +104,10 @@ def sample_preferences():
 def sample_gap_responses():
     """Sample responses to address employment gaps."""
     return {
-        'gaps': [
+        "gaps": [
             {
-                'period': '2019-2020',
-                'explanation': 'Pursued advanced certifications in cloud architecture'
+                "period": "2019-2020",
+                "explanation": "Pursued advanced certifications in cloud architecture",
             }
         ]
     }
@@ -118,16 +117,19 @@ def sample_gap_responses():
 # Test Class 1: Generation Success Cases
 # ============================================================================
 
+
 class TestGenerationSuccess:
     """Tests for successful cover letter generation."""
 
     @pytest.mark.asyncio
-    async def test_generate_cover_letter_success(self, mock_dal_handler, mock_llm_client):
+    async def test_generate_cover_letter_success(
+        self, mock_dal_handler, mock_llm_client
+    ):
         """Test successful cover letter generation with minimal inputs."""
         # Setup
-        user_id = 'user-123'
-        cv_id = 'cv-123'
-        job_id = 'job-123'
+        user_id = "user-123"
+        cv_id = "cv-123"
+        job_id = "job-123"
 
         # Execute
         # result = await generate_cover_letter(
@@ -149,7 +151,9 @@ class TestGenerationSuccess:
         assert True
 
     @pytest.mark.asyncio
-    async def test_generate_with_preferences(self, mock_dal_handler, mock_llm_client, sample_preferences):
+    async def test_generate_with_preferences(
+        self, mock_dal_handler, mock_llm_client, sample_preferences
+    ):
         """Test generation respects user preferences."""
         # Execute
         # result = await generate_cover_letter(
@@ -171,7 +175,9 @@ class TestGenerationSuccess:
         assert True
 
     @pytest.mark.asyncio
-    async def test_generate_with_emphasis_areas(self, mock_dal_handler, mock_llm_client):
+    async def test_generate_with_emphasis_areas(
+        self, mock_dal_handler, mock_llm_client
+    ):
         """Test generation emphasizes specified areas."""
         # Setup preferences with specific emphasis
         # preferences = {
@@ -291,7 +297,9 @@ class TestGenerationSuccess:
         assert True
 
     @pytest.mark.asyncio
-    async def test_generate_with_gap_responses(self, mock_dal_handler, mock_llm_client, sample_gap_responses):
+    async def test_generate_with_gap_responses(
+        self, mock_dal_handler, mock_llm_client, sample_gap_responses
+    ):
         """Test generation addresses employment gaps when provided."""
         # result = await generate_cover_letter(
         #     dal=mock_dal_handler,
@@ -312,6 +320,7 @@ class TestGenerationSuccess:
 # ============================================================================
 # Test Class 2: Input Synthesis
 # ============================================================================
+
 
 class TestInputSynthesis:
     """Tests for input data synthesis."""
@@ -406,6 +415,7 @@ class TestInputSynthesis:
 # ============================================================================
 # Test Class 3: Quality Score Calculation
 # ============================================================================
+
 
 class TestQualityScoreCalculation:
     """Tests for quality score calculation."""
@@ -521,6 +531,7 @@ class TestQualityScoreCalculation:
 # Test Class 4: Error Handling
 # ============================================================================
 
+
 class TestErrorHandling:
     """Tests for error handling in generation logic."""
 
@@ -605,7 +616,9 @@ class TestErrorHandling:
         assert True
 
     @pytest.mark.asyncio
-    async def test_llm_rate_limit_returns_error(self, mock_dal_handler, mock_llm_client):
+    async def test_llm_rate_limit_returns_error(
+        self, mock_dal_handler, mock_llm_client
+    ):
         """Test error handling when LLM rate limit is hit."""
         # Setup LLM to return rate limit error
         # from openai import RateLimitError

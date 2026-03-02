@@ -1808,7 +1808,9 @@ class ApiConstruct(Construct):
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-gap-api",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
-                "DYNAMODB_TABLE_NAME": self.api_db.artifacts_table.table_name,
+                # Gap questions use pk/sk keys — must point to the users table, not artifacts_table.
+                "USERS_TABLE_NAME": self.api_db.db.table_name,
+                "DYNAMODB_TABLE_NAME": self.api_db.db.table_name,
                 constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
             timeout=Duration.seconds(30),
@@ -2015,6 +2017,7 @@ class ApiConstruct(Construct):
             ("/jobs", "POST", self.job_api_func),
             ("/jobs", "GET", self.job_api_func),
             ("/jobs/{jobId}", "GET", self.job_api_func),
+            ("/gap-analysis/questions", "POST", self.gap_api_func),
             ("/jobs/{jobId}/gap-questions", "POST", self.gap_api_func),
             ("/jobs/{jobId}/gap-questions", "GET", self.gap_api_func),
             ("/jobs/{jobId}/gap-responses", "POST", self.gap_api_func),

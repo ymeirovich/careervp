@@ -7,8 +7,6 @@ These tests are in RED phase - they will FAIL until implementation exists.
 Run with: pytest tests/cover-letter/unit/test_validation.py -v
 """
 
-import pytest
-from datetime import datetime
 
 # Note: These imports will fail until implementation exists (RED phase)
 # from pydantic import ValidationError
