@@ -185,6 +185,7 @@ class TestGapAnalysisEndpoints:
             self.test_generate_gap_questions()
             # Wait for async processing
             import time
+
             time.sleep(15)
 
         if not test_data.get("gap_questions"):
@@ -208,7 +209,9 @@ class TestGapAnalysisEndpoints:
             response.status_code,
             data,
         )
-        assert response.status_code == 200, f"GET /jobs/{job_id}/gap-questions returned {response.status_code}"
+        assert response.status_code == 200, (
+            f"GET /jobs/{job_id}/gap-questions returned {response.status_code}"
+        )
         assert_gap_questions_quality(data)
         questions = data.get("questions", [])
         print(f"✓ GET /jobs/{job_id}/gap-questions - Found {len(questions)} questions")

@@ -92,7 +92,9 @@ def list_tests() -> None:
     print("Run with: python run_all_tests.py --test <name>")
 
 
-def run_test_module(module_name: str, class_names: List[str], verbose: bool = False) -> bool:
+def run_test_module(
+    module_name: str, class_names: List[str], verbose: bool = False
+) -> bool:
     """Run tests from a specific module/class list with pytest."""
     print(f"\n{'=' * 60}")
     print(f"Running: {module_name}")

@@ -120,6 +120,7 @@ class TestInterviewPrepEndpoints:
             self.test_generate_interview_prep()
             # Wait for async processing
             import time
+
             time.sleep(15)
 
         interview_prep_id = test_data.get("interview_prep_id")
@@ -142,11 +143,15 @@ class TestInterviewPrepEndpoints:
             response.status_code,
             data,
         )
-        assert response.status_code == 200, f"GET /interview-prep/{interview_prep_id}/status returned {response.status_code}"
+        assert response.status_code == 200, (
+            f"GET /interview-prep/{interview_prep_id}/status returned {response.status_code}"
+        )
         assert_interview_prep_quality(data)
         status = data.get("status", "unknown")
         questions = data.get("result", {}).get("questions", [])
-        print(f"✓ GET /interview-prep/{interview_prep_id}/status - Status: {status}, Questions: {len(questions)}")
+        print(
+            f"✓ GET /interview-prep/{interview_prep_id}/status - Status: {status}, Questions: {len(questions)}"
+        )
 
     def test_interview_prep_async_polling(self):
         """Test interview prep async polling lifecycle."""

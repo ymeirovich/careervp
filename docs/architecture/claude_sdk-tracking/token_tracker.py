@@ -34,58 +34,83 @@ logger = logging.getLogger(__name__)
 # ── Pricing (per 1K tokens, USD) ─────────────────────────────────────────────
 # Update these if Anthropic changes pricing
 MODEL_PRICING = {
-    "claude-haiku-4-5-20251001":   {"input": 0.0008, "output": 0.004,
-                                    "cache_write": 0.001, "cache_read": 0.00008},
-    "claude-sonnet-4-5-20250929":  {"input": 0.003,  "output": 0.015,
-                                    "cache_write": 0.00375, "cache_read": 0.0003},
+    "claude-haiku-4-5-20251001": {
+        "input": 0.0008,
+        "output": 0.004,
+        "cache_write": 0.001,
+        "cache_read": 0.00008,
+    },
+    "claude-sonnet-4-5-20250929": {
+        "input": 0.003,
+        "output": 0.015,
+        "cache_write": 0.00375,
+        "cache_read": 0.0003,
+    },
     # Fallback for unknown models
-    "default":                     {"input": 0.003,  "output": 0.015,
-                                    "cache_write": 0.00375, "cache_read": 0.0003},
+    "default": {
+        "input": 0.003,
+        "output": 0.015,
+        "cache_write": 0.00375,
+        "cache_read": 0.0003,
+    },
 }
 
 # ── AWS clients (module-level = reused across warm invocations) ───────────────
 _dynamodb = None
 _cloudwatch = None
 
+
 def _get_dynamodb():
     global _dynamodb
     if _dynamodb is None:
-        _dynamodb = boto3.resource("dynamodb", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+        _dynamodb = boto3.resource(
+            "dynamodb", region_name=os.environ.get("AWS_REGION", "us-east-1")
+        )
     return _dynamodb
+
 
 def _get_cloudwatch():
     global _cloudwatch
     if _cloudwatch is None:
-        _cloudwatch = boto3.client("cloudwatch", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+        _cloudwatch = boto3.client(
+            "cloudwatch", region_name=os.environ.get("AWS_REGION", "us-east-1")
+        )
     return _cloudwatch
 
 
 # ── Cost calculation ──────────────────────────────────────────────────────────
 
-def calculate_cost(model: str, input_tokens: int, output_tokens: int,
-                   cache_write_tokens: int = 0, cache_read_tokens: int = 0) -> dict:
+
+def calculate_cost(
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    cache_write_tokens: int = 0,
+    cache_read_tokens: int = 0,
+) -> dict:
     """
     Returns a cost breakdown dict with individual line items and total_usd.
     Uses Decimal for DynamoDB compatibility.
     """
     pricing = MODEL_PRICING.get(model, MODEL_PRICING["default"])
 
-    input_cost        = (input_tokens        / 1000) * pricing["input"]
-    output_cost       = (output_tokens       / 1000) * pricing["output"]
-    cache_write_cost  = (cache_write_tokens  / 1000) * pricing["cache_write"]
-    cache_read_cost   = (cache_read_tokens   / 1000) * pricing["cache_read"]
-    total             = input_cost + output_cost + cache_write_cost + cache_read_cost
+    input_cost = (input_tokens / 1000) * pricing["input"]
+    output_cost = (output_tokens / 1000) * pricing["output"]
+    cache_write_cost = (cache_write_tokens / 1000) * pricing["cache_write"]
+    cache_read_cost = (cache_read_tokens / 1000) * pricing["cache_read"]
+    total = input_cost + output_cost + cache_write_cost + cache_read_cost
 
     return {
-        "input_cost_usd":       round(input_cost,       6),
-        "output_cost_usd":      round(output_cost,      6),
+        "input_cost_usd": round(input_cost, 6),
+        "output_cost_usd": round(output_cost, 6),
         "cache_write_cost_usd": round(cache_write_cost, 6),
-        "cache_read_cost_usd":  round(cache_read_cost,  6),
-        "total_usd":            round(total,            6),
+        "cache_read_cost_usd": round(cache_read_cost, 6),
+        "total_usd": round(total, 6),
     }
 
 
 # ── DynamoDB writer ───────────────────────────────────────────────────────────
+
 
 def record_usage(
     application_id: str,
@@ -100,8 +125,8 @@ def record_usage(
     duration_ms: Optional[int] = None,
     success: bool = True,
     error_type: Optional[str] = None,
-    stage: Optional[str] = None,          # e.g. "self_correction_attempt_2"
-    extra_metadata: Optional[dict] = None
+    stage: Optional[str] = None,  # e.g. "self_correction_attempt_2"
+    extra_metadata: Optional[dict] = None,
 ) -> dict:
     """
     Write one usage record to DynamoDB and emit CloudWatch metrics.
@@ -115,37 +140,34 @@ def record_usage(
     now_iso = datetime.now(timezone.utc).isoformat()
     timestamp_ms = int(time.time() * 1000)
 
-    cost = calculate_cost(model, input_tokens, output_tokens,
-                          cache_write_tokens, cache_read_tokens)
+    cost = calculate_cost(
+        model, input_tokens, output_tokens, cache_write_tokens, cache_read_tokens
+    )
 
     record = {
         # Keys
-        "application_id":    application_id,
-        "sk":                f"{timestamp_ms}#{agent_name}",
-
+        "application_id": application_id,
+        "sk": f"{timestamp_ms}#{agent_name}",
         # Identity
-        "user_id":           user_id,
-        "agent_name":        agent_name,
-        "model":             model,
-        "stage":             stage or "primary",
-        "timestamp":         now_iso,
-        "timestamp_ms":      timestamp_ms,
-
+        "user_id": user_id,
+        "agent_name": agent_name,
+        "model": model,
+        "stage": stage or "primary",
+        "timestamp": now_iso,
+        "timestamp_ms": timestamp_ms,
         # Tokens — direct from response.usage, zero prompt overhead
-        "input_tokens":           input_tokens,
-        "output_tokens":          output_tokens,
-        "cache_write_tokens":     cache_write_tokens,
-        "cache_read_tokens":      cache_read_tokens,
-        "total_tokens":           input_tokens + output_tokens,
-
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "cache_write_tokens": cache_write_tokens,
+        "cache_read_tokens": cache_read_tokens,
+        "total_tokens": input_tokens + output_tokens,
         # Cost
         **{k: decimal.Decimal(str(v)) for k, v in cost.items()},
-
         # Diagnostics
-        "success":               success,
-        "error_type":            error_type,
-        "duration_ms":           duration_ms,
-        "anthropic_request_id":  anthropic_request_id,  # links to Anthropic dashboard
+        "success": success,
+        "error_type": error_type,
+        "duration_ms": duration_ms,
+        "anthropic_request_id": anthropic_request_id,  # links to Anthropic dashboard
     }
 
     if extra_metadata:
@@ -161,74 +183,125 @@ def record_usage(
         logger.error(f"[token_tracker] DynamoDB write failed: {e}")
 
     # Emit CloudWatch custom metrics
-    _emit_cloudwatch_metrics(agent_name, model, input_tokens,
-                              output_tokens, cost["total_usd"],
-                              success, duration_ms)
+    _emit_cloudwatch_metrics(
+        agent_name,
+        model,
+        input_tokens,
+        output_tokens,
+        cost["total_usd"],
+        success,
+        duration_ms,
+    )
 
     return cost
 
 
 # ── CloudWatch metrics ────────────────────────────────────────────────────────
 
-def _emit_cloudwatch_metrics(agent_name: str, model: str,
-                              input_tokens: int, output_tokens: int,
-                              cost_usd: float, success: bool,
-                              duration_ms: Optional[int]):
+
+def _emit_cloudwatch_metrics(
+    agent_name: str,
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    cost_usd: float,
+    success: bool,
+    duration_ms: Optional[int],
+):
     """
     Emit metrics to CloudWatch namespace 'CareerVP/TokenUsage'.
     Dimensions: AgentName, Model — enables per-agent filtering in dashboards.
     """
     namespace = "CareerVP/TokenUsage"
     dims_agent = [{"Name": "AgentName", "Value": agent_name}]
-    dims_model = [{"Name": "Model",     "Value": model}]
-    dims_both  = [{"Name": "AgentName", "Value": agent_name},
-                  {"Name": "Model",     "Value": model}]
+    dims_model = [{"Name": "Model", "Value": model}]
+    dims_both = [
+        {"Name": "AgentName", "Value": agent_name},
+        {"Name": "Model", "Value": model},
+    ]
 
     metric_data = [
         # Token counts
-        {"MetricName": "InputTokens",  "Dimensions": dims_both,
-         "Value": input_tokens,  "Unit": "Count"},
-        {"MetricName": "OutputTokens", "Dimensions": dims_both,
-         "Value": output_tokens, "Unit": "Count"},
-        {"MetricName": "TotalTokens",  "Dimensions": dims_both,
-         "Value": input_tokens + output_tokens, "Unit": "Count"},
-
+        {
+            "MetricName": "InputTokens",
+            "Dimensions": dims_both,
+            "Value": input_tokens,
+            "Unit": "Count",
+        },
+        {
+            "MetricName": "OutputTokens",
+            "Dimensions": dims_both,
+            "Value": output_tokens,
+            "Unit": "Count",
+        },
+        {
+            "MetricName": "TotalTokens",
+            "Dimensions": dims_both,
+            "Value": input_tokens + output_tokens,
+            "Unit": "Count",
+        },
         # Cost (stored as milli-dollars to stay in numeric range)
-        {"MetricName": "CostMilliUSD", "Dimensions": dims_both,
-         "Value": cost_usd * 1000, "Unit": "None"},
-
+        {
+            "MetricName": "CostMilliUSD",
+            "Dimensions": dims_both,
+            "Value": cost_usd * 1000,
+            "Unit": "None",
+        },
         # Per-agent aggregates (useful for per-agent alarms)
-        {"MetricName": "InputTokens",  "Dimensions": dims_agent,
-         "Value": input_tokens,  "Unit": "Count"},
-        {"MetricName": "OutputTokens", "Dimensions": dims_agent,
-         "Value": output_tokens, "Unit": "Count"},
-        {"MetricName": "CostMilliUSD", "Dimensions": dims_agent,
-         "Value": cost_usd * 1000, "Unit": "None"},
-
+        {
+            "MetricName": "InputTokens",
+            "Dimensions": dims_agent,
+            "Value": input_tokens,
+            "Unit": "Count",
+        },
+        {
+            "MetricName": "OutputTokens",
+            "Dimensions": dims_agent,
+            "Value": output_tokens,
+            "Unit": "Count",
+        },
+        {
+            "MetricName": "CostMilliUSD",
+            "Dimensions": dims_agent,
+            "Value": cost_usd * 1000,
+            "Unit": "None",
+        },
         # Success / failure
-        {"MetricName": "InvocationSuccess", "Dimensions": dims_agent,
-         "Value": 1 if success else 0, "Unit": "Count"},
-        {"MetricName": "InvocationFailure", "Dimensions": dims_agent,
-         "Value": 0 if success else 1, "Unit": "Count"},
+        {
+            "MetricName": "InvocationSuccess",
+            "Dimensions": dims_agent,
+            "Value": 1 if success else 0,
+            "Unit": "Count",
+        },
+        {
+            "MetricName": "InvocationFailure",
+            "Dimensions": dims_agent,
+            "Value": 0 if success else 1,
+            "Unit": "Count",
+        },
     ]
 
     if duration_ms is not None:
-        metric_data.append({
-            "MetricName": "DurationMs", "Dimensions": dims_agent,
-            "Value": duration_ms, "Unit": "Milliseconds"
-        })
+        metric_data.append(
+            {
+                "MetricName": "DurationMs",
+                "Dimensions": dims_agent,
+                "Value": duration_ms,
+                "Unit": "Milliseconds",
+            }
+        )
 
     try:
         cw = _get_cloudwatch()
         # CloudWatch accepts max 20 metrics per call
         for i in range(0, len(metric_data), 20):
-            cw.put_metric_data(Namespace=namespace,
-                               MetricData=metric_data[i:i+20])
+            cw.put_metric_data(Namespace=namespace, MetricData=metric_data[i : i + 20])
     except Exception as e:
         logger.error(f"[token_tracker] CloudWatch emit failed: {e}")
 
 
 # ── Decorator ─────────────────────────────────────────────────────────────────
+
 
 def track_tokens(agent_name: str, model_env_var: str = "MODEL_NAME"):
     """
@@ -247,20 +320,23 @@ def track_tokens(agent_name: str, model_env_var: str = "MODEL_NAME"):
 
     Alternatively, use the TrackedAnthropicClient below for automatic capture.
     """
+
     def decorator(func: Callable):
         @functools.wraps(func)
         def wrapper(event, context):
             start_ms = int(time.time() * 1000)
             application_id = event.get("application_id", "unknown")
-            user_id        = event.get("user_id", "unknown")
-            model          = os.environ.get(model_env_var, "unknown")
+            user_id = event.get("user_id", "unknown")
+            model = os.environ.get(model_env_var, "unknown")
 
             try:
                 result = func(event, context)
                 duration_ms = int(time.time() * 1000) - start_ms
 
                 # Extract usage from result if agent stored it
-                usage_data = result.get("_token_usage") if isinstance(result, dict) else None
+                usage_data = (
+                    result.get("_token_usage") if isinstance(result, dict) else None
+                )
                 if usage_data:
                     record_usage(
                         application_id=application_id,
@@ -269,7 +345,9 @@ def track_tokens(agent_name: str, model_env_var: str = "MODEL_NAME"):
                         model=model,
                         input_tokens=usage_data.get("input_tokens", 0),
                         output_tokens=usage_data.get("output_tokens", 0),
-                        cache_write_tokens=usage_data.get("cache_creation_input_tokens", 0),
+                        cache_write_tokens=usage_data.get(
+                            "cache_creation_input_tokens", 0
+                        ),
                         cache_read_tokens=usage_data.get("cache_read_input_tokens", 0),
                         anthropic_request_id=usage_data.get("request_id"),
                         duration_ms=duration_ms,
@@ -297,10 +375,12 @@ def track_tokens(agent_name: str, model_env_var: str = "MODEL_NAME"):
                 raise
 
         return wrapper
+
     return decorator
 
 
 # ── Tracked Anthropic client ──────────────────────────────────────────────────
+
 
 class TrackedAnthropicClient:
     """
@@ -338,17 +418,24 @@ class TrackedAnthropicClient:
         # {"input_tokens": 12500, "output_tokens": 8200, "total_cost_usd": 0.247}
     """
 
-    def __init__(self, agent_name: str, application_id: str, user_id: str,
-                 model: Optional[str] = None):
-        self.agent_name     = agent_name
+    def __init__(
+        self,
+        agent_name: str,
+        application_id: str,
+        user_id: str,
+        model: Optional[str] = None,
+    ):
+        self.agent_name = agent_name
         self.application_id = application_id
-        self.user_id        = user_id
-        self.model          = model or os.environ.get("MODEL_NAME", "unknown")
-        self._client        = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-        self._call_count    = 0
-        self._totals        = {
-            "input_tokens": 0, "output_tokens": 0,
-            "cache_write_tokens": 0, "cache_read_tokens": 0,
+        self.user_id = user_id
+        self.model = model or os.environ.get("MODEL_NAME", "unknown")
+        self._client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        self._call_count = 0
+        self._totals = {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_write_tokens": 0,
+            "cache_read_tokens": 0,
             "total_cost_usd": 0.0,
         }
 
@@ -358,9 +445,9 @@ class TrackedAnthropicClient:
         Intercepts response.usage — zero tokens added to prompt.
         Strips private kwargs (_stage, _extra_metadata) before API call.
         """
-        stage          = kwargs.pop("_stage", f"call_{self._call_count + 1}")
+        stage = kwargs.pop("_stage", f"call_{self._call_count + 1}")
         extra_metadata = kwargs.pop("_extra_metadata", None)
-        model          = kwargs.get("model", self.model)
+        model = kwargs.get("model", self.model)
 
         start_ms = int(time.time() * 1000)
         response = self._client.messages.create(**kwargs)
@@ -370,11 +457,11 @@ class TrackedAnthropicClient:
         usage = response.usage
 
         # Extract all token fields (cache fields present only if caching enabled)
-        input_tokens       = getattr(usage, "input_tokens", 0)
-        output_tokens      = getattr(usage, "output_tokens", 0)
-        cache_write        = getattr(usage, "cache_creation_input_tokens", 0) or 0
-        cache_read         = getattr(usage, "cache_read_input_tokens", 0) or 0
-        request_id         = getattr(response, "_request_id", None)
+        input_tokens = getattr(usage, "input_tokens", 0)
+        output_tokens = getattr(usage, "output_tokens", 0)
+        cache_write = getattr(usage, "cache_creation_input_tokens", 0) or 0
+        cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
+        request_id = getattr(response, "_request_id", None)
 
         # Record this individual call
         cost = record_usage(
@@ -393,11 +480,11 @@ class TrackedAnthropicClient:
         )
 
         # Accumulate totals
-        self._totals["input_tokens"]       += input_tokens
-        self._totals["output_tokens"]      += output_tokens
+        self._totals["input_tokens"] += input_tokens
+        self._totals["output_tokens"] += output_tokens
         self._totals["cache_write_tokens"] += cache_write
-        self._totals["cache_read_tokens"]  += cache_read
-        self._totals["total_cost_usd"]     += cost["total_usd"]
+        self._totals["cache_read_tokens"] += cache_read
+        self._totals["total_cost_usd"] += cost["total_usd"]
 
         logger.info(
             f"[{self.agent_name}] stage={stage} "

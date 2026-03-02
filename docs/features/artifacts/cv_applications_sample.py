@@ -99,8 +99,8 @@ What We Offer:
         "preferences": {
             "tone": "professional",
             "target_length": "one_page",
-            "emphasis_areas": ["python", "aws", "cloud_infrastructure"]
-        }
+            "emphasis_areas": ["python", "aws", "cloud_infrastructure"],
+        },
     },
     {
         "id": "app-002",
@@ -144,8 +144,8 @@ What We Offer:
         "preferences": {
             "tone": "professional",
             "target_length": "one_page",
-            "emphasis_areas": ["python", "payment_processing", "security"]
-        }
+            "emphasis_areas": ["python", "payment_processing", "security"],
+        },
     },
     {
         "id": "app-003",
@@ -189,8 +189,8 @@ What We Offer:
         "preferences": {
             "tone": "innovative",
             "target_length": "one_page",
-            "emphasis_areas": ["python", "react", "full_stack"]
-        }
+            "emphasis_areas": ["python", "react", "full_stack"],
+        },
     },
     {
         "id": "app-004",
@@ -234,8 +234,8 @@ What We Offer:
         "preferences": {
             "tone": "technical",
             "target_length": "one_page",
-            "emphasis_areas": ["aws", "kubernetes", "devops"]
-        }
+            "emphasis_areas": ["aws", "kubernetes", "devops"],
+        },
     },
     {
         "id": "app-005",
@@ -279,8 +279,8 @@ What We Offer:
         "preferences": {
             "tone": "research_focused",
             "target_length": "one_page",
-            "emphasis_areas": ["python", "machine_learning", "aws"]
-        }
+            "emphasis_areas": ["python", "machine_learning", "aws"],
+        },
     },
     {
         "id": "app-006",
@@ -324,8 +324,8 @@ What We Offer:
         "preferences": {
             "tone": "leadership",
             "target_length": "one_page",
-            "emphasis_areas": ["engineering_management", "python", "aws"]
-        }
+            "emphasis_areas": ["engineering_management", "python", "aws"],
+        },
     },
     {
         "id": "app-007",
@@ -369,8 +369,8 @@ What We Offer:
         "preferences": {
             "tone": "security_focused",
             "target_length": "one_page",
-            "emphasis_areas": ["security", "python", "aws"]
-        }
+            "emphasis_areas": ["security", "python", "aws"],
+        },
     },
     {
         "id": "app-008",
@@ -414,8 +414,8 @@ What We Offer:
         "preferences": {
             "tone": "analytical",
             "target_length": "one_page",
-            "emphasis_areas": ["python", "data_engineering", "aws"]
-        }
+            "emphasis_areas": ["python", "data_engineering", "aws"],
+        },
     },
     {
         "id": "app-009",
@@ -459,8 +459,8 @@ What We Offer:
         "preferences": {
             "tone": "reliability_focused",
             "target_length": "one_page",
-            "emphasis_areas": ["aws", "kubernetes", "monitoring"]
-        }
+            "emphasis_areas": ["aws", "kubernetes", "monitoring"],
+        },
     },
 ]
 
@@ -484,7 +484,7 @@ def get_test_config() -> dict[str, Any]:
         "applications": CV_APPLICATIONS,
         "cv_text": SAMPLE_CV_TEXT,
         "user_id": "e2e-test-user-" + str(uuid.uuid4())[:8],
-        "description": "E2E Test Configuration for 9 CV Applications"
+        "description": "E2E Test Configuration for 9 CV Applications",
     }
 
 

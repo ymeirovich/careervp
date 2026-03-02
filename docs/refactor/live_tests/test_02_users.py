@@ -160,7 +160,9 @@ class TestUserEndpoints:
             "test_list_user_cvs", "GET /users/me/cv", response.status_code, data
         )
 
-        assert response.status_code == 200, f"GET /users/me/cv returned {response.status_code}"
+        assert response.status_code == 200, (
+            f"GET /users/me/cv returned {response.status_code}"
+        )
         assert_cv_list_quality(data)
         cvs = data.get("cvs", [])
         print(f"✓ GET /users/me/cv - Found {len(cvs)} CV(s)")

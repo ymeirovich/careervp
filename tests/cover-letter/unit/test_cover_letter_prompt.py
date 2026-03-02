@@ -5,7 +5,6 @@ Tests prompt construction, anti-AI detection rules, and FVS integration.
 These tests are in RED phase - they will FAIL until implementation exists.
 """
 
-import pytest
 
 # Note: These imports will fail until implementation exists (RED phase)
 # from careervp.logic.prompts.cover_letter_prompt import (

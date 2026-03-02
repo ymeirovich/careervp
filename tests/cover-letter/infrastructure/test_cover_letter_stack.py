@@ -12,7 +12,6 @@ Test Categories:
 Current Status: ALL TESTS SHOULD FAIL - No implementation exists yet
 """
 
-import pytest
 
 
 class TestCoverLetterLambdaConfiguration:

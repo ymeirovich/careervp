@@ -13,7 +13,7 @@ from pydantic import ValidationError
 from careervp.dal.application_repository import ApplicationRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.handlers.auth_utils import extract_user_id
-from careervp.handlers.utils.observability import logger
+from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.gap_analysis import generate_gap_questions
 from careervp.logic.trial_service import TrialExhaustedException, TrialExpiredException, TrialService
 from careervp.models.api_models import GapQuestionRequest, GapResponseRequest
@@ -21,6 +21,7 @@ from careervp.models.result import Result, ResultCode
 
 _trial_service: TrialService | None = None
 _application_repository: ApplicationRepository | None = None
+_current_request_origin: str | None = None
 
 
 def _resolve_table_name(*env_keys: str) -> str:
@@ -36,9 +37,8 @@ def _configuration_error_response() -> dict[str, Any]:
 
 
 def _get_questions_dal() -> DynamoDalHandler:
-    """DAL for gap questions — stored in the artifacts table."""
-    table_name = _resolve_table_name('ARTIFACTS_TABLE_NAME', 'DYNAMODB_TABLE_NAME', 'TABLE_NAME')
-    # Schema validation removed - keys (pk/sk) confirmed correct in code
+    """DAL for gap questions — stored in the users table (pk/sk key schema)."""
+    table_name = _resolve_table_name('USERS_TABLE_NAME', 'DYNAMODB_TABLE_NAME', 'TABLE_NAME')
     return DynamoDalHandler(table_name=table_name)
 
 
@@ -49,8 +49,13 @@ def _get_responses_dal() -> DynamoDalHandler:
     return DynamoDalHandler(table_name=table_name)
 
 
+@logger.inject_lambda_context(log_event=False)
+@tracer.capture_lambda_handler(capture_response=False)
+@metrics.log_metrics(capture_cold_start_metric=True)
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
-    _ = context
+    global _current_request_origin
+    _headers = event.get('headers') or {}
+    _current_request_origin = _headers.get('origin') or _headers.get('Origin')
     method = str(event.get('httpMethod', '')).upper()
     path = str(event.get('path', '')).rstrip('/')
 
@@ -73,8 +78,14 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
 
 def _cors_headers() -> dict[str, str]:
+    allowed_origins_env = os.getenv('ALLOWED_ORIGINS', '')
+    if allowed_origins_env:
+        allowed = {o.strip() for o in allowed_origins_env.split(',') if o.strip()}
+        origin = _current_request_origin if _current_request_origin in allowed else 'null'
+    else:
+        origin = '*'
     return {
-        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Origin': origin,
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Content-Type': 'application/json',
@@ -182,26 +193,25 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
 
     try:
         dal = _get_questions_dal()
+        try:
+            save_result = dal.save_gap_questions(
+                user_id=user_id,
+                cv_id=cv_id,
+                job_id=job_id,
+                questions=questions,
+            )
+        except Exception as exc:
+            logger.exception('Unexpected DAL exception while saving gap questions', error=str(exc), job_id=job_id)
+            save_result = Result(success=False, error='persist failed', code=ResultCode.DYNAMODB_ERROR)
+        if not save_result.success:
+            logger.warning(
+                'Persisting gap questions failed — returning questions without caching',
+                job_id=job_id,
+                code=save_result.code,
+                error=save_result.error,
+            )
     except RuntimeError:
-        logger.exception('Gap questions table configuration error')
-        return _configuration_error_response()
-    try:
-        save_result = dal.save_gap_questions(
-            user_id=user_id,
-            cv_id=cv_id,
-            job_id=job_id,
-            questions=questions,
-        )
-    except Exception as exc:
-        logger.exception('Unexpected DAL exception while saving gap questions', error=str(exc), job_id=job_id)
-        save_result = Result(success=False, error='persist failed', code=ResultCode.DYNAMODB_ERROR)
-    if not save_result.success:
-        logger.error('Failed to persist gap questions', job_id=job_id, code=save_result.code, error=save_result.error)
-        return _error_response(
-            HTTPStatus.INTERNAL_SERVER_ERROR,
-            'Failed to save gap questions. Please try again.',
-            save_result.code,
-        )
+        logger.exception('Gap questions table not configured — returning questions without caching')
 
     try:
         application_repo.update_state(
@@ -213,8 +223,9 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
     except Exception:
         pass
 
+    metrics.add_metric(name='GapQuestionsGenerated', unit='Count', value=1)
     return _json_response(
-        HTTPStatus.CREATED,
+        HTTPStatus.OK,
         {
             'job_id': job_id,
             'cv_id': cv_id,

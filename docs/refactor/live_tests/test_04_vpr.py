@@ -110,6 +110,7 @@ class TestVPREndpoints:
             self.test_generate_vpr()
             # Wait for async processing
             import time
+
             time.sleep(15)
 
         vpr_id = test_data.get("vpr_id")
@@ -132,7 +133,9 @@ class TestVPREndpoints:
             response.status_code,
             data,
         )
-        assert response.status_code == 200, f"GET /vpr/{vpr_id}/status returned {response.status_code}"
+        assert response.status_code == 200, (
+            f"GET /vpr/{vpr_id}/status returned {response.status_code}"
+        )
         status = data.get("status", "unknown")
         if status == "completed":
             assert_vpr_quality(data)

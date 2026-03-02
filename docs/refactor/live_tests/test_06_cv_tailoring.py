@@ -126,6 +126,7 @@ class TestCVTailoringEndpoints:
             self.test_generate_tailored_cv()
             # Wait for async processing
             import time
+
             time.sleep(15)
 
         # Status endpoint expects the request/artifact ID returned by generate.
@@ -151,11 +152,15 @@ class TestCVTailoringEndpoints:
             response.status_code,
             data,
         )
-        assert response.status_code == 200, f"GET /cv-tailoring/{cv_tailoring_id}/status returned {response.status_code}"
+        assert response.status_code == 200, (
+            f"GET /cv-tailoring/{cv_tailoring_id}/status returned {response.status_code}"
+        )
         assert_tailored_cv_quality(data)
         status = data.get("status", "unknown")
         ats_score = data.get("result", {}).get("ats_score", "N/A")
-        print(f"✓ GET /cv-tailoring/{cv_tailoring_id}/status - Status: {status}, ATS Score: {ats_score}")
+        print(
+            f"✓ GET /cv-tailoring/{cv_tailoring_id}/status - Status: {status}, ATS Score: {ats_score}"
+        )
 
     def test_list_tailored_cvs(self):
         """Test GET /cv-tailorings - list user's tailored CVs."""
@@ -175,7 +180,9 @@ class TestCVTailoringEndpoints:
             response.status_code,
             data,
         )
-        assert response.status_code == 200, f"GET /cv-tailorings returned {response.status_code}"
+        assert response.status_code == 200, (
+            f"GET /cv-tailorings returned {response.status_code}"
+        )
         tailored_cvs = data.get("tailored_cvs", [])
         print(f"✓ GET /cv-tailorings - Found {len(tailored_cvs)} tailored CV(s)")
 
@@ -233,4 +240,6 @@ class TestCVTailoringEndpoints:
 
             time.sleep(poll_interval)
 
-        pytest.fail(f"CV tailoring polling timed out after {max_attempts * poll_interval}s")
+        pytest.fail(
+            f"CV tailoring polling timed out after {max_attempts * poll_interval}s"
+        )

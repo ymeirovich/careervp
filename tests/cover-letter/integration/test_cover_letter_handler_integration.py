@@ -16,9 +16,8 @@ Total: 22 tests
 
 import json
 import pytest
-from datetime import datetime
 from decimal import Decimal
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 pytestmark = pytest.mark.skip(
     reason="Pending implementation: cover_letter_handler module does not exist yet."

@@ -22,8 +22,30 @@ NUM_TEST_JOBS = 20
 
 def generate_test_users() -> list[dict[str, Any]]:
     """Generate synthetic test users."""
-    first_names = ["John", "Jane", "Michael", "Sarah", "David", "Emily", "Robert", "Lisa", "William", "Jennifer"]
-    last_names = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez"]
+    first_names = [
+        "John",
+        "Jane",
+        "Michael",
+        "Sarah",
+        "David",
+        "Emily",
+        "Robert",
+        "Lisa",
+        "William",
+        "Jennifer",
+    ]
+    last_names = [
+        "Smith",
+        "Johnson",
+        "Williams",
+        "Brown",
+        "Jones",
+        "Garcia",
+        "Miller",
+        "Davis",
+        "Rodriguez",
+        "Martinez",
+    ]
     countries = ["ISRAEL", "USA"]
     subscription_tiers = ["free", "premium", "trial"]
 
@@ -31,13 +53,15 @@ def generate_test_users() -> list[dict[str, Any]]:
     for i in range(NUM_TEST_USERS):
         user = {
             "user_id": str(uuid.uuid4()),
-            "email": f"test.user{i+1}@staging.careervp.com",
+            "email": f"test.user{i + 1}@staging.careervp.com",
             "first_name": random.choice(first_names),
             "last_name": random.choice(last_names),
             "country": random.choice(countries),
             "subscription_tier": random.choice(subscription_tiers),
             "is_active": True,
-            "created_at": (datetime.now() - timedelta(days=random.randint(1, 90))).isoformat(),
+            "created_at": (
+                datetime.now() - timedelta(days=random.randint(1, 90))
+            ).isoformat(),
             "updated_at": datetime.now().isoformat(),
         }
         users.append(user)
@@ -98,7 +122,9 @@ def generate_test_jobs() -> list[dict[str, Any]]:
                 "Strong communication skills",
             ],
             "is_active": True,
-            "created_at": (datetime.now() - timedelta(days=random.randint(1, 30))).isoformat(),
+            "created_at": (
+                datetime.now() - timedelta(days=random.randint(1, 30))
+            ).isoformat(),
             "updated_at": datetime.now().isoformat(),
         }
         jobs.append(job)
@@ -111,65 +137,86 @@ def generate_test_cvs() -> list[dict[str, Any]]:
     cvs = []
 
     # Sample CV 1 - Software Engineer
-    cvs.append({
-        "cv_id": str(uuid.uuid4()),
-        "user_id": "{{USER_ID_1}}",
-        "file_name": "software_engineer_resume.pdf",
-        "file_type": "application/pdf",
-        "summary": "Experienced software engineer with 5 years of experience in full-stack development.",
-        "experience": [
-            {
-                "title": "Software Engineer",
-                "company": "TechCorp",
-                "start_date": "2020-01",
-                "end_date": "Present",
-                "description": "Developed microservices using Python and React."
-            },
-            {
-                "title": "Junior Developer",
-                "company": "StartupXYZ",
-                "start_date": "2018-06",
-                "end_date": "2019-12",
-                "description": "Built REST APIs and front-end components."
-            }
-        ],
-        "skills": ["Python", "JavaScript", "React", "AWS", "Docker", "Kubernetes", "SQL", "NoSQL"],
-        "education": [
-            {
-                "degree": "B.Sc. Computer Science",
-                "institution": "Technion",
-                "year": 2018
-            }
-        ],
-        "created_at": datetime.now().isoformat(),
-    })
+    cvs.append(
+        {
+            "cv_id": str(uuid.uuid4()),
+            "user_id": "{{USER_ID_1}}",
+            "file_name": "software_engineer_resume.pdf",
+            "file_type": "application/pdf",
+            "summary": "Experienced software engineer with 5 years of experience in full-stack development.",
+            "experience": [
+                {
+                    "title": "Software Engineer",
+                    "company": "TechCorp",
+                    "start_date": "2020-01",
+                    "end_date": "Present",
+                    "description": "Developed microservices using Python and React.",
+                },
+                {
+                    "title": "Junior Developer",
+                    "company": "StartupXYZ",
+                    "start_date": "2018-06",
+                    "end_date": "2019-12",
+                    "description": "Built REST APIs and front-end components.",
+                },
+            ],
+            "skills": [
+                "Python",
+                "JavaScript",
+                "React",
+                "AWS",
+                "Docker",
+                "Kubernetes",
+                "SQL",
+                "NoSQL",
+            ],
+            "education": [
+                {
+                    "degree": "B.Sc. Computer Science",
+                    "institution": "Technion",
+                    "year": 2018,
+                }
+            ],
+            "created_at": datetime.now().isoformat(),
+        }
+    )
 
     # Sample CV 2 - Data Scientist
-    cvs.append({
-        "cv_id": str(uuid.uuid4()),
-        "user_id": "{{USER_ID_2}}",
-        "file_name": "data_scientist_resume.pdf",
-        "file_type": "application/pdf",
-        "summary": "Data scientist with expertise in machine learning and statistical analysis.",
-        "experience": [
-            {
-                "title": "Data Scientist",
-                "company": "DataDriven Inc",
-                "start_date": "2021-03",
-                "end_date": "Present",
-                "description": "Built ML models for predictive analytics."
-            }
-        ],
-        "skills": ["Python", "R", "TensorFlow", "PyTorch", "SQL", "Tableau", "Statistics"],
-        "education": [
-            {
-                "degree": "M.Sc. Data Science",
-                "institution": "Tel Aviv University",
-                "year": 2021
-            }
-        ],
-        "created_at": datetime.now().isoformat(),
-    })
+    cvs.append(
+        {
+            "cv_id": str(uuid.uuid4()),
+            "user_id": "{{USER_ID_2}}",
+            "file_name": "data_scientist_resume.pdf",
+            "file_type": "application/pdf",
+            "summary": "Data scientist with expertise in machine learning and statistical analysis.",
+            "experience": [
+                {
+                    "title": "Data Scientist",
+                    "company": "DataDriven Inc",
+                    "start_date": "2021-03",
+                    "end_date": "Present",
+                    "description": "Built ML models for predictive analytics.",
+                }
+            ],
+            "skills": [
+                "Python",
+                "R",
+                "TensorFlow",
+                "PyTorch",
+                "SQL",
+                "Tableau",
+                "Statistics",
+            ],
+            "education": [
+                {
+                    "degree": "M.Sc. Data Science",
+                    "institution": "Tel Aviv University",
+                    "year": 2021,
+                }
+            ],
+            "created_at": datetime.now().isoformat(),
+        }
+    )
 
     return cvs
 

@@ -17,7 +17,9 @@ def assert_vpr_quality(data: dict[str, Any]) -> None:
     assert len(uvp) >= 20, "VPR UVP is too short"
 
     differentiators = result.get("differentiators")
-    assert isinstance(differentiators, list) and len(differentiators) >= 3, "VPR differentiators must include at least 3 items"
+    assert isinstance(differentiators, list) and len(differentiators) >= 3, (
+        "VPR differentiators must include at least 3 items"
+    )
     valid_count = 0
     for entry in differentiators:
         if isinstance(entry, dict):
@@ -52,11 +54,15 @@ def assert_cv_list_quality(data: dict[str, Any]) -> None:
 
 def assert_gap_questions_quality(data: dict[str, Any]) -> None:
     questions = data.get("questions")
-    assert isinstance(questions, list) and len(questions) >= 3, "Expected at least 3 gap questions"
+    assert isinstance(questions, list) and len(questions) >= 3, (
+        "Expected at least 3 gap questions"
+    )
 
     for idx, question in enumerate(questions):
         assert isinstance(question, dict), f"Gap question #{idx + 1} must be an object"
-        assert _non_empty_text(question.get("id")), f"Gap question #{idx + 1} missing id"
+        assert _non_empty_text(question.get("id")), (
+            f"Gap question #{idx + 1} missing id"
+        )
         text = _non_empty_text(question.get("text"))
         assert len(text) >= 12, f"Gap question #{idx + 1} text is too short"
 
@@ -69,7 +75,9 @@ def assert_tailored_cv_quality(data: dict[str, Any]) -> None:
     assert len(tailored_cv) >= 80, "Tailored CV text is too short"
 
     ats_score = result.get("ats_score")
-    assert isinstance(ats_score, (int, float)), "Tailored CV must include numeric ats_score"
+    assert isinstance(ats_score, (int, float)), (
+        "Tailored CV must include numeric ats_score"
+    )
 
 
 def assert_cover_letter_quality(data: dict[str, Any]) -> None:
@@ -78,7 +86,9 @@ def assert_cover_letter_quality(data: dict[str, Any]) -> None:
 
     cover_letter = _non_empty_text(result.get("cover_letter"))
     assert len(cover_letter) >= 80, "Cover letter text is too short"
-    assert cover_letter.lower() != "cover letter generation completed.", "Cover letter payload is placeholder text"
+    assert cover_letter.lower() != "cover letter generation completed.", (
+        "Cover letter payload is placeholder text"
+    )
 
 
 def assert_interview_prep_quality(data: dict[str, Any]) -> None:
@@ -86,12 +96,18 @@ def assert_interview_prep_quality(data: dict[str, Any]) -> None:
     assert isinstance(result, dict), "Interview prep status must include result object"
 
     questions = result.get("questions")
-    assert isinstance(questions, list) and len(questions) >= 3, "Interview prep must include at least 3 questions"
+    assert isinstance(questions, list) and len(questions) >= 3, (
+        "Interview prep must include at least 3 questions"
+    )
 
     rich_questions = 0
     for idx, question in enumerate(questions):
-        assert isinstance(question, dict), f"Interview question #{idx + 1} must be an object"
-        assert _non_empty_text(question.get("id")), f"Interview question #{idx + 1} missing id"
+        assert isinstance(question, dict), (
+            f"Interview question #{idx + 1} must be an object"
+        )
+        assert _non_empty_text(question.get("id")), (
+            f"Interview question #{idx + 1} missing id"
+        )
         text = _non_empty_text(question.get("text"))
         if len(text) >= 14:
             rich_questions += 1
