@@ -182,7 +182,7 @@ class TestGapAnalysisOutputShape:
             )
 
             with (
-                patch('careervp.handlers.gap_handler._get_dal') as mock_get_dal,
+                patch('careervp.handlers.gap_handler._get_questions_dal') as mock_get_dal,
                 patch('careervp.handlers.gap_handler._get_trial_service') as mock_trial_service,
                 patch('careervp.handlers.gap_handler._get_application_repository') as mock_application_repository,
             ):

@@ -1,0 +1,73 @@
+spec_id: GAP_GET_001
+title: Gap Questions GET Returns Empty (Write Works, Read Fails)
+priority: high
+status: pending
+
+description: |
+  POST /jobs/{job_id}/gap-questions successfully generates and saves questions
+  GET /jobs/{job_id}/gap-questions returns empty {cv_id: null, questions: []}
+
+  This is the SAME pattern as Cover Letter List and Interview Prep Status bugs.
+
+test_evidence:
+  - test_name: test_generate_gap_questions
+    endpoint: POST /jobs/{job_id}/gap-questions
+    status_code: 200
+    result: Generated 10 questions
+
+  - test_name: test_get_gap_questions
+    endpoint: GET /jobs/{job_id}/gap-questions
+    status_code: 200
+    result: '{"cv_id": null, "questions": []}'
+
+root_cause:
+  file: src/backend/careervp/dal/dynamo_dal_handler.py
+  line: 480
+  function: list_gap_questions_by_prefix
+  code: |
+    if job_id:
+        items = [item for item in items if item.get('job_id') == job_id]
+  issue: |
+    This strict filter compares job_id exactly. If there's any mismatch
+    (whitespace, case, format), the filter returns empty.
+
+post_flow:
+  - pk: user_id
+  - sk: "ARTIFACT#GAP_ANALYSIS#{cv_id}#{job_id}"
+  - job_id: from request
+
+get_flow:
+  - pk: user_id
+  - sk_begins_with: "ARTIFACT#GAP_ANALYSIS#"
+  - filter: job_id (STRICT - THE BUG)
+
+fix_options:
+  - option: A
+    description: Remove the strict filter
+    code_change: |
+      # In list_gap_questions_by_prefix(), remove lines 479-480
+      # The prefix query already filters sufficiently
+
+  - option: B
+    description: Fix filter to be less strict
+    code_change: |
+      # Instead of exact match, use contains
+      if job_id:
+          items = [item for item in items if job_id in str(item.get('job_id', ''))]
+
+tests:
+  unit:
+    - description: Test list_gap_questions_by_prefix returns items when job_id matches
+
+  integration:
+    - test_file: docs/refactor/live_tests/test_05_gap_analysis.py
+    - description: |
+        1. POST to generate gap questions
+        2. GET to retrieve the questions
+        3. Verify questions array is NOT empty
+
+files_to_modify:
+  - path: src/backend/careervp/dal/dynamo_dal_handler.py
+    lines: "479-480"
+
+dependencies: []

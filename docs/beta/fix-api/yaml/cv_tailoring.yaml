@@ -1,0 +1,71 @@
+spec_id: CV_TAILORING_001
+title: CV Tailoring - Fix ID Format and Add Delete Endpoint
+priority: medium
+status: pending
+
+description: |
+  Two issues with CV Tailoring:
+  1. ID Format Bug: List endpoint returns full DynamoDB sort key as ID
+  2. Missing Delete Endpoint: No way to delete CV tailorings
+
+issue_1_id_format:
+  current_behavior: |
+    {
+      "id": "ARTIFACT#CV_TAILORED#cv-tail-8d5a9e29-01ea-4618-933c-518a4d6dbb64"
+    }
+
+  expected_behavior: |
+    {
+      "id": "cv-tail-8d5a9e29-01ea-4618-933c-518a4d6dbb64"
+    }
+
+  root_cause:
+    file: src/backend/careervp/handlers/cv_tailoring_handler.py
+    function: _build_tailored_cv_list_item
+    line: 532-536
+    code: |
+      sk = item.get('sk', '')
+      return {'id': str(sk or '')}  # Returns full SK
+
+issue_2_delete_endpoint:
+  current_endpoints:
+    - POST /cv-tailoring/generate - Create new CV tailoring
+    - GET /cv-tailoring/{id}/status - Get tailoring status
+    - GET /cv-tailorings - List all tailorings
+
+  needed:
+    - DELETE /cv-tailoring/{id} - Delete a CV tailoring
+
+fix_tasks:
+  - Fix ID format
+    file: src/backend/careervp/handlers/cv_tailoring_handler.py
+    function: _build_tailored_cv_list_item
+    code: |
+      sk = item.get('sk', '')
+      cv_tailoring_id = sk.replace('ARTIFACT#CV_TAILORED#', '') if sk else ''
+      return {'id': cv_tailoring_id, ...}
+
+  - Add delete endpoint
+    handler: delete_tailored_cv(event)
+    file: src/backend/careervp/handlers/cv_tailoring_handler.py
+
+  - Add delete to DAL
+    file: src/backend/careervp/dal/dynamo_dal_handler.py
+    method: delete_tailored_cv(user_id, cv_tailoring_id)
+
+tests:
+  unit:
+    - description: Test _build_tailored_cv_list_item extracts correct ID
+    - description: Test delete handler returns 200 on success
+
+  integration:
+    - description: |
+        1. Create a CV tailoring
+        2. Delete it
+        3. Verify it's gone (GET returns 404)
+
+files_to_modify:
+  - path: src/backend/careervp/handlers/cv_tailoring_handler.py
+  - path: src/backend/careervp/dal/dynamo_dal_handler.py
+
+dependencies: []

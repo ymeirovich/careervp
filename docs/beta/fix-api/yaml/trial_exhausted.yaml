@@ -1,0 +1,69 @@
+spec_id: TRIAL_001
+title: Trial Credits Being Consumed More Than Expected
+priority: high
+status: pending
+
+description: |
+  Live test suite exhausting trial credits (3 free applications) when should only consume 2:
+  - 1 credit for test_05_gap_analysis
+  - 1 credit for test_10_api_contract
+  But test gets 403 trial_exhausted indicating 3+ credits consumed.
+
+test_flow:
+  - step: 1
+    action: Pre-flight reset
+    expected: Trial = 0
+  - step: 2
+    action: test_05_gap_analysis
+    expected: Trial = 1
+  - step: 3
+    action: Other tests (no credit consumption)
+    expected: Trial = 1
+  - step: 4
+    action: Pre-contract reset
+    expected: Trial = 0
+  - step: 5
+    action: test_10_api_contract
+    expected: Trial = 1
+  - step: 6
+    action: Trial exhausted
+    expected: Should still have 1 credit left
+
+investigation_tasks:
+  - Verify only POST /gap-questions consumes credits
+    search: consume_credit
+  - Verify CV Tailoring, Cover Letter, Interview Prep, VPR, Job Create do NOT consume credits
+
+  - Check reset logic
+    file: run_all_tests.py
+    lines: "187-189"
+    code: |
+      if test_name == "contract":
+          _reset_trial(api_base)
+
+  - Check for multiple calls to POST /gap-questions
+    files:
+      - docs/refactor/live_tests/test_05_gap_analysis.py
+      - docs/refactor/live_tests/test_10_api_contract_success.py
+
+fix_options:
+  - option: A
+    description: Fix reset endpoint failure
+    action: Add better error handling/logging to reset endpoint
+
+  - option: B
+    description: Fix multiple calls
+    action: Remove duplicate calls, add proper state management
+
+tests:
+  unit:
+    - description: Verify trial service correctly tracks and resets credits
+
+  integration:
+    - description: Verify 2 POST /gap-questions calls work without exhausting trial
+
+files_to_modify:
+  - path: src/backend/careervp/logic/trial_service.py
+  - path: docs/refactor/live_tests/run_all_tests.py
+
+dependencies: []

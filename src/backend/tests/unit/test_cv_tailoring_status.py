@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 from unittest.mock import MagicMock
 
-import boto3
+import boto3  # type: ignore[import-untyped]
 import pytest
 from moto import mock_aws
 
@@ -177,7 +177,46 @@ def test_get_users_me_tailored_cvs_returns_only_user_items(tailoring_table: Any)
     payload = json.loads(response['body'])
     ids = {entry['id'] for entry in payload['tailored_cvs']}
     assert ids == {
-        'ARTIFACT#CV_TAILORED#cv-1#1700000000#v1',
-        'ARTIFACT#CV_TAILORED#cv-2#1700000001#v1',
+        'cv-1#1700000000#v1',
+        'cv-2#1700000001#v1',
     }
     assert all(entry['status'] in {'completed', 'processing'} for entry in payload['tailored_cvs'])
+
+
+def test_delete_tailored_cv_removes_artifact(tailoring_table: Any) -> None:
+    """DELETE /cv-tailoring/{cvTailoringId} removes the tailored CV artifact."""
+    from careervp.handlers.cv_tailoring_handler import lambda_handler
+
+    now = datetime.now(timezone.utc).isoformat()
+    tailoring_table.put_item(
+        Item={
+            'pk': 'user-1',
+            'sk': 'ARTIFACT#CV_TAILORED#cv-tail-123',
+            'entity_type': 'CV_TAILORING',
+            'cv_id': 'cv-1',
+            'status': 'completed',
+            'created_at': now,
+            'updated_at': now,
+            'ttl': 9999999999,
+        }
+    )
+
+    event = _event(
+        path='/cv-tailoring/cv-tail-123',
+        method='DELETE',
+        user_id='user-1',
+        path_parameters={'cvTailoringId': 'cv-tail-123'},
+    )
+    response = lambda_handler(event, _context())
+
+    assert response['statusCode'] == 200
+    payload = json.loads(response['body'])
+    assert payload['status'] == 'deleted'
+
+    lookup = tailoring_table.get_item(
+        Key={
+            'pk': 'user-1',
+            'sk': 'ARTIFACT#CV_TAILORED#cv-tail-123',
+        }
+    )
+    assert lookup.get('Item') is None

@@ -1,0 +1,60 @@
+spec_id: COVER_LETTER_001
+title: Cover Letter List Returns Empty After Successful Generation
+priority: high
+status: pending
+
+description: |
+  POST /cover-letter/generate successfully generates a cover letter
+  GET /cover-letter/{id}/status successfully returns the cover letter
+  But GET /cover-letters returns empty array []
+
+test_evidence:
+  - test_name: test_cover_letter_async_polling
+    endpoint: GET /cover-letter/{id}/status
+    status_code: 200
+    result: cover_letter returned successfully
+
+  - test_name: test_list_cover_letters
+    endpoint: GET /cover-letters
+    status_code: 200
+    result: '{"cover_letters": []}'
+
+root_cause:
+  file: src/backend/careervp/dal/dynamo_dal_handler.py
+  line: 452
+  issue: |
+    results = [item.get('cover_letter') or item for item in items]
+    This returns only the nested 'cover_letter' field, discarding top-level fields
+    like cv_id, job_id, created_at, pk, sk
+
+fix_options:
+  - option: A
+    description: Fix DAL to return full items
+    code_change: |
+      # In dynamo_dal_handler.py list_cover_letters(), line 452
+      # Change from:
+      results = [item.get('cover_letter') or item for item in items]
+      # To:
+      results = items  # Return full DynamoDB items
+
+  - option: B
+    description: Fix handler to handle both cases
+    code_change: Modify _build_cover_letter_list_item() to extract fields from nested payload
+
+tests:
+  unit:
+    - test_file: tests/cover-letter/unit/
+      description: Verify list_cover_letters returns items with all required fields
+
+  integration:
+    - test_file: docs/refactor/live_tests/test_07_cover_letter.py
+      description: |
+        1. Generate a cover letter
+        2. List all cover letters
+        3. Assert the generated cover letter appears in the list
+
+files_to_modify:
+  - path: src/backend/careervp/dal/dynamo_dal_handler.py
+    lines: "452"
+
+dependencies: []

@@ -45,7 +45,6 @@ def _get_questions_dal() -> DynamoDalHandler:
 def _get_responses_dal() -> DynamoDalHandler:
     """DAL for gap responses — stored in the dedicated gap_responses table."""
     table_name = _resolve_table_name('GAP_RESPONSES_TABLE_NAME')
-    # Schema validation removed - keys (userId/questionId) confirmed correct in code
     return DynamoDalHandler(table_name=table_name)
 
 
@@ -573,7 +572,7 @@ def _prepare_trial_and_pending_state(
 def _get_trial_service() -> TrialService | None:
     global _trial_service
     if _trial_service is None:
-        table_name = os.getenv('USERS_TABLE_NAME') or os.getenv('TABLE_NAME') or ''
+        table_name = os.getenv('USERS_TABLE_NAME') or os.getenv('DYNAMODB_TABLE_NAME') or os.getenv('TABLE_NAME') or ''
         if not table_name:
             return None
         _trial_service = TrialService(dal=DynamoDalHandler(table_name=table_name))

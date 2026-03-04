@@ -41,7 +41,7 @@ SCRIPTS_DIR = os.path.join(
 )
 sys.path.insert(0, SCRIPTS_DIR)
 
-from resolve_api_base import resolve_api_base  # noqa: E402
+from resolve_api_base import resolve_api_base  # type: ignore[import-not-found]  # noqa: E402
 
 # Add current directory to path
 LIVE_TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -120,24 +120,39 @@ def run_test_module(
 
 
 def _reset_trial(api_base: str) -> None:
-    """Reset trial credits before the test run to prevent trial_exhausted 403s."""
-    try:
-        import requests as _requests
+    """Reset trial credits and fail fast when reset verification fails."""
+    import requests as _requests
 
-        sys.path.insert(0, LIVE_TESTS_DIR)
-        from conftest import get_auth_headers  # noqa: PLC0415
+    sys.path.insert(0, LIVE_TESTS_DIR)
+    from conftest import get_auth_headers  # type: ignore[import-not-found]  # noqa: PLC0415
 
-        resp = _requests.post(
-            f"{api_base}/users/me/trial/reset",
-            headers=get_auth_headers(),
-            timeout=15,
+    headers = get_auth_headers()
+    reset_resp = _requests.post(
+        f"{api_base}/users/me/trial/reset",
+        headers=headers,
+        timeout=15,
+    )
+    if reset_resp.status_code != 200:
+        raise RuntimeError(
+            f"Trial reset returned {reset_resp.status_code}: {reset_resp.text[:300]}"
         )
-        if resp.status_code == 200:
-            print("  ✓ Trial reset")
-        else:
-            print(f"  ⚠ Trial reset returned {resp.status_code} — continuing anyway")
-    except Exception as exc:
-        print(f"  ⚠ Trial reset skipped: {exc}")
+
+    usage_resp = _requests.get(
+        f"{api_base}/users/me/usage",
+        headers=headers,
+        timeout=15,
+    )
+    if usage_resp.status_code != 200:
+        raise RuntimeError(
+            f"Trial usage check returned {usage_resp.status_code}: {usage_resp.text[:300]}"
+        )
+
+    usage_payload = usage_resp.json()
+    used = int(usage_payload.get("applications", {}).get("used", -1))
+    if used != 0:
+        raise RuntimeError(f"Trial reset verification failed: applications.used={used}")
+
+    print("  ✓ Trial reset (verified used=0)")
 
 
 def run_all_tests(verbose: bool = False, mode: str = "full") -> int:
@@ -157,7 +172,11 @@ def run_all_tests(verbose: bool = False, mode: str = "full") -> int:
 
     # Reset trial credits so tests are never blocked by exhausted limits
     print("\nPre-flight:")
-    _reset_trial(api_base)
+    try:
+        _reset_trial(api_base)
+    except Exception as exc:
+        print(f"  ✗ Pre-flight trial reset failed: {exc}")
+        return 1
 
     # Run tests in order (dependencies matter!)
     full_order = [
@@ -186,7 +205,12 @@ def run_all_tests(verbose: bool = False, mode: str = "full") -> int:
             try:
                 if test_name == "contract":
                     print("\nPre-contract reset:")
-                    _reset_trial(api_base)
+                    try:
+                        _reset_trial(api_base)
+                    except Exception as exc:
+                        print(f"  ✗ Pre-contract trial reset failed: {exc}")
+                        failed += 1
+                        continue
                 module_name, class_names = TEST_MODULES[test_name]
                 ok = run_test_module(module_name, class_names, verbose)
                 if ok:

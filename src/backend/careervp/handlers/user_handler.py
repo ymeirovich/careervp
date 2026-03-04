@@ -59,7 +59,7 @@ def _get_trial_service() -> TrialService | None:
     global _trial_service
     if _trial_service is not None:
         return _trial_service
-    table_name = os.getenv('USERS_TABLE_NAME') or os.getenv('TABLE_NAME')
+    table_name = os.getenv('USERS_TABLE_NAME') or os.getenv('DYNAMODB_TABLE_NAME') or os.getenv('TABLE_NAME')
     if not table_name:
         return None
     _trial_service = TrialService(dal=DynamoDalHandler(table_name=table_name))

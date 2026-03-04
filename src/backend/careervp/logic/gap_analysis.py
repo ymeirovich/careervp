@@ -35,6 +35,8 @@ TAG_DISTRIBUTION: tuple[str, ...] = (
     TAG_INTERVIEW_MVP,
 )
 
+PRIORITY_LEVELS = {'CRITICAL', 'IMPORTANT', 'OPTIONAL'}
+
 
 def calculate_gap_score(impact: str, probability: str) -> float:
     """Calculate gap score with weighted impact/probability."""
@@ -155,6 +157,22 @@ def _coerce_gap_score(question: dict[str, Any], impact: str, probability: str) -
     return calculate_gap_score(impact=impact, probability=probability)
 
 
+def _normalize_priority(value: Any, default: str = 'IMPORTANT') -> str:
+    normalized = str(value).strip().upper()
+    if normalized in PRIORITY_LEVELS:
+        return normalized
+    return default
+
+
+def _normalize_destination(value: Any, tags: list[str]) -> str:
+    normalized = str(value or '').strip().upper().replace('_', ' ')
+    if normalized in {'CV IMPACT', 'INTERVIEW/MVP ONLY'}:
+        return normalized
+    if TAG_CV_IMPACT in tags:
+        return 'CV IMPACT'
+    return 'INTERVIEW/MVP ONLY'
+
+
 def _normalize_question(question: dict[str, Any], index: int) -> dict[str, Any]:
     impact = _normalize_level(question.get('impact'))
     probability = _normalize_level(question.get('probability'))
@@ -162,40 +180,80 @@ def _normalize_question(question: dict[str, Any], index: int) -> dict[str, Any]:
     text = str(question.get('question') or question.get('text') or f'Provide evidence for gap area #{index + 1}.')
     tags = _normalize_tags(question.get('tags'))
     gap_score = _coerce_gap_score(question, impact=impact, probability=probability)
+    requirement = str(question.get('requirement') or '').strip()
+    strategic_intent = str(question.get('strategic_intent') or '').strip()
+    evidence_gap = str(question.get('evidence_gap') or '').strip()
+    priority = _normalize_priority(question.get('priority'))
+    destination = _normalize_destination(question.get('destination'), tags=tags)
 
     return {
+        'id': question_id,
+        'text': text,
         'question_id': question_id,
         'question': text,
         'impact': impact,
         'probability': probability,
         'gap_score': gap_score,
         'tags': tags,
+        'destination': destination,
+        'requirement': requirement,
+        'strategic_intent': strategic_intent,
+        'evidence_gap': evidence_gap,
+        'priority': priority,
     }
 
 
-def _ensure_question_count(questions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _build_fallback_question(
+    index: int,
+    requirement: str,
+    tag: str,
+    role_title: str,
+) -> dict[str, Any]:
+    impact = 'HIGH' if tag == TAG_CV_IMPACT else 'MEDIUM'
+    probability = 'MEDIUM'
+    question_id = f'generated-q{index}'
+    question_text = f'What quantified outcome best proves you meet "{requirement}" for the {role_title or "target role"}?'
+    destination = 'CV IMPACT' if tag == TAG_CV_IMPACT else 'INTERVIEW/MVP ONLY'
+    priority = 'CRITICAL' if tag == TAG_CV_IMPACT else 'IMPORTANT'
+    return {
+        'id': question_id,
+        'text': question_text,
+        'question_id': question_id,
+        'question': question_text,
+        'impact': impact,
+        'probability': probability,
+        'gap_score': calculate_gap_score(impact=impact, probability=probability),
+        'tags': [tag],
+        'destination': destination,
+        'requirement': requirement,
+        'strategic_intent': f'Expose concrete evidence for requirement: {requirement}',
+        'evidence_gap': f'No quantified evidence currently mapped to: {requirement}',
+        'priority': priority,
+    }
+
+
+def _ensure_question_count(questions: list[dict[str, Any]], job_posting: dict[str, Any]) -> list[dict[str, Any]]:
     normalized = questions[:MAX_QUESTIONS]
+    requirements = [str(req).strip() for req in job_posting.get('requirements', []) if str(req).strip()]
+    role_title = str(job_posting.get('role_title') or '').strip()
     while len(normalized) < MAX_QUESTIONS:
         index = len(normalized) + 1
-        fallback_impact = 'LOW'
-        fallback_probability = 'LOW'
-        normalized.append(
-            {
-                'question_id': f'generated-q{index}',
-                'question': f'What concrete evidence demonstrates fit for uncovered requirement #{index}?',
-                'impact': fallback_impact,
-                'probability': fallback_probability,
-                'gap_score': 0.0,
-                'tags': [],
-            }
-        )
+        tag = TAG_DISTRIBUTION[index - 1]
+        requirement = requirements[(index - 1) % len(requirements)] if requirements else f'Core requirement #{index}'
+        normalized.append(_build_fallback_question(index=index, requirement=requirement, tag=tag, role_title=role_title))
     return normalized
 
 
 def _apply_tag_distribution(questions: list[dict[str, Any]]) -> None:
     for index, question in enumerate(questions):
         # Keep array schema while enforcing deterministic category coverage.
-        question['tags'] = [TAG_DISTRIBUTION[index]]
+        tag = TAG_DISTRIBUTION[index]
+        question['tags'] = [tag]
+        question['destination'] = 'CV IMPACT' if tag == TAG_CV_IMPACT else 'INTERVIEW/MVP ONLY'
+        question['priority'] = _normalize_priority(
+            question.get('priority'),
+            default='CRITICAL' if tag == TAG_CV_IMPACT else 'IMPORTANT',
+        )
 
 
 async def generate_gap_questions(
@@ -232,7 +290,7 @@ async def generate_gap_questions(
     questions = [_normalize_question(question=question, index=index) for index, question in enumerate(parsed_questions)]
 
     questions.sort(key=lambda q: float(q.get('gap_score', 0.0)), reverse=True)
-    questions = _ensure_question_count(questions)
+    questions = _ensure_question_count(questions, job_posting=job_posting)
     _apply_tag_distribution(questions)
 
     return Result(success=True, data=questions, code=ResultCode.GAP_QUESTIONS_GENERATED)
