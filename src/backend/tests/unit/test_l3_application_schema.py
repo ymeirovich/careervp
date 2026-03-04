@@ -62,8 +62,8 @@ class TestApplicationCreation:
         UUID(application_id)
         mock_table.put_item.assert_called_once()
         item = mock_table.put_item.call_args.kwargs['Item']
-        assert item['pk'] == 'user-123'
-        assert item['sk'] == f'APP#{application_id}'
+        assert item['userId'] == 'user-123'
+        assert item['applicationId'] == application_id
 
     def test_application_initial_state_is_created(self, repository: ApplicationRepository, mock_table: MagicMock) -> None:
         repository.create(user_id='user-123', job_id='job-456')

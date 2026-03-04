@@ -38,8 +38,18 @@ def _configuration_error_response() -> dict[str, Any]:
 
 def _get_questions_dal() -> DynamoDalHandler:
     """DAL for gap questions — stored in the users table (pk/sk key schema)."""
-    table_name = _resolve_table_name('USERS_TABLE_NAME', 'DYNAMODB_TABLE_NAME', 'TABLE_NAME')
+    table_name = _resolve_table_name(
+        'TABLE_NAME',
+        'ARTIFACTS_TABLE_NAME',
+        'DYNAMODB_TABLE_NAME',
+        'USERS_TABLE_NAME',
+    )
     return DynamoDalHandler(table_name=table_name)
+
+
+def _get_dal() -> DynamoDalHandler:
+    """Backward-compatible alias for tests and legacy call sites."""
+    return _get_questions_dal()
 
 
 def _get_responses_dal() -> DynamoDalHandler:
@@ -192,7 +202,7 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
     missing_qualifications = _build_missing_qualifications(focus_areas)
 
     try:
-        dal = _get_questions_dal()
+        dal = _get_dal()
     except RuntimeError:
         logger.exception('Gap questions table not configured')
         return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, 'Internal server error', ResultCode.MISSING_ENV)

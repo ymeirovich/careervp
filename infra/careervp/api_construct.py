@@ -2003,7 +2003,7 @@ class ApiConstruct(Construct):
         )
 
     def _add_openapi_contract_routes(self) -> None:
-        # Canonical route surface (I7): exactly 30 method+path operations.
+        # Canonical route surface (I7).
         route_map: list[tuple[str, str, _lambda.Function]] = [
             ("/health", "GET", self.health_api_func),
             ("/auth/register", "POST", self.auth_api_func),
@@ -2028,6 +2028,7 @@ class ApiConstruct(Construct):
             ("/vprs", "GET", self.vpr_status_func),
             ("/cv-tailoring/generate", "POST", self.cv_tailoring_func),
             ("/cv-tailoring/{cvTailoringId}/status", "GET", self.cv_tailoring_func),
+            ("/cv-tailoring/{cvTailoringId}", "DELETE", self.cv_tailoring_func),
             ("/cv-tailorings", "GET", self.cv_tailoring_func),
             ("/cover-letter/generate", "POST", self.cover_letter_api_func),
             (

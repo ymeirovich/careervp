@@ -21,6 +21,8 @@ def gap_test_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]
     monkeypatch.setenv('POWERTOOLS_SERVICE_NAME', 'careervp-gap-test')
     monkeypatch.setenv('LOG_LEVEL', 'INFO')
     monkeypatch.setenv('DYNAMODB_TABLE_NAME', 'test-gap-table')
+    monkeypatch.setenv('TABLE_NAME', 'test-gap-table')
+    monkeypatch.setenv('USERS_TABLE_NAME', 'test-gap-table')
     monkeypatch.setenv('GAP_RESPONSES_TABLE_NAME', 'test-gap-responses-table')
     yield
 
