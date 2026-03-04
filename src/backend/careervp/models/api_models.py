@@ -400,7 +400,12 @@ class InterviewPrepRequest(APIModel):
     vpr_id: str = Field(min_length=1)
     gap_response_ids: list[str]
     focus_areas: list[str] = Field(default_factory=list)
-    question_count: int = 5
+    question_count: int = 10
+    # Optional context fields for agentic architecture alignment (section 3.7).
+    # Backend resolves these server-side; clients that omit them continue to work.
+    application_id: str | None = None
+    job_id: str | None = None
+    language: str = 'en'
 
     @field_validator('gap_response_ids')
     @classmethod

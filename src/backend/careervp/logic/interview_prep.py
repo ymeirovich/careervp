@@ -21,7 +21,7 @@ from careervp.models.interview_prep import (
 )
 from careervp.models.result import Result, ResultCode
 
-MAX_QUESTIONS = 10
+MAX_QUESTIONS = 15
 MAX_PER_TYPE = 4
 ANSWER_MIN_WORDS = 150
 ANSWER_MAX_WORDS = 300
@@ -39,9 +39,18 @@ async def generate_interview_prep(
     gap_responses: list[dict[str, Any]] | None = None,
     job_title: str = '',
     company_name: str = '',
+    # Architecture section 3.7 required context inputs — resolved server-side
+    cv_facts: dict[str, Any] | None = None,
+    job_requirements: dict[str, Any] | None = None,
+    vpr_differentiators: list[str] | None = None,
+    company_research: dict[str, Any] | None = None,
+    language: str = 'en',
 ) -> Result[InterviewPrepResponse]:
-    """Generate personalized interview preparation."""
+    """Generate personalized interview preparation with architecture-aligned context inputs."""
     start_time = time.perf_counter()
+
+    # Enforce question_count policy: default 10, cap 15
+    question_count = min(max(request.question_count, 1), MAX_QUESTIONS)
 
     system_prompt = build_system_prompt()
     user_prompt = build_user_prompt(
@@ -50,7 +59,12 @@ async def generate_interview_prep(
         job_title=job_title,
         company_name=company_name,
         focus_areas=request.focus_areas,
-        question_count=request.question_count,
+        question_count=question_count,
+        cv_facts=cv_facts,
+        job_requirements=job_requirements,
+        vpr_differentiators=vpr_differentiators,
+        company_research=company_research,
+        language=language,
     )
 
     llm_client = LLMClient()
