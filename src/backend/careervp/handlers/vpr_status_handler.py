@@ -239,16 +239,47 @@ def _parse_limit(event: dict[str, Any]) -> int:
     return max(1, min(limit, 100))
 
 
-def _build_vpr_list_item(job: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
+def _build_vpr_list_item(job: dict[str, Any], jobs_repo: JobsRepository | None = None) -> dict[str, Any]:  # noqa: C901
     job_id = str(job.get('job_id', ''))
     created_at = job.get('created_at')
     input_data = job.get('input_data')
     job_posting = input_data.get('job_posting') if isinstance(input_data, dict) else None
     job_title = ''
     company_name = ''
+    resolution_source = 'unavailable'
+
     if isinstance(job_posting, dict):
         job_title = str(job_posting.get('role_title') or job_posting.get('title') or '')
         company_name = str(job_posting.get('company_name') or job_posting.get('company') or '')
+        if job_title or company_name:
+            resolution_source = 'input_data_job_posting'
+
+    if not (job_title and company_name) and jobs_repo is not None:
+        ref_job_id: str | None = None
+        if isinstance(input_data, dict):
+            ref_job_id = str(input_data.get('job_id') or '').strip() or None
+        if not ref_job_id:
+            ref_job_id = str(job.get('application_id') or '').strip() or None
+
+        if ref_job_id:
+            try:
+                fetched_job = jobs_repo.get_job(ref_job_id)
+                if isinstance(fetched_job, dict):
+                    if not job_title:
+                        job_title = str(fetched_job.get('title') or '').strip()
+                    if not company_name:
+                        company_name = str(fetched_job.get('company_name') or fetched_job.get('company') or '').strip()
+                    if job_title or company_name:
+                        resolution_source = 'jobs_table_fallback'
+                        metrics.add_metric(name='VPRMetadataFallbackUsed', unit='Count', value=1)
+            except Exception:
+                logger.warning('Jobs table fallback failed for VPR list metadata', job_id=job_id, ref_job_id=ref_job_id)
+
+    logger.debug(
+        'VPR list item metadata resolved',
+        job_id=job_id,
+        resolution_source=resolution_source,
+    )
 
     return {
         'id': job_id,
@@ -280,7 +311,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     if _is_list_user_vprs_request(event):
         limit = _parse_limit(event)
         jobs = jobs_repo.get_vpr_jobs_by_user(user_id=user_id, limit=limit)
-        list_payload = {'vprs': [_build_vpr_list_item(job) for job in jobs]}
+        list_payload = {'vprs': [_build_vpr_list_item(job, jobs_repo=jobs_repo) for job in jobs]}
         return {
             'statusCode': int(HTTPStatus.OK),
             'headers': JSON_HEADERS,
