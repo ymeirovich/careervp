@@ -29,7 +29,7 @@ from careervp.models.result import Result, ResultCode
 
 
 def _get_dal() -> DynamoDalHandler:
-    table_name = os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('TABLE_NAME', '')
+    table_name = os.environ.get('TABLE_NAME') or os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or ''
     return DynamoDalHandler(table_name)
 
 
@@ -182,7 +182,7 @@ def _update_artifact_status(
 
     import boto3 as _boto3
 
-    table_name = os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('TABLE_NAME', '')
+    table_name = os.environ.get('TABLE_NAME') or os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or ''
     table = _boto3.resource('dynamodb').Table(table_name)
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
 

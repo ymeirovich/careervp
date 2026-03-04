@@ -33,6 +33,15 @@ def _event(path: str, method: str, body: dict[str, object] | None = None) -> dic
     }
 
 
+def _context() -> SimpleNamespace:
+    return SimpleNamespace(
+        function_name='gap-handler',
+        memory_limit_in_mb=256,
+        invoked_function_arn='arn:aws:lambda:us-east-1:123456789012:function:gap-handler',
+        aws_request_id='req-gap-1',
+    )
+
+
 def test_submit_gap_responses_returns_500_when_gap_table_env_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -50,7 +59,7 @@ def test_submit_gap_responses_returns_500_when_gap_table_env_missing(
 
     # Ensure this fails due to configuration validation, not DAL side-effects.
     with patch.object(gap_handler, '_normalize_submitted_responses', return_value=([{'question_id': 'q1', 'response': 'Answer'}], None)):
-        response = gap_handler.lambda_handler(event, SimpleNamespace(function_name='gap-handler'))
+        response = gap_handler.lambda_handler(event, _context())
 
     assert response['statusCode'] == 500
     payload = json.loads(str(response['body']))
@@ -105,7 +114,7 @@ def test_submit_gap_responses_returns_500_on_schema_mismatch(
     dal = SimpleNamespace(save_gap_responses_raw=lambda **_: fake_result)
 
     with patch.object(gap_handler, '_get_responses_dal', return_value=dal):
-        response = gap_handler.lambda_handler(event, SimpleNamespace(function_name='gap-handler'))
+        response = gap_handler.lambda_handler(event, _context())
 
     assert response['statusCode'] == 500
     payload = json.loads(str(response['body']))
