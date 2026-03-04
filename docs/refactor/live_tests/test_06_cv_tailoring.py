@@ -186,6 +186,117 @@ class TestCVTailoringEndpoints:
         tailored_cvs = data.get("tailored_cvs", [])
         print(f"✓ GET /cv-tailorings - Found {len(tailored_cvs)} tailored CV(s)")
 
+    def test_delete_tailored_cv_roundtrip(self):
+        """Test create -> delete -> verify absence roundtrip for tailored CV."""
+        if not test_data.get("cv_tailoring_id"):
+            print("No tailored CV found, generating first...")
+            self.test_generate_tailored_cv()
+
+        cv_tailoring_id = test_data.get("cv_tailoring_id")
+        if not cv_tailoring_id:
+            pytest.skip("No cv_tailoring_id available for delete roundtrip")
+
+        headers = get_auth_headers()
+        encoded_id = quote(cv_tailoring_id, safe="")
+        status_url = f"{self.base_url}/cv-tailoring/{encoded_id}/status"
+        delete_url = f"{self.base_url}/cv-tailoring/{encoded_id}"
+        list_url = f"{self.base_url}/cv-tailorings"
+
+        # Ensure the item exists before deleting (handles short async propagation).
+        for attempt in range(12):
+            pre_delete_status = requests.get(status_url, headers=headers, timeout=10)
+            if pre_delete_status.status_code == 200:
+                break
+            if attempt == 11:
+                pytest.fail(
+                    f"Tailored CV {cv_tailoring_id} never became available before delete "
+                    f"(last status={pre_delete_status.status_code}, body={pre_delete_status.text[:200]})"
+                )
+            time.sleep(5)
+
+        delete_response = requests.delete(delete_url, headers=headers, timeout=15)
+        try:
+            delete_data = delete_response.json()
+        except Exception:
+            delete_data = {"raw_text": delete_response.text}
+
+        print_response(
+            "test_delete_tailored_cv_roundtrip",
+            f"DELETE /cv-tailoring/{cv_tailoring_id}",
+            delete_response.status_code,
+            delete_data,
+        )
+        assert delete_response.status_code == 200, (
+            f"DELETE /cv-tailoring/{cv_tailoring_id} returned {delete_response.status_code}"
+        )
+        assert delete_data.get("status") == "deleted", (
+            f"Expected deleted status, got: {delete_data}"
+        )
+
+        # Status endpoint should return 404 once deletion is visible.
+        status_result = None
+        for attempt in range(12):
+            status_response = requests.get(status_url, headers=headers, timeout=10)
+            status_result = status_response
+            if status_response.status_code == 404:
+                break
+            if attempt < 11:
+                time.sleep(5)
+
+        assert status_result is not None
+        try:
+            status_data = status_result.json()
+        except Exception:
+            status_data = {"raw_text": status_result.text}
+
+        print_response(
+            "test_delete_tailored_cv_roundtrip_status_check",
+            f"GET /cv-tailoring/{cv_tailoring_id}/status",
+            status_result.status_code,
+            status_data,
+        )
+        assert status_result.status_code == 404, (
+            f"Expected 404 after deletion, got {status_result.status_code}"
+        )
+
+        # List endpoint should no longer include the deleted ID.
+        for attempt in range(12):
+            list_response = requests.get(list_url, headers=headers, timeout=10)
+            try:
+                list_data = list_response.json()
+            except Exception:
+                list_data = {"raw_text": list_response.text}
+
+            print_response(
+                "test_delete_tailored_cv_roundtrip_list_check",
+                "GET /cv-tailorings",
+                list_response.status_code,
+                list_data,
+            )
+            assert list_response.status_code == 200, (
+                f"GET /cv-tailorings returned {list_response.status_code}"
+            )
+
+            tailored_cvs = list_data.get("tailored_cvs", [])
+            if not any(
+                str(entry.get("id")) == str(cv_tailoring_id)
+                for entry in tailored_cvs
+                if isinstance(entry, dict)
+            ):
+                print(
+                    f"✓ DELETE roundtrip - {cv_tailoring_id} no longer appears in list"
+                )
+                test_data.pop("cv_tailoring_id", None)
+                save_test_ids(test_data)
+                return
+
+            if attempt < 11:
+                time.sleep(5)
+
+        pytest.fail(
+            f"Deleted tailored CV {cv_tailoring_id} still appears in list after polling"
+        )
+
     def test_cv_tailoring_async_polling(self):
         """Test CV tailoring async polling lifecycle."""
         # First, submit a CV tailoring request

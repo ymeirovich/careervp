@@ -10,12 +10,14 @@ Results: docs/beta/execution_results/L6_4_results.md
 
 import json
 import os
+import re
 
 import pytest
 
 CANONICAL_ROUTES_PATH = '/Users/yitzchak/Documents/dev/careervp/docs/beta/canonical_routes.md'
 FROZEN_SPEC_PATH = '/Users/yitzchak/Documents/dev/careervp/docs/beta/evidence/I7_routes/frozen_spec.json'
 ROUTE_DIFF_PATH = '/Users/yitzchak/Documents/dev/careervp/docs/beta/evidence/I7_routes/route-surface-diff.txt'
+API_CONSTRUCT_PATH = '/Users/yitzchak/Documents/dev/careervp/infra/careervp/api_construct.py'
 
 EXPECTED_ROUTE_COUNT = 31
 
@@ -165,3 +167,17 @@ class TestNoDeprecatedRoutes:
         """No routes with /api/ prefix exist in canonical spec."""
         api_prefix_routes = [r for r in CANONICAL_ROUTES if '/api/' in r]
         assert api_prefix_routes == [], f'Routes with /api/ prefix found: {api_prefix_routes}'
+
+
+@pytest.mark.unit
+class TestCvTailoringDeleteRouteSurface:
+    """CV tailoring route surface must include delete route."""
+
+    def test_cv_tailoring_delete_route_present(self):
+        """CDK route map includes DELETE /cv-tailoring/{cvTailoringId}."""
+        with open(API_CONSTRUCT_PATH) as f:
+            content = f.read()
+
+        matches = re.findall(r'\(\s*"([^"]+)"\s*,\s*"([A-Z]+)"\s*,', content)
+        route_operations = {(method, path) for path, method in matches}
+        assert ('DELETE', '/cv-tailoring/{cvTailoringId}') in route_operations
