@@ -439,7 +439,7 @@ class DynamoDalHandler(DalHandler):
         logger.info('listing cover letters for user from DynamoDB')
         try:
             table = self._get_db_handler(self.table_name)
-            key_condition = Key('pk').eq(user_id) & Key('sk').begins_with(COVER_LETTER_SORT_KEY_PREFIX)
+            key_condition = Key('applicationId').eq(user_id) & Key('artifactId').begins_with(COVER_LETTER_SORT_KEY_PREFIX)
             items: list[dict[str, Any]] = []
             response = table.query(KeyConditionExpression=key_condition)
             items.extend(response.get('Items', []))
