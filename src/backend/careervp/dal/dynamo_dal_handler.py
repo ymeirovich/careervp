@@ -1,9 +1,9 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-import boto3  # type: ignore[import-untyped]
-from boto3.dynamodb.conditions import Key  # type: ignore[import-untyped]
-from botocore.exceptions import ClientError  # type: ignore[import-untyped]
+import boto3
+from boto3.dynamodb.conditions import Key
+from botocore.exceptions import ClientError
 from mypy_boto3_dynamodb import DynamoDBServiceResource
 from pydantic import ValidationError
 

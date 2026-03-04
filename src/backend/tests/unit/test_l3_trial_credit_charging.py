@@ -59,10 +59,13 @@ class TestCreditChargedBeforeLLM:
             dal = MagicMock()
             dal.save_gap_questions.return_value = Result(success=True, data=None, code=ResultCode.GAP_QUESTIONS_GENERATED)
             mock_get_dal.return_value = dal
-            mock_generate.side_effect = lambda **_: call_order.append('generate_gap_questions') or Result(
-                success=True,
-                data=[{'question_id': 'q-1', 'question': 'Describe impact', 'tags': ['[CV IMPACT]']}],
-                code=ResultCode.GAP_QUESTIONS_GENERATED,
+            mock_generate.side_effect = lambda **_: (
+                call_order.append('generate_gap_questions')
+                or Result(
+                    success=True,
+                    data=[{'question_id': 'q-1', 'question': 'Describe impact', 'tags': ['[CV IMPACT]']}],
+                    code=ResultCode.GAP_QUESTIONS_GENERATED,
+                )
             )
             response = lambda_handler(_event(), MagicMock())
 

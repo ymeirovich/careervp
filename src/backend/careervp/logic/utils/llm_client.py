@@ -12,10 +12,10 @@ from functools import wraps
 from time import sleep
 from typing import Any, Callable, ParamSpec, TypeVar, cast
 
-import boto3  # type: ignore[import-untyped]
+import boto3
 from anthropic import Anthropic, APIError, RateLimitError
 from aws_lambda_powertools.metrics import MetricUnit
-from botocore.exceptions import BotoCoreError, ClientError  # type: ignore[import-untyped]
+from botocore.exceptions import BotoCoreError, ClientError
 
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.models.result import Result, ResultCode

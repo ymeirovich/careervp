@@ -9,7 +9,7 @@ import os
 import re
 from typing import Any, cast
 
-import boto3  # type: ignore[import-untyped]
+import boto3
 from anthropic import Anthropic
 
 from careervp.logic.circuit_breaker import CircuitBreaker, CircuitBreakerBlockedError

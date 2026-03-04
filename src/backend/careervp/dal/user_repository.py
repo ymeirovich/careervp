@@ -8,8 +8,8 @@ import os
 from datetime import datetime, timezone
 from typing import Any
 
-import boto3  # type: ignore[import-untyped]
-from botocore.exceptions import ClientError  # type: ignore[import-untyped]
+import boto3
+from botocore.exceptions import ClientError
 
 from careervp.models.user import User
 

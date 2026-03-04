@@ -11,7 +11,7 @@ from typing import Any
 
 from aws_lambda_powertools.metrics import MetricUnit
 from aws_lambda_powertools.utilities.typing import LambdaContext
-from boto3.dynamodb.conditions import Attr, Key  # type: ignore[import-untyped]
+from boto3.dynamodb.conditions import Attr, Key
 from pydantic import ValidationError
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
@@ -157,7 +157,7 @@ def _update_artifact_status(
     """Update interview prep artifact status in DynamoDB."""
     import datetime as _dt
 
-    import boto3 as _boto3  # type: ignore[import-untyped]
+    import boto3 as _boto3
 
     table_name = _get_artifacts_table_name()
     table = _boto3.resource('dynamodb').Table(table_name)

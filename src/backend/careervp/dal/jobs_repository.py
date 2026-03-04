@@ -14,9 +14,9 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-import boto3  # type: ignore[import-untyped]
-from boto3.dynamodb.conditions import Key  # type: ignore[import-untyped]
-from botocore.exceptions import ClientError  # type: ignore[import-untyped]
+import boto3
+from boto3.dynamodb.conditions import Key
+from botocore.exceptions import ClientError
 
 from careervp.dal.api_storage_adapter import ApiStorageAdapter
 from careervp.handlers.utils.observability import logger, tracer
