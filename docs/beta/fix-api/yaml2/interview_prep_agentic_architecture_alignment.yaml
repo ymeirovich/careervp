@@ -1,0 +1,313 @@
+spec_id: INTERVIEW_PREP_003
+title: Interview Prep Must Align to Agentic Architecture Inputs and Workflow
+priority: high
+status: pending
+owner: backend-platform
+created_at: 2026-03-04
+updated_at: 2026-03-04
+
+description: |
+  Align interview prep generation with Agentic Architecture section 3.7 by ensuring
+  backend-enriched context is passed to prompt and generation workflow:
+  cv_facts, job_requirements, vpr_differentiators, gap_responses, company_research, language.
+
+  This spec is regression-safe:
+  - Keep existing POST/GET contracts backward-compatible.
+  - Add optional request fields only.
+  - Preserve working status/list behavior from INTERVIEW_PREP_002.
+
+scope:
+  applies_to:
+    - POST /interview-prep/generate
+    - interview prep async worker execution path
+    - interview prep prompt and generation logic
+    - context resolution from CV/VPR/gap/company/job/application sources
+  does_not_replace:
+    - full orchestrator/Step Functions migration
+    - coding/security/testing standards
+  out_of_scope:
+    - breaking API contract redesign
+    - full rewrite of cover letter or CV tailoring pipelines
+    - replacing existing interview prep status payload schema
+
+problem_statement:
+  exact_failing_behavior: |
+    Interview prep prompt and generation pipeline do not consume architecture-required context.
+    Current implementation builds prompt with only VPR summary + optional gap responses and
+    does not pass cv_facts/job_requirements/vpr_differentiators/company_research/language.
+
+    Additional drift:
+    - handler invokes generate_interview_prep with vpr_data={"vpr_id": ...} and gap_responses=[]
+    - API request model for interview prep lacks application_id/job_id/language context
+    - current max question count is 10 while architecture expects 10-15
+  expected_behavior: |
+    Interview prep generation uses architecture-defined inputs:
+    cv_facts, job_requirements, vpr_differentiators, gap_responses, company_research, language.
+    Backend enriches this context server-side and generated output remains contract-compatible
+    for existing clients and tests.
+  impact: |
+    Generated interview prep is weakly grounded and can drift from CV facts and job/company context.
+    Architecture drift increases hallucination risk, lowers output quality, and prevents deterministic
+    alignment validation.
+  reproducibility_notes:
+    - Submit POST /interview-prep/generate with current payload
+    - Trace path submit -> worker -> generate_interview_prep -> build_user_prompt
+    - Confirm prompt lacks architecture-required sections
+
+evidence:
+  failing_tests:
+    - docs/refactor/live_tests/test_08_interview_prep.py::TestInterviewPrepEndpoints::test_interview_prep_async_polling
+  endpoints:
+    - method: POST
+      path: /interview-prep/generate
+      observed_status: 202
+      observed_body_fragment: '{"request_id":"<uuid>","artifact_id":"<uuid>","status":"processing"}'
+    - method: GET
+      path: /interview-prep/{id}/status
+      observed_status: 404
+      observed_body_fragment: '{"error":"Interview prep not found","code":"CV_NOT_FOUND"}'
+      note: historical defect recorded at careervp/live-test-results26.log:2022, fixed in INTERVIEW_PREP_002 and must not regress
+  code_observations:
+    - src/backend/careervp/logic/prompts/interview_prep_prompt.py build_user_prompt lacks cv_facts/job_requirements/vpr_differentiators/company_research/language
+    - src/backend/careervp/handlers/interview_prep_handler.py passes vpr_data={'vpr_id': api_request.vpr_id} and gap_responses=[]
+    - src/backend/careervp/models/api_models.py InterviewPrepRequest lacks application_id/job_id/language
+    - src/backend/careervp/models/interview_prep.py question_count upper bound is 10
+  architecture_references:
+    - docs/architecture/prompt-improvement/CareerVP_Agentic_Architecture.md:1157
+    - docs/architecture/prompt-improvement/CareerVP_Agentic_Architecture.md:1230
+    - docs/architecture/prompt-improvement/CareerVP_Agentic_Architecture.md:1700
+  environment: dev-live
+  timestamp_utc: '2026-03-04T11:30:00Z'
+
+architecture_and_ownership_map:
+  route_to_lambda:
+    - route: POST /interview-prep/generate
+      lambda: interview-prep-api
+      handler: src/backend/careervp/handlers/interview_prep_submit_handler.py
+    - route: GET /interview-prep/{interviewPrepId}/status
+      lambda: interview-prep-status
+      handler: src/backend/careervp/handlers/interview_prep_handler.py
+    - route: GET /interview-preps
+      lambda: interview-prep-status
+      handler: src/backend/careervp/handlers/interview_prep_handler.py
+  data_store:
+    - table: artifacts
+      key_schema:
+        partition_key: applicationId
+        sort_key: artifactId
+      usage:
+        - interview prep artifact read/write/status
+        - company research artifact lookup by job_id
+    - table: jobs
+      key_schema:
+        partition_key: job_id
+      usage:
+        - VPR async input_data and result fallback
+    - table: users
+      key_schema:
+        partition_key: pk
+        sort_key: sk
+      usage:
+        - CV records with sk prefix CV#
+        - legacy company research fallback keys
+    - table: gap_responses
+      key_schema:
+        partition_key: userId
+        sort_key: questionId
+      usage:
+        - latest responses and filtering by gap_response_ids
+  auth_identity:
+    source: requestContext.authorizer.*.claims.sub
+    scope_key: user_id
+  canonical_source_of_truth:
+    route_surface: OpenAPI request/response models plus infra route mapping
+    storage_schema: deployed PK/SK and index definitions in infrastructure
+
+root_cause_analysis:
+  hypotheses_ranked:
+    - id: H1
+      hypothesis: Prompt contract drift from architecture (missing required input fields)
+      disproof_criteria: prompt builder accepts and renders all architecture inputs
+      status: confirmed
+    - id: H2
+      hypothesis: No server-side context aggregation exists for interview prep
+      disproof_criteria: handler resolves CV/job/VPR/gap/company/language before generation
+      status: confirmed
+    - id: H3
+      hypothesis: CV lookup path inconsistent with persisted CV key shape
+      disproof_criteria: lookup supports latest CV#* records
+      status: confirmed
+    - id: H4
+      hypothesis: Missing architecture-conformance tests allowed drift
+      disproof_criteria: tests assert required prompt inputs and grounding
+      status: confirmed
+  confirmed_root_causes:
+    - Interview prep context inputs are under-modeled and not resolved in handlers
+    - Prompt interface is narrower than architecture-required schema
+    - Tests validate status flow but not architecture input completeness
+  contributing_factors:
+    - Prior async fixes prioritized status schema over prompt/workflow alignment
+    - Multiple storage systems without a dedicated context resolver
+
+fix_plan:
+  behavior_changes:
+    - Implement interview prep context resolver assembling cv_facts, job_requirements, vpr_differentiators, gap_responses, company_research, language
+    - Resolve context server-side while keeping current client payload valid
+    - Update prompt builder to include explicit sections for all architecture-required inputs
+    - Update generation path to pass resolved context into prompt
+    - Update question count policy: default 10, explicit lower values honored, hard max 15
+    - Preserve submit/status/list contracts and async lifecycle
+    - Return deterministic prerequisite failure when CV context cannot be resolved
+    - Persist context source metadata for observability/debugging
+    - Enforce domain-specific error semantics
+    - Ensure all code and infra changes comply with careervp/docs/best_practices/yaml/*
+  files_to_modify:
+    - src/backend/careervp/models/api_models.py
+    - src/backend/careervp/models/interview_prep.py
+    - src/backend/careervp/handlers/interview_prep_submit_handler.py
+    - src/backend/careervp/handlers/interview_prep_handler.py
+    - src/backend/careervp/logic/interview_prep.py
+    - src/backend/careervp/logic/prompts/interview_prep_prompt.py
+    - src/backend/careervp/dal/dynamo_dal_handler.py
+    - src/backend/tests/unit/test_interview_prep_status.py
+    - src/backend/tests/unit/test_async_submit_handlers.py
+    - src/backend/tests/unit/test_l0_interview_prep_generation.py
+    - src/backend/tests/integration/test_interview_prep_roundtrip.py
+    - docs/refactor/live_tests/test_08_interview_prep.py
+    - docs/refactor/live_tests/run_all_tests.py
+  non_goals:
+    - No full orchestrator runtime migration in this change set
+    - No breaking response schema change
+    - No forced strict 10-15 output when explicit lower question_count is requested
+  rollback_plan:
+    - Keep prior prompt path behind internal fallback switch for one deploy window
+    - Revert context resolver invocation while retaining INTERVIEW_PREP_002 status/schema fixes
+    - Disable use of new optional request fields if interoperability regressions occur
+
+acceptance_criteria:
+  api_level:
+    - POST /interview-prep/generate with existing payload returns 202 and request_id
+    - POST /interview-prep/generate accepts optional application_id/job_id/language without validation regression
+    - GET /interview-prep/{request_id}/status returns 200 for valid request_id with existing response shape
+    - Missing prerequisite CV context returns deterministic domain-specific failure
+  data_level:
+    - Interview prep status/store paths continue using Key={applicationId, artifactId}
+    - CV context resolution supports persisted CV records keyed with sk prefix CV#
+    - Gap responses filtered against requested gap_response_ids when present
+    - Company research retrieval supports artifact and legacy-compatible keys, user-scoped
+    - Prompt input contains all architecture-required sections before LLM invocation
+  observability:
+    - Metrics emitted for context resolution success/failure categories
+    - Logs include user_id, request_id, application_id/job_id when resolved, and context source flags
+    - Generated question count metric recorded
+  edge_cases:
+    - Cross-user access remains denied/404 scoped
+    - Missing company research degrades gracefully
+    - Missing vpr differentiators uses deterministic fallback
+    - Explicit question_count below default honored; above max capped to 15
+    - No regression to INTERVIEW_PREP_002 behavior
+
+validation_plan:
+  unit_tests:
+    - src/backend/tests/unit/test_interview_prep_prompt_context.py
+    - src/backend/tests/unit/test_interview_prep_context_resolution.py
+    - src/backend/tests/unit/test_l0_interview_prep_generation.py
+    - src/backend/tests/unit/test_interview_prep_status.py
+    - src/backend/tests/unit/test_async_submit_handlers.py
+  integration_tests:
+    - src/backend/tests/integration/test_interview_prep_roundtrip.py
+    - src/backend/tests/integration/test_interview_prep_context_sources.py
+  live_e2e:
+    - docs/refactor/live_tests/test_08_interview_prep.py
+  regression_tests:
+    - docs/refactor/live_tests/test_04_vpr.py
+    - docs/refactor/live_tests/test_05_gap_analysis.py
+    - docs/refactor/live_tests/test_07_cover_letter.py
+    - docs/refactor/live_tests/run_all_tests.py
+
+traceability_matrix:
+  - requirement_id: AC-IP-301
+    requirement: Prompt includes all architecture-required interview prep inputs
+    code_reference: src/backend/careervp/logic/prompts/interview_prep_prompt.py
+    test_reference: src/backend/tests/unit/test_interview_prep_prompt_context.py::test_prompt_contains_agentic_input_sections
+    evidence_reference: docs/evidence/interview-prep-prompt-inputs-2026-03-04.json
+    result: pending
+  - requirement_id: AC-IP-302
+    requirement: Backend resolves cv_facts server-side and passes into generation
+    code_reference: src/backend/careervp/handlers/interview_prep_handler.py
+    test_reference: src/backend/tests/unit/test_interview_prep_context_resolution.py::test_resolves_cv_facts_from_latest_cv_record
+    evidence_reference: docs/evidence/interview-prep-context-cv-resolution-2026-03-04.json
+    result: pending
+  - requirement_id: AC-IP-303
+    requirement: API contract remains backward-compatible while allowing optional context fields
+    code_reference: src/backend/careervp/models/api_models.py
+    test_reference: src/backend/tests/unit/test_async_submit_handlers.py::test_interview_prep_submit_handler_validates_and_queues_with_sqs_queue_url
+    evidence_reference: docs/evidence/interview-prep-submit-contract-compat-2026-03-04.json
+    result: pending
+  - requirement_id: AC-IP-304
+    requirement: Question count policy supports default 10 and cap 15
+    code_reference: src/backend/careervp/logic/interview_prep.py
+    test_reference: src/backend/tests/unit/test_l0_interview_prep_generation.py::test_question_count_policy_default_and_cap
+    evidence_reference: docs/evidence/interview-prep-question-count-policy-2026-03-04.json
+    result: pending
+  - requirement_id: AC-IP-305
+    requirement: Live roundtrip returns resolvable request_id and grounded completed payload
+    code_reference: src/backend/careervp/handlers/interview_prep_handler.py
+    test_reference: docs/refactor/live_tests/test_08_interview_prep.py::TestInterviewPrepEndpoints::test_get_interview_prep_status
+    evidence_reference: docs/evidence/interview-prep-live-roundtrip-2026-03-04.json
+    result: pending
+  - requirement_id: AC-IP-306
+    requirement: No regression to INTERVIEW_PREP_002 status key schema and domain not-found code behavior
+    code_reference: src/backend/careervp/handlers/interview_prep_handler.py
+    test_reference: src/backend/tests/unit/test_interview_prep_status.py::test_artifacts_schema_keys
+    evidence_reference: docs/evidence/interview-prep-status-schema-regression-2026-03-04.txt
+    result: pending
+
+completion_evidence:
+  required_artifacts:
+    - unit_test_output
+    - integration_test_output
+    - live_test_output
+    - prompt_render_snapshot
+    - context_resolution_trace
+  residual_risks:
+    - Storage heterogeneity across artifacts/jobs/users/gap_responses may require additional fallback hardening
+    - Historical records with partial metadata may produce reduced-context prompts until data backfill
+  sign_off_checklist:
+    - All required spec sections populated and validated against SPEC_QUALITY_001
+    - All acceptance criteria mapped to code, test, and evidence
+    - Architecture input fields present in prompt render snapshots
+    - Live async lifecycle verified with terminal completed state
+    - Regression suite for adjacent endpoints green
+    - Compliance review completed for all relevant best-practice specs
+
+assumptions_and_defaults:
+  - Server enrichment is the canonical strategy; clients are not required to send full architecture context
+  - Output schema remains backward-compatible; alignment is achieved through richer input/workflow
+  - Default generated question_count is 10 when omitted; explicit lower values are honored
+  - Maximum generated question_count is 15
+  - INTERVIEW_PREP_002 is a prerequisite baseline and must not regress
+
+compliance_requirements:
+  must_comply_with:
+    - careervp/docs/best_practices/yaml/spec_best_practices.yaml
+    - careervp/docs/best_practices/yaml/lambda_handler_spec.yaml
+    - careervp/docs/best_practices/yaml/testing_spec.yaml
+    - careervp/docs/best_practices/yaml/dynamodb_modeling_spec.yaml
+    - careervp/docs/best_practices/yaml/code_quality_security_spec.yaml
+    - careervp/docs/best_practices/yaml/application_state_spec.yaml
+    - careervp/docs/best_practices/yaml/trial_enforcement_spec.yaml
+    - careervp/docs/best_practices/yaml/cicd_spec.yaml
+    - careervp/docs/best_practices/yaml/prompt_optimization_spec.yaml
+    - careervp/docs/best_practices/yaml/prompt_optimization_cdk_spec.yaml
+    - careervp/docs/best_practices/yaml/cognito_spec.yaml
+    - careervp/docs/best_practices/yaml/frontend_spec.yaml
+  gate_checks:
+    - Spec completeness gate
+    - Traceability gate
+    - Schema conformance gate
+    - Pre-deploy contract plus regression gate
+    - Post-deploy live validation plus closure review gate
+
+dependencies:
+  - INTERVIEW_PREP_002

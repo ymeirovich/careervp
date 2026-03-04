@@ -1,0 +1,136 @@
+spec_id: GAP_GET_002
+title: Gap Questions Read-After-Write Must Return Persisted Questions
+priority: high
+status: pending
+owner: backend-platform
+created_at: 2026-03-04
+updated_at: 2026-03-04
+
+problem_statement:
+  exact_failing_behavior: |
+    POST /jobs/{job_id}/gap-questions returns generated questions, but
+    GET /jobs/{job_id}/gap-questions returns {"cv_id": null, "questions": []}.
+  expected_behavior: |
+    A successful POST response implies data is persisted and retrievable via GET for the same user/job_id.
+  impact: |
+    Users lose generated work and downstream flows fail quality checks.
+  reproducibility_notes:
+    - Execute test_05_gap_analysis generate endpoint
+    - Call GET gap questions with same job_id and auth
+
+evidence:
+  failing_tests:
+    - docs/refactor/live_tests/test_05_gap_analysis.py::TestGapAnalysisEndpoints::test_get_gap_questions
+  endpoints:
+    - method: POST
+      path: /jobs/{jobId}/gap-questions
+      observed_status: 200
+    - method: GET
+      path: /jobs/{jobId}/gap-questions
+      observed_status: 200
+      observed_body_fragment: '{"cv_id": null, "questions": []}'
+  environment: dev-live
+  timestamp_utc: '2026-03-04T07:00:00Z'
+
+architecture_and_ownership_map:
+  route_to_lambda:
+    - route: POST /jobs/{jobId}/gap-questions
+      lambda: gap-api
+      handler: src/backend/careervp/handlers/gap_handler.py
+    - route: GET /jobs/{jobId}/gap-questions
+      lambda: gap-api
+      handler: src/backend/careervp/handlers/gap_handler.py
+  data_store:
+    table: users (gap question artifacts)
+    key_schema:
+      partition_key: pk
+      sort_key: sk
+    artifact_prefix: ARTIFACT#GAP_ANALYSIS#
+  auth_identity:
+    source: requestContext.authorizer.*.claims.sub
+    scope_key: user_id
+
+root_cause_analysis:
+  hypotheses_ranked:
+    - id: H1
+      hypothesis: Persist failures are swallowed and POST still returns success
+      disproof_criteria: POST fails when DAL save fails
+      status: likely
+    - id: H2
+      hypothesis: GET filter logic mismatches job_id formatting
+      disproof_criteria: job_id normalization + sk suffix match returns item
+      status: partially_resolved_but_not_sufficient
+    - id: H3
+      hypothesis: user_id extraction mismatch between POST and GET
+      disproof_criteria: same authenticated sub used in both code paths
+      status: unresolved
+  contributing_factors:
+    - Write path logs persistence error but still returns successful payload
+    - Read path returns empty 200 for storage issues, masking defects
+
+fix_plan:
+  behavior_changes:
+    - Treat DAL save failure as request failure (5xx), not silent success.
+    - Add explicit persisted=true invariant before returning 200 from POST.
+    - Harden GET retrieval by exact job_id normalization and deterministic item selection.
+    - Emit structured logs for user_id/job_id/save_result/retrieval_count.
+  files_to_modify:
+    - src/backend/careervp/handlers/gap_handler.py
+    - src/backend/careervp/dal/dynamo_dal_handler.py
+  non_goals:
+    - No changes to gap question generation content format
+  rollback_plan:
+    - Revert strict persistence gate behind temporary feature flag if external dependency outage causes widespread failures
+
+acceptance_criteria:
+  api_level:
+    - POST /jobs/{jobId}/gap-questions returns 200 only when persistence succeeds
+    - GET /jobs/{jobId}/gap-questions returns >=1 persisted question for recent successful POST
+    - Storage failures surface as non-2xx with explicit error code
+  data_level:
+    - Persisted item sk ends with #{job_id}
+    - GET matching includes job_id normalized comparison and sk suffix validation
+  observability:
+    - Metric for gap question persistence failures
+    - Metric for gap question empty-read after recent write (should be zero)
+  edge_cases:
+    - Multiple artifacts for same job_id return most recent by timestamp
+
+validation_plan:
+  unit_tests:
+    - src/backend/tests/unit/test_gap_handler_persistence_required.py
+    - src/backend/tests/unit/test_gap_dal_job_id_filter.py
+  integration_tests:
+    - src/backend/tests/integration/test_gap_read_after_write_roundtrip.py
+  live_e2e:
+    - docs/refactor/live_tests/test_05_gap_analysis.py
+  regression_tests:
+    - Ensure submit gap responses flow unchanged for valid persisted questions
+
+traceability_matrix:
+  - requirement_id: AC-GAP-001
+    requirement: POST success requires persistence success
+    code_reference: src/backend/careervp/handlers/gap_handler.py
+    test_reference: src/backend/tests/unit/test_gap_handler_persistence_required.py::test_post_fails_on_save_failure
+    evidence_reference: docs/evidence/gap-post-persist-gate-<timestamp>.json
+    result: pending
+  - requirement_id: AC-GAP-002
+    requirement: GET returns persisted questions for same job_id
+    code_reference: src/backend/careervp/dal/dynamo_dal_handler.py
+    test_reference: docs/refactor/live_tests/test_05_gap_analysis.py::TestGapAnalysisEndpoints::test_get_gap_questions
+    evidence_reference: docs/evidence/gap-roundtrip-<timestamp>.json
+    result: pending
+
+completion_evidence:
+  required_artifacts:
+    - unit_test_output
+    - integration_test_output
+    - live_test_output
+  residual_risks:
+    - Existing historical malformed job_id records may remain unreadable without backfill
+  sign_off_checklist:
+    - Silent persistence failure path removed
+    - Read-after-write scenario verified in live env
+    - Regression suite green
+
+dependencies: []

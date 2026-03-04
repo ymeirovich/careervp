@@ -25,6 +25,7 @@ from careervp.models.interview_prep import InterviewPrepRequest as LogicIntervie
 from careervp.models.result import Result, ResultCode
 
 INTERVIEW_PREP_SORT_KEY_PREFIX = 'ARTIFACT#INTERVIEW_PREP#'
+PRIMARY_KEY_MODE = 'applicationId/artifactId'
 
 
 def _get_artifacts_table_name() -> str:
@@ -37,6 +38,13 @@ def _get_artifacts_table_name() -> str:
 
 def _get_dal() -> DynamoDalHandler:
     return DynamoDalHandler(_get_artifacts_table_name())
+
+
+def _normalize_interview_prep_artifact_id(interview_prep_id: str) -> str:
+    normalized = interview_prep_id.strip()
+    if normalized.startswith(INTERVIEW_PREP_SORT_KEY_PREFIX):
+        return normalized
+    return f'{INTERVIEW_PREP_SORT_KEY_PREFIX}{normalized}'
 
 
 @logger.inject_lambda_context
@@ -171,15 +179,29 @@ def _update_artifact_status(
         update_expr += ', interview_prep = :result'
         attr_values[':result'] = result_data
 
+    artifact_id = _normalize_interview_prep_artifact_id(job_id)
     try:
         table.update_item(
-            Key={'pk': user_id, 'sk': f'ARTIFACT#INTERVIEW_PREP#{job_id}'},
+            Key={'applicationId': user_id, 'artifactId': artifact_id},
             UpdateExpression=update_expr,
             ExpressionAttributeNames=attr_names,
             ExpressionAttributeValues=attr_values,
         )
+        logger.info(
+            'Updated interview prep artifact status',
+            user_id=user_id,
+            request_id=job_id,
+            key_schema_mode=PRIMARY_KEY_MODE,
+            status=status,
+        )
     except Exception as exc:
-        logger.error('Failed to update artifact status', job_id=job_id, error=str(exc))
+        logger.error(
+            'Failed to update artifact status',
+            user_id=user_id,
+            request_id=job_id,
+            key_schema_mode=PRIMARY_KEY_MODE,
+            error=str(exc),
+        )
         raise
 
 
@@ -266,9 +288,16 @@ def get_interview_prep_status(event: dict[str, Any]) -> dict[str, Any]:
 
     interview_prep_item = _get_interview_prep_item(user_id, interview_prep_id)
     if not interview_prep_item:
+        metrics.add_metric(name='InterviewPrepStatusNotFound', unit=MetricUnit.Count, value=1)
+        logger.warning(
+            'Interview prep status lookup returned no record',
+            user_id=user_id,
+            request_id=interview_prep_id,
+            key_schema_mode=PRIMARY_KEY_MODE,
+        )
         return _build_response(
             HTTPStatus.NOT_FOUND,
-            {'error': 'Interview prep not found', 'code': ResultCode.CV_NOT_FOUND},
+            {'error': 'Interview prep not found', 'code': ResultCode.INTERVIEW_PREP_NOT_FOUND},
         )
 
     return _build_response(
@@ -443,25 +472,37 @@ def _build_generation_error_response(generation_result: Result[Any]) -> dict[str
     )
 
 
-def _get_interview_prep_item(user_id: str, interview_prep_id: str) -> dict[str, Any] | None:
+def _get_interview_prep_item(user_id: str, interview_prep_id: str) -> dict[str, Any] | None:  # noqa: C901
     dal = _get_dal()
     table = dal._get_db_handler(dal.table_name)
-    for artifact_id in (
+
+    candidate_artifact_ids = (
+        _normalize_interview_prep_artifact_id(interview_prep_id),
         interview_prep_id,
-        f'{INTERVIEW_PREP_SORT_KEY_PREFIX}{interview_prep_id}',
-    ):
+    )
+    for artifact_id in candidate_artifact_ids:
         try:
-            get_response = table.get_item(Key={'pk': user_id, 'sk': artifact_id})
+            get_response = table.get_item(Key={'applicationId': user_id, 'artifactId': artifact_id})
         except Exception:
             get_response = {}
         item = get_response.get('Item') if isinstance(get_response, dict) else None
         if isinstance(item, dict):
             return item
 
+    # Temporary backward-compatible fallback for legacy records written with pk/sk key schema.
+    for artifact_id in candidate_artifact_ids:
+        try:
+            legacy_response = table.get_item(Key={'pk': user_id, 'sk': artifact_id})
+        except Exception:
+            legacy_response = {}
+        legacy_item = legacy_response.get('Item') if isinstance(legacy_response, dict) else None
+        if isinstance(legacy_item, dict):
+            return legacy_item
+
     try:
         query_response = table.query(
-            KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with(INTERVIEW_PREP_SORT_KEY_PREFIX),
-            FilterExpression=Attr('sk').contains(interview_prep_id),
+            KeyConditionExpression=Key('applicationId').eq(user_id) & Key('artifactId').begins_with(INTERVIEW_PREP_SORT_KEY_PREFIX),
+            FilterExpression=Attr('artifactId').contains(interview_prep_id),
             Limit=1,
         )
     except Exception:
@@ -469,6 +510,19 @@ def _get_interview_prep_item(user_id: str, interview_prep_id: str) -> dict[str, 
     query_items = query_response.get('Items') if isinstance(query_response, dict) else None
     if isinstance(query_items, list) and query_items and isinstance(query_items[0], dict):
         return query_items[0]
+
+    # Temporary legacy-query fallback while old records exist.
+    try:
+        legacy_query_response = table.query(
+            KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with(INTERVIEW_PREP_SORT_KEY_PREFIX),
+            FilterExpression=Attr('sk').contains(interview_prep_id),
+            Limit=1,
+        )
+    except Exception:
+        legacy_query_response = {}
+    legacy_query_items = legacy_query_response.get('Items') if isinstance(legacy_query_response, dict) else None
+    if isinstance(legacy_query_items, list) and legacy_query_items and isinstance(legacy_query_items[0], dict):
+        return legacy_query_items[0]
     return None
 
 

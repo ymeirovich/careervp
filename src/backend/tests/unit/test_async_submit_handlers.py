@@ -100,9 +100,13 @@ def test_interview_prep_submit_handler_validates_and_queues_with_sqs_queue_url()
     assert response['statusCode'] == 202
     body = json.loads(str(response['body']))
     assert body['status'] == 'processing'
+    assert body['request_id'] == body['artifact_id']
     mock_sqs.send_message.assert_called_once()
     mock_sqs.get_queue_url.assert_not_called()
     mock_table.put_item.assert_called_once()
+    item = mock_table.put_item.call_args.kwargs['Item']
+    assert item['artifactId'] == f'ARTIFACT#INTERVIEW_PREP#{body["request_id"]}'
+    assert item['applicationId'] == 'user-123'
 
 
 def test_cover_letter_submit_handler_returns_structured_validation_errors() -> None:
@@ -155,3 +159,42 @@ def test_interview_prep_submit_handler_returns_structured_validation_errors() ->
     assert body['validation_errors'][0]['code'] == 'VALIDATION_ERROR'
     mock_sqs.send_message.assert_not_called()
     mock_dynamo.Table.assert_not_called()
+
+
+def test_interview_prep_submit_handler_marks_failed_with_artifacts_keys_on_sqs_error() -> None:
+    from careervp.handlers import interview_prep_submit_handler as module
+
+    event = _event(
+        '/interview-prep/generate',
+        {
+            'vpr_id': 'vpr-1',
+            'gap_response_ids': ['gap-1'],
+            'focus_areas': ['system design'],
+            'question_count': 5,
+        },
+    )
+    context = _lambda_context('interview-prep-submit')
+
+    sqs_error = module.BotoClientError(
+        {'Error': {'Code': 'ServiceError', 'Message': 'queue unavailable'}},
+        'SendMessage',
+    )
+    mock_table = MagicMock()
+
+    with (
+        patch.object(module, 'sqs') as mock_sqs,
+        patch.object(module, 'dynamodb_resource') as mock_dynamo,
+    ):
+        mock_sqs.send_message.side_effect = sqs_error
+        mock_dynamo.Table.return_value = mock_table
+        response = module.lambda_handler(event, context)
+
+    assert response['statusCode'] == 500
+    put_item = mock_table.put_item.call_args.kwargs['Item']
+    expected_artifact_id = put_item['artifactId']
+    mock_table.update_item.assert_called_once_with(
+        Key={'applicationId': 'user-123', 'artifactId': expected_artifact_id},
+        UpdateExpression='SET #s = :status, updated_at = :now',
+        ExpressionAttributeNames={'#s': 'status'},
+        ExpressionAttributeValues={':status': 'FAILED', ':now': put_item['created_at']},
+    )

@@ -56,8 +56,8 @@ class TestGapAnalysisEndpoints:
 
         response = requests.post(url, json=payload, headers=headers, timeout=60)
 
-        # Accept 200 (success) or 400/422 (validation error)
-        if response.status_code == 200:
+        # Accept 200/201 success semantics; fail on all other statuses.
+        if response.status_code in [200, 201]:
             try:
                 data = response.json()
             except Exception:
@@ -173,8 +173,8 @@ class TestGapAnalysisEndpoints:
                 response.status_code,
                 data,
             )
-            print(
-                f"⚠ POST /jobs/{job_id}/gap-responses - Status {response.status_code}: {response.text[:200]}"
+            pytest.fail(
+                f"POST /jobs/{job_id}/gap-responses returned {response.status_code}: {response.text[:300]}"
             )
 
     def test_get_gap_questions(self):

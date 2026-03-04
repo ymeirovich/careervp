@@ -1,0 +1,245 @@
+spec_id: SPEC_QUALITY_001
+title: Best Practices for Writing and Executing Fix Specs
+priority: high
+status: active
+
+description: |
+  This meta-spec defines mandatory best practices for writing, implementing,
+  validating, and closing engineering fix specs.
+
+  Goal:
+  - Ensure each spec is implemented exactly as designed.
+  - Prevent partial fixes that pass local/unit tests but fail in deployed environments.
+  - Require objective evidence for completion.
+
+scope:
+  applies_to:
+    - API bug fix specs
+    - backend behavior fixes
+    - infra-route/handler alignment fixes
+    - data persistence and contract compliance fixes
+  does_not_replace:
+    - coding standards
+    - security standards
+    - incident response procedures
+
+required_spec_sections:
+  - section: Metadata
+    must_include:
+      - spec_id (stable and unique)
+      - title (problem + impact)
+      - priority (low|medium|high|critical)
+      - status (draft|pending|in_progress|implemented|validated|closed)
+      - owner (person or team)
+      - created_at (YYYY-MM-DD)
+      - updated_at (YYYY-MM-DD)
+
+  - section: Problem Statement
+    must_include:
+      - exact failing behavior
+      - expected behavior
+      - user/business impact
+      - reproducibility notes
+
+  - section: Evidence
+    must_include:
+      - failing test names
+      - endpoint/method/path
+      - observed status code/body
+      - timestamp and environment (dev/stage/prod)
+      - log/correlation/request IDs when available
+
+  - section: Architecture and Ownership Map
+    must_include:
+      - route -> lambda/function mapping
+      - handler file paths
+      - data store/table/index used by each path
+      - auth source and identity key used for scoping
+
+  - section: Root Cause Analysis
+    must_include:
+      - ranked hypotheses
+      - disproof criteria for each hypothesis
+      - confirmed root cause(s)
+      - contributing factors
+
+  - section: Fix Plan
+    must_include:
+      - exact files to modify
+      - exact behavior changes
+      - non-goals/out of scope
+      - rollback plan
+
+  - section: Acceptance Criteria
+    must_include:
+      - API-level criteria (status + body contract)
+      - data-level criteria (storage keys, index usage, schema)
+      - observability criteria (logs/metrics)
+      - negative and edge-case criteria
+
+  - section: Validation Plan
+    must_include:
+      - unit tests
+      - integration tests with production-like schema
+      - live/e2e checks against deployed route
+      - regression checks for adjacent endpoints
+
+  - section: Traceability Matrix
+    must_include:
+      - requirement_id
+      - code_reference
+      - test_reference
+      - evidence_reference
+      - pass/fail
+
+  - section: Completion Evidence
+    must_include:
+      - test output snippets
+      - deployed endpoint verification artifacts
+      - known residual risks
+      - explicit sign-off checklist
+
+quality_rules:
+  writing_rules:
+    - Use concrete identifiers, not placeholders, for routes, files, keys, and models.
+    - Include absolute status/body expectations; avoid ambiguous wording ("should work").
+    - Define canonical source of truth for route surface (OpenAPI and infra mapping).
+    - Define canonical source of truth for storage schema (table PK/SK and GSIs).
+    - Avoid broad "fix X" tasks; split by deterministic behavior changes.
+
+  implementation_rules:
+    - Update all affected code paths (submit/status/list/worker), not only one path.
+    - Enforce schema consistency across read/write/update/query operations.
+    - Preserve backward compatibility intentionally; do not rely on accidental fallbacks.
+    - Standardize error codes/messages for the domain (avoid unrelated codes like CV_NOT_FOUND for interview prep).
+
+  testing_rules:
+    - Unit tests must mirror deployed schema and key names.
+    - Integration tests must validate roundtrip behavior: write -> read/status/list.
+    - Live tests must verify exact request ID returned by submit is resolvable by status endpoint.
+    - Add regression tests for adjacent artifact types sharing infrastructure patterns.
+
+  evidence_rules:
+    - No status transition to validated/closed without attached evidence artifacts.
+    - Evidence must include environment and exact execution date/time.
+    - If behavior is async, evidence must include polling lifecycle and terminal state.
+
+anti_patterns_to_avoid:
+  - Pattern: Partial path fix
+    description: Submit fixed, status/list/worker unchanged.
+  - Pattern: Schema drift in tests
+    description: Tests use legacy table keys that do not match deployed schema.
+  - Pattern: Silent completion
+    description: Spec marked done without traceability matrix and live proof.
+  - Pattern: Generic acceptance criteria
+    description: Criteria cannot be machine-verified.
+
+required_gates:
+  pre_merge:
+    - Gate: Spec completeness check
+      rule: All required_spec_sections present.
+    - Gate: Traceability check
+      rule: Every acceptance criterion mapped to code + test.
+    - Gate: Schema conformance check
+      rule: Storage key/index usage matches deployed table schema.
+
+  pre_deploy:
+    - Gate: Contract checks
+      rule: Endpoint contract tests pass for changed routes.
+    - Gate: Regression checks
+      rule: Related endpoints pass smoke tests.
+
+  post_deploy:
+    - Gate: Live validation
+      rule: Execute acceptance scenario against deployed API and store artifacts.
+    - Gate: Closure review
+      rule: Reviewer confirms evidence and residual risks.
+
+spec_lifecycle:
+  - state: draft
+    entry_criteria:
+      - problem described
+    exit_criteria:
+      - all required sections populated
+
+  - state: pending
+    entry_criteria:
+      - owner assigned
+      - plan approved
+    exit_criteria:
+      - implementation started
+
+  - state: in_progress
+    entry_criteria:
+      - code changes in progress
+    exit_criteria:
+      - all planned changes merged
+
+  - state: implemented
+    entry_criteria:
+      - code complete
+    exit_criteria:
+      - unit + integration tests passing
+
+  - state: validated
+    entry_criteria:
+      - deployed environment verification complete
+      - traceability matrix all pass
+    exit_criteria:
+      - sign-off complete
+
+  - state: closed
+    entry_criteria:
+      - residual risks documented
+      - rollback and monitoring notes captured
+
+execution_checklist:
+  spec_author:
+    - Define exact route(s), handler(s), and data schema touched.
+    - Write machine-verifiable acceptance criteria.
+    - Include failure reproduction command(s).
+
+  implementer:
+    - Create requirement-to-code mapping before editing.
+    - Implement all affected paths and shared helpers.
+    - Add/adjust tests with deployed schema fidelity.
+
+  reviewer:
+    - Verify no acceptance criterion is unmapped.
+    - Verify tests model production schema and auth context.
+    - Verify live evidence corresponds to changed route IDs.
+
+  release_owner:
+    - Enforce pre_deploy and post_deploy gates.
+    - Block closure if any required evidence missing.
+
+traceability_template:
+  - requirement_id: AC-001
+    requirement: POST returns request_id resolvable by GET status
+    code_reference: src/backend/careervp/handlers/example.py:120
+    test_reference: docs/refactor/live_tests/test_example.py::test_roundtrip
+    evidence_reference: docs/evidence/example-roundtrip-2026-03-04.json
+    result: pass
+
+validation_commands_template:
+  unit:
+    - uv run pytest src/backend/tests/unit/test_<feature>.py -q
+  integration:
+    - uv run pytest src/backend/tests/integration/test_<feature>_roundtrip.py -q
+  live:
+    - uv run pytest docs/refactor/live_tests/test_<feature>.py -q
+
+future_improvements_included:
+  - Require traceability matrix in every spec and PR.
+  - Require schema-faithful tests (same key names/indexes as deployed infra).
+  - Add hard deployment gates based on acceptance criteria pass/fail.
+  - Require post-deploy evidence artifacts before status moves to validated/closed.
+  - Add static/invariant checks for forbidden legacy key usage where schema changed.
+
+files_to_modify_when_adopting:
+  - path: docs/beta/fix-api/yaml/<new_spec>.yaml
+  - path: tests/unit/test_<feature>*.py
+  - path: tests/integration/test_<feature>*.py
+  - path: docs/refactor/live_tests/test_<feature>*.py
+
+dependencies: []
