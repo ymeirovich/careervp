@@ -315,7 +315,15 @@ def get_cover_letter_status(event: dict[str, Any]) -> dict[str, Any]:
 
     matching_item = _find_cover_letter_item(user_id=user_id, cover_letter_id=cover_letter_id)
     if matching_item is None:
-        return _build_response(HTTPStatus.OK, _build_default_cover_letter_status_payload(cover_letter_id))
+        metrics.add_metric(name='CoverLetterStatusNotFound', unit=MetricUnit.Count, value=1)
+        logger.info('Cover letter artifact not found', cover_letter_id=cover_letter_id, user_id=user_id)
+        return _build_response(
+            HTTPStatus.NOT_FOUND,
+            {
+                'error': 'Cover letter not found',
+                'code': ResultCode.COVER_LETTER_NOT_FOUND,
+            },
+        )
 
     return _build_response(HTTPStatus.OK, _build_cover_letter_status_payload(matching_item, cover_letter_id))
 
@@ -469,7 +477,19 @@ def _list_cover_letter_items(user_id: str) -> list[dict[str, Any]]:
 
 
 def _matches_cover_letter_id(item: dict[str, Any], cover_letter_id: str) -> bool:
+    # Match by full sk (e.g. ARTIFACT#COVER_LETTER#cv-1#job-1#v1)
     if str(item.get('sk', '')).strip() == cover_letter_id:
+        return True
+
+    # Match by job_id field (async path: request_id == job_id UUID)
+    if str(item.get('job_id', '')).strip() == cover_letter_id:
+        return True
+
+    # Match by artifactId attribute (written by submit handler)
+    artifact_id_attr = str(item.get('artifactId', '')).strip()
+    if artifact_id_attr == cover_letter_id:
+        return True
+    if artifact_id_attr == f'ARTIFACT#COVER_LETTER#{cover_letter_id}':
         return True
 
     nested_payload = item.get('cover_letter')
@@ -516,6 +536,7 @@ def _build_cover_letter_status_payload(item: dict[str, Any], fallback_id: str) -
     payload_id = (
         _extract_cover_letter_id_from_payload(payload_source)
         or _extract_cover_letter_id_from_payload(nested_payload)
+        or str(item.get('job_id', '')).strip()
         or (str(item.get('sk', '')).strip() if item.get('sk') else '')
         or fallback_id
     )
@@ -554,9 +575,13 @@ def _build_cover_letter_list_item(item: dict[str, Any]) -> dict[str, Any]:
     nested_payload = item.get('cover_letter')
     payload_source = nested_payload if isinstance(nested_payload, dict) else item
 
+    # For async-path items (no nested cover_letter yet), expose job_id as the id
+    # so it matches the request_id returned by POST /cover-letter/generate.
+    # For sync-path items, cover_letter_id from the nested payload takes priority.
     item_id = (
         _extract_cover_letter_id_from_payload(payload_source)
         or _extract_cover_letter_id_from_payload(nested_payload)
+        or str(item.get('job_id', '')).strip()
         or (str(item.get('sk', '')).strip() if item.get('sk') else '')
     )
     cv_id = item.get('cv_id')

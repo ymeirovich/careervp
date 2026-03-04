@@ -436,10 +436,11 @@ class DynamoDalHandler(DalHandler):
     @tracer.capture_method(capture_response=False)
     def list_cover_letters(self, user_id: str) -> Result[list[dict[str, Any]]]:
         logger.append_keys(user_id=user_id)
-        logger.info('listing cover letters for user from DynamoDB')
+        logger.info('listing cover letters for user from DynamoDB', key_schema='pk/sk')
         try:
             table = self._get_db_handler(self.table_name)
-            key_condition = Key('applicationId').eq(user_id) & Key('artifactId').begins_with(COVER_LETTER_SORT_KEY_PREFIX)
+            # Canonical read path: pk=user_id, sk begins_with ARTIFACT#COVER_LETTER#
+            key_condition = Key('pk').eq(user_id) & Key('sk').begins_with(COVER_LETTER_SORT_KEY_PREFIX)
             items: list[dict[str, Any]] = []
             response = table.query(KeyConditionExpression=key_condition)
             items.extend(response.get('Items', []))
@@ -449,8 +450,8 @@ class DynamoDalHandler(DalHandler):
                     ExclusiveStartKey=response['LastEvaluatedKey'],
                 )
                 items.extend(response.get('Items', []))
-            results = items
-            return Result(success=True, data=results, code=ResultCode.SUCCESS)
+            logger.info('cover letters listed', user_id=user_id, count=len(items))
+            return Result(success=True, data=items, code=ResultCode.SUCCESS)
         except (ClientError, ValidationError) as exc:
             error_msg = 'failed to list cover letters'
             logger.exception(error_msg, user_id=user_id)
