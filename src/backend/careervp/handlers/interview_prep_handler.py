@@ -399,22 +399,153 @@ def _load_user_cv(dal: DynamoDalHandler, user_id: str) -> UserCV | None:
     return None
 
 
+_MAX_QUESTION_COUNT = 15
+_DEFAULT_QUESTION_COUNT = 10
+
+
+def _resolve_interview_prep_context(  # noqa: C901
+    dal: Any,
+    user_id: str,
+    api_request: InterviewPrepRequest,
+) -> dict[str, Any]:
+    """Resolve architecture-required context inputs server-side (section 3.7).
+
+    Returns dict with: cv_facts, vpr_data, vpr_differentiators,
+    gap_responses, company_research, language, job_title, job_id.
+    Failures are non-fatal — caller proceeds with reduced context.
+    """
+    from boto3.dynamodb.conditions import Attr
+    from boto3.dynamodb.conditions import Key as DynKey
+
+    context: dict[str, Any] = {
+        'cv_facts': None,
+        'vpr_data': {'vpr_id': api_request.vpr_id},
+        'vpr_differentiators': None,
+        'gap_responses': None,
+        'company_research': None,
+        'language': getattr(api_request, 'language', 'en') or 'en',
+        'job_title': '',
+        'job_id': getattr(api_request, 'job_id', None),
+    }
+
+    # Resolve CV facts
+    try:
+        raw_cv = dal.get_cv(user_id)
+        if raw_cv is not None:
+            cv_dict = raw_cv.model_dump(mode='json') if hasattr(raw_cv, 'model_dump') else dict(raw_cv)
+            context['cv_facts'] = {
+                'professional_summary': cv_dict.get('professional_summary'),
+                'skills': cv_dict.get('skills', []),
+                'experience': cv_dict.get('experience') or cv_dict.get('work_experience', []),
+            }
+            metrics.add_metric(name='InterviewPrepCVResolved', unit=MetricUnit.Count, value=1)
+        else:
+            metrics.add_metric(name='InterviewPrepCVMissing', unit=MetricUnit.Count, value=1)
+            logger.warning('CV not found for interview prep context', user_id=user_id)
+    except Exception as exc:
+        metrics.add_metric(name='InterviewPrepCVResolutionError', unit=MetricUnit.Count, value=1)
+        logger.warning('CV resolution failed', user_id=user_id, error=str(exc))
+
+    # Resolve VPR data (vpr_id used as application_id per architecture mapping)
+    try:
+        vpr_result = dal.get_vpr(api_request.vpr_id)
+        if hasattr(vpr_result, 'success') and vpr_result.success and vpr_result.data is not None:
+            vpr = vpr_result.data
+            vpr_dict = vpr.model_dump(mode='json') if hasattr(vpr, 'model_dump') else dict(vpr)
+            context['vpr_data'] = vpr_dict
+            context['vpr_differentiators'] = vpr_dict.get('differentiators') or []
+            context['language'] = vpr_dict.get('language') or context['language']
+            metrics.add_metric(name='InterviewPrepVPRResolved', unit=MetricUnit.Count, value=1)
+        else:
+            metrics.add_metric(name='InterviewPrepVPRMissing', unit=MetricUnit.Count, value=1)
+            logger.warning('VPR not found for context resolution', vpr_id=api_request.vpr_id)
+    except Exception as exc:
+        metrics.add_metric(name='InterviewPrepVPRResolutionError', unit=MetricUnit.Count, value=1)
+        logger.warning('VPR resolution failed', vpr_id=api_request.vpr_id, error=str(exc))
+
+    # Resolve gap responses filtered by requested gap_response_ids
+    try:
+        gap_result = dal.get_gap_responses(user_id)
+        if hasattr(gap_result, 'success') and gap_result.success and gap_result.data:
+            all_responses = gap_result.data
+            requested_ids = set(api_request.gap_response_ids)
+            if requested_ids:
+                filtered = [
+                    r.model_dump(mode='json') if hasattr(r, 'model_dump') else dict(r)
+                    for r in all_responses
+                    if getattr(r, 'question_id', None) in requested_ids
+                ]
+                context['gap_responses'] = (
+                    filtered if filtered else [r.model_dump(mode='json') if hasattr(r, 'model_dump') else dict(r) for r in all_responses]
+                )
+            else:
+                context['gap_responses'] = [r.model_dump(mode='json') if hasattr(r, 'model_dump') else dict(r) for r in all_responses]
+            metrics.add_metric(name='InterviewPrepGapResponsesResolved', unit=MetricUnit.Count, value=1)
+    except Exception as exc:
+        logger.warning('Gap responses resolution failed', user_id=user_id, error=str(exc))
+
+    # Resolve company research (optional — graceful degradation when absent)
+    job_id = context['job_id']
+    if job_id:
+        try:
+            table = dal._get_db_handler(dal.table_name)
+            company_prefix = 'ARTIFACT#COMPANY_RESEARCH#'
+            resp = table.query(
+                KeyConditionExpression=DynKey('applicationId').eq(user_id) & DynKey('artifactId').begins_with(company_prefix),
+                FilterExpression=Attr('artifactId').contains(job_id),
+                Limit=1,
+            )
+            items = resp.get('Items', []) if isinstance(resp, dict) else []
+            if items and isinstance(items[0], dict):
+                context['company_research'] = items[0].get('company_research') or items[0]
+                metrics.add_metric(name='InterviewPrepCompanyResearchResolved', unit=MetricUnit.Count, value=1)
+        except Exception as exc:
+            logger.warning('Company research resolution failed', job_id=job_id, error=str(exc))
+
+    logger.info(
+        'Interview prep context resolved',
+        user_id=user_id,
+        vpr_id=api_request.vpr_id,
+        job_id=job_id,
+        cv_resolved=context['cv_facts'] is not None,
+        vpr_resolved=context['vpr_data'] != {'vpr_id': api_request.vpr_id},
+        gap_resolved=bool(context['gap_responses']),
+        company_research_resolved=context['company_research'] is not None,
+        language=context['language'],
+        key_schema_mode=PRIMARY_KEY_MODE,
+    )
+    return context
+
+
 def _generate_interview_prep_result(
     api_request: InterviewPrepRequest,
     user_id: str,
 ) -> Result[Any]:
+    dal = _get_dal()
+    ctx = _resolve_interview_prep_context(dal, user_id, api_request)
+
+    # Enforce question_count policy: honor explicit lower values, cap at MAX
+    question_count = min(max(int(api_request.question_count or _DEFAULT_QUESTION_COUNT), 1), _MAX_QUESTION_COUNT)
+
     logic_request = LogicInterviewPrepRequest(
         user_id=user_id,
         vpr_id=api_request.vpr_id,
-        job_id=None,
+        job_id=ctx['job_id'],
         gap_response_ids=list(api_request.gap_response_ids),
         focus_areas=list(api_request.focus_areas),
-        question_count=api_request.question_count,
+        question_count=question_count,
     )
     maybe_async_result = generate_interview_prep(
         request=logic_request,
-        vpr_data={'vpr_id': api_request.vpr_id},
-        gap_responses=[],
+        vpr_data=ctx['vpr_data'],
+        gap_responses=ctx['gap_responses'] or [],
+        job_title=ctx['job_title'],
+        company_name='',
+        cv_facts=ctx['cv_facts'],
+        job_requirements=None,
+        vpr_differentiators=ctx['vpr_differentiators'],
+        company_research=ctx['company_research'],
+        language=ctx['language'],
     )
     if asyncio.iscoroutine(maybe_async_result):
         return asyncio.run(maybe_async_result)

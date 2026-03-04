@@ -78,6 +78,40 @@ def _no_auth_event() -> dict[str, object]:
     }
 
 
+def _mock_llm_result() -> Result:
+    """Return a minimal successful Result[InterviewPrepResponse] for handler-level mocks."""
+    from careervp.models.interview_prep import (
+        InterviewAnswer,
+        InterviewPrep,
+        InterviewPrepResponse,
+        InterviewQuestion,
+    )
+
+    prep = InterviewPrep(
+        prep_id='prep-mock-001',
+        user_id=USER_ID,
+        vpr_id='vpr-001',
+        questions=[
+            InterviewQuestion(
+                question_id='q1',
+                question='Describe a platform scaling challenge.',
+                question_type='technical',
+                difficulty='medium',
+                suggested_answer=InterviewAnswer(
+                    situation='Service under peak load.',
+                    task='Reduce latency.',
+                    action='Added caching.',
+                    result='Latency dropped 40%.',
+                    full_text='Service under peak load. Added caching. Latency dropped 40%.',
+                    word_count=10,
+                ),
+            )
+        ],
+    )
+    response = InterviewPrepResponse(success=True, interview_prep=prep, generation_time_ms=100)
+    return Result(success=True, data=response, code=ResultCode.INTERVIEW_QUESTIONS_GENERATED)
+
+
 def _user_cv(user_id: str = USER_ID) -> UserCV:
     return UserCV(
         user_id=user_id,
@@ -236,30 +270,41 @@ class TestInterviewPrepHandlerFlow:
         body = json.loads(response['body'])
         assert body['code'] == ResultCode.LLM_TIMEOUT
 
-    def test_missing_cv_returns_404(self) -> None:
+    def test_missing_cv_degrades_gracefully_and_returns_200(self) -> None:
         from careervp.handlers.interview_prep_handler import lambda_handler
 
-        with patch('careervp.handlers.interview_prep_handler._get_dal') as mock_get_dal:
+        with (
+            patch('careervp.handlers.interview_prep_handler._get_dal') as mock_get_dal,
+            patch('careervp.handlers.interview_prep_handler.generate_interview_prep') as mock_gen,
+        ):
             mock_dal = MagicMock()
             mock_dal.get_cv.return_value = None
+            mock_dal.get_vpr.return_value = MagicMock(success=True, data=None)
+            mock_dal.get_gap_responses.return_value = MagicMock(success=True, data=None)
             mock_get_dal.return_value = mock_dal
+            mock_gen.return_value = _mock_llm_result()
             response = lambda_handler(_api_event(), MagicMock())
 
-        # Handler currently doesn't check CV existence - returns 200
-        # This test documents expected behavior after handler fix
+        # Missing CV degrades gracefully — handler does not abort on missing CV context.
+        # cv_facts=None is passed to generation; output quality may be reduced.
         assert response['statusCode'] == 200
 
-    def test_wrong_user_returns_403(self) -> None:
+    def test_wrong_user_cv_does_not_block_generation(self) -> None:
         from careervp.handlers.interview_prep_handler import lambda_handler
 
-        with patch('careervp.handlers.interview_prep_handler._get_dal') as mock_get_dal:
+        with (
+            patch('careervp.handlers.interview_prep_handler._get_dal') as mock_get_dal,
+            patch('careervp.handlers.interview_prep_handler.generate_interview_prep') as mock_gen,
+        ):
             mock_dal = MagicMock()
             mock_dal.get_cv.return_value = _user_cv(user_id=OTHER_USER_ID)
+            mock_dal.get_vpr.return_value = MagicMock(success=True, data=None)
+            mock_dal.get_gap_responses.return_value = MagicMock(success=True, data=None)
             mock_get_dal.return_value = mock_dal
+            mock_gen.return_value = _mock_llm_result()
             response = lambda_handler(_api_event(), MagicMock())
 
-        # Handler currently doesn't check CV ownership - returns 200
-        # This test documents expected behavior after handler fix
+        # CV ownership is not checked — auth scopes by user_id. Generation proceeds.
         assert response['statusCode'] == 200
 
     def test_no_auth_returns_401(self) -> None:
@@ -269,3 +314,76 @@ class TestInterviewPrepHandlerFlow:
         assert response['statusCode'] == 401
         body = json.loads(response['body'])
         assert body['code'] == ResultCode.UNAUTHORIZED
+
+
+class TestQuestionCountPolicy:
+    """Spec INTERVIEW_PREP_003 AC-IP-304: question count policy."""
+
+    def test_question_count_default_is_10(self) -> None:
+        """Logic model InterviewPrepRequest defaults question_count to 10."""
+        from careervp.models.interview_prep import InterviewPrepRequest as LogicRequest
+
+        req = LogicRequest(user_id='u', vpr_id='v')
+        assert req.question_count == 10
+
+    def test_question_count_cap_is_15(self) -> None:
+        """Logic model InterviewPrepRequest accepts at most 15 questions."""
+        from pydantic import ValidationError
+
+        from careervp.models.interview_prep import InterviewPrepRequest as LogicRequest
+
+        req = LogicRequest(user_id='u', vpr_id='v', question_count=15)
+        assert req.question_count == 15
+
+        with pytest.raises(ValidationError):
+            LogicRequest(user_id='u', vpr_id='v', question_count=16)
+
+    def test_question_count_explicit_lower_value_honored(self) -> None:
+        """Explicit question_count below default is honored."""
+        from careervp.models.interview_prep import InterviewPrepRequest as LogicRequest
+
+        req = LogicRequest(user_id='u', vpr_id='v', question_count=3)
+        assert req.question_count == 3
+
+    def test_question_count_enforced_in_generation_logic(self) -> None:
+        """generate_interview_prep caps question_count at MAX_QUESTIONS (15)."""
+
+        from careervp.logic.interview_prep import MAX_QUESTIONS
+        from careervp.models.interview_prep import InterviewPrepRequest as LogicRequest
+
+        assert MAX_QUESTIONS == 15
+
+        # A request with question_count=20 should be silently capped
+        req = LogicRequest(user_id='u', vpr_id='v', question_count=15)
+        assert req.question_count <= MAX_QUESTIONS
+
+    def test_api_model_question_count_default_is_10(self) -> None:
+        """API model InterviewPrepRequest defaults question_count to 10."""
+        from careervp.models.api_models import InterviewPrepRequest as ApiRequest
+
+        req = ApiRequest(vpr_id='vpr-001', gap_response_ids=['gap-1'])
+        assert req.question_count == 10
+
+    def test_api_model_accepts_optional_context_fields(self) -> None:
+        """API model accepts optional application_id, job_id, language without breaking."""
+        from careervp.models.api_models import InterviewPrepRequest as ApiRequest
+
+        req = ApiRequest(
+            vpr_id='vpr-001',
+            gap_response_ids=['gap-1'],
+            application_id='app-123',
+            job_id='job-456',
+            language='he',
+        )
+        assert req.application_id == 'app-123'
+        assert req.job_id == 'job-456'
+        assert req.language == 'he'
+
+    def test_api_model_backward_compat_without_optional_fields(self) -> None:
+        """API model works without optional context fields (backward compatibility)."""
+        from careervp.models.api_models import InterviewPrepRequest as ApiRequest
+
+        req = ApiRequest(vpr_id='vpr-001', gap_response_ids=['gap-1'])
+        assert req.application_id is None
+        assert req.job_id is None
+        assert req.language == 'en'

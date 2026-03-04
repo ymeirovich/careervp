@@ -64,7 +64,7 @@ class InterviewPrepRequest(BaseModel):
     job_id: Annotated[str | None, Field(default=None)]
     gap_response_ids: Annotated[list[str], Field(default_factory=list)]
     focus_areas: Annotated[list[str], Field(default_factory=list)]
-    question_count: Annotated[int, Field(default=5, ge=1, le=10)]
+    question_count: Annotated[int, Field(default=10, ge=1, le=15)]
 
 
 class InterviewPrepResponse(BaseModel):
