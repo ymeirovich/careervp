@@ -193,25 +193,37 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
 
     try:
         dal = _get_questions_dal()
-        try:
-            save_result = dal.save_gap_questions(
-                user_id=user_id,
-                cv_id=cv_id,
-                job_id=job_id,
-                questions=questions,
-            )
-        except Exception as exc:
-            logger.exception('Unexpected DAL exception while saving gap questions', error=str(exc), job_id=job_id)
-            save_result = Result(success=False, error='persist failed', code=ResultCode.DYNAMODB_ERROR)
-        if not save_result.success:
-            logger.warning(
-                'Persisting gap questions failed — returning questions without caching',
-                job_id=job_id,
-                code=save_result.code,
-                error=save_result.error,
-            )
     except RuntimeError:
-        logger.exception('Gap questions table not configured — returning questions without caching')
+        logger.exception('Gap questions table not configured')
+        return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, 'Internal server error', ResultCode.MISSING_ENV)
+
+    try:
+        save_result = dal.save_gap_questions(
+            user_id=user_id,
+            cv_id=cv_id,
+            job_id=job_id,
+            questions=questions,
+        )
+    except Exception as exc:
+        logger.exception('Unexpected DAL exception while saving gap questions', error=str(exc), job_id=job_id)
+        save_result = Result(success=False, error='persist failed', code=ResultCode.DYNAMODB_ERROR)
+
+    if not save_result.success:
+        logger.error(
+            'Gap question persistence failed',
+            user_id=user_id,
+            job_id=job_id,
+            save_result_code=save_result.code,
+            error=save_result.error,
+        )
+        metrics.add_metric(name='GapQuestionPersistenceFailures', unit='Count', value=1)
+        return _error_response(
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+            'Failed to save gap questions. Please try again.',
+            save_result.code,
+        )
+
+    logger.info('Gap questions persisted', user_id=user_id, job_id=job_id, question_count=len(questions))
 
     try:
         application_repo.update_state(
@@ -272,6 +284,12 @@ def get_questions(event: dict[str, Any]) -> dict[str, Any]:
         )
 
     latest = max(items, key=_item_timestamp)
+    logger.info(
+        'Gap questions retrieved',
+        user_id=user_id,
+        job_id=job_id,
+        retrieval_count=len(items),
+    )
     return _json_response(
         HTTPStatus.OK,
         {
