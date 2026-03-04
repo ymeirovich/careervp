@@ -1,0 +1,84 @@
+spec_id: GAP_QUALITY_001
+title: Gap Analysis Question Quality Fix
+priority: high
+status: pending
+
+description: |
+  Gap analysis questions generated are of low quality compared to ground truth.
+  Generated questions are generic fallbacks instead of contextually-rich, targeted questions.
+
+test_evidence:
+  current_output: |
+    {
+      "question_id": "generated-q1",
+      "question": "What concrete evidence demonstrates fit for uncovered requirement #1?",
+      "impact": "LOW",
+      "probability": "LOW",
+      "gap_score": 0.0,
+      "tags": ["[CV IMPACT]"]
+    }
+
+  expected_output:
+    - Detailed strategic intent for each question
+    - Clear requirement from job posting
+    - Evidence gap analysis
+    - Priority level (CRITICAL | IMPORTANT | OPTIONAL)
+    - Proper quantification emphasis for CV IMPACT questions
+
+architecture_reference:
+  file: docs/architecture/prompt-improvement/CareerVP_Agentic_Architecture.md
+  section: "3.3 AGENT: Gap Analysis Question Generator"
+  requirements:
+    - Load User Memory (query knowledge base for recurring themes)
+    - Cross-Reference Analysis (CV facts vs job requirements)
+    - Categorize by Destination ([CV IMPACT] vs [INTERVIEW/MVP ONLY])
+    - Generate Questions (Max 10) with quantification emphasis
+
+enhanced_prompt_reference:
+  file: docs/architecture/jsa-skill-alignment/JSA-Skill-Alignment-Plan.md
+  section: "B. Replace prompt with enhanced tagging"
+
+question_format:
+  - requirement: Exact quote from job posting
+  - question: Targeted question emphasizing quantification
+  - destination: CV IMPACT or INTERVIEW/MVP ONLY
+  - strategic_intent: Why being asked
+  - evidence_gap: What's missing from CV
+  - priority: CRITICAL | IMPORTANT | OPTIONAL
+
+root_cause:
+  - Prompt is missing critical context (CV facts, job requirements, recurring themes)
+  - _ensure_question_count function creates generic fallback questions
+  - gap_score 0.0 is hardcoded, not calculated for fallback questions
+  - LLM needs more context to generate targeted questions
+
+fix_tasks:
+  - Fix the prompt with enhanced version including:
+    - CV facts context
+    - Job requirements context
+    - Recurring themes (skip topics)
+    - Company research context
+    - Previous gap responses
+
+  - Fix fallback logic
+    - Remove fallbacks entirely OR
+    - Calculate proper gap_score for fallbacks
+
+  - Add required fields:
+    - requirement
+    - strategic_intent
+    - evidence_gap
+    - priority
+
+tests:
+  unit:
+    - description: Verify questions include all required fields
+
+  integration:
+    - description: Compare generated questions against ground truth format
+
+files_to_modify:
+  - path: src/backend/careervp/logic/gap_analysis.py
+  - path: src/backend/careervp/logic/prompts/gap_analysis_prompt.py
+
+dependencies: []

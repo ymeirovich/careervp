@@ -1,9 +1,9 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-import boto3
-from boto3.dynamodb.conditions import Key
-from botocore.exceptions import ClientError
+import boto3  # type: ignore[import-untyped]
+from boto3.dynamodb.conditions import Key  # type: ignore[import-untyped]
+from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 from mypy_boto3_dynamodb import DynamoDBServiceResource
 from pydantic import ValidationError
 
@@ -449,7 +449,7 @@ class DynamoDalHandler(DalHandler):
                     ExclusiveStartKey=response['LastEvaluatedKey'],
                 )
                 items.extend(response.get('Items', []))
-            results = [item.get('cover_letter') or item for item in items]
+            results = items
             return Result(success=True, data=results, code=ResultCode.SUCCESS)
         except (ClientError, ValidationError) as exc:
             error_msg = 'failed to list cover letters'
@@ -477,11 +477,46 @@ class DynamoDalHandler(DalHandler):
                 )
                 items.extend(response.get('Items', []))
             if job_id:
-                items = [item for item in items if item.get('job_id') == job_id]
+                normalized_job_id = str(job_id).strip().casefold()
+                if normalized_job_id:
+                    items = [
+                        item
+                        for item in items
+                        if str(item.get('job_id', '')).strip().casefold() == normalized_job_id
+                        or str(item.get('sk', '')).strip().casefold().endswith(f'#{normalized_job_id}')
+                    ]
             return Result(success=True, data=items if items else None, code=ResultCode.SUCCESS)
         except (ClientError, ValidationError) as exc:
             error_msg = 'failed to list gap questions'
             logger.exception(error_msg, user_id=user_id)
+            return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
+
+    @tracer.capture_method(capture_response=False)
+    def delete_tailored_cv(self, user_id: str, cv_tailoring_id: str) -> Result[None]:
+        logger.append_keys(user_id=user_id, cv_tailoring_id=cv_tailoring_id)
+        logger.info('deleting tailored CV artifact from DynamoDB')
+        if not cv_tailoring_id:
+            return Result(success=False, error='cv_tailoring_id is required', code=ResultCode.MISSING_REQUIRED_FIELD)
+
+        normalized_id = str(cv_tailoring_id).strip()
+        sort_keys = [normalized_id]
+        prefixed = f'{TAILORED_CV_SORT_KEY_PREFIX}{normalized_id}'
+        if normalized_id.startswith(TAILORED_CV_SORT_KEY_PREFIX):
+            sort_keys.append(normalized_id.removeprefix(TAILORED_CV_SORT_KEY_PREFIX))
+        else:
+            sort_keys.append(prefixed)
+
+        try:
+            table = self._get_db_handler(self.table_name)
+            for sk in dict.fromkeys(sort_keys):
+                response = table.get_item(Key={'pk': user_id, 'sk': sk})
+                if response.get('Item'):
+                    table.delete_item(Key={'pk': user_id, 'sk': sk})
+                    return Result(success=True, data=None, code=ResultCode.SUCCESS)
+            return Result(success=False, error='Tailored CV not found', code=ResultCode.CV_NOT_FOUND)
+        except (ClientError, ValidationError) as exc:
+            error_msg = 'failed to delete tailored CV'
+            logger.exception(error_msg, user_id=user_id, cv_tailoring_id=cv_tailoring_id)
             return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
 
     @tracer.capture_method(capture_response=False)

@@ -1,0 +1,65 @@
+spec_id: HEALTH_CHECK_001
+title: Health Check Returns "degraded" Status
+priority: medium
+status: pending
+
+description: |
+  The /health endpoint returns "degraded" because it performs live connectivity
+  checks to Anthropic API and DynamoDB which are failing silently.
+
+test_evidence:
+  - endpoint: GET /health
+    status_code: 200
+    result: |
+      {
+        "status": "degraded",
+        "services": {
+          "anthropic": "degraded",
+          "dynamodb": "degraded"
+        }
+      }
+
+problems:
+  - Live API calls on every health check - expensive and unreliable
+  - Silent failures - no logging of WHY services are degraded
+  - Catch-all exceptions - hides real issues
+  - No timeout handling
+  - No retry logic
+  - Cold start issues
+
+root_cause:
+  file: src/backend/careervp/handlers/health_handler.py
+  issue: |
+    try:
+        client = anthropic.Anthropic()
+        client.models.list()
+    except Exception:
+        services['anthropic'] = 'degraded'
+
+fix_options:
+  - option: A
+    description: Remove live checks (recommended)
+    code_change: |
+      Simply return "healthy" without making live API calls.
+      Health checks should verify Lambda is running, not check external services.
+
+  - option: B
+    description: Add retry logic with exponential backoff
+    code_change: |
+      @retry_with_backoff(max_retries=3, initial_delay=1, backoff_factor=2)
+      def check_anthropic():
+          client = anthropic.Anthropic(timeout=5.0)
+          client.models.list(limit=1)
+          return 'healthy'
+
+tests:
+  - test_file: docs/refactor/live_tests/test_01_auth_health.py
+    description: Update to accept "healthy" status
+
+  - test_file: docs/refactor/live_tests/test_10_api_contract_success.py
+    description: Update contract test
+
+files_to_modify:
+  - path: src/backend/careervp/handlers/health_handler.py
+
+dependencies: []

@@ -11,7 +11,7 @@ from typing import Any
 
 from aws_lambda_powertools.metrics import MetricUnit
 from aws_lambda_powertools.utilities.typing import LambdaContext
-from boto3.dynamodb.conditions import Attr, Key
+from boto3.dynamodb.conditions import Attr, Key  # type: ignore[import-untyped]
 from pydantic import ValidationError
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
@@ -27,9 +27,16 @@ from careervp.models.result import Result, ResultCode
 INTERVIEW_PREP_SORT_KEY_PREFIX = 'ARTIFACT#INTERVIEW_PREP#'
 
 
+def _get_artifacts_table_name() -> str:
+    for env_key in ('ARTIFACTS_TABLE_NAME', 'DYNAMODB_TABLE_NAME', 'TABLE_NAME'):
+        value = os.environ.get(env_key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ''
+
+
 def _get_dal() -> DynamoDalHandler:
-    table_name = os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('TABLE_NAME', '')
-    return DynamoDalHandler(table_name)
+    return DynamoDalHandler(_get_artifacts_table_name())
 
 
 @logger.inject_lambda_context
@@ -150,9 +157,9 @@ def _update_artifact_status(
     """Update interview prep artifact status in DynamoDB."""
     import datetime as _dt
 
-    import boto3 as _boto3
+    import boto3 as _boto3  # type: ignore[import-untyped]
 
-    table_name = os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('TABLE_NAME', '')
+    table_name = _get_artifacts_table_name()
     table = _boto3.resource('dynamodb').Table(table_name)
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
 

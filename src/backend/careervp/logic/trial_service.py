@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 
@@ -59,23 +59,50 @@ class TrialService:
         }
 
     def consume_credit(self, user_id: str) -> None:
+        table = self._table()
+        key = {'pk': self._pk(user_id), 'sk': 'TRIAL'}
+        now_iso = self._now_fn().isoformat()
+        existing = table.get_item(Key=key).get('Item')
+        if not isinstance(existing, dict):
+            table.put_item(
+                Item={
+                    'pk': self._pk(user_id),
+                    'sk': 'TRIAL',
+                    'created_at': now_iso,
+                    'application_count': 0,
+                    'trial_active': True,
+                    'updated_at': now_iso,
+                }
+            )
+
         try:
-            self._table().update_item(
-                Key={'pk': self._pk(user_id), 'sk': 'TRIAL'},
-                UpdateExpression=('SET application_count = if_not_exists(application_count, :zero) + :inc, updated_at = :updated_at'),
-                ConditionExpression=('attribute_exists(pk) AND attribute_exists(sk) AND trial_active = :trial_active AND application_count < :max'),
+            table.update_item(
+                Key=key,
+                UpdateExpression=(
+                    'SET application_count = if_not_exists(application_count, :zero) + :inc, '
+                    'updated_at = :updated_at, '
+                    'created_at = if_not_exists(created_at, :created_at), '
+                    'trial_active = if_not_exists(trial_active, :trial_active)'
+                ),
+                ConditionExpression=('trial_active = :trial_active AND application_count < :max'),
                 ExpressionAttributeValues={
                     ':zero': 0,
                     ':inc': 1,
                     ':max': TRIAL_LIMIT_APPLICATIONS,
                     ':trial_active': True,
-                    ':updated_at': self._now_fn().isoformat(),
+                    ':created_at': now_iso,
+                    ':updated_at': now_iso,
                 },
             )
         except ClientError as exc:
             error_code = exc.response.get('Error', {}).get('Code')
             if error_code == 'ConditionalCheckFailedException':
-                raise TrialExhaustedException(user_id=user_id, application_count=TRIAL_LIMIT_APPLICATIONS) from exc
+                latest = table.get_item(Key=key).get('Item')
+                if isinstance(latest, dict):
+                    count = self._coerce_non_negative_int(latest.get('application_count'))
+                else:
+                    count = TRIAL_LIMIT_APPLICATIONS
+                raise TrialExhaustedException(user_id=user_id, application_count=max(count, TRIAL_LIMIT_APPLICATIONS)) from exc
             raise
 
     def get_usage(self, user_id: str) -> dict[str, Any]:

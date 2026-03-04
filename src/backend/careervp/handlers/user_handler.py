@@ -14,11 +14,11 @@ import os
 from http import HTTPStatus
 from typing import Any
 
-import boto3
+import boto3  # type: ignore[import-untyped]
 from aws_lambda_powertools.event_handler import Response, content_types
 from aws_lambda_powertools.logging.correlation_paths import API_GATEWAY_REST
 from aws_lambda_powertools.utilities.typing import LambdaContext
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Key  # type: ignore[import-untyped]
 from pydantic import ValidationError
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
@@ -59,7 +59,7 @@ def _get_trial_service() -> TrialService | None:
     global _trial_service
     if _trial_service is not None:
         return _trial_service
-    table_name = os.getenv('USERS_TABLE_NAME') or os.getenv('TABLE_NAME')
+    table_name = os.getenv('USERS_TABLE_NAME') or os.getenv('DYNAMODB_TABLE_NAME') or os.getenv('TABLE_NAME')
     if not table_name:
         return None
     _trial_service = TrialService(dal=DynamoDalHandler(table_name=table_name))

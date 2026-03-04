@@ -1,0 +1,68 @@
+spec_id: INTERVIEW_PREP_001
+title: Interview Prep Status Returns CV_NOT_FOUND (404)
+priority: high
+status: pending
+
+description: |
+  POST /interview-prep/generate returns 202 with job ID
+  GET /interview-prep/{id}/status returns 404 with error "Interview prep not found" code "CV_NOT_FOUND"
+
+test_evidence:
+  - test_name: test_generate_interview_prep
+    endpoint: POST /interview-prep/generate
+    status_code: 202
+    result: request_id and artifact_id returned
+
+  - test_name: test_get_interview_prep_status
+    endpoint: GET /interview-prep/{id}/status
+    status_code: 404
+    result: error "Interview prep not found", code "CV_NOT_FOUND"
+
+architecture:
+  submit_lambda: interview-prep-api
+  submit_handler: interview_prep_submit_handler.py
+  status_lambda: interview-prep-status
+  status_handler: interview_prep_handler.py
+
+root_cause_options:
+  - option: A
+    description: DynamoDB save silently failed
+    file: src/backend/careervp/handlers/interview_prep_submit_handler.py
+    lines: "134-150"
+    issue: table.put_item() might fail without raising BotoClientError
+
+  - option: B
+    description: Key mismatch between save and query
+    issue: |
+      Save: sk = ARTIFACT#INTERVIEW_PREP#{job_id}
+      Query tries: sk = {interview_prep_id} or sk = ARTIFACT#INTERVIEW_PREP#{interview_prep_id}
+
+  - option: C
+    description: User ID mismatch
+    issue: Different auth extraction between submit and status
+
+fix_options:
+  - option: A
+    description: Fix exception handling in submit handler
+
+  - option: B
+    description: Ensure key construction matches between save and query
+
+  - option: C
+    description: Verify auth extraction is consistent
+
+tests:
+  unit:
+    - description: Verify items saved with sk=ARTIFACT#INTERVIEW_PREP#{job_id} can be found
+
+  integration:
+    - test_file: docs/refactor/live_tests/test_08_interview_prep.py
+      description: |
+        1. POST /interview-prep/generate returns 202
+        2. GET /interview-prep/{id}/status returns 200
+
+files_to_modify:
+  - path: src/backend/careervp/handlers/interview_prep_submit_handler.py
+  - path: src/backend/careervp/handlers/interview_prep_handler.py
+
+dependencies: []

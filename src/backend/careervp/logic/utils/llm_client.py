@@ -12,10 +12,10 @@ from functools import wraps
 from time import sleep
 from typing import Any, Callable, ParamSpec, TypeVar, cast
 
-import boto3
+import boto3  # type: ignore[import-untyped]
 from anthropic import Anthropic, APIError, RateLimitError
 from aws_lambda_powertools.metrics import MetricUnit
-from botocore.exceptions import BotoCoreError, ClientError
+from botocore.exceptions import BotoCoreError, ClientError  # type: ignore[import-untyped]
 
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.models.result import Result, ResultCode
@@ -58,7 +58,13 @@ def retry_on_transient_error(max_retries: int = 3, base_delay: float = 1.0) -> C
                     sleep(delay)
                 except APIError as e:
                     status_code = getattr(e, 'status_code', None)
-                    if isinstance(status_code, int) and status_code >= 500:
+                    error_text = str(e).lower()
+                    is_transient = (
+                        (isinstance(status_code, int) and (status_code >= 500 or status_code == 529))
+                        or 'overloaded' in error_text
+                        or 'error code: 529' in error_text
+                    )
+                    if is_transient:
                         last_exception = e
                         delay = base_delay * (2**attempt)
                         logger.warning('Transient API error, retrying', attempt=attempt + 1, status_code=status_code, delay=delay)
@@ -100,7 +106,11 @@ class LLMRouter:
         if not self._api_key:
             raise ValueError('ANTHROPIC_API_KEY not found in environment variable or SSM Parameter Store')
 
-        self._client = Anthropic(api_key=self._api_key)
+        self._client = Anthropic(
+            api_key=self._api_key,
+            max_retries=3,
+            timeout=60.0,
+        )
 
     def _fetch_from_ssm(self, parameter_name: str) -> str | None:
         """

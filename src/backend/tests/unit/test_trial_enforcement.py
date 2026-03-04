@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 
 from careervp.logic.trial_service import TrialExhaustedException, TrialExpiredException, TrialService
 
@@ -114,6 +114,20 @@ class TestApplicationCounter:
         service.consume_credit('user-test-123')
         kwargs = table.update_item.call_args.kwargs
         assert kwargs['ExpressionAttributeValues'][':inc'] == 1
+
+    def test_consume_credit_initializes_missing_trial_record(self) -> None:
+        table = MagicMock()
+        table.get_item.return_value = {}
+        table.update_item.return_value = {}
+        dal = MagicMock()
+        dal.table_name = 'users-table'
+        dal._get_db_handler.return_value = table
+        service = TrialService(dal=dal, now_fn=lambda: datetime.now(timezone.utc))
+
+        service.consume_credit('user-test-123')
+
+        table.put_item.assert_called_once()
+        table.update_item.assert_called_once()
 
     def test_third_application_increments_to_3(self) -> None:
         service, table = _make_service(_trial_record(application_count=2))

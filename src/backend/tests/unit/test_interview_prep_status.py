@@ -4,9 +4,9 @@ import json
 from collections.abc import Generator
 from datetime import datetime, timezone
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-import boto3
+import boto3  # type: ignore[import-untyped]
 import pytest
 from moto import mock_aws
 
@@ -161,3 +161,16 @@ def test_get_interview_prep_status_is_user_scoped(interview_prep_table: Any) -> 
     response = lambda_handler(event, _context())
 
     assert response['statusCode'] == 404
+
+
+def test_interview_prep_dal_prefers_artifacts_table_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Status/read path should use the same table precedence as submit path."""
+    from careervp.handlers import interview_prep_handler as module
+
+    monkeypatch.setenv('ARTIFACTS_TABLE_NAME', 'artifacts-table')
+    monkeypatch.setenv('DYNAMODB_TABLE_NAME', 'dynamodb-table')
+
+    with patch.object(module, 'DynamoDalHandler') as mock_dal_cls:
+        module._get_dal()
+
+    mock_dal_cls.assert_called_once_with('artifacts-table')

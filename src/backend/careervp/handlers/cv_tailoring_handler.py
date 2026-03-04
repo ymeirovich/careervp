@@ -10,7 +10,7 @@ from decimal import Decimal
 from http import HTTPStatus
 from typing import Any
 
-from boto3.dynamodb.conditions import Attr, Key
+from boto3.dynamodb.conditions import Attr, Key  # type: ignore[import-untyped]
 from pydantic import ValidationError
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
@@ -69,6 +69,9 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
 
     if method == 'GET' and path in {'/users/me/tailored-cvs', '/cv-tailorings'}:
         return list_tailored_cvs(event)
+
+    if method == 'DELETE' and _is_tailoring_delete_path(path):
+        return delete_tailored_cv(event)
 
     if method != 'POST':
         return _response(
@@ -367,6 +370,67 @@ def list_tailored_cvs(event: dict[str, Any]) -> dict[str, Any]:
     return _response(HTTPStatus.OK, {'tailored_cvs': tailored_cvs}, headers)
 
 
+def delete_tailored_cv(event: dict[str, Any]) -> dict[str, Any]:
+    """Handle DELETE /cv-tailoring/{cvTailoringId}."""
+    headers = _cors_headers()
+    user_id = _get_user_id(event)
+    if not user_id:
+        return _response(
+            HTTPStatus.UNAUTHORIZED,
+            {
+                'success': False,
+                'code': ResultCode.UNAUTHORIZED,
+                'message': 'Missing or invalid authentication token',
+            },
+            headers,
+        )
+
+    cv_tailoring_id = _extract_cv_tailoring_id(event)
+    if not cv_tailoring_id:
+        return _response(
+            HTTPStatus.BAD_REQUEST,
+            {
+                'success': False,
+                'code': ResultCode.MISSING_REQUIRED_FIELD,
+                'message': 'Missing cvTailoringId path parameter',
+            },
+            headers,
+        )
+
+    dal = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))
+    delete_result = dal.delete_tailored_cv(user_id=user_id, cv_tailoring_id=cv_tailoring_id)
+    if not delete_result.success:
+        if delete_result.code == ResultCode.CV_NOT_FOUND:
+            return _response(
+                HTTPStatus.NOT_FOUND,
+                {
+                    'success': False,
+                    'code': ResultCode.CV_NOT_FOUND,
+                    'message': 'Tailored CV not found',
+                },
+                headers,
+            )
+        return _response(
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+            {
+                'success': False,
+                'code': delete_result.code,
+                'message': 'Failed to delete tailored CV',
+            },
+            headers,
+        )
+
+    return _response(
+        HTTPStatus.OK,
+        {
+            'success': True,
+            'id': cv_tailoring_id,
+            'status': 'deleted',
+        },
+        headers,
+    )
+
+
 def _fetch_and_tailor_cv(request: TailorCVRequest) -> Result[Any]:
     """Fetch CV from DAL and invoke tailoring logic."""
     dal = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))
@@ -415,6 +479,12 @@ def _get_user_id(event: dict[str, Any], request_data: dict[str, Any] | None = No
 
 def _is_tailoring_status_path(path: str) -> bool:
     return path.startswith('/cv-tailoring/') and path != '/cv-tailoring/generate'
+
+
+def _is_tailoring_delete_path(path: str) -> bool:
+    if not path.startswith('/cv-tailoring/') or path == '/cv-tailoring/generate':
+        return False
+    return not path.endswith('/status')
 
 
 def _extract_cv_tailoring_id(event: dict[str, Any]) -> str | None:
@@ -530,10 +600,13 @@ def _build_tailored_cv_status_payload(item: dict[str, Any], fallback_id: str) ->
 
 
 def _build_tailored_cv_list_item(item: dict[str, Any]) -> dict[str, Any]:
-    # Use the full SK as the ID for uniqueness
-    sk = item.get('sk', '')
+    sk = str(item.get('sk', '') or '')
+    if sk.startswith('ARTIFACT#CV_TAILORED#'):
+        item_id = sk.removeprefix('ARTIFACT#CV_TAILORED#')
+    else:
+        item_id = sk
     return {
-        'id': str(sk or ''),
+        'id': item_id,
         'status': _normalize_tailoring_status(item.get('status')),
         'cv_id': item.get('cv_id'),
         'created_at': item.get('created_at'),
@@ -596,7 +669,7 @@ def _build_success_data(data: Any) -> dict[str, Any]:
 
 def _cors_headers() -> dict[str, str]:
     headers = get_cors_headers(None)
-    headers.setdefault('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    headers.setdefault('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS')
     headers.setdefault('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     return headers
 
