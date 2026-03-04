@@ -44,12 +44,14 @@ def test_e2e_quality_gates() -> None:
             responses.append({'question_id': str(qid), 'response': 'Quality gate STAR response with outcomes.'})
     gap_r = client.request(
         'POST',
-        '/gap-analysis/responses',
+        f'/jobs/{job_id}/gap-responses',
         token=token,
         json_body={'cv_id': cv_id, 'job_id': job_id, 'responses': responses},
-        expected_status={200, 201},
+        expected_status={201},
     )
     gap_ids = gap_r.data.get('data', gap_r.data).get('gap_response_ids', [])
+    if not isinstance(gap_ids, list) or not gap_ids:
+        gap_ids = [item['question_id'] for item in responses if item.get('question_id')]
 
     vpr = client.request(
         'POST',

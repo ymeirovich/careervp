@@ -4,6 +4,7 @@
 import copy
 import json
 import os
+import re
 import time
 import uuid
 from pathlib import Path
@@ -21,8 +22,10 @@ from .test_01_auth_health import test_data
 
 
 DOCS_ROOT = Path(__file__).resolve().parents[2]  # docs/
+REPO_ROOT = Path(__file__).resolve().parents[3]
 REFACTOR2_PAYLOADS_DIR = DOCS_ROOT / "refactor2" / "payloads"
 LEGACY_PAYLOADS_DIR = DOCS_ROOT / "refactor" / "payloads"
+INFRA_API_CONSTRUCT_PATH = REPO_ROOT / "infra" / "careervp" / "api_construct.py"
 
 STRICT_PAYLOAD_ORDER = [
     "health_check.json",
@@ -76,10 +79,33 @@ PATH_PARAM_TO_STATE_KEY = {
     "interviewPrepId": "interview_prep_id",
 }
 
+_ROUTE_TUPLE_PATTERN = re.compile(
+    r'\(\s*"(?P<path>/[^"]+)"\s*,\s*"(?P<method>[A-Z]+)"\s*,\s*self\.[^)]+\)',
+)
+
 
 def _load_json(path: Path) -> dict[str, Any]:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def _load_contract_route_map_from_infra() -> set[tuple[str, str]]:
+    source = INFRA_API_CONSTRUCT_PATH.read_text(encoding="utf-8")
+    function_start = source.find("def _add_openapi_contract_routes")
+    assert function_start >= 0, (
+        "Unable to locate _add_openapi_contract_routes in api_construct.py"
+    )
+    route_map_loop = source.find(
+        "for path, method, handler in route_map:", function_start
+    )
+    assert route_map_loop >= 0, (
+        "Unable to locate route_map iteration in api_construct.py"
+    )
+    route_section = source[function_start:route_map_loop]
+    return {
+        (match.group("method"), match.group("path"))
+        for match in _ROUTE_TUPLE_PATTERN.finditer(route_section)
+    }
 
 
 def _load_refactor2_payload(filename: str) -> dict[str, Any]:
@@ -570,6 +596,20 @@ def _validate_quality(
 
 class TestAPIContractSuccess:
     """Strict payload-driven API contract suite."""
+
+    def test_gap_responses_payload_route_matches_infra_contract_route_map(self):
+        infra_routes = _load_contract_route_map_from_infra()
+        payload = _load_refactor2_payload("gap_responses_submit.json")
+        method = str(payload["method"]).upper()
+        path = str(payload["path"])
+
+        assert path == "/jobs/{jobId}/gap-responses", (
+            "gap_responses_submit.json must use canonical route "
+            "/jobs/{jobId}/gap-responses"
+        )
+        assert (method, path) in infra_routes, (
+            f"gap_responses_submit.json route missing from infra contract map: {method} {path}"
+        )
 
     def test_api_contract_success_for_all_27_endpoints(self):
         legacy = _load_legacy_context()
