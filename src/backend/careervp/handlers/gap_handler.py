@@ -143,6 +143,7 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
         payload=payload,
         user_id=user_id,
         job_id=job_id,
+        endpoint=_resolve_trial_consumption_endpoint(event),
     )
     if error_response is not None:
         return error_response
@@ -544,15 +545,71 @@ def _prepare_trial_and_pending_state(
     payload: dict[str, Any],
     user_id: str,
     job_id: str,
+    endpoint: str,
 ) -> tuple[str, dict[str, Any] | None]:
     trial_service = _get_trial_service()
     if trial_service is not None:
+        usage_before = None
+        usage_after = None
         try:
-            trial_service.check_trial_status(user_id)
+            status = trial_service.check_trial_status(user_id)
+            usage_before = _extract_applications_used(status)
+            if usage_before is None:
+                usage_before = _read_trial_usage_snapshot(
+                    trial_service=trial_service,
+                    user_id=user_id,
+                    endpoint=endpoint,
+                )
             trial_service.consume_credit(user_id)
+            usage_after = _read_trial_usage_snapshot(
+                trial_service=trial_service,
+                user_id=user_id,
+                endpoint=endpoint,
+            )
+            consumed = True
+            if usage_before is not None and usage_after is not None:
+                consumed = usage_after > usage_before
+            _log_trial_credit_attribution(
+                endpoint=endpoint,
+                user_id=user_id,
+                usage_before=usage_before,
+                usage_after=usage_after,
+                consumed=consumed,
+            )
         except TrialExpiredException:
+            if usage_before is None:
+                usage_before = _read_trial_usage_snapshot(
+                    trial_service=trial_service,
+                    user_id=user_id,
+                    endpoint=endpoint,
+                )
+            _log_trial_credit_attribution(
+                endpoint=endpoint,
+                user_id=user_id,
+                usage_before=usage_before,
+                usage_after=usage_after,
+                consumed=False,
+            )
             return '', _error_response(HTTPStatus.FORBIDDEN, 'Trial expired', 'trial_expired')
         except TrialExhaustedException:
+            if usage_before is None:
+                usage_before = _read_trial_usage_snapshot(
+                    trial_service=trial_service,
+                    user_id=user_id,
+                    endpoint=endpoint,
+                )
+            usage_after = _read_trial_usage_snapshot(
+                trial_service=trial_service,
+                user_id=user_id,
+                endpoint=endpoint,
+            )
+            _log_trial_credit_attribution(
+                endpoint=endpoint,
+                user_id=user_id,
+                usage_before=usage_before,
+                usage_after=usage_after,
+                consumed=False,
+            )
             return '', _error_response(HTTPStatus.FORBIDDEN, 'Trial exhausted', 'trial_exhausted')
 
     application_id = _coerce_str(payload.get('application_id')) or job_id
@@ -587,6 +644,82 @@ def _get_application_repository() -> ApplicationRepository:
             raise RuntimeError('Application repository table name not configured')
         _application_repository = ApplicationRepository(dal=DynamoDalHandler(table_name=table_name))
     return _application_repository
+
+
+def _resolve_trial_consumption_endpoint(event: dict[str, Any]) -> str:
+    path = str(event.get('path', '')).rstrip('/')
+    if _is_post_questions_path(path):
+        return 'POST /jobs/{jobId}/gap-questions'
+    if path == '/gap-analysis/questions':
+        return 'POST /gap-analysis/questions'
+    return f'POST {path or "/gap-analysis/questions"}'
+
+
+def _extract_applications_used(trial_usage: Any) -> int | None:
+    if not isinstance(trial_usage, dict):
+        return None
+
+    direct_used = trial_usage.get('applications_used')
+    try:
+        if direct_used is not None:
+            return max(0, int(direct_used))
+    except (TypeError, ValueError):
+        return None
+
+    nested_applications = trial_usage.get('applications')
+    if not isinstance(nested_applications, dict):
+        return None
+
+    nested_used = nested_applications.get('used')
+    try:
+        if nested_used is not None:
+            return max(0, int(nested_used))
+    except (TypeError, ValueError):
+        return None
+    return None
+
+
+def _read_trial_usage_snapshot(
+    *,
+    trial_service: TrialService,
+    user_id: str,
+    endpoint: str,
+) -> int | None:
+    try:
+        usage = trial_service.get_usage(user_id)
+    except Exception as exc:
+        logger.warning(
+            'Unable to read trial usage snapshot',
+            endpoint=endpoint,
+            user_id=user_id,
+            error=str(exc),
+        )
+        return None
+    return _extract_applications_used(usage)
+
+
+def _log_trial_credit_attribution(
+    *,
+    endpoint: str,
+    user_id: str,
+    usage_before: int | None,
+    usage_after: int | None,
+    consumed: bool,
+) -> None:
+    logger.info(
+        'Trial credit attribution',
+        endpoint=endpoint,
+        user_id=user_id,
+        usage_before=usage_before,
+        usage_after=usage_after,
+        consumed=consumed,
+    )
+    metrics.add_metric(name='TrialCreditAttributionEvents', unit='Count', value=1)
+    metrics.add_metric(name='TrialCreditConsumed', unit='Count', value=1 if consumed else 0)
+    if usage_before is not None:
+        metrics.add_metric(name='TrialUsageBefore', unit='Count', value=usage_before)
+    if usage_after is not None:
+        metrics.add_metric(name='TrialUsageAfter', unit='Count', value=usage_after)
 
 
 __all__ = ['lambda_handler', 'generate_questions', 'get_questions', 'submit_response', 'get_responses']

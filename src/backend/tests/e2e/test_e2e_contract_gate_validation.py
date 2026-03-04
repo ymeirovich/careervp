@@ -26,7 +26,7 @@ def test_e2e_contract_gate_validation() -> None:
         ('GET', '/vpr/nonexistent-id', token, None, {200, 401, 404}),
         ('GET', '/users/me/vprs', token, None, {200, 401}),
         ('POST', '/gap-analysis/questions', token, {'cv_id': 'x', 'job_id': 'y'}, {200, 400, 401}),
-        ('POST', '/gap-analysis/responses', token, {'cv_id': 'x', 'job_id': 'y', 'responses': []}, {200, 400, 401}),
+        ('POST', '/jobs/nonexistent-id/gap-responses', token, {'cv_id': 'x', 'job_id': 'y', 'responses': []}, {200, 201, 400, 401, 404}),
         ('GET', '/gap-analysis/nonexistent-id/questions', token, None, {200, 401, 404}),
         ('POST', '/cv-tailoring/generate', token, {'cv_id': 'x'}, {202, 400, 401, 422}),
         ('GET', '/cv-tailoring/nonexistent-id', token, None, {200, 401, 404}),

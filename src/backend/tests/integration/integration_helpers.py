@@ -248,16 +248,20 @@ def submit_gap_responses(
     ]
     response = post_with_payload_fallback(
         client,
-        '/gap-analysis/responses',
+        f'/jobs/{job_id}/gap-responses',
         payloads,
         token=token,
-        expected_status=200,
+        expected_status=201,
     )
 
     ids_value = optional_field(response.data, 'gap_response_ids', 'response_ids', 'ids')
-    if not isinstance(ids_value, list):
-        raise AssertionError(f'Expected gap response ids list. payload={response.data}')
-    ids = [str(v) for v in ids_value if v]
+    ids: list[str] = []
+    if isinstance(ids_value, list):
+        ids = [str(v) for v in ids_value if v]
+    if not ids:
+        # The current gap-responses contract returns aggregate save status without ids.
+        # Reuse submitted question ids as downstream dependency handles.
+        ids = [item['question_id'] for item in response_items if item.get('question_id')]
     if not ids:
         raise AssertionError(f'Expected non-empty gap response ids. payload={response.data}')
     return response, ids
