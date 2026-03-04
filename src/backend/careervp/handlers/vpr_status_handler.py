@@ -239,7 +239,7 @@ def _parse_limit(event: dict[str, Any]) -> int:
     return max(1, min(limit, 100))
 
 
-def _build_vpr_list_item(job: dict[str, Any]) -> dict[str, Any]:
+def _build_vpr_list_item(job: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
     job_id = str(job.get('job_id', ''))
     created_at = job.get('created_at')
     input_data = job.get('input_data')
