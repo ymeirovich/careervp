@@ -143,20 +143,58 @@ class TestVPREndpoints:
 
     def test_list_vprs(self):
         """Test GET /vprs - list user's VPRs."""
+        # Ensure at least one VPR request exists for deterministic list validation.
+        if not test_data.get("vpr_id"):
+            print("No VPR found, generating first...")
+            self.test_generate_vpr()
+
+        vpr_id = test_data.get("vpr_id")
+        if not vpr_id:
+            pytest.skip("No VPR ID available for list validation")
+
         url = f"{self.base_url}/vprs"
         headers = get_auth_headers()
+        max_attempts = 12
+        poll_interval = 5
+        last_data: Any = {}
+        last_status = 0
 
-        response = requests.get(url, headers=headers, timeout=10)
+        for attempt in range(max_attempts):
+            response = requests.get(url, headers=headers, timeout=10)
+            last_status = response.status_code
+            try:
+                data = response.json()
+            except Exception:
+                data = {"raw_text": response.text}
+            last_data = data
 
-        try:
-            data = response.json()
-        except Exception:
-            data = {"raw_text": response.text}
+            print_response("test_list_vprs", "GET /vprs", response.status_code, data)
+            assert response.status_code == 200, (
+                f"GET /vprs returned {response.status_code}"
+            )
 
-        print_response("test_list_vprs", "GET /vprs", response.status_code, data)
-        assert response.status_code == 200, f"GET /vprs returned {response.status_code}"
-        vprs = data.get("vprs", [])
-        print(f"✓ GET /vprs - Found {len(vprs)} VPR(s)")
+            vprs = data.get("vprs", [])
+            if any(
+                str(item.get("id")) == str(vpr_id)
+                for item in vprs
+                if isinstance(item, dict)
+            ):
+                print(
+                    f"✓ GET /vprs - Found {len(vprs)} VPR(s), includes generated ID {vpr_id}"
+                )
+                return
+
+            if attempt < max_attempts - 1:
+                print(
+                    f"  VPR list does not yet include {vpr_id} "
+                    f"(attempt {attempt + 1}/{max_attempts})"
+                )
+                time.sleep(poll_interval)
+
+        pytest.fail(
+            f"GET /vprs did not include generated VPR ID {vpr_id} after "
+            f"{max_attempts * poll_interval}s (last status={last_status}, last body={last_data})"
+        )
 
     def test_vpr_async_polling(self):
         """Test VPR async polling lifecycle."""

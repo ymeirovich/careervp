@@ -1,7 +1,7 @@
 {
-  "description": "POST /gap-analysis/responses - Submit gap responses",
+  "description": "POST /jobs/{jobId}/gap-responses - Submit gap responses",
   "method": "POST",
-  "path": "/gap-analysis/responses",
+  "path": "/jobs/{jobId}/gap-responses",
   "headers": {
     "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
   },
@@ -28,37 +28,11 @@
     ]
   },
   "expected_response": {
-    "status_code": 200,
+    "status_code": 201,
     "body": {
       "status": "saved",
-      "impact_statements": [
-        {
-          "text": "Architected serverless data processing pipeline handling 50,000 events/min with 60% cost reduction and 80% latency improvement (500ms → 100ms)",
-          "evidence_type": "CV_IMPACT",
-          "usable_in": [
-            "vpr",
-            "cv_tailoring",
-            "cover_letter"
-          ]
-        },
-        {
-          "text": "Developed structured mentorship program that promoted 5 engineers to senior level in 18 months with 100% retention through personalized learning paths and measurable milestones",
-          "evidence_type": "INTERVIEW_PREP",
-          "usable_in": [
-            "vpr",
-            "interview_prep",
-            "cover_letter"
-          ]
-        },
-        {
-          "text": "Led 3-person team for 6 months to deliver serverless architecture transformation, demonstrating cross-functional leadership and technical execution",
-          "evidence_type": "CV_IMPACT",
-          "usable_in": [
-            "vpr",
-            "cv_tailoring"
-          ]
-        }
-      ]
+      "job_id": "",
+      "responses_saved": 0
     }
   }
 }

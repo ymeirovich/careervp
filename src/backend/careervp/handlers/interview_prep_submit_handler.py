@@ -115,6 +115,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         )
 
     job_id = str(uuid.uuid4())
+    artifact_id = f'ARTIFACT#INTERVIEW_PREP#{job_id}'
     now = datetime.datetime.now(datetime.timezone.utc)
     created_at = now.isoformat()
 
@@ -136,9 +137,9 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         table.put_item(
             Item={
                 'pk': authenticated_user_id,
-                'sk': f'ARTIFACT#INTERVIEW_PREP#{job_id}',
+                'sk': artifact_id,
                 'applicationId': authenticated_user_id,
-                'artifactId': f'ARTIFACT#INTERVIEW_PREP#{job_id}',
+                'artifactId': artifact_id,
                 'artifactType': 'interview_prep',
                 'user_id': authenticated_user_id,
                 'job_id': job_id,
@@ -180,7 +181,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         try:
             table = dynamodb_resource.Table(_get_artifacts_table_name())
             table.update_item(
-                Key={'pk': authenticated_user_id, 'sk': f'ARTIFACT#INTERVIEW_PREP#{job_id}'},
+                Key={'applicationId': authenticated_user_id, 'artifactId': artifact_id},
                 UpdateExpression='SET #s = :status, updated_at = :now',
                 ExpressionAttributeNames={'#s': 'status'},
                 ExpressionAttributeValues={':status': 'FAILED', ':now': now.isoformat()},

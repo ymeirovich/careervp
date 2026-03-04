@@ -1,0 +1,137 @@
+spec_id: INTERVIEW_PREP_002
+title: Interview Prep Status Must Align with Artifacts Table Schema
+priority: high
+status: pending
+owner: backend-platform
+created_at: 2026-03-04
+updated_at: 2026-03-04
+
+problem_statement:
+  exact_failing_behavior: |
+    POST /interview-prep/generate returns 202 with request_id,
+    but GET /interview-prep/{id}/status returns 404 code CV_NOT_FOUND.
+  expected_behavior: |
+    Status lookup for returned request_id must return 200 with pending/processing/completed lifecycle.
+  impact: |
+    Async interview prep flow is broken and polling tests fail.
+  reproducibility_notes:
+    - Submit interview prep request
+    - Immediately call status endpoint with returned request_id
+
+evidence:
+  failing_tests:
+    - docs/refactor/live_tests/test_08_interview_prep.py::TestInterviewPrepEndpoints::test_get_interview_prep_status
+  endpoints:
+    - method: POST
+      path: /interview-prep/generate
+      observed_status: 202
+    - method: GET
+      path: /interview-prep/{id}/status
+      observed_status: 404
+      observed_body_fragment: '{"error": "Interview prep not found", "code": "CV_NOT_FOUND"}'
+  environment: dev-live
+  timestamp_utc: '2026-03-04T07:00:00Z'
+
+architecture_and_ownership_map:
+  route_to_lambda:
+    - route: POST /interview-prep/generate
+      lambda: interview-prep-api
+      handler: src/backend/careervp/handlers/interview_prep_submit_handler.py
+    - route: GET /interview-prep/{interviewPrepId}/status
+      lambda: interview-prep-status
+      handler: src/backend/careervp/handlers/interview_prep_handler.py
+  data_store:
+    table: artifacts
+    key_schema:
+      partition_key: applicationId
+      sort_key: artifactId
+    artifact_prefix: ARTIFACT#INTERVIEW_PREP#
+  auth_identity:
+    source: requestContext.authorizer.*.claims.sub
+    scope_key: user_id
+
+root_cause_analysis:
+  hypotheses_ranked:
+    - id: H1
+      hypothesis: status and worker use pk/sk keys against artifacts table
+      disproof_criteria: all interview prep reads/writes use applicationId/artifactId
+      status: confirmed
+    - id: H2
+      hypothesis: submit and status use different user-id extraction
+      disproof_criteria: shared auth extraction helper used in both
+      status: disproven
+    - id: H3
+      hypothesis: submit save silently fails
+      disproof_criteria: submit writes and errors are surfaced with correlation logs
+      status: less_likely
+  contributing_factors:
+    - Mixed legacy/new storage-key conventions across handlers
+    - Unit tests using pk/sk schema mask production artifacts schema mismatch
+
+fix_plan:
+  behavior_changes:
+    - Update interview prep status and worker key usage to applicationId/artifactId.
+    - Keep temporary backward-compatible read fallback for legacy records only.
+    - Replace CV_NOT_FOUND with interview-prep specific not-found code.
+    - Ensure POST request_id equals suffix in persisted artifactId and is retrievable.
+  files_to_modify:
+    - src/backend/careervp/handlers/interview_prep_handler.py
+    - src/backend/careervp/handlers/interview_prep_submit_handler.py
+    - src/backend/tests/unit/test_interview_prep_status.py
+  non_goals:
+    - No redesign of interview prep result payload schema
+  rollback_plan:
+    - Re-enable dual-read fallback if unexpected legacy-key data found post-deploy
+
+acceptance_criteria:
+  api_level:
+    - POST /interview-prep/generate returns 202 with request_id
+    - GET /interview-prep/{request_id}/status returns 200 for valid request_id
+    - Unknown request_id returns 404 with interview-prep-specific error code
+  data_level:
+    - Artifacts table operations use Key={applicationId, artifactId}
+    - artifactId format is ARTIFACT#INTERVIEW_PREP#{request_id}
+  observability:
+    - Metric for status_not_found
+    - Log fields include user_id, request_id, key_schema_mode
+  edge_cases:
+    - Cross-user status access returns 404
+
+validation_plan:
+  unit_tests:
+    - src/backend/tests/unit/test_interview_prep_status.py (updated to artifacts schema)
+    - src/backend/tests/unit/test_async_submit_handlers.py (request_id/key consistency)
+  integration_tests:
+    - src/backend/tests/integration/test_interview_prep_roundtrip.py
+  live_e2e:
+    - docs/refactor/live_tests/test_08_interview_prep.py
+  regression_tests:
+    - verify /interview-preps list remains correct
+
+traceability_matrix:
+  - requirement_id: AC-IP-001
+    requirement: request_id from POST is resolvable by GET status
+    code_reference: src/backend/careervp/handlers/interview_prep_handler.py
+    test_reference: docs/refactor/live_tests/test_08_interview_prep.py::TestInterviewPrepEndpoints::test_get_interview_prep_status
+    evidence_reference: docs/evidence/interview-prep-roundtrip-<timestamp>.json
+    result: pending
+  - requirement_id: AC-IP-002
+    requirement: artifacts key schema uses applicationId/artifactId
+    code_reference: src/backend/careervp/handlers/interview_prep_handler.py
+    test_reference: src/backend/tests/unit/test_interview_prep_status.py::test_artifacts_schema_keys
+    evidence_reference: docs/evidence/interview-prep-key-schema-<timestamp>.json
+    result: pending
+
+completion_evidence:
+  required_artifacts:
+    - unit_test_output
+    - integration_test_output
+    - live_test_output
+  residual_risks:
+    - Legacy pk/sk interview-prep records may require migration/backfill
+  sign_off_checklist:
+    - All status transitions verified end-to-end
+    - No CV_NOT_FOUND leak from interview prep endpoint
+    - Regression suite green
+
+dependencies: []

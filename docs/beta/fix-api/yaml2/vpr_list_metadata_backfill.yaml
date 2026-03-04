@@ -1,0 +1,164 @@
+spec_id: VPR_LIST_METADATA_001
+title: Backfill VPR List Metadata (job_title/company_name) Without Regressing Existing VPR Flows
+priority: medium
+status: pending
+owner: backend-platform
+created_at: 2026-03-04
+updated_at: 2026-03-04
+
+problem_statement:
+  exact_failing_behavior: |
+    GET /vprs returns entries with empty job_title and company_name even when valid
+    job_id exists for each VPR.
+  expected_behavior: |
+    GET /vprs returns meaningful metadata:
+    - job_title from input_data.job_posting.role_title/title when available
+    - company_name from input_data.job_posting.company_name/company when available
+    - otherwise fallback to Jobs table lookup by job_id.
+  user_business_impact: |
+    List endpoint appears incomplete in UI and weakens user trust/history usability.
+  reproducibility_notes:
+    - Run VPR generation via POST /vpr/generate with cv_id/job_id/gap_response_ids
+    - Call GET /vprs
+    - Observe empty job_title/company_name fields
+
+evidence:
+  failing_test_names:
+    - docs/refactor/live_tests/test_04_vpr.py::TestVPREndpoints::test_list_vprs
+  endpoint_method_path:
+    - method: GET
+      path: /vprs
+      observed_status_code: 200
+      observed_body_fragment: |
+        {
+          "vprs": [
+            {
+              "id": "...",
+              "job_title": "",
+              "company_name": ""
+            }
+          ]
+        }
+  environment: dev-live
+  timestamp_utc: '2026-03-04T08:25:09Z'
+  request_or_correlation_ids:
+    - vpr_id example: f8feac4e-98eb-43a3-a65b-0c6ece324674
+
+architecture_and_ownership_map:
+  route_function_mapping:
+    - route: GET /vprs
+      lambda: vpr-status
+      handler_file: src/backend/careervp/handlers/vpr_status_handler.py
+  handler_file_paths:
+    - src/backend/careervp/handlers/vpr_status_handler.py
+    - src/backend/careervp/handlers/vpr_submit_handler.py
+    - src/backend/careervp/dal/jobs_repository.py
+  data_store_usage:
+    - table: jobs
+      key: job_id
+      index: user_id-index
+      fields_used:
+        - input_data
+        - application_id
+        - title
+        - company_name
+        - company
+  auth_scope:
+    source: extract_user_id from authorizer claims
+    identity_key: user_id
+
+root_cause_analysis:
+  ranked_hypotheses:
+    - id: H1
+      hypothesis: list builder reads only input_data.job_posting, but submit payload does not populate job_posting
+      disproof_criteria: verify submit input_data contains job_posting with role/company
+      status: confirmed
+    - id: H2
+      hypothesis: fallback lookup to Jobs table is missing in list response builder
+      disproof_criteria: list builder resolves title/company from job_id when job_posting absent
+      status: confirmed
+    - id: H3
+      hypothesis: VPR records are missing any reference to job_id
+      disproof_criteria: input_data.job_id or application_id present on VPR records
+      status: likely_false
+  confirmed_root_causes:
+    - _build_vpr_list_item does not resolve metadata from canonical jobs records when job_posting is absent.
+  contributing_factors:
+    - submit handler stores raw request input_data for compatibility, not enriched job_posting fields.
+
+fix_plan:
+  exact_files_to_modify:
+    - path: src/backend/careervp/handlers/vpr_status_handler.py
+    - path: src/backend/tests/unit/test_vpr_status_handler.py
+    - path: docs/refactor/live_tests/test_04_vpr.py
+  exact_behavior_changes:
+    - Add non-breaking fallback in list construction:
+      - First: read input_data.job_posting.role_title/title and company_name/company.
+      - Second: if missing, resolve job_id from input_data.job_id or application_id, then fetch job via JobsRepository.get_job(job_id).
+      - Use fetched title/company_name when available.
+    - Keep existing response schema unchanged.
+  non_goals_out_of_scope:
+    - No changes to VPR generation content.
+    - No schema migration of existing job records.
+    - No changes to auth behavior.
+  rollback_plan:
+    - Feature-flag fallback lookup path.
+    - Revert to existing list rendering if lookup causes latency/regressions.
+
+acceptance_criteria:
+  api_level:
+    - GET /vprs returns 200 and includes generated VPR ID.
+    - For VPR entries with resolvable job references, job_title and company_name are non-empty strings.
+  data_level:
+    - Fallback resolution uses existing JobsRepository.get_job on job_id/application_id only.
+    - No writes are introduced in list path.
+  observability_criteria:
+    - Structured debug logs include resolution_source: input_data_job_posting | jobs_table_fallback | unavailable.
+    - Metric for metadata_fallback_used count.
+  negative_edge_cases:
+    - If neither input_data.job_posting nor jobs table record exists, return empty strings without failing request.
+    - User-scoping remains enforced; no cross-user data leakage.
+
+validation_plan:
+  unit_tests:
+    - test_vpr_list_item_uses_input_data_job_posting_when_present
+    - test_vpr_list_item_falls_back_to_jobs_table_when_missing_job_posting
+    - test_vpr_list_item_handles_missing_fallback_without_exception
+  integration_tests:
+    - test_vpr_list_includes_metadata_after_generate_roundtrip (production-like jobs table shape)
+  live_e2e_checks:
+    - docs/refactor/live_tests/test_04_vpr.py::TestVPREndpoints::test_list_vprs
+  regression_checks_adjacent_endpoints:
+    - docs/refactor/live_tests/test_04_vpr.py::TestVPREndpoints::test_get_vpr_status
+    - docs/refactor/live_tests/test_04_vpr.py::TestVPREndpoints::test_vpr_async_polling
+
+traceability_matrix:
+  - requirement_id: AC-VPR-LIST-001
+    requirement: list returns non-empty job_title/company_name when resolvable
+    code_reference: src/backend/careervp/handlers/vpr_status_handler.py
+    test_reference: src/backend/tests/unit/test_vpr_status_handler.py::test_vpr_list_item_fallback_metadata
+    evidence_reference: docs/evidence/vpr-list-metadata-unit-<timestamp>.txt
+    pass_fail: pending
+  - requirement_id: AC-VPR-LIST-002
+    requirement: no regression to VPR status endpoint behavior
+    code_reference: src/backend/careervp/handlers/vpr_status_handler.py
+    test_reference: docs/refactor/live_tests/test_04_vpr.py::TestVPREndpoints::test_get_vpr_status
+    evidence_reference: docs/evidence/vpr-status-regression-<timestamp>.txt
+    pass_fail: pending
+
+completion_evidence:
+  test_output_snippets:
+    - unit_test_output_path: docs/evidence/vpr-list-metadata-unit-<timestamp>.txt
+    - integration_test_output_path: docs/evidence/vpr-list-metadata-integration-<timestamp>.txt
+    - live_test_output_path: docs/evidence/vpr-list-metadata-live-<timestamp>.txt
+  deployed_endpoint_verification_artifacts:
+    - docs/evidence/vpr-list-before-after-<timestamp>.json
+  known_residual_risks:
+    - Some historical records may have no resolvable job reference and legitimately remain blank.
+  explicit_sign_off_checklist:
+    - acceptance_criteria_met
+    - regression_checks_passed
+    - evidence_artifacts_attached
+    - reviewer_signoff_recorded
+
+dependencies: []

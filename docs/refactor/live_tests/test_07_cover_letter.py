@@ -163,27 +163,64 @@ class TestCoverLetterEndpoints:
 
     def test_list_cover_letters(self):
         """Test GET /cover-letters - list user's cover letters."""
+        # Ensure we have a generated cover letter before asserting list contents.
+        if not test_data.get("cover_letter_id"):
+            print("No cover letter found, generating first...")
+            self.test_generate_cover_letter()
+
+        cover_letter_id = test_data.get("cover_letter_id")
+        if not cover_letter_id:
+            pytest.skip("No cover letter ID available for list validation")
+
         url = f"{self.base_url}/cover-letters"
         headers = get_auth_headers()
+        max_attempts = 12
+        poll_interval = 5
+        last_data: Any = {}
+        last_status = 0
 
-        response = requests.get(url, headers=headers, timeout=10)
+        for attempt in range(max_attempts):
+            response = requests.get(url, headers=headers, timeout=10)
+            last_status = response.status_code
 
-        try:
-            data = response.json()
-        except Exception:
-            data = {"raw_text": response.text}
+            try:
+                data = response.json()
+            except Exception:
+                data = {"raw_text": response.text}
+            last_data = data
 
-        print_response(
-            "test_list_cover_letters",
-            "GET /cover-letters",
-            response.status_code,
-            data,
+            print_response(
+                "test_list_cover_letters",
+                "GET /cover-letters",
+                response.status_code,
+                data,
+            )
+            assert response.status_code == 200, (
+                f"GET /cover-letters returned {response.status_code}"
+            )
+            cover_letters = data.get("cover_letters", [])
+            if any(
+                str(item.get("id")) == str(cover_letter_id)
+                for item in cover_letters
+                if isinstance(item, dict)
+            ):
+                print(
+                    f"✓ GET /cover-letters - Found {len(cover_letters)} cover letter(s), "
+                    f"includes generated ID {cover_letter_id}"
+                )
+                return
+
+            if attempt < max_attempts - 1:
+                print(
+                    f"  Cover letter list does not yet include {cover_letter_id} "
+                    f"(attempt {attempt + 1}/{max_attempts})"
+                )
+                time.sleep(poll_interval)
+
+        pytest.fail(
+            f"GET /cover-letters did not include generated cover letter ID {cover_letter_id} "
+            f"after {max_attempts * poll_interval}s (last status={last_status}, last body={last_data})"
         )
-        assert response.status_code == 200, (
-            f"GET /cover-letters returned {response.status_code}"
-        )
-        cover_letters = data.get("cover_letters", [])
-        print(f"✓ GET /cover-letters - Found {len(cover_letters)} cover letter(s)")
 
     def test_cover_letter_async_polling(self):
         """Test cover letter async polling lifecycle."""

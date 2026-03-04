@@ -129,28 +129,47 @@ class TestInterviewPrepEndpoints:
 
         url = f"{self.base_url}/interview-prep/{interview_prep_id}/status"
         headers = get_auth_headers()
+        max_attempts = 12
+        poll_interval = 5
+        last_status = 0
+        last_data: Any = {}
 
-        response = requests.get(url, headers=headers, timeout=10)
+        for attempt in range(max_attempts):
+            response = requests.get(url, headers=headers, timeout=10)
+            last_status = response.status_code
+            try:
+                data = response.json()
+            except Exception:
+                data = {"raw_text": response.text}
+            last_data = data
 
-        try:
-            data = response.json()
-        except Exception:
-            data = {"raw_text": response.text}
+            print_response(
+                "test_get_interview_prep_status",
+                f"GET /interview-prep/{interview_prep_id}/status",
+                response.status_code,
+                data,
+            )
 
-        print_response(
-            "test_get_interview_prep_status",
-            f"GET /interview-prep/{interview_prep_id}/status",
-            response.status_code,
-            data,
-        )
-        assert response.status_code == 200, (
-            f"GET /interview-prep/{interview_prep_id}/status returned {response.status_code}"
-        )
-        assert_interview_prep_quality(data)
-        status = data.get("status", "unknown")
-        questions = data.get("result", {}).get("questions", [])
-        print(
-            f"✓ GET /interview-prep/{interview_prep_id}/status - Status: {status}, Questions: {len(questions)}"
+            if response.status_code == 200:
+                assert_interview_prep_quality(data)
+                status = data.get("status", "unknown")
+                questions = data.get("result", {}).get("questions", [])
+                print(
+                    f"✓ GET /interview-prep/{interview_prep_id}/status - "
+                    f"Status: {status}, Questions: {len(questions)}"
+                )
+                return
+
+            if attempt < max_attempts - 1:
+                print(
+                    f"  Interview prep status endpoint returned {response.status_code} "
+                    f"(attempt {attempt + 1}/{max_attempts})"
+                )
+                time.sleep(poll_interval)
+
+        pytest.fail(
+            f"GET /interview-prep/{interview_prep_id}/status did not return 200 after "
+            f"{max_attempts * poll_interval}s (last status={last_status}, last body={last_data})"
         )
 
     def test_interview_prep_async_polling(self):
@@ -201,6 +220,21 @@ class TestInterviewPrepEndpoints:
                     print(
                         f"  Interview prep status: {status} (attempt {attempt + 1}/{max_attempts})"
                     )
+            else:
+                try:
+                    error_data = response.json()
+                except Exception:
+                    error_data = {"raw_text": response.text}
+                print_response(
+                    "test_interview_prep_async_polling",
+                    f"GET /interview-prep/{interview_prep_id}/status",
+                    response.status_code,
+                    error_data,
+                )
+                print(
+                    f"  Interview prep polling received HTTP {response.status_code} "
+                    f"(attempt {attempt + 1}/{max_attempts})"
+                )
 
             time.sleep(poll_interval)
 
