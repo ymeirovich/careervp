@@ -12,16 +12,19 @@ Complete toolset for diagnosing, fixing, and validating RECOVERY_002 (gap questi
 # Option A: Use the run_all_tests.py built-in reset (recommended)
 python3 docs/refactor/live_tests/run_all_tests.py --test gap
 
-# Option B: Manual reset via API (if you have network access to dev-live)
+# Option B: Manual reset via API (if you have network access to deployed API)
 python3 -c "
 import sys
+import os
 import requests
 sys.path.insert(0, 'docs/refactor/live_tests')
+sys.path.insert(0, 'docs/refactor3/scripts')
 from conftest import get_auth_headers
+from resolve_api_base import resolve_api_base
 
 try:
     headers = get_auth_headers()
-    api_base = 'https://dev-live.careervp.com/v1'
+    api_base = os.environ.get('API_BASE') or resolve_api_base()
 
     # Reset trial credits
     reset_resp = requests.post(f'{api_base}/users/me/trial/reset', headers=headers, timeout=15)
