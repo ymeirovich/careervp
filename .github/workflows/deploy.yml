@@ -79,7 +79,7 @@ jobs:
           cat docs/evidence/recovery-gate-parity-report-${TIMESTAMP}.json
           echo "=== Parity check passed ==="
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE }}
           role-session-name: deploy-dev-${{ github.sha }}
@@ -270,7 +270,7 @@ jobs:
           npx cdk synth --quiet || { echo "CDK synth failed"; exit 1; }
           echo "=== CDK Nag Security Scan passed ==="
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE }}
           role-session-name: deploy-${{ inputs.environment }}-${{ github.sha }}

@@ -122,7 +122,7 @@ jobs:
         run: make dev
 
       - name: Configure AWS credentials (sandbox)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_GAP_SANDBOX }}
           role-session-name: gap-remediation-${{ github.run_id }}
