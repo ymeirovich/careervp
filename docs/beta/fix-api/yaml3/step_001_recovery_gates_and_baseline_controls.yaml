@@ -1,10 +1,10 @@
 spec_id: RECOVERY_001
 title: Establish Baseline, Blocking Gates, and Evidence Controls Before Regression Reversal
 priority: critical
-status: pending
+status: in_progress
 owner: backend-platform
 created_at: 2026-03-05
-updated_at: 2026-03-05
+updated_at: 2026-03-05T18:45:00Z
 sequence_step: 1
 status_scale: draft|pending|in_progress|implemented|validated|closed
 

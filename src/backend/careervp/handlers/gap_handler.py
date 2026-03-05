@@ -229,9 +229,10 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
             error=save_result.error,
         )
         metrics.add_metric(name='GapQuestionPersistenceFailures', unit='Count', value=1)
+        # Return detailed error for diagnostics (includes table_name, operation, error_code, message)
         return _error_response(
             HTTPStatus.INTERNAL_SERVER_ERROR,
-            'Failed to save gap questions. Please try again.',
+            f'Failed to save gap questions. Details: {save_result.error}',
             save_result.code,
         )
 
