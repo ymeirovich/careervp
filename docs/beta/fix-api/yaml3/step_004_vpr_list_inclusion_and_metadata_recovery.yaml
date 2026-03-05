@@ -1,0 +1,221 @@
+spec_id: RECOVERY_004
+title: Stabilize VPR List Inclusion and Metadata Backfill Without Regressing Status Flow
+priority: high
+status: pending
+owner: backend-platform
+created_at: 2026-03-05
+updated_at: 2026-03-05
+sequence_step: 4
+
+targets_yaml2_specs:
+  - VPR_LIST_METADATA_001
+
+problem_statement:
+  exact_failing_behavior: |
+    In live-test-results28.log, GET /vprs did not include the newly generated VPR ID after 60 seconds,
+    even though generation and status polling succeeded. Earlier run 27 included generated ID but had
+    metadata gaps. This indicates list retrieval/filter/pagination inconsistency.
+  expected_behavior: |
+    GET /vprs must include the generated VPR ID within polling window and provide metadata fields when resolvable.
+    Behavior must meet or exceed log 27 while closing remaining metadata and inclusion gaps.
+  user_business_impact: |
+    Users cannot trust generated VPR history; list appears stale or incomplete.
+  reproducibility_notes:
+    - Run docs/refactor/live_tests/test_04_vpr.py.
+    - Observe test_list_vprs failing on missing generated ID.
+
+evidence:
+  failing_tests:
+    - docs/refactor/live_tests/test_04_vpr.py::TestVPREndpoints::test_list_vprs
+  endpoint_method_path:
+    - method: GET
+      path: /vprs
+      observed_status_code: 200
+      observed_body_fragment: generated id missing after 60s
+  baseline_artifact: careervp/live-test-results27.log
+  regression_artifact: careervp/live-test-results28.log
+  environment: dev-live
+  timestamp_utc: '2026-03-05T00:00:00Z'
+
+architecture_and_ownership_map:
+  route_to_lambda:
+    - route: GET /vprs
+      lambda: vpr-status
+      handler: src/backend/careervp/handlers/vpr_status_handler.py
+    - route: GET /vpr/{vprId}/status
+      lambda: vpr-status
+      handler: src/backend/careervp/handlers/vpr_status_handler.py
+  handler_file_paths:
+    - src/backend/careervp/handlers/vpr_status_handler.py
+    - src/backend/careervp/dal/jobs_repository.py
+    - src/backend/careervp/handlers/vpr_submit_handler.py
+  data_store_index_usage:
+    - jobs table user_id-index and job_id lookup
+  auth_source_and_identity_key:
+    source: requestContext.authorizer claims
+    identity_key: user_id
+  canonical_sources_of_truth:
+    route_surface: infra/careervp/api_construct.py
+    jobs_schema: src/backend/careervp/dal/jobs_repository.py
+
+root_cause_analysis:
+  hypotheses_ranked:
+    - id: H1
+      hypothesis: get_vpr_jobs_by_user uses limited single-page query and drops relevant items after filtering.
+      disproof_criteria: list method paginates and returns filtered items until limit is satisfied.
+      status: confirmed
+    - id: H2
+      hypothesis: metadata fallback exists but inclusion logic still misses newly generated jobs.
+      disproof_criteria: generated vpr id appears consistently in list within polling window.
+      status: confirmed
+    - id: H3
+      hypothesis: submit path stores unresolvable references.
+      disproof_criteria: generated records contain resolvable job_id or application_id mapping.
+      status: partially_confirmed
+  confirmed_root_causes:
+    - Single-page query and in-memory filtering can omit recent generated vpr records.
+    - Inclusion and metadata concerns were partially fixed independently, causing split behavior.
+  contributing_factors:
+    - Limit and filter ordering was not validated against live polling expectations.
+
+fix_plan:
+  exact_files_to_modify:
+    - path: src/backend/careervp/dal/jobs_repository.py
+      change: implement paginated accumulation for get_vpr_jobs_by_user before applying final limit
+    - path: src/backend/careervp/handlers/vpr_status_handler.py
+      change: keep metadata fallback and ensure list item ordering includes newest generated IDs
+    - path: src/backend/tests/unit/test_vpr_status_handler.py
+      change: add pagination + inclusion tests and fallback metadata tests
+    - path: docs/refactor/live_tests/test_04_vpr.py
+      change: keep generated-id inclusion assertion and metadata non-empty assertion when resolvable
+  exact_behavior_changes:
+    - /vprs list returns generated VPR IDs consistently within polling window.
+    - metadata fallback from jobs table remains non-breaking and user-scoped.
+  non_goals_out_of_scope:
+    - No VPR content generation changes.
+    - No auth model changes.
+  rollback_plan:
+    - Revert pagination accumulation changes if query latency/regression appears unexpectedly.
+
+acceptance_criteria:
+  api_level:
+    - GET /vprs returns generated vpr id within 60s polling window after POST /vpr/generate.
+    - GET /vpr/{vprId}/status behavior remains unchanged and successful.
+  data_level:
+    - jobs repository list query must support pagination and consistent filtering for application_id-backed records.
+    - metadata fallback uses jobs table lookup only and does not perform writes.
+  observability:
+    - list resolution logs include metadata source and pagination stats.
+    - fallback usage metric remains emitted.
+  negative_and_edge_case_criteria:
+    - missing metadata sources may return empty strings, but generated id must still be listed.
+    - cross-user records must never appear.
+  regression_reversal_criteria:
+    - no list_vprs failure for missing generated id in live tests.
+    - no regressions to status or async polling endpoints.
+
+baseline_and_regression_budget:
+  baseline_artifact:
+    path: careervp/live-test-results27.log
+    reason: baseline includes generated ID in list
+  blocked_regressions:
+    - generated_id_missing_from_status_or_list_after_polling_window
+    - new_non_2xx_on_changed_endpoints
+  allowed_deltas: {}
+
+verification_contract:
+  - requirement_id: VC-VPR-001
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: true
+    verification_description: paginated list retrieval and filter behavior tests
+  - requirement_id: VC-VPR-002
+    verification_type: live
+    blocking_gate: post_deploy
+    artifact_required: true
+    verification_description: test_list_vprs includes generated id and metadata behavior
+
+deployed_parity_plan:
+  route_surface_parity:
+    source_of_truth: infra/careervp/api_construct.py
+    verification_steps:
+      - Confirm GET /vprs and GET /vpr/{vprId}/status route to vpr-status lambda.
+  authorizer_parity:
+    source_of_truth: deployed method auth settings
+    verification_steps:
+      - Verify authenticated user context required for listing.
+  runtime_env_resolution_parity:
+    source_of_truth: vpr-status lambda env and jobs table access
+    verification_steps:
+      - Verify VPR_JOBS_TABLE_NAME resolves correctly in deployed env.
+
+validation_plan:
+  unit_tests:
+    - src/backend/tests/unit/test_vpr_status_handler.py
+  integration_tests:
+    - src/backend/tests/integration/test_vpr_list_roundtrip.py
+  contract_tests:
+    - docs/refactor/live_tests/test_10_api_contract_success.py
+  live_e2e_checks:
+    - docs/refactor/live_tests/test_04_vpr.py
+  regression_checks:
+    - compare vpr list behavior against careervp/live-test-results27.log
+  validation_commands:
+    - uv run python scripts/smoke/run_targeted_smoke.py --step RECOVERY_004 --out docs/evidence/targeted-smoke-RECOVERY_004-<timestamp>.json
+    - uv run python scripts/spec_quality/check_regression_delta.py --baseline careervp/live-test-results27.log --current docs/evidence/targeted-smoke-RECOVERY_004-<timestamp>.json --out docs/evidence/per-step-regression-delta-RECOVERY_004-<timestamp>.json
+    - uv run pytest src/backend/tests/unit/test_vpr_status_handler.py -q
+    - uv run pytest src/backend/tests/integration/test_vpr_list_roundtrip.py -q
+    - uv run pytest docs/refactor/live_tests/test_04_vpr.py -q
+
+traceability_matrix:
+  - requirement_id: AC-VPR-301
+    requirement: generated VPR id appears in list after submit
+    code_reference: src/backend/careervp/dal/jobs_repository.py
+    test_reference: docs/refactor/live_tests/test_04_vpr.py::TestVPREndpoints::test_list_vprs
+    verification_type: live
+    blocking_gate: post_deploy
+    artifact_required: true
+    evidence_reference: docs/evidence/vpr-list-generated-id-live-<timestamp>.json
+    result: pending
+  - requirement_id: AC-VPR-302
+    requirement: metadata fallback remains functional and non-breaking
+    code_reference: src/backend/careervp/handlers/vpr_status_handler.py
+    test_reference: src/backend/tests/unit/test_vpr_status_handler.py::test_vpr_list_item_falls_back_to_jobs_table_when_missing_job_posting
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: true
+    evidence_reference: docs/evidence/vpr-list-metadata-fallback-unit-<timestamp>.json
+    result: pending
+
+rollback_trigger_matrix:
+  - trigger_id: RT-VPR-001
+    trigger_condition: generated id missing from /vprs in post_deploy live run
+    detection_source: test_04_vpr.py list test
+    action: block promotion and rollback RECOVERY_004 changes
+    owner: release_owner
+  - trigger_id: RT-VPR-002
+    trigger_condition: status endpoint regresses while list fix is applied
+    detection_source: live status and polling checks
+    action: block closure and patch before redeploy
+    owner: backend-platform
+
+completion_evidence:
+  required_artifacts:
+    - docs/evidence/vpr-list-generated-id-live-<timestamp>.json
+    - docs/evidence/vpr-list-metadata-fallback-unit-<timestamp>.json
+  known_residual_risks:
+    - Very large user history may require eventual performance tuning.
+  explicit_sign_off_checklist:
+    - VPR_LIST_METADATA_001 all ACs pass
+    - generated-id inclusion stable across two live passes
+
+confidence_assessment:
+  confidence_score_0_to_100: 0
+  implementation_100_percent: false
+  confidence_basis:
+    - Spec authored, implementation and evidence pending.
+  confidence_update_rule: |
+    Set to >=95 only when AC-VPR-301 and AC-VPR-302 are pass with post_deploy evidence.
+
+dependencies:
+  - RECOVERY_001

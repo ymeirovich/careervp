@@ -1,0 +1,297 @@
+spec_id: RECOVERY_003
+title: Fix Cover Letter Artifact Schema Drift and Restore Submit-Status-List Roundtrip
+priority: critical
+status: pending
+owner: backend-platform
+created_at: 2026-03-05
+updated_at: 2026-03-05
+sequence_step: 3
+
+targets_yaml2_specs:
+  - COVER_LETTER_002
+
+problem_statement:
+  exact_failing_behavior: |
+    live-test-results28.log shows GET /cover-letter/{id}/status returning 404 for generated id,
+    and GET /cover-letters returning empty array after generation. This indicates schema/path
+    mismatch between submit/worker/status/list operations.
+  expected_behavior: |
+    request_id returned by POST /cover-letter/generate must be resolvable by status and present in list.
+    Unknown IDs must return domain-specific 404. No synthetic success and no silent persistence fallback.
+  user_business_impact: |
+    Generated cover letters appear lost, breaking UX history and poll/status reliability.
+  reproducibility_notes:
+    - Run docs/refactor/live_tests/test_07_cover_letter.py.
+    - Observe timeout or 404 for status and empty list for generated IDs.
+
+evidence:
+  failing_tests:
+    - docs/refactor/live_tests/test_07_cover_letter.py::TestCoverLetterEndpoints::test_get_cover_letter_status
+    - docs/refactor/live_tests/test_07_cover_letter.py::TestCoverLetterEndpoints::test_list_cover_letters
+    - docs/refactor/live_tests/test_07_cover_letter.py::TestCoverLetterEndpoints::test_cover_letter_async_polling
+  endpoint_method_path:
+    - method: POST
+      path: /cover-letter/generate
+      observed_status_code: 202
+    - method: GET
+      path: /cover-letter/{coverLetterId}/status
+      observed_status_code: 404
+    - method: GET
+      path: /cover-letters
+      observed_status_code: 200
+      observed_body_fragment: '{"cover_letters": []}'
+  baseline_artifact: careervp/live-test-results27.log
+  regression_artifact: careervp/live-test-results28.log
+  environment: dev-live
+  timestamp_utc: '2026-03-05T00:00:00Z'
+
+architecture_and_ownership_map:
+  route_to_lambda:
+    - route: POST /cover-letter/generate
+      lambda: cover-letter-api
+      handler: src/backend/careervp/handlers/cover_letter_submit_handler.py
+    - route: GET /cover-letter/{coverLetterId}/status
+      lambda: cover-letter-status
+      handler: src/backend/careervp/handlers/cover_letter_handler.py
+    - route: GET /cover-letters
+      lambda: cover-letter-status
+      handler: src/backend/careervp/handlers/cover_letter_handler.py
+  handler_file_paths:
+    - src/backend/careervp/handlers/cover_letter_submit_handler.py
+    - src/backend/careervp/handlers/cover_letter_handler.py
+    - src/backend/careervp/dal/dynamo_dal_handler.py
+    - infra/careervp/api_construct.py
+  data_store_index_usage:
+    - artifacts table applicationId/artifactId is canonical
+  auth_source_and_identity_key:
+    source: requestContext.authorizer claims
+    identity_key: user_id
+  canonical_sources_of_truth:
+    route_surface: infra/careervp/api_construct.py
+    storage_schema: infra/careervp/api_db_construct.py artifacts table
+
+root_cause_analysis:
+  hypotheses_ranked:
+    - id: H1
+      hypothesis: status/list still depend on pk/sk-only reads while deployed table is applicationId/artifactId.
+      disproof_criteria: status/list successfully read generated records via canonical keys.
+      status: confirmed
+    - id: H2
+      hypothesis: submit or worker writes mixed key fields that are inconsistently read.
+      disproof_criteria: submit and worker write canonical key set and readers consume same schema.
+      status: confirmed
+    - id: H3
+      hypothesis: handler returns synthetic success when persistence path fails.
+      disproof_criteria: persistence failures surface non-2xx and cannot produce fake completed response.
+      status: confirmed
+  confirmed_root_causes:
+    - Mixed schema usage across submit, worker, and status/list paths.
+    - permissive fallback behavior masked data persistence defects.
+  contributing_factors:
+    - Legacy pk/sk behavior retained without strict canonical read/write enforcement.
+
+fix_plan:
+  migration_strategy:
+    description: |
+      DUAL-READ TRANSITIONAL GUARD required before removing legacy pk/sk read path.
+      Phase A (this step): write canonical keys (applicationId/artifactId) AND retain legacy pk/sk
+      reads as a silent fallback. This ensures existing records written with pk/sk are still readable.
+      Phase B (post-validation): once two consecutive live passes confirm all new writes resolve via
+      canonical keys, remove the legacy fallback in a follow-on commit.
+    phase_a_writes: canonical applicationId/artifactId keys only (no dual-write to pk/sk)
+    phase_a_reads: canonical first, then legacy pk/sk fallback if canonical miss and record predates migration
+    phase_b_trigger: AC-CL-MIGRATE-001 confirmed green across two consecutive live passes
+    data_scope_query: |
+      Before Phase B, run:
+        uv run python scripts/spec_quality/check_cover_letter_key_schema.py \
+          --table ${ARTIFACTS_TABLE_NAME} \
+          --user-sample 20 \
+          --out docs/evidence/cover-letter-key-schema-audit-<timestamp>.json
+      This identifies records still using only pk/sk and quantifies migration scope.
+  exact_files_to_modify:
+    - path: src/backend/careervp/handlers/cover_letter_handler.py
+      change: enforce canonical artifacts read path (applicationId/artifactId) with silent legacy fallback for pre-migration records; strict not-found semantics remain
+    - path: src/backend/careervp/handlers/cover_letter_submit_handler.py
+      change: ensure request_id/artifactId mapping writes canonical keys; do not write pk/sk
+    - path: src/backend/careervp/dal/dynamo_dal_handler.py
+      change: add canonical read/list methods; retain legacy_read as explicitly-flagged fallback path with COVER_LETTER_LEGACY_READ_ENABLED env guard
+    - path: src/backend/tests/unit/test_cover_letter_status_storage_keys.py
+      change: verify applicationId/artifactId key usage and that legacy fallback is only invoked on canonical miss
+    - path: src/backend/tests/unit/test_cover_letter_list_includes_generated_artifact.py
+      change: verify generated ID appears in list via canonical path; assert legacy path not invoked for new records
+    - path: src/backend/tests/integration/test_cover_letter_roundtrip_persistence.py
+      change: verify submit->status->list roundtrip in production-like schema using canonical keys
+    - path: docs/refactor/live_tests/test_07_cover_letter.py
+      change: verify generated id resolvability and no empty list regressions
+    - path: scripts/spec_quality/check_cover_letter_key_schema.py
+      change: >
+        script created by RECOVERY_001 (per Regression_PLAN.md:153); use here is Phase B gate only —
+        run to audit existing records for pk/sk-only schema before removing legacy fallback
+  exact_behavior_changes:
+    - Status/list resolve generated artifacts through canonical key schema (applicationId/artifactId).
+    - Pre-migration records (pk/sk only) remain readable via legacy fallback during Phase A.
+    - Unknown ID returns 404 with COVER_LETTER_NOT_FOUND.
+    - Persistence failure cannot return synthetic completed success.
+    - COVER_LETTER_LEGACY_READ_ENABLED env var controls fallback; defaults to true during Phase A.
+  non_goals_out_of_scope:
+    - No changes to cover letter content generation prompt.
+    - Phase B (legacy fallback removal) is explicitly out of scope for this step.
+  rollback_plan:
+    - If canonical reads fail for newly generated records: set COVER_LETTER_LEGACY_READ_ENABLED=true (already default in Phase A) and redeploy — no code change required.
+    - If canonical reads fail for pre-migration records: legacy fallback covers these automatically in Phase A.
+    - "If rollback of this entire step is required: revert commit set; records written in canonical format during the window will be unreadable by reverted code. Remediation: backfill pk/sk keys for records created during Phase A window using the key-schema audit script output as the target record set."
+
+acceptance_criteria:
+  api_level:
+    - POST /cover-letter/generate returns request_id and artifact_id.
+    - GET /cover-letter/{request_id}/status returns 200 for persisted artifact.
+    - GET /cover-letters includes generated request_id after completion.
+    - GET /cover-letter/{unknown}/status returns 404 with domain-specific code.
+  data_level:
+    - Reads and writes use artifacts table key schema applicationId/artifactId.
+    - artifactId format remains ARTIFACT#COVER_LETTER#{request_id}.
+  observability:
+    - Not-found metric and key-schema mode logs are emitted.
+  negative_and_edge_case_criteria:
+    - User A cannot read/list User B cover letters.
+    - No synthetic completed payload is returned for missing persistence.
+  regression_reversal_criteria:
+    - No cover-letter status 404 for newly generated ID in live tests.
+    - No empty cover_letters list when generated id exists.
+
+baseline_and_regression_budget:
+  baseline_artifact:
+    path: careervp/live-test-results27.log
+    reason: known better behavior reference for cover-letter flow
+  blocked_regressions:
+    - new_non_2xx_on_changed_endpoints
+    - new_empty_arrays_on_generated_artifact_list_or_read_paths
+    - generated_id_missing_from_status_or_list_after_polling_window
+  allowed_deltas: {}
+
+verification_contract:
+  - requirement_id: VC-CL-001
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: true
+    verification_description: canonical storage key usage and not-found behavior
+  - requirement_id: VC-CL-002
+    verification_type: integration
+    blocking_gate: pre_merge
+    artifact_required: true
+    verification_description: roundtrip submit->status->list in production-like schema
+  - requirement_id: VC-CL-003
+    verification_type: live
+    blocking_gate: post_deploy
+    artifact_required: true
+    verification_description: live e2e includes generated id in status/list within polling window
+
+deployed_parity_plan:
+  route_surface_parity:
+    source_of_truth: infra/careervp/api_construct.py
+    verification_steps:
+      - Confirm /cover-letter/generate routes to submit lambda.
+      - Confirm /cover-letter/{coverLetterId}/status and /cover-letters route to status lambda.
+  authorizer_parity:
+    source_of_truth: deployed API method auth configuration
+    verification_steps:
+      - Verify auth remains required for all cover-letter endpoints.
+  runtime_env_resolution_parity:
+    source_of_truth: lambda env vars and handler table resolution
+    verification_steps:
+      - Verify cover-letter lambdas use artifacts table resolution first.
+
+validation_plan:
+  unit_tests:
+    - src/backend/tests/unit/test_cover_letter_status_storage_keys.py
+    - src/backend/tests/unit/test_cover_letter_list_includes_generated_artifact.py
+  integration_tests:
+    - src/backend/tests/integration/test_cover_letter_roundtrip_persistence.py
+  contract_tests:
+    - docs/refactor/live_tests/test_10_api_contract_success.py
+  live_e2e_checks:
+    - docs/refactor/live_tests/test_07_cover_letter.py
+  regression_checks:
+    - compare new live artifact to careervp/live-test-results27.log for cover-letter endpoints
+  validation_commands:
+    - uv run python scripts/smoke/run_targeted_smoke.py --step RECOVERY_003 --out docs/evidence/targeted-smoke-RECOVERY_003-<timestamp>.json
+    - uv run python scripts/spec_quality/check_regression_delta.py --baseline careervp/live-test-results27.log --current docs/evidence/targeted-smoke-RECOVERY_003-<timestamp>.json --out docs/evidence/per-step-regression-delta-RECOVERY_003-<timestamp>.json
+    - uv run pytest src/backend/tests/unit/test_cover_letter_status_storage_keys.py src/backend/tests/unit/test_cover_letter_list_includes_generated_artifact.py -q
+    - uv run pytest src/backend/tests/integration/test_cover_letter_roundtrip_persistence.py -q
+    - uv run pytest docs/refactor/live_tests/test_07_cover_letter.py -q
+
+traceability_matrix:
+  - requirement_id: AC-CL-MIGRATE-001
+    requirement: Key-schema audit run and pre-migration record count documented before Phase B
+    code_reference: scripts/spec_quality/check_cover_letter_key_schema.py
+    test_reference: docs/evidence/cover-letter-key-schema-audit-<timestamp>.json
+    verification_type: static
+    blocking_gate: pre_phase_b
+    artifact_required: true
+    evidence_reference: docs/evidence/cover-letter-key-schema-audit-<timestamp>.json
+    result: pending
+    note: Phase B (legacy fallback removal) must not proceed until this audit is complete and record count is zero or backfilled.
+  - requirement_id: AC-CL-301
+    requirement: generated request_id resolves on status endpoint
+    code_reference: src/backend/careervp/handlers/cover_letter_handler.py
+    test_reference: src/backend/tests/integration/test_cover_letter_roundtrip_persistence.py::test_status_readable_after_submit
+    verification_type: integration
+    blocking_gate: pre_merge
+    artifact_required: true
+    evidence_reference: docs/evidence/cover-letter-status-roundtrip-<timestamp>.json
+    result: pending
+  - requirement_id: AC-CL-302
+    requirement: list endpoint includes generated id
+    code_reference: src/backend/careervp/dal/dynamo_dal_handler.py
+    test_reference: docs/refactor/live_tests/test_07_cover_letter.py::TestCoverLetterEndpoints::test_list_cover_letters
+    verification_type: live
+    blocking_gate: post_deploy
+    artifact_required: true
+    evidence_reference: docs/evidence/cover-letter-list-roundtrip-live-<timestamp>.json
+    result: pending
+  - requirement_id: AC-CL-303
+    requirement: missing id returns domain 404 without synthetic success
+    code_reference: src/backend/careervp/handlers/cover_letter_handler.py
+    test_reference: src/backend/tests/unit/test_cover_letter_status_storage_keys.py::test_missing_returns_404
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: true
+    evidence_reference: docs/evidence/cover-letter-not-found-domain-code-<timestamp>.json
+    result: pending
+
+rollback_trigger_matrix:
+  - trigger_id: RT-CL-001
+    trigger_condition: generated cover letter id not resolvable in status/list post_deploy
+    detection_source: live test_07_cover_letter
+    action: rollback RECOVERY_003 commit set and re-enable legacy read fallback flag
+    owner: release_owner
+  - trigger_id: RT-CL-002
+    trigger_condition: cover-letter endpoints introduce new non-2xx vs baseline
+    detection_source: regression delta checker
+    action: block promotion and revert offending changes
+    owner: backend-platform
+
+completion_evidence:
+  required_artifacts:
+    - docs/evidence/cover-letter-status-roundtrip-<timestamp>.json
+    - docs/evidence/cover-letter-list-roundtrip-live-<timestamp>.json
+    - docs/evidence/cover-letter-not-found-domain-code-<timestamp>.json
+  known_residual_risks:
+    - Legacy data (pk/sk-only records) is handled by Phase A fallback. Phase B removal requires audit confirmation that zero such records remain or are backfilled.
+    - Records created during a Phase A deployment window that is subsequently fully rolled back will require pk/sk backfill using the key-schema audit script output as the target set.
+    - COVER_LETTER_LEGACY_READ_ENABLED must remain true in all Phase A deployments; toggling it false before Phase B audit completes will break reads for pre-migration records.
+  explicit_sign_off_checklist:
+    - COVER_LETTER_002 all ACs pass
+    - no cover-letter regressions vs baseline
+    - two consecutive live passes include cover-letter suite
+
+confidence_assessment:
+  confidence_score_0_to_100: 0
+  implementation_100_percent: false
+  confidence_basis:
+    - Pending implementation and live validation evidence.
+  confidence_update_rule: |
+    Set to >=95 only after AC-CL-301..303 are pass and live suites pass twice consecutively.
+
+dependencies:
+  - RECOVERY_001

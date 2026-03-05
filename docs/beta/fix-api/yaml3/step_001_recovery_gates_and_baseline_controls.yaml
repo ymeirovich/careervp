@@ -1,0 +1,447 @@
+spec_id: RECOVERY_001
+title: Establish Baseline, Blocking Gates, and Evidence Controls Before Regression Reversal
+priority: critical
+status: pending
+owner: backend-platform
+created_at: 2026-03-05
+updated_at: 2026-03-05
+sequence_step: 1
+status_scale: draft|pending|in_progress|implemented|validated|closed
+
+targets_yaml2_specs:
+  - COVER_LETTER_002
+  - CV_TAILORING_002
+  - GAP_GET_002
+  - INTERVIEW_PREP_002
+  - INTERVIEW_PREP_003
+  - TRIAL_002
+  - VPR_LIST_METADATA_001
+
+problem_statement:
+  exact_failing_behavior: |
+    Regressions were accepted into live runs because gates were not enforced as release blockers.
+    live-test-results28.log introduced non-2xx responses and generated-artifact empty list/read
+    regressions compared to live-test-results27.log.
+  expected_behavior: |
+    No regression-fix implementation proceeds unless baseline deltas, parity checks, traceability,
+    and evidence integrity checks are configured and passing.
+  user_business_impact: |
+    Without strict gates, code can appear complete but degrade live behavior and force costly rollback cycles.
+  reproducibility_notes:
+    - Compare careervp/live-test-results27.log to careervp/live-test-results28.log.
+    - Identify non-2xx increases, empty-array regressions, and generated-id roundtrip misses.
+
+evidence:
+  failing_tests:
+    - docs/refactor/live_tests/test_04_vpr.py::TestVPREndpoints::test_list_vprs
+    - docs/refactor/live_tests/test_05_gap_analysis.py::TestGapAnalysisEndpoints::test_generate_gap_questions
+    - docs/refactor/live_tests/test_06_cv_tailoring.py::TestCVTailoringEndpoints::test_delete_tailored_cv_roundtrip
+    - docs/refactor/live_tests/test_07_cover_letter.py::TestCoverLetterEndpoints::test_list_cover_letters
+    - docs/refactor/live_tests/test_08_interview_prep.py::TestInterviewPrepEndpoints::test_get_interview_prep_status
+    - docs/refactor/live_tests/test_10_api_contract_success.py::TestAPIContractSuccess::test_api_contract_success_for_all_27_endpoints
+  endpoint_method_path:
+    - method: POST
+      path: /jobs/{jobId}/gap-questions
+      observed_status_code: 500
+    - method: DELETE
+      path: /cv-tailoring/{cvTailoringId}
+      observed_status_code: 403
+    - method: GET
+      path: /cover-letters
+      observed_status_code: 200
+      observed_body_fragment: '{"cover_letters": []}'
+    - method: GET
+      path: /vprs
+      observed_status_code: 200
+      observed_body_fragment: generated id missing after polling window
+  baseline_artifact: careervp/live-test-results27.log
+  regression_artifact: careervp/live-test-results28.log
+  environment: dev-live
+  timestamp_utc: '2026-03-05T00:00:00Z'
+
+architecture_and_ownership_map:
+  route_to_lambda:
+    - route: POST /jobs/{jobId}/gap-questions
+      lambda: gap-api
+      handler: src/backend/careervp/handlers/gap_handler.py
+    - route: GET /jobs/{jobId}/gap-questions
+      lambda: gap-api
+      handler: src/backend/careervp/handlers/gap_handler.py
+    - route: POST /jobs/{jobId}/gap-responses
+      lambda: gap-api
+      handler: src/backend/careervp/handlers/gap_handler.py
+    - route: POST /cover-letter/generate
+      lambda: cover-letter-api
+      handler: src/backend/careervp/handlers/cover_letter_submit_handler.py
+    - route: GET /cover-letter/{coverLetterId}/status
+      lambda: cover-letter-status
+      handler: src/backend/careervp/handlers/cover_letter_handler.py
+    - route: GET /cover-letters
+      lambda: cover-letter-status
+      handler: src/backend/careervp/handlers/cover_letter_handler.py
+    - route: GET /vprs
+      lambda: vpr-status
+      handler: src/backend/careervp/handlers/vpr_status_handler.py
+    - route: GET /vpr/{vprId}/status
+      lambda: vpr-status
+      handler: src/backend/careervp/handlers/vpr_status_handler.py
+    - route: POST /cv-tailoring/generate
+      lambda: cv-tailoring-api
+      handler: src/backend/careervp/handlers/cv_tailoring_handler.py
+    - route: GET /cv-tailoring/{cvTailoringId}/status
+      lambda: cv-tailoring-api
+      handler: src/backend/careervp/handlers/cv_tailoring_handler.py
+    - route: DELETE /cv-tailoring/{cvTailoringId}
+      lambda: cv-tailoring-api
+      handler: src/backend/careervp/handlers/cv_tailoring_handler.py
+    - route: GET /cv-tailorings
+      lambda: cv-tailoring-api
+      handler: src/backend/careervp/handlers/cv_tailoring_handler.py
+    - route: POST /interview-prep/generate
+      lambda: interview-prep-api
+      handler: src/backend/careervp/handlers/interview_prep_submit_handler.py
+    - route: GET /interview-prep/{interviewPrepId}/status
+      lambda: interview-prep-status
+      handler: src/backend/careervp/handlers/interview_prep_handler.py
+    - route: GET /interview-preps
+      lambda: interview-prep-status
+      handler: src/backend/careervp/handlers/interview_prep_handler.py
+  handler_file_paths:
+    - infra/careervp/api_construct.py
+    - src/backend/careervp/handlers/gap_handler.py
+    - src/backend/careervp/handlers/cover_letter_handler.py
+    - src/backend/careervp/handlers/vpr_status_handler.py
+    - src/backend/careervp/handlers/cv_tailoring_handler.py
+    - src/backend/careervp/handlers/interview_prep_handler.py
+  data_store_index_usage:
+    - users table pk/sk
+    - artifacts table applicationId/artifactId
+    - jobs table job_id and user_id-index
+    - gap_responses table userId/questionId
+  auth_source_and_identity_key:
+    source: requestContext.authorizer claims
+    identity_key: user_id
+
+root_cause_analysis:
+  hypotheses_ranked:
+    - id: H1
+      hypothesis: Release gates were advisory, not blocking.
+      disproof_criteria: CI blocks merge/deploy on AC evidence and regression deltas.
+      status: confirmed
+    - id: H2
+      hypothesis: Baseline regression comparison was not mandatory.
+      disproof_criteria: Every spec includes baseline artifact and delta budget check.
+      status: confirmed
+    - id: H3
+      hypothesis: Deployed parity checks were incomplete.
+      disproof_criteria: Route/auth/env parity checks run and fail-fast before promotion.
+      status: confirmed
+  confirmed_root_causes:
+    - Missing mandatory baseline-and-delta enforcement.
+    - Missing blocking evidence integrity checks for spec completion states.
+    - Missing deployed parity verification as a release gate.
+  contributing_factors:
+    - Local tests were green while live contract drift remained.
+    - Async quality was not required to pass twice consecutively.
+
+fix_plan:
+  exact_files_to_modify:
+    - path: docs/refactor/live_tests/run_all_tests.py
+      change: emit machine-readable summary and support --summary-json output for repeated-live gate evidence
+    - path: docs/refactor/live_tests/test_10_api_contract_success.py
+      change: enforce regression budget checks and AC-scoped evidence output hooks
+    - path: src/backend/tests/integration/test_deployed_parity_contract.py
+      change: add deployed-parity contract assertions for route/method/auth parity gate
+    - path: docs/beta/fix-api/yaml3/step_001_recovery_gates_and_baseline_controls.yaml
+      change: define baseline and gate contract for all downstream yaml3 specs
+    - path: scripts/spec_quality/check_regression_delta.py
+      change: add blocker logic for non-2xx and empty-array deltas against baseline and emit JSON evidence
+    - path: scripts/spec_quality/check_deployed_parity.py
+      change: generate infra route inventory, compare to deployed method/auth inventory, and emit JSON evidence
+    - path: scripts/spec_quality/check_evidence_integrity.py
+      change: validate spec_id, requirement_id, git_sha, deployment_id, executed_at_utc and fail-closed for blocking ACs
+    - path: scripts/smoke/run_targeted_smoke.py
+      change: |
+        new script; runs the 5 targeted smoke assertions (gap POST, cover-letter status, VPR list,
+        CV tailoring DELETE not-403, interview-prep status resolvable); accepts --step flag to
+        label output; exits non-zero on any assertion failure; emits JSON evidence artifact
+    - path: scripts/spec_quality/check_yaml2_closure.py
+      change: >
+        new script; verifies all yaml2 ACs and evidence references are pass and fresh;
+        used as the final gate in RECOVERY_008 but must be built and verified in
+        RECOVERY_001 before any other step proceeds per Regression_PLAN.md:152
+    - path: scripts/spec_quality/check_cover_letter_key_schema.py
+      change: >
+        new script; audits existing cover letter DynamoDB records for pk/sk-only schema
+        before Phase B legacy fallback removal; used as Phase B gate in RECOVERY_003 but
+        must be built and verified in RECOVERY_001 before any other step proceeds per
+        Regression_PLAN.md:153
+    - path: .github/workflows/pr-validation.yml
+      change: wire pre_merge blockers (regression delta and evidence integrity) as required checks
+    - path: .github/workflows/deploy.yml
+      change: wire pre_deploy parity check and post_deploy two-pass live gate as deploy blockers
+  exact_behavior_changes:
+    - No feature-change specs may move to validated or closed unless blockers pass.
+    - Deployment and closure are blocked when baseline delta budget is violated.
+    - Evidence artifacts become mandatory for all blocking ACs.
+    - CI and deploy workflows fail-closed when gate scripts are missing or return non-zero.
+  non_goals_out_of_scope:
+    - No endpoint behavior change in this step.
+    - No schema migrations in this step.
+  rollback_plan:
+    - Revert gate tooling changes as one commit if tooling blocks valid paths unexpectedly.
+    - Keep baseline artifact references immutable for auditability.
+
+acceptance_criteria:
+  api_level:
+    - Gate tooling must not change runtime endpoint responses directly.
+    - Gate tooling must fail pipeline when regression blockers are detected.
+  data_level:
+    - Regression parser stores per-endpoint metrics for status class and empty-array detection.
+    - Evidence integrity checker validates required evidence fields.
+  observability:
+    - Gate outputs include baseline artifact path, current artifact path, and diff summary.
+    - Build logs include failed AC IDs and blocking gate names.
+  negative_and_edge_case_criteria:
+    - If baseline artifact is missing, gate fails hard.
+    - If evidence artifact exists but git_sha mismatches, gate fails hard.
+    - If deployment_id is missing for post_deploy checks, gate fails hard.
+
+baseline_and_regression_budget:
+  baseline_artifact:
+    path: careervp/live-test-results27.log
+    reason: latest known-better live behavior before regressions in log 28
+  blocked_regressions:
+    - new_non_2xx_on_changed_endpoints
+    - new_empty_arrays_on_generated_artifact_list_or_read_paths
+    - generated_id_missing_from_status_or_list_after_polling_window
+  allowed_deltas: {}
+
+verification_contract:
+  - requirement_id: VC-RECOVERY-001
+    verification_type: static
+    blocking_gate: pre_merge
+    artifact_required: true
+    verification_description: regression delta checker exists and validates baseline/current artifacts
+  - requirement_id: VC-RECOVERY-002
+    verification_type: contract
+    blocking_gate: pre_deploy
+    artifact_required: true
+    verification_description: contract suite emits AC-scoped evidence artifacts
+  - requirement_id: VC-RECOVERY-003
+    verification_type: live
+    blocking_gate: post_deploy
+    artifact_required: true
+    verification_description: full live suite must pass twice consecutively
+
+execution_sequence:
+  - step: S1
+    name: spec_patch_and_scope_lock
+    outcome: step_001 commands, scope, and blockers are executable and unambiguous
+  - step: S2
+    name: implement_gate_scripts
+    outcome: regression/parity/evidence scripts exist with deterministic JSON outputs and non-zero blocker exits
+  - step: S3
+    name: wire_ci_blockers
+    outcome: pre_merge and pre_deploy gates are mandatory in workflow definitions
+  - step: S4
+    name: run_two_pass_live_validation
+    outcome: live suite passes twice consecutively with timestamped evidence artifacts
+  - step: S5
+    name: unblock_downstream_recovery_steps
+    outcome: RECOVERY_002..RECOVERY_008 can proceed only if all AC-RECOVERY blockers are pass
+
+deployed_parity_plan:
+  route_surface_parity:
+    source_of_truth: infra/careervp/api_construct.py route map and live API inventory
+    verification_steps:
+      - Build infra route inventory from infra/careervp/api_construct.py and write docs/evidence/infra-route-map-<timestamp>.json.
+      - Compare infra method/path inventory to deployed method/path set for target environment.
+  authorizer_parity:
+    source_of_truth: api gateway method auth configuration
+    verification_steps:
+      - Verify changed routes use intended authorizer settings.
+      - Fail when deployed auth mode differs from infra route family expectations.
+  runtime_env_resolution_parity:
+    source_of_truth: lambda environment definitions and handler resolution order
+    verification_steps:
+      - Validate table/env precedence for changed handlers.
+      - Fail when required env vars are missing for changed handlers.
+
+targeted_smoke_test:
+  description: |
+    Fast-fail gate that runs immediately after each step deployment, before the two-pass full suite.
+    Must complete in under 3 minutes. Covers the 5 highest-risk regression surfaces.
+    On any failure: block two-pass suite, trigger step rollback trigger matrix, do not proceed.
+  scope:
+    - name: gap_post_persistence
+      method: POST
+      path: /jobs/{jobId}/gap-questions
+      assertion: response status 200 AND body contains questions array with length >= 1
+      failure_action: rollback RECOVERY_002 and block progression
+    - name: cover_letter_status_resolvable
+      method: GET
+      path: /cover-letter/{coverLetterId}/status
+      assertion: response status 200 for a recently generated coverLetterId (not 404)
+      failure_action: rollback RECOVERY_003 and block progression
+    - name: vpr_list_includes_generated
+      method: GET
+      path: /vprs
+      assertion: response status 200 AND generated vprId from most recent submit present in body
+      failure_action: rollback RECOVERY_004 and block progression
+    - name: cv_tailoring_delete_not_403
+      method: DELETE
+      path: /cv-tailoring/{cvTailoringId}
+      assertion: response status NOT 403 (accept 200 or 404 depending on id existence)
+      failure_action: rollback RECOVERY_005 and block progression
+    - name: interview_prep_status_resolvable
+      method: GET
+      path: /interview-prep/{interviewPrepId}/status
+      assertion: response status 200 for a recently generated interviewPrepId (not 404)
+      failure_action: rollback RECOVERY_006 and block progression
+  smoke_test_script:
+    path: scripts/smoke/run_targeted_smoke.py
+    output: docs/evidence/targeted-smoke-<step>-<timestamp>.json
+    command: uv run python scripts/smoke/run_targeted_smoke.py --step RECOVERY_00X --out docs/evidence/targeted-smoke-RECOVERY_00X-<timestamp>.json
+    expected_exit_code: 0
+  ci_gate:
+    workflow: .github/workflows/deploy.yml
+    position: post_deploy_before_two_pass_suite
+    required: true
+    failure_behavior: block two-pass suite execution and surface targeted smoke output
+
+validation_plan:
+  unit_tests:
+    - src/backend/tests/unit/test_l6_route_surface.py
+  integration_tests:
+    - src/backend/tests/integration/test_deployed_parity_contract.py
+  contract_tests:
+    - docs/refactor/live_tests/test_10_api_contract_success.py
+  live_e2e_checks:
+    - docs/refactor/live_tests/run_all_tests.py
+  regression_checks:
+    - compare careervp/live-test-results27.log vs new live artifact
+  validation_commands:
+    - mkdir -p docs/evidence docs/evidence/smoke
+    - uv run python scripts/smoke/run_targeted_smoke.py --step RECOVERY_001 --out docs/evidence/targeted-smoke-RECOVERY_001-<timestamp>.json
+    - uv run python scripts/spec_quality/check_deployed_parity.py --env dev-live --infra-source infra/careervp/api_construct.py --out docs/evidence/recovery-gate-parity-report-<timestamp>.json
+    - uv run python docs/refactor/live_tests/run_all_tests.py --mode full --summary-json docs/evidence/recovery-gate-live-pass-1-<timestamp>.json
+    - uv run python docs/refactor/live_tests/run_all_tests.py --mode full --summary-json docs/evidence/recovery-gate-live-pass-2-<timestamp>.json
+    - uv run python scripts/spec_quality/check_regression_delta.py --baseline careervp/live-test-results27.log --current docs/evidence/recovery-gate-live-pass-2-<timestamp>.json --out docs/evidence/recovery-gate-regression-delta-<timestamp>.json
+    - uv run python scripts/spec_quality/check_evidence_integrity.py --spec careervp/docs/beta/fix-api/yaml3/step_001_recovery_gates_and_baseline_controls.yaml --artifacts-dir docs/evidence --require-deployment-id-for post_deploy
+
+ci_gate_enforcement_plan:
+  pre_merge:
+    workflow: .github/workflows/pr-validation.yml
+    required_commands:
+      - uv run python scripts/spec_quality/check_regression_delta.py --baseline careervp/live-test-results27.log --current <pr_contract_artifact>
+      - uv run python scripts/spec_quality/check_evidence_integrity.py --spec careervp/docs/beta/fix-api/yaml3/step_001_recovery_gates_and_baseline_controls.yaml --artifacts-dir docs/evidence
+  pre_deploy:
+    workflow: .github/workflows/deploy.yml
+    required_commands:
+      - uv run python scripts/spec_quality/check_deployed_parity.py --env dev-live --infra-source infra/careervp/api_construct.py --out docs/evidence/recovery-gate-parity-report-<timestamp>.json
+      - uv run pytest docs/refactor/live_tests/test_10_api_contract_success.py::TestAPIContractSuccess::test_api_contract_success_for_all_27_endpoints -q
+  post_deploy_smoke:
+    workflow: .github/workflows/deploy.yml
+    position: immediately_after_deploy_before_two_pass_suite
+    description: Fast-fail targeted smoke (<3 min). Failure blocks two-pass suite and triggers rollback.
+    required_commands:
+      - uv run python scripts/smoke/run_targeted_smoke.py --step RECOVERY_001 --out docs/evidence/targeted-smoke-RECOVERY_001-<timestamp>.json
+  post_deploy:
+    workflow: .github/workflows/deploy.yml
+    depends_on: post_deploy_smoke
+    required_commands:
+      - uv run python docs/refactor/live_tests/run_all_tests.py --mode full --summary-json docs/evidence/recovery-gate-live-pass-1-<timestamp>.json
+      - uv run python docs/refactor/live_tests/run_all_tests.py --mode full --summary-json docs/evidence/recovery-gate-live-pass-2-<timestamp>.json
+      - uv run python scripts/spec_quality/check_evidence_integrity.py --spec careervp/docs/beta/fix-api/yaml3/step_001_recovery_gates_and_baseline_controls.yaml --artifacts-dir docs/evidence --require-deployment-id-for post_deploy
+
+traceability_matrix:
+  - requirement_id: AC-RECOVERY-000
+    requirement: Targeted smoke script exists and runs the 5 critical endpoint assertions in under 3 minutes
+    code_reference: scripts/smoke/run_targeted_smoke.py
+    test_reference: scripts/smoke/run_targeted_smoke.py
+    verification_type: live
+    blocking_gate: post_deploy_smoke
+    artifact_required: true
+    evidence_reference: docs/evidence/targeted-smoke-RECOVERY_001-<timestamp>.json
+    result: pending
+    note: This gate must pass before each step's two-pass full suite begins. Failure immediately triggers the step's rollback_trigger_matrix.
+  - requirement_id: AC-RECOVERY-001
+    requirement: Regression blockers fail-fast before deploy
+    code_reference: scripts/spec_quality/check_regression_delta.py
+    test_reference: docs/refactor/live_tests/test_10_api_contract_success.py
+    verification_type: contract
+    blocking_gate: pre_deploy
+    artifact_required: true
+    evidence_reference: docs/evidence/recovery-gate-regression-delta-<timestamp>.json
+    result: pending
+  - requirement_id: AC-RECOVERY-002
+    requirement: Evidence integrity contract enforced for blocking ACs
+    code_reference: scripts/spec_quality/check_evidence_integrity.py
+    test_reference: src/backend/tests/integration/test_deployed_parity_contract.py
+    verification_type: static
+    blocking_gate: pre_merge
+    artifact_required: true
+    evidence_reference: docs/evidence/recovery-gate-evidence-integrity-<timestamp>.json
+    result: pending
+  - requirement_id: AC-RECOVERY-003
+    requirement: Two consecutive live suite passes required
+    code_reference: docs/refactor/live_tests/run_all_tests.py
+    test_reference: docs/refactor/live_tests/run_all_tests.py
+    verification_type: live
+    blocking_gate: post_deploy
+    artifact_required: true
+    evidence_reference: docs/evidence/recovery-gate-live-pass-1-<timestamp>.json and docs/evidence/recovery-gate-live-pass-2-<timestamp>.json
+    result: pending
+
+rollback_trigger_matrix:
+  - trigger_id: RT-RECOVERY-000
+    trigger_condition: Targeted smoke fails for any of the 5 critical endpoints after a step deploy
+    detection_source: scripts/smoke/run_targeted_smoke.py non-zero exit or JSON failure assertion
+    action: |
+      1. Block two-pass suite immediately.
+      2. Identify which smoke assertion failed (endpoint name in JSON output).
+      3. Trigger the rollback action from the corresponding step's rollback_trigger_matrix entry.
+      4. Do not proceed to next step until smoke passes on a clean redeploy.
+    owner: release_owner
+  - trigger_id: RT-RECOVERY-001
+    trigger_condition: Gate tooling incorrectly blocks compliant specs
+    detection_source: CI failures with all ACs satisfied
+    action: rollback gate tooling commit and re-run verification
+    owner: release_owner
+  - trigger_id: RT-RECOVERY-002
+    trigger_condition: Regression blockers not detected but live fails
+    detection_source: post_deploy live evidence mismatch
+    action: block closure, patch checker logic, rerun full validation
+    owner: backend-platform
+
+completion_evidence:
+  required_artifacts:
+    - docs/evidence/targeted-smoke-RECOVERY_001-<timestamp>.json
+    - docs/evidence/recovery-gate-regression-delta-<timestamp>.json
+    - docs/evidence/recovery-gate-parity-report-<timestamp>.json
+    - docs/evidence/infra-route-map-<timestamp>.json
+    - docs/evidence/recovery-gate-live-pass-1-<timestamp>.json
+    - docs/evidence/recovery-gate-live-pass-2-<timestamp>.json
+  known_residual_risks:
+    - Parser false positives until first calibration run on stable logs.
+    - Targeted smoke assertions depend on live test data (recent submit IDs); smoke runner must manage its own test fixtures or reuse IDs from prior test run context.
+  explicit_sign_off_checklist:
+    - targeted smoke script exists at scripts/smoke/run_targeted_smoke.py
+    - targeted smoke passes in under 3 minutes post-deploy
+    - blocking gates enabled in CI
+    - baseline artifact pinned
+    - evidence integrity checker active
+    - two-pass live stability gate active
+
+confidence_assessment:
+  confidence_score_0_to_100: 0
+  implementation_100_percent: false
+  confidence_basis:
+    - Spec defined but not yet executed.
+    - No evidence artifacts generated yet.
+  confidence_update_rule: |
+    Set to >=95 only when all blocking traceability entries are pass
+    and two consecutive live passes are recorded.
+
+dependencies: []

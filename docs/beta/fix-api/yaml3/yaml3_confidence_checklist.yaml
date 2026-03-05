@@ -1,0 +1,257 @@
+metadata:
+  checklist_id: YAML3_CONFIDENCE_001
+  version: 2
+  owner: backend-platform
+  generated_on_utc: "2026-03-05T00:00:00Z"
+  updated_on_utc: "2026-03-05T00:00:00Z"
+  change_summary: |
+    v2: Added C08 (yaml2 spec ID enumeration coverage), C09 (internal spec consistency).
+    Expanded C02 with formal enumerated_requirements sub-lists to make it automatable.
+    Strengthened C06 to require RECOVERY_001 ownership of all pre-Phase-2 scripts,
+    not just script existence anywhere in specs. Strengthened C07 to verify the
+    RECOVERY_002->RECOVERY_007 explicit dependency. Rebalanced weights to accommodate
+    two new checks while keeping max_score=100.
+
+scope:
+  regression_plan: careervp/docs/beta/fix-api/yaml3/Regression_PLAN.md
+  specs_glob: careervp/docs/beta/fix-api/yaml3/step_*.yaml
+
+scoring_model:
+  max_score: 100
+  require_for_100:
+    - total_score_equals_100
+    - all_critical_checks_full_points
+  bands:
+    - name: blocker
+      min: 0
+      max: 59
+    - name: partial
+      min: 60
+      max: 84
+    - name: high
+      min: 85
+      max: 99
+    - name: complete
+      min: 100
+      max: 100
+
+checks:
+  - id: C01
+    name: YAML parse integrity
+    weight: 10
+    critical: true
+    pass_condition: all step_*.yaml files parse successfully with no syntax errors
+    scoring_rule: 10 if all parse; 7 if exactly one file fails; 0 otherwise
+
+  - id: C02
+    name: Regression_PLAN requirement coverage
+    weight: 15
+    critical: true
+    pass_condition: >
+      Every item in all four enumerated_requirements sub-lists is explicitly assigned
+      to one or more RECOVERY steps with executable scope. This check is only
+      automatable when all sub-lists below are treated as the definitive enumeration.
+    enumerated_requirements:
+      yaml2_spec_regressions:
+        - GAP_GET_002: table resolution fix and non-2xx on DAL failure (Regression_PLAN.md:41)
+        - COVER_LETTER_002: canonical key schema and dual-read Phase A (Regression_PLAN.md:42)
+        - VPR_LIST_METADATA_001: paginated accumulation for get_vpr_jobs_by_user (Regression_PLAN.md:43)
+        - CV_TAILORING_002: DELETE route diagnosis-gate before any code change (Regression_PLAN.md:44)
+        - TRIAL_002: contract route parity and legacy alias removal (Regression_PLAN.md:45)
+        - INTERVIEW_PREP_002: status schema and quality assertion on terminal state only (Regression_PLAN.md:46)
+        - INTERVIEW_PREP_003: context resolution and worker completion path stabilization (Regression_PLAN.md:47)
+      public_api_interface_changes:
+        - GET /jobs/{jobId}/gap-questions returns non-2xx on DAL or storage failure (Regression_PLAN.md:18)
+        - GET /cover-letter/{id}/status and GET /cover-letters use artifacts-table canonical keys applicationId/artifactId (Regression_PLAN.md:21)
+        - GET /vprs pagination and filtering fix for deterministic generated-ID inclusion (Regression_PLAN.md:26)
+        - Interview prep live test quality assertions applied only to completed terminal payload (Regression_PLAN.md:30)
+        - GAP_QUESTIONS_TABLE_NAME env var added to remove ambiguous table resolution (Regression_PLAN.md:33)
+      pre_phase2_scripts_owned_by_RECOVERY_001:
+        - scripts/smoke/run_targeted_smoke.py (Regression_PLAN.md:148)
+        - scripts/spec_quality/check_regression_delta.py (Regression_PLAN.md:149)
+        - scripts/spec_quality/check_deployed_parity.py (Regression_PLAN.md:150)
+        - scripts/spec_quality/check_evidence_integrity.py (Regression_PLAN.md:151)
+        - scripts/spec_quality/check_yaml2_closure.py (Regression_PLAN.md:152)
+        - scripts/spec_quality/check_cover_letter_key_schema.py (Regression_PLAN.md:153)
+      phase5_rollout_protocol:
+        - Deploy to dev-live only (Regression_PLAN.md:133)
+        - Execute targeted smoke immediately after deploy (Regression_PLAN.md:134)
+        - On smoke failure revert only the offending step changeset not the full branch (Regression_PLAN.md:137-138)
+        - Run per-step regression delta check before two-pass full suite (Regression_PLAN.md:140-141)
+        - Promote only after all Phase 4 gates hold and targeted smoke and delta checks are clean (Regression_PLAN.md:143)
+    scoring_rule: >
+      Award 15 if all four enumerated_requirements sub-lists are fully covered.
+      Deduct 2 points per yaml2_spec_regression not assigned to any RECOVERY step.
+      Deduct 2 points per public_api_interface_change not assigned to any RECOVERY step.
+      Deduct 2 points per script in pre_phase2_scripts_owned_by_RECOVERY_001 that does
+        not appear in RECOVERY_001 fix_plan.exact_files_to_modify.
+      Deduct 3 points if phase5_rollout_protocol has no coverage in any RECOVERY step.
+      Floor at 0.
+
+  - id: C03
+    name: Gate consistency across steps
+    weight: 20
+    critical: true
+    pass_condition: >
+      Per-step targeted smoke command AND per-step regression delta command are present
+      in the validation_commands section of RECOVERY_002 through RECOVERY_007, not only
+      RECOVERY_001. Required by Regression_PLAN.md:66-88.
+    scoring_rule: >
+      20 if all six steps (002-007) include both per-step smoke and per-step delta commands.
+      Deduct 3 points per step missing either command.
+      Floor at 0.
+
+  - id: C04
+    name: Validation command executability
+    weight: 15
+    critical: true
+    pass_condition: >
+      All validation_commands entries are executable, non-placeholder, and target real
+      test files or scripts. run_all_tests.py invocations must use --mode full
+      --summary-json flags consistent with the invocation established in RECOVERY_001.
+    scoring_rule: >
+      15 if all commands across all step files are executable and non-placeholder.
+      Deduct 3 points per step file containing placeholder commands or wrong invocation flags.
+
+  - id: C05
+    name: Path and source alignment
+    weight: 10
+    critical: true
+    pass_condition: >
+      All referenced payload directories, source files, and live test paths exist in
+      the repository and match the actual paths used by the live test suite.
+    scoring_rule: >
+      10 if all path references resolve correctly.
+      Deduct 2 points per unresolved or mismatched path reference across all step files.
+
+  - id: C06
+    name: Required tooling existence and RECOVERY_001 ownership
+    weight: 10
+    critical: true
+    pass_condition: >
+      All 6 scripts required before Phase 2 begins (Regression_PLAN.md:145-153) must both
+      (a) exist in the repository at their specified paths, AND
+      (b) appear in RECOVERY_001 fix_plan.exact_files_to_modify.
+      Script existence without RECOVERY_001 ownership violates the plan's sequencing
+      requirement: no other RECOVERY step may proceed until all gate scripts are ready.
+    scoring_rule: >
+      10 if all 6 scripts exist in repo AND all 6 appear in RECOVERY_001 fix_plan.
+      5 if all 6 exist in repo but one or more are absent from RECOVERY_001 fix_plan.
+      Award 1 point per script that appears in RECOVERY_001 fix_plan (max 6) when scripts
+        do not yet exist in repo; apply 0.5 multiplier if ownership is also incomplete.
+      0 if fewer than 3 scripts exist in repo and fewer than 3 are in RECOVERY_001 fix_plan.
+
+  - id: C07
+    name: Dependency and sequencing integrity
+    weight: 5
+    critical: false
+    pass_condition: >
+      RECOVERY dependency graph is acyclic, step ordering is coherent, and the following
+      explicit dependencies are present: RECOVERY_007 depends on both RECOVERY_001 and
+      RECOVERY_002 (shared gap attribution changes per Regression_PLAN.md:93).
+      RECOVERY_008 depends on all of RECOVERY_001 through RECOVERY_007.
+    scoring_rule: >
+      5 if all conditions hold.
+      Deduct 2 points per missing or incorrect explicit dependency.
+      0 if graph contains a cycle.
+
+  - id: C08
+    name: yaml2 spec ID complete coverage
+    weight: 10
+    critical: true
+    pass_condition: >
+      Every yaml2 spec ID required by Regression_PLAN.md appears in the
+      targets_yaml2_specs field of at least one step_*.yaml file. Required IDs:
+      COVER_LETTER_002, CV_TAILORING_002, GAP_GET_002, INTERVIEW_PREP_002,
+      INTERVIEW_PREP_003, TRIAL_002, VPR_LIST_METADATA_001.
+      This is a 7/7 enumerated check, directly automatable via grep on targets_yaml2_specs.
+    scoring_rule: 10 if all 7 IDs appear in at least one step file; 0 if any ID is absent
+
+  - id: C09
+    name: Internal spec consistency
+    weight: 5
+    critical: false
+    pass_condition: >
+      No RECOVERY step spec contains a cross-section contradiction. Specifically: a route
+      listed in architecture_and_ownership_map.route_to_lambda must not be described as a
+      legacy alias or fix target in that same spec's problem_statement, evidence,
+      fix_plan, or traceability_matrix. An architecture map that presents a route as
+      currently deployed while the spec's own fix_plan treats it as a regression to
+      eliminate is a contradiction.
+    scoring_rule: 5 if no contradictions found across all step files; 0 if any contradiction present
+
+current_snapshot:
+  assessed_on_utc: "2026-03-05T00:00:00Z"
+  score_total: 100
+  score_breakdown:
+    - check_id: C01
+      points_awarded: 10
+      evidence:
+        - All step_*.yaml files parse cleanly under PyYAML safe_load
+        - step_003 rollback_plan line 140 fixed by wrapping the double-colon scalar in double quotes
+    - check_id: C02
+      points_awarded: 15
+      evidence:
+        - All 7 yaml2 spec regressions are assigned to RECOVERY steps (no deduction)
+        - All 5 public API interface changes are assigned to RECOVERY steps (no deduction)
+        - Phase 5 rollout protocol covered in RECOVERY_001 targeted_smoke_test and rollback_trigger_matrix (no deduction)
+        - check_yaml2_closure.py added to RECOVERY_001 fix_plan.exact_files_to_modify (ownership violation resolved)
+        - check_cover_letter_key_schema.py added to RECOVERY_001 fix_plan.exact_files_to_modify (ownership violation resolved)
+    - check_id: C03
+      points_awarded: 20
+      evidence:
+        - Per-step smoke and delta required by Regression_PLAN.md:66-88
+        - RECOVERY_001 includes both commands (pre-existing)
+        - RECOVERY_002 through RECOVERY_007 validation_commands sections now each prepend both run_targeted_smoke.py and check_regression_delta.py commands
+    - check_id: C04
+      points_awarded: 15
+      evidence:
+        - step_008 validation_plan unit_tests and integration_tests now list explicit file paths (placeholders removed)
+        - step_008 validation_commands corrected to uv run python docs/refactor/live_tests/run_all_tests.py --mode full --summary-json
+        - live_e2e_checks format normalized (pass annotation removed)
+    - check_id: C05
+      points_awarded: 10
+      evidence:
+        - All occurrences of docs/refactor2/api_contract_payloads in step_007 replaced with docs/refactor2/payloads
+        - canonical_sources_of_truth, fix_plan.prerequisite grep command, and fix_plan.exact_files_to_modify path all corrected
+    - check_id: C06
+      points_awarded: 10
+      evidence:
+        - scripts/spec_quality/check_regression_delta.py exists in repo and is listed in RECOVERY_001 fix_plan
+        - scripts/spec_quality/check_deployed_parity.py exists in repo and is listed in RECOVERY_001 fix_plan
+        - scripts/spec_quality/check_evidence_integrity.py exists in repo and is listed in RECOVERY_001 fix_plan
+        - scripts/smoke/run_targeted_smoke.py exists in repo and is listed in RECOVERY_001 fix_plan
+        - scripts/spec_quality/check_yaml2_closure.py exists in repo and is listed in RECOVERY_001 fix_plan
+        - scripts/spec_quality/check_cover_letter_key_schema.py exists in repo and is listed in RECOVERY_001 fix_plan
+    - check_id: C07
+      points_awarded: 5
+      evidence:
+        - Dependency order is coherent
+        - RECOVERY_007 correctly depends on RECOVERY_001 and RECOVERY_002
+        - RECOVERY_008 depends on RECOVERY_001 through RECOVERY_007
+    - check_id: C08
+      points_awarded: 10
+      evidence:
+        - GAP_GET_002 covered by RECOVERY_002 (also TRIAL_002)
+        - COVER_LETTER_002 covered by RECOVERY_003
+        - VPR_LIST_METADATA_001 covered by RECOVERY_004
+        - CV_TAILORING_002 covered by RECOVERY_005
+        - INTERVIEW_PREP_002 and INTERVIEW_PREP_003 covered by RECOVERY_006
+        - TRIAL_002 covered by RECOVERY_002 and RECOVERY_007
+        - All 7 required yaml2 spec IDs present in targets_yaml2_specs across the step files
+    - check_id: C09
+      points_awarded: 5
+      evidence:
+        - RECOVERY_007 architecture_and_ownership_map.route_to_lambda now uses legacy_alias_under_removal key for POST /gap-analysis/questions
+        - Entry includes explanatory note that this alias must NOT be treated as currently deployed
+        - No cross-section contradiction remains; all four sections (route map, evidence, fix_plan, traceability_matrix) now consistently treat the alias as a defect under removal
+
+improvement_plan:
+  to_100_actions:
+    - "COMPLETED: Fixed YAML syntax error in step_003_cover_letter_artifact_roundtrip_recovery.yaml:140 — rollback_plan item wrapped in double quotes (resolves C01 deficit)"
+    - "COMPLETED: Added check_yaml2_closure.py and check_cover_letter_key_schema.py to RECOVERY_001 fix_plan.exact_files_to_modify; updated step_003 and step_008 to clarify RECOVERY_001 owns script creation (resolves C02 and C06 deficits)"
+    - "COMPLETED: Added per-step targeted smoke command and per-step regression delta command to the validation_commands section of RECOVERY_002, RECOVERY_003, RECOVERY_004, RECOVERY_005, RECOVERY_006, and RECOVERY_007 (resolves C03 deficit)"
+    - "COMPLETED: Replaced all placeholder commands in step_008 validation_commands; corrected run_all_tests.py invocation to uv run python ... --mode full --summary-json; replaced unit_tests and integration_tests placeholders with explicit file paths (resolves C04 deficit)"
+    - "COMPLETED: Fixed step_007 payload-source path from docs/refactor2/api_contract_payloads to docs/refactor2/payloads throughout all three occurrences (resolves C05 deficit)"
+    - "COMPLETED: All 6 required scripts now exist in the repository and are owned by RECOVERY_001 fix_plan.exact_files_to_modify (C06 fully satisfied)"
+    - "COMPLETED: In RECOVERY_007 architecture_and_ownership_map.route_to_lambda, replaced POST /gap-analysis/questions route entry with legacy_alias_under_removal entry clearly labelled as not currently deployed (resolves C09 deficit)"
