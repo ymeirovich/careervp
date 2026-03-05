@@ -39,10 +39,12 @@ def _configuration_error_response() -> dict[str, Any]:
 def _get_questions_dal() -> DynamoDalHandler:
     """DAL for gap questions — stored in the users table (pk/sk key schema)."""
     table_name = _resolve_table_name(
-        'TABLE_NAME',
-        'ARTIFACTS_TABLE_NAME',
-        'DYNAMODB_TABLE_NAME',
+        'GAP_QUESTIONS_TABLE_NAME',
         'USERS_TABLE_NAME',
+        'DYNAMODB_TABLE_NAME',
+    )
+    logger.info(
+        'Gap questions DAL resolved', table_name=table_name, resolution_source='GAP_QUESTIONS_TABLE_NAME|USERS_TABLE_NAME|DYNAMODB_TABLE_NAME'
     )
     return DynamoDalHandler(table_name=table_name)
 
@@ -273,17 +275,28 @@ def get_questions(event: dict[str, Any]) -> dict[str, Any]:
         return _configuration_error_response()
     result = dal.list_gap_questions_by_prefix(user_id=user_id, job_id=job_id)
     if not result.success:
-        return _json_response(
-            HTTPStatus.OK,
-            {
-                'job_id': job_id,
-                'cv_id': None,
-                'questions': [],
-            },
+        logger.error(
+            'Gap questions retrieval failed',
+            user_id=user_id,
+            job_id=job_id,
+            error=result.error,
+            code=result.code,
+        )
+        metrics.add_metric(name='GapQuestionRetrievalFailures', unit='Count', value=1)
+        return _error_response(
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+            'Failed to retrieve gap questions',
+            result.code,
         )
 
     items = result.data or []
     if not items:
+        logger.info(
+            'Gap questions empty read',
+            user_id=user_id,
+            job_id=job_id,
+        )
+        metrics.add_metric(name='GapQuestionEmptyReads', unit='Count', value=1)
         return _json_response(
             HTTPStatus.OK,
             {

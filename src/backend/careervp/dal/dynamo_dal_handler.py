@@ -488,9 +488,11 @@ class DynamoDalHandler(DalHandler):
                     ]
             return Result(success=True, data=items if items else None, code=ResultCode.SUCCESS)
         except (ClientError, ValidationError) as exc:
-            error_msg = 'failed to list gap questions'
-            logger.exception(error_msg, user_id=user_id)
-            return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
+            return self._dal_failure_result(
+                operation='list_gap_questions_by_prefix',
+                exc=exc,
+                key_names=['pk', 'sk'],
+            )
 
     @tracer.capture_method(capture_response=False)
     def delete_tailored_cv(self, user_id: str, cv_tailoring_id: str) -> Result[None]:

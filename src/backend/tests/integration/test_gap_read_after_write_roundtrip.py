@@ -276,3 +276,51 @@ def test_get_with_wrong_job_id_returns_empty(gap_table: Any) -> None:
     assert get_response['statusCode'] == 200
     get_body = json.loads(get_response['body'])
     assert get_body.get('questions') == [], 'GET for different job_id must return empty questions list'
+
+
+@pytest.mark.integration
+def test_get_returns_non_2xx_on_dal_failure(gap_table: Any) -> None:
+    """GET returns non-2xx when DAL encounters an error (not silent empty 200)."""
+    from careervp.handlers import gap_handler
+    from careervp.models.result import Result, ResultCode
+
+    mock_dal = MagicMock()
+    mock_dal.list_gap_questions_by_prefix.return_value = Result(
+        success=False, error='ProvisionedThroughputExceededException', code=ResultCode.DYNAMODB_ERROR
+    )
+
+    with patch.object(gap_handler, '_get_questions_dal', return_value=mock_dal):
+        response = gap_handler.get_questions(_get_event())
+
+    assert response['statusCode'] >= 500, f'GET must return 5xx on DAL failure, got {response["statusCode"]}'
+    body = json.loads(response['body'])
+    assert 'error' in body, 'Error response must include error field'
+
+
+@pytest.mark.integration
+def test_cross_user_does_not_leak_questions(gap_table: Any) -> None:
+    """GET for user B must not return questions posted by user A (cross-user isolation)."""
+    from careervp.handlers import gap_handler
+    from careervp.models.result import Result, ResultCode
+
+    user_a = 'user-a-isolation'
+    user_b = 'user-b-isolation'
+    questions = _generated_questions(2)
+
+    # User A posts questions
+    with (
+        patch.object(gap_handler, '_get_trial_service', return_value=None),
+        patch.object(gap_handler, '_get_application_repository') as mock_app_repo,
+        patch('asyncio.run') as mock_run,
+    ):
+        mock_app_repo.return_value.update_state.return_value = None
+        mock_run.return_value = Result(success=True, data=questions, code=ResultCode.GAP_QUESTIONS_GENERATED)
+        post_response = gap_handler.generate_questions(_post_event(user_id=user_a))
+
+    assert post_response['statusCode'] == 200, f'User A POST failed: {post_response["body"]}'
+
+    # User B reads — must not see User A's questions
+    get_response = gap_handler.get_questions(_get_event(user_id=user_b))
+    assert get_response['statusCode'] == 200
+    get_body = json.loads(get_response['body'])
+    assert get_body.get('questions') == [], f'User B must not see User A questions, got: {get_body.get("questions")}'

@@ -94,8 +94,9 @@ class TestGapAnalysisEndpoints:
                 response.status_code,
                 data,
             )
-            print(
-                f"⚠ POST /jobs/{job_id}/gap-questions - Status {response.status_code}: {response.text[:200]}"
+            pytest.fail(
+                f"POST /jobs/{job_id}/gap-questions returned {response.status_code} "
+                f"(expected 200/201): {response.text[:300]}"
             )
 
     def test_submit_gap_responses(self):
@@ -214,4 +215,10 @@ class TestGapAnalysisEndpoints:
         )
         assert_gap_questions_quality(data)
         questions = data.get("questions", [])
-        print(f"✓ GET /jobs/{job_id}/gap-questions - Found {len(questions)} questions")
+        assert len(questions) >= 1, (
+            f"GET /jobs/{job_id}/gap-questions returned empty questions after successful POST "
+            f"(read-after-write violation, AC-GAP-302)"
+        )
+        print(
+            f"✓ GET /jobs/{job_id}/gap-questions - Found {len(questions)} questions (read-after-write verified)"
+        )

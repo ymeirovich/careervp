@@ -66,16 +66,18 @@ def test_submit_gap_responses_returns_500_when_gap_table_env_missing(
     assert 'error' in payload
 
 
-def test_get_questions_dal_prefers_artifacts_table_name(
+def test_get_questions_dal_prefers_gap_questions_table_name(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Gap questions should use dedicated GAP_QUESTIONS_TABLE_NAME, not ARTIFACTS_TABLE_NAME."""
     from careervp.handlers import gap_handler
 
-    monkeypatch.setenv('ARTIFACTS_TABLE_NAME', 'artifacts-table')
+    monkeypatch.setenv('GAP_QUESTIONS_TABLE_NAME', 'gap-questions-table')
+    monkeypatch.setenv('USERS_TABLE_NAME', 'users-table')
     monkeypatch.setenv('DYNAMODB_TABLE_NAME', 'legacy-table')
 
     dal = gap_handler._get_questions_dal()
-    assert dal.table_name == 'artifacts-table'
+    assert dal.table_name == 'gap-questions-table'
 
 
 def test_get_responses_dal_uses_gap_responses_table_only(
