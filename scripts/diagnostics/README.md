@@ -4,6 +4,39 @@ Complete toolset for diagnosing, fixing, and validating RECOVERY_002 (gap questi
 
 ## Quick Start
 
+### 0. Reset Trial Credits (Required Before Testing)
+```bash
+cd careervp
+python3 -c "
+import sys
+import requests
+sys.path.insert(0, 'docs/refactor/live_tests')
+from conftest import get_auth_headers
+
+headers = get_auth_headers()
+api_base = 'https://dev-live.careervp.com/v1'
+
+# Reset trial credits
+reset_resp = requests.post(f'{api_base}/users/me/trial/reset', headers=headers, timeout=15)
+if reset_resp.status_code != 200:
+    print(f'⚠️  Trial reset failed: {reset_resp.status_code}')
+    sys.exit(1)
+
+# Verify reset
+usage_resp = requests.get(f'{api_base}/users/me/usage', headers=headers, timeout=15)
+if usage_resp.status_code != 200:
+    print(f'⚠️  Usage check failed: {usage_resp.status_code}')
+    sys.exit(1)
+
+used = int(usage_resp.json().get('applications', {}).get('used', -1))
+if used != 0:
+    print(f'⚠️  Trial reset verification failed: applications.used={used}')
+    sys.exit(1)
+
+print('✓ Trial reset successful (applications.used=0)')
+"
+```
+
 ### 1. Run Live Tests & Capture Error
 ```bash
 cd careervp
