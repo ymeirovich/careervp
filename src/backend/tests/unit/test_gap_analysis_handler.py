@@ -211,7 +211,7 @@ def test_get_questions_returns_200(gap_table: Any) -> None:
 
 
 def test_submit_response_returns_200(gap_responses_table: Any) -> None:
-    """POST /gap-analysis/responses returns 201 and persists responses."""
+    """POST /gap-analysis/responses returns 200 and persists responses."""
     from careervp.handlers.gap_handler import lambda_handler
 
     event = _event(
@@ -231,8 +231,8 @@ def test_submit_response_returns_200(gap_responses_table: Any) -> None:
 
     response = lambda_handler(event, _context())
 
-    # Handler returns 201 for creation
-    assert response['statusCode'] == 201
+    # Handler returns 200 for response submission
+    assert response['statusCode'] == 200
     payload = json.loads(response['body'])
     assert payload['status'] == 'saved'
     assert payload['job_id'] == 'job-222'

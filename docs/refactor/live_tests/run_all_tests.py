@@ -276,6 +276,15 @@ def main() -> None:
                 ]
                 print(f"Would run: {', '.join(node_ids)}")
             else:
+                # Reset trial before running individual tests
+                api_base = resolve_api_base()
+                print("\nPre-flight:")
+                try:
+                    _reset_trial(api_base)
+                except Exception as exc:
+                    print(f"  ✗ Pre-flight trial reset failed: {exc}")
+                    sys.exit(1)
+
                 module_name, class_names = TEST_MODULES[test_key]
                 ok = run_test_module(module_name, class_names, args.verbose)
                 if not ok:
