@@ -1,5 +1,6 @@
 import json
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Any
 
 import boto3
@@ -523,6 +524,17 @@ class DynamoDalHandler(DalHandler):
             logger.exception(error_msg, user_id=user_id, cv_tailoring_id=cv_tailoring_id)
             return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
 
+    @staticmethod
+    def _convert_floats_to_decimal(obj: Any) -> Any:
+        """Recursively convert float values to decimal.Decimal for DynamoDB compatibility."""
+        if isinstance(obj, float):
+            return Decimal(str(obj))
+        elif isinstance(obj, dict):
+            return {key: DynamoDalHandler._convert_floats_to_decimal(value) for key, value in obj.items()}
+        elif isinstance(obj, list):
+            return [DynamoDalHandler._convert_floats_to_decimal(item) for item in obj]
+        return obj
+
     @tracer.capture_method(capture_response=False)
     def save_gap_questions(
         self,
@@ -536,6 +548,8 @@ class DynamoDalHandler(DalHandler):
         logger.info('saving gap analysis questions to DynamoDB')
         try:
             table = self._get_db_handler(self.table_name)
+            # Convert floats to Decimals for DynamoDB compatibility
+            converted_questions = self._convert_floats_to_decimal(questions)
             item = {
                 'pk': user_id,
                 'sk': self._build_gap_analysis_sort_key(cv_id, job_id),
@@ -543,7 +557,7 @@ class DynamoDalHandler(DalHandler):
                 'user_id': user_id,
                 'cv_id': cv_id,
                 'job_id': job_id,
-                'questions': questions,
+                'questions': converted_questions,
                 'created_at': datetime.now(timezone.utc).isoformat(),
                 'updated_at': datetime.now(timezone.utc).isoformat(),
                 'ttl': self._ttl_timestamp(ttl_days),

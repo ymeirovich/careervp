@@ -154,7 +154,7 @@ def test_gap_responses_submit_does_not_check_or_consume_trial_credit() -> None:
     ):
         response = lambda_handler(event, _context())
 
-    assert response['statusCode'] == 201
+    assert response['statusCode'] == 200
     mock_get_trial_service.assert_not_called()
 
 

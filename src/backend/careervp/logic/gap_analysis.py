@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from decimal import Decimal
 from typing import Any
 
 from careervp.logic.llm_client import LLMClient
@@ -16,6 +17,18 @@ from careervp.models.result import Result, ResultCode
 IMPACT_SCORES = {'HIGH': 1.0, 'MEDIUM': 0.6, 'LOW': 0.3}
 PROBABILITY_SCORES = {'HIGH': 1.0, 'MEDIUM': 0.6, 'LOW': 0.3}
 MAX_QUESTIONS = 10
+
+
+def _convert_decimal_to_float(obj: Any) -> Any:
+    """Recursively convert Decimal to float for JSON serialization."""
+    if isinstance(obj, Decimal):
+        return float(obj)
+    elif isinstance(obj, dict):
+        return {key: _convert_decimal_to_float(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [_convert_decimal_to_float(item) for item in obj]
+    return obj
+
 
 TAG_CV_IMPACT = '[CV IMPACT]'
 TAG_TECHNICAL = '[TECHNICAL]'
@@ -38,14 +51,14 @@ TAG_DISTRIBUTION: tuple[str, ...] = (
 PRIORITY_LEVELS = {'CRITICAL', 'IMPORTANT', 'OPTIONAL'}
 
 
-def calculate_gap_score(impact: str, probability: str) -> float:
+def calculate_gap_score(impact: str, probability: str) -> Decimal:
     """Calculate gap score with weighted impact/probability."""
     if impact not in IMPACT_SCORES:
         raise ValueError('Invalid impact level')
     if probability not in PROBABILITY_SCORES:
         raise ValueError('Invalid probability level')
     score = (0.7 * IMPACT_SCORES[impact]) + (0.3 * PROBABILITY_SCORES[probability])
-    return round(score, 2)
+    return Decimal(str(round(score, 2)))
 
 
 async def _maybe_await(value: Any) -> Any:
@@ -149,11 +162,11 @@ def _extract_questions(payload: Any) -> list[dict[str, Any]]:
     return questions
 
 
-def _coerce_gap_score(question: dict[str, Any], impact: str, probability: str) -> float:
+def _coerce_gap_score(question: dict[str, Any], impact: str, probability: str) -> Decimal:
     raw_gap_score = question.get('gap_score')
     if isinstance(raw_gap_score, (int, float)):
         bounded = max(0.0, min(1.0, float(raw_gap_score)))
-        return round(bounded, 2)
+        return Decimal(str(round(bounded, 2)))
     return calculate_gap_score(impact=impact, probability=probability)
 
 
@@ -294,5 +307,8 @@ async def generate_gap_questions(
     questions.sort(key=lambda q: float(q.get('gap_score', 0.0)), reverse=True)
     questions = _ensure_question_count(questions, job_posting=job_posting)
     _apply_tag_distribution(questions)
+
+    # Convert Decimals to floats for JSON serialization
+    questions = _convert_decimal_to_float(questions)
 
     return Result(success=True, data=questions, code=ResultCode.GAP_QUESTIONS_GENERATED)
