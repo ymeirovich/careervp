@@ -164,7 +164,9 @@ class LLMClient:
                 messages=[{'role': 'user', 'content': prompt}],
             )
         except Exception as exc:  # noqa: BLE001 - translate provider errors into configured type.
-            raise BedrockInvocationError('Failed to invoke LLM model') from exc
+            error_msg = f'Failed to invoke LLM model: {type(exc).__name__}: {str(exc)}'
+            logger.error(error_msg, exc_info=True)
+            raise BedrockInvocationError(error_msg) from exc
 
     def _handle_response(self, text_content: str, cache_key: str | None) -> dict[str, Any]:
         """Parse response and handle caching."""

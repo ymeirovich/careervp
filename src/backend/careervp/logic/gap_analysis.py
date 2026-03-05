@@ -272,9 +272,11 @@ async def generate_gap_questions(
     try:
         llm_result = await _maybe_await(llm_client.generate(prompt=f'{system_prompt}\n\n{user_prompt}'))
     except TimeoutError as exc:
-        return Result(success=False, error=str(exc), code=ResultCode.TIMEOUT)
+        error_msg = f'LLM request timeout: {str(exc)}'
+        return Result(success=False, error=error_msg, code=ResultCode.TIMEOUT)
     except Exception as exc:  # noqa: BLE001
-        return Result(success=False, error=str(exc), code=ResultCode.LLM_API_ERROR)
+        error_msg = f'{type(exc).__name__}: {str(exc)}'
+        return Result(success=False, error=error_msg, code=ResultCode.LLM_API_ERROR)
 
     if isinstance(llm_result, Result) and not llm_result.success:
         return llm_result

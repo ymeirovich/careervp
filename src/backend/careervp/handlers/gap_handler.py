@@ -170,18 +170,17 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
             )
         )
     except Exception as exc:
+        error_details = f'{type(exc).__name__}: {str(exc)}'
         logger.error(
             'Gap question generation failed',
             job_id=job_id,
-            error=str(exc),
+            error=error_details,
             exc_info=True,
         )
-        return _json_response(
+        return _error_response(
             HTTPStatus.SERVICE_UNAVAILABLE,
-            {
-                'error': 'Gap question generation failed. Please try again.',
-                'detail': 'The AI service is temporarily unavailable.',
-            },
+            f'Failed to invoke LLM model: {error_details}',
+            ResultCode.LLM_API_ERROR,
         )
     if not generation_result.success or generation_result.data is None:
         status = (
