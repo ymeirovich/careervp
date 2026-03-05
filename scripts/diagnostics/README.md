@@ -5,37 +5,51 @@ Complete toolset for diagnosing, fixing, and validating RECOVERY_002 (gap questi
 ## Quick Start
 
 ### 0. Reset Trial Credits (Required Before Testing)
+
+**Before running tests**, reset trial credits to ensure you have credits available:
+
 ```bash
-cd careervp
+# Option A: Use the run_all_tests.py built-in reset (recommended)
+python3 docs/refactor/live_tests/run_all_tests.py --test gap
+
+# Option B: Manual reset via API (if you have network access to dev-live)
 python3 -c "
 import sys
 import requests
 sys.path.insert(0, 'docs/refactor/live_tests')
 from conftest import get_auth_headers
 
-headers = get_auth_headers()
-api_base = 'https://dev-live.careervp.com/v1'
+try:
+    headers = get_auth_headers()
+    api_base = 'https://dev-live.careervp.com/v1'
 
-# Reset trial credits
-reset_resp = requests.post(f'{api_base}/users/me/trial/reset', headers=headers, timeout=15)
-if reset_resp.status_code != 200:
-    print(f'⚠️  Trial reset failed: {reset_resp.status_code}')
+    # Reset trial credits
+    reset_resp = requests.post(f'{api_base}/users/me/trial/reset', headers=headers, timeout=15)
+    if reset_resp.status_code != 200:
+        print(f'⚠️  Trial reset failed: {reset_resp.status_code}')
+        print(f'Response: {reset_resp.text}')
+        sys.exit(1)
+
+    # Verify reset
+    usage_resp = requests.get(f'{api_base}/users/me/usage', headers=headers, timeout=15)
+    if usage_resp.status_code != 200:
+        print(f'⚠️  Usage check failed: {usage_resp.status_code}')
+        sys.exit(1)
+
+    used = int(usage_resp.json().get('applications', {}).get('used', -1))
+    if used != 0:
+        print(f'⚠️  Trial reset verification failed: applications.used={used}')
+        sys.exit(1)
+
+    print('✓ Trial reset successful (applications.used=0)')
+except Exception as e:
+    print(f'⚠️  Trial reset error: {e}')
+    print('Note: run_all_tests.py includes automatic reset before tests')
     sys.exit(1)
-
-# Verify reset
-usage_resp = requests.get(f'{api_base}/users/me/usage', headers=headers, timeout=15)
-if usage_resp.status_code != 200:
-    print(f'⚠️  Usage check failed: {usage_resp.status_code}')
-    sys.exit(1)
-
-used = int(usage_resp.json().get('applications', {}).get('used', -1))
-if used != 0:
-    print(f'⚠️  Trial reset verification failed: applications.used={used}')
-    sys.exit(1)
-
-print('✓ Trial reset successful (applications.used=0)')
 "
 ```
+
+**Note**: `run_all_tests.py` automatically resets trial credits before running gap analysis tests via the `_reset_trial()` function (see line 176 in `run_all_tests.py`).
 
 ### 1. Run Live Tests & Capture Error
 ```bash
