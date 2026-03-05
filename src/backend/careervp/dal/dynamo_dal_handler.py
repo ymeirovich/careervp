@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -547,6 +548,13 @@ class DynamoDalHandler(DalHandler):
                 'updated_at': datetime.now(timezone.utc).isoformat(),
                 'ttl': self._ttl_timestamp(ttl_days),
             }
+            logger.debug('gap_questions item prepared', item_keys=list(item.keys()), item_size_estimate=len(str(item)))
+            # Pre-validate JSON serializability to catch issues before DynamoDB
+            try:
+                json.dumps(item, default=str)
+            except Exception as serialize_exc:
+                logger.error('Item not JSON serializable', error=str(serialize_exc))
+                raise serialize_exc
             table.put_item(Item=item)
             return Result(success=True, data=None, code=ResultCode.SUCCESS)
         except (ClientError, ValidationError) as exc:
@@ -554,6 +562,18 @@ class DynamoDalHandler(DalHandler):
                 operation='save_gap_questions',
                 exc=exc,
                 key_names=['pk', 'sk'],
+            )
+        except Exception as exc:
+            # Catch any other exceptions (e.g., TypeError, serialization errors)
+            logger.exception(
+                'Unexpected error saving gap questions',
+                error=str(exc),
+                exc_type=type(exc).__name__,
+            )
+            return Result(
+                success=False,
+                error=f'unexpected_error: {type(exc).__name__}: {str(exc)}',
+                code=ResultCode.DYNAMODB_ERROR,
             )
 
     @tracer.capture_method(capture_response=False)
