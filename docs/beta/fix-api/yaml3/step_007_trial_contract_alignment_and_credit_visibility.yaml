@@ -1,0 +1,276 @@
+spec_id: RECOVERY_007
+title: Complete Trial and Contract Route Alignment with Endpoint-Level Credit Attribution
+priority: high
+status: pending
+owner: backend-platform
+created_at: 2026-03-05
+updated_at: 2026-03-05
+sequence_step: 7
+
+targets_yaml2_specs:
+  - TRIAL_002
+
+problem_statement:
+  exact_failing_behavior: |
+    Contract suite failures moved from historical route mismatch to newer runtime failures,
+    and trial diagnostics can be misinterpreted when route/contract parity is not guaranteed.
+    We need deterministic contract route validity and credit attribution visibility per endpoint.
+  expected_behavior: |
+    Contract payload routes must match deployed canonical routes.
+    Trial credit usage must be attributable and auditable per endpoint with before/after usage metrics.
+  user_business_impact: |
+    Misdiagnosed failures lead to wrong fixes, delayed releases, and repeated contract instability.
+  reproducibility_notes:
+    - Run docs/refactor/live_tests/test_10_api_contract_success.py.
+    - Validate gap responses and gap questions contract payloads against deployed route map and trial telemetry.
+
+evidence:
+  failing_tests:
+    - docs/refactor/live_tests/test_10_api_contract_success.py::TestAPIContractSuccess::test_api_contract_success_for_all_27_endpoints
+  endpoint_method_path:
+    - method: POST
+      path: /jobs/{jobId}/gap-responses
+      observed_status_code: contract-dependent failures must be eliminated
+    - method: POST
+      path: /jobs/{jobId}/gap-questions
+      observed_status_code: 500 seen in regression run (addressed in RECOVERY_002)
+      route_clarification: |
+        NOTE: An earlier draft of this spec referenced /gap-analysis/questions. That is a legacy
+        route alias observed in older contract payload files. The canonical deployed route is
+        /jobs/{jobId}/gap-questions (confirmed in infra/careervp/api_construct.py and RECOVERY_002).
+        Resolution required in fix_plan: verify contract payload files in docs/refactor2/payloads
+        do NOT reference /gap-analysis/questions; if they do, update them to the canonical route.
+        Add a route-alias check to test_contract_route_parity.py to fail if any legacy alias appears.
+  baseline_artifact: careervp/live-test-results27.log
+  regression_artifact: careervp/live-test-results28.log
+  environment: dev-live
+  timestamp_utc: '2026-03-05T00:00:00Z'
+
+architecture_and_ownership_map:
+  route_to_lambda:
+    - legacy_alias_under_removal: POST /gap-analysis/questions
+      note: >
+        this route alias appears in older contract payload files and must NOT be treated as
+        currently deployed; canonical route is POST /jobs/{jobId}/gap-questions per
+        RECOVERY_002 and infra/careervp/api_construct.py; fix_plan removes this alias from
+        payload files
+    - route: POST /jobs/{jobId}/gap-responses
+      lambda: gap-api
+      handler: src/backend/careervp/handlers/gap_handler.py
+  handler_file_paths:
+    - docs/refactor/live_tests/test_10_api_contract_success.py
+    - src/backend/careervp/handlers/gap_handler.py
+    - src/backend/careervp/handlers/job_handler.py
+    - src/backend/careervp/logic/trial_service.py
+    - infra/careervp/api_construct.py
+  data_store_index_usage:
+    - users table for trial usage record
+    - applications/jobs tables for request lifecycle
+  auth_source_and_identity_key:
+    source: requestContext.authorizer claims
+    identity_key: user_id
+  canonical_sources_of_truth:
+    contract_payloads: docs/refactor2/payloads
+    route_surface: infra/careervp/api_construct.py
+
+root_cause_analysis:
+  hypotheses_ranked:
+    - id: H1
+      hypothesis: Contract payload route list drifts from deployed route surface.
+      disproof_criteria: route parity assertion validates every payload route against deployed inventory.
+      status: confirmed
+    - id: H2
+      hypothesis: Trial credit consumption visibility is insufficient for diagnosing failures.
+      disproof_criteria: endpoint-level usage_before/usage_after/consumed telemetry is emitted and validated.
+      status: confirmed
+    - id: H3
+      hypothesis: Trial reset path is unreliable.
+      disproof_criteria: pre-flight and pre-contract reset verification shows used=0 consistently.
+      status: disproven_in_recent_runs
+  confirmed_root_causes:
+    - Route-parity enforcement and credit-attribution evidence were not jointly blocking.
+  contributing_factors:
+    - Contract runs lacked clear failure domain separation for route mismatch vs persistence errors.
+
+fix_plan:
+  prerequisite:
+    - Step: Inspect all files under docs/refactor2/payloads for any route referencing
+        /gap-analysis/questions or other legacy aliases.
+    - Command: grep -r "gap-analysis/questions" docs/refactor2/payloads/ || echo "no legacy alias found"
+    - If found: update the affected payload file to use /jobs/{jobId}/gap-questions and document
+        the change in AC-TR-300 evidence artifact.
+    - If not found: document the grep result as the evidence artifact confirming no alias drift.
+  exact_files_to_modify:
+    - path: docs/refactor2/payloads
+      change: replace any /gap-analysis/questions route references with canonical /jobs/{jobId}/gap-questions; document affected files in evidence artifact
+    - path: docs/refactor/live_tests/test_10_api_contract_success.py
+      change: keep canonical route assertions and add deployed parity and evidence output checks
+    - path: src/backend/careervp/handlers/gap_handler.py
+      change: preserve and validate endpoint-level trial attribution logs/metrics
+    - path: src/backend/tests/unit/test_trial_credit_attribution.py
+      change: enforce endpoint charging boundaries and attribution payload fields
+    - path: src/backend/tests/integration/test_contract_route_parity.py
+      change: |
+        compare payload route set against infra route map and deployed route inventory;
+        add explicit assertion that no legacy route alias (/gap-analysis/questions or similar)
+        appears in any contract payload file
+  exact_behavior_changes:
+    - Contract suite fails fast when payload route is not canonical/deployed.
+    - Contract suite fails fast when any legacy route alias is detected in payload files.
+    - Trial attribution telemetry is required for charging endpoints.
+  non_goals_out_of_scope:
+    - No trial quota increase.
+    - No broad auth policy redesign.
+  rollback_plan:
+    - Revert contract test strictness only if proven false positives after parity tooling validation.
+    - If contract payload files were updated to remove legacy alias and rollback is needed, restore
+      payload files from git and document why the alias must be retained temporarily.
+
+acceptance_criteria:
+  api_level:
+    - Contract payload routes all resolve to canonical deployed endpoints.
+    - No DEFAULT_4XX/DEFAULT_5XX on required contract-covered gap routes.
+  data_level:
+    - Trial usage before/after values are emitted for charging endpoint checks.
+    - Non-charging endpoints do not consume trial credits.
+  observability:
+    - Logs include endpoint, user_id, usage_before, usage_after, consumed.
+    - Metrics include TrialCreditAttributionEvents and TrialCreditConsumed.
+  negative_and_edge_case_criteria:
+    - Repeated contract runs with proper resets do not falsely trigger trial_exhausted.
+    - Route mismatch produces explicit contract failure before endpoint execution.
+  regression_reversal_criteria:
+    - Contract success suite has no blockers attributable to route mismatch or missing attribution visibility.
+
+baseline_and_regression_budget:
+  baseline_artifact:
+    path: careervp/live-test-results27.log
+    reason: baseline for strict contract behavior around gap/trial endpoints
+  blocked_regressions:
+    - new_non_2xx_on_changed_endpoints
+    - contract_default_4xx_or_5xx_on_required_routes
+  allowed_deltas: {}
+
+verification_contract:
+  - requirement_id: VC-TRIAL-001
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: true
+    verification_description: allowed charging paths and attribution fields are enforced
+  - requirement_id: VC-TRIAL-002
+    verification_type: contract
+    blocking_gate: pre_deploy
+    artifact_required: true
+    verification_description: payload route set parity check passes against infra and deployed route maps
+  - requirement_id: VC-TRIAL-003
+    verification_type: live
+    blocking_gate: post_deploy
+    artifact_required: true
+    verification_description: strict contract suite fully passes in live environment
+
+deployed_parity_plan:
+  route_surface_parity:
+    source_of_truth: infra route map + deployed API inventory
+    verification_steps:
+      - Assert each contract payload path exists with expected method.
+  authorizer_parity:
+    source_of_truth: deployed method auth settings
+    verification_steps:
+      - Confirm protected contract routes require valid auth.
+  runtime_env_resolution_parity:
+    source_of_truth: gap/job lambda env and trial service table resolution
+    verification_steps:
+      - Verify trial service uses intended users table in deployed env.
+
+validation_plan:
+  unit_tests:
+    - src/backend/tests/unit/test_trial_credit_attribution.py
+  integration_tests:
+    - src/backend/tests/integration/test_contract_route_parity.py
+  contract_tests:
+    - docs/refactor/live_tests/test_10_api_contract_success.py
+  live_e2e_checks:
+    - docs/refactor/live_tests/run_all_tests.py --test contract
+  regression_checks:
+    - compare contract endpoint status classes against careervp/live-test-results27.log
+  validation_commands:
+    - uv run python scripts/smoke/run_targeted_smoke.py --step RECOVERY_007 --out docs/evidence/targeted-smoke-RECOVERY_007-<timestamp>.json
+    - uv run python scripts/spec_quality/check_regression_delta.py --baseline careervp/live-test-results27.log --current docs/evidence/targeted-smoke-RECOVERY_007-<timestamp>.json --out docs/evidence/per-step-regression-delta-RECOVERY_007-<timestamp>.json
+    - uv run pytest src/backend/tests/unit/test_trial_credit_attribution.py -q
+    - uv run pytest src/backend/tests/integration/test_contract_route_parity.py -q
+    - uv run pytest docs/refactor/live_tests/test_10_api_contract_success.py -q
+
+traceability_matrix:
+  - requirement_id: AC-TR-300
+    requirement: No legacy route alias (/gap-analysis/questions) present in contract payload files
+    code_reference: docs/refactor2/payloads
+    test_reference: src/backend/tests/integration/test_contract_route_parity.py::test_no_legacy_route_alias_in_payloads
+    verification_type: static
+    blocking_gate: pre_merge
+    artifact_required: true
+    evidence_reference: docs/evidence/trial-contract-route-alias-check-<timestamp>.json
+    result: pending
+    note: Grep output or updated payload files are the evidence. If alias found and fixed, list affected files in this artifact.
+  - requirement_id: AC-TR-301
+    requirement: contract payload routes match canonical deployed route map
+    code_reference: docs/refactor/live_tests/test_10_api_contract_success.py
+    test_reference: src/backend/tests/integration/test_contract_route_parity.py::test_contract_payload_routes_match_deployed_and_infra
+    verification_type: contract
+    blocking_gate: pre_deploy
+    artifact_required: true
+    evidence_reference: docs/evidence/trial-contract-route-parity-<timestamp>.json
+    result: pending
+  - requirement_id: AC-TR-302
+    requirement: endpoint-level trial attribution is emitted for charging checks
+    code_reference: src/backend/careervp/handlers/gap_handler.py
+    test_reference: src/backend/tests/unit/test_trial_credit_attribution.py::test_gap_questions_consumes_credit_with_attribution
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: true
+    evidence_reference: docs/evidence/trial-credit-attribution-unit-<timestamp>.json
+    result: pending
+  - requirement_id: AC-TR-303
+    requirement: strict contract suite runs without route/attribution blockers
+    code_reference: docs/refactor/live_tests/test_10_api_contract_success.py
+    test_reference: docs/refactor/live_tests/test_10_api_contract_success.py::TestAPIContractSuccess::test_api_contract_success_for_all_27_endpoints
+    verification_type: live
+    blocking_gate: post_deploy
+    artifact_required: true
+    evidence_reference: docs/evidence/trial-contract-live-success-<timestamp>.json
+    result: pending
+
+rollback_trigger_matrix:
+  - trigger_id: RT-TR-001
+    trigger_condition: required contract endpoint returns DEFAULT_4XX/DEFAULT_5XX post_deploy
+    detection_source: strict contract live test output
+    action: block promotion and rollback RECOVERY_007 changes
+    owner: release_owner
+  - trigger_id: RT-TR-002
+    trigger_condition: attribution logs missing for charging endpoint after deploy
+    detection_source: observability audit
+    action: block closure and patch telemetry path
+    owner: backend-platform
+
+completion_evidence:
+  required_artifacts:
+    - docs/evidence/trial-contract-route-parity-<timestamp>.json
+    - docs/evidence/trial-credit-attribution-unit-<timestamp>.json
+    - docs/evidence/trial-contract-live-success-<timestamp>.json
+  known_residual_risks:
+    - External auth/service instability can still cause unrelated contract failures.
+  explicit_sign_off_checklist:
+    - TRIAL_002 all ACs pass
+    - strict contract suite green
+    - trial attribution evidence attached
+
+confidence_assessment:
+  confidence_score_0_to_100: 0
+  implementation_100_percent: false
+  confidence_basis:
+    - Pending implementation and full contract live verification.
+  confidence_update_rule: |
+    Set to >=95 only after AC-TR-301..303 pass and contract suite is stable across two live runs.
+
+dependencies:
+  - RECOVERY_001
+  - RECOVERY_002

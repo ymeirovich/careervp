@@ -1,0 +1,263 @@
+spec_id: RECOVERY_006
+title: Complete Interview Prep Status Schema and Agentic Quality Requirements in Live Runtime
+priority: critical
+status: pending
+owner: backend-platform
+created_at: 2026-03-05
+updated_at: 2026-03-05
+sequence_step: 6
+
+targets_yaml2_specs:
+  - INTERVIEW_PREP_002
+  - INTERVIEW_PREP_003
+
+problem_statement:
+  exact_failing_behavior: |
+    Interview prep status improved from 404 in older runs to 200 in live-test-results28.log,
+    but quality still fails because status responses can remain "processing" without result object,
+    and async completion can return failed/empty question payloads.
+  expected_behavior: |
+    Request IDs returned by submit must be resolvable via status using artifacts schema.
+    Completed status responses must include valid result object and >=3 quality questions.
+    Architecture-required context inputs must remain aligned with INTERVIEW_PREP_003.
+  user_business_impact: |
+    Users see incomplete or failed interview prep outputs despite accepted submissions.
+  reproducibility_notes:
+    - Run docs/refactor/live_tests/test_08_interview_prep.py.
+    - Observe quality assertion failure or failed/empty result responses.
+
+evidence:
+  failing_tests:
+    - docs/refactor/live_tests/test_08_interview_prep.py::TestInterviewPrepEndpoints::test_get_interview_prep_status
+  endpoint_method_path:
+    - method: POST
+      path: /interview-prep/generate
+      observed_status_code: 202
+    - method: GET
+      path: /interview-prep/{interviewPrepId}/status
+      observed_status_code: 200
+      observed_body_fragment: '{"status": "processing"}'
+  baseline_artifact: careervp/live-test-results27.log
+  regression_artifact: careervp/live-test-results28.log
+  environment: dev-live
+  timestamp_utc: '2026-03-05T00:00:00Z'
+
+architecture_and_ownership_map:
+  route_to_lambda:
+    - route: POST /interview-prep/generate
+      lambda: interview-prep-api
+      handler: src/backend/careervp/handlers/interview_prep_submit_handler.py
+    - route: GET /interview-prep/{interviewPrepId}/status
+      lambda: interview-prep-status
+      handler: src/backend/careervp/handlers/interview_prep_handler.py
+    - route: GET /interview-preps
+      lambda: interview-prep-status
+      handler: src/backend/careervp/handlers/interview_prep_handler.py
+  handler_file_paths:
+    - src/backend/careervp/handlers/interview_prep_submit_handler.py
+    - src/backend/careervp/handlers/interview_prep_handler.py
+    - src/backend/careervp/logic/interview_prep.py
+    - src/backend/careervp/logic/prompts/interview_prep_prompt.py
+    - src/backend/careervp/models/api_models.py
+    - src/backend/careervp/models/interview_prep.py
+  data_store_index_usage:
+    - artifacts table applicationId/artifactId for submit/status/list
+    - users/jobs/gap_responses/company research for context resolution
+  auth_source_and_identity_key:
+    source: requestContext.authorizer claims
+    identity_key: user_id
+  canonical_sources_of_truth:
+    status_schema: INTERVIEW_PREP_002
+    context_contract: INTERVIEW_PREP_003
+
+root_cause_analysis:
+  hypotheses_ranked:
+    - id: H1
+      hypothesis: status endpoint is schema-correct but live test quality assertion is applied too early for processing state.
+      disproof_criteria: tests poll until terminal state before enforcing completed payload quality.
+      status: confirmed
+    - id: H2
+      hypothesis: async worker can persist failed/empty result due context resolution or generation fallback issues.
+      disproof_criteria: completed path consistently persists non-empty question set with context inputs.
+      status: confirmed
+    - id: H3
+      hypothesis: architecture-required context fields are not consistently passed through all execution paths.
+      disproof_criteria: prompt-context tests and live traces confirm all required sections.
+      status: partially_confirmed
+  confirmed_root_causes:
+    - Quality assertions and lifecycle assertions were not fully aligned with async status semantics.
+    - Some runtime paths still produce failed/empty terminal payloads.
+  contributing_factors:
+    - Live-only failure modes not fully represented in pre-deploy tests.
+
+fix_plan:
+  exact_files_to_modify:
+    - path: src/backend/careervp/handlers/interview_prep_handler.py
+      change: enforce terminal payload quality for completed status and deterministic failed-state error details
+    - path: src/backend/careervp/handlers/interview_prep_submit_handler.py
+      change: keep request_id/artifact key consistency and required context metadata
+    - path: src/backend/careervp/logic/interview_prep.py
+      change: harden generation fallback and minimum question quality constraints
+    - path: src/backend/careervp/logic/prompts/interview_prep_prompt.py
+      change: ensure architecture-required sections are always rendered
+    - path: docs/refactor/live_tests/test_08_interview_prep.py
+      change: poll until terminal state before strict quality assertion for completed payload
+    - path: src/backend/tests/integration/test_interview_prep_roundtrip.py
+      change: include processing->completed lifecycle quality assertions
+    - path: src/backend/tests/integration/test_interview_prep_context_sources.py
+      change: add missing integration coverage for context source fallback paths
+  exact_behavior_changes:
+    - GET status remains 200 for resolvable IDs across pending/processing/completed/failed.
+    - Completed response must include result with >=3 usable questions.
+    - Failed response must include deterministic failure details and non-empty diagnostics.
+  non_goals_out_of_scope:
+    - No major API schema redesign.
+    - No orchestrator migration.
+  rollback_plan:
+    - Revert strict terminal-quality enforcement if it causes widespread false negatives while preserving schema fixes.
+
+acceptance_criteria:
+  api_level:
+    - POST /interview-prep/generate returns 202 with request_id.
+    - GET /interview-prep/{request_id}/status returns 200 for valid id and lifecycle status.
+    - Unknown request_id returns 404 INTERVIEW_PREP_NOT_FOUND.
+    - Completed status includes result object and >=3 quality questions.
+  data_level:
+    - Artifacts table usage is applicationId/artifactId for submit and status/list.
+    - Prompt input includes required context: cv_facts, job_requirements, vpr_differentiators, gap_responses, company_research, language.
+  observability:
+    - Logs include context resolution source flags and request_id.
+    - Metrics include generation success/failure and question count.
+  negative_and_edge_case_criteria:
+    - Cross-user access remains denied.
+    - Missing optional context sources degrade gracefully without empty successful completed payload.
+  regression_reversal_criteria:
+    - test_get_interview_prep_status no longer fails quality assertion in live suite.
+    - no reintroduction of 404 CV_NOT_FOUND leak for valid request IDs.
+
+baseline_and_regression_budget:
+  baseline_artifact:
+    path: careervp/live-test-results27.log
+    reason: baseline for status-resolvability progress
+  blocked_regressions:
+    - new_non_2xx_on_changed_endpoints
+    - generated_id_missing_from_status_or_list_after_polling_window
+    - new_empty_arrays_on_generated_artifact_list_or_read_paths
+  allowed_deltas: {}
+
+verification_contract:
+  - requirement_id: VC-IP-001
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: true
+    verification_description: schema keys, not-found domain code, prompt context sections
+  - requirement_id: VC-IP-002
+    verification_type: integration
+    blocking_gate: pre_merge
+    artifact_required: true
+    verification_description: processing->completed lifecycle with quality payload
+  - requirement_id: VC-IP-003
+    verification_type: live
+    blocking_gate: post_deploy
+    artifact_required: true
+    verification_description: live status polling reaches terminal completed quality response
+
+deployed_parity_plan:
+  route_surface_parity:
+    source_of_truth: infra/careervp/api_construct.py
+    verification_steps:
+      - Confirm interview-prep routes map to submit and status lambdas as expected.
+  authorizer_parity:
+    source_of_truth: deployed method auth config
+    verification_steps:
+      - Verify auth required and user-scoping enforced.
+  runtime_env_resolution_parity:
+    source_of_truth: lambda env and table resolution
+    verification_steps:
+      - Verify interview-prep handlers resolve artifacts table consistently.
+
+validation_plan:
+  unit_tests:
+    - src/backend/tests/unit/test_interview_prep_status.py
+    - src/backend/tests/unit/test_interview_prep_context_resolution.py
+    - src/backend/tests/unit/test_interview_prep_prompt_context.py
+    - src/backend/tests/unit/test_l0_interview_prep_generation.py
+  integration_tests:
+    - src/backend/tests/integration/test_interview_prep_roundtrip.py
+    - src/backend/tests/integration/test_interview_prep_context_sources.py
+  contract_tests:
+    - docs/refactor/live_tests/test_10_api_contract_success.py
+  live_e2e_checks:
+    - docs/refactor/live_tests/test_08_interview_prep.py
+  regression_checks:
+    - compare interview-prep endpoint outcomes versus careervp/live-test-results27.log and 28 deltas
+  validation_commands:
+    - uv run python scripts/smoke/run_targeted_smoke.py --step RECOVERY_006 --out docs/evidence/targeted-smoke-RECOVERY_006-<timestamp>.json
+    - uv run python scripts/spec_quality/check_regression_delta.py --baseline careervp/live-test-results27.log --current docs/evidence/targeted-smoke-RECOVERY_006-<timestamp>.json --out docs/evidence/per-step-regression-delta-RECOVERY_006-<timestamp>.json
+    - uv run pytest src/backend/tests/unit/test_interview_prep_status.py src/backend/tests/unit/test_interview_prep_context_resolution.py src/backend/tests/unit/test_interview_prep_prompt_context.py src/backend/tests/unit/test_l0_interview_prep_generation.py -q
+    - uv run pytest src/backend/tests/integration/test_interview_prep_roundtrip.py src/backend/tests/integration/test_interview_prep_context_sources.py -q
+    - uv run pytest docs/refactor/live_tests/test_08_interview_prep.py -q
+
+traceability_matrix:
+  - requirement_id: AC-IP-301
+    requirement: request_id from submit is resolvable via status lifecycle
+    code_reference: src/backend/careervp/handlers/interview_prep_handler.py
+    test_reference: src/backend/tests/integration/test_interview_prep_roundtrip.py::test_status_readable_immediately_after_submit
+    verification_type: integration
+    blocking_gate: pre_merge
+    artifact_required: true
+    evidence_reference: docs/evidence/interview-prep-status-lifecycle-<timestamp>.json
+    result: pending
+  - requirement_id: AC-IP-302
+    requirement: completed status payload includes quality result object
+    code_reference: src/backend/careervp/handlers/interview_prep_handler.py
+    test_reference: docs/refactor/live_tests/test_08_interview_prep.py::TestInterviewPrepEndpoints::test_get_interview_prep_status
+    verification_type: live
+    blocking_gate: post_deploy
+    artifact_required: true
+    evidence_reference: docs/evidence/interview-prep-quality-live-<timestamp>.json
+    result: pending
+  - requirement_id: AC-IP-303
+    requirement: architecture-required context sections are preserved in generation path
+    code_reference: src/backend/careervp/logic/prompts/interview_prep_prompt.py
+    test_reference: src/backend/tests/unit/test_interview_prep_prompt_context.py::test_prompt_contains_all_architecture_sections
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: true
+    evidence_reference: docs/evidence/interview-prep-context-sections-unit-<timestamp>.json
+    result: pending
+
+rollback_trigger_matrix:
+  - trigger_id: RT-IP-001
+    trigger_condition: live interview-prep quality assertion fails after deployment
+    detection_source: test_08_interview_prep live run
+    action: block promotion and rollback RECOVERY_006
+    owner: release_owner
+  - trigger_id: RT-IP-002
+    trigger_condition: status endpoint regresses to unresolved ids for valid submissions
+    detection_source: integration and live evidence
+    action: rollback and re-open INTERVIEW_PREP_002/003 closure
+    owner: backend-platform
+
+completion_evidence:
+  required_artifacts:
+    - docs/evidence/interview-prep-status-lifecycle-<timestamp>.json
+    - docs/evidence/interview-prep-quality-live-<timestamp>.json
+    - docs/evidence/interview-prep-context-sections-unit-<timestamp>.json
+  known_residual_risks:
+    - Model-provider variability may affect completion latency; SLA thresholds must be monitored.
+  explicit_sign_off_checklist:
+    - INTERVIEW_PREP_002 all ACs pass
+    - INTERVIEW_PREP_003 all ACs pass
+    - two consecutive live passes include interview-prep suite
+
+confidence_assessment:
+  confidence_score_0_to_100: 0
+  implementation_100_percent: false
+  confidence_basis:
+    - Pending code and live evidence.
+  confidence_update_rule: |
+    Set to >=95 only after AC-IP-301..303 pass and no interview-prep regressions remain in full live suite.
+
+dependencies:
+  - RECOVERY_001
