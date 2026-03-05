@@ -372,7 +372,7 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
         )
 
     return _json_response(
-        HTTPStatus.CREATED,
+        HTTPStatus.OK,
         {
             'status': 'saved',
             'job_id': job_id,
