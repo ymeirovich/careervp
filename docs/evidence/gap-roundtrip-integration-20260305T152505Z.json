@@ -1,0 +1,45 @@
+{
+  "spec_id": "RECOVERY_002",
+  "requirement_id": "AC-GAP-302",
+  "verification_type": "integration",
+  "blocking_gate": "pre_merge",
+  "tests": 6,
+  "failures": 0,
+  "errors": 0,
+  "passed": 6,
+  "result": "pass",
+  "test_cases": [
+    {
+      "name": "test_get_after_post_returns_persisted_questions",
+      "status": "pass",
+      "time": "0.527"
+    },
+    {
+      "name": "test_post_failure_does_not_return_200",
+      "status": "pass",
+      "time": "0.069"
+    },
+    {
+      "name": "test_get_returns_most_recent_for_multiple_artifacts",
+      "status": "pass",
+      "time": "0.245"
+    },
+    {
+      "name": "test_get_with_wrong_job_id_returns_empty",
+      "status": "pass",
+      "time": "0.267"
+    },
+    {
+      "name": "test_get_returns_non_2xx_on_dal_failure",
+      "status": "pass",
+      "time": "0.073"
+    },
+    {
+      "name": "test_cross_user_does_not_leak_questions",
+      "status": "pass",
+      "time": "0.215"
+    }
+  ],
+  "executed_at_utc": "2026-03-05T15:25:08Z",
+  "git_sha": "427dcd30be24797e9f88465d1f0fdc66b89209b0"
+}

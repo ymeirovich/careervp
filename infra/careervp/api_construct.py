@@ -1809,6 +1809,7 @@ class ApiConstruct(Construct):
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
                 # Gap questions use pk/sk keys — must point to the users table, not artifacts_table.
+                "GAP_QUESTIONS_TABLE_NAME": self.api_db.db.table_name,
                 "USERS_TABLE_NAME": self.api_db.db.table_name,
                 "DYNAMODB_TABLE_NAME": self.api_db.db.table_name,
                 constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,

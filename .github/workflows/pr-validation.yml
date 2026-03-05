@@ -55,6 +55,63 @@ jobs:
         working-directory: src/backend
         run: uv run pytest
 
+  deployed-parity:
+    name: Deployed Parity Gate (pre_merge)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+          enable-cache: true
+      - name: Run deployed parity check
+        run: |
+          mkdir -p docs/evidence
+          uv run python scripts/spec_quality/check_deployed_parity.py \
+            --env pr \
+            --infra-source infra/careervp/api_construct.py \
+            --out docs/evidence/pr-parity-report-${{ github.sha }}.json
+          echo "=== Parity report ==="
+          cat docs/evidence/pr-parity-report-${{ github.sha }}.json
+
+  evidence-integrity:
+    name: Evidence Integrity Gate (pre_merge)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+          enable-cache: true
+      - name: Run regression delta check (if baseline present)
+        run: |
+          BASELINE="careervp/live-test-results27.log"
+          if [ ! -f "$BASELINE" ]; then
+            echo "::warning::Baseline artifact not found at $BASELINE – regression delta check skipped"
+            exit 0
+          fi
+          # Use most recent evidence artifact as current, or skip if none exist
+          CURRENT=$(ls -t docs/evidence/recovery-gate-live-pass-*.json 2>/dev/null | head -1 || true)
+          if [ -z "$CURRENT" ]; then
+            echo "::warning::No current live-pass evidence artifact found – regression delta skipped (run a deploy to generate one)"
+            exit 0
+          fi
+          uv run python scripts/spec_quality/check_regression_delta.py \
+            --baseline "$BASELINE" \
+            --current "$CURRENT" \
+            --out docs/evidence/pr-regression-delta-${{ github.sha }}.json
+      - name: Run evidence integrity check
+        run: |
+          if [ ! -d "docs/evidence" ] || [ -z "$(ls -A docs/evidence 2>/dev/null)" ]; then
+            echo "::warning::docs/evidence is empty – evidence integrity gate deferred until first deploy"
+            exit 0
+          fi
+          uv run python scripts/spec_quality/check_evidence_integrity.py \
+            --spec careervp/docs/beta/fix-api/yaml3/step_001_recovery_gates_and_baseline_controls.yaml \
+            --artifacts-dir docs/evidence
+
   cdk-synth:
     name: CDK Synth
     runs-on: ubuntu-latest

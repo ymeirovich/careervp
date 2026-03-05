@@ -67,6 +67,17 @@ jobs:
           echo "=== Running CDK Nag Security Scan ==="
           npx cdk synth --quiet || { echo "CDK synth failed"; exit 1; }
           echo "=== CDK Nag Security Scan passed ==="
+      - name: Pre-deploy parity check (RECOVERY gate)
+        run: |
+          TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
+          mkdir -p docs/evidence
+          echo "=== Pre-deploy infra route parity check ==="
+          uv run python scripts/spec_quality/check_deployed_parity.py \
+            --env dev-live \
+            --infra-source infra/careervp/api_construct.py \
+            --out docs/evidence/recovery-gate-parity-report-${TIMESTAMP}.json
+          cat docs/evidence/recovery-gate-parity-report-${TIMESTAMP}.json
+          echo "=== Parity check passed ==="
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -165,6 +176,59 @@ jobs:
           # Use uv's Python for inline scripts
           export PATH="${PWD}/.venv/bin:${PATH}"
           bash tests/aws_cli_smoke.sh dev
+      - name: Post-deploy targeted smoke (RECOVERY gate, <3 min)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AUTO_SET_LAMBDA_ENV: '1'
+          AWS_REGION: ${{ env.AWS_REGION }}
+          STACK_NAME: ${{ env.STACK_NAME }}
+        run: |
+          TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
+          mkdir -p docs/evidence
+          echo "=== Post-deploy targeted smoke (5 critical regression surfaces) ==="
+          uv run python scripts/smoke/run_targeted_smoke.py \
+            --step RECOVERY_001 \
+            --max-seconds 180 \
+            --out docs/evidence/targeted-smoke-RECOVERY_001-${TIMESTAMP}.json
+          echo "=== Targeted smoke passed ==="
+      - name: Two-pass live suite - Pass 1 (RECOVERY gate)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AUTO_SET_LAMBDA_ENV: '1'
+          AWS_REGION: ${{ env.AWS_REGION }}
+          STACK_NAME: ${{ env.STACK_NAME }}
+          DEPLOYMENT_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
+          mkdir -p docs/evidence
+          echo "=== Live suite pass 1 ==="
+          uv run python docs/refactor/live_tests/run_all_tests.py \
+            --mode full \
+            --summary-json docs/evidence/recovery-gate-live-pass-1-${TIMESTAMP}.json
+          echo "=== Pass 1 complete ==="
+      - name: Two-pass live suite - Pass 2 (RECOVERY gate)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AUTO_SET_LAMBDA_ENV: '1'
+          AWS_REGION: ${{ env.AWS_REGION }}
+          STACK_NAME: ${{ env.STACK_NAME }}
+          DEPLOYMENT_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
+          mkdir -p docs/evidence
+          echo "=== Live suite pass 2 (consecutive stability gate) ==="
+          uv run python docs/refactor/live_tests/run_all_tests.py \
+            --mode full \
+            --summary-json docs/evidence/recovery-gate-live-pass-2-${TIMESTAMP}.json
+          echo "=== Pass 2 complete ==="
+      - name: Evidence integrity gate (post_deploy)
+        run: |
+          echo "=== Evidence integrity check ==="
+          uv run python scripts/spec_quality/check_evidence_integrity.py \
+            --spec careervp/docs/beta/fix-api/yaml3/step_001_recovery_gates_and_baseline_controls.yaml \
+            --artifacts-dir docs/evidence \
+            --require-deployment-id-for post_deploy
+          echo "=== Evidence integrity passed ==="
 
   deploy-other:
     if: github.event_name == 'workflow_dispatch'

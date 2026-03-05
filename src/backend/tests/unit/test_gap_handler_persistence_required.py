@@ -200,3 +200,39 @@ def test_post_returns_200_only_when_persistence_succeeds() -> None:
     assert payload['cv_id'] == 'cv-ok'
     assert len(payload['questions']) == 2
     mock_dal.save_gap_questions.assert_called_once()
+
+
+@pytest.mark.unit
+def test_get_returns_non_2xx_on_dal_failure() -> None:
+    """GET returns non-2xx with error when DAL fails (no silent empty 200)."""
+    from careervp.handlers import gap_handler
+    from careervp.models.result import Result, ResultCode
+
+    event = _make_event(
+        path='/jobs/job-dal-fail/gap-questions',
+        method='GET',
+        path_parameters={'jobId': 'job-dal-fail'},
+    )
+
+    mock_dal = MagicMock()
+    mock_dal.list_gap_questions_by_prefix.return_value = Result(success=False, error='DynamoDB read failed', code=ResultCode.DYNAMODB_ERROR)
+
+    with patch.object(gap_handler, '_get_questions_dal', return_value=mock_dal):
+        response = gap_handler.get_questions(event)
+
+    assert response['statusCode'] >= 500, f'Expected 5xx on DAL failure but got {response["statusCode"]}'
+    body = json.loads(response['body'])
+    assert 'error' in body, 'Error response must include error field'
+
+
+@pytest.mark.unit
+def test_get_table_resolution_uses_gap_questions_table_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    """_get_questions_dal prefers GAP_QUESTIONS_TABLE_NAME over other env vars."""
+    from careervp.handlers.gap_handler import _get_questions_dal
+
+    monkeypatch.setenv('GAP_QUESTIONS_TABLE_NAME', 'gap-specific-table')
+    monkeypatch.setenv('USERS_TABLE_NAME', 'users-table')
+    monkeypatch.setenv('DYNAMODB_TABLE_NAME', 'generic-table')
+
+    dal = _get_questions_dal()
+    assert dal.table_name == 'gap-specific-table', f'Expected gap-specific-table but got {dal.table_name}'
