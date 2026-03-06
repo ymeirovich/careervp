@@ -1,0 +1,97 @@
+spec_id: RECOVERY_006_YAML4
+title: Complete Interview Prep Status Schema and Artifact Quality Requirements
+priority: critical
+status: pending
+owner: backend-platform
+created_at: 2026-03-06
+updated_at: 2026-03-06
+sequence_step: 6
+default_environment: dev
+
+targets_yaml2_specs:
+  - INTERVIEW_PREP_002
+  - INTERVIEW_PREP_003
+
+execution_policy:
+  stop_after_step_for_user_deploy: true
+  resume_only_after_user_live_evidence: true
+  user_must_run_live_tests_in_environment: dev
+
+non_regression_constraints:
+  - preserve_async_contracts
+  - no_endpoint_shape_changes
+  - do_not_require_result_during_processing_state
+  - completed_or_failed_terminal_payloads_must_be_usable
+
+problem_statement:
+  exact_failing_behavior: |
+    Interview prep status is reachable but can fail quality due to early assertions and
+    runtime terminal failures with empty question artifacts.
+  expected_behavior: |
+    Processing is allowed; terminal completed responses include usable question artifacts.
+    Failed terminal responses include deterministic diagnostics.
+  business_impact: |
+    Users receive failed or unusable interview prep output.
+
+implementation_scope:
+  files_to_modify:
+    - src/backend/careervp/handlers/interview_prep_handler.py
+    - src/backend/careervp/handlers/interview_prep_submit_handler.py
+    - src/backend/careervp/logic/interview_prep.py
+    - src/backend/careervp/logic/prompts/interview_prep_prompt.py
+    - docs/refactor/live_tests/test_08_interview_prep.py
+    - src/backend/tests/integration/test_interview_prep_roundtrip.py
+    - src/backend/tests/integration/test_interview_prep_context_sources.py
+
+implementation_checklist:
+  - id: S006-01
+    task: Keep status lifecycle async-safe (pending/processing/completed/failed).
+  - id: S006-02
+    task: Enforce strict quality only on terminal completed state in live tests.
+  - id: S006-03
+    task: Ensure terminal completed payload has normalized question list and minimum usable content.
+  - id: S006-04
+    task: Ensure failed state returns stable domain diagnostics (no empty opaque errors).
+  - id: S006-05
+    task: Improve exception handling and observability across generation and persistence paths.
+
+pre_deploy_validation:
+  required_commands:
+    - uv run pytest src/backend/tests/unit/test_interview_prep_status.py src/backend/tests/unit/test_interview_prep_context_resolution.py src/backend/tests/unit/test_interview_prep_prompt_context.py src/backend/tests/unit/test_l0_interview_prep_generation.py -q
+    - uv run pytest src/backend/tests/integration/test_interview_prep_roundtrip.py src/backend/tests/integration/test_interview_prep_context_sources.py -q
+  pass_conditions:
+    - all_commands_exit_0
+    - processing_state_behavior_intact
+    - terminal_quality_assertions_pass
+
+handoff_gate:
+  stop_now: true
+  user_actions:
+    - Deploy this step to AWS dev
+    - Run uv run pytest docs/refactor/live_tests/test_08_interview_prep.py -q
+    - Save artifact to docs/evidence/RECOVERY_006-live-<timestamp>.log
+  required_evidence_fields:
+    - environment=dev
+    - deployment_id
+    - git_sha
+    - request_id_or_correlation_id
+    - terminal_status_distribution
+    - expected_vs_actual
+    - result
+  resume_condition:
+    - evidence_file_present
+    - interview_prep_artifacts_are_usable
+
+traceability_matrix:
+  - requirement_id: AC-IP-301
+    requirement: request_id from submit is resolvable through lifecycle
+    test_reference: src/backend/tests/integration/test_interview_prep_roundtrip.py::test_status_readable_immediately_after_submit
+    result: pending
+  - requirement_id: AC-IP-302
+    requirement: completed status includes quality result object
+    test_reference: docs/refactor/live_tests/test_08_interview_prep.py::TestInterviewPrepEndpoints::test_get_interview_prep_status
+    result: pending
+  - requirement_id: AC-IP-303
+    requirement: required architecture context sections are preserved
+    test_reference: src/backend/tests/unit/test_interview_prep_prompt_context.py::test_prompt_contains_all_architecture_sections
+    result: pending

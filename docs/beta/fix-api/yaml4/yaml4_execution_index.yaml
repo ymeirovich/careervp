@@ -1,0 +1,82 @@
+spec_id: YAML4_REGRESSION_PREVENTION_INDEX
+title: YAML4 Stepwise Remediation Plan (Regression Prevention First)
+status: pending
+owner: backend-platform
+created_at: 2026-03-06
+updated_at: 2026-03-06
+default_environment: dev
+
+purpose: |
+  Execute RECOVERY_003..008 as separate, deployment-gated steps.
+  After each step implementation, STOP so user can deploy to AWS dev and run live tests.
+
+execution_contract:
+  stepwise_handoff_required: true
+  stop_after_every_step: true
+  user_actions_between_steps:
+    - Deploy changed code to AWS dev
+    - Run targeted live tests for the step
+    - Save test output artifact under docs/evidence
+    - Provide evidence path before next step starts
+  no_step_skipping: true
+  no_parallel_step_execution: true
+
+global_constraints:
+  - prevent_further_regressions_is_priority_one
+  - do_not_change_async_to_sync_endpoints
+  - do_not_change_user_facing_endpoint_shapes
+  - reuse_working_modules_and_patterns_before_new_logic
+  - preserve_working_code_paths; no broad rewrites
+  - all new/changed error handling must follow docs/best_practices/yaml/*
+
+context_rot_controls:
+  required_ledger: docs/diagnostics/REGRESSION5_CONTEXT_LEDGER.md
+  ledger_required_fields:
+    - timestamp_utc
+    - git_sha
+    - step_id
+    - hypothesis_and_decision
+    - files_changed
+    - tests_run
+    - evidence_paths
+    - deployment_id
+  immutable_references:
+    - baseline_live_log: careervp/live-test-results27.log
+    - current_failure_log: careervp/live-test-results31.log
+    - prior_specs: careervp/docs/beta/fix-api/yaml3
+
+shareable_modules_to_reuse:
+  - src/backend/careervp/handlers/vpr_submit_handler.py
+  - src/backend/careervp/handlers/vpr_status_handler.py
+  - src/backend/careervp/handlers/gap_handler.py
+  - src/backend/careervp/handlers/auth_middleware.py
+
+step_sequence:
+  - step: 003
+    spec: docs/beta/yaml4/step_003_cover_letter_artifact_roundtrip_recovery.yaml
+    focus: cover letter submit/status/list artifact consistency
+  - step: 004
+    spec: docs/beta/yaml4/step_004_vpr_list_inclusion_and_metadata_recovery.yaml
+    focus: vpr list inclusion and metadata stability without regressions
+  - step: 005
+    spec: docs/beta/yaml4/step_005_cv_tailoring_delete_route_deployed_parity.yaml
+    focus: cv tailoring delete runtime parity and 500/403 elimination
+  - step: 006
+    spec: docs/beta/yaml4/step_006_interview_prep_status_and_quality_completion.yaml
+    focus: interview prep terminal quality + artifact usability
+  - step: 007
+    spec: docs/beta/yaml4/step_007_trial_contract_alignment_and_credit_visibility.yaml
+    focus: contract route parity and trial attribution telemetry
+  - step: 008
+    spec: docs/beta/yaml4/step_008_yaml2_100_percent_completion_and_release_readiness.yaml
+    focus: final 100/100 verification and release-readiness gate
+
+final_gate:
+  required:
+    - AC-FINAL-301 pass
+    - AC-FINAL-302 pass
+    - AC-FINAL-303 pass
+    - cover_letter_produces_usable_artifact
+    - cv_tailoring_produces_usable_artifact
+    - interview_prep_produces_usable_artifact
+    - no_new_regressions_in_currently_passing_modules

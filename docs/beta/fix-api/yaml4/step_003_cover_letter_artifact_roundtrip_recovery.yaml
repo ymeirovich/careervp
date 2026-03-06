@@ -1,0 +1,98 @@
+spec_id: RECOVERY_003_YAML4
+title: Fix Cover Letter Artifact Schema Drift and Restore Submit-Status-List Roundtrip
+priority: critical
+status: pending
+owner: backend-platform
+created_at: 2026-03-06
+updated_at: 2026-03-06
+sequence_step: 3
+default_environment: dev
+
+targets_yaml2_specs:
+  - COVER_LETTER_002
+
+execution_policy:
+  stop_after_step_for_user_deploy: true
+  resume_only_after_user_live_evidence: true
+  user_must_run_live_tests_in_environment: dev
+
+non_regression_constraints:
+  - preserve_async_contracts
+  - no_endpoint_shape_changes
+  - do_not_overwrite_working_code_paths
+  - reuse_existing_result_and_error_mapping_patterns
+
+problem_statement:
+  exact_failing_behavior: |
+    In live-test-results31.log, cover letter submit returns accepted but status/list fail to
+    return generated artifacts consistently.
+  expected_behavior: |
+    request_id returned by POST /cover-letter/generate must resolve in status endpoint and appear in list.
+  business_impact: |
+    Users cannot retrieve generated cover letters reliably.
+
+confirmed_root_cause:
+  - DAL canonical reads/lists still use pk/sk while artifacts table is applicationId/artifactId.
+  - Placeholder evidence in docs/evidence is not sufficient for closure.
+
+implementation_scope:
+  files_to_modify:
+    - src/backend/careervp/dal/dynamo_dal_handler.py
+    - src/backend/careervp/handlers/cover_letter_handler.py
+    - src/backend/tests/unit/test_cover_letter_status_storage_keys.py
+    - src/backend/tests/unit/test_cover_letter_list_includes_generated_artifact.py
+    - src/backend/tests/integration/test_cover_letter_roundtrip_persistence.py
+  do_not_modify:
+    - endpoint_paths_or_methods
+    - async_submit_flow_shape
+
+implementation_checklist:
+  - id: S003-01
+    task: Use canonical key names applicationId/artifactId for cover-letter DAL read/list operations.
+  - id: S003-02
+    task: Keep temporary legacy fallback explicitly guarded by COVER_LETTER_LEGACY_READ_ENABLED.
+  - id: S003-03
+    task: Ensure persistence failures never return synthetic completed success.
+  - id: S003-04
+    task: Upgrade error handling to specific catches + logger.exception without leaking internals.
+  - id: S003-05
+    task: Add/refresh tests for submit->status->list and unknown-id domain 404 semantics.
+
+pre_deploy_validation:
+  required_commands:
+    - uv run pytest src/backend/tests/unit/test_cover_letter_status_storage_keys.py src/backend/tests/unit/test_cover_letter_list_includes_generated_artifact.py -q
+    - uv run pytest src/backend/tests/integration/test_cover_letter_roundtrip_persistence.py -q
+  pass_conditions:
+    - all_commands_exit_0
+    - no_regressions_in_touched_unit_tests
+
+handoff_gate:
+  stop_now: true
+  user_actions:
+    - Deploy this step to AWS dev
+    - Run uv run pytest docs/refactor/live_tests/test_07_cover_letter.py -q
+    - Save artifact to docs/evidence/RECOVERY_003-live-<timestamp>.log
+  required_evidence_fields:
+    - environment=dev
+    - deployment_id
+    - git_sha
+    - request_id_or_correlation_id
+    - expected_vs_actual
+    - result
+  resume_condition:
+    - evidence_file_present
+    - cover_letter_status_and_list_roundtrip_passes
+
+traceability_matrix:
+  - requirement_id: AC-CL-301
+    requirement: generated request_id resolves on status endpoint
+    test_reference: src/backend/tests/integration/test_cover_letter_roundtrip_persistence.py::test_status_readable_after_submit
+    result: pending
+  - requirement_id: AC-CL-302
+    requirement: list endpoint includes generated id
+    test_reference: docs/refactor/live_tests/test_07_cover_letter.py::TestCoverLetterEndpoints::test_list_cover_letters
+    result: pending
+  - requirement_id: AC-CL-303
+    requirement: unknown id returns domain 404 without synthetic success
+    test_reference: src/backend/tests/unit/test_cover_letter_status_storage_keys.py::test_missing_returns_404
+    result: pending
