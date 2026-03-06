@@ -1,0 +1,26 @@
+{
+  "spec_id": "VPR_LIST_METADATA_001",
+  "requirement_id": "AC-VPR-LIST-001",
+  "git_sha": "a4980a0",
+  "deployment_id": "arn:aws:cloudformation:us-east-1:788159322332:stack/CareerVpCrudDev/6dfdbe70-0504-11f1-b797-0afffba4f579",
+  "environment": "dev",
+  "executed_at_utc": "2026-03-06T14:53:53.085997Z",
+  "api_base": "https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod",
+  "evidence_kind": "live_test_execution",
+  "yaml4_step_id": "RECOVERY_004",
+  "module_test_file": "docs/refactor/live_tests/test_04_vpr.py",
+  "module_status": "pass",
+  "module_returncode": 0,
+  "module_timed_out": false,
+  "module_duration_seconds": 17.887,
+  "module_started_at_utc": "2026-03-06T14:49:31.267124Z",
+  "module_finished_at_utc": "2026-03-06T14:49:49.153836Z",
+  "module_log_path": "docs/evidence/RECOVERY_004-live-20260306T144631Z.log",
+  "module_summary_path": "docs/evidence/RECOVERY_004-live-summary-20260306T144631Z.json",
+  "expected_vs_actual": {
+    "expected": "VPR list module passes with generated IDs visible and metadata non-breaking.",
+    "actual": "Live VPR module passed (4 passed in 16.27s).",
+    "result": "pass"
+  },
+  "result": "pass"
+}
