@@ -1,0 +1,48 @@
+{
+  "runner": "careervp-live-tests",
+  "executed_at_utc": "2026-03-06T14:30:24.408524Z",
+  "mode": "smoke",
+  "api_base": "https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod",
+  "test_user": "test-user-e2e",
+  "auth_enabled": "true",
+  "modules": [
+    {
+      "name": "bootstrap",
+      "module_name": "test_00_auth_bootstrap",
+      "class_names": [
+        "TestAuthBootstrap"
+      ],
+      "status": "pass",
+      "pytest_exit_code": 0
+    },
+    {
+      "name": "health",
+      "module_name": "test_01_auth_health",
+      "class_names": [
+        "TestHealthEndpoint"
+      ],
+      "status": "pass",
+      "pytest_exit_code": 0
+    },
+    {
+      "name": "auth",
+      "module_name": "test_01_auth_health",
+      "class_names": [
+        "TestAuthEndpoints"
+      ],
+      "status": "pass",
+      "pytest_exit_code": 0
+    }
+  ],
+  "errors": [],
+  "totals": {
+    "selected": 3,
+    "passed": 3,
+    "failed": 0
+  },
+  "non_2xx_count": 0,
+  "empty_array_count": 0,
+  "generated_id_missing_count": 0,
+  "status": "pass",
+  "exit_code": 0
+}
