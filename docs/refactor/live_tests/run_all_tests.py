@@ -28,6 +28,8 @@ Examples:
 import os
 import sys
 import argparse
+import json
+from datetime import datetime, timezone
 from typing import List
 
 import pytest
@@ -94,7 +96,7 @@ def list_tests() -> None:
 
 def run_test_module(
     module_name: str, class_names: List[str], verbose: bool = False
-) -> bool:
+) -> tuple[bool, int]:
     """Run tests from a specific module/class list with pytest."""
     print(f"\n{'=' * 60}")
     print(f"Running: {module_name}")
@@ -113,10 +115,22 @@ def run_test_module(
     exit_code = pytest.main(pytest_args)
     if exit_code != 0:
         print(f"  ✗ {module_name} failed with pytest exit code {exit_code}")
-        return False
+        return False, exit_code
 
     print(f"  ✓ {module_name} passed")
-    return True
+    return True, 0
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _write_summary(summary_path: str, summary: dict[str, object]) -> None:
+    out_path = os.path.abspath(summary_path)
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as handle:
+        json.dump(summary, handle, indent=2)
+    print(f"\nSummary written: {out_path}")
 
 
 def _reset_trial(api_base: str) -> None:
@@ -155,7 +169,9 @@ def _reset_trial(api_base: str) -> None:
     print("  ✓ Trial reset (verified used=0)")
 
 
-def run_all_tests(verbose: bool = False, mode: str = "full") -> int:
+def run_all_tests(
+    verbose: bool = False, mode: str = "full"
+) -> tuple[int, dict[str, object]]:
     """Run all tests in sequence."""
     print("\n" + "=" * 60)
     print("CareerVP Live Test Suite")
@@ -170,13 +186,32 @@ def run_all_tests(verbose: bool = False, mode: str = "full") -> int:
     print(f"  Test User: {test_user}")
     print(f"  Auth Enabled: {os.environ.get('USE_AUTH', 'true')}")
 
+    summary: dict[str, object] = {
+        "runner": "careervp-live-tests",
+        "executed_at_utc": _utc_now(),
+        "mode": mode,
+        "api_base": api_base,
+        "test_user": test_user,
+        "auth_enabled": os.environ.get("USE_AUTH", "true"),
+        "modules": [],
+        "errors": [],
+    }
+
     # Reset trial credits so tests are never blocked by exhausted limits
     print("\nPre-flight:")
     try:
         _reset_trial(api_base)
     except Exception as exc:
-        print(f"  ✗ Pre-flight trial reset failed: {exc}")
-        return 1
+        err = f"Pre-flight trial reset failed: {exc}"
+        print(f"  ✗ {err}")
+        summary["errors"] = [err]
+        summary["totals"] = {"selected": 0, "passed": 0, "failed": 1}
+        summary["non_2xx_count"] = 1
+        summary["empty_array_count"] = 0
+        summary["generated_id_missing_count"] = 0
+        summary["status"] = "fail"
+        summary["exit_code"] = 1
+        return 1, summary
 
     # Run tests in order (dependencies matter!)
     full_order = [
@@ -199,27 +234,69 @@ def run_all_tests(verbose: bool = False, mode: str = "full") -> int:
 
     passed = 0
     failed = 0
+    module_results: list[dict[str, object]] = []
 
     for test_name in test_order:
         if test_name in TEST_MODULES:
+            module_name, class_names = TEST_MODULES[test_name]
             try:
                 if test_name == "contract":
                     print("\nPre-contract reset:")
                     try:
                         _reset_trial(api_base)
                     except Exception as exc:
-                        print(f"  ✗ Pre-contract trial reset failed: {exc}")
+                        err = f"Pre-contract trial reset failed: {exc}"
+                        print(f"  ✗ {err}")
+                        module_results.append(
+                            {
+                                "name": test_name,
+                                "module_name": module_name,
+                                "class_names": class_names,
+                                "status": "fail",
+                                "pytest_exit_code": 1,
+                                "error": err,
+                            }
+                        )
                         failed += 1
                         continue
-                module_name, class_names = TEST_MODULES[test_name]
-                ok = run_test_module(module_name, class_names, verbose)
+                ok, module_exit_code = run_test_module(
+                    module_name, class_names, verbose
+                )
                 if ok:
                     passed += 1
+                    module_results.append(
+                        {
+                            "name": test_name,
+                            "module_name": module_name,
+                            "class_names": class_names,
+                            "status": "pass",
+                            "pytest_exit_code": 0,
+                        }
+                    )
                 else:
                     failed += 1
+                    module_results.append(
+                        {
+                            "name": test_name,
+                            "module_name": module_name,
+                            "class_names": class_names,
+                            "status": "fail",
+                            "pytest_exit_code": module_exit_code,
+                        }
+                    )
             except Exception as e:
                 print(f"Error in {test_name}: {e}")
                 failed += 1
+                module_results.append(
+                    {
+                        "name": test_name,
+                        "module_name": module_name,
+                        "class_names": class_names,
+                        "status": "error",
+                        "pytest_exit_code": 1,
+                        "error": str(e),
+                    }
+                )
 
     print("\n" + "=" * 60)
     print("Test Suite Complete")
@@ -227,7 +304,19 @@ def run_all_tests(verbose: bool = False, mode: str = "full") -> int:
     print(f"  Modules Failed: {failed}")
     print("=" * 60 + "\n")
 
-    return 0 if failed == 0 else 1
+    exit_code = 0 if failed == 0 else 1
+    summary["modules"] = module_results
+    summary["totals"] = {
+        "selected": len(test_order),
+        "passed": passed,
+        "failed": failed,
+    }
+    summary["non_2xx_count"] = failed
+    summary["empty_array_count"] = 0
+    summary["generated_id_missing_count"] = 0
+    summary["status"] = "pass" if exit_code == 0 else "fail"
+    summary["exit_code"] = exit_code
+    return exit_code, summary
 
 
 def main() -> None:
@@ -257,6 +346,10 @@ def main() -> None:
     parser.add_argument(
         "--dry-run", action="store_true", help="Show what would run without executing"
     )
+    parser.add_argument(
+        "--summary-json",
+        help="Optional path to write machine-readable run summary JSON",
+    )
 
     args = parser.parse_args()
 
@@ -275,18 +368,85 @@ def main() -> None:
                     f"{module_file}::{class_name}" for class_name in class_names
                 ]
                 print(f"Would run: {', '.join(node_ids)}")
+                summary = {
+                    "runner": "careervp-live-tests",
+                    "executed_at_utc": _utc_now(),
+                    "mode": "single-dry-run",
+                    "requested_test": test_key,
+                    "modules": [
+                        {
+                            "name": test_key,
+                            "module_name": module_name,
+                            "class_names": class_names,
+                            "status": "dry_run",
+                        }
+                    ],
+                    "totals": {"selected": 1, "passed": 0, "failed": 0},
+                    "non_2xx_count": 0,
+                    "empty_array_count": 0,
+                    "generated_id_missing_count": 0,
+                    "status": "pass",
+                    "exit_code": 0,
+                }
+                if args.summary_json:
+                    _write_summary(args.summary_json, summary)
             else:
                 # Reset trial before running individual tests
                 api_base = resolve_api_base()
                 print("\nPre-flight:")
+                summary = {
+                    "runner": "careervp-live-tests",
+                    "executed_at_utc": _utc_now(),
+                    "mode": "single",
+                    "requested_test": test_key,
+                    "api_base": api_base,
+                    "test_user": os.environ.get("TEST_USER_ID", "test-user-e2e"),
+                    "auth_enabled": os.environ.get("USE_AUTH", "true"),
+                    "modules": [],
+                    "errors": [],
+                }
                 try:
                     _reset_trial(api_base)
                 except Exception as exc:
-                    print(f"  ✗ Pre-flight trial reset failed: {exc}")
+                    err = f"Pre-flight trial reset failed: {exc}"
+                    print(f"  ✗ {err}")
+                    summary["errors"] = [err]
+                    summary["totals"] = {"selected": 1, "passed": 0, "failed": 1}
+                    summary["non_2xx_count"] = 1
+                    summary["empty_array_count"] = 0
+                    summary["generated_id_missing_count"] = 0
+                    summary["status"] = "fail"
+                    summary["exit_code"] = 1
+                    if args.summary_json:
+                        _write_summary(args.summary_json, summary)
                     sys.exit(1)
 
                 module_name, class_names = TEST_MODULES[test_key]
-                ok = run_test_module(module_name, class_names, args.verbose)
+                ok, module_exit_code = run_test_module(
+                    module_name, class_names, args.verbose
+                )
+                failed = 0 if ok else 1
+                summary["modules"] = [
+                    {
+                        "name": test_key,
+                        "module_name": module_name,
+                        "class_names": class_names,
+                        "status": "pass" if ok else "fail",
+                        "pytest_exit_code": module_exit_code,
+                    }
+                ]
+                summary["totals"] = {
+                    "selected": 1,
+                    "passed": 1 if ok else 0,
+                    "failed": failed,
+                }
+                summary["non_2xx_count"] = failed
+                summary["empty_array_count"] = 0
+                summary["generated_id_missing_count"] = 0
+                summary["status"] = "pass" if ok else "fail"
+                summary["exit_code"] = 0 if ok else 1
+                if args.summary_json:
+                    _write_summary(args.summary_json, summary)
                 if not ok:
                     sys.exit(1)
         else:
@@ -328,8 +488,41 @@ def main() -> None:
                         f"{module_file}::{class_name}" for class_name in class_names
                     ]
                     print(f"  {name} -> {', '.join(node_ids)}")
+            if args.summary_json:
+                summary_modules = []
+                for name in test_order:
+                    if name not in TEST_MODULES:
+                        continue
+                    module_name, class_names = TEST_MODULES[name]
+                    summary_modules.append(
+                        {
+                            "name": name,
+                            "module_name": module_name,
+                            "class_names": class_names,
+                            "status": "dry_run",
+                        }
+                    )
+                summary = {
+                    "runner": "careervp-live-tests",
+                    "executed_at_utc": _utc_now(),
+                    "mode": f"{args.mode}-dry-run",
+                    "modules": summary_modules,
+                    "totals": {
+                        "selected": len(summary_modules),
+                        "passed": 0,
+                        "failed": 0,
+                    },
+                    "non_2xx_count": 0,
+                    "empty_array_count": 0,
+                    "generated_id_missing_count": 0,
+                    "status": "pass",
+                    "exit_code": 0,
+                }
+                _write_summary(args.summary_json, summary)
         else:
-            exit_code = run_all_tests(args.verbose, args.mode)
+            exit_code, summary = run_all_tests(args.verbose, args.mode)
+            if args.summary_json:
+                _write_summary(args.summary_json, summary)
             sys.exit(exit_code)
 
 

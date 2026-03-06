@@ -1,0 +1,97 @@
+spec_id: RECOVERY_007_YAML4
+title: Complete Trial and Contract Route Alignment with Endpoint-Level Credit Attribution
+priority: high
+status: pending
+owner: backend-platform
+created_at: 2026-03-06
+updated_at: 2026-03-06
+sequence_step: 7
+default_environment: dev
+
+targets_yaml2_specs:
+  - TRIAL_002
+
+execution_policy:
+  stop_after_step_for_user_deploy: true
+  resume_only_after_user_live_evidence: true
+  user_must_run_live_tests_in_environment: dev
+
+non_regression_constraints:
+  - preserve_async_contracts
+  - no_endpoint_shape_changes
+  - fail_fast_on_contract_route_drift
+  - preserve_working_gap_and_trial_paths
+
+problem_statement:
+  exact_failing_behavior: |
+    Contract instability can be misdiagnosed when payload routes drift from deployed routes,
+    and trial credit attribution is not explicit enough.
+  expected_behavior: |
+    Contract payload routes must match canonical deployed surface; charging endpoints must emit
+    usage_before/usage_after/consumed attribution.
+  business_impact: |
+    Incorrect diagnosis causes repeated regressions and delayed releases.
+
+implementation_scope:
+  files_to_modify:
+    - docs/refactor2/payloads/*
+    - docs/refactor/live_tests/test_10_api_contract_success.py
+    - src/backend/tests/integration/test_contract_route_parity.py
+    - src/backend/tests/unit/test_trial_credit_attribution.py
+    - src/backend/careervp/handlers/gap_handler.py
+
+implementation_checklist:
+  - id: S007-01
+    task: Remove legacy route aliases from payload files (for example /gap-analysis/questions).
+  - id: S007-02
+    task: Enforce payload route parity check against infra/deployed route inventory.
+  - id: S007-03
+    task: Require endpoint-level trial attribution evidence for charging routes.
+  - id: S007-04
+    task: Ensure contract suite reports route mismatch separately from runtime failures.
+
+pre_deploy_validation:
+  required_commands:
+    - uv run pytest src/backend/tests/unit/test_trial_credit_attribution.py -q
+    - uv run pytest src/backend/tests/integration/test_contract_route_parity.py -q
+    - uv run pytest docs/refactor/live_tests/test_10_api_contract_success.py -q
+  pass_conditions:
+    - all_commands_exit_0
+    - no_legacy_route_alias_in_payloads
+    - trial_attribution_fields_present
+
+handoff_gate:
+  stop_now: true
+  user_actions:
+    - Deploy this step to AWS dev
+    - Run uv run pytest docs/refactor/live_tests/test_10_api_contract_success.py -q
+    - Save artifact to docs/evidence/RECOVERY_007-live-<timestamp>.log
+  required_evidence_fields:
+    - environment=dev
+    - deployment_id
+    - git_sha
+    - route_parity_snapshot
+    - trial_attribution_snapshot
+    - expected_vs_actual
+    - result
+  resume_condition:
+    - evidence_file_present
+    - contract_suite_passes_without_route_or_attribution_blockers
+
+traceability_matrix:
+  - requirement_id: AC-TR-300
+    requirement: no legacy route alias in contract payload files
+    test_reference: src/backend/tests/integration/test_contract_route_parity.py::test_no_legacy_route_alias_in_payloads
+    result: pending
+  - requirement_id: AC-TR-301
+    requirement: payload routes match canonical deployed route map
+    test_reference: src/backend/tests/integration/test_contract_route_parity.py::test_contract_payload_routes_match_deployed_and_infra
+    result: pending
+  - requirement_id: AC-TR-302
+    requirement: endpoint-level trial attribution is emitted for charging checks
+    test_reference: src/backend/tests/unit/test_trial_credit_attribution.py::test_gap_questions_consumes_credit_with_attribution
+    result: pending
+  - requirement_id: AC-TR-303
+    requirement: strict contract suite passes in live
+    test_reference: docs/refactor/live_tests/test_10_api_contract_success.py::TestAPIContractSuccess::test_api_contract_success_for_all_27_endpoints
+    result: pending
