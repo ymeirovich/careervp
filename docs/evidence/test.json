@@ -1,0 +1,50 @@
+{
+  "step": "RECOVERY_001",
+  "max_seconds": 60,
+  "duration_seconds": 67.445,
+  "assertion_count": 5,
+  "failure_count": 3,
+  "status": "fail",
+  "checks": [
+    {
+      "name": "gap_post_persistence",
+      "node_id": "docs/refactor/live_tests/test_05_gap_analysis.py::TestGapAnalysisEndpoints::test_generate_gap_questions",
+      "status": "pass",
+      "exit_code": 0,
+      "stdout_tail": ".                                                                        [100%]\n1 passed in 26.32s\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "cover_letter_status_resolvable",
+      "node_id": "docs/refactor/live_tests/test_07_cover_letter.py::TestCoverLetterEndpoints::test_get_cover_letter_status",
+      "status": "fail",
+      "exit_code": 1,
+      "stdout_tail": "F                                                                        [100%]\n=================================== FAILURES ===================================\n____________ TestCoverLetterEndpoints.test_get_cover_letter_status _____________\ndocs/refactor/live_tests/test_07_cover_letter.py:157: in test_get_cover_letter_status\n    assert response.status_code == 200, (\nE   AssertionError: GET /cover-letter/93eb876e-bc4d-44ad-add6-ebf2034b8419/status returned 404\nE   assert 404 == 200\nE    +  where 404 = <Response [404]>.status_code\n----------------------------- Captured stdout call -----------------------------\n\n=== RESPONSE test_get_cover_letter_status ===\n{\n  \"test_name\": \"test_get_cover_letter_status\",\n  \"endpoint\": \"GET /cover-letter/93eb876e-bc4d-44ad-add6-ebf2034b8419/status\",\n  \"status_code\": 404,\n  \"response\": {\n    \"error\": \"Cover letter not found\",\n    \"code\": \"COVER_LETTER_NOT_FOUND\"\n  }\n}\n=========================== short test summary info ============================\nFAILED docs/refactor/live_tests/test_07_cover_letter.py::TestCoverLetterEndpoints::test_get_cover_letter_status\n1 failed in 6.61s\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "vpr_list_includes_generated",
+      "node_id": "docs/refactor/live_tests/test_04_vpr.py::TestVPREndpoints::test_list_vprs",
+      "status": "pass",
+      "exit_code": 0,
+      "stdout_tail": ".                                                                        [100%]\n1 passed in 7.34s\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "cv_tailoring_delete_not_403",
+      "node_id": "docs/refactor/live_tests/test_06_cv_tailoring.py::TestCVTailoringEndpoints::test_delete_tailored_cv_roundtrip",
+      "status": "fail",
+      "exit_code": 1,
+      "stdout_tail": "5f7b2-18a8-48d6-b7fd-0e86bb5182ca returned 500\nE   assert 500 == 200\nE    +  where 500 = <Response [500]>.status_code\n----------------------------- Captured stdout call -----------------------------\nNo tailored CV found, generating first...\n\n=== RESPONSE test_generate_tailored_cv ===\n{\n  \"test_name\": \"test_generate_tailored_cv\",\n  \"endpoint\": \"POST /cv-tailoring/generate\",\n  \"status_code\": 202,\n  \"response\": {\n    \"request_id\": \"cv-tail-5175f7b2-18a8-48d6-b7fd-0e86bb5182ca\",\n    \"status\": \"processing\",\n    \"estimated_time_seconds\": 30\n  }\n}\n\u2713 POST /cv-tailoring/generate - CV tailoring submitted, ID: cv-tail-5175f7b2-18a8-48d6-b7fd-0e86bb5182ca\n\n=== RESPONSE test_delete_tailored_cv_roundtrip ===\n{\n  \"test_name\": \"test_delete_tailored_cv_roundtrip\",\n  \"endpoint\": \"DELETE /cv-tailoring/cv-tail-5175f7b2-18a8-48d6-b7fd-0e86bb5182ca\",\n  \"status_code\": 500,\n  \"response\": {\n    \"success\": false,\n    \"code\": \"DYNAMODB_ERROR\",\n    \"message\": \"Failed to delete tailored CV\"\n  }\n}\n=========================== short test summary info ============================\nFAILED docs/refactor/live_tests/test_06_cv_tailoring.py::TestCVTailoringEndpoints::test_delete_tailored_cv_roundtrip\n1 failed in 11.62s\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "interview_prep_status_resolvable",
+      "node_id": "docs/refactor/live_tests/test_08_interview_prep.py::TestInterviewPrepEndpoints::test_get_interview_prep_status",
+      "status": "fail",
+      "exit_code": 1,
+      "stdout_tail": "==================== FAILURES ===================================\n__________ TestInterviewPrepEndpoints.test_get_interview_prep_status ___________\ndocs/refactor/live_tests/test_08_interview_prep.py:154: in test_get_interview_prep_status\n    assert_interview_prep_quality(data)\ndocs/refactor/live_tests/quality_assertions.py:99: in assert_interview_prep_quality\n    assert isinstance(questions, list) and len(questions) >= 3, (\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   AssertionError: Interview prep must include at least 3 questions\n----------------------------- Captured stdout call -----------------------------\n\n=== RESPONSE test_get_interview_prep_status ===\n{\n  \"test_name\": \"test_get_interview_prep_status\",\n  \"endpoint\": \"GET /interview-prep/6f77f52a-0935-49f1-9601-b3c8a2ef8980/status\",\n  \"status_code\": 200,\n  \"response\": {\n    \"id\": \"6f77f52a-0935-49f1-9601-b3c8a2ef8980\",\n    \"status\": \"failed\",\n    \"result\": {\n      \"questions\": []\n    }\n  }\n}\n=========================== short test summary info ============================\nFAILED docs/refactor/live_tests/test_08_interview_prep.py::TestInterviewPrepEndpoints::test_get_interview_prep_status\n1 failed in 8.63s\n",
+      "stderr_tail": ""
+    }
+  ]
+}

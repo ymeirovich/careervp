@@ -41,14 +41,14 @@ def _convert_decimal_to_float(obj: Any) -> Any:
 
 
 def _get_dal() -> DynamoDalHandler:
-    table_name = os.environ.get('TABLE_NAME') or os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or ''
+    table_name = os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME') or ''
     resolved_from = (
-        'TABLE_NAME'
-        if os.environ.get('TABLE_NAME')
-        else 'ARTIFACTS_TABLE_NAME'
+        'ARTIFACTS_TABLE_NAME'
         if os.environ.get('ARTIFACTS_TABLE_NAME')
         else 'DYNAMODB_TABLE_NAME'
         if os.environ.get('DYNAMODB_TABLE_NAME')
+        else 'TABLE_NAME'
+        if os.environ.get('TABLE_NAME')
         else 'none'
     )
     logger.debug('Cover letter DAL table resolved', table_name=table_name, resolved_from=resolved_from)
@@ -212,7 +212,7 @@ def _update_artifact_status(
 
     import boto3 as _boto3
 
-    table_name = os.environ.get('TABLE_NAME') or os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or ''
+    table_name = os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME') or ''
     table = _boto3.resource('dynamodb').Table(table_name)
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
 
@@ -224,14 +224,25 @@ def _update_artifact_status(
         update_expr += ', cover_letter = :result'
         attr_values[':result'] = result_data
 
+    artifact_id = f'ARTIFACT#COVER_LETTER#{job_id}'
     try:
         table.update_item(
-            Key={'pk': user_id, 'sk': f'ARTIFACT#COVER_LETTER#{job_id}'},
+            Key={'applicationId': user_id, 'artifactId': artifact_id},
             UpdateExpression=update_expr,
             ExpressionAttributeNames=attr_names,
             ExpressionAttributeValues=attr_values,
         )
     except Exception as exc:
+        error_response = getattr(exc, 'response', {}) if hasattr(exc, 'response') else {}
+        error_code = ((error_response.get('Error') or {}).get('Code')) if isinstance(error_response, dict) else None
+        if error_code == 'ValidationException':
+            table.update_item(
+                Key={'pk': user_id, 'sk': artifact_id},
+                UpdateExpression=update_expr,
+                ExpressionAttributeNames=attr_names,
+                ExpressionAttributeValues=attr_values,
+            )
+            return
         logger.error('Failed to update artifact status', job_id=job_id, error=str(exc))
         raise
 

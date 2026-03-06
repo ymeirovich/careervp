@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any
 
 import boto3
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr, Key
 from botocore.exceptions import ClientError
 from mypy_boto3_dynamodb import DynamoDBServiceResource
 from pydantic import ValidationError
@@ -379,6 +379,9 @@ class DynamoDalHandler(DalHandler):
         try:
             table = self._get_db_handler(self.table_name)
             item = {
+                'applicationId': user_id,
+                'artifactId': f'ARTIFACT#COVER_LETTER#{job_id}',
+                'artifactType': 'cover_letter',
                 'pk': user_id,
                 'sk': self._build_cover_letter_sort_key(cv_id, job_id, version),
                 'artifact_type': 'cover_letter',
@@ -386,6 +389,7 @@ class DynamoDalHandler(DalHandler):
                 'cv_id': cv_id,
                 'job_id': job_id,
                 'version': version,
+                'status': 'COMPLETED',
                 'cover_letter': cover_letter,
                 'created_at': datetime.now(timezone.utc).isoformat(),
                 'updated_at': datetime.now(timezone.utc).isoformat(),
@@ -452,8 +456,8 @@ class DynamoDalHandler(DalHandler):
         logger.info('reading cover letter by canonical artifact_id')
         try:
             table = self._get_db_handler(self.table_name)
-            # Canonical read: pk == applicationId (== user_id), sk == artifactId
-            response = table.get_item(Key={'pk': application_id, 'sk': artifact_id})
+            # Canonical read: applicationId + artifactId
+            response = table.get_item(Key={'applicationId': application_id, 'artifactId': artifact_id})
             item = response.get('Item')
             if item:
                 logger.info('cover letter found via canonical key', key_schema='canonical')
@@ -467,11 +471,32 @@ class DynamoDalHandler(DalHandler):
 
             logger.info('cover letter not found and legacy fallback disabled', artifact_id=artifact_id)
             return Result(success=True, data=None, code=ResultCode.SUCCESS)
-        except (ClientError, ValidationError) as exc:
+        except ClientError as exc:
+            error_code, _ = self._client_error_details(exc)
+            if error_code == 'ValidationException':
+                try:
+                    response = table.get_item(Key={'pk': application_id, 'sk': artifact_id})
+                    item = response.get('Item')
+                    if item:
+                        logger.info('cover letter found via legacy key fallback', key_schema='legacy')
+                        return Result(success=True, data=item, code=ResultCode.SUCCESS)
+                    return Result(success=True, data=None, code=ResultCode.SUCCESS)
+                except (ClientError, ValidationError) as fallback_exc:
+                    return self._dal_failure_result(
+                        operation='read_cover_letter_by_artifact_id',
+                        exc=fallback_exc,
+                        key_names=['applicationId', 'artifactId', 'pk', 'sk'],
+                    )
             return self._dal_failure_result(
                 operation='read_cover_letter_by_artifact_id',
                 exc=exc,
-                key_names=['pk', 'sk'],
+                key_names=['applicationId', 'artifactId'],
+            )
+        except ValidationError as exc:
+            return self._dal_failure_result(
+                operation='read_cover_letter_by_artifact_id',
+                exc=exc,
+                key_names=['applicationId', 'artifactId'],
             )
 
     def _legacy_read_cover_letter_by_scan(
@@ -480,39 +505,84 @@ class DynamoDalHandler(DalHandler):
         artifact_id: str,
     ) -> Result[dict[str, Any] | None]:
         """Legacy fallback: scan cover letter items for matching artifactId or job_id."""
+        request_id = artifact_id
+        if artifact_id.startswith(COVER_LETTER_SORT_KEY_PREFIX):
+            request_id = artifact_id[len(COVER_LETTER_SORT_KEY_PREFIX) :]
+
         try:
             table = self._get_db_handler(self.table_name)
-            key_condition = Key('pk').eq(application_id) & Key('sk').begins_with(COVER_LETTER_SORT_KEY_PREFIX)
-            items: list[dict[str, Any]] = []
-            response = table.query(KeyConditionExpression=key_condition)
-            items.extend(response.get('Items', []))
-            while 'LastEvaluatedKey' in response:
-                response = table.query(
-                    KeyConditionExpression=key_condition,
-                    ExclusiveStartKey=response['LastEvaluatedKey'],
-                )
-                items.extend(response.get('Items', []))
+            try:
+                items = self._query_cover_letter_items(table, application_id, use_canonical_keys=True)
+            except ClientError as exc:
+                error_code, _ = self._client_error_details(exc)
+                if error_code != 'ValidationException':
+                    raise
+                items = self._query_cover_letter_items(table, application_id, use_canonical_keys=False)
 
-            # Extract the request_id from artifact_id (ARTIFACT#COVER_LETTER#{request_id})
-            request_id = artifact_id
-            if artifact_id.startswith(COVER_LETTER_SORT_KEY_PREFIX):
-                request_id = artifact_id[len(COVER_LETTER_SORT_KEY_PREFIX) :]
-
-            for item in items:
-                if str(item.get('artifactId', '')) == artifact_id:
-                    logger.info('cover letter found via legacy artifactId match', key_schema='legacy')
-                    return Result(success=True, data=item, code=ResultCode.SUCCESS)
-                if str(item.get('job_id', '')) == request_id:
-                    logger.info('cover letter found via legacy job_id match', key_schema='legacy')
-                    return Result(success=True, data=item, code=ResultCode.SUCCESS)
-
-            return Result(success=True, data=None, code=ResultCode.SUCCESS)
-        except (ClientError, ValidationError) as exc:
+            return self._match_cover_letter_item(items, artifact_id, request_id, allow_sk_match=False)
+        except ClientError as exc:
+            error_code, _ = self._client_error_details(exc)
+            if error_code == 'ValidationException':
+                try:
+                    items = self._query_cover_letter_items(table, application_id, use_canonical_keys=False)
+                    return self._match_cover_letter_item(items, artifact_id, request_id, allow_sk_match=True)
+                except (ClientError, ValidationError) as fallback_exc:
+                    return self._dal_failure_result(
+                        operation='_legacy_read_cover_letter_by_scan',
+                        exc=fallback_exc,
+                        key_names=['applicationId', 'artifactId', 'pk', 'sk'],
+                    )
             return self._dal_failure_result(
                 operation='_legacy_read_cover_letter_by_scan',
                 exc=exc,
-                key_names=['pk', 'sk'],
+                key_names=['applicationId', 'artifactId'],
             )
+        except ValidationError as exc:
+            return self._dal_failure_result(
+                operation='_legacy_read_cover_letter_by_scan',
+                exc=exc,
+                key_names=['applicationId', 'artifactId'],
+            )
+
+    def _query_cover_letter_items(
+        self,
+        table: Any,
+        application_id: str,
+        *,
+        use_canonical_keys: bool,
+    ) -> list[dict[str, Any]]:
+        if use_canonical_keys:
+            key_condition = Key('applicationId').eq(application_id) & Key('artifactId').begins_with(COVER_LETTER_SORT_KEY_PREFIX)
+        else:
+            key_condition = Key('pk').eq(application_id) & Key('sk').begins_with(COVER_LETTER_SORT_KEY_PREFIX)
+
+        items: list[dict[str, Any]] = []
+        response = table.query(KeyConditionExpression=key_condition)
+        items.extend(response.get('Items', []))
+        while 'LastEvaluatedKey' in response:
+            response = table.query(
+                KeyConditionExpression=key_condition,
+                ExclusiveStartKey=response['LastEvaluatedKey'],
+            )
+            items.extend(response.get('Items', []))
+        return items
+
+    def _match_cover_letter_item(
+        self,
+        items: list[dict[str, Any]],
+        artifact_id: str,
+        request_id: str,
+        *,
+        allow_sk_match: bool,
+    ) -> Result[dict[str, Any] | None]:
+        for item in items:
+            if str(item.get('artifactId', '')) == artifact_id:
+                return Result(success=True, data=item, code=ResultCode.SUCCESS)
+            if allow_sk_match and str(item.get('sk', '')) == artifact_id:
+                return Result(success=True, data=item, code=ResultCode.SUCCESS)
+            if str(item.get('job_id', '')) == request_id:
+                return Result(success=True, data=item, code=ResultCode.SUCCESS)
+        return Result(success=True, data=None, code=ResultCode.SUCCESS)
 
     @tracer.capture_method(capture_response=False)
     def list_cover_letters_canonical(self, application_id: str) -> Result[list[dict[str, Any]]]:
@@ -525,16 +595,13 @@ class DynamoDalHandler(DalHandler):
         logger.info('listing cover letters via canonical path', key_schema='canonical')
         try:
             table = self._get_db_handler(self.table_name)
-            key_condition = Key('pk').eq(application_id) & Key('sk').begins_with(COVER_LETTER_SORT_KEY_PREFIX)
-            items: list[dict[str, Any]] = []
-            response = table.query(KeyConditionExpression=key_condition)
-            items.extend(response.get('Items', []))
-            while 'LastEvaluatedKey' in response:
-                response = table.query(
-                    KeyConditionExpression=key_condition,
-                    ExclusiveStartKey=response['LastEvaluatedKey'],
-                )
-                items.extend(response.get('Items', []))
+            try:
+                items = self._query_cover_letter_items(table, application_id, use_canonical_keys=True)
+            except ClientError as exc:
+                error_code, _ = self._client_error_details(exc)
+                if error_code != 'ValidationException':
+                    raise
+                items = self._query_cover_letter_items(table, application_id, use_canonical_keys=False)
             logger.info('cover letters listed via canonical path', application_id=application_id, count=len(items))
             return Result(success=True, data=items, code=ResultCode.SUCCESS)
         except (ClientError, ValidationError) as exc:
@@ -552,9 +619,17 @@ class DynamoDalHandler(DalHandler):
         logger.info('legacy cover letter read', pk=pk, sk=sk, key_schema='legacy')
         try:
             table = self._get_db_handler(self.table_name)
-            response = table.get_item(Key={'pk': pk, 'sk': sk})
-            item = response.get('Item')
-            return Result(success=True, data=item, code=ResultCode.SUCCESS)
+            try:
+                response = table.get_item(Key={'pk': pk, 'sk': sk})
+                item = response.get('Item')
+                return Result(success=True, data=item, code=ResultCode.SUCCESS)
+            except ClientError as exc:
+                error_code, _ = self._client_error_details(exc)
+                if error_code != 'ValidationException':
+                    raise
+                response = table.scan(FilterExpression=Attr('pk').eq(pk) & Attr('sk').eq(sk), Limit=1)
+                items = response.get('Items', [])
+                return Result(success=True, data=(items[0] if items else None), code=ResultCode.SUCCESS)
         except (ClientError, ValidationError) as exc:
             return self._dal_failure_result(
                 operation='legacy_read_cover_letter',

@@ -180,13 +180,25 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         try:
             table = dynamodb_resource.Table(_get_artifacts_table_name())
             table.update_item(
-                Key={'pk': authenticated_user_id, 'sk': f'ARTIFACT#COVER_LETTER#{job_id}'},
+                Key={'applicationId': authenticated_user_id, 'artifactId': f'ARTIFACT#COVER_LETTER#{job_id}'},
                 UpdateExpression='SET #s = :status, updated_at = :now',
                 ExpressionAttributeNames={'#s': 'status'},
                 ExpressionAttributeValues={':status': 'FAILED', ':now': now.isoformat()},
             )
-        except BotoClientError:
-            logger.error('Failed to mark job as failed', job_id=job_id)
+        except BotoClientError as update_exc:
+            error_code = ((update_exc.response.get('Error') or {}).get('Code')) if update_exc.response else None
+            if error_code == 'ValidationException':
+                try:
+                    table.update_item(
+                        Key={'pk': authenticated_user_id, 'sk': f'ARTIFACT#COVER_LETTER#{job_id}'},
+                        UpdateExpression='SET #s = :status, updated_at = :now',
+                        ExpressionAttributeNames={'#s': 'status'},
+                        ExpressionAttributeValues={':status': 'FAILED', ':now': now.isoformat()},
+                    )
+                except BotoClientError:
+                    logger.error('Failed to mark job as failed', job_id=job_id)
+            else:
+                logger.error('Failed to mark job as failed', job_id=job_id)
         return _build_error_response('Failed to queue job for processing', HTTPStatus.INTERNAL_SERVER_ERROR)
 
     metrics.add_metric(name='CoverLetterJobCreated', unit='Count', value=1)
