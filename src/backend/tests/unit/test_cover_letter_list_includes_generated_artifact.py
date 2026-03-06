@@ -2,11 +2,12 @@
 Unit tests verifying the list endpoint includes generated cover letter artifacts.
 
 Validates:
-- AC-CL-001: Generated cover letter appears in list after save
+- AC-CL-302: Generated cover letter appears in list after save via canonical path
 - List materializes IDs from artifactId / job_id fields
 - Both async-path (submit handler) and sync-path (save_cover_letter) items appear
+- Legacy fallback not invoked for new records (COVER_LETTER_LEGACY_READ_ENABLED=false)
 
-Spec: docs/beta/fix-api/yaml2/cover_letter_list_roundtrip.yaml
+Spec: docs/beta/fix-api/yaml3/step_003_cover_letter_artifact_roundtrip_recovery.yaml
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ def env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
     monkeypatch.setenv('LOG_LEVEL', 'INFO')
     monkeypatch.setenv('ENV', 'local')
     monkeypatch.setenv('TABLE_NAME', 'test-artifacts-list-table')
+    monkeypatch.setenv('COVER_LETTER_LEGACY_READ_ENABLED', 'false')
     yield
 
 
@@ -95,14 +97,14 @@ def test_list_empty_when_no_artifacts(artifacts_table: Any) -> None:
 def test_list_includes_async_artifact_by_job_id(artifacts_table: Any) -> None:
     """Generated async-path artifact (job_id UUID) appears in list with id == job_id.
 
-    AC-CL-001: request_id from POST must appear in GET /cover-letters list.
+    AC-CL-302: request_id from POST must appear in GET /cover-letters list via canonical path.
     """
     from careervp.handlers.cover_letter_handler import lambda_handler
 
     user_id = 'user-test'
     job_id = 'uuid-async-artifact-1234'
 
-    # Simulate what cover_letter_submit_handler.py writes to DynamoDB
+    # Simulate what cover_letter_submit_handler.py writes to DynamoDB (canonical keys)
     artifacts_table.put_item(
         Item={
             'pk': user_id,
@@ -170,6 +172,8 @@ def test_list_only_returns_current_user_artifacts(artifacts_table: Any) -> None:
             Item={
                 'pk': uid,
                 'sk': f'ARTIFACT#COVER_LETTER#{jid}',
+                'applicationId': uid,
+                'artifactId': f'ARTIFACT#COVER_LETTER#{jid}',
                 'user_id': uid,
                 'job_id': jid,
                 'status': 'COMPLETED',
@@ -183,3 +187,39 @@ def test_list_only_returns_current_user_artifacts(artifacts_table: Any) -> None:
     ids = [item['id'] for item in body['cover_letters']]
     assert job_id_a in ids, 'Expected user A artifact in list'
     assert job_id_b not in ids, 'User B artifact must not appear in user A list'
+
+
+@pytest.mark.unit
+def test_list_via_canonical_path_no_legacy_needed(
+    artifacts_table: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With COVER_LETTER_LEGACY_READ_ENABLED=false, new canonical records still appear in list.
+
+    Verifies legacy fallback not invoked for new records.
+    """
+    monkeypatch.setenv('COVER_LETTER_LEGACY_READ_ENABLED', 'false')
+
+    from careervp.handlers.cover_letter_handler import lambda_handler
+
+    user_id = 'user-test'
+    job_id = 'uuid-no-legacy-needed'
+
+    artifacts_table.put_item(
+        Item={
+            'pk': user_id,
+            'sk': f'ARTIFACT#COVER_LETTER#{job_id}',
+            'applicationId': user_id,
+            'artifactId': f'ARTIFACT#COVER_LETTER#{job_id}',
+            'user_id': user_id,
+            'job_id': job_id,
+            'status': 'COMPLETED',
+        }
+    )
+
+    response = lambda_handler(_list_event(user_id), _context())
+
+    assert response['statusCode'] == 200
+    body = json.loads(response['body'])
+    ids = [item['id'] for item in body['cover_letters']]
+    assert job_id in ids, f'Canonical record must appear in list even with legacy disabled. Got ids: {ids}'

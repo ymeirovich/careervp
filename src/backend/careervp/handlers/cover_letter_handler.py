@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+from decimal import Decimal
 from http import HTTPStatus
 from typing import Any, cast
 
@@ -28,8 +29,29 @@ from careervp.models.cv import UserCV
 from careervp.models.result import Result, ResultCode
 
 
+def _convert_decimal_to_float(obj: Any) -> Any:
+    """Recursively convert Decimal to float for JSON serialization (mirrors gap_analysis.py)."""
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, dict):
+        return {k: _convert_decimal_to_float(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_convert_decimal_to_float(i) for i in obj]
+    return obj
+
+
 def _get_dal() -> DynamoDalHandler:
     table_name = os.environ.get('TABLE_NAME') or os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or ''
+    resolved_from = (
+        'TABLE_NAME'
+        if os.environ.get('TABLE_NAME')
+        else 'ARTIFACTS_TABLE_NAME'
+        if os.environ.get('ARTIFACTS_TABLE_NAME')
+        else 'DYNAMODB_TABLE_NAME'
+        if os.environ.get('DYNAMODB_TABLE_NAME')
+        else 'none'
+    )
+    logger.debug('Cover letter DAL table resolved', table_name=table_name, resolved_from=resolved_from)
     return DynamoDalHandler(table_name)
 
 
@@ -156,15 +178,23 @@ def _generate_and_persist_from_sqs(
             cv_id=api_request.cv_id,
             job_id=api_request.job_id,
         )
-    except Exception:
-        logger.warning('save_cover_letter failed, updating artifact directly', job_id=job_id)
+    except Exception as save_exc:
+        logger.error(
+            'save_cover_letter failed in SQS worker; marking job FAILED',
+            job_id=job_id,
+            user_id=user_id,
+            error=f'{type(save_exc).__name__}: {save_exc}',
+            exc_info=True,
+        )
+        _update_artifact_status(user_id=user_id, job_id=job_id, status='FAILED')
+        raise RuntimeError(f'Persistence failed for cover letter job {job_id}: {save_exc}') from save_exc
 
-    # Update the artifact record to COMPLETED
+    # Update the artifact record to COMPLETED only after successful persistence
     _update_artifact_status(
         user_id=user_id,
         job_id=job_id,
         status='COMPLETED',
-        result_data=cover_letter_payload,
+        result_data=_convert_decimal_to_float(cover_letter_payload),
     )
 
     metrics.add_metric(name='CoverLetterWorkerGenerated', unit=MetricUnit.Count, value=1)
@@ -274,11 +304,19 @@ def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:
             cv_id=api_request.cv_id,
             job_id=api_request.job_id,
         )
-    except Exception:
+    except Exception as exc:
+        logger.error('Cover letter persistence failed', user_id=user_id, error=str(exc), exc_info=True)
         save_result = Result(success=False, error='persist failed', code=ResultCode.DYNAMODB_ERROR)
     if not save_result.success:
-        artifact_id = str(cover_letter_payload.get('cover_letter_id', '')).strip() or f'cover-letter-{api_request.job_id}'
-        return _build_response(HTTPStatus.OK, {'artifact_id': artifact_id, 'status': 'completed'})
+        # AC-CL-303: Persistence failure must NOT return synthetic completed response
+        metrics.add_metric(name='CoverLetterPersistenceFailure', unit=MetricUnit.Count, value=1)
+        return _build_response(
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+            {
+                'error': 'Cover letter generated but failed to save. Please try again.',
+                'code': ResultCode.DYNAMODB_ERROR,
+            },
+        )
 
     artifact_id = str(cover_letter_payload.get('cover_letter_id', '')).strip()
     metrics.add_metric(name='CoverLetterGenerated', unit=MetricUnit.Count, value=1)
@@ -461,6 +499,32 @@ def _build_generation_error_response(generation_result: Result[Any]) -> dict[str
 
 
 def _find_cover_letter_item(user_id: str, cover_letter_id: str) -> dict[str, Any] | None:
+    """Find a cover letter artifact using canonical key lookup with legacy fallback.
+
+    Phase A dual-read strategy:
+      1. Try canonical read: applicationId=user_id, artifactId=ARTIFACT#COVER_LETTER#{cover_letter_id}
+      2. If canonical miss and COVER_LETTER_LEGACY_READ_ENABLED=true, scan legacy items
+      3. Fall back to list scan for edge cases (sync-path items with different sk format)
+    """
+    dal = _get_dal()
+
+    # Canonical read: construct the expected artifactId
+    artifact_id = f'ARTIFACT#COVER_LETTER#{cover_letter_id}'
+    canonical_result = dal.read_cover_letter_by_artifact_id(
+        application_id=user_id,
+        artifact_id=artifact_id,
+    )
+    if canonical_result.success and canonical_result.data is not None:
+        return canonical_result.data
+
+    # Phase A fallback: scan list for matching item (pre-migration pk/sk records)
+    logger.info(
+        'Canonical cover letter read missed; using list-scan fallback (Phase A)',
+        cover_letter_id=cover_letter_id,
+        user_id=user_id,
+        canonical_result_code=getattr(canonical_result, 'code', None),
+    )
+    metrics.add_metric(name='CoverLetterCanonicalReadFallback', unit=MetricUnit.Count, value=1)
     items = _list_cover_letter_items(user_id)
     for item in items:
         if _matches_cover_letter_id(item, cover_letter_id):
@@ -470,7 +534,7 @@ def _find_cover_letter_item(user_id: str, cover_letter_id: str) -> dict[str, Any
 
 def _list_cover_letter_items(user_id: str) -> list[dict[str, Any]]:
     dal = _get_dal()
-    result = dal.list_cover_letters(user_id)
+    result = dal.list_cover_letters_canonical(user_id)
     if result.success and isinstance(result.data, list):
         return [item for item in result.data if isinstance(item, dict)]
     return []
@@ -505,7 +569,9 @@ def _normalize_status(raw_status: Any) -> str:
     normalized = str(raw_status or '').strip().lower()
     if normalized in {'pending', 'processing', 'completed', 'failed'}:
         return normalized
-    return 'completed'
+    if normalized:
+        logger.warning('Unexpected cover letter status value', raw_status=raw_status)
+    return 'pending'
 
 
 def _extract_cover_letter_text(cover_letter_payload: Any) -> str | None:
@@ -630,7 +696,7 @@ def _build_response(status_code: HTTPStatus, body: dict[str, Any]) -> dict[str, 
     return {
         'statusCode': status_code.value,
         'headers': headers,
-        'body': json.dumps(body, default=str),
+        'body': json.dumps(_convert_decimal_to_float(body)),
     }
 
 

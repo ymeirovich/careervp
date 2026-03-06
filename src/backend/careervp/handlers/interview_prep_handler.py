@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from http import HTTPStatus
 from typing import Any
 
@@ -26,6 +27,17 @@ from careervp.models.result import Result, ResultCode
 
 INTERVIEW_PREP_SORT_KEY_PREFIX = 'ARTIFACT#INTERVIEW_PREP#'
 PRIMARY_KEY_MODE = 'applicationId/artifactId'
+
+
+def _convert_decimal_to_float(obj: Any) -> Any:
+    """Recursively convert Decimal to float for JSON serialization."""
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, dict):
+        return {k: _convert_decimal_to_float(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_convert_decimal_to_float(i) for i in obj]
+    return obj
 
 
 def _get_artifacts_table_name() -> str:
@@ -141,15 +153,23 @@ def _generate_and_persist_from_sqs(
     prep_payload = prep_model.model_dump(mode='json')
     try:
         _persist_interview_prep(dal=dal, user_id=user_id, prep_payload=prep_payload)
-    except Exception:
-        logger.warning('_persist_interview_prep failed, updating artifact directly', job_id=job_id)
+    except Exception as persist_exc:
+        logger.error(
+            '_persist_interview_prep failed in SQS worker; marking job FAILED',
+            job_id=job_id,
+            user_id=user_id,
+            error=f'{type(persist_exc).__name__}: {persist_exc}',
+            exc_info=True,
+        )
+        _update_artifact_status(user_id=user_id, job_id=job_id, status='FAILED')
+        raise RuntimeError(f'Persistence failed for interview prep job {job_id}: {persist_exc}') from persist_exc
 
-    # Update the artifact record to COMPLETED
+    # Update the artifact record to COMPLETED only after successful persistence
     _update_artifact_status(
         user_id=user_id,
         job_id=job_id,
         status='COMPLETED',
-        result_data=prep_payload,
+        result_data=_convert_decimal_to_float(prep_payload),
     )
 
     metrics.add_metric(name='InterviewPrepWorkerGenerated', unit=MetricUnit.Count, value=1)
@@ -227,16 +247,18 @@ def _submit_interview_prep_request(event: dict[str, Any]) -> dict[str, Any]:
 
     try:
         generation_result = _generate_interview_prep_result(api_request=api_request, user_id=user_id)
-    except Exception:
-        fallback_id = f'interview-prep-{api_request.vpr_id}'
-        fallback_payload = _build_fallback_interview_prep_payload(
+    except Exception as gen_exc:
+        logger.error(
+            'Interview prep generation raised exception',
             user_id=user_id,
-            vpr_id=api_request.vpr_id,
-            prep_id=fallback_id,
-            focus_areas=list(api_request.focus_areas),
+            error=f'{type(gen_exc).__name__}: {gen_exc}',
+            exc_info=True,
         )
-        _persist_interview_prep(dal=dal, user_id=user_id, prep_payload=fallback_payload)
-        return _build_response(HTTPStatus.OK, {'artifact_id': fallback_id, 'status': 'completed'})
+        metrics.add_metric(name='InterviewPrepFailures', unit=MetricUnit.Count, value=1)
+        return _build_response(
+            HTTPStatus.SERVICE_UNAVAILABLE,
+            {'error': 'Interview prep generation failed. Please try again.', 'code': ResultCode.LLM_API_ERROR},
+        )
     if not generation_result.success or generation_result.data is None:
         metrics.add_metric(name='InterviewPrepFailures', unit=MetricUnit.Count, value=1)
         return _build_generation_error_response(generation_result)
@@ -255,15 +277,16 @@ def _submit_interview_prep_request(event: dict[str, Any]) -> dict[str, Any]:
     except Exception:
         persist_result = Result(success=False, error='persist failed', code=ResultCode.DYNAMODB_ERROR)
     if not persist_result.success:
-        fallback_id = str(prep_payload.get('prep_id', '')).strip() or f'interview-prep-{api_request.vpr_id}'
-        fallback_payload = _build_fallback_interview_prep_payload(
+        metrics.add_metric(name='InterviewPrepPersistenceFailure', unit=MetricUnit.Count, value=1)
+        logger.error(
+            'Interview prep persistence failed; cannot return synthetic success',
             user_id=user_id,
-            vpr_id=api_request.vpr_id,
-            prep_id=fallback_id,
-            focus_areas=list(api_request.focus_areas),
+            error=persist_result.error,
         )
-        _persist_interview_prep(dal=dal, user_id=user_id, prep_payload=fallback_payload)
-        return _build_response(HTTPStatus.OK, {'artifact_id': fallback_id, 'status': 'completed'})
+        return _build_response(
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+            {'error': 'Interview prep generated but failed to save. Please try again.', 'code': ResultCode.DYNAMODB_ERROR},
+        )
 
     artifact_id = str(prep_payload.get('prep_id', '')).strip()
     metrics.add_metric(name='InterviewPrepGenerated', unit=MetricUnit.Count, value=1)
@@ -661,7 +684,9 @@ def _normalize_status(raw_status: Any) -> str:
     status = str(raw_status or '').strip().lower()
     if status in {'pending', 'processing', 'completed', 'failed'}:
         return status
-    return 'completed'
+    if status:
+        logger.warning('Unexpected interview prep status value', raw_status=raw_status)
+    return 'pending'
 
 
 def _extract_prep_id_from_payload(prep_payload: Any) -> str | None:
@@ -846,7 +871,7 @@ def _build_response(status_code: HTTPStatus, body: dict[str, Any]) -> dict[str, 
     return {
         'statusCode': status_code.value,
         'headers': headers,
-        'body': json.dumps(body, default=str),
+        'body': json.dumps(_convert_decimal_to_float(body)),
     }
 
 

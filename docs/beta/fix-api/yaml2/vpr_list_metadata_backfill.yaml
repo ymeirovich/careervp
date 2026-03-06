@@ -1,7 +1,7 @@
 spec_id: VPR_LIST_METADATA_001
 title: Backfill VPR List Metadata (job_title/company_name) Without Regressing Existing VPR Flows
 priority: medium
-status: pending
+status: validated
 owner: backend-platform
 created_at: 2026-03-04
 updated_at: 2026-03-04
@@ -137,22 +137,22 @@ traceability_matrix:
     requirement: list returns non-empty job_title/company_name when resolvable
     code_reference: src/backend/careervp/handlers/vpr_status_handler.py
     test_reference: src/backend/tests/unit/test_vpr_status_handler.py::test_vpr_list_item_fallback_metadata
-    evidence_reference: docs/evidence/vpr-list-metadata-unit-<timestamp>.txt
-    pass_fail: pending
+    evidence_reference: docs/evidence/vpr-list-metadata-unit-20260306T082812Z.txt
+    result: pass
   - requirement_id: AC-VPR-LIST-002
     requirement: no regression to VPR status endpoint behavior
     code_reference: src/backend/careervp/handlers/vpr_status_handler.py
     test_reference: docs/refactor/live_tests/test_04_vpr.py::TestVPREndpoints::test_get_vpr_status
-    evidence_reference: docs/evidence/vpr-status-regression-<timestamp>.txt
-    pass_fail: pending
+    evidence_reference: docs/evidence/vpr-status-regression-20260306T082812Z.txt
+    result: pass
 
 completion_evidence:
   test_output_snippets:
-    - unit_test_output_path: docs/evidence/vpr-list-metadata-unit-<timestamp>.txt
-    - integration_test_output_path: docs/evidence/vpr-list-metadata-integration-<timestamp>.txt
-    - live_test_output_path: docs/evidence/vpr-list-metadata-live-<timestamp>.txt
+    - unit_test_output_path: docs/evidence/vpr-list-metadata-unit-20260306T082812Z.txt
+    - integration_test_output_path: docs/evidence/vpr-list-metadata-integration-20260306T082812Z.txt
+    - live_test_output_path: docs/evidence/vpr-list-metadata-live-20260306T082812Z.txt
   deployed_endpoint_verification_artifacts:
-    - docs/evidence/vpr-list-before-after-<timestamp>.json
+    - docs/evidence/vpr-list-before-after-20260306T082812Z.json
   known_residual_risks:
     - Some historical records may have no resolvable job reference and legitimately remain blank.
   explicit_sign_off_checklist:

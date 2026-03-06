@@ -167,12 +167,14 @@ class TestTrialServiceImplementation:
             service.check_trial_status('user-1')
 
     def test_trial_service_check_app_count(self) -> None:
+        # Use today's date so trial is NOT expired (days_elapsed=0 < 14)
+        # but application_count=3 >= TRIAL_LIMIT_APPLICATIONS=3 → TrialExhaustedException
         table = MagicMock()
         table.get_item.return_value = {
             'Item': {
                 'pk': 'USER#user-1',
                 'sk': 'TRIAL',
-                'created_at': '2026-02-20T00:00:00+00:00',
+                'created_at': '2026-03-06T00:00:00+00:00',
                 'application_count': 3,
                 'trial_active': True,
             }
