@@ -40,9 +40,17 @@ CV_ID = 'cv-roundtrip-001'
 def gap_integration_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
     monkeypatch.setenv('USERS_TABLE_NAME', TABLE_NAME)
     monkeypatch.setenv('DYNAMODB_TABLE_NAME', TABLE_NAME)
+    monkeypatch.setenv('GAP_QUESTIONS_TABLE_NAME', TABLE_NAME)
     monkeypatch.setenv('GAP_RESPONSES_TABLE_NAME', RESPONSES_TABLE_NAME)
     monkeypatch.setenv('APPLICATIONS_TABLE_NAME', APPLICATIONS_TABLE_NAME)
+    # Reset module-level singletons so prior tests don't leak cached DynamoDB clients
+    import careervp.handlers.gap_handler as _gh
+
+    _gh._trial_service = None
+    _gh._application_repository = None
     yield
+    _gh._trial_service = None
+    _gh._application_repository = None
 
 
 @pytest.fixture

@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
@@ -436,13 +437,52 @@ class DynamoDalHandler(DalHandler):
             return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
 
     @tracer.capture_method(capture_response=False)
-    def list_cover_letters(self, user_id: str) -> Result[list[dict[str, Any]]]:
-        logger.append_keys(user_id=user_id)
-        logger.info('listing cover letters for user from DynamoDB', key_schema='pk/sk')
+    def read_cover_letter_by_artifact_id(
+        self,
+        application_id: str,
+        artifact_id: str,
+    ) -> Result[dict[str, Any] | None]:
+        """Canonical read: fetch a single cover letter by applicationId + artifactId.
+
+        Phase A dual-read: tries canonical pk=application_id, sk=artifact_id first.
+        Falls back to legacy pk/sk scan if COVER_LETTER_LEGACY_READ_ENABLED=true and
+        canonical read misses.
+        """
+        logger.append_keys(application_id=application_id, artifact_id=artifact_id)
+        logger.info('reading cover letter by canonical artifact_id')
         try:
             table = self._get_db_handler(self.table_name)
-            # Canonical read path: pk=user_id, sk begins_with ARTIFACT#COVER_LETTER#
-            key_condition = Key('pk').eq(user_id) & Key('sk').begins_with(COVER_LETTER_SORT_KEY_PREFIX)
+            # Canonical read: pk == applicationId (== user_id), sk == artifactId
+            response = table.get_item(Key={'pk': application_id, 'sk': artifact_id})
+            item = response.get('Item')
+            if item:
+                logger.info('cover letter found via canonical key', key_schema='canonical')
+                return Result(success=True, data=item, code=ResultCode.SUCCESS)
+
+            # Legacy fallback (Phase A): scan cover letter items for matching artifact
+            legacy_enabled = os.environ.get('COVER_LETTER_LEGACY_READ_ENABLED', 'true').strip().lower() == 'true'
+            if legacy_enabled:
+                logger.info('canonical miss, attempting legacy fallback', key_schema='legacy')
+                return self._legacy_read_cover_letter_by_scan(application_id, artifact_id)
+
+            logger.info('cover letter not found and legacy fallback disabled', artifact_id=artifact_id)
+            return Result(success=True, data=None, code=ResultCode.SUCCESS)
+        except (ClientError, ValidationError) as exc:
+            return self._dal_failure_result(
+                operation='read_cover_letter_by_artifact_id',
+                exc=exc,
+                key_names=['pk', 'sk'],
+            )
+
+    def _legacy_read_cover_letter_by_scan(
+        self,
+        application_id: str,
+        artifact_id: str,
+    ) -> Result[dict[str, Any] | None]:
+        """Legacy fallback: scan cover letter items for matching artifactId or job_id."""
+        try:
+            table = self._get_db_handler(self.table_name)
+            key_condition = Key('pk').eq(application_id) & Key('sk').begins_with(COVER_LETTER_SORT_KEY_PREFIX)
             items: list[dict[str, Any]] = []
             response = table.query(KeyConditionExpression=key_condition)
             items.extend(response.get('Items', []))
@@ -452,12 +492,83 @@ class DynamoDalHandler(DalHandler):
                     ExclusiveStartKey=response['LastEvaluatedKey'],
                 )
                 items.extend(response.get('Items', []))
-            logger.info('cover letters listed', user_id=user_id, count=len(items))
+
+            # Extract the request_id from artifact_id (ARTIFACT#COVER_LETTER#{request_id})
+            request_id = artifact_id
+            if artifact_id.startswith(COVER_LETTER_SORT_KEY_PREFIX):
+                request_id = artifact_id[len(COVER_LETTER_SORT_KEY_PREFIX) :]
+
+            for item in items:
+                if str(item.get('artifactId', '')) == artifact_id:
+                    logger.info('cover letter found via legacy artifactId match', key_schema='legacy')
+                    return Result(success=True, data=item, code=ResultCode.SUCCESS)
+                if str(item.get('job_id', '')) == request_id:
+                    logger.info('cover letter found via legacy job_id match', key_schema='legacy')
+                    return Result(success=True, data=item, code=ResultCode.SUCCESS)
+
+            return Result(success=True, data=None, code=ResultCode.SUCCESS)
+        except (ClientError, ValidationError) as exc:
+            return self._dal_failure_result(
+                operation='_legacy_read_cover_letter_by_scan',
+                exc=exc,
+                key_names=['pk', 'sk'],
+            )
+
+    @tracer.capture_method(capture_response=False)
+    def list_cover_letters_canonical(self, application_id: str) -> Result[list[dict[str, Any]]]:
+        """Canonical list: query by pk=applicationId with ARTIFACT#COVER_LETTER# prefix.
+
+        Phase A dual-read: this is the primary read path. Legacy items written with
+        pk=user_id will also be found since pk == applicationId == user_id for cover letters.
+        """
+        logger.append_keys(application_id=application_id)
+        logger.info('listing cover letters via canonical path', key_schema='canonical')
+        try:
+            table = self._get_db_handler(self.table_name)
+            key_condition = Key('pk').eq(application_id) & Key('sk').begins_with(COVER_LETTER_SORT_KEY_PREFIX)
+            items: list[dict[str, Any]] = []
+            response = table.query(KeyConditionExpression=key_condition)
+            items.extend(response.get('Items', []))
+            while 'LastEvaluatedKey' in response:
+                response = table.query(
+                    KeyConditionExpression=key_condition,
+                    ExclusiveStartKey=response['LastEvaluatedKey'],
+                )
+                items.extend(response.get('Items', []))
+            logger.info('cover letters listed via canonical path', application_id=application_id, count=len(items))
             return Result(success=True, data=items, code=ResultCode.SUCCESS)
         except (ClientError, ValidationError) as exc:
-            error_msg = 'failed to list cover letters'
-            logger.exception(error_msg, user_id=user_id)
+            error_msg = 'failed to list cover letters (canonical)'
+            logger.exception(error_msg, application_id=application_id)
             return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
+
+    def legacy_read_cover_letter(self, pk: str, sk: str) -> Result[dict[str, Any] | None]:
+        """Explicit legacy read by pk/sk. Guarded by COVER_LETTER_LEGACY_READ_ENABLED env var."""
+        legacy_enabled = os.environ.get('COVER_LETTER_LEGACY_READ_ENABLED', 'true').strip().lower() == 'true'
+        if not legacy_enabled:
+            logger.warning('legacy cover letter read attempted but disabled', pk=pk, sk=sk)
+            return Result(success=True, data=None, code=ResultCode.SUCCESS)
+
+        logger.info('legacy cover letter read', pk=pk, sk=sk, key_schema='legacy')
+        try:
+            table = self._get_db_handler(self.table_name)
+            response = table.get_item(Key={'pk': pk, 'sk': sk})
+            item = response.get('Item')
+            return Result(success=True, data=item, code=ResultCode.SUCCESS)
+        except (ClientError, ValidationError) as exc:
+            return self._dal_failure_result(
+                operation='legacy_read_cover_letter',
+                exc=exc,
+                key_names=['pk', 'sk'],
+            )
+
+    @tracer.capture_method(capture_response=False)
+    def list_cover_letters(self, user_id: str) -> Result[list[dict[str, Any]]]:
+        """List cover letters - delegates to canonical path.
+
+        Maintained for backward compatibility. Internally uses list_cover_letters_canonical.
+        """
+        return self.list_cover_letters_canonical(user_id)
 
     @tracer.capture_method(capture_response=False)
     def list_gap_questions_by_prefix(

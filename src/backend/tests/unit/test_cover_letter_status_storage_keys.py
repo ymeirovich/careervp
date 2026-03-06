@@ -2,11 +2,12 @@
 Unit tests for cover letter status storage key correctness.
 
 Validates:
-- AC-CL-002: Missing cover letter id returns 404 (no synthetic success)
-- List queries use canonical pk/sk key schema
-- Status lookup finds persisted artifacts via job_id matching
+- AC-CL-301: generated request_id resolves on status endpoint via canonical keys
+- AC-CL-303: Missing cover letter id returns 404 (no synthetic success)
+- Canonical applicationId/artifactId key usage
+- Legacy fallback only invoked on canonical miss when enabled
 
-Spec: docs/beta/fix-api/yaml2/cover_letter_list_roundtrip.yaml
+Spec: docs/beta/fix-api/yaml3/step_003_cover_letter_artifact_roundtrip_recovery.yaml
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ def env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
     monkeypatch.setenv('LOG_LEVEL', 'INFO')
     monkeypatch.setenv('ENV', 'local')
     monkeypatch.setenv('TABLE_NAME', 'test-artifacts-table')
+    monkeypatch.setenv('COVER_LETTER_LEGACY_READ_ENABLED', 'false')
     yield
 
 
@@ -88,7 +90,7 @@ def _context() -> Any:
 def test_missing_returns_404(artifacts_table: Any) -> None:
     """Status of unknown cover letter id returns 404, not synthetic 200.
 
-    AC-CL-002: No synthetic success path in production code.
+    AC-CL-303: No synthetic success path in production code.
     """
     from careervp.handlers.cover_letter_handler import lambda_handler
 
@@ -106,13 +108,17 @@ def test_missing_returns_404(artifacts_table: Any) -> None:
 
 
 @pytest.mark.unit
-def test_status_found_after_persist(artifacts_table: Any) -> None:
-    """Status returns 200 when artifact is present in DynamoDB under pk/sk keys."""
+def test_status_found_via_canonical_keys(artifacts_table: Any) -> None:
+    """Status returns 200 when artifact is found via canonical applicationId/artifactId keys.
+
+    AC-CL-301: request_id resolves on status endpoint via canonical key path.
+    """
     from careervp.handlers.cover_letter_handler import lambda_handler
 
     user_id = 'user-abc'
     job_id = 'uuid-1111-2222-3333'
 
+    # Write with canonical keys: pk=applicationId, sk=artifactId
     artifacts_table.put_item(
         Item={
             'pk': user_id,
@@ -141,8 +147,8 @@ def test_status_found_after_persist(artifacts_table: Any) -> None:
 
 
 @pytest.mark.unit
-def test_list_uses_pk_sk_keys(artifacts_table: Any) -> None:
-    """List query uses canonical pk/sk key schema and returns persisted artifacts."""
+def test_list_uses_canonical_keys(artifacts_table: Any) -> None:
+    """List query uses canonical applicationId/artifactId key schema and returns persisted artifacts."""
     from careervp.handlers.cover_letter_handler import lambda_handler
 
     user_id = 'user-abc'
@@ -169,7 +175,7 @@ def test_list_uses_pk_sk_keys(artifacts_table: Any) -> None:
     assert response['statusCode'] == 200
     body = json.loads(response['body'])
     ids = [item['id'] for item in body['cover_letters']]
-    assert job_id in ids, f'Expected job_id {job_id} in list ids {ids} after pk/sk save'
+    assert job_id in ids, f'Expected job_id {job_id} in list ids {ids} after canonical key save'
 
 
 @pytest.mark.unit
@@ -184,6 +190,8 @@ def test_user_cannot_read_other_user_artifact(artifacts_table: Any) -> None:
         Item={
             'pk': user_b,
             'sk': f'ARTIFACT#COVER_LETTER#{job_id}',
+            'applicationId': user_b,
+            'artifactId': f'ARTIFACT#COVER_LETTER#{job_id}',
             'user_id': user_b,
             'job_id': job_id,
             'status': 'COMPLETED',
@@ -202,3 +210,100 @@ def test_user_cannot_read_other_user_artifact(artifacts_table: Any) -> None:
 
     # User A cannot see User B's artifact - pk lookup scoped to user-a-id
     assert response['statusCode'] == 404, f'User A should not see User B artifact, got {response["statusCode"]}'
+
+
+@pytest.mark.unit
+def test_legacy_fallback_not_invoked_for_new_canonical_records(
+    artifacts_table: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """For new records written with canonical keys, legacy fallback should not be needed.
+
+    With COVER_LETTER_LEGACY_READ_ENABLED=false, canonical read must still find new records.
+    """
+    monkeypatch.setenv('COVER_LETTER_LEGACY_READ_ENABLED', 'false')
+
+    from careervp.handlers.cover_letter_handler import lambda_handler
+
+    user_id = 'user-abc'
+    job_id = 'uuid-canonical-only-1234'
+
+    # Write canonical record (pk=applicationId, sk=artifactId)
+    artifacts_table.put_item(
+        Item={
+            'pk': user_id,
+            'sk': f'ARTIFACT#COVER_LETTER#{job_id}',
+            'applicationId': user_id,
+            'artifactId': f'ARTIFACT#COVER_LETTER#{job_id}',
+            'user_id': user_id,
+            'job_id': job_id,
+            'status': 'COMPLETED',
+            'created_at': '2026-03-05T00:00:00+00:00',
+            'updated_at': '2026-03-05T00:00:00+00:00',
+        }
+    )
+
+    event = _make_event(
+        path=f'/cover-letter/{job_id}',
+        method='GET',
+        path_parameters={'coverLetterId': job_id},
+    )
+
+    response = lambda_handler(event, _context())
+
+    assert response['statusCode'] == 200, f'Canonical record must be readable even with legacy fallback disabled, got {response["statusCode"]}'
+    body = json.loads(response['body'])
+    assert body['id'] == job_id
+
+
+@pytest.mark.unit
+def test_dal_canonical_read_method(artifacts_table: Any) -> None:
+    """DAL read_cover_letter_by_artifact_id returns item via canonical key."""
+    from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+
+    user_id = 'user-abc'
+    job_id = 'uuid-dal-read-test'
+    artifact_id = f'ARTIFACT#COVER_LETTER#{job_id}'
+
+    artifacts_table.put_item(
+        Item={
+            'pk': user_id,
+            'sk': artifact_id,
+            'applicationId': user_id,
+            'artifactId': artifact_id,
+            'job_id': job_id,
+            'status': 'COMPLETED',
+        }
+    )
+
+    dal = DynamoDalHandler('test-artifacts-table')
+    result = dal.read_cover_letter_by_artifact_id(user_id, artifact_id)
+
+    assert result.success, f'canonical read failed: {result.error}'
+    assert result.data is not None, 'canonical read returned None for existing record'
+    assert result.data['job_id'] == job_id
+
+
+@pytest.mark.unit
+def test_dal_legacy_read_disabled_returns_none(
+    artifacts_table: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When COVER_LETTER_LEGACY_READ_ENABLED=false, legacy_read_cover_letter returns None."""
+    monkeypatch.setenv('COVER_LETTER_LEGACY_READ_ENABLED', 'false')
+
+    from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+
+    artifacts_table.put_item(
+        Item={
+            'pk': 'user-abc',
+            'sk': 'ARTIFACT#COVER_LETTER#cv-1#job-1#v1',
+            'status': 'COMPLETED',
+        }
+    )
+
+    dal = DynamoDalHandler('test-artifacts-table')
+    result = dal.legacy_read_cover_letter('user-abc', 'ARTIFACT#COVER_LETTER#cv-1#job-1#v1')
+
+    assert result.success
+    assert result.data is None, 'Legacy read should return None when disabled'

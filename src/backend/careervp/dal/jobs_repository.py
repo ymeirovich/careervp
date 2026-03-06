@@ -138,19 +138,59 @@ class JobsRepository:
         return [item for item in items if isinstance(item, dict) and item.get('title')]
 
     def get_vpr_jobs_by_user(self, user_id: str, limit: int = 20) -> list[dict[str, Any]]:
-        """List VPR async jobs that belong to a specific user."""
+        """List VPR async jobs that belong to a specific user.
+
+        Uses paginated accumulation so that in-memory filtering (application_id presence)
+        does not cause recently generated VPR records to be silently dropped when the first
+        DynamoDB page is dominated by non-VPR items.  Reads pages of up to 50 raw items
+        until the desired number of valid VPR items is accumulated or all pages are consumed.
+        """
         safe_limit = max(1, min(limit, 100))
-        try:
-            response = self.table.query(
-                IndexName=USER_ID_INDEX_NAME,
-                KeyConditionExpression=Key('user_id').eq(user_id),
-                Limit=safe_limit,
-            )
-        except ClientError as e:
-            logger.error('Failed to list VPR jobs by user', user_id=user_id, error=str(e))
-            return []
-        items = response.get('Items', [])
-        return [item for item in items if isinstance(item, dict) and item.get('application_id')]
+        page_size = max(safe_limit * 3, 50)  # over-fetch so filtering keeps enough items
+        accumulated: list[dict[str, Any]] = []
+        pages_read = 0
+        last_evaluated_key = None
+
+        while len(accumulated) < safe_limit:
+            query_kwargs: dict[str, Any] = {
+                'IndexName': USER_ID_INDEX_NAME,
+                'KeyConditionExpression': Key('user_id').eq(user_id),
+                'Limit': page_size,
+                'ScanIndexForward': False,  # newest first
+            }
+            if last_evaluated_key:
+                query_kwargs['ExclusiveStartKey'] = last_evaluated_key
+
+            try:
+                response = self.table.query(**query_kwargs)
+            except ClientError as e:
+                logger.error(
+                    'Failed to list VPR jobs by user',
+                    user_id=user_id,
+                    pages_read=pages_read,
+                    accumulated_so_far=len(accumulated),
+                    error=f'{type(e).__name__}: {e}',
+                )
+                break
+
+            pages_read += 1
+            page_items = response.get('Items', [])
+            valid = [item for item in page_items if isinstance(item, dict) and item.get('application_id')]
+            accumulated.extend(valid)
+
+            last_evaluated_key = response.get('LastEvaluatedKey')
+            if not last_evaluated_key:
+                break  # no more pages
+
+        result = accumulated[:safe_limit]
+        logger.info(
+            'VPR jobs list resolved',
+            user_id=user_id,
+            pages_read=pages_read,
+            total_accumulated=len(accumulated),
+            returned=len(result),
+        )
+        return result
 
     @tracer.capture_method(capture_response=False)
     def get_job(self, job_id: str) -> dict[str, Any] | None:

@@ -1,7 +1,7 @@
 {
-  "description": "GET /gap-analysis/{jobId}/questions - Get previous gap questions",
+  "description": "GET /jobs/{jobId}/gap-questions - Get previous gap questions (canonical route per RECOVERY_007)",
   "method": "GET",
-  "path": "/gap-analysis/{jobId}/questions",
+  "path": "/jobs/{jobId}/gap-questions",
   "headers": {
     "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
   },
@@ -36,5 +36,6 @@
         }
       ]
     }
-  }
+  },
+  "_migration_note": "Legacy route removed per RECOVERY_007 AC-TR-300. Canonical: /jobs/{jobId}/gap-questions"
 }

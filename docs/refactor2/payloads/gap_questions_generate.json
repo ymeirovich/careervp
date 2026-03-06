@@ -1,13 +1,12 @@
 {
-  "description": "POST /gap-analysis/questions - Generate gap questions",
+  "description": "POST /jobs/{jobId}/gap-questions - Generate gap questions (canonical route per RECOVERY_002)",
   "method": "POST",
-  "path": "/gap-analysis/questions",
+  "path": "/jobs/job-c3d4e5f6-7890-4a1b-c2d3-e4f567890123/gap-questions",
   "headers": {
     "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
   },
   "request": {
     "cv_id": "cv-a1b2c3d4-5678-4e9f-a0b1-c2d3e4f56789",
-    "job_id": "job-c3d4e5f6-7890-4a1b-c2d3-e4f567890123",
     "max_questions": 10,
     "focus_areas": [
       "cloud_architecture",
@@ -62,5 +61,7 @@
         }
       ]
     }
-  }
+  },
+  "_recovery_007": "Legacy alias removed. Canonical route is /jobs/{jobId}/gap-questions per RECOVERY_007 AC-TR-300.",
+  "_migration_note": "Legacy route removed per RECOVERY_007 AC-TR-300. Canonical: /jobs/{jobId}/gap-questions"
 }

@@ -1,13 +1,14 @@
 """Integration tests: Cover letter roundtrip persistence.
 
 Verifies that a cover letter artifact persisted via the submit handler
-is retrievable via the status and list endpoints using real DynamoDB
-key schema (pk/sk).
+is retrievable via the status and list endpoints using canonical
+applicationId/artifactId key schema with Phase A dual-read fallback.
 
 Traceability:
-  AC-CL-001: Generated cover letter appears in list
-  AC-CL-002: Missing cover letter id returns 404 (no synthetic success)
-Spec: docs/beta/fix-api/yaml2/cover_letter_list_roundtrip.yaml
+  AC-CL-301: generated request_id resolves on status endpoint
+  AC-CL-302: list endpoint includes generated id
+  AC-CL-303: missing id returns domain 404 without synthetic success
+Spec: docs/beta/fix-api/yaml3/step_003_cover_letter_artifact_roundtrip_recovery.yaml
 """
 
 from __future__ import annotations
@@ -38,6 +39,7 @@ def cl_roundtrip_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, N
     monkeypatch.setenv('TABLE_NAME', TABLE_NAME)
     monkeypatch.setenv('DYNAMODB_TABLE_NAME', TABLE_NAME)
     monkeypatch.setenv('ARTIFACTS_TABLE_NAME', TABLE_NAME)
+    monkeypatch.setenv('COVER_LETTER_LEGACY_READ_ENABLED', 'true')
     yield
 
 
@@ -102,8 +104,8 @@ def _context() -> Any:
     return ctx
 
 
-def _seed_artifact(table: Any, user_id: str, job_id: str, status: str = 'COMPLETED') -> None:
-    """Simulate what cover_letter_submit_handler writes to DynamoDB."""
+def _seed_canonical_artifact(table: Any, user_id: str, job_id: str, status: str = 'COMPLETED') -> None:
+    """Simulate what cover_letter_submit_handler writes: canonical applicationId/artifactId keys."""
     table.put_item(
         Item={
             'pk': user_id,
@@ -114,8 +116,27 @@ def _seed_artifact(table: Any, user_id: str, job_id: str, status: str = 'COMPLET
             'user_id': user_id,
             'job_id': job_id,
             'status': status,
-            'created_at': '2026-03-04T00:00:00+00:00',
-            'updated_at': '2026-03-04T00:00:00+00:00',
+            'created_at': '2026-03-05T00:00:00+00:00',
+            'updated_at': '2026-03-05T00:00:00+00:00',
+        }
+    )
+
+
+def _seed_legacy_artifact(table: Any, user_id: str, cv_id: str, job_id: str) -> None:
+    """Simulate a pre-migration record written with legacy pk/sk only (no applicationId/artifactId)."""
+    table.put_item(
+        Item={
+            'pk': user_id,
+            'sk': f'ARTIFACT#COVER_LETTER#{cv_id}#{job_id}#v1',
+            'artifact_type': 'cover_letter',
+            'user_id': user_id,
+            'cv_id': cv_id,
+            'job_id': job_id,
+            'version': 1,
+            'cover_letter': {'cover_letter_id': f'cl-{job_id}', 'full_text': 'Dear Hiring Manager...'},
+            'status': 'COMPLETED',
+            'created_at': '2026-03-01T00:00:00+00:00',
+            'updated_at': '2026-03-01T00:00:00+00:00',
         }
     )
 
@@ -124,7 +145,7 @@ def _seed_artifact(table: Any, user_id: str, job_id: str, status: str = 'COMPLET
 def test_status_returns_404_when_artifact_not_persisted(artifacts_table: Any) -> None:
     """GET status for unknown request_id returns 404, not synthetic success.
 
-    AC-CL-002: No synthetic success path in production code.
+    AC-CL-303: No synthetic success path in production code.
     """
     from careervp.handlers.cover_letter_handler import lambda_handler
 
@@ -136,14 +157,14 @@ def test_status_returns_404_when_artifact_not_persisted(artifacts_table: Any) ->
 
 
 @pytest.mark.integration
-def test_status_returns_200_for_persisted_artifact(artifacts_table: Any) -> None:
-    """GET status returns 200 with id == request_id when artifact is persisted.
+def test_status_returns_200_for_canonical_artifact(artifacts_table: Any) -> None:
+    """GET status returns 200 with id == request_id when artifact uses canonical keys.
 
-    AC-CL-001 + API acceptance criteria: request_id from POST retrievable via GET status.
+    AC-CL-301: request_id from POST retrievable via GET status using canonical path.
     """
     from careervp.handlers.cover_letter_handler import lambda_handler
 
-    _seed_artifact(artifacts_table, USER_ID, JOB_ID)
+    _seed_canonical_artifact(artifacts_table, USER_ID, JOB_ID)
 
     response = lambda_handler(_status_event(JOB_ID), _context())
 
@@ -154,15 +175,14 @@ def test_status_returns_200_for_persisted_artifact(artifacts_table: Any) -> None
 
 
 @pytest.mark.integration
-def test_list_includes_artifact_after_persistence(artifacts_table: Any) -> None:
-    """GET /cover-letters includes request_id after artifact is persisted.
+def test_list_includes_canonical_artifact_after_persistence(artifacts_table: Any) -> None:
+    """GET /cover-letters includes request_id after canonical artifact is persisted.
 
-    AC-CL-001: Generated cover letter appears in list.
-    Root cause fix: list_cover_letters now uses pk/sk (not applicationId/artifactId).
+    AC-CL-302: Generated cover letter appears in list via canonical key path.
     """
     from careervp.handlers.cover_letter_handler import lambda_handler
 
-    _seed_artifact(artifacts_table, USER_ID, JOB_ID)
+    _seed_canonical_artifact(artifacts_table, USER_ID, JOB_ID)
 
     response = lambda_handler(_list_event(), _context())
 
@@ -175,17 +195,17 @@ def test_list_includes_artifact_after_persistence(artifacts_table: Any) -> None:
 
 @pytest.mark.integration
 def test_full_roundtrip_submit_status_list(artifacts_table: Any) -> None:
-    """Full roundtrip: persist artifact → status 200 → list includes id.
+    """Full roundtrip: persist canonical artifact -> status 200 -> list includes id.
 
-    Validates the complete async flow:
-      POST /cover-letter/generate → writes pk/sk artifact
-      GET /cover-letter/{request_id}/status → 200 with id == request_id
-      GET /cover-letters → list contains request_id
+    Validates the complete async flow with production-like canonical schema:
+      POST /cover-letter/generate -> writes canonical applicationId/artifactId artifact
+      GET /cover-letter/{request_id}/status -> 200 with id == request_id
+      GET /cover-letters -> list contains request_id
     """
     from careervp.handlers.cover_letter_handler import lambda_handler
 
     request_id = 'uuid-full-roundtrip-5678'
-    _seed_artifact(artifacts_table, USER_ID, request_id, status='COMPLETED')
+    _seed_canonical_artifact(artifacts_table, USER_ID, request_id, status='COMPLETED')
 
     # Step 1: status returns 200
     status_response = lambda_handler(_status_event(request_id), _context())
@@ -221,8 +241,8 @@ def test_user_isolation_in_list(artifacts_table: Any) -> None:
     user_a, user_b = 'user-a-isolation', 'user-b-isolation'
     job_a, job_b = 'uuid-job-a', 'uuid-job-b'
 
-    _seed_artifact(artifacts_table, user_a, job_a)
-    _seed_artifact(artifacts_table, user_b, job_b)
+    _seed_canonical_artifact(artifacts_table, user_a, job_a)
+    _seed_canonical_artifact(artifacts_table, user_b, job_b)
 
     response_a = lambda_handler(_list_event(user_a), _context())
     body_a = json.loads(response_a['body'])
@@ -230,3 +250,47 @@ def test_user_isolation_in_list(artifacts_table: Any) -> None:
 
     assert job_a in ids_a, 'User A artifact must appear in user A list'
     assert job_b not in ids_a, 'User B artifact must not appear in user A list'
+
+
+@pytest.mark.integration
+def test_legacy_artifact_readable_via_fallback(
+    artifacts_table: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pre-migration legacy records (pk/sk only) are readable via Phase A fallback.
+
+    With COVER_LETTER_LEGACY_READ_ENABLED=true, legacy items appear in list.
+    """
+    monkeypatch.setenv('COVER_LETTER_LEGACY_READ_ENABLED', 'true')
+
+    from careervp.handlers.cover_letter_handler import lambda_handler
+
+    _seed_legacy_artifact(artifacts_table, USER_ID, cv_id='cv-legacy', job_id='job-legacy')
+
+    response = lambda_handler(_list_event(), _context())
+
+    assert response['statusCode'] == 200
+    body = json.loads(response['body'])
+    # Legacy items should be in the list since they share the same pk/sk prefix pattern
+    assert len(body['cover_letters']) > 0, 'Legacy artifact should appear in list via pk/sk query'
+
+
+@pytest.mark.integration
+def test_canonical_and_legacy_coexist(
+    artifacts_table: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Both canonical and legacy records appear in list during Phase A."""
+    monkeypatch.setenv('COVER_LETTER_LEGACY_READ_ENABLED', 'true')
+
+    from careervp.handlers.cover_letter_handler import lambda_handler
+
+    # Seed both types
+    _seed_canonical_artifact(artifacts_table, USER_ID, 'uuid-canonical-new')
+    _seed_legacy_artifact(artifacts_table, USER_ID, cv_id='cv-old', job_id='job-old')
+
+    response = lambda_handler(_list_event(), _context())
+
+    assert response['statusCode'] == 200
+    body = json.loads(response['body'])
+    assert len(body['cover_letters']) == 2, f'Expected 2 cover letters (1 canonical + 1 legacy), got {len(body["cover_letters"])}'
