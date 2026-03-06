@@ -1,0 +1,35 @@
+spec_id: YAML5_EXECUTION_INDEX
+title: YAML5 Cover Letter Context Materialization Execution Index
+priority: critical
+status: draft
+owner: backend-platform
+created_at: 2026-03-06
+updated_at: 2026-03-06
+
+default_environment: dev
+purpose: |
+  Execute YAML5 cover-letter context materialization with strict no-regression controls
+  and spec-best-practices compliance.
+
+step_sequence:
+  - step: 001
+    spec: docs/beta/fix-api/yaml5/step_001_cover_letter_context_materialization.yaml
+    focus: materialize IDs into prompt-ready context before LLM invocation
+  - step: 002
+    spec: docs/beta/fix-api/yaml5/step_002_cover_letter_prompt_contract_and_guardrails.yaml
+    focus: enforce prompt/output contract (2-3 paragraphs, one-page cap) and serialize context evidence deterministically
+
+global_constraints:
+  - no_endpoint_shape_changes
+  - preserve_async_submit_contract
+  - mandatory_ruff_mypy_pytest_before_deploy
+  - two_consecutive_live_passes_required_for_closure
+  - closure_blocked_on_any_placeholder_evidence
+  - closure_blocked_on_any_paragraph_or_page_limit_violation
+
+required_controls:
+  - route_surface_parity
+  - authorizer_parity
+  - runtime_env_resolution_parity
+  - baseline_regression_delta_check
+  - evidence_freshness_integrity_check

@@ -41,14 +41,14 @@ def _convert_decimal_to_float(obj: Any) -> Any:
 
 
 def _get_dal() -> DynamoDalHandler:
-    table_name = os.environ.get('TABLE_NAME') or os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or ''
+    table_name = os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME') or ''
     resolved_from = (
-        'TABLE_NAME'
-        if os.environ.get('TABLE_NAME')
-        else 'ARTIFACTS_TABLE_NAME'
+        'ARTIFACTS_TABLE_NAME'
         if os.environ.get('ARTIFACTS_TABLE_NAME')
         else 'DYNAMODB_TABLE_NAME'
         if os.environ.get('DYNAMODB_TABLE_NAME')
+        else 'TABLE_NAME'
+        if os.environ.get('TABLE_NAME')
         else 'none'
     )
     logger.debug('Cover letter DAL table resolved', table_name=table_name, resolved_from=resolved_from)
@@ -130,7 +130,12 @@ def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
             _generate_and_persist_from_sqs(job_id=job_id, user_id=user_id, request_data=request_data)
         except Exception as exc:
             logger.error('Cover letter SQS job failed', job_id=job_id, error=str(exc), exc_info=True)
-            _update_artifact_status(user_id=user_id, job_id=job_id, status='FAILED')
+            _update_artifact_status(
+                user_id=user_id,
+                job_id=job_id,
+                status='FAILED',
+                error_details=_extract_failure_details(exc),
+            )
             raise
 
     return {'statusCode': 200, 'body': 'OK'}
@@ -206,13 +211,14 @@ def _update_artifact_status(
     job_id: str,
     status: str,
     result_data: dict[str, Any] | None = None,
+    error_details: dict[str, str] | None = None,
 ) -> None:
     """Update cover letter artifact status in DynamoDB."""
     import datetime as _dt
 
     import boto3 as _boto3
 
-    table_name = os.environ.get('TABLE_NAME') or os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or ''
+    table_name = os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME') or ''
     table = _boto3.resource('dynamodb').Table(table_name)
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
 
@@ -223,15 +229,38 @@ def _update_artifact_status(
     if result_data is not None:
         update_expr += ', cover_letter = :result'
         attr_values[':result'] = result_data
+    if error_details:
+        if error_details.get('error'):
+            update_expr += ', #err = :error'
+            attr_names['#err'] = 'error'
+            attr_values[':error'] = error_details['error']
+        if error_details.get('code'):
+            update_expr += ', #code = :code'
+            attr_names['#code'] = 'code'
+            attr_values[':code'] = error_details['code']
+        if error_details.get('error_type'):
+            update_expr += ', error_type = :error_type'
+            attr_values[':error_type'] = error_details['error_type']
 
+    artifact_id = f'ARTIFACT#COVER_LETTER#{job_id}'
     try:
         table.update_item(
-            Key={'pk': user_id, 'sk': f'ARTIFACT#COVER_LETTER#{job_id}'},
+            Key={'applicationId': user_id, 'artifactId': artifact_id},
             UpdateExpression=update_expr,
             ExpressionAttributeNames=attr_names,
             ExpressionAttributeValues=attr_values,
         )
     except Exception as exc:
+        error_response = getattr(exc, 'response', {}) if hasattr(exc, 'response') else {}
+        error_code = ((error_response.get('Error') or {}).get('Code')) if isinstance(error_response, dict) else None
+        if error_code == 'ValidationException':
+            table.update_item(
+                Key={'pk': user_id, 'sk': artifact_id},
+                UpdateExpression=update_expr,
+                ExpressionAttributeNames=attr_names,
+                ExpressionAttributeValues=attr_values,
+            )
+            return
         logger.error('Failed to update artifact status', job_id=job_id, error=str(exc))
         raise
 
@@ -428,15 +457,31 @@ def _extract_cover_letter_id(event: dict[str, Any]) -> str | None:
 
 
 def _load_user_cv(dal: DynamoDalHandler, user_id: str) -> UserCV | None:
-    raw_cv = dal.get_cv(user_id)
-    if isinstance(raw_cv, UserCV):
-        return raw_cv
-    if isinstance(raw_cv, dict):
+    users_table_name = os.environ.get('USERS_TABLE_NAME', '').strip()
+    cv_table_name = os.environ.get('CVS_TABLE_NAME', '').strip()
+    dal_candidates: list[DynamoDalHandler] = []
+    if users_table_name:
+        dal_candidates.append(DynamoDalHandler(users_table_name))
+    if cv_table_name:
+        dal_candidates.append(DynamoDalHandler(cv_table_name))
+    if (not cv_table_name and not users_table_name) or (cv_table_name != dal.table_name and users_table_name != dal.table_name):
+        dal_candidates.append(dal)
+
+    for cv_dal in dal_candidates:
         try:
-            return UserCV.model_validate(raw_cv)
-        except ValidationError:
-            logger.warning('Failed to coerce DynamoDB CV payload to UserCV')
-            return None
+            raw_cv = cv_dal.get_cv(user_id)
+        except Exception as exc:
+            logger.warning('Failed to load CV from candidate table', table_name=cv_dal.table_name, error=str(exc))
+            continue
+
+        if isinstance(raw_cv, UserCV):
+            return raw_cv
+        if isinstance(raw_cv, dict):
+            try:
+                return UserCV.model_validate(raw_cv)
+            except ValidationError:
+                logger.warning('Failed to coerce DynamoDB CV payload to UserCV')
+                continue
     return None
 
 
@@ -477,6 +522,30 @@ def _generate_cover_letter_result(
         error='Invalid cover letter generation response',
         code=ResultCode.INTERNAL_ERROR,
     )
+
+
+def _extract_failure_details(exc: Exception) -> dict[str, str]:
+    """Extract structured diagnostics from worker failure exceptions."""
+    details: dict[str, str] = {}
+    message = str(exc).strip()
+    if message:
+        details['error'] = message
+    error_type = type(exc).__name__.strip()
+    if error_type:
+        details['error_type'] = error_type
+
+    response = getattr(exc, 'response', None)
+    if isinstance(response, dict):
+        error_block = response.get('Error')
+        if isinstance(error_block, dict):
+            code = str(error_block.get('Code', '')).strip()
+            if code:
+                details['code'] = code
+            if not details.get('error'):
+                error_message = str(error_block.get('Message', '')).strip()
+                if error_message:
+                    details['error'] = error_message
+    return details
 
 
 def _build_generation_error_response(generation_result: Result[Any]) -> dict[str, Any]:
@@ -614,27 +683,61 @@ def _build_cover_letter_status_payload(item: dict[str, Any], fallback_id: str) -
     }
 
     if status in {'completed', 'failed'}:
-        result: dict[str, Any] = {}
-
-        cover_letter_text = _extract_cover_letter_text(payload_source) or _extract_cover_letter_text(nested_payload)
-        if cover_letter_text:
-            result['cover_letter'] = cover_letter_text
-
-        paragraphs_value = item.get('paragraphs')
-        if paragraphs_value is None and isinstance(payload_source, dict):
-            paragraphs_value = payload_source.get('paragraphs')
-        if isinstance(paragraphs_value, dict):
-            result['paragraphs'] = paragraphs_value
-
-        fvs_validation = item.get('fvs_validation')
-        if fvs_validation is None and isinstance(payload_source, dict):
-            fvs_validation = payload_source.get('fvs_validation')
-        if isinstance(fvs_validation, dict):
-            result['fvs_validation'] = fvs_validation
+        result = _build_cover_letter_result_payload(item=item, payload_source=payload_source, nested_payload=nested_payload)
+        if status == 'failed':
+            failed_details = _extract_failed_status_details(item)
+            if failed_details.get('error'):
+                payload['error'] = failed_details['error']
+                result['error'] = failed_details['error']
+            if failed_details.get('code'):
+                payload['code'] = failed_details['code']
+                result['code'] = failed_details['code']
+            if failed_details.get('error_type'):
+                result['error_type'] = failed_details['error_type']
 
         if result:
             payload['result'] = result
     return payload
+
+
+def _build_cover_letter_result_payload(
+    item: dict[str, Any],
+    payload_source: dict[str, Any] | Any,
+    nested_payload: Any,
+) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+
+    cover_letter_text = _extract_cover_letter_text(payload_source) or _extract_cover_letter_text(nested_payload)
+    if cover_letter_text:
+        result['cover_letter'] = cover_letter_text
+
+    paragraphs_value = item.get('paragraphs')
+    if paragraphs_value is None and isinstance(payload_source, dict):
+        paragraphs_value = payload_source.get('paragraphs')
+    if isinstance(paragraphs_value, dict):
+        result['paragraphs'] = paragraphs_value
+
+    fvs_validation = item.get('fvs_validation')
+    if fvs_validation is None and isinstance(payload_source, dict):
+        fvs_validation = payload_source.get('fvs_validation')
+    if isinstance(fvs_validation, dict):
+        result['fvs_validation'] = fvs_validation
+    return result
+
+
+def _extract_failed_status_details(item: dict[str, Any]) -> dict[str, str]:
+    details: dict[str, str] = {}
+    error_message = str(item.get('error', '')).strip()
+    error_code = str(item.get('code', '')).strip()
+    error_type = str(item.get('error_type', '')).strip()
+
+    if error_message:
+        details['error'] = error_message
+    if error_code:
+        details['code'] = error_code
+    if error_type:
+        details['error_type'] = error_type
+    return details
 
 
 def _build_cover_letter_list_item(item: dict[str, Any]) -> dict[str, Any]:

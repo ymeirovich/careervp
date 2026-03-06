@@ -1,0 +1,340 @@
+spec_id: YAML5_COVER_LETTER_PROMPT_002
+title: Cover Letter Prompt Contract and Output Guardrails
+priority: critical
+status: in_progress
+owner: backend-platform
+created_at: 2026-03-06
+updated_at: 2026-03-06
+version: 1
+default_environment: dev
+
+metadata:
+  scope: cover_letter_prompt_inputs_and_output_shape
+  related_specs:
+    - docs/beta/fix-api/yaml5/step_001_cover_letter_context_materialization.yaml
+    - docs/beta/fix-api/yaml4/step_003_cover_letter_artifact_roundtrip_recovery.yaml
+    - docs/beta/fix-api/yaml4/step_008_yaml2_100_percent_completion_and_release_readiness.yaml
+  standards:
+    - docs/best_practices/yaml/spec_best_practices.yaml
+    - docs/best_practices/yaml/prompt_optimization_spec.yaml
+    - docs/best_practices/yaml/lambda_handler_spec.yaml
+    - docs/best_practices/yaml/dynamodb_modeling_spec.yaml
+    - docs/best_practices/yaml/testing_spec.yaml
+    - docs/best_practices/yaml/code_quality_security_spec.yaml
+
+problem_statement:
+  exact_failing_behavior: |
+    Live cover-letter completions can return non-usable output because prompt context is unresolved
+    and output shape constraints are under-enforced. Specifically:
+    - Worker has emitted prompts containing synthetic placeholders derived from IDs.
+    - Completed result can be structurally valid API-wise but fail business-quality requirements.
+    - Prompt did not enforce a deterministic one-page/paragraph contract strongly enough.
+  expected_behavior: |
+    Before LLM invocation, prompt context is concrete and validated; generated output must satisfy
+    strict layout rules: 2 or 3 paragraphs only, and hard max 350 words (never over one page).
+    Prompt assembly must include available gap-response evidence and avoid placeholder leakage.
+  user_business_impact: |
+    Users receive a "completed" artifact that is not deployable for applications, degrading trust
+    and introducing regression risk in handoff gates.
+  reproducibility_notes:
+    command: uv run pytest docs/refactor/live_tests/test_07_cover_letter.py -vv -s
+    failing_signal: completed response body asks user to provide company/title/description due placeholder context
+
+evidence:
+  failing_tests:
+    - docs/refactor/live_tests/test_07_cover_letter.py::TestCoverLetterEndpoints::test_cover_letter_async_polling
+  endpoint_contract:
+    - method: GET
+      path: /cover-letter/{coverLetterId}/status
+      observed: "200 completed with placeholder-driven refusal content"
+  observed_status_code: 200
+  observed_payload_excerpt: |
+    "The job posting details are referenced as placeholders rather than actual content"
+  environment: dev
+  observed_at_utc: "2026-03-06T21:00:00Z"
+  request_ids:
+    - c289dbb0-2795-4dc1-84ec-7741667616eb
+
+architecture_and_ownership_map:
+  routes:
+    - route: POST /cover-letter/generate
+      lambda: CoverLetterApiLambda
+      handler: src/backend/careervp/handlers/cover_letter_submit_handler.py
+    - route: GET /cover-letter/{coverLetterId}/status
+      lambda: CoverLetterStatusLambda
+      handler: src/backend/careervp/handlers/cover_letter_handler.py
+    - route: SQS cover-letter job processing
+      lambda: CoverLetterWorkerLambda
+      handler: src/backend/careervp/handlers/cover_letter_handler.py
+  prompt_and_logic:
+    - component: prompt builder
+      file: src/backend/careervp/logic/prompts/cover_letter_prompt.py
+    - component: output parser and validation
+      file: src/backend/careervp/logic/cover_letter.py
+  data_sources:
+    - data: job title/company/description
+      source: JOBS_TABLE_NAME via jobs repository
+    - data: gap responses
+      source: GAP_RESPONSES_TABLE_NAME via DynamoDalHandler.get_gap_responses
+    - data: status/result artifacts
+      source: ARTIFACTS_TABLE_NAME
+  auth_and_scope:
+    identity_key: user_id from Cognito authorizer claims
+    required_rule: resolved context and status reads are scoped to authenticated user_id
+
+root_cause_analysis:
+  ranked_hypotheses:
+    - id: H1
+      rank: 1
+      statement: prompt contract lacks strict, test-enforced paragraph/page constraints
+      disproof_criteria: generation path rejects >350 words and paragraph count outside 2-3
+      status: confirmed
+    - id: H2
+      rank: 2
+      statement: gap-response evidence is not reliably injected into user prompt context
+      disproof_criteria: prompt builder accepts/serializes supplied gap response payloads deterministically
+      status: confirmed
+    - id: H3
+      rank: 3
+      statement: context placeholders can bypass quality controls and surface as completed output
+      disproof_criteria: placeholder/synthetic values are blocked pre-LLM with explicit failure diagnostics
+      status: pending
+  confirmed_root_causes:
+    - Prompt did not hard-bound one-page requirement in a way paired with logic-side enforcement.
+    - Paragraph shape requirements were not guaranteed by parser/validation.
+    - Prompt assembly did not consistently pass structured gap-response evidence.
+  contributing_factors:
+    - Async status contract reports completion independent of semantic quality.
+    - Prior behavior favored permissive parsing over deterministic output-shape enforcement.
+
+fix_plan:
+  strategy: |
+    Harden prompt contract and parser validation in logic layer, then add tests proving deterministic
+    compliance (2-3 paragraphs, <=350 words) and robust prompt-context serialization.
+  files_to_modify:
+    - src/backend/careervp/logic/prompts/cover_letter_prompt.py
+    - src/backend/careervp/logic/cover_letter.py
+    - src/backend/tests/unit/test_cover_letter_prompt_constraints.py
+    - docs/beta/fix-api/yaml5/step_001_cover_letter_context_materialization.yaml
+    - docs/beta/fix-api/yaml5/yaml5_execution_index.yaml
+    - docs/beta/fix-api/yaml5/step_002_cover_letter_prompt_contract_and_guardrails.yaml
+  exact_behavior_changes:
+    - System prompt must explicitly require one-page hard cap (350 words max) and 2-3 paragraph output.
+    - Logic validation rejects outputs over 350 words with FVS_VALIDATION_FAILED.
+    - Parser/normalization guarantees parsed cover letter has 2-3 non-empty paragraphs.
+    - Prompt builder accepts gap responses as model objects or dict payloads and serializes deterministically.
+    - Step-002 checklist adds pre-LLM placeholder-context blocking as the remaining closure item.
+  non_goals:
+    - no API route/method changes
+    - no request/response shape changes for submit/status/list endpoints
+    - no migration of async orchestration model
+  rollback_plan:
+    - revert prompt/validation deltas if regression appears in adjacent artifact generation flows
+    - keep route contracts unchanged so rollback is code-only
+
+acceptance_criteria:
+  api_level:
+    - id: AC-CL-PROMPT-001
+      criterion: GET status payload shape remains unchanged for completed/failed artifacts.
+    - id: AC-CL-PROMPT-002
+      criterion: completion text no longer exceeds one-page policy (hard max 350 words).
+  data_level:
+    - id: AC-CL-PROMPT-003
+      criterion: prompt context includes serialized gap responses when provided (no dropped evidence section).
+    - id: AC-CL-PROMPT-004
+      criterion: no synthetic placeholder strings are allowed in materialized required context inputs at invocation boundary.
+  observability_level:
+    - id: AC-CL-PROMPT-005
+      criterion: worker logs include deterministic context-completeness decision fields before generation.
+  negative_and_edge_cases:
+    - id: AC-CL-PROMPT-006
+      criterion: one-paragraph LLM output is normalized into valid 2-paragraph shape or rejected.
+    - id: AC-CL-PROMPT-007
+      criterion: ">3-paragraph LLM output is truncated/normalized and validated to max 3 paragraphs."
+    - id: AC-CL-PROMPT-008
+      criterion: outputs >350 words are rejected with FVS_VALIDATION_FAILED and explicit error message.
+
+baseline_and_regression_budget:
+  baseline_artifact:
+    required: true
+    path: live-test-results31.log
+    description: baseline for cover-letter endpoint behavior and latency deltas
+  blocked_regressions:
+    required: true
+    list:
+      - new_non_2xx_on_changed_endpoints
+      - new_empty_arrays_on_generated_artifact_list_or_read_paths
+      - generated_id_missing_from_status_or_list_after_polling_window
+      - paragraph_contract_regression
+      - one_page_limit_regression
+  allowed_deltas:
+    required: true
+    values:
+      test_07_cover_letter_failures: 0
+      contract_shape_changes: 0
+      p95_latency_ms_delta_prompt_guardrails: 300
+
+verification_contract:
+  entries:
+    - requirement_id: AC-CL-PROMPT-001
+      verification_type: contract
+      blocking_gate: pre_deploy
+      artifact_required: true
+    - requirement_id: AC-CL-PROMPT-002
+      verification_type: unit
+      blocking_gate: pre_merge
+      artifact_required: true
+    - requirement_id: AC-CL-PROMPT-003
+      verification_type: unit
+      blocking_gate: pre_merge
+      artifact_required: true
+    - requirement_id: AC-CL-PROMPT-004
+      verification_type: integration
+      blocking_gate: pre_deploy
+      artifact_required: true
+    - requirement_id: AC-CL-PROMPT-005
+      verification_type: integration
+      blocking_gate: pre_deploy
+      artifact_required: true
+    - requirement_id: AC-CL-PROMPT-006
+      verification_type: unit
+      blocking_gate: pre_merge
+      artifact_required: true
+    - requirement_id: AC-CL-PROMPT-007
+      verification_type: unit
+      blocking_gate: pre_merge
+      artifact_required: true
+    - requirement_id: AC-CL-PROMPT-008
+      verification_type: unit
+      blocking_gate: pre_merge
+      artifact_required: true
+
+deployed_parity_plan:
+  route_surface_parity:
+    strategy: no route changes in step_002; confirm deployed route inventory unchanged before live checks
+    commands:
+      - uv run python scripts/spec_quality/check_deployed_parity.py --env dev --routes docs/evidence/YAML5_COVER_LETTER_PROMPT_002-routes.json
+  authorizer_parity:
+    strategy: confirm cover-letter submit/status/list authorizers unchanged after deploy
+  runtime_env_resolution_parity:
+    strategy: verify no env/table resolution changes introduced by prompt guardrail patch
+
+validation_plan:
+  static_quality_gates:
+    - uv run ruff format src/backend/careervp/logic/prompts/cover_letter_prompt.py src/backend/careervp/logic/cover_letter.py src/backend/tests/unit/test_cover_letter_prompt_constraints.py
+    - uv run ruff check src/backend/careervp/logic/prompts/cover_letter_prompt.py src/backend/careervp/logic/cover_letter.py src/backend/tests/unit/test_cover_letter_prompt_constraints.py --fix
+    - uv run mypy src/backend/careervp/logic/prompts/cover_letter_prompt.py src/backend/careervp/logic/cover_letter.py src/backend/tests/unit/test_cover_letter_prompt_constraints.py --strict
+  unit_tests:
+    - uv run pytest src/backend/tests/unit/test_cover_letter_prompt_constraints.py -q
+    - uv run pytest src/backend/tests/unit/test_cover_letter_status_storage_keys.py -q
+  integration_tests:
+    - uv run pytest src/backend/tests/integration/test_cover_letter_roundtrip_persistence.py -q
+  regression_tests:
+    - uv run pytest src/backend/tests/integration/test_interview_prep_context_sources.py -q
+    - uv run pytest src/backend/tests/integration/test_vpr_list_roundtrip.py -q
+  live_tests:
+    - uv run pytest docs/refactor/live_tests/test_07_cover_letter.py -vv -s
+    - uv run pytest docs/refactor/live_tests/test_07_cover_letter.py -vv -s
+  pass_conditions:
+    - all_static_gates_pass
+    - unit_integration_regression_pass
+    - two_consecutive_live_passes
+    - no_blocked_regression_triggered
+
+traceability_matrix:
+  - requirement_id: AC-CL-PROMPT-001
+    code_reference: src/backend/careervp/handlers/cover_letter_handler.py
+    test_reference: docs/refactor/live_tests/test_07_cover_letter.py::TestCoverLetterEndpoints::test_get_cover_letter_status
+    verification_type: contract
+    blocking_gate: pre_deploy
+    evidence_reference: docs/evidence/YAML5_COVER_LETTER_PROMPT_002-contract-status.json
+    result: pending
+  - requirement_id: AC-CL-PROMPT-002
+    code_reference: src/backend/careervp/logic/cover_letter.py
+    test_reference: src/backend/tests/unit/test_cover_letter_prompt_constraints.py::test_over_one_page_word_count_is_rejected
+    verification_type: unit
+    blocking_gate: pre_merge
+    evidence_reference: docs/evidence/YAML5_COVER_LETTER_PROMPT_002-unit-word-cap.json
+    result: pending
+  - requirement_id: AC-CL-PROMPT-003
+    code_reference: src/backend/careervp/logic/prompts/cover_letter_prompt.py
+    test_reference: src/backend/tests/unit/test_cover_letter_prompt_constraints.py::test_user_prompt_serializes_gap_response_dicts
+    verification_type: unit
+    blocking_gate: pre_merge
+    evidence_reference: docs/evidence/YAML5_COVER_LETTER_PROMPT_002-unit-gap-serialization.json
+    result: pending
+  - requirement_id: AC-CL-PROMPT-004
+    code_reference: src/backend/careervp/handlers/cover_letter_handler.py
+    test_reference: src/backend/tests/integration/test_cover_letter_context_roundtrip.py::test_missing_required_prompt_inputs_sets_failed_without_llm_call
+    verification_type: integration
+    blocking_gate: pre_deploy
+    evidence_reference: docs/evidence/YAML5_COVER_LETTER_PROMPT_002-integration-placeholder-block.json
+    result: pending
+  - requirement_id: AC-CL-PROMPT-005
+    code_reference: src/backend/careervp/handlers/cover_letter_handler.py
+    test_reference: src/backend/tests/integration/test_cover_letter_context_roundtrip.py::test_context_resolution_observability_fields
+    verification_type: integration
+    blocking_gate: pre_deploy
+    evidence_reference: docs/evidence/YAML5_COVER_LETTER_PROMPT_002-observability-context-completeness.json
+    result: pending
+  - requirement_id: AC-CL-PROMPT-006
+    code_reference: src/backend/careervp/logic/cover_letter.py
+    test_reference: src/backend/tests/unit/test_cover_letter_prompt_constraints.py::test_single_paragraph_output_is_normalized_to_two_paragraphs
+    verification_type: unit
+    blocking_gate: pre_merge
+    evidence_reference: docs/evidence/YAML5_COVER_LETTER_PROMPT_002-unit-2-paragraph-normalization.json
+    result: pending
+  - requirement_id: AC-CL-PROMPT-007
+    code_reference: src/backend/careervp/logic/cover_letter.py
+    test_reference: src/backend/tests/unit/test_cover_letter_prompt_constraints.py::test_more_than_three_paragraphs_is_normalized_to_three
+    verification_type: unit
+    blocking_gate: pre_merge
+    evidence_reference: docs/evidence/YAML5_COVER_LETTER_PROMPT_002-unit-max-3-paragraphs.json
+    result: pending
+  - requirement_id: AC-CL-PROMPT-008
+    code_reference: src/backend/careervp/logic/cover_letter.py
+    test_reference: src/backend/tests/unit/test_cover_letter_prompt_constraints.py::test_over_one_page_word_count_is_rejected
+    verification_type: unit
+    blocking_gate: pre_merge
+    evidence_reference: docs/evidence/YAML5_COVER_LETTER_PROMPT_002-unit-fvs-failure-word-limit.json
+    result: pending
+
+rollback_trigger_matrix:
+  - trigger_id: RT-001
+    condition: blocking acceptance criterion fails post-deploy
+    detection_source: post_deploy live gates
+    action: block promotion and rollback latest deployment
+    owner: release_owner
+  - trigger_id: RT-002
+    condition: changed cover-letter routes return new DEFAULT_4XX/DEFAULT_5XX
+    detection_source: contract suite and live checks
+    action: rollback and open incident
+    owner: release_owner
+  - trigger_id: RT-003
+    condition: async terminal success rate for cover letter drops below 95 percent
+    detection_source: live polling evidence
+    action: rollback or disable related feature flag
+    owner: service_owner
+
+completion_evidence:
+  required_artifacts:
+    - docs/evidence/YAML5_COVER_LETTER_PROMPT_002-premerge-quality.log
+    - docs/evidence/YAML5_COVER_LETTER_PROMPT_002-unit-tests.log
+    - docs/evidence/YAML5_COVER_LETTER_PROMPT_002-live-pass-1.log
+    - docs/evidence/YAML5_COVER_LETTER_PROMPT_002-live-pass-2.log
+    - docs/evidence/YAML5_COVER_LETTER_PROMPT_002-regression-delta.json
+  signoff_checklist:
+    - all_traceability_rows_are_pass
+    - evidence_is_fresh_and_sha_matched
+    - no_open_rollback_trigger
+    - residual_risks_documented
+  residual_risks:
+    - Placeholder-context blocking in worker remains open until step_001 resolver implementation is merged.
+    - Strict paragraph enforcement can increase regeneration retries for low-quality model outputs.
+
+what_you_were_not_considering_now_captured:
+  - Prompt-only constraints are insufficient without logic-side hard validation.
+  - Paragraph count must be treated as a contract, not a style preference.
+  - One-page rule needs an explicit numeric ceiling to be testable and enforceable.
+  - Prompt-context evidence (gap responses) must accept schema variance (dict/model payloads).
+  - Placeholder-denylist checks should run before LLM invocation to avoid completed-but-invalid artifacts.

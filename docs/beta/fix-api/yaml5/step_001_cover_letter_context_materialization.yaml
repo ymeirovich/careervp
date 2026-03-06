@@ -1,0 +1,443 @@
+spec_id: YAML5_COVER_LETTER_CONTEXT_001
+title: Materialize ID-based Context Before Cover Letter LLM Invocation
+priority: critical
+status: draft
+owner: backend-platform
+created_at: 2026-03-06
+updated_at: 2026-03-06
+version: 1
+default_environment: dev
+
+metadata:
+  scope: cover_letter_async_worker_and_prompt_context
+  related_specs:
+    - docs/beta/fix-api/yaml4/step_003_cover_letter_artifact_roundtrip_recovery.yaml
+    - docs/beta/fix-api/yaml4/step_008_yaml2_100_percent_completion_and_release_readiness.yaml
+    - docs/beta/fix-api/yaml5/step_002_cover_letter_prompt_contract_and_guardrails.yaml
+  standards:
+    - docs/best_practices/yaml/spec_best_practices.yaml
+    - docs/best_practices/yaml/lambda_handler_spec.yaml
+    - docs/best_practices/yaml/dynamodb_modeling_spec.yaml
+    - docs/best_practices/yaml/testing_spec.yaml
+
+problem_statement:
+  exact_failing_behavior: |
+    Cover letter generation currently calls LLM with placeholder job/company text derived from job_id,
+    causing non-tailored output that explicitly asks for missing job details.
+    Live evidence shows completed status can return a cover letter body that says
+    "Company for <job_id>", "Role for <job_id>", and "Job description for <job_id>".
+  expected_behavior: |
+    Before invoking the LLM, worker materializes IDs into real context:
+    job posting details, VPR content, gap response answers, and company research context.
+    Prompt must contain concrete data rather than synthetic placeholders.
+  user_business_impact: |
+    Users receive unusable artifacts despite completed status, reducing trust and creating hidden regression risk.
+  reproducibility_notes:
+    command: uv run pytest docs/refactor/live_tests/test_07_cover_letter.py -vv -s
+    failing_signal: completed artifact contains placeholder-derived refusal/non-tailored text
+
+evidence:
+  failing_tests:
+    - docs/refactor/live_tests/test_07_cover_letter.py::TestCoverLetterEndpoints::test_cover_letter_async_polling
+    - docs/refactor/live_tests/test_07_cover_letter.py::TestCoverLetterEndpoints::test_get_cover_letter_status
+  endpoint_contract:
+    - method: POST
+      path: /cover-letter/generate
+      observed: "202 accepted with request_id"
+    - method: GET
+      path: /cover-letter/{coverLetterId}/status
+      observed: "200 completed but non-tailored result body"
+  observed_payload_excerpt: |
+    "The job posting details are referenced as placeholders rather than actual content"
+  environment: dev
+  observed_at_utc: "2026-03-06T21:00:00Z"
+  request_ids:
+    - c289dbb0-2795-4dc1-84ec-7741667616eb
+
+architecture_and_ownership_map:
+  routes:
+    - route: POST /cover-letter/generate
+      lambda: CoverLetterApiLambda
+      handler: src/backend/careervp/handlers/cover_letter_submit_handler.py
+    - route: GET /cover-letter/{coverLetterId}/status
+      lambda: CoverLetterStatusLambda
+      handler: src/backend/careervp/handlers/cover_letter_handler.py
+    - route: GET /cover-letters
+      lambda: CoverLetterStatusLambda
+      handler: src/backend/careervp/handlers/cover_letter_handler.py
+    - route: SQS cover-letter job processing
+      lambda: CoverLetterWorkerLambda
+      handler: src/backend/careervp/handlers/cover_letter_handler.py
+  stores_and_sources:
+    - data: cover letter artifacts and request_data
+      source: ARTIFACTS_TABLE_NAME
+      access_path: DynamoDalHandler + direct boto3 update_item/get_item
+    - data: CV canonical content
+      source: USERS_TABLE_NAME (primary), CVS_TABLE_NAME (fallback)
+      access_path: DynamoDalHandler.get_cv
+    - data: job posting details (title/company/description/requirements)
+      source: JOBS_TABLE_NAME
+      access_path: JobsRepository.get_job
+    - data: gap responses
+      source: GAP_RESPONSES_TABLE_NAME
+      access_path: DynamoDalHandler.get_gap_responses
+    - data: company research
+      source: ARTIFACTS_TABLE_NAME with ARTIFACT#COMPANY_RESEARCH# prefix
+      access_path: query by applicationId/artifactId
+    - data: VPR content
+      source: VPR_JOBS_TABLE_NAME and result_key payload resolution path
+      access_path: jobs repository + existing vpr status enrichment logic
+  auth_and_scope:
+    identity_key: user_id from Cognito authorizer claims
+    required_rule: all resolved IDs must belong to requesting user_id
+
+root_cause_analysis:
+  ranked_hypotheses:
+    - id: H1
+      rank: 1
+      statement: cover_letter_handler builds LogicCoverLetterRequest using placeholders instead of resolved job context
+      disproof_criteria: logic request fields are populated from persisted job data before LLM call
+      status: confirmed
+    - id: H2
+      rank: 2
+      statement: vpr_id, gap_response_ids, company_research_id are not materialized into prompt payload
+      disproof_criteria: resolver fetches and injects these artifacts into generation call and prompt
+      status: confirmed
+    - id: H3
+      rank: 3
+      statement: DAL cannot supply required context due key/schema mismatch
+      disproof_criteria: integration tests show successful roundtrip retrieval with production keys
+      status: partially_confirmed
+  confirmed_root_causes:
+    - Placeholder synthesis in _generate_cover_letter_result for company_name/job_title/job_description.
+    - Missing context materialization layer for IDs (job/vpr/gap/company research) prior to generate_cover_letter.
+    - generate_cover_letter currently does not pass gap_responses into prompt builder.
+  contributing_factors:
+    - Async submit path persists only IDs and relies on downstream resolver that was never implemented.
+    - Legacy fallback patterns mask missing context until live quality validation.
+
+fix_plan:
+  strategy: |
+    Introduce a deterministic context-materialization step in cover_letter_handler (worker and sync paths),
+    then pass resolved context to logic/prompt layer. Preserve async API contract and endpoint shapes.
+  files_to_modify:
+    - src/backend/careervp/handlers/cover_letter_handler.py
+    - src/backend/careervp/logic/cover_letter.py
+    - src/backend/careervp/logic/prompts/cover_letter_prompt.py
+    - src/backend/careervp/dal/dynamo_dal_handler.py
+    - src/backend/careervp/dal/jobs_repository.py
+    - infra/careervp/api_construct.py
+    - src/backend/tests/unit/test_cover_letter_context_materialization.py
+    - src/backend/tests/integration/test_cover_letter_context_roundtrip.py
+    - src/backend/tests/integration/test_cover_letter_roundtrip_persistence.py
+    - docs/refactor/live_tests/test_07_cover_letter.py
+  exact_behavior_changes:
+    - Add _resolve_cover_letter_context(dal, user_id, api_request) that materializes:
+      - job fields: company_name, job_title, job_description
+      - vpr payload: differentiators/summary data
+      - gap responses filtered by request.gap_response_ids
+      - company research payload for job/company context
+    - Replace placeholder assignment in _generate_cover_letter_result with resolved fields.
+    - Pass gap_responses (and optional company_research summary) into build_user_prompt inputs.
+    - Add mandatory context completeness check before LLM call (company_name/job_title/job_description cannot be synthetic placeholders).
+    - Normalize missing/partial context policy:
+      - missing job record -> fail job with explicit diagnostic (no placeholder fallback)
+      - missing optional context (company research) -> degrade gracefully with metric/log
+    - Preserve status/list payload shape and async submit contract.
+    - Ensure worker role has required read permissions for jobs table and any required bucket/table for VPR materialization.
+  non_goals:
+    - no endpoint path/method changes
+    - no auth model changes
+    - no conversion of async flow to sync
+    - no broad rewrite of VPR architecture
+  rollback_plan:
+    - keep feature flag COVER_LETTER_CONTEXT_MATERIALIZATION_ENABLED default false until validated
+    - deploy with flag true only in dev first
+    - if regression triggers, disable flag and revert worker/context resolver commit
+
+acceptance_criteria:
+  api_level:
+    - id: AC-CL-CONTEXT-001
+      criterion: POST /cover-letter/generate remains 202 with request_id/artifact_id/status contract unchanged.
+    - id: AC-CL-CONTEXT-002
+      criterion: GET /cover-letter/{id}/status completed result includes tailored content derived from real job context, not placeholder text.
+    - id: AC-CL-CONTEXT-003
+      criterion: GET /cover-letters includes generated artifact for request_id within polling SLA.
+  data_level:
+    - id: AC-CL-CONTEXT-004
+      criterion: job context loaded from JOBS_TABLE_NAME for matching user_id + job_id.
+    - id: AC-CL-CONTEXT-005
+      criterion: gap responses filtered by gap_response_ids and mapped into prompt context.
+    - id: AC-CL-CONTEXT-006
+      criterion: company research resolved using ARTIFACT#COMPANY_RESEARCH# key pattern with user scoping.
+    - id: AC-CL-CONTEXT-007
+      criterion: no placeholder string patterns ('Company for <job_id>', 'Role for <job_id>', 'Job description for <job_id>') appear in completed artifacts.
+  observability_level:
+    - id: AC-CL-CONTEXT-008
+      criterion: logs emit context resolution decisions (job_resolved, vpr_resolved, gap_resolved, company_research_resolved).
+    - id: AC-CL-CONTEXT-009
+      criterion: failed status includes deterministic error details when mandatory context missing.
+  negative_and_edge_cases:
+    - id: AC-CL-CONTEXT-010
+      criterion: cross-user job_id access must not leak context; returns not found/failed with sanitized error.
+    - id: AC-CL-CONTEXT-011
+      criterion: missing optional company research does not fail generation when mandatory context exists.
+    - id: AC-CL-CONTEXT-012
+      criterion: malformed gap response payload entries are skipped or normalized without crashing worker.
+    - id: AC-CL-CONTEXT-013
+      criterion: if required prompt context fields are empty/synthetic, worker stores failed status with explicit missing_context diagnostics and does not invoke LLM.
+
+baseline_and_regression_budget:
+  baseline_artifact:
+    required: true
+    path: live-test-results31.log
+    description: baseline for endpoint behavior and failure delta checks
+  blocked_regressions:
+    required: true
+    list:
+      - new_non_2xx_on_changed_endpoints
+      - new_empty_arrays_on_generated_artifact_list_or_read_paths
+      - generated_id_missing_from_status_or_list_after_polling_window
+      - placeholder_text_present_in_completed_cover_letter
+      - cross_user_context_data_leak
+  allowed_deltas:
+    required: true
+    values:
+      test_07_cover_letter_failures: 0
+      contract_shape_changes: 0
+      p95_latency_ms_delta_post_context_materialization: 500
+
+verification_contract:
+  entries:
+    - requirement_id: AC-CL-CONTEXT-001
+      verification_type: contract
+      blocking_gate: pre_deploy
+      artifact_required: true
+    - requirement_id: AC-CL-CONTEXT-002
+      verification_type: live
+      blocking_gate: post_deploy
+      artifact_required: true
+    - requirement_id: AC-CL-CONTEXT-003
+      verification_type: live
+      blocking_gate: post_deploy
+      artifact_required: true
+    - requirement_id: AC-CL-CONTEXT-004
+      verification_type: integration
+      blocking_gate: pre_merge
+      artifact_required: true
+    - requirement_id: AC-CL-CONTEXT-005
+      verification_type: integration
+      blocking_gate: pre_merge
+      artifact_required: true
+    - requirement_id: AC-CL-CONTEXT-006
+      verification_type: integration
+      blocking_gate: pre_merge
+      artifact_required: true
+    - requirement_id: AC-CL-CONTEXT-007
+      verification_type: unit
+      blocking_gate: pre_merge
+      artifact_required: true
+    - requirement_id: AC-CL-CONTEXT-008
+      verification_type: integration
+      blocking_gate: pre_deploy
+      artifact_required: true
+    - requirement_id: AC-CL-CONTEXT-009
+      verification_type: integration
+      blocking_gate: pre_deploy
+      artifact_required: true
+    - requirement_id: AC-CL-CONTEXT-010
+      verification_type: integration
+      blocking_gate: pre_merge
+      artifact_required: true
+    - requirement_id: AC-CL-CONTEXT-011
+      verification_type: integration
+      blocking_gate: pre_merge
+      artifact_required: true
+    - requirement_id: AC-CL-CONTEXT-012
+      verification_type: unit
+      blocking_gate: pre_merge
+      artifact_required: true
+    - requirement_id: AC-CL-CONTEXT-013
+      verification_type: integration
+      blocking_gate: pre_deploy
+      artifact_required: true
+
+deployed_parity_plan:
+  route_surface_parity:
+    strategy: run deployed parity inventory against changed routes and lambda integrations before live tests
+    commands:
+      - uv run python scripts/spec_quality/check_deployed_parity.py --env dev --routes docs/evidence/YAML5_COVER_LETTER_CONTEXT_001-routes.json
+  authorizer_parity:
+    strategy: verify POST/GET cover-letter routes retain intended Cognito authorizer behavior
+    checks:
+      - no route becomes public
+      - no route auth downgrade
+  runtime_env_resolution_parity:
+    strategy: verify worker resolves tables from injected env in deterministic order
+    required_envs:
+      - ARTIFACTS_TABLE_NAME
+      - USERS_TABLE_NAME
+      - CVS_TABLE_NAME
+      - JOBS_TABLE_NAME
+      - KNOWLEDGE_TABLE_NAME
+
+validation_plan:
+  static_quality_gates:
+    - uv run ruff check src/backend/careervp/handlers/cover_letter_handler.py src/backend/careervp/logic/cover_letter.py src/backend/careervp/logic/prompts/cover_letter_prompt.py src/backend/careervp/dal/dynamo_dal_handler.py src/backend/careervp/dal/jobs_repository.py infra/careervp/api_construct.py
+    - uv run mypy src/backend/careervp/handlers/cover_letter_handler.py src/backend/careervp/logic/cover_letter.py src/backend/careervp/logic/prompts/cover_letter_prompt.py src/backend/careervp/dal/dynamo_dal_handler.py src/backend/careervp/dal/jobs_repository.py infra/careervp/api_construct.py --strict
+  unit_tests:
+    - uv run pytest src/backend/tests/unit/test_cover_letter_context_materialization.py -q
+    - uv run pytest src/backend/tests/unit/test_cover_letter_status_storage_keys.py -q
+  integration_tests:
+    - uv run pytest src/backend/tests/integration/test_cover_letter_context_roundtrip.py -q
+    - uv run pytest src/backend/tests/integration/test_cover_letter_roundtrip_persistence.py -q
+  regression_tests:
+    - uv run pytest src/backend/tests/integration/test_interview_prep_context_sources.py -q
+    - uv run pytest src/backend/tests/integration/test_vpr_list_roundtrip.py -q
+    - uv run pytest docs/refactor/live_tests/test_10_api_contract_success.py -q
+  live_tests:
+    - uv run pytest docs/refactor/live_tests/test_07_cover_letter.py -vv -s
+    - uv run pytest docs/refactor/live_tests/test_07_cover_letter.py -vv -s
+  pass_conditions:
+    - all_static_gates_pass
+    - unit_integration_regression_pass
+    - two_consecutive_live_passes
+    - no_blocked_regression_triggered
+
+traceability_matrix:
+  - requirement_id: AC-CL-CONTEXT-001
+    code_reference: src/backend/careervp/handlers/cover_letter_submit_handler.py
+    test_reference: docs/refactor/live_tests/test_07_cover_letter.py::TestCoverLetterEndpoints::test_generate_cover_letter
+    verification_type: contract
+    blocking_gate: pre_deploy
+    evidence_reference: docs/evidence/YAML5_COVER_LETTER_CONTEXT_001-generate.json
+    result: pending
+  - requirement_id: AC-CL-CONTEXT-002
+    code_reference: src/backend/careervp/handlers/cover_letter_handler.py
+    test_reference: docs/refactor/live_tests/test_07_cover_letter.py::TestCoverLetterEndpoints::test_cover_letter_async_polling
+    verification_type: live
+    blocking_gate: post_deploy
+    evidence_reference: docs/evidence/YAML5_COVER_LETTER_CONTEXT_001-live-polling.json
+    result: pending
+  - requirement_id: AC-CL-CONTEXT-003
+    code_reference: src/backend/careervp/handlers/cover_letter_handler.py
+    test_reference: docs/refactor/live_tests/test_07_cover_letter.py::TestCoverLetterEndpoints::test_list_cover_letters
+    verification_type: live
+    blocking_gate: post_deploy
+    evidence_reference: docs/evidence/YAML5_COVER_LETTER_CONTEXT_001-live-list.json
+    result: pending
+  - requirement_id: AC-CL-CONTEXT-004
+    code_reference: src/backend/careervp/dal/jobs_repository.py
+    test_reference: src/backend/tests/integration/test_cover_letter_context_roundtrip.py::test_job_context_materialized_from_jobs_table
+    verification_type: integration
+    blocking_gate: pre_merge
+    evidence_reference: docs/evidence/YAML5_COVER_LETTER_CONTEXT_001-integration-job-context.json
+    result: pending
+  - requirement_id: AC-CL-CONTEXT-005
+    code_reference: src/backend/careervp/handlers/cover_letter_handler.py
+    test_reference: src/backend/tests/integration/test_cover_letter_context_roundtrip.py::test_gap_responses_filtered_by_gap_response_ids
+    verification_type: integration
+    blocking_gate: pre_merge
+    evidence_reference: docs/evidence/YAML5_COVER_LETTER_CONTEXT_001-integration-gap-context.json
+    result: pending
+  - requirement_id: AC-CL-CONTEXT-006
+    code_reference: src/backend/careervp/handlers/cover_letter_handler.py
+    test_reference: src/backend/tests/integration/test_cover_letter_context_roundtrip.py::test_company_research_resolved_with_user_scope
+    verification_type: integration
+    blocking_gate: pre_merge
+    evidence_reference: docs/evidence/YAML5_COVER_LETTER_CONTEXT_001-integration-company-context.json
+    result: pending
+  - requirement_id: AC-CL-CONTEXT-007
+    code_reference: src/backend/careervp/handlers/cover_letter_handler.py
+    test_reference: src/backend/tests/unit/test_cover_letter_context_materialization.py::test_no_placeholder_prompt_values
+    verification_type: unit
+    blocking_gate: pre_merge
+    evidence_reference: docs/evidence/YAML5_COVER_LETTER_CONTEXT_001-unit-no-placeholders.json
+    result: pending
+  - requirement_id: AC-CL-CONTEXT-008
+    code_reference: src/backend/careervp/handlers/cover_letter_handler.py
+    test_reference: src/backend/tests/integration/test_cover_letter_context_roundtrip.py::test_context_resolution_observability_fields
+    verification_type: integration
+    blocking_gate: pre_deploy
+    evidence_reference: docs/evidence/YAML5_COVER_LETTER_CONTEXT_001-observability.json
+    result: pending
+  - requirement_id: AC-CL-CONTEXT-009
+    code_reference: src/backend/careervp/handlers/cover_letter_handler.py
+    test_reference: src/backend/tests/integration/test_cover_letter_context_roundtrip.py::test_missing_mandatory_context_sets_failed_with_diagnostics
+    verification_type: integration
+    blocking_gate: pre_deploy
+    evidence_reference: docs/evidence/YAML5_COVER_LETTER_CONTEXT_001-failure-diagnostics.json
+    result: pending
+  - requirement_id: AC-CL-CONTEXT-010
+    code_reference: src/backend/careervp/handlers/cover_letter_handler.py
+    test_reference: src/backend/tests/integration/test_cover_letter_context_roundtrip.py::test_cross_user_job_context_forbidden
+    verification_type: integration
+    blocking_gate: pre_merge
+    evidence_reference: docs/evidence/YAML5_COVER_LETTER_CONTEXT_001-security-scope.json
+    result: pending
+  - requirement_id: AC-CL-CONTEXT-011
+    code_reference: src/backend/careervp/handlers/cover_letter_handler.py
+    test_reference: src/backend/tests/integration/test_cover_letter_context_roundtrip.py::test_missing_company_research_degrades_gracefully
+    verification_type: integration
+    blocking_gate: pre_merge
+    evidence_reference: docs/evidence/YAML5_COVER_LETTER_CONTEXT_001-optional-context.json
+    result: pending
+  - requirement_id: AC-CL-CONTEXT-012
+    code_reference: src/backend/careervp/logic/cover_letter.py
+    test_reference: src/backend/tests/unit/test_cover_letter_context_materialization.py::test_malformed_gap_response_entries_do_not_crash
+    verification_type: unit
+    blocking_gate: pre_merge
+    evidence_reference: docs/evidence/YAML5_COVER_LETTER_CONTEXT_001-unit-gap-normalization.json
+    result: pending
+  - requirement_id: AC-CL-CONTEXT-013
+    code_reference: src/backend/careervp/handlers/cover_letter_handler.py
+    test_reference: src/backend/tests/integration/test_cover_letter_context_roundtrip.py::test_missing_required_prompt_inputs_sets_failed_without_llm_call
+    verification_type: integration
+    blocking_gate: pre_deploy
+    evidence_reference: docs/evidence/YAML5_COVER_LETTER_CONTEXT_001-missing-context-failure.json
+    result: pending
+
+rollback_trigger_matrix:
+  - trigger_id: RT-001
+    condition: any blocking AC fails after deploy
+    detection_source: post_deploy live gates
+    action: block promotion; rollback last deployment
+    owner: release_owner
+  - trigger_id: RT-002
+    condition: changed cover-letter endpoint returns new DEFAULT_4XX/DEFAULT_5XX
+    detection_source: contract + live tests
+    action: rollback and open incident
+    owner: release_owner
+  - trigger_id: RT-003
+    condition: async terminal success rate for cover letter drops below 95 percent in validation window
+    detection_source: live polling evidence
+    action: rollback or disable materialization flag
+    owner: service_owner
+
+completion_evidence:
+  required_artifacts:
+    - docs/evidence/YAML5_COVER_LETTER_CONTEXT_001-premerge-quality.log
+    - docs/evidence/YAML5_COVER_LETTER_CONTEXT_001-predeploy-tests.log
+    - docs/evidence/YAML5_COVER_LETTER_CONTEXT_001-live-pass-1.log
+    - docs/evidence/YAML5_COVER_LETTER_CONTEXT_001-live-pass-2.log
+    - docs/evidence/YAML5_COVER_LETTER_CONTEXT_001-regression-delta.json
+  signoff_checklist:
+    - all_traceability_rows_are_pass
+    - evidence_is_fresh_and_sha_matched
+    - no_open_rollback_trigger
+    - residual_risks_documented
+  residual_risks:
+    - VPR payload format variance may require additional normalization branch.
+    - Historical gap response schema variants may reduce context richness for older records.
+
+what_you_were_not_considering_now_captured:
+  - strict ownership checks for every resolved ID source to prevent cross-user context leakage
+  - prompt-injection sanitization for externally sourced job/company text
+  - token/cost and latency impact from loading richer context sections
+  - deterministic fallback policy (what is mandatory vs optional context) to avoid silent degraded quality
+  - schema variance between legacy/new gap response payload fields (answer vs response)
+  - VPR materialization source-of-truth drift (jobs result_key vs legacy DAL get_vpr path)
+  - observability cardinality and PII safety in new context-resolution logs
+  - rollback-safe feature flag to disable materialization without reverting unrelated fixes
+  - prompt-output contract hardening (2-3 paragraphs, hard one-page cap) must be enforced in logic, not prompt text only
+  - placeholder-pattern denylist must be checked before LLM invocation to prevent silent degraded completions
