@@ -3,6 +3,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
+from uuid import uuid4
 
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
@@ -88,9 +89,15 @@ class DynamoDalHandler(DalHandler):
         try:
             table = self._get_db_handler(self.table_name)
             # Exclude nulls to avoid DynamoDB GSI key-type validation errors (e.g. email-index expects S, not NULL).
-            item = user_cv.model_dump(exclude_none=True)
+            if not user_cv.cv_id:
+                user_cv.cv_id = str(uuid4())
+
+            item = user_cv.model_dump(exclude_none=True, mode='json')
+            # Canonical key schema for CVS table.
+            item['userId'] = user_cv.user_id
+            item['cvId'] = user_cv.cv_id
+            # Legacy aliases retained for backward compatibility in mixed environments.
             item['pk'] = user_cv.user_id
-            # Use CV#{cv_id} to support multiple CVs per user
             item['sk'] = f'CV#{user_cv.cv_id}'
             table.put_item(Item=item)
         except (ClientError, ValidationError) as exc:  # pragma: no cover
@@ -106,11 +113,47 @@ class DynamoDalHandler(DalHandler):
         logger.info('fetching CV from DynamoDB')
         try:
             table = self._get_db_handler(self.table_name)
-            response = table.get_item(Key={'pk': user_id, 'sk': 'CV'})
-            item = response.get('Item')
-            if not item:
+            items: list[dict[str, Any]] = []
+            try:
+                response = table.query(
+                    KeyConditionExpression=Key('userId').eq(user_id),
+                    ScanIndexForward=False,
+                    Limit=20,
+                )
+                items.extend(response.get('Items', []))
+            except ClientError as exc:
+                error_code, _ = self._client_error_details(exc)
+                if error_code != 'ValidationException':
+                    raise
+
+                response = table.query(
+                    KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with('CV#'),
+                    ScanIndexForward=False,
+                    Limit=20,
+                )
+                items.extend(response.get('Items', []))
+                if not items:
+                    legacy = table.get_item(Key={'pk': user_id, 'sk': 'CV'}).get('Item')
+                    if isinstance(legacy, dict):
+                        items.append(legacy)
+
+            if not items:
                 return None
-            return UserCV.model_validate(item)
+
+            latest_item = max(
+                items,
+                key=lambda item: (
+                    str(item.get('updated_at', '')),
+                    str(item.get('created_at', '')),
+                    str(item.get('cvId', item.get('cv_id', item.get('sk', '')))),
+                ),
+            )
+            normalized = dict(latest_item)
+            if 'user_id' not in normalized and 'userId' in normalized:
+                normalized['user_id'] = normalized['userId']
+            if 'cv_id' not in normalized and 'cvId' in normalized:
+                normalized['cv_id'] = normalized['cvId']
+            return UserCV.model_validate(normalized)
         except (ClientError, ValidationError) as exc:  # pragma: no cover
             error_msg = 'failed to get CV'
             logger.exception(error_msg, user_id=user_id)

@@ -307,3 +307,43 @@ def test_dal_legacy_read_disabled_returns_none(
 
     assert result.success
     assert result.data is None, 'Legacy read should return None when disabled'
+
+
+@pytest.mark.unit
+def test_failed_status_includes_error_diagnostics(artifacts_table: Any) -> None:
+    """Failed status payload surfaces stored worker diagnostics."""
+    from careervp.handlers.cover_letter_handler import lambda_handler
+
+    user_id = 'user-abc'
+    job_id = 'uuid-failed-job-1'
+    artifact_id = f'ARTIFACT#COVER_LETTER#{job_id}'
+
+    artifacts_table.put_item(
+        Item={
+            'pk': user_id,
+            'sk': artifact_id,
+            'applicationId': user_id,
+            'artifactId': artifact_id,
+            'job_id': job_id,
+            'status': 'FAILED',
+            'error': 'AccessDeniedException: not authorized to call ssm:GetParameter',
+            'code': 'AccessDeniedException',
+            'error_type': 'ClientError',
+        }
+    )
+
+    event = _make_event(
+        path=f'/cover-letter/{job_id}',
+        method='GET',
+        path_parameters={'coverLetterId': job_id},
+    )
+
+    response = lambda_handler(event, _context())
+
+    assert response['statusCode'] == 200
+    body = json.loads(response['body'])
+    assert body['status'] == 'failed'
+    assert body['error'] == 'AccessDeniedException: not authorized to call ssm:GetParameter'
+    assert body['code'] == 'AccessDeniedException'
+    assert isinstance(body.get('result'), dict)
+    assert body['result']['error_type'] == 'ClientError'

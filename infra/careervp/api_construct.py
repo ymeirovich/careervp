@@ -185,6 +185,8 @@ class ApiConstruct(Construct):
         )
         self.cover_letter_worker_func = self._add_cover_letter_worker_lambda(
             artifacts_table=self.api_db.artifacts_table,
+            cvs_table=self.api_db.cvs_table,
+            users_table=self.api_db.users_table,
             applications_table=self.api_db.applications_table,
             dlq=self.cover_letter_worker_dlq,
         )
@@ -766,6 +768,7 @@ class ApiConstruct(Construct):
             "COMPANY_RESEARCH_CACHE_TABLE_NAME": (
                 self.api_db.company_research_cache_table.table_name
             ),
+            "USERS_TABLE_NAME": self.api_db.users_table.table_name,
             "ALLOWED_ORIGINS": "https://careervp.app,https://www.careervp.app",
         }
 
@@ -1404,6 +1407,8 @@ class ApiConstruct(Construct):
     def _add_cover_letter_worker_lambda(
         self,
         artifacts_table: dynamodb.TableV2,
+        cvs_table: dynamodb.TableV2,
+        users_table: dynamodb.TableV2,
         applications_table: dynamodb.TableV2,
         dlq: aws_sqs.Queue,
     ) -> _lambda.Function:
@@ -1452,7 +1457,22 @@ class ApiConstruct(Construct):
 
         self.cover_letter_jobs_queue.grant_consume_messages(lambda_function)
         artifacts_table.grant_read_write_data(lambda_function)
+        cvs_table.grant_read_data(lambda_function)
+        users_table.grant_read_data(lambda_function)
         applications_table.grant_read_write_data(lambda_function)
+        lambda_function.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["ssm:GetParameter"],
+                resources=[
+                    (
+                        f"arn:aws:ssm:{self.naming.region}:"
+                        f"{self.naming.account_id}:parameter/"
+                        f"{constants.ANTHROPIC_API_KEY_SSM_PARAM.lstrip('/')}"
+                    )
+                ],
+                effect=iam.Effect.ALLOW,
+            )
+        )
         return lambda_function
 
     def _add_interview_prep_worker_lambda(
