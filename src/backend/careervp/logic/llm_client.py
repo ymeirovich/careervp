@@ -7,6 +7,7 @@ import logging
 import math
 import os
 import re
+import time
 from typing import Any, cast
 
 import boto3
@@ -20,6 +21,8 @@ from careervp.models.cv import UserCV
 # Default model: Haiku for cost efficiency (per CLAUDE.md Decision 1.2)
 DEFAULT_MODEL = 'claude-haiku-4-5-20251001'
 DEFAULT_TEMPERATURE = 0.3
+DEFAULT_RETRY_MAX_ATTEMPTS = 3
+DEFAULT_RETRY_BASE_DELAY_SECONDS = 0.5
 logger = logging.getLogger(__name__)
 
 
@@ -156,17 +159,75 @@ class LLMClient:
 
     def _invoke_model(self, prompt: str, model_name: str, temperature: float) -> Any:
         """Invoke model and normalize transport/runtime failures for the circuit breaker."""
+        attempts = self._retry_max_attempts()
+        base_delay_seconds = self._retry_base_delay_seconds()
+        last_exc: Exception | None = None
+
+        for attempt in range(1, attempts + 1):
+            try:
+                return self._client.messages.create(
+                    model=model_name,
+                    max_tokens=4096,
+                    temperature=temperature,
+                    messages=[{'role': 'user', 'content': prompt}],
+                )
+            except Exception as exc:  # noqa: BLE001 - translate provider errors into configured type.
+                last_exc = exc
+                is_transient = self._is_transient_provider_error(exc)
+                should_retry = is_transient and attempt < attempts
+                if should_retry:
+                    delay_seconds = base_delay_seconds * (2 ** (attempt - 1))
+                    logger.warning(
+                        'Transient LLM provider error; retrying attempt=%s/%s delay_seconds=%.2f error_type=%s',
+                        attempt,
+                        attempts,
+                        delay_seconds,
+                        type(exc).__name__,
+                    )
+                    time.sleep(delay_seconds)
+                    continue
+                break
+
+        if last_exc is None:
+            raise BedrockInvocationError('Failed to invoke LLM model: unknown invocation error')
+        error_msg = f'Failed to invoke LLM model: {type(last_exc).__name__}: {str(last_exc)}'
+        logger.error(error_msg, exc_info=True)
+        raise BedrockInvocationError(error_msg) from last_exc
+
+    @staticmethod
+    def _retry_max_attempts() -> int:
+        raw_value = str(os.environ.get('LLM_RETRY_MAX_ATTEMPTS', DEFAULT_RETRY_MAX_ATTEMPTS)).strip()
         try:
-            return self._client.messages.create(
-                model=model_name,
-                max_tokens=4096,
-                temperature=temperature,
-                messages=[{'role': 'user', 'content': prompt}],
-            )
-        except Exception as exc:  # noqa: BLE001 - translate provider errors into configured type.
-            error_msg = f'Failed to invoke LLM model: {type(exc).__name__}: {str(exc)}'
-            logger.error(error_msg, exc_info=True)
-            raise BedrockInvocationError(error_msg) from exc
+            parsed = int(raw_value)
+        except ValueError:
+            return DEFAULT_RETRY_MAX_ATTEMPTS
+        return max(1, parsed)
+
+    @staticmethod
+    def _retry_base_delay_seconds() -> float:
+        raw_value = str(os.environ.get('LLM_RETRY_BASE_DELAY_SECONDS', DEFAULT_RETRY_BASE_DELAY_SECONDS)).strip()
+        try:
+            parsed = float(raw_value)
+        except ValueError:
+            return DEFAULT_RETRY_BASE_DELAY_SECONDS
+        return max(0.0, parsed)
+
+    @staticmethod
+    def _is_transient_provider_error(exc: Exception) -> bool:
+        status_code = getattr(exc, 'status_code', None)
+        if isinstance(status_code, int) and status_code in {429, 500, 502, 503, 504, 529}:
+            return True
+
+        message = str(exc).lower()
+        transient_markers = (
+            'overloaded',
+            'overloaded_error',
+            'error code: 529',
+            'rate limit',
+            'timeout',
+            'temporarily unavailable',
+        )
+        return any(marker in message for marker in transient_markers)
 
     def _handle_response(self, text_content: str, cache_key: str | None) -> dict[str, Any]:
         """Parse response and handle caching."""
