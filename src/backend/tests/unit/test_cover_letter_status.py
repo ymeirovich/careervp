@@ -142,6 +142,76 @@ def test_get_cover_letter_status_returns_200_when_found(cover_letter_table: Any)
     assert payload['status'] == 'completed'
 
 
+def test_get_cover_letter_status_prefers_canonical_request_id_over_nested_id(cover_letter_table: Any) -> None:
+    """Canonical async request_id must remain the primary id in status payload."""
+    from careervp.handlers.cover_letter_handler import lambda_handler
+
+    request_id = 'request-id-1234'
+    nested_id = 'nested-cover-letter-id-9999'
+    user_id = 'user-1'
+
+    cover_letter_table.put_item(
+        Item={
+            'pk': user_id,
+            'sk': f'ARTIFACT#COVER_LETTER#{request_id}',
+            'applicationId': user_id,
+            'artifactId': f'ARTIFACT#COVER_LETTER#{request_id}',
+            'artifactType': 'cover_letter',
+            'user_id': user_id,
+            'job_id': 'job-posting-id-2222',
+            'status': 'COMPLETED',
+            'cover_letter': {'cover_letter_id': nested_id, 'full_text': 'Dear Hiring Manager...'},
+            'created_at': '2026-03-07T00:00:00+00:00',
+            'updated_at': '2026-03-07T00:00:00+00:00',
+        }
+    )
+
+    event = _event(
+        path=f'/cover-letter/{request_id}',
+        method='GET',
+        path_parameters={'coverLetterId': request_id},
+    )
+
+    response = lambda_handler(event, _context())
+
+    assert response['statusCode'] == 200
+    payload = json.loads(response['body'])
+    assert payload['id'] == request_id
+
+
+def test_get_cover_letters_list_prefers_canonical_request_id_over_nested_id(cover_letter_table: Any) -> None:
+    """List must expose canonical async request_id in item.id for contract parity."""
+    from careervp.handlers.cover_letter_handler import lambda_handler
+
+    request_id = 'request-id-list-1234'
+    nested_id = 'nested-cover-letter-id-list-9999'
+    user_id = 'user-1'
+
+    cover_letter_table.put_item(
+        Item={
+            'pk': user_id,
+            'sk': f'ARTIFACT#COVER_LETTER#{request_id}',
+            'applicationId': user_id,
+            'artifactId': f'ARTIFACT#COVER_LETTER#{request_id}',
+            'artifactType': 'cover_letter',
+            'user_id': user_id,
+            'job_id': 'job-posting-id-3333',
+            'status': 'COMPLETED',
+            'cover_letter': {'cover_letter_id': nested_id, 'full_text': 'Dear Hiring Manager...'},
+            'created_at': '2026-03-07T00:00:00+00:00',
+            'updated_at': '2026-03-07T00:00:00+00:00',
+        }
+    )
+
+    event = _event(path='/cover-letters', method='GET')
+    response = lambda_handler(event, _context())
+
+    assert response['statusCode'] == 200
+    payload = json.loads(response['body'])
+    assert payload['cover_letters']
+    assert payload['cover_letters'][0]['id'] == request_id
+
+
 def test_get_users_me_cover_letters_returns_empty_list(cover_letter_table: Any) -> None:
     """GET /users/me/cover-letters should return list of cover letters.
 

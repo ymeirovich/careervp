@@ -906,16 +906,38 @@ def _extract_cover_letter_id_from_payload(cover_letter_payload: Any) -> str | No
     return None
 
 
+def _extract_canonical_request_id(item: dict[str, Any], fallback_id: str | None = None) -> str | None:
+    raw_sk = str(item.get('sk', '')).strip()
+    has_legacy_sort_key = False
+    if raw_sk.startswith('ARTIFACT#COVER_LETTER#'):
+        sk_suffix = raw_sk.removeprefix('ARTIFACT#COVER_LETTER#').strip()
+        has_legacy_sort_key = bool(sk_suffix and '#' in sk_suffix)
+
+    for key in ('artifactId', 'sk'):
+        if key == 'artifactId' and has_legacy_sort_key:
+            continue
+        raw_value = str(item.get(key, '')).strip()
+        if raw_value.startswith('ARTIFACT#COVER_LETTER#'):
+            suffix = raw_value.removeprefix('ARTIFACT#COVER_LETTER#').strip()
+            if suffix and '#' not in suffix:
+                return suffix
+    if fallback_id:
+        normalized_fallback = str(fallback_id).strip()
+        if normalized_fallback:
+            return normalized_fallback
+    return None
+
+
 def _build_cover_letter_status_payload(item: dict[str, Any], fallback_id: str) -> dict[str, Any]:
     nested_payload = item.get('cover_letter')
     payload_source = nested_payload if isinstance(nested_payload, dict) else item
 
     payload_id = (
-        _extract_cover_letter_id_from_payload(payload_source)
+        _extract_canonical_request_id(item, fallback_id=fallback_id)
+        or _extract_cover_letter_id_from_payload(payload_source)
         or _extract_cover_letter_id_from_payload(nested_payload)
         or str(item.get('job_id', '')).strip()
         or (str(item.get('sk', '')).strip() if item.get('sk') else '')
-        or fallback_id
     )
     status = _normalize_status(item.get('status'))
 
@@ -992,11 +1014,9 @@ def _build_cover_letter_list_item(item: dict[str, Any]) -> dict[str, Any]:
     nested_payload = item.get('cover_letter')
     payload_source = nested_payload if isinstance(nested_payload, dict) else item
 
-    # For async-path items (no nested cover_letter yet), expose job_id as the id
-    # so it matches the request_id returned by POST /cover-letter/generate.
-    # For sync-path items, cover_letter_id from the nested payload takes priority.
     item_id = (
-        _extract_cover_letter_id_from_payload(payload_source)
+        _extract_canonical_request_id(item)
+        or _extract_cover_letter_id_from_payload(payload_source)
         or _extract_cover_letter_id_from_payload(nested_payload)
         or str(item.get('job_id', '')).strip()
         or (str(item.get('sk', '')).strip() if item.get('sk') else '')
