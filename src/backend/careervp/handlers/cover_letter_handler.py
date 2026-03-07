@@ -106,12 +106,27 @@ def _jobs_table_candidates() -> list[str]:
     candidates: list[str] = [
         _coerce_text(os.environ.get('JOBS_TABLE_NAME')),
         _coerce_text(os.environ.get('VPR_JOBS_TABLE_NAME')),
+        _coerce_text(os.environ.get('JOBS_TABLE')),
+        _coerce_text(os.environ.get('JOB_TABLE_NAME')),
     ]
     if env_name:
         candidates.extend(
             [
                 f'careervp-jobs-table-{env_name}',
                 f'careervp-vpr-jobs-table-{env_name}',
+            ]
+        )
+    else:
+        # Fallback to known deployed naming patterns when ENV vars are not exposed
+        # on the worker Lambda but jobs still exist in the shared jobs table.
+        candidates.extend(
+            [
+                'careervp-jobs-table-dev',
+                'careervp-vpr-jobs-table-dev',
+                'careervp-jobs-table-staging',
+                'careervp-vpr-jobs-table-staging',
+                'careervp-jobs-table-prod',
+                'careervp-vpr-jobs-table-prod',
             ]
         )
     return _unique_non_empty(candidates)

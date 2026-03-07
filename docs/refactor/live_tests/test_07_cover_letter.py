@@ -12,14 +12,23 @@ from typing import Any
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from .conftest import API_BASE, TEST_USER_ID, get_auth_headers, save_test_ids
+from .conftest import (
+    API_BASE,
+    TEST_USER_ID,
+    SAMPLE_JOB_PATH,
+    get_auth_headers,
+    read_sample_file,
+    save_test_ids,
+)
 from .quality_assertions import assert_cover_letter_quality
 
 # Import test data from previous tests
 from .test_01_auth_health import test_data
 
 
-def print_response(test_name: str, endpoint: str, status_code: int, response_data: Any):
+def print_response(
+    test_name: str, endpoint: str, status_code: int, response_data: Any
+) -> None:
     """Print JSON response for documentation."""
     output = {
         "test_name": test_name,
@@ -34,19 +43,63 @@ def print_response(test_name: str, endpoint: str, status_code: int, response_dat
 class TestCoverLetterEndpoints:
     """Test Cover Letter endpoints."""
 
-    @pytest.fixture(autouse=True)
-    def setup(self):
+    @pytest.fixture(autouse=True)  # type: ignore[untyped-decorator]
+    def setup(self) -> None:
         """Setup test data."""
         self.base_url = API_BASE
 
-    def test_generate_cover_letter(self):
+    def _auth_headers(self) -> dict[str, str]:
+        """Use bearer-token identity only; avoid stale X-User-Id overrides."""
+        headers = dict(get_auth_headers())
+        headers.pop("X-User-Id", None)
+        return headers
+
+    def _ensure_live_job_id(self, headers: dict[str, str]) -> str:
+        """Ensure test_data['job_id'] points to a real live job record."""
+        existing_job_id = str(test_data.get("job_id") or "").strip()
+        if existing_job_id:
+            get_job_url = f"{self.base_url}/jobs/{existing_job_id}"
+            get_job_response = requests.get(get_job_url, headers=headers, timeout=20)
+            if get_job_response.status_code == 200:
+                return existing_job_id
+
+        create_job_url = f"{self.base_url}/jobs"
+        job_description = read_sample_file(SAMPLE_JOB_PATH).strip()
+        if not job_description:
+            job_description = (
+                "Learning Experience Specialist role with LMS administration, "
+                "instructional design, and cross-functional enablement ownership."
+            )
+
+        payload = {
+            "title": "Learning Experience Specialist",
+            "company_name": "SysAid",
+            "description": job_description[:1000],
+            "url": "https://www.sysaid.com/careers",
+        }
+        create_response = requests.post(
+            create_job_url, json=payload, headers=headers, timeout=30
+        )
+        assert create_response.status_code in [200, 201], (
+            "Failed to materialize live job_id for cover-letter test: "
+            f"{create_response.status_code} {create_response.text[:300]}"
+        )
+
+        data = create_response.json()
+        created_job_id = data.get("id") or data.get("job_id")
+        assert created_job_id, f"Job create response missing id: {data}"
+        test_data["job_id"] = created_job_id
+        save_test_ids(test_data)
+        return str(created_job_id)
+
+    def test_generate_cover_letter(self) -> None:
         """Test POST /cover-letter/generate - generate cover letter."""
         url = f"{self.base_url}/cover-letter/generate"
-        headers = get_auth_headers()
+        headers = self._auth_headers()
 
         # Build payload using test data
         cv_id = test_data.get("cv_id") or f"cv_{TEST_USER_ID}"
-        job_id = test_data.get("job_id") or f"job_{TEST_USER_ID}"
+        job_id = self._ensure_live_job_id(headers)
         vpr_id = test_data.get("vpr_id") or f"vpr_{TEST_USER_ID}"
         gap_response_ids = test_data.get("gap_response_ids") or ["gap_test_001"]
         company_research_id = (
@@ -123,7 +176,7 @@ class TestCoverLetterEndpoints:
                 f"⚠ POST /cover-letter/generate - Status {response.status_code}: {response.text[:200]}"
             )
 
-    def test_get_cover_letter_status(self):
+    def test_get_cover_letter_status(self) -> None:
         """Test GET /cover-letter/{coverLetterId}/status - get cover letter status."""
         # Auto-generate cover letter if none exists
         if not test_data.get("cover_letter_id"):
@@ -136,7 +189,7 @@ class TestCoverLetterEndpoints:
             pytest.skip("No cover letter ID available - generation may have failed")
 
         url = f"{self.base_url}/cover-letter/{cover_letter_id}/status"
-        headers = get_auth_headers()
+        headers = self._auth_headers()
 
         max_attempts = 12
         poll_interval = 5
@@ -188,7 +241,7 @@ class TestCoverLetterEndpoints:
             f"{max_attempts * poll_interval}s (last status={last_status}, last body={last_data})"
         )
 
-    def test_list_cover_letters(self):
+    def test_list_cover_letters(self) -> None:
         """Test GET /cover-letters - list user's cover letters."""
         # Ensure we have a generated cover letter before asserting list contents.
         if not test_data.get("cover_letter_id"):
@@ -200,7 +253,7 @@ class TestCoverLetterEndpoints:
             pytest.skip("No cover letter ID available for list validation")
 
         url = f"{self.base_url}/cover-letters"
-        headers = get_auth_headers()
+        headers = self._auth_headers()
         max_attempts = 12
         poll_interval = 5
         last_data: Any = {}
@@ -249,7 +302,7 @@ class TestCoverLetterEndpoints:
             f"after {max_attempts * poll_interval}s (last status={last_status}, last body={last_data})"
         )
 
-    def test_cover_letter_async_polling(self):
+    def test_cover_letter_async_polling(self) -> None:
         """Test cover letter async polling lifecycle."""
         # First, submit a cover letter request
         self.test_generate_cover_letter()
@@ -259,7 +312,7 @@ class TestCoverLetterEndpoints:
             pytest.skip("No cover letter ID available for polling test")
 
         url = f"{self.base_url}/cover-letter/{cover_letter_id}/status"
-        headers = get_auth_headers()
+        headers = self._auth_headers()
 
         # Poll for completion (max 2 minutes)
         max_attempts = 24
