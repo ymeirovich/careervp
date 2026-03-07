@@ -134,7 +134,7 @@ jobs:
           ensure_string_parameter "/careervp/dev/jwt-public-key" "$JWT_PUBLIC_KEY"
       - name: CFN State Guard
         run: |
-          .github/scripts/cfn-guard.sh "${{ env.STACK_NAME }}" "${{ env.AWS_REGION }}"
+          "$GITHUB_WORKSPACE/.github/scripts/cfn-guard.sh" "${{ env.STACK_NAME }}" "${{ env.AWS_REGION }}"
       - name: Build and Deploy
         working-directory: src/backend
         env:
@@ -144,7 +144,7 @@ jobs:
           make deploy 2>&1 | tee /tmp/deploy.log || {
             if grep -Eq "(_IN_PROGRESS state and can not be updated|UPDATE_COMPLETE_CLEANUP_IN_PROGRESS|is in .*_IN_PROGRESS state)" /tmp/deploy.log; then
               echo "::warning::Stack update lock detected. Re-running CFN guard and retrying deploy..."
-              .github/scripts/cfn-guard.sh "${{ env.STACK_NAME }}" "${{ env.AWS_REGION }}"
+              "$GITHUB_WORKSPACE/.github/scripts/cfn-guard.sh" "${{ env.STACK_NAME }}" "${{ env.AWS_REGION }}"
               make deploy
             else
               exit 1
@@ -336,7 +336,7 @@ jobs:
           # Dynamically compute stack name for other environments
           STACK_NAME: ${{ inputs.environment == 'prod' && 'CareerVpCrudProduction' || inputs.environment == 'staging' && 'CareerVpCrudStaging' || 'CareerVpCrudDev' }}
         run: |
-          .github/scripts/cfn-guard.sh "$STACK_NAME" "${{ env.AWS_REGION }}"
+          "$GITHUB_WORKSPACE/.github/scripts/cfn-guard.sh" "$STACK_NAME" "${{ env.AWS_REGION }}"
       - name: Build and Deploy
         working-directory: src/backend
         env:
@@ -347,7 +347,7 @@ jobs:
           make deploy 2>&1 | tee /tmp/deploy.log || {
             if grep -Eq "(_IN_PROGRESS state and can not be updated|UPDATE_COMPLETE_CLEANUP_IN_PROGRESS|is in .*_IN_PROGRESS state)" /tmp/deploy.log; then
               echo "::warning::Stack update lock detected. Re-running CFN guard and retrying deploy..."
-              .github/scripts/cfn-guard.sh "$STACK_NAME" "${{ env.AWS_REGION }}"
+              "$GITHUB_WORKSPACE/.github/scripts/cfn-guard.sh" "$STACK_NAME" "${{ env.AWS_REGION }}"
               make deploy
             else
               exit 1
