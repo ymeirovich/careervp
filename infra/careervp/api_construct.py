@@ -1434,6 +1434,7 @@ class ApiConstruct(Construct):
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
                 "DYNAMODB_TABLE_NAME": artifacts_table.table_name,
+                "JOBS_TABLE_NAME": self.api_db.jobs_table.table_name,
                 "COVER_LETTER_LEGACY_READ_ENABLED": "true",
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
                 constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
@@ -1460,6 +1461,7 @@ class ApiConstruct(Construct):
         cvs_table.grant_read_data(lambda_function)
         users_table.grant_read_data(lambda_function)
         applications_table.grant_read_write_data(lambda_function)
+        self.api_db.jobs_table.grant_read_data(lambda_function)
         lambda_function.add_to_role_policy(
             iam.PolicyStatement(
                 actions=["ssm:GetParameter"],

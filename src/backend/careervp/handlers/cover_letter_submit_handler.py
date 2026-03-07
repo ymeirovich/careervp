@@ -141,7 +141,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
                 'artifactId': f'ARTIFACT#COVER_LETTER#{job_id}',
                 'artifactType': 'cover_letter',
                 'user_id': authenticated_user_id,
-                'job_id': job_id,
+                'job_id': api_request.job_id,
                 'status': 'PENDING',
                 'request_data': api_request.model_dump(mode='json'),
                 'created_at': created_at,
@@ -177,13 +177,21 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         logger.error('Failed to send message to SQS', job_id=job_id, error=str(exc))
         metrics.add_metric(name='SqsError', unit='Count', value=1)
         # Mark job as failed since we couldn't queue it
+        _sqs_error_msg = str(exc)
+        _sqs_error_type = type(exc).__name__
         try:
             table = dynamodb_resource.Table(_get_artifacts_table_name())
             table.update_item(
                 Key={'applicationId': authenticated_user_id, 'artifactId': f'ARTIFACT#COVER_LETTER#{job_id}'},
-                UpdateExpression='SET #s = :status, updated_at = :now',
-                ExpressionAttributeNames={'#s': 'status'},
-                ExpressionAttributeValues={':status': 'FAILED', ':now': now.isoformat()},
+                UpdateExpression='SET #s = :status, updated_at = :now, #e = :err, error_type = :etype, stage = :stage',
+                ExpressionAttributeNames={'#s': 'status', '#e': 'error'},
+                ExpressionAttributeValues={
+                    ':status': 'FAILED',
+                    ':now': now.isoformat(),
+                    ':err': _sqs_error_msg,
+                    ':etype': _sqs_error_type,
+                    ':stage': 'sqs_submission',
+                },
             )
         except BotoClientError as update_exc:
             error_code = ((update_exc.response.get('Error') or {}).get('Code')) if update_exc.response else None
@@ -191,9 +199,15 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
                 try:
                     table.update_item(
                         Key={'pk': authenticated_user_id, 'sk': f'ARTIFACT#COVER_LETTER#{job_id}'},
-                        UpdateExpression='SET #s = :status, updated_at = :now',
-                        ExpressionAttributeNames={'#s': 'status'},
-                        ExpressionAttributeValues={':status': 'FAILED', ':now': now.isoformat()},
+                        UpdateExpression='SET #s = :status, updated_at = :now, #e = :err, error_type = :etype, stage = :stage',
+                        ExpressionAttributeNames={'#s': 'status', '#e': 'error'},
+                        ExpressionAttributeValues={
+                            ':status': 'FAILED',
+                            ':now': now.isoformat(),
+                            ':err': _sqs_error_msg,
+                            ':etype': _sqs_error_type,
+                            ':stage': 'sqs_submission',
+                        },
                     )
                 except BotoClientError:
                     logger.error('Failed to mark job as failed', job_id=job_id)

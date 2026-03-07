@@ -132,14 +132,21 @@ def _jobs_table_candidates() -> list[str]:
     return _unique_non_empty(candidates)
 
 
-def _resolve_job_record(user_id: str, job_id: str) -> dict[str, Any] | None:
+def _resolve_job_record(user_id: str, job_id: str) -> dict[str, Any]:
+    """Resolve a job record for cover letter context.
+
+    Raises ``ValueError`` with diagnostic context (attempted table names,
+    user_id mismatch details) if the record cannot be found or accessed.
+    """
     candidates = _jobs_table_candidates()
     if not candidates:
         candidates = ['']
 
     attempted_tables: list[str] = []
+    mismatch_tables: list[str] = []
     for table_name in candidates:
-        attempted_tables.append(table_name or '<default>')
+        display_name = table_name or '<default>'
+        attempted_tables.append(display_name)
         repository = JobsRepository(table_name=table_name or None)
         record = repository.get_job(job_id)
         if not isinstance(record, dict):
@@ -151,18 +158,19 @@ def _resolve_job_record(user_id: str, job_id: str) -> dict[str, Any] | None:
                 user_id=user_id,
                 job_id=job_id,
                 record_user_id=record_user_id,
-                table_name=table_name or '<default>',
+                table_name=display_name,
             )
+            mismatch_tables.append(display_name)
             continue
         return record
 
-    logger.warning(
-        'Unable to resolve job record for cover letter context',
-        user_id=user_id,
-        job_id=job_id,
-        attempted_tables=attempted_tables,
-    )
-    return None
+    if mismatch_tables:
+        raise ValueError(
+            f'Job record found but belongs to a different user for job_id={job_id}. '
+            f'Mismatch in tables: {mismatch_tables}. '
+            f'Attempted tables: {attempted_tables}'
+        )
+    raise ValueError(f'No job posting found for job_id={job_id}. Attempted tables: {attempted_tables}')
 
 
 def _extract_job_context(job_record: dict[str, Any]) -> dict[str, str]:
@@ -249,9 +257,6 @@ def _resolve_cover_letter_context(
     api_request: CoverLetterRequest,
 ) -> dict[str, Any]:
     job_record = _resolve_job_record(user_id=user_id, job_id=api_request.job_id)
-    if job_record is None:
-        raise ValueError(f'No job posting found for job_id={api_request.job_id}')
-
     job_context = _extract_job_context(job_record)
     for field_name, field_value in job_context.items():
         if _is_placeholder_context_value(field_value, job_id=api_request.job_id):
@@ -339,13 +344,9 @@ def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
         try:
             _generate_and_persist_from_sqs(job_id=job_id, user_id=user_id, request_data=request_data)
         except Exception as exc:
+            # _generate_and_persist_from_sqs marks the artifact FAILED internally with
+            # stage context before re-raising. Re-raise here so SQS routes to DLQ.
             logger.error('Cover letter SQS job failed', job_id=job_id, error=str(exc), exc_info=True)
-            _update_artifact_status(
-                user_id=user_id,
-                job_id=job_id,
-                status='FAILED',
-                error_details=_extract_failure_details(exc),
-            )
             raise
 
     return {'statusCode': 200, 'body': 'OK'}
@@ -356,56 +357,74 @@ def _generate_and_persist_from_sqs(
     user_id: str,
     request_data: dict[str, Any],
 ) -> None:
-    """Load pending record, generate cover letter, persist result."""
-    dal = _get_dal()
+    """Load pending record, generate cover letter, persist result.
 
-    # Update status to PROCESSING
-    _update_artifact_status(user_id=user_id, job_id=job_id, status='PROCESSING')
+    All exceptions are caught internally: the artifact is marked FAILED with
+    a ``stage`` field indicating which pipeline step failed, then re-raised so
+    SQS can route the message to the DLQ after retries are exhausted.
+    """
+    current_stage = 'initialization'
+    cover_letter_payload: dict[str, Any] | None = None
 
-    # Validate the request data
-    api_request = CoverLetterRequest.model_validate(request_data)
-
-    # Load user CV
-    user_cv = _load_user_cv(dal=dal, user_id=user_id)
-    if user_cv is None or user_cv.user_id != user_id:
-        raise ValueError(f'No CV found for user {user_id}')
-
-    # Generate cover letter using existing logic
-    generation_result = _generate_cover_letter_result(
-        api_request=api_request,
-        user_id=user_id,
-        user_cv=user_cv,
-        dal=dal,
-    )
-
-    if not generation_result.success or generation_result.data is None:
-        raise RuntimeError(f'Cover letter generation failed: {generation_result.error}')
-
-    cover_letter_model = generation_result.data.cover_letter
-    if cover_letter_model is None:
-        raise RuntimeError('Cover letter generation returned no content')
-
-    # Persist the result
-    cover_letter_payload = cover_letter_model.model_dump(mode='json')
     try:
+        dal = _get_dal()
+
+        # Update status to PROCESSING
+        _update_artifact_status(user_id=user_id, job_id=job_id, status='PROCESSING')
+
+        # Validate the request data
+        current_stage = 'request_validation'
+        api_request = CoverLetterRequest.model_validate(request_data)
+
+        # Load user CV
+        current_stage = 'cv_loading'
+        user_cv = _load_user_cv(dal=dal, user_id=user_id)
+        if user_cv is None or user_cv.user_id != user_id:
+            raise ValueError(f'No CV found for user {user_id}')
+
+        # Generate cover letter (context resolution + LLM call)
+        current_stage = 'context_resolution'
+        generation_result = _generate_cover_letter_result(
+            api_request=api_request,
+            user_id=user_id,
+            user_cv=user_cv,
+            dal=dal,
+        )
+
+        current_stage = 'generation'
+        if not generation_result.success or generation_result.data is None:
+            raise RuntimeError(f'Cover letter generation failed: {generation_result.error}')
+
+        cover_letter_model = generation_result.data.cover_letter
+        if cover_letter_model is None:
+            raise RuntimeError('Cover letter generation returned no content')
+
+        # Persist the result
+        current_stage = 'persistence'
+        cover_letter_payload = cover_letter_model.model_dump(mode='json')
         dal.save_cover_letter(
             cover_letter=cover_letter_payload,
             user_id=user_id,
             cv_id=api_request.cv_id,
             job_id=api_request.job_id,
         )
-    except Exception as save_exc:
+
+    except Exception as exc:
+        error_details = _extract_failure_details(exc)
+        error_details['stage'] = current_stage
         logger.error(
-            'save_cover_letter failed in SQS worker; marking job FAILED',
+            'Cover letter generation failed',
             job_id=job_id,
             user_id=user_id,
-            error=f'{type(save_exc).__name__}: {save_exc}',
+            stage=current_stage,
+            error=str(exc),
             exc_info=True,
         )
-        _update_artifact_status(user_id=user_id, job_id=job_id, status='FAILED')
-        raise RuntimeError(f'Persistence failed for cover letter job {job_id}: {save_exc}') from save_exc
+        _update_artifact_status(user_id=user_id, job_id=job_id, status='FAILED', error_details=error_details)
+        raise
 
     # Update the artifact record to COMPLETED only after successful persistence
+    assert cover_letter_payload is not None  # guaranteed: set before 'persistence' stage completes
     _update_artifact_status(
         user_id=user_id,
         job_id=job_id,
@@ -452,6 +471,9 @@ def _update_artifact_status(
         if error_details.get('error_type'):
             update_expr += ', error_type = :error_type'
             attr_values[':error_type'] = error_details['error_type']
+        if error_details.get('stage'):
+            update_expr += ', stage = :stage'
+            attr_values[':stage'] = error_details['stage']
 
     artifact_id = f'ARTIFACT#COVER_LETTER#{job_id}'
     try:
@@ -914,6 +936,9 @@ def _build_cover_letter_status_payload(item: dict[str, Any], fallback_id: str) -
                 result['code'] = failed_details['code']
             if failed_details.get('error_type'):
                 result['error_type'] = failed_details['error_type']
+            if failed_details.get('stage'):
+                payload['stage'] = failed_details['stage']
+                result['stage'] = failed_details['stage']
 
         if result:
             payload['result'] = result
@@ -950,6 +975,7 @@ def _extract_failed_status_details(item: dict[str, Any]) -> dict[str, str]:
     error_message = str(item.get('error', '')).strip()
     error_code = str(item.get('code', '')).strip()
     error_type = str(item.get('error_type', '')).strip()
+    stage = str(item.get('stage', '')).strip()
 
     if error_message:
         details['error'] = error_message
@@ -957,6 +983,8 @@ def _extract_failed_status_details(item: dict[str, Any]) -> dict[str, str]:
         details['code'] = error_code
     if error_type:
         details['error_type'] = error_type
+    if stage:
+        details['stage'] = stage
     return details
 
 
