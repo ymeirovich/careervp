@@ -61,6 +61,48 @@ def test_retry_decorator_does_not_retry_non_transient_api_error() -> None:
     mock_sleep.assert_not_called()
 
 
+def test_retry_decorator_retries_on_generic_overloaded_exception() -> None:
+    class OverloadedError(Exception):
+        status_code = 529
+
+    call_count = 0
+
+    @retry_on_transient_error(max_retries=3, base_delay=0.0)
+    def flaky_call() -> str:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise OverloadedError("Error code: 529 - {'type': 'overloaded_error', 'message': 'Overloaded'}")
+        return 'ok'
+
+    with patch('careervp.logic.utils.llm_client.sleep') as mock_sleep:
+        result = flaky_call()
+
+    assert result == 'ok'
+    assert call_count == 2
+    mock_sleep.assert_called_once()
+
+
+def test_retry_decorator_raises_after_generic_overloaded_retries_exhausted() -> None:
+    class OverloadedError(Exception):
+        status_code = 529
+
+    call_count = 0
+
+    @retry_on_transient_error(max_retries=3, base_delay=0.0)
+    def flaky_call() -> str:
+        nonlocal call_count
+        call_count += 1
+        raise OverloadedError("Error code: 529 - {'type': 'overloaded_error', 'message': 'Overloaded'}")
+
+    with patch('careervp.logic.utils.llm_client.sleep') as mock_sleep:
+        with pytest.raises(OverloadedError):
+            flaky_call()
+
+    assert call_count == 3
+    assert mock_sleep.call_count == 3
+
+
 def test_llm_router_initializes_anthropic_with_retry_timeout() -> None:
     with patch('careervp.logic.utils.llm_client.Anthropic') as mock_anthropic:
         LLMRouter(api_key='test-key')

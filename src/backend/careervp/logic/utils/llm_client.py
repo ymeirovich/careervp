@@ -57,17 +57,29 @@ def retry_on_transient_error(max_retries: int = 3, base_delay: float = 1.0) -> C
                     logger.warning('Rate limited, retrying', attempt=attempt + 1, delay=delay)
                     sleep(delay)
                 except APIError as e:
-                    status_code = getattr(e, 'status_code', None)
-                    error_text = str(e).lower()
-                    is_transient = (
-                        (isinstance(status_code, int) and (status_code >= 500 or status_code == 529))
-                        or 'overloaded' in error_text
-                        or 'error code: 529' in error_text
-                    )
+                    is_transient = _is_transient_error(e)
                     if is_transient:
                         last_exception = e
                         delay = base_delay * (2**attempt)
-                        logger.warning('Transient API error, retrying', attempt=attempt + 1, status_code=status_code, delay=delay)
+                        logger.warning(
+                            'Transient API error, retrying',
+                            attempt=attempt + 1,
+                            status_code=getattr(e, 'status_code', None),
+                            delay=delay,
+                        )
+                        sleep(delay)
+                    else:
+                        raise
+                except Exception as e:  # noqa: BLE001 - allow retry for overloaded transient provider errors.
+                    if _is_transient_error(e):
+                        last_exception = e
+                        delay = base_delay * (2**attempt)
+                        logger.warning(
+                            'Transient provider error, retrying',
+                            attempt=attempt + 1,
+                            error_type=type(e).__name__,
+                            delay=delay,
+                        )
                         sleep(delay)
                     else:
                         raise
@@ -78,6 +90,25 @@ def retry_on_transient_error(max_retries: int = 3, base_delay: float = 1.0) -> C
         return wrapper
 
     return decorator
+
+
+def _is_transient_error(exc: Exception) -> bool:
+    status_code = getattr(exc, 'status_code', None)
+    if isinstance(status_code, int) and (status_code >= 500 or status_code in {429, 529}):
+        return True
+
+    error_text = str(exc).lower()
+    return any(
+        marker in error_text
+        for marker in (
+            'overloaded',
+            'overloaded_error',
+            'error code: 529',
+            'rate limit',
+            'temporarily unavailable',
+            'timeout',
+        )
+    )
 
 
 def _capture_method_typed(*decorator_args: Any, **decorator_kwargs: Any) -> Callable[[Callable[P, R]], Callable[P, R]]:
