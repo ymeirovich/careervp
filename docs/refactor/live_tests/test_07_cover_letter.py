@@ -129,10 +129,7 @@ class TestCoverLetterEndpoints:
         if not test_data.get("cover_letter_id"):
             print("No cover letter found, generating first...")
             self.test_generate_cover_letter()
-            # Wait for async processing
-            import time
-
-            time.sleep(15)
+            time.sleep(10)
 
         cover_letter_id = test_data.get("cover_letter_id")
         if not cover_letter_id:
@@ -141,25 +138,55 @@ class TestCoverLetterEndpoints:
         url = f"{self.base_url}/cover-letter/{cover_letter_id}/status"
         headers = get_auth_headers()
 
-        response = requests.get(url, headers=headers, timeout=10)
+        max_attempts = 12
+        poll_interval = 5
+        last_data: Any = {}
+        last_status = 0
 
-        try:
-            data = response.json()
-        except Exception:
-            data = {"raw_text": response.text}
+        for attempt in range(max_attempts):
+            response = requests.get(url, headers=headers, timeout=10)
+            last_status = response.status_code
 
-        print_response(
-            "test_get_cover_letter_status",
-            f"GET /cover-letter/{cover_letter_id}/status",
-            response.status_code,
-            data,
+            try:
+                data = response.json()
+            except Exception:
+                data = {"raw_text": response.text}
+            last_data = data
+
+            print_response(
+                "test_get_cover_letter_status",
+                f"GET /cover-letter/{cover_letter_id}/status",
+                response.status_code,
+                data,
+            )
+            assert response.status_code == 200, (
+                f"GET /cover-letter/{cover_letter_id}/status returned {response.status_code}"
+            )
+
+            status = str(data.get("status", "unknown")).lower()
+            if status == "completed":
+                assert_cover_letter_quality(data)
+                print(
+                    f"✓ GET /cover-letter/{cover_letter_id}/status - Status: {status}"
+                )
+                return
+
+            if status in {"failed", "error"}:
+                pytest.fail(
+                    f"GET /cover-letter/{cover_letter_id}/status returned terminal failure: {data}"
+                )
+
+            if attempt < max_attempts - 1:
+                print(
+                    f"  Cover letter still {status} "
+                    f"(attempt {attempt + 1}/{max_attempts})"
+                )
+                time.sleep(poll_interval)
+
+        pytest.fail(
+            f"GET /cover-letter/{cover_letter_id}/status did not complete after "
+            f"{max_attempts * poll_interval}s (last status={last_status}, last body={last_data})"
         )
-        assert response.status_code == 200, (
-            f"GET /cover-letter/{cover_letter_id}/status returned {response.status_code}"
-        )
-        assert_cover_letter_quality(data)
-        status = data.get("status", "unknown")
-        print(f"✓ GET /cover-letter/{cover_letter_id}/status - Status: {status}")
 
     def test_list_cover_letters(self):
         """Test GET /cover-letters - list user's cover letters."""

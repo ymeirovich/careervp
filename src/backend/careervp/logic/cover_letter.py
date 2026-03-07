@@ -29,6 +29,16 @@ MAX_WORD_COUNT = 350
 MIN_PARAGRAPH_COUNT = 2
 MAX_PARAGRAPH_COUNT = 3
 ANTI_AI_MIN_SCORE = 9.0
+DISALLOWED_OUTPUT_MARKERS = (
+    'company for ',
+    'role for ',
+    'job description for ',
+    'referenced as placeholders rather than actual content',
+    'unable to generate a tailored cover letter',
+    'please share the actual job posting information',
+    'i appreciate your request',
+)
+BULLET_LIST_PATTERN = re.compile(r'^\s*(?:[-*]\s+|\d+\.\s+)')
 
 
 async def _maybe_await(value: Any) -> Any:
@@ -37,7 +47,7 @@ async def _maybe_await(value: Any) -> Any:
     return value
 
 
-async def generate_cover_letter(
+async def generate_cover_letter(  # noqa: C901
     request: CoverLetterRequest,
     user_cv: UserCV,
     vpr: VPRResponse,
@@ -106,6 +116,13 @@ async def generate_cover_letter(
         return Result(
             success=False,
             error=(f'Cover letter must contain {MIN_PARAGRAPH_COUNT}-{MAX_PARAGRAPH_COUNT} paragraphs (received {paragraph_count})'),
+            code=ResultCode.FVS_VALIDATION_FAILED,
+        )
+    content_violation = _detect_output_content_violation(cover_letter.full_text)
+    if content_violation:
+        return Result(
+            success=False,
+            error=content_violation,
             code=ResultCode.FVS_VALIDATION_FAILED,
         )
 
@@ -248,3 +265,15 @@ def _split_into_two_paragraphs(text: str) -> list[str]:
         if first and second:
             return [first, second]
     return []
+
+
+def _detect_output_content_violation(cover_letter_text: str) -> str | None:
+    lowered = cover_letter_text.lower()
+    for marker in DISALLOWED_OUTPUT_MARKERS:
+        if marker in lowered:
+            return f'Cover letter contains disallowed placeholder/meta content: "{marker}"'
+
+    for line in cover_letter_text.splitlines():
+        if BULLET_LIST_PATTERN.match(line):
+            return 'Cover letter contains bullet-list formatting, which is not allowed'
+    return None

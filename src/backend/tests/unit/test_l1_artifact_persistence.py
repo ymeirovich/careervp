@@ -151,6 +151,18 @@ def _sample_vpr_request() -> VPRRequest:
     )
 
 
+def _resolved_cover_letter_context() -> dict[str, object]:
+    mock_vpr = MagicMock()
+    mock_vpr.model_dump.return_value = {'vpr_id': 'vpr-123'}
+    return {
+        'company_name': 'Acme Cloud',
+        'job_title': 'Principal Platform Engineer',
+        'job_description': 'Lead platform reliability and architecture quality.',
+        'gap_responses': [{'question_id': 'gap-123', 'answer': 'I improved release reliability by 35%.'}],
+        'vpr': mock_vpr,
+    }
+
+
 @pytest.mark.unit
 def test_cover_letter_generation_persists_to_dynamodb() -> None:
     from careervp.handlers.cover_letter_handler import lambda_handler
@@ -168,7 +180,11 @@ def test_cover_letter_generation_persists_to_dynamodb() -> None:
                 data=MagicMock(cover_letter=MagicMock(model_dump=MagicMock(return_value=payload))),
                 code=ResultCode.COVER_LETTER_GENERATED,
             )
-            response = lambda_handler(_cover_letter_event(), MagicMock())
+            with patch(
+                'careervp.handlers.cover_letter_handler._resolve_cover_letter_context',
+                return_value=_resolved_cover_letter_context(),
+            ):
+                response = lambda_handler(_cover_letter_event(), MagicMock())
 
     assert response['statusCode'] == 200
     dal.save_cover_letter.assert_called_once()

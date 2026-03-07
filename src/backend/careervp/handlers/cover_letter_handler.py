@@ -14,6 +14,7 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 from pydantic import ValidationError
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers
 from careervp.handlers.utils.observability import logger, metrics, tracer
@@ -58,16 +59,210 @@ def _get_dal() -> DynamoDalHandler:
 class _FallbackVPR:
     """Minimal VPR shim used by cover-letter logic prompt construction."""
 
-    def __init__(self, vpr_id: str, job_id: str) -> None:
+    def __init__(self, vpr_id: str, job_id: str, payload: dict[str, Any] | None = None) -> None:
         self._vpr_id = vpr_id
         self._job_id = job_id
+        self._payload = payload
 
     def model_dump(self, mode: str = 'json') -> dict[str, Any]:
         _ = mode
+        if self._payload is not None:
+            return self._payload
         return {
             'vpr_id': self._vpr_id,
             'job_id': self._job_id,
         }
+
+
+def _coerce_text(value: Any) -> str:
+    return str(value or '').strip()
+
+
+def _is_placeholder_context_value(value: str, *, job_id: str) -> bool:
+    normalized = value.strip().lower()
+    if not normalized:
+        return True
+    if normalized.startswith(('company for ', 'role for ', 'job description for ')):
+        return True
+
+    lowered_job_id = job_id.strip().lower()
+    return bool(lowered_job_id and lowered_job_id in normalized and normalized.startswith(('company for ', 'role for ', 'job description for ')))
+
+
+def _unique_non_empty(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    output: list[str] = []
+    for value in values:
+        stripped = value.strip()
+        if not stripped or stripped in seen:
+            continue
+        output.append(stripped)
+        seen.add(stripped)
+    return output
+
+
+def _jobs_table_candidates() -> list[str]:
+    env_name = _coerce_text(os.environ.get('ENVIRONMENT') or os.environ.get('ENV') or os.environ.get('STAGE')).lower()
+    candidates: list[str] = [
+        _coerce_text(os.environ.get('JOBS_TABLE_NAME')),
+        _coerce_text(os.environ.get('VPR_JOBS_TABLE_NAME')),
+    ]
+    if env_name:
+        candidates.extend(
+            [
+                f'careervp-jobs-table-{env_name}',
+                f'careervp-vpr-jobs-table-{env_name}',
+            ]
+        )
+    return _unique_non_empty(candidates)
+
+
+def _resolve_job_record(user_id: str, job_id: str) -> dict[str, Any] | None:
+    candidates = _jobs_table_candidates()
+    if not candidates:
+        candidates = ['']
+
+    attempted_tables: list[str] = []
+    for table_name in candidates:
+        attempted_tables.append(table_name or '<default>')
+        repository = JobsRepository(table_name=table_name or None)
+        record = repository.get_job(job_id)
+        if not isinstance(record, dict):
+            continue
+        record_user_id = _coerce_text(record.get('user_id'))
+        if record_user_id and record_user_id != user_id:
+            logger.warning(
+                'Resolved job record belongs to another user',
+                user_id=user_id,
+                job_id=job_id,
+                record_user_id=record_user_id,
+                table_name=table_name or '<default>',
+            )
+            continue
+        return record
+
+    logger.warning(
+        'Unable to resolve job record for cover letter context',
+        user_id=user_id,
+        job_id=job_id,
+        attempted_tables=attempted_tables,
+    )
+    return None
+
+
+def _extract_job_context(job_record: dict[str, Any]) -> dict[str, str]:
+    return {
+        'company_name': _coerce_text(job_record.get('company_name') or job_record.get('company')),
+        'job_title': _coerce_text(job_record.get('title') or job_record.get('job_title') or job_record.get('role_title')),
+        'job_description': _coerce_text(job_record.get('description') or job_record.get('job_description')),
+    }
+
+
+def _normalize_gap_response(item: Any) -> dict[str, Any] | None:
+    if hasattr(item, 'model_dump'):
+        payload = item.model_dump(mode='json')
+    elif isinstance(item, dict):
+        payload = dict(item)
+    else:
+        return None
+    if not isinstance(payload, dict):
+        return None
+
+    question_id = _coerce_text(payload.get('question_id') or payload.get('id') or payload.get('response_id'))
+    question = _coerce_text(payload.get('question') or payload.get('question_text'))
+    answer = _coerce_text(payload.get('answer') or payload.get('response') or payload.get('response_text'))
+
+    if question_id:
+        payload['question_id'] = question_id
+    if question:
+        payload['question'] = question
+    if answer:
+        payload['answer'] = answer
+    return payload
+
+
+def _resolve_gap_responses(
+    dal: DynamoDalHandler,
+    user_id: str,
+    requested_gap_response_ids: list[str],
+) -> list[dict[str, Any]]:
+    requested_ids = {entry.strip() for entry in requested_gap_response_ids if entry.strip()}
+    try:
+        gap_result = dal.get_gap_responses(user_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning('Gap response lookup failed for cover letter context', user_id=user_id, error=str(exc))
+        return []
+
+    if not hasattr(gap_result, 'success') or not gap_result.success or not gap_result.data:
+        return []
+
+    normalized = [_normalize_gap_response(item) for item in gap_result.data]
+    all_responses = [item for item in normalized if isinstance(item, dict)]
+    if not requested_ids:
+        return all_responses
+
+    filtered = [item for item in all_responses if _coerce_text(item.get('question_id')) in requested_ids]
+    return filtered or all_responses
+
+
+def _resolve_vpr_payload(
+    dal: DynamoDalHandler,
+    vpr_id: str,
+    job_id: str,
+) -> Any:
+    fallback = _FallbackVPR(vpr_id=vpr_id, job_id=job_id)
+    try:
+        vpr_result = dal.get_vpr(vpr_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning('VPR lookup failed for cover letter context', vpr_id=vpr_id, error=str(exc))
+        return cast(Any, fallback)
+
+    if not hasattr(vpr_result, 'success') or not vpr_result.success or vpr_result.data is None:
+        return cast(Any, fallback)
+
+    resolved_vpr = vpr_result.data
+    if hasattr(resolved_vpr, 'model_dump'):
+        return cast(Any, resolved_vpr)
+    if isinstance(resolved_vpr, dict):
+        return cast(Any, _FallbackVPR(vpr_id=vpr_id, job_id=job_id, payload=resolved_vpr))
+    return cast(Any, fallback)
+
+
+def _resolve_cover_letter_context(
+    dal: DynamoDalHandler,
+    user_id: str,
+    api_request: CoverLetterRequest,
+) -> dict[str, Any]:
+    job_record = _resolve_job_record(user_id=user_id, job_id=api_request.job_id)
+    if job_record is None:
+        raise ValueError(f'No job posting found for job_id={api_request.job_id}')
+
+    job_context = _extract_job_context(job_record)
+    for field_name, field_value in job_context.items():
+        if _is_placeholder_context_value(field_value, job_id=api_request.job_id):
+            raise ValueError(f'Missing required non-placeholder job context field: {field_name}')
+
+    context = {
+        **job_context,
+        'gap_responses': _resolve_gap_responses(
+            dal=dal,
+            user_id=user_id,
+            requested_gap_response_ids=list(api_request.gap_response_ids),
+        ),
+        'vpr': _resolve_vpr_payload(
+            dal=dal,
+            vpr_id=api_request.vpr_id,
+            job_id=api_request.job_id,
+        ),
+    }
+    logger.info(
+        'Cover letter context resolved',
+        user_id=user_id,
+        job_id=api_request.job_id,
+        vpr_id=api_request.vpr_id,
+        has_gap_responses=bool(context['gap_responses']),
+    )
+    return context
 
 
 @logger.inject_lambda_context
@@ -165,6 +360,7 @@ def _generate_and_persist_from_sqs(
         api_request=api_request,
         user_id=user_id,
         user_cv=user_cv,
+        dal=dal,
     )
 
     if not generation_result.success or generation_result.data is None:
@@ -306,6 +502,7 @@ def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:
             api_request=api_request,
             user_id=user_id,
             user_cv=user_cv,
+            dal=dal,
         )
     except Exception as e:
         logger.error('Cover letter generation failed', user_id=user_id, error=str(e), exc_info=True)
@@ -495,15 +692,22 @@ def _generate_cover_letter_result(
     api_request: CoverLetterRequest,
     user_id: str,
     user_cv: UserCV,
+    dal: DynamoDalHandler | None = None,
 ) -> Result[Any]:
+    resolved_dal = dal or _get_dal()
+    context = _resolve_cover_letter_context(
+        dal=resolved_dal,
+        user_id=user_id,
+        api_request=api_request,
+    )
     logic_request = LogicCoverLetterRequest(
         user_id=user_id,
         cv_id=api_request.cv_id,
         job_id=api_request.job_id,
         vpr_id=api_request.vpr_id,
-        company_name=f'Company for {api_request.job_id}',
-        job_title=f'Role for {api_request.job_id}',
-        job_description=f'Job description for {api_request.job_id}',
+        company_name=str(context['company_name']),
+        job_title=str(context['job_title']),
+        job_description=str(context['job_description']),
         gap_response_ids=list(api_request.gap_response_ids),
         company_research_id=api_request.company_research_id,
         options=_to_logic_options(api_request),
@@ -511,7 +715,8 @@ def _generate_cover_letter_result(
     maybe_async_result = generate_cover_letter(
         request=logic_request,
         user_cv=user_cv,
-        vpr=cast(Any, _FallbackVPR(api_request.vpr_id, api_request.job_id)),
+        vpr=cast(Any, context['vpr']),
+        gap_responses=cast(Any, context['gap_responses']),
     )
     if asyncio.iscoroutine(maybe_async_result):
         return asyncio.run(maybe_async_result)
