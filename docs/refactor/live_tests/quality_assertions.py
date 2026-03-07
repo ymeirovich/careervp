@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 
@@ -86,9 +87,32 @@ def assert_cover_letter_quality(data: dict[str, Any]) -> None:
 
     cover_letter = _non_empty_text(result.get("cover_letter"))
     assert len(cover_letter) >= 80, "Cover letter text is too short"
-    assert cover_letter.lower() != "cover letter generation completed.", (
-        "Cover letter payload is placeholder text"
-    )
+    lowered = cover_letter.lower()
+    blocked_markers = [
+        "cover letter generation completed.",
+        "company for ",
+        "role for ",
+        "job description for ",
+        "unable to generate a tailored cover letter",
+        "referenced as placeholders rather than actual content",
+        "please share the actual job posting information",
+        "i appreciate your request",
+    ]
+    for marker in blocked_markers:
+        assert marker not in lowered, (
+            f"Cover letter contains placeholder/meta marker: {marker}"
+        )
+
+    paragraphs = [part.strip() for part in cover_letter.split("\n\n") if part.strip()]
+    assert 2 <= len(paragraphs) <= 3, "Cover letter must contain exactly 2-3 paragraphs"
+
+    word_count = len(cover_letter.split())
+    assert word_count <= 350, "Cover letter must be one page max (<=350 words)"
+
+    for line in cover_letter.splitlines():
+        assert not re.match(r"^\s*(?:[-*]\s+|\d+\.\s+)", line), (
+            "Cover letter must not contain bullet/numbered list formatting"
+        )
 
 
 def assert_interview_prep_quality(data: dict[str, Any]) -> None:

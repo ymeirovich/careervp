@@ -137,3 +137,48 @@ def test_over_one_page_word_count_is_rejected() -> None:
     assert not result.success
     assert result.code == ResultCode.FVS_VALIDATION_FAILED
     assert 'word limit' in (result.error or '')
+
+
+def test_placeholder_meta_output_is_rejected() -> None:
+    llm_payload = {
+        'text': (
+            'I appreciate your request, but I am unable to generate a tailored cover letter at this time. '
+            'The job posting details are referenced as placeholders rather than actual content.'
+        ),
+    }
+    with (
+        patch('careervp.logic.cover_letter.LLMClient') as mock_llm_cls,
+        patch('careervp.logic.cover_letter.check_anti_ai_patterns', return_value=_strong_anti_ai_score()),
+    ):
+        mock_llm = MagicMock()
+        mock_llm.generate.return_value = llm_payload
+        mock_llm_cls.return_value = mock_llm
+
+        result = asyncio.run(generate_cover_letter(request=_request(), user_cv=_user_cv(), vpr=_vpr()))
+
+    assert not result.success
+    assert result.code == ResultCode.FVS_VALIDATION_FAILED
+    assert 'placeholder/meta content' in (result.error or '')
+
+
+def test_bullet_list_output_is_rejected() -> None:
+    llm_payload = {
+        'text': (
+            '- I led reliability initiatives improving uptime by 25%.\n'
+            '- I mentored engineers and shipped resilient services.\n\n'
+            'I am excited to bring this experience to your team and deliver measurable results.'
+        ),
+    }
+    with (
+        patch('careervp.logic.cover_letter.LLMClient') as mock_llm_cls,
+        patch('careervp.logic.cover_letter.check_anti_ai_patterns', return_value=_strong_anti_ai_score()),
+    ):
+        mock_llm = MagicMock()
+        mock_llm.generate.return_value = llm_payload
+        mock_llm_cls.return_value = mock_llm
+
+        result = asyncio.run(generate_cover_letter(request=_request(), user_cv=_user_cv(), vpr=_vpr()))
+
+    assert not result.success
+    assert result.code == ResultCode.FVS_VALIDATION_FAILED
+    assert 'bullet-list formatting' in (result.error or '')

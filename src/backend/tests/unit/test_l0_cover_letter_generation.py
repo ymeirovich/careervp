@@ -96,6 +96,16 @@ def _mock_vpr_response() -> MagicMock:
     return vpr
 
 
+def _resolved_context() -> dict[str, object]:
+    return {
+        'company_name': 'Innovate Labs',
+        'job_title': 'Principal Software Engineer',
+        'job_description': 'Lead backend architecture and mentor engineering teams.',
+        'gap_responses': [{'question_id': 'gap-001', 'answer': 'I reduced incident volume by 40%.'}],
+        'vpr': _mock_vpr_response(),
+    }
+
+
 @pytest.mark.unit
 class TestCoverLetterCallsLLM:
     """Validates L0.1: cover_letter.py calls LLMClient, not a stub."""
@@ -183,8 +193,8 @@ class TestCoverLetterHandlerFlow:
                     data=MagicMock(cover_letter=MagicMock(model_dump=MagicMock(return_value=cover_letter_payload))),
                     code=ResultCode.COVER_LETTER_GENERATED,
                 )
-
-                response = lambda_handler(_api_event(), MagicMock())
+                with patch('careervp.handlers.cover_letter_handler._resolve_cover_letter_context', return_value=_resolved_context()):
+                    response = lambda_handler(_api_event(), MagicMock())
 
         assert response['statusCode'] == 200
         body = json.loads(response['body'])
@@ -205,7 +215,8 @@ class TestCoverLetterHandlerFlow:
                     error='LLM timed out',
                     code=ResultCode.LLM_TIMEOUT,
                 )
-                response = lambda_handler(_api_event(), MagicMock())
+                with patch('careervp.handlers.cover_letter_handler._resolve_cover_letter_context', return_value=_resolved_context()):
+                    response = lambda_handler(_api_event(), MagicMock())
 
         assert response['statusCode'] == 503
         body = json.loads(response['body'])
@@ -247,7 +258,11 @@ class TestCoverLetterHandlerFlow:
                 )
 
                 with patch('careervp.handlers.cover_letter_handler.metrics.add_metric') as mock_metric:
-                    response = lambda_handler(_api_event(), MagicMock())
+                    with patch(
+                        'careervp.handlers.cover_letter_handler._resolve_cover_letter_context',
+                        return_value=_resolved_context(),
+                    ):
+                        response = lambda_handler(_api_event(), MagicMock())
 
         assert response['statusCode'] == 200
         metric_names = [call.kwargs.get('name') for call in mock_metric.call_args_list]
