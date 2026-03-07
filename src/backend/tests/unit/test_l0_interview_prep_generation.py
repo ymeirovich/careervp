@@ -18,7 +18,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from careervp.logic.interview_prep import generate_interview_prep
+from careervp.logic.interview_prep import (
+    DEFAULT_GENERATION_TEMPERATURE,
+    PARSE_RETRY_TEMPERATURE,
+    _parse_interview_prep,
+    generate_interview_prep,
+)
 from careervp.models.cv import UserCV
 from careervp.models.interview_prep import InterviewPrepRequest
 from careervp.models.result import Result, ResultCode
@@ -172,6 +177,79 @@ class TestInterviewPrepCallsLLM:
             call_prompt = mock_llm.generate.call_args.kwargs['prompt']
             assert 'Principal Software Engineer' in call_prompt
             assert 'Innovate Labs' in call_prompt
+
+    def test_parse_recovery_extracts_first_json_object_from_extra_text(self) -> None:
+        request = _logic_request()
+        raw = (
+            '{'
+            '"questions":[{"question_id":"q1","question":"Tell me about a scaling project.",'
+            '"question_type":"behavioral","difficulty":"medium","suggested_answer":{'
+            '"situation":"Legacy service was unstable.","task":"Improve reliability.",'
+            '"action":"Introduced queue backpressure.","result":"Reduced incidents.",'
+            '"full_text":"Legacy service was unstable. Introduced queue backpressure. Reduced incidents."}}],'
+            '"questions_to_ask":[]'
+            '}'
+            '\n\nGenerated successfully.'
+        )
+
+        prep = _parse_interview_prep(raw, request)
+
+        assert len(prep.questions) == 1
+        assert prep.questions[0].question_id == 'q1'
+
+    def test_parse_failure_retries_with_compact_output(self) -> None:
+        request = _logic_request()
+        with patch('careervp.logic.interview_prep.LLMClient') as mock_cls:
+            mock_llm = MagicMock()
+            mock_llm.generate.side_effect = [
+                {'text': '{"questions":[{"question_id":"q1","question":"broken"'},
+                {
+                    'text': json.dumps(
+                        {
+                            'questions': [
+                                {
+                                    'question_id': 'q1',
+                                    'question': 'Describe a reliability improvement you led.',
+                                    'question_type': 'behavioral',
+                                    'difficulty': 'medium',
+                                    'suggested_answer': {
+                                        'situation': 'A noisy monolith caused incidents.',
+                                        'task': 'Reduce instability quickly.',
+                                        'action': 'Added queueing and observability guardrails.',
+                                        'result': 'Incident rate dropped significantly.',
+                                        'full_text': (
+                                            'A noisy monolith caused incidents. I added queueing '
+                                            'and observability guardrails, which reduced incidents.'
+                                        ),
+                                    },
+                                }
+                            ],
+                            'questions_to_ask': [],
+                        }
+                    )
+                },
+            ]
+            mock_cls.return_value = mock_llm
+
+            result = asyncio.run(
+                generate_interview_prep(
+                    request=request,
+                    vpr_data={'summary': 'Platform leadership impact'},
+                    gap_responses=[{'id': 'gap-001', 'response': 'Provided measurable outcomes'}],
+                    job_title='Principal Software Engineer',
+                    company_name='Innovate Labs',
+                )
+            )
+
+        assert result.success
+        assert mock_llm.generate.call_count == 2
+        first_call = mock_llm.generate.call_args_list[0].kwargs
+        second_call = mock_llm.generate.call_args_list[1].kwargs
+        assert first_call['temperature'] == DEFAULT_GENERATION_TEMPERATURE
+        assert second_call['temperature'] == PARSE_RETRY_TEMPERATURE
+        assert '# Output Contract' in first_call['prompt']
+        assert '# Compact Output' not in first_call['prompt']
+        assert '# Compact Output' in second_call['prompt']
 
 
 @pytest.mark.unit

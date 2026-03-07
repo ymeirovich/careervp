@@ -182,6 +182,26 @@ def test_prompt_focus_areas_included() -> None:
     assert 'behavioral' in prompt
 
 
+def test_prompt_output_contract_added_when_strict_json_enabled() -> None:
+    """Strict mode adds explicit JSON-only output contract."""
+    prompt = build_user_prompt(
+        vpr_data=_vpr_data(),
+        strict_json_only=True,
+    )
+    assert '# Output Contract' in prompt
+    assert 'Return exactly one valid JSON object' in prompt
+
+
+def test_prompt_compact_output_section_added_when_requested() -> None:
+    """Compact mode adds response-size reduction guidance."""
+    prompt = build_user_prompt(
+        vpr_data=_vpr_data(),
+        compact_output=True,
+    )
+    assert '# Compact Output' in prompt
+    assert 'concise' in prompt
+
+
 def test_system_prompt_grounds_answers_in_cv_facts() -> None:
     """System prompt rule instructs model to ground answers in CV facts."""
     system_prompt = build_system_prompt()

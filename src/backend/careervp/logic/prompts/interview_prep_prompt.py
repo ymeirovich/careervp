@@ -49,7 +49,7 @@ def build_system_prompt() -> str:
     )
 
 
-def build_user_prompt(
+def build_user_prompt(  # noqa: C901
     vpr_data: dict[str, Any],
     gap_responses: list[dict[str, Any]] | None = None,
     job_title: str = '',
@@ -62,6 +62,8 @@ def build_user_prompt(
     vpr_differentiators: list[str] | None = None,
     company_research: dict[str, Any] | None = None,
     language: str = 'en',
+    strict_json_only: bool = False,
+    compact_output: bool = False,
 ) -> str:
     """Build user prompt for interview prep generation.
 
@@ -106,5 +108,18 @@ def build_user_prompt(
         sections.append('# Focus Areas\n' + ', '.join(focus_areas))
 
     sections.append(f'# Target\nGenerate {question_count} questions grounded in the CV facts and job context above.')
+    if compact_output:
+        sections.append(
+            '# Compact Output\n'
+            'Keep output concise to avoid truncation: 3-5 interviewer questions, '
+            'and each suggested STAR field should be 1-2 sentences.'
+        )
+    if strict_json_only:
+        sections.append(
+            '# Output Contract\n'
+            'Return exactly one valid JSON object and nothing else.\n'
+            'Do not use markdown, code fences, comments, or explanatory text.\n'
+            'Ensure all strings are properly escaped and the JSON is fully closed.'
+        )
 
     return '\n\n'.join(sections)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 import uuid
 from datetime import datetime, timezone
@@ -25,6 +26,11 @@ MAX_QUESTIONS = 15
 MAX_PER_TYPE = 4
 ANSWER_MIN_WORDS = 150
 ANSWER_MAX_WORDS = 300
+DEFAULT_GENERATION_TEMPERATURE = 0.3
+PARSE_RETRY_MAX_QUESTIONS = 5
+PARSE_RETRY_TEMPERATURE = 0.1
+
+logger = logging.getLogger(__name__)
 
 
 async def _maybe_await(value: Any) -> Any:
@@ -48,53 +54,82 @@ async def generate_interview_prep(
 ) -> Result[InterviewPrepResponse]:
     """Generate personalized interview preparation with architecture-aligned context inputs."""
     start_time = time.perf_counter()
-
-    # Enforce question_count policy: default 10, cap 15
     question_count = min(max(request.question_count, 1), MAX_QUESTIONS)
-
-    system_prompt = build_system_prompt()
-    user_prompt = build_user_prompt(
-        vpr_data=vpr_data,
-        gap_responses=gap_responses,
-        job_title=job_title,
-        company_name=company_name,
-        focus_areas=request.focus_areas,
-        question_count=question_count,
-        cv_facts=cv_facts,
-        job_requirements=job_requirements,
-        vpr_differentiators=vpr_differentiators,
-        company_research=company_research,
-        language=language,
-    )
-
+    retry_question_count = min(question_count, PARSE_RETRY_MAX_QUESTIONS)
     llm_client = LLMClient()
-    try:
-        llm_result = await _maybe_await(llm_client.generate(prompt=f'{system_prompt}\n\n{user_prompt}'))
-    except TimeoutError as exc:
-        return Result(success=False, error=str(exc), code=ResultCode.TIMEOUT)
-    except Exception as exc:  # noqa: BLE001
-        return Result(
-            success=False,
-            error=f'LLM invocation failed: {exc}',
-            code=ResultCode.LLM_API_ERROR,
+    parse_error: ValueError | None = None
+
+    attempts = [
+        {
+            'question_count': question_count,
+            'temperature': DEFAULT_GENERATION_TEMPERATURE,
+            'compact_output': False,
+        },
+        {
+            'question_count': retry_question_count,
+            'temperature': PARSE_RETRY_TEMPERATURE,
+            'compact_output': True,
+        },
+    ]
+
+    prep: InterviewPrep | None = None
+    for attempt_index, attempt in enumerate(attempts, start=1):
+        system_prompt = build_system_prompt()
+        user_prompt = build_user_prompt(
+            vpr_data=vpr_data,
+            gap_responses=gap_responses,
+            job_title=job_title,
+            company_name=company_name,
+            focus_areas=request.focus_areas,
+            question_count=int(attempt['question_count']),
+            cv_facts=cv_facts,
+            job_requirements=job_requirements,
+            vpr_differentiators=vpr_differentiators,
+            company_research=company_research,
+            language=language,
+            strict_json_only=True,
+            compact_output=bool(attempt['compact_output']),
         )
+        generation_prompt = f'{system_prompt}\n\n{user_prompt}'
 
-    # Extract raw text from LLM response
-    if isinstance(llm_result, Result):
-        if not llm_result.success:
+        try:
+            llm_result = await _maybe_await(
+                llm_client.generate(
+                    prompt=generation_prompt,
+                    temperature=float(attempt['temperature']),
+                )
+            )
+        except TimeoutError as exc:
+            return Result(success=False, error=str(exc), code=ResultCode.TIMEOUT)
+        except Exception as exc:  # noqa: BLE001
+            return Result(
+                success=False,
+                error=f'LLM invocation failed: {exc}',
+                code=ResultCode.LLM_API_ERROR,
+            )
+
+        if isinstance(llm_result, Result) and not llm_result.success:
             return Result(success=False, error=llm_result.error or 'LLM failed', code=ResultCode.LLM_API_ERROR)
-        raw = llm_result.data if isinstance(llm_result.data, str) else json.dumps(llm_result.data)
-    elif isinstance(llm_result, dict):
-        raw = llm_result.get('text', json.dumps(llm_result))
-    elif isinstance(llm_result, str):
-        raw = llm_result
-    else:
-        raw = str(llm_result)
 
-    try:
-        prep = _parse_interview_prep(raw, request)
-    except ValueError as exc:
-        return Result(success=False, error=f'Parse failed: {exc}', code=ResultCode.INTERNAL_ERROR)
+        raw = _extract_raw_text_from_llm_result(llm_result)
+        try:
+            prep = _parse_interview_prep(raw, request)
+            break
+        except ValueError as exc:
+            parse_error = exc
+            logger.warning(
+                'Interview prep parse attempt failed (attempt %s/%s, compact_output=%s, question_count=%s): %s',
+                attempt_index,
+                len(attempts),
+                attempt['compact_output'],
+                attempt['question_count'],
+                str(exc),
+            )
+            continue
+
+    if prep is None:
+        assert parse_error is not None
+        return Result(success=False, error=f'Parse failed: {parse_error}', code=ResultCode.INTERNAL_ERROR)
 
     generation_time_ms = int((time.perf_counter() - start_time) * 1000)
 
@@ -108,6 +143,19 @@ async def generate_interview_prep(
     return Result(success=True, data=response, code=ResultCode.INTERVIEW_QUESTIONS_GENERATED)
 
 
+def _extract_raw_text_from_llm_result(llm_result: Any) -> str:
+    """Extract raw text from LLM result payloads."""
+    if isinstance(llm_result, Result):
+        if not llm_result.success:
+            return llm_result.error or ''
+        return llm_result.data if isinstance(llm_result.data, str) else json.dumps(llm_result.data)
+    if isinstance(llm_result, dict):
+        return str(llm_result.get('text', json.dumps(llm_result)))
+    if isinstance(llm_result, str):
+        return llm_result
+    return str(llm_result)
+
+
 def _strip_code_blocks(text: str) -> str:
     """Remove markdown code block markers from LLM output."""
     cleaned = text.strip()
@@ -119,6 +167,61 @@ def _strip_code_blocks(text: str) -> str:
             cleaned = cleaned[:-3]
         cleaned = cleaned.strip()
     return cleaned
+
+
+def _extract_first_json_object(text: str) -> str | None:
+    """Extract the first balanced JSON object from raw LLM text."""
+    start = text.find('{')
+    if start == -1:
+        return None
+
+    depth = 0
+    in_string = False
+    escaping = False
+    for idx in range(start, len(text)):
+        char = text[idx]
+        if escaping:
+            escaping = False
+            continue
+        if char == '\\':
+            escaping = True
+            continue
+        if char == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if char == '{':
+            depth += 1
+        elif char == '}':
+            depth -= 1
+            if depth == 0:
+                return text[start : idx + 1]
+    return None
+
+
+def _load_json_payload(raw_text: str) -> dict[str, Any]:
+    """Load JSON payload from raw LLM output with recovery for wrapped text."""
+    cleaned = _strip_code_blocks(raw_text)
+    candidates: list[str] = [cleaned]
+    extracted = _extract_first_json_object(cleaned)
+    if extracted and extracted != cleaned:
+        candidates.append(extracted)
+
+    last_error: json.JSONDecodeError | None = None
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError as exc:
+            last_error = exc
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+        raise ValueError('JSON root must be an object')
+
+    if last_error is not None:
+        raise ValueError(f'Invalid JSON: {last_error}') from last_error
+    raise ValueError('Invalid JSON payload')
 
 
 def _parse_answer(answer_data: dict[str, Any]) -> InterviewAnswer:
@@ -181,12 +284,7 @@ def _parse_questions(raw_questions: list[dict[str, Any]]) -> list[InterviewQuest
 
 def _parse_interview_prep(raw_text: str, request: InterviewPrepRequest) -> InterviewPrep:
     """Parse LLM JSON output into InterviewPrep model."""
-    cleaned = _strip_code_blocks(raw_text)
-
-    try:
-        payload = json.loads(cleaned)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f'Invalid JSON: {exc}') from exc
+    payload = _load_json_payload(raw_text)
 
     questions = _parse_questions(payload.get('questions', []))
 
