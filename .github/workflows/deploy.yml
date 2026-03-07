@@ -53,7 +53,7 @@ jobs:
         run: uv python install ${{ env.PYTHON_VERSION }}
       - name: Install backend dependencies
         working-directory: src/backend
-        run: uv sync
+        run: uv sync --group dev
       - name: Build Lambda artifacts
         working-directory: src/backend
         run: make build
@@ -208,7 +208,7 @@ jobs:
           TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
           mkdir -p docs/evidence
           echo "=== Live suite pass 1 ==="
-          uv run python docs/refactor/live_tests/run_all_tests.py \
+          uv run --project src/backend python docs/refactor/live_tests/run_all_tests.py \
             --mode full \
             --summary-json docs/evidence/recovery-gate-live-pass-1-${TIMESTAMP}.json
           echo "=== Pass 1 complete ==="
@@ -223,7 +223,7 @@ jobs:
           TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
           mkdir -p docs/evidence
           echo "=== Live suite pass 2 (consecutive stability gate) ==="
-          uv run python docs/refactor/live_tests/run_all_tests.py \
+          uv run --project src/backend python docs/refactor/live_tests/run_all_tests.py \
             --mode full \
             --summary-json docs/evidence/recovery-gate-live-pass-2-${TIMESTAMP}.json
           echo "=== Pass 2 complete ==="

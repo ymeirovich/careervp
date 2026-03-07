@@ -193,6 +193,7 @@ class ApiConstruct(Construct):
         self.interview_prep_worker_func = self._add_interview_prep_worker_lambda(
             artifacts_table=self.api_db.artifacts_table,
             applications_table=self.api_db.applications_table,
+            jobs_table=self.api_db.jobs_table,
             dlq=self.interview_prep_worker_dlq,
         )
         self._add_openapi_contract_routes()
@@ -1481,6 +1482,7 @@ class ApiConstruct(Construct):
         self,
         artifacts_table: dynamodb.TableV2,
         applications_table: dynamodb.TableV2,
+        jobs_table: dynamodb.TableV2,
         dlq: aws_sqs.Queue,
     ) -> _lambda.Function:
         """Create interview_prep_worker triggered by SQS queue."""
@@ -1505,6 +1507,7 @@ class ApiConstruct(Construct):
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
                 "DYNAMODB_TABLE_NAME": artifacts_table.table_name,
+                "VPR_JOBS_TABLE_NAME": jobs_table.table_name,
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
                 constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
@@ -1528,6 +1531,20 @@ class ApiConstruct(Construct):
         self.interview_prep_jobs_queue.grant_consume_messages(lambda_function)
         artifacts_table.grant_read_write_data(lambda_function)
         applications_table.grant_read_write_data(lambda_function)
+        jobs_table.grant_read_data(lambda_function)
+        lambda_function.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["ssm:GetParameter"],
+                resources=[
+                    (
+                        f"arn:aws:ssm:{self.naming.region}:"
+                        f"{self.naming.account_id}:parameter/"
+                        f"{constants.ANTHROPIC_API_KEY_SSM_PARAM.lstrip('/')}"
+                    )
+                ],
+                effect=iam.Effect.ALLOW,
+            )
+        )
         return lambda_function
 
     def _add_cv_tailoring_lambda_integration(

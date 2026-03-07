@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 os.environ.setdefault('AWS_DEFAULT_REGION', 'us-east-1')
 os.environ.setdefault('POWERTOOLS_SERVICE_NAME', 'test')
@@ -229,3 +229,74 @@ def test_default_language_is_en() -> None:
     ctx = _resolve_interview_prep_context(dal, 'user-1', _api_request(language='en'))
 
     assert ctx['language'] == 'en'
+
+
+def test_context_prefers_cvs_table_for_cv_lookup(monkeypatch: Any) -> None:
+    """When CVS_TABLE_NAME is configured, resolver should query that table before fallback DAL."""
+    from careervp.handlers import interview_prep_handler as module
+
+    monkeypatch.setenv('CVS_TABLE_NAME', 'test-cvs-table')
+    cv_dal = MagicMock()
+    cv_dal.table_name = 'test-cvs-table'
+    cv_dal.get_cv.return_value = _mock_cv()
+
+    fallback_dal = _make_dal(cv=None)
+    fallback_dal.get_cv.side_effect = RuntimeError('fallback artifacts table should not be used for CV')
+
+    with patch.object(module, 'DynamoDalHandler', return_value=cv_dal):
+        ctx = module._resolve_interview_prep_context(fallback_dal, 'user-1', _api_request())
+
+    assert ctx['cv_facts'] is not None
+    cv_dal.get_cv.assert_called_once_with('user-1')
+    fallback_dal.get_cv.assert_not_called()
+
+
+def test_context_prefers_gap_responses_table_for_gap_lookup(monkeypatch: Any) -> None:
+    """When GAP_RESPONSES_TABLE_NAME is configured, resolver should query it before fallback DAL."""
+    from careervp.handlers import interview_prep_handler as module
+
+    monkeypatch.setenv('GAP_RESPONSES_TABLE_NAME', 'test-gap-responses-table')
+    gap_dal = MagicMock()
+    gap_dal.table_name = 'test-gap-responses-table'
+    gap_dal.get_gap_responses.return_value = _make_dal(gap_responses=[_mock_gap_response('gap-001')]).get_gap_responses.return_value
+
+    fallback_dal = _make_dal(gap_responses=None, gap_success=False)
+    fallback_dal.get_gap_responses.side_effect = RuntimeError('fallback artifacts table should not be used for gap responses')
+
+    with patch.object(module, 'DynamoDalHandler', return_value=gap_dal):
+        ctx = module._resolve_interview_prep_context(fallback_dal, 'user-1', _api_request(gap_response_ids=['gap-001']))
+
+    assert isinstance(ctx['gap_responses'], list)
+    assert len(ctx['gap_responses']) == 1
+    gap_dal.get_gap_responses.assert_called_once_with('user-1')
+    fallback_dal.get_gap_responses.assert_not_called()
+
+
+def test_context_prefers_vpr_jobs_table_payload(monkeypatch: Any) -> None:
+    """When VPR_JOBS_TABLE_NAME is configured and job exists, resolver should use jobs payload."""
+    from careervp.handlers import interview_prep_handler as module
+
+    monkeypatch.setenv('VPR_JOBS_TABLE_NAME', 'test-vpr-jobs-table')
+    jobs_repo = MagicMock()
+    jobs_repo.get_job.return_value = {
+        'job_id': 'vpr-001',
+        'application_id': 'job-123',
+        'status': 'COMPLETED',
+        'result': {
+            'uvp': 'Strong platform engineer',
+            'differentiators': [{'text': 'Distributed systems depth'}],
+            'language': 'he',
+        },
+    }
+
+    fallback_dal = _make_dal(vpr=None, vpr_success=False)
+    fallback_dal.get_vpr.side_effect = RuntimeError('fallback artifacts table should not be used for VPR when jobs payload exists')
+
+    with patch.object(module, 'JobsRepository', return_value=jobs_repo):
+        ctx = module._resolve_interview_prep_context(fallback_dal, 'user-1', _api_request(vpr_id='vpr-001', language='en'))
+
+    assert ctx['vpr_data'].get('uvp') == 'Strong platform engineer'
+    assert ctx['vpr_differentiators'] == ['Distributed systems depth']
+    assert ctx['language'] == 'he'
+    jobs_repo.get_job.assert_called_once_with('vpr-001')
+    fallback_dal.get_vpr.assert_not_called()

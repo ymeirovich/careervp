@@ -16,12 +16,12 @@ from boto3.dynamodb.conditions import Attr, Key
 from pydantic import ValidationError
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.interview_prep import generate_interview_prep
 from careervp.models.api_models import InterviewPrepRequest
-from careervp.models.cv import UserCV
 from careervp.models.interview_prep import InterviewPrepRequest as LogicInterviewPrepRequest
 from careervp.models.result import Result, ResultCode
 
@@ -526,17 +526,79 @@ def _extract_interview_prep_id(event: dict[str, Any]) -> str | None:
     return None
 
 
-def _load_user_cv(dal: DynamoDalHandler, user_id: str) -> UserCV | None:
-    raw_cv = dal.get_cv(user_id)
-    if isinstance(raw_cv, UserCV):
-        return raw_cv
-    if isinstance(raw_cv, dict):
-        try:
-            return UserCV.model_validate(raw_cv)
-        except ValidationError:
-            logger.warning('Failed to coerce DynamoDB CV payload to UserCV')
-            return None
-    return None
+def _coerce_text(value: Any) -> str:
+    return str(value or '').strip()
+
+
+def _build_context_dal_candidates(
+    *,
+    env_table_name: str,
+    fallback_dal: Any,
+) -> list[Any]:
+    """Prefer feature-specific table DAL, then fallback DAL for backward compatibility."""
+    candidates: list[Any] = []
+    fallback_table_name = _coerce_text(getattr(fallback_dal, 'table_name', ''))
+    preferred_table_name = _coerce_text(os.environ.get(env_table_name))
+
+    if preferred_table_name and preferred_table_name != fallback_table_name:
+        candidates.append(DynamoDalHandler(preferred_table_name))
+
+    candidates.append(fallback_dal)
+    return candidates
+
+
+def _extract_vpr_differentiators(vpr_payload: dict[str, Any]) -> list[str] | None:
+    raw_differentiators = vpr_payload.get('differentiators')
+    if not isinstance(raw_differentiators, list):
+        return None
+
+    differentiators: list[str] = []
+    for raw_entry in raw_differentiators:
+        if isinstance(raw_entry, dict):
+            value = _coerce_text(raw_entry.get('text') or raw_entry.get('value'))
+        else:
+            value = _coerce_text(raw_entry)
+        if value:
+            differentiators.append(value)
+    return differentiators or None
+
+
+def _resolve_vpr_from_jobs_table(vpr_id: str) -> dict[str, Any] | None:
+    table_name = _coerce_text(os.environ.get('VPR_JOBS_TABLE_NAME') or os.environ.get('JOBS_TABLE_NAME'))
+    if not table_name:
+        return None
+
+    logger.info('Interview prep context VPR jobs lookup start', vpr_id=vpr_id, jobs_table_name=table_name)
+    try:
+        repository = JobsRepository(table_name=table_name)
+        job_record = repository.get_job(vpr_id)
+    except Exception as exc:
+        logger.warning('Interview prep context VPR jobs lookup failed', vpr_id=vpr_id, jobs_table_name=table_name, error=str(exc))
+        return None
+
+    if not isinstance(job_record, dict):
+        logger.info('Interview prep context VPR jobs lookup empty', vpr_id=vpr_id, jobs_table_name=table_name)
+        return None
+
+    logger.info('Interview prep context VPR jobs lookup payload', vpr_id=vpr_id, jobs_table_name=table_name, job_record=job_record)
+    payload = job_record.get('result')
+    if isinstance(payload, dict):
+        merged_payload = dict(payload)
+    else:
+        merged_payload = {}
+
+    merged_payload.setdefault('vpr_id', vpr_id)
+    application_id = _coerce_text(job_record.get('application_id'))
+    if application_id:
+        merged_payload.setdefault('application_id', application_id)
+
+    input_data = job_record.get('input_data')
+    if isinstance(input_data, dict):
+        language = _coerce_text(input_data.get('language'))
+        if language:
+            merged_payload.setdefault('language', language)
+
+    return merged_payload if merged_payload else None
 
 
 _MAX_QUESTION_COUNT = 15
@@ -554,9 +616,6 @@ def _resolve_interview_prep_context(  # noqa: C901
     gap_responses, company_research, language, job_title, job_id.
     Failures are non-fatal — caller proceeds with reduced context.
     """
-    from boto3.dynamodb.conditions import Attr
-    from boto3.dynamodb.conditions import Key as DynKey
-
     context: dict[str, Any] = {
         'cv_facts': None,
         'vpr_data': {'vpr_id': api_request.vpr_id},
@@ -569,60 +628,116 @@ def _resolve_interview_prep_context(  # noqa: C901
     }
 
     # Resolve CV facts
-    try:
-        raw_cv = dal.get_cv(user_id)
-        if raw_cv is not None:
-            cv_dict = raw_cv.model_dump(mode='json') if hasattr(raw_cv, 'model_dump') else dict(raw_cv)
-            context['cv_facts'] = {
-                'professional_summary': cv_dict.get('professional_summary'),
-                'skills': cv_dict.get('skills', []),
-                'experience': cv_dict.get('experience') or cv_dict.get('work_experience', []),
-            }
-            metrics.add_metric(name='InterviewPrepCVResolved', unit=MetricUnit.Count, value=1)
-        else:
-            metrics.add_metric(name='InterviewPrepCVMissing', unit=MetricUnit.Count, value=1)
-            logger.warning('CV not found for interview prep context', user_id=user_id)
-    except Exception as exc:
-        metrics.add_metric(name='InterviewPrepCVResolutionError', unit=MetricUnit.Count, value=1)
-        logger.warning('CV resolution failed', user_id=user_id, error=str(exc))
+    cv_candidates = _build_context_dal_candidates(
+        env_table_name='CVS_TABLE_NAME',
+        fallback_dal=dal,
+    )
+    for cv_dal in cv_candidates:
+        cv_table_name = _coerce_text(getattr(cv_dal, 'table_name', ''))
+        logger.info('Interview prep context CV lookup attempt', user_id=user_id, table_name=cv_table_name)
+        try:
+            raw_cv = cv_dal.get_cv(user_id)
+        except Exception as exc:
+            metrics.add_metric(name='InterviewPrepCVResolutionError', unit=MetricUnit.Count, value=1)
+            logger.warning('CV resolution failed', user_id=user_id, table_name=cv_table_name, error=str(exc))
+            continue
 
-    # Resolve VPR data (vpr_id used as application_id per architecture mapping)
+        if raw_cv is None:
+            logger.info('Interview prep context CV lookup empty', user_id=user_id, table_name=cv_table_name)
+            continue
+
+        cv_dict = raw_cv.model_dump(mode='json') if hasattr(raw_cv, 'model_dump') else dict(raw_cv)
+        logger.info('Interview prep context CV lookup payload', user_id=user_id, table_name=cv_table_name, cv_payload=cv_dict)
+        context['cv_facts'] = {
+            'professional_summary': cv_dict.get('professional_summary'),
+            'skills': cv_dict.get('skills', []),
+            'experience': cv_dict.get('experience') or cv_dict.get('work_experience', []),
+        }
+        metrics.add_metric(name='InterviewPrepCVResolved', unit=MetricUnit.Count, value=1)
+        break
+    if context['cv_facts'] is None:
+        metrics.add_metric(name='InterviewPrepCVMissing', unit=MetricUnit.Count, value=1)
+        logger.warning('CV not found for interview prep context', user_id=user_id)
+
+    # Resolve VPR data (prefer VPR jobs table entry by vpr job id)
     try:
-        vpr_result = dal.get_vpr(api_request.vpr_id)
-        if hasattr(vpr_result, 'success') and vpr_result.success and vpr_result.data is not None:
-            vpr = vpr_result.data
-            vpr_dict = vpr.model_dump(mode='json') if hasattr(vpr, 'model_dump') else dict(vpr)
-            context['vpr_data'] = vpr_dict
-            context['vpr_differentiators'] = vpr_dict.get('differentiators') or []
-            context['language'] = vpr_dict.get('language') or context['language']
+        vpr_payload = _resolve_vpr_from_jobs_table(api_request.vpr_id)
+        if isinstance(vpr_payload, dict):
+            logger.info('Interview prep context VPR payload from jobs table', vpr_id=api_request.vpr_id, vpr_payload=vpr_payload)
+            context['vpr_data'] = vpr_payload
+            context['vpr_differentiators'] = _extract_vpr_differentiators(vpr_payload) or []
+            context['language'] = _coerce_text(vpr_payload.get('language')) or context['language']
             metrics.add_metric(name='InterviewPrepVPRResolved', unit=MetricUnit.Count, value=1)
         else:
-            metrics.add_metric(name='InterviewPrepVPRMissing', unit=MetricUnit.Count, value=1)
-            logger.warning('VPR not found for context resolution', vpr_id=api_request.vpr_id)
+            vpr_result = dal.get_vpr(api_request.vpr_id)
+            if hasattr(vpr_result, 'success') and vpr_result.success and vpr_result.data is not None:
+                vpr = vpr_result.data
+                vpr_dict = vpr.model_dump(mode='json') if hasattr(vpr, 'model_dump') else dict(vpr)
+                logger.info(
+                    'Interview prep context VPR payload from DAL fallback',
+                    vpr_id=api_request.vpr_id,
+                    table_name=getattr(dal, 'table_name', ''),
+                    vpr_payload=vpr_dict,
+                )
+                context['vpr_data'] = vpr_dict
+                context['vpr_differentiators'] = _extract_vpr_differentiators(vpr_dict) or []
+                context['language'] = _coerce_text(vpr_dict.get('language')) or context['language']
+                metrics.add_metric(name='InterviewPrepVPRResolved', unit=MetricUnit.Count, value=1)
+            else:
+                metrics.add_metric(name='InterviewPrepVPRMissing', unit=MetricUnit.Count, value=1)
+                logger.warning('VPR not found for context resolution', vpr_id=api_request.vpr_id)
     except Exception as exc:
         metrics.add_metric(name='InterviewPrepVPRResolutionError', unit=MetricUnit.Count, value=1)
         logger.warning('VPR resolution failed', vpr_id=api_request.vpr_id, error=str(exc))
 
     # Resolve gap responses filtered by requested gap_response_ids
-    try:
-        gap_result = dal.get_gap_responses(user_id)
-        if hasattr(gap_result, 'success') and gap_result.success and gap_result.data:
-            all_responses = gap_result.data
-            requested_ids = set(api_request.gap_response_ids)
-            if requested_ids:
-                filtered = [
-                    r.model_dump(mode='json') if hasattr(r, 'model_dump') else dict(r)
-                    for r in all_responses
-                    if getattr(r, 'question_id', None) in requested_ids
-                ]
-                context['gap_responses'] = (
-                    filtered if filtered else [r.model_dump(mode='json') if hasattr(r, 'model_dump') else dict(r) for r in all_responses]
-                )
+    gap_candidates = _build_context_dal_candidates(
+        env_table_name='GAP_RESPONSES_TABLE_NAME',
+        fallback_dal=dal,
+    )
+    requested_ids = {entry.strip() for entry in api_request.gap_response_ids if entry.strip()}
+    for gap_dal in gap_candidates:
+        gap_table_name = _coerce_text(getattr(gap_dal, 'table_name', ''))
+        logger.info(
+            'Interview prep context gap responses lookup attempt',
+            user_id=user_id,
+            table_name=gap_table_name,
+            requested_gap_response_ids=list(requested_ids),
+        )
+        try:
+            gap_result = gap_dal.get_gap_responses(user_id)
+        except Exception as exc:
+            logger.warning('Gap responses resolution failed', user_id=user_id, table_name=gap_table_name, error=str(exc))
+            continue
+
+        if not hasattr(gap_result, 'success') or not gap_result.success or not gap_result.data:
+            logger.info('Interview prep context gap responses lookup empty', user_id=user_id, table_name=gap_table_name)
+            continue
+
+        all_responses: list[dict[str, Any]] = []
+        for raw_response in gap_result.data:
+            if hasattr(raw_response, 'model_dump'):
+                normalized = raw_response.model_dump(mode='json')
+            elif isinstance(raw_response, dict):
+                normalized = dict(raw_response)
             else:
-                context['gap_responses'] = [r.model_dump(mode='json') if hasattr(r, 'model_dump') else dict(r) for r in all_responses]
-            metrics.add_metric(name='InterviewPrepGapResponsesResolved', unit=MetricUnit.Count, value=1)
-    except Exception as exc:
-        logger.warning('Gap responses resolution failed', user_id=user_id, error=str(exc))
+                continue
+            all_responses.append(normalized)
+
+        logger.info(
+            'Interview prep context gap responses lookup payload', user_id=user_id, table_name=gap_table_name, gap_responses_payload=all_responses
+        )
+        if requested_ids:
+            filtered = [
+                response
+                for response in all_responses
+                if _coerce_text(response.get('question_id') or response.get('questionId') or response.get('id')) in requested_ids
+            ]
+            context['gap_responses'] = filtered or all_responses
+        else:
+            context['gap_responses'] = all_responses
+        metrics.add_metric(name='InterviewPrepGapResponsesResolved', unit=MetricUnit.Count, value=1)
+        break
 
     # Resolve company research (optional — graceful degradation when absent)
     job_id = context['job_id']
@@ -631,7 +746,7 @@ def _resolve_interview_prep_context(  # noqa: C901
             table = dal._get_db_handler(dal.table_name)
             company_prefix = 'ARTIFACT#COMPANY_RESEARCH#'
             resp = table.query(
-                KeyConditionExpression=DynKey('applicationId').eq(user_id) & DynKey('artifactId').begins_with(company_prefix),
+                KeyConditionExpression=Key('applicationId').eq(user_id) & Key('artifactId').begins_with(company_prefix),
                 FilterExpression=Attr('artifactId').contains(job_id),
                 Limit=1,
             )

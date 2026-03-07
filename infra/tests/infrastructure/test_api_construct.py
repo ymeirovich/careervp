@@ -5,6 +5,38 @@ from typing import Any
 from aws_cdk.assertions import Template
 
 
+def _lambda_resource_by_handler(
+    synthesized_template: Template,
+    handler: str,
+    *,
+    function_name_contains: str | None = None,
+) -> dict[str, Any]:
+    functions = synthesized_template.find_resources("AWS::Lambda::Function")
+    matches = [
+        resource
+        for resource in functions.values()
+        if resource["Properties"].get("Handler") == handler
+    ]
+    if function_name_contains:
+        filtered = []
+        for resource in matches:
+            function_name = str(resource["Properties"].get("FunctionName", ""))
+            if function_name_contains in function_name:
+                filtered.append(resource)
+        matches = filtered
+    assert matches, f"Lambda handler not synthesized: {handler}"
+    return matches[0]
+
+
+def _lambda_role_logical_id(lambda_resource: dict[str, Any]) -> str:
+    role_ref = lambda_resource["Properties"].get("Role")
+    if isinstance(role_ref, dict) and isinstance(role_ref.get("Fn::GetAtt"), list):
+        logical_id = role_ref["Fn::GetAtt"][0]
+        if isinstance(logical_id, str) and logical_id:
+            return logical_id
+    raise AssertionError("Lambda role reference could not be resolved from template")
+
+
 def test_company_research_lambda_configuration(synthesized_template: Template) -> None:
     """Ensure the new Lambda uses the required handler, timeout, and memory settings."""
     all_functions = synthesized_template.find_resources("AWS::Lambda::Function")
@@ -121,6 +153,69 @@ def test_lambda_role_has_llm_cache_permissions(synthesized_template: Template) -
 
     assert cache_policy_found, (
         "No least-privilege IAM policy found for LLM cache table access"
+    )
+
+
+def test_interview_prep_worker_has_vpr_jobs_table_env(
+    synthesized_template: Template,
+) -> None:
+    """Interview prep worker must receive VPR jobs table env for cross-service context lookup."""
+    lambda_resource = _lambda_resource_by_handler(
+        synthesized_template,
+        "careervp.handlers.interview_prep_handler.lambda_handler",
+        function_name_contains="interview-prep-worker",
+    )
+    env_vars = lambda_resource["Properties"].get("Environment", {}).get("Variables", {})
+    assert "VPR_JOBS_TABLE_NAME" in env_vars, (
+        "Interview prep worker missing VPR_JOBS_TABLE_NAME environment variable"
+    )
+
+
+def test_interview_prep_worker_role_can_read_anthropic_ssm_parameter(
+    synthesized_template: Template,
+) -> None:
+    """Interview prep worker role should include explicit ssm:GetParameter on anthropic key."""
+    lambda_resource = _lambda_resource_by_handler(
+        synthesized_template,
+        "careervp.handlers.interview_prep_handler.lambda_handler",
+        function_name_contains="interview-prep-worker",
+    )
+    role_logical_id = _lambda_role_logical_id(lambda_resource)
+
+    policies = synthesized_template.find_resources("AWS::IAM::Policy")
+    ssm_statement_found = False
+    for policy in policies.values():
+        roles = policy["Properties"].get("Roles", [])
+        if not isinstance(roles, list):
+            continue
+        attached_to_worker_role = any(
+            isinstance(role_entry, dict) and role_entry.get("Ref") == role_logical_id
+            for role_entry in roles
+        )
+        if not attached_to_worker_role:
+            continue
+
+        statements = policy["Properties"].get("PolicyDocument", {}).get("Statement", [])
+        if not isinstance(statements, list):
+            continue
+        for statement in statements:
+            actions = statement.get("Action", [])
+            action_list = [actions] if isinstance(actions, str) else actions
+            if (
+                not isinstance(action_list, list)
+                or "ssm:GetParameter" not in action_list
+            ):
+                continue
+
+            resource_repr = str(statement.get("Resource", ""))
+            if "anthropic-api-key" in resource_repr:
+                ssm_statement_found = True
+                break
+        if ssm_statement_found:
+            break
+
+    assert ssm_statement_found, (
+        "Interview prep worker role missing ssm:GetParameter permission for anthropic-api-key parameter"
     )
 
 
