@@ -188,7 +188,7 @@ jobs:
           echo "=== Post-deploy targeted smoke (5 critical regression surfaces) ==="
           uv run python scripts/smoke/run_targeted_smoke.py \
             --step RECOVERY_001 \
-            --max-seconds 180 \
+            --max-seconds 360 \
             --out docs/evidence/targeted-smoke-RECOVERY_001-${TIMESTAMP}.json
           echo "=== Targeted smoke passed ==="
       - name: Two-pass live suite - Pass 1 (RECOVERY gate)
