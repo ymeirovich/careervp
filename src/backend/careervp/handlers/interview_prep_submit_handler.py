@@ -87,6 +87,12 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     _ = context
     endpoint = str(event.get('path', ''))
     tracer.put_annotation(key='endpoint', value=endpoint)
+    logger.info(
+        'Interview prep submit request received',
+        api_gateway_event=event,
+        endpoint=endpoint,
+        request_id=_get_request_id(event, context),
+    )
     authenticated_user_id = _extract_authenticated_user_id(event)
     if not authenticated_user_id:
         metrics.add_metric(name='UnauthorizedError', unit='Count', value=1)
@@ -98,7 +104,9 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
     try:
         request_data = _parse_body(event)
+        logger.info('Interview prep submit parsed request body', request_body=request_data)
         api_request = InterviewPrepRequest.model_validate(request_data)
+        logger.info('Interview prep submit validated request body', validated_payload=api_request.model_dump(mode='json'))
     except ValidationError as exc:
         logger.warning('Invalid request body', error=str(exc))
         metrics.add_metric(name='ValidationError', unit='Count', value=1)
@@ -134,20 +142,22 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
     try:
         table = dynamodb_resource.Table(table_name)
+        artifact_item = {
+            'pk': authenticated_user_id,
+            'sk': artifact_id,
+            'applicationId': authenticated_user_id,
+            'artifactId': artifact_id,
+            'artifactType': 'interview_prep',
+            'user_id': authenticated_user_id,
+            'job_id': job_id,
+            'status': 'PENDING',
+            'request_data': api_request.model_dump(mode='json'),
+            'created_at': created_at,
+            'updated_at': created_at,
+        }
+        logger.info('Interview prep submit writing DynamoDB artifact', table_name=table_name, dynamodb_item=artifact_item)
         table.put_item(
-            Item={
-                'pk': authenticated_user_id,
-                'sk': artifact_id,
-                'applicationId': authenticated_user_id,
-                'artifactId': artifact_id,
-                'artifactType': 'interview_prep',
-                'user_id': authenticated_user_id,
-                'job_id': job_id,
-                'status': 'PENDING',
-                'request_data': api_request.model_dump(mode='json'),
-                'created_at': created_at,
-                'updated_at': created_at,
-            },
+            Item=artifact_item,
         )
     except BotoClientError as exc:
         logger.error('Failed to create artifact record', job_id=job_id, error=str(exc))
@@ -157,20 +167,26 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     # Send message to SQS
     try:
         queue_url = _get_sqs_queue_url()
+        sqs_payload = {
+            'job_id': job_id,
+            'user_id': authenticated_user_id,
+            'request_data': api_request.model_dump(mode='json'),
+        }
+        sqs_attributes = {
+            'job_type': {'StringValue': 'interview_prep_generation', 'DataType': 'String'},
+            'job_id': {'StringValue': job_id, 'DataType': 'String'},
+            'user_id': {'StringValue': authenticated_user_id, 'DataType': 'String'},
+        }
+        logger.info(
+            'Interview prep submit sending SQS message',
+            queue_url=queue_url,
+            sqs_message_body=sqs_payload,
+            sqs_message_attributes=sqs_attributes,
+        )
         sqs.send_message(
             QueueUrl=queue_url,
-            MessageBody=json.dumps(
-                {
-                    'job_id': job_id,
-                    'user_id': authenticated_user_id,
-                    'request_data': api_request.model_dump(mode='json'),
-                }
-            ),
-            MessageAttributes={
-                'job_type': {'StringValue': 'interview_prep_generation', 'DataType': 'String'},
-                'job_id': {'StringValue': job_id, 'DataType': 'String'},
-                'user_id': {'StringValue': authenticated_user_id, 'DataType': 'String'},
-            },
+            MessageBody=json.dumps(sqs_payload),
+            MessageAttributes=sqs_attributes,
         )
         logger.info('Interview prep job queued successfully', job_id=job_id, queue_url=queue_url)
 
@@ -192,18 +208,18 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
     metrics.add_metric(name='InterviewPrepJobCreated', unit='Count', value=1)
     logger.info('Interview prep job created successfully', job_id=job_id)
+    response_body = {
+        'request_id': job_id,
+        'artifact_id': job_id,
+        'status': 'processing',
+        'estimated_time_seconds': 60,
+    }
+    logger.info('Interview prep submit response payload', response_status_code=int(HTTPStatus.ACCEPTED), response_body=response_body)
 
     return {
         'statusCode': int(HTTPStatus.ACCEPTED),
         'headers': JSON_HEADERS,
-        'body': json.dumps(
-            {
-                'request_id': job_id,
-                'artifact_id': job_id,
-                'status': 'processing',
-                'estimated_time_seconds': 60,
-            }
-        ),
+        'body': json.dumps(response_body),
     }
 
 

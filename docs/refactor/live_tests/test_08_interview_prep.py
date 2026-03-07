@@ -151,8 +151,28 @@ class TestInterviewPrepEndpoints:
             )
 
             if response.status_code == 200:
-                assert_interview_prep_quality(data)
                 status = data.get("status", "unknown")
+                if status in ["pending", "processing"]:
+                    if attempt < max_attempts - 1:
+                        print(
+                            f"  Interview prep status: {status} "
+                            f"(attempt {attempt + 1}/{max_attempts})"
+                        )
+                        time.sleep(poll_interval)
+                        continue
+                    pytest.fail(
+                        f"Interview prep remained {status!r} after "
+                        f"{max_attempts * poll_interval}s"
+                    )
+                if status in ["failed", "error"]:
+                    error = data.get("error")
+                    code = data.get("code")
+                    stage = data.get("failure_stage")
+                    pytest.fail(
+                        f"Interview prep failed for id={interview_prep_id}: "
+                        f"error={error}, code={code}, failure_stage={stage}, body={data}"
+                    )
+                assert_interview_prep_quality(data)
                 questions = data.get("result", {}).get("questions", [])
                 print(
                     f"✓ GET /interview-prep/{interview_prep_id}/status - "
@@ -214,8 +234,13 @@ class TestInterviewPrepEndpoints:
                     )
                     return
                 elif status in ["failed", "error"]:
-                    print("✗ Interview prep polling - Failed")
-                    return
+                    error = data.get("error")
+                    code = data.get("code")
+                    stage = data.get("failure_stage")
+                    pytest.fail(
+                        f"Interview prep polling failed for id={interview_prep_id}: "
+                        f"error={error}, code={code}, failure_stage={stage}, body={data}"
+                    )
                 else:
                     print(
                         f"  Interview prep status: {status} (attempt {attempt + 1}/{max_attempts})"

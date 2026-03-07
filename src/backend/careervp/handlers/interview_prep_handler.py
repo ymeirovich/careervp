@@ -100,7 +100,9 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
     """Process SQS messages for async interview prep generation."""
     for record in event.get('Records', []):
+        logger.info('Interview prep worker received SQS record', sqs_record=record)
         body = json.loads(record.get('body', '{}'))
+        logger.info('Interview prep worker parsed SQS body', sqs_body=body)
         job_id = body.get('job_id', '')
         user_id = body.get('user_id', '')
         request_data = body.get('request_data', {})
@@ -116,7 +118,6 @@ def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
             _generate_and_persist_from_sqs(job_id=job_id, user_id=user_id, request_data=request_data)
         except Exception as exc:
             logger.error('Interview prep SQS job failed', job_id=job_id, error=str(exc), exc_info=True)
-            _update_artifact_status(user_id=user_id, job_id=job_id, status='FAILED')
             raise
 
     return {'statusCode': 200, 'body': 'OK'}
@@ -129,12 +130,33 @@ def _generate_and_persist_from_sqs(
 ) -> None:
     """Load pending record, generate interview prep, persist result."""
     dal = _get_dal()
+    logger.info('Interview prep worker generation starting', job_id=job_id, user_id=user_id, request_data=request_data)
 
     # Update status to PROCESSING
     _update_artifact_status(user_id=user_id, job_id=job_id, status='PROCESSING')
 
     # Validate the request data
-    api_request = InterviewPrepRequest.model_validate(request_data)
+    try:
+        api_request = InterviewPrepRequest.model_validate(request_data)
+    except ValidationError as validation_exc:
+        logger.error(
+            'Interview prep worker request validation failed',
+            job_id=job_id,
+            user_id=user_id,
+            request_data=request_data,
+            error=str(validation_exc),
+        )
+        _update_artifact_status(
+            user_id=user_id,
+            job_id=job_id,
+            status='FAILED',
+            error='Interview prep request validation failed',
+            code=ResultCode.INVALID_INPUT,
+            failure_stage='request_validation',
+            failure_timestamp=datetime.now(timezone.utc).isoformat(),
+            error_details={'exception_type': type(validation_exc).__name__, 'validation_error': str(validation_exc)},
+        )
+        raise
 
     # Generate interview prep using existing logic
     generation_result = _generate_interview_prep_result(
@@ -143,14 +165,44 @@ def _generate_and_persist_from_sqs(
     )
 
     if not generation_result.success or generation_result.data is None:
-        raise RuntimeError(f'Interview prep generation failed: {generation_result.error}')
+        generation_error = generation_result.error or 'Interview prep generation failed'
+        logger.error(
+            'Interview prep worker generation failed',
+            job_id=job_id,
+            user_id=user_id,
+            generation_code=generation_result.code,
+            generation_error=generation_error,
+        )
+        _update_artifact_status(
+            user_id=user_id,
+            job_id=job_id,
+            status='FAILED',
+            error=generation_error,
+            code=generation_result.code or ResultCode.INTERNAL_ERROR,
+            failure_stage='generation',
+            failure_timestamp=datetime.now(timezone.utc).isoformat(),
+            error_details={'generation_success': generation_result.success},
+        )
+        raise RuntimeError(f'Interview prep generation failed: {generation_error}')
 
     prep_model = generation_result.data.interview_prep
     if prep_model is None:
+        logger.error('Interview prep worker generation returned empty interview_prep', job_id=job_id, user_id=user_id)
+        _update_artifact_status(
+            user_id=user_id,
+            job_id=job_id,
+            status='FAILED',
+            error='Interview prep generation returned no content',
+            code=ResultCode.INTERNAL_ERROR,
+            failure_stage='generation',
+            failure_timestamp=datetime.now(timezone.utc).isoformat(),
+            error_details={'generation_success': generation_result.success},
+        )
         raise RuntimeError('Interview prep generation returned no content')
 
     # Persist the result
     prep_payload = prep_model.model_dump(mode='json')
+    logger.info('Interview prep worker persisting generation payload', job_id=job_id, user_id=user_id, interview_prep_payload=prep_payload)
     try:
         _persist_interview_prep(dal=dal, user_id=user_id, prep_payload=prep_payload)
     except Exception as persist_exc:
@@ -161,7 +213,16 @@ def _generate_and_persist_from_sqs(
             error=f'{type(persist_exc).__name__}: {persist_exc}',
             exc_info=True,
         )
-        _update_artifact_status(user_id=user_id, job_id=job_id, status='FAILED')
+        _update_artifact_status(
+            user_id=user_id,
+            job_id=job_id,
+            status='FAILED',
+            error=f'Persistence failed for interview prep job {job_id}',
+            code=ResultCode.DYNAMODB_ERROR,
+            failure_stage='persistence',
+            failure_timestamp=datetime.now(timezone.utc).isoformat(),
+            error_details={'exception_type': type(persist_exc).__name__, 'exception_message': str(persist_exc)},
+        )
         raise RuntimeError(f'Persistence failed for interview prep job {job_id}: {persist_exc}') from persist_exc
 
     # Update the artifact record to COMPLETED only after successful persistence
@@ -181,6 +242,11 @@ def _update_artifact_status(
     job_id: str,
     status: str,
     result_data: dict[str, Any] | None = None,
+    error: str | None = None,
+    code: str | None = None,
+    failure_stage: str | None = None,
+    failure_timestamp: str | None = None,
+    error_details: dict[str, Any] | None = None,
 ) -> None:
     """Update interview prep artifact status in DynamoDB."""
     import datetime as _dt
@@ -198,9 +264,36 @@ def _update_artifact_status(
     if result_data is not None:
         update_expr += ', interview_prep = :result'
         attr_values[':result'] = result_data
+    if error is not None:
+        update_expr += ', #err = :error'
+        attr_names['#err'] = 'error'
+        attr_values[':error'] = error
+    if code is not None:
+        update_expr += ', #code = :code'
+        attr_names['#code'] = 'code'
+        attr_values[':code'] = str(code)
+    if failure_stage is not None:
+        update_expr += ', failure_stage = :failure_stage'
+        attr_values[':failure_stage'] = failure_stage
+    if failure_timestamp is not None:
+        update_expr += ', failure_timestamp = :failure_timestamp'
+        attr_values[':failure_timestamp'] = failure_timestamp
+    if error_details is not None:
+        update_expr += ', error_details = :error_details'
+        attr_values[':error_details'] = error_details
 
     artifact_id = _normalize_interview_prep_artifact_id(job_id)
     try:
+        logger.info(
+            'Interview prep worker updating DynamoDB artifact status',
+            user_id=user_id,
+            request_id=job_id,
+            key_schema_mode=PRIMARY_KEY_MODE,
+            status=status,
+            update_expression=update_expr,
+            expression_attribute_names=attr_names,
+            expression_attribute_values=attr_values,
+        )
         table.update_item(
             Key={'applicationId': user_id, 'artifactId': artifact_id},
             UpdateExpression=update_expr,
@@ -323,10 +416,14 @@ def get_interview_prep_status(event: dict[str, Any]) -> dict[str, Any]:
             {'error': 'Interview prep not found', 'code': ResultCode.INTERVIEW_PREP_NOT_FOUND},
         )
 
-    return _build_response(
-        HTTPStatus.OK,
-        _build_interview_prep_status_payload(interview_prep_item, interview_prep_id),
+    status_payload = _build_interview_prep_status_payload(interview_prep_item, interview_prep_id)
+    logger.info(
+        'Interview prep status response payload built',
+        user_id=user_id,
+        request_id=interview_prep_id,
+        status_payload=status_payload,
     )
+    return _build_response(HTTPStatus.OK, status_payload)
 
 
 def list_interview_preps(event: dict[str, Any]) -> dict[str, Any]:
@@ -570,9 +667,32 @@ def _generate_interview_prep_result(
         company_research=ctx['company_research'],
         language=ctx['language'],
     )
+    logger.info(
+        'Interview prep worker generation input payload',
+        user_id=user_id,
+        api_request=api_request.model_dump(mode='json'),
+        generation_context=ctx,
+    )
     if asyncio.iscoroutine(maybe_async_result):
-        return asyncio.run(maybe_async_result)
+        async_result = asyncio.run(maybe_async_result)
+        logger.info(
+            'Interview prep worker generation output payload',
+            user_id=user_id,
+            success=async_result.success,
+            code=async_result.code,
+            error=async_result.error,
+            has_data=async_result.data is not None,
+        )
+        return async_result
     if isinstance(maybe_async_result, Result):
+        logger.info(
+            'Interview prep worker generation output payload',
+            user_id=user_id,
+            success=maybe_async_result.success,
+            code=maybe_async_result.code,
+            error=maybe_async_result.error,
+            has_data=maybe_async_result.data is not None,
+        )
         return maybe_async_result
     return Result(
         success=False,
@@ -603,6 +723,7 @@ def _persist_interview_prep(dal: DynamoDalHandler, user_id: str, prep_payload: d
         'pk': user_id,
         'sk': artifact_id,
     }
+    logger.info('Interview prep worker writing interview prep artifact', user_id=user_id, prep_payload=prep_payload, dynamodb_item=item)
     table.put_item(Item=item)
     return Result(success=True, data=None, code=ResultCode.SUCCESS)
 
@@ -770,98 +891,17 @@ def _build_interview_prep_status_payload(item: dict[str, Any], fallback_id: str)
                 'readiness_summary': prep_payload.get('readiness_summary') or 'Preparation synthesized from role context and behavioral focus areas.',
             }
         payload['result'] = result_payload
+    if status == 'failed':
+        payload['error'] = str(item.get('error') or 'Interview prep generation failed')
+        payload['code'] = str(item.get('code') or ResultCode.INTERNAL_ERROR)
+        if item.get('failure_stage') is not None:
+            payload['failure_stage'] = item.get('failure_stage')
+        if item.get('failure_timestamp') is not None:
+            payload['failure_timestamp'] = item.get('failure_timestamp')
+        if item.get('error_details') is not None:
+            payload['error_details'] = item.get('error_details')
 
     return payload
-
-
-def _build_default_interview_prep_status_payload(interview_prep_id: str) -> dict[str, Any]:
-    """Deterministic contract-safe interview prep response."""
-    return {
-        'id': interview_prep_id,
-        'status': 'completed',
-        'result': {
-            'questions': [
-                {
-                    'id': 'q1',
-                    'text': 'Describe a project where you improved system performance under tight deadlines.',
-                    'question_type': 'technical',
-                    'suggested_answer': {
-                        'format': 'STAR',
-                        'situation': 'A critical service was breaching latency targets during peak traffic.',
-                        'task': 'I was responsible for reducing p95 response time before a release milestone.',
-                        'action': 'I profiled bottlenecks, introduced caching, and optimized database queries.',
-                        'result': 'Latency dropped by over 35% and the release shipped on schedule.',
-                    },
-                },
-                {
-                    'id': 'q2',
-                    'text': 'Tell me about a time you influenced stakeholders without direct authority.',
-                    'question_type': 'behavioral',
-                    'suggested_answer': {
-                        'format': 'STAR',
-                        'situation': 'Engineering and product teams disagreed on scope for a launch.',
-                        'task': 'I needed alignment to avoid schedule risk.',
-                        'action': 'I created a risk matrix and facilitated a decision workshop with alternatives.',
-                        'result': 'We aligned on phased scope and delivered the highest-impact features on time.',
-                    },
-                },
-                {
-                    'id': 'q3',
-                    'text': 'How would you explain this role’s value proposition in your first interview answer?',
-                    'question_type': 'situational',
-                    'suggested_answer': {
-                        'format': 'STAR',
-                        'situation': 'Early interview stage requiring concise positioning.',
-                        'task': 'Connect background to role priorities with measurable outcomes.',
-                        'action': 'Lead with domain fit, then cite quantified achievements and execution style.',
-                        'result': 'Clear, credible narrative aligned to hiring manager priorities.',
-                    },
-                },
-            ],
-            'questions_to_ask': [
-                {
-                    'question': 'What outcomes define success in the first 90 days for this role?',
-                    'purpose': 'Clarifies expectations and priorities.',
-                }
-            ],
-            'pre_interview_checklist': [
-                'Prepare STAR examples with metrics.',
-                'Review role requirements and map relevant projects.',
-                'Rehearse concise narrative for role fit.',
-            ],
-            'interview_report': {
-                'readiness_summary': 'Interview preparation package generated with technical and behavioral focus.',
-            },
-        },
-    }
-
-
-def _build_fallback_interview_prep_payload(
-    *,
-    user_id: str,
-    vpr_id: str,
-    prep_id: str,
-    focus_areas: list[str],
-) -> dict[str, Any]:
-    normalized_focus = [str(area).strip() for area in focus_areas if str(area).strip()]
-    return {
-        'prep_id': prep_id,
-        'user_id': user_id,
-        'vpr_id': vpr_id,
-        'questions': _build_default_interview_prep_status_payload(prep_id)['result']['questions'],
-        'questions_to_ask': [
-            {
-                'question': 'How does this team measure interview success for this role?',
-                'purpose': 'Helps tailor final interview responses to business outcomes.',
-            }
-        ],
-        'pre_interview_checklist': [
-            'Review likely follow-up questions.',
-            'Quantify impact in each STAR answer.',
-            f'Emphasize focus areas: {", ".join(normalized_focus) if normalized_focus else "technical and behavioral"}',
-        ],
-        'readiness_summary': 'Fallback interview prep generated from available context.',
-    }
 
 
 def _build_response(status_code: HTTPStatus, body: dict[str, Any]) -> dict[str, Any]:
