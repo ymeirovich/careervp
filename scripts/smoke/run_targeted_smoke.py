@@ -18,25 +18,33 @@ CHECKS = [
         "TestGapAnalysisEndpoints::test_generate_gap_questions",
     ),
     (
-        "cover_letter_status_resolvable",
+        "cover_letter_submit_accepts",
         "docs/refactor/live_tests/test_07_cover_letter.py::"
-        "TestCoverLetterEndpoints::test_get_cover_letter_status",
+        "TestCoverLetterEndpoints::test_generate_cover_letter",
+    ),
+    (
+        "interview_prep_submit_accepts",
+        "docs/refactor/live_tests/test_08_interview_prep.py::"
+        "TestInterviewPrepEndpoints::test_generate_interview_prep",
+    ),
+    (
+        "cv_tailoring_submit_accepts",
+        "docs/refactor/live_tests/test_06_cv_tailoring.py::"
+        "TestCVTailoringEndpoints::test_generate_tailored_cv",
     ),
     (
         "vpr_list_includes_generated",
         "docs/refactor/live_tests/test_04_vpr.py::TestVPREndpoints::test_list_vprs",
     ),
-    (
-        "cv_tailoring_delete_not_403",
-        "docs/refactor/live_tests/test_06_cv_tailoring.py::"
-        "TestCVTailoringEndpoints::test_delete_tailored_cv_roundtrip",
-    ),
-    (
-        "interview_prep_status_resolvable",
-        "docs/refactor/live_tests/test_08_interview_prep.py::"
-        "TestInterviewPrepEndpoints::test_get_interview_prep_status",
-    ),
 ]
+
+
+ENV_JSON_PATH = Path("docs/refactor/live_tests/.env.json")
+RESET_KEYS_BY_CHECK: dict[str, tuple[str, ...]] = {
+    "cover_letter_submit_accepts": ("cover_letter_id",),
+    "cv_tailoring_submit_accepts": ("cv_tailoring_id",),
+    "interview_prep_submit_accepts": ("interview_prep_id",),
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -59,6 +67,31 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _reset_cached_test_ids(check_name: str, repo_root: Path) -> None:
+    keys = RESET_KEYS_BY_CHECK.get(check_name)
+    if not keys:
+        return
+
+    env_json_path = repo_root / ENV_JSON_PATH
+    if not env_json_path.exists():
+        return
+
+    try:
+        payload = json.loads(env_json_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return
+    if not isinstance(payload, dict):
+        return
+
+    changed = False
+    for key in keys:
+        if key in payload:
+            payload.pop(key, None)
+            changed = True
+    if changed:
+        env_json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
 def main() -> int:
     args = parse_args()
     repo_root = Path(__file__).resolve().parents[2]
@@ -70,6 +103,7 @@ def main() -> int:
     failures = 0
 
     for name, node_id in CHECKS:
+        _reset_cached_test_ids(name, repo_root)
         elapsed = time.time() - started
         if elapsed > args.max_seconds:
             failures += 1
