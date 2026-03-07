@@ -54,7 +54,11 @@ def retry_on_transient_error(max_retries: int = 3, base_delay: float = 1.0) -> C
                 except RateLimitError as e:
                     last_exception = e
                     delay = base_delay * (2**attempt)
-                    logger.warning('Rate limited, retrying', attempt=attempt + 1, delay=delay)
+                    logger.warning(
+                        'Rate limited, retrying attempt=%s delay=%.2f',
+                        attempt + 1,
+                        delay,
+                    )
                     sleep(delay)
                 except APIError as e:
                     is_transient = _is_transient_error(e)
@@ -62,10 +66,10 @@ def retry_on_transient_error(max_retries: int = 3, base_delay: float = 1.0) -> C
                         last_exception = e
                         delay = base_delay * (2**attempt)
                         logger.warning(
-                            'Transient API error, retrying',
-                            attempt=attempt + 1,
-                            status_code=getattr(e, 'status_code', None),
-                            delay=delay,
+                            'Transient API error, retrying attempt=%s status_code=%s delay=%.2f',
+                            attempt + 1,
+                            getattr(e, 'status_code', None),
+                            delay,
                         )
                         sleep(delay)
                     else:
@@ -75,10 +79,10 @@ def retry_on_transient_error(max_retries: int = 3, base_delay: float = 1.0) -> C
                         last_exception = e
                         delay = base_delay * (2**attempt)
                         logger.warning(
-                            'Transient provider error, retrying',
-                            attempt=attempt + 1,
-                            error_type=type(e).__name__,
-                            delay=delay,
+                            'Transient provider error, retrying attempt=%s error_type=%s delay=%.2f',
+                            attempt + 1,
+                            type(e).__name__,
+                            delay,
                         )
                         sleep(delay)
                     else:
