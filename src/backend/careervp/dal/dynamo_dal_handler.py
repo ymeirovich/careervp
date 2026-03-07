@@ -749,8 +749,17 @@ class DynamoDalHandler(DalHandler):
                     return Result(success=True, data=None, code=ResultCode.SUCCESS)
             return Result(success=False, error='Tailored CV not found', code=ResultCode.CV_NOT_FOUND)
         except (ClientError, ValidationError) as exc:
+            error_code, error_message = self._client_error_details(exc)
             error_msg = 'failed to delete tailored CV'
-            logger.exception(error_msg, user_id=user_id, cv_tailoring_id=cv_tailoring_id)
+            logger.exception(
+                error_msg,
+                user_id=user_id,
+                cv_tailoring_id=cv_tailoring_id,
+                attempted_sort_keys=list(dict.fromkeys(sort_keys)),
+                table_name=self.table_name,
+                error_code=error_code,
+                error_message=error_message,
+            )
             return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
 
     @staticmethod

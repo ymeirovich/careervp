@@ -4,7 +4,7 @@ import json
 from collections.abc import Generator
 from datetime import datetime, timezone
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import boto3  # type: ignore[import-untyped]
 import pytest
@@ -220,3 +220,43 @@ def test_delete_tailored_cv_removes_artifact(tailoring_table: Any) -> None:
         }
     )
     assert lookup.get('Item') is None
+
+
+def test_delete_tailored_cv_logs_request_to_response_on_dal_failure() -> None:
+    """DELETE failure emits request/dal/response structured events."""
+    from careervp.handlers.cv_tailoring_handler import lambda_handler
+    from careervp.models.result import Result, ResultCode
+
+    mock_dal = MagicMock()
+    mock_dal.delete_tailored_cv.return_value = Result(
+        success=False,
+        error='AccessDeniedException: delete not allowed',
+        code=ResultCode.DYNAMODB_ERROR,
+    )
+
+    event = _event(
+        path='/cv-tailoring/cv-tail-123',
+        method='DELETE',
+        user_id='user-1',
+        path_parameters={'cvTailoringId': 'cv-tail-123'},
+    )
+
+    with (
+        patch('careervp.handlers.cv_tailoring_handler.DynamoDalHandler', return_value=mock_dal),
+        patch('careervp.handlers.cv_tailoring_handler.logger') as mock_logger,
+    ):
+        response = lambda_handler(event, _context())
+
+    assert response['statusCode'] == 500
+    payload = json.loads(response['body'])
+    assert payload['code'] == ResultCode.DYNAMODB_ERROR
+
+    info_events = [call.kwargs.get('event') for call in mock_logger.info.call_args_list]
+    assert 'cv_tailoring_request_received' in info_events
+    assert 'cv_tailoring_delete_started' in info_events
+    assert 'cv_tailoring_delete_dal_result' in info_events
+    assert 'cv_tailoring_response_sent' in info_events
+
+    debug_events = [call.kwargs.get('event') for call in mock_logger.debug.call_args_list]
+    assert 'cv_tailoring_request_received' in debug_events
+    assert 'cv_tailoring_response_sent' in debug_events

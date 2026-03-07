@@ -52,6 +52,22 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
     headers = _cors_headers()
     method = str(event.get('httpMethod', '')).upper()
     path = str(event.get('path', '')).rstrip('/')
+    aws_request_id = getattr(context, 'aws_request_id', 'unknown')
+    request_context = {
+        'event': 'cv_tailoring_request_received',
+        'http_method': method,
+        'path': path,
+        'aws_request_id': aws_request_id,
+    }
+    logger.info('cv_tailoring request received', **request_context)
+    logger.debug(
+        'cv_tailoring request body',
+        event='cv_tailoring_request_received',
+        http_method=method,
+        path=path,
+        aws_request_id=aws_request_id,
+        request_body=_request_body_for_logging(event),
+    )
 
     if method == 'OPTIONS':
         return _response(HTTPStatus.OK, {'success': True}, headers)
@@ -68,9 +84,25 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
             )
 
     if method == 'GET' and path in {'/users/me/tailored-cvs', '/cv-tailorings'}:
+        logger.info(
+            'cv_tailoring route selected',
+            event='cv_tailoring_route_selected',
+            http_method=method,
+            path=path,
+            route='list_tailored_cvs',
+            aws_request_id=aws_request_id,
+        )
         return list_tailored_cvs(event)
 
     if method == 'DELETE' and _is_tailoring_delete_path(path):
+        logger.info(
+            'cv_tailoring route selected',
+            event='cv_tailoring_route_selected',
+            http_method=method,
+            path=path,
+            route='delete_tailored_cv',
+            aws_request_id=aws_request_id,
+        )
         return delete_tailored_cv(event)
 
     if method != 'POST':
@@ -373,7 +405,21 @@ def list_tailored_cvs(event: dict[str, Any]) -> dict[str, Any]:
 def delete_tailored_cv(event: dict[str, Any]) -> dict[str, Any]:
     """Handle DELETE /cv-tailoring/{cvTailoringId}."""
     headers = _cors_headers()
+    method = str(event.get('httpMethod', '')).upper()
+    path = str(event.get('path', '')).rstrip('/')
+    request_context = {
+        'http_method': method,
+        'path': path,
+        'event': 'cv_tailoring_delete_started',
+    }
     user_id = _get_user_id(event)
+    logger.info('cv_tailoring delete started', user_id=user_id, **request_context)
+    logger.debug(
+        'cv_tailoring delete request body',
+        user_id=user_id,
+        request_body=_request_body_for_logging(event),
+        **request_context,
+    )
     if not user_id:
         return _response(
             HTTPStatus.UNAUTHORIZED,
@@ -383,6 +429,11 @@ def delete_tailored_cv(event: dict[str, Any]) -> dict[str, Any]:
                 'message': 'Missing or invalid authentication token',
             },
             headers,
+            log_context={
+                **request_context,
+                'event': 'cv_tailoring_response_sent',
+                'user_id_hash_or_id': user_id,
+            },
         )
 
     cv_tailoring_id = _extract_cv_tailoring_id(event)
@@ -395,10 +446,34 @@ def delete_tailored_cv(event: dict[str, Any]) -> dict[str, Any]:
                 'message': 'Missing cvTailoringId path parameter',
             },
             headers,
+            log_context={
+                **request_context,
+                'event': 'cv_tailoring_response_sent',
+                'user_id_hash_or_id': user_id,
+            },
         )
 
+    logger.info(
+        'cv_tailoring delete invoking dal',
+        event='cv_tailoring_delete_started',
+        http_method=method,
+        path=path,
+        user_id=user_id,
+        cv_tailoring_id=cv_tailoring_id,
+    )
     dal = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))
     delete_result = dal.delete_tailored_cv(user_id=user_id, cv_tailoring_id=cv_tailoring_id)
+    logger.info(
+        'cv_tailoring delete dal result',
+        event='cv_tailoring_delete_dal_result',
+        http_method=method,
+        path=path,
+        user_id=user_id,
+        cv_tailoring_id=cv_tailoring_id,
+        success=delete_result.success,
+        result_code=delete_result.code,
+        error_message=delete_result.error,
+    )
     if not delete_result.success:
         if delete_result.code == ResultCode.CV_NOT_FOUND:
             return _response(
@@ -409,6 +484,14 @@ def delete_tailored_cv(event: dict[str, Any]) -> dict[str, Any]:
                     'message': 'Tailored CV not found',
                 },
                 headers,
+                log_context={
+                    **request_context,
+                    'event': 'cv_tailoring_response_sent',
+                    'user_id_hash_or_id': user_id,
+                    'cv_tailoring_id': cv_tailoring_id,
+                    'result_code': delete_result.code,
+                    'error_message': delete_result.error,
+                },
             )
         return _response(
             HTTPStatus.INTERNAL_SERVER_ERROR,
@@ -418,6 +501,14 @@ def delete_tailored_cv(event: dict[str, Any]) -> dict[str, Any]:
                 'message': 'Failed to delete tailored CV',
             },
             headers,
+            log_context={
+                **request_context,
+                'event': 'cv_tailoring_response_sent',
+                'user_id_hash_or_id': user_id,
+                'cv_tailoring_id': cv_tailoring_id,
+                'result_code': delete_result.code,
+                'error_message': delete_result.error,
+            },
         )
 
     return _response(
@@ -428,6 +519,14 @@ def delete_tailored_cv(event: dict[str, Any]) -> dict[str, Any]:
             'status': 'deleted',
         },
         headers,
+        log_context={
+            **request_context,
+            'event': 'cv_tailoring_response_sent',
+            'user_id_hash_or_id': user_id,
+            'cv_tailoring_id': cv_tailoring_id,
+            'result_code': delete_result.code,
+            'error_message': None,
+        },
     )
 
 
@@ -674,8 +773,35 @@ def _cors_headers() -> dict[str, str]:
     return headers
 
 
-def _response(status: int | HTTPStatus, body: dict[str, Any], headers: dict[str, str]) -> dict[str, Any]:
+def _request_body_for_logging(event: dict[str, Any]) -> Any:
+    body = event.get('body')
+    if body is None:
+        return None
+    if isinstance(body, (dict, list)):
+        return body
+    if isinstance(body, str):
+        try:
+            return json.loads(body)
+        except json.JSONDecodeError:
+            return body
+    return str(body)
+
+
+def _response(
+    status: int | HTTPStatus,
+    body: dict[str, Any],
+    headers: dict[str, str],
+    log_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     status_code = int(status.value) if isinstance(status, HTTPStatus) else int(status)
+    if log_context is not None:
+        logger.info('cv_tailoring response sent', status_code=status_code, **log_context)
+        logger.debug(
+            'cv_tailoring response body',
+            status_code=status_code,
+            response_body=body,
+            **log_context,
+        )
     return {
         'statusCode': status_code,
         'headers': headers,

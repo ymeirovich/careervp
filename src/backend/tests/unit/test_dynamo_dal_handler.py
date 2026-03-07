@@ -181,6 +181,35 @@ def test_delete_tailored_cv_deletes_prefixed_item(mocker: MockerFixture) -> None
     assert delete_key['sk'] == 'ARTIFACT#CV_TAILORED#cv-tail-123'
 
 
+def test_delete_tailored_cv_returns_dynamodb_error_on_access_denied(mocker: MockerFixture) -> None:
+    handler = DynamoDalHandler(TABLE_NAME)
+    mock_table = mocker.Mock()
+    mock_table.get_item.side_effect = [
+        {'Item': {'pk': 'user-1', 'sk': 'cv-tail-123'}},
+    ]
+    mock_table.delete_item.side_effect = ClientError(
+        error_response={
+            'Error': {
+                'Code': 'AccessDeniedException',
+                'Message': 'User is not authorized to perform: dynamodb:DeleteItem',
+            }
+        },
+        operation_name='DeleteItem',
+    )
+    mock_logger = mocker.patch('careervp.dal.dynamo_dal_handler.logger')
+    mocker.patch.object(handler, '_get_db_handler', return_value=mock_table)
+
+    result = handler.delete_tailored_cv('user-1', 'cv-tail-123')
+
+    assert result.success is False
+    assert result.code == ResultCode.DYNAMODB_ERROR
+    assert 'AccessDeniedException' in str(result.error)
+    mock_logger.exception.assert_called_once()
+    call_kwargs = mock_logger.exception.call_args.kwargs
+    assert call_kwargs['error_code'] == 'AccessDeniedException'
+    assert 'attempted_sort_keys' in call_kwargs
+
+
 class TestDynamoDalHandlerVPR:
     """End-to-end persistence tests for VPR DAL methods."""
 

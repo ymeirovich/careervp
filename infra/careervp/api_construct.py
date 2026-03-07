@@ -466,6 +466,7 @@ class ApiConstruct(Construct):
                                 "dynamodb:PutItem",
                                 "dynamodb:GetItem",
                                 "dynamodb:UpdateItem",
+                                "dynamodb:DeleteItem",
                                 "dynamodb:Query",
                             ],
                             resources=[

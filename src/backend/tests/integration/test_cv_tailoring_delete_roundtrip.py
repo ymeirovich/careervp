@@ -59,6 +59,15 @@ class TestCvTailoringDeleteRoute:
         assert not _is_tailoring_delete_path('/cv-tailoring/generate'), 'Generate path must not match delete'
         assert not _is_tailoring_delete_path('/cv-tailoring/cv-123/status'), 'Status path must not match delete'
 
+    def test_dynamodb_db_policy_includes_delete_item(self):
+        """dynamodb_db IAM policy must include DeleteItem for users table delete path."""
+        api_construct_path = '/Users/yitzchak/Documents/dev/careervp/infra/careervp/api_construct.py'
+        with open(api_construct_path) as f:
+            content = f.read()
+
+        assert '"dynamodb_db": iam.PolicyDocument(' in content
+        assert '"dynamodb:DeleteItem"' in content
+
 
 class TestCvTailoringDeleteRoundtrip:
     """AC-CVT-302: Create-delete-list roundtrip end-to-end."""
