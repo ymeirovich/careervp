@@ -119,8 +119,6 @@ class TestInterviewPrepEndpoints:
             print("No interview prep found, generating first...")
             self.test_generate_interview_prep()
             # Wait for async processing
-            import time
-
             time.sleep(15)
 
         interview_prep_id = test_data.get("interview_prep_id")

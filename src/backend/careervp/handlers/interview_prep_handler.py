@@ -159,10 +159,30 @@ def _generate_and_persist_from_sqs(
         raise
 
     # Generate interview prep using existing logic
-    generation_result = _generate_interview_prep_result(
-        api_request=api_request,
-        user_id=user_id,
-    )
+    try:
+        generation_result = _generate_interview_prep_result(
+            api_request=api_request,
+            user_id=user_id,
+        )
+    except Exception as generation_exc:
+        logger.error(
+            'Interview prep worker generation raised exception',
+            job_id=job_id,
+            user_id=user_id,
+            error=str(generation_exc),
+            exc_info=True,
+        )
+        _update_artifact_status(
+            user_id=user_id,
+            job_id=job_id,
+            status='FAILED',
+            error=f'Interview prep generation exception: {generation_exc}',
+            code=ResultCode.LLM_API_ERROR,
+            failure_stage='generation',
+            failure_timestamp=datetime.now(timezone.utc).isoformat(),
+            error_details={'exception_type': type(generation_exc).__name__},
+        )
+        raise
 
     if not generation_result.success or generation_result.data is None:
         generation_error = generation_result.error or 'Interview prep generation failed'
