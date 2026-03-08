@@ -216,7 +216,7 @@ python3 docs/staging/scripts/generate_synthetic_data.py
 
 ```bash
 # Example API calls for seeding
-API_URL="https://api-id.execute-api.us-east-1.amazonaws.com/prod"
+API_URL="https://stage-api.careervp.com"
 
 # Register test users
 for user in $(cat staging_test_users.json | jq -r '.[].email'); do

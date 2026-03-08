@@ -14,7 +14,7 @@
 **Prerequisites:** API deployed, Anthropic API key configured in SSM
 
 ```
-API_BASE="${API_BASE:-https://<api-id>.execute-api.us-east-1.amazonaws.com/prod}"
+API_BASE="${API_BASE:-https://dev-api.careervp.com}"
 ```
 
 ### Step Sequence
@@ -295,13 +295,11 @@ echo "Contract Gate: $PASS/$TOTAL passed, $FAIL failed"
 
 ```bash
 # Required environment variables for E2E tests
-export API_BASE="https://<api-id>.execute-api.us-east-1.amazonaws.com/prod"
+export API_BASE="https://dev-api.careervp.com"
 export TEST_USER_EMAIL="e2e-test@careervp.com"
 export TEST_USER_PASSWORD="SecureP@ss123!"
 export AWS_REGION="us-east-1"
 
-# Optional: Auto-discover API base
-API_ID=$(aws apigatewayv2 get-apis --region us-east-1 \
-  | jq -r '.Items[] | select(.Name=="careervp-core-api-dev") | .ApiId' | head -n1)
-export API_BASE="https://${API_ID}.execute-api.us-east-1.amazonaws.com/prod"
+# Stage environment option
+# export API_BASE="https://stage-api.careervp.com"
 ```

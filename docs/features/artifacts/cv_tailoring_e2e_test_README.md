@@ -32,10 +32,10 @@ cd docs/features/artifacts
 python cv_tailoring_e2e_test.py
 
 # Option B: Specify API URL explicitly
-python cv_tailoring_e2e_test.py --api-url https://your-api-id.execute-api.us-east-1.amazonaws.com/prod
+python cv_tailoring_e2e_test.py --api-url https://dev-api.careervp.com
 
 # Option C: With environment variables
-export API_URL=https://your-api-id.execute-api.us-east-1.amazonaws.com/prod
+export API_URL=https://dev-api.careervp.com
 export CV_ID=your-test-cv-id
 export USER_ID=your-test-user-id
 python cv_tailoring_e2e_test.py
@@ -57,7 +57,7 @@ python cv_tailoring_e2e_test.py
 ============================================================
 CV Tailoring E2E Test Suite
 ============================================================
-API URL: https://abc123.execute-api.us-east-1.amazonaws.com/prod
+API URL: https://dev-api.careervp.com
 Test CV ID: test-cv-001
 User ID: test-user-001
 Timestamp: 2024-01-15T10:30:00.000Z

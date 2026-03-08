@@ -24,7 +24,7 @@ This runbook provides a comprehensive, spec-based, test-driven approach to imple
 | **SSM Parameters** | `/careervp/dev/*` | API keys, JWT keys |
 | **DynamoDB Tables** | `careervp-*-dev` | Environment-suffix tables |
 | **S3 Buckets** | `careervp-*-dev` | Environment-suffix buckets |
-| **API Gateway** | Default "prod" stage | URL: `https://{id}.execute-api.us-east-1.amazonaws.com/prod/` |
+| **API Gateway** | Custom domain mapped to prod stage | URL: `https://stage-api.careervp.com/` |
 | **Configuration** | dev_configuration.json | AWS AppConfig |
 | **CI/CD** | Auto-deploy on push to main | Via deploy.yml |
 
