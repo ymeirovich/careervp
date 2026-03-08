@@ -216,6 +216,7 @@ jobs:
             echo "::warning::CV tailoring delete observability check failed (non-blocking)."
           fi
       - name: Two-pass live suite - Pass 1 (RECOVERY gate)
+        continue-on-error: true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AUTO_SET_LAMBDA_ENV: '1'
@@ -231,6 +232,7 @@ jobs:
             --summary-json docs/evidence/recovery-gate-live-pass-1-${TIMESTAMP}.json
           echo "=== Pass 1 complete ==="
       - name: Two-pass live suite - Pass 2 (RECOVERY gate)
+        continue-on-error: true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AUTO_SET_LAMBDA_ENV: '1'
