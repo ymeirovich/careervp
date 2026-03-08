@@ -53,7 +53,7 @@ def _generate_presigned_url(result_key: str) -> str:
     url = client.generate_presigned_url(
         'get_object',
         Params={'Bucket': bucket, 'Key': result_key},
-        ExpiresIn=3600,
+        ExpiresIn=604800,  # 7 days — reduces expiry-related download failures
     )
     assert isinstance(url, str), 'S3 presigned URL should return a string'
     return url

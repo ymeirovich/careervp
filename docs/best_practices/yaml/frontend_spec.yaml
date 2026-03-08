@@ -1,0 +1,611 @@
+# CareerVP Frontend Specification
+# Machine-readable YAML format for automated validation
+# Design-agnostic patterns that can be applied before knowing the specific design
+
+spec_version: "1.0"
+date: "2026-02-25"
+purpose: "Frontend development standards for security, quality, and AWS integration"
+enforcement: "All new frontend code must follow these patterns"
+
+# =============================================================================
+# SECTION 1: PROJECT STRUCTURE
+# =============================================================================
+project_structure:
+  section: "1. Project Structure"
+
+  rule_1_1:
+    id: "FE_DIRECTORY_ORGANIZATION"
+    name: "Feature-Based Directory Structure"
+    severity: "required"
+    description: "Organize code by feature, not by type"
+    status: "required"
+
+    recommended_structure: |
+      src/
+      ├── components/           # Shared UI components
+      │   ├── Button/
+      │   ├── Input/
+      │   └── Modal/
+      ├── features/            # Feature modules
+      │   ├── auth/
+      │   ├── vpr/
+      │   └── cv-tailoring/
+      ├── hooks/               # Custom React hooks
+      ├── services/            # API clients
+      ├── utils/               # Helper functions
+      ├── types/               # TypeScript types
+      └── App.tsx
+
+    aws_waf_note: "AWS Well-Architected - Operational Excellence: Organized codebase enables faster iteration"
+
+  rule_1_2:
+    id: "FE_INDEX_EXPORTS"
+    name: "Use Index Files for Clean Imports"
+    severity: "recommended"
+    description: "Create index.ts files for clean public APIs"
+    status: "recommended"
+
+    pattern: |
+      components/Button/index.ts
+      export { Button } from './Button'
+
+# =============================================================================
+# SECTION 2: TYPESCRIPT STANDARDS
+# =============================================================================
+typescript:
+  section: "2. TypeScript Standards"
+
+  rule_2_1:
+    id: "FE_STRICT_TYPES"
+    name: "Enable Strict TypeScript"
+    severity: "required"
+    description: "Use strict mode for type safety"
+    status: "required"
+
+    configuration: |
+      tsconfig.json:
+        compilerOptions:
+          strict: true
+          noImplicitAny: true
+          strictNullChecks: true
+
+  rule_2_2:
+    id: "FE_TYPE_DEFINITIONS"
+    name: "Define API Response Types"
+    severity: "required"
+    description: "Create TypeScript interfaces for all API responses"
+    status: "required"
+
+    pattern: |
+      types/api.ts:
+      interface VPRResponse {
+        id: string;
+        content: string;
+        status: 'success' | 'error';
+      }
+
+  rule_2_3:
+    id: "FE Avoid ANY"
+    name: "Avoid 'any' Type"
+    severity: "required"
+    description: "Never use 'any' - use unknown or generic types"
+    status: "required"
+
+    forbidden_patterns:
+      - "let data: any"
+      - "function foo(): any"
+
+    alternatives:
+      - "function foo<T>(): T"
+      - "function foo(): unknown"
+
+  rule_2_4:
+    id: "FE_SHARED_TYPES"
+    name: "Share Types Between Frontend/Backend"
+    severity: "recommended"
+    description: "Generate types from backend OpenAPI spec"
+    status: "recommended"
+
+    tools:
+      - "openapi-typescript"
+      - "orval"
+
+# =============================================================================
+# SECTION 3: API CLIENT
+# =============================================================================
+api_client:
+  section: "3. API Client Patterns"
+
+  rule_3_1:
+    id: "FE_API_CLIENT_PATTERN"
+    name: "Centralize API Calls"
+    severity: "required"
+    description: "Use centralized API client/service"
+    status: "required"
+
+    required_structure:
+      - "Base URL from environment"
+      - "Authentication headers"
+      - "Error handling"
+      - "Request/response logging"
+
+    recommended_pattern: |
+      services/api.ts:
+      class ApiClient {
+        private baseUrl: string;
+        private authToken: string | null;
+
+        async request<T>(endpoint: string, options: RequestInit): Promise<T>
+      }
+
+  rule_3_2:
+    id: "FE_AUTH_HEADERS"
+    name: "Include Auth Headers"
+    severity: "required"
+    description: "Attach authorization header to all requests"
+    status: "required"
+
+    required_pattern: |
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      }
+
+  rule_3_3:
+    id: "FE_ERROR_HANDLING"
+    name: "Handle API Errors Consistently"
+    severity: "required"
+    description: "Implement centralized error handling"
+    status: "required"
+
+    error_handling_pattern: |
+      interface ApiError {
+        status: number;
+        message: string;
+        code?: string;
+      }
+
+      // Transform 4xx/5xx to typed error
+      // Log errors for debugging
+      // Show user-friendly messages
+
+  rule_3_4:
+    id: "FE_REQUEST_TIMEOUT"
+    name: "Set Request Timeouts"
+    severity: "recommended"
+    description: "Implement request timeouts"
+    status: "recommended"
+
+    recommendation: "10-30 second timeout for API requests"
+
+# =============================================================================
+# SECTION 4: STATE MANAGEMENT
+# =============================================================================
+state_management:
+  section: "4. State Management"
+
+  rule_4_1:
+    id: "FE_STATE_CHOICE"
+    name: "Choose Appropriate State Solution"
+    severity: "required"
+    description: "Match state solution to complexity"
+    status: "required"
+
+    recommendations:
+      - complexity: "Simple (few components)"
+        solution: "React Context + useState"
+      - complexity: "Medium (multiple features)"
+        solution: "Zustand or Recoil"
+      - complexity: "Complex (global state)"
+        solution: "Redux Toolkit"
+
+  rule_4_2:
+    id: "FE_SERVER_STATE"
+    name: "Use Server State Library"
+    severity: "recommended"
+    description: "Use React Query or SWR for server state"
+    status: "recommended"
+
+    pattern: |
+      // Instead of manual fetch + useEffect
+      const { data, isLoading } = useQuery({
+        queryKey: ['vpr', id],
+        queryFn: () => api.getVPR(id),
+      });
+
+    benefits:
+      - "Caching"
+      - "Background refetching"
+      - "Optimistic updates"
+      - "Error handling"
+
+  rule_4_3:
+    id: "FE_SEPARATE_STATE"
+    name: "Separate Server/Client State"
+    severity: "required"
+    description: "Don't mix server data with UI state"
+    status: "required"
+
+    pattern: |
+      // Server state (from API)
+      const { data: user } = useQuery(['user', id]);
+
+      // Client state (local interaction)
+      const [isEditing, setIsEditing] = useState(false);
+
+# =============================================================================
+# SECTION 5: COMPONENTS
+# =============================================================================
+components:
+  section: "5. Component Patterns"
+
+  rule_5_1:
+    id: "FE_COMPONENT_STRUCTURE"
+    name: "Follow Component Structure Conventions"
+    severity: "required"
+    description: "Consistent component file structure"
+    status: "required"
+
+    structure: |
+      components/Button/
+      ├── Button.tsx        # Component implementation
+      ├── Button.test.tsx   # Unit tests
+      ├── index.ts          # Public exports
+      └── types.ts          # Component types
+
+  rule_5_2:
+    id: "FE_COMPOSITION"
+    name: "Prefer Component Composition"
+    severity: "recommended"
+    description: "Compose complex UIs from simple components"
+    status: "recommended"
+
+    pattern: |
+      <Card>
+        <Card.Header>
+          <Title />
+        </Card.Header>
+        <Card.Body>
+          <Content />
+        </Card.Body>
+        <Card.Footer>
+          <Actions />
+        </Card.Footer>
+      </Card>
+
+  rule_5_3:
+    id: "FE_CUSTOM_HOOKS"
+    name: "Extract Logic to Custom Hooks"
+    severity: "recommended"
+    description: "Move reusable logic to custom hooks"
+    status: "recommended"
+
+    pattern: |
+      // useAuth.ts
+      const useAuth = () => {
+        const [user, setUser] = useState<User | null>(null);
+        const login = async (credentials) => { ... };
+        const logout = () => { ... };
+        return { user, login, logout };
+      };
+
+# =============================================================================
+# SECTION 6: SECURITY
+# =============================================================================
+security:
+  section: "6. Frontend Security"
+
+  rule_6_1:
+    id: "FE_XSS_PREVENTION"
+    name: "Prevent XSS Attacks"
+    severity: "critical"
+    description: "Sanitize user input and use React's escaping"
+    status: "required"
+
+    requirements:
+      - "Use React's default escaping"
+      - "Sanitize HTML with DOMPurify if needed"
+      - "Never use dangerouslySetInnerHTML"
+
+    forbidden_patterns:
+      - pattern: "dangerouslySetInnerHTML"
+        description: "XSS vulnerability"
+      - pattern: "eval()"
+        description: "Code injection risk"
+
+  rule_6_2:
+    id: "FE_SECURITY_HEADERS"
+    name: "Configure Security Headers"
+    severity: "required"
+    description: "Set security headers in responses"
+    status: "required"
+
+    headers:
+      - "Content-Security-Policy"
+      - "X-Content-Type-Options: nosniff"
+      - "X-Frame-Options: DENY"
+      - "X-XSS-Protection: 1; mode=block"
+
+    aws_waf_note: "AWS Well-Architected - Security: Security headers protect against common attacks"
+
+  rule_6_3:
+    id: "FE_TOKEN_STORAGE"
+    name: "Secure Token Storage"
+    severity: "required"
+    description: "Handle tokens securely"
+    status: "required"
+
+    recommendations:
+      - "Use httpOnly cookies for access tokens"
+      - "If using localStorage: encrypt sensitive data"
+      - "Implement token refresh flow"
+
+    forbidden_patterns:
+      - "Store tokens in URL"
+      - "Log tokens to console"
+
+  rule_6_4:
+    id: "FE_DEPENDENCY_SECURITY"
+    name: "Scan Dependencies for Vulnerabilities"
+    severity: "required"
+    description: "Run security scans on dependencies"
+    status: "required"
+
+    tools:
+      - "npm audit"
+      - "Snyk"
+      - "Dependabot"
+
+    aws_waf_note: "AWS Well-Architected - Security: Vulnerable dependencies are a common attack vector"
+
+# =============================================================================
+# SECTION 7: PERFORMANCE
+# =============================================================================
+performance:
+  section: "7. Frontend Performance"
+
+  rule_7_1:
+    id: "FE_CODE_SPLITTING"
+    name: "Implement Code Splitting"
+    severity: "recommended"
+    description: "Split code by route/component"
+    status: "recommended"
+
+    patterns:
+      - "React.lazy() for route components"
+      - "Dynamic imports for heavy components"
+
+    example: |
+      const HeavyComponent = React.lazy(() => import('./HeavyComponent'));
+
+  rule_7_2:
+    id: "FE_ASSET_OPTIMIZATION"
+    name: "Optimize Assets"
+    severity: "required"
+    description: "Optimize images, fonts, and bundles"
+    status: "required"
+
+    practices:
+      - "Use WebP/AVIF images"
+      - "Compress and minify bundles"
+      - "Use tree shaking"
+      - "Configure long-term caching"
+
+  rule_7_3:
+    id: "FE_CDN_INTEGRATION"
+    name: "Use CDN for Static Assets"
+    severity: "required"
+    description: "Serve static assets from CDN"
+    status: "required"
+
+    aws_waf_note: "AWS Well-Architected - Performance: CDN reduces latency for global users"
+
+    setup:
+      - "CloudFront distribution"
+      - "S3 as origin"
+      - "Cache policies configured"
+
+  rule_7_4:
+    id: "FE_CACHING"
+    name: "Implement Caching Strategy"
+    severity: "required"
+    description: "Configure appropriate caching"
+    status: "required"
+
+    cache_headers:
+      - "Static assets: long cache (1 year)"
+      - "API responses: no-cache or short TTL"
+      - "HTML: no-cache (always fetch latest)"
+
+# =============================================================================
+# SECTION 8: ERROR HANDLING
+# =============================================================================
+error_handling:
+  section: "8. Error Handling"
+
+  rule_8_1:
+    id: "FE_ERROR_BOUNDARIES"
+    name: "Use Error Boundaries"
+    severity: "required"
+    description: "Wrap components with error boundaries"
+    status: "required"
+
+    pattern: |
+      class ErrorBoundary extends React.Component {
+        componentDidCatch(error, errorInfo) {
+          // Log to error reporting service
+        }
+        render() {
+          return this.props.children;
+        }
+      }
+
+  rule_8_2:
+    id: "FE_ERROR_REPORTING"
+    name: "Centralize Error Reporting"
+    severity: "required"
+    description: "Send errors to error tracking service"
+    status: "required"
+
+    tools:
+      - "Sentry"
+      - "Datadog"
+      - "CloudWatch RUM"
+
+    required_data:
+      - "Error message"
+      - "Stack trace"
+      - "User context"
+      - "Browser/OS info"
+
+  rule_8_3:
+    id: "FE_FALLBACK_UI"
+    name: "Provide Fallback UI"
+    severity: "required"
+    description: "Show graceful degradation"
+    status: "required"
+
+    patterns:
+      - "Loading states"
+      - "Empty states"
+      - "Error states"
+
+# =============================================================================
+# SECTION 9: ACCESSIBILITY
+# =============================================================================
+accessibility:
+  section: "9. Accessibility (AWS Best Practice)"
+
+  rule_9_1:
+    id: "FE_A11Y_SEMANTIC_HTML"
+    name: "Use Semantic HTML"
+    severity: "required"
+    description: "Use proper HTML elements"
+    status: "required"
+
+    pattern: |
+      <button> for actions
+      <a> for links
+      <header>, <main>, <nav> for layout
+
+    aws_waf_note: "AWS Well-Architected - Accessibility: Supports all users, including those using assistive technologies"
+
+  rule_9_2:
+    id: "FE_A11Y_KEYBOARD"
+    name: "Ensure Keyboard Navigation"
+    severity: "required"
+    description: "All functionality accessible via keyboard"
+    status: "required"
+
+    requirements:
+      - "Tab order is logical"
+      - "Focus indicators visible"
+      - "Skip links for navigation"
+
+  rule_9_3:
+    id: "FE_A11Y_LABELS"
+    name: "Provide ARIA Labels"
+    severity: "recommended"
+    description: "Add labels for screen readers"
+    status: "recommended"
+
+    pattern: |
+      <button aria-label="Close dialog">
+      <input aria-describedby="error-message">
+
+# =============================================================================
+# SECTION 10: TESTING
+# =============================================================================
+testing:
+  section: "10. Frontend Testing"
+
+  rule_10_1:
+    id: "FE_TEST_TYPES"
+    name: "Use Testing Pyramid"
+    severity: "required"
+    description: "Balance unit, integration, and e2e tests"
+    status: "required"
+
+    distribution:
+      - "Unit: 70%"
+      - "Integration: 20%"
+      - "E2E: 10%"
+
+  rule_10_2:
+    id: "FE_UNIT_TESTING"
+    name: "Unit Test Components"
+    severity: "required"
+    description: "Test components in isolation"
+    status: "required"
+
+    tools:
+      - "Jest"
+      - "React Testing Library"
+
+    pattern: |
+      test('renders button with text', () => {
+        render(<Button>Click me</Button>);
+        expect(screen.getByText('Click me')).toBeInTheDocument();
+      });
+
+  rule_10_3:
+    id: "FE_E2E_TESTING"
+    name: "E2E Test Critical Flows"
+    severity: "required"
+    description: "Test critical user journeys"
+    status: "required"
+
+    tools:
+      - "Playwright"
+      - "Cypress"
+
+    coverage:
+      - "Authentication flow"
+      - "Core business workflows"
+      - "Payment flows"
+
+# =============================================================================
+# SECTION 11: INTERNATIONALIZATION
+# =============================================================================
+internationalization:
+  section: "11. Internationalization (i18n)"
+
+  rule_11_1:
+    id: "FE_I18N_SETUP"
+    name: "Set Up i18n Early"
+    severity: "recommended"
+    description: "Configure i18n before adding content"
+    status: "recommended"
+
+    tools:
+      - "react-i18next"
+      - "i18next"
+
+    languages:
+      - "English (en)"
+      - "Hebrew (he)"  # As per project requirements
+
+  rule_11_2:
+    id: "FE_I18N_CONTENT"
+    name: "Externalize Strings"
+    severity: "required"
+    description: "Don't hardcode display strings"
+    status: "required"
+
+    pattern: |
+      // Instead of
+      <h1>Welcome</h1>
+
+      // Use
+      <h1>{t('welcome')}</h1>
+
+  rule_11_3:
+    id: "FE_I18N_FORMAT"
+    name: "Use i18n for Formatting"
+    severity: "required"
+    description: "Format dates, numbers per locale"
+    status: "required"
+
+    pattern: |
+      {new Intl.NumberFormat(locale).format(number)}
+      {new Date(date).toLocaleDateString(locale)}

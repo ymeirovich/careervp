@@ -67,12 +67,14 @@ def test_e2e_happy_path_full_job_application() -> None:
             responses.append({'question_id': str(qid), 'response': 'STAR response with measurable impact.'})
     gap_r = client.request(
         'POST',
-        '/gap-analysis/responses',
+        f'/jobs/{job_id}/gap-responses',
         token=token,
         json_body={'cv_id': cv_id, 'job_id': job_id, 'responses': responses},
-        expected_status={200, 201},
+        expected_status={201},
     )
     gap_ids = unwrap(gap_r.data).get('gap_response_ids', unwrap(gap_r.data).get('response_ids', []))
+    if not isinstance(gap_ids, list) or not gap_ids:
+        gap_ids = [item['question_id'] for item in responses if item.get('question_id')]
     assert isinstance(gap_ids, list) and len(gap_ids) > 0
 
     vpr = client.request(

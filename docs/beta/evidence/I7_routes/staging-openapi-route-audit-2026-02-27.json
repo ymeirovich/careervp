@@ -1,0 +1,11 @@
+{
+  "generated_file": "docs/swagger/careervp-api-staging-v1.json",
+  "frozen_spec": "docs/beta/evidence/I7_routes/frozen_spec.json",
+  "path_count": 26,
+  "operation_count": 30,
+  "frozen_operation_count": 30,
+  "has_api_prefix": false,
+  "missing_method_paths": [],
+  "extra_method_paths": [],
+  "operation_surface_matches_frozen": true
+}

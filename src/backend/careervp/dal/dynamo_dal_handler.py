@@ -1,8 +1,12 @@
+import json
+import os
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Any
+from uuid import uuid4
 
 import boto3
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr, Key
 from botocore.exceptions import ClientError
 from mypy_boto3_dynamodb import DynamoDBServiceResource
 from pydantic import ValidationError
@@ -30,6 +34,48 @@ class DynamoDalHandler(DalHandler):
     def __init__(self, table_name: str):
         self.table_name = table_name
 
+    @staticmethod
+    def _client_error_details(exc: Exception) -> tuple[str, str]:
+        if isinstance(exc, ClientError):
+            error = exc.response.get('Error', {})
+            return str(error.get('Code', 'ClientError')), str(error.get('Message', str(exc)))
+        return exc.__class__.__name__, str(exc)
+
+    def _map_dal_error_code(self, exc: Exception, error_message: str) -> str:
+        if isinstance(exc, ValidationError):
+            return ResultCode.VALIDATION
+        if isinstance(exc, ClientError):
+            error_code, _ = self._client_error_details(exc)
+            if error_code == 'ValidationException':
+                if 'schema' in error_message.lower() or 'key element' in error_message.lower():
+                    return ResultCode.TABLE_SCHEMA_MISMATCH
+                return ResultCode.DYNAMODB_VALIDATION_EXCEPTION
+        return ResultCode.DYNAMODB_ERROR
+
+    def _dal_failure_result(
+        self,
+        *,
+        operation: str,
+        exc: Exception,
+        key_names: list[str],
+    ) -> Result[Any]:
+        error_code, error_message = self._client_error_details(exc)
+        mapped_code = self._map_dal_error_code(exc, error_message)
+        logger.error(
+            'DynamoDB DAL operation failed',
+            table_name=self.table_name,
+            operation=operation,
+            key_names=key_names,
+            error_code=error_code,
+            error_message=error_message,
+            exc_info=True,
+        )
+        return Result(
+            success=False,
+            error=(f'table_name={self.table_name} operation={operation} error_code={error_code} message={error_message}'),
+            code=mapped_code,
+        )
+
     def _get_db_handler(self, table_name: str) -> Any:
         logger.info('opening connection to dynamodb table', table_name=table_name)
         session = boto3.session.Session()
@@ -43,9 +89,16 @@ class DynamoDalHandler(DalHandler):
         try:
             table = self._get_db_handler(self.table_name)
             # Exclude nulls to avoid DynamoDB GSI key-type validation errors (e.g. email-index expects S, not NULL).
-            item = user_cv.model_dump(exclude_none=True)
+            if not user_cv.cv_id:
+                user_cv.cv_id = str(uuid4())
+
+            item = user_cv.model_dump(exclude_none=True, mode='json')
+            # Canonical key schema for CVS table.
+            item['userId'] = user_cv.user_id
+            item['cvId'] = user_cv.cv_id
+            # Legacy aliases retained for backward compatibility in mixed environments.
             item['pk'] = user_cv.user_id
-            item['sk'] = 'CV'
+            item['sk'] = f'CV#{user_cv.cv_id}'
             table.put_item(Item=item)
         except (ClientError, ValidationError) as exc:  # pragma: no cover
             error_msg = 'failed to save CV'
@@ -60,11 +113,47 @@ class DynamoDalHandler(DalHandler):
         logger.info('fetching CV from DynamoDB')
         try:
             table = self._get_db_handler(self.table_name)
-            response = table.get_item(Key={'pk': user_id, 'sk': 'CV'})
-            item = response.get('Item')
-            if not item:
+            items: list[dict[str, Any]] = []
+            try:
+                response = table.query(
+                    KeyConditionExpression=Key('userId').eq(user_id),
+                    ScanIndexForward=False,
+                    Limit=20,
+                )
+                items.extend(response.get('Items', []))
+            except ClientError as exc:
+                error_code, _ = self._client_error_details(exc)
+                if error_code != 'ValidationException':
+                    raise
+
+                response = table.query(
+                    KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with('CV#'),
+                    ScanIndexForward=False,
+                    Limit=20,
+                )
+                items.extend(response.get('Items', []))
+                if not items:
+                    legacy = table.get_item(Key={'pk': user_id, 'sk': 'CV'}).get('Item')
+                    if isinstance(legacy, dict):
+                        items.append(legacy)
+
+            if not items:
                 return None
-            return UserCV.model_validate(item)
+
+            latest_item = max(
+                items,
+                key=lambda item: (
+                    str(item.get('updated_at', '')),
+                    str(item.get('created_at', '')),
+                    str(item.get('cvId', item.get('cv_id', item.get('sk', '')))),
+                ),
+            )
+            normalized = dict(latest_item)
+            if 'user_id' not in normalized and 'userId' in normalized:
+                normalized['user_id'] = normalized['userId']
+            if 'cv_id' not in normalized and 'cvId' in normalized:
+                normalized['cv_id'] = normalized['cvId']
+            return UserCV.model_validate(normalized)
         except (ClientError, ValidationError) as exc:  # pragma: no cover
             error_msg = 'failed to get CV'
             logger.exception(error_msg, user_id=user_id)
@@ -296,7 +385,7 @@ class DynamoDalHandler(DalHandler):
             return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
 
     @tracer.capture_method(capture_response=False)
-    def list_tailored_cvs(self, user_id: str) -> Result[list[TailoredCV]]:
+    def list_tailored_cvs(self, user_id: str) -> Result[list[dict[str, Any]]]:
         logger.append_keys(user_id=user_id)
         logger.info('listing tailored CVs for user from DynamoDB')
         try:
@@ -311,9 +400,9 @@ class DynamoDalHandler(DalHandler):
                     ExclusiveStartKey=response['LastEvaluatedKey'],
                 )
                 items.extend(response.get('Items', []))
-            results = [TailoredCV.model_validate(item.get('tailored_cv') or item) for item in items]
-            return Result(success=True, data=results, code=ResultCode.SUCCESS)
-        except (ClientError, ValidationError) as exc:
+            # Return raw items as dicts for backward compatibility
+            return Result(success=True, data=items, code=ResultCode.SUCCESS)
+        except ClientError as exc:
             error_msg = 'failed to list tailored CVs'
             logger.exception(error_msg, user_id=user_id)
             return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
@@ -333,6 +422,9 @@ class DynamoDalHandler(DalHandler):
         try:
             table = self._get_db_handler(self.table_name)
             item = {
+                'applicationId': user_id,
+                'artifactId': f'ARTIFACT#COVER_LETTER#{job_id}',
+                'artifactType': 'cover_letter',
                 'pk': user_id,
                 'sk': self._build_cover_letter_sort_key(cv_id, job_id, version),
                 'artifact_type': 'cover_letter',
@@ -340,6 +432,7 @@ class DynamoDalHandler(DalHandler):
                 'cv_id': cv_id,
                 'job_id': job_id,
                 'version': version,
+                'status': 'COMPLETED',
                 'cover_letter': cover_letter,
                 'created_at': datetime.now(timezone.utc).isoformat(),
                 'updated_at': datetime.now(timezone.utc).isoformat(),
@@ -391,27 +484,294 @@ class DynamoDalHandler(DalHandler):
             return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
 
     @tracer.capture_method(capture_response=False)
-    def list_cover_letters(self, user_id: str) -> Result[list[dict[str, Any]]]:
-        logger.append_keys(user_id=user_id)
-        logger.info('listing cover letters for user from DynamoDB')
+    def read_cover_letter_by_artifact_id(
+        self,
+        application_id: str,
+        artifact_id: str,
+    ) -> Result[dict[str, Any] | None]:
+        """Canonical read: fetch a single cover letter by applicationId + artifactId.
+
+        Phase A dual-read: tries canonical pk=application_id, sk=artifact_id first.
+        Falls back to legacy pk/sk scan if COVER_LETTER_LEGACY_READ_ENABLED=true and
+        canonical read misses.
+        """
+        logger.append_keys(application_id=application_id, artifact_id=artifact_id)
+        logger.info('reading cover letter by canonical artifact_id')
         try:
             table = self._get_db_handler(self.table_name)
-            key_condition = Key('pk').eq(user_id) & Key('sk').begins_with(COVER_LETTER_SORT_KEY_PREFIX)
-            items: list[dict[str, Any]] = []
-            response = table.query(KeyConditionExpression=key_condition)
+            # Canonical read: applicationId + artifactId
+            response = table.get_item(Key={'applicationId': application_id, 'artifactId': artifact_id})
+            item = response.get('Item')
+            if item:
+                logger.info('cover letter found via canonical key', key_schema='canonical')
+                return Result(success=True, data=item, code=ResultCode.SUCCESS)
+
+            # Legacy fallback (Phase A): scan cover letter items for matching artifact
+            legacy_enabled = os.environ.get('COVER_LETTER_LEGACY_READ_ENABLED', 'true').strip().lower() == 'true'
+            if legacy_enabled:
+                logger.info('canonical miss, attempting legacy fallback', key_schema='legacy')
+                return self._legacy_read_cover_letter_by_scan(application_id, artifact_id)
+
+            logger.info('cover letter not found and legacy fallback disabled', artifact_id=artifact_id)
+            return Result(success=True, data=None, code=ResultCode.SUCCESS)
+        except ClientError as exc:
+            error_code, _ = self._client_error_details(exc)
+            if error_code == 'ValidationException':
+                try:
+                    response = table.get_item(Key={'pk': application_id, 'sk': artifact_id})
+                    item = response.get('Item')
+                    if item:
+                        logger.info('cover letter found via legacy key fallback', key_schema='legacy')
+                        return Result(success=True, data=item, code=ResultCode.SUCCESS)
+                    return Result(success=True, data=None, code=ResultCode.SUCCESS)
+                except (ClientError, ValidationError) as fallback_exc:
+                    return self._dal_failure_result(
+                        operation='read_cover_letter_by_artifact_id',
+                        exc=fallback_exc,
+                        key_names=['applicationId', 'artifactId', 'pk', 'sk'],
+                    )
+            return self._dal_failure_result(
+                operation='read_cover_letter_by_artifact_id',
+                exc=exc,
+                key_names=['applicationId', 'artifactId'],
+            )
+        except ValidationError as exc:
+            return self._dal_failure_result(
+                operation='read_cover_letter_by_artifact_id',
+                exc=exc,
+                key_names=['applicationId', 'artifactId'],
+            )
+
+    def _legacy_read_cover_letter_by_scan(
+        self,
+        application_id: str,
+        artifact_id: str,
+    ) -> Result[dict[str, Any] | None]:
+        """Legacy fallback: scan cover letter items for matching artifactId or job_id."""
+        request_id = artifact_id
+        if artifact_id.startswith(COVER_LETTER_SORT_KEY_PREFIX):
+            request_id = artifact_id[len(COVER_LETTER_SORT_KEY_PREFIX) :]
+
+        try:
+            table = self._get_db_handler(self.table_name)
+            try:
+                items = self._query_cover_letter_items(table, application_id, use_canonical_keys=True)
+            except ClientError as exc:
+                error_code, _ = self._client_error_details(exc)
+                if error_code != 'ValidationException':
+                    raise
+                items = self._query_cover_letter_items(table, application_id, use_canonical_keys=False)
+
+            return self._match_cover_letter_item(items, artifact_id, request_id, allow_sk_match=False)
+        except ClientError as exc:
+            error_code, _ = self._client_error_details(exc)
+            if error_code == 'ValidationException':
+                try:
+                    items = self._query_cover_letter_items(table, application_id, use_canonical_keys=False)
+                    return self._match_cover_letter_item(items, artifact_id, request_id, allow_sk_match=True)
+                except (ClientError, ValidationError) as fallback_exc:
+                    return self._dal_failure_result(
+                        operation='_legacy_read_cover_letter_by_scan',
+                        exc=fallback_exc,
+                        key_names=['applicationId', 'artifactId', 'pk', 'sk'],
+                    )
+            return self._dal_failure_result(
+                operation='_legacy_read_cover_letter_by_scan',
+                exc=exc,
+                key_names=['applicationId', 'artifactId'],
+            )
+        except ValidationError as exc:
+            return self._dal_failure_result(
+                operation='_legacy_read_cover_letter_by_scan',
+                exc=exc,
+                key_names=['applicationId', 'artifactId'],
+            )
+
+    def _query_cover_letter_items(
+        self,
+        table: Any,
+        application_id: str,
+        *,
+        use_canonical_keys: bool,
+    ) -> list[dict[str, Any]]:
+        if use_canonical_keys:
+            key_condition = Key('applicationId').eq(application_id) & Key('artifactId').begins_with(COVER_LETTER_SORT_KEY_PREFIX)
+        else:
+            key_condition = Key('pk').eq(application_id) & Key('sk').begins_with(COVER_LETTER_SORT_KEY_PREFIX)
+
+        items: list[dict[str, Any]] = []
+        response = table.query(KeyConditionExpression=key_condition)
+        items.extend(response.get('Items', []))
+        while 'LastEvaluatedKey' in response:
+            response = table.query(
+                KeyConditionExpression=key_condition,
+                ExclusiveStartKey=response['LastEvaluatedKey'],
+            )
             items.extend(response.get('Items', []))
+        return items
+
+    def _match_cover_letter_item(
+        self,
+        items: list[dict[str, Any]],
+        artifact_id: str,
+        request_id: str,
+        *,
+        allow_sk_match: bool,
+    ) -> Result[dict[str, Any] | None]:
+        for item in items:
+            if str(item.get('artifactId', '')) == artifact_id:
+                return Result(success=True, data=item, code=ResultCode.SUCCESS)
+            if allow_sk_match and str(item.get('sk', '')) == artifact_id:
+                return Result(success=True, data=item, code=ResultCode.SUCCESS)
+            if str(item.get('job_id', '')) == request_id:
+                return Result(success=True, data=item, code=ResultCode.SUCCESS)
+        return Result(success=True, data=None, code=ResultCode.SUCCESS)
+
+    @tracer.capture_method(capture_response=False)
+    def list_cover_letters_canonical(self, application_id: str) -> Result[list[dict[str, Any]]]:
+        """Canonical list: query by pk=applicationId with ARTIFACT#COVER_LETTER# prefix.
+
+        Phase A dual-read: this is the primary read path. Legacy items written with
+        pk=user_id will also be found since pk == applicationId == user_id for cover letters.
+        """
+        logger.append_keys(application_id=application_id)
+        logger.info('listing cover letters via canonical path', key_schema='canonical')
+        try:
+            table = self._get_db_handler(self.table_name)
+            try:
+                items = self._query_cover_letter_items(table, application_id, use_canonical_keys=True)
+            except ClientError as exc:
+                error_code, _ = self._client_error_details(exc)
+                if error_code != 'ValidationException':
+                    raise
+                items = self._query_cover_letter_items(table, application_id, use_canonical_keys=False)
+            logger.info('cover letters listed via canonical path', application_id=application_id, count=len(items))
+            return Result(success=True, data=items, code=ResultCode.SUCCESS)
+        except (ClientError, ValidationError) as exc:
+            error_msg = 'failed to list cover letters (canonical)'
+            logger.exception(error_msg, application_id=application_id)
+            return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
+
+    def legacy_read_cover_letter(self, pk: str, sk: str) -> Result[dict[str, Any] | None]:
+        """Explicit legacy read by pk/sk. Guarded by COVER_LETTER_LEGACY_READ_ENABLED env var."""
+        legacy_enabled = os.environ.get('COVER_LETTER_LEGACY_READ_ENABLED', 'true').strip().lower() == 'true'
+        if not legacy_enabled:
+            logger.warning('legacy cover letter read attempted but disabled', pk=pk, sk=sk)
+            return Result(success=True, data=None, code=ResultCode.SUCCESS)
+
+        logger.info('legacy cover letter read', pk=pk, sk=sk, key_schema='legacy')
+        try:
+            table = self._get_db_handler(self.table_name)
+            try:
+                response = table.get_item(Key={'pk': pk, 'sk': sk})
+                item = response.get('Item')
+                return Result(success=True, data=item, code=ResultCode.SUCCESS)
+            except ClientError as exc:
+                error_code, _ = self._client_error_details(exc)
+                if error_code != 'ValidationException':
+                    raise
+                response = table.scan(FilterExpression=Attr('pk').eq(pk) & Attr('sk').eq(sk), Limit=1)
+                items = response.get('Items', [])
+                return Result(success=True, data=(items[0] if items else None), code=ResultCode.SUCCESS)
+        except (ClientError, ValidationError) as exc:
+            return self._dal_failure_result(
+                operation='legacy_read_cover_letter',
+                exc=exc,
+                key_names=['pk', 'sk'],
+            )
+
+    @tracer.capture_method(capture_response=False)
+    def list_cover_letters(self, user_id: str) -> Result[list[dict[str, Any]]]:
+        """List cover letters - delegates to canonical path.
+
+        Maintained for backward compatibility. Internally uses list_cover_letters_canonical.
+        """
+        return self.list_cover_letters_canonical(user_id)
+
+    @tracer.capture_method(capture_response=False)
+    def list_gap_questions_by_prefix(
+        self,
+        user_id: str,
+        job_id: str | None = None,
+    ) -> Result[list[dict[str, Any]] | None]:
+        """List gap questions by querying with sort key prefix, optionally filtering by job_id."""
+        logger.append_keys(user_id=user_id)
+        logger.info('listing gap analysis questions from DynamoDB')
+        try:
+            table = self._get_db_handler(self.table_name)
+            key_condition = Key('pk').eq(user_id) & Key('sk').begins_with(GAP_ANALYSIS_SORT_KEY_PREFIX)
+            response = table.query(KeyConditionExpression=key_condition)
+            items = list(response.get('Items', []))
             while 'LastEvaluatedKey' in response:
                 response = table.query(
                     KeyConditionExpression=key_condition,
                     ExclusiveStartKey=response['LastEvaluatedKey'],
                 )
                 items.extend(response.get('Items', []))
-            results = [item.get('cover_letter') or item for item in items]
-            return Result(success=True, data=results, code=ResultCode.SUCCESS)
+            if job_id:
+                normalized_job_id = str(job_id).strip().casefold()
+                if normalized_job_id:
+                    items = [
+                        item
+                        for item in items
+                        if str(item.get('job_id', '')).strip().casefold() == normalized_job_id
+                        or str(item.get('sk', '')).strip().casefold().endswith(f'#{normalized_job_id}')
+                    ]
+            return Result(success=True, data=items if items else None, code=ResultCode.SUCCESS)
         except (ClientError, ValidationError) as exc:
-            error_msg = 'failed to list cover letters'
-            logger.exception(error_msg, user_id=user_id)
+            return self._dal_failure_result(
+                operation='list_gap_questions_by_prefix',
+                exc=exc,
+                key_names=['pk', 'sk'],
+            )
+
+    @tracer.capture_method(capture_response=False)
+    def delete_tailored_cv(self, user_id: str, cv_tailoring_id: str) -> Result[None]:
+        logger.append_keys(user_id=user_id, cv_tailoring_id=cv_tailoring_id)
+        logger.info('deleting tailored CV artifact from DynamoDB')
+        if not cv_tailoring_id:
+            return Result(success=False, error='cv_tailoring_id is required', code=ResultCode.MISSING_REQUIRED_FIELD)
+
+        normalized_id = str(cv_tailoring_id).strip()
+        sort_keys = [normalized_id]
+        prefixed = f'{TAILORED_CV_SORT_KEY_PREFIX}{normalized_id}'
+        if normalized_id.startswith(TAILORED_CV_SORT_KEY_PREFIX):
+            sort_keys.append(normalized_id.removeprefix(TAILORED_CV_SORT_KEY_PREFIX))
+        else:
+            sort_keys.append(prefixed)
+
+        try:
+            table = self._get_db_handler(self.table_name)
+            for sk in dict.fromkeys(sort_keys):
+                response = table.get_item(Key={'pk': user_id, 'sk': sk})
+                if response.get('Item'):
+                    table.delete_item(Key={'pk': user_id, 'sk': sk})
+                    return Result(success=True, data=None, code=ResultCode.SUCCESS)
+            return Result(success=False, error='Tailored CV not found', code=ResultCode.CV_NOT_FOUND)
+        except (ClientError, ValidationError) as exc:
+            error_code, error_message = self._client_error_details(exc)
+            error_msg = 'failed to delete tailored CV'
+            logger.exception(
+                error_msg,
+                user_id=user_id,
+                cv_tailoring_id=cv_tailoring_id,
+                attempted_sort_keys=list(dict.fromkeys(sort_keys)),
+                table_name=self.table_name,
+                error_code=error_code,
+                error_message=error_message,
+            )
             return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
+
+    @staticmethod
+    def _convert_floats_to_decimal(obj: Any) -> Any:
+        """Recursively convert float values to decimal.Decimal for DynamoDB compatibility."""
+        if isinstance(obj, float):
+            return Decimal(str(obj))
+        elif isinstance(obj, dict):
+            return {key: DynamoDalHandler._convert_floats_to_decimal(value) for key, value in obj.items()}
+        elif isinstance(obj, list):
+            return [DynamoDalHandler._convert_floats_to_decimal(item) for item in obj]
+        return obj
 
     @tracer.capture_method(capture_response=False)
     def save_gap_questions(
@@ -426,6 +786,8 @@ class DynamoDalHandler(DalHandler):
         logger.info('saving gap analysis questions to DynamoDB')
         try:
             table = self._get_db_handler(self.table_name)
+            # Convert floats to Decimals for DynamoDB compatibility
+            converted_questions = self._convert_floats_to_decimal(questions)
             item = {
                 'pk': user_id,
                 'sk': self._build_gap_analysis_sort_key(cv_id, job_id),
@@ -433,17 +795,38 @@ class DynamoDalHandler(DalHandler):
                 'user_id': user_id,
                 'cv_id': cv_id,
                 'job_id': job_id,
-                'questions': questions,
+                'questions': converted_questions,
                 'created_at': datetime.now(timezone.utc).isoformat(),
                 'updated_at': datetime.now(timezone.utc).isoformat(),
                 'ttl': self._ttl_timestamp(ttl_days),
             }
+            logger.debug('gap_questions item prepared', item_keys=list(item.keys()), item_size_estimate=len(str(item)))
+            # Pre-validate JSON serializability to catch issues before DynamoDB
+            try:
+                json.dumps(item, default=str)
+            except Exception as serialize_exc:
+                logger.error('Item not JSON serializable', error=str(serialize_exc))
+                raise serialize_exc
             table.put_item(Item=item)
             return Result(success=True, data=None, code=ResultCode.SUCCESS)
         except (ClientError, ValidationError) as exc:
-            error_msg = 'failed to save gap questions'
-            logger.exception(error_msg, user_id=user_id)
-            return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
+            return self._dal_failure_result(
+                operation='save_gap_questions',
+                exc=exc,
+                key_names=['pk', 'sk'],
+            )
+        except Exception as exc:
+            # Catch any other exceptions (e.g., TypeError, serialization errors)
+            logger.exception(
+                'Unexpected error saving gap questions',
+                error=str(exc),
+                exc_type=type(exc).__name__,
+            )
+            return Result(
+                success=False,
+                error=f'unexpected_error: {type(exc).__name__}: {str(exc)}',
+                code=ResultCode.DYNAMODB_ERROR,
+            )
 
     @tracer.capture_method(capture_response=False)
     def get_gap_questions(
@@ -484,8 +867,8 @@ class DynamoDalHandler(DalHandler):
         try:
             table = self._get_db_handler(self.table_name)
             item = {
-                'pk': user_id,
-                'sk': self._build_gap_responses_sort_key(version),
+                'userId': user_id,
+                'questionId': self._build_gap_responses_sort_key(version),
                 'artifact_type': 'gap_responses',
                 'user_id': user_id,
                 'version': version,
@@ -497,9 +880,46 @@ class DynamoDalHandler(DalHandler):
             table.put_item(Item=item)
             return Result(success=True, data=None, code=ResultCode.GAP_RESPONSES_SAVED)
         except (ClientError, ValidationError) as exc:
-            error_msg = 'failed to save gap responses'
-            logger.exception(error_msg, user_id=user_id)
-            return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
+            return self._dal_failure_result(
+                operation='save_gap_responses',
+                exc=exc,
+                key_names=['userId', 'questionId'],
+            )
+
+    @tracer.capture_method(capture_response=False)
+    def save_gap_responses_raw(
+        self,
+        user_id: str,
+        job_id: str,
+        responses: list[dict[str, Any]],
+        version: int = 1,
+        ttl_days: int = 90,
+    ) -> Result[None]:
+        """Save gap responses from raw dict format (for handler compatibility)."""
+        logger.append_keys(user_id=user_id)
+        logger.info('saving gap responses (raw) to DynamoDB')
+        try:
+            table = self._get_db_handler(self.table_name)
+            item = {
+                'userId': user_id,
+                'questionId': self._build_gap_responses_sort_key(version),
+                'artifact_type': 'gap_responses',
+                'user_id': user_id,
+                'job_id': job_id,
+                'version': version,
+                'responses': responses,
+                'created_at': datetime.now(timezone.utc).isoformat(),
+                'updated_at': datetime.now(timezone.utc).isoformat(),
+                'ttl': self._ttl_timestamp(ttl_days),
+            }
+            table.put_item(Item=item)
+            return Result(success=True, data=None, code=ResultCode.GAP_RESPONSES_SAVED)
+        except (ClientError, ValidationError) as exc:
+            return self._dal_failure_result(
+                operation='save_gap_responses_raw',
+                exc=exc,
+                key_names=['userId', 'questionId'],
+            )
 
     @tracer.capture_method(capture_response=False)
     def get_gap_responses(
@@ -513,20 +933,22 @@ class DynamoDalHandler(DalHandler):
             table = self._get_db_handler(self.table_name)
             if version is None:
                 prefix = self._build_gap_responses_sort_key(version=0).replace('#v0', '#v')
-                key_condition = Key('pk').eq(user_id) & Key('sk').begins_with(prefix)
+                key_condition = Key('userId').eq(user_id) & Key('questionId').begins_with(prefix)
                 response = table.query(KeyConditionExpression=key_condition)
                 items = response.get('Items', [])
                 if not items:
                     return Result(success=True, data=None, code=ResultCode.SUCCESS)
-                latest_item = max(items, key=lambda item: self._parse_version_from_sk(item.get('sk', '')))
+                latest_item = max(items, key=lambda item: self._parse_version_from_sk(item.get('questionId', '')))
                 payload = latest_item.get('responses') or []
             else:
-                response = table.get_item(Key={'pk': user_id, 'sk': self._build_gap_responses_sort_key(version)})
+                response = table.get_item(Key={'userId': user_id, 'questionId': self._build_gap_responses_sort_key(version)})
                 item = response.get('Item')
                 payload = item.get('responses') if item else []
             parsed = [GapResponse.model_validate(item) for item in payload]
             return Result(success=True, data=parsed, code=ResultCode.SUCCESS)
         except (ClientError, ValidationError) as exc:
-            error_msg = 'failed to get gap responses'
-            logger.exception(error_msg, user_id=user_id)
-            return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)
+            return self._dal_failure_result(
+                operation='get_gap_responses',
+                exc=exc,
+                key_names=['userId', 'questionId'],
+            )

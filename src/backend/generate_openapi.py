@@ -1,41 +1,33 @@
-"""
-This script is designed to download and save the Swagger JSON configuration from an AWS
-Cloud Development Kit (CDK) deployed service. It's particularly useful for automating
-the process of fetching Swagger documentation for APIs created using Powertools for Lambda
-since their swagger endpoint support a JSON download option.
-
-You can place the swagger file under your docs folder and publish it as part of your PR
-changes. When you run the 'make pr' command, it will run automatically run this script
-and save its output to the default location where it will be uploaded to GitHub pages.
-
-The script uses AWS Boto3 to interact with AWS services, and the 'requests' library to
-download the Swagger JSON.
-
-Usage:
-    The script accepts command-line arguments for customization:
-    --out-destination: Specifies the directory where the Swagger JSON will be saved.
-        (Default: 'docs/swagger')
-    --out-filename: Specifies the filename for the saved Swagger JSON.
-        (Default: 'openapi.json')
-    --swagger-url-key: The key for the Swagger URL in the CDK stack outputs.
-        (Default: 'SwaggerURL')
-    --stack-name: (Optional) The name of the CDK stack to use. If not provided,
-        the 'get_stack_name' function from the cdk folder will be used
-
-Example:
-    python generate_openapi.py --out-destination './docs/swagger' --out-filename
-        'openapi.json' --swagger-url-key 'SwaggerURL' --stack-name 'MyStack'
-"""
+"""Generate OpenAPI JSON from deployed API Gateway route resources."""
 
 import argparse
 import json
 import os
-import time
+import re
 from typing import Any, Dict, Optional
 
 import boto3
-import requests
 from cdk.careervp.utils import get_stack_name
+
+PATH_NORMALIZATION_OVERRIDES = {
+    '/company-research/{jobId}': '/company-research/{company_name}',
+}
+
+PATH_PARAMETER_REPLACEMENTS = {
+    '{jobId}': '{job_id}',
+    '{vprId}': '{job_id}',
+    '{cvTailoringId}': '{job_id}',
+    '{coverLetterId}': '{job_id}',
+    '{interviewPrepId}': '{job_id}',
+}
+
+
+def normalize_route_path(path: str) -> str:
+    """Normalize deployed legacy path-parameter names to canonical contract names."""
+    normalized = PATH_NORMALIZATION_OVERRIDES.get(path, path)
+    for legacy, canonical in PATH_PARAMETER_REPLACEMENTS.items():
+        normalized = normalized.replace(legacy, canonical)
+    return normalized
 
 
 def get_cdk_stack_outputs(stack_name: Optional[str] = None) -> Dict[str, str]:
@@ -55,30 +47,58 @@ def get_cdk_stack_outputs(stack_name: Optional[str] = None) -> Dict[str, str]:
     return {output['OutputKey']: output['OutputValue'] for output in outputs}
 
 
-def download_swagger_json(swagger_url: str, retries: int = 5, delay_seconds: float = 5.0) -> Dict[str, Any]:
-    """
-    Download Swagger JSON from the provided URL.
+def parse_api_id_from_swagger_url(swagger_url: str) -> str:
+    """Extract API Gateway REST API id from execute-api URL."""
+    match = re.match(r'https://([a-z0-9]+)\.execute-api\.[a-z0-9-]+\.amazonaws\.com/.+', swagger_url)
+    if not match:
+        raise ValueError(f'Unable to parse API id from SwaggerURL: {swagger_url}')
+    return match.group(1)
 
-    Args:
-        swagger_url (str): The URL from which to download the Swagger JSON.
 
-    Returns:
-        Dict[str, Any]: The downloaded Swagger JSON.
-    """
-    for attempt in range(1, retries + 1):
-        try:
-            response = requests.get(f'{swagger_url}?format=json', timeout=30)
-            response.raise_for_status()
-            json_data = response.json()
-            assert isinstance(json_data, dict), 'Swagger JSON should be a dict'
-            return json_data
-        except requests.HTTPError as exc:
-            if attempt == retries:
-                raise
-            print(f'Retry {attempt} failed fetching Swagger JSON ({exc}). Retrying in {delay_seconds} seconds...')
-            time.sleep(delay_seconds)
-    # Should never reach due to raise on final attempt
-    raise RuntimeError('Failed to download Swagger JSON after retries')
+def get_apigateway_resource_items(rest_api_id: str) -> list[dict[str, Any]]:
+    """Fetch all API Gateway resources for the given REST API id."""
+    client = boto3.client('apigateway')
+    paginator = client.get_paginator('get_resources')
+    items: list[dict[str, Any]] = []
+    for page in paginator.paginate(restApiId=rest_api_id):
+        page_items = page.get('items', [])
+        if isinstance(page_items, list):
+            items.extend(item for item in page_items if isinstance(item, dict))
+    return items
+
+
+def build_openapi_from_apigw_resources(resources: list[dict[str, Any]]) -> Dict[str, Any]:
+    """Build a minimal OpenAPI document from API Gateway resources/methods."""
+    excluded_paths = {'/swagger', '/swagger.css', '/swagger.js'}
+    paths: dict[str, dict[str, Any]] = {}
+
+    for resource in resources:
+        path = resource.get('path')
+        if not isinstance(path, str) or not path or path in excluded_paths:
+            continue
+        normalized_path = normalize_route_path(path)
+
+        resource_methods = resource.get('resourceMethods')
+        if not isinstance(resource_methods, dict):
+            continue
+
+        for method in sorted(resource_methods.keys()):
+            method_upper = str(method).upper()
+            if method_upper == 'OPTIONS':
+                continue
+            method_lower = method_upper.lower()
+            path_item = paths.setdefault(normalized_path, {})
+            path_item[method_lower] = {
+                'responses': {
+                    '200': {'description': 'OK'},
+                }
+            }
+
+    return {
+        'openapi': '3.0.1',
+        'info': {'title': 'CareerVP Canonical API', 'version': 'staging-v1'},
+        'paths': dict(sorted(paths.items(), key=lambda kv: kv[0])),
+    }
 
 
 def save_json_to_file(json_data: Dict[str, Any], file_path: str) -> None:
@@ -112,9 +132,11 @@ def main(out_destination: str, out_filename: str, swagger_url_key: str, stack_na
         raise SystemExit(1)
 
     try:
-        swagger_json = download_swagger_json(swagger_url)
-    except requests.HTTPError as err:
-        print(f'Failed to download Swagger JSON: {err}')
+        rest_api_id = parse_api_id_from_swagger_url(swagger_url)
+        resources = get_apigateway_resource_items(rest_api_id)
+        swagger_json = build_openapi_from_apigw_resources(resources)
+    except Exception as err:  # noqa: BLE001
+        print(f'Failed to generate OpenAPI from API Gateway resources: {err}')
         raise SystemExit(1) from err
 
     file_path = os.path.join(out_destination, out_filename)

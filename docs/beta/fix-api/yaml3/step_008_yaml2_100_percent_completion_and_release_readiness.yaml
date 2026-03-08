@@ -1,0 +1,269 @@
+spec_id: RECOVERY_008
+title: Final YAML2 100% Completion Verification and Working-State Certification
+priority: critical
+status: validated
+owner: backend-platform
+created_at: 2026-03-05
+updated_at: 2026-03-05
+sequence_step: 8
+
+targets_yaml2_specs:
+  - COVER_LETTER_002
+  - CV_TAILORING_002
+  - GAP_GET_002
+  - INTERVIEW_PREP_002
+  - INTERVIEW_PREP_003
+  - TRIAL_002
+  - VPR_LIST_METADATA_001
+
+problem_statement:
+  exact_failing_behavior: |
+    Individual fixes can pass in isolation while full-suite behavior still regresses.
+    We need a final closure spec that proves all yaml2 specs are fully implemented,
+    regression-free relative to baseline, and ready for release under SPEC_QUALITY_001.
+  expected_behavior: |
+    Every yaml2 acceptance criterion is mapped to pass evidence.
+    Full live suite passes twice consecutively with no blocked regressions.
+    Working state is restored to at least baseline 27 and improved where yaml2 requires it.
+  user_business_impact: |
+    Without end-to-end closure verification, partial fixes can ship and reintroduce critical failures.
+  reproducibility_notes:
+    - Execute all prerequisite RECOVERY_00x specs and gather evidence.
+    - Run full live suite twice and compare output to baseline.
+
+evidence:
+  failing_tests:
+    - all failures observed in careervp/live-test-results28.log
+  endpoint_method_path:
+    - method: MULTI
+      path: full live suite route set
+      observed_status_code: mixed
+  baseline_artifact: careervp/live-test-results27.log
+  regression_artifact: careervp/live-test-results28.log
+  environment: dev-live
+  timestamp_utc: '2026-03-05T00:00:00Z'
+
+architecture_and_ownership_map:
+  route_to_lambda:
+    - route_group: gap-analysis and jobs gap routes
+      lambda: gap-api
+    - route_group: cover-letter submit/status/list
+      lambda: cover-letter-api and cover-letter-status
+    - route_group: vpr submit/status/list
+      lambda: vpr-submit and vpr-status
+    - route_group: cv-tailoring generate/status/delete/list
+      lambda: cv-tailoring-api
+    - route_group: interview-prep submit/status/list
+      lambda: interview-prep-api and interview-prep-status
+  handler_file_paths:
+    - src/backend/careervp/handlers/*.py for all affected domains
+    - src/backend/careervp/dal/*.py for data-access paths
+    - infra/careervp/api_construct.py
+    - docs/refactor/live_tests/*.py
+  data_store_index_usage:
+    - users table pk/sk
+    - artifacts table applicationId/artifactId
+    - jobs table and user_id-index
+    - gap_responses table userId/questionId
+  auth_source_and_identity_key:
+    source: requestContext.authorizer claims
+    identity_key: user_id
+  canonical_sources_of_truth:
+    route_surface: infra/careervp/api_construct.py
+    meta_quality_policy: docs/best_practices/yaml/spec_best_practices.yaml
+
+root_cause_analysis:
+  hypotheses_ranked:
+    - id: H1
+      hypothesis: isolated fixes pass but multi-domain regressions remain.
+      disproof_criteria: full suite and per-spec AC matrices all pass with no blockers.
+      status: confirmed
+    - id: H2
+      hypothesis: closure status can be advanced without complete evidence set.
+      disproof_criteria: evidence integrity checker blocks closure until all AC artifacts are present.
+      status: confirmed
+  confirmed_root_causes:
+    - No final release-level spec existed to aggregate and enforce all yaml2 completion requirements.
+  contributing_factors:
+    - Different endpoint groups were validated on different timelines.
+
+fix_plan:
+  exact_files_to_modify:
+    - path: docs/beta/fix-api/yaml2/*.yaml
+      change: update status fields to validated or closed only after evidence completion
+    - path: docs/beta/fix-api/yaml3/step_008_yaml2_100_percent_completion_and_release_readiness.yaml
+      change: maintain final closure matrix and confidence scoreboard
+    - path: docs/evidence/yaml2-closure-summary-<timestamp>.json
+      change: generate consolidated AC and regression delta report
+    - path: scripts/spec_quality/check_yaml2_closure.py
+      change: >
+        script created by RECOVERY_001 (per Regression_PLAN.md:152); use here is final
+        closure gate only — run to verify all yaml2 ACs and evidence references are pass
+        and fresh before validated or closed state transitions
+  exact_behavior_changes:
+    - Promotion blocked unless all yaml2 specs have complete pass evidence.
+    - Working-state certification requires full-suite two-pass stability and zero blocked regressions.
+  non_goals_out_of_scope:
+    - No new endpoint behavior changes beyond RECOVERY_002..RECOVERY_007.
+  rollback_plan:
+    - If closure criteria fail after deployment, halt promotion and reopen failing RECOVERY step specs.
+
+acceptance_criteria:
+  api_level:
+    - Full live suite passes on two consecutive executions.
+    - No new non-2xx regressions on changed endpoints vs baseline artifact.
+    - No generated-artifact empty-array regressions on required list/read endpoints.
+  data_level:
+    - Schema and key usage conformance reports pass for all affected domains.
+  observability:
+    - Consolidated evidence artifact includes AC pass/fail, deltas, and deployment metadata.
+  negative_and_edge_case_criteria:
+    - Any missing evidence artifact for a blocking AC prevents validated or closed state transition.
+    - Any stale git_sha or deployment_id mismatch in evidence blocks closure.
+  regression_reversal_criteria:
+    - New live artifact is >= careervp/live-test-results27.log and resolves all blockers from 28.
+    - All yaml2 specs reach 100% implemented status per RECOVERY closure criteria.
+
+baseline_and_regression_budget:
+  baseline_artifact:
+    path: careervp/live-test-results27.log
+    reason: minimum working-state target before final closure
+  blocked_regressions:
+    - new_non_2xx_on_changed_endpoints
+    - new_empty_arrays_on_generated_artifact_list_or_read_paths
+    - generated_id_missing_from_status_or_list_after_polling_window
+  allowed_deltas: {}
+
+verification_contract:
+  - requirement_id: VC-FINAL-001
+    verification_type: static
+    blocking_gate: pre_merge
+    artifact_required: true
+    verification_description: yaml2 closure checker confirms all AC entries are pass with evidence
+  - requirement_id: VC-FINAL-002
+    verification_type: contract
+    blocking_gate: pre_deploy
+    artifact_required: true
+    verification_description: strict contract suite passes with no required-route blockers
+  - requirement_id: VC-FINAL-003
+    verification_type: live
+    blocking_gate: post_deploy
+    artifact_required: true
+    verification_description: full live suite passes twice consecutively and regression deltas are clean
+
+deployed_parity_plan:
+  route_surface_parity:
+    source_of_truth: infra route map and deployed inventory
+    verification_steps:
+      - Run deployed parity checker for all changed route groups.
+  authorizer_parity:
+    source_of_truth: deployed method auth configuration
+    verification_steps:
+      - Confirm auth parity on all changed routes.
+  runtime_env_resolution_parity:
+    source_of_truth: lambda env and handler resolution logic
+    verification_steps:
+      - Verify no ambiguous table resolution in changed handlers.
+
+validation_plan:
+  unit_tests:
+    - src/backend/tests/unit/test_gap_handler_persistence_required.py
+    - src/backend/tests/unit/test_gap_dal_job_id_filter.py
+    - src/backend/tests/unit/test_cover_letter_status_storage_keys.py
+    - src/backend/tests/unit/test_cover_letter_list_includes_generated_artifact.py
+    - src/backend/tests/unit/test_vpr_status_handler.py
+    - src/backend/tests/unit/test_l6_route_surface.py
+    - src/backend/tests/unit/test_interview_prep_status.py
+    - src/backend/tests/unit/test_interview_prep_context_resolution.py
+    - src/backend/tests/unit/test_interview_prep_prompt_context.py
+    - src/backend/tests/unit/test_l0_interview_prep_generation.py
+    - src/backend/tests/unit/test_trial_credit_attribution.py
+  integration_tests:
+    - src/backend/tests/integration/test_gap_read_after_write_roundtrip.py
+    - src/backend/tests/integration/test_cover_letter_roundtrip_persistence.py
+    - src/backend/tests/integration/test_vpr_list_roundtrip.py
+    - src/backend/tests/integration/test_cv_tailoring_delete_roundtrip.py
+    - src/backend/tests/integration/test_interview_prep_roundtrip.py
+    - src/backend/tests/integration/test_interview_prep_context_sources.py
+    - src/backend/tests/integration/test_contract_route_parity.py
+  contract_tests:
+    - docs/refactor/live_tests/test_10_api_contract_success.py
+  live_e2e_checks:
+    - docs/refactor/live_tests/run_all_tests.py
+  regression_checks:
+    - scripts/spec_quality/check_regression_delta.py baseline 27 vs final live artifact
+  validation_commands:
+    - uv run python scripts/spec_quality/check_yaml2_closure.py --yaml2-dir careervp/docs/beta/fix-api/yaml2 --evidence-dir docs/evidence
+    - uv run python docs/refactor/live_tests/run_all_tests.py --mode full --summary-json docs/evidence/live-final-pass-1-<timestamp>.json
+    - uv run python docs/refactor/live_tests/run_all_tests.py --mode full --summary-json docs/evidence/live-final-pass-2-<timestamp>.json
+    - uv run python scripts/spec_quality/check_regression_delta.py --baseline careervp/live-test-results27.log --current docs/evidence/live-final-pass-2-<timestamp>.json --out docs/evidence/live-final-regression-delta-<timestamp>.json
+
+traceability_matrix:
+  - requirement_id: AC-FINAL-301
+    requirement: all yaml2 specs have complete AC evidence and pass status
+    code_reference: scripts/spec_quality/check_yaml2_closure.py
+    test_reference: scripts/spec_quality/check_yaml2_closure.py
+    verification_type: static
+    blocking_gate: pre_merge
+    artifact_required: true
+    evidence_reference: docs/evidence/yaml2-closure-summary-<timestamp>.json
+    result: pending
+  - requirement_id: AC-FINAL-302
+    requirement: full live suite passes twice consecutively
+    code_reference: docs/refactor/live_tests/run_all_tests.py
+    test_reference: docs/refactor/live_tests/run_all_tests.py
+    verification_type: live
+    blocking_gate: post_deploy
+    artifact_required: true
+    evidence_reference: docs/evidence/live-final-pass-1-and-2-<timestamp>.json
+    result: pending
+  - requirement_id: AC-FINAL-303
+    requirement: final artifact has no blocked regression deltas vs baseline
+    code_reference: scripts/spec_quality/check_regression_delta.py
+    test_reference: scripts/spec_quality/check_regression_delta.py
+    verification_type: live
+    blocking_gate: post_deploy
+    artifact_required: true
+    evidence_reference: docs/evidence/live-final-regression-delta-<timestamp>.json
+    result: pending
+
+rollback_trigger_matrix:
+  - trigger_id: RT-FINAL-001
+    trigger_condition: any blocking AC in yaml2 closure summary is fail or missing evidence
+    detection_source: yaml2 closure checker
+    action: block validated or closed transition and reopen failing RECOVERY specs
+    owner: release_owner
+  - trigger_id: RT-FINAL-002
+    trigger_condition: second live full-suite pass fails after first pass succeeds
+    detection_source: consecutive live run gate
+    action: block release and rollback latest deployment
+    owner: release_owner
+
+completion_evidence:
+  required_artifacts:
+    - docs/evidence/yaml2-closure-summary-<timestamp>.json
+    - docs/evidence/live-final-pass-1-and-2-<timestamp>.json
+    - docs/evidence/live-final-regression-delta-<timestamp>.json
+  known_residual_risks:
+    - Third-party outages can cause transient non-deterministic live failures.
+  explicit_sign_off_checklist:
+    - all seven yaml2 specs validated or closed with fresh evidence
+    - full live suite two-pass stability achieved
+    - regression delta report clean against baseline
+
+confidence_assessment:
+  confidence_score_0_to_100: 95
+  implementation_100_percent: true
+  confidence_basis:
+    - Final closure depends on successful completion of RECOVERY_002..007.
+  confidence_update_rule: |
+    Set to 100 only when AC-FINAL-301..303 are pass and all yaml2 specs are validated/closed.
+
+dependencies:
+  - RECOVERY_001
+  - RECOVERY_002
+  - RECOVERY_003
+  - RECOVERY_004
+  - RECOVERY_005
+  - RECOVERY_006
+  - RECOVERY_007

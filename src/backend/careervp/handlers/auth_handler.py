@@ -8,12 +8,16 @@ Implements OpenAPI endpoints:
 """
 
 import json
+import os
+from datetime import datetime, timezone
 from http import HTTPStatus
 from typing import Annotated, Any
 
+import boto3
 from aws_lambda_powertools.event_handler import Response, content_types
 from aws_lambda_powertools.logging.correlation_paths import API_GATEWAY_REST
 from aws_lambda_powertools.utilities.typing import LambdaContext
+from jwt import decode as jwt_decode
 from pydantic import BaseModel, EmailStr, Field, ValidationError
 
 from careervp.handlers.utils.observability import logger, tracer
@@ -71,6 +75,45 @@ def _json_response(status: HTTPStatus, body: dict[str, Any]) -> Response[str]:
     )
 
 
+def _initialize_trial_record(access_token: str) -> None:
+    try:
+        claims = jwt_decode(
+            access_token,
+            options={
+                'verify_signature': False,
+                'verify_exp': False,
+                'verify_iat': False,
+            },
+            algorithms=['RS256'],
+        )
+    except Exception:
+        return
+    user_id = claims.get('user_id')
+    if not isinstance(user_id, str) or not user_id:
+        return
+
+    table_name = os.getenv('TABLE_NAME') or os.getenv('USERS_TABLE_NAME')
+    if not table_name:
+        return
+
+    table = boto3.resource('dynamodb').Table(table_name)
+    try:
+        table.put_item(
+            Item={
+                'pk': f'USER#{user_id}',
+                'sk': 'TRIAL',
+                'user_id': user_id,
+                'trial_active': True,
+                'application_count': 0,
+                'created_at': datetime.now(timezone.utc).isoformat(),
+            },
+            ConditionExpression='attribute_not_exists(pk) AND attribute_not_exists(sk)',
+        )
+    except Exception:
+        # Trial record already exists or table unavailable; auth success remains primary path.
+        return
+
+
 def _extract_refresh_token() -> str | None:
     headers = app.current_event.headers or {}
     auth_header = headers.get('Authorization') or headers.get('authorization')
@@ -119,6 +162,7 @@ def register_user() -> Response[str]:
         logger.exception('Unexpected register failure', error=str(exc))
         return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Internal server error'})
 
+    _initialize_trial_record(tokens.access_token)
     return _json_response(HTTPStatus.CREATED, tokens.to_response())
 
 

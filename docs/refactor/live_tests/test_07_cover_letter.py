@@ -1,5 +1,5 @@
 # Live Tests - Cover Letter Endpoints
-# Tests: POST /cover-letter/generate, GET /cover-letter/{coverLetterId}, GET /users/me/cover-letters
+# Tests: POST /cover-letter/generate, GET /cover-letter/{coverLetterId}/status, GET /cover-letters
 
 import os
 import json
@@ -12,13 +12,23 @@ from typing import Any
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from .conftest import API_BASE, TEST_USER_ID, get_auth_headers, save_test_ids
+from .conftest import (
+    API_BASE,
+    TEST_USER_ID,
+    SAMPLE_JOB_PATH,
+    get_auth_headers,
+    read_sample_file,
+    save_test_ids,
+)
+from .quality_assertions import assert_cover_letter_quality
 
 # Import test data from previous tests
 from .test_01_auth_health import test_data
 
 
-def print_response(test_name: str, endpoint: str, status_code: int, response_data: Any):
+def print_response(
+    test_name: str, endpoint: str, status_code: int, response_data: Any
+) -> None:
     """Print JSON response for documentation."""
     output = {
         "test_name": test_name,
@@ -33,21 +43,65 @@ def print_response(test_name: str, endpoint: str, status_code: int, response_dat
 class TestCoverLetterEndpoints:
     """Test Cover Letter endpoints."""
 
-    @pytest.fixture(autouse=True)
-    def setup(self):
+    @pytest.fixture(autouse=True)  # type: ignore[untyped-decorator]
+    def setup(self) -> None:
         """Setup test data."""
         self.base_url = API_BASE
 
-    def test_generate_cover_letter(self):
+    def _auth_headers(self) -> dict[str, str]:
+        """Use bearer-token identity only; avoid stale X-User-Id overrides."""
+        headers = dict(get_auth_headers())
+        headers.pop("X-User-Id", None)
+        return headers
+
+    def _ensure_live_job_id(self, headers: dict[str, str]) -> str:
+        """Ensure test_data['job_id'] points to a real live job record."""
+        existing_job_id = str(test_data.get("job_id") or "").strip()
+        if existing_job_id:
+            get_job_url = f"{self.base_url}/jobs/{existing_job_id}"
+            get_job_response = requests.get(get_job_url, headers=headers, timeout=20)
+            if get_job_response.status_code == 200:
+                return existing_job_id
+
+        create_job_url = f"{self.base_url}/jobs"
+        job_description = read_sample_file(SAMPLE_JOB_PATH).strip()
+        if not job_description:
+            job_description = (
+                "Learning Experience Specialist role with LMS administration, "
+                "instructional design, and cross-functional enablement ownership."
+            )
+
+        payload = {
+            "title": "Learning Experience Specialist",
+            "company_name": "SysAid",
+            "description": job_description[:1000],
+            "url": "https://www.sysaid.com/careers",
+        }
+        create_response = requests.post(
+            create_job_url, json=payload, headers=headers, timeout=30
+        )
+        assert create_response.status_code in [200, 201], (
+            "Failed to materialize live job_id for cover-letter test: "
+            f"{create_response.status_code} {create_response.text[:300]}"
+        )
+
+        data = create_response.json()
+        created_job_id = data.get("id") or data.get("job_id")
+        assert created_job_id, f"Job create response missing id: {data}"
+        test_data["job_id"] = created_job_id
+        save_test_ids(test_data)
+        return str(created_job_id)
+
+    def test_generate_cover_letter(self) -> None:
         """Test POST /cover-letter/generate - generate cover letter."""
         url = f"{self.base_url}/cover-letter/generate"
-        headers = get_auth_headers()
+        headers = self._auth_headers()
 
         # Build payload using test data
         cv_id = test_data.get("cv_id") or f"cv_{TEST_USER_ID}"
-        job_id = test_data.get("job_id") or f"job_{TEST_USER_ID}"
+        job_id = self._ensure_live_job_id(headers)
         vpr_id = test_data.get("vpr_id") or f"vpr_{TEST_USER_ID}"
-        gap_response_ids = test_data.get("gap_response_ids", ["gap_test_001"])
+        gap_response_ids = test_data.get("gap_response_ids") or ["gap_test_001"]
         company_research_id = (
             test_data.get("company_research_id") or f"comp_{TEST_USER_ID}"
         )
@@ -83,6 +137,8 @@ class TestCoverLetterEndpoints:
 
             if "request_id" in data:
                 test_data["cover_letter_id"] = data["request_id"]
+            elif "artifact_id" in data:
+                test_data["cover_letter_id"] = data["artifact_id"]
             elif "id" in data:
                 test_data["cover_letter_id"] = data["id"]
             save_test_ids(test_data)
@@ -120,105 +176,133 @@ class TestCoverLetterEndpoints:
                 f"⚠ POST /cover-letter/generate - Status {response.status_code}: {response.text[:200]}"
             )
 
-    def test_get_cover_letter_status(self):
-        """Test GET /cover-letter/{coverLetterId} - get cover letter status."""
-        cover_letter_id = test_data.get("cover_letter_id") or "test-cover-letter-id"
+    def test_get_cover_letter_status(self) -> None:
+        """Test GET /cover-letter/{coverLetterId}/status - get cover letter status."""
+        # Auto-generate cover letter if none exists
+        if not test_data.get("cover_letter_id"):
+            print("No cover letter found, generating first...")
+            self.test_generate_cover_letter()
+            time.sleep(10)
 
-        url = f"{self.base_url}/cover-letter/{cover_letter_id}"
-        headers = get_auth_headers()
+        cover_letter_id = test_data.get("cover_letter_id")
+        if not cover_letter_id:
+            pytest.skip("No cover letter ID available - generation may have failed")
 
-        response = requests.get(url, headers=headers, timeout=10)
+        url = f"{self.base_url}/cover-letter/{cover_letter_id}/status"
+        headers = self._auth_headers()
 
-        # Accept 200 (success), 404 (not found), or 401 (auth required)
-        if response.status_code == 200:
+        max_attempts = 12
+        poll_interval = 5
+        last_data: Any = {}
+        last_status = 0
+
+        for attempt in range(max_attempts):
+            response = requests.get(url, headers=headers, timeout=10)
+            last_status = response.status_code
+
             try:
                 data = response.json()
             except Exception:
                 data = {"raw_text": response.text}
+            last_data = data
 
             print_response(
                 "test_get_cover_letter_status",
-                f"GET /cover-letter/{cover_letter_id}",
+                f"GET /cover-letter/{cover_letter_id}/status",
                 response.status_code,
                 data,
             )
+            assert response.status_code == 200, (
+                f"GET /cover-letter/{cover_letter_id}/status returned {response.status_code}"
+            )
 
-            status = data.get("status", "unknown")
-            result = data.get("result", {})
-            if result:
-                result.get("paragraphs", {})
-                print(f"✓ GET /cover-letter/{cover_letter_id} - Status: {status}")
-            else:
-                print(f"✓ GET /cover-letter/{cover_letter_id} - Status: {status}")
-        elif response.status_code == 404:
+            status = str(data.get("status", "unknown")).lower()
+            if status == "completed":
+                assert_cover_letter_quality(data)
+                print(
+                    f"✓ GET /cover-letter/{cover_letter_id}/status - Status: {status}"
+                )
+                return
+
+            if status in {"failed", "error"}:
+                pytest.fail(
+                    f"GET /cover-letter/{cover_letter_id}/status returned terminal failure: {data}"
+                )
+
+            if attempt < max_attempts - 1:
+                print(
+                    f"  Cover letter still {status} "
+                    f"(attempt {attempt + 1}/{max_attempts})"
+                )
+                time.sleep(poll_interval)
+
+        pytest.fail(
+            f"GET /cover-letter/{cover_letter_id}/status did not complete after "
+            f"{max_attempts * poll_interval}s (last status={last_status}, last body={last_data})"
+        )
+
+    def test_list_cover_letters(self) -> None:
+        """Test GET /cover-letters - list user's cover letters."""
+        # Ensure we have a generated cover letter before asserting list contents.
+        if not test_data.get("cover_letter_id"):
+            print("No cover letter found, generating first...")
+            self.test_generate_cover_letter()
+
+        cover_letter_id = test_data.get("cover_letter_id")
+        if not cover_letter_id:
+            pytest.skip("No cover letter ID available for list validation")
+
+        url = f"{self.base_url}/cover-letters"
+        headers = self._auth_headers()
+        max_attempts = 12
+        poll_interval = 5
+        last_data: Any = {}
+        last_status = 0
+
+        for attempt in range(max_attempts):
+            response = requests.get(url, headers=headers, timeout=10)
+            last_status = response.status_code
+
             try:
                 data = response.json()
             except Exception:
                 data = {"raw_text": response.text}
-
-            print_response(
-                "test_get_cover_letter_status",
-                f"GET /cover-letter/{cover_letter_id}",
-                response.status_code,
-                data,
-            )
-            print(f"⚠ GET /cover-letter/{cover_letter_id} - Cover letter not found")
-        else:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
-
-            print_response(
-                "test_get_cover_letter_status",
-                f"GET /cover-letter/{cover_letter_id}",
-                response.status_code,
-                data,
-            )
-            print(
-                f"⚠ GET /cover-letter/{cover_letter_id} - Status {response.status_code}"
-            )
-
-    def test_list_cover_letters(self):
-        """Test GET /users/me/cover-letters - list user's cover letters."""
-        url = f"{self.base_url}/users/me/cover-letters"
-        headers = get_auth_headers()
-
-        response = requests.get(url, headers=headers, timeout=10)
-
-        # Accept 200 (success) or 401 (auth required)
-        if response.status_code == 200:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
+            last_data = data
 
             print_response(
                 "test_list_cover_letters",
-                "GET /users/me/cover-letters",
+                "GET /cover-letters",
                 response.status_code,
                 data,
             )
-
+            assert response.status_code == 200, (
+                f"GET /cover-letters returned {response.status_code}"
+            )
             cover_letters = data.get("cover_letters", [])
-            print(
-                f"✓ GET /users/me/cover-letters - Found {len(cover_letters)} cover letter(s)"
-            )
-        else:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
+            if any(
+                str(item.get("id")) == str(cover_letter_id)
+                for item in cover_letters
+                if isinstance(item, dict)
+            ):
+                print(
+                    f"✓ GET /cover-letters - Found {len(cover_letters)} cover letter(s), "
+                    f"includes generated ID {cover_letter_id}"
+                )
+                return
 
-            print_response(
-                "test_list_cover_letters",
-                "GET /users/me/cover-letters",
-                response.status_code,
-                data,
-            )
-            print(f"⚠ GET /users/me/cover-letters - Status {response.status_code}")
+            if attempt < max_attempts - 1:
+                print(
+                    f"  Cover letter list does not yet include {cover_letter_id} "
+                    f"(attempt {attempt + 1}/{max_attempts})"
+                )
+                time.sleep(poll_interval)
 
-    def test_cover_letter_async_polling(self):
+        pytest.fail(
+            f"GET /cover-letters did not include generated cover letter ID {cover_letter_id} "
+            f"after {max_attempts * poll_interval}s (last status={last_status}, last body={last_data})"
+        )
+
+    def test_cover_letter_async_polling(self) -> None:
         """Test cover letter async polling lifecycle."""
         # First, submit a cover letter request
         self.test_generate_cover_letter()
@@ -227,8 +311,8 @@ class TestCoverLetterEndpoints:
         if not cover_letter_id:
             pytest.skip("No cover letter ID available for polling test")
 
-        url = f"{self.base_url}/cover-letter/{cover_letter_id}"
-        headers = get_auth_headers()
+        url = f"{self.base_url}/cover-letter/{cover_letter_id}/status"
+        headers = self._auth_headers()
 
         # Poll for completion (max 2 minutes)
         max_attempts = 24
@@ -245,7 +329,7 @@ class TestCoverLetterEndpoints:
 
                 print_response(
                     "test_cover_letter_async_polling",
-                    f"GET /cover-letter/{cover_letter_id}",
+                    f"GET /cover-letter/{cover_letter_id}/status",
                     response.status_code,
                     data,
                 )
@@ -253,8 +337,7 @@ class TestCoverLetterEndpoints:
                 status = data.get("status", "")
 
                 if status == "completed":
-                    result = data.get("result", {})
-                    result.get("paragraphs", {})
+                    assert_cover_letter_quality(data)
                     print(
                         f"✓ Cover letter polling - Completed after {attempt * poll_interval}s"
                     )
@@ -269,4 +352,6 @@ class TestCoverLetterEndpoints:
 
             time.sleep(poll_interval)
 
-        print(f"⚠ Cover letter polling - Timeout after {max_attempts * poll_interval}s")
+        pytest.fail(
+            f"Cover letter polling timed out after {max_attempts * poll_interval}s"
+        )

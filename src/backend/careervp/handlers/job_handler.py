@@ -4,10 +4,11 @@ Job CRUD handler for OpenAPI `/jobs` endpoints.
 Implements:
 - POST /jobs
 - GET /jobs
-- GET /jobs/{jobId}
+- GET /jobs/{job_id}
 """
 
 import json
+import os
 from datetime import datetime, timezone
 from http import HTTPStatus
 from typing import Any
@@ -17,22 +18,17 @@ from aws_lambda_powertools.logging.correlation_paths import API_GATEWAY_REST
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from pydantic import ValidationError
 
+from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
+from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.utils.observability import logger, tracer
 from careervp.handlers.utils.rest_api_resolver import app
-from careervp.logic.auth_service import AuthService, ConfigurationError, InvalidTokenError
+from careervp.logic.trial_service import TrialExhaustedException, TrialExpiredException, TrialService
 from careervp.models.api_models import JobCreateRequest
 from careervp.models.job import Job
 
-_auth_service: AuthService | None = None
 _jobs_repository: JobsRepository | None = None
-
-
-def _get_auth_service() -> AuthService:
-    global _auth_service
-    if _auth_service is None:
-        _auth_service = AuthService.from_env()
-    return _auth_service
+_trial_service: TrialService | None = None
 
 
 def _get_jobs_repository() -> JobsRepository:
@@ -44,9 +40,9 @@ def _get_jobs_repository() -> JobsRepository:
 
 def _reset_handler_caches() -> None:
     """Testing hook to reset module dependency caches."""
-    global _auth_service, _jobs_repository
-    _auth_service = None
+    global _jobs_repository, _trial_service
     _jobs_repository = None
+    _trial_service = None
 
 
 def _json_response(status: HTTPStatus, body: dict[str, Any]) -> Response[str]:
@@ -57,73 +53,33 @@ def _json_response(status: HTTPStatus, body: dict[str, Any]) -> Response[str]:
     )
 
 
-def _extract_claim_user_id(claims: Any) -> str | None:
-    if not isinstance(claims, dict):
+def _get_trial_service() -> TrialService | None:
+    global _trial_service
+    if _trial_service is not None:
+        return _trial_service
+    table_name = os.getenv('USERS_TABLE_NAME')
+    if not table_name:
         return None
-    for key in ('sub', 'user_id', 'cognito:username'):
-        value = claims.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
-
-
-def _extract_user_id_from_authorizer() -> str | None:
-    request_context = app.current_event.request_context
-    if not isinstance(request_context, dict):
-        return None
-
-    authorizer = request_context.get('authorizer')
-    if not isinstance(authorizer, dict):
-        return None
-
-    claims = authorizer.get('claims')
-    claim_user_id = _extract_claim_user_id(claims)
-    if claim_user_id:
-        return claim_user_id
-
-    jwt_context = authorizer.get('jwt')
-    if isinstance(jwt_context, dict):
-        jwt_claims = jwt_context.get('claims')
-        jwt_user_id = _extract_claim_user_id(jwt_claims)
-        if jwt_user_id:
-            return jwt_user_id
-
-    for key in ('user_id', 'principalId', 'principal_id'):
-        value = authorizer.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
-
-
-def _extract_bearer_token() -> str | None:
-    headers = app.current_event.headers or {}
-    auth_header = headers.get('Authorization') or headers.get('authorization')
-    if not isinstance(auth_header, str):
-        return None
-    if not auth_header.startswith('Bearer '):
-        return None
-    token = auth_header[7:].strip()
-    return token if token else None
+    _trial_service = TrialService(dal=DynamoDalHandler(table_name=table_name))
+    return _trial_service
 
 
 def _get_authenticated_user_id() -> str | None:
-    authorizer_user_id = _extract_user_id_from_authorizer()
-    if authorizer_user_id:
-        return authorizer_user_id
+    # Try raw_event first (contains original event dict)
+    raw_event = getattr(app.current_event, 'raw_event', None)
+    if isinstance(raw_event, dict):
+        user_id = extract_user_id(raw_event)
+        if user_id:
+            return user_id
 
-    token = _extract_bearer_token()
-    if not token:
-        return None
+    # Fallback: try request_context (Powertools object)
+    request_context = app.current_event.request_context
+    if isinstance(request_context, dict):
+        return extract_user_id({'requestContext': request_context})
 
-    try:
-        payload = _get_auth_service().validate_token(token, expected_token_type='access')
-    except (InvalidTokenError, ConfigurationError):
-        return None
-
-    user_id = payload.get('user_id') or payload.get('sub')
-    if isinstance(user_id, str) and user_id.strip():
-        return user_id.strip()
-    return None
+    # Convert Powertools object to dict
+    rc_dict = dict(request_context)
+    return extract_user_id({'requestContext': rc_dict})
 
 
 def _parse_limit() -> int:
@@ -174,6 +130,15 @@ def create_job() -> Response[str]:
     if not user_id:
         return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Authentication required'})
 
+    trial_service = _get_trial_service()
+    if trial_service is not None:
+        try:
+            trial_service.check_trial_status(user_id)
+        except TrialExpiredException:
+            return _json_response(HTTPStatus.FORBIDDEN, {'error': 'trial_expired'})
+        except TrialExhaustedException:
+            return _json_response(HTTPStatus.FORBIDDEN, {'error': 'trial_exhausted'})
+
     try:
         raw_body = app.current_event.json_body
         if isinstance(raw_body, dict) and 'company_name' not in raw_body and 'company' in raw_body:
@@ -216,14 +181,19 @@ def list_jobs() -> Response[str]:
 
 
 @app.get('/jobs/<jobId>')
+@app.get('/jobs/<job_id>')
 @tracer.capture_method(capture_response=False)
-def get_job(jobId: str) -> Response[str]:
+def get_job(jobId: str | None = None, job_id: str | None = None) -> Response[str]:
     """Fetch one job by id, enforcing owner access."""
+    resolved_job_id = (jobId or job_id or '').strip()
+    if not resolved_job_id:
+        return _json_response(HTTPStatus.BAD_REQUEST, {'error': 'Job id is required'})
+
     user_id = _get_authenticated_user_id()
     if not user_id:
         return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Authentication required'})
 
-    job_record = _get_jobs_repository().get_job(jobId)
+    job_record = _get_jobs_repository().get_job(resolved_job_id)
     if job_record is None:
         return _json_response(HTTPStatus.NOT_FOUND, {'error': 'Job not found'})
     if str(job_record.get('user_id', '')) != user_id:

@@ -1,0 +1,282 @@
+spec_id: RECOVERY_005
+title: Restore DELETE /cv-tailoring/{cvTailoringId} Runtime Availability and Authorization Parity
+priority: high
+status: pending
+owner: backend-platform
+created_at: 2026-03-05
+updated_at: 2026-03-05
+sequence_step: 5
+
+targets_yaml2_specs:
+  - CV_TAILORING_002
+
+problem_statement:
+  exact_failing_behavior: |
+    Code and infra route map include DELETE /cv-tailoring/{cvTailoringId}, but live-test-results28.log
+    shows 403 DEFAULT_4XX for delete roundtrip. This indicates deployed route/auth integration drift.
+  expected_behavior: |
+    DELETE route must be deployed, authorized correctly, return 200 on successful delete,
+    and preserve existing generate/status/list behavior.
+  user_business_impact: |
+    Users cannot delete tailored CV artifacts; stale data accumulates and API contract is broken.
+  reproducibility_notes:
+    - Run docs/refactor/live_tests/test_06_cv_tailoring.py.
+    - Observe test_delete_tailored_cv_roundtrip returning 403 DEFAULT_4XX.
+
+evidence:
+  failing_tests:
+    - docs/refactor/live_tests/test_06_cv_tailoring.py::TestCVTailoringEndpoints::test_delete_tailored_cv_roundtrip
+  endpoint_method_path:
+    - method: DELETE
+      path: /cv-tailoring/{cvTailoringId}
+      observed_status_code: 403
+      observed_body_fragment: '{"error": "DEFAULT_4XX"}'
+  baseline_artifact: careervp/live-test-results27.log
+  regression_artifact: careervp/live-test-results28.log
+  environment: dev-live
+  timestamp_utc: '2026-03-05T00:00:00Z'
+
+architecture_and_ownership_map:
+  route_to_lambda:
+    - route: POST /cv-tailoring/generate
+      lambda: cv-tailoring-api
+      handler: src/backend/careervp/handlers/cv_tailoring_handler.py
+    - route: GET /cv-tailoring/{cvTailoringId}/status
+      lambda: cv-tailoring-api
+      handler: src/backend/careervp/handlers/cv_tailoring_handler.py
+    - route: DELETE /cv-tailoring/{cvTailoringId}
+      lambda: cv-tailoring-api
+      handler: src/backend/careervp/handlers/cv_tailoring_handler.py
+    - route: GET /cv-tailorings
+      lambda: cv-tailoring-api
+      handler: src/backend/careervp/handlers/cv_tailoring_handler.py
+  handler_file_paths:
+    - infra/careervp/api_construct.py
+    - src/backend/careervp/handlers/cv_tailoring_handler.py
+    - src/backend/careervp/dal/dynamo_dal_handler.py
+    - src/backend/tests/unit/test_l6_route_surface.py
+  data_store_index_usage:
+    - users table pk/sk for tailored cv artifact persistence
+  auth_source_and_identity_key:
+    source: requestContext.authorizer claims
+    identity_key: user_id
+  canonical_sources_of_truth:
+    route_surface: infra/careervp/api_construct.py
+    deployed_inventory: api gateway method inventory
+
+root_cause_analysis:
+  hypotheses_ranked:
+    - id: H1
+      hypothesis: Deployed API method for DELETE not attached to intended integration.
+      disproof_criteria: deployed method map shows DELETE route integrated with cv-tailoring lambda.
+      status: requires_diagnosis
+      diagnosis_command: uv run python scripts/spec_quality/check_deployed_parity.py --env dev-live --infra-source infra/careervp/api_construct.py --filter-route "DELETE /cv-tailoring/{cvTailoringId}" --out docs/evidence/cv-tailoring-delete-parity-diagnosis-<timestamp>.json
+    - id: H2
+      hypothesis: Authorizer/policy mismatch causes DELETE default 4xx.
+      disproof_criteria: deployed method auth matches POST/GET path family and tokens are accepted.
+      status: requires_diagnosis
+      diagnosis_command: uv run python scripts/spec_quality/check_deployed_parity.py --env dev-live --infra-source infra/careervp/api_construct.py --filter-route "DELETE /cv-tailoring/{cvTailoringId}" --check-auth --out docs/evidence/cv-tailoring-delete-auth-diagnosis-<timestamp>.json
+    - id: H3
+      hypothesis: handler delete branch is unreachable.
+      disproof_criteria: local integration invokes delete branch and returns 200/404 correctly.
+      status: disproven
+  diagnosis_gate:
+    description: |
+      MANDATORY before writing any fix code: run diagnosis_command for H1 and H2.
+      Read the output JSON to determine which hypothesis is confirmed.
+      Fix plan execution is conditional on diagnosis result (see conditional_fix_plan below).
+    blocking: true
+    output_artifact: docs/evidence/cv-tailoring-delete-parity-diagnosis-<timestamp>.json
+  conditional_fix_plan:
+    if_H1_confirmed:
+      - path: infra/careervp/api_construct.py
+        change: attach DELETE method integration to cv-tailoring lambda
+    if_H2_confirmed:
+      - path: infra/careervp/api_construct.py
+        change: fix authorizer binding for DELETE method to match cv-tailoring route family auth mode
+    if_neither_confirmed:
+      - Escalate: inspect raw API Gateway method configuration for the deployed DELETE route manually.
+      - Do not proceed to code changes until root cause is confirmed.
+  confirmed_root_causes:
+    - PENDING diagnosis — update this field after running diagnosis_command for H1 and H2.
+  contributing_factors:
+    - Route surface tests validated code-level map but not deployed runtime inventory.
+
+fix_plan:
+  prerequisite:
+    - Step: Run diagnosis_gate commands (H1 and H2) and read output JSON before any code changes.
+    - Gate: do not modify infra/careervp/api_construct.py until confirmed_root_causes is updated from diagnosis output.
+  exact_files_to_modify:
+    - path: infra/careervp/api_construct.py
+      change: apply conditional_fix_plan change corresponding to confirmed hypothesis (H1 or H2); do not apply both blindly
+    - path: src/backend/tests/unit/test_l6_route_surface.py
+      change: include authorizer and method-level parity assertions for DELETE route
+    - path: src/backend/tests/integration/test_cv_tailoring_delete_roundtrip.py
+      change: verify create->delete->absence behavior
+    - path: docs/refactor/live_tests/test_06_cv_tailoring.py
+      change: keep delete roundtrip strict assertion and add response diagnostics
+  exact_behavior_changes:
+    - DELETE endpoint returns 200 on successful delete and 404 for unknown IDs.
+    - No DEFAULT_4XX for valid authorized delete requests.
+  non_goals_out_of_scope:
+    - No CV tailoring generation algorithm changes.
+    - Do not modify all cv-tailoring routes speculatively; only apply the confirmed targeted fix.
+  rollback_plan:
+    - Roll back only the DELETE-method-specific infra change if it breaks existing cv-tailoring methods.
+    - Re-run diagnosis_gate commands post-rollback to confirm state returned to pre-fix.
+
+acceptance_criteria:
+  api_level:
+    - DELETE /cv-tailoring/{id} returns 200 for existing artifact owned by caller.
+    - DELETE unknown id returns 404 with domain-specific code.
+    - POST/GET status/GET list remain behaviorally unchanged.
+  data_level:
+    - Deleted artifact does not appear in subsequent /cv-tailorings list.
+  observability:
+    - Delete success/failure metrics and logs include user_id and cv_tailoring_id.
+  negative_and_edge_case_criteria:
+    - Cross-user delete attempts return 404/forbidden without disclosing existence.
+    - Invalid auth returns 401/403 with correct domain behavior, not DEFAULT_4XX leakage.
+  regression_reversal_criteria:
+    - No 403 DEFAULT_4XX for valid delete requests in live suite.
+
+baseline_and_regression_budget:
+  baseline_artifact:
+    path: careervp/live-test-results27.log
+    reason: baseline for cv-tailoring endpoints before delete regression
+  blocked_regressions:
+    - new_non_2xx_on_changed_endpoints
+  allowed_deltas: {}
+
+verification_contract:
+  - requirement_id: VC-CVT-001
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: true
+    verification_description: route and authorizer parity assertions for DELETE method
+  - requirement_id: VC-CVT-002
+    verification_type: integration
+    blocking_gate: pre_merge
+    artifact_required: true
+    verification_description: create-delete-list roundtrip in backend integration tests
+  - requirement_id: VC-CVT-003
+    verification_type: live
+    blocking_gate: post_deploy
+    artifact_required: true
+    verification_description: test_delete_tailored_cv_roundtrip passes in live suite
+
+deployed_parity_plan:
+  route_surface_parity:
+    source_of_truth: infra route map and deployed API route inventory
+    verification_steps:
+      - Compare method/path integration mapping for cv-tailoring routes.
+  authorizer_parity:
+    source_of_truth: deployed method authorization configuration
+    verification_steps:
+      - Ensure DELETE uses same intended auth mode as related cv-tailoring endpoints.
+  runtime_env_resolution_parity:
+    source_of_truth: cv-tailoring lambda env
+    verification_steps:
+      - Confirm lambda receives expected users-table env and delete code path can access artifacts.
+
+execution_sequence:
+  - step: S0
+    name: run_diagnosis_gate
+    outcome: |
+      H1/H2 confirmed or disproven from parity JSON output.
+      confirmed_root_causes field updated in this spec.
+      No code written until this step produces a JSON artifact.
+  - step: S1
+    name: apply_conditional_fix
+    depends_on: S0
+    outcome: Only the confirmed hypothesis fix is applied to infra/careervp/api_construct.py.
+  - step: S2
+    name: update_route_surface_tests
+    depends_on: S1
+    outcome: test_l6_route_surface.py includes DELETE method/auth assertions.
+  - step: S3
+    name: integration_and_live_validation
+    depends_on: S2
+    outcome: create->delete->list roundtrip passes in integration and live suites.
+
+validation_plan:
+  unit_tests:
+    - src/backend/tests/unit/test_l6_route_surface.py
+  integration_tests:
+    - src/backend/tests/integration/test_cv_tailoring_delete_roundtrip.py
+  contract_tests:
+    - docs/refactor/live_tests/test_10_api_contract_success.py
+  live_e2e_checks:
+    - docs/refactor/live_tests/test_06_cv_tailoring.py
+  regression_checks:
+    - compare delete endpoint status classes against careervp/live-test-results27.log
+  validation_commands:
+    - uv run python scripts/smoke/run_targeted_smoke.py --step RECOVERY_005 --out docs/evidence/targeted-smoke-RECOVERY_005-<timestamp>.json
+    - uv run python scripts/spec_quality/check_regression_delta.py --baseline careervp/live-test-results27.log --current docs/evidence/targeted-smoke-RECOVERY_005-<timestamp>.json --out docs/evidence/per-step-regression-delta-RECOVERY_005-<timestamp>.json
+    - uv run pytest src/backend/tests/unit/test_l6_route_surface.py -q
+    - uv run pytest src/backend/tests/integration/test_cv_tailoring_delete_roundtrip.py -q
+    - uv run pytest docs/refactor/live_tests/test_06_cv_tailoring.py -q
+
+traceability_matrix:
+  - requirement_id: AC-CVT-300
+    requirement: Root cause confirmed via diagnosis_gate before any code change
+    code_reference: scripts/spec_quality/check_deployed_parity.py
+    test_reference: docs/evidence/cv-tailoring-delete-parity-diagnosis-<timestamp>.json
+    verification_type: static
+    blocking_gate: pre_code
+    artifact_required: true
+    evidence_reference: docs/evidence/cv-tailoring-delete-parity-diagnosis-<timestamp>.json
+    result: pending
+    note: This gate must be resolved before AC-CVT-301 work begins. Update confirmed_root_causes with output.
+  - requirement_id: AC-CVT-301
+    requirement: DELETE route exists and is deployed with correct integration
+    code_reference: infra/careervp/api_construct.py
+    test_reference: src/backend/tests/unit/test_l6_route_surface.py::test_cv_tailoring_delete_route_present
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: true
+    evidence_reference: docs/evidence/cv-tailoring-delete-route-parity-<timestamp>.json
+    result: pending
+  - requirement_id: AC-CVT-302
+    requirement: create-delete-list roundtrip works end-to-end
+    code_reference: src/backend/careervp/handlers/cv_tailoring_handler.py
+    test_reference: docs/refactor/live_tests/test_06_cv_tailoring.py::TestCVTailoringEndpoints::test_delete_tailored_cv_roundtrip
+    verification_type: live
+    blocking_gate: post_deploy
+    artifact_required: true
+    evidence_reference: docs/evidence/cv-tailoring-delete-roundtrip-live-<timestamp>.json
+    result: pending
+
+rollback_trigger_matrix:
+  - trigger_id: RT-CVT-001
+    trigger_condition: live delete route returns 403 DEFAULT_4XX for valid auth request
+    detection_source: live test_06_cv_tailoring
+    action: rollback RECOVERY_005 deployment changes
+    owner: release_owner
+  - trigger_id: RT-CVT-002
+    trigger_condition: generate/status/list behavior regresses after delete route fix
+    detection_source: cv-tailoring live suite regression checks
+    action: block closure and revert offending infra/handler changes
+    owner: backend-platform
+
+completion_evidence:
+  required_artifacts:
+    - docs/evidence/cv-tailoring-delete-route-parity-<timestamp>.json
+    - docs/evidence/cv-tailoring-delete-roundtrip-live-<timestamp>.json
+  known_residual_risks:
+    - Existing stale artifacts may require cleanup if delete was previously unavailable.
+  explicit_sign_off_checklist:
+    - CV_TAILORING_002 all ACs pass
+    - no DELETE default 4xx for valid requests
+    - route/auth parity report attached
+
+confidence_assessment:
+  confidence_score_0_to_100: 0
+  implementation_100_percent: false
+  confidence_basis:
+    - Spec defined, deployment parity verification pending.
+  confidence_update_rule: |
+    Set to >=95 only after AC-CVT-301 and AC-CVT-302 are pass with live evidence.
+
+dependencies:
+  - RECOVERY_001

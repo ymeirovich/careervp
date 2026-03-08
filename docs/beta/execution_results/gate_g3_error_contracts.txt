@@ -1,0 +1,11 @@
+Gate: G3 - Error Contract Suite
+Spec: cognito-test-fixes/PLAN.md G3 / SPEC.md FIX C-E
+Command: pytest docs/refactor/live_tests/test_11_api_error_contracts.py -q
+Required: All intentional non-2xx assertions pass with normalized error contract (error OR message key)
+
+Date: (fill in after run)
+Result: (PASS / FAIL)
+Tests: (e.g., "9 passed in 12.3s")
+
+--- pytest output ---
+(paste full output here)

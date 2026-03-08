@@ -236,6 +236,7 @@ def _build_company_research_event(
     domain: str | None = 'techco.com',
     job_posting_url: str | None = None,
     job_posting_text: str | None = None,
+    user_id: str = 'user-123',
 ) -> dict[str, Any]:
     """Construct API Gateway event for company research endpoint."""
     request: dict[str, Any] = {'company_name': company_name}
@@ -248,8 +249,9 @@ def _build_company_research_event(
     return {
         'body': json.dumps(request),
         'headers': {
-            'x-user-id': 'user-123',
+            'Authorization': 'Bearer mock-token',
         },
+        'requestContext': {'authorizer': {'claims': {'sub': user_id}}},
     }
 
 
@@ -454,7 +456,8 @@ class TestCompanyResearchFlow:
         """Test invalid request payload returns 400."""
         event = {
             'body': json.dumps({'invalid_field': 'value'}),
-            'headers': {'x-user-id': 'user-123'},
+            'headers': {'Authorization': 'Bearer mock-token'},
+            'requestContext': {'authorizer': {'claims': {'sub': 'user-123'}}},
         }
 
         response = company_research_handler(event, MagicMock())

@@ -1,0 +1,359 @@
+# CareerVP Cognito Authentication Specification
+# Machine-readable YAML format for automated validation
+
+spec_version: "1.0"
+date: "2026-02-26"
+purpose: "Cognito User Pool, JWT Authorizer, and auth migration standards for CareerVP beta"
+enforcement: "All auth-related Lambda handlers and CDK constructs must follow these patterns"
+
+# =============================================================================
+# SECTION 1: COGNITO USER POOL
+# =============================================================================
+user_pool:
+  section: "1. Cognito User Pool Configuration"
+
+  rule_1_1:
+    id: "COGNITO_USER_POOL_CONFIG"
+    name: "User Pool Standard Configuration"
+    severity: "required"
+    description: "Configure User Pool with secure defaults"
+    status: "required"
+
+    required_settings:
+      - self_sign_up_enabled: true
+      - sign_in_aliases: ["email"]
+      - auto_verify: ["email"]
+      - password_policy:
+          min_length: 8
+          require_uppercase: true
+          require_lowercase: true
+          require_digits: true
+          require_symbols: false
+      - account_recovery: "email"
+      - mfa: "off"  # Beta: no MFA required; enable for GA
+
+    cdk_example: |
+      from aws_cdk import aws_cognito as cognito
+
+      user_pool = cognito.UserPool(
+          self, "CareerVPUserPool",
+          user_pool_name=f"careervp-users-{env}",
+          self_sign_up_enabled=True,
+          sign_in_aliases=cognito.SignInAliases(email=True),
+          auto_verify=cognito.AutoVerifiedAttrs(email=True),
+          password_policy=cognito.PasswordPolicy(
+              min_length=8,
+              require_uppercase=True,
+              require_lowercase=True,
+              require_digits=True,
+              require_symbols=False,
+          ),
+          account_recovery=cognito.AccountRecovery.EMAIL_ONLY,
+          removal_policy=RemovalPolicy.DESTROY,  # dev/staging only
+      )
+
+    aws_waf_note: "AWS Well-Architected - Security: Use Cognito managed auth to avoid custom token vulnerabilities"
+
+  rule_1_2:
+    id: "COGNITO_USER_POOL_CLIENT"
+    name: "User Pool Client Configuration"
+    severity: "required"
+    description: "Configure client for web app SRP auth flow"
+    status: "required"
+
+    required_settings:
+      - auth_flows:
+          - "USER_SRP_AUTH"
+          - "REFRESH_TOKEN_AUTH"
+      - generate_secret: false  # Web apps cannot keep secrets
+      - token_validity:
+          access_token: "1 hours"
+          id_token: "1 hours"
+          refresh_token: "30 days"
+
+    cdk_example: |
+      user_pool_client = user_pool.add_client(
+          "CareerVPWebClient",
+          client_name=f"careervp-web-client-{env}",
+          generate_secret=False,
+          auth_flows=cognito.AuthFlow(
+              user_srp=True,
+              refresh_token=True,
+          ),
+          access_token_validity=Duration.hours(1),
+          id_token_validity=Duration.hours(1),
+          refresh_token_validity=Duration.days(30),
+      )
+
+  rule_1_3:
+    id: "COGNITO_USER_POOL_DOMAIN"
+    name: "User Pool Domain for Hosted UI"
+    severity: "recommended"
+    description: "Configure Cognito domain for hosted auth UI"
+    status: "recommended"
+
+    cdk_example: |
+      user_pool.add_domain(
+          "CareerVPDomain",
+          cognito_domain=cognito.CognitoDomainOptions(
+              domain_prefix=f"careervp-{env}",
+          )
+      )
+
+# =============================================================================
+# SECTION 2: API GATEWAY JWT AUTHORIZER
+# =============================================================================
+jwt_authorizer:
+  section: "2. API Gateway JWT Authorizer"
+
+  rule_2_1:
+    id: "COGNITO_JWT_AUTHORIZER"
+    name: "Configure Cognito JWT Authorizer on API Gateway"
+    severity: "required"
+    description: "Use Cognito as the sole JWT authorizer for all protected routes"
+    status: "required"
+
+    required_settings:
+      - authorizer_type: "COGNITO_USER_POOLS"
+      - identity_source: "method.request.header.Authorization"
+      - token_validation_regex: "Bearer .+"
+
+    cdk_example: |
+      from aws_cdk import aws_apigateway as apigw
+
+      cognito_authorizer = apigw.CognitoUserPoolsAuthorizer(
+          self, "CognitoAuthorizer",
+          cognito_user_pools=[user_pool],
+          authorizer_name="careervp-cognito-authorizer",
+          identity_source="method.request.header.Authorization",
+      )
+
+      # Apply to all protected methods
+      resource.add_method(
+          "POST",
+          integration,
+          authorizer=cognito_authorizer,
+          authorization_type=apigw.AuthorizationType.COGNITO,
+      )
+
+    aws_waf_note: "AWS Well-Architected - Security: Cognito JWT authorizer validates tokens without custom code"
+
+  rule_2_2:
+    id: "COGNITO_UNPROTECTED_ROUTES"
+    name: "Explicitly Mark Public Routes"
+    severity: "required"
+    description: "Health check and auth routes must be explicitly public (NONE auth)"
+    status: "required"
+
+    public_routes:
+      - "GET /health"
+      - "POST /auth/register"
+      - "POST /auth/login"
+      - "POST /auth/refresh"
+      - "OPTIONS *"  # CORS preflight
+
+    cdk_example: |
+      health_resource.add_method(
+          "GET",
+          health_integration,
+          authorization_type=apigw.AuthorizationType.NONE,
+      )
+
+# =============================================================================
+# SECTION 3: HANDLER IDENTITY EXTRACTION
+# =============================================================================
+handler_identity:
+  section: "3. Handler Identity Extraction"
+
+  rule_3_1:
+    id: "COGNITO_EXTRACT_USER_ID"
+    name: "Extract User ID from Cognito Claims Only"
+    severity: "critical"
+    description: "User ID must come from Cognito JWT claims, never from payload or headers"
+    status: "required"
+
+    required_pattern: |
+      def extract_user_id(event: dict) -> str | None:
+          """Extract user ID from Cognito JWT authorizer claims."""
+          try:
+              return event["requestContext"]["authorizer"]["claims"]["sub"]
+          except (KeyError, TypeError):
+              return None
+
+      # In handler:
+      user_id = extract_user_id(event)
+      if not user_id:
+          return _build_response(HTTPStatus.UNAUTHORIZED, {"error": "Unauthorized"})
+
+    forbidden_patterns:
+      - pattern: "event.get('body').*user_id"
+        description: "Never extract user_id from request body"
+      - pattern: "event.get('headers', {}).get('X-User-Id')"
+        description: "Never use X-User-Id header"
+      - pattern: "event.get('queryStringParameters', {}).get('user_id')"
+        description: "Never use query param user_id"
+      - pattern: "event.get('requestContext', {}).get('identity')"
+        description: "Never use legacy identity pattern"
+      - pattern: "payload.user_id"
+        description: "Never trust payload user_id"
+
+    static_analysis_grep: "grep -r 'X-User-Id\\|payload.*user_id\\|body.*user_id' src/backend/careervp/handlers/"
+
+  rule_3_2:
+    id: "COGNITO_EMAIL_FROM_CLAIMS"
+    name: "Extract Email from Cognito Claims"
+    severity: "required"
+    description: "Use Cognito claims for email, not DB lookup"
+    status: "required"
+
+    required_pattern: |
+      def extract_email(event: dict) -> str | None:
+          """Extract email from Cognito JWT claims."""
+          try:
+              return event["requestContext"]["authorizer"]["claims"]["email"]
+          except (KeyError, TypeError):
+              return None
+
+# =============================================================================
+# SECTION 4: AUTH ENDPOINT PATTERNS
+# =============================================================================
+auth_endpoints:
+  section: "4. Auth Endpoint Patterns (Cognito SDK)"
+
+  rule_4_1:
+    id: "COGNITO_REGISTER"
+    name: "User Registration via Cognito"
+    severity: "required"
+    description: "Register via Cognito sign_up API"
+    status: "required"
+
+    implementation: |
+      import boto3
+      from botocore.exceptions import ClientError
+
+      cognito_client = boto3.client("cognito-idp", region_name=REGION)
+
+      def register_user(email: str, password: str, name: str) -> dict:
+          try:
+              response = cognito_client.sign_up(
+                  ClientId=CLIENT_ID,
+                  Username=email,
+                  Password=password,
+                  UserAttributes=[
+                      {"Name": "email", "Value": email},
+                      {"Name": "name", "Value": name},
+                  ],
+              )
+              return {"user_sub": response["UserSub"]}
+          except ClientError as e:
+              code = e.response["Error"]["Code"]
+              if code == "UsernameExistsException":
+                  raise UserAlreadyExistsError(email)
+              raise
+
+  rule_4_2:
+    id: "COGNITO_LOGIN"
+    name: "User Login via Cognito SRP"
+    severity: "required"
+    description: "Login via USER_SRP_AUTH flow"
+    status: "required"
+
+    implementation: |
+      def login_user(email: str, password: str) -> dict:
+          response = cognito_client.initiate_auth(
+              AuthFlow="USER_PASSWORD_AUTH",  # Use SRP in production
+              AuthParameters={
+                  "USERNAME": email,
+                  "PASSWORD": password,
+              },
+              ClientId=CLIENT_ID,
+          )
+          auth = response["AuthenticationResult"]
+          return {
+              "access_token": auth["AccessToken"],
+              "id_token": auth["IdToken"],
+              "refresh_token": auth["RefreshToken"],
+              "expires_in": auth["ExpiresIn"],
+          }
+
+  rule_4_3:
+    id: "COGNITO_REFRESH"
+    name: "Token Refresh"
+    severity: "required"
+    description: "Refresh access token via REFRESH_TOKEN_AUTH"
+    status: "required"
+
+    implementation: |
+      def refresh_tokens(refresh_token: str) -> dict:
+          response = cognito_client.initiate_auth(
+              AuthFlow="REFRESH_TOKEN_AUTH",
+              AuthParameters={"REFRESH_TOKEN": refresh_token},
+              ClientId=CLIENT_ID,
+          )
+          auth = response["AuthenticationResult"]
+          return {
+              "access_token": auth["AccessToken"],
+              "id_token": auth["IdToken"],
+              "expires_in": auth["ExpiresIn"],
+          }
+
+# =============================================================================
+# SECTION 5: TESTING AUTH SCENARIOS
+# =============================================================================
+testing_auth:
+  section: "5. Auth Test Scenarios"
+
+  rule_5_1:
+    id: "COGNITO_TEST_SCENARIOS"
+    name: "Test All 4 Auth Scenarios Per Route"
+    severity: "required"
+    description: "Each protected route must pass all 4 token scenarios"
+    status: "required"
+
+    scenarios:
+      - id: "no_token"
+        description: "Request with no Authorization header"
+        expected_status: 401
+        implementation: "No header"
+      - id: "expired_token"
+        description: "Request with expired JWT"
+        expected_status: 401
+        implementation: "Use token with exp in past"
+      - id: "wrong_user_token"
+        description: "Valid token but wrong user's resource"
+        expected_status: 403
+        implementation: "Valid JWT for user-A accessing user-B's resource"
+      - id: "valid_token"
+        description: "Valid token for authorized user"
+        expected_status: 200
+        implementation: "Fresh valid JWT"
+
+    evidence_artifact: "docs/beta/evidence/I3_auth/auth-abuse-matrix.json"
+
+  rule_5_2:
+    id: "COGNITO_TEST_MOCK"
+    name: "Mock Cognito in Unit Tests"
+    severity: "required"
+    description: "Use mock event fixtures for unit tests"
+    status: "required"
+
+    fixture_pattern: |
+      @pytest.fixture
+      def cognito_event_factory():
+          def make_event(user_id: str, email: str = "test@example.com", body: dict = None):
+              return {
+                  "requestContext": {
+                      "authorizer": {
+                          "claims": {
+                              "sub": user_id,
+                              "email": email,
+                              "email_verified": "true",
+                          }
+                      }
+                  },
+                  "body": json.dumps(body) if body else None,
+                  "headers": {"Content-Type": "application/json"},
+                  "httpMethod": "POST",
+                  "path": "/test",
+              }
+          return make_event

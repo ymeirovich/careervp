@@ -1,8 +1,40 @@
 from __future__ import annotations
 
+from typing import Any
+
 from aws_cdk.assertions import Template
 
-from careervp import constants
+
+def _lambda_resource_by_handler(
+    synthesized_template: Template,
+    handler: str,
+    *,
+    function_name_contains: str | None = None,
+) -> dict[str, Any]:
+    functions = synthesized_template.find_resources("AWS::Lambda::Function")
+    matches = [
+        resource
+        for resource in functions.values()
+        if resource["Properties"].get("Handler") == handler
+    ]
+    if function_name_contains:
+        filtered = []
+        for resource in matches:
+            function_name = str(resource["Properties"].get("FunctionName", ""))
+            if function_name_contains in function_name:
+                filtered.append(resource)
+        matches = filtered
+    assert matches, f"Lambda handler not synthesized: {handler}"
+    return matches[0]
+
+
+def _lambda_role_logical_id(lambda_resource: dict[str, Any]) -> str:
+    role_ref = lambda_resource["Properties"].get("Role")
+    if isinstance(role_ref, dict) and isinstance(role_ref.get("Fn::GetAtt"), list):
+        logical_id = role_ref["Fn::GetAtt"][0]
+        if isinstance(logical_id, str) and logical_id:
+            return logical_id
+    raise AssertionError("Lambda role reference could not be resolved from template")
 
 
 def test_company_research_lambda_configuration(synthesized_template: Template) -> None:
@@ -27,24 +59,27 @@ def test_company_research_lambda_configuration(synthesized_template: Template) -
 
 
 def test_company_research_api_route_exists(synthesized_template: Template) -> None:
-    """Validate that API Gateway defines the /api/company-research POST route."""
+    """Validate that API Gateway defines the /company-research/{company_name} GET route."""
     resources = synthesized_template.find_resources("AWS::ApiGateway::Resource")
-    company_research_ids = {
-        logical_id
-        for logical_id, props in resources.items()
-        if props["Properties"].get("PathPart") == constants.GW_RESOURCE_COMPANY_RESEARCH
-    }
-    assert company_research_ids, "API Gateway resource /company-research missing"
-
-    # confirm there is a POST method associated with the company research Lambda
     methods = synthesized_template.find_resources("AWS::ApiGateway::Method")
-    company_research_methods = [
-        logical_id
-        for logical_id, props in methods.items()
-        if props["Properties"].get("HttpMethod") == "POST"
-        and props["Properties"].get("ResourceId", {}).get("Ref") in company_research_ids
+
+    # Get all method paths to find the company-research route
+    method_paths = _get_method_paths(methods, resources)
+
+    # The canonical route is GET /company-research/{company_name}
+    # It may also appear as /company-research/{jobId} in the CDK
+    company_research_routes = [
+        (http_method, path)
+        for http_method, path, _ in method_paths
+        if path.startswith("company-research")
     ]
-    assert company_research_methods, "No POST method found for /company-research"
+    assert company_research_routes, "No company-research route found in API Gateway"
+
+    # Confirm there is a GET method
+    get_methods = [m for m, p in company_research_routes if m == "GET"]
+    assert get_methods, (
+        f"No GET method found for company-research. Found: {company_research_routes}"
+    )
 
 
 def test_llm_cache_table_configuration(synthesized_template: Template) -> None:
@@ -121,28 +156,93 @@ def test_lambda_role_has_llm_cache_permissions(synthesized_template: Template) -
     )
 
 
-def test_rest_api_has_token_authorizer(synthesized_template: Template) -> None:
-    """Ensure API Gateway has a TOKEN Lambda authorizer for protected endpoints."""
-    authorizers = synthesized_template.find_resources("AWS::ApiGateway::Authorizer")
-    token_authorizers = [
-        props
-        for props in authorizers.values()
-        if props["Properties"].get("Type") == "TOKEN"
-    ]
-    assert token_authorizers, "API Gateway TOKEN authorizer was not synthesized"
-
-
-def test_protected_methods_use_custom_authorization(
+def test_interview_prep_worker_has_vpr_jobs_table_env(
     synthesized_template: Template,
 ) -> None:
-    """Ensure protected REST methods require CUSTOM authorization."""
+    """Interview prep worker must receive VPR jobs table env for cross-service context lookup."""
+    lambda_resource = _lambda_resource_by_handler(
+        synthesized_template,
+        "careervp.handlers.interview_prep_handler.lambda_handler",
+        function_name_contains="interview-prep-worker",
+    )
+    env_vars = lambda_resource["Properties"].get("Environment", {}).get("Variables", {})
+    assert "VPR_JOBS_TABLE_NAME" in env_vars, (
+        "Interview prep worker missing VPR_JOBS_TABLE_NAME environment variable"
+    )
+
+
+def test_interview_prep_worker_role_can_read_anthropic_ssm_parameter(
+    synthesized_template: Template,
+) -> None:
+    """Interview prep worker role should include explicit ssm:GetParameter on anthropic key."""
+    lambda_resource = _lambda_resource_by_handler(
+        synthesized_template,
+        "careervp.handlers.interview_prep_handler.lambda_handler",
+        function_name_contains="interview-prep-worker",
+    )
+    role_logical_id = _lambda_role_logical_id(lambda_resource)
+
+    policies = synthesized_template.find_resources("AWS::IAM::Policy")
+    ssm_statement_found = False
+    for policy in policies.values():
+        roles = policy["Properties"].get("Roles", [])
+        if not isinstance(roles, list):
+            continue
+        attached_to_worker_role = any(
+            isinstance(role_entry, dict) and role_entry.get("Ref") == role_logical_id
+            for role_entry in roles
+        )
+        if not attached_to_worker_role:
+            continue
+
+        statements = policy["Properties"].get("PolicyDocument", {}).get("Statement", [])
+        if not isinstance(statements, list):
+            continue
+        for statement in statements:
+            actions = statement.get("Action", [])
+            action_list = [actions] if isinstance(actions, str) else actions
+            if (
+                not isinstance(action_list, list)
+                or "ssm:GetParameter" not in action_list
+            ):
+                continue
+
+            resource_repr = str(statement.get("Resource", ""))
+            if "anthropic-api-key" in resource_repr:
+                ssm_statement_found = True
+                break
+        if ssm_statement_found:
+            break
+
+    assert ssm_statement_found, (
+        "Interview prep worker role missing ssm:GetParameter permission for anthropic-api-key parameter"
+    )
+
+
+def test_rest_api_has_cognito_authorizer(synthesized_template: Template) -> None:
+    """Ensure API Gateway has a Cognito authorizer for protected endpoints."""
+    authorizers = synthesized_template.find_resources("AWS::ApiGateway::Authorizer")
+    cognito_authorizers = [
+        props
+        for props in authorizers.values()
+        if props["Properties"].get("Type") == "COGNITO_USER_POOLS"
+    ]
+    assert cognito_authorizers, "API Gateway Cognito authorizer was not synthesized"
+
+
+def test_protected_methods_use_cognito_authorization(
+    synthesized_template: Template,
+) -> None:
+    """Ensure protected REST methods require Cognito authorization."""
     methods = synthesized_template.find_resources("AWS::ApiGateway::Method")
-    custom_methods = [
+    cognito_methods = [
         props
         for props in methods.values()
-        if props["Properties"].get("AuthorizationType") == "CUSTOM"
+        if props["Properties"].get("AuthorizationType") == "COGNITO_USER_POOLS"
     ]
-    assert custom_methods, "No protected API Gateway methods use CUSTOM authorization"
+    assert cognito_methods, (
+        "No protected API Gateway methods use COGNITO_USER_POOLS authorization"
+    )
 
 
 def test_api_gateway_stage_has_access_logs_and_tracing(
@@ -161,6 +261,64 @@ def test_api_gateway_stage_has_access_logs_and_tracing(
         and stage["Properties"]["AccessLogSetting"].get("DestinationArn")
         for stage in stages.values()
     ), "API Gateway stage access logs are not configured"
+
+    assert any(
+        isinstance(stage["Properties"].get("MethodSettings"), list)
+        and any(
+            method.get("MetricsEnabled") is True
+            and method.get("LoggingLevel") in {"INFO", "ERROR"}
+            for method in stage["Properties"]["MethodSettings"]
+            if isinstance(method, dict)
+        )
+        for stage in stages.values()
+    ), "API Gateway method metrics/logging are not configured"
+
+    access_log_formats = [
+        stage["Properties"]["AccessLogSetting"].get("Format", "")
+        for stage in stages.values()
+        if isinstance(stage["Properties"].get("AccessLogSetting"), dict)
+    ]
+    assert any("$context.extendedRequestId" in fmt for fmt in access_log_formats), (
+        "API Gateway access logs must include extendedRequestId"
+    )
+    assert any("$context.integration.status" in fmt for fmt in access_log_formats), (
+        "API Gateway access logs must include integration status"
+    )
+    assert any(
+        "$context.integrationErrorMessage" in fmt for fmt in access_log_formats
+    ), "API Gateway access logs must include integration error message"
+    assert any("$context.authorizer.error" in fmt for fmt in access_log_formats), (
+        "API Gateway access logs must include authorizer error field"
+    )
+
+
+def test_api_gateway_gateway_responses_include_request_id(
+    synthesized_template: Template,
+) -> None:
+    """Ensure API Gateway default error responses use a consistent request_id envelope."""
+    gateway_responses = synthesized_template.find_resources(
+        "AWS::ApiGateway::GatewayResponse"
+    )
+    assert gateway_responses, (
+        "No API Gateway GatewayResponse resources were synthesized"
+    )
+
+    required_response_types = {
+        "DEFAULT_4XX",
+        "DEFAULT_5XX",
+        "UNAUTHORIZED",
+        "ACCESS_DENIED",
+    }
+    present_response_types = {
+        props["Properties"].get("ResponseType") for props in gateway_responses.values()
+    }
+    missing = required_response_types - present_response_types
+    assert not missing, f"Missing required API Gateway responses: {sorted(missing)}"
+
+    assert all(
+        "$context.requestId" in str(props["Properties"].get("ResponseTemplates", {}))
+        for props in gateway_responses.values()
+    ), "Gateway responses must include request_id in the response body"
 
 
 def test_lambda_log_groups_are_kms_encrypted(synthesized_template: Template) -> None:
@@ -206,15 +364,6 @@ def test_openapi_route_matrix_matches_payload_contracts(
         route_path = method_props["Properties"].get("ResourceId", {})
         route_paths.append(route_path)
 
-    # Check for critical routes
-    critical_routes = [
-        "/auth/register",
-        "/auth/login",
-        "/health",
-        "/jobs",
-        "/vpr/generate",
-    ]
-
     # Get all API Gateway resources to check path patterns
     resources = synthesized_template.find_resources("AWS::ApiGateway::Resource")
     resource_paths = {}
@@ -242,7 +391,9 @@ def test_openapi_route_matrix_matches_payload_contracts(
 # =============================================================================
 
 
-def _get_method_paths(methods: dict, resources: dict) -> list[tuple[str, str, dict]]:
+def _get_method_paths(
+    methods: dict[str, Any], resources: dict[str, Any]
+) -> list[tuple[str, str, dict[str, Any]]]:
     """Helper to get method paths with their properties.
 
     Returns list of (http_method, path_part, method_props).
@@ -330,7 +481,7 @@ def test_protected_routes_require_authorizer(synthesized_template: Template) -> 
     """Ensure protected routes require authorizer.
 
     Per auth_and_authorizer_spec.yaml:
-    - Protected: all routes except /auth/register, /auth/login, /health
+    - Protected: all routes except /auth/register, /auth/login, /auth/refresh, /health
     """
     methods = synthesized_template.find_resources("AWS::ApiGateway::Method")
     resources = synthesized_template.find_resources("AWS::ApiGateway::Resource")
@@ -339,7 +490,7 @@ def test_protected_routes_require_authorizer(synthesized_template: Template) -> 
     method_paths = _get_method_paths(methods, resources)
 
     # Define public routes to exclude (without leading slashes)
-    public_paths = {"health", "auth/register", "auth/login"}
+    public_paths = {"health", "auth/register", "auth/login", "auth/refresh"}
 
     protected_methods = []
     no_auth_methods = []

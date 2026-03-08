@@ -1,0 +1,50 @@
+{
+  "step_id": "L3.1",
+  "date": "2026-02-27",
+  "invariant": "I6",
+  "status": "PASS",
+  "branch": "beta/fix-gaps1",
+  "strict_test_first": {
+    "red": {
+      "command": "cd src/backend && uv run pytest tests/unit/test_l3_application_schema.py -v --tb=short",
+      "result": "FAILED",
+      "failure": "ImportError: cannot import name 'APPLICATION_STATES' from careervp.dal.application_repository"
+    },
+    "green": {
+      "command": "cd src/backend && uv run pytest tests/unit/test_l3_application_schema.py -v --tb=short",
+      "result": "PASSED",
+      "summary": {
+        "passed": 30,
+        "failed": 0,
+        "errors": 0
+      }
+    }
+  },
+  "validation": {
+    "ruff": {
+      "command": "cd src/backend && uv run ruff check careervp/dal/application_repository.py tests/unit/test_l3_application_schema.py",
+      "result": "PASSED"
+    },
+    "mypy": {
+      "command": "cd src/backend && uv run mypy careervp/dal/application_repository.py --strict",
+      "result": "PASSED"
+    }
+  },
+  "schema_checks": {
+    "pk_format": "USER#{user_id}",
+    "sk_format": "APP#{application_id}",
+    "states": [
+      "created",
+      "cv_selected",
+      "gap_questions_pending",
+      "gap_questions_ready",
+      "gap_responses_submitted",
+      "artifacts_generating",
+      "artifacts_completed"
+    ]
+  },
+  "artifacts": [
+    "src/backend/careervp/dal/application_repository.py",
+    "src/backend/tests/unit/test_l3_application_schema.py"
+  ]
+}

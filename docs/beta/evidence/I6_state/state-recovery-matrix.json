@@ -1,0 +1,56 @@
+{
+  "invariant": "I6",
+  "date": "2026-02-27",
+  "branch": "beta/fix-gaps1",
+  "source_tests": [
+    "src/backend/tests/unit/test_application_state.py",
+    "src/backend/tests/unit/test_l3_state_recovery.py"
+  ],
+  "states": [
+    {
+      "state": "created",
+      "pass": true,
+      "recovery_assertion": "application present, cv null, gap_analysis null"
+    },
+    {
+      "state": "cv_selected",
+      "pass": true,
+      "recovery_assertion": "cv payload populated"
+    },
+    {
+      "state": "gap_questions_pending",
+      "pass": true,
+      "recovery_assertion": "trial_credit_consumed preserved on reload"
+    },
+    {
+      "state": "gap_questions_ready",
+      "pass": true,
+      "recovery_assertion": "gap questions populated"
+    },
+    {
+      "state": "gap_responses_submitted",
+      "pass": true,
+      "recovery_assertion": "gap questions and responses populated"
+    },
+    {
+      "state": "artifacts_generating",
+      "pass": true,
+      "recovery_assertion": "mixed artifact statuses preserved"
+    },
+    {
+      "state": "artifacts_completed",
+      "pass": true,
+      "recovery_assertion": "all artifact statuses completed"
+    }
+  ],
+  "summary": {
+    "total_states": 7,
+    "passed_states": 7,
+    "failed_states": 0,
+    "backend_test_count": 28
+  },
+  "frontend_validation": {
+    "status": "deferred",
+    "reason": "frontend workspace unavailable in this execution scope"
+  }
+}

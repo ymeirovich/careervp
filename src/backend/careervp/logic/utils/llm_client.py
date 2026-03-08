@@ -54,14 +54,36 @@ def retry_on_transient_error(max_retries: int = 3, base_delay: float = 1.0) -> C
                 except RateLimitError as e:
                     last_exception = e
                     delay = base_delay * (2**attempt)
-                    logger.warning('Rate limited, retrying', attempt=attempt + 1, delay=delay)
+                    logger.warning(
+                        'Rate limited, retrying attempt=%s delay=%.2f',
+                        attempt + 1,
+                        delay,
+                    )
                     sleep(delay)
                 except APIError as e:
-                    status_code = getattr(e, 'status_code', None)
-                    if isinstance(status_code, int) and status_code >= 500:
+                    is_transient = _is_transient_error(e)
+                    if is_transient:
                         last_exception = e
                         delay = base_delay * (2**attempt)
-                        logger.warning('Transient API error, retrying', attempt=attempt + 1, status_code=status_code, delay=delay)
+                        logger.warning(
+                            'Transient API error, retrying attempt=%s status_code=%s delay=%.2f',
+                            attempt + 1,
+                            getattr(e, 'status_code', None),
+                            delay,
+                        )
+                        sleep(delay)
+                    else:
+                        raise
+                except Exception as e:  # noqa: BLE001 - allow retry for overloaded transient provider errors.
+                    if _is_transient_error(e):
+                        last_exception = e
+                        delay = base_delay * (2**attempt)
+                        logger.warning(
+                            'Transient provider error, retrying attempt=%s error_type=%s delay=%.2f',
+                            attempt + 1,
+                            type(e).__name__,
+                            delay,
+                        )
                         sleep(delay)
                     else:
                         raise
@@ -72,6 +94,25 @@ def retry_on_transient_error(max_retries: int = 3, base_delay: float = 1.0) -> C
         return wrapper
 
     return decorator
+
+
+def _is_transient_error(exc: Exception) -> bool:
+    status_code = getattr(exc, 'status_code', None)
+    if isinstance(status_code, int) and (status_code >= 500 or status_code in {429, 529}):
+        return True
+
+    error_text = str(exc).lower()
+    return any(
+        marker in error_text
+        for marker in (
+            'overloaded',
+            'overloaded_error',
+            'error code: 529',
+            'rate limit',
+            'temporarily unavailable',
+            'timeout',
+        )
+    )
 
 
 def _capture_method_typed(*decorator_args: Any, **decorator_kwargs: Any) -> Callable[[Callable[P, R]], Callable[P, R]]:
@@ -100,7 +141,11 @@ class LLMRouter:
         if not self._api_key:
             raise ValueError('ANTHROPIC_API_KEY not found in environment variable or SSM Parameter Store')
 
-        self._client = Anthropic(api_key=self._api_key)
+        self._client = Anthropic(
+            api_key=self._api_key,
+            max_retries=3,
+            timeout=60.0,
+        )
 
     def _fetch_from_ssm(self, parameter_name: str) -> str | None:
         """

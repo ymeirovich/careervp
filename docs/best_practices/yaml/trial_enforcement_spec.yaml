@@ -1,0 +1,289 @@
+# CareerVP Trial Enforcement Specification
+# Machine-readable YAML format for automated validation
+
+spec_version: "1.0"
+date: "2026-02-26"
+purpose: "14-day / 3-application trial enforcement standards for CareerVP beta"
+enforcement: "All trial-related handlers and services must follow these patterns"
+
+# =============================================================================
+# SECTION 1: TRIAL MODEL
+# =============================================================================
+trial_model:
+  section: "1. Trial Model Definition"
+
+  rule_1_1:
+    id: "TRIAL_DEFINITION"
+    name: "Trial Period Parameters"
+    severity: "required"
+    description: "Define the canonical trial model"
+    status: "required"
+
+    parameters:
+      trial_duration_days: 14
+      max_applications: 3
+      credit_unit: "application"
+      enforcement_point: "gap_question_generation"
+      expiry_basis: "user_created_at"
+
+    invariant_reference: "I5 — Trial enforcement blocks application #4 and post-14-day access"
+
+  rule_1_2:
+    id: "TRIAL_STATE_MACHINE"
+    name: "Trial State Transitions"
+    severity: "required"
+    description: "Valid transitions for trial state"
+    status: "required"
+
+    states:
+      - ACTIVE: "< 14 days AND < 3 applications used"
+      - EXHAUSTED: "3 applications used (regardless of time)"
+      - EXPIRED: ">= 14 days old (regardless of applications)"
+      - SUBSCRIBED: "Paid subscription active (post-beta)"
+
+    blocked_actions:
+      - state: "EXHAUSTED"
+        action: "POST /jobs (create application)"
+        response: "403 upgrade-required"
+      - state: "EXPIRED"
+        action: "any protected route"
+        response: "403 trial-expired"
+
+# =============================================================================
+# SECTION 2: CREDIT COUNTING
+# =============================================================================
+credit_counting:
+  section: "2. Credit Counting Patterns"
+
+  rule_2_1:
+    id: "TRIAL_ATOMIC_COUNTER"
+    name: "Atomic Credit Decrement"
+    severity: "critical"
+    description: "Use DynamoDB conditional write for atomic counter to prevent race conditions"
+    status: "required"
+
+    forbidden_patterns:
+      - pattern: "read-modify-write without ConditionExpression"
+        description: "Race condition — 5 concurrent requests can all see count=2 and decrement to 3"
+      - pattern: "application_count + 1 without atomic check"
+        description: "Non-atomic increment allows overshooting limit"
+
+    required_pattern: |
+      # Atomic increment with limit check using ConditionExpression
+      try:
+          dynamodb_client.update_item(
+              TableName=TABLE_NAME,
+              Key={"pk": {"S": f"USER#{user_id}"}, "sk": {"S": "TRIAL"}},
+              UpdateExpression="SET application_count = application_count + :inc",
+              ConditionExpression="application_count < :max AND trial_active = :true",
+              ExpressionAttributeValues={
+                  ":inc": {"N": "1"},
+                  ":max": {"N": "3"},
+                  ":true": {"BOOL": True},
+              },
+              ReturnValues="UPDATED_NEW",
+          )
+      except dynamodb_client.exceptions.ConditionalCheckFailedException:
+          raise TrialExhaustedException(user_id)
+
+    aws_waf_note: "AWS DynamoDB Best Practice: Conditional writes prevent race conditions in concurrent environments"
+
+  rule_2_2:
+    id: "TRIAL_DECREMENT_POINT"
+    name: "Credit Consumed at Gap Question Generation"
+    severity: "required"
+    description: "Charge trial credit exactly when gap questions are generated, not before"
+    status: "required"
+
+    enforcement_point: "POST /jobs/{job_id}/gap-questions"
+    rationale: "Gap question generation is the first irreversible AI step; charging here prevents abandoned workflows consuming credits"
+
+  rule_2_3:
+    id: "TRIAL_CONCURRENT_SAFETY"
+    name: "Handle Concurrent Credit Consumption"
+    severity: "critical"
+    description: "5 parallel requests at limit boundary must not overcount"
+    status: "required"
+
+    test_scenario: |
+      # Test: 5 concurrent requests at count=2 (one below limit=3)
+      # Expected: exactly 1 succeeds, 4 receive TrialExhaustedException
+      import concurrent.futures
+
+      def try_create_application(user_id):
+          return trial_service.consume_credit(user_id)
+
+      with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+          futures = [executor.submit(try_create_application, user_id) for _ in range(5)]
+          results = [f.result() for f in concurrent.futures.as_completed(futures)]
+
+      successes = [r for r in results if r.success]
+      assert len(successes) == 1, f"Expected 1 success, got {len(successes)}"
+
+    evidence_artifact: "docs/beta/evidence/I5_trial/trial-enforcement-report.json"
+
+# =============================================================================
+# SECTION 3: EXPIRY CHECK
+# =============================================================================
+expiry_check:
+  section: "3. Expiry Check Patterns"
+
+  rule_3_1:
+    id: "TRIAL_EXPIRY_MIDDLEWARE"
+    name: "Trial Expiry Check as Middleware"
+    severity: "required"
+    description: "Check trial status before processing any protected request"
+    status: "required"
+
+    required_pattern: |
+      def check_trial_status(user_id: str, dal: DynamoDalHandler) -> TrialStatus:
+          """
+          Check if user's trial is active.
+          Returns TrialStatus with state, days_remaining, credits_remaining.
+          Raises TrialExpiredException if expired.
+          Raises TrialExhaustedException if credits exhausted.
+          """
+          user_record = dal.get_user_trial(user_id)
+          if not user_record:
+              raise UserNotFoundError(user_id)
+
+          now = datetime.now(timezone.utc)
+          created_at = user_record["created_at"]
+          days_elapsed = (now - created_at).days
+
+          if days_elapsed >= 14:
+              raise TrialExpiredException(user_id, days_elapsed)
+
+          applications_used = user_record.get("application_count", 0)
+          days_remaining = 14 - days_elapsed
+          credits_remaining = 3 - applications_used
+
+          return TrialStatus(
+              state="ACTIVE",
+              days_remaining=days_remaining,
+              credits_remaining=credits_remaining,
+              applications_used=applications_used,
+          )
+
+  rule_3_2:
+    id: "TRIAL_EXPIRY_RESPONSE"
+    name: "Standardized Trial Enforcement Responses"
+    severity: "required"
+    description: "Return consistent 403 responses with machine-readable error codes"
+    status: "required"
+
+    response_schemas:
+      trial_exhausted:
+        status_code: 403
+        body: |
+          {
+            "error": "trial_exhausted",
+            "message": "Trial limit of 3 applications reached",
+            "upgrade_url": "/subscription/upgrade",
+            "applications_used": 3,
+            "max_applications": 3
+          }
+      trial_expired:
+        status_code: 403
+        body: |
+          {
+            "error": "trial_expired",
+            "message": "14-day trial period has ended",
+            "upgrade_url": "/subscription/upgrade",
+            "trial_ended_at": "ISO8601 timestamp"
+          }
+
+# =============================================================================
+# SECTION 4: USAGE ENDPOINT
+# =============================================================================
+usage_endpoint:
+  section: "4. GET /users/me/usage Endpoint"
+
+  rule_4_1:
+    id: "TRIAL_USAGE_RESPONSE"
+    name: "Usage Endpoint Response Schema"
+    severity: "required"
+    description: "Return standardized trial usage information"
+    status: "required"
+
+    response_schema: |
+      {
+        "trial": {
+          "is_active": true,
+          "days_remaining": 10,
+          "days_elapsed": 4,
+          "trial_ends_at": "2026-03-11T00:00:00Z",
+          "applications": {
+            "used": 1,
+            "remaining": 2,
+            "max": 3
+          }
+        },
+        "subscription": {
+          "status": "trial",
+          "plan": null
+        }
+      }
+
+  rule_4_2:
+    id: "TRIAL_USAGE_AUTH"
+    name: "Usage Endpoint Requires Auth"
+    severity: "required"
+    description: "GET /users/me/usage is a protected route"
+    status: "required"
+
+    required: "Cognito JWT authorizer enforced. Returns 401 without valid token."
+
+# =============================================================================
+# SECTION 5: DYNAMODB SCHEMA
+# =============================================================================
+dynamodb_schema:
+  section: "5. DynamoDB Schema for Trial Data"
+
+  rule_5_1:
+    id: "TRIAL_DB_SCHEMA"
+    name: "Trial Data Storage in Single Table"
+    severity: "required"
+    description: "Store trial data in users table using TRIAL sort key"
+    status: "required"
+
+    schema:
+      pk: "USER#{user_id}"
+      sk: "TRIAL"
+      attributes:
+        - created_at: "ISO8601 UTC timestamp (user registration time)"
+        - application_count: "Number (atomic counter, starts at 0)"
+        - trial_active: "Boolean (true until manually deactivated)"
+        - last_application_at: "ISO8601 UTC timestamp (updated on each application)"
+
+    gsi: "user_id-index on pk for direct user lookup"
+
+    notes:
+      - "Do NOT use Scan to find expired trials — expiry is computed at request time"
+      - "application_count is incremented atomically via ConditionExpression"
+      - "Use PAY_PER_REQUEST billing mode"
+
+# =============================================================================
+# SECTION 6: TESTING REQUIREMENTS
+# =============================================================================
+testing:
+  section: "6. Testing Requirements"
+
+  rule_6_1:
+    id: "TRIAL_TEST_SCENARIOS"
+    name: "Required Test Cases"
+    severity: "required"
+    description: "All trial enforcement scenarios must be unit tested"
+    status: "required"
+
+    required_tests:
+      - "test_trial_active_within_limit: user day 3, 1 application → ACTIVE"
+      - "test_trial_exhausted_at_3_applications: user day 3, 3 applications → 403 trial_exhausted"
+      - "test_trial_expired_at_14_days: user day 14, 0 applications → 403 trial_expired"
+      - "test_trial_expired_at_15_days: user day 15, 0 applications → 403 trial_expired"
+      - "test_trial_atomic_increment_concurrent: 5 concurrent at count=2 → exactly 1 succeeds"
+      - "test_trial_usage_endpoint_returns_correct_counts"
+      - "test_trial_fourth_application_blocked_with_403"
+
+    test_payload: "docs/refactor/payloads/beta_l5_trial_enforcement_test.json"
+    test_file: "src/backend/tests/unit/test_trial_enforcement.py"

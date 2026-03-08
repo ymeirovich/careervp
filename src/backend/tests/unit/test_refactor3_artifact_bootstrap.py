@@ -27,7 +27,7 @@ REQUIRED_VALIDATIONS = [
 
 def test_payload_contract_count_is_27() -> None:
     payload_files = sorted((REFACTOR3_DIR / 'payloads').glob('*.json'))
-    assert len(payload_files) == 27, f'Expected 27 payload contracts, found {len(payload_files)}'
+    assert len(payload_files) == 28, f'Expected 28 payload contracts, found {len(payload_files)}'
 
 
 def test_required_refactor3_specs_exist() -> None:

@@ -1,0 +1,98 @@
+spec_id: RECOVERY_005_YAML4
+title: Restore DELETE /cv-tailoring/{cvTailoringId} Runtime Availability and Authorization Parity
+priority: high
+status: pending
+owner: backend-platform
+created_at: 2026-03-06
+updated_at: 2026-03-06
+sequence_step: 5
+default_environment: dev
+
+targets_yaml2_specs:
+  - CV_TAILORING_002
+
+execution_policy:
+  stop_after_step_for_user_deploy: true
+  resume_only_after_user_live_evidence: true
+  user_must_run_live_tests_in_environment: dev
+
+non_regression_constraints:
+  - preserve_async_contracts
+  - no_endpoint_shape_changes
+  - no_speculative_infra_changes
+  - diagnose_before_fix
+
+problem_statement:
+  exact_failing_behavior: |
+    live-test-results31.log reports delete path failure for CV tailoring (runtime non-success).
+  expected_behavior: |
+    DELETE /cv-tailoring/{id} returns 200 for owner-owned artifact and 404 for unknown IDs.
+  business_impact: |
+    Users cannot clean up tailored CV artifacts.
+
+diagnosis_gate:
+  mandatory_before_code_changes: true
+  hypotheses:
+    - id: H1
+      statement: deployed route/integration/auth parity drift
+      check_command: uv run python scripts/spec_quality/check_deployed_parity.py --env dev --infra-source infra/careervp/api_construct.py --filter-route "DELETE /cv-tailoring/{cvTailoringId}" --check-auth --out docs/evidence/RECOVERY_005-parity-<timestamp>.json
+    - id: H2
+      statement: runtime DAL/handler delete path failure
+      check_command: uv run pytest src/backend/tests/integration/test_cv_tailoring_delete_roundtrip.py -q
+  decision_rule:
+    - If H1 confirmed, apply minimal infra parity fix.
+    - If H2 confirmed, apply minimal handler/DAL runtime fix.
+    - Do not apply both without evidence.
+
+implementation_scope:
+  candidate_files:
+    - infra/careervp/api_construct.py
+    - src/backend/careervp/handlers/cv_tailoring_handler.py
+    - src/backend/careervp/dal/dynamo_dal_handler.py
+    - src/backend/tests/unit/test_l6_route_surface.py
+    - src/backend/tests/integration/test_cv_tailoring_delete_roundtrip.py
+
+implementation_checklist:
+  - id: S005-01
+    task: Execute diagnosis gate and record confirmed root cause.
+  - id: S005-02
+    task: Apply only root-cause-matched fix (infra parity OR runtime delete path).
+  - id: S005-03
+    task: Harden error handling for delete path (specific catches, sanitized responses, full server-side logs).
+  - id: S005-04
+    task: Validate create->delete->list absence and cross-user isolation.
+
+pre_deploy_validation:
+  required_commands:
+    - uv run pytest src/backend/tests/unit/test_l6_route_surface.py -q
+    - uv run pytest src/backend/tests/integration/test_cv_tailoring_delete_roundtrip.py -q
+  pass_conditions:
+    - all_commands_exit_0
+    - no_regressions_in_generate_status_list_paths
+
+handoff_gate:
+  stop_now: true
+  user_actions:
+    - Deploy this step to AWS dev
+    - Run uv run pytest docs/refactor/live_tests/test_06_cv_tailoring.py -q
+    - Save artifact to docs/evidence/RECOVERY_005-live-<timestamp>.log
+  required_evidence_fields:
+    - environment=dev
+    - deployment_id
+    - git_sha
+    - confirmed_root_cause_id
+    - expected_vs_actual
+    - result
+  resume_condition:
+    - evidence_file_present
+    - delete_roundtrip_passes_in_live
+
+traceability_matrix:
+  - requirement_id: AC-CVT-301
+    requirement: DELETE route exists/deployed with intended integration/auth
+    test_reference: src/backend/tests/unit/test_l6_route_surface.py::test_cv_tailoring_delete_route_present
+    result: pending
+  - requirement_id: AC-CVT-302
+    requirement: create-delete-list roundtrip works in live
+    test_reference: docs/refactor/live_tests/test_06_cv_tailoring.py::TestCVTailoringEndpoints::test_delete_tailored_cv_roundtrip
+    result: pending

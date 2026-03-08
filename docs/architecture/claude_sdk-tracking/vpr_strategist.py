@@ -19,18 +19,21 @@ from token_tracker import TrackedAnthropicClient  # from Lambda layer
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-MODEL     = os.environ.get("MODEL_NAME", "claude-sonnet-4-5-20250929")
+MODEL = os.environ.get("MODEL_NAME", "claude-sonnet-4-5-20250929")
 MAX_TOKENS = int(os.environ.get("MAX_TOKENS", "4000"))
 
 # DynamoDB for persisting results (existing infra)
 import boto3
+
 dynamodb = boto3.resource("dynamodb")
-apps_table = dynamodb.Table(os.environ.get("APPLICATIONS_TABLE", "careervp-applications"))
+apps_table = dynamodb.Table(
+    os.environ.get("APPLICATIONS_TABLE", "careervp-applications")
+)
 
 
 def lambda_handler(event: dict, context: Any) -> dict:
     application_id = event["application_id"]
-    user_id        = event["user_id"]
+    user_id = event["user_id"]
 
     # ── Instantiate tracked client ────────────────────────────────────────────
     # This is the ONLY change to existing agent code.
@@ -44,10 +47,10 @@ def lambda_handler(event: dict, context: Any) -> dict:
     )
 
     # ── Build the prompt (unchanged from existing architecture) ───────────────
-    cv_facts           = event["cv_facts"]
-    gap_responses      = event["gap_responses"]
-    job_requirements   = event["job_requirements"]
-    company_research   = event["company_research"]
+    cv_facts = event["cv_facts"]
+    gap_responses = event["gap_responses"]
+    job_requirements = event["job_requirements"]
+    company_research = event["company_research"]
 
     prompt = VPR_GENERATION_PROMPT.format(
         cv_facts_json=json.dumps(cv_facts, indent=2),
@@ -80,7 +83,7 @@ Apply improvements and output the final version only.
         model=MODEL,
         max_tokens=MAX_TOKENS,
         messages=[{"role": "user", "content": meta_prompt}],
-        _stage="stage6_meta_evaluation",   # tracked separately in DynamoDB
+        _stage="stage6_meta_evaluation",  # tracked separately in DynamoDB
     )
 
     final_vpr = meta_response.content[0].text
@@ -95,9 +98,12 @@ Apply improvements and output the final version only.
             messages=[
                 {"role": "user", "content": meta_prompt},
                 {"role": "assistant", "content": final_vpr},
-                {"role": "user", "content": "Expand the Evidence & Alignment Matrix section to reach 1500+ words."}
+                {
+                    "role": "user",
+                    "content": "Expand the Evidence & Alignment Matrix section to reach 1500+ words.",
+                },
             ],
-            _stage="self_correction_expansion",   # clearly labelled in tracking
+            _stage="self_correction_expansion",  # clearly labelled in tracking
         )
         final_vpr = expand_response.content[0].text
 
@@ -120,7 +126,7 @@ Apply improvements and output the final version only.
     return {
         "application_id": application_id,
         "vpr_content": final_vpr,
-        "agent_totals": totals,   # passed downstream via Step Functions
+        "agent_totals": totals,  # passed downstream via Step Functions
         # Note: detailed per-call records already in careervp-token-usage table
     }
 
@@ -131,6 +137,7 @@ def _update_application_costs(application_id: str, agent_name: str, totals: dict
     Uses update expression to add agent costs without overwriting other agents.
     """
     import decimal
+
     try:
         apps_table.update_item(
             Key={"applicationId": application_id},

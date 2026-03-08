@@ -1,0 +1,149 @@
+spec_id: COVER_LETTER_002
+title: Cover Letter Status/List Must Use Real Persisted Artifacts (No Synthetic Success)
+priority: high
+status: validated
+owner: backend-platform
+created_at: 2026-03-04
+updated_at: 2026-03-04
+
+problem_statement:
+  exact_failing_behavior: |
+    POST /cover-letter/generate returns 202 and GET /cover-letter/{id}/status returns 200,
+    but GET /cover-letters returns an empty list. Current status endpoint can return a
+    default synthetic payload when no persisted artifact is found.
+  expected_behavior: |
+    The request_id from POST must be retrievable from GET status and list using persisted data.
+    No synthetic success payload should mask missing persistence.
+  impact: |
+    False-positive success hides data loss and breaks downstream UX flows relying on list/history.
+  reproducibility_notes:
+    - Generate cover letter
+    - Read status by returned id
+    - List cover letters and verify generated id appears
+
+evidence:
+  failing_tests:
+    - docs/refactor/live_tests/test_07_cover_letter.py::TestCoverLetterEndpoints::test_list_cover_letters
+  endpoints:
+    - method: POST
+      path: /cover-letter/generate
+      observed_status: 202
+    - method: GET
+      path: /cover-letter/{coverLetterId}/status
+      observed_status: 200
+    - method: GET
+      path: /cover-letters
+      observed_status: 200
+      observed_body_fragment: '{"cover_letters": []}'
+  environment: dev-live
+  timestamp_utc: '2026-03-04T07:00:00Z'
+
+architecture_and_ownership_map:
+  route_to_lambda:
+    - route: POST /cover-letter/generate
+      lambda: cover-letter-api
+      handler: src/backend/careervp/handlers/cover_letter_submit_handler.py
+    - route: GET /cover-letter/{coverLetterId}/status
+      lambda: cover-letter-status
+      handler: src/backend/careervp/handlers/cover_letter_handler.py
+    - route: GET /cover-letters
+      lambda: cover-letter-status
+      handler: src/backend/careervp/handlers/cover_letter_handler.py
+  data_store:
+    table: artifacts
+    key_schema:
+      partition_key: applicationId
+      sort_key: artifactId
+    artifact_prefix: ARTIFACT#COVER_LETTER#
+  auth_identity:
+    source: requestContext.authorizer.*.claims.sub
+    scope_key: user_id
+
+root_cause_analysis:
+  hypotheses_ranked:
+    - id: H1
+      hypothesis: Status/list use pk/sk access patterns inconsistent with artifacts table schema
+      disproof_criteria: Successful get/list using applicationId/artifactId only
+      status: confirmed
+    - id: H2
+      hypothesis: Synthetic fallback in status masks missing persisted artifact
+      disproof_criteria: Endpoint returns 404 when artifact missing
+      status: confirmed
+    - id: H3
+      hypothesis: DAL list transformation drops fields
+      disproof_criteria: DAL returns full item objects with IDs preserved
+      status: partially_resolved
+  contributing_factors:
+    - Split submit/status handlers with inconsistent storage patterns
+    - Lenient fallback behavior converting data-loss into 200 success
+
+fix_plan:
+  behavior_changes:
+    - Use artifacts table canonical keys (applicationId/artifactId) for status/list reads and worker updates.
+    - Keep temporary backward-compatible read fallback to pk/sk during migration window only.
+    - Remove synthetic success default from GET status in production paths; return 404 when not found.
+    - Ensure list endpoint materializes IDs from artifactId and includes generated artifact.
+  files_to_modify:
+    - src/backend/careervp/handlers/cover_letter_handler.py
+    - src/backend/careervp/dal/dynamo_dal_handler.py
+  non_goals:
+    - No response schema redesign for existing successful payloads
+    - No changes to cover letter generation prompt/content
+  rollback_plan:
+    - Feature-flag strict not-found behavior if client impact detected
+    - Re-enable legacy read fallback while preserving logging of misses
+
+acceptance_criteria:
+  api_level:
+    - POST /cover-letter/generate returns 202 with request_id
+    - GET /cover-letter/{request_id}/status returns 200 and id == request_id when persisted
+    - GET /cover-letter/{unknown_id}/status returns 404 with domain-specific code
+    - GET /cover-letters includes the generated id after completion
+  data_level:
+    - Reads/writes for cover letter artifacts use applicationId/artifactId on artifacts table
+    - artifactId format is ARTIFACT#COVER_LETTER#{request_id}
+  observability:
+    - Emit metric for not_found lookups
+    - Log key schema used for read path (canonical vs legacy fallback)
+  edge_cases:
+    - User A cannot read/list User B artifacts
+
+validation_plan:
+  unit_tests:
+    - src/backend/tests/unit/test_cover_letter_status_storage_keys.py
+    - src/backend/tests/unit/test_cover_letter_list_includes_generated_artifact.py
+  integration_tests:
+    - src/backend/tests/integration/test_cover_letter_roundtrip_persistence.py
+  live_e2e:
+    - docs/refactor/live_tests/test_07_cover_letter.py
+  regression_tests:
+    - Verify existing completed cover-letter artifacts remain readable after key migration logic
+
+traceability_matrix:
+  - requirement_id: AC-CL-001
+    requirement: Generated cover letter appears in list
+    code_reference: src/backend/careervp/handlers/cover_letter_handler.py
+    test_reference: docs/refactor/live_tests/test_07_cover_letter.py::TestCoverLetterEndpoints::test_list_cover_letters
+    evidence_reference: docs/evidence/cover-letter-roundtrip-20260306T082812Z.json
+    result: pass
+  - requirement_id: AC-CL-002
+    requirement: Missing cover letter id returns 404 (no synthetic success)
+    code_reference: src/backend/careervp/handlers/cover_letter_handler.py
+    test_reference: src/backend/tests/unit/test_cover_letter_status_storage_keys.py::test_missing_returns_404
+    evidence_reference: docs/evidence/cover-letter-not-found-20260306T082812Z.json
+    result: pass
+
+completion_evidence:
+  required_artifacts:
+    - unit_test_output
+    - integration_test_output
+    - live_test_output
+    - deployed_request_response_samples
+  residual_risks:
+    - Legacy artifacts with inconsistent keys may require one-time migration script
+  sign_off_checklist:
+    - All acceptance criteria mapped and passing
+    - No synthetic success path in production code
+    - Regression suite green
+
+dependencies: []

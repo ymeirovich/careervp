@@ -26,9 +26,9 @@ class TestSmokeScriptParsesPayloadContracts:
         assert PAYLOADS_DIR.exists(), f'Payloads directory not found: {PAYLOADS_DIR}'
 
     def test_payloads_count(self):
-        """Verify we have 27 payload contracts."""
+        """Verify we have 28 payload contracts."""
         json_files = list(PAYLOADS_DIR.glob('*.json'))
-        assert len(json_files) == 27, f'Expected 27 payloads, found {len(json_files)}'
+        assert len(json_files) == 28, f'Expected 28 payloads, found {len(json_files)}'
 
     def test_health_payload_structure(self):
         """Verify health_check.json has required fields."""

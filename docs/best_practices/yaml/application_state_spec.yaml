@@ -1,0 +1,278 @@
+# CareerVP Application State Model Specification
+# Machine-readable YAML format for automated validation
+
+spec_version: "1.0"
+date: "2026-02-26"
+purpose: "Canonical application lifecycle model for state recovery on page reload"
+enforcement: "All application-related handlers must use this state model"
+
+# =============================================================================
+# SECTION 1: LIFECYCLE STATES
+# =============================================================================
+lifecycle:
+  section: "1. Application Lifecycle States"
+
+  rule_1_1:
+    id: "STATE_CANONICAL_LIFECYCLE"
+    name: "Canonical Application State Machine"
+    severity: "required"
+    description: "7-state lifecycle that enables page-reload state recovery"
+    status: "required"
+
+    states:
+      - id: "created"
+        description: "Application record created; no CV or job linked yet"
+        entry_trigger: "POST /jobs (creates job + application)"
+        next_states: ["cv_selected"]
+        frontend_recovery: "Redirect to CV selection step"
+      - id: "cv_selected"
+        description: "CV linked to application"
+        entry_trigger: "PUT /applications/{id}/cv"
+        next_states: ["gap_questions_pending"]
+        frontend_recovery: "Redirect to gap question generation step"
+      - id: "gap_questions_pending"
+        description: "Trial credit charged; gap question generation triggered"
+        entry_trigger: "POST /jobs/{id}/gap-questions (atomic credit charge)"
+        next_states: ["gap_questions_ready"]
+        frontend_recovery: "Poll gap question status; show loading if still generating"
+      - id: "gap_questions_ready"
+        description: "AI gap questions generated and stored"
+        entry_trigger: "Gap analysis worker completes"
+        next_states: ["gap_responses_submitted"]
+        frontend_recovery: "Redirect to gap response form with stored questions"
+      - id: "gap_responses_submitted"
+        description: "User submitted responses to all gap questions"
+        entry_trigger: "POST /jobs/{id}/gap-responses"
+        next_states: ["artifacts_generating"]
+        frontend_recovery: "Show artifact generation in progress"
+      - id: "artifacts_generating"
+        description: "All 5 artifact generators triggered via SQS"
+        entry_trigger: "Gap response submission triggers artifact generation"
+        next_states: ["artifacts_completed", "artifacts_failed"]
+        frontend_recovery: "Poll all 5 artifact statuses; show progress for each"
+      - id: "artifacts_completed"
+        description: "All 5 artifacts generated and persisted to DynamoDB"
+        entry_trigger: "All workers complete"
+        next_states: []
+        frontend_recovery: "Show artifact list with download links"
+
+    invariant_reference: "I6 — Frontend state survives page reload at every workflow step"
+
+  rule_1_2:
+    id: "STATE_TRANSITION_RULES"
+    name: "State Transition Validation"
+    severity: "required"
+    description: "Transitions must be linear and validated before write"
+    status: "required"
+
+    forbidden_transitions:
+      - from: "artifacts_completed"
+        to: "any"
+        reason: "Terminal state — no backward transitions"
+      - from: "gap_questions_pending"
+        to: "created"
+        reason: "Credit already consumed — cannot un-charge"
+
+    required_pattern: |
+      VALID_TRANSITIONS: dict[str, list[str]] = {
+          "created": ["cv_selected"],
+          "cv_selected": ["gap_questions_pending"],
+          "gap_questions_pending": ["gap_questions_ready"],
+          "gap_questions_ready": ["gap_responses_submitted"],
+          "gap_responses_submitted": ["artifacts_generating"],
+          "artifacts_generating": ["artifacts_completed", "artifacts_failed"],
+          "artifacts_completed": [],
+          "artifacts_failed": ["artifacts_generating"],  # allow retry
+      }
+
+      def transition_state(application: dict, new_state: str) -> None:
+          current = application["state"]
+          allowed = VALID_TRANSITIONS.get(current, [])
+          if new_state not in allowed:
+              raise InvalidStateTransitionError(current, new_state)
+
+# =============================================================================
+# SECTION 2: DYNAMODB SCHEMA
+# =============================================================================
+dynamodb_schema:
+  section: "2. DynamoDB Schema"
+
+  rule_2_1:
+    id: "STATE_DB_SCHEMA"
+    name: "Application Table Schema"
+    severity: "required"
+    description: "Single-table design for application state"
+    status: "required"
+
+    schema:
+      primary_record:
+        pk: "USER#{user_id}"
+        sk: "APP#{application_id}"
+        attributes:
+          - application_id: "String UUID"
+          - user_id: "String"
+          - job_id: "String"
+          - cv_id: "String | null (null until cv_selected state)"
+          - state: "String (one of the 7 canonical states)"
+          - created_at: "ISO8601 UTC"
+          - updated_at: "ISO8601 UTC"
+          - trial_credit_consumed: "Boolean"
+          - artifact_statuses: "Map<artifact_type, status> (pending/processing/completed/failed)"
+          - ttl: "Unix timestamp (90 days)"
+          - entity_type: "APPLICATION"
+
+      gsi:
+        - name: "state-index"
+          pk: "state"
+          sk: "user_id"
+          purpose: "Query applications by state (for admin/monitoring)"
+
+    example: |
+      {
+        "pk": "USER#abc123",
+        "sk": "APP#xyz789",
+        "application_id": "xyz789",
+        "user_id": "abc123",
+        "job_id": "job456",
+        "cv_id": "cv789",
+        "state": "gap_questions_ready",
+        "created_at": "2026-02-26T10:00:00Z",
+        "updated_at": "2026-02-26T10:05:00Z",
+        "trial_credit_consumed": true,
+        "artifact_statuses": {
+          "vpr": "pending",
+          "cv_tailored": "pending",
+          "cover_letter": "pending",
+          "interview_prep": "pending",
+          "gap_analysis": "pending"
+        },
+        "entity_type": "APPLICATION",
+        "ttl": 1748000000
+      }
+
+# =============================================================================
+# SECTION 3: RECOVERY ENDPOINT
+# =============================================================================
+recovery_endpoint:
+  section: "3. GET /applications/{id} Recovery Endpoint"
+
+  rule_3_1:
+    id: "STATE_RECOVERY_RESPONSE"
+    name: "Recovery Endpoint Returns Full State"
+    severity: "required"
+    description: "Single endpoint for frontend to restore complete workflow state"
+    status: "required"
+
+    response_schema: |
+      {
+        "application": {
+          "application_id": "xyz789",
+          "state": "gap_questions_ready",
+          "created_at": "2026-02-26T10:00:00Z",
+          "trial_credit_consumed": true
+        },
+        "job": {
+          "job_id": "job456",
+          "title": "Senior Software Engineer",
+          "company": "Acme Corp",
+          "description": "..."
+        },
+        "cv": {
+          "cv_id": "cv789",
+          "filename": "john_doe_cv.pdf"
+        },
+        "gap_analysis": {
+          "questions": [...],  // null if not yet generated
+          "responses": [...]   // null if not yet submitted
+        },
+        "artifacts": {
+          "vpr": { "status": "completed", "artifact_id": "vpr123", "s3_url": "..." },
+          "cv_tailored": { "status": "pending", "artifact_id": null },
+          "cover_letter": { "status": "processing", "artifact_id": null },
+          "interview_prep": { "status": "pending", "artifact_id": null },
+          "gap_analysis": { "status": "pending", "artifact_id": null }
+        }
+      }
+
+  rule_3_2:
+    id: "STATE_RECOVERY_AUTH"
+    name: "Recovery Endpoint Ownership Check"
+    severity: "critical"
+    description: "User can only recover their own application state"
+    status: "required"
+
+    required_pattern: |
+      def get_application(application_id: str, user_id: str) -> dict:
+          application = dal.get_application(application_id)
+          if not application:
+              raise ApplicationNotFoundError(application_id)
+          if application["user_id"] != user_id:
+              raise PermissionDeniedError(user_id, application_id)
+          return application
+
+# =============================================================================
+# SECTION 4: STATE WRITE PATTERNS
+# =============================================================================
+state_writes:
+  section: "4. State Write Patterns"
+
+  rule_4_1:
+    id: "STATE_CONDITIONAL_WRITE"
+    name: "Use Conditional Writes for State Transitions"
+    severity: "required"
+    description: "Prevent concurrent state overwrites with ConditionExpression"
+    status: "required"
+
+    required_pattern: |
+      # Only update state if current state is the expected previous state
+      dal.update_application_state(
+          application_id=application_id,
+          user_id=user_id,
+          new_state="gap_questions_ready",
+          expected_current_state="gap_questions_pending",
+      )
+
+      # Implementation:
+      def update_application_state(
+          self,
+          application_id: str,
+          user_id: str,
+          new_state: str,
+          expected_current_state: str,
+      ) -> None:
+          self.table.update_item(
+              Key={"pk": f"USER#{user_id}", "sk": f"APP#{application_id}"},
+              UpdateExpression="SET #state = :new_state, updated_at = :now",
+              ConditionExpression="#state = :expected",
+              ExpressionAttributeNames={"#state": "state"},
+              ExpressionAttributeValues={
+                  ":new_state": new_state,
+                  ":now": datetime.now(timezone.utc).isoformat(),
+                  ":expected": expected_current_state,
+              },
+          )
+
+# =============================================================================
+# SECTION 5: TESTING REQUIREMENTS
+# =============================================================================
+testing:
+  section: "5. Testing Requirements"
+
+  rule_5_1:
+    id: "STATE_TEST_SCENARIOS"
+    name: "Required Test Cases for State Model"
+    severity: "required"
+    description: "All state lifecycle scenarios must be unit tested"
+    status: "required"
+
+    required_tests:
+      - "test_application_created_state: POST job → application in created state"
+      - "test_application_state_transitions: Walk through all 7 states in sequence"
+      - "test_application_invalid_transition_raises: Attempt backward transition → InvalidStateTransitionError"
+      - "test_application_recovery_returns_full_state: GET /applications/{id} returns all nested data"
+      - "test_application_recovery_ownership_check: Wrong user gets 403"
+      - "test_application_state_survives_reload: Create state → serialize → deserialize → assert state preserved"
+      - "test_artifact_statuses_updated_on_worker_complete: Worker completion updates artifact_statuses"
+
+    test_payload: "docs/refactor/payloads/beta_l3_application_state_test.json"
+    test_file: "src/backend/tests/unit/test_application_state.py"

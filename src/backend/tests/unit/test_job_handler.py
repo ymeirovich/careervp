@@ -66,7 +66,17 @@ def jobs_table() -> Generator[Any, None, None]:
         table = dynamodb.create_table(
             TableName='test-jobs-table',
             KeySchema=[{'AttributeName': 'job_id', 'KeyType': 'HASH'}],
-            AttributeDefinitions=[{'AttributeName': 'job_id', 'AttributeType': 'S'}],
+            AttributeDefinitions=[
+                {'AttributeName': 'job_id', 'AttributeType': 'S'},
+                {'AttributeName': 'user_id', 'AttributeType': 'S'},
+            ],
+            GlobalSecondaryIndexes=[
+                {
+                    'IndexName': 'user_id-index',
+                    'KeySchema': [{'AttributeName': 'user_id', 'KeyType': 'HASH'}],
+                    'Projection': {'ProjectionType': 'ALL'},
+                },
+            ],
             BillingMode='PAY_PER_REQUEST',
         )
         table.meta.client.get_waiter('table_exists').wait(TableName='test-jobs-table')
@@ -79,10 +89,30 @@ def _generate_api_gw_event(
     body: dict[str, Any] | None = None,
     headers: dict[str, str] | None = None,
     query: dict[str, str] | None = None,
+    user_id: str | None = None,
 ) -> dict[str, Any]:
     request_headers = {'Content-Type': 'application/json'}
     if headers:
         request_headers.update(headers)
+
+    request_context = {
+        'accountId': '123456789012',
+        'apiId': 'testapi',
+        'domainName': 'testapi.execute-api.us-east-1.amazonaws.com',
+        'domainPrefix': 'testapi',
+        'httpMethod': method,
+        'path': path,
+        'protocol': 'HTTP/1.1',
+        'requestId': 'test-request-id',
+        'requestTime': '01/Jan/2026:00:00:00 +0000',
+        'requestTimeEpoch': 1767225600000,
+        'stage': 'test',
+    }
+
+    # Add Cognito authorizer claims if user_id is provided
+    if user_id:
+        request_context['authorizer'] = {'claims': {'sub': user_id}}
+
     return {
         'version': '1.0',
         'resource': path,
@@ -92,19 +122,7 @@ def _generate_api_gw_event(
         'multiValueHeaders': {},
         'queryStringParameters': query,
         'multiValueQueryStringParameters': None,
-        'requestContext': {
-            'accountId': '123456789012',
-            'apiId': 'testapi',
-            'domainName': 'testapi.execute-api.us-east-1.amazonaws.com',
-            'domainPrefix': 'testapi',
-            'httpMethod': method,
-            'path': path,
-            'protocol': 'HTTP/1.1',
-            'requestId': 'test-request-id',
-            'requestTime': '01/Jan/2026:00:00:00 +0000',
-            'requestTimeEpoch': 1767225600000,
-            'stage': 'test',
-        },
+        'requestContext': request_context,
         'pathParameters': None,
         'stageVariables': None,
         'body': json.dumps(body) if body is not None else None,
@@ -147,6 +165,7 @@ def test_create_job_returns_201(jobs_table: Any) -> None:
             'company_name': 'Acme Corp',
             'description': 'Design and build backend services.',
         },
+        user_id='user-1',
     )
 
     response = lambda_handler(event, _generate_lambda_context())
@@ -202,7 +221,7 @@ def test_list_jobs_returns_user_jobs(jobs_table: Any) -> None:
     )
 
     access_token = _create_access_token(user_id='user-1', email='user1@example.com')
-    event = _generate_api_gw_event(path='/jobs', method='GET', headers={'Authorization': f'Bearer {access_token}'})
+    event = _generate_api_gw_event(path='/jobs', method='GET', headers={'Authorization': f'Bearer {access_token}'}, user_id='user-1')
     response = lambda_handler(event, _generate_lambda_context())
 
     assert response['statusCode'] == 200
@@ -228,7 +247,7 @@ def test_get_job_returns_single_job(jobs_table: Any) -> None:
     )
     access_token = _create_access_token(user_id='user-1', email='user1@example.com')
 
-    event = _generate_api_gw_event(path='/jobs/job-123', method='GET', headers={'Authorization': f'Bearer {access_token}'})
+    event = _generate_api_gw_event(path='/jobs/job-123', method='GET', headers={'Authorization': f'Bearer {access_token}'}, user_id='user-1')
     response = lambda_handler(event, _generate_lambda_context())
 
     assert response['statusCode'] == 200
@@ -254,7 +273,7 @@ def test_users_can_only_access_own_jobs(jobs_table: Any) -> None:
     )
 
     access_token = _create_access_token(user_id='other-user', email='other@example.com')
-    event = _generate_api_gw_event(path='/jobs/job-private', method='GET', headers={'Authorization': f'Bearer {access_token}'})
+    event = _generate_api_gw_event(path='/jobs/job-private', method='GET', headers={'Authorization': f'Bearer {access_token}'}, user_id='other-user')
     response = lambda_handler(event, _generate_lambda_context())
 
     assert response['statusCode'] == 403

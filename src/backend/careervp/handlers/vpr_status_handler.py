@@ -2,8 +2,8 @@
 VPR Status Handler for Async Architecture.
 
 Endpoints:
-- GET /vpr/{vprId}
-- GET /users/me/vprs
+- GET /vpr/{job_id}/status
+- GET /vprs
 Flow:
   1. Authenticate request
   2. Fetch VPR job(s) from DynamoDB
@@ -23,90 +23,17 @@ import boto3
 from aws_lambda_powertools.utilities.typing import LambdaContext
 
 from careervp.dal.jobs_repository import JobsRepository
+from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.utils.observability import logger, metrics, tracer
-from careervp.logic.auth_service import AuthService, ConfigurationError, InvalidTokenError
 
 JSON_HEADERS = {'Content-Type': 'application/json'}
 
 # Module-level S3 client for testing/mocking
 s3 = boto3.client('s3')
-_auth_service: AuthService | None = None
-
-
-def _get_auth_service() -> AuthService:
-    global _auth_service
-    if _auth_service is None:
-        _auth_service = AuthService.from_env()
-    return _auth_service
-
-
-def _extract_claim_user_id(claims: Any) -> str | None:
-    if not isinstance(claims, dict):
-        return None
-    for key in ('sub', 'user_id', 'cognito:username'):
-        value = claims.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
-
-
-def _extract_user_id_from_authorizer(event: dict[str, Any]) -> str | None:
-    request_context = event.get('requestContext')
-    if not isinstance(request_context, dict):
-        return None
-
-    authorizer = request_context.get('authorizer')
-    if not isinstance(authorizer, dict):
-        return None
-
-    claims = authorizer.get('claims')
-    claim_user_id = _extract_claim_user_id(claims)
-    if claim_user_id:
-        return claim_user_id
-
-    jwt_context = authorizer.get('jwt')
-    if isinstance(jwt_context, dict):
-        jwt_claims = jwt_context.get('claims')
-        jwt_user_id = _extract_claim_user_id(jwt_claims)
-        if jwt_user_id:
-            return jwt_user_id
-
-    for key in ('user_id', 'principalId', 'principal_id'):
-        value = authorizer.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
-
-
-def _extract_bearer_token(event: dict[str, Any]) -> str | None:
-    headers = event.get('headers')
-    if not isinstance(headers, dict):
-        return None
-    auth_header = headers.get('Authorization') or headers.get('authorization')
-    if not isinstance(auth_header, str) or not auth_header.startswith('Bearer '):
-        return None
-    token = auth_header[7:].strip()
-    return token if token else None
 
 
 def _extract_authenticated_user_id(event: dict[str, Any]) -> str | None:
-    authorizer_user_id = _extract_user_id_from_authorizer(event)
-    if authorizer_user_id:
-        return authorizer_user_id
-
-    token = _extract_bearer_token(event)
-    if not token:
-        return None
-
-    try:
-        payload = _get_auth_service().validate_token(token, expected_token_type='access')
-    except (InvalidTokenError, ConfigurationError):
-        return None
-
-    user_id = payload.get('user_id') or payload.get('sub')
-    if isinstance(user_id, str) and user_id.strip():
-        return user_id.strip()
-    return None
+    return extract_user_id(event)
 
 
 def _get_results_bucket() -> str:
@@ -125,7 +52,7 @@ def _generate_presigned_url(result_key: str) -> str:
     url = s3.generate_presigned_url(
         'get_object',
         Params={'Bucket': bucket, 'Key': result_key},
-        ExpiresIn=3600,
+        ExpiresIn=604800,  # 7 days — reduces expiry-related download failures
     )
     assert isinstance(url, str), 'S3 presigned URL should return a string'
     return url
@@ -285,6 +212,8 @@ def _extract_vpr_id(event: dict[str, Any]) -> str | None:
     path_value = str(event.get('path', ''))
     if path_value.startswith('/vpr/'):
         candidate = path_value.removeprefix('/vpr/').strip('/')
+        if candidate.endswith('/status'):
+            candidate = candidate[: -len('/status')]
         if candidate:
             return candidate
     return None
@@ -293,7 +222,7 @@ def _extract_vpr_id(event: dict[str, Any]) -> str | None:
 def _is_list_user_vprs_request(event: dict[str, Any]) -> bool:
     method = str(event.get('httpMethod', '')).upper()
     path = str(event.get('path', '')).rstrip('/')
-    return method == 'GET' and path == '/users/me/vprs'
+    return method == 'GET' and path in {'/users/me/vprs', '/vprs'}
 
 
 def _parse_limit(event: dict[str, Any]) -> int:
@@ -310,16 +239,47 @@ def _parse_limit(event: dict[str, Any]) -> int:
     return max(1, min(limit, 100))
 
 
-def _build_vpr_list_item(job: dict[str, Any]) -> dict[str, Any]:
+def _build_vpr_list_item(job: dict[str, Any], jobs_repo: JobsRepository | None = None) -> dict[str, Any]:  # noqa: C901
     job_id = str(job.get('job_id', ''))
     created_at = job.get('created_at')
     input_data = job.get('input_data')
     job_posting = input_data.get('job_posting') if isinstance(input_data, dict) else None
     job_title = ''
     company_name = ''
+    resolution_source = 'unavailable'
+
     if isinstance(job_posting, dict):
         job_title = str(job_posting.get('role_title') or job_posting.get('title') or '')
         company_name = str(job_posting.get('company_name') or job_posting.get('company') or '')
+        if job_title or company_name:
+            resolution_source = 'input_data_job_posting'
+
+    if not (job_title and company_name) and jobs_repo is not None:
+        ref_job_id: str | None = None
+        if isinstance(input_data, dict):
+            ref_job_id = str(input_data.get('job_id') or '').strip() or None
+        if not ref_job_id:
+            ref_job_id = str(job.get('application_id') or '').strip() or None
+
+        if ref_job_id:
+            try:
+                fetched_job = jobs_repo.get_job(ref_job_id)
+                if isinstance(fetched_job, dict):
+                    if not job_title:
+                        job_title = str(fetched_job.get('title') or '').strip()
+                    if not company_name:
+                        company_name = str(fetched_job.get('company_name') or fetched_job.get('company') or '').strip()
+                    if job_title or company_name:
+                        resolution_source = 'jobs_table_fallback'
+                        metrics.add_metric(name='VPRMetadataFallbackUsed', unit='Count', value=1)
+            except Exception:
+                logger.warning('Jobs table fallback failed for VPR list metadata', job_id=job_id, ref_job_id=ref_job_id)
+
+    logger.debug(
+        'VPR list item metadata resolved',
+        job_id=job_id,
+        resolution_source=resolution_source,
+    )
 
     return {
         'id': job_id,
@@ -351,7 +311,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     if _is_list_user_vprs_request(event):
         limit = _parse_limit(event)
         jobs = jobs_repo.get_vpr_jobs_by_user(user_id=user_id, limit=limit)
-        list_payload = {'vprs': [_build_vpr_list_item(job) for job in jobs]}
+        list_payload = {'vprs': [_build_vpr_list_item(job, jobs_repo=jobs_repo) for job in jobs]}
         return {
             'statusCode': int(HTTPStatus.OK),
             'headers': JSON_HEADERS,

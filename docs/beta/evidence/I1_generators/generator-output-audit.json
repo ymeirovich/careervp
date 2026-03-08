@@ -1,0 +1,2002 @@
+[
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-001",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 1, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-002",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 2, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-003",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 3, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-004",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 4, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-005",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 5, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-006",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 6, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-007",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 7, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-008",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 8, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-009",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 9, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-010",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 10, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-011",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 11, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-012",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 12, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-013",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 13, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-014",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 14, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-015",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 15, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-016",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 16, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-017",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 17, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-018",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 18, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-019",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 19, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-020",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 20, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-021",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 21, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-022",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 22, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-023",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 23, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-024",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 24, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-025",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 25, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-026",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 26, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-027",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 27, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-028",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 28, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-029",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 29, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-030",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 30, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-031",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 31, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-032",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 32, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-033",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 33, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-034",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 34, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-035",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 35, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-036",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 36, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-037",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 37, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-038",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 38, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-039",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 39, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-040",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 40, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-041",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 41, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-042",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 42, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-043",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 43, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-044",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 44, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-045",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 45, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-046",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 46, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-047",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 47, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-048",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 48, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-049",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 49, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cover_letter",
+    "run_id": "l0-phase-cover_letter-050",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 50, improving release stability and service performance through measurable execution.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-001",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 1.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-002",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 2.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-003",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 3.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-004",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 4.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-005",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 5.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-006",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 6.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-007",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 7.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-008",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 8.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-009",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 9.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-010",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 10.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-011",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 11.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-012",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 12.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-013",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 13.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-014",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 14.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-015",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 15.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-016",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 16.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-017",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 17.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-018",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 18.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-019",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 19.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-020",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 20.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-021",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 21.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-022",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 22.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-023",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 23.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-024",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 24.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-025",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 25.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-026",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 26.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-027",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 27.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-028",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 28.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-029",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 29.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-030",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 30.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-031",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 31.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-032",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 32.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-033",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 33.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-034",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 34.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-035",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 35.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-036",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 36.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-037",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 37.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-038",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 38.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-039",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 39.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-040",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 40.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-041",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 41.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-042",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 42.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-043",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 43.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-044",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 44.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-045",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 45.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-046",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 46.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-047",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 47.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-048",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 48.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-049",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 49.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "interview_prep",
+    "run_id": "l0-phase-interview_prep-050",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe a real architecture tradeoff you led in run 50.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-001",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 1. Describe measurable platform outcome 1 from run 1. Describe measurable platform outcome 2 from run 1. Describe measurable platform outcome 3 from run 1. Describe measura",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-002",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 2. Describe measurable platform outcome 1 from run 2. Describe measurable platform outcome 2 from run 2. Describe measurable platform outcome 3 from run 2. Describe measura",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-003",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 3. Describe measurable platform outcome 1 from run 3. Describe measurable platform outcome 2 from run 3. Describe measurable platform outcome 3 from run 3. Describe measura",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-004",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 4. Describe measurable platform outcome 1 from run 4. Describe measurable platform outcome 2 from run 4. Describe measurable platform outcome 3 from run 4. Describe measura",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-005",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 5. Describe measurable platform outcome 1 from run 5. Describe measurable platform outcome 2 from run 5. Describe measurable platform outcome 3 from run 5. Describe measura",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-006",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 6. Describe measurable platform outcome 1 from run 6. Describe measurable platform outcome 2 from run 6. Describe measurable platform outcome 3 from run 6. Describe measura",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-007",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 7. Describe measurable platform outcome 1 from run 7. Describe measurable platform outcome 2 from run 7. Describe measurable platform outcome 3 from run 7. Describe measura",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-008",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 8. Describe measurable platform outcome 1 from run 8. Describe measurable platform outcome 2 from run 8. Describe measurable platform outcome 3 from run 8. Describe measura",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-009",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 9. Describe measurable platform outcome 1 from run 9. Describe measurable platform outcome 2 from run 9. Describe measurable platform outcome 3 from run 9. Describe measura",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-010",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 10. Describe measurable platform outcome 1 from run 10. Describe measurable platform outcome 2 from run 10. Describe measurable platform outcome 3 from run 10. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-011",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 11. Describe measurable platform outcome 1 from run 11. Describe measurable platform outcome 2 from run 11. Describe measurable platform outcome 3 from run 11. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-012",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 12. Describe measurable platform outcome 1 from run 12. Describe measurable platform outcome 2 from run 12. Describe measurable platform outcome 3 from run 12. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-013",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 13. Describe measurable platform outcome 1 from run 13. Describe measurable platform outcome 2 from run 13. Describe measurable platform outcome 3 from run 13. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-014",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 14. Describe measurable platform outcome 1 from run 14. Describe measurable platform outcome 2 from run 14. Describe measurable platform outcome 3 from run 14. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-015",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 15. Describe measurable platform outcome 1 from run 15. Describe measurable platform outcome 2 from run 15. Describe measurable platform outcome 3 from run 15. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-016",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 16. Describe measurable platform outcome 1 from run 16. Describe measurable platform outcome 2 from run 16. Describe measurable platform outcome 3 from run 16. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-017",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 17. Describe measurable platform outcome 1 from run 17. Describe measurable platform outcome 2 from run 17. Describe measurable platform outcome 3 from run 17. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-018",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 18. Describe measurable platform outcome 1 from run 18. Describe measurable platform outcome 2 from run 18. Describe measurable platform outcome 3 from run 18. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-019",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 19. Describe measurable platform outcome 1 from run 19. Describe measurable platform outcome 2 from run 19. Describe measurable platform outcome 3 from run 19. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-020",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 20. Describe measurable platform outcome 1 from run 20. Describe measurable platform outcome 2 from run 20. Describe measurable platform outcome 3 from run 20. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-021",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 21. Describe measurable platform outcome 1 from run 21. Describe measurable platform outcome 2 from run 21. Describe measurable platform outcome 3 from run 21. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-022",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 22. Describe measurable platform outcome 1 from run 22. Describe measurable platform outcome 2 from run 22. Describe measurable platform outcome 3 from run 22. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-023",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 23. Describe measurable platform outcome 1 from run 23. Describe measurable platform outcome 2 from run 23. Describe measurable platform outcome 3 from run 23. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-024",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 24. Describe measurable platform outcome 1 from run 24. Describe measurable platform outcome 2 from run 24. Describe measurable platform outcome 3 from run 24. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-025",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 25. Describe measurable platform outcome 1 from run 25. Describe measurable platform outcome 2 from run 25. Describe measurable platform outcome 3 from run 25. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-026",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 26. Describe measurable platform outcome 1 from run 26. Describe measurable platform outcome 2 from run 26. Describe measurable platform outcome 3 from run 26. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-027",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 27. Describe measurable platform outcome 1 from run 27. Describe measurable platform outcome 2 from run 27. Describe measurable platform outcome 3 from run 27. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-028",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 28. Describe measurable platform outcome 1 from run 28. Describe measurable platform outcome 2 from run 28. Describe measurable platform outcome 3 from run 28. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-029",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 29. Describe measurable platform outcome 1 from run 29. Describe measurable platform outcome 2 from run 29. Describe measurable platform outcome 3 from run 29. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-030",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 30. Describe measurable platform outcome 1 from run 30. Describe measurable platform outcome 2 from run 30. Describe measurable platform outcome 3 from run 30. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-031",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 31. Describe measurable platform outcome 1 from run 31. Describe measurable platform outcome 2 from run 31. Describe measurable platform outcome 3 from run 31. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-032",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 32. Describe measurable platform outcome 1 from run 32. Describe measurable platform outcome 2 from run 32. Describe measurable platform outcome 3 from run 32. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-033",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 33. Describe measurable platform outcome 1 from run 33. Describe measurable platform outcome 2 from run 33. Describe measurable platform outcome 3 from run 33. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-034",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 34. Describe measurable platform outcome 1 from run 34. Describe measurable platform outcome 2 from run 34. Describe measurable platform outcome 3 from run 34. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-035",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 35. Describe measurable platform outcome 1 from run 35. Describe measurable platform outcome 2 from run 35. Describe measurable platform outcome 3 from run 35. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-036",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 36. Describe measurable platform outcome 1 from run 36. Describe measurable platform outcome 2 from run 36. Describe measurable platform outcome 3 from run 36. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-037",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 37. Describe measurable platform outcome 1 from run 37. Describe measurable platform outcome 2 from run 37. Describe measurable platform outcome 3 from run 37. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-038",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 38. Describe measurable platform outcome 1 from run 38. Describe measurable platform outcome 2 from run 38. Describe measurable platform outcome 3 from run 38. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-039",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 39. Describe measurable platform outcome 1 from run 39. Describe measurable platform outcome 2 from run 39. Describe measurable platform outcome 3 from run 39. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-040",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 40. Describe measurable platform outcome 1 from run 40. Describe measurable platform outcome 2 from run 40. Describe measurable platform outcome 3 from run 40. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-041",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 41. Describe measurable platform outcome 1 from run 41. Describe measurable platform outcome 2 from run 41. Describe measurable platform outcome 3 from run 41. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-042",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 42. Describe measurable platform outcome 1 from run 42. Describe measurable platform outcome 2 from run 42. Describe measurable platform outcome 3 from run 42. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-043",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 43. Describe measurable platform outcome 1 from run 43. Describe measurable platform outcome 2 from run 43. Describe measurable platform outcome 3 from run 43. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-044",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 44. Describe measurable platform outcome 1 from run 44. Describe measurable platform outcome 2 from run 44. Describe measurable platform outcome 3 from run 44. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-045",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 45. Describe measurable platform outcome 1 from run 45. Describe measurable platform outcome 2 from run 45. Describe measurable platform outcome 3 from run 45. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-046",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 46. Describe measurable platform outcome 1 from run 46. Describe measurable platform outcome 2 from run 46. Describe measurable platform outcome 3 from run 46. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-047",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 47. Describe measurable platform outcome 1 from run 47. Describe measurable platform outcome 2 from run 47. Describe measurable platform outcome 3 from run 47. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-048",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 48. Describe measurable platform outcome 1 from run 48. Describe measurable platform outcome 2 from run 48. Describe measurable platform outcome 3 from run 48. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-049",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 49. Describe measurable platform outcome 1 from run 49. Describe measurable platform outcome 2 from run 49. Describe measurable platform outcome 3 from run 49. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "gap_analysis",
+    "run_id": "l0-phase-gap_analysis-050",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Describe measurable platform outcome 0 from run 50. Describe measurable platform outcome 1 from run 50. Describe measurable platform outcome 2 from run 50. Describe measurable platform outcome 3 from run 50. Describe mea",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-001",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 1. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-002",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 2. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-003",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 3. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-004",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 4. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-005",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 5. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-006",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 6. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-007",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 7. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-008",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 8. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-009",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 9. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-010",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 10. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-011",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 11. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-012",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 12. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-013",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 13. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-014",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 14. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-015",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 15. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-016",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 16. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-017",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 17. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-018",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 18. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-019",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 19. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-020",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 20. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-021",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 21. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-022",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 22. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-023",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 23. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-024",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 24. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-025",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 25. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-026",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 26. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-027",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 27. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-028",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 28. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-029",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 29. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-030",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 30. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-031",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 31. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-032",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 32. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-033",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 33. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-034",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 34. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-035",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 35. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-036",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 36. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-037",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 37. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-038",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 38. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-039",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 39. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-040",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 40. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-041",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 41. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-042",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 42. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-043",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 43. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-044",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 44. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-045",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 45. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-046",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 46. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-047",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 47. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-048",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 48. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-049",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 49. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "cv_tailoring",
+    "run_id": "l0-phase-cv_tailoring-050",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 50. Python AWS Kubernetes Leadership",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-001",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-002",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-003",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-004",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-005",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-006",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-007",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-008",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-009",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-010",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-011",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-012",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-013",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-014",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-015",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-016",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-017",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-018",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-019",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-020",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-021",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-022",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-023",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-024",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-025",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-026",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-027",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-028",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-029",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-030",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-031",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-032",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-033",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-034",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-035",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-036",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-037",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-038",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-039",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-040",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-041",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-042",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-043",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-044",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-045",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-046",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-047",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-048",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-049",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  },
+  {
+    "generator": "vpr",
+    "run_id": "l0-phase-vpr-050",
+    "is_template": false,
+    "template_match": null,
+    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "environment": "local-integration-test"
+  }
+]

@@ -73,14 +73,14 @@ def lambda_handler(event, context):
 # ─────────────────────────────────────────────────────────────────────────────
 
 AGENT_NAMES = {
-    "cv_parser":                    "cv-parser",
-    "company_research":             "company-research",
-    "gap_analysis_question_gen":    "gap-analysis-question-generator",
-    "vpr_strategist":               "vpr-strategist",
-    "cv_tailor":                    "cv-tailor",
-    "cover_letter_writer":          "cover-letter-writer",
-    "interview_prep_generator":     "interview-prep-generator",
-    "quality_validator":            "quality-validator",
+    "cv_parser": "cv-parser",
+    "company_research": "company-research",
+    "gap_analysis_question_gen": "gap-analysis-question-generator",
+    "vpr_strategist": "vpr-strategist",
+    "cv_tailor": "cv-tailor",
+    "cover_letter_writer": "cover-letter-writer",
+    "interview_prep_generator": "interview-prep-generator",
+    "quality_validator": "quality-validator",
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

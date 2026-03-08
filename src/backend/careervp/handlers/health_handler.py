@@ -13,17 +13,17 @@ API_VERSION = '1.0.0'
 
 
 def health_check() -> dict[str, Any]:
-    """Return service health payload."""
+    """Return deterministic service health payload without external network calls."""
     timestamp = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+    services = {
+        'anthropic': 'healthy',
+        'dynamodb': 'healthy',
+    }
     return {
         'status': 'healthy',
         'timestamp': timestamp,
         'version': API_VERSION,
-        'services': {
-            'dynamodb': 'healthy',
-            'lambda': 'healthy',
-            'bedrock': 'healthy',
-        },
+        'services': services,
     }
 
 

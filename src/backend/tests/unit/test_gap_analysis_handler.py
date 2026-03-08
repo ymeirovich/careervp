@@ -4,7 +4,7 @@ import json
 from collections.abc import Generator
 from datetime import datetime, timezone
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import boto3
 import pytest
@@ -21,6 +21,9 @@ def gap_test_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]
     monkeypatch.setenv('POWERTOOLS_SERVICE_NAME', 'careervp-gap-test')
     monkeypatch.setenv('LOG_LEVEL', 'INFO')
     monkeypatch.setenv('DYNAMODB_TABLE_NAME', 'test-gap-table')
+    monkeypatch.setenv('TABLE_NAME', 'test-gap-table')
+    monkeypatch.setenv('USERS_TABLE_NAME', 'test-gap-table')
+    monkeypatch.setenv('GAP_RESPONSES_TABLE_NAME', 'test-gap-responses-table')
     yield
 
 
@@ -28,20 +31,40 @@ def gap_test_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]
 def gap_table() -> Generator[Any, None, None]:
     with mock_aws():
         dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
-        # Table schema must match handler's query keys: userId, applicationId
+        # Table schema must match DynamoDalHandler's pk/sk schema
         table = dynamodb.create_table(
             TableName='test-gap-table',
             KeySchema=[
-                {'AttributeName': 'userId', 'KeyType': 'HASH'},
-                {'AttributeName': 'applicationId', 'KeyType': 'RANGE'},
+                {'AttributeName': 'pk', 'KeyType': 'HASH'},
+                {'AttributeName': 'sk', 'KeyType': 'RANGE'},
             ],
             AttributeDefinitions=[
-                {'AttributeName': 'userId', 'AttributeType': 'S'},
-                {'AttributeName': 'applicationId', 'AttributeType': 'S'},
+                {'AttributeName': 'pk', 'AttributeType': 'S'},
+                {'AttributeName': 'sk', 'AttributeType': 'S'},
             ],
             BillingMode='PAY_PER_REQUEST',
         )
         table.meta.client.get_waiter('table_exists').wait(TableName='test-gap-table')
+        yield table
+
+
+@pytest.fixture
+def gap_responses_table() -> Generator[Any, None, None]:
+    with mock_aws():
+        dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+        table = dynamodb.create_table(
+            TableName='test-gap-responses-table',
+            KeySchema=[
+                {'AttributeName': 'userId', 'KeyType': 'HASH'},
+                {'AttributeName': 'questionId', 'KeyType': 'RANGE'},
+            ],
+            AttributeDefinitions=[
+                {'AttributeName': 'userId', 'AttributeType': 'S'},
+                {'AttributeName': 'questionId', 'AttributeType': 'S'},
+            ],
+            BillingMode='PAY_PER_REQUEST',
+        )
+        table.meta.client.get_waiter('table_exists').wait(TableName='test-gap-responses-table')
         yield table
 
 
@@ -71,7 +94,7 @@ def _event(
             'path': path,
             'stage': 'test',
             'requestId': 'req-1',
-            'authorizer': {'principalId': user_id},
+            'authorizer': {'claims': {'sub': user_id}},
         },
         'body': json.dumps(body) if body is not None else None,
         'isBase64Encoded': False,
@@ -88,6 +111,7 @@ def _context() -> Any:
 def test_generate_questions_returns_200_and_persists(gap_table: Any) -> None:
     """POST /gap-analysis/questions returns 200 and stores generated questions."""
     from careervp.handlers.gap_handler import lambda_handler
+    from careervp.models.result import Result, ResultCode
 
     event = _event(
         path='/gap-analysis/questions',
@@ -100,7 +124,31 @@ def test_generate_questions_returns_200_and_persists(gap_table: Any) -> None:
         },
     )
 
-    response = lambda_handler(event, _context())
+    generated_questions = [
+        {
+            'question_id': f'gap-q{i + 1}',
+            'question': 'Describe a measurable impact example.',
+            'impact': 'HIGH',
+            'probability': 'MEDIUM',
+            'tags': ['[CV IMPACT]'],
+        }
+        for i in range(10)
+    ]
+
+    with (
+        patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate,
+        patch('careervp.handlers.gap_handler._get_trial_service') as mock_trial_service,
+    ):
+        trial_service = MagicMock()
+        trial_service.check_trial_status.return_value = {'is_active': True}
+        trial_service.consume_credit.return_value = None
+        mock_trial_service.return_value = trial_service
+        mock_generate.return_value = Result(
+            success=True,
+            data=generated_questions,
+            code=ResultCode.GAP_QUESTIONS_GENERATED,
+        )
+        response = lambda_handler(event, _context())
 
     # Handler returns 201 for creation, accept both 200 and 201
     assert response['statusCode'] in [200, 201]
@@ -111,8 +159,8 @@ def test_generate_questions_returns_200_and_persists(gap_table: Any) -> None:
 
     stored = gap_table.get_item(
         Key={
-            'userId': 'user-1',
-            'applicationId': 'GAP_ANALYSIS#cv-123#job-123',
+            'pk': 'user-1',
+            'sk': 'ARTIFACT#GAP_ANALYSIS#cv-123#job-123',
         }
     ).get('Item')
     assert isinstance(stored, dict)
@@ -128,8 +176,8 @@ def test_get_questions_returns_200(gap_table: Any) -> None:
     # Table key schema: userId (pk), applicationId (sk)
     gap_table.put_item(
         Item={
-            'userId': 'user-1',
-            'applicationId': 'GAP_ANALYSIS#cv-123#job-555',
+            'pk': 'user-1',
+            'sk': 'ARTIFACT#GAP_ANALYSIS#cv-123#job-555',
             'artifactType': 'gap_analysis',
             'cv_id': 'cv-123',
             'job_id': 'job-555',
@@ -162,8 +210,8 @@ def test_get_questions_returns_200(gap_table: Any) -> None:
     assert len(payload['questions']) == 1
 
 
-def test_submit_response_returns_200(gap_table: Any) -> None:
-    """POST /gap-analysis/responses returns 201 and persists responses."""
+def test_submit_response_returns_200(gap_responses_table: Any) -> None:
+    """POST /gap-analysis/responses returns 200 and persists responses."""
     from careervp.handlers.gap_handler import lambda_handler
 
     event = _event(
@@ -183,18 +231,18 @@ def test_submit_response_returns_200(gap_table: Any) -> None:
 
     response = lambda_handler(event, _context())
 
-    # Handler returns 201 for creation
-    assert response['statusCode'] == 201
+    # Handler returns 200 for response submission
+    assert response['statusCode'] == 200
     payload = json.loads(response['body'])
     assert payload['status'] == 'saved'
     assert payload['job_id'] == 'job-222'
     assert payload['responses_saved'] == 1
 
-    # Table key schema: userId (pk), applicationId (sk)
-    stored = gap_table.get_item(
+    # Table key schema: pk/sk
+    stored = gap_responses_table.get_item(
         Key={
             'userId': 'user-1',
-            'applicationId': 'GAP_RESPONSES#job-222',
+            'questionId': 'ARTIFACT#GAP_RESPONSES#v1',
         }
     ).get('Item')
     assert isinstance(stored, dict), f'Expected dict but got None. Stored keys: {list(stored.keys()) if stored else "None"}'
@@ -226,20 +274,25 @@ def test_submit_response_requires_job_id(gap_table: Any) -> None:
     assert 'job_id' in payload.get('error', '').lower() or 'required' in payload.get('error', '').lower()
 
 
-def test_get_responses_returns_200(gap_table: Any) -> None:
+def test_get_responses_returns_200(gap_responses_table: Any) -> None:
     """GET /gap-analysis/responses/{jobId} returns saved responses."""
     from careervp.handlers.gap_handler import lambda_handler
 
     now = datetime.now(timezone.utc).isoformat()
-    # Table key schema: userId (pk), applicationId (sk)
-    gap_table.put_item(
+    # Table key schema: pk/sk
+    gap_responses_table.put_item(
         Item={
             'userId': 'user-1',
-            'applicationId': 'GAP_RESPONSES#job-999',
+            'questionId': 'ARTIFACT#GAP_RESPONSES#v1',
             'artifactType': 'gap_responses',
             'job_id': 'job-999',
             'responses': [
-                {'question_id': 'q9', 'response': 'Built distributed systems.'},
+                {
+                    'question_id': 'q9',
+                    'question': 'What is your experience?',
+                    'answer': 'Built distributed systems.',
+                    'destination': 'CV_IMPACT',
+                },
             ],
             'created_at': now,
             'updated_at': now,

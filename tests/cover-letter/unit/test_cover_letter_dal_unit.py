@@ -10,9 +10,8 @@ They will be updated with real assertions during the GREEN phase.
 """
 
 import pytest
-from unittest.mock import Mock, AsyncMock, patch
-from datetime import datetime, timedelta
-from decimal import Decimal
+from unittest.mock import Mock, AsyncMock
+from datetime import datetime
 
 # Note: These imports will fail until implementation exists (RED phase)
 # from careervp.dal.dynamo_dal_handler import DynamoDalHandler
@@ -522,13 +521,13 @@ def sample_cover_letter_data():
     Will be updated when model exists.
     """
     return {
-        'cover_letter_id': 'cl-test-123',
-        'user_id': 'user-test-456',
-        'cv_id': 'cv-test-789',
-        'job_posting_id': 'job-test-101',
-        'version': 1,
-        'content': 'Dear Hiring Manager,\n\nI am excited to apply...',
-        'created_at': datetime.now().isoformat(),
-        'updated_at': datetime.now().isoformat(),
-        'is_latest': True
+        "cover_letter_id": "cl-test-123",
+        "user_id": "user-test-456",
+        "cv_id": "cv-test-789",
+        "job_posting_id": "job-test-101",
+        "version": 1,
+        "content": "Dear Hiring Manager,\n\nI am excited to apply...",
+        "created_at": datetime.now().isoformat(),
+        "updated_at": datetime.now().isoformat(),
+        "is_latest": True,
     }

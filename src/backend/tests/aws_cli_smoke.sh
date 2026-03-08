@@ -441,7 +441,9 @@ test_company_research_lambda() {
       requestId: "smoke-test-company-research",
       stage: "prod",
       authorizer: {
-        principalId: "cli-smoke-user"
+        claims: {
+          sub: "cli-smoke-user"
+        }
       }
     },
     isBase64Encoded: false

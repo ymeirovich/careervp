@@ -1,0 +1,26 @@
+{
+  "spec_id": "INTERVIEW_PREP_002",
+  "requirement_id": "AC-IP-004",
+  "git_sha": "a4980a0",
+  "deployment_id": "arn:aws:cloudformation:us-east-1:788159322332:stack/CareerVpCrudDev/6dfdbe70-0504-11f1-b797-0afffba4f579",
+  "environment": "dev",
+  "executed_at_utc": "2026-03-06T14:53:53.085997Z",
+  "api_base": "https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod",
+  "evidence_kind": "live_test_execution",
+  "yaml4_step_id": "RECOVERY_006",
+  "module_test_file": "docs/refactor/live_tests/test_08_interview_prep.py",
+  "module_status": "fail",
+  "module_returncode": 1,
+  "module_timed_out": false,
+  "module_duration_seconds": 25.468,
+  "module_started_at_utc": "2026-03-06T14:50:06.485058Z",
+  "module_finished_at_utc": "2026-03-06T14:50:31.952632Z",
+  "module_log_path": "docs/evidence/RECOVERY_006-live-20260306T144631Z.log",
+  "module_summary_path": "docs/evidence/RECOVERY_006-live-summary-20260306T144631Z.json",
+  "expected_vs_actual": {
+    "expected": "Unknown ID yields stable domain not-found semantics.",
+    "actual": "Module failed on status quality gate; not-found criterion not established in this run output.",
+    "result": "fail"
+  },
+  "result": "fail"
+}

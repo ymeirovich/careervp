@@ -1,0 +1,26 @@
+Gate: G5 - Full Live Suite
+Spec: cognito-test-fixes/PLAN.md G5 / SPEC.md FIX C-E
+Command: pytest docs/refactor/live_tests/ -v 2>&1 | tee docs/beta/execution_results/gate_g5_full_suite.txt
+Required: All gates G1-G4 passed. Full suite shows expected success/negative distribution.
+Expected: No unexpected auth drift, all previously-failing tests now pass.
+
+Date: (fill in after run)
+Result: (PASS / FAIL)
+Summary: (e.g., "44 passed, 2 skipped, 0 failed in 180.5s")
+
+Expected module outcomes after all Priority 1-3 fixes:
+  test_00_auth_bootstrap       PASS
+  test_01_auth_health          PASS
+  test_02_users                PASS  (GET /users/me/cv returns CVs — P1-C)
+  test_03_jobs                 PASS
+  test_04_vpr                  PASS
+  test_05_gap_analysis         PASS  (gap questions generated + retrieved — P1-B, P1-D, P1-E)
+  test_06_cv_tailoring         PASS
+  test_07_cover_letter         PASS
+  test_08_interview_prep       PASS
+  test_09_company_research     PASS  (tests run, not skipped — P2-B)
+  test_10_api_contract_success PASS  (no 401 on protected routes — P2-C)
+  test_11_api_error_contracts  PASS
+
+--- pytest output ---
+(paste full output here — or this file is the tee target and will be populated by the command above)

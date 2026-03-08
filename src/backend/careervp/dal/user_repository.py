@@ -68,6 +68,44 @@ class UserRepository:
 
         return self._to_user(updated_item)
 
+    def ensure_user(self, user_id: str, data: dict[str, Any] | None = None) -> User | None:
+        """Create a default profile if missing, then apply updates."""
+        if self._table is None:
+            return None
+
+        existing = self.get_user(user_id)
+        if existing is not None:
+            return self.update_user(user_id, data or {}) if data else existing
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        item: dict[str, Any] = {
+            'pk': f'USER#{user_id}',
+            'sk': USER_PROFILE_SK,
+            'user_id': user_id,
+            'email': f'{user_id}@example.com',
+            'name': '',
+            'preferences': {},
+            'created_at': now_iso,
+            'updated_at': now_iso,
+        }
+
+        if isinstance(data, dict):
+            if isinstance(data.get('name'), str) and data['name'].strip():
+                item['name'] = data['name'].strip()
+            incoming_preferences = data.get('preferences')
+            if isinstance(incoming_preferences, dict):
+                item['preferences'] = incoming_preferences
+            timezone_value = data.get('timezone')
+            if isinstance(timezone_value, str) and timezone_value.strip():
+                item.setdefault('preferences', {})
+                item['preferences']['timezone'] = timezone_value.strip()
+
+        try:
+            self._table.put_item(Item=item)
+        except ClientError:
+            return None
+        return self._to_user(item)
+
     def _get_existing_profile_item(self, user_id: str) -> tuple[dict[str, Any], str] | None:
         if self._table is None:
             return None

@@ -4,6 +4,7 @@
 import copy
 import json
 import os
+import re
 import time
 import uuid
 from pathlib import Path
@@ -21,8 +22,10 @@ from .test_01_auth_health import test_data
 
 
 DOCS_ROOT = Path(__file__).resolve().parents[2]  # docs/
+REPO_ROOT = Path(__file__).resolve().parents[3]
 REFACTOR2_PAYLOADS_DIR = DOCS_ROOT / "refactor2" / "payloads"
 LEGACY_PAYLOADS_DIR = DOCS_ROOT / "refactor" / "payloads"
+INFRA_API_CONSTRUCT_PATH = REPO_ROOT / "infra" / "careervp" / "api_construct.py"
 
 STRICT_PAYLOAD_ORDER = [
     "health_check.json",
@@ -76,10 +79,33 @@ PATH_PARAM_TO_STATE_KEY = {
     "interviewPrepId": "interview_prep_id",
 }
 
+_ROUTE_TUPLE_PATTERN = re.compile(
+    r'\(\s*"(?P<path>/[^"]+)"\s*,\s*"(?P<method>[A-Z]+)"\s*,\s*self\.[^)]+\)',
+)
+
 
 def _load_json(path: Path) -> dict[str, Any]:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def _load_contract_route_map_from_infra() -> set[tuple[str, str]]:
+    source = INFRA_API_CONSTRUCT_PATH.read_text(encoding="utf-8")
+    function_start = source.find("def _add_openapi_contract_routes")
+    assert function_start >= 0, (
+        "Unable to locate _add_openapi_contract_routes in api_construct.py"
+    )
+    route_map_loop = source.find(
+        "for path, method, handler in route_map:", function_start
+    )
+    assert route_map_loop >= 0, (
+        "Unable to locate route_map iteration in api_construct.py"
+    )
+    route_section = source[function_start:route_map_loop]
+    return {
+        (match.group("method"), match.group("path"))
+        for match in _ROUTE_TUPLE_PATTERN.finditer(route_section)
+    }
 
 
 def _load_refactor2_payload(filename: str) -> dict[str, Any]:
@@ -197,8 +223,12 @@ def _hydrate_request(
         if request_field in body and state.get(state_key):
             body[request_field] = state[state_key]
 
-    if "gap_response_ids" in body and state.get("gap_response_ids"):
-        body["gap_response_ids"] = state["gap_response_ids"]
+    if "gap_response_ids" in body:
+        state_gap_ids = state.get("gap_response_ids")
+        if isinstance(state_gap_ids, list):
+            non_empty_ids = [item for item in state_gap_ids if item]
+            if non_empty_ids:
+                body["gap_response_ids"] = non_empty_ids
 
     if payload_file == "gap_responses_submit.json":
         responses = body.get("responses", [])
@@ -222,6 +252,16 @@ def _update_state(
     if payload_file in {"auth_register.json", "auth_login.json"}:
         if response_data.get("access_token"):
             state["access_token"] = response_data["access_token"]
+        if response_data.get("id_token"):
+            state["id_token"] = response_data["id_token"]
+        if response_data.get("refresh_token"):
+            state["refresh_token"] = response_data["refresh_token"]
+
+    if payload_file == "auth_refresh.json":
+        if response_data.get("access_token"):
+            state["access_token"] = response_data["access_token"]
+        if response_data.get("id_token"):
+            state["id_token"] = response_data["id_token"]
         if response_data.get("refresh_token"):
             state["refresh_token"] = response_data["refresh_token"]
 
@@ -299,6 +339,8 @@ def _sync_with_shared_test_data(state: dict[str, Any]) -> None:
 
     if state.get("access_token"):
         tokens["access"] = state["access_token"]
+    if state.get("id_token"):
+        tokens["id"] = state["id_token"]
     if state.get("refresh_token"):
         tokens["refresh"] = state["refresh_token"]
 
@@ -340,14 +382,12 @@ def _build_headers(payload_file: str, state: dict[str, Any]) -> dict[str, str]:
         )
         return headers
 
-    access_token = state.get("access_token")
-    assert access_token, (
-        f"Missing access_token for authenticated payload {payload_file}"
+    auth_token = state.get("id_token") or state.get("access_token")
+    assert auth_token, (
+        f"Missing id_token/access_token for authenticated payload {payload_file}"
     )
     headers["Authorization"] = (
-        access_token
-        if str(access_token).startswith("Bearer ")
-        else f"Bearer {access_token}"
+        auth_token if str(auth_token).startswith("Bearer ") else f"Bearer {auth_token}"
     )
     if state.get("user_id"):
         headers["X-User-Id"] = str(state["user_id"])
@@ -556,6 +596,20 @@ def _validate_quality(
 
 class TestAPIContractSuccess:
     """Strict payload-driven API contract suite."""
+
+    def test_gap_responses_payload_route_matches_infra_contract_route_map(self):
+        infra_routes = _load_contract_route_map_from_infra()
+        payload = _load_refactor2_payload("gap_responses_submit.json")
+        method = str(payload["method"]).upper()
+        path = str(payload["path"])
+
+        assert path == "/jobs/{jobId}/gap-responses", (
+            "gap_responses_submit.json must use canonical route "
+            "/jobs/{jobId}/gap-responses"
+        )
+        assert (method, path) in infra_routes, (
+            f"gap_responses_submit.json route missing from infra contract map: {method} {path}"
+        )
 
     def test_api_contract_success_for_all_27_endpoints(self):
         legacy = _load_legacy_context()

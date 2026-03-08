@@ -1,0 +1,611 @@
+{
+  "generated_at": "2026-03-06T08:34:13.142098+00:00",
+  "environment": "local-integration-test",
+  "artifact": "I3",
+  "total_routes": 15,
+  "scenarios_per_route": 4,
+  "total_checks": 60,
+  "passes": 60,
+  "records": [
+    {
+      "route": "/users/me",
+      "method": "GET",
+      "scenario": "no_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/users/me",
+      "method": "GET",
+      "scenario": "expired_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/users/me",
+      "method": "GET",
+      "scenario": "wrong_user_token",
+      "expected": 403,
+      "actual": 403,
+      "expected_status": 403,
+      "actual_status": 403,
+      "pass": true
+    },
+    {
+      "route": "/users/me",
+      "method": "GET",
+      "scenario": "valid_token",
+      "expected": 200,
+      "actual": 200,
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true
+    },
+    {
+      "route": "/users/me/usage",
+      "method": "GET",
+      "scenario": "no_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/users/me/usage",
+      "method": "GET",
+      "scenario": "expired_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/users/me/usage",
+      "method": "GET",
+      "scenario": "wrong_user_token",
+      "expected": 403,
+      "actual": 403,
+      "expected_status": 403,
+      "actual_status": 403,
+      "pass": true
+    },
+    {
+      "route": "/users/me/usage",
+      "method": "GET",
+      "scenario": "valid_token",
+      "expected": 200,
+      "actual": 200,
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true
+    },
+    {
+      "route": "/jobs",
+      "method": "POST",
+      "scenario": "no_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/jobs",
+      "method": "POST",
+      "scenario": "expired_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/jobs",
+      "method": "POST",
+      "scenario": "wrong_user_token",
+      "expected": 403,
+      "actual": 403,
+      "expected_status": 403,
+      "actual_status": 403,
+      "pass": true
+    },
+    {
+      "route": "/jobs",
+      "method": "POST",
+      "scenario": "valid_token",
+      "expected": 200,
+      "actual": 200,
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true
+    },
+    {
+      "route": "/jobs",
+      "method": "GET",
+      "scenario": "no_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/jobs",
+      "method": "GET",
+      "scenario": "expired_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/jobs",
+      "method": "GET",
+      "scenario": "wrong_user_token",
+      "expected": 403,
+      "actual": 403,
+      "expected_status": 403,
+      "actual_status": 403,
+      "pass": true
+    },
+    {
+      "route": "/jobs",
+      "method": "GET",
+      "scenario": "valid_token",
+      "expected": 200,
+      "actual": 200,
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true
+    },
+    {
+      "route": "/jobs/{job_id}/gap-questions",
+      "method": "POST",
+      "scenario": "no_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/jobs/{job_id}/gap-questions",
+      "method": "POST",
+      "scenario": "expired_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/jobs/{job_id}/gap-questions",
+      "method": "POST",
+      "scenario": "wrong_user_token",
+      "expected": 403,
+      "actual": 403,
+      "expected_status": 403,
+      "actual_status": 403,
+      "pass": true
+    },
+    {
+      "route": "/jobs/{job_id}/gap-questions",
+      "method": "POST",
+      "scenario": "valid_token",
+      "expected": 200,
+      "actual": 200,
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true
+    },
+    {
+      "route": "/jobs/{job_id}/gap-responses",
+      "method": "POST",
+      "scenario": "no_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/jobs/{job_id}/gap-responses",
+      "method": "POST",
+      "scenario": "expired_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/jobs/{job_id}/gap-responses",
+      "method": "POST",
+      "scenario": "wrong_user_token",
+      "expected": 403,
+      "actual": 403,
+      "expected_status": 403,
+      "actual_status": 403,
+      "pass": true
+    },
+    {
+      "route": "/jobs/{job_id}/gap-responses",
+      "method": "POST",
+      "scenario": "valid_token",
+      "expected": 200,
+      "actual": 200,
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true
+    },
+    {
+      "route": "/vpr/generate",
+      "method": "POST",
+      "scenario": "no_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/vpr/generate",
+      "method": "POST",
+      "scenario": "expired_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/vpr/generate",
+      "method": "POST",
+      "scenario": "wrong_user_token",
+      "expected": 403,
+      "actual": 403,
+      "expected_status": 403,
+      "actual_status": 403,
+      "pass": true
+    },
+    {
+      "route": "/vpr/generate",
+      "method": "POST",
+      "scenario": "valid_token",
+      "expected": 200,
+      "actual": 200,
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true
+    },
+    {
+      "route": "/vprs",
+      "method": "GET",
+      "scenario": "no_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/vprs",
+      "method": "GET",
+      "scenario": "expired_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/vprs",
+      "method": "GET",
+      "scenario": "wrong_user_token",
+      "expected": 403,
+      "actual": 403,
+      "expected_status": 403,
+      "actual_status": 403,
+      "pass": true
+    },
+    {
+      "route": "/vprs",
+      "method": "GET",
+      "scenario": "valid_token",
+      "expected": 200,
+      "actual": 200,
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true
+    },
+    {
+      "route": "/cover-letter/generate",
+      "method": "POST",
+      "scenario": "no_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/cover-letter/generate",
+      "method": "POST",
+      "scenario": "expired_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/cover-letter/generate",
+      "method": "POST",
+      "scenario": "wrong_user_token",
+      "expected": 403,
+      "actual": 403,
+      "expected_status": 403,
+      "actual_status": 403,
+      "pass": true
+    },
+    {
+      "route": "/cover-letter/generate",
+      "method": "POST",
+      "scenario": "valid_token",
+      "expected": 200,
+      "actual": 200,
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true
+    },
+    {
+      "route": "/cover-letters",
+      "method": "GET",
+      "scenario": "no_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/cover-letters",
+      "method": "GET",
+      "scenario": "expired_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/cover-letters",
+      "method": "GET",
+      "scenario": "wrong_user_token",
+      "expected": 403,
+      "actual": 403,
+      "expected_status": 403,
+      "actual_status": 403,
+      "pass": true
+    },
+    {
+      "route": "/cover-letters",
+      "method": "GET",
+      "scenario": "valid_token",
+      "expected": 200,
+      "actual": 200,
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true
+    },
+    {
+      "route": "/cv-tailoring/generate",
+      "method": "POST",
+      "scenario": "no_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/cv-tailoring/generate",
+      "method": "POST",
+      "scenario": "expired_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/cv-tailoring/generate",
+      "method": "POST",
+      "scenario": "wrong_user_token",
+      "expected": 403,
+      "actual": 403,
+      "expected_status": 403,
+      "actual_status": 403,
+      "pass": true
+    },
+    {
+      "route": "/cv-tailoring/generate",
+      "method": "POST",
+      "scenario": "valid_token",
+      "expected": 200,
+      "actual": 200,
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true
+    },
+    {
+      "route": "/cv-tailorings",
+      "method": "GET",
+      "scenario": "no_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/cv-tailorings",
+      "method": "GET",
+      "scenario": "expired_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/cv-tailorings",
+      "method": "GET",
+      "scenario": "wrong_user_token",
+      "expected": 403,
+      "actual": 403,
+      "expected_status": 403,
+      "actual_status": 403,
+      "pass": true
+    },
+    {
+      "route": "/cv-tailorings",
+      "method": "GET",
+      "scenario": "valid_token",
+      "expected": 200,
+      "actual": 200,
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true
+    },
+    {
+      "route": "/interview-prep/generate",
+      "method": "POST",
+      "scenario": "no_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/interview-prep/generate",
+      "method": "POST",
+      "scenario": "expired_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/interview-prep/generate",
+      "method": "POST",
+      "scenario": "wrong_user_token",
+      "expected": 403,
+      "actual": 403,
+      "expected_status": 403,
+      "actual_status": 403,
+      "pass": true
+    },
+    {
+      "route": "/interview-prep/generate",
+      "method": "POST",
+      "scenario": "valid_token",
+      "expected": 200,
+      "actual": 200,
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true
+    },
+    {
+      "route": "/interview-preps",
+      "method": "GET",
+      "scenario": "no_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/interview-preps",
+      "method": "GET",
+      "scenario": "expired_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/interview-preps",
+      "method": "GET",
+      "scenario": "wrong_user_token",
+      "expected": 403,
+      "actual": 403,
+      "expected_status": 403,
+      "actual_status": 403,
+      "pass": true
+    },
+    {
+      "route": "/interview-preps",
+      "method": "GET",
+      "scenario": "valid_token",
+      "expected": 200,
+      "actual": 200,
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true
+    },
+    {
+      "route": "/applications/{id}",
+      "method": "GET",
+      "scenario": "no_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/applications/{id}",
+      "method": "GET",
+      "scenario": "expired_token",
+      "expected": 401,
+      "actual": 401,
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true
+    },
+    {
+      "route": "/applications/{id}",
+      "method": "GET",
+      "scenario": "wrong_user_token",
+      "expected": 403,
+      "actual": 403,
+      "expected_status": 403,
+      "actual_status": 403,
+      "pass": true
+    },
+    {
+      "route": "/applications/{id}",
+      "method": "GET",
+      "scenario": "valid_token",
+      "expected": 200,
+      "actual": 200,
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true
+    }
+  ]
+}

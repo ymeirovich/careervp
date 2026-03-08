@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -19,12 +20,25 @@ from careervp.models.cover_letter import (
     CoverLetterResponse,
 )
 from careervp.models.cv import UserCV
+from careervp.models.job import GapResponse
 from careervp.models.result import Result, ResultCode
 from careervp.models.vpr import VPRResponse
 
-WORD_COUNT_TARGETS = {'short': 250, 'standard': 350, 'long': 400}
-MAX_WORD_COUNT = 400
+WORD_COUNT_TARGETS = {'short': 220, 'standard': 300, 'long': 350}
+MAX_WORD_COUNT = 350
+MIN_PARAGRAPH_COUNT = 2
+MAX_PARAGRAPH_COUNT = 3
 ANTI_AI_MIN_SCORE = 9.0
+DISALLOWED_OUTPUT_MARKERS = (
+    'company for ',
+    'role for ',
+    'job description for ',
+    'referenced as placeholders rather than actual content',
+    'unable to generate a tailored cover letter',
+    'please share the actual job posting information',
+    'i appreciate your request',
+)
+BULLET_LIST_PATTERN = re.compile(r'^\s*(?:[-*]\s+|\d+\.\s+)')
 
 
 async def _maybe_await(value: Any) -> Any:
@@ -33,11 +47,11 @@ async def _maybe_await(value: Any) -> Any:
     return value
 
 
-async def generate_cover_letter(
+async def generate_cover_letter(  # noqa: C901
     request: CoverLetterRequest,
     user_cv: UserCV,
     vpr: VPRResponse,
-    gap_responses: list[dict[str, Any]] | None = None,
+    gap_responses: list[GapResponse | dict[str, Any]] | None = None,
 ) -> Result[CoverLetterResponse]:
     """Generate a personalised cover letter."""
     start_time = time.perf_counter()
@@ -57,6 +71,7 @@ async def generate_cover_letter(
         company_name=request.company_name,
         job_title=request.job_title,
         job_description=request.job_description,
+        gap_responses=gap_responses,
     )
 
     llm_client = LLMClient()
@@ -94,6 +109,20 @@ async def generate_cover_letter(
         return Result(
             success=False,
             error=f'Cover letter exceeds {MAX_WORD_COUNT} word limit ({cover_letter.word_count} words)',
+            code=ResultCode.FVS_VALIDATION_FAILED,
+        )
+    paragraph_count = len([paragraph for paragraph in cover_letter.paragraphs if paragraph.content.strip()])
+    if paragraph_count < MIN_PARAGRAPH_COUNT or paragraph_count > MAX_PARAGRAPH_COUNT:
+        return Result(
+            success=False,
+            error=(f'Cover letter must contain {MIN_PARAGRAPH_COUNT}-{MAX_PARAGRAPH_COUNT} paragraphs (received {paragraph_count})'),
+            code=ResultCode.FVS_VALIDATION_FAILED,
+        )
+    content_violation = _detect_output_content_violation(cover_letter.full_text)
+    if content_violation:
+        return Result(
+            success=False,
+            error=content_violation,
             code=ResultCode.FVS_VALIDATION_FAILED,
         )
 
@@ -141,7 +170,7 @@ def _parse_cover_letter_response(raw_text: str, request: CoverLetterRequest) -> 
 
         para_types: list[str] = ['hook', 'proof_points', 'close']
         raw_paragraphs = payload.get('paragraphs', [])
-        for i, para in enumerate(raw_paragraphs):
+        for i, para in enumerate(raw_paragraphs[:MAX_PARAGRAPH_COUNT]):
             if isinstance(para, dict):
                 p_type = para.get('type', para_types[i] if i < len(para_types) else 'hook')
                 content = para.get('content', '')
@@ -159,7 +188,7 @@ def _parse_cover_letter_response(raw_text: str, request: CoverLetterRequest) -> 
         # Treat as plain text - split into 3 paragraphs
         parts = [p.strip() for p in full_text.split('\n\n') if p.strip()]
         plain_para_types: list[Literal['hook', 'proof_points', 'close']] = ['hook', 'proof_points', 'close']
-        for i, part in enumerate(parts[:3]):
+        for i, part in enumerate(parts[:MAX_PARAGRAPH_COUNT]):
             p_type = plain_para_types[i] if i < len(plain_para_types) else 'hook'
             paragraphs.append(
                 CoverLetterParagraph(
@@ -168,6 +197,9 @@ def _parse_cover_letter_response(raw_text: str, request: CoverLetterRequest) -> 
                     word_count=len(part.split()),
                 )
             )
+    paragraphs = _normalize_paragraph_count(full_text=full_text, paragraphs=paragraphs)
+    if paragraphs:
+        full_text = '\n\n'.join(paragraph.content.strip() for paragraph in paragraphs if paragraph.content.strip())
 
     word_count = len(full_text.split())
     tone = 'professional'
@@ -187,3 +219,61 @@ def _parse_cover_letter_response(raw_text: str, request: CoverLetterRequest) -> 
         created_at=datetime.now(timezone.utc),
         version=1,
     )
+
+
+def _normalize_paragraph_count(
+    full_text: str,
+    paragraphs: list[CoverLetterParagraph],
+) -> list[CoverLetterParagraph]:
+    """Normalize parsed cover letter paragraphs to required 2-3 count."""
+    cleaned = [paragraph for paragraph in paragraphs if paragraph.content.strip()]
+    if len(cleaned) > MAX_PARAGRAPH_COUNT:
+        return cleaned[:MAX_PARAGRAPH_COUNT]
+    if MIN_PARAGRAPH_COUNT <= len(cleaned) <= MAX_PARAGRAPH_COUNT:
+        return cleaned
+
+    source_text = full_text.strip()
+    if not source_text and cleaned:
+        source_text = cleaned[0].content.strip()
+    split_parts = _split_into_two_paragraphs(source_text)
+    if len(split_parts) == 2:
+        return [
+            CoverLetterParagraph(type='hook', content=split_parts[0], word_count=len(split_parts[0].split())),
+            CoverLetterParagraph(type='proof_points', content=split_parts[1], word_count=len(split_parts[1].split())),
+        ]
+    return cleaned[:MAX_PARAGRAPH_COUNT]
+
+
+def _split_into_two_paragraphs(text: str) -> list[str]:
+    normalized = text.strip()
+    if not normalized:
+        return []
+
+    sentences = [part.strip() for part in re.split(r'(?<=[.!?])\s+', normalized) if part.strip()]
+    if len(sentences) >= 2:
+        midpoint = max(1, len(sentences) // 2)
+        first = ' '.join(sentences[:midpoint]).strip()
+        second = ' '.join(sentences[midpoint:]).strip()
+        if first and second:
+            return [first, second]
+
+    words = normalized.split()
+    if len(words) >= 20:
+        midpoint = len(words) // 2
+        first = ' '.join(words[:midpoint]).strip()
+        second = ' '.join(words[midpoint:]).strip()
+        if first and second:
+            return [first, second]
+    return []
+
+
+def _detect_output_content_violation(cover_letter_text: str) -> str | None:
+    lowered = cover_letter_text.lower()
+    for marker in DISALLOWED_OUTPUT_MARKERS:
+        if marker in lowered:
+            return f'Cover letter contains disallowed placeholder/meta content: "{marker}"'
+
+    for line in cover_letter_text.splitlines():
+        if BULLET_LIST_PATTERN.match(line):
+            return 'Cover letter contains bullet-list formatting, which is not allowed'
+    return None

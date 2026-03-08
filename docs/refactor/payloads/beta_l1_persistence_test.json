@@ -1,0 +1,95 @@
+{
+  "description": "Phase 2 (Layer 1) — Persistence and Data Integrity test payloads",
+  "invariant": "I2",
+  "steps": {
+    "L1_1_artifact_persistence": {
+      "step_id": "L1.1",
+      "test_file": "src/backend/tests/unit/test_l1_artifact_persistence.py",
+      "roundtrip_test": {
+        "description": "generate → wait complete → list → assert ID present",
+        "artifact_types": ["vpr", "cv_tailored", "cover_letter", "interview_prep", "gap_analysis"],
+        "run_count": 50,
+        "pass_criterion": "100% roundtrip success"
+      },
+      "mock_dynamodb_put": {
+        "pk": "USER#user-test-123",
+        "sk": "ARTIFACT#COVER_LETTER#cl-abc",
+        "artifact_id": "cl-abc",
+        "user_id": "user-test-123",
+        "status": "completed",
+        "content": "...",
+        "entity_type": "COVER_LETTER",
+        "created_at": "2026-02-26T10:00:00Z"
+      },
+      "mock_list_query": {
+        "KeyConditionExpression": "pk = :pk AND begins_with(sk, :prefix)",
+        "expected_result_count_min": 1,
+        "expected_ids": ["cl-abc"]
+      },
+      "assertions": {
+        "dynamodb_put_item_called": true,
+        "list_endpoint_returns_nonempty": true,
+        "artifact_id_in_list_response": true
+      }
+    },
+    "L1_2_dal_unification": {
+      "step_id": "L1.2",
+      "test_file": "src/backend/tests/unit/test_l1_dal_unification.py",
+      "grep_patterns_must_be_zero": [
+        "CVTable(",
+        "from careervp.dal.cv_table import",
+        "import CVTable"
+      ],
+      "assertions": {
+        "all_handlers_use_dynamo_dal_handler": true,
+        "cvtable_references_count": 0
+      }
+    },
+    "L1_3_health_check": {
+      "step_id": "L1.3",
+      "test_file": "src/backend/tests/unit/test_l1_health_check.py",
+      "request_event": {
+        "httpMethod": "GET",
+        "path": "/health",
+        "requestContext": {}
+      },
+      "expected_response": {
+        "status": 200,
+        "body_must_contain": {
+          "anthropic": "healthy",
+          "dynamodb": "healthy"
+        },
+        "body_must_not_contain": {
+          "bedrock": "healthy"
+        }
+      },
+      "assertions": {
+        "reports_anthropic_not_bedrock": true,
+        "checks_real_dynamodb_connectivity": true
+      }
+    },
+    "L1_4_list_endpoints": {
+      "step_id": "L1.4",
+      "test_file": "src/backend/tests/unit/test_l1_list_endpoints.py",
+      "endpoints": [
+        {"path": "/vprs", "method": "GET", "artifact_type": "vpr"},
+        {"path": "/cover-letters", "method": "GET", "artifact_type": "cover_letter"},
+        {"path": "/cv-tailorings", "method": "GET", "artifact_type": "cv_tailored"},
+        {"path": "/interview-preps", "method": "GET", "artifact_type": "interview_prep"},
+        {"path": "/gap-analyses", "method": "GET", "artifact_type": "gap_analysis"}
+      ],
+      "setup": "Pre-insert artifact record in mock DynamoDB before calling list endpoint",
+      "assertions": {
+        "list_returns_nonempty_array": true,
+        "contains_artifact_id": true,
+        "query_uses_begins_with_not_scan": true
+      }
+    }
+  },
+  "phase_integration_test": {
+    "test_file": "src/backend/tests/integration/test_l1_phase_integration.py",
+    "description": "Generate artifact → poll complete → list → assert artifact in response",
+    "pass_criterion": "100% roundtrip for all 5 artifact types across 50 runs",
+    "evidence_artifact": "docs/beta/evidence/I2_persistence/persistence-roundtrip-report.json"
+  }
+}

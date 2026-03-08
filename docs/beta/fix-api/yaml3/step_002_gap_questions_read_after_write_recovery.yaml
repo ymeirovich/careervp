@@ -1,0 +1,259 @@
+spec_id: RECOVERY_002
+title: Restore Gap Questions Read-After-Write and Eliminate Table-Resolution Regression
+priority: critical
+status: implemented
+owner: backend-platform
+created_at: 2026-03-05
+updated_at: 2026-03-05
+sequence_step: 2
+
+targets_yaml2_specs:
+  - GAP_GET_002
+  - TRIAL_002
+
+problem_statement:
+  exact_failing_behavior: |
+    Regression in live-test-results28.log changed gap question generation from 200-with-empty-read
+    behavior (seen in 27) to hard 500 DYNAMODB_ERROR on POST /jobs/{jobId}/gap-questions.
+    Root issue is table selection drift in gap question DAL resolution.
+  expected_behavior: |
+    POST /jobs/{jobId}/gap-questions succeeds only when persistence succeeds in the correct users table.
+    GET /jobs/{jobId}/gap-questions returns persisted questions for same user/job.
+    Contract and live behavior must be >= live-test-results27.log and satisfy GAP_GET_002 fully.
+  user_business_impact: |
+    Users cannot persist or retrieve generated questions, blocking downstream gap responses and contract runs.
+  reproducibility_notes:
+    - Run docs/refactor/live_tests/test_05_gap_analysis.py against current deployed API.
+    - Observe 500 in live-test-results28.log for POST /jobs/{jobId}/gap-questions.
+
+evidence:
+  failing_tests:
+    - docs/refactor/live_tests/test_05_gap_analysis.py::TestGapAnalysisEndpoints::test_generate_gap_questions
+    - docs/refactor/live_tests/test_05_gap_analysis.py::TestGapAnalysisEndpoints::test_get_gap_questions
+    - docs/refactor/live_tests/test_10_api_contract_success.py::TestAPIContractSuccess::test_api_contract_success_for_all_27_endpoints
+  endpoint_method_path:
+    - method: POST
+      path: /jobs/{jobId}/gap-questions
+      observed_status_code: 500
+      observed_body_fragment: '{"code": "DYNAMODB_ERROR"}'
+    - method: GET
+      path: /jobs/{jobId}/gap-questions
+      observed_status_code: 200
+      observed_body_fragment: '{"questions": []}'
+  baseline_artifact: careervp/live-test-results27.log
+  regression_artifact: careervp/live-test-results28.log
+  environment: dev-live
+  timestamp_utc: '2026-03-05T00:00:00Z'
+
+architecture_and_ownership_map:
+  route_to_lambda:
+    - route: POST /jobs/{jobId}/gap-questions
+      lambda: gap-api
+      handler: src/backend/careervp/handlers/gap_handler.py
+    - route: GET /jobs/{jobId}/gap-questions
+      lambda: gap-api
+      handler: src/backend/careervp/handlers/gap_handler.py
+    - route: POST /jobs/{jobId}/gap-responses
+      lambda: gap-api
+      handler: src/backend/careervp/handlers/gap_handler.py
+  handler_file_paths:
+    - src/backend/careervp/handlers/gap_handler.py
+    - src/backend/careervp/dal/dynamo_dal_handler.py
+    - infra/careervp/api_construct.py
+  data_store_index_usage:
+    - users table pk/sk for gap question artifacts
+    - gap_responses table userId/questionId for responses
+    - applications table for state transitions
+  auth_source_and_identity_key:
+    source: requestContext.authorizer claims
+    identity_key: user_id
+  canonical_sources_of_truth:
+    route_surface: infra/careervp/api_construct.py
+    storage_schema: infra/careervp/api_db_construct.py
+
+root_cause_analysis:
+  hypotheses_ranked:
+    - id: H1
+      hypothesis: gap handler chooses ARTIFACTS_TABLE_NAME before users table env vars.
+      disproof_criteria: explicit GAP_QUESTIONS_TABLE_NAME or USERS_TABLE_NAME priority is enforced and verified.
+      status: confirmed
+    - id: H2
+      hypothesis: persistence gate is missing on POST.
+      disproof_criteria: POST returns non-2xx when DAL save fails.
+      status: already_partially_fixed
+    - id: H3
+      hypothesis: GET path masks DAL failures as empty success.
+      disproof_criteria: DAL failures return explicit non-2xx, not empty 200.
+      status: confirmed
+  confirmed_root_causes:
+    - Runtime env fallback order drift routed gap writes/reads to wrong table.
+    - GET path still tolerates DAL failures as empty data in some failure modes.
+  contributing_factors:
+    - Shared env injection included ARTIFACTS_TABLE_NAME, creating ambiguous resolution.
+
+fix_plan:
+  exact_files_to_modify:
+    - path: src/backend/careervp/handlers/gap_handler.py
+      change: make table resolution explicit and deterministic for gap question store
+    - path: infra/careervp/api_construct.py
+      change: add GAP_QUESTIONS_TABLE_NAME env for gap lambda and keep USERS_TABLE_NAME alignment
+    - path: src/backend/careervp/dal/dynamo_dal_handler.py
+      change: ensure DAL error propagation can be surfaced by handler
+    - path: src/backend/tests/integration/test_gap_read_after_write_roundtrip.py
+      change: update to verify explicit table selection and no silent empty success on DAL failures
+    - path: docs/refactor/live_tests/test_05_gap_analysis.py
+      change: assert non-2xx on storage failure and strict read-after-write behavior
+  exact_behavior_changes:
+    - _get_questions_dal uses GAP_QUESTIONS_TABLE_NAME first, then USERS_TABLE_NAME, then DYNAMODB_TABLE_NAME.
+    - GET /jobs/{jobId}/gap-questions returns non-2xx with domain code on DAL failure.
+    - POST remains persistence-gated and cannot return 200 if save fails.
+  non_goals_out_of_scope:
+    - No change to question generation content.
+    - No changes to gap_responses storage model.
+  rollback_plan:
+    - Revert gap handler env resolution and new env var usage if runtime breaks unexpectedly.
+    - Keep trial attribution changes intact during rollback.
+
+acceptance_criteria:
+  api_level:
+    - POST /jobs/{jobId}/gap-questions returns 200 only when persistence succeeds.
+    - GET /jobs/{jobId}/gap-questions returns >=1 persisted question for recent successful POST.
+    - DAL/storage failures return non-2xx with explicit domain code and no empty 200 fallback.
+  data_level:
+    - Gap question writes and reads use users table key schema pk/sk.
+    - sk suffix matching for job_id is deterministic and case-normalized.
+  observability:
+    - Logs include resolved table name and table-resolution source.
+    - Metrics include persistence failures and empty-read-after-write detections.
+  negative_and_edge_case_criteria:
+    - Wrong job_id returns empty list with 200 only when DAL is healthy and no matching artifact exists.
+    - Cross-user requests do not leak artifacts.
+  regression_reversal_criteria:
+    - No 500 DYNAMODB_ERROR for gap question generation in live run.
+    - Result must be >= baseline: no new blockers compared to live-test-results27.log.
+
+baseline_and_regression_budget:
+  baseline_artifact:
+    path: careervp/live-test-results27.log
+    reason: pre-regression behavior reference for gap endpoints
+  blocked_regressions:
+    - new_non_2xx_on_changed_endpoints
+    - generated_id_missing_from_status_or_list_after_polling_window
+  allowed_deltas: {}
+
+verification_contract:
+  - requirement_id: VC-GAP-001
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: true
+    verification_description: deterministic table-resolution order and persistence gate tests
+  - requirement_id: VC-GAP-002
+    verification_type: integration
+    blocking_gate: pre_merge
+    artifact_required: true
+    verification_description: read-after-write roundtrip with production-like schema
+  - requirement_id: VC-GAP-003
+    verification_type: live
+    blocking_gate: post_deploy
+    artifact_required: true
+    verification_description: test_05_gap_analysis passes with persisted questions
+
+deployed_parity_plan:
+  route_surface_parity:
+    source_of_truth: infra/careervp/api_construct.py
+    verification_steps:
+      - Confirm /jobs/{jobId}/gap-questions POST and GET remain routed to gap-api.
+  authorizer_parity:
+    source_of_truth: deployed API method auth settings
+    verification_steps:
+      - Confirm user-scoped auth still required for gap routes.
+  runtime_env_resolution_parity:
+    source_of_truth: gap lambda environment variables
+    verification_steps:
+      - Verify GAP_QUESTIONS_TABLE_NAME resolves to users table.
+      - Verify no runtime selection of artifacts table for gap questions.
+
+validation_plan:
+  unit_tests:
+    - src/backend/tests/unit/test_gap_handler_persistence_required.py
+    - src/backend/tests/unit/test_gap_dal_job_id_filter.py
+  integration_tests:
+    - src/backend/tests/integration/test_gap_read_after_write_roundtrip.py
+  contract_tests:
+    - docs/refactor/live_tests/test_10_api_contract_success.py
+  live_e2e_checks:
+    - docs/refactor/live_tests/test_05_gap_analysis.py
+  regression_checks:
+    - compare gap endpoint outcomes against careervp/live-test-results27.log
+  validation_commands:
+    - uv run python scripts/smoke/run_targeted_smoke.py --step RECOVERY_002 --out docs/evidence/targeted-smoke-RECOVERY_002-<timestamp>.json
+    - uv run python scripts/spec_quality/check_regression_delta.py --baseline careervp/live-test-results27.log --current docs/evidence/targeted-smoke-RECOVERY_002-<timestamp>.json --out docs/evidence/per-step-regression-delta-RECOVERY_002-<timestamp>.json
+    - uv run pytest src/backend/tests/unit/test_gap_handler_persistence_required.py src/backend/tests/unit/test_gap_dal_job_id_filter.py -q
+    - uv run pytest src/backend/tests/integration/test_gap_read_after_write_roundtrip.py -q
+    - uv run pytest docs/refactor/live_tests/test_05_gap_analysis.py -q
+
+traceability_matrix:
+  - requirement_id: AC-GAP-301
+    requirement: POST success requires persistence success
+    code_reference: src/backend/careervp/handlers/gap_handler.py
+    test_reference: src/backend/tests/unit/test_gap_handler_persistence_required.py::test_post_fails_on_save_failure
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: true
+    evidence_reference: docs/evidence/gap-post-persistence-gate-20260305T152500Z.json
+    result: pass
+  - requirement_id: AC-GAP-302
+    requirement: GET returns persisted questions for same job_id after successful POST
+    code_reference: src/backend/careervp/dal/dynamo_dal_handler.py
+    test_reference: src/backend/tests/integration/test_gap_read_after_write_roundtrip.py::test_get_after_post_returns_persisted_questions
+    verification_type: integration
+    blocking_gate: pre_merge
+    artifact_required: true
+    evidence_reference: docs/evidence/gap-roundtrip-integration-20260305T152505Z.json
+    result: pass
+  - requirement_id: AC-GAP-303
+    requirement: Live gap analysis path has no regression relative to baseline
+    code_reference: docs/refactor/live_tests/test_05_gap_analysis.py
+    test_reference: docs/refactor/live_tests/test_05_gap_analysis.py::TestGapAnalysisEndpoints::test_get_gap_questions
+    verification_type: live
+    blocking_gate: post_deploy
+    artifact_required: true
+    evidence_reference: docs/evidence/gap-live-regression-delta-<timestamp>.json
+    result: pending
+
+rollback_trigger_matrix:
+  - trigger_id: RT-GAP-001
+    trigger_condition: gap generation returns 500 in post_deploy validation
+    detection_source: live test_05_gap_analysis
+    action: block promotion and rollback RECOVERY_002 change set
+    owner: release_owner
+  - trigger_id: RT-GAP-002
+    trigger_condition: read-after-write returns empty array for successful POST
+    detection_source: integration and live evidence
+    action: block closure and patch before redeploy
+    owner: backend-platform
+
+completion_evidence:
+  required_artifacts:
+    - docs/evidence/gap-post-persistence-gate-20260305T152500Z.json
+    - docs/evidence/gap-roundtrip-integration-20260305T152505Z.json
+    - docs/evidence/gap-live-regression-delta-<timestamp>.json
+  known_residual_risks:
+    - Historical malformed records may still be unreadable without backfill.
+  explicit_sign_off_checklist:
+    - GAP_GET_002 all ACs pass
+    - No new gap endpoint non-2xx vs baseline
+    - No silent empty 200 on DAL failure
+
+confidence_assessment:
+  confidence_score_0_to_100: 85
+  implementation_100_percent: true
+  confidence_basis:
+    - All code changes implemented and unit/integration tests pass.
+    - AC-GAP-301 and AC-GAP-302 verified locally.
+    - AC-GAP-303 pending post-deploy live validation.
+  confidence_update_rule: |
+    Set to >=95 only after AC-GAP-301..303 are all pass and post_deploy live evidence is attached.
+
+dependencies:
+  - RECOVERY_001

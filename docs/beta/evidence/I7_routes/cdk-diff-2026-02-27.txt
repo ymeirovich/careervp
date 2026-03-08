@@ -1,0 +1,756 @@
+(node:39169) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:39139) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[Warning at /CareerVpCrudDev/CareerVpCrudDev-Cognito/UserPool/Resource] AwsSolutions-COG2: The Cognito user pool does not require MFA. Multi-factor authentication (MFA) increases security for the application by adding another authentication method, and not relying solely on user name and password.
+
+start: Building CareerVpCrudDev Template
+success: Built CareerVpCrudDev Template
+start: Publishing CareerVpCrudDev Template (788159322332-us-east-1-7baebe7d)
+success: Published CareerVpCrudDev Template (788159322332-us-east-1-7baebe7d)
+Hold on while we create a read-only change set to get a diff with accurate replacement information (use --no-change-set to use a less accurate but faster template-only diff)
+
+Stack CareerVpCrudDev
+Resources
+[-] AWS::ApiGateway::Deployment CareerVpCrudDev-Crud/service-rest-api/Deployment CareerVpCrudDevCrudservicerestapiDeployment0B6DC41Bd1e052545c8524ed1712f175309e95c3 destroy
+[+] AWS::ApiGateway::Deployment CareerVpCrudDev-Crud/service-rest-api/Deployment CareerVpCrudDevCrudservicerestapiDeployment0B6DC41Be81752f971ff8efc5bea869bb5bf3aed
+[~] AWS::Cognito::UserPool CareerVpCrudDev-Cognito/UserPool CareerVpCrudDevCognitoUserPool42C0A4E4
+ └─ [~] UserPoolTags
+     └─ [~] .owner:
+         ├─ [-] runner
+         └─ [+] yitzchak
+[~] AWS::DynamoDB::GlobalTable CareerVpCrudDev-Crud/CareerVpCrudDev-Cruddb/CareerVpCrudDev-Cruddbusers CareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbusers3019B409
+ └─ [~] Replicas
+     └─ @@ -32,7 +32,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::DynamoDB::GlobalTable CareerVpCrudDev-Crud/CareerVpCrudDev-Cruddb/CareerVpCrudDev-Cruddbidempotency CareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbidempotency7D5B82F7
+ └─ [~] Replicas
+     └─ @@ -12,7 +12,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::DynamoDB::GlobalTable CareerVpCrudDev-Crud/CareerVpCrudDev-Cruddb/CareerVpCrudDev-Cruddbjobs CareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbjobs57D3C1AC
+ └─ [~] Replicas
+     └─ @@ -17,7 +17,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::DynamoDB::GlobalTable CareerVpCrudDev-Crud/CareerVpCrudDev-Cruddb/CareerVpCrudDev-CruddbCvsTable CareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbCvsTable262F06D8
+ └─ [~] Replicas
+     └─ @@ -12,7 +12,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::DynamoDB::GlobalTable CareerVpCrudDev-Crud/CareerVpCrudDev-Cruddb/CareerVpCrudDev-CruddbApplicationsTable CareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbApplicationsTable65A47C10
+ └─ [~] Replicas
+     └─ @@ -17,7 +17,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::DynamoDB::GlobalTable CareerVpCrudDev-Crud/CareerVpCrudDev-Cruddb/CareerVpCrudDev-CruddbGapResponsesTable CareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbGapResponsesTable6DB1AFFD
+ └─ [~] Replicas
+     └─ @@ -12,7 +12,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::DynamoDB::GlobalTable CareerVpCrudDev-Crud/CareerVpCrudDev-Cruddb/CareerVpCrudDev-CruddbKnowledgeTable CareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbKnowledgeTable0AFE336B
+ └─ [~] Replicas
+     └─ @@ -17,7 +17,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::DynamoDB::GlobalTable CareerVpCrudDev-Crud/CareerVpCrudDev-Cruddb/CareerVpCrudDev-CruddbArtifactsTable CareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbArtifactsTableD4DFE196
+ └─ [~] Replicas
+     └─ @@ -17,7 +17,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::DynamoDB::GlobalTable CareerVpCrudDev-Crud/CareerVpCrudDev-Cruddb/CareerVpCrudDev-CruddbCompanyResearchCacheTable CareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbCompanyResearchCacheTableDD10AD70
+ └─ [~] Replicas
+     └─ @@ -12,7 +12,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::S3::Bucket CareerVpCrudDev-Crud/CareerVpCrudDev-Cruddb/CareerVpCrudDev-Cruddbcvs CareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbcvsBFF7234D
+ └─ [~] Tags
+     └─ @@ -9,7 +9,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::S3::Bucket CareerVpCrudDev-Crud/CareerVpCrudDev-Cruddb/CareerVpCrudDev-Cruddbvpr-results CareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbvprresultsFAC99242
+ └─ [~] Tags
+     └─ @@ -9,7 +9,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::S3::Bucket CareerVpCrudDev-Crud/CareerVpCrudDev-Cruddb/CareerVpCrudDev-CruddbStaticBucket CareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbStaticBucket4DC38154
+ └─ [~] Tags
+     └─ @@ -9,7 +9,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::S3::Bucket CareerVpCrudDev-Crud/CareerVpCrudDev-Cruddb/CareerVpCrudDev-CruddbBackupsBucket CareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbBackupsBucket85F6701A
+ └─ [~] Tags
+     └─ @@ -9,7 +9,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::S3::Bucket CareerVpCrudDev-Crud/CareerVpCrudDev-Cruddb/CareerVpCrudDev-CruddbLogsBucket CareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbLogsBucket81E6FFC8
+ └─ [~] Tags
+     └─ @@ -9,7 +9,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::S3::Bucket CareerVpCrudDev-Crud/CareerVpCrudDev-Cruddb/CareerVpCrudDev-CruddbArtifactsBucket CareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbArtifactsBucket2434A06F
+ └─ [~] Tags
+     └─ @@ -9,7 +9,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::SQS::Queue CareerVpCrudDev-Crud/CareerVpCrudDev-Cruddb/CareerVpCrudDev-CruddbCvUploadDlq CareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbCvUploadDlq99105D39
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::SQS::Queue CareerVpCrudDev-Crud/CareerVpCrudDev-Cruddb/CareerVpCrudDev-CruddbCvUploadQueue CareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbCvUploadQueue20D0E259
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::SQS::Queue CareerVpCrudDev-Crud/CareerVpCrudDev-Cruddb/CareerVpCrudDev-CruddbGapAnalysisDlq CareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbGapAnalysisDlq355FDF74
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::SQS::Queue CareerVpCrudDev-Crud/CareerVpCrudDev-Cruddb/CareerVpCrudDev-CruddbGapAnalysisQueue CareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbGapAnalysisQueue6C243C65
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::KMS::Key CareerVpCrudDev-Crud/CloudWatchLogsKey CareerVpCrudDevCrudCloudWatchLogsKey48716E3C
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Logs::LogGroup CareerVpCrudDev-Crud/ApiGatewayAccessLogGroup CareerVpCrudDevCrudApiGatewayAccessLogGroupA62093C3
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Logs::LogGroup CareerVpCrudDev-Crud/CVParserLogGroup CareerVpCrudDevCrudCVParserLogGroup4B625C9D
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Lambda::Function CareerVpCrudDev-Crud/CVParser CareerVpCrudDevCrudCVParserBC347720
+ ├─ [~] Code
+ │   └─ [~] .S3Key:
+ │       ├─ [-] 3fe6bbf8bd6117ee26fbf7d680ab882c0568f6dc632c23e256a7a4037959a00c.zip
+ │       └─ [+] 20647419192c302185ca545b66629d789a5ab98a87cc8d124137a99a51151212.zip
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Logs::LogGroup CareerVpCrudDev-Crud/CompanyResearchLogGroup CareerVpCrudDevCrudCompanyResearchLogGroup9D47E2A9
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Lambda::Function CareerVpCrudDev-Crud/CompanyResearch CareerVpCrudDevCrudCompanyResearch7A3F17FB
+ ├─ [~] Code
+ │   └─ [~] .S3Key:
+ │       ├─ [-] 3fe6bbf8bd6117ee26fbf7d680ab882c0568f6dc632c23e256a7a4037959a00c.zip
+ │       └─ [+] 20647419192c302185ca545b66629d789a5ab98a87cc8d124137a99a51151212.zip
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Logs::LogGroup CareerVpCrudDev-Crud/AuthApiLogGroup CareerVpCrudDevCrudAuthApiLogGroup9F324CD2
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Lambda::Function CareerVpCrudDev-Crud/AuthApiLambda CareerVpCrudDevCrudAuthApiLambda17FB112D
+ ├─ [~] Code
+ │   └─ [~] .S3Key:
+ │       ├─ [-] 3fe6bbf8bd6117ee26fbf7d680ab882c0568f6dc632c23e256a7a4037959a00c.zip
+ │       └─ [+] 20647419192c302185ca545b66629d789a5ab98a87cc8d124137a99a51151212.zip
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Logs::LogGroup CareerVpCrudDev-Crud/HealthApiLogGroup CareerVpCrudDevCrudHealthApiLogGroupF9614AF7
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Lambda::Function CareerVpCrudDev-Crud/HealthApiLambda CareerVpCrudDevCrudHealthApiLambda7362A696
+ ├─ [~] Code
+ │   └─ [~] .S3Key:
+ │       ├─ [-] 3fe6bbf8bd6117ee26fbf7d680ab882c0568f6dc632c23e256a7a4037959a00c.zip
+ │       └─ [+] 20647419192c302185ca545b66629d789a5ab98a87cc8d124137a99a51151212.zip
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Logs::LogGroup CareerVpCrudDev-Crud/GapApiLogGroup CareerVpCrudDevCrudGapApiLogGroup3B58D93C
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Lambda::Function CareerVpCrudDev-Crud/GapApiLambda CareerVpCrudDevCrudGapApiLambda812F6815
+ ├─ [~] Code
+ │   └─ [~] .S3Key:
+ │       ├─ [-] 3fe6bbf8bd6117ee26fbf7d680ab882c0568f6dc632c23e256a7a4037959a00c.zip
+ │       └─ [+] 20647419192c302185ca545b66629d789a5ab98a87cc8d124137a99a51151212.zip
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Logs::LogGroup CareerVpCrudDev-Crud/CoverLetterApiLogGroup CareerVpCrudDevCrudCoverLetterApiLogGroup75F7680F
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Lambda::Function CareerVpCrudDev-Crud/CoverLetterApiLambda CareerVpCrudDevCrudCoverLetterApiLambdaF1340087
+ ├─ [~] Code
+ │   └─ [~] .S3Key:
+ │       ├─ [-] 3fe6bbf8bd6117ee26fbf7d680ab882c0568f6dc632c23e256a7a4037959a00c.zip
+ │       └─ [+] 20647419192c302185ca545b66629d789a5ab98a87cc8d124137a99a51151212.zip
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Logs::LogGroup CareerVpCrudDev-Crud/InterviewPrepApiLogGroup CareerVpCrudDevCrudInterviewPrepApiLogGroup12C2854A
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Lambda::Function CareerVpCrudDev-Crud/InterviewPrepApiLambda CareerVpCrudDevCrudInterviewPrepApiLambdaA473A407
+ ├─ [~] Code
+ │   └─ [~] .S3Key:
+ │       ├─ [-] 3fe6bbf8bd6117ee26fbf7d680ab882c0568f6dc632c23e256a7a4037959a00c.zip
+ │       └─ [+] 20647419192c302185ca545b66629d789a5ab98a87cc8d124137a99a51151212.zip
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Logs::LogGroup CareerVpCrudDev-Crud/CVTailorLogGroup CareerVpCrudDevCrudCVTailorLogGroup4E8E3F04
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Lambda::Function CareerVpCrudDev-Crud/CVTailor CareerVpCrudDevCrudCVTailor6C64016D
+ ├─ [~] Code
+ │   └─ [~] .S3Key:
+ │       ├─ [-] 3fe6bbf8bd6117ee26fbf7d680ab882c0568f6dc632c23e256a7a4037959a00c.zip
+ │       └─ [+] 20647419192c302185ca545b66629d789a5ab98a87cc8d124137a99a51151212.zip
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::SQS::Queue CareerVpCrudDev-Crud/CvUploadWorkerDlq CareerVpCrudDevCrudCvUploadWorkerDlqD5275284
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::SQS::Queue CareerVpCrudDev-Crud/CvTailorWorkerDlq CareerVpCrudDevCrudCvTailorWorkerDlqD913C386
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::SQS::Queue CareerVpCrudDev-Crud/CoverLetterWorkerDlq CareerVpCrudDevCrudCoverLetterWorkerDlqBBEFFA3C
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::SQS::Queue CareerVpCrudDev-Crud/InterviewPrepWorkerDlq CareerVpCrudDevCrudInterviewPrepWorkerDlqD6FA7DCB
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Logs::LogGroup CareerVpCrudDev-Crud/CvUploadWorkerLogGroup CareerVpCrudDevCrudCvUploadWorkerLogGroup1210A83E
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::IAM::Role CareerVpCrudDev-Crud/CvUploadWorkerLambda/ServiceRole CareerVpCrudDevCrudCvUploadWorkerLambdaServiceRoleE609ECF0
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Lambda::Function CareerVpCrudDev-Crud/CvUploadWorkerLambda CareerVpCrudDevCrudCvUploadWorkerLambda00500EE7
+ ├─ [~] Code
+ │   └─ [~] .S3Key:
+ │       ├─ [-] 3fe6bbf8bd6117ee26fbf7d680ab882c0568f6dc632c23e256a7a4037959a00c.zip
+ │       └─ [+] 20647419192c302185ca545b66629d789a5ab98a87cc8d124137a99a51151212.zip
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Logs::LogGroup CareerVpCrudDev-Crud/CvTailorWorkerLogGroup CareerVpCrudDevCrudCvTailorWorkerLogGroupBB311D9E
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::IAM::Role CareerVpCrudDev-Crud/CvTailorWorkerLambda/ServiceRole CareerVpCrudDevCrudCvTailorWorkerLambdaServiceRole7507C1D8
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Lambda::Function CareerVpCrudDev-Crud/CvTailorWorkerLambda CareerVpCrudDevCrudCvTailorWorkerLambda833E005A
+ ├─ [~] Code
+ │   └─ [~] .S3Key:
+ │       ├─ [-] 3fe6bbf8bd6117ee26fbf7d680ab882c0568f6dc632c23e256a7a4037959a00c.zip
+ │       └─ [+] 20647419192c302185ca545b66629d789a5ab98a87cc8d124137a99a51151212.zip
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Lambda::EventSourceMapping CareerVpCrudDev-Crud/CvTailorWorkerLambda/DynamoDBEventSource:CareerVpCrudDevCareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbArtifactsTable69F51206 CareerVpCrudDevCrudCvTailorWorkerLambdaDynamoDBEventSourceCareerVpCrudDevCareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbArtifactsTable69F51206A0F6CCC3
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Logs::LogGroup CareerVpCrudDev-Crud/CoverLetterWorkerLogGroup CareerVpCrudDevCrudCoverLetterWorkerLogGroup4E9F0784
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::IAM::Role CareerVpCrudDev-Crud/CoverLetterWorkerLambda/ServiceRole CareerVpCrudDevCrudCoverLetterWorkerLambdaServiceRole3697B265
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Lambda::Function CareerVpCrudDev-Crud/CoverLetterWorkerLambda CareerVpCrudDevCrudCoverLetterWorkerLambda57C8BA85
+ ├─ [~] Code
+ │   └─ [~] .S3Key:
+ │       ├─ [-] 3fe6bbf8bd6117ee26fbf7d680ab882c0568f6dc632c23e256a7a4037959a00c.zip
+ │       └─ [+] 20647419192c302185ca545b66629d789a5ab98a87cc8d124137a99a51151212.zip
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Lambda::EventSourceMapping CareerVpCrudDev-Crud/CoverLetterWorkerLambda/DynamoDBEventSource:CareerVpCrudDevCareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbArtifactsTable69F51206 CareerVpCrudDevCrudCoverLetterWorkerLambdaDynamoDBEventSourceCareerVpCrudDevCareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbArtifactsTable69F5120608740913
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Lambda::Function CareerVpCrudDev-Crud/InterviewPrepWorkerLambda CareerVpCrudDevCrudInterviewPrepWorkerLambdaBE85EFC5
+ ├─ [~] Code
+ │   └─ [~] .S3Key:
+ │       ├─ [-] 3fe6bbf8bd6117ee26fbf7d680ab882c0568f6dc632c23e256a7a4037959a00c.zip
+ │       └─ [+] 20647419192c302185ca545b66629d789a5ab98a87cc8d124137a99a51151212.zip
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Lambda::EventSourceMapping CareerVpCrudDev-Crud/InterviewPrepWorkerLambda/DynamoDBEventSource:CareerVpCrudDevCareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbArtifactsTable69F51206 CareerVpCrudDevCrudInterviewPrepWorkerLambdaDynamoDBEventSourceCareerVpCrudDevCareerVpCrudDevCrudCareerVpCrudDevCruddbCareerVpCrudDevCruddbArtifactsTable69F5120678AAA13A
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::SNS::Topic CareerVpCrudDev-Crud/CareerVpCrudDev-Crud/CareerVpCrudDev-Crudalarms CareerVpCrudDevCrudCareerVpCrudDevCrudalarmsC9BD4B17
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::CloudWatch::Alarm CareerVpCrudDev-Crud/CareerVpCrudDev-Crud/CareerVpCrudDev-CrudHighFacade/CareerVpCrudDev-Crud-careervp-core-api-dev-prod-Fault-Rate-internal_error CareerVpCrudDevCrudCareerVpCrudDevCrudHighFacadeCareerVpCrudDevCrudcareervpcoreapidevprodFaultRateinternalerror56C63F69
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::CloudWatch::Alarm CareerVpCrudDev-Crud/CareerVpCrudDev-Crud/CareerVpCrudDev-CrudLowFacade/CareerVpCrudDev-Crud-careervp-cv-parser-lambda-dev-Latency-P90-p90 CareerVpCrudDevCrudCareerVpCrudDevCrudLowFacadeCareerVpCrudDevCrudcareervpcvparserlambdadevLatencyP90p90D345E444
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::CloudWatch::Alarm CareerVpCrudDev-Crud/CareerVpCrudDev-Crud/CareerVpCrudDev-CrudLowFacade/CareerVpCrudDev-Crud-careervp-vpr-submit-lambda-dev-Latency-P90-p90 CareerVpCrudDevCrudCareerVpCrudDevCrudLowFacadeCareerVpCrudDevCrudcareervpvprsubmitlambdadevLatencyP90p905D4E40D6
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::CloudWatch::Alarm CareerVpCrudDev-Crud/CareerVpCrudDev-Crud/CareerVpCrudDev-CrudLowFacade/CareerVpCrudDev-Crud-careervp-company-research-lambda-dev-Latency-P90-p90 CareerVpCrudDevCrudCareerVpCrudDevCrudLowFacadeCareerVpCrudDevCrudcareervpcompanyresearchlambdadevLatencyP90p90F5589EFD
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::CloudWatch::Alarm CareerVpCrudDev-Crud/CareerVpCrudDev-Crud/CareerVpCrudDev-CrudLowFacade/CareerVpCrudDev-Crud-careervp-cvtailor-lambda-dev-Latency-P90-p90 CareerVpCrudDevCrudCareerVpCrudDevCrudLowFacadeCareerVpCrudDevCrudcareervpcvtailorlambdadevLatencyP90p9089EE8FF8
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::IAM::Role BucketNotificationsHandler050a0587b7544547bf325f094a3db834/Role BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleB6FB88EC
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+[~] AWS::Lambda::Function BucketNotificationsHandler050a0587b7544547bf325f094a3db834 BucketNotificationsHandler050a0587b7544547bf325f094a3db8347ECC3691
+ └─ [~] Tags
+     └─ @@ -5,7 +5,7 @@
+        [ ] },
+        [ ] {
+        [ ]   "Key": "owner",
+        [-]   "Value": "runner"
+        [+]   "Value": "yitzchak"
+        [ ] },
+        [ ] {
+        [ ]   "Key": "service",
+
+
+
+✨  Number of stacks with differences: 1
+

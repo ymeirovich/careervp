@@ -1,0 +1,90 @@
+spec_id: RECOVERY_004_YAML4
+title: Stabilize VPR List Inclusion and Metadata Backfill Without Regressing Passing Flows
+priority: high
+status: pending
+owner: backend-platform
+created_at: 2026-03-06
+updated_at: 2026-03-06
+sequence_step: 4
+default_environment: dev
+
+targets_yaml2_specs:
+  - VPR_LIST_METADATA_001
+
+execution_policy:
+  stop_after_step_for_user_deploy: true
+  resume_only_after_user_live_evidence: true
+  user_must_run_live_tests_in_environment: dev
+
+non_regression_constraints:
+  - preserve_async_contracts
+  - no_endpoint_shape_changes
+  - prefer_no_code_change_if_live_behavior_is_already_stable
+  - protect_passing_vpr_status_behavior
+
+shareable_modules_to_reuse:
+  - src/backend/careervp/handlers/vpr_status_handler.py
+  - src/backend/careervp/handlers/vpr_submit_handler.py
+
+problem_statement:
+  exact_failing_behavior: |
+    Prior runs showed intermittent vpr list omission or metadata gaps after successful generation.
+    Current live behavior appears improved and must be preserved.
+  expected_behavior: |
+    Generated VPR ID appears in /vprs within polling window and metadata remains non-breaking.
+  business_impact: |
+    Missing generated IDs makes users distrust saved VPR history.
+
+implementation_scope:
+  files_to_modify_if_needed:
+    - src/backend/careervp/dal/jobs_repository.py
+    - src/backend/careervp/handlers/vpr_status_handler.py
+    - src/backend/tests/unit/test_vpr_status_handler.py
+    - src/backend/tests/integration/test_vpr_list_roundtrip.py
+  decision_rule:
+    - If targeted tests are already green and live evidence is stable, perform evidence-only closure (no code edits).
+    - Modify code only when omission/metadata regression is reproduced.
+
+implementation_checklist:
+  - id: S004-01
+    task: Run targeted regression checks first; classify as no-op or fix-required.
+  - id: S004-02
+    task: If fix-required, apply minimal pagination/filter-order correction only.
+  - id: S004-03
+    task: Preserve existing status endpoint behavior and auth scoping.
+  - id: S004-04
+    task: Improve logging for metadata-source and pagination diagnostics.
+
+pre_deploy_validation:
+  required_commands:
+    - uv run pytest src/backend/tests/unit/test_vpr_status_handler.py -q
+    - uv run pytest src/backend/tests/integration/test_vpr_list_roundtrip.py -q
+  pass_conditions:
+    - all_commands_exit_0
+    - no_regression_in_status_endpoint_tests
+
+handoff_gate:
+  stop_now: true
+  user_actions:
+    - Deploy this step to AWS dev
+    - Run uv run pytest docs/refactor/live_tests/test_04_vpr.py -q
+    - Save artifact to docs/evidence/RECOVERY_004-live-<timestamp>.log
+  required_evidence_fields:
+    - environment=dev
+    - deployment_id
+    - git_sha
+    - expected_vs_actual
+    - result
+  resume_condition:
+    - evidence_file_present
+    - generated_id_visible_in_vpr_list
+
+traceability_matrix:
+  - requirement_id: AC-VPR-301
+    requirement: generated VPR id appears in list after submit
+    test_reference: docs/refactor/live_tests/test_04_vpr.py::TestVPREndpoints::test_list_vprs
+    result: pending
+  - requirement_id: AC-VPR-302
+    requirement: metadata fallback remains functional and non-breaking
+    test_reference: src/backend/tests/unit/test_vpr_status_handler.py::test_vpr_list_item_falls_back_to_jobs_table_when_missing_job_posting
+    result: pending

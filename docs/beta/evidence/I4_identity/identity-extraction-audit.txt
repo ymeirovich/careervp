@@ -1,0 +1,3 @@
+/Users/yitzchak/Documents/dev/careervp/src/backend/careervp/handlers/auth_utils.py:44:        for header_name in ('x-user-id', 'X-User-Id'):
+/Users/yitzchak/Documents/dev/careervp/src/backend/careervp/handlers/cover_letter_handler.py:121:        user_id = body.get('user_id', '')
+/Users/yitzchak/Documents/dev/careervp/src/backend/careervp/handlers/interview_prep_handler.py:105:        user_id = body.get('user_id', '')

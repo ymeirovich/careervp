@@ -1,0 +1,51 @@
+{
+  "yaml2_dir": "docs/beta/fix-api/yaml2",
+  "evidence_dir": "docs/evidence",
+  "spec_count": 7,
+  "spec_summaries": [
+    {
+      "file": "docs/beta/fix-api/yaml2/cover_letter_list_roundtrip.yaml",
+      "spec_id": "COVER_LETTER_002",
+      "status": "validated",
+      "issue_count": 0
+    },
+    {
+      "file": "docs/beta/fix-api/yaml2/cv_tailoring_delete_route_completion.yaml",
+      "spec_id": "CV_TAILORING_002",
+      "status": "validated",
+      "issue_count": 0
+    },
+    {
+      "file": "docs/beta/fix-api/yaml2/gap_questions_read_after_write.yaml",
+      "spec_id": "GAP_GET_002",
+      "status": "validated",
+      "issue_count": 0
+    },
+    {
+      "file": "docs/beta/fix-api/yaml2/interview_prep_agentic_architecture_alignment.yaml",
+      "spec_id": "INTERVIEW_PREP_003",
+      "status": "validated",
+      "issue_count": 0
+    },
+    {
+      "file": "docs/beta/fix-api/yaml2/interview_prep_status_schema_alignment.yaml",
+      "spec_id": "INTERVIEW_PREP_002",
+      "status": "validated",
+      "issue_count": 0
+    },
+    {
+      "file": "docs/beta/fix-api/yaml2/trial_and_contract_route_alignment.yaml",
+      "spec_id": "TRIAL_002",
+      "status": "validated",
+      "issue_count": 0
+    },
+    {
+      "file": "docs/beta/fix-api/yaml2/vpr_list_metadata_backfill.yaml",
+      "spec_id": "VPR_LIST_METADATA_001",
+      "status": "validated",
+      "issue_count": 0
+    }
+  ],
+  "issues": [],
+  "status": "pass"
+}

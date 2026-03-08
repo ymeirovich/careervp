@@ -13,20 +13,25 @@ from careervp.models.vpr import VPR
 
 
 class _SingletonMeta(ABCMeta):
-    _instances: dict[type, DalHandler] = {}
+    _instances: dict[tuple[Any, ...], DalHandler] = {}
 
     def __call__(cls, *args: Any, **kwargs: Any) -> DalHandler:
-        if cls not in cls._instances:
-            cls._instances[cls] = super(_SingletonMeta, cls).__call__(*args, **kwargs)
-        return cls._instances[cls]
+        try:
+            key: tuple[Any, ...] = (cls, args, tuple(sorted(kwargs.items())))
+        except TypeError:
+            key = (cls,)
+        if key not in cls._instances:
+            cls._instances[key] = super(_SingletonMeta, cls).__call__(*args, **kwargs)
+        return cls._instances[key]
 
 
 class DalHandler(ABC, metaclass=_SingletonMeta):
     @classmethod
     def reset_instance(cls) -> None:
-        """Testing hook to drop the cached singleton instance."""
-        if cls in _SingletonMeta._instances:
-            del _SingletonMeta._instances[cls]
+        """Testing hook to drop all cached singleton instances for this class."""
+        keys_to_delete = [k for k in _SingletonMeta._instances if k[0] is cls]
+        for k in keys_to_delete:
+            del _SingletonMeta._instances[k]
 
     @abstractmethod
     def save_cv(self, user_cv: UserCV) -> None: ...  # pragma: no cover
@@ -59,7 +64,7 @@ class DalHandler(ABC, metaclass=_SingletonMeta):
     ) -> Result[TailoredCV | None]: ...  # pragma: no cover
 
     @abstractmethod
-    def list_tailored_cvs(self, user_id: str) -> Result[list[TailoredCV]]: ...  # pragma: no cover
+    def list_tailored_cvs(self, user_id: str) -> Result[list[dict[str, Any]]]: ...  # pragma: no cover
 
     @abstractmethod
     def save_cover_letter(

@@ -6,11 +6,14 @@ import os
 from datetime import datetime, timezone
 from typing import Iterator
 
-import boto3
+import boto3  # type: ignore[import-untyped]
 import pytest
+from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 from moto import mock_aws
+from pytest_mock import MockerFixture
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+from careervp.models.result import ResultCode
 from careervp.models.vpr import VPR, EvidenceItem, GapStrategy
 
 TABLE_NAME = 'test-vpr-table'
@@ -105,6 +108,108 @@ def _build_vpr(version: int = 1, application_id: str = 'app-123', user_id: str =
     )
 
 
+def test_list_cover_letters_returns_full_items(mocker: MockerFixture) -> None:
+    handler = DynamoDalHandler(TABLE_NAME)
+    mock_table = mocker.Mock()
+    mock_table.query.return_value = {
+        'Items': [
+            {
+                'pk': 'user-1',
+                'sk': 'ARTIFACT#COVER_LETTER#cv-1#job-1#v1',
+                'cv_id': 'cv-1',
+                'job_id': 'job-1',
+                'cover_letter': {'text': 'hello'},
+            }
+        ]
+    }
+    mocker.patch.object(handler, '_get_db_handler', return_value=mock_table)
+
+    result = handler.list_cover_letters('user-1')
+
+    assert result.success is True
+    assert isinstance(result.data, list)
+    assert result.data[0]['cv_id'] == 'cv-1'
+    assert isinstance(result.data[0]['cover_letter'], dict)
+
+
+def test_list_gap_questions_by_prefix_matches_normalized_job_id(mocker: MockerFixture) -> None:
+    handler = DynamoDalHandler(TABLE_NAME)
+    mock_table = mocker.Mock()
+    mock_table.query.return_value = {
+        'Items': [
+            {
+                'pk': 'user-1',
+                'sk': 'ARTIFACT#GAP_ANALYSIS#cv-1# Job-123 ',
+                'job_id': ' Job-123 ',
+            },
+            {
+                'pk': 'user-1',
+                'sk': 'ARTIFACT#GAP_ANALYSIS#cv-1#JOB-123',
+            },
+            {
+                'pk': 'user-1',
+                'sk': 'ARTIFACT#GAP_ANALYSIS#cv-1#job-999',
+                'job_id': 'job-999',
+            },
+        ]
+    }
+    mocker.patch.object(handler, '_get_db_handler', return_value=mock_table)
+
+    result = handler.list_gap_questions_by_prefix('user-1', job_id='job-123')
+
+    assert result.success is True
+    assert isinstance(result.data, list)
+    assert len(result.data) == 2
+    assert all('job-123' in str(item.get('sk', '')).lower() for item in result.data)
+
+
+def test_delete_tailored_cv_deletes_prefixed_item(mocker: MockerFixture) -> None:
+    handler = DynamoDalHandler(TABLE_NAME)
+    mock_table = mocker.Mock()
+    mock_table.get_item.side_effect = [
+        {},
+        {'Item': {'pk': 'user-1', 'sk': 'ARTIFACT#CV_TAILORED#cv-tail-123'}},
+    ]
+    mock_table.delete_item.return_value = {}
+    mocker.patch.object(handler, '_get_db_handler', return_value=mock_table)
+
+    result = handler.delete_tailored_cv('user-1', 'cv-tail-123')
+
+    assert result.success is True
+    assert mock_table.delete_item.call_count == 1
+    delete_key = mock_table.delete_item.call_args.kwargs['Key']
+    assert delete_key['sk'] == 'ARTIFACT#CV_TAILORED#cv-tail-123'
+
+
+def test_delete_tailored_cv_returns_dynamodb_error_on_access_denied(mocker: MockerFixture) -> None:
+    handler = DynamoDalHandler(TABLE_NAME)
+    mock_table = mocker.Mock()
+    mock_table.get_item.side_effect = [
+        {'Item': {'pk': 'user-1', 'sk': 'cv-tail-123'}},
+    ]
+    mock_table.delete_item.side_effect = ClientError(
+        error_response={
+            'Error': {
+                'Code': 'AccessDeniedException',
+                'Message': 'User is not authorized to perform: dynamodb:DeleteItem',
+            }
+        },
+        operation_name='DeleteItem',
+    )
+    mock_logger = mocker.patch('careervp.dal.dynamo_dal_handler.logger')
+    mocker.patch.object(handler, '_get_db_handler', return_value=mock_table)
+
+    result = handler.delete_tailored_cv('user-1', 'cv-tail-123')
+
+    assert result.success is False
+    assert result.code == ResultCode.DYNAMODB_ERROR
+    assert 'AccessDeniedException' in str(result.error)
+    mock_logger.exception.assert_called_once()
+    call_kwargs = mock_logger.exception.call_args.kwargs
+    assert call_kwargs['error_code'] == 'AccessDeniedException'
+    assert 'attempted_sort_keys' in call_kwargs
+
+
 class TestDynamoDalHandlerVPR:
     """End-to-end persistence tests for VPR DAL methods."""
 
@@ -150,3 +255,56 @@ class TestDynamoDalHandlerVPR:
         missing_result = handler.get_vpr(application_id='missing', version=1)
         assert missing_result.success is True
         assert missing_result.data is None
+
+    def test_save_gap_questions_returns_schema_mismatch_code_on_validation_exception(self, mocker: MockerFixture) -> None:
+        handler = DynamoDalHandler(TABLE_NAME)
+        mock_table = mocker.Mock()
+        mock_table.put_item.side_effect = ClientError(
+            error_response={
+                'Error': {
+                    'Code': 'ValidationException',
+                    'Message': 'The provided key element does not match the schema',
+                }
+            },
+            operation_name='PutItem',
+        )
+        mocker.patch.object(handler, '_get_db_handler', return_value=mock_table)
+
+        result = handler.save_gap_questions(
+            user_id='user-1',
+            cv_id='cv-1',
+            job_id='job-1',
+            questions=[{'question_id': 'q1', 'question': 'Example'}],
+        )
+
+        assert result.success is False
+        assert result.code == ResultCode.TABLE_SCHEMA_MISMATCH
+        assert result.error is not None
+        assert 'table_name' in result.error
+        assert 'operation=save_gap_questions' in result.error
+
+    def test_save_gap_responses_raw_includes_table_and_operation_on_failure(self, mocker: MockerFixture) -> None:
+        handler = DynamoDalHandler(TABLE_NAME)
+        mock_table = mocker.Mock()
+        mock_table.put_item.side_effect = ClientError(
+            error_response={
+                'Error': {
+                    'Code': 'ProvisionedThroughputExceededException',
+                    'Message': 'rate exceeded',
+                }
+            },
+            operation_name='PutItem',
+        )
+        mocker.patch.object(handler, '_get_db_handler', return_value=mock_table)
+
+        result = handler.save_gap_responses_raw(
+            user_id='user-1',
+            job_id='job-1',
+            responses=[{'question_id': 'q1', 'response': 'A'}],
+        )
+
+        assert result.success is False
+        assert result.code == ResultCode.DYNAMODB_ERROR
+        assert result.error is not None
+        assert f'table_name={TABLE_NAME}' in result.error
+        assert 'operation=save_gap_responses_raw' in result.error

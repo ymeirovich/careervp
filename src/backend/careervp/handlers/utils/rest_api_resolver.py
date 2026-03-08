@@ -11,7 +11,7 @@ app = APIGatewayRestResolver(enable_validation=True)
 app.enable_swagger(path='/swagger', title='CareerVP API')
 
 
-# Powertools decorators are untyped; silence mypy while keeping the functions typed.
+# Powertools decorator typing now resolves cleanly with current stubs.
 @app.exception_handler(DynamicConfigurationException)
 def handle_dynamic_config_error(ex: DynamicConfigurationException) -> Response[Any]:  # receives exception raised
     logger.exception('failed to load dynamic configuration from AppConfig')

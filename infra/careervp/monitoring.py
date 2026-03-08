@@ -1,9 +1,11 @@
 import aws_cdk.aws_sns as sns
 from aws_cdk import CfnOutput, Duration, RemovalPolicy, aws_apigateway
+from aws_cdk import aws_cloudwatch as cloudwatch
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_kms as kms
 from aws_cdk import aws_lambda as _lambda
+from aws_cdk import aws_logs as logs
 from cdk_monitoring_constructs import (
     AlarmFactoryDefaults,
     CustomMetricGroup,
@@ -134,6 +136,35 @@ class CrudMonitoring(Construct):
                 human_readable_name="Error logs",
                 pattern="ERROR",
                 alarm_friendly_name="error logs",
+            )
+
+            validation_exception_metric_id = (
+                f"{func.node.id}DynamoValidationExceptionMetric"
+            )
+            logs.MetricFilter(
+                self,
+                validation_exception_metric_id,
+                log_group=func.log_group,
+                filter_pattern=logs.FilterPattern.literal('"ValidationException"'),
+                metric_namespace=constants.METRICS_NAMESPACE,
+                metric_name=f"{func.function_name}-DynamoValidationException",
+                metric_value="1",
+                default_value=0,
+            )
+            cloudwatch.Alarm(
+                self,
+                f"{func.node.id}DynamoValidationExceptionAlarm",
+                metric=cloudwatch.Metric(
+                    namespace=constants.METRICS_NAMESPACE,
+                    metric_name=f"{func.function_name}-DynamoValidationException",
+                    statistic="Sum",
+                    period=Duration.minutes(5),
+                ),
+                threshold=1,
+                evaluation_periods=1,
+                datapoints_to_alarm=1,
+                treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+                alarm_name=f"{func.function_name}-DynamoValidationException",
             )
 
         low_level_facade.monitor_dynamo_table(

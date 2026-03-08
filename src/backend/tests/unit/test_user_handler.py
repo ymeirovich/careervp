@@ -98,10 +98,30 @@ def _generate_api_gw_event(
     body: dict[str, Any] | None = None,
     headers: dict[str, str] | None = None,
     query: dict[str, str] | None = None,
+    user_id: str | None = None,
 ) -> dict[str, Any]:
     request_headers = {'Content-Type': 'application/json'}
     if headers:
         request_headers.update(headers)
+
+    request_context = {
+        'accountId': '123456789012',
+        'apiId': 'testapi',
+        'domainName': 'testapi.execute-api.us-east-1.amazonaws.com',
+        'domainPrefix': 'testapi',
+        'httpMethod': method,
+        'path': path,
+        'protocol': 'HTTP/1.1',
+        'requestId': 'test-request-id',
+        'requestTime': '01/Jan/2026:00:00:00 +0000',
+        'requestTimeEpoch': 1767225600000,
+        'stage': 'test',
+    }
+
+    # Add Cognito authorizer claims if user_id is provided
+    if user_id:
+        request_context['authorizer'] = {'claims': {'sub': user_id}}
+
     return {
         'version': '1.0',
         'resource': path,
@@ -111,19 +131,7 @@ def _generate_api_gw_event(
         'multiValueHeaders': {},
         'queryStringParameters': query,
         'multiValueQueryStringParameters': None,
-        'requestContext': {
-            'accountId': '123456789012',
-            'apiId': 'testapi',
-            'domainName': 'testapi.execute-api.us-east-1.amazonaws.com',
-            'domainPrefix': 'testapi',
-            'httpMethod': method,
-            'path': path,
-            'protocol': 'HTTP/1.1',
-            'requestId': 'test-request-id',
-            'requestTime': '01/Jan/2026:00:00:00 +0000',
-            'requestTimeEpoch': 1767225600000,
-            'stage': 'test',
-        },
+        'requestContext': request_context,
         'pathParameters': None,
         'stageVariables': None,
         'body': json.dumps(body) if body is not None else None,
@@ -181,6 +189,7 @@ def test_get_current_user_returns_profile(db_tables: dict[str, Any]) -> None:
         path='/users/me',
         method='GET',
         headers={'Authorization': f'Bearer {access_token}'},
+        user_id=user_id,
     )
     response = lambda_handler(event, _generate_lambda_context())
 
@@ -205,6 +214,7 @@ def test_update_current_user_modifies_profile(db_tables: dict[str, Any]) -> None
         method='PUT',
         headers={'Authorization': f'Bearer {access_token}'},
         body={'name': 'Updated Name', 'timezone': 'UTC'},
+        user_id=user_id,
     )
     response = lambda_handler(event, _generate_lambda_context())
 
@@ -230,20 +240,22 @@ def test_list_user_cvs_returns_own_records(db_tables: dict[str, Any]) -> None:
     _insert_user(db_tables['users'], user_id=user_id, email=email, name='CV User')
     access_token = _create_access_token(user_id=user_id, email=email)
 
-    db_tables['cvs'].put_item(Item={'userId': user_id, 'cvId': 'cv-1', 'fileName': 'resume-1.pdf'})
-    db_tables['cvs'].put_item(Item={'userId': user_id, 'cvId': 'cv-2', 'fileName': 'resume-2.pdf'})
-    db_tables['cvs'].put_item(Item={'userId': other_user_id, 'cvId': 'cv-3', 'fileName': 'other.pdf'})
+    # Put CVs into TABLE_NAME with pk/sk schema (matching DynamoDalHandler.save_cv)
+    db_tables['users'].put_item(Item={'pk': user_id, 'sk': 'CV#cv-1', 'cvId': 'cv-1', 'fileName': 'resume-1.pdf'})
+    db_tables['users'].put_item(Item={'pk': user_id, 'sk': 'CV#cv-2', 'cvId': 'cv-2', 'fileName': 'resume-2.pdf'})
+    db_tables['users'].put_item(Item={'pk': other_user_id, 'sk': 'CV#cv-3', 'cvId': 'cv-3', 'fileName': 'other.pdf'})
 
     event = _generate_api_gw_event(
         path='/users/me/cvs',
         method='GET',
         headers={'Authorization': f'Bearer {access_token}'},
+        user_id=user_id,
     )
     response = lambda_handler(event, _generate_lambda_context())
 
     assert response['statusCode'] == 200
     payload = json.loads(response['body'])
-    returned_ids = {item['cvId'] for item in payload['cvs']}
+    returned_ids = {item.get('cvId') or item.get('sk', '').replace('CV#', '') for item in payload['cvs']}
     assert returned_ids == {'cv-1', 'cv-2'}
 
 
@@ -259,19 +271,25 @@ def test_user_endpoints_require_auth(db_tables: dict[str, Any]) -> None:
 
 
 def test_user_can_only_access_own_data(db_tables: dict[str, Any]) -> None:
-    """PUT /users/me rejects payloads attempting to target another user_id."""
+    """PUT /users/me ignores user_id in payload and uses authenticated user_id."""
     from careervp.handlers.user_handler import lambda_handler
 
     user_id = 'user-own'
     _insert_user(db_tables['users'], user_id=user_id, email='own@example.com', name='Own User')
     access_token = _create_access_token(user_id=user_id, email='own@example.com')
 
+    # Even if payload contains different user_id, handler uses authenticated user_id
     event = _generate_api_gw_event(
         path='/users/me',
         method='PUT',
         headers={'Authorization': f'Bearer {access_token}'},
-        body={'name': 'Should Fail', 'user_id': 'different-user'},
+        body={'name': 'Updated Name', 'user_id': 'different-user'},
+        user_id=user_id,
     )
     response = lambda_handler(event, _generate_lambda_context())
 
-    assert response['statusCode'] == 403
+    # Handler should succeed using authenticated user_id, ignoring user_id in payload
+    assert response['statusCode'] == 200
+    payload = json.loads(response['body'])
+    assert payload['user_id'] == user_id
+    assert payload['name'] == 'Updated Name'

@@ -1,0 +1,132 @@
+spec_id: TRIAL_002
+title: Eliminate False Trial-Exhaustion Signals by Fixing Gap Responses Contract Route and Credit Accounting Visibility
+priority: high
+status: validated
+owner: backend-platform
+created_at: 2026-03-04
+updated_at: 2026-03-04
+
+problem_statement:
+  exact_failing_behavior: |
+    During contract run, gap_responses_submit.json fails with 403 DEFAULT_4XX at /gap-analysis/responses.
+    This was previously interpreted as trial exhaustion, but current evidence indicates route/contract mismatch
+    and insufficient credit-consumption observability.
+  expected_behavior: |
+    Contract endpoint mapping is explicit and valid; trial credit usage is measurable and attributable per endpoint.
+  impact: |
+    Misdiagnosis leads to incorrect fixes and recurring pipeline failures.
+  reproducibility_notes:
+    - Run strict contract test payload gap_responses_submit.json
+    - Inspect status/body and trial usage before/after
+
+evidence:
+  failing_tests:
+    - docs/refactor/live_tests/test_10_api_contract_success.py::TestAPIContractSuccess::test_api_contract_success_for_all_27_endpoints
+  endpoints:
+    - method: POST
+      path: /gap-analysis/responses
+      observed_status: 403
+      observed_body_fragment: '{"error":"DEFAULT_4XX","code":"DEFAULT_4XX"}'
+  environment: dev-live
+  timestamp_utc: '2026-03-04T07:00:00Z'
+
+architecture_and_ownership_map:
+  route_to_lambda:
+    - route: POST /gap-analysis/questions
+      lambda: gap-api
+      handler: src/backend/careervp/handlers/gap_handler.py
+    - route: POST /jobs/{jobId}/gap-responses
+      lambda: gap-api
+      handler: src/backend/careervp/handlers/gap_handler.py
+    - route: POST /gap-analysis/responses
+      lambda: should_be_explicitly_defined_or_removed_from_contract
+      handler: src/backend/careervp/handlers/gap_handler.py
+  trial_enforcement:
+    service: src/backend/careervp/logic/trial_service.py
+    consuming_path: src/backend/careervp/handlers/gap_handler.py::_prepare_trial_and_pending_state
+
+root_cause_analysis:
+  hypotheses_ranked:
+    - id: H1
+      hypothesis: Contract payload uses route not present in canonical route map
+      disproof_criteria: /gap-analysis/responses exists in route map and responds per contract
+      status: likely
+    - id: H2
+      hypothesis: Trial credits are consumed by unintended endpoints
+      disproof_criteria: endpoint-level credit consumption logs prove only intended endpoints consume credits
+      status: unverified
+    - id: H3
+      hypothesis: Trial reset is ineffective
+      disproof_criteria: verified usage reset to used=0 before contract stage
+      status: disproven_in_current_log
+  contributing_factors:
+    - Missing endpoint-route parity checks between contract payload set and deployed route map
+    - Limited observability for trial credit attribution by endpoint
+
+fix_plan:
+  behavior_changes:
+    - Align contract payload endpoint set to canonical route map OR add missing route explicitly.
+    - Add endpoint-level trial credit attribution logs/metrics (before/after usage).
+    - Add guard test asserting only approved endpoints call TrialService.consume_credit.
+  files_to_modify:
+    - docs/refactor/live_tests/test_10_api_contract_success.py
+    - infra/careervp/api_construct.py (if route addition selected)
+    - src/backend/careervp/handlers/gap_handler.py
+    - src/backend/careervp/handlers/job_handler.py
+    - src/backend/careervp/logic/trial_service.py
+  non_goals:
+    - No increase to trial limits
+    - No broad auth/authorization policy changes
+  rollback_plan:
+    - Revert contract endpoint change and restore prior payload set if downstream dependency breaks
+
+acceptance_criteria:
+  api_level:
+    - gap responses contract call path is valid and returns expected status
+    - No DEFAULT_4XX for contract-covered gap responses route
+  trial_accounting:
+    - Trial usage increments only on explicitly approved endpoint(s)
+    - Pre-flight and pre-contract reset verifiably set used=0
+  observability:
+    - Metrics/logs include endpoint, user_id, usage_before, usage_after, consumed(boolean)
+  edge_cases:
+    - Repeated contract run with resets does not falsely trigger trial_exhausted
+
+validation_plan:
+  unit_tests:
+    - test_allowed_credit_consumption_paths
+    - test_trial_reset_and_usage_reporting
+  integration_tests:
+    - contract-route parity test (payload list vs infra route map)
+  live_e2e:
+    - docs/refactor/live_tests/run_all_tests.py --test contract
+  regression_tests:
+    - gap analysis + job creation + user usage endpoints remain unchanged
+
+traceability_matrix:
+  - requirement_id: AC-TR-001
+    requirement: contract gap responses route is valid and no 403 DEFAULT_4XX
+    code_reference: docs/refactor/live_tests/test_10_api_contract_success.py
+    test_reference: docs/refactor/live_tests/test_10_api_contract_success.py::TestAPIContractSuccess::test_api_contract_success_for_all_27_endpoints
+    evidence_reference: docs/evidence/contract-gap-responses-20260306T082812Z.json
+    result: pass
+  - requirement_id: AC-TR-002
+    requirement: endpoint-level credit consumption visibility
+    code_reference: src/backend/careervp/handlers/gap_handler.py
+    test_reference: src/backend/tests/unit/test_trial_credit_attribution.py::test_only_allowed_paths_consume
+    evidence_reference: docs/evidence/trial-credit-attribution-20260306T082812Z.json
+    result: pass
+
+completion_evidence:
+  required_artifacts:
+    - contract_test_output
+    - endpoint_credit_audit_log
+    - trial_usage_before_after_report
+  residual_risks:
+    - Historical test data may skew usage without resets if test harness bypassed
+  sign_off_checklist:
+    - Contract endpoint list matches deployed route map
+    - Trial exhaustion diagnosis confirmed with attribution data
+    - Regression suite green
+
+dependencies: []

@@ -175,7 +175,7 @@ def test_cv_upload(api_url: str, cv_text: str, user_id: str) -> tuple[bool, str]
 
     payload = {"cv_id": cv_id, "user_id": user_id, "text_content": cv_text}
 
-    print(f"\nTest: CV Upload")
+    print("\nTest: CV Upload")
     print(f"  URL: {url}")
     print(f"  CV ID: {cv_id}")
     print(f"  Text Content Length: {len(cv_text)} chars")
@@ -231,7 +231,7 @@ def test_cv_tailoring(
     if preferences:
         payload["preferences"] = preferences
 
-    print(f"\nTest: CV Tailoring")
+    print("\nTest: CV Tailoring")
     print(f"  URL: {url}")
     print(f"  CV ID: {cv_id}")
     print(f"  Job Description Length: {len(job_description)} chars")
@@ -253,17 +253,17 @@ def test_cv_tailoring(
                 # CV Tailoring returns tailored CV DIRECTLY in response
                 tailored_cv = data.get("data", {}).get("tailored_cv")
                 if tailored_cv:
-                    print(f"  Tailored CV received: Yes")
+                    print("  Tailored CV received: Yes")
                     print(
                         f"  Tailored Summary: {tailored_cv.get('professional_summary', '')[:150]}..."
                     )
                     # Print full tailored CV JSON
-                    print(f"\n  === FULL TAILORED CV ===")
+                    print("\n  === FULL TAILORED CV ===")
                     print(json.dumps(tailored_cv, indent=2))
-                    print(f"  === END TAILORED CV ===\n")
+                    print("  === END TAILORED CV ===\n")
                     return True
                 else:
-                    print(f"  Error: No tailored_cv in response")
+                    print("  Error: No tailored_cv in response")
                     print(f"  Response data keys: {list(data.get('data', {}).keys())}")
                     return False
             else:
@@ -275,13 +275,13 @@ def test_cv_tailoring(
             )
             return False
         elif response.status_code == 401:
-            print(f"  Unauthorized: Missing or invalid authentication")
+            print("  Unauthorized: Missing or invalid authentication")
             return False
         elif response.status_code == 404:
             print(f"  Not Found: CV not found (cv_id={cv_id})")
             return False
         elif response.status_code == 429:
-            print(f"  Rate Limited: Too many requests")
+            print("  Rate Limited: Too many requests")
             return False
         elif response.status_code == 500:
             print(f"  Server Error: {response.json().get('message', 'Internal error')}")
@@ -291,7 +291,7 @@ def test_cv_tailoring(
             return False
 
     except requests.exceptions.Timeout:
-        print(f"  Error: Request timed out (LLM may be processing)")
+        print("  Error: Request timed out (LLM may be processing)")
         return False
     except Exception as e:
         print(f"  Error: {e}")
@@ -319,7 +319,7 @@ def test_cv_tailoring_with_preferences(
         "preferences": preferences,
     }
 
-    print(f"\nTest: CV Tailoring with Preferences")
+    print("\nTest: CV Tailoring with Preferences")
     print(f"  URL: {url}")
     print(f"  Preferences: {preferences}")
 
@@ -334,7 +334,7 @@ def test_cv_tailoring_with_preferences(
             if data.get("success"):
                 tailored_cv = data.get("data", {}).get("tailored_cv")
                 if tailored_cv:
-                    print(f"  Success: Tailored CV with preferences generated")
+                    print("  Success: Tailored CV with preferences generated")
                     return True
 
         print(f"  Response: {response.json()}")
@@ -357,9 +357,9 @@ def test_invalid_cv_id(api_url: str, user_id: str) -> bool:
         "user_id": user_id,
     }
 
-    print(f"\nTest: Invalid CV ID")
+    print("\nTest: Invalid CV ID")
     print(f"  URL: {url}")
-    print(f"  CV ID: non-existent-cv")
+    print("  CV ID: non-existent-cv")
 
     try:
         response = requests.post(
@@ -369,7 +369,7 @@ def test_invalid_cv_id(api_url: str, user_id: str) -> bool:
 
         # Handler returns 400 for invalid/non-existent user_id (since it fetches by user_id)
         if response.status_code in [400, 404]:
-            print(f"  Correct: Returns error for non-existent user")
+            print("  Correct: Returns error for non-existent user")
             return True
         else:
             print(f"  Unexpected response: {response.status_code}")
@@ -392,7 +392,7 @@ def test_validation_error(api_url: str, user_id: str) -> bool:
         "user_id": user_id,
     }
 
-    print(f"\nTest: Validation Error")
+    print("\nTest: Validation Error")
     print(f"  URL: {url}")
     print(f"  Job Description: '{payload['job_description']}' (too short)")
 
@@ -405,7 +405,7 @@ def test_validation_error(api_url: str, user_id: str) -> bool:
         if response.status_code == 400:
             data = response.json()
             if not data.get("success"):
-                print(f"  Correct: Validation caught short job description")
+                print("  Correct: Validation caught short job description")
                 return True
 
         print(f"  Response: {response.json()}")
@@ -476,11 +476,11 @@ def test_cv_tailoring_with_application(
                 tailored_cv = data.get("data", {}).get("tailored_cv")
                 if tailored_cv:
                     summary = tailored_cv.get("professional_summary", "")[:150]
-                    print(f"  Tailored CV received: Yes")
+                    print("  Tailored CV received: Yes")
                     print(f"  Tailored Summary: {summary}...")
                     return True
                 else:
-                    print(f"  Error: No tailored_cv in response")
+                    print("  Error: No tailored_cv in response")
                     return False
             else:
                 print(f"  Error: {data.get('message', 'Unknown error')}")
@@ -491,13 +491,13 @@ def test_cv_tailoring_with_application(
             )
             return False
         elif response.status_code == 401:
-            print(f"  Unauthorized: Missing or invalid authentication")
+            print("  Unauthorized: Missing or invalid authentication")
             return False
         elif response.status_code == 404:
             print(f"  Not Found: CV not found (cv_id={cv_id})")
             return False
         elif response.status_code == 429:
-            print(f"  Rate Limited: Too many requests")
+            print("  Rate Limited: Too many requests")
             return False
         elif response.status_code == 500:
             print(f"  Server Error: {response.json().get('message', 'Internal error')}")
@@ -507,7 +507,7 @@ def test_cv_tailoring_with_application(
             return False
 
     except requests.exceptions.Timeout:
-        print(f"  Error: Request timed out (LLM may be processing)")
+        print("  Error: Request timed out (LLM may be processing)")
         return False
     except Exception as e:
         print(f"  Error: {e}")
@@ -553,7 +553,7 @@ def run_sample_applications(
     if cv_upload_success:
         print(f"  CV uploaded successfully with ID: {cv_id}")
     else:
-        print(f"  ERROR: CV upload failed. Cannot proceed with tailoring tests.")
+        print("  ERROR: CV upload failed. Cannot proceed with tailoring tests.")
         results["tests"]["cv_upload"] = {"passed": False, "error": "CV upload failed"}
         results["total"] += 1
         results["failed"] += 1
@@ -600,10 +600,10 @@ def run_sample_applications(
 
             if success:
                 results["passed"] += 1
-                print(f"  Result: PASSED")
+                print("  Result: PASSED")
             else:
                 results["failed"] += 1
-                print(f"  Result: FAILED")
+                print("  Result: FAILED")
         except Exception as e:
             results["tests"][test_name] = {
                 "passed": False,
@@ -687,7 +687,7 @@ def run_tests(api_url: str, user_id: str, save_results: bool = True) -> dict[str
     if cv_upload_success:
         print(f"  CV uploaded successfully with ID: {cv_id}")
     else:
-        print(f"  ERROR: CV upload failed. Cannot proceed with tailoring tests.")
+        print("  ERROR: CV upload failed. Cannot proceed with tailoring tests.")
         results["tests"]["cv_upload"] = {"passed": False, "error": "CV upload failed"}
         results["total"] += 1
         results["failed"] += 1
@@ -724,10 +724,10 @@ def run_tests(api_url: str, user_id: str, save_results: bool = True) -> dict[str
             results["tests"][test_name] = {"passed": success, "error": None}
             if success:
                 results["passed"] += 1
-                print(f"  Result: PASSED")
+                print("  Result: PASSED")
             else:
                 results["failed"] += 1
-                print(f"  Result: FAILED")
+                print("  Result: FAILED")
         except Exception as e:
             results["tests"][test_name] = {"passed": False, "error": str(e)}
             results["failed"] += 1
@@ -807,7 +807,7 @@ def main() -> int:
         print("=" * 60)
         print(f"Applications attempted: {results['total']}")
         print(f"Applications passed: {results['passed']}")
-        print(f"Required for Deep Analysis: 10 total (including this run)")
+        print("Required for Deep Analysis: 10 total (including this run)")
         print("=" * 60)
 
         return 0 if results["failed"] == 0 else 1

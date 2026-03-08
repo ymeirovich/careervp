@@ -134,15 +134,31 @@ if [ -n "$IN_PROGRESS_CHANGESETS" ]; then
         if [ -n "$changeset_id" ]; then
             log_info "  Waiting for changeset: $changeset_id"
             # Wait for the changeset to complete (either succeed or fail)
+            ATTEMPTS=0
+            MAX_ATTEMPTS=40
             while true; do
-                CS_STATUS=$(aws cloudformation describe-change-set \
+                RAW_CS_STATUS=$(aws cloudformation describe-change-set \
                     --change-set-name "$changeset_id" \
                     --region "$REGION" \
                     --query "Status" \
-                    --output text 2>/dev/null) || CS_STATUS="UNKNOWN"
+                    --output text 2>/dev/null || echo "UNKNOWN")
+                CS_STATUS=$(echo "$RAW_CS_STATUS" | tr -d '\r' | xargs)
                 log_info "  Changeset status: $CS_STATUS"
-                if [ "$CS_STATUS" = "CREATE_COMPLETE" ] || [ "$CS_STATUS" = "FAILED" ]; then
-                    break
+                case "$CS_STATUS" in
+                    CREATE_COMPLETE|FAILED|DELETE_COMPLETE)
+                        break
+                        ;;
+                    CREATE_PENDING|CREATE_IN_PROGRESS|DELETE_PENDING|DELETE_IN_PROGRESS)
+                        ;;
+                    *)
+                        log_warn "  Unexpected changeset status '$CS_STATUS'. Continuing with cleanup."
+                        break
+                        ;;
+                esac
+                ATTEMPTS=$((ATTEMPTS + 1))
+                if [ "$ATTEMPTS" -ge "$MAX_ATTEMPTS" ]; then
+                    log_error "  Timed out waiting for changeset terminal state: $changeset_id"
+                    exit 1
                 fi
                 log_info "  Waiting 30 seconds..."
                 sleep 30
@@ -156,7 +172,7 @@ fi
 CHANGESET_IDS=$(aws cloudformation list-change-sets \
     --stack-name "$STACK_NAME" \
     --region "$REGION" \
-    --query "Summaries[?Status==\`FAILED\` || Status==\`OBSOLETE\`].ChangeSetId" \
+    --query "Summaries[?(Status==\`FAILED\` || Status==\`OBSOLETE\`) || (Status==\`CREATE_COMPLETE\` && ExecutionStatus==\`AVAILABLE\`)].ChangeSetId" \
     --output text 2>/dev/null) || CHANGESET_IDS=""
 
 if [ -n "$CHANGESET_IDS" ]; then

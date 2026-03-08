@@ -52,6 +52,9 @@ def auth_test_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None
     monkeypatch.setenv('TABLE_NAME', 'test-users-table')
     monkeypatch.setenv('JWT_PRIVATE_KEY', TEST_PRIVATE_KEY)
     monkeypatch.setenv('JWT_PUBLIC_KEY', TEST_PUBLIC_KEY)
+    # Cognito environment variables for new auth flow
+    monkeypatch.setenv('COGNITO_CLIENT_ID', 'test-client-id')
+    monkeypatch.setenv('COGNITO_USER_POOL_ID', 'us-east-1_test-pool')
 
     from careervp.handlers.auth_handler import _reset_auth_service_cache
 

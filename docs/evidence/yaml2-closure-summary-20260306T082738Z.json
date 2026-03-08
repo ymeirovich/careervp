@@ -1,0 +1,80 @@
+{
+  "generated_at": "20260306T082738Z",
+  "generator": "RECOVERY_008 closure script",
+  "ac_FINAL_301": "pass",
+  "ac_FINAL_302": "deferred - blocked by Anthropic API credits (live E2E requires LLM calls)",
+  "ac_FINAL_303": "deferred - depends on live suite (same blocker)",
+  "yaml2_specs": [
+    {
+      "spec_id": "COVER_LETTER_002",
+      "file": "cover_letter_list_roundtrip.yaml",
+      "status": "validated",
+      "recovery_step": "RECOVERY_003"
+    },
+    {
+      "spec_id": "CV_TAILORING_002",
+      "file": "cv_tailoring_delete_route_completion.yaml",
+      "status": "validated",
+      "recovery_step": "RECOVERY_005"
+    },
+    {
+      "spec_id": "GAP_GET_002",
+      "file": "gap_questions_read_after_write.yaml",
+      "status": "validated",
+      "recovery_step": "RECOVERY_002"
+    },
+    {
+      "spec_id": "INTERVIEW_PREP_002",
+      "file": "interview_prep_status_schema_alignment.yaml",
+      "status": "validated",
+      "recovery_step": "RECOVERY_006"
+    },
+    {
+      "spec_id": "INTERVIEW_PREP_003",
+      "file": "interview_prep_agentic_architecture_alignment.yaml",
+      "status": "validated",
+      "recovery_step": "RECOVERY_006"
+    },
+    {
+      "spec_id": "TRIAL_002",
+      "file": "trial_and_contract_route_alignment.yaml",
+      "status": "validated",
+      "recovery_step": "RECOVERY_007"
+    },
+    {
+      "spec_id": "VPR_LIST_METADATA_001",
+      "file": "vpr_list_metadata_backfill.yaml",
+      "status": "validated",
+      "recovery_step": "RECOVERY_004"
+    }
+  ],
+  "spec_suite_result": {
+    "unit_tests": {
+      "count": 11,
+      "result": "pass",
+      "passed": 185,
+      "failed": 0,
+      "skipped": 3
+    },
+    "integration_tests": {
+      "count": 7,
+      "result": "pass"
+    },
+    "all_spec_required_tests": "pass"
+  },
+  "recovery_steps_completed": [
+    "RECOVERY_002",
+    "RECOVERY_003",
+    "RECOVERY_004",
+    "RECOVERY_005",
+    "RECOVERY_006",
+    "RECOVERY_007",
+    "RECOVERY_008"
+  ],
+  "confidence_score": 95,
+  "confidence_basis": "All unit+integration AC tests pass. Live E2E deferred pending Anthropic API credits.",
+  "blocked_regressions": [],
+  "known_blockers": [
+    "Live E2E (AC-FINAL-302/303) requires Anthropic API key with credits"
+  ]
+}

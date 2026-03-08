@@ -293,3 +293,32 @@ class TestLLMClientCircuitBreaker:
         assert result == {'text': 'cached fallback'}
         assert mock_cache_get.call_count == 2
         assert mock_client.messages.create.call_count == 0
+
+    @patch('careervp.logic.llm_client.time.sleep', autospec=True)
+    def test_llm_client_retries_on_transient_529_and_recovers(self, mock_sleep: MagicMock):
+        class OverloadedError(Exception):
+            status_code = 529
+
+        transient_error = OverloadedError("Error code: 529 - {'type': 'overloaded_error', 'message': 'Overloaded'}")
+        llm_client, mock_client = self._build_client()
+        mock_client.messages.create.side_effect = [transient_error, _anthropic_text_response('{"status":"ok"}')]
+
+        result = llm_client.generate(prompt='return {"ok": true}')
+
+        assert result == {'status': 'ok'}
+        assert mock_client.messages.create.call_count == 2
+        mock_sleep.assert_called_once()
+
+    @patch('careervp.logic.llm_client.time.sleep', autospec=True)
+    def test_llm_client_exhausts_transient_retries_and_raises(self, mock_sleep: MagicMock):
+        class OverloadedError(Exception):
+            status_code = 529
+
+        transient_error = OverloadedError("Error code: 529 - {'type': 'overloaded_error', 'message': 'Overloaded'}")
+        llm_client, mock_client = self._build_client(create_side_effect=transient_error)
+
+        with pytest.raises(BedrockInvocationError, match='Failed to invoke LLM model'):
+            llm_client.generate(prompt='return {"ok": true}')
+
+        assert mock_client.messages.create.call_count == 3
+        assert mock_sleep.call_count == 2

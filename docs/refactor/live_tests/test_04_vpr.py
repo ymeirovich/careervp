@@ -1,5 +1,5 @@
 # Live Tests - VPR (Value Proposition Report) Endpoints
-# Tests: POST /vpr/generate, GET /vpr/{vprId}, GET /users/me/vprs
+# Tests: POST /vpr/generate, GET /vpr/{vprId}/status, GET /vprs
 
 import os
 import json
@@ -13,6 +13,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from .conftest import API_BASE, TEST_USER_ID, get_auth_headers, save_test_ids
+from .quality_assertions import assert_vpr_quality
 
 # Import test data from previous tests
 from .test_01_auth_health import test_data
@@ -46,7 +47,7 @@ class TestVPREndpoints:
         # Build payload using test data from previous tests
         cv_id = test_data.get("cv_id") or f"cv_{TEST_USER_ID}"
         job_id = test_data.get("job_id") or f"job_{TEST_USER_ID}"
-        gap_response_ids = test_data.get("gap_response_ids", ["gap_test_001"])
+        gap_response_ids = test_data.get("gap_response_ids") or ["gap_test_001"]
 
         payload = {
             "cv_id": cv_id,
@@ -102,78 +103,98 @@ class TestVPREndpoints:
             )
 
     def test_get_vpr_status(self):
-        """Test GET /vpr/{vprId} - poll VPR status."""
-        vpr_id = test_data.get("vpr_id") or "test-vpr-id"
+        """Test GET /vpr/{vprId}/status - poll VPR status."""
+        # Auto-generate VPR if none exists
+        if not test_data.get("vpr_id"):
+            print("No VPR found, generating first...")
+            self.test_generate_vpr()
+            # Wait for async processing
+            import time
 
-        url = f"{self.base_url}/vpr/{vpr_id}"
+            time.sleep(15)
+
+        vpr_id = test_data.get("vpr_id")
+        if not vpr_id:
+            pytest.skip("No VPR ID available - generation may have failed")
+
+        url = f"{self.base_url}/vpr/{vpr_id}/status"
         headers = get_auth_headers()
 
         response = requests.get(url, headers=headers, timeout=10)
 
-        # Accept 200 (success), 404 (not found), or 401 (auth required)
-        if response.status_code == 200:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw_text": response.text}
 
-            print_response(
-                "test_get_vpr_status", f"GET /vpr/{vpr_id}", response.status_code, data
-            )
-
-            status = data.get("status", "unknown")
-            print(f"✓ GET /vpr/{vpr_id} - Status: {status}")
-        elif response.status_code == 404:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
-
-            print_response(
-                "test_get_vpr_status", f"GET /vpr/{vpr_id}", response.status_code, data
-            )
-            print(f"⚠ GET /vpr/{vpr_id} - VPR not found")
-        else:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
-
-            print_response(
-                "test_get_vpr_status", f"GET /vpr/{vpr_id}", response.status_code, data
-            )
-            print(f"⚠ GET /vpr/{vpr_id} - Status {response.status_code}")
+        print_response(
+            "test_get_vpr_status",
+            f"GET /vpr/{vpr_id}/status",
+            response.status_code,
+            data,
+        )
+        assert response.status_code == 200, (
+            f"GET /vpr/{vpr_id}/status returned {response.status_code}"
+        )
+        status = data.get("status", "unknown")
+        if status == "completed":
+            assert_vpr_quality(data)
+        print(f"✓ GET /vpr/{vpr_id}/status - Status: {status}")
 
     def test_list_vprs(self):
-        """Test GET /users/me/vprs - list user's VPRs."""
-        url = f"{self.base_url}/users/me/vprs"
+        """Test GET /vprs - list user's VPRs."""
+        # Ensure at least one VPR request exists for deterministic list validation.
+        if not test_data.get("vpr_id"):
+            print("No VPR found, generating first...")
+            self.test_generate_vpr()
+
+        vpr_id = test_data.get("vpr_id")
+        if not vpr_id:
+            pytest.skip("No VPR ID available for list validation")
+
+        url = f"{self.base_url}/vprs"
         headers = get_auth_headers()
+        max_attempts = 12
+        poll_interval = 5
+        last_data: Any = {}
+        last_status = 0
 
-        response = requests.get(url, headers=headers, timeout=10)
-
-        # Accept 200 (success) or 401 (auth required)
-        if response.status_code == 200:
+        for attempt in range(max_attempts):
+            response = requests.get(url, headers=headers, timeout=10)
+            last_status = response.status_code
             try:
                 data = response.json()
             except Exception:
                 data = {"raw_text": response.text}
+            last_data = data
 
-            print_response(
-                "test_list_vprs", "GET /users/me/vprs", response.status_code, data
+            print_response("test_list_vprs", "GET /vprs", response.status_code, data)
+            assert response.status_code == 200, (
+                f"GET /vprs returned {response.status_code}"
             )
 
             vprs = data.get("vprs", [])
-            print(f"✓ GET /users/me/vprs - Found {len(vprs)} VPR(s)")
-        else:
-            try:
-                data = response.json()
-            except Exception:
-                data = {"raw_text": response.text}
+            if any(
+                str(item.get("id")) == str(vpr_id)
+                for item in vprs
+                if isinstance(item, dict)
+            ):
+                print(
+                    f"✓ GET /vprs - Found {len(vprs)} VPR(s), includes generated ID {vpr_id}"
+                )
+                return
 
-            print_response(
-                "test_list_vprs", "GET /users/me/vprs", response.status_code, data
-            )
-            print(f"⚠ GET /users/me/vprs - Status {response.status_code}")
+            if attempt < max_attempts - 1:
+                print(
+                    f"  VPR list does not yet include {vpr_id} "
+                    f"(attempt {attempt + 1}/{max_attempts})"
+                )
+                time.sleep(poll_interval)
+
+        pytest.fail(
+            f"GET /vprs did not include generated VPR ID {vpr_id} after "
+            f"{max_attempts * poll_interval}s (last status={last_status}, last body={last_data})"
+        )
 
     def test_vpr_async_polling(self):
         """Test VPR async polling lifecycle."""
@@ -184,7 +205,7 @@ class TestVPREndpoints:
         if not vpr_id:
             pytest.skip("No VPR ID available for polling test")
 
-        url = f"{self.base_url}/vpr/{vpr_id}"
+        url = f"{self.base_url}/vpr/{vpr_id}/status"
         headers = get_auth_headers()
 
         # Poll for completion (max 2 minutes)
@@ -202,7 +223,7 @@ class TestVPREndpoints:
 
                 print_response(
                     "test_vpr_async_polling",
-                    f"GET /vpr/{vpr_id}",
+                    f"GET /vpr/{vpr_id}/status",
                     response.status_code,
                     data,
                 )
@@ -210,6 +231,7 @@ class TestVPREndpoints:
                 status = data.get("status", "")
 
                 if status == "completed":
+                    assert_vpr_quality(data)
                     print(f"✓ VPR polling - Completed after {attempt * poll_interval}s")
                     return
                 elif status in ["failed", "error"]:
@@ -222,4 +244,4 @@ class TestVPREndpoints:
 
             time.sleep(poll_interval)
 
-        print(f"⚠ VPR polling - Timeout after {max_attempts * poll_interval}s")
+        pytest.fail(f"VPR polling timed out after {max_attempts * poll_interval}s")

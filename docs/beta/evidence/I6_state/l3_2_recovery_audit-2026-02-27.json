@@ -1,0 +1,54 @@
+{
+  "step_id": "L3.2",
+  "date": "2026-02-27",
+  "invariant": "I6",
+  "status": "PASS",
+  "branch": "beta/fix-gaps1",
+  "strict_test_first": {
+    "red": {
+      "command": "cd src/backend && uv run pytest tests/unit/test_l3_application_recovery.py -v --tb=short",
+      "result": "FAILED",
+      "failure": "ModuleNotFoundError + route wiring failures (application route still mapped to job handler)"
+    },
+    "green": {
+      "command": "cd src/backend && uv run pytest tests/unit/test_l3_application_recovery.py -v --tb=short",
+      "result": "PASSED",
+      "summary": {
+        "passed": 17,
+        "failed": 0,
+        "errors": 0
+      }
+    }
+  },
+  "validation": {
+    "ruff": {
+      "command": "cd src/backend && uv run ruff check careervp/handlers/application_handler.py careervp/handlers/job_handler.py tests/unit/test_l3_application_recovery.py",
+      "result": "PASSED"
+    },
+    "mypy": {
+      "command": "cd src/backend && uv run mypy careervp/handlers/application_handler.py --strict",
+      "result": "PASSED"
+    },
+    "infra_ruff": {
+      "command": "cd infra && uv run ruff check careervp/api_construct.py",
+      "result": "PASSED"
+    }
+  },
+  "api_route": {
+    "path": "/applications/{application_id}",
+    "method": "GET",
+    "registered_in": "infra/careervp/api_construct.py",
+    "handler": "self.application_api_func"
+  },
+  "security_checks": {
+    "identity_source": "requestContext.authorizer.claims.sub / jwt.claims.sub",
+    "ownership_enforced": true,
+    "job_handler_alias_removed": true
+  },
+  "artifacts": [
+    "src/backend/careervp/handlers/application_handler.py",
+    "src/backend/careervp/handlers/job_handler.py",
+    "src/backend/tests/unit/test_l3_application_recovery.py",
+    "infra/careervp/api_construct.py"
+  ]
+}

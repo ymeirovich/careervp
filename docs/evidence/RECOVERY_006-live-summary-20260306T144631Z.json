@@ -1,0 +1,13 @@
+{
+  "step_id": "RECOVERY_006",
+  "test_file": "docs/refactor/live_tests/test_08_interview_prep.py",
+  "command": "uv run pytest docs/refactor/live_tests/test_08_interview_prep.py -q",
+  "status": "fail",
+  "returncode": 1,
+  "timed_out": false,
+  "error": "",
+  "started_at_utc": "2026-03-06T14:50:06.485058Z",
+  "finished_at_utc": "2026-03-06T14:50:31.952632Z",
+  "duration_seconds": 25.468,
+  "log_path": "docs/evidence/RECOVERY_006-live-20260306T144631Z.log"
+}

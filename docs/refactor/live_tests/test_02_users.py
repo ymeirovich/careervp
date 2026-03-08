@@ -1,5 +1,5 @@
 # Live Tests - User Management Endpoints
-# Tests: GET /users/me, PUT /users/me, POST /users/me/cv, GET /users/me/cvs
+# Tests: GET /users/me, PUT /users/me, POST /users/me/cv, GET /users/me/cv
 
 import os
 import json
@@ -18,6 +18,7 @@ from .conftest import (
     read_sample_file,
     save_test_ids,
 )
+from .quality_assertions import assert_cv_list_quality
 
 # Import test data from auth tests
 from .test_01_auth_health import test_data
@@ -143,8 +144,8 @@ class TestUserEndpoints:
             )
 
     def test_list_user_cvs(self):
-        """Test GET /users/me/cvs - list user's CVs."""
-        url = f"{self.base_url}/users/me/cvs"
+        """Test GET /users/me/cv - list user's CVs."""
+        url = f"{self.base_url}/users/me/cv"
         headers = get_auth_headers()
 
         response = requests.get(url, headers=headers, timeout=10)
@@ -156,12 +157,12 @@ class TestUserEndpoints:
             data = {"raw_text": response.text}
 
         print_response(
-            "test_list_user_cvs", "GET /users/me/cvs", response.status_code, data
+            "test_list_user_cvs", "GET /users/me/cv", response.status_code, data
         )
 
-        # Accept 200 (success) or 401 (auth required)
-        if response.status_code == 200:
-            cvs = data.get("cvs", [])
-            print(f"✓ GET /users/me/cvs - Found {len(cvs)} CV(s)")
-        else:
-            print(f"⚠ GET /users/me/cvs - Status {response.status_code}")
+        assert response.status_code == 200, (
+            f"GET /users/me/cv returned {response.status_code}"
+        )
+        assert_cv_list_quality(data)
+        cvs = data.get("cvs", [])
+        print(f"✓ GET /users/me/cv - Found {len(cvs)} CV(s)")

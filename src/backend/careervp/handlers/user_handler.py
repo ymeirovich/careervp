@@ -4,7 +4,8 @@ User profile management handler.
 Implements OpenAPI endpoints:
 - GET /users/me
 - PUT /users/me
-- GET /users/me/cvs
+- GET /users/me/cv
+- GET /users/me/usage
 """
 
 import base64
@@ -20,21 +21,16 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 from boto3.dynamodb.conditions import Key
 from pydantic import ValidationError
 
+from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.user_repository import UserRepository
+from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.utils.observability import logger, tracer
 from careervp.handlers.utils.rest_api_resolver import app
-from careervp.logic.auth_service import AuthService, ConfigurationError, InvalidTokenError
+from careervp.logic.trial_service import TrialService
 from careervp.models.api_models import UpdateUserRequest
 
-_auth_service: AuthService | None = None
 _user_repository: UserRepository | None = None
-
-
-def _get_auth_service() -> AuthService:
-    global _auth_service
-    if _auth_service is None:
-        _auth_service = AuthService.from_env()
-    return _auth_service
+_trial_service: TrialService | None = None
 
 
 def _get_user_repository() -> UserRepository:
@@ -46,9 +42,9 @@ def _get_user_repository() -> UserRepository:
 
 def _reset_handler_caches() -> None:
     """Testing hook to reset module-level dependency caches."""
-    global _auth_service, _user_repository
-    _auth_service = None
+    global _user_repository, _trial_service
     _user_repository = None
+    _trial_service = None
 
 
 def _json_response(status: HTTPStatus, body: dict[str, Any]) -> Response[str]:
@@ -59,73 +55,37 @@ def _json_response(status: HTTPStatus, body: dict[str, Any]) -> Response[str]:
     )
 
 
-def _extract_claim_user_id(claims: Any) -> str | None:
-    if not isinstance(claims, dict):
+def _get_trial_service() -> TrialService | None:
+    global _trial_service
+    if _trial_service is not None:
+        return _trial_service
+    table_name = os.getenv('USERS_TABLE_NAME') or os.getenv('DYNAMODB_TABLE_NAME') or os.getenv('TABLE_NAME')
+    if not table_name:
         return None
-    for key in ('sub', 'user_id', 'cognito:username'):
-        value = claims.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
+    _trial_service = TrialService(dal=DynamoDalHandler(table_name=table_name))
+    return _trial_service
 
 
 def _extract_user_id_from_authorizer() -> str | None:
+    # Try raw_event first (contains original event dict)
+    raw_event = getattr(app.current_event, 'raw_event', None)
+    if isinstance(raw_event, dict):
+        user_id = extract_user_id(raw_event)
+        if user_id:
+            return user_id
+
+    # Fallback: try request_context (Powertools object)
     request_context = app.current_event.request_context
-    if not isinstance(request_context, dict):
-        return None
+    if isinstance(request_context, dict):
+        return extract_user_id({'requestContext': request_context})
 
-    authorizer = request_context.get('authorizer')
-    if not isinstance(authorizer, dict):
-        return None
-
-    claims = authorizer.get('claims')
-    claim_user_id = _extract_claim_user_id(claims)
-    if claim_user_id:
-        return claim_user_id
-
-    jwt_context = authorizer.get('jwt')
-    if isinstance(jwt_context, dict):
-        jwt_claims = jwt_context.get('claims')
-        jwt_user_id = _extract_claim_user_id(jwt_claims)
-        if jwt_user_id:
-            return jwt_user_id
-
-    for key in ('user_id', 'principalId', 'principal_id'):
-        value = authorizer.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
-
-
-def _extract_bearer_token() -> str | None:
-    headers = app.current_event.headers or {}
-    auth_header = headers.get('Authorization') or headers.get('authorization')
-    if not isinstance(auth_header, str):
-        return None
-    if not auth_header.startswith('Bearer '):
-        return None
-    token = auth_header[7:].strip()
-    return token if token else None
+    # Convert Powertools object to dict
+    rc_dict = dict(request_context)
+    return extract_user_id({'requestContext': rc_dict})
 
 
 def _get_authenticated_user_id() -> str | None:
-    authorizer_user_id = _extract_user_id_from_authorizer()
-    if authorizer_user_id:
-        return authorizer_user_id
-
-    token = _extract_bearer_token()
-    if not token:
-        return None
-
-    try:
-        payload = _get_auth_service().validate_token(token, expected_token_type='access')
-    except (InvalidTokenError, ConfigurationError):
-        return None
-
-    user_id = payload.get('user_id') or payload.get('sub')
-    if isinstance(user_id, str) and user_id.strip():
-        return user_id.strip()
-    return None
+    return _extract_user_id_from_authorizer()
 
 
 def _parse_limit() -> int:
@@ -163,13 +123,16 @@ def _encode_cursor(last_evaluated_key: dict[str, Any] | None) -> str | None:
 
 
 def _list_user_cvs(user_id: str, limit: int, cursor: dict[str, Any] | None) -> tuple[list[dict[str, Any]], str | None]:
-    table_name = os.environ.get('CVS_TABLE_NAME')
+    # Use the same table as cv_upload_handler (TABLE_NAME from env)
+    table_name = os.environ.get('TABLE_NAME')
     if not table_name:
+        logger.warning('TABLE_NAME not configured for CV list')
         return [], None
 
     table = boto3.resource('dynamodb').Table(table_name)
+    # Query using pk=user_id and sk begins_with 'CV#' (same schema as DynamoDalHandler.save_cv)
     query_args: dict[str, Any] = {
-        'KeyConditionExpression': Key('userId').eq(user_id),
+        'KeyConditionExpression': Key('pk').eq(user_id) & Key('sk').begins_with('CV#'),
         'Limit': limit,
     }
     if cursor:
@@ -195,9 +158,9 @@ def get_current_user() -> Response[str]:
     if not user_id:
         return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Authentication required'})
 
-    user = _get_user_repository().get_user(user_id)
+    user = _get_user_repository().ensure_user(user_id)
     if user is None:
-        return _json_response(HTTPStatus.NOT_FOUND, {'error': 'User profile not found'})
+        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Failed to initialize user profile'})
     return _json_response(HTTPStatus.OK, user.to_api_dict())
 
 
@@ -216,10 +179,6 @@ def update_current_user() -> Response[str]:
     except (ValidationError, ValueError, TypeError) as exc:
         logger.warning('Invalid update user payload', error=str(exc))
         return _json_response(HTTPStatus.BAD_REQUEST, {'error': 'Invalid request payload'})
-
-    payload_user_id = raw_payload.get('user_id')
-    if isinstance(payload_user_id, str) and payload_user_id and payload_user_id != user_id:
-        return _json_response(HTTPStatus.FORBIDDEN, {'error': 'Cannot modify another user profile'})
 
     try:
         payload = UpdateUserRequest.model_validate(
@@ -241,13 +200,14 @@ def update_current_user() -> Response[str]:
     if isinstance(payload_preferences, dict):
         update_data['preferences'] = payload_preferences
 
-    user = _get_user_repository().update_user(user_id, update_data)
+    user = _get_user_repository().ensure_user(user_id, update_data)
     if user is None:
-        return _json_response(HTTPStatus.NOT_FOUND, {'error': 'User profile not found'})
+        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Failed to update user profile'})
     return _json_response(HTTPStatus.OK, user.to_api_dict())
 
 
-@app.get('/users/me/cvs')
+@app.get('/users/me/cv')
+@app.get('/users/me/cvs')  # Backward-compatible alias.
 @tracer.capture_method(capture_response=False)
 def list_user_cvs() -> Response[str]:
     """List current user's CV records."""
@@ -263,6 +223,71 @@ def list_user_cvs() -> Response[str]:
         'cursor': next_cursor or '',
     }
     return _json_response(HTTPStatus.OK, body)
+
+
+@app.get('/users/me/usage')
+@tracer.capture_method(capture_response=False)
+def get_usage_snapshot() -> Response[str]:
+    """Return user usage snapshot for the authenticated user."""
+    user_id = _get_authenticated_user_id()
+    if not user_id:
+        return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Authentication required'})
+
+    trial_service = _get_trial_service()
+    if trial_service is None:
+        return _json_response(
+            HTTPStatus.OK,
+            {
+                'trial': {
+                    'active': True,
+                    'days_elapsed': 0,
+                    'days_remaining': 14,
+                    'ends_at': None,
+                },
+                'applications': {
+                    'used': 0,
+                    'remaining': 3,
+                },
+            },
+        )
+
+    usage = trial_service.get_usage(user_id)
+    return _json_response(
+        HTTPStatus.OK,
+        {
+            'trial': {
+                'active': bool(usage.get('trial_active', False)),
+                'days_elapsed': int(usage.get('days_elapsed', 0)),
+                'days_remaining': int(usage.get('days_remaining', 0)),
+                'ends_at': usage.get('trial_ends_at'),
+            },
+            'applications': {
+                'used': int(usage.get('applications_used', 0)),
+                'remaining': int(usage.get('credits_remaining', 0)),
+            },
+        },
+    )
+
+
+@app.post('/users/me/trial/reset')
+@tracer.capture_method(capture_response=False)
+def reset_user_trial() -> Response[str]:
+    """Reset trial usage for the authenticated user (test/admin use)."""
+    user_id = _get_authenticated_user_id()
+    if not user_id:
+        return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Authentication required'})
+
+    trial_service = _get_trial_service()
+    if trial_service is None:
+        return _json_response(HTTPStatus.SERVICE_UNAVAILABLE, {'error': 'Trial service unavailable'})
+
+    try:
+        trial_service.reset_trial(user_id)
+    except Exception as exc:
+        logger.exception('Failed to reset trial', user_id=user_id, error=str(exc))
+        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Failed to reset trial'})
+
+    return _json_response(HTTPStatus.OK, {'status': 'reset', 'message': 'Trial reset successfully'})
 
 
 @logger.inject_lambda_context(correlation_id_path=API_GATEWAY_REST)

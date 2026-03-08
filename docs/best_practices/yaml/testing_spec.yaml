@@ -1,0 +1,491 @@
+# CareerVP Testing Specification
+# Machine-readable YAML format for automated validation
+
+spec_version: "1.0"
+date: "2026-02-25"
+purpose: "Testing standards combining codebase conventions with AWS Well-Architected Framework"
+enforcement: "All new tests must follow these patterns"
+
+# =============================================================================
+# SECTION 1: TEST ORGANIZATION
+# =============================================================================
+test_organization:
+  section: "1. Test Organization"
+
+  rule_1_1:
+    id: "TEST_DIRECTORY_STRUCTURE"
+    name: "Layered Test Directory Structure"
+    severity: "required"
+    description: "Organize tests by feature and type"
+    status: "required"
+
+    structure: |
+      tests/
+      ├── unit/                    # Pure unit tests
+      ├── integration/              # Component integration tests
+      ├── e2e/                     # End-to-end tests
+      └── {feature}/
+          ├── unit/
+          ├── integration/
+          └── e2e/
+
+    codebase_example: |
+      tests/
+      ├── cover-letter/
+      │   ├── unit/
+      │   ├── integration/
+      │   ├── e2e/
+      │   └── conftest.py
+      └── vpr-async/
+          ├── unit/
+          ├── integration/
+          └── e2e/
+
+    aws_waf_note: "AWS Well-Architected - Reliability: Well-organized tests enable faster debugging"
+
+  rule_1_2:
+    id: "TEST_NAMING_CONVENTION"
+    name: "Consistent Test Naming"
+    severity: "required"
+    description: "Follow pytest naming conventions"
+    status: "required"
+
+    patterns:
+      - "test_*.py"
+      - "Test* class"
+      - "test_* function"
+
+  rule_1_3:
+    id: "TEST_PYTEST_CONFIG"
+    name: "Configure pytest Markers"
+    severity: "required"
+    description: "Use markers for test categorization"
+    status: "required"
+
+    required_markers:
+      - "@pytest.mark.unit"
+      - "@pytest.mark.integration"
+      - "@pytest.mark.e2e"
+      - "@pytest.mark.slow"
+
+    codebase_example: |
+      # pytest.ini
+      [pytest]
+      markers =
+          unit: unit tests
+          integration: integration tests
+          e2e: end-to-end tests
+          slow: slow-running tests
+
+# =============================================================================
+# SECTION 2: UNIT TESTS
+# =============================================================================
+unit_tests:
+  section: "2. Unit Test Patterns"
+
+  rule_2_1:
+    id: "TEST_UNIT_ISOLATION"
+    name: "Isolate Unit Tests"
+    severity: "required"
+    description: "Mock all external dependencies"
+    status: "required"
+
+    mocking_patterns:
+      - "Use @patch decorators"
+      - "Use patch.dict for environment"
+      - "Use MagicMock/Mock for boto3 clients"
+
+    codebase_example: |
+      @pytest.fixture
+      def mock_dynamodb():
+          with patch("module._get_dynamodb_client") as mock_factory:
+              mock_client = MagicMock()
+              mock_factory.return_value = mock_client
+              yield mock_client
+
+  rule_2_2:
+    id: "TEST_UNIT_ENV_ISOLATION"
+    name: "Environment Variable Isolation"
+    severity: "required"
+    description: "Reset environment between tests"
+    status: "required"
+
+    required_pattern: |
+      @pytest.fixture(autouse=True)
+      def reset_environment():
+          yield
+          # Clean up test env vars
+
+    codebase_example: |
+      @pytest.fixture(autouse=True)
+      def reset_environment():
+          yield
+          # Clean up after test
+
+      # Set test env at module level
+      os.environ["AWS_ACCESS_KEY_ID"] = "testing"
+      os.environ["AWS_SECRET_ACCESS_KEY"] = "testing"
+
+  rule_2_3:
+    id: "TEST_SINGLE_ASSERTION"
+    name: "One Assertion Per Test"
+    severity: "recommended"
+    description: "Each test should verify one behavior"
+    status: "recommended"
+
+    pattern: "test_<behavior>_when_<condition>"
+
+# =============================================================================
+# SECTION 3: INTEGRATION TESTS
+# =============================================================================
+integration_tests:
+  section: "3. Integration Test Patterns"
+
+  rule_3_1:
+    id: "TEST_INTEGRATION_BOUNDARY"
+    name: "Test Component Boundaries"
+    severity: "required"
+    description: "Integration tests verify component interactions"
+    status: "required"
+
+    scope:
+      - "Handler + DAL interaction"
+      - "Service + Repository integration"
+      - "API contract validation"
+
+    forbidden:
+      - "Don't call real AWS services (use mocks)"
+
+  rule_3_2:
+    id: "TEST_INTEGRATION_EVENTS"
+    name: "Use Realistic Event Fixtures"
+    severity: "required"
+    description: "Mock API Gateway events realistically"
+    status: "required"
+
+    codebase_example: |
+      @pytest.fixture
+      def api_gateway_event():
+          return {
+              "requestContext": {
+                  "authorizer": {"claims": {"sub": "user-123"}}
+              },
+              "body": json.dumps({"cv_id": "cv-456"}),
+              "headers": {"Content-Type": "application/json"},
+          }
+
+  rule_3_3:
+    id: "TEST_INTEGRATION_ISOLATION"
+    name: "Isolate Integration Tests"
+    severity: "required"
+    description: "Each test should be independent"
+    status: "required"
+
+    requirements:
+      - "No shared state between tests"
+      - "Each test sets up its own data"
+      - "Clean up after each test"
+
+    aws_waf_note: "AWS Well-Architected - Reliability: Isolated tests prevent cascading failures"
+
+# =============================================================================
+# SECTION 4: E2E TESTS
+# =============================================================================
+e2e_tests:
+  section: "4. End-to-End Test Patterns"
+
+  rule_4_1:
+    id: "TEST_E2E_REAL_ENV"
+    name: "Use Real Environment for E2E"
+    severity: "required"
+    description: "E2E tests run against deployed stack"
+    status: "required"
+
+    configuration:
+      - "Use staging/pre-production environment"
+      - "Use real AWS resources"
+      - "Include in CI/CD pipeline with gate"
+
+  rule_4_2:
+    id: "TEST_E2E_MARKERS"
+    name: "Mark E2E Tests Appropriately"
+    severity: "required"
+    description: "E2E tests should be skippable"
+    status: "required"
+
+    required_patterns:
+      - "@pytest.mark.e2e"
+      - "@pytest.mark.slow"
+      - "Can be skipped with: pytest -m 'not e2e'"
+
+# =============================================================================
+# SECTION 5: AWS MOCKING STRATEGIES
+# =============================================================================
+aws_mocking:
+  section: "5. AWS Service Mocking"
+
+  rule_5_1:
+    id: "TEST_MOCK_CLIENTS"
+    name: "Mock Boto3 Clients"
+    severity: "required"
+    description: "Use MagicMock for AWS clients"
+    status: "required"
+
+    codebase_example: |
+      @pytest.fixture
+      def mock_dynamodb_client():
+          client = Mock()
+          client.put_item = Mock(return_value={})
+          client.get_item = Mock(return_value={"Item": {}})
+          client.query = Mock(return_value={"Items": []})
+          return client
+
+  rule_5_2:
+    id: "TEST_MOCK_HANDLERS"
+    name: "Mock at Handler Boundary"
+    severity: "recommended"
+    description: "Mock DAL/service in handler tests"
+    status: "recommended"
+
+    codebase_example: |
+      with patch("handler.dal") as mock:
+          mock.get_cv.return_value = Mock(...)
+          yield mock
+
+  rule_5_3:
+    id: "TEST_ASYNC_MOCKS"
+    name: "Support Async Operations"
+    severity: "required"
+    description: "Use AsyncMock for async handlers"
+    status: "required"
+
+    required_patterns:
+      - "@pytest.mark.asyncio"
+      - "AsyncMock for async methods"
+
+    codebase_example: |
+      dal = AsyncMock()
+      dal.get_cv.return_value = Mock(success=True, data=Mock(...))
+
+# =============================================================================
+# SECTION 6: TEST FIXTURES
+# =============================================================================
+test_fixtures:
+  section: "6. Test Fixtures"
+
+  rule_6_1:
+    id: "TEST_FIXTURE_SCOPING"
+    name: "Use Appropriate Fixture Scope"
+    severity: "recommended"
+    description: "Scope fixtures appropriately"
+    status: "recommended"
+
+    scopes:
+      - scope: "function (default)"
+        use_when: "Each test needs fresh data"
+      - scope: "module"
+        use_when: "Shared data across tests"
+      - scope: "session"
+        use_when: "Expensive setup, reused"
+
+    codebase_example: |
+      @pytest.fixture(scope="module")
+      def shared_database():
+          """Module-scoped for expensive setup"""
+          setup_database()
+          yield
+          teardown_database()
+
+  rule_6_2:
+    id: "TEST_CONFTREE"
+    name: "Use Feature-Specific conftest.py"
+    severity: "recommended"
+    description: "Define fixtures close to tests that use them"
+    status: "recommended"
+
+    pattern: "tests/{feature}/conftest.py"
+
+  rule_6_3:
+    id: "TEST_FIXTURE_AUTOMOCK"
+    name: "Autouse Environment Fixtures"
+    severity: "required"
+    description: "Auto-set test environment"
+    status: "required"
+
+    required_pattern: |
+      @pytest.fixture(autouse=True)
+      def test_environment():
+          os.environ["AWS_ACCESS_KEY_ID"] = "testing"
+          os.environ["AWS_SECRET_ACCESS_KEY"] = "testing"
+
+# =============================================================================
+# SECTION 7: TEST DATA
+# =============================================================================
+test_data:
+  section: "7. Test Data Management"
+
+  rule_7_1:
+    id: "TEST_DATA_FIXTURES"
+    name: "Use JSON Fixtures for Test Data"
+    severity: "recommended"
+    description: "Store complex test data in JSON files"
+    status: "recommended"
+
+    pattern: "tests/fixtures/*.json"
+
+    codebase_example: |
+      tests/fixtures/
+      ├── fvs_baseline_cv.json
+      └── fvs_test_hallucination.json
+
+  rule_7_2:
+    id: "TEST_DATA_FACTORIES"
+    name: "Use Factories for Dynamic Data"
+    severity: "recommended"
+    description: "Create test data programmatically"
+    status: "recommended"
+
+    pattern: "Factory classes or functions for test objects"
+
+# =============================================================================
+# SECTION 8: TDD PATTERNS
+# =============================================================================
+tdd_patterns:
+  section: "8. Test-Driven Development"
+
+  rule_8_1:
+    id: "TEST_RED_PHASE"
+    name: "Use RED Phase Pattern"
+    severity: "recommended"
+    description: "Write failing tests before implementation"
+    status: "recommended"
+
+    phases:
+      - RED: "Write failing test"
+      - GREEN: "Make test pass"
+      - REFACTOR: "Improve code"
+
+    codebase_example: |
+      def test_save_cover_letter_success(self, mock_dal_handler):
+          """
+          Test successful cover letter save.
+
+          Expected behavior:
+          - Cover letter artifact saved to DynamoDB
+          - Returns ResultCode.SUCCESS
+          """
+          assert True  # RED phase placeholder
+
+  rule_8_2:
+    id: "TEST_ASSERTION_MESSAGES"
+    name: "Include Assertion Messages"
+    severity: "recommended"
+    description: "Add descriptive messages to assertions"
+    status: "recommended"
+
+    pattern: "assert condition, 'Expected X but got Y'"
+
+# =============================================================================
+# SECTION 9: CI/CD INTEGRATION
+# =============================================================================
+cicd_integration:
+  section: "9. CI/CD Test Integration"
+
+  rule_9_1:
+    id: "TEST_COVERAGE_THRESHOLD"
+    name: "Set Coverage Thresholds"
+    severity: "recommended"
+    description: "Enforce minimum coverage"
+    status: "recommended"
+
+    configuration:
+      - "unit: 80% minimum"
+      - "critical paths: 90%"
+
+    aws_waf_note: "AWS Well-Architected - Reliability: Coverage gates catch regressions"
+
+  rule_9_2:
+    id: "TEST_PARALLEL_EXECUTION"
+    name: "Run Tests in Parallel"
+    severity: "recommended"
+    description: "Use pytest-xdist for parallel execution"
+    status: "recommended"
+
+    configuration: "pytest -n auto"
+
+  rule_9_3:
+    id: "TEST_CDK_VALIDATION"
+    name: "Include CDK Infrastructure Tests"
+    severity: "recommended"
+    description: "Validate CloudFormation outputs"
+    status: "recommended"
+
+    codebase_example: |
+      def test_lambda_memory_configuration():
+          template = Template.from_stack(stack)
+          template.has_resource_properties(
+              "AWS::Lambda::Function",
+              {"MemorySize": 2048}
+          )
+
+# =============================================================================
+# SECTION 10: CONTRACT TESTING
+# =============================================================================
+contract_testing:
+  section: "10. Contract Testing (AWS Best Practice)"
+
+  rule_10_1:
+    id: "TEST_CONTRACT_API"
+    name: "Validate API Contracts"
+    severity: "recommended"
+    description: "Ensure API responses match expected schema"
+    status: "recommended"
+
+    tools:
+      - "pydantic schema validation"
+      - "JSON Schema validators"
+
+    aws_waf_note: "AWS Well-Architected - Reliability: Contract tests catch API breaking changes"
+
+  rule_10_2:
+    id: "TEST_CONTRACT_CONSUMER"
+    name: "Consumer-Driven Contracts"
+    severity: "recommended"
+    description: "Consumers define expected behavior"
+    status: "recommended"
+
+    pattern: "API producer tests against consumer specifications"
+
+# =============================================================================
+# SECTION 11: CHAOS ENGINEERING
+# =============================================================================
+chaos_engineering:
+  section: "11. Chaos Engineering (AWS Best Practice)"
+
+  rule_11_1:
+    id: "TEST_FAILURE_INJECTION"
+    name: "Test Failure Scenarios"
+    severity: "recommended"
+    description: "Inject failures to test resilience"
+    status: "recommended"
+
+    scenarios:
+      - "DynamoDB timeout"
+      - "SQS failure"
+      - "LLM API error"
+
+    aws_waf_note: "AWS Well-Architected - Reliability: Chaos testing validates error handling"
+
+  rule_11_2:
+    id: "TEST_CIRCUIT_BREAKER"
+    name: "Test Circuit Breaker Patterns"
+    severity: "recommended"
+    description: "Verify circuit breaker behavior"
+    status: "recommended"
+
+    codebase_example: |
+      # From test_circuit_breaker.py
+      @pytest.mark.skip(reason="Integration test")
+      def test_open_timeout_transitions_to_half_open():
+          time.sleep(1.1)
+          assert breaker.can_proceed() is True

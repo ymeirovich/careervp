@@ -1,0 +1,484 @@
+spec_id: SPEC_QUALITY_001
+title: Best Practices for Writing and Executing Fix Specs
+priority: high
+status: active
+version: 2
+updated_at: 2026-03-05
+
+description: |
+  This meta-spec defines mandatory best practices for writing, implementing,
+  validating, and closing engineering fix specs.
+
+  Goal:
+  - Ensure each spec is implemented exactly as designed.
+  - Prevent partial fixes that pass local/unit tests but fail in deployed environments.
+  - Require objective evidence for completion.
+  - Make "100% implemented" machine-verifiable and release-enforceable.
+
+scope:
+  applies_to:
+    - API bug fix specs
+    - backend behavior fixes
+    - infra-route/handler alignment fixes
+    - data persistence and contract compliance fixes
+  does_not_replace:
+    - coding standards
+    - security standards
+    - incident response procedures
+
+full_implementation_standard:
+  definition_100_percent:
+    - All acceptance criteria pass in deployed environment(s), not only unit/integration.
+    - Every acceptance criterion has traceability and a valid evidence artifact.
+    - Regression delta is within baseline_and_regression_budget.allowed_deltas.
+  release_readiness_rule:
+    - implemented is code-complete only and not release-eligible.
+    - validated is minimum release-eligible state.
+    - closed requires sustained stability and zero open rollback triggers.
+  required_consecutive_live_passes: 2
+
+baseline_and_regression_budget:
+  baseline_artifact:
+    required: true
+    description: |
+      Path to known-good evidence artifact or log used for regression delta checks
+      (for example previous live suite result).
+  blocked_regressions:
+    required: true
+    description: Must be explicitly listed and enforced as hard blockers.
+    required_defaults:
+      - new_non_2xx_on_changed_endpoints
+      - new_empty_arrays_on_generated_artifact_list_or_read_paths
+      - generated_id_missing_from_status_or_list_after_polling_window
+  allowed_deltas:
+    required: true
+    description: |
+      Explicit, numeric deltas allowed versus baseline. Empty means zero tolerance.
+    default: {}
+
+verification_contract:
+  required_fields:
+    - requirement_id
+    - verification_type
+    - blocking_gate
+    - artifact_required
+  field_constraints:
+    verification_type:
+      allowed_values: [static, unit, integration, contract, live]
+    blocking_gate:
+      allowed_values: [pre_merge, pre_deploy, post_deploy]
+    artifact_required:
+      allowed_values: [true, false]
+
+deployed_parity_requirements:
+  route_surface_parity:
+    required: true
+    description: Deployed route inventory must match infra/OpenAPI contract for changed paths.
+  authorizer_parity:
+    required: true
+    description: Deployed authorizer bindings must match intended method-level auth.
+  runtime_env_resolution_parity:
+    required: true
+    description: |
+      Runtime env/table/index resolution must match spec-declared source of truth.
+      Ambiguous fallback order must be tested and documented.
+
+evidence_artifact_contract:
+  required_fields:
+    - spec_id
+    - requirement_id
+    - environment
+    - executed_at_utc
+    - git_sha
+    - deployment_id
+    - request_id_or_correlation_id
+    - expected
+    - actual
+    - result
+  freshness_rules:
+    - artifact timestamp must be from current validation window.
+    - git_sha in evidence must match commit under validation.
+    - deployment_id/environment must match target deployment.
+
+rollback_trigger_matrix:
+  required_fields:
+    - trigger_id
+    - condition
+    - detection_source
+    - action
+    - owner
+  required_default_triggers:
+    - trigger_id: RT-001
+      condition: blocking acceptance criterion flips pass->fail post-deploy
+      detection_source: post_deploy gates
+      action: block promotion and execute rollback decision procedure
+      owner: release_owner
+    - trigger_id: RT-002
+      condition: contract endpoint returns DEFAULT_4XX or DEFAULT_5XX on required route
+      detection_source: contract suite and live checks
+      action: block promotion and rollback affected change set
+      owner: release_owner
+    - trigger_id: RT-003
+      condition: async terminal success rate below spec threshold in validation window
+      detection_source: live polling evidence
+      action: block closure and revert/patch before next deploy
+      owner: service_owner
+
+required_spec_sections:
+  - section: Metadata
+    must_include:
+      - spec_id (stable and unique)
+      - title (problem + impact)
+      - priority (low|medium|high|critical)
+      - status (draft|pending|in_progress|implemented|validated|closed)
+      - owner (person or team)
+      - created_at (YYYY-MM-DD)
+      - updated_at (YYYY-MM-DD)
+
+  - section: Problem Statement
+    must_include:
+      - exact failing behavior
+      - expected behavior
+      - user/business impact
+      - reproducibility notes
+
+  - section: Evidence
+    must_include:
+      - failing test names
+      - endpoint/method/path
+      - observed status code/body
+      - timestamp and environment (dev/stage/prod)
+      - log/correlation/request IDs when available
+
+  - section: Architecture and Ownership Map
+    must_include:
+      - route -> lambda/function mapping
+      - handler file paths
+      - data store/table/index used by each path
+      - auth source and identity key used for scoping
+
+  - section: Root Cause Analysis
+    must_include:
+      - ranked hypotheses
+      - disproof criteria for each hypothesis
+      - confirmed root cause(s)
+      - contributing factors
+
+  - section: Fix Plan
+    must_include:
+      - exact files to modify
+      - exact behavior changes
+      - non-goals/out of scope
+      - rollback plan
+
+  - section: Acceptance Criteria
+    must_include:
+      - API-level criteria (status + body contract)
+      - data-level criteria (storage keys, index usage, schema)
+      - observability criteria (logs/metrics)
+      - negative and edge-case criteria
+
+  - section: Baseline and Regression Budget
+    must_include:
+      - baseline_artifact
+      - blocked_regressions
+      - allowed_deltas
+
+  - section: Verification Contract
+    must_include:
+      - requirement_id
+      - verification_type (static|unit|integration|contract|live)
+      - blocking_gate (pre_merge|pre_deploy|post_deploy)
+      - artifact_required (true|false)
+
+  - section: Deployed Parity Plan
+    must_include:
+      - route_surface_parity strategy
+      - authorizer_parity strategy
+      - runtime_env_resolution_parity strategy
+
+  - section: Validation Plan
+    must_include:
+      - unit tests
+      - integration tests with production-like schema
+      - live/e2e checks against deployed route
+      - regression checks for adjacent endpoints
+
+  - section: Traceability Matrix
+    must_include:
+      - requirement_id
+      - code_reference
+      - test_reference
+      - verification_type
+      - blocking_gate
+      - evidence_reference
+      - pass/fail
+
+  - section: Rollback Trigger Matrix
+    must_include:
+      - trigger_id
+      - trigger condition
+      - detection source
+      - action
+      - owner
+
+  - section: Completion Evidence
+    must_include:
+      - test output snippets
+      - deployed endpoint verification artifacts
+      - known residual risks
+      - explicit sign-off checklist
+
+quality_rules:
+  writing_rules:
+    - Use concrete identifiers, not placeholders, for routes, files, keys, and models.
+    - Include absolute status/body expectations; avoid ambiguous wording ("should work").
+    - Define canonical source of truth for route surface (OpenAPI and infra mapping).
+    - Define canonical source of truth for storage schema (table PK/SK and GSIs).
+    - Avoid broad "fix X" tasks; split by deterministic behavior changes.
+    - Define baseline artifact and explicit regression budget for every spec.
+
+  implementation_rules:
+    - Update all affected code paths (submit/status/list/worker), not only one path.
+    - Enforce schema consistency across read/write/update/query operations.
+    - Preserve backward compatibility intentionally; do not rely on accidental fallbacks.
+    - Standardize error codes/messages for the domain (avoid unrelated codes like CV_NOT_FOUND for interview prep).
+    - Resolve runtime env precedence explicitly; avoid ambiguous table selection fallbacks.
+
+  testing_rules:
+    - Unit tests must mirror deployed schema and key names.
+    - Integration tests must validate roundtrip behavior: write -> read/status/list.
+    - Live tests must verify exact request ID returned by submit is resolvable by status endpoint.
+    - Add regression tests for adjacent artifact types sharing infrastructure patterns.
+    - Must assert submit->status->list generated ID roundtrip for changed async endpoints.
+    - Must assert no unexpected non-2xx status code deltas vs baseline for changed endpoints.
+    - Must assert no unexpected empty arrays on generated-artifact list/read paths.
+    - Async specs must define polling SLA: max wait, poll interval, and required terminal state.
+
+  evidence_rules:
+    - No status transition to validated/closed without attached evidence artifacts.
+    - Evidence must include environment and exact execution date/time.
+    - If behavior is async, evidence must include polling lifecycle and terminal state.
+    - Evidence artifact fields must conform to evidence_artifact_contract.
+    - Evidence with stale git_sha, deployment_id, or timestamp is invalid.
+
+anti_patterns_to_avoid:
+  - pattern: Partial path fix
+    description: Submit fixed, status/list/worker unchanged.
+  - pattern: Schema drift in tests
+    description: Tests use legacy table keys that do not match deployed schema.
+  - pattern: Silent completion
+    description: Spec marked done without traceability matrix and live proof.
+  - pattern: Generic acceptance criteria
+    description: Criteria cannot be machine-verified.
+  - pattern: Optimistic implemented state
+    description: Spec marked implemented while live verification/evidence is pending.
+  - pattern: Env fallback ambiguity
+    description: Runtime selects unintended table/index due to fallback order drift.
+  - pattern: Single-pass live validation
+    description: One flaky pass is treated as stable completion.
+  - pattern: Evidence reference drift
+    description: Artifact path exists but content does not match validated SHA/deployment/time window.
+
+required_gates:
+  pre_merge:
+    - gate: Spec completeness check
+      blocking: true
+      rule: All required_spec_sections present.
+    - gate: Acceptance-criterion coverage check
+      blocking: true
+      rule: Every acceptance criterion mapped to code + test + verification_contract entry.
+    - gate: AC machine-verifiability check
+      blocking: true
+      rule: Every AC has objective expected/actual assertion criteria.
+    - gate: Schema conformance check
+      blocking: true
+      rule: Storage key/index usage matches deployed table schema contract.
+    - gate: Static route/schema parity check
+      blocking: true
+      rule: Changed route contracts in code match infra/OpenAPI contract map.
+
+  pre_deploy:
+    - gate: Contract checks
+      blocking: true
+      rule: Endpoint contract tests pass for changed routes.
+    - gate: Deployed route and authorizer parity check
+      blocking: true
+      rule: Deployed route/method/auth inventory matches intended infra contract.
+    - gate: Runtime env parity check
+      blocking: true
+      rule: Table/index/env resolution behavior matches spec-declared runtime mapping.
+    - gate: Regression delta check
+      blocking: true
+      rule: Non-2xx, empty-array, and generated-id roundtrip deltas are within allowed_deltas.
+
+  post_deploy:
+    - gate: Live validation
+      blocking: true
+      rule: Execute acceptance scenarios against deployed API and store artifacts.
+    - gate: Consecutive live stability check
+      blocking: true
+      rule: Full live suite must pass required_consecutive_live_passes times in a row.
+    - gate: Evidence completeness and freshness check
+      blocking: true
+      rule: All blocking ACs have valid evidence_artifact_contract-compliant artifacts.
+    - gate: Closure review
+      blocking: true
+      rule: Reviewer confirms evidence, residual risks, and rollback trigger status.
+
+blocking_gate_logic:
+  promotion_block_conditions:
+    - changed endpoint introduces new non-2xx where baseline had 2xx.
+    - changed endpoint introduces unexpected empty array on generated-artifact list/read path.
+    - generated ID is missing from status/list after agreed polling window.
+  validated_or_closed_block_conditions:
+    - any blocking AC lacks evidence artifact.
+    - evidence artifact timestamp/git_sha/deployment_id mismatch.
+    - deployed route inventory differs from infra contract for changed paths.
+  rollback_auto_trigger_conditions:
+    - blocking AC flips from pass to fail post-deploy.
+    - required contract endpoint returns DEFAULT_4XX or DEFAULT_5XX.
+    - async terminal success rate below threshold in validation window.
+
+spec_lifecycle:
+  - state: draft
+    entry_criteria:
+      - problem described
+    exit_criteria:
+      - all required sections populated
+
+  - state: pending
+    entry_criteria:
+      - owner assigned
+      - plan approved
+    exit_criteria:
+      - implementation started
+
+  - state: in_progress
+    entry_criteria:
+      - code changes in progress
+    exit_criteria:
+      - all planned changes merged
+
+  - state: implemented
+    entry_criteria:
+      - code complete
+    exit_criteria:
+      - all acceptance criteria mapped in traceability matrix
+      - all non-live blocking gates pass (pre_merge checks complete)
+      - unit + integration tests passing
+      - state is not release-eligible
+
+  - state: validated
+    entry_criteria:
+      - deployed environment verification complete
+      - regression delta check passed against baseline artifact
+      - traceability matrix all blocking ACs pass
+      - evidence completeness and freshness checks pass
+    exit_criteria:
+      - sign-off complete
+      - state is release-eligible
+
+  - state: closed
+    entry_criteria:
+      - residual risks documented
+      - rollback and monitoring notes captured
+      - consecutive live pass requirement satisfied
+      - zero unresolved blocking rollback triggers
+
+execution_checklist:
+  spec_author:
+    - Define exact route(s), handler(s), and data schema touched.
+    - Write machine-verifiable acceptance criteria.
+    - Include failure reproduction command(s).
+    - Define baseline_and_regression_budget with explicit blocked_regressions and allowed_deltas.
+    - Define verification_contract entries for every acceptance criterion.
+
+  implementer:
+    - Create requirement-to-code mapping before editing.
+    - Implement all affected paths and shared helpers.
+    - Add/adjust tests with deployed schema fidelity.
+    - Add evidence artifacts conforming to evidence_artifact_contract.
+
+  reviewer:
+    - Verify no acceptance criterion is unmapped.
+    - Verify tests model production schema and auth context.
+    - Verify live evidence corresponds to changed route IDs.
+    - Verify deployed parity checks and regression delta checks are present and passing.
+
+  release_owner:
+    - Enforce pre_deploy and post_deploy blocking gates.
+    - Block promotion when any promotion_block_condition is true.
+    - Trigger rollback procedure when rollback_auto_trigger_conditions are met.
+
+traceability_template:
+  - requirement_id: AC-001
+    requirement: POST returns request_id resolvable by GET status
+    code_reference: src/backend/careervp/handlers/example.py:120
+    test_reference: docs/refactor/live_tests/test_example.py::test_roundtrip
+    verification_type: live
+    blocking_gate: post_deploy
+    artifact_required: true
+    environment: dev-live
+    git_sha: "<commit_sha>"
+    deployment_id: "<deploy_id>"
+    executed_at_utc: "2026-03-05T12:00:00Z"
+    evidence_reference: docs/evidence/example-roundtrip-2026-03-05.json
+    result: pass
+
+validation_commands_template:
+  unit:
+    - uv run pytest src/backend/tests/unit/test_<feature>.py -q
+  integration:
+    - uv run pytest src/backend/tests/integration/test_<feature>_roundtrip.py -q
+  contract:
+    - uv run pytest docs/refactor/live_tests/test_10_api_contract_success.py -q
+  live:
+    - uv run pytest docs/refactor/live_tests/test_<feature>.py -q
+  baseline_regression_diff:
+    - uv run python scripts/spec_quality/check_regression_delta.py --baseline <baseline_artifact> --current <current_artifact>
+  deployed_parity_inventory:
+    - uv run python scripts/spec_quality/check_deployed_parity.py --env <env> --routes <infra_contract_json>
+  evidence_integrity:
+    - uv run python scripts/spec_quality/check_evidence_integrity.py --spec <spec_yaml> --artifacts-dir docs/evidence
+
+meta_spec_validation_scenarios:
+  - scenario: incomplete_spec_fails
+    expected: Spec quality checker fails when required sections are missing.
+  - scenario: implemented_without_live_artifact_fails
+    expected: Spec quality checker fails when state is implemented/validated without required live evidence.
+  - scenario: stale_sha_or_deploy_id_fails
+    expected: Evidence integrity check fails when git_sha or deployment_id mismatches.
+  - scenario: missing_regression_budget_fails
+    expected: Spec quality checker fails when baseline_and_regression_budget is incomplete.
+  - scenario: fully_compliant_spec_passes
+    expected: Checker passes when all required fields, gates, and evidence are complete.
+
+mandatory_controls:
+  - Traceability matrix is required in every spec and PR.
+  - Schema-faithful tests are mandatory (same key names/indexes as deployed infra).
+  - Deployment gates are blocking based on acceptance criteria pass/fail.
+  - Post-deploy evidence artifacts are mandatory before validated/closed.
+  - Static/invariant checks for forbidden legacy key usage are mandatory where schema changed.
+  - Deployed route/auth/env parity checks are mandatory for changed endpoints.
+  - Regression delta checks against a baseline artifact are mandatory.
+
+assumptions_and_defaults:
+  release_policy_default:
+    - Only validated or closed specs are deploy-eligible.
+  stability_policy_default:
+    - Two consecutive full live passes are required for closure.
+  blocked_regression_sentinels_default:
+    - non_2xx_increase
+    - empty_array_regression
+    - generated_id_roundtrip_miss
+  ci_enforcement_default:
+    - If enforcement tooling is not yet implemented, spec still defines mandatory fields and blockers that must be implemented next.
+
+files_to_modify_when_adopting:
+  - path: docs/beta/fix-api/yaml/<new_spec>.yaml
+  - path: tests/unit/test_<feature>*.py
+  - path: tests/integration/test_<feature>*.py
+  - path: docs/refactor/live_tests/test_<feature>*.py
+
+dependencies: []

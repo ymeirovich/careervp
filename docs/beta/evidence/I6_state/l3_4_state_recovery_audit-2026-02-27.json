@@ -1,0 +1,35 @@
+{
+  "step_id": "L3.4",
+  "date": "2026-02-27",
+  "invariant": "I6",
+  "status": "PASS",
+  "branch": "beta/fix-gaps1",
+  "strict_test_first": {
+    "note": "Placeholder assertions in test_application_state.py and test_l3_state_recovery.py were replaced with concrete checks.",
+    "green": {
+      "command": "cd src/backend && uv run pytest tests/unit/test_application_state.py tests/unit/test_l3_state_recovery.py -v --tb=short",
+      "result": "PASSED",
+      "summary": {
+        "passed": 28,
+        "failed": 0,
+        "errors": 0
+      }
+    }
+  },
+  "validation": {
+    "ruff": {
+      "command": "cd src/backend && uv run ruff check careervp/",
+      "result": "PASSED"
+    },
+    "mypy": {
+      "command": "cd src/backend && uv run mypy careervp/ --strict",
+      "result": "PASSED",
+      "scope": "95 source files"
+    }
+  },
+  "artifacts": [
+    "src/backend/tests/unit/test_application_state.py",
+    "src/backend/tests/unit/test_l3_state_recovery.py",
+    "docs/beta/evidence/I6_state/state-recovery-matrix.json"
+  ]
+}

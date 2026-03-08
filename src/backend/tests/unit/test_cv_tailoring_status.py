@@ -4,9 +4,9 @@ import json
 from collections.abc import Generator
 from datetime import datetime, timezone
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-import boto3
+import boto3  # type: ignore[import-untyped]
 import pytest
 from moto import mock_aws
 
@@ -22,6 +22,7 @@ def cv_tailoring_status_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, 
     monkeypatch.setenv('LOG_LEVEL', 'INFO')
     monkeypatch.setenv('ENV', 'local')
     monkeypatch.setenv('TABLE_NAME', 'test-tailoring-table')
+    monkeypatch.setenv('DYNAMODB_TABLE_NAME', 'test-tailoring-table')
     yield
 
 
@@ -57,7 +58,6 @@ def _event(
         'httpMethod': method,
         'headers': {
             'Content-Type': 'application/json',
-            'x-user-id': user_id,
         },
         'multiValueHeaders': {},
         'queryStringParameters': None,
@@ -70,6 +70,11 @@ def _event(
             'path': path,
             'stage': 'test',
             'requestId': 'req-1',
+            'authorizer': {
+                'claims': {
+                    'sub': user_id,
+                }
+            },
         },
         'body': None,
         'isBase64Encoded': False,
@@ -131,7 +136,7 @@ def test_get_users_me_tailored_cvs_returns_only_user_items(tailoring_table: Any)
     tailoring_table.put_item(
         Item={
             'pk': 'user-1',
-            'sk': 'TAILORED_CV#cv-1#1700000000#v1',
+            'sk': 'ARTIFACT#CV_TAILORED#cv-1#1700000000#v1',
             'entity_type': 'CV_TAILORING',
             'cv_id': 'cv-1',
             'status': 'completed',
@@ -143,7 +148,7 @@ def test_get_users_me_tailored_cvs_returns_only_user_items(tailoring_table: Any)
     tailoring_table.put_item(
         Item={
             'pk': 'user-1',
-            'sk': 'TAILORED_CV#cv-2#1700000001#v1',
+            'sk': 'ARTIFACT#CV_TAILORED#cv-2#1700000001#v1',
             'entity_type': 'CV_TAILORING',
             'cv_id': 'cv-2',
             'status': 'processing',
@@ -155,7 +160,7 @@ def test_get_users_me_tailored_cvs_returns_only_user_items(tailoring_table: Any)
     tailoring_table.put_item(
         Item={
             'pk': 'other-user',
-            'sk': 'TAILORED_CV#cv-9#1700000002#v1',
+            'sk': 'ARTIFACT#CV_TAILORED#cv-9#1700000002#v1',
             'entity_type': 'CV_TAILORING',
             'cv_id': 'cv-9',
             'status': 'completed',
@@ -172,7 +177,86 @@ def test_get_users_me_tailored_cvs_returns_only_user_items(tailoring_table: Any)
     payload = json.loads(response['body'])
     ids = {entry['id'] for entry in payload['tailored_cvs']}
     assert ids == {
-        'TAILORED_CV#cv-1#1700000000#v1',
-        'TAILORED_CV#cv-2#1700000001#v1',
+        'cv-1#1700000000#v1',
+        'cv-2#1700000001#v1',
     }
     assert all(entry['status'] in {'completed', 'processing'} for entry in payload['tailored_cvs'])
+
+
+def test_delete_tailored_cv_removes_artifact(tailoring_table: Any) -> None:
+    """DELETE /cv-tailoring/{cvTailoringId} removes the tailored CV artifact."""
+    from careervp.handlers.cv_tailoring_handler import lambda_handler
+
+    now = datetime.now(timezone.utc).isoformat()
+    tailoring_table.put_item(
+        Item={
+            'pk': 'user-1',
+            'sk': 'ARTIFACT#CV_TAILORED#cv-tail-123',
+            'entity_type': 'CV_TAILORING',
+            'cv_id': 'cv-1',
+            'status': 'completed',
+            'created_at': now,
+            'updated_at': now,
+            'ttl': 9999999999,
+        }
+    )
+
+    event = _event(
+        path='/cv-tailoring/cv-tail-123',
+        method='DELETE',
+        user_id='user-1',
+        path_parameters={'cvTailoringId': 'cv-tail-123'},
+    )
+    response = lambda_handler(event, _context())
+
+    assert response['statusCode'] == 200
+    payload = json.loads(response['body'])
+    assert payload['status'] == 'deleted'
+
+    lookup = tailoring_table.get_item(
+        Key={
+            'pk': 'user-1',
+            'sk': 'ARTIFACT#CV_TAILORED#cv-tail-123',
+        }
+    )
+    assert lookup.get('Item') is None
+
+
+def test_delete_tailored_cv_logs_request_to_response_on_dal_failure() -> None:
+    """DELETE failure emits request/dal/response structured events."""
+    from careervp.handlers.cv_tailoring_handler import lambda_handler
+    from careervp.models.result import Result, ResultCode
+
+    mock_dal = MagicMock()
+    mock_dal.delete_tailored_cv.return_value = Result(
+        success=False,
+        error='AccessDeniedException: delete not allowed',
+        code=ResultCode.DYNAMODB_ERROR,
+    )
+
+    event = _event(
+        path='/cv-tailoring/cv-tail-123',
+        method='DELETE',
+        user_id='user-1',
+        path_parameters={'cvTailoringId': 'cv-tail-123'},
+    )
+
+    with (
+        patch('careervp.handlers.cv_tailoring_handler.DynamoDalHandler', return_value=mock_dal),
+        patch('careervp.handlers.cv_tailoring_handler.logger') as mock_logger,
+    ):
+        response = lambda_handler(event, _context())
+
+    assert response['statusCode'] == 500
+    payload = json.loads(response['body'])
+    assert payload['code'] == ResultCode.DYNAMODB_ERROR
+
+    info_events = [call.kwargs.get('event') for call in mock_logger.info.call_args_list]
+    assert 'cv_tailoring_request_received' in info_events
+    assert 'cv_tailoring_delete_started' in info_events
+    assert 'cv_tailoring_delete_dal_result' in info_events
+    assert 'cv_tailoring_response_sent' in info_events
+
+    debug_events = [call.kwargs.get('event') for call in mock_logger.debug.call_args_list]
+    assert 'cv_tailoring_request_received' in debug_events
+    assert 'cv_tailoring_response_sent' in debug_events

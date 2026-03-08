@@ -1,0 +1,123 @@
+spec_id: CV_TAILORING_002
+title: Wire DELETE /cv-tailoring/{id} Route and Protect Existing CV Tailoring Behavior
+priority: medium
+status: validated
+owner: backend-platform
+created_at: 2026-03-04
+updated_at: 2026-03-04
+
+problem_statement:
+  exact_failing_behavior: |
+    Delete logic exists in handler/DAL, but canonical API route map does not expose
+    DELETE /cv-tailoring/{cvTailoringId}. Feature is partially implemented.
+  expected_behavior: |
+    DELETE route is deployed and functional, with no regressions to generate/status/list endpoints.
+  impact: |
+    Users cannot remove stale artifacts; implementation drift creates maintenance risk.
+  reproducibility_notes:
+    - Check infra route map for DELETE binding
+    - Invoke delete endpoint against known tailoring id
+
+evidence:
+  failing_tests:
+    - None currently enforcing route availability
+  endpoints:
+    - method: DELETE
+      path: /cv-tailoring/{cvTailoringId}
+      observed_status: not_routed
+  environment: codebase-audit
+  timestamp_utc: '2026-03-04T07:00:00Z'
+
+architecture_and_ownership_map:
+  route_to_lambda:
+    - route: POST /cv-tailoring/generate
+      lambda: cv-tailoring-api
+      handler: src/backend/careervp/handlers/cv_tailoring_handler.py
+    - route: GET /cv-tailoring/{cvTailoringId}/status
+      lambda: cv-tailoring-api
+      handler: src/backend/careervp/handlers/cv_tailoring_handler.py
+    - route: GET /cv-tailorings
+      lambda: cv-tailoring-api
+      handler: src/backend/careervp/handlers/cv_tailoring_handler.py
+    - route: DELETE /cv-tailoring/{cvTailoringId}
+      lambda: cv-tailoring-api
+      handler: src/backend/careervp/handlers/cv_tailoring_handler.py
+  data_store:
+    table: artifacts/users (existing tailoring storage table)
+    key_schema:
+      partition_key: pk
+      sort_key: sk
+
+root_cause_analysis:
+  hypotheses_ranked:
+    - id: H1
+      hypothesis: Infra route map omitted DELETE operation
+      disproof_criteria: DELETE route appears in canonical route map + deployed routes
+      status: confirmed
+    - id: H2
+      hypothesis: Handler method unsupported
+      disproof_criteria: handler dispatch includes DELETE branch
+      status: disproven
+  contributing_factors:
+    - Code implemented before route-surface completion
+
+fix_plan:
+  behavior_changes:
+    - Add DELETE /cv-tailoring/{cvTailoringId} to canonical route map in infra.
+    - Add route-surface test coverage to prevent future omission.
+    - Keep generate/status/list behavior unchanged.
+  files_to_modify:
+    - infra/careervp/api_construct.py
+    - src/backend/tests/unit/test_l6_route_surface.py
+    - docs/refactor/live_tests/test_06_cv_tailoring.py
+  non_goals:
+    - No change to tailoring generation algorithm
+  rollback_plan:
+    - Remove DELETE route binding if unexpected client impact observed
+
+acceptance_criteria:
+  api_level:
+    - DELETE /cv-tailoring/{id} exists and returns 200 on successful delete
+    - Deleting unknown id returns 404
+    - POST/GET status/GET list still pass current contracts
+  data_level:
+    - Deleted artifact no longer appears in list endpoint
+  observability:
+    - Delete success/failure metrics emitted
+
+validation_plan:
+  unit_tests:
+    - route-surface includes DELETE /cv-tailoring/{cvTailoringId}
+    - delete handler success/not-found cases
+  integration_tests:
+    - create -> delete -> verify status/list absence
+  live_e2e:
+    - docs/refactor/live_tests/test_06_cv_tailoring.py (extended with delete roundtrip)
+  regression_tests:
+    - existing tailoring async polling still passes
+
+traceability_matrix:
+  - requirement_id: AC-CVT-001
+    requirement: DELETE route exists in canonical route map
+    code_reference: infra/careervp/api_construct.py
+    test_reference: src/backend/tests/unit/test_l6_route_surface.py::test_cv_tailoring_delete_route_present
+    evidence_reference: docs/evidence/cv-tailoring-route-surface-20260306T082812Z.json
+    result: pass
+  - requirement_id: AC-CVT-002
+    requirement: create-delete-list roundtrip works
+    code_reference: src/backend/careervp/handlers/cv_tailoring_handler.py
+    test_reference: docs/refactor/live_tests/test_06_cv_tailoring.py::test_delete_tailored_cv_roundtrip
+    evidence_reference: docs/evidence/cv-tailoring-delete-roundtrip-20260306T082812Z.json
+    result: pass
+
+completion_evidence:
+  required_artifacts:
+    - unit_test_output
+    - integration_or_live_roundtrip_output
+  residual_risks:
+    - Existing clients may not yet use DELETE path; behavior change is additive
+  sign_off_checklist:
+    - Route map and deployed route inventory aligned
+    - Existing tailoring flows unaffected
+
+dependencies: []

@@ -44,17 +44,20 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Ensure stack exists
+        id: check-stack
         if: steps.check-creds.outputs.has_credentials == 'true'
         run: |
           set -euo pipefail
           if ! aws cloudformation describe-stacks --stack-name CareerVpCrudDev >/tmp/stack.json 2>/tmp/stack.err; then
+            echo "stack_exists=false" >> "$GITHUB_OUTPUT"
             echo "OpenAPI drift check skipped – stack CareerVpCrudDev not found." >> "$GITHUB_STEP_SUMMARY"
             echo "Stack not found, skipping compare."
             exit 0
           fi
+          echo "stack_exists=true" >> "$GITHUB_OUTPUT"
 
       - name: Compare OpenAPI
-        if: steps.check-creds.outputs.has_credentials == 'true'
+        if: steps.check-creds.outputs.has_credentials == 'true' && steps.check-stack.outputs.stack_exists == 'true'
         working-directory: src/backend
         run: make compare-openapi
 

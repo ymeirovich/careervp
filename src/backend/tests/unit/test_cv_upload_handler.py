@@ -502,10 +502,19 @@ class TestCVUploadDynamoDBPersistence:
             assert response['statusCode'] == 201
 
             # Verify CV was saved to DynamoDB
-            saved_item = table.get_item(Key={'pk': 'test-user-123', 'sk': 'CV'})
-            assert 'Item' in saved_item
-            assert saved_item['Item']['full_name'] == 'John Doe'
-            assert saved_item['Item']['is_parsed'] is True
+            # Query for items with pk='test-user-123' and sk starts with 'CV#'
+            client = boto3.client('dynamodb', region_name='us-east-1')
+            response = client.query(
+                TableName='test-users-table',
+                KeyConditionExpression='pk = :pk AND begins_with(sk, :sk)',
+                ExpressionAttributeValues={':pk': {'S': 'test-user-123'}, ':sk': {'S': 'CV#'}},
+            )
+            items = response.get('Items', [])
+            assert len(items) == 1, f'Expected 1 CV item, got {len(items)}'
+            # Convert DynamoDB format to plain dict
+            saved_item = {k: list(v.values())[0] for k, v in items[0].items()}
+            assert saved_item['full_name'] == 'John Doe'
+            assert saved_item['is_parsed'] is True
 
     @mock_aws
     def test_openapi_payload_uses_bearer_token_for_user_id(self, mock_llm_success):
@@ -525,38 +534,34 @@ class TestCVUploadDynamoDBPersistence:
             BillingMode='PAY_PER_REQUEST',
         )
 
-        mock_auth_service = MagicMock()
-        mock_auth_service.validate_token.return_value = {'sub': 'token-user-123'}
-
         with patch('careervp.logic.cv_parser.get_llm_router') as mock_router:
             mock_router.return_value.invoke.return_value = mock_llm_success
-            with patch('careervp.handlers.cv_upload_handler._get_auth_service', return_value=mock_auth_service):
-                from careervp.handlers.cv_upload_handler import lambda_handler
+            from careervp.handlers.cv_upload_handler import lambda_handler
 
-                event = generate_api_gw_event(
-                    {
-                        'cv_content': (
-                            'John Smith Senior Software Engineer with 8 years experience in Python, AWS, '
-                            'distributed systems, mentoring teams, API optimization, CI/CD delivery, and '
-                            'microservices architecture across high-scale production platforms.'
-                        ),
-                        'file_name': 'john_smith_cv.txt',
-                    }
-                )
-                event['headers'] = {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer test-access-token',
+            event = generate_api_gw_event(
+                {
+                    'cv_content': (
+                        'John Smith Senior Software Engineer with 8 years experience in Python, AWS, '
+                        'distributed systems, mentoring teams, API optimization, CI/CD delivery, and '
+                        'microservices architecture across high-scale production platforms.'
+                    ),
+                    'file_name': 'john_smith_cv.txt',
                 }
-                event['requestContext']['authorizer'] = {}
-                context = generate_lambda_context()
+            )
+            event['headers'] = {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer test-access-token',
+            }
+            event['requestContext']['authorizer'] = {'claims': {'sub': 'token-user-123'}}
+            context = generate_lambda_context()
 
-                response = lambda_handler(event, context)
+            response = lambda_handler(event, context)
 
-                assert response['statusCode'] == 201
-                body = json.loads(response['body'])
-                assert body['success'] is True
-                assert body['status'] == 'parsed'
-                assert body['cv_id']
+            assert response['statusCode'] == 201
+            body = json.loads(response['body'])
+            assert body['success'] is True
+            assert body['status'] == 'parsed'
+            assert body['cv_id']
 
 
 class TestCVUploadErrorHandling:

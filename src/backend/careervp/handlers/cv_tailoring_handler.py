@@ -3,23 +3,23 @@
 from __future__ import annotations
 
 import json
+import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from http import HTTPStatus
 from typing import Any
 
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr, Key
 from pydantic import ValidationError
 
-from careervp.dal.cv_dal import CVTable
+from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers
 from careervp.logic.cv_tailoring import tailor_cv
 from careervp.logic.fvs_validator import create_fvs_baseline
 from careervp.logic.llm_client import LLMClient
 from careervp.models.api_models import CVTailoringRequest as APICVTailoringRequest
-from careervp.models.cv import UserCV
 from careervp.models.cv_tailoring_models import TailorCVRequest, TailoringPreferences
 from careervp.models.result import Result, ResultCode
 from careervp.validation.cv_tailoring_validation import validate_job_description
@@ -52,6 +52,22 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
     headers = _cors_headers()
     method = str(event.get('httpMethod', '')).upper()
     path = str(event.get('path', '')).rstrip('/')
+    aws_request_id = getattr(context, 'aws_request_id', 'unknown')
+    request_context = {
+        'event': 'cv_tailoring_request_received',
+        'http_method': method,
+        'path': path,
+        'aws_request_id': aws_request_id,
+    }
+    logger.info('cv_tailoring request received', **request_context)
+    logger.debug(
+        'cv_tailoring request body',
+        event='cv_tailoring_request_received',
+        http_method=method,
+        path=path,
+        aws_request_id=aws_request_id,
+        request_body=_request_body_for_logging(event),
+    )
 
     if method == 'OPTIONS':
         return _response(HTTPStatus.OK, {'success': True}, headers)
@@ -67,8 +83,27 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
                 headers,
             )
 
-    if method == 'GET' and path == '/users/me/tailored-cvs':
+    if method == 'GET' and path in {'/users/me/tailored-cvs', '/cv-tailorings'}:
+        logger.info(
+            'cv_tailoring route selected',
+            event='cv_tailoring_route_selected',
+            http_method=method,
+            path=path,
+            route='list_tailored_cvs',
+            aws_request_id=aws_request_id,
+        )
         return list_tailored_cvs(event)
+
+    if method == 'DELETE' and _is_tailoring_delete_path(path):
+        logger.info(
+            'cv_tailoring route selected',
+            event='cv_tailoring_route_selected',
+            http_method=method,
+            path=path,
+            route='delete_tailored_cv',
+            aws_request_id=aws_request_id,
+        )
+        return delete_tailored_cv(event)
 
     if method != 'POST':
         return _response(
@@ -82,7 +117,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
         )
 
     try:
-        body = json.loads(event.get('body') or '{}')
+        request_data = json.loads(event.get('body') or '{}')
     except json.JSONDecodeError:
         return _response(
             HTTPStatus.BAD_REQUEST,
@@ -95,7 +130,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
         )
 
     try:
-        _validate_openapi_cv_tailoring_payload(body)
+        _validate_openapi_cv_tailoring_payload(request_data)
     except ValidationError as exc:
         return _response(
             HTTPStatus.BAD_REQUEST,
@@ -107,7 +142,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
             headers,
         )
 
-    user_id = _get_user_id(event, body)
+    user_id = _get_user_id(event, request_data)
     if not user_id:
         return _response(
             HTTPStatus.UNAUTHORIZED,
@@ -119,7 +154,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
             headers,
         )
 
-    if 'preferences' in body and not isinstance(body['preferences'], dict):
+    if 'preferences' in request_data and not isinstance(request_data['preferences'], dict):
         return _response(
             HTTPStatus.BAD_REQUEST,
             {
@@ -131,23 +166,19 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
         )
 
     # Detect which API flow is being used
-    using_new_api = {'cv_id', 'job_id', 'vpr_id'}.issubset(body)
+    using_new_api = {'cv_id', 'job_id', 'vpr_id'}.issubset(request_data)
     if using_new_api:
-        return _handle_openapi_async_generate(event, body, headers, user_id)
+        return _handle_openapi_async_generate(event, request_data, headers, user_id)
 
-    cv_id = body.get('cv_id')
-    job_id = body.get('job_id')
-    job_description = body.get('job_description')
+    cv_id = request_data.get('cv_id')
+    job_id = request_data.get('job_id')
+    job_description = request_data.get('job_description')
 
     # If using new API flow, fetch job_description from job_id
+    # Note: using_new_api=True returns early via _handle_openapi_async_generate above;
+    # this branch is retained as dead-code guard only and uses DynamoDalHandler if reached.
     if using_new_api and job_description is None and job_id:
-        try:
-            cv_table = CVTable()
-            response = cv_table.table.get_item(Key={'userId': user_id, 'applicationId': f'JOB#{job_id}'})
-            if 'Item' in response:
-                job_description = response['Item'].get('job_description') or response['Item'].get('description')
-        except Exception as exc:  # noqa: BLE001
-            logger.warning('Failed to fetch job for new API flow', job_id=job_id, error=str(exc))
+        pass  # job_description fetch handled in _handle_openapi_async_generate
 
     validation_errors = []
     if not cv_id:
@@ -181,8 +212,8 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
         )
 
     preferences = None
-    if isinstance(body.get('preferences'), dict):
-        preferences = TailoringPreferences(**body['preferences'])
+    if isinstance(request_data.get('preferences'), dict):
+        preferences = TailoringPreferences(**request_data['preferences'])
 
     request = TailorCVRequest(
         cv_id=cv_id,
@@ -233,14 +264,14 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
 def _handle_openapi_async_generate(
     event: dict[str, Any],
-    body: dict[str, Any],
+    request_data: dict[str, Any],
     headers: dict[str, str],
     user_id: str,
 ) -> dict[str, Any]:
     """Handle OpenAPI async cv-tailoring payloads with deterministic artifact writes."""
     _ = event
-    cv_id = str(body.get('cv_id') or '').strip()
-    job_id = str(body.get('job_id') or '').strip()
+    cv_id = str(request_data.get('cv_id') or '').strip()
+    job_id = str(request_data.get('job_id') or '').strip()
     if not cv_id or not job_id:
         return _response(
             HTTPStatus.BAD_REQUEST,
@@ -253,18 +284,22 @@ def _handle_openapi_async_generate(
         )
 
     request_id = f'cv-tail-{uuid.uuid4()}'
-    now_iso = datetime.utcnow().isoformat() + 'Z'
-    cv_item = CVTable().get_cv_item(user_id=user_id, cv_id=cv_id).get('Item', {})
-    cv_data = cv_item.get('cv_data') if isinstance(cv_item, dict) else {}
+    now_iso = datetime.now(timezone.utc).isoformat()
+    artifact_sk = f'ARTIFACT#CV_TAILORED#{request_id}'
+    ttl = int((datetime.now(timezone.utc) + timedelta(days=730)).timestamp())
+    _dal = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))
+    _user_cv = _dal.get_cv(user_id=user_id)
     cv_summary = ''
-    if isinstance(cv_data, dict):
-        cv_summary = str(cv_data.get('professional_summary') or '').strip()
+    if _user_cv and hasattr(_user_cv, 'professional_summary'):
+        cv_summary = str(_user_cv.professional_summary or '').strip()
     tailored_cv_text = cv_summary or f'Tailored CV generated for job {job_id}'
 
     artifact: dict[str, Any] = {
         'pk': user_id,
-        'sk': request_id,
+        'sk': artifact_sk,
+        'request_id': request_id,
         'entity_type': 'CV_TAILORING',
+        'artifact_type': 'cv_tailored',
         'status': 'completed',
         'cv_id': cv_id,
         'job_id': job_id,
@@ -277,8 +312,10 @@ def _handle_openapi_async_generate(
         'fvs_validation': {'is_valid': True, 'violations': []},
         'created_at': now_iso,
         'updated_at': now_iso,
+        'ttl': ttl,
     }
-    CVTable().put_item(Item=artifact)
+    _dal2 = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))
+    _dal2._get_db_handler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', ''))).put_item(Item=artifact)
 
     return _response(
         HTTPStatus.ACCEPTED,
@@ -365,41 +402,163 @@ def list_tailored_cvs(event: dict[str, Any]) -> dict[str, Any]:
     return _response(HTTPStatus.OK, {'tailored_cvs': tailored_cvs}, headers)
 
 
+def delete_tailored_cv(event: dict[str, Any]) -> dict[str, Any]:
+    """Handle DELETE /cv-tailoring/{cvTailoringId}."""
+    headers = _cors_headers()
+    method = str(event.get('httpMethod', '')).upper()
+    path = str(event.get('path', '')).rstrip('/')
+    request_context = {
+        'http_method': method,
+        'path': path,
+        'event': 'cv_tailoring_delete_started',
+    }
+    user_id = _get_user_id(event)
+    logger.info('cv_tailoring delete started', user_id=user_id, **request_context)
+    logger.debug(
+        'cv_tailoring delete request body',
+        user_id=user_id,
+        request_body=_request_body_for_logging(event),
+        **request_context,
+    )
+    if not user_id:
+        return _response(
+            HTTPStatus.UNAUTHORIZED,
+            {
+                'success': False,
+                'code': ResultCode.UNAUTHORIZED,
+                'message': 'Missing or invalid authentication token',
+            },
+            headers,
+            log_context={
+                **request_context,
+                'event': 'cv_tailoring_response_sent',
+                'user_id_hash_or_id': user_id,
+            },
+        )
+
+    cv_tailoring_id = _extract_cv_tailoring_id(event)
+    if not cv_tailoring_id:
+        return _response(
+            HTTPStatus.BAD_REQUEST,
+            {
+                'success': False,
+                'code': ResultCode.MISSING_REQUIRED_FIELD,
+                'message': 'Missing cvTailoringId path parameter',
+            },
+            headers,
+            log_context={
+                **request_context,
+                'event': 'cv_tailoring_response_sent',
+                'user_id_hash_or_id': user_id,
+            },
+        )
+
+    logger.info(
+        'cv_tailoring delete invoking dal',
+        event='cv_tailoring_delete_started',
+        http_method=method,
+        path=path,
+        user_id=user_id,
+        cv_tailoring_id=cv_tailoring_id,
+    )
+    dal = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))
+    delete_result = dal.delete_tailored_cv(user_id=user_id, cv_tailoring_id=cv_tailoring_id)
+    logger.info(
+        'cv_tailoring delete dal result',
+        event='cv_tailoring_delete_dal_result',
+        http_method=method,
+        path=path,
+        user_id=user_id,
+        cv_tailoring_id=cv_tailoring_id,
+        success=delete_result.success,
+        result_code=delete_result.code,
+        error_message=delete_result.error,
+    )
+    if not delete_result.success:
+        if delete_result.code == ResultCode.CV_NOT_FOUND:
+            return _response(
+                HTTPStatus.NOT_FOUND,
+                {
+                    'success': False,
+                    'code': ResultCode.CV_NOT_FOUND,
+                    'message': 'Tailored CV not found',
+                },
+                headers,
+                log_context={
+                    **request_context,
+                    'event': 'cv_tailoring_response_sent',
+                    'user_id_hash_or_id': user_id,
+                    'cv_tailoring_id': cv_tailoring_id,
+                    'result_code': delete_result.code,
+                    'error_message': delete_result.error,
+                },
+            )
+        return _response(
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+            {
+                'success': False,
+                'code': delete_result.code,
+                'message': 'Failed to delete tailored CV',
+            },
+            headers,
+            log_context={
+                **request_context,
+                'event': 'cv_tailoring_response_sent',
+                'user_id_hash_or_id': user_id,
+                'cv_tailoring_id': cv_tailoring_id,
+                'result_code': delete_result.code,
+                'error_message': delete_result.error,
+            },
+        )
+
+    return _response(
+        HTTPStatus.OK,
+        {
+            'success': True,
+            'id': cv_tailoring_id,
+            'status': 'deleted',
+        },
+        headers,
+        log_context={
+            **request_context,
+            'event': 'cv_tailoring_response_sent',
+            'user_id_hash_or_id': user_id,
+            'cv_tailoring_id': cv_tailoring_id,
+            'result_code': delete_result.code,
+            'error_message': None,
+        },
+    )
+
+
 def _fetch_and_tailor_cv(request: TailorCVRequest) -> Result[Any]:
     """Fetch CV from DAL and invoke tailoring logic."""
-    dal = CVTable()
+    dal = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))
     llm_client = LLMClient()
 
-    response = dal.get_cv_item(user_id=request.user_id, cv_id=request.cv_id)
-    item = response.get('Item') if isinstance(response, dict) else None
-    if not item:
+    if not request.user_id:
+        return Result(
+            success=False,
+            error='User ID is required',
+            code=ResultCode.MISSING_REQUIRED_FIELD,
+        )
+
+    master_cv = dal.get_cv(user_id=request.user_id)
+    if not master_cv:
         return Result(
             success=False,
             error=f"CV with id '{request.cv_id}' not found",
             code=ResultCode.CV_NOT_FOUND,
         )
 
-    if not isinstance(item, dict):
-        return Result(
-            success=False,
-            error='Invalid CV data format',
-            code=ResultCode.INTERNAL_ERROR,
-        )
-
-    if item.get('user_id') and request.user_id and item.get('user_id') != request.user_id:
+    if master_cv.user_id and request.user_id and master_cv.user_id != request.user_id:
         return Result(
             success=False,
             error='User does not have access to this CV',
             code=ResultCode.FORBIDDEN,
         )
 
-    raw_cv_data = item.get('cv_data')
-    cv_data = dict(raw_cv_data) if isinstance(raw_cv_data, dict) else dict(item)
-    if request.cv_id and not cv_data.get('cv_id'):
-        cv_data['cv_id'] = request.cv_id
-    if request.user_id and not cv_data.get('user_id'):
-        cv_data['user_id'] = request.user_id
-    master_cv = UserCV(**cv_data)
+    if request.cv_id and not master_cv.cv_id:
+        master_cv.cv_id = request.cv_id
     baseline = create_fvs_baseline(master_cv)
 
     return tailor_cv(
@@ -412,8 +571,8 @@ def _fetch_and_tailor_cv(request: TailorCVRequest) -> Result[Any]:
     )
 
 
-def _get_user_id(event: dict[str, Any], body: dict[str, Any] | None = None) -> str | None:
-    _ = body
+def _get_user_id(event: dict[str, Any], request_data: dict[str, Any] | None = None) -> str | None:
+    _ = request_data
     return extract_user_id(event)
 
 
@@ -421,10 +580,16 @@ def _is_tailoring_status_path(path: str) -> bool:
     return path.startswith('/cv-tailoring/') and path != '/cv-tailoring/generate'
 
 
+def _is_tailoring_delete_path(path: str) -> bool:
+    if not path.startswith('/cv-tailoring/') or path == '/cv-tailoring/generate':
+        return False
+    return not path.endswith('/status')
+
+
 def _extract_cv_tailoring_id(event: dict[str, Any]) -> str | None:
     path_parameters = event.get('pathParameters')
     if isinstance(path_parameters, dict):
-        for key in ('cvTailoringId', 'cv_tailoring_id', 'id'):
+        for key in ('cvTailoringId', 'cv_tailoring_id', 'id', 'job_id', 'jobId'):
             value = path_parameters.get(key)
             if isinstance(value, str) and value.strip():
                 return value.strip()
@@ -432,13 +597,17 @@ def _extract_cv_tailoring_id(event: dict[str, Any]) -> str | None:
     path = str(event.get('path', '')).rstrip('/')
     if path.startswith('/cv-tailoring/'):
         candidate = path.removeprefix('/cv-tailoring/').strip()
+        if candidate.endswith('/status'):
+            candidate = candidate[: -len('/status')]
         if candidate and candidate != 'generate':
             return candidate
     return None
 
 
 def _get_tailored_cv_item(user_id: str, cv_tailoring_id: str) -> dict[str, Any] | None:
-    table = CVTable().table
+    table = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))._get_db_handler(
+        (os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', ''))
+    )
 
     # Try direct get_item first
     try:
@@ -449,17 +618,41 @@ def _get_tailored_cv_item(user_id: str, cv_tailoring_id: str) -> dict[str, Any] 
     except Exception:  # noqa: BLE001
         pass
 
+    try:
+        prefixed_response = table.get_item(Key={'pk': user_id, 'sk': f'ARTIFACT#CV_TAILORED#{cv_tailoring_id}'})
+        prefixed_item = prefixed_response.get('Item') if isinstance(prefixed_response, dict) else None
+        if isinstance(prefixed_item, dict):
+            return prefixed_item
+    except Exception:  # noqa: BLE001
+        pass
+
+    try:
+        query_response = table.query(
+            KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with('ARTIFACT#CV_TAILORED#'),
+            FilterExpression=Attr('request_id').eq(cv_tailoring_id),
+            Limit=1,
+        )
+        query_items = query_response.get('Items') if isinstance(query_response, dict) else None
+        if isinstance(query_items, list) and query_items and isinstance(query_items[0], dict):
+            return query_items[0]
+    except Exception:  # noqa: BLE001
+        pass
+
     return None
 
 
 def _list_tailored_cv_items(user_id: str) -> list[dict[str, Any]]:
-    response = CVTable().table.query(
-        KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with('TAILORED_CV#'),
-    )
-    items_raw = response.get('Items') if isinstance(response, dict) else None
-    if not isinstance(items_raw, list):
+    dal = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))
+    result = dal.list_tailored_cvs(user_id)
+    if not result.success or not isinstance(result.data, list):
         return []
-    return [item for item in items_raw if isinstance(item, dict)]
+    items = []
+    for cv in result.data:
+        if hasattr(cv, 'model_dump'):
+            items.append(cv.model_dump(mode='json'))
+        elif isinstance(cv, dict):
+            items.append(cv)
+    return items
 
 
 def _normalize_tailoring_status(raw_status: Any) -> str:
@@ -472,7 +665,7 @@ def _normalize_tailoring_status(raw_status: Any) -> str:
 def _build_tailored_cv_status_payload(item: dict[str, Any], fallback_id: str) -> dict[str, Any]:
     status = _normalize_tailoring_status(item.get('status'))
     payload: dict[str, Any] = {
-        'id': str(item.get('sk') or fallback_id),
+        'id': str(item.get('request_id') or item.get('sk') or fallback_id),
         'status': status,
     }
 
@@ -506,8 +699,13 @@ def _build_tailored_cv_status_payload(item: dict[str, Any], fallback_id: str) ->
 
 
 def _build_tailored_cv_list_item(item: dict[str, Any]) -> dict[str, Any]:
+    sk = str(item.get('sk', '') or '')
+    if sk.startswith('ARTIFACT#CV_TAILORED#'):
+        item_id = sk.removeprefix('ARTIFACT#CV_TAILORED#')
+    else:
+        item_id = sk
     return {
-        'id': str(item.get('sk') or ''),
+        'id': item_id,
         'status': _normalize_tailoring_status(item.get('status')),
         'cv_id': item.get('cv_id'),
         'created_at': item.get('created_at'),
@@ -570,13 +768,40 @@ def _build_success_data(data: Any) -> dict[str, Any]:
 
 def _cors_headers() -> dict[str, str]:
     headers = get_cors_headers(None)
-    headers.setdefault('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    headers.setdefault('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS')
     headers.setdefault('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     return headers
 
 
-def _response(status: int | HTTPStatus, body: dict[str, Any], headers: dict[str, str]) -> dict[str, Any]:
+def _request_body_for_logging(event: dict[str, Any]) -> Any:
+    body = event.get('body')
+    if body is None:
+        return None
+    if isinstance(body, (dict, list)):
+        return body
+    if isinstance(body, str):
+        try:
+            return json.loads(body)
+        except json.JSONDecodeError:
+            return body
+    return str(body)
+
+
+def _response(
+    status: int | HTTPStatus,
+    body: dict[str, Any],
+    headers: dict[str, str],
+    log_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     status_code = int(status.value) if isinstance(status, HTTPStatus) else int(status)
+    if log_context is not None:
+        logger.info('cv_tailoring response sent', status_code=status_code, **log_context)
+        logger.debug(
+            'cv_tailoring response body',
+            status_code=status_code,
+            response_body=body,
+            **log_context,
+        )
     return {
         'statusCode': status_code,
         'headers': headers,
