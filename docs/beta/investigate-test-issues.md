@@ -2,7 +2,7 @@
 
 ## Context
 
-You are investigating live test failures from `live-test-results14.log`. The API is deployed at `https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod`.
+You are investigating live test failures from `live-test-results14.log`. The API is deployed at `https://dev-api.careervp.com`.
 
 **READ FIRST**
 1. /Users/yitzchak/Documents/dev/careervp/live-test-results14.log

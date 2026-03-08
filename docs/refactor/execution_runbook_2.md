@@ -255,14 +255,14 @@ Run AFTER CV Summarizer and LLM Cache implementation.
 cd /Users/yitzchak/Documents/dev/careervp
 
 # Configuration
-API_BASE="${API_BASE:-https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod}"
+API_BASE="${API_BASE:-https://dev-api.careervp.com}"
 TEST_USER_ID="${TEST_USER_ID:-test-user-e2e}"
 TOKEN="${TOKEN:-}"  # Optional in dev when AUTHORIZER_DISABLED=true
 
 # Optional: auto-discover deployed API base from AWS
 # API_ID=$(aws apigateway get-rest-apis --region us-east-1 --limit 500 \
 #   | jq -r '.items[] | select(.name=="careervp-core-api-dev") | .id' | head -n1)
-# API_BASE="https://${API_ID}.execute-api.us-east-1.amazonaws.com/prod"
+# API_BASE="https://dev-api.careervp.com"
 
 # If JWT auth is enabled in staging:
 # TOKEN=$(curl -s -X POST "$API_BASE/auth/login" -H "Content-Type: application/json" \

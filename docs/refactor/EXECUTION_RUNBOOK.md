@@ -517,7 +517,7 @@ curl -X POST "https://api.careervp.com/v1/vpr/generate" \
   -d @docs/refactor/payloads/phase1_vpr_generator_test.json
 
 
-curl -X POST "https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod/vpr" \
+curl -X POST "https://dev-api.careervp.com/vpr" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d @docs/refactor/payloads/phase1_vpr_generator_test.json

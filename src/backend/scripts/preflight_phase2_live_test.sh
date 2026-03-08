@@ -39,6 +39,14 @@ if [[ ! -f "${PAYLOAD_PATH}" ]]; then
 fi
 
 if [[ -z "${API_BASE}" ]]; then
+  if [[ "${API_NAME_HINT}" == *"stage"* || "${API_NAME_HINT}" == *"staging"* ]]; then
+    API_BASE="https://stage-api.careervp.com"
+  else
+    API_BASE="https://dev-api.careervp.com"
+  fi
+fi
+
+if [[ -z "${API_BASE}" ]]; then
   api_id="$(
     aws apigateway get-rest-apis --region "${AWS_DEFAULT_REGION}" --limit 500 \
       | jq -r --arg api_name "${API_NAME_HINT}" '.items[] | select(.name == $api_name) | .id' \

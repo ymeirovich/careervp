@@ -13,7 +13,7 @@ Test Coverage:
 
 Environment Variables:
 - API_BASE_URL: Base URL for the API endpoint
-  (default: https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod)
+  (default: https://dev-api.careervp.com/prod)
 - VPR_SUBMIT_ENDPOINT: Override submit endpoint (default: /vpr/generate)
 - VPR_STATUS_ENDPOINT: Override status endpoint (default: /vpr)
 - TEST_TIMEOUT: Max wait time in seconds (default: 60)
@@ -150,7 +150,7 @@ def api_base_url() -> str:
     """
     return os.getenv(
         "API_BASE_URL",
-        "https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod",
+        "https://dev-api.careervp.com/prod",
     )
 
 

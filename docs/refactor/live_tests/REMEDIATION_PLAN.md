@@ -1,7 +1,7 @@
 # Live Test Remediation Plan
 
 **Date:** 2026-02-19
-**API Base:** https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod
+**API Base:** https://dev-api.careervp.com
 **Test Execution:** `python -m pytest . -v -s --tb=short 2>&1 | tee test_results.log`
 
 ---
