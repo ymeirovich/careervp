@@ -197,6 +197,24 @@ jobs:
           else
             echo "=== Targeted smoke passed ==="
           fi
+      - name: CV tailoring delete observability (RECOVERY_005)
+        continue-on-error: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AUTO_SET_LAMBDA_ENV: '1'
+          AWS_REGION: ${{ env.AWS_REGION }}
+          STACK_NAME: ${{ env.STACK_NAME }}
+        run: |
+          TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
+          mkdir -p docs/evidence
+          echo "=== CV tailoring delete observability check ==="
+          uv run --project src/backend pytest -q \
+            docs/refactor/live_tests/test_06_cv_tailoring.py::TestCVTailoringEndpoints::test_delete_tailored_cv_roundtrip \
+            | tee docs/evidence/cv-tailoring-delete-observability-${TIMESTAMP}.log
+          EXIT_CODE=${PIPESTATUS[0]}
+          if [ "$EXIT_CODE" -ne 0 ]; then
+            echo "::warning::CV tailoring delete observability check failed (non-blocking)."
+          fi
       - name: Two-pass live suite - Pass 1 (RECOVERY gate)
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -231,7 +249,7 @@ jobs:
         run: |
           echo "=== Evidence integrity check ==="
           uv run python scripts/spec_quality/check_evidence_integrity.py \
-            --spec careervp/docs/beta/fix-api/yaml3/step_001_recovery_gates_and_baseline_controls.yaml \
+            --spec docs/beta/fix-api/yaml3/step_001_recovery_gates_and_baseline_controls.yaml \
             --artifacts-dir docs/evidence \
             --require-deployment-id-for post_deploy
           echo "=== Evidence integrity passed ==="

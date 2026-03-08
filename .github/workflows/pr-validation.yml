@@ -55,6 +55,22 @@ jobs:
         working-directory: src/backend
         run: uv run pytest
 
+  cv-tailoring-delete-observability:
+    name: CV Tailoring Delete Observability
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+          enable-cache: true
+      - name: Run delete roundtrip integration tests
+        working-directory: src/backend
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src/backend
+        run: uv run pytest tests/integration/test_cv_tailoring_delete_roundtrip.py -q
+
   deployed-parity:
     name: Deployed Parity Gate (pre_merge)
     runs-on: ubuntu-latest
@@ -109,7 +125,7 @@ jobs:
             exit 0
           fi
           uv run python scripts/spec_quality/check_evidence_integrity.py \
-            --spec careervp/docs/beta/fix-api/yaml3/step_001_recovery_gates_and_baseline_controls.yaml \
+            --spec docs/beta/fix-api/yaml3/step_001_recovery_gates_and_baseline_controls.yaml \
             --artifacts-dir docs/evidence
 
   cdk-synth:

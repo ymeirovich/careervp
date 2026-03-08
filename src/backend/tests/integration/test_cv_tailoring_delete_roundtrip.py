@@ -16,11 +16,15 @@ Traceability:
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 os.environ.setdefault('POWERTOOLS_SERVICE_NAME', 'careervp-test')
 os.environ.setdefault('LOG_LEVEL', 'DEBUG')
 os.environ.setdefault('TABLE_NAME', 'test-users-table')
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+API_CONSTRUCT_PATH = REPO_ROOT / 'infra' / 'careervp' / 'api_construct.py'
 
 
 def _make_tailored_cv(cv_id: str, user_id: str) -> dict:
@@ -42,8 +46,7 @@ class TestCvTailoringDeleteRoute:
         """infra/careervp/api_construct.py includes DELETE /cv-tailoring/{cvTailoringId}."""
         import re
 
-        api_construct_path = '/Users/yitzchak/Documents/dev/careervp/infra/careervp/api_construct.py'
-        with open(api_construct_path) as f:
+        with API_CONSTRUCT_PATH.open() as f:
             content = f.read()
         matches = re.findall(r'\(\s*"([^"]+)"\s*,\s*"([A-Z]+)"\s*,', content)
         route_ops = {(method, path) for path, method in matches}
@@ -61,8 +64,7 @@ class TestCvTailoringDeleteRoute:
 
     def test_dynamodb_db_policy_includes_delete_item(self):
         """dynamodb_db IAM policy must include DeleteItem for users table delete path."""
-        api_construct_path = '/Users/yitzchak/Documents/dev/careervp/infra/careervp/api_construct.py'
-        with open(api_construct_path) as f:
+        with API_CONSTRUCT_PATH.open() as f:
             content = f.read()
 
         assert '"dynamodb_db": iam.PolicyDocument(' in content
