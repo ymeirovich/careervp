@@ -4,6 +4,18 @@ Complete toolset for diagnosing, fixing, and validating RECOVERY_002 (gap questi
 
 ## Quick Start
 
+### Validate Cloudflare Dev/Stage API Routing
+
+```bash
+cd careervp
+bash scripts/diagnostics/verify_dev_stage_api_dns_and_health.sh
+```
+
+This checks:
+- DNS resolution for `dev-api.careervp.com` and `stage-api.careervp.com`
+- `/prod/health` reachability for both environments
+- an unauthenticated protected-route probe (`/prod/users/me`) for both environments
+
 ### 0. Reset Trial Credits (Required Before Testing)
 
 **Before running tests**, reset trial credits to ensure you have credits available:

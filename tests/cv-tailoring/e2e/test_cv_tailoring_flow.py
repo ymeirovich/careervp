@@ -18,7 +18,7 @@ import requests
 def api_base_url() -> str:
     return os.getenv(
         "CAREERVP_API_BASE_URL",
-        "https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod",
+        "https://dev-api.careervp.com/prod",
     )
 
 

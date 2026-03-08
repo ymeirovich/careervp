@@ -119,7 +119,7 @@ API target mismatch was identified as a root cause for live test failures. The t
 | File | Hardcoded Default |
 |------|-------------------|
 | `docs/refactor/live_tests/run_all_tests.py` | `https://api.careervp.com/v1` |
-| `docs/refactor/live_tests/conftest.py` | `https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod` |
+| `docs/refactor/live_tests/conftest.py` | `https://dev-api.careervp.com` |
 
 ### Solution: Single-Source API_BASE Resolution
 
@@ -145,7 +145,7 @@ API target mismatch was identified as a root cause for live test failures. The t
 | Component | Resolution |
 |-----------|------------|
 | `run_all_tests.py` | Hardcoded `https://api.careervp.com/v1` |
-| `conftest.py` | Hardcoded `https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod` |
+| `conftest.py` | Hardcoded `https://dev-api.careervp.com` |
 
 **Problem:** Tests could target different APIs, causing inconsistent behavior.
 

@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-API_URL="${CAREERVP_API_BASE_URL:-https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod}"
+API_URL="${CAREERVP_API_BASE_URL:-https://dev-api.careervp.com/prod}"
 TOKEN="${CAREERVP_TOKEN:-}"
 TIMESTAMP=$(date +%s)
 

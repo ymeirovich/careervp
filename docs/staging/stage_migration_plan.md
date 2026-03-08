@@ -21,7 +21,7 @@ This document outlines the step-by-step plan to create a staging environment for
 | **SSM Parameters** | `/careervp/dev/*` | API keys, JWT keys |
 | **DynamoDB Tables** | `careervp-*-dev` | Environment-suffix tables |
 | **S3 Buckets** | `careervp-*-dev` | Environment-suffix buckets |
-| **API Gateway** | Default "prod" stage | URL: `https://{id}.execute-api.us-east-1.amazonaws.com/prod/` |
+| **API Gateway** | Custom domain mapped to prod stage | URL: `https://stage-api.careervp.com/` |
 | **Configuration** | dev_configuration.json | AWS AppConfig |
 | **CI/CD** | Auto-deploy on push to main | Via deploy.yml |
 
@@ -523,7 +523,7 @@ aws lambda list-functions --region us-east-1 \
 
 ## Access
 
-- **API Endpoint:** https://{api-id}.execute-api.us-east-1.amazonaws.com/prod/
+- **API Endpoint:** https://stage-api.careervp.com/
 - **Stack Name:** CareerVpCrudStaging
 - **Region:** us-east-1
 
@@ -544,7 +544,7 @@ ENVIRONMENT=staging make deploy
 
 ```bash
 export ENVIRONMENT=staging
-export API_BASE="https://{api-id}.execute-api.us-east-1.amazonaws.com/prod/"
+export API_BASE="https://stage-api.careervp.com/"
 make smoke-test
 ```
 
