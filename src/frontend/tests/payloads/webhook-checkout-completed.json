@@ -1,0 +1,11 @@
+{
+  "type": "checkout.session.completed",
+  "data": {
+    "object": {
+      "id": "cs_test_001",
+      "subscription": "sub_1Pxyz",
+      "customer": "cus_Nabc",
+      "metadata": { "user_id": "user-010", "plan": "monthly" }
+    }
+  }
+}

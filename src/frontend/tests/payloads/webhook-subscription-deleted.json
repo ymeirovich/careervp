@@ -1,0 +1,6 @@
+{
+  "type": "customer.subscription.deleted",
+  "data": {
+    "object": { "id": "sub_1Pxyz" }
+  }
+}

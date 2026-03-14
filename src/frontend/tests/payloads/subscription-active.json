@@ -1,0 +1,9 @@
+{
+  "subscription_id": "sub_1Pxyz",
+  "customer_id": "cus_Nabc",
+  "status": "active",
+  "plan": "monthly",
+  "current_period_end": "2026-04-14T00:00:00Z",
+  "cancel_at_period_end": false,
+  "trial_end": null
+}

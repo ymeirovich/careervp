@@ -1,0 +1,5 @@
+{
+  "plan": "quarterly",
+  "success_url": "https://app.careervp.com/billing/success?session_id={CHECKOUT_SESSION_ID}",
+  "cancel_url": "https://app.careervp.com/settings/billing"
+}

@@ -1,0 +1,8 @@
+{
+  "subscription": {
+    "subscription_id": "sub_active001",
+    "user_id": "user-006",
+    "status": "active",
+    "plan": "monthly"
+  }
+}

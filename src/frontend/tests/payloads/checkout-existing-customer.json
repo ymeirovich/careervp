@@ -1,0 +1,4 @@
+{
+  "user": { "user_id": "user-005", "stripe_customer_id": "cus_existing001" },
+  "subscription": null
+}

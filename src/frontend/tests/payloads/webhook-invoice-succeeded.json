@@ -1,0 +1,10 @@
+{
+  "type": "invoice.payment_succeeded",
+  "data": {
+    "object": {
+      "id": "in_recovered001",
+      "subscription": "sub_1Pxyz",
+      "customer": "cus_Nabc"
+    }
+  }
+}

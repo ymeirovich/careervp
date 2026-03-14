@@ -1,0 +1,5 @@
+{
+  "user": { "user_id": "user-003", "created_at": "NOW_MINUS_2_DAYS" },
+  "usage": { "user_id": "user-003", "remaining": 0 },
+  "subscription": null
+}

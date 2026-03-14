@@ -1,0 +1,11 @@
+{
+  "type": "invoice.payment_failed",
+  "data": {
+    "object": {
+      "id": "in_fail001",
+      "subscription": "sub_1Pxyz",
+      "customer": "cus_Nabc",
+      "attempt_count": 1
+    }
+  }
+}
