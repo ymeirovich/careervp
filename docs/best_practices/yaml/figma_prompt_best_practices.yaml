@@ -1,0 +1,426 @@
+# ============================================================
+# CareerVP — Figma-to-Code Prompt Specification
+# ============================================================
+# Purpose   : Machine-readable rules for composing prompts that
+#             convert Figma nodes into production-ready code for
+#             the CareerVP frontend.
+# Applies to: All Figma → Claude Code / Cursor / Copilot workflows
+# Version   : 1.0.0
+# Updated   : 2026-03-13
+# ============================================================
+
+meta:
+  project: CareerVP
+  description: >
+    AI-powered job-application platform that generates optimised CVs,
+    cover letters, and value-proposition reports.
+  figma_file_key: OAncxa2CNTZFvQ3gGrI79O
+  docs_path: /Users/yitzchak/Documents/dev/careervp/docs
+  frontend_root: /Users/yitzchak/Documents/dev/careervp/frontend
+
+
+# ─────────────────────────────────────────────
+# TECH STACK  (must be referenced in every prompt)
+# ─────────────────────────────────────────────
+tech_stack:
+  framework: "Next.js 15 (App Router)"
+  language: TypeScript
+  styling: "Tailwind CSS v3 + shadcn/ui"
+  state_management: Zustand
+  data_fetching: "TanStack Query v5"
+  forms: "react-hook-form + zod"
+  auth: "AWS Cognito (JWT in Authorization header)"
+  backend: "Python Lambda + API Gateway + DynamoDB"
+  payments: Stripe
+  icons: lucide-react
+
+
+# ─────────────────────────────────────────────
+# FILE SYSTEM CONVENTIONS
+# ─────────────────────────────────────────────
+file_conventions:
+  pages_dir: "src/app/(routes)/"
+  components_dir: "src/components/"
+  ui_components_dir: "src/components/ui/"          # shadcn primitives
+  feature_components_dir: "src/components/features/" # domain components
+  hooks_dir: "src/hooks/"
+  stores_dir: "src/stores/"
+  types_dir: "src/types/"
+  lib_dir: "src/lib/"
+  api_client_dir: "src/lib/api/"
+
+  naming_rules:
+    pages: "page.tsx  (Next.js App Router convention)"
+    components: "PascalCase.tsx"
+    hooks: "useCamelCase.ts"
+    stores: "useCamelCaseStore.ts"
+    types: "camelCase.types.ts"
+
+  path_examples:
+    dashboard_page: "src/app/(routes)/dashboard/page.tsx"
+    cv_optimizer: "src/components/features/CVOptimizer.tsx"
+    billing_card: "src/components/features/BillingCard.tsx"
+    subscription_store: "src/stores/useSubscriptionStore.ts"
+    auth_hook: "src/hooks/useAuth.ts"
+
+
+# ─────────────────────────────────────────────
+# REQUIRED PROMPT STRUCTURE
+# ─────────────────────────────────────────────
+# Every Figma-to-code prompt MUST include all five sections below.
+# Use the template at the bottom of this file.
+# ─────────────────────────────────────────────
+required_prompt_sections:
+
+  - id: 1
+    name: figma_reference
+    description: >
+      Identify the exact Figma node being implemented. Include both the
+      visual description AND the node path so the AI has dual context.
+    rules:
+      - State the Figma node name and ID (e.g. "Dashboard / SubscriptionCard — node 54:3")
+      - Describe what the component looks like in 1–2 sentences
+      - Note whether it is a full page, a section, or an isolated component
+
+  - id: 2
+    name: output_target
+    description: >
+      Specify exactly WHERE the generated code should be placed.
+    rules:
+      - Provide the exact file path relative to the frontend root
+      - State whether to CREATE a new file or MODIFY an existing one
+      - If modifying: name the function/component to insert into
+    anti_patterns:
+      - "Generate a dashboard component"       # ❌ no path
+      - "Add it to the billing section"        # ❌ ambiguous location
+
+  - id: 3
+    name: framework_and_styling
+    description: >
+      Explicitly declare the framework, component library, and any layout
+      constraints so the AI does not invent its own style system.
+    rules:
+      - Always declare: "Next.js 15 App Router, TypeScript, Tailwind CSS, shadcn/ui"
+      - Specify layout system: flexbox | grid | absolute (match Figma)
+      - Reference shadcn primitives when applicable (Card, Button, Badge, etc.)
+      - Use Tailwind utility classes only — no inline styles, no custom CSS files
+      - Colours must map to Tailwind tokens or CSS variables from globals.css
+    anti_patterns:
+      - Using arbitrary hex values instead of Tailwind tokens
+      - Creating a new .css or .module.css file for a single component
+
+  - id: 4
+    name: data_and_state
+    description: >
+      Describe how the component gets and manages its data.
+    rules:
+      - Identify the data source: API endpoint | Zustand store | props | static
+      - For API data: name the endpoint (e.g. GET /users/me/subscription) and
+        wrap the call with TanStack Query (useQuery / useMutation)
+      - For forms: use react-hook-form with a zod schema
+      - For auth-gated data: show how to extract the JWT from Cognito context
+      - Include loading, error, and empty states in the component
+    anti_patterns:
+      - Using useEffect + fetch instead of TanStack Query
+      - Storing server state in Zustand (Zustand is for UI/client state only)
+      - Hardcoding mock data without a comment marking it as a placeholder
+
+  - id: 5
+    name: behaviour_and_constraints
+    description: >
+      Describe interactions, edge cases, and explicit out-of-scope items.
+    rules:
+      - List every interactive element and its handler (onClick, onChange, etc.)
+      - Specify navigation targets (Next.js <Link> or router.push())
+      - State what happens on error (toast, inline message, redirect)
+      - List what is NOT in scope for this prompt to prevent scope creep
+      - Note any accessibility requirements (aria-label, role, keyboard nav)
+
+
+# ─────────────────────────────────────────────
+# QUALITY GATES  (AI output must pass all of these)
+# ─────────────────────────────────────────────
+quality_gates:
+  - gate: correct_file_path
+    check: "Output file matches the path specified in the prompt"
+
+  - gate: no_inline_styles
+    check: "Zero inline style={} attributes; all styling via Tailwind classes"
+
+  - gate: typescript_strict
+    check: "No implicit `any`; all props typed with interfaces or types"
+
+  - gate: shadcn_primitives
+    check: "UI building blocks use shadcn/ui components, not raw HTML"
+
+  - gate: tanstack_query
+    check: "All API calls wrapped in useQuery or useMutation"
+
+  - gate: loading_and_error_states
+    check: "Component handles isLoading, isError, and empty/null data"
+
+  - gate: no_hardcoded_secrets
+    check: "No API keys, tokens, or credentials in source code"
+
+  - gate: form_validation
+    check: "All forms use react-hook-form + zod schema"
+
+  - gate: responsive_layout
+    check: "Component is mobile-first; uses Tailwind responsive prefixes"
+
+  - gate: app_router_conventions
+    check: >
+      Pages export a default async component. Client components are marked
+      'use client'. No pages/ directory patterns used.
+
+
+# ─────────────────────────────────────────────
+# COMPONENT CATEGORY RULES
+# ─────────────────────────────────────────────
+# Extra rules that apply per component type.
+# ─────────────────────────────────────────────
+component_categories:
+
+  full_page:
+    output_path_pattern: "src/app/(routes)/<page-name>/page.tsx"
+    notes:
+      - Must be a Server Component by default (no 'use client' unless required)
+      - Data fetching via async/await at the page level or via layout
+      - Pass data down as props to child feature components
+
+  feature_component:
+    output_path_pattern: "src/components/features/<FeatureName>.tsx"
+    notes:
+      - Owns its own TanStack Query hook or receives data via props
+      - Composed from shadcn/ui primitives in src/components/ui/
+      - May have its own sub-components in the same file if < 150 lines total
+
+  ui_primitive:
+    output_path_pattern: "src/components/ui/<component-name>.tsx"
+    notes:
+      - Pure presentational; no API calls, no Zustand
+      - Fully controlled via props
+      - Must have a Storybook story (future requirement — add TODO comment)
+
+  form:
+    output_path_pattern: "src/components/features/<FormName>Form.tsx"
+    notes:
+      - Always 'use client'
+      - Schema defined with zod in a co-located <FormName>.schema.ts file
+      - Submit handler calls a useMutation hook, not a direct fetch
+
+  modal_dialog:
+    output_path_pattern: "src/components/features/<DialogName>Dialog.tsx"
+    notes:
+      - Use shadcn/ui Dialog primitive
+      - Controlled open/close state lives in the parent or Zustand store
+      - No routing inside modals
+
+
+# ─────────────────────────────────────────────
+# CAREERVP DOMAIN VOCABULARY
+# ─────────────────────────────────────────────
+# Use these exact terms in prompts to ensure consistent naming.
+# ─────────────────────────────────────────────
+domain_vocabulary:
+  entities:
+    - user
+    - subscription          # Stripe subscription record
+    - application_package   # CV + cover letter + value prop report bundle
+    - cv_document           # Optimised CV output
+    - cover_letter          # Cover letter output
+    - value_proposition     # Value proposition report output
+    - job_posting           # Input: raw job description pasted by user
+    - generation_run        # One invocation of the AI pipeline
+
+  subscription_statuses:
+    - trialing
+    - active
+    - past_due
+    - canceled
+    - incomplete
+
+  user_roles:
+    - user      # Standard job seeker
+    - admin     # Internal operator (Cognito 'Admins' group)
+
+  quota_fields:
+    - applications_used
+    - applications_limit
+    - trial_ends_at
+
+
+# ─────────────────────────────────────────────
+# PROMPT ANTI-PATTERNS  (never do these)
+# ─────────────────────────────────────────────
+anti_patterns:
+
+  - id: AP-01
+    name: vague_output_location
+    bad_example: "Create a subscription card component"
+    good_example: >
+      Create src/components/features/SubscriptionCard.tsx — a card that
+      displays the user's current plan, usage, and an upgrade CTA.
+
+  - id: AP-02
+    name: missing_stack_declaration
+    bad_example: "Implement this Figma design using React"
+    good_example: >
+      Implement this Figma design using Next.js 15 App Router, TypeScript,
+      Tailwind CSS, and shadcn/ui Card and Button components.
+
+  - id: AP-03
+    name: no_data_source
+    bad_example: "Show the user's subscription status"
+    good_example: >
+      Fetch subscription status from GET /users/me/subscription using
+      useQuery. Display trialing | active | past_due as a shadcn Badge.
+
+  - id: AP-04
+    name: missing_states
+    bad_example: "Display the list of application packages"
+    good_example: >
+      Display the list of application packages. Show a Skeleton loader
+      while isLoading, an Alert with retry button on isError, and an
+      empty-state illustration when the list is empty.
+
+  - id: AP-05
+    name: scope_creep
+    bad_example: "Build the dashboard page"
+    good_example: >
+      Build only the SubscriptionSummaryCard section of the dashboard
+      page. Out of scope: the ApplicationHistory table and the nav sidebar.
+
+  - id: AP-06
+    name: wrong_state_tool
+    bad_example: "Store the fetched subscription data in Zustand"
+    good_example: >
+      Cache subscription data with TanStack Query (useQuery). Use Zustand
+      only for the UI state that controls the upgrade modal open/close.
+
+
+# ─────────────────────────────────────────────
+# MASTER PROMPT TEMPLATE
+# ─────────────────────────────────────────────
+# Copy this template for every Figma-to-code task.
+# Replace ALL <placeholders>.
+# ─────────────────────────────────────────────
+prompt_template: |
+  ## Figma → Code: <ComponentName>
+
+  ### 1. Figma Reference
+  Implement the Figma node "<Node Name>" (node ID: <XX:XX>) from the
+  CareerVP design file (key: OAncxa2CNTZFvQ3gGrI79O).
+  This node is a <full page | section | isolated component> that shows
+  <1-sentence visual description>.
+
+  ### 2. Output Target
+  <CREATE | MODIFY> the file at:
+    <relative/path/from/frontend/root/ComponentName.tsx>
+  <If MODIFY: Insert the new component inside the `<FunctionName>` function,
+   after line ~<N>.>
+
+  ### 3. Framework & Styling
+  - Next.js 15 App Router, TypeScript (strict), Tailwind CSS v3, shadcn/ui
+  - Layout: <flexbox | grid | absolute> — match the Figma layout exactly
+  - Use these shadcn primitives: <Card, Button, Badge, Dialog, ...>
+  - Colour tokens: <e.g. bg-primary, text-muted-foreground, border-border>
+  - Mark as 'use client' if the component has: <hooks | event handlers | browser APIs>
+
+  ### 4. Data & State
+  - Data source: <API endpoint path | Zustand store | props | static>
+  <If API:>
+  - Fetch with useQuery({ queryKey: ['<key>'], queryFn: () => api.<method>() })
+  - API function lives in src/lib/api/<domain>.ts
+  <If form:>
+  - Form managed by react-hook-form; validation schema in <FormName>.schema.ts
+  - Submit via useMutation calling POST <endpoint>
+  - States to handle: isLoading → <Skeleton>, isError → <Alert>, empty → <EmptyState>
+
+  ### 5. Behaviour & Constraints
+  Interactive elements:
+  - <Button label>: <onClick handler description>
+  - <Link label>: navigates to <route> via Next.js <Link> or router.push()
+  On error: <toast message | inline Alert | redirect to /error>
+  Accessibility: <aria-label values, keyboard nav requirements>
+  OUT OF SCOPE for this prompt:
+  - <item 1>
+  - <item 2>
+
+
+# ─────────────────────────────────────────────
+# WORKED EXAMPLES
+# ─────────────────────────────────────────────
+examples:
+
+  - name: SubscriptionCard
+    prompt: |
+      ## Figma → Code: SubscriptionCard
+
+      ### 1. Figma Reference
+      Implement the Figma node "Dashboard / SubscriptionCard" (node 54:3)
+      from file OAncxa2CNTZFvQ3gGrI79O.
+      This is an isolated component showing the user's current plan, usage
+      quota, days remaining in trial, and an upgrade CTA button.
+
+      ### 2. Output Target
+      CREATE src/components/features/SubscriptionCard.tsx
+
+      ### 3. Framework & Styling
+      - Next.js 15 App Router, TypeScript strict, Tailwind CSS, shadcn/ui
+      - Layout: flex column, gap-4, inside a shadcn Card
+      - Primitives: Card, CardHeader, CardContent, Button, Badge, Progress
+      - Colour tokens: bg-card, text-foreground, text-muted-foreground
+      - Mark 'use client' (uses onClick handler)
+
+      ### 4. Data & State
+      - Fetch from GET /users/me/subscription via:
+          useQuery({ queryKey: ['subscription'], queryFn: api.getSubscription })
+      - Display fields: status (Badge), applications_used / applications_limit
+        (Progress bar + text), trial_ends_at (formatted date)
+      - isLoading → render <SubscriptionCardSkeleton />
+      - isError   → render shadcn Alert "Could not load subscription"
+      - Zustand: useSubscriptionStore controls upgradeModalOpen state
+
+      ### 5. Behaviour & Constraints
+      - "Upgrade Plan" button: sets upgradeModalOpen = true in Zustand store
+      - Badge colour: trialing=blue, active=green, past_due=red, canceled=gray
+      - Accessible: Button has aria-label="Upgrade your CareerVP plan"
+      OUT OF SCOPE:
+      - The UpgradeDialog itself (separate prompt)
+      - Any billing history display
+
+  - name: CVOptimizerForm
+    prompt: |
+      ## Figma → Code: CVOptimizerForm
+
+      ### 1. Figma Reference
+      Implement "Optimizer / CVUploadForm" (node 12:34).
+      A two-column form with a job description textarea on the left and
+      a CV file-upload drop zone on the right, plus a submit button.
+
+      ### 2. Output Target
+      CREATE src/components/features/CVOptimizerForm.tsx
+      CREATE src/components/features/CVOptimizerForm.schema.ts
+
+      ### 3. Framework & Styling
+      - Next.js 15 App Router, TypeScript strict, Tailwind CSS, shadcn/ui
+      - Layout: CSS grid, 2 columns on md+, 1 column on mobile
+      - Primitives: Textarea, Button, Label, Alert
+      - Mark 'use client'
+
+      ### 4. Data & State
+      - Form: react-hook-form with zod schema in CVOptimizerForm.schema.ts
+      - Schema fields: jobDescription (string, min 50 chars), cvFile (File)
+      - Submit: useMutation calling POST /cv/optimize (multipart/form-data)
+      - isLoading → Button shows spinner + disabled
+      - isError   → shadcn Alert below the form with server error message
+      - onSuccess → router.push('/results/<runId>')
+
+      ### 5. Behaviour & Constraints
+      - File drop zone accepts .pdf and .docx only; show error for other types
+      - Character counter below jobDescription textarea
+      - Submit button label: "Optimise My CV"
+      OUT OF SCOPE:
+      - Results display page
+      - Credit / quota check (handled server-side)

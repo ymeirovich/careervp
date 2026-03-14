@@ -1,0 +1,31 @@
+{
+  "runner": "careervp-live-tests",
+  "executed_at_utc": "2026-03-07T16:32:15.220587Z",
+  "mode": "single",
+  "requested_test": "interview-prep",
+  "api_base": "https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod",
+  "test_user": "test-user-e2e",
+  "auth_enabled": "true",
+  "modules": [
+    {
+      "name": "interview-prep",
+      "module_name": "test_08_interview_prep",
+      "class_names": [
+        "TestInterviewPrepEndpoints"
+      ],
+      "status": "fail",
+      "pytest_exit_code": 1
+    }
+  ],
+  "errors": [],
+  "totals": {
+    "selected": 1,
+    "passed": 0,
+    "failed": 1
+  },
+  "non_2xx_count": 1,
+  "empty_array_count": 0,
+  "generated_id_missing_count": 0,
+  "status": "fail",
+  "exit_code": 1
+}
