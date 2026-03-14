@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Figma Design Tokens ────────────────────────────────────────────────── */
+@layer base {
+  :root {
+    /* From Figma: CareerVP Test1 */
+    --color-bg: #1a1a2e;           /* Desktop-1/2 background */
+    --color-button-default: #f97316; /* Button default state */
+    --color-button-click: #ffcc00;   /* Button click state */
+    --color-border: #000000;         /* Button border */
+
+    /* Spacing & Typography */
+    --button-radius: 1000px;
+    --button-padding-x: 1.75rem;     /* 28px */
+    --button-padding-y: 0.625rem;    /* 10px */
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply antialiased;
+  }
+}
+
+/* ─── Component Styles ────────────────────────────────────────────────────── */
+@layer components {
+  .grain-texture {
+    @apply pointer-events-none fixed inset-0 z-[1] mix-blend-multiply opacity-[0.18];
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 300px 300px;
+  }
+
+  .btn-careerVP {
+    @apply inline-flex items-center justify-center cursor-pointer rounded-[1000px] border border-black px-7 py-2.5 font-[family-name:var(--font-sans)] text-[32px] font-normal leading-normal text-black shadow-[0_4px_0_#000,0_8px_24px_rgba(0,0,0,0.15)] transition-all duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)];
+    background-color: var(--color-button-default);
+  }
+
+  .btn-careerVP:hover:not(.clicked) {
+    @apply -translate-y-1;
+    box-shadow: 0 6px 0 #000, 0 12px 32px rgba(249, 115, 22, 0.35);
+  }
+
+  .btn-careerVP:active:not(.clicked) {
+    @apply translate-y-1;
+    box-shadow: 0 2px 0 #000;
+  }
+
+  .btn-careerVP.clicked {
+    background-color: var(--color-button-click);
+    box-shadow: 0 4px 0 #000, 0 6px 20px rgba(255, 204, 0, 0.4);
+  }
+}
+
+/* ─── Animations ──────────────────────────────────────────────────────────── */
+@keyframes fireworks-pop {
+  from {
+    transform: scale(0.82);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
