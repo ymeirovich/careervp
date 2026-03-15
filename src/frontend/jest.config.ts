@@ -11,7 +11,7 @@ const config: Config = {
   transform: {
     '^.+\\.ts$': 'ts-jest',
   },
-  setupFilesAfterSetup: ['<rootDir>/tests/setup.ts'],
+  setupFiles: ['<rootDir>/tests/setup.ts'],
   collectCoverageFrom: [
     'tests/**/*.test.ts',
     '!tests/payloads/**',
@@ -19,7 +19,6 @@ const config: Config = {
   coverageDirectory: 'coverage',
   verbose: true,
   testTimeout: 30000,
-  // Group tests by type
   projects: [
     {
       displayName: 'unit',
@@ -43,6 +42,45 @@ const config: Config = {
     {
       displayName: 'regression',
       testMatch: ['<rootDir>/tests/regression/**/*.test.ts'],
+      transform: { '^.+\\.ts$': 'ts-jest' },
+      testEnvironment: 'node',
+    },
+    {
+      displayName: 'critical',
+      testMatch: [
+        '<rootDir>/tests/unit/backward-compat-*.test.ts',
+        '<rootDir>/tests/unit/webhook-out-of-order*.test.ts',
+        '<rootDir>/tests/unit/webhook-stale-data*.test.ts',
+        '<rootDir>/tests/unit/lifecycle-trial-no-restart.test.ts',
+        '<rootDir>/tests/unit/observability-*.test.ts',
+        '<rootDir>/tests/integration/concurrent-checkout.integration.test.ts',
+        '<rootDir>/tests/integration/race-condition-*.integration.test.ts',
+        '<rootDir>/tests/integration/stripe-*.integration.test.ts',
+        '<rootDir>/tests/integration/partial-failure-*.integration.test.ts',
+        '<rootDir>/tests/integration/subscription-cache-stale.integration.test.ts',
+        '<rootDir>/tests/integration/state-*.integration.test.ts',
+        '<rootDir>/tests/integration/lifecycle-resubscribe-*.integration.test.ts',
+      ],
+      transform: { '^.+\\.ts$': 'ts-jest' },
+      testEnvironment: 'node',
+    },
+    {
+      displayName: 'perf',
+      testMatch: ['<rootDir>/tests/perf/**/*.test.ts'],
+      transform: { '^.+\\.ts$': 'ts-jest' },
+      testEnvironment: 'node',
+      testTimeout: 120000,
+    },
+    {
+      displayName: 'ops',
+      testMatch: ['<rootDir>/tests/ops/**/*.test.ts'],
+      transform: { '^.+\\.ts$': 'ts-jest' },
+      testEnvironment: 'node',
+      testTimeout: 60000,
+    },
+    {
+      displayName: 'security',
+      testMatch: ['<rootDir>/tests/security/**/*.test.ts'],
       transform: { '^.+\\.ts$': 'ts-jest' },
       testEnvironment: 'node',
     },

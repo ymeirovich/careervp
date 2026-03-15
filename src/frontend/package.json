@@ -11,10 +11,10 @@
     "test:regression": "jest --config jest.config.ts --selectProjects regression",
     "test:coverage": "jest --config jest.config.ts --coverage",
     "test:watch": "jest --config jest.config.ts --watch",
-    "test:critical": "jest --config jest.config.ts --testPathPattern='(unit|integration)/(backward-compat|concurrent|race-condition|stripe-error|stripe-timeout|stripe-rate|partial-failure|subscription-cache|state-divergence|state-reconcil|lifecycle-resubscribe|webhook-out-of-order|lifecycle-trial)'",
-    "test:perf": "PERF_TEST=true jest --config jest.config.ts --testPathPattern='perf/'",
-    "test:ops": "jest --config jest.config.ts --testPathPattern='ops/'",
-    "test:security": "jest --config jest.config.ts --testPathPattern='security/'",
+    "test:critical": "jest --config jest.config.ts --selectProjects critical",
+    "test:perf": "PERF_TEST=true jest --config jest.config.ts --selectProjects perf",
+    "test:ops": "OPS_TEST=true jest --config jest.config.ts --selectProjects ops",
+    "test:security": "jest --config jest.config.ts --selectProjects security",
     "test:all": "jest --config jest.config.ts"
   },
   "devDependencies": {
