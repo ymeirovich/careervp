@@ -1,0 +1,5 @@
+{
+  "user": { "user_id": "missing-usage-001", "created_at": "NOW_MINUS_2_DAYS" },
+  "usage": null,
+  "subscription": null
+}

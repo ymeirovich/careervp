@@ -1,0 +1,6 @@
+{
+  "user_id": "partial-fail-001",
+  "stripe_customer_id": "cus_created_successfully",
+  "checkout_session_id": "cs_created_successfully",
+  "dynamodb_subscription_write_fails": true
+}

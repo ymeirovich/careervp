@@ -1,0 +1,9 @@
+{
+  "user_id": "resubscribe-user-001",
+  "previous_subscription": {
+    "subscription_id": "sub_canceled_001",
+    "status": "canceled",
+    "plan": "monthly"
+  },
+  "new_subscription_request": { "plan": "quarterly" }
+}

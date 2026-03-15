@@ -1,0 +1,5 @@
+{
+  "user_id": "stripe-503-user",
+  "plan": "monthly",
+  "stripe_error": { "type": "api_error", "status": 503, "message": "Service unavailable" }
+}

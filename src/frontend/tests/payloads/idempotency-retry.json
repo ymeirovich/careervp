@@ -1,0 +1,7 @@
+{
+  "user_id": "idempotency-user-001",
+  "idempotency_key": "checkout_idempotency-user-001_req-abc123",
+  "plan": "monthly",
+  "first_response": { "checkout_url": "https://checkout.stripe.com/pay/cs_test_original" },
+  "retry_response": { "checkout_url": "https://checkout.stripe.com/pay/cs_test_original" }
+}

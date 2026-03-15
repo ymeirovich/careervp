@@ -1,0 +1,17 @@
+{
+  "user_id": "out-of-order-001",
+  "events": [
+    {
+      "type": "customer.subscription.updated",
+      "data": { "object": { "id": "sub_001", "status": "active", "plan": "quarterly", "created": 1741996800 } },
+      "stripe_event_id": "evt_update_001",
+      "received_at": "T+10s"
+    },
+    {
+      "type": "checkout.session.completed",
+      "data": { "object": { "subscription": "sub_001", "customer": "cus_001", "metadata": { "user_id": "out-of-order-001", "plan": "monthly" } } },
+      "stripe_event_id": "evt_checkout_001",
+      "received_at": "T+0s"
+    }
+  ]
+}

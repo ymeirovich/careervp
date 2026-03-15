@@ -1,0 +1,9 @@
+{
+  "user": { "user_id": "race-window-001", "created_at": "NOW_MINUS_2_DAYS", "stripe_customer_id": null },
+  "subscription_injected_during_check": {
+    "subscription_id": "sub_injected",
+    "user_id": "race-window-001",
+    "status": "active",
+    "plan": "monthly"
+  }
+}

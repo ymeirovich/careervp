@@ -1,0 +1,9 @@
+{
+  "cached_subscription": {
+    "subscription_id": "sub_stale_001",
+    "user_id": "stale-user-001",
+    "status": "active",
+    "cached_at": "NOW_MINUS_35_MINUTES"
+  },
+  "stripe_actual_status": "past_due"
+}

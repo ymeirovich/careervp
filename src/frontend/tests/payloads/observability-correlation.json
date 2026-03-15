@@ -1,0 +1,6 @@
+{
+  "user_id": "obs-user-001",
+  "request_id": "req-abc123-xyz",
+  "expected_log_fields": ["request_id", "user_id", "event", "timestamp"],
+  "expected_metrics": ["checkout_attempt", "checkout_success"]
+}

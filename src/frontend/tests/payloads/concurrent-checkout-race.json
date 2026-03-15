@@ -1,0 +1,7 @@
+{
+  "user_id": "race-user-001",
+  "plan": "monthly",
+  "success_url": "https://app.careervp.com/billing/success?session_id={CHECKOUT_SESSION_ID}",
+  "cancel_url": "https://app.careervp.com/settings/billing",
+  "concurrent_request_count": 2
+}
