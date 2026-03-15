@@ -75,3 +75,5 @@ describe('Regression: CORS No Wildcard', () => {
     });
   });
 });
+
+export {};

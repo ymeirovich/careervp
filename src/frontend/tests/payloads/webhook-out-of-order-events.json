@@ -3,7 +3,7 @@
   "events": [
     {
       "type": "customer.subscription.updated",
-      "data": { "object": { "id": "sub_001", "status": "active", "plan": "quarterly", "created": 1741996800 } },
+      "data": { "object": { "id": "sub_001", "status": "active", "plan": "quarterly", "created": 1741996810 } },
       "stripe_event_id": "evt_update_001",
       "received_at": "T+10s"
     },

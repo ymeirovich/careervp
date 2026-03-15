@@ -168,3 +168,5 @@ describe('SEC-003: No Secrets in Lambda Logs', () => {
     );
   });
 });
+
+export {};

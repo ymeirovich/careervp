@@ -122,7 +122,9 @@ describe('CC-001: Concurrent Checkout Prevention', () => {
 
   it('should not create duplicate subscriptions under concurrent load', async () => {
     mockStripeCustomerCreate.mockResolvedValue({ id: 'cus_dedup_001' });
-    mockSubscriptionDal.create_checkout_intent.mockResolvedValue(undefined);
+    mockSubscriptionDal.create_checkout_intent
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('ConditionalCheckFailedException'));
 
     const N = concurrentPayload.concurrent_request_count;
     await Promise.allSettled(

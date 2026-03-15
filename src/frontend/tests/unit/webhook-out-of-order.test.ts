@@ -135,7 +135,7 @@ describe('CC-011: Webhook Out-of-Order Event Processing', () => {
       .mockResolvedValueOnce({ // After update processed (plan=quarterly, T+10s)
         subscription_id: 'sub_001',
         plan: 'quarterly',
-        updated_at: 1741996800, // The created timestamp from update event
+        updated_at: 1741996810, // The created timestamp from update event
       });
 
     await processWebhookEvent(updateEvent);   // Arrives first despite being T+10s

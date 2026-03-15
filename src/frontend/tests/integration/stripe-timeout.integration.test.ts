@@ -95,7 +95,8 @@ describe('CC-009: Stripe API Call Timeout', () => {
 
     const resultPromise = handleCheckout('timeout-user', 'monthly');
 
-    // Fast-forward 11 seconds to trigger the timeout
+    // Yield to let get_user resolve (registers the setTimeout), then advance timers
+    await Promise.resolve();
     jest.advanceTimersByTime(11_000);
 
     const result = await resultPromise;
@@ -114,6 +115,8 @@ describe('CC-009: Stripe API Call Timeout', () => {
 
     const resultPromise = handleCheckout('timeout-user', 'monthly');
 
+    // Yield to let get_user resolve (registers the setTimeout), then advance timers
+    await Promise.resolve();
     // Advance to just before 10s — should NOT have timed out yet
     jest.advanceTimersByTime(9_999);
     // Advance past 10s — timeout fires
@@ -130,6 +133,7 @@ describe('CC-009: Stripe API Call Timeout', () => {
     mockStripeCheckoutCreate.mockImplementation(() => new Promise(() => {}));
 
     const resultPromise = handleCheckout('timeout-user', 'monthly');
+    await Promise.resolve();
     jest.advanceTimersByTime(11_000);
     await resultPromise;
 
@@ -152,3 +156,5 @@ describe('CC-009: Stripe API Call Timeout', () => {
     expect(result.body.checkout_url).toMatch(/checkout\.stripe\.com/);
   });
 });
+
+export {};

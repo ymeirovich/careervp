@@ -12,6 +12,8 @@
  *   PERF_TEST=true npx jest --testPathPattern='perf/' --testTimeout=30000
  */
 
+jest.setTimeout(120000);
+
 const SKIP_PERF = !process.env.PERF_TEST;
 
 // ─── Mock Setup ──────────────────────────────────────────────────────────────
@@ -138,3 +140,5 @@ describe('PERF-001: 100 Concurrent Checkouts', () => {
     });
   });
 });
+
+export {};

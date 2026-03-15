@@ -155,3 +155,5 @@ describe('CC-014: Partial Failure — Subscription Created, Usage Update Fails',
     expect(mockUsageDal.set_unlimited_usage).toHaveBeenCalledWith(testEvent.user_id, 9999);
   });
 });
+
+export {};

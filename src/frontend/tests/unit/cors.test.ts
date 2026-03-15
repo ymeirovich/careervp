@@ -103,3 +103,5 @@ describe('CORS Configuration', () => {
     });
   });
 });
+
+export {};

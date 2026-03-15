@@ -14,6 +14,8 @@
  *   OPS_TEST=true STAGE=staging npx jest --testPathPattern='ops/'
  */
 
+jest.setTimeout(60000);
+
 const SKIP_OPS = !process.env.OPS_TEST;
 const STAGE = process.env.STAGE ?? 'dev';
 
@@ -127,3 +129,5 @@ describe('STAGE-001: Staging Uses Different Secrets from Production', () => {
     });
   });
 });
+
+export {};

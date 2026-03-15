@@ -6,6 +6,8 @@
  * Environment: dev stage; Stripe test mode; Stripe CLI.
  */
 
+jest.setTimeout(60000);
+
 // ─── Configuration ───────────────────────────────────────────────────────────
 
 const DEV_API_BASE = 'https://dev-api.careervp.com';
@@ -105,3 +107,5 @@ describe('E2E: Invoice Payment Recovery', () => {
     });
   });
 });
+
+export {};

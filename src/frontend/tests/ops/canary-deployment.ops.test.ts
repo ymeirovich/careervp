@@ -15,6 +15,8 @@
  *   OPS_TEST=true STAGE=prod npx jest --testPathPattern='ops/'
  */
 
+jest.setTimeout(60000);
+
 const SKIP_OPS = !process.env.OPS_TEST;
 const STAGE = process.env.STAGE ?? 'dev';
 const LAMBDA_FUNCTION_NAME = `careervp-billing-${STAGE}`;
@@ -137,3 +139,5 @@ describe('STAGE-003: Canary Deployment Procedure', () => {
     });
   });
 });
+
+export {};

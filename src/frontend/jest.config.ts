@@ -37,7 +37,6 @@ const config: Config = {
       testMatch: ['<rootDir>/tests/e2e/**/*.test.ts'],
       transform: { '^.+\\.ts$': 'ts-jest' },
       testEnvironment: 'node',
-      testTimeout: 60000,
     },
     {
       displayName: 'regression',
@@ -69,14 +68,12 @@ const config: Config = {
       testMatch: ['<rootDir>/tests/perf/**/*.test.ts'],
       transform: { '^.+\\.ts$': 'ts-jest' },
       testEnvironment: 'node',
-      testTimeout: 120000,
     },
     {
       displayName: 'ops',
       testMatch: ['<rootDir>/tests/ops/**/*.test.ts'],
       transform: { '^.+\\.ts$': 'ts-jest' },
       testEnvironment: 'node',
-      testTimeout: 60000,
     },
     {
       displayName: 'security',

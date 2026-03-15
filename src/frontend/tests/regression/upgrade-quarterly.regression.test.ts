@@ -134,3 +134,5 @@ describe('Regression: Quarterly Upgrade Variant', () => {
     });
   });
 });
+
+export {};

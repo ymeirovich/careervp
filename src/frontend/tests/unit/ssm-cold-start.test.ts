@@ -154,3 +154,5 @@ describe('SSM Cold Start Failure Handling', () => {
     );
   });
 });
+
+export {};

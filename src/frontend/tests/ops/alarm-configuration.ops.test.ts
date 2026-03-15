@@ -20,6 +20,8 @@
  *   OPS_TEST=true npx jest --testPathPattern='ops/'
  */
 
+jest.setTimeout(60000);
+
 const SKIP_OPS = !process.env.OPS_TEST;
 const AWS_REGION = process.env.AWS_REGION ?? 'us-east-1';
 const STAGE = process.env.STAGE ?? 'dev';
@@ -163,3 +165,5 @@ describe('OBS-003: CloudWatch Alarm Configuration', () => {
     });
   });
 });
+
+export {};

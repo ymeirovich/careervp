@@ -158,3 +158,5 @@ describe('CC-018: Subscription State Reconciliation', () => {
     expect(result.checked).toBe(2);
   });
 });
+
+export {};

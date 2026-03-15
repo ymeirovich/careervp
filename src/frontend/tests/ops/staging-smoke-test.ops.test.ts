@@ -22,6 +22,8 @@
  *   OPS_TEST=true STAGE=staging npx jest --testPathPattern='ops/' --testTimeout=60000
  */
 
+jest.setTimeout(60000);
+
 const SKIP_OPS = !process.env.OPS_TEST;
 const STAGE = process.env.STAGE ?? 'dev';
 const STAGING_API = process.env.STAGING_API_URL ?? `https://${STAGE}-api.careervp.com`;
@@ -132,3 +134,5 @@ describe('STAGE-002: Staging Smoke Test', () => {
     });
   });
 });
+
+export {};

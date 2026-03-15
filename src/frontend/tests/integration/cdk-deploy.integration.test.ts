@@ -137,3 +137,5 @@ describe('Integration: CDK Deploy Verification', () => {
     });
   });
 });
+
+export {};

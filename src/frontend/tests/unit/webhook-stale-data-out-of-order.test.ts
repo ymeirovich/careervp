@@ -88,9 +88,9 @@ describe('CC-012: Stale Data from Out-of-Order Webhook', () => {
 
     mockSubscriptionDal.get_subscription
       .mockResolvedValueOnce(null) // First event: no existing record
-      .mockResolvedValueOnce({     // Second event: record from first event
+      .mockResolvedValueOnce({     // Second event: record from newer event (1742000000)
         subscription_id: 'sub_001',
-        stripe_event_created: 1741000000,
+        stripe_event_created: 1742000000,
       });
 
     // Process newer event first (correct behaviour — apply it)
@@ -188,6 +188,8 @@ describe('CC-012: Stale Data from Out-of-Order Webhook', () => {
     }
 
     // After all events, the newest (t3 = active) should win
-    expect(storedRecord).toMatchObject({ new_status: 'active' });
+    expect(storedRecord).toMatchObject({ status: 'active' });
   });
 });
+
+export {};

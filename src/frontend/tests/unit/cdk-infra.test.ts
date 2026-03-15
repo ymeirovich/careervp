@@ -217,3 +217,5 @@ describe('CDK Infrastructure Provisioning', () => {
     });
   });
 });
+
+export {};

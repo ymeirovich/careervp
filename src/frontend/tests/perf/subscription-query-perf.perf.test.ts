@@ -14,6 +14,8 @@
  *   PERF_TEST=true npx jest --testPathPattern='perf/' --testTimeout=30000
  */
 
+jest.setTimeout(120000);
+
 const SKIP_PERF = !process.env.PERF_TEST;
 
 // ─── Mock Setup ──────────────────────────────────────────────────────────────
@@ -117,3 +119,5 @@ describe('PERF-002: Subscription Query Performance', () => {
     });
   });
 });
+
+export {};

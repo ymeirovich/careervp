@@ -9,6 +9,8 @@
  * Environment: dev stage; Stripe test mode; Stripe CLI webhook relay.
  */
 
+jest.setTimeout(60000);
+
 // ─── Configuration ───────────────────────────────────────────────────────────
 
 const DEV_API_BASE = 'https://dev-api.careervp.com';
@@ -141,3 +143,5 @@ describe('E2E: Full Upgrade Flow', () => {
     });
   });
 });
+
+export {};

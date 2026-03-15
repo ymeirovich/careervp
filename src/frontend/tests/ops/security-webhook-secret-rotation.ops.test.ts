@@ -21,6 +21,8 @@
  *   OPS_TEST=true npx jest --testPathPattern='ops/'
  */
 
+jest.setTimeout(60000);
+
 const SKIP_OPS = !process.env.OPS_TEST;
 const STAGE = process.env.STAGE ?? 'dev';
 
@@ -132,3 +134,5 @@ describe('SEC-001: Webhook Secret Rotation Procedure', () => {
     });
   });
 });
+
+export {};

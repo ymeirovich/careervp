@@ -140,3 +140,5 @@ describe('CC-015: Partial Failure Rollback / Forward Strategy', () => {
     expect(result.body.checkout_url).toMatch(/checkout\.stripe\.com/);
   });
 });
+
+export {};

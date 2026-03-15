@@ -171,3 +171,5 @@ describe('SEC-002: Rate Limiting on Webhook Endpoint', () => {
     expect(WEBHOOK_THROTTLE_CONFIG.scope).toBe('per-IP');
   });
 });
+
+export {};
