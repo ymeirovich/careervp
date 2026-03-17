@@ -12,7 +12,10 @@ import portalNoCustomerPayload from '../payloads/portal-no-customer.json';
 
 // ─── Mock Setup ──────────────────────────────────────────────────────────────
 
-const mockStripePortalCreate = jest.fn();
+// Generic PaymentProvider interface mock — replace with concrete provider at integration time
+const mockPaymentProvider = {
+  createPortalSession: jest.fn(),
+};
 const mockDal = {
   get_customer_id: jest.fn(),
 };
@@ -38,14 +41,14 @@ async function handlePortal(
     };
   }
 
-  const portalSession = mockStripePortalCreate({
-    customer: customerId,
+  const portalSession = mockPaymentProvider.createPortalSession({
+    customer_id: customerId,
     return_url: returnUrl,
   });
 
   return {
     statusCode: 200,
-    body: { portal_url: portalSession.url },
+    body: { portal_url: portalSession.portal_url },
   };
 }
 
@@ -54,8 +57,9 @@ async function handlePortal(
 describe('Customer Portal Session', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockStripePortalCreate.mockReturnValue({
-      url: 'https://billing.stripe.com/session/test_portal_001',
+    mockPaymentProvider.createPortalSession.mockReturnValue({
+      session_id: 'bps_test_001',
+      portal_url: 'https://billing.example.com/session/test_portal_001',
     });
   });
 
@@ -69,16 +73,16 @@ describe('Customer Portal Session', () => {
         return_url: portalRequestPayload.return_url,
       });
 
-      // Assert stripe.billing_portal.Session.create() called with correct customer
-      expect(mockStripePortalCreate).toHaveBeenCalledWith({
-        customer: 'cus_Nabc',
+      // Assert payment_provider.create_portal_session() called with correct customer
+      expect(mockPaymentProvider.createPortalSession).toHaveBeenCalledWith({
+        customer_id: 'cus_Nabc',
         return_url: 'https://app.careervp.com/settings/billing',
       });
 
       // Assert 200 with portal_url
       expect(result.statusCode).toBe(200);
       expect(result.body.portal_url).toBe(
-        'https://billing.stripe.com/session/test_portal_001',
+        'https://billing.example.com/session/test_portal_001',
       );
     });
   });
@@ -93,8 +97,8 @@ describe('Customer Portal Session', () => {
         return_url: 'https://app.careervp.com/settings/billing',
       });
 
-      // Assert stripe portal NOT called
-      expect(mockStripePortalCreate).not.toHaveBeenCalled();
+      // Assert payment provider portal NOT called
+      expect(mockPaymentProvider.createPortalSession).not.toHaveBeenCalled();
 
       // Assert 404 response
       expect(result.statusCode).toBe(404);

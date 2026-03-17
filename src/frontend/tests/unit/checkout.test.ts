@@ -5,7 +5,7 @@
  * Tests the POST /billing/checkout handler logic including:
  * - Monthly and quarterly plan checkout creation
  * - Invalid plan rejection (400)
- * - Stripe customer reuse for returning users
+ * - Payment provider customer reuse for returning users
  * - Duplicate checkout blocking (409) for active subscribers
  */
 
@@ -23,8 +23,11 @@ const PRICE_MAP: Record<string, string> = {
   quarterly: 'price_quarterly_001',
 };
 
-const mockStripCustomerCreate = jest.fn();
-const mockStripeCheckoutSessionCreate = jest.fn();
+// Generic PaymentProvider interface mock — replace with concrete provider at integration time
+const mockPaymentProvider = {
+  createCustomer: jest.fn(),
+  createCheckoutSession: jest.fn(),
+};
 const mockDal = {
   get_subscription_by_user: jest.fn(),
   get_customer_id: jest.fn(),
@@ -69,11 +72,11 @@ async function handleCheckout(
     };
   }
 
-  // Get or create Stripe customer
+  // Get or create payment-provider customer
   let customerId = mockDal.get_customer_id(userId);
   if (!customerId) {
     const user = mockUserDal.get_user(userId);
-    const customer = mockStripCustomerCreate({
+    const customer = mockPaymentProvider.createCustomer({
       email: user?.email ?? '',
       metadata: { user_id: userId },
     });
@@ -82,9 +85,9 @@ async function handleCheckout(
   }
 
   const priceId = PRICE_MAP[plan];
-  const session = mockStripeCheckoutSessionCreate({
-    customer: customerId,
-    payment_method_types: ['card'],
+  const session = mockPaymentProvider.createCheckoutSession({
+    customer_id: customerId,
+    price_id: priceId,
     line_items: [{ price: priceId, quantity: 1 }],
     mode: 'subscription',
     success_url,
@@ -94,7 +97,7 @@ async function handleCheckout(
 
   return {
     statusCode: 200,
-    body: { checkout_url: session.url },
+    body: { checkout_url: session.checkout_url },
   };
 }
 
@@ -103,10 +106,10 @@ async function handleCheckout(
 describe('Checkout Session Creation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockStripCustomerCreate.mockReturnValue({ id: 'cus_test001' });
-    mockStripeCheckoutSessionCreate.mockReturnValue({
-      id: 'cs_test_001',
-      url: 'https://checkout.stripe.com/c/pay/cs_test_001',
+    mockPaymentProvider.createCustomer.mockReturnValue({ id: 'cus_test001' });
+    mockPaymentProvider.createCheckoutSession.mockReturnValue({
+      session_id: 'cs_test_001',
+      checkout_url: 'https://checkout.example.com/c/pay/cs_test_001',
     });
     mockUserDal.get_user.mockReturnValue({
       user_id: 'user-004',
@@ -123,8 +126,8 @@ describe('Checkout Session Creation', () => {
 
       const result = await handleCheckout('user-004', checkoutMonthlyPayload);
 
-      // Assert stripe.Customer.create() called with metadata.user_id
-      expect(mockStripCustomerCreate).toHaveBeenCalledWith(
+      // Assert payment_provider.create_customer() called with metadata.user_id
+      expect(mockPaymentProvider.createCustomer).toHaveBeenCalledWith(
         expect.objectContaining({
           metadata: { user_id: 'user-004' },
         }),
@@ -133,10 +136,10 @@ describe('Checkout Session Creation', () => {
       // Assert dal.store_customer_id called
       expect(mockDal.store_customer_id).toHaveBeenCalledWith('user-004', 'cus_test001');
 
-      // Assert checkout.Session.create called with monthly price
-      expect(mockStripeCheckoutSessionCreate).toHaveBeenCalledWith(
+      // Assert payment_provider.create_checkout_session called with monthly price
+      expect(mockPaymentProvider.createCheckoutSession).toHaveBeenCalledWith(
         expect.objectContaining({
-          customer: 'cus_test001',
+          customer_id: 'cus_test001',
           line_items: [{ price: 'price_monthly_001', quantity: 1 }],
           mode: 'subscription',
         }),
@@ -144,20 +147,20 @@ describe('Checkout Session Creation', () => {
 
       // Assert response 200 with checkout_url
       expect(result.statusCode).toBe(200);
-      expect(result.body.checkout_url).toBe('https://checkout.stripe.com/c/pay/cs_test_001');
+      expect(result.body.checkout_url).toBe('https://checkout.example.com/c/pay/cs_test_001');
     });
   });
 
   // ── F-SUB-004b: Quarterly Checkout ──────────────────────────────────────
   describe('F-SUB-004b: Quarterly Checkout Session', () => {
-    it('should create checkout session with STRIPE_PRICE_QUARTERLY', async () => {
+    it('should create checkout session with PRICE_QUARTERLY', async () => {
       mockDal.get_subscription_by_user.mockReturnValue(null);
       mockDal.get_customer_id.mockReturnValue(null);
 
       const result = await handleCheckout('user-004', checkoutQuarterlyPayload);
 
-      // Assert checkout.Session.create() called with STRIPE_PRICE_QUARTERLY
-      expect(mockStripeCheckoutSessionCreate).toHaveBeenCalledWith(
+      // Assert payment_provider.create_checkout_session() called with quarterly price
+      expect(mockPaymentProvider.createCheckoutSession).toHaveBeenCalledWith(
         expect.objectContaining({
           line_items: [{ price: 'price_quarterly_001', quantity: 1 }],
         }),
@@ -177,9 +180,9 @@ describe('Checkout Session Creation', () => {
       expect(result.statusCode).toBe(400);
       expect(result.body.error).toContain('Invalid plan');
 
-      // Assert no Stripe calls made
-      expect(mockStripCustomerCreate).not.toHaveBeenCalled();
-      expect(mockStripeCheckoutSessionCreate).not.toHaveBeenCalled();
+      // Assert no payment provider calls made
+      expect(mockPaymentProvider.createCustomer).not.toHaveBeenCalled();
+      expect(mockPaymentProvider.createCheckoutSession).not.toHaveBeenCalled();
     });
 
     it('should return 400 when success_url is missing', async () => {
@@ -193,10 +196,10 @@ describe('Checkout Session Creation', () => {
     });
   });
 
-  // ── F-SUB-005: Stripe Customer Reuse ────────────────────────────────────
-  describe('F-SUB-005: Stripe Customer Reuse on Re-Subscribe', () => {
-    it('should not create new Stripe customer when one exists', async () => {
-      // Preconditions: User has existing stripe_customer_id
+  // ── F-SUB-005: Payment Provider Customer Reuse ───────────────────────────
+  describe('F-SUB-005: Payment Provider Customer Reuse on Re-Subscribe', () => {
+    it('should not create new customer when one exists', async () => {
+      // Preconditions: User has existing customer_id
       mockDal.get_subscription_by_user.mockReturnValue(null);
       mockDal.get_customer_id.mockReturnValue(
         checkoutExistingCustomerPayload.user.stripe_customer_id,
@@ -204,13 +207,13 @@ describe('Checkout Session Creation', () => {
 
       const result = await handleCheckout('user-005', checkoutMonthlyPayload);
 
-      // Assert stripe.Customer.create() is NOT called
-      expect(mockStripCustomerCreate).not.toHaveBeenCalled();
+      // Assert payment_provider.create_customer() is NOT called
+      expect(mockPaymentProvider.createCustomer).not.toHaveBeenCalled();
 
-      // Assert checkout.Session.create() called with existing customer
-      expect(mockStripeCheckoutSessionCreate).toHaveBeenCalledWith(
+      // Assert payment_provider.create_checkout_session() called with existing customer
+      expect(mockPaymentProvider.createCheckoutSession).toHaveBeenCalledWith(
         expect.objectContaining({
-          customer: 'cus_existing001',
+          customer_id: 'cus_existing001',
         }),
       );
 
@@ -229,8 +232,8 @@ describe('Checkout Session Creation', () => {
 
       const result = await handleCheckout('user-006', checkoutMonthlyPayload);
 
-      // Assert Stripe checkout.Session.create NOT called
-      expect(mockStripeCheckoutSessionCreate).not.toHaveBeenCalled();
+      // Assert payment_provider.create_checkout_session NOT called
+      expect(mockPaymentProvider.createCheckoutSession).not.toHaveBeenCalled();
 
       // Assert 409 response
       expect(result.statusCode).toBe(409);
@@ -249,7 +252,7 @@ describe('Checkout Session Creation', () => {
       const result = await handleCheckout('user-006', checkoutMonthlyPayload);
 
       expect(result.statusCode).toBe(200);
-      expect(mockStripeCheckoutSessionCreate).toHaveBeenCalled();
+      expect(mockPaymentProvider.createCheckoutSession).toHaveBeenCalled();
     });
   });
 });

@@ -145,10 +145,29 @@ CONFIGURATION_NAME = "careervp_config"
 CONFIGURATION_MAX_AGE_MINUTES = "5"
 
 # =============================================================================
+# BILLING LAMBDA
+# =============================================================================
+BILLING_LAMBDA = "billing"
+BILLING_FEATURE = "billing"
+BILLING_RECONCILE_LAMBDA = "billing-reconcile"
+BILLING_RECONCILE_FEATURE = "billing-reconcile"
+
+# SQS — webhook partial-failure DLQ
+BILLING_WEBHOOK_DLQ = "billing-webhook-dlq"
+
+# =============================================================================
 # SSM PARAMETERS
 # =============================================================================
 ANTHROPIC_API_KEY_SSM_PARAM = f"/careervp/{ENVIRONMENT}/anthropic-api-key"
 ANTHROPIC_API_KEY_ENV_VAR = "ANTHROPIC_API_KEY_SSM_PARAM"
+
+# Payment provider — webhook secrets (primary + previous for zero-downtime rotation)
+WEBHOOK_SECRET_SSM_PARAM = f"/careervp/{ENVIRONMENT}/payment-provider-webhook-secret"
+WEBHOOK_SECRET_PREVIOUS_SSM_PARAM = (
+    f"/careervp/{ENVIRONMENT}/payment-provider-webhook-secret-previous"
+)
+WEBHOOK_SECRET_ENV_VAR = "PAYMENT_PROVIDER_WEBHOOK_SECRET_SSM_PARAM"
+WEBHOOK_SECRET_PREVIOUS_ENV_VAR = "PAYMENT_PROVIDER_WEBHOOK_SECRET_PREVIOUS_SSM_PARAM"
 
 # =============================================================================
 # BUILD PATHS

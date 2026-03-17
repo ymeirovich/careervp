@@ -6,6 +6,8 @@ Step-by-step instructions for running every tier of the subscription service tes
 
 ## Setup
 
+### TypeScript (Frontend Tests)
+
 ```bash
 cd /Users/yitzchak/Documents/dev/careervp/src/frontend
 npm install
@@ -14,48 +16,105 @@ npm install
 > **Common mistake:** If you see `npm error Missing script`, verify you are inside
 > `src/frontend/`, not the project root or `docs/frontend/`.
 
+### Python (Backend Tests)
+
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+uv sync
+```
+
+> **Requires:** `uv` package manager. Install via `curl -LsSf https://astral.sh/uv/install.sh | sh`.
+
 ---
 
 ## Test Suite Overview
 
-Two independent test suites exist:
+Three independent test suites exist:
 
-| Suite | Command | Tests | Purpose |
-|-------|---------|-------|---------|
-| **Happy-path** | `npm run test:unit` etc. | 129 | Spec compliance (F-SUB-001–021) |
-| **Critical hardening** | `npm run test:critical` | ~120 | Edge cases, resilience, security |
+| Suite | Language | Command | Tests | Purpose |
+|-------|----------|---------|-------|---------|
+| **Python backend unit** | Python | `uv run pytest tests/unit/test_subscription_*.py ...` | ~120 | DAL, service, webhook, quota logic |
+| **TS happy-path** | TypeScript | `npm run test:unit` etc. | 129 | Spec compliance (F-SUB-001–021) |
+| **TS critical hardening** | TypeScript | `npm run test:critical` | ~120 | Edge cases, resilience, security |
 
-Happy-path tests should **always pass**. Critical tests will **fail** until the backend implements the corresponding hardening described in `CRITICAL_CONSIDERATIONS.md`.
+Happy-path and Python tests should **always pass**. Critical hardening tests will **fail** until the backend implements the corresponding hardening described in `CRITICAL_CONSIDERATIONS.md`.
 
 ---
 
-## All Available Commands
+## Python Backend Tests
+
+All Python tests live in `src/backend/tests/unit/` and follow the `test_trial_enforcement.py` pattern.
+
+### Subscription-Service Test Files
+
+| File | Coverage | ~Cases |
+|------|----------|--------|
+| `test_subscription_repository.py` | DAL: get, upsert, update, customer_id, payment events | ~40 |
+| `test_billing_service.py` | Checkout, portal, customer reuse, duplicate block | ~30 |
+| `test_webhook_service.py` | Signature verify, checkout completed, subscription events | ~35 |
+| `test_quota_service.py` | Blocked states, trial enforcement, backward compat | ~15 |
+
+### Running Python Tests
 
 ```bash
-# ── Happy-path (spec compliance) ─────────────────────────
-npm run test:unit          # 13 unit test files  (~30s)
-npm run test:integration   # 3 integration files (~2m, needs AWS + Stripe)
-npm run test:e2e           # 5 E2E files         (~3m, needs Stripe CLI)
-npm run test:regression    # 7 regression files  (~1m)
-npm run test:coverage      # All above + HTML coverage report
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
 
-# ── Critical hardening (edge cases) ──────────────────────
-npm run test:critical      # 22 automatable critical tests (~2m)
-npm run test:security      # 2 security tests (~30s)
+# All subscription service tests (recommended)
+uv run pytest tests/unit/test_subscription_repository.py \
+              tests/unit/test_billing_service.py \
+              tests/unit/test_webhook_service.py \
+              tests/unit/test_quota_service.py \
+              -v --tb=short
 
-# ── Requires env flags ────────────────────────────────────
-PERF_TEST=true npm run test:perf       # Load tests (100 concurrent)
-OPS_TEST=true  npm run test:ops        # Deployment/ops validation
+# Individual test file
+uv run pytest tests/unit/test_billing_service.py -v
 
-# ── Utilities ─────────────────────────────────────────────
-npm test                   # All happy-path tests (unit+int+e2e+regression)
-npm run test:all           # Every test including critical/perf/ops/security
-npm run test:watch         # Watch mode for development
+# Filter by feature ID
+uv run pytest tests/unit/ -k "F_SUB_005" -v
+
+# Run with markers
+uv run pytest tests/unit/ -m unit -v
+
+# With coverage
+uv run pytest tests/unit/test_subscription_repository.py \
+              tests/unit/test_billing_service.py \
+              tests/unit/test_webhook_service.py \
+              tests/unit/test_quota_service.py \
+              --cov=careervp --cov-report=html
+```
+
+### Running All Existing Backend Unit Tests (Including Subscription)
+
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+uv run pytest tests/unit/ -v --tb=short
 ```
 
 ---
 
-## Happy-Path Tests (F-SUB-001 → F-SUB-021)
+## Running Python + TypeScript Tests in Parallel
+
+Open two terminals. Both sets of tests are independent and can run simultaneously.
+
+**Terminal 1 — Python backend:**
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+uv run pytest tests/unit/test_subscription_repository.py \
+              tests/unit/test_billing_service.py \
+              tests/unit/test_webhook_service.py \
+              tests/unit/test_quota_service.py \
+              -v --tb=short
+```
+
+**Terminal 2 — TypeScript frontend:**
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/frontend
+npm run test:unit
+```
+
+---
+
+## TypeScript Happy-Path Tests (F-SUB-001 → F-SUB-021)
 
 ### 1. Unit Tests
 ```bash
@@ -83,28 +142,30 @@ npm run test:unit
 ```bash
 npm run test:integration
 ```
-**Duration:** ~2m | **Deps:** AWS credentials, Stripe test key
+**Duration:** ~2m | **Deps:** AWS credentials, payment provider test config
 
 ```bash
 export AWS_REGION=us-east-1
-export STRIPE_SECRET_KEY=sk_test_...
+export PAYMENT_PROVIDER=placeholder      # or real provider in test env
+export PAYMENT_PROVIDER_PLACEHOLDER=true
 ```
 
 | File | Feature | What it hits |
 |------|---------|-------------|
-| `integration/checkout.integration.test.ts` | F-SUB-004-INT | Stripe API, DynamoDB |
+| `integration/checkout.integration.test.ts` | F-SUB-004-INT | Payment provider API, DynamoDB |
 | `integration/webhook-rawbody.integration.test.ts` | F-SUB-009-INT | API Gateway raw body |
 | `integration/cdk-deploy.integration.test.ts` | F-SUB-018-INT | CDK stack |
 
 ### 3. E2E Tests
 ```bash
-# Terminal 1 — start webhook relay first
-stripe listen --forward-to https://dev-api.careervp.com/billing/webhook
+# Terminal 1 — start webhook relay first (provider-specific)
+# Example with Stripe CLI:
+# stripe listen --forward-to https://dev-api.careervp.com/billing/webhook
 
 # Terminal 2
 npm run test:e2e
 ```
-**Duration:** ~3m | **Deps:** Stripe CLI, dev API, Cognito test user
+**Duration:** ~3m | **Deps:** Payment provider CLI/relay, dev API, Cognito test user
 
 | File | Feature | Flow |
 |------|---------|------|
@@ -139,7 +200,7 @@ open coverage/lcov-report/index.html
 
 ---
 
-## Critical Hardening Tests (CC-001 → SEC-003)
+## TypeScript Critical Hardening Tests (CC-001 → SEC-003)
 
 These tests document **expected hardened behavior** and will **fail until the backend implements the corresponding hardening**. See `CRITICAL_CONSIDERATIONS.md` for what each needs.
 
@@ -155,7 +216,7 @@ npm run test:critical
 |------|----|---------------|
 | `integration/concurrent-checkout.integration.test.ts` | CC-001 | DynamoDB conditional expressions prevent duplicate customers |
 | `integration/race-condition-check-create.integration.test.ts` | CC-002 | Check-then-act uses atomic conditional write |
-| `integration/stripe-idempotency.integration.test.ts` | CC-003 | All Stripe calls include `idempotency_key` |
+| `integration/stripe-idempotency.integration.test.ts` | CC-003 | All payment provider calls include `idempotency_key` |
 
 #### Backward Compatibility
 
@@ -165,14 +226,14 @@ npm run test:critical
 | `unit/backward-compat-missing-usage.test.ts` | CC-005 | Missing Usage record returns `500 usage_not_found`, not crash |
 | `unit/backward-compat-partial-data.test.ts` | CC-006 | Missing User record returns `500 user_not_found` |
 
-#### Stripe Error Handling
+#### Payment Provider Error Handling
 
 | File | ID | Passes when... |
 |------|----|---------------|
-| `integration/stripe-error-503-session.integration.test.ts` | CC-007 | Stripe 503 mapped to `503 payment_provider_unavailable` |
-| `integration/stripe-error-503-customer.integration.test.ts` | CC-008 | Stripe 503 on customer create → 503, no partial user update |
-| `integration/stripe-timeout.integration.test.ts` | CC-009 | Stripe timeout at 10s → `503 payment_provider_timeout` |
-| `integration/stripe-rate-limit-429.integration.test.ts` | CC-010 | Stripe 429 → `503 please_retry_later` + `Retry-After` header |
+| `integration/stripe-error-503-session.integration.test.ts` | CC-007 | Provider 503 mapped to `503 payment_provider_unavailable` |
+| `integration/stripe-error-503-customer.integration.test.ts` | CC-008 | Provider 503 on customer create → 503, no partial user update |
+| `integration/stripe-timeout.integration.test.ts` | CC-009 | Provider timeout at 10s → `503 payment_provider_timeout` |
+| `integration/stripe-rate-limit-429.integration.test.ts` | CC-010 | Provider 429 → `503 please_retry_later` + `Retry-After` header |
 
 #### Webhook Delivery Order
 
@@ -185,17 +246,17 @@ npm run test:critical
 
 | File | ID | Passes when... |
 |------|----|---------------|
-| `integration/partial-failure-customer-created.integration.test.ts` | CC-013 | DynamoDB failure after Stripe success is logged + recoverable |
+| `integration/partial-failure-customer-created.integration.test.ts` | CC-013 | DynamoDB failure after provider success is logged + recoverable |
 | `integration/partial-failure-usage-fails.integration.test.ts` | CC-014 | Usage write failure is logged + flagged for manual fix |
 | `integration/partial-failure-rollback.integration.test.ts` | CC-015 | Retry reuses existing customer, creates no duplicate |
 
-#### Stripe State vs App State
+#### Provider State vs App State
 
 | File | ID | Passes when... |
 |------|----|---------------|
 | `integration/subscription-cache-stale.integration.test.ts` | CC-016 | Cache older than 30 min triggers fresh query |
-| `integration/state-divergence-detection.integration.test.ts` | CC-017 | DynamoDB/Stripe mismatch emits `subscription_state_divergence` metric |
-| `integration/state-reconciliation.integration.test.ts` | CC-018 | Reconciliation updates DynamoDB to match Stripe (Stripe wins) |
+| `integration/state-divergence-detection.integration.test.ts` | CC-017 | DynamoDB/provider mismatch emits `subscription_state_divergence` metric |
+| `integration/state-reconciliation.integration.test.ts` | CC-018 | Reconciliation updates DynamoDB to match provider (provider wins) |
 
 #### Lifecycle Edge Cases
 
@@ -230,8 +291,8 @@ PERF_TEST=true npm run test:perf
 
 | File | ID | Passes when... |
 |------|----|---------------|
-| `perf/load-test-concurrent-checkouts.perf.test.ts` | PERF-001 | 100 concurrent checkouts: P99 <2s, zero errors, 1 Stripe customer |
-| `perf/subscription-query-perf.perf.test.ts` | PERF-002 | Subscription query uses GSI; no full table scan |
+| `perf/load-test-concurrent-checkouts.perf.test.ts` | PERF-001 | 100 concurrent checkouts: P99 <2s, zero errors, 1 provider customer |
+| `perf/subscription-query-perf.perf.test.ts` | PERF-002 | Subscription query uses single-table sk; no full table scan |
 
 ### Ops / Deployment Tests
 ```bash
@@ -243,7 +304,7 @@ OPS_TEST=true npm run test:ops
 |------|----|-----------------|
 | `ops/alarm-configuration.ops.test.ts` | OBS-003 | CloudWatch alarms exist for error rate, latency, divergence |
 | `ops/security-webhook-secret-rotation.ops.test.ts` | SEC-001 | Webhook secret in Secrets Manager; rotation documented |
-| `ops/staging-validation-different-secrets.ops.test.ts` | STAGE-001 | Staging uses `sk_test_` key, not live key |
+| `ops/staging-validation-different-secrets.ops.test.ts` | STAGE-001 | Staging uses test credentials, not live credentials |
 | `ops/staging-smoke-test.ops.test.ts` | STAGE-002 | Full E2E smoke test against staging URL |
 | `ops/canary-deployment.ops.test.ts` | STAGE-003 | Lambda alias configured for weighted canary routing |
 | `ops/rollback-procedure.ops.test.ts` | STAGE-004 | Previous Lambda version exists; rollback documented |
@@ -258,7 +319,7 @@ OPS_TEST=true npm run test:ops
 `trial-active`, `trial-expired`, `trial-exhausted`, `checkout-monthly-request`, `checkout-quarterly-request`, `checkout-invalid-plan`, `checkout-existing-customer`, `checkout-already-active`, `portal-request`, `portal-no-customer`, `subscription-active`, `subscription-canceling`, `subscription-past-due`, `subscription-canceled`, `subscription-expired`, `webhook-invalid-signature`, `webhook-checkout-completed`, `webhook-invoice-succeeded`, `webhook-invoice-failed`, `webhook-subscription-updated-plan-change`, `webhook-subscription-cancel-scheduled`, `webhook-subscription-deleted`
 
 ### Critical Hardening Payloads (12)
-`concurrent-checkout-race`, `race-window`, `idempotency-retry`, `backward-compat-old-trial`, `backward-compat-missing-usage`, `backward-compat-partial-data`, `stripe-503-error`, `partial-failure-customer`, `subscription-cache-stale`, `webhook-out-of-order-events`, `lifecycle-resubscribe`, `observability-correlation`
+`concurrent-checkout-race`, `race-window`, `idempotency-retry`, `backward-compat-old-trial`, `backward-compat-missing-usage`, `backward-compat-partial-data`, `provider-503-error`, `partial-failure-customer`, `subscription-cache-stale`, `webhook-out-of-order-events`, `lifecycle-resubscribe`, `observability-correlation`
 
 ---
 
@@ -269,7 +330,9 @@ OPS_TEST=true npm run test:ops
 export AWS_REGION=us-east-1
 aws sts get-caller-identity  # verify credentials
 
-export STRIPE_SECRET_KEY=sk_test_...
+# Set payment provider config (placeholder for dev/test)
+export PAYMENT_PROVIDER=placeholder
+export PAYMENT_PROVIDER_PLACEHOLDER=true
 
 USER_POOL_ID=us-east-1_WiHMRqLpe
 CLIENT_ID=$(aws cognito-idp list-user-pool-clients \
@@ -284,9 +347,14 @@ JWT=$(aws cognito-idp admin-initiate-auth \
 ```
 
 ### Manual: Trial Activation
+
+Trials are stored in the users table at `sk=TRIAL`.
+
 ```bash
-aws dynamodb get-item --table-name careervp-users-dev \
-  --key '{"user_id":{"S":"test@example.com"}}' | jq '.Item.remaining'
+aws dynamodb get-item \
+  --table-name careervp-users-dev \
+  --key '{"pk":{"S":"USER#test@example.com"},"sk":{"S":"TRIAL"}}' \
+  | jq '.Item.remaining'
 # Expected: {"N":"3"}
 ```
 
@@ -295,40 +363,63 @@ aws dynamodb get-item --table-name careervp-users-dev \
 curl -s -X POST https://dev-api.careervp.com/billing/checkout \
   -H "Authorization: $JWT" -H "Content-Type: application/json" \
   -H "Origin: https://app.careervp.com" \
-  -d '{"plan":"monthly","success_url":"https://app.careervp.com/billing/success?session_id={CHECKOUT_SESSION_ID}","cancel_url":"https://app.careervp.com/settings/billing"}'
-# Expected: {"checkout_url":"https://checkout.stripe.com/..."}
+  -d '{"plan":"monthly","success_url":"https://app.careervp.com/billing/success","cancel_url":"https://app.careervp.com/settings/billing"}'
+# Expected: {"checkout_url":"https://..."}
 ```
 
 ### Manual: Webhook Processing
+
+Subscription data is stored in the single users table at `sk=SUBSCRIPTION#CURRENT`.
+Usage is stored at `sk=USAGE`. `customer_id` is stored on `sk=PROFILE`.
+
 ```bash
-# Terminal 1
-stripe listen --forward-to https://dev-api.careervp.com/billing/webhook
+# Trigger a checkout.session.completed webhook (provider CLI varies)
+# Example for development with a real provider's CLI:
+# stripe trigger checkout.session.completed \
+#   --override metadata.user_id=test@example.com \
+#   --override metadata.plan=monthly
 
-# Terminal 2
-stripe trigger checkout.session.completed \
-  --override metadata.user_id=test@example.com \
-  --override metadata.plan=monthly
+# Verify subscription created (single-table: sk=SUBSCRIPTION#CURRENT)
+aws dynamodb get-item \
+  --table-name careervp-users-dev \
+  --key '{"pk":{"S":"USER#test@example.com"},"sk":{"S":"SUBSCRIPTION#CURRENT"}}' \
+  | jq '.Item | {status: .status.S, plan: .plan.S}'
+# Expected: {"status":"active","plan":"monthly"}
 
-# Verify subscription created
-aws dynamodb query --table-name careervp-subscriptions-dev \
-  --index-name UserSubscriptionIndex \
-  --key-condition-expression "user_id = :uid" \
-  --expression-attribute-values '{":uid":{"S":"test@example.com"}}' \
-  | jq '.Items[0] | {status, plan}'
-# Expected: {"status":{"S":"active"},"plan":{"S":"monthly"}}
-
-# Verify unlimited access
-aws dynamodb get-item --table-name careervp-usage-dev \
-  --key '{"user_id":{"S":"test@example.com"}}' | jq '.Item.remaining'
+# Verify unlimited access (single-table: sk=USAGE)
+aws dynamodb get-item \
+  --table-name careervp-users-dev \
+  --key '{"pk":{"S":"USER#test@example.com"},"sk":{"S":"USAGE"}}' \
+  | jq '.Item.remaining'
 # Expected: {"N":"9999"}
+
+# Verify customer_id stored on PROFILE row
+aws dynamodb get-item \
+  --table-name careervp-users-dev \
+  --key '{"pk":{"S":"USER#test@example.com"},"sk":{"S":"PROFILE"}}' \
+  | jq '.Item.customer_id'
+# Expected: {"S":"cus_..."}
 ```
 
 ### Manual: Access Control (Expired Trial)
 ```bash
-aws dynamodb put-item --table-name careervp-users-dev \
-  --item '{"user_id":{"S":"expired-test"},"created_at":{"S":"2026-02-01T00:00:00Z"}}'
-aws dynamodb put-item --table-name careervp-usage-dev \
-  --item '{"user_id":{"S":"expired-test"},"remaining":{"N":"2"},"created_at":{"S":"2026-02-01T00:00:00Z"}}'
+# Create an expired trial user (single-table: put PROFILE + TRIAL rows)
+aws dynamodb put-item \
+  --table-name careervp-users-dev \
+  --item '{
+    "pk":{"S":"USER#expired-test"},
+    "sk":{"S":"PROFILE"},
+    "created_at":{"S":"2026-02-01T00:00:00Z"}
+  }'
+
+aws dynamodb put-item \
+  --table-name careervp-users-dev \
+  --item '{
+    "pk":{"S":"USER#expired-test"},
+    "sk":{"S":"USAGE"},
+    "remaining":{"N":"2"},
+    "created_at":{"S":"2026-02-01T00:00:00Z"}
+  }'
 
 curl -s -X POST https://dev-api.careervp.com/jobs \
   -H "Authorization: $JWT" -H "Content-Type: application/json" \
@@ -371,13 +462,15 @@ aws logs filter-log-events \
 | Error | Cause | Fix |
 |-------|-------|-----|
 | `npm error Missing script: "test:critical"` | Wrong directory | `cd src/frontend` |
-| `Cannot find module 'stripe'` | Deps not installed | `npm install` |
+| `ModuleNotFoundError: careervp` | Wrong Python dir | `cd src/backend` |
 | `No tests found` | Jest config missing directory | Verify `jest.config.ts` includes project for that dir |
-| Jest timeout | Stripe mock not resolving | Check mock resolves or rejects |
+| Jest timeout | Payment provider mock not resolving | Check mock resolves or rejects |
 | `AWS credentials not found` | Env not set | `aws configure` or export vars |
-| Stripe webhook not received | CLI not running | Start `stripe listen` in separate terminal |
+| `uv: command not found` | uv not installed | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
 
 ### Debug a Single Test
+
+**TypeScript:**
 ```bash
 # Verbose
 npx jest tests/unit/trial.test.ts --verbose
@@ -390,6 +483,21 @@ node --inspect-brk ./node_modules/.bin/jest --runInBand \
   tests/integration/concurrent-checkout.integration.test.ts
 ```
 
+**Python:**
+```bash
+# Single test file verbose
+uv run pytest tests/unit/test_billing_service.py -v
+
+# Single test by name
+uv run pytest tests/unit/test_billing_service.py -k "test_checkout_monthly" -v
+
+# Show captured stdout
+uv run pytest tests/unit/test_billing_service.py -v -s
+
+# Stop after first failure
+uv run pytest tests/unit/ -x --tb=long
+```
+
 ---
 
 ## Full Deployment Validation Sequence
@@ -397,23 +505,30 @@ node --inspect-brk ./node_modules/.bin/jest --runInBand \
 Run this end-to-end before any production deployment:
 
 ```bash
-cd /Users/yitzchak/Documents/dev/careervp/src/frontend
+# ── Stage 1: Python backend unit tests (must all pass) ────────────────────
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+uv run pytest tests/unit/test_subscription_repository.py \
+              tests/unit/test_billing_service.py \
+              tests/unit/test_webhook_service.py \
+              tests/unit/test_quota_service.py \
+              -v --tb=short
 
-# Stage 1: Happy-path (must all pass)
+# ── Stage 2: TypeScript happy-path (must all pass) ────────────────────────
+cd /Users/yitzchak/Documents/dev/careervp/src/frontend
 npm run test:unit
 npm run test:integration
 npm run test:regression
 npm run test:coverage          # verify >80%
 
-# Stage 2: Critical hardening (must all pass)
+# ── Stage 3: Critical hardening (must all pass) ───────────────────────────
 npm run test:critical
 npm run test:security
 
-# Stage 3: E2E (requires Stripe CLI)
-stripe listen --forward-to https://dev-api.careervp.com/billing/webhook &
+# ── Stage 4: E2E (requires payment provider CLI or relay) ─────────────────
+# Start webhook relay in separate terminal, then:
 npm run test:e2e
 
-# Stage 4: Optional (manual triggers)
+# ── Stage 5: Optional (manual triggers) ───────────────────────────────────
 PERF_TEST=true npm run test:perf
 OPS_TEST=true  npm run test:ops
 ```
@@ -422,27 +537,32 @@ OPS_TEST=true  npm run test:ops
 
 | Check | Target |
 |-------|--------|
-| Happy-path tests | 129/129 pass |
-| Critical tests | ~120/120 pass (after hardening) |
-| Security tests | 2/2 pass |
+| Python backend unit tests | All pass |
+| TypeScript happy-path tests | 129/129 pass |
+| TypeScript critical tests | ~120/120 pass (after hardening) |
+| TypeScript security tests | 2/2 pass |
 | Code coverage | >80% billing module |
-| Lint | 0 errors (`ruff check careervp`) |
-| Type check | 0 errors (`mypy careervp --strict`) |
+| Python lint | 0 errors (`uv run ruff check careervp`) |
+| Python type check | 0 errors (`uv run mypy careervp --strict`) |
 | CloudWatch post-deploy | Zero new errors for 30 min |
 
 ---
 
 ## Test Count Summary
 
-| Suite | Files | ~Cases | Command |
-|-------|-------|--------|---------|
-| Unit (happy-path) | 13 | 82 | `test:unit` |
-| Integration (happy-path) | 3 | 11 | `test:integration` |
-| E2E | 5 | 10 | `test:e2e` |
-| Regression | 7 | 26 | `test:regression` |
-| Unit (critical) | 8 | ~40 | `test:critical` |
-| Integration (critical) | 14 | ~56 | `test:critical` |
-| Performance | 2 | ~8 | `PERF_TEST=true test:perf` |
-| Ops | 6 | ~18 | `OPS_TEST=true test:ops` |
-| Security | 2 | ~8 | `test:security` |
-| **TOTAL** | **60** | **~259** | |
+| Suite | Language | Files | ~Cases | Command |
+|-------|----------|-------|--------|---------|
+| Subscription DAL | Python | 1 | ~40 | `pytest test_subscription_repository.py` |
+| Billing service | Python | 1 | ~30 | `pytest test_billing_service.py` |
+| Webhook service | Python | 1 | ~35 | `pytest test_webhook_service.py` |
+| Quota service | Python | 1 | ~15 | `pytest test_quota_service.py` |
+| Unit (happy-path) | TypeScript | 13 | 82 | `test:unit` |
+| Integration (happy-path) | TypeScript | 3 | 11 | `test:integration` |
+| E2E | TypeScript | 5 | 10 | `test:e2e` |
+| Regression | TypeScript | 7 | 26 | `test:regression` |
+| Unit (critical) | TypeScript | 8 | ~40 | `test:critical` |
+| Integration (critical) | TypeScript | 14 | ~56 | `test:critical` |
+| Performance | TypeScript | 2 | ~8 | `PERF_TEST=true test:perf` |
+| Ops | TypeScript | 6 | ~18 | `OPS_TEST=true test:ops` |
+| Security | TypeScript | 2 | ~8 | `test:security` |
+| **TOTAL** | | **64** | **~379** | |

@@ -25,14 +25,14 @@
 
 ## 1. Overview
 
-CareerVP users get a **7-day free trial** with 3 application credits. After the trial ends, they must subscribe to continue using the product. Stripe handles all payment processing via hosted UI — no card data ever touches CareerVP servers.
+CareerVP users get a **14-day free trial** with 3 application credits. After the trial ends, they must subscribe to continue using the product. Stripe handles all payment processing via hosted UI — no card data ever touches CareerVP servers. **An application is defined as generating a Gap Analysis question set. Users can continue to use existing 3 applications after the trial expires. They cannot create new applications after the trial expires.**
 
 **Flow summary:**
 1. User signs up → trial record created in DynamoDB automatically
 2. Trial expires OR credits exhausted → user sees upgrade prompt
 3. User clicks upgrade → `POST /billing/checkout` → backend creates Stripe checkout session → frontend redirects to Stripe
 4. Payment succeeds → Stripe fires `checkout.session.completed` webhook → backend updates subscription → user gets unlimited access
-5. Monthly renewal → Stripe auto-charges → `invoice.payment_succeeded` webhook → no action needed
+5. Monthly renewal → Stripe auto-charges → `invoice.payment_succeeded` webhook → no action needed (support Monthly and Quarterly subscription renewals)
 6. Payment fails → `invoice.payment_failed` webhook → mark `past_due` → show banner to user
 7. User cancels → `customer.subscription.deleted` webhook → mark `canceled` → block access at next API call
 
@@ -48,21 +48,21 @@ Create in Stripe Dashboard (or via Stripe CLI for test mode):
 Product: CareerVP Pro
   Price 1 (Monthly):
     ID: store as STRIPE_PRICE_MONTHLY env var
-    Amount: $19.00 USD
+    Amount: $29.00 USD
     Interval: monthly
     Nickname: "Monthly"
 
-  Price 2 (Annual):
-    ID: store as STRIPE_PRICE_ANNUAL env var
-    Amount: $149.00 USD
-    Interval: yearly
-    Nickname: "Annual"
+  Price 2 (Quarterly):
+    ID: store as STRIPE_PRICE_QUARTERLY env var
+    Amount: $75.00 USD
+    Interval: quarterly
+    Nickname: "Quarterly"
 ```
 
 ### Webhook Endpoint
 
 Register in Stripe Dashboard:
-- **URL:** `https://dev-api.careervp.com/billing/webhook` (test) / `https://api.careervp.com/billing/webhook` (prod)
+- **URL:** `https://dev-api.careervp.com/billing/webhook` (dev) `https://stage-api.careervp.com/billing/webhook` (test) / `https://api.careervp.com/billing/webhook` (prod)
 - **Events to listen for:**
   - `checkout.session.completed`
   - `invoice.payment_succeeded`
@@ -76,7 +76,7 @@ Register in Stripe Dashboard:
 ```bash
 STRIPE_SECRET_KEY=sk_test_xxx          # sk_live_xxx in prod
 STRIPE_PRICE_MONTHLY=price_xxx
-STRIPE_PRICE_ANNUAL=price_yyy
+STRIPE_PRICE_QUARTERLY=price_yyy
 STRIPE_WEBHOOK_SECRET=whsec_xxx
 SUBSCRIPTIONS_TABLE_NAME=careervp-subscriptions-dev
 USERS_TABLE_NAME=careervp-users-dev
@@ -91,7 +91,7 @@ USAGE_TABLE_NAME=careervp-usage-dev
 [signup]
     │
     ▼
- trialing ──── trial expires (7 days) ──────────────────► expired
+ trialing ──── trial expires (14 days) ──────────────────► expired
     │                                                         │
     │  user upgrades (checkout.session.completed)             │ user upgrades
     ▼                                                         ▼
@@ -113,7 +113,7 @@ USAGE_TABLE_NAME=careervp-usage-dev
 
 | State | Access | Description |
 |---|---|---|
-| `trialing` | Full (limited credits) | Default on signup; 3 credits, 7 days |
+| `trialing` | Full (limited credits) | Default on signup; 3 credits, 14 days |
 | `active` | Full (unlimited) | Stripe subscription active and paid |
 | `past_due` | Blocked | Payment failed; grace period for card update |
 | `canceled` | Blocked | Subscription ended; must re-subscribe |
@@ -173,7 +173,7 @@ def _check_access(user_id: str, usage_dal, subscription_dal) -> None:
 | `user_id` | String | Cognito `sub` UUID |
 | `customer_id` | String | Stripe customer ID (`cus_xxx`) |
 | `status` | String | `trialing` \| `active` \| `past_due` \| `canceled` \| `expired` |
-| `plan` | String | `monthly` \| `annual` |
+| `plan` | String | `monthly` \| `quarterly` |
 | `stripe_price_id` | String | Stripe price ID |
 | `current_period_start` | String | ISO 8601 — start of current billing period |
 | `current_period_end` | String | ISO 8601 — end of current billing period |
@@ -249,7 +249,7 @@ Creates a Stripe Checkout session for a new subscription.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `plan` | string | Yes | `"monthly"` or `"annual"` |
+| `plan` | string | Yes | `"monthly"` or `"quarterly"` |
 | `success_url` | string | Yes | Where Stripe redirects on success. Must include `{CHECKOUT_SESSION_ID}` placeholder |
 | `cancel_url` | string | Yes | Where Stripe redirects if user cancels checkout |
 
@@ -261,7 +261,7 @@ Creates a Stripe Checkout session for a new subscription.
    - Query `CustomerIndex` GSI for existing `customer_id`
    - If none: `stripe.Customer.create(email=user_email, metadata={"user_id": user_id})`
    - Store `customer_id` on user record if new
-4. Resolve Stripe price ID: `STRIPE_PRICE_MONTHLY` or `STRIPE_PRICE_ANNUAL`
+4. Resolve Stripe price ID: `STRIPE_PRICE_MONTHLY` or `STRIPE_PRICE_QUARTERLY`
 5. Call `stripe.checkout.Session.create()`
 6. Return checkout URL
 
@@ -414,7 +414,7 @@ logger.setLevel(logging.INFO)
 stripe.api_key = os.environ['STRIPE_SECRET_KEY']
 PRICE_MAP = {
     'monthly': os.environ['STRIPE_PRICE_MONTHLY'],
-    'annual': os.environ['STRIPE_PRICE_ANNUAL'],
+    'quarterly': os.environ['STRIPE_PRICE_QUARTERLY'],
 }
 
 dal = SubscriptionDAL(
@@ -470,7 +470,7 @@ def handle_checkout(user_id: str, body: dict) -> dict:
     cancel_url = body.get('cancel_url')
 
     if plan not in PRICE_MAP:
-        raise ValueError(f"Invalid plan '{plan}'. Must be 'monthly' or 'annual'.")
+        raise ValueError(f"Invalid plan '{plan}'. Must be 'monthly' or 'quarterly'.")
     if not success_url or not cancel_url:
         raise ValueError('success_url and cancel_url are required')
 
@@ -562,7 +562,7 @@ WEBHOOK_SECRET = os.environ['STRIPE_WEBHOOK_SECRET']
 
 PRICE_TO_PLAN = {
     os.environ.get('STRIPE_PRICE_MONTHLY', ''): 'monthly',
-    os.environ.get('STRIPE_PRICE_ANNUAL', ''): 'annual',
+    os.environ.get('STRIPE_PRICE_QUARTERLY', ''): 'quarterly',
 }
 
 dal = SubscriptionDAL(
@@ -934,7 +934,7 @@ billing_handler = aws_lambda.Function(
     environment={
         'STRIPE_SECRET_KEY': stripe_key.string_value,
         'STRIPE_PRICE_MONTHLY': stripe_price_monthly.string_value,
-        'STRIPE_PRICE_ANNUAL': stripe_price_annual.string_value,
+        'STRIPE_PRICE_QUARTERLY': stripe_price_quarterly.string_value,
         'STRIPE_WEBHOOK_SECRET': stripe_webhook_secret.string_value,
         'SUBSCRIPTIONS_TABLE_NAME': subscriptions_table.table_name,
         'USERS_TABLE_NAME': users_table.table_name,

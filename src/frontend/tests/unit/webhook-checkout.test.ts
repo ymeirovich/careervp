@@ -13,7 +13,10 @@ import { createStripeSubscription } from '../setup';
 
 // ─── Mock Setup ──────────────────────────────────────────────────────────────
 
-const mockStripeSubscriptionRetrieve = jest.fn();
+// Generic PaymentProvider interface mock — replace with concrete provider at integration time
+const mockPaymentProvider = {
+  retrieveSubscription: jest.fn(),
+};
 const mockDal = {
   upsert_subscription: jest.fn(),
   set_unlimited_usage: jest.fn(),
@@ -38,8 +41,8 @@ async function handleCheckoutCompleted(session: Record<string, unknown>): Promis
     throw new Error('Missing subscription or user_id');
   }
 
-  // Fetch full subscription from Stripe
-  const stripeSub = mockStripeSubscriptionRetrieve(subscriptionId);
+  // Fetch full subscription from payment provider
+  const providerSub = mockPaymentProvider.retrieveSubscription(subscriptionId);
 
   mockDal.upsert_subscription({
     subscription_id: subscriptionId,
@@ -47,11 +50,11 @@ async function handleCheckoutCompleted(session: Record<string, unknown>): Promis
     customer_id: customerId,
     status: 'active',
     plan,
-    stripe_price_id: stripeSub.items.data[0].price.id,
-    current_period_start: tsToIso(stripeSub.current_period_start),
-    current_period_end: tsToIso(stripeSub.current_period_end),
+    stripe_price_id: providerSub.items.data[0].price.id,
+    current_period_start: tsToIso(providerSub.current_period_start),
+    current_period_end: tsToIso(providerSub.current_period_end),
     trial_end: null,
-    cancel_at_period_end: stripeSub.cancel_at_period_end ?? false,
+    cancel_at_period_end: providerSub.cancel_at_period_end ?? false,
     canceled_at: null,
     payment_failed_count: 0,
   });
@@ -65,7 +68,7 @@ async function handleCheckoutCompleted(session: Record<string, unknown>): Promis
 describe('Webhook — Checkout Completed', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockStripeSubscriptionRetrieve.mockReturnValue(createStripeSubscription());
+    mockPaymentProvider.retrieveSubscription.mockReturnValue(createStripeSubscription());
   });
 
   // ── F-SUB-010: Checkout Completed → Subscription Active ─────────────────
@@ -97,14 +100,14 @@ describe('Webhook — Checkout Completed', () => {
       expect(mockDal.set_unlimited_usage).toHaveBeenCalledWith('user-010');
     });
 
-    it('should retrieve full subscription from Stripe for period dates', async () => {
+    it('should retrieve full subscription from payment provider for period dates', async () => {
       const sessionData = webhookCheckoutPayload.data.object;
 
       await handleCheckoutCompleted(sessionData);
 
-      expect(mockStripeSubscriptionRetrieve).toHaveBeenCalledWith('sub_1Pxyz');
+      expect(mockPaymentProvider.retrieveSubscription).toHaveBeenCalledWith('sub_1Pxyz');
 
-      // Assert period dates are ISO formatted from Stripe timestamps
+      // Assert period dates are ISO formatted from provider timestamps
       const upsertCall = mockDal.upsert_subscription.mock.calls[0][0];
       expect(upsertCall.current_period_start).toBeDefined();
       expect(upsertCall.current_period_end).toBeDefined();
