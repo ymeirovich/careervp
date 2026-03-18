@@ -348,7 +348,7 @@ class TestRecordPaymentEvent:
         repo.record_payment_event('evt_001', 'checkout.session.completed')
 
         kwargs = idempotency_table.put_item.call_args.kwargs
-        assert kwargs['ConditionExpression'] == 'attribute_not_exists(pk)'
+        assert kwargs['ConditionExpression'] == 'attribute_not_exists(id)'
 
     def test_stores_pk_with_payment_event_prefix(self) -> None:
         repo, _, idempotency_table = _make_repo()
@@ -356,7 +356,7 @@ class TestRecordPaymentEvent:
         repo.record_payment_event('evt_abc123', 'invoice.payment_succeeded')
 
         item = idempotency_table.put_item.call_args.kwargs['Item']
-        assert item['pk'] == 'PAYMENT_EVENT#evt_abc123'
+        assert item['id'] == 'PAYMENT_EVENT#evt_abc123#invoice.payment_succeeded'
 
     def test_sets_ttl_expiration(self) -> None:
         repo, _, idempotency_table = _make_repo()
@@ -375,3 +375,63 @@ class TestRecordPaymentEvent:
         result = repo.record_payment_event('evt_001', 'checkout.session.completed')
 
         assert result is False
+
+
+# ─── scan_active_subscriptions ────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+class TestScanActiveSubscriptions:
+    def test_returns_active_items(self) -> None:
+        repo, users_table, _ = _make_repo()
+        item = _subscription_item(status='active')
+        users_table.scan.return_value = {'Items': [item]}
+
+        results = repo.scan_active_subscriptions()
+
+        assert results == [item]
+
+    def test_returns_empty_list_when_no_active_subscriptions(self) -> None:
+        repo, users_table, _ = _make_repo()
+        users_table.scan.return_value = {'Items': []}
+
+        results = repo.scan_active_subscriptions()
+
+        assert results == []
+
+    def test_scans_users_table_not_idempotency(self) -> None:
+        repo, users_table, idempotency_table = _make_repo()
+        users_table.scan.return_value = {'Items': []}
+
+        repo.scan_active_subscriptions()
+
+        users_table.scan.assert_called_once()
+        idempotency_table.scan.assert_not_called()
+
+    def test_aliases_reserved_word_status(self) -> None:
+        """status is a DynamoDB reserved word — must use ExpressionAttributeNames."""
+        repo, users_table, _ = _make_repo()
+        users_table.scan.return_value = {'Items': []}
+
+        repo.scan_active_subscriptions()
+
+        kwargs = users_table.scan.call_args.kwargs
+        assert '#s' in kwargs.get('ExpressionAttributeNames', {})
+        assert kwargs['ExpressionAttributeNames']['#s'] == 'status'
+
+    def test_paginates_until_no_last_evaluated_key(self) -> None:
+        """Must loop pages — a single scan is capped at 1 MB."""
+        repo, users_table, _ = _make_repo()
+        page1_item = _subscription_item(user_id='u1')
+        page2_item = _subscription_item(user_id='u2')
+        users_table.scan.side_effect = [
+            {'Items': [page1_item], 'LastEvaluatedKey': {'pk': 'USER#u1'}},
+            {'Items': [page2_item]},
+        ]
+
+        results = repo.scan_active_subscriptions()
+
+        assert len(results) == 2
+        assert users_table.scan.call_count == 2
+        second_kwargs = users_table.scan.call_args_list[1].kwargs
+        assert second_kwargs.get('ExclusiveStartKey') == {'pk': 'USER#u1'}

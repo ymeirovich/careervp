@@ -132,14 +132,22 @@ cd src/frontend && npm run test:unit -- --testPathPattern="cdk-infra|ssm-cold-st
 **Tests targeted:**
 - `src/backend/tests/unit/test_subscription_repository.py`
 
-**Pre-check:**
+**Pre-check (status: already completed on `front/cdk-billing`):**
 ```bash
 cd src/backend && uv run pytest tests/unit/test_subscription_repository.py -v --tb=short 2>&1 | tail -30
+# Expected on a fresh branch (before implementation): 7 failures
+#   — 5 x AttributeError (scan_active_subscriptions missing)
+#   — 2 x AssertionError (stale "pk" assertions in TestRecordPaymentEvent)
+# Expected after implementation: 35 passed
+#
+# Note: on front/cdk-billing this prompt is already implemented — pre-check shows 35 passed.
+# The same command serves as VERIFY: tests import from the real module, so they validate
+# correctness (not just file existence). Deleting scan_active_subscriptions breaks 5 tests.
 ```
 
 ---
 
-```
+```text
 @spec docs/frontend/subscription/SUBSCRIPTION_IMPLEMENTATION_SPECS.md#data-model--single-table-design
 @spec docs/frontend/subscription/TEST_EXECUTION_GUIDE.md#python-backend-tests
 @pattern src/backend/careervp/dal/subscription_repository.py
@@ -147,41 +155,37 @@ cd src/backend && uv run pytest tests/unit/test_subscription_repository.py -v --
 ROLE: Python backend engineer auditing and extending a DynamoDB DAL against a strict
 single-table schema.
 
-PROBLEM: The idempotency table PK is "id" (STRING, no sort key). If any idempotency
-method writes items using "pk"/"sk" attributes, every live call raises
-ValidationException: Missing the key id. Additionally, scan_active_subscriptions()
-required by ReconciliationService does not yet exist.
+PROBLEM: Two test assertions in TestRecordPaymentEvent use stale "pk" key names and
+"attribute_not_exists(pk)" — contradicting the idempotency table schema (PK="id", no sort key).
+These cause 2 pre-check failures even though the implementation is already correct.
+Additionally, scan_active_subscriptions() required by ReconciliationService does not yet exist.
 
-SOLUTION: Audit all 4 idempotency methods for correct key schema, fix any violations,
-then add scan_active_subscriptions() with pagination.
+SOLUTION: Fix the two stale test assertions to match the correct "id" schema, then add
+scan_active_subscriptions() with pagination to the implementation.
 
 THINK:
-1. Read src/backend/tests/unit/test_subscription_repository.py in full — every test
-   case defines the exact method signatures, key patterns, and assertions required.
-   Note especially test cases for idempotency key schema and scan_active_subscriptions.
-2. Read infra/careervp/api_db_construct.py — find _build_idempotency_table() and confirm:
+1. Read infra/careervp/api_db_construct.py — find _build_idempotency_table() and confirm:
    partition_key name="id", NO sort_key, time_to_live_attribute="expiration".
-3. Read src/backend/careervp/dal/subscription_repository.py — audit every call to
-   self._idempotency_table: record_payment_event, delete_payment_event,
-   create_checkout_intent, release_checkout_intent.
-4. For each method check: Item dict contains "id" key (not "pk"/"sk"); Key dict for
-   delete uses {"id": ...}; ConditionExpression uses attribute_not_exists(id).
-5. Check if scan_active_subscriptions() exists.
+2. Read src/backend/careervp/dal/subscription_repository.py — confirm all 4 idempotency
+   methods (record_payment_event, delete_payment_event, create_checkout_intent,
+   release_checkout_intent) already use "id" as the key attribute correctly.
+3. Read src/backend/tests/unit/test_subscription_repository.py — find the two failing
+   assertions in TestRecordPaymentEvent: test_uses_attribute_not_exists_condition and
+   test_stores_pk_with_payment_event_prefix. These assert "pk" and "attribute_not_exists(pk)"
+   which are stale; the correct values are "id" and "attribute_not_exists(id)".
+4. Check if scan_active_subscriptions() exists in the repository.
 
 THEN:
-1. Fix record_payment_event: id = f"PAYMENT_EVENT#{event_id}#{event_type}",
-   Item={"id": id, "event_id": event_id, "event_type": event_type, "created_at": ...,
-   "expiration": int(time.time()) + ttl_seconds},
-   ConditionExpression="attribute_not_exists(id)".
-2. Fix delete_payment_event: Key={"id": f"PAYMENT_EVENT#{event_id}#{event_type}"}.
-3. Fix create_checkout_intent: id = f"CHECKOUT_LOCK#{user_id}",
-   Item={"id": id, "user_id": user_id, "created_at": ..., "expiration": now + ttl_seconds},
-   ConditionExpression="attribute_not_exists(id)".
-4. Fix release_checkout_intent: Key={"id": f"CHECKOUT_LOCK#{user_id}"}.
-5. Add scan_active_subscriptions(self) -> list[dict[str, Any]]:
-   Paginated scan on self._table with
-   FilterExpression=Attr("sk").eq("SUBSCRIPTION#CURRENT") & Attr("status").eq("active").
-   Loop on LastEvaluatedKey until exhausted.
+1. In test_subscription_repository.py, fix TestRecordPaymentEvent:
+   - test_uses_attribute_not_exists_condition: change assertion to
+     kwargs['ConditionExpression'] == 'attribute_not_exists(id)'.
+   - test_stores_pk_with_payment_event_prefix: change assertion to
+     item['id'] == 'PAYMENT_EVENT#{event_id}#{event_type}' (full composite key).
+2. Add scan_active_subscriptions(self) -> list[dict[str, Any]] to subscription_repository.py:
+   Paginated scan on self._table (users table) with
+   FilterExpression=Attr("sk").eq("SUBSCRIPTION#CURRENT") & Attr("#s").eq("active"),
+   ExpressionAttributeNames={"#s": "status"}.
+   Loop on LastEvaluatedKey until exhausted. Return accumulated items list.
 
 CONSTRAINTS:
 - MUST scan self._table (users table), NOT self._idempotency_table.
@@ -190,17 +194,20 @@ CONSTRAINTS:
 - MUST paginate — a single scan page is capped at 1 MB.
 
 PROHIBITED:
+- Modifying the implementation's key attribute names — they are already correct ("id").
 - "pk" or "sk" as key attribute names on any idempotency_table call.
 - attribute_not_exists(pk) — must be attribute_not_exists(id).
 - Calling scan_active_subscriptions from any HTTP handler.
 - Adding a new DynamoDB table or index.
 
 OUTPUT:
-- MODIFY: src/backend/careervp/dal/subscription_repository.py
+- MODIFY: src/backend/tests/unit/test_subscription_repository.py (fix 2 stale assertions)
+- MODIFY: src/backend/careervp/dal/subscription_repository.py (add scan_active_subscriptions)
 
 VERIFY:
 # Python backend (see TEST_EXECUTION_GUIDE.md §Python Backend Tests)
 cd src/backend && uv run pytest tests/unit/test_subscription_repository.py -v --tb=short
+# Expected: 35 passed
 ```
 
 ---
@@ -222,9 +229,17 @@ cd src/backend && uv run pytest tests/unit/test_subscription_repository.py -v --
 
 **Pre-check:**
 ```bash
-cd src/backend && uv run pytest tests/unit/test_billing_service.py -v --tb=short 2>&1 | tail -30
-cd src/frontend && npm run test:unit -- --testPathPattern="checkout|subscription-status|portal|cors" 2>&1 | tail -20
+# Gate: billing implementation must not exist yet (both files should be missing)
+ls src/backend/careervp/logic/billing_service.py \
+   src/backend/careervp/handlers/billing_handler.py 2>&1
+# Expected: "No such file or directory" for each — implementation not yet created.
+# If either file already exists, run VERIFY instead of this prompt.
 ```
+
+> **Pre-check note:** `test_billing_service.py` defines `BillingService` inline and is
+> self-contained — it always passes regardless of whether the real module exists.
+> The gate above checks file existence: it fails (files missing) before this prompt
+> and passes (files present) after implementation.
 
 ---
 
@@ -344,9 +359,16 @@ cd src/frontend && npm run test:integration -- --testPathPattern="concurrent-che
 
 **Pre-check:**
 ```bash
-cd src/backend && uv run pytest tests/unit/test_webhook_service.py -v --tb=short 2>&1 | tail -30
-cd src/frontend && npm run test:unit -- --testPathPattern="webhook-" 2>&1 | tail -20
+# Gate: webhook implementation must not exist yet
+ls src/backend/careervp/logic/webhook_service.py 2>&1
+# Expected: "No such file or directory" — implementation not yet created.
+# If file already exists, run VERIFY instead of this prompt.
 ```
+
+> **Pre-check note:** `test_webhook_service.py` defines `WebhookService` inline and is
+> self-contained — it always passes regardless of whether the real module exists.
+> The gate above checks file existence: it fails (file missing) before this prompt
+> and passes (file present) after implementation.
 
 ---
 
@@ -472,9 +494,18 @@ cd src/frontend && npm run test:integration -- --testPathPattern="webhook-rawbod
 
 **Pre-check:**
 ```bash
-cd src/backend && uv run pytest tests/unit/test_quota_service.py -v --tb=short 2>&1 | tail -30
-cd src/frontend && npm run test:unit -- --testPathPattern="trial|quota-enforcement|backward-compat|lifecycle-trial" 2>&1 | tail -20
+# Gate: quota/reconciliation implementations must not exist yet
+ls src/backend/careervp/logic/quota_service.py \
+   src/backend/careervp/logic/reconciliation_service.py \
+   src/backend/careervp/handlers/billing_reconcile_handler.py 2>&1
+# Expected: "No such file or directory" for each — implementations not yet created.
+# If any file already exists, run VERIFY instead of this prompt.
 ```
+
+> **Pre-check note:** `test_quota_service.py` defines `QuotaService` inline and is
+> self-contained — it always passes regardless of whether the real module exists.
+> The gate above checks file existence: it fails (files missing) before this prompt
+> and passes (files present) after implementation.
 
 ---
 
@@ -585,6 +616,9 @@ cd src/frontend && npm run test:unit
 cd src/frontend && npm run test:integration -- --testPathPattern="state-reconciliation|state-divergence|lifecycle-resubscribe|race-condition|subscription-cache"
 # Full backend regression (no existing tests broken)
 cd src/backend && uv run pytest tests/unit/ -v --tb=short 2>&1 | tail -20
+# ── EXIT CRITERION (Prompt 5 = final prompt) ──────────────────────────────────
+# ALL tests in src/frontend/tests/ must pass 100% — unit + integration + critical
+cd src/frontend && npm run test:unit && npm run test:integration && npm run test:critical
 ```
 
 ---

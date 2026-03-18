@@ -169,6 +169,12 @@ WEBHOOK_SECRET_PREVIOUS_SSM_PARAM = (
 WEBHOOK_SECRET_ENV_VAR = "PAYMENT_PROVIDER_WEBHOOK_SECRET_SSM_PARAM"
 WEBHOOK_SECRET_PREVIOUS_ENV_VAR = "PAYMENT_PROVIDER_WEBHOOK_SECRET_PREVIOUS_SSM_PARAM"
 
+# Payment provider — price IDs
+PRICE_ID_MONTHLY_SSM_PARAM = f"/careervp/{ENVIRONMENT}/payment-provider-price-monthly"
+PRICE_ID_QUARTERLY_SSM_PARAM = (
+    f"/careervp/{ENVIRONMENT}/payment-provider-price-quarterly"
+)
+
 # =============================================================================
 # BUILD PATHS
 # =============================================================================

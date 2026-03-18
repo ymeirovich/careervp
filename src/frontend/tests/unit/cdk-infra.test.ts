@@ -129,11 +129,11 @@ describe('CDK Infrastructure Provisioning', () => {
       );
 
       expect(userIndex).toBeDefined();
-      expect(userIndex.KeySchema).toEqual([
+      expect(userIndex!.KeySchema).toEqual([
         { AttributeName: 'user_id', KeyType: 'HASH' },
         { AttributeName: 'created_at', KeyType: 'RANGE' },
       ]);
-      expect(userIndex.Projection.ProjectionType).toBe('ALL');
+      expect(userIndex!.Projection.ProjectionType).toBe('ALL');
     });
 
     it('should have StatusIndex with status PK and user_id SK', () => {
@@ -143,7 +143,7 @@ describe('CDK Infrastructure Provisioning', () => {
       );
 
       expect(statusIndex).toBeDefined();
-      expect(statusIndex.KeySchema).toEqual([
+      expect(statusIndex!.KeySchema).toEqual([
         { AttributeName: 'status', KeyType: 'HASH' },
         { AttributeName: 'user_id', KeyType: 'RANGE' },
       ]);
@@ -156,7 +156,7 @@ describe('CDK Infrastructure Provisioning', () => {
       );
 
       expect(custIndex).toBeDefined();
-      expect(custIndex.KeySchema).toEqual([
+      expect(custIndex!.KeySchema).toEqual([
         { AttributeName: 'customer_id', KeyType: 'HASH' },
       ]);
     });
