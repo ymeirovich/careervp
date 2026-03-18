@@ -490,7 +490,15 @@ def test_protected_routes_require_authorizer(synthesized_template: Template) -> 
     method_paths = _get_method_paths(methods, resources)
 
     # Define public routes to exclude (without leading slashes)
-    public_paths = {"health", "auth/register", "auth/login", "auth/refresh"}
+    # Per auth_and_authorizer_spec.yaml: /health, /auth/register, /auth/login, /auth/refresh
+    # billing/webhook is also public - it verifies webhook signature itself
+    public_paths = {
+        "health",
+        "auth/register",
+        "auth/login",
+        "auth/refresh",
+        "billing/webhook",
+    }
 
     protected_methods = []
     no_auth_methods = []

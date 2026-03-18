@@ -2167,6 +2167,7 @@ class ApiConstruct(Construct):
         # Per auth_and_authorizer_spec.yaml:
         # - Public (unprotected): /health, /auth/register, /auth/login
         # - Protected: /auth/refresh and all other routes
+        # - billing/webhook is public: verifies webhook signature itself (S-006)
         public_paths = {
             "/health",
             "/auth/register",
