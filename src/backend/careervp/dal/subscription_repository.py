@@ -368,6 +368,33 @@ class SubscriptionRepository:
             # Non-fatal — TTL auto-cleans within 1 hour regardless
             logger.warning('release_checkout_intent failed (non-fatal)', user_id=user_id, error=str(exc))
 
+    # ─── Reconciliation support ───────────────────────────────────────────────
+
+    @tracer.capture_method(capture_response=False)
+    def scan_active_subscriptions(self) -> list[dict[str, Any]]:
+        """Return all active subscription rows from the users table.
+
+        Performs a paginated scan filtering on sk=SUBSCRIPTION#CURRENT and
+        status=active.  Must scan self._table (users table), never the
+        idempotency table.  A single scan page is capped at 1 MB, so
+        pagination is mandatory for correctness at scale.
+        """
+        results: list[dict[str, Any]] = []
+        filter_expr = Attr('sk').eq(SUBSCRIPTION_SK) & Attr('#s').eq('active')
+        kwargs: dict[str, Any] = {
+            'FilterExpression': filter_expr,
+            'ExpressionAttributeNames': {'#s': 'status'},
+        }
+        while True:
+            response = self._table.scan(**kwargs)
+            results.extend(response.get('Items', []))
+            last_key = response.get('LastEvaluatedKey')
+            if not last_key:
+                break
+            kwargs['ExclusiveStartKey'] = last_key
+        logger.info('scan_active_subscriptions', count=len(results))
+        return results
+
     # ─── Payment-event retry support ─────────────────────────────────────────
 
     @tracer.capture_method(capture_response=False)

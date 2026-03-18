@@ -2,8 +2,11 @@ import json
 from typing import cast
 
 from aws_cdk import CfnOutput, Duration, RemovalPolicy, aws_apigateway, aws_sqs
+from aws_cdk import aws_cloudwatch as cw
 from aws_cdk import aws_cognito as cognito
 from aws_cdk import aws_dynamodb as dynamodb
+from aws_cdk import aws_events as events
+from aws_cdk import aws_events_targets as targets
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_kms as kms
 from aws_cdk import aws_lambda as _lambda
@@ -196,6 +199,14 @@ class ApiConstruct(Construct):
             jobs_table=self.api_db.jobs_table,
             dlq=self.interview_prep_worker_dlq,
         )
+
+        # Billing infrastructure (S-006)
+        self.billing_webhook_dlq = self._build_billing_webhook_dlq()
+        self.billing_lambda = self._add_billing_lambda()
+        self.billing_reconcile_lambda = self._add_billing_reconcile_lambda()
+        self._add_billing_eventbridge_rule()
+        self.billing_error_alarm = self._add_billing_error_alarm()
+
         self._add_openapi_contract_routes()
 
         self._build_swagger_endpoints(
@@ -275,6 +286,7 @@ class ApiConstruct(Construct):
             "service-rest-api",
             rest_api_name=self.naming.api_name(constants.API_FEATURE),
             description="CareerVP API - AI-powered job application assistant",
+            binary_media_types=["application/json", "*/*"],
             deploy_options=aws_apigateway.StageOptions(
                 throttling_rate_limit=2,
                 throttling_burst_limit=10,
@@ -2016,6 +2028,128 @@ class ApiConstruct(Construct):
             architecture=_lambda.Architecture.X86_64,
         )
 
+    def _build_billing_webhook_dlq(self) -> aws_sqs.Queue:
+        """Dead-letter queue for failed billing webhook events."""
+        return aws_sqs.Queue(
+            self,
+            "BillingWebhookDlq",
+            queue_name=self.naming.dlq_name(constants.BILLING_WEBHOOK_DLQ),
+            retention_period=Duration.days(14),
+            encryption=aws_sqs.QueueEncryption.KMS_MANAGED,
+        )
+
+    def _add_billing_lambda(self) -> _lambda.Function:
+        """Billing handler Lambda for payment webhooks and checkout flows."""
+        function_name = self.naming.lambda_name(constants.BILLING_FEATURE)
+        log_group = logs.LogGroup(
+            self,
+            "BillingLambdaLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
+        lambda_function = _lambda.Function(
+            self,
+            "BillingLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.billing_handler.handler",
+            function_name=function_name,
+            environment={
+                "TABLE_NAME": self.api_db.db.table_name,
+                "IDEMPOTENCY_TABLE_NAME": self.api_db.idempotency_db.table_name,
+                constants.WEBHOOK_SECRET_ENV_VAR: ssm.StringParameter.value_for_string_parameter(
+                    self, constants.WEBHOOK_SECRET_SSM_PARAM
+                ),
+                constants.WEBHOOK_SECRET_PREVIOUS_ENV_VAR: ssm.StringParameter.value_for_string_parameter(
+                    self, constants.WEBHOOK_SECRET_PREVIOUS_SSM_PARAM
+                ),
+                "PRICE_ID_MONTHLY": ssm.StringParameter.value_for_string_parameter(
+                    self, constants.PRICE_ID_MONTHLY_SSM_PARAM
+                ),
+                "PRICE_ID_QUARTERLY": ssm.StringParameter.value_for_string_parameter(
+                    self, constants.PRICE_ID_QUARTERLY_SSM_PARAM
+                ),
+                "PAYMENT_PROVIDER": "placeholder",
+            },
+            timeout=Duration.seconds(30),
+            memory_size=256,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+        self.api_db.db.grant_read_write_data(lambda_function)
+        self.api_db.idempotency_db.grant_read_write_data(lambda_function)
+        return lambda_function
+
+    def _add_billing_reconcile_lambda(self) -> _lambda.Function:
+        """Billing reconciliation Lambda triggered nightly by EventBridge."""
+        function_name = self.naming.lambda_name(constants.BILLING_RECONCILE_FEATURE)
+        log_group = logs.LogGroup(
+            self,
+            "BillingReconcileLambdaLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
+        lambda_function = _lambda.Function(
+            self,
+            "BillingReconcileLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.billing_reconcile_handler.handler",
+            function_name=function_name,
+            environment={
+                "TABLE_NAME": self.api_db.db.table_name,
+                "PAYMENT_PROVIDER": "placeholder",
+            },
+            timeout=Duration.seconds(300),
+            memory_size=256,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+        self.api_db.db.grant_read_write_data(lambda_function)
+        return lambda_function
+
+    def _add_billing_eventbridge_rule(self) -> events.Rule:
+        """EventBridge scheduled rule — triggers billing reconciliation at 02:00 UTC."""
+        return events.Rule(
+            self,
+            "BillingReconcileScheduleRule",
+            schedule=events.Schedule.cron(hour="2", minute="0"),
+            targets=[
+                targets.LambdaFunction(
+                    handler=self.billing_reconcile_lambda,
+                    event=events.RuleTargetInput.from_object(
+                        {"detail": {"action": "reconcile_subscriptions"}}
+                    ),
+                )
+            ],
+        )
+
+    def _add_billing_error_alarm(self) -> cw.Alarm:
+        """CloudWatch alarm fires on any billing Lambda error within 5 minutes."""
+        return cw.Alarm(
+            self,
+            "BillingLambdaErrorAlarm",
+            metric=self.billing_lambda.metric_errors(
+                period=Duration.minutes(5),
+                statistic="Sum",
+            ),
+            threshold=1,
+            evaluation_periods=1,
+            treat_missing_data=cw.TreatMissingData.NOT_BREACHING,
+        )
+
     def _get_or_create_path_resource(self, path: str) -> aws_apigateway.Resource:
         current: aws_apigateway.IResource = self.rest_api.root
         parts = [segment for segment in path.split("/") if segment]
@@ -2033,7 +2167,13 @@ class ApiConstruct(Construct):
         # Per auth_and_authorizer_spec.yaml:
         # - Public (unprotected): /health, /auth/register, /auth/login
         # - Protected: /auth/refresh and all other routes
-        public_paths = {"/health", "/auth/register", "/auth/login", "/auth/refresh"}
+        public_paths = {
+            "/health",
+            "/auth/register",
+            "/auth/login",
+            "/auth/refresh",
+            "/billing/webhook",
+        }
         is_public_route = path in public_paths
         resource.add_method(
             http_method=method,
@@ -2091,6 +2231,11 @@ class ApiConstruct(Construct):
             ("/company-research/{jobId}", "GET", self.company_research_func),
             ("/company-research/fetch", "POST", self.company_research_func),
             ("/knowledge-base", "GET", self.company_research_func),
+            # Billing routes (S-006)
+            ("/billing/checkout", "POST", self.billing_lambda),
+            ("/billing/portal", "POST", self.billing_lambda),
+            ("/billing/webhook", "POST", self.billing_lambda),
+            ("/users/me/subscription", "GET", self.billing_lambda),
         ]
         for path, method, handler in route_map:
             self._add_route_method(path, method, handler)
