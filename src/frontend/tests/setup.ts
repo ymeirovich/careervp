@@ -24,9 +24,7 @@ process.env.AWS_REGION = 'us-east-1';
  * Generates an ISO 8601 date string offset from now by the given number of days.
  */
 export function daysAgo(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString();
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }
 
 export function daysFromNow(days: number): string {
@@ -36,9 +34,7 @@ export function daysFromNow(days: number): string {
 }
 
 export function hoursAgo(hours: number): string {
-  const d = new Date();
-  d.setHours(d.getHours() - hours);
-  return d.toISOString();
+  return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 }
 
 // ─── Mock Factories ──────────────────────────────────────────────────────────

@@ -20,15 +20,18 @@ from pydantic import ValidationError
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
+from careervp.dal.subscription_repository import SubscriptionRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.utils.observability import logger, tracer
 from careervp.handlers.utils.rest_api_resolver import app
+from careervp.logic.quota_service import QuotaError, QuotaService
 from careervp.logic.trial_service import TrialExhaustedException, TrialExpiredException, TrialService
 from careervp.models.api_models import JobCreateRequest
 from careervp.models.job import Job
 
 _jobs_repository: JobsRepository | None = None
 _trial_service: TrialService | None = None
+_quota_service: QuotaService | None = None
 
 
 def _get_jobs_repository() -> JobsRepository:
@@ -40,9 +43,10 @@ def _get_jobs_repository() -> JobsRepository:
 
 def _reset_handler_caches() -> None:
     """Testing hook to reset module dependency caches."""
-    global _jobs_repository, _trial_service
+    global _jobs_repository, _trial_service, _quota_service
     _jobs_repository = None
     _trial_service = None
+    _quota_service = None
 
 
 def _json_response(status: HTTPStatus, body: dict[str, Any]) -> Response[str]:
@@ -62,6 +66,20 @@ def _get_trial_service() -> TrialService | None:
         return None
     _trial_service = TrialService(dal=DynamoDalHandler(table_name=table_name))
     return _trial_service
+
+
+def _get_quota_service() -> QuotaService | None:
+    global _quota_service
+    if _quota_service is not None:
+        return _quota_service
+    trial_service = _get_trial_service()
+    if trial_service is None:
+        return None
+    _quota_service = QuotaService(
+        subscription_repo=SubscriptionRepository(),
+        trial_service=trial_service,
+    )
+    return _quota_service
 
 
 def _get_authenticated_user_id() -> str | None:
@@ -129,6 +147,13 @@ def create_job() -> Response[str]:
     user_id = _get_authenticated_user_id()
     if not user_id:
         return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Authentication required'})
+
+    quota_service = _get_quota_service()
+    if quota_service is not None:
+        try:
+            quota_service.check_access(user_id)
+        except QuotaError as exc:
+            return _json_response(HTTPStatus.FORBIDDEN, {'error': exc.error})
 
     trial_service = _get_trial_service()
     if trial_service is not None:
