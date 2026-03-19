@@ -154,6 +154,26 @@
       "method": "GET",
       "path": "/vprs",
       "auth": "COGNITO"
+    },
+    {
+      "method": "POST",
+      "path": "/billing/checkout",
+      "auth": "COGNITO"
+    },
+    {
+      "method": "POST",
+      "path": "/billing/portal",
+      "auth": "COGNITO"
+    },
+    {
+      "method": "POST",
+      "path": "/billing/webhook",
+      "auth": "NONE"
+    },
+    {
+      "method": "GET",
+      "path": "/users/me/subscription",
+      "auth": "COGNITO"
     }
   ]
 }

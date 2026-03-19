@@ -105,12 +105,12 @@ class TestRouteSurfaceDiffEmpty:
         assert os.path.exists(FROZEN_SPEC_PATH), f'frozen_spec.json missing at {FROZEN_SPEC_PATH}'
 
     def test_frozen_spec_has_31_routes(self):
-        """frozen_spec.json contains exactly 31 routes."""
+        """frozen_spec.json contains exactly 35 routes (31 original + 4 billing)."""
         assert os.path.exists(FROZEN_SPEC_PATH), f'Missing: {FROZEN_SPEC_PATH}'
         with open(FROZEN_SPEC_PATH) as f:
             spec = json.load(f)
         routes = spec.get('routes', [])
-        assert len(routes) == 31, f'Expected 31 routes in frozen spec, got {len(routes)}'
+        assert len(routes) == 35, f'Expected 35 routes in frozen spec, got {len(routes)}'
 
 
 @pytest.mark.unit
@@ -141,7 +141,9 @@ class TestRouteAuthenticationSurface:
         assert os.path.exists(FROZEN_SPEC_PATH), f'Missing: {FROZEN_SPEC_PATH}'
         with open(FROZEN_SPEC_PATH) as f:
             spec = json.load(f)
-        protected = [r for r in spec['routes'] if not r['path'].startswith('/auth/') and r['path'] != '/health']
+        # Exclude public routes: /auth/*, /health, and /billing/webhook (called by Stripe, not browsers)
+        public_paths = {'/health', '/billing/webhook'}
+        protected = [r for r in spec['routes'] if not r['path'].startswith('/auth/') and r['path'] not in public_paths]
         for route in protected:
             assert route['auth'] == 'COGNITO', f'Expected COGNITO auth for {route["path"]}, got: {route["auth"]}'
 

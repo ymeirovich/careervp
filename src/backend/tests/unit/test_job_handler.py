@@ -51,6 +51,7 @@ def job_test_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]
     monkeypatch.setenv('VPR_JOBS_TABLE_NAME', 'test-jobs-table')
     monkeypatch.setenv('JWT_PRIVATE_KEY', TEST_PRIVATE_KEY)
     monkeypatch.setenv('JWT_PUBLIC_KEY', TEST_PUBLIC_KEY)
+    monkeypatch.delenv('USERS_TABLE_NAME', raising=False)
 
     from careervp.handlers.job_handler import _reset_handler_caches
 

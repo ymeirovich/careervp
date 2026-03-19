@@ -34,6 +34,8 @@ def env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
     monkeypatch.setenv('ENV', 'local')
     monkeypatch.setenv('TABLE_NAME', 'test-artifacts-list-table')
     monkeypatch.setenv('COVER_LETTER_LEGACY_READ_ENABLED', 'false')
+    monkeypatch.delenv('DYNAMODB_TABLE_NAME', raising=False)
+    monkeypatch.delenv('ARTIFACTS_TABLE_NAME', raising=False)
     yield
 
 

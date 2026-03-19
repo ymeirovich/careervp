@@ -32,7 +32,7 @@ class ApiError extends Error {
 function trialExpired(createdAtIso: string): boolean {
   const created = new Date(createdAtIso);
   const trialEnd = new Date(created.getTime() + 14 * 24 * 60 * 60 * 1000);
-  return new Date() > trialEnd;
+  return new Date() >= trialEnd;
 }
 
 async function checkTrialAndQuota(userId: string): Promise<void> {

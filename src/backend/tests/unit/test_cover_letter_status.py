@@ -21,6 +21,8 @@ def cover_letter_status_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, 
     monkeypatch.setenv('LOG_LEVEL', 'INFO')
     monkeypatch.setenv('ENV', 'local')
     monkeypatch.setenv('TABLE_NAME', 'test-cover-letter-table')
+    monkeypatch.delenv('DYNAMODB_TABLE_NAME', raising=False)
+    monkeypatch.delenv('ARTIFACTS_TABLE_NAME', raising=False)
     yield
 
 

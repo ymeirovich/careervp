@@ -335,8 +335,8 @@ VERIFY:
 cd src/backend && uv run pytest tests/unit/test_billing_service.py -v --tb=short
 # TypeScript unit (see TEST_EXECUTION_GUIDE.md §TypeScript Happy-Path Tests)
 cd src/frontend && npm run test:unit -- --testPathPattern="checkout|subscription-status|portal|cors"
-# TypeScript integration (see TEST_EXECUTION_GUIDE.md §TypeScript Critical Hardening Tests)
-cd src/frontend && npm run test:integration -- --testPathPattern="concurrent-checkout|partial-failure-customer|stripe-timeout|stripe-error-503|stripe-rate-limit"
+# TypeScript critical hardening (see TEST_EXECUTION_GUIDE.md §TypeScript Critical Hardening Tests)
+cd src/frontend && npm run test:critical -- --testPathPattern="concurrent-checkout|partial-failure-customer|stripe-timeout|stripe-error-503|stripe-rate-limit"
 ```
 
 ---
@@ -468,8 +468,10 @@ VERIFY:
 cd src/backend && uv run pytest tests/unit/test_webhook_service.py -v --tb=short
 # TypeScript unit (see TEST_EXECUTION_GUIDE.md §TypeScript Happy-Path Tests)
 cd src/frontend && npm run test:unit -- --testPathPattern="webhook-"
-# TypeScript integration (see TEST_EXECUTION_GUIDE.md §TypeScript Critical Hardening Tests)
-cd src/frontend && npm run test:integration -- --testPathPattern="webhook-rawbody|stripe-idempotency|partial-failure-rollback|partial-failure-usage"
+# TypeScript critical hardening (see TEST_EXECUTION_GUIDE.md §TypeScript Critical Hardening Tests)
+# webhook-rawbody is in test:integration; stripe-idempotency and partial-failure-* are in test:critical
+cd src/frontend && npm run test:integration -- --testPathPattern="webhook-rawbody"
+cd src/frontend && npm run test:critical -- --testPathPattern="stripe-idempotency|partial-failure-rollback|partial-failure-usage"
 ```
 
 ---
@@ -612,8 +614,8 @@ cd src/backend && uv run pytest tests/unit/test_quota_service.py \
                                 tests/unit/test_subscription_repository.py -v --tb=short
 # TypeScript unit (see TEST_EXECUTION_GUIDE.md §TypeScript Happy-Path Tests)
 cd src/frontend && npm run test:unit
-# TypeScript integration (see TEST_EXECUTION_GUIDE.md §TypeScript Critical Hardening Tests)
-cd src/frontend && npm run test:integration -- --testPathPattern="state-reconciliation|state-divergence|lifecycle-resubscribe|race-condition|subscription-cache"
+# TypeScript critical hardening (see TEST_EXECUTION_GUIDE.md §TypeScript Critical Hardening Tests)
+cd src/frontend && npm run test:critical -- --testPathPattern="state-reconciliation|state-divergence|lifecycle-resubscribe|race-condition|subscription-cache"
 # Full backend regression (no existing tests broken)
 cd src/backend && uv run pytest tests/unit/ -v --tb=short 2>&1 | tail -20
 # ── EXIT CRITERION (Prompt 5 = final prompt) ──────────────────────────────────

@@ -12,9 +12,11 @@ from pydantic import ValidationError
 
 from careervp.dal.application_repository import ApplicationRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+from careervp.dal.subscription_repository import SubscriptionRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.gap_analysis import generate_gap_questions
+from careervp.logic.quota_service import QuotaError, QuotaService
 from careervp.logic.trial_service import TrialExhaustedException, TrialExpiredException, TrialService
 from careervp.models.api_models import GapQuestionRequest, GapResponseRequest
 from careervp.models.result import Result, ResultCode
@@ -22,6 +24,13 @@ from careervp.models.result import Result, ResultCode
 _trial_service: TrialService | None = None
 _application_repository: ApplicationRepository | None = None
 _current_request_origin: str | None = None
+
+
+def _reset_handler_caches() -> None:
+    """Testing hook to reset module-level cached singletons between tests."""
+    global _trial_service, _application_repository
+    _trial_service = None
+    _application_repository = None
 
 
 def _resolve_table_name(*env_keys: str) -> str:
@@ -588,77 +597,101 @@ def _prepare_trial_and_pending_state(
     job_id: str,
     endpoint: str,
 ) -> tuple[str, dict[str, Any] | None]:
-    trial_service = _get_trial_service()
-    if trial_service is not None:
-        usage_before = None
-        usage_after = None
+    quota_service = _get_quota_service()
+    if quota_service is not None:
         try:
-            status = trial_service.check_trial_status(user_id)
-            usage_before = _extract_applications_used(status)
-            if usage_before is None:
-                usage_before = _read_trial_usage_snapshot(
-                    trial_service=trial_service,
-                    user_id=user_id,
-                    endpoint=endpoint,
-                )
-            trial_service.consume_credit(user_id)
-            usage_after = _read_trial_usage_snapshot(
-                trial_service=trial_service,
-                user_id=user_id,
-                endpoint=endpoint,
-            )
-            consumed = True
-            if usage_before is not None and usage_after is not None:
-                consumed = usage_after > usage_before
-            _log_trial_credit_attribution(
-                endpoint=endpoint,
-                user_id=user_id,
-                usage_before=usage_before,
-                usage_after=usage_after,
-                consumed=consumed,
-            )
-        except TrialExpiredException:
-            if usage_before is None:
-                usage_before = _read_trial_usage_snapshot(
-                    trial_service=trial_service,
-                    user_id=user_id,
-                    endpoint=endpoint,
-                )
-            _log_trial_credit_attribution(
-                endpoint=endpoint,
-                user_id=user_id,
-                usage_before=usage_before,
-                usage_after=usage_after,
-                consumed=False,
-            )
-            return '', _error_response(HTTPStatus.FORBIDDEN, 'Trial expired', 'trial_expired')
-        except TrialExhaustedException:
-            if usage_before is None:
-                usage_before = _read_trial_usage_snapshot(
-                    trial_service=trial_service,
-                    user_id=user_id,
-                    endpoint=endpoint,
-                )
-            usage_after = _read_trial_usage_snapshot(
-                trial_service=trial_service,
-                user_id=user_id,
-                endpoint=endpoint,
-            )
-            _log_trial_credit_attribution(
-                endpoint=endpoint,
-                user_id=user_id,
-                usage_before=usage_before,
-                usage_after=usage_after,
-                consumed=False,
-            )
-            return '', _error_response(HTTPStatus.FORBIDDEN, 'Trial exhausted', 'trial_exhausted')
+            quota_service.check_access(user_id)
+        except QuotaError as exc:
+            return '', _error_response(HTTPStatus.FORBIDDEN, exc.message or exc.error, exc.error)
 
+    result = _process_trial_credits(trial_service=_get_trial_service(), user_id=user_id, endpoint=endpoint)
+    if result is not None:
+        return result
+
+    return _update_application_to_pending(payload, job_id)
+
+
+def _process_trial_credits(
+    trial_service: TrialService | None,
+    user_id: str,
+    endpoint: str,
+) -> tuple[str, dict[str, Any] | None] | None:
+    """Process trial credits and return error response if trial expired/exhausted, None if ok."""
+    if trial_service is None:
+        return None
+
+    usage_before = None
+    usage_after = None
+    try:
+        status = trial_service.check_trial_status(user_id)
+        usage_before = _extract_applications_used(status)
+        if usage_before is None:
+            usage_before = _read_trial_usage_snapshot(
+                trial_service=trial_service,
+                user_id=user_id,
+                endpoint=endpoint,
+            )
+        trial_service.consume_credit(user_id)
+        usage_after = _read_trial_usage_snapshot(
+            trial_service=trial_service,
+            user_id=user_id,
+            endpoint=endpoint,
+        )
+        consumed = True
+        if usage_before is not None and usage_after is not None:
+            consumed = usage_after > usage_before
+        _log_trial_credit_attribution(
+            endpoint=endpoint,
+            user_id=user_id,
+            usage_before=usage_before,
+            usage_after=usage_after,
+            consumed=consumed,
+        )
+    except TrialExpiredException:
+        _handle_trial_exception(trial_service, user_id, endpoint, usage_before, None)
+        return '', _error_response(HTTPStatus.FORBIDDEN, 'Trial expired', 'trial_expired')
+    except TrialExhaustedException:
+        usage_after = _read_trial_usage_snapshot(
+            trial_service=trial_service,
+            user_id=user_id,
+            endpoint=endpoint,
+        )
+        _handle_trial_exception(trial_service, user_id, endpoint, usage_before, usage_after)
+        return '', _error_response(HTTPStatus.FORBIDDEN, 'Trial exhausted', 'trial_exhausted')
+    return None
+
+
+def _handle_trial_exception(
+    trial_service: TrialService,
+    user_id: str,
+    endpoint: str,
+    usage_before: int | None,
+    usage_after: int | None,
+) -> None:
+    """Log trial attribution when trial exception occurs."""
+    if usage_before is None:
+        usage_before = _read_trial_usage_snapshot(
+            trial_service=trial_service,
+            user_id=user_id,
+            endpoint=endpoint,
+        )
+    _log_trial_credit_attribution(
+        endpoint=endpoint,
+        user_id=user_id,
+        usage_before=usage_before,
+        usage_after=usage_after,
+        consumed=False,
+    )
+
+
+def _update_application_to_pending(payload: dict[str, Any], job_id: str) -> tuple[str, dict[str, Any] | None]:
+    """Update application state to pending and return application_id."""
     application_id = _coerce_str(payload.get('application_id')) or job_id
     application_repo = _get_application_repository()
     try:
         application_repo.update_state(
             application_id=application_id,
-            user_id=user_id,
+            user_id='',
             new_state='gap_questions_pending',
             expected_state='cv_selected',
         )
@@ -675,6 +708,17 @@ def _get_trial_service() -> TrialService | None:
             return None
         _trial_service = TrialService(dal=DynamoDalHandler(table_name=table_name))
     return _trial_service
+
+
+def _get_quota_service() -> QuotaService | None:
+    """Build a QuotaService on demand; returns None when trial service is unavailable."""
+    trial_service = _get_trial_service()
+    if trial_service is None:
+        return None
+    return QuotaService(
+        subscription_repo=SubscriptionRepository(),
+        trial_service=trial_service,
+    )
 
 
 def _get_application_repository() -> ApplicationRepository:

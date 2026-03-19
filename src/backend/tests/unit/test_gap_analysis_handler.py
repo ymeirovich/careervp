@@ -12,6 +12,15 @@ from moto import mock_aws
 
 
 @pytest.fixture(autouse=True)
+def reset_gap_handler_caches() -> Generator[None, None, None]:
+    from careervp.handlers.gap_handler import _reset_handler_caches
+
+    _reset_handler_caches()
+    yield
+    _reset_handler_caches()
+
+
+@pytest.fixture(autouse=True)
 def gap_test_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
     monkeypatch.setenv('AWS_ACCESS_KEY_ID', 'testing')
     monkeypatch.setenv('AWS_SECRET_ACCESS_KEY', 'testing')
@@ -23,6 +32,7 @@ def gap_test_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]
     monkeypatch.setenv('DYNAMODB_TABLE_NAME', 'test-gap-table')
     monkeypatch.setenv('TABLE_NAME', 'test-gap-table')
     monkeypatch.setenv('USERS_TABLE_NAME', 'test-gap-table')
+    monkeypatch.setenv('GAP_QUESTIONS_TABLE_NAME', 'test-gap-table')
     monkeypatch.setenv('GAP_RESPONSES_TABLE_NAME', 'test-gap-responses-table')
     yield
 
