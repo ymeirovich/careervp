@@ -1,7 +1,7 @@
 {
-  "description": "GET /users/me/vprs - List user's VPRs",
+  "description": "GET /vprs - List user's VPRs",
   "method": "GET",
-  "path": "/users/me/vprs",
+  "path": "/vprs",
   "headers": {
     "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
   },

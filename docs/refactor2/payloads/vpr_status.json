@@ -1,7 +1,7 @@
 {
-  "description": "GET /vpr/{vprId} - Get VPR status or result",
+  "description": "GET /vpr/{vprId}/status - Get VPR status or result",
   "method": "GET",
-  "path": "/vpr/{vprId}",
+  "path": "/vpr/{vprId}/status",
   "headers": {
     "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
   },

@@ -1,7 +1,7 @@
 {
-  "description": "GET /cv-tailoring/{cvTailoringId} - Get tailored CV status or result",
+  "description": "GET /cv-tailoring/{cvTailoringId}/status - Get tailored CV status or result",
   "method": "GET",
-  "path": "/cv-tailoring/{cvTailoringId}",
+  "path": "/cv-tailoring/{cvTailoringId}/status",
   "headers": {
     "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
   },

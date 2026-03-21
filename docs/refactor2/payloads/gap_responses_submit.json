@@ -28,7 +28,7 @@
     ]
   },
   "expected_response": {
-    "status_code": 201,
+    "status_code": 200,
     "body": {
       "status": "saved",
       "job_id": "",
