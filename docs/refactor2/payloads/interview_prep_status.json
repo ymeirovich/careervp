@@ -1,7 +1,7 @@
 {
-  "description": "GET /interview-prep/{interviewPrepId} - Get interview prep status or result",
+  "description": "GET /interview-prep/{interviewPrepId}/status - Get interview prep status or result",
   "method": "GET",
-  "path": "/interview-prep/{interviewPrepId}",
+  "path": "/interview-prep/{interviewPrepId}/status",
   "headers": {
     "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
   },

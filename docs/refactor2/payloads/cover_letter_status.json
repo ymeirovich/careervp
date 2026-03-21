@@ -1,7 +1,7 @@
 {
-  "description": "GET /cover-letter/{coverLetterId} - Get cover letter status or result",
+  "description": "GET /cover-letter/{coverLetterId}/status - Get cover letter status or result",
   "method": "GET",
-  "path": "/cover-letter/{coverLetterId}",
+  "path": "/cover-letter/{coverLetterId}/status",
   "headers": {
     "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
   },

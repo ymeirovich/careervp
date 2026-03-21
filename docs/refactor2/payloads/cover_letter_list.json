@@ -1,7 +1,7 @@
 {
-  "description": "GET /users/me/cover-letters - List user's cover letters",
+  "description": "GET /cover-letters - List user's cover letters",
   "method": "GET",
-  "path": "/users/me/cover-letters",
+  "path": "/cover-letters",
   "headers": {
     "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
   },

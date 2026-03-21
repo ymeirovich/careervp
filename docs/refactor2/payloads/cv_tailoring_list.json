@@ -1,7 +1,7 @@
 {
-  "description": "GET /users/me/tailored-cvs - List user's tailored CVs",
+  "description": "GET /cv-tailorings - List user's tailored CVs",
   "method": "GET",
-  "path": "/users/me/tailored-cvs",
+  "path": "/cv-tailorings",
   "headers": {
     "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YTdmNjMwNy0zNTYyLTRlYmMtYjIwOS01ZjE5NTU5YjA0OGYifQ.example"
   },
