@@ -286,7 +286,6 @@ class ApiConstruct(Construct):
             "service-rest-api",
             rest_api_name=self.naming.api_name(constants.API_FEATURE),
             description="CareerVP API - AI-powered job application assistant",
-            binary_media_types=["application/json", "*/*"],
             deploy_options=aws_apigateway.StageOptions(
                 throttling_rate_limit=2,
                 throttling_burst_limit=10,
