@@ -12,17 +12,9 @@
       "tailored_cvs": [
         {
           "id": "cv-tail-f2a3b4c5-6789-4d0e-f1a2-345678901234",
-          "job_title": "Senior Software Engineer",
-          "company_name": "TechCorp",
-          "ats_score": 9.2,
+          "status": "completed",
+          "cv_id": "cv-abc123",
           "created_at": "2024-01-20T16:30:00Z"
-        },
-        {
-          "id": "cv-tail-a3b4c5d6-7890-4e1f-a2b3-456789012345",
-          "job_title": "Full Stack Developer",
-          "company_name": "StartupInc",
-          "ats_score": 8.8,
-          "created_at": "2024-01-19T15:00:00Z"
         }
       ]
     }

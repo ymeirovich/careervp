@@ -15,27 +15,7 @@
       "id": "cover-c5d6e7f8-9012-4a3b-d4e5-678901234567",
       "status": "completed",
       "result": {
-        "cover_letter": "Dear Hiring Manager,\n\nI'm writing to express my strong interest in the Senior Software Engineer position at TechCorp. What excites me most about this opportunity is TechCorp's commitment to building scalable cloud-native solutions that serve millions of users...\n\n[Full cover letter text...]",
-        "paragraphs": {
-          "hook": {
-            "word_count": 92,
-            "includes_uvp": true,
-            "includes_company_reference": true
-          },
-          "proof_points": {
-            "requirements_matched": 3,
-            "claims_verified": true,
-            "quantified_evidence": true
-          },
-          "close": {
-            "word_count": 68,
-            "includes_cta": true
-          }
-        },
-        "fvs_validation": {
-          "is_valid": true,
-          "violations": []
-        }
+        "cover_letter": "Dear Hiring Manager,"
       }
     }
   }
