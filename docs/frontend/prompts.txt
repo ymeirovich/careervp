@@ -1,0 +1,114 @@
+Here's the recommended implementation order and prompts to use. Each prompt is self-contained and safe to run in a fresh session.
+
+---
+
+## Order of Implementation
+
+Dependencies flow top-to-bottom — each step builds on the previous.
+
+---
+
+### Step 1 — Foundation (types + API client + shared components)
+
+```
+Read docs/frontend/IMPLEMENTATION-REFERENCE.md and implement:
+1. lib/types.ts — add all new interfaces (keep existing ones)
+2. lib/api.ts — add all new methods (keep existing ones, add apiFetchOrNull helper)
+3. components/ui/Badge.tsx — new component
+4. components/ui/FormField.tsx — new component
+5. components/dashboard/ResourceCard.tsx — new component
+
+Follow the exact specs in the reference doc. Do not create any page files yet.
+```
+
+---
+
+### Step 2 — Layout refactor (Sidebar, Topbar, DashboardContext, layout.tsx)
+
+```
+Read docs/frontend/IMPLEMENTATION.md sections "Shared Layout & Navigation" and "Dashboard Page".
+Read the current frontend/app/dashboard/page.tsx.
+
+1. Create app/dashboard/dashboard-context.tsx (DashboardContext + useDashboard hook)
+2. Create components/dashboard/Sidebar.tsx — extract from page.tsx, add route-awareness
+3. Create components/dashboard/Topbar.tsx — extract from page.tsx, add title + breadcrumb props
+4. Create components/dashboard/StatusStrip.tsx — extract from page.tsx
+5. Create app/dashboard/layout.tsx — auth guard + DashboardContext.Provider + Sidebar shell
+6. Update app/dashboard/page.tsx — remove extracted components, fix "View Application" href
+
+Follow the spec exactly. The layout must be "use client" and fetch usage+subscription once.
+*"Fix any TypeScript errors before finishing"*
+
+```
+
+---
+
+### Step 3 — Application Hub page
+
+```
+Read docs/frontend/IMPLEMENTATION-PAGES.md section "Application Hub Page".
+Read docs/frontend/IMPLEMENTATION-REFERENCE.md for types and API methods.
+
+Create app/dashboard/jobs/[jobId]/page.tsx — the Application Hub.
+
+Key points:
+- Single API call: api.getApplication(jobId)
+- ResourceCard grid with dependency-aware disabled states
+- CV selector dropdown
+- "Generate" buttons with async polling (3s interval) for VPR
+*"Fix any TypeScript errors before finishing"*
+```
+
+---
+
+### Step 4 — Gap Analysis page (CRUD form)
+
+```
+Read docs/frontend/IMPLEMENTATION-PAGES.md section "Gap Analysis Page".
+
+Create app/dashboard/jobs/[jobId]/gap-analysis/page.tsx
+
+This is a CRUD form with state machine: VIEW → EDIT → SAVING → VIEW.
+On first visit with no responses, default to EDIT mode.
+*"Fix any TypeScript errors before finishing"*
+```
+
+---
+
+### Step 5 — VPR, Cover Letter, Interview Prep display pages
+
+```
+Read docs/frontend/IMPLEMENTATION-PAGES.md sections "VPR Page", "Cover Letter Page", and "Interview Prep Page".
+
+Create all three display pages:
+- app/dashboard/jobs/[jobId]/vpr/page.tsx
+- app/dashboard/jobs/[jobId]/cover-letter/page.tsx
+- app/dashboard/jobs/[jobId]/interview-prep/page.tsx
+
+All three follow the same pattern: call api.getApplication(jobId), extract from hub.artifacts.*, redirect to hub if artifact is null.
+*"Fix any TypeScript errors before finishing"*
+```
+
+---
+
+### Step 6 — CV Center + CV Edit pages
+
+```
+Read docs/frontend/IMPLEMENTATION-PAGES.md sections "CV Center Page" and "CV Detail / Edit Page".
+Read docs/frontend/IMPLEMENTATION-REFERENCE.md for CV-related types.
+
+Create:
+- app/dashboard/cv/page.tsx — single CVSummaryCard view
+- app/dashboard/cv/edit/page.tsx — edit form (GET then POST upsert), immutable fields marked with lock icon
+- app/dashboard/cv/new/page.tsx — upload/paste form for first-time CV creation
+*"Fix any TypeScript errors before finishing"*
+```
+
+---
+
+## Tips
+
+- **Run Step 1 before anything else** — pages import from `lib/types.ts` and `lib/api.ts`
+- **After Step 2**, verify the dashboard still loads correctly before proceeding
+- **Each step is independent after Step 2** — Steps 3–6 can be run in any order or in parallel if you use separate worktrees
+- For TypeScript errors after each step, append: *"Fix any TypeScript errors before finishing"*
