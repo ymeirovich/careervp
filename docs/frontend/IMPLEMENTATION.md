@@ -1,533 +1,242 @@
-# Dashboard Implementation Details
+# Frontend Implementation Spec — CareerVP CRUD UI
 
-**Date**: March 14, 2026
-**Branch**: `ui/figma-test`
-**Source**: Figma node 66:262 (Desktop / Dashboard Full)
-**File**: `frontend/app/dashboard/page.tsx`
-
----
-
-## Overview
-
-The CareerVP Dashboard is a React component that displays:
-- User's job applications
-- Plan and credit status
-- Navigation sidebar
-- Application management interface
-
-**Technology Stack**:
-- Next.js 15 (App Router)
-- Tailwind CSS v3
-- TypeScript
-- React 19
+**Date**: March 24, 2026 (revised)
+**Status**: Active design reference
+**Source API**: `docs/swagger/careervp-core-api-dev-prod-swagger-apigateway (1).json`
 
 ---
 
-## Component Hierarchy
+## Table of Contents
+
+### This file
+1. [Overview & Architecture](#overview--architecture)
+2. [Shared Layout & Navigation](#shared-layout--navigation)
+3. [Dashboard Page](#dashboard-page-dashboarddashboard)
+
+### [IMPLEMENTATION-PAGES.md](./IMPLEMENTATION-PAGES.md)
+4. Application Hub (`/dashboard/jobs/[jobId]`)
+5. Gap Analysis (`/dashboard/jobs/[jobId]/gap-analysis`)
+6. VPR Display (`/dashboard/jobs/[jobId]/vpr`)
+7. Cover Letter Display (`/dashboard/jobs/[jobId]/cover-letter`)
+8. Interview Prep Display (`/dashboard/jobs/[jobId]/interview-prep`)
+9. CV Center (`/dashboard/cv`)
+10. CV Detail / Edit (`/dashboard/cv/edit` and `/dashboard/cv/new`)
+
+### [IMPLEMENTATION-REFERENCE.md](./IMPLEMENTATION-REFERENCE.md)
+11. Shared Components (ResourceCard, Badge, FormField)
+12. API Client Methods
+13. TypeScript Types
+14. Design Tokens
+15. Testing Checklist
+
+---
+
+## Overview & Architecture
+
+CareerVP is a multi-page Next.js 15 (App Router) application. All authenticated pages live under `/dashboard` and share a common shell (Sidebar + Topbar) via `dashboard/layout.tsx`.
+
+### Page Routing Table
+
+| Route | File | Description |
+|-------|------|-------------|
+| `/login` | `app/login/page.tsx` | Login form (existing) |
+| `/dashboard` | `app/dashboard/page.tsx` | Jobs table + StatusStrip (existing, updated) |
+| `/dashboard/jobs/[jobId]` | `app/dashboard/jobs/[jobId]/page.tsx` | **NEW** Application Hub |
+| `/dashboard/jobs/[jobId]/gap-analysis` | `app/dashboard/jobs/[jobId]/gap-analysis/page.tsx` | **NEW** Gap Analysis Q&A form |
+| `/dashboard/jobs/[jobId]/vpr` | `app/dashboard/jobs/[jobId]/vpr/page.tsx` | **NEW** VPR display |
+| `/dashboard/jobs/[jobId]/cover-letter` | `app/dashboard/jobs/[jobId]/cover-letter/page.tsx` | **NEW** Cover Letter display |
+| `/dashboard/jobs/[jobId]/interview-prep` | `app/dashboard/jobs/[jobId]/interview-prep/page.tsx` | **NEW** Interview Prep display |
+| `/dashboard/cv` | `app/dashboard/cv/page.tsx` | **NEW** CV Center (single CV summary) |
+| `/dashboard/cv/edit` | `app/dashboard/cv/edit/page.tsx` | **NEW** CV edit form |
+| `/dashboard/cv/new` | `app/dashboard/cv/new/page.tsx` | **NEW** CV upload form (first time) |
+
+### ID Glossary (Read This First)
+
+There are three distinct IDs in this system that are easy to confuse:
+
+| Name | Meaning | Source |
+|------|---------|--------|
+| `job_id` | Saved job posting ID | `POST /jobs` response |
+| `application_id` | Workflow state key — **same UUID as `job_id`** | `GET /applications/{id}` |
+| VPR `job_id` (async task) | ID for a specific async generation run | `POST /vpr/generate` response |
+
+**`application_id` = `job_id`** — the backend assigns the same UUID to both. When the frontend generates a VPR, it sends `job_id` in the request body; the backend stores it internally as `application_id`. They refer to the same entity.
+
+**Field name normalization:** `GET /jobs/{jobId}` returns `company` and `role_title`. `GET /jobs` (list) returns `company_name` and `title`. The `api.ts` client normalizes both to `company_name` / `title` before returning.
+
+### Resource Dependency Chain
+
+Resources must be generated in dependency order. The Application Hub enforces this with disabled states.
 
 ```
-DashboardPage (main export)
-├── Sidebar()
-│   ├── Logo section (30×30 icon + text)
-│   ├── Divider
-│   └── Navigation list
-│       ├── CareerVP (section title)
-│       ├── Dashboard (active)
-│       ├── Applications
-│       ├── CV Center
-│       ├── Billing
-│       └── Settings
+Job Created (POST /jobs) → job_id = application_id
+├── Company Research  (optional, no deps)
+├── CV Selection      (required for all downstream — stored per-application in local state)
+└── Gap Analysis      (requires CV selected)
+    └── VPR           (requires CV + Gap Analysis complete)
+        ├── Cover Letter    (requires VPR ready)
+        └── Interview Prep  (requires VPR ready)
+```
+
+### Directory Structure
+
+```
+frontend/
+├── app/
+│   ├── auth-context.tsx
+│   ├── dashboard/
+│   │   ├── layout.tsx                    ← NEW: shared shell
+│   │   ├── page.tsx                      ← UPDATED: StatusStrip + JobsCard only
+│   │   ├── jobs/
+│   │   │   └── [jobId]/
+│   │   │       ├── page.tsx              ← NEW: Application Hub
+│   │   │       ├── gap-analysis/
+│   │   │       │   └── page.tsx          ← NEW
+│   │   │       ├── vpr/
+│   │   │       │   └── page.tsx          ← NEW
+│   │   │       ├── cover-letter/
+│   │   │       │   └── page.tsx          ← NEW
+│   │   │       └── interview-prep/
+│   │   │           └── page.tsx          ← NEW
+│   │   └── cv/
+│   │       ├── page.tsx                  ← NEW: CV Center (summary)
+│   │       ├── edit/
+│   │       │   └── page.tsx              ← NEW: CV Edit form
+│   │       └── new/
+│   │           └── page.tsx              ← NEW: CV Upload (first time)
+│   ├── login/
+│   │   └── page.tsx
+│   └── api/proxy/[...path]/route.ts
 │
-├── Content Area (flex-1)
-│   ├── Topbar()
-│   │   ├── Page title: "Dashboard"
-│   │   └── Right section
-│   │       ├── Credits display
-│   │       └── User menu
-│   │
-│   └── Main Content (flex column, gap-6, padding-6)
-│       ├── StatusStrip()
-│       │   ├── Plan Card: "Plan: Free Tier"
-│       │   ├── Credits Card: "Credits Remaining: 1 / 3"
-│       │   └── Status Card: "Status: Active ●"
-│       │
-│       └── JobsCard()
-│           ├── Header
-│           │   ├── "My Jobs" title
-│           │   └── "+ New Application" button
-│           │
-│           └── Jobs Table
-│               ├── Table Header
-│               │   ├── Job Title (flex-1)
-│               │   ├── Company (160px)
-│               │   ├── Status (120px)
-│               │   ├── Updated (140px)
-│               │   └── Action (140px)
-│               │
-│               └── Table Rows
-│                   └── Job data (currently 1 sample row)
+├── components/
+│   ├── dashboard/
+│   │   ├── Sidebar.tsx                   ← EXTRACTED + updated
+│   │   ├── Topbar.tsx                    ← EXTRACTED + updated
+│   │   ├── StatusStrip.tsx               ← EXTRACTED
+│   │   └── ResourceCard.tsx              ← NEW
+│   ├── ui/
+│   │   ├── button.tsx                    ← existing
+│   │   ├── Badge.tsx                     ← NEW
+│   │   └── FormField.tsx                 ← NEW
+│   └── NewApplicationModal.tsx           ← existing
+│
+└── lib/
+    ├── api.ts                            ← UPDATED: new methods
+    ├── auth.ts
+    ├── types.ts                          ← UPDATED: new interfaces
+    └── utils.ts
 ```
 
 ---
 
-## Component Breakdown
+## Shared Layout & Navigation
 
-### 1. DashboardPage (Root Component)
+### `app/dashboard/layout.tsx`
 
-**Purpose**: Assembles entire dashboard layout
+Wraps every `/dashboard/**` route. Must be `"use client"` because it uses `useAuth()` (Cognito) and `usePathname()` (for Sidebar active state).
 
-**Props**: None (currently static)
+Fetches `usage` and `subscription` once and exposes them via `DashboardContext` so every page's Topbar can read `userName` and `usage` without re-fetching.
 
-**Renders**:
-```
-Page wrapper (background #fcf7f5)
-  └─ App Shell (bordered #fafafa)
-     ├─ Sidebar (240px)
-     └─ Content Area (flex-1)
-        ├─ Topbar (80px)
-        └─ Main (flex column, gap-6, padding-6)
-```
-
-**Key Styling**:
+**Context:**
 ```typescript
-// Page background
-style={{ backgroundColor: "#fcf7f5" }}
-
-// App shell
-className="mx-auto flex border border-[#cbd5e1] bg-[#fafafa]"
-style={{ marginLeft: "100px", marginTop: "62px", width: "1239px", minHeight: "900px" }}
-
-// Content area
-className="flex flex-1 flex-col min-w-0"
-```
-
-**Data Flow**: Static data (no API calls yet)
-
----
-
-### 2. Sidebar()
-
-**Purpose**: Left navigation menu
-
-**Props**: None
-
-**Renders**:
-- Logo section: CVP icon (30×30) + "CareerVP" text
-- Divider: 1px border
-- Navigation list: 5 items (Dashboard active, others inactive)
-
-**Key Styling**:
-```typescript
-className="flex w-[220px] shrink-0 flex-col bg-white border-r border-[#cbd5e1]"
-```
-
-**Navigation Items**:
-```typescript
-const NAV_ITEMS = [
-  { label: "CareerVP", isSection: true },
-  { label: "Dashboard", active: true, href: "/dashboard" },
-  { label: "Applications", href: "#" },
-  { label: "CV Center", href: "#" },
-  { label: "Billing", href: "#" },
-  { label: "Settings", href: "#" },
-];
-```
-
-**Active Item Styling**:
-```typescript
-"active" in item && item.active
-  ? "bg-[rgba(217,217,217,0.61)]"  // Light gray active state
-  : "hover:bg-[rgba(217,217,217,0.3)]"  // Hover state
-```
-
----
-
-### 3. Topbar()
-
-**Purpose**: Top navigation bar with page title and user menu
-
-**Props**: None
-
-**Renders**:
-- Left: "Dashboard" title (24px, semibold)
-- Right: "Credits: 1 / 3" + User menu ("Lisi" + dropdown)
-
-**Key Styling**:
-```typescript
-className="flex h-20 shrink-0 items-center justify-between border-b border-[#cbd5e1] bg-white px-6"
-```
-
-**Elements**:
-- Title: `text-2xl font-semibold text-[#1e2229]`
-- Credits: `text-base font-normal`
-- User Menu: `rounded-[8px] border border-[#6b7280] bg-[#f0f2f5]`
-
-**Dropdown Arrow**: Inverted polygon image (ASSET_DROPDOWN_ARROW)
-
----
-
-### 4. StatusStrip()
-
-**Purpose**: Display plan, credits, and status information
-
-**Props**:
-- `plan`: string (default "Free Tier")
-- `creditsUsed`: number (default 1)
-- `creditsTotal`: number (default 3)
-
-**Renders**: 3 status cards in horizontal flex
-
-**Status Cards**:
-1. **Plan Card**: "Plan: Free Tier"
-2. **Credits Card**: "Credits Remaining: 1 / 3" (with progress bar)
-3. **Status Card**: "Status: Active" + green dot (green #16b44b)
-
-**Key Styling**:
-```typescript
-// Container
-className="flex items-center gap-8 rounded-[8px] border border-[#cbd5e1] bg-white px-[26px] py-[11px] w-full"
-
-// Cards
-className="flex items-center justify-center rounded-[4px] border border-[#cbd5e1] bg-[rgba(245,245,245,0.61)] px-4 py-3"
-
-// Status text (green)
-className="text-[#16b44b]"
-```
-
-**Progress Bar** (Credits):
-```typescript
-<div className="h-1.5 w-20 rounded-full bg-stone-100 overflow-hidden">
-  <div
-    className="h-full rounded-full bg-[#f97316]"
-    style={{ width: `${(creditsUsed / creditsTotal) * 100}%` }}
-  />
-</div>
-```
-
----
-
-### 5. JobsCard()
-
-**Purpose**: Display job applications in a table format
-
-**Props**: None
-
-**Renders**:
-- Header: "My Jobs" title + "+ New Application" button
-- Table: Header row + data rows
-
-**Table Structure**:
-```
-Header Row (bg-[#cbd5e1]):
-├─ Job Title (flex-1, variable width)
-├─ Company (160px, fixed)
-├─ Status (120px, fixed)
-├─ Updated (140px, fixed)
-└─ Action (140px, fixed)
-
-Data Row(s) (hover: bg-[rgba(245,245,245,0.5)]):
-├─ "Learning Experience Specialist"
-├─ "SysAid"
-├─ "Active" (green #16b44b)
-├─ "Mar 7, 2026"
-└─ "View Application" (link)
-```
-
-**Button Styling** ("+ New Application"):
-```typescript
-className="inline-flex items-center rounded-[8px] bg-[#f97316] px-3 py-2 transition-opacity"
-
-// Hover & Active states
-"hover:opacity-90 active:opacity-80"
-```
-
-**Table Row Hover**:
-```typescript
-className="hover:bg-[rgba(245,245,245,0.5)] transition-colors"
-```
-
----
-
-## Design Tokens Used
-
-### Colors
-
-| Usage | Hex | Tailwind | Location |
-|---|---|---|---|
-| Page BG | #fcf7f5 | inline style | DashboardPage wrapper |
-| Card BG | white | `bg-white` | Sidebar, Topbar, Cards |
-| App Shell BG | #fafafa | `bg-[#fafafa]` | App Shell container |
-| Border | #cbd5e1 | `border-[#cbd5e1]` | All borders |
-| Text Primary | #1e2229 | `text-[#1e2229]` | Headings, primary text |
-| Text Muted | #6b7280 | `text-[#6b7280]` | Secondary text, table header |
-| Active State | #16b44b | `text-[#16b44b]` | "Active" status, green dot |
-| Primary CTA | #f97316 | `bg-[#f97316]` | "+ New Application" button |
-| Active Nav BG | rgba(217,217,217,0.61) | `bg-[rgba(217,217,217,0.61)]` | Dashboard nav item |
-| Status Card BG | rgba(245,245,245,0.61) | `bg-[rgba(245,245,245,0.61)]` | Status cards |
-
-### Typography
-
-| Element | Font | Size | Weight | Tailwind |
-|---|---|---|---|---|
-| Page Title | DM Sans | 24px | semibold | `text-2xl font-semibold` |
-| Card Title | DM Sans | 18px | bold | `text-lg font-bold` |
-| Nav Items | DM Sans | 14px | bold | `text-sm font-bold` |
-| Body Text | DM Sans | 14-16px | normal/medium | `text-sm` / `text-base` |
-| Table Header | DM Sans | 14px | medium | `text-sm font-medium` |
-
-### Spacing
-
-| Element | Size | Tailwind | Usage |
-|---|---|---|---|
-| Sidebar Width | 240px | `w-[220px]` | Left nav |
-| Topbar Height | 80px | `h-20` | Top bar |
-| Main Gap | 24px | `gap-6` | Between sections |
-| Main Padding | 24px | `p-6` | Content padding |
-| Card Padding | 12px × 16px | `px-4 py-3` | Card internals |
-| Logo Size | 30×30px | `h-[30px] w-[30px]` | Sidebar icon |
-| Status Dot | 16×16px | `h-4 w-4` | Status indicator |
-
----
-
-## Data Structure
-
-### Jobs Array
-
-```typescript
-interface Job {
-  id: number;           // Unique identifier
-  title: string;        // Job title
-  company: string;      // Company name
-  status: JobStatus;    // "Active" | "Draft" | "Archived"
-  updated: string;      // Last updated date (e.g., "Mar 7, 2026")
+// app/dashboard/dashboard-context.tsx
+interface DashboardContextValue {
+  userName: string
+  usage: Usage | null
+  subscription: SubscriptionResponse | null
 }
-
-const JOBS: Job[] = [
-  {
-    id: 1,
-    title: "Learning Experience Specialist",
-    company: "SysAid",
-    status: "Active",
-    updated: "Mar 7, 2026",
-  },
-  // More jobs here (currently just 1 sample)
-];
+export const DashboardContext = createContext<DashboardContextValue>(...)
 ```
 
-### Navigation Items Array
+**Component Hierarchy:**
+```
+DashboardLayout  ("use client")
+├── Auth guard: if !user → redirect("/login")
+├── DashboardContext.Provider (userName, usage, subscription)
+│   └── Shell wrapper (div.min-h-screen, bg-[#fcf7f5])
+│       └── App Shell (1239px, border, bg-[#fafafa])
+│           ├── Sidebar (240px)  ← reads usePathname() for active state
+│           └── Content Area (flex-1)
+│               └── {children}  ← page content goes here
+```
 
+**Data fetched once in layout:**
+```typescript
+Promise.all([api.getUsage(), api.getSubscription()])
+```
+
+**Key point:** Individual pages render their own `Topbar` as the first child with a `title` prop. Topbar reads `userName`/`usage` from `DashboardContext` — no prop drilling needed.
+
+### `components/dashboard/Sidebar.tsx`
+
+Extracted from `dashboard/page.tsx` and made route-aware.
+
+**Props:** None (reads current path via `usePathname()`)
+
+**Active state logic:** Item is active when `pathname.startsWith(item.href)` (except `/dashboard` which requires exact match to avoid matching all sub-routes).
+
+**Updated `NAV_ITEMS`:**
 ```typescript
 const NAV_ITEMS = [
   { label: "CareerVP", isSection: true },
-  { label: "Dashboard", active: true, href: "/dashboard" },
-  { label: "Applications", href: "#" },
-  { label: "CV Center", href: "#" },
-  { label: "Billing", href: "#" },
-  { label: "Settings", href: "#" },
+  { label: "Dashboard", href: "/dashboard", exact: true },
+  { label: "Applications", href: "/dashboard/jobs" },
+  { label: "CV Center", href: "/dashboard/cv" },
+  { label: "Billing", href: "#" },        // placeholder
+  { label: "Settings", href: "#" },       // placeholder
 ];
 ```
 
-### Table Columns Array
+**Styling:** Unchanged — `w-60`, white BG, `border-r border-[#cbd5e1]`, active item `bg-[rgba(217,217,217,0.61)]`.
 
+### `components/dashboard/Topbar.tsx`
+
+Extracted from `dashboard/page.tsx` with a `title` prop and optional breadcrumb.
+
+**Props:**
 ```typescript
-const TABLE_COLUMNS = [
-  { key: "title", label: "Job Title", className: "flex-1 min-w-0" },
-  { key: "company", label: "Company", className: "w-[160px] shrink-0" },
-  { key: "status", label: "Status", className: "w-[120px] shrink-0" },
-  { key: "updated", label: "Updated", className: "w-[140px] shrink-0" },
-  { key: "action", label: "Action", className: "w-[140px] shrink-0" },
-];
+interface TopbarProps {
+  title: string
+  breadcrumb?: { label: string; href: string }[]
+  // userName and usage read from DashboardContext — not passed as props
+}
 ```
+
+**Breadcrumb** renders as `Dashboard > Applications > [Job Title]` above the title when provided. Uses `>` separator, each segment is a link except the last.
+
+**Styling:** Unchanged — `h-20`, white BG, `border-b border-[#cbd5e1]`, `px-6`.
 
 ---
 
-## Assets & External Resources
+## Dashboard Page (`/dashboard`)
 
-### Figma Asset URLs (7-day expiration)
+**File:** `app/dashboard/page.tsx`
 
+**Changes from current:** Sidebar and Topbar moved to layout. Page now renders only `StatusStrip` + `JobsCard`. "View Application" link updated from `href="#"` to `href={`/dashboard/jobs/${job.job_id}`}`.
+
+**Component Hierarchy:**
+```
+DashboardPage
+├── Topbar (title="Dashboard")
+└── main (flex column, gap-6, p-6)
+    ├── StatusStrip (plan, credits, status)
+    └── JobsCard
+        ├── Header: "My Jobs" + "+ New Application" button
+        └── Table
+            └── Row: Title | Company | Status | Created | "View Application" → /dashboard/jobs/{id}
+```
+
+**Data fetched on mount:**
 ```typescript
-const ASSET_CVP_LOGO =
-  "https://www.figma.com/api/mcp/asset/661cfe6f-1041-4faa-8666-3d001bb92746";
-const ASSET_STATUS_DOT =
-  "https://www.figma.com/api/mcp/asset/62714d3b-6e61-40cf-917d-9ad5f45735ac";
-const ASSET_DROPDOWN_ARROW =
-  "https://www.figma.com/api/mcp/asset/29ba343a-ed50-4f60-ab33-814b014f47b8";
+api.getJobs()
+// usage and subscription come from DashboardContext (fetched once in layout)
 ```
 
-**Usage**:
+**"View Application" link** (updated):
 ```typescript
-<img src={ASSET_CVP_LOGO} className="h-[30px] w-[30px]" />
-<img src={ASSET_STATUS_DOT} className="h-4 w-4" />
-<img src={ASSET_DROPDOWN_ARROW} style={{ transform: "scaleY(-1)" }} />
+<a href={`/dashboard/jobs/${job.job_id}`} className="text-[#1e2229] hover:underline">
+  View Application
+</a>
 ```
 
-**Future**: Export from Figma and store in `frontend/public/icons/`
-
 ---
-
-## Layout Dimensions
-
-### Page/Frame Dimensions (Figma)
-
-```
-┌──────────────────────────────────────────────────────┐
-│ Page: "Test 2 Desktop"                               │
-│ Frame: "Desktop / Dashboard Full"                    │
-│ Node ID: 66:262                                      │
-│                                                       │
-│ Viewport: 1440×1024px                               │
-│ App Shell:                                           │
-│   Position: left 100px, top 62px                    │
-│   Size: 1239×900px                                   │
-│   Border: 1px #cbd5e1                               │
-│   Background: #fafafa                               │
-│                                                       │
-│ ┌─────────────────────────────────────────────────┐ │
-│ │ Sidebar      │ Content Area                     │ │
-│ │ 240px wide   │ flex-1                           │ │
-│ │              │                                  │ │
-│ │ Logo         │ Topbar (80px)                   │ │
-│ │ Nav          │ ┌─────────────────────────────┐│ │
-│ │              │ │ Dashboard   Credits  Menu   ││ │
-│ │              │ └─────────────────────────────┘│ │
-│ │              │                                  │ │
-│ │              │ Main (gap-6, p-6)              │ │
-│ │              │ ┌─────────────────────────────┐│ │
-│ │              │ │ Status Strip                 ││ │
-│ │              │ ├─────────────────────────────┤│ │
-│ │              │ │ Jobs Card                    ││ │
-│ │              │ │ ┌──────────────────────────┐││ │
-│ │              │ │ │ My Jobs  [+ New App]     │││ │
-│ │              │ │ ├──────────────────────────┤││ │
-│ │              │ │ │ Table                    │││ │
-│ │              │ │ └──────────────────────────┘││ │
-│ │              │ └─────────────────────────────┘│ │
-│ │              │                                  │ │
-│ └─────────────────────────────────────────────────┘ │
-│                                                       │
-└──────────────────────────────────────────────────────┘
-```
-
-### Component Heights & Widths
-
-| Component | Width | Height | Notes |
-|---|---|---|---|
-| Sidebar | 240px | 900px | Full height of app shell |
-| Topbar | flex-1 | 80px | Spans remaining width |
-| Main Content | flex-1 | auto | Fills remaining space |
-| Status Strip | 924px | auto | Cards: 48px each |
-| Jobs Card | 924px | auto | Header: 72px + Table |
-| Table Header | 904px | 55px | With padding |
-| Table Row | 904px | 78px | With padding & border |
-
----
-
-## Responsive Behavior (Current)
-
-**Currently**: Desktop-only (1440px width design)
-
-**Breakpoints Ready for Future**:
-- Mobile: 375px (base, no prefix)
-- Tablet: 768px (`md:` Tailwind prefix)
-- Desktop: 1024px+ (`lg:` Tailwind prefix)
-
-**Responsive Enhancements**:
-- Sidebar: hide on mobile (`hidden md:flex`)
-- Table: convert to cards on mobile
-- Topbar: simplify on mobile
-- Grid: adjust columns on mobile
-
----
-
-## Performance Considerations
-
-### Current
-- Static data (no API calls)
-- Single page load
-- All components inline (no code splitting)
-- Images from Figma (temporary URLs)
-
-### Future Optimizations
-1. Code split components (`React.lazy()`)
-2. Paginate table rows (currently 1 row)
-3. Cache Figma assets locally
-4. Implement virtual scrolling for large tables
-5. Add loading states and error boundaries
-
----
-
-## Testing Checklist
-
-Before shipping:
-
-- [ ] Colors match Figma exactly (#f97316, #1e2229, etc.)
-- [ ] Spacing matches measurements (24px gaps, 80px topbar, 240px sidebar)
-- [ ] Typography matches (24px semibold, 14px medium, etc.)
-- [ ] Layout matches Figma structure
-- [ ] All links navigate correctly
-- [ ] Buttons are clickable
-- [ ] Hover states visible (table rows, nav items)
-- [ ] No console errors
-- [ ] No accessibility warnings
-- [ ] Responsive behavior matches intent (if mobile layouts added)
-
----
-
-## Future Enhancements
-
-### Phase 1: Code Connect (Done)
-- [x] Implement dashboard from Figma design
-- [x] Document design tokens
-- [ ] Set up Code Connect mappings
-
-### Phase 2: Data Integration (Next)
-- [ ] Replace static JOBS with API calls
-- [ ] Implement real job applications list
-- [ ] Add loading states
-- [ ] Add error handling
-- [ ] Pagination for large lists
-
-### Phase 3: Interactivity
-- [ ] "+ New Application" button → modal form
-- [ ] "View Application" links → detail page
-- [ ] Nav items → actual page navigation
-- [ ] User menu → dropdown menu
-
-### Phase 4: Features
-- [ ] Filter jobs by status
-- [ ] Sort jobs by date/company
-- [ ] Search jobs
-- [ ] Edit job details
-- [ ] Delete applications
-
-### Phase 5: Responsive Design
-- [ ] Mobile sidebar (hamburger menu)
-- [ ] Mobile table (card layout)
-- [ ] Mobile navigation
-- [ ] Touch-friendly interactions
-
----
-
-## File Locations
-
-- **Main File**: `frontend/app/dashboard/page.tsx`
-- **Layout**: `frontend/app/layout.tsx`
-- **Global CSS**: `frontend/app/globals.css`
-- **Tailwind Config**: `frontend/tailwind.config.ts`
-- **Utilities**: `frontend/lib/utils.ts`
-
----
-
-## Design System References
-
-- **Colors**: `docs/frontend/DESIGN_SYSTEM_RULES.md` (Color Palette section)
-- **Typography**: `docs/frontend/DESIGN_SYSTEM_RULES.md` (Typography Scale section)
-- **Spacing**: `docs/frontend/DESIGN_SYSTEM_RULES.md` (Spacing Scale section)
-- **Code Connect**: `docs/frontend/CODE_CONNECT_SETUP.md`
-- **Workflow**: `docs/frontend/FIGMA_WORKFLOW_GUIDE.md`
-
----
-
-**Last Updated**: March 14, 2026
-**Status**: Ready for Code Connect integration
-**Next Review**: After Code Connect plan upgrade

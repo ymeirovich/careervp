@@ -1,0 +1,716 @@
+{
+  "swagger" : "2.0",
+  "info" : {
+    "description" : "CareerVP API - AI-powered job application assistant",
+    "version" : "2026-03-21T14:55:20Z",
+    "title" : "careervp-core-api-dev"
+  },
+  "host" : "dev-api.careervp.com",
+  "schemes" : [ "https" ],
+  "paths" : {
+    "/applications/{application_id}" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "application_id",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-application-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/auth/login" : {
+      "post" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-auth-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/auth/refresh" : {
+      "post" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-auth-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/auth/register" : {
+      "post" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-auth-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/billing/checkout" : {
+      "post" : {
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-billing-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/billing/portal" : {
+      "post" : {
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-billing-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/billing/webhook" : {
+      "post" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-billing-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/company-research/fetch" : {
+      "post" : {
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-company-research-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/company-research/{jobId}" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "jobId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-company-research-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/cover-letter/generate" : {
+      "post" : {
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cover-letter-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/cover-letter/{coverLetterId}/status" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "coverLetterId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cover-letter-status-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/cover-letters" : {
+      "get" : {
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cover-letter-status-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/cv-tailoring/generate" : {
+      "post" : {
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cvtailor-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/cv-tailoring/{cvTailoringId}" : {
+      "delete" : {
+        "parameters" : [ {
+          "name" : "cvTailoringId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cvtailor-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/cv-tailoring/{cvTailoringId}/status" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "cvTailoringId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cvtailor-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/cv-tailorings" : {
+      "get" : {
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cvtailor-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/gap-analysis/questions" : {
+      "post" : {
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-gap-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/health" : {
+      "get" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-health-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/interview-prep/generate" : {
+      "post" : {
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-interview-prep-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/interview-prep/{interviewPrepId}/status" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "interviewPrepId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-interview-prep-status-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/interview-preps" : {
+      "get" : {
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-interview-prep-status-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/jobs" : {
+      "get" : {
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-job-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      },
+      "post" : {
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-job-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/jobs/{jobId}" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "jobId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-job-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/jobs/{jobId}/gap-questions" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "jobId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-gap-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      },
+      "post" : {
+        "parameters" : [ {
+          "name" : "jobId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-gap-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/jobs/{jobId}/gap-responses" : {
+      "post" : {
+        "parameters" : [ {
+          "name" : "jobId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-gap-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/knowledge-base" : {
+      "get" : {
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-company-research-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/swagger" : {
+      "get" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cv-parser-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/swagger.css" : {
+      "get" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cv-parser-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/swagger.js" : {
+      "get" : {
+        "responses" : { },
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cv-parser-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/users/me" : {
+      "get" : {
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-user-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      },
+      "put" : {
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-user-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/users/me/cv" : {
+      "get" : {
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-user-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      },
+      "post" : {
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cv-parser-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/users/me/subscription" : {
+      "get" : {
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-billing-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/users/me/trial/reset" : {
+      "post" : {
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-user-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/users/me/usage" : {
+      "get" : {
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-user-api-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/vpr/generate" : {
+      "post" : {
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-submit-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/vpr/{vprId}/status" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "vprId",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-status-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    },
+    "/vprs" : {
+      "get" : {
+        "responses" : { },
+        "security" : [ {
+          "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : [ ]
+        } ],
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-status-lambda-dev/invocations",
+          "httpMethod" : "POST",
+          "passthroughBehavior" : "when_no_match",
+          "responseTransferMode" : "BUFFERED",
+          "type" : "aws_proxy"
+        }
+      }
+    }
+  },
+  "securityDefinitions" : {
+    "CareerVpCrudDevCareerVpCrudDevCrudCognitoAuth05F2A908" : {
+      "type" : "apiKey",
+      "name" : "Authorization",
+      "in" : "header",
+      "x-amazon-apigateway-authtype" : "cognito_user_pools",
+      "x-amazon-apigateway-authorizer" : {
+        "providerARNs" : [ "arn:aws:cognito-idp:us-east-1:788159322332:userpool/us-east-1_WiHMRqLpe" ],
+        "type" : "cognito_user_pools"
+      }
+    }
+  },
+  "x-amazon-apigateway-security-policy" : "TLS_1_0",
+  "x-amazon-apigateway-gateway-responses" : {
+    "DEFAULT_4XX" : {
+      "responseParameters" : {
+        "gatewayresponse.header.Access-Control-Allow-Methods" : "'GET,POST,PUT,DELETE,OPTIONS'",
+        "gatewayresponse.header.Access-Control-Allow-Origin" : "'*'",
+        "gatewayresponse.header.Access-Control-Allow-Headers" : "'Content-Type,Authorization'"
+      },
+      "responseTemplates" : {
+        "application/json" : "{\"error\": \"DEFAULT_4XX\", \"code\": \"DEFAULT_4XX\", \"request_id\": \"$context.requestId\"}"
+      }
+    },
+    "DEFAULT_5XX" : {
+      "responseParameters" : {
+        "gatewayresponse.header.Access-Control-Allow-Methods" : "'GET,POST,PUT,DELETE,OPTIONS'",
+        "gatewayresponse.header.Access-Control-Allow-Origin" : "'*'",
+        "gatewayresponse.header.Access-Control-Allow-Headers" : "'Content-Type,Authorization'"
+      },
+      "responseTemplates" : {
+        "application/json" : "{\"error\": \"DEFAULT_5XX\", \"code\": \"DEFAULT_5XX\", \"request_id\": \"$context.requestId\"}"
+      }
+    },
+    "UNAUTHORIZED" : {
+      "responseParameters" : {
+        "gatewayresponse.header.Access-Control-Allow-Methods" : "'GET,POST,PUT,DELETE,OPTIONS'",
+        "gatewayresponse.header.Access-Control-Allow-Origin" : "'*'",
+        "gatewayresponse.header.Access-Control-Allow-Headers" : "'Content-Type,Authorization'"
+      },
+      "responseTemplates" : {
+        "application/json" : "{\"error\": \"UNAUTHORIZED\", \"code\": \"UNAUTHORIZED\", \"request_id\": \"$context.requestId\"}"
+      }
+    },
+    "ACCESS_DENIED" : {
+      "responseParameters" : {
+        "gatewayresponse.header.Access-Control-Allow-Methods" : "'GET,POST,PUT,DELETE,OPTIONS'",
+        "gatewayresponse.header.Access-Control-Allow-Origin" : "'*'",
+        "gatewayresponse.header.Access-Control-Allow-Headers" : "'Content-Type,Authorization'"
+      },
+      "responseTemplates" : {
+        "application/json" : "{\"error\": \"ACCESS_DENIED\", \"code\": \"ACCESS_DENIED\", \"request_id\": \"$context.requestId\"}"
+      }
+    }
+  }
+}
