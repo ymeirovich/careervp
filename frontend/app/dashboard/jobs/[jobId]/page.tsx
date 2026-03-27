@@ -32,12 +32,17 @@ export default function ApplicationHubPage({
   const [vprTaskId, setVprTaskId] = useState<string | null>(null);
   const [clTaskId, setClTaskId] = useState<string | null>(null);
   const [ipTaskId, setIpTaskId] = useState<string | null>(null);
+  const [cvTaskId, setCvTaskId] = useState<string | null>(null);
+
+  // Completed artifact IDs (session-local for cv tailored)
+  const [cvTailoredId, setCvTailoredId] = useState<string | null>(null);
 
   // Action in-flight
   const [generatingVpr, setGeneratingVpr] = useState(false);
   const [generatingCl, setGeneratingCl] = useState(false);
   const [generatingIp, setGeneratingIp] = useState(false);
   const [generatingResearch, setGeneratingResearch] = useState(false);
+  const [generatingCv, setGeneratingCv] = useState(false);
 
   const refreshHub = useCallback(async () => {
     const data = await api.getApplication(jobId);
@@ -88,6 +93,12 @@ export default function ApplicationHubPage({
         hubData.artifacts.interview_prep.artifact_id
       ) {
         setIpTaskId(hubData.artifacts.interview_prep.artifact_id);
+      }
+      if (
+        hubData?.artifacts.cv_tailored?.status === "processing" &&
+        hubData.artifacts.cv_tailored.artifact_id
+      ) {
+        setCvTaskId(hubData.artifacts.cv_tailored.artifact_id);
       }
 
       setLoading(false);
@@ -148,6 +159,27 @@ export default function ApplicationHubPage({
     }, 3000);
     return () => clearInterval(interval);
   }, [ipTaskId, refreshHub]);
+
+  // CV Tailored polling
+  useEffect(() => {
+    if (!cvTaskId) return;
+    const interval = setInterval(async () => {
+      try {
+        const result = await api.pollCVTailored(cvTaskId);
+        if (result.status === "completed" || result.status === "failed") {
+          clearInterval(interval);
+          if (result.status === "completed") {
+            setCvTailoredId(cvTaskId);
+          }
+          setCvTaskId(null);
+          refreshHub();
+        }
+      } catch {
+        // ignore transient poll errors
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [cvTaskId, refreshHub]);
 
   // ── Generate handlers ────────────────────────────────────────────────────────
 
@@ -263,12 +295,42 @@ export default function ApplicationHubPage({
     }
   };
 
+  const handleGenerateCV = async () => {
+    if (!cv?.cv_id) return;
+    const vprId = hub?.artifacts.vpr?.artifact_id ?? undefined;
+    setGeneratingCv(true);
+    try {
+      const task = await api.generateCV({
+        job_id: jobId,
+        cv_id: cv.cv_id,
+        vpr_id: vprId,
+      });
+      setCvTaskId(task.request_id);
+      setHub((prev) =>
+        prev
+          ? {
+              ...prev,
+              artifacts: {
+                ...prev.artifacts,
+                cv_tailored: { status: "processing", artifact_id: null },
+              },
+            }
+          : prev
+      );
+    } catch (err) {
+      console.error("Generate CV error:", err);
+    } finally {
+      setGeneratingCv(false);
+    }
+  };
+
   // ── Derived state ────────────────────────────────────────────────────────────
 
   const displayJob = hub?.job ?? job;
   const vprArtifact = hub?.artifacts.vpr;
   const clArtifact = hub?.artifacts.cover_letter;
   const ipArtifact = hub?.artifacts.interview_prep;
+  const cvTailoredArtifact = hub?.artifacts.cv_tailored;
 
   const vprStatus = vprArtifact?.status ?? "not_started";
   const clStatus = clArtifact?.status ?? "not_started";
@@ -285,6 +347,14 @@ export default function ApplicationHubPage({
   const vprProcessing = vprStatus === "processing" || !!vprTaskId;
   const clProcessing = clStatus === "processing" || !!clTaskId;
   const ipProcessing = ipStatus === "processing" || !!ipTaskId;
+  const cvProcessing =
+    cvTailoredArtifact?.status === "processing" || !!cvTaskId;
+
+  // Tailored CV artifact ID: prefer hub's artifact_id, fall back to session-local
+  const cvTailoredArtifactId =
+    cvTailoredArtifact?.artifact_id ?? cvTailoredId;
+  const cvTailoredReady =
+    cvTailoredArtifact?.status === "completed" || !!cvTailoredId;
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -373,9 +443,10 @@ export default function ApplicationHubPage({
           )}
         </div>
 
-        {/* Resource Grid */}
+        {/* Resource Grid — follows the application workflow top to bottom */}
         <div className="grid grid-cols-2 gap-4">
-          {/* Company Research */}
+
+          {/* ① Company Research */}
           <ResourceCard
             title="Company Research"
             description={
@@ -393,7 +464,7 @@ export default function ApplicationHubPage({
             }}
           />
 
-          {/* CV Selection */}
+          {/* ② Base CV */}
           <ResourceCard
             title="Base CV"
             description={
@@ -408,7 +479,7 @@ export default function ApplicationHubPage({
             }}
           />
 
-          {/* Gap Analysis */}
+          {/* ③ Gap Analysis */}
           <ResourceCard
             title="Gap Analysis"
             description={
@@ -425,7 +496,7 @@ export default function ApplicationHubPage({
             }
             primaryAction={{
               label: gapComplete
-                ? "View Responses"
+                ? "Edit Responses"
                 : gapInProgress
                   ? "Continue Answering"
                   : "Start Gap Analysis",
@@ -437,34 +508,40 @@ export default function ApplicationHubPage({
             dependency={!cvSelected ? "Select a CV first" : undefined}
           />
 
-          {/* VPR */}
+          {/* ④ Tailored CV */}
           <ResourceCard
-            title="Value Proposition Report"
+            title="Tailored CV"
             description={
-              vprReady
-                ? "Your positioning brief is ready"
-                : vprProcessing
-                  ? "Generating your positioning brief…"
-                  : "Generate your positioning brief"
+              cvTailoredReady
+                ? "Your tailored CV is ready"
+                : cvProcessing
+                  ? "Tailoring your CV…"
+                  : "Generate a CV tailored for this role"
             }
-            status={vprReady ? "ready" : vprProcessing ? "processing" : "not_started"}
-            statusLabel={vprReady ? "Ready" : undefined}
-            primaryAction={
-              vprReady
-                ? {
-                    label: "View VPR",
-                    href: `/dashboard/jobs/${jobId}/vpr`,
-                  }
-                : {
-                    label: vprProcessing ? "Generating…" : "Generate VPR",
-                    onClick: handleGenerateVpr,
-                    loading: generatingVpr || vprProcessing,
-                    disabled: !cvSelected || !gapComplete || vprProcessing,
-                  }
+            status={
+              cvTailoredReady
+                ? "ready"
+                : cvProcessing
+                  ? "processing"
+                  : "not_started"
             }
+            statusLabel={cvTailoredReady ? "Ready" : undefined}
+            primaryAction={{
+              label: cvProcessing
+                ? "Generating…"
+                : cvTailoredReady
+                  ? "Regenerate"
+                  : "Generate CV",
+              onClick: handleGenerateCV,
+              loading: generatingCv || cvProcessing,
+              disabled: !cvSelected || !gapComplete || cvProcessing,
+            }}
             secondaryAction={
-              vprReady
-                ? { label: "Regenerate", onClick: handleGenerateVpr }
+              cvTailoredArtifactId
+                ? {
+                    label: "Edit",
+                    href: `/dashboard/jobs/${jobId}/cv-tailored?id=${cvTailoredArtifactId}`,
+                  }
                 : undefined
             }
             dependency={
@@ -476,7 +553,48 @@ export default function ApplicationHubPage({
             }
           />
 
-          {/* Cover Letter */}
+          {/* ⑤ VPR */}
+          <ResourceCard
+            title="Value Proposition Report"
+            description={
+              vprReady
+                ? "Your positioning brief is ready"
+                : vprProcessing
+                  ? "Generating your positioning brief…"
+                  : "Generate your positioning brief"
+            }
+            status={
+              vprReady ? "ready" : vprProcessing ? "processing" : "not_started"
+            }
+            statusLabel={vprReady ? "Ready" : undefined}
+            primaryAction={{
+              label: vprProcessing
+                ? "Generating…"
+                : vprReady
+                  ? "Regenerate"
+                  : "Generate VPR",
+              onClick: handleGenerateVpr,
+              loading: generatingVpr || vprProcessing,
+              disabled: !cvSelected || !gapComplete || vprProcessing,
+            }}
+            secondaryAction={
+              vprReady
+                ? {
+                    label: "Edit",
+                    href: `/dashboard/jobs/${jobId}/vpr`,
+                  }
+                : undefined
+            }
+            dependency={
+              !cvSelected
+                ? "Select a CV first"
+                : !gapComplete
+                  ? "Complete Gap Analysis first"
+                  : undefined
+            }
+          />
+
+          {/* ⑥ Cover Letter */}
           <ResourceCard
             title="Cover Letter"
             description={
@@ -493,23 +611,29 @@ export default function ApplicationHubPage({
                   ? "processing"
                   : "not_started"
             }
-            primaryAction={
+            statusLabel={clStatus === "completed" ? "Ready" : undefined}
+            primaryAction={{
+              label: clProcessing
+                ? "Generating…"
+                : clStatus === "completed"
+                  ? "Regenerate"
+                  : "Generate Cover Letter",
+              onClick: handleGenerateCoverLetter,
+              loading: generatingCl || clProcessing,
+              disabled: !vprReady || clProcessing,
+            }}
+            secondaryAction={
               clStatus === "completed"
                 ? {
-                    label: "View Letter",
+                    label: "Edit",
                     href: `/dashboard/jobs/${jobId}/cover-letter`,
                   }
-                : {
-                    label: clProcessing ? "Generating…" : "Generate Cover Letter",
-                    onClick: handleGenerateCoverLetter,
-                    loading: generatingCl || clProcessing,
-                    disabled: !vprReady || clProcessing,
-                  }
+                : undefined
             }
             dependency={!vprReady ? "Generate VPR first" : undefined}
           />
 
-          {/* Interview Prep */}
+          {/* ⑦ Interview Prep */}
           <ResourceCard
             title="Interview Prep"
             description={
@@ -526,18 +650,24 @@ export default function ApplicationHubPage({
                   ? "processing"
                   : "not_started"
             }
-            primaryAction={
+            statusLabel={ipStatus === "completed" ? "Ready" : undefined}
+            primaryAction={{
+              label: ipProcessing
+                ? "Generating…"
+                : ipStatus === "completed"
+                  ? "Regenerate"
+                  : "Generate Prep",
+              onClick: handleGenerateInterviewPrep,
+              loading: generatingIp || ipProcessing,
+              disabled: !vprReady || ipProcessing,
+            }}
+            secondaryAction={
               ipStatus === "completed"
                 ? {
-                    label: "View Prep",
+                    label: "Edit",
                     href: `/dashboard/jobs/${jobId}/interview-prep`,
                   }
-                : {
-                    label: ipProcessing ? "Generating…" : "Generate Prep",
-                    onClick: handleGenerateInterviewPrep,
-                    loading: generatingIp || ipProcessing,
-                    disabled: !vprReady || ipProcessing,
-                  }
+                : undefined
             }
             dependency={!vprReady ? "Generate VPR first" : undefined}
           />

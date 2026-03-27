@@ -96,6 +96,57 @@ class ApplicationRepository:
             },
         )
 
+    def update_gap_responses(self, application_id: str, user_id: str, responses: list[dict[str, Any]]) -> None:
+        """Write gap responses into the application record, creating it if it doesn't exist.
+
+        Uses a DynamoDB upsert (update_item without a condition) so that the record is
+        created on the fly when the application was never explicitly initialised.
+        if_not_exists() ensures initialisation fields are only written on creation.
+        """
+        now = self._now_iso()
+        self._table().update_item(
+            Key={
+                'userId': user_id,
+                'applicationId': application_id,
+            },
+            UpdateExpression=(
+                'SET gap_responses = :responses, '
+                'updated_at = :now, '
+                '#st = if_not_exists(#st, :submitted), '
+                '#status = if_not_exists(#status, :submitted), '
+                'application_id = if_not_exists(application_id, :app_id), '
+                'user_id = if_not_exists(user_id, :user_id_val), '
+                'job_id = if_not_exists(job_id, :app_id), '
+                'entity_type = if_not_exists(entity_type, :entity_type), '
+                'artifact_statuses = if_not_exists(artifact_statuses, :empty_map), '
+                'trial_credit_consumed = if_not_exists(trial_credit_consumed, :false_val), '
+                'created_at = if_not_exists(created_at, :now)'
+            ),
+            ExpressionAttributeNames={'#st': 'state', '#status': 'status'},
+            ExpressionAttributeValues={
+                ':responses': responses,
+                ':now': now,
+                ':submitted': 'gap_responses_submitted',
+                ':app_id': application_id,
+                ':user_id_val': user_id,
+                ':entity_type': 'APPLICATION',
+                ':empty_map': {},
+                ':false_val': False,
+            },
+        )
+        # For existing records in gap_questions_ready, advance state.
+        # For new or already-submitted records this conditional update will fail
+        # (expected_state mismatch) and is safely ignored.
+        try:
+            self.update_state(
+                application_id=application_id,
+                user_id=user_id,
+                new_state='gap_responses_submitted',
+                expected_state='gap_questions_ready',
+            )
+        except Exception:
+            pass
+
     def update_artifact_status(self, application_id: str, user_id: str, artifact_type: str, status: str) -> None:
         if not artifact_type:
             raise ValueError('artifact_type is required')
