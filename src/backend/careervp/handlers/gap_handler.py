@@ -380,6 +380,16 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
             save_result.code,
         )
 
+    try:
+        application_repo = _get_application_repository()
+        application_repo.update_gap_responses(
+            application_id=job_id,
+            user_id=user_id,
+            responses=normalized_responses,
+        )
+    except Exception as exc:
+        logger.warning('Could not update application with gap responses', job_id=job_id, error=str(exc))
+
     return _json_response(
         HTTPStatus.OK,
         {

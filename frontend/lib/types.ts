@@ -141,9 +141,7 @@ export interface GapQuestion {
 
 export interface GapResponse {
   question_id: string;
-  question: string;
-  answer: string;
-  destination: "CV_IMPACT" | "INTERVIEW_MVP_ONLY";
+  response: string;
 }
 
 export interface GapAnalysisRequest {
@@ -339,6 +337,24 @@ export interface CompanyResearchResult {
   funding_status?: string | null;
   size_range?: string | null;
   industry?: string | null;
+}
+
+// ── CV Tailoring ──
+export interface CVTailoringRequest {
+  cv_id: string;
+  job_id: string;
+  vpr_id?: string;
+}
+
+export interface CVTailoredStatusResponse {
+  id?: string;
+  status: ArtifactStatus;
+  result?: {
+    tailored_cv?: string;
+    ats_score?: number;
+    keyword_matches?: { matched: string[]; missing: string[] };
+    suggestions?: string[];
+  };
 }
 
 // ── Application Hub (GET /applications/{application_id}) ──

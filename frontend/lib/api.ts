@@ -21,6 +21,8 @@ import type {
   CoverLetterStatusResponse,
   InterviewPrepRequest,
   InterviewPrepStatusResponse,
+  CVTailoringRequest,
+  CVTailoredStatusResponse,
 } from "./types";
 
 // Route through the Next.js proxy to avoid CORS preflight issues with API Gateway.
@@ -169,6 +171,15 @@ export const api = {
       `/interview-prep/${asyncTaskId}/status`
     ),
 
+  // CV Tailoring — async generation
+  generateCV: (data: CVTailoringRequest): Promise<AsyncTaskResponse> =>
+    apiFetch<AsyncTaskResponse>("/cv-tailoring/generate", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  pollCVTailored: (cvTailoringId: string): Promise<CVTailoredStatusResponse> =>
+    apiFetch<CVTailoredStatusResponse>(`/cv-tailoring/${cvTailoringId}`),
+
   // Display pages — fetch completed artifact by artifact_id
   getVPR: (artifactId: string): Promise<VPRStatusResponse> =>
     apiFetch<VPRStatusResponse>(`/vpr/${artifactId}/status`),
@@ -180,4 +191,6 @@ export const api = {
     apiFetch<InterviewPrepStatusResponse>(
       `/interview-prep/${artifactId}/status`
     ),
+  getCVTailored: (cvTailoringId: string): Promise<CVTailoredStatusResponse> =>
+    apiFetch<CVTailoredStatusResponse>(`/cv-tailoring/${cvTailoringId}`),
 };

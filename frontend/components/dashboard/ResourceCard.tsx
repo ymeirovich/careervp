@@ -17,6 +17,7 @@ interface ResourceCardProps {
   secondaryAction?: {
     label: string;
     onClick?: () => void;
+    href?: string;
   };
   dependency?: string;
 }
@@ -88,12 +89,21 @@ export function ResourceCard({
         )}
 
         {secondaryAction && (
-          <button
-            onClick={secondaryAction.onClick}
-            className="text-xs font-medium text-[#6b7280] hover:text-[#1e2229] transition-colors"
-          >
-            {secondaryAction.label}
-          </button>
+          secondaryAction.href ? (
+            <Link
+              href={secondaryAction.href}
+              className="text-xs font-medium text-[#6b7280] hover:text-[#1e2229] transition-colors"
+            >
+              {secondaryAction.label}
+            </Link>
+          ) : (
+            <button
+              onClick={secondaryAction.onClick}
+              className="text-xs font-medium text-[#6b7280] hover:text-[#1e2229] transition-colors"
+            >
+              {secondaryAction.label}
+            </button>
+          )
         )}
 
         {primaryAction.disabled && dependency && (

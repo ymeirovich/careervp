@@ -160,11 +160,7 @@ export default function GapAnalysisPage({
           return [
             {
               question_id: qid,
-              question: getQText(q),
-              answer: r.answer.trim(),
-              destination:
-                (r.destination as "CV_IMPACT" | "INTERVIEW_MVP_ONLY") ||
-                "CV_IMPACT",
+              response: r.answer.trim(),
             },
           ];
         });
