@@ -1,0 +1,372 @@
+id: "01-pydantic-schema"
+title: "VPR Pydantic Models — 10-Section Schema"
+status: pending
+priority: 1
+
+summary: |
+  Replace the flat 9-field VPR Pydantic model with a 10-section schema matching
+  vpr.json. This is the foundation spec — nothing else can proceed until the type
+  contracts here are locked.
+
+  Two new sections not in vpr.json but required by the DOCX ground truth:
+    - companyInsights  (sourced from VPRRequest.company_context)
+    - verificationSummary  (HIGH/MEDIUM/GROWTH confidence per evidence type)
+
+context:
+  read_files:
+    - "src/backend/careervp/models/vpr.py"           # full rewrite target
+    - "src/backend/careervp/models/job.py"            # CompanyContext, GapResponse, JobPosting — imports only
+  do_not_read:
+    - "src/backend/careervp/logic/vpr_generator.py"   # wait for spec 03
+    - "src/backend/careervp/logic/fvs_validator.py"   # wait for spec 04
+    - "src/backend/careervp/dal/dynamo_dal_handler.py" # wait for spec 05
+  inline_reference: |
+    Current VPR (to be replaced):
+      class VPR(BaseModel):
+        application_id: str; user_id: str
+        executive_summary: str
+        evidence_matrix: list[EvidenceItem]   # {requirement, evidence, alignment_score: STRONG|MODERATE|DEVELOPING, impact_potential}
+        differentiators: list[str]
+        gap_strategies: list[GapStrategy]     # {gap, mitigation_approach, transferable_skills[]}
+        cultural_fit: str | None
+        talking_points: list[str]
+        keywords: list[str]
+        version: int; language: Literal['en','he']; created_at: datetime; word_count: int
+
+    Keep unchanged (used by CV tailoring, gap analysis, etc.):
+      TokenUsage, Achievement, TargetRole, ValueProposition, VPRRequest, VPRResponse
+
+changes:
+  strategy: |
+    Use snake_case field names internally (DynamoDB storage).
+    Use Pydantic alias_generator=to_camel for API-facing JSON serialization.
+    Add model_config = ConfigDict(populate_by_name=True, extra='ignore').
+    'extra=ignore' ensures forward/backward DynamoDB compatibility.
+
+  new_models:
+    - name: VPRMetadata
+      fields:
+        - "reportDate: str  # ISO 8601 date string"
+        - "candidateName: str"
+        - "targetRole: str"
+        - "targetCompany: str"
+        - "reportVersion: str  # pattern: ^\d+\.\d+$, default '1.0'"
+        - "jobPostingUrl: str | None = None"
+        - "analysisScope: Literal['full','preliminary','targeted'] = 'full'"
+
+    - name: VPRStrength
+      fields:
+        - "strength: str  # 10-15 words"
+        - "evidence: str  # specific quantified proof"
+        - "relevance_to_role: str"
+
+    - name: VPRConcern
+      fields:
+        - "concern: str  # 10-15 words"
+        - "severity: Literal['high','medium','low']"
+        - "mitigation: str"
+
+    - name: VPRExecutiveSummary
+      fields:
+        - "overall_fit_score: int  # 0-100, per vpr.json"
+        - "fit_rationale: str  # 100-500 chars, 2-3 sentences"
+        - "top_three_strengths: Annotated[list[VPRStrength], Field(min_length=3, max_length=3)]"
+        - "top_three_concerns: Annotated[list[VPRConcern], Field(min_length=3, max_length=3)]"
+        - "recommended_approach: Literal['aggressive_apply','apply_with_customization','apply_after_preparation','do_not_apply']"
+
+    - name: VPRResponsibility
+      fields:
+        - "responsibility: str"
+        - "alignment_score: int  # 0-100"
+        - "candidate_evidence: list[str]  # min 1"
+        - "evidence_quality: Literal['direct','analogous','transferable','weak']"
+
+    - name: VPRMustHave
+      fields:
+        - "requirement: str"
+        - "candidate_meets_requirement: bool"
+        - "evidence: str"
+        - "strength_of_evidence: Literal['strong','moderate','weak','none'] = 'moderate'"
+
+    - name: VPRNiceToHave
+      fields:
+        - "preference: str"
+        - "candidate_has_this: bool"
+        - "evidence: str | None = None"
+
+    - name: VPRPrerequisite
+      fields:
+        - "assumption: str"
+        - "candidate_meets_this: bool"
+        - "reasoning: str"
+
+    - name: VPRRequirementBreakdown
+      fields:
+        - "must_have: list[VPRMustHave]"
+        - "nice_to_have: list[VPRNiceToHave]"
+        - "assumed_prerequisites: list[VPRPrerequisite]"
+
+    - name: VPRRoleAlignment
+      fields:
+        - "core_responsibilities: Annotated[list[VPRResponsibility], Field(min_length=1)]"
+        - "requirement_breakdown: VPRRequirementBreakdown"
+
+    - name: VPRKeyAchievement
+      fields:
+        - "achievement: str"
+        - "metric: str"
+        - "impact: str"
+
+    - name: VPRRelevantExperience
+      fields:
+        - "role: str"
+        - "organization: str"
+        - "duration: str  # pattern: ^\d+(\.\d+)? (year|years|month|months)$"
+        - "key_achievements: Annotated[list[VPRKeyAchievement], Field(min_length=1)]"
+        - "relevance_to_target_role: str"
+        - "relevance_score: int | None = None  # 0-100"
+
+    - name: VPRExperienceGap
+      fields:
+        - "missing_experience: str"
+        - "impact_on_candidacy: Literal['critical','significant','moderate','minimal']"
+        - "compensating_factors: list[str]"
+        - "mitigation_strategy: str | None = None"
+
+    - name: VPRExperienceMapping
+      fields:
+        - "relevant_experiences: Annotated[list[VPRRelevantExperience], Field(min_length=1)]"
+        - "experience_gaps: list[VPRExperienceGap]"
+
+    - name: VPRTechnicalSkill
+      fields:
+        - "skill: str"
+        - "required_level: Literal['expert','advanced','intermediate','basic']"
+        - "candidate_level: Literal['expert','advanced','intermediate','basic','none']"
+        - "evidence: str"
+        - "gap: bool = False"
+        - "development_path: str | None = None"
+
+    - name: VPRSoftSkill
+      fields:
+        - "skill: str"
+        - "candidate_demonstrates: bool"
+        - "evidence: str"
+        - "strength_level: Literal['exceptional','strong','adequate','developing']"
+
+    - name: VPRToolProficiency
+      fields:
+        - "tool: str"
+        - "required_for_role: bool"
+        - "candidate_proficiency: Literal['expert','proficient','familiar','none']"
+        - "evidence: str"
+        - "needs_upskilling: bool = False"
+
+    - name: VPRSkillsAnalysis
+      fields:
+        - "technical_skills: list[VPRTechnicalSkill]"
+        - "soft_skills: list[VPRSoftSkill]"
+        - "tool_proficiency: list[VPRToolProficiency]"
+
+    - name: VPRIdentifiedGap
+      fields:
+        - "requirement: str"
+        - "current_evidence: str"
+        - "gap_severity: Literal['critical','high','medium','low']"
+        - "suggested_evidence: list[str]"
+        - "can_be_created_quickly: bool = False"
+        - "estimated_time_to_create: str | None = None"
+
+    - name: VPRPriorityGap
+      fields:
+        - "gap: str"
+        - "priority: int  # 1-5, 1=highest"
+        - "action_item: str"
+        - "deadline: Literal['before_application','before_interview','nice_to_have']"
+
+    - name: VPREvidenceGaps
+      fields:
+        - "identified_gaps: Annotated[list[VPRIdentifiedGap], Field(min_length=1)]"
+        - "priority_gaps_to_address: Annotated[list[VPRPriorityGap], Field(min_length=1, max_length=5)]"
+
+    - name: VPRUniqueStrength
+      fields:
+        - "strength: str"
+        - "rarity: Literal['very_rare','uncommon','somewhat_rare']"
+        - "relevance: str"
+        - "proof: str"
+
+    - name: VPRCompetitiveAdvantage
+      fields:
+        - "advantage: str"
+        - "vs_typical_candidate: str"
+        - "how_to_leverage: str | None = None"
+
+    - name: VPRDifferentiators
+      fields:
+        - "unique_strengths: Annotated[list[VPRUniqueStrength], Field(min_length=1, max_length=5)]"
+        - "competitive_advantages: list[VPRCompetitiveAdvantage]"
+        - "positioning_statement: str  # 100-300 chars"
+
+    - name: VPRMitigation
+      fields:
+        - "strategy: Literal['reframe','acknowledge_and_address','provide_evidence','show_analogous_experience']"
+        - "messaging: str"
+
+    - name: VPRObjection
+      fields:
+        - "objection: str"
+        - "likelihood: Literal['very_likely','likely','possible','unlikely']"
+        - "mitigation: VPRMitigation"
+        - "where_to_address: list[Literal['cover_letter','cv','portfolio','interview']]"
+
+    - name: VPRPreemptiveResponse
+      fields:
+        - "concern: str"
+        - "preemptive_action: str"
+
+    - name: VPRConcernsAndMitigations
+      fields:
+        - "likely_objections: Annotated[list[VPRObjection], Field(min_length=1)]"
+        - "preemptive_responses: list[VPRPreemptiveResponse]"
+
+    - name: VPRPrimaryValue
+      fields:
+        - "statement: str"
+        - "evidence: str"
+        - "outcome_for_company: str"
+
+    - name: VPRSecondaryValue
+      fields:
+        - "value: str"
+        - "proof: str"
+
+    - name: VPRQuantifiedImpact
+      fields:
+        - "metric: str"
+        - "expected_range: str"
+        - "basis_for_projection: str"
+
+    - name: VPRValueProposition
+      fields:
+        - "primary_value: VPRPrimaryValue"
+        - "secondary_values: Annotated[list[VPRSecondaryValue], Field(min_length=2, max_length=4)]"
+        - "quantified_impact: list[VPRQuantifiedImpact]"
+        - "elevator_pitch: str  # 100-200 chars"
+
+    - name: VPRKeywordGroup
+      fields:
+        - "primary: list[str]   # use 2-3x across materials"
+        - "secondary: list[str]  # use 1-2x"
+
+    - name: VPRApplicationStrategy
+      description: "Strategy guidance embedded in VPR. Cover letter/LinkedIn/interview are separate generated documents."
+      fields:
+        - "messaging_approach: str  # recommended communication approach narrative"
+        - "ats_keywords: VPRKeywordGroup"
+        - "cv_lead_differentiator: str  # what to open CV with"
+        - "sections_to_compress: list[str]"
+
+    # Two sections from DOCX not in vpr.json — add to schema
+    - name: VPRCompanyInsight
+      description: "Sourced from VPRRequest.company_context. Rendered as 'Company Insights' section in DOCX."
+      fields:
+        - "mission_and_position: str"
+        - "recent_initiatives: list[str]"
+        - "current_challenges: list[str]"
+
+    - name: VPRVerificationEntry
+      description: "Confidence level per evidence category. Rendered as 'Verification Summary' in DOCX."
+      fields:
+        - "category: str  # e.g. 'LMS deployment & management'"
+        - "confidence: Literal['high','medium','growth_area']"
+        - "basis: str  # what evidence supports this confidence level"
+
+    - name: VPRVerificationSummary
+      fields:
+        - "entries: list[VPRVerificationEntry]"
+        - "key_evidence_sources: list[str]  # e.g. 'Master CV', 'Gap Analysis Responses', 'Company Research'"
+
+    - name: VPR  # FULL REPLACEMENT of current VPR model
+      description: "Complete 10-section Value Proposition Report. Stored in DynamoDB as snake_case; serialized as camelCase for API responses."
+      fields:
+        # Identity (preserved from current)
+        - "application_id: str"
+        - "user_id: str"
+        # 10 content sections (vpr.json)
+        - "metadata: VPRMetadata"
+        - "executive_summary: VPRExecutiveSummary"
+        - "role_alignment: VPRRoleAlignment"
+        - "experience_mapping: VPRExperienceMapping"
+        - "skills_analysis: VPRSkillsAnalysis"
+        - "evidence_gaps: VPREvidenceGaps"
+        - "differentiators: VPRDifferentiators"
+        - "concerns_and_mitigations: VPRConcernsAndMitigations"
+        - "value_proposition: VPRValueProposition"
+        - "application_strategy: VPRApplicationStrategy"
+        # 2 additional sections from DOCX
+        - "company_insights: VPRCompanyInsight | None = None"
+        - "verification_summary: VPRVerificationSummary | None = None"
+        # Metadata (preserved from current)
+        - "version: int = 1"
+        - "language: Literal['en','he'] = 'en'"
+        - "created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))"
+        - "word_count: int = 0"
+      config: |
+        model_config = ConfigDict(
+            populate_by_name=True,
+            extra='ignore',   # forward-compat with future DynamoDB items
+            alias_generator=to_camel,  # from pydantic.alias_generators
+        )
+
+preserves:
+  - "TokenUsage — unchanged"
+  - "Achievement — unchanged"
+  - "TargetRole — unchanged"
+  - "ValueProposition (old helper model) — can be kept as deprecated alias or removed; VPRValueProposition is the new version"
+  - "VPRRequest — unchanged (application_id, user_id, job_posting, gap_responses, company_context)"
+  - "VPRResponse — update VPR field type to new VPR; rest unchanged"
+
+do_not_change:
+  - "models/job.py — JobPosting, GapResponse, CompanyContext"
+  - "models/cv.py — UserCV"
+  - "models/result.py — Result, ResultCode"
+  - "Any logic/*.py files"
+  - "Any dal/*.py files"
+  - "Any handlers/*.py files"
+
+acceptance_criteria:
+  - "`uv run mypy careervp --strict` passes with zero errors"
+  - "`uv run pytest tests/unit/ -v --tb=short` passes (update fixture mocks for new VPR shape)"
+  - "VPR.model_dump(by_alias=True) produces camelCase JSON matching vpr.json property names"
+  - "VPR.model_validate({'application_id': ..., 'user_id': ..., extra_field: 'x'}) succeeds (extra='ignore')"
+  - "All 10 sections are required fields on VPR (except company_insights and verification_summary which are Optional)"
+
+implementation_prompt: |
+  You are upgrading the VPR Pydantic model in `src/backend/careervp/models/vpr.py`.
+
+  ## Context (read these 2 files only)
+  1. src/backend/careervp/models/vpr.py — full rewrite target
+  2. src/backend/careervp/models/job.py — for import references only (do not modify)
+
+  ## What you are building
+  Replace the current flat `VPR` class (executive_summary: str, evidence_matrix: list, etc.)
+  with a 10-section schema. The complete target model structure is defined in this spec.
+
+  ## Key design rules
+  1. Use snake_case field names (DynamoDB storage format).
+  2. Add `alias_generator=to_camel` (from pydantic.alias_generators) so
+     `.model_dump(by_alias=True)` produces camelCase for API/frontend consumers.
+  3. Add `model_config = ConfigDict(populate_by_name=True, extra='ignore')` to VPR
+     and all nested models. `extra='ignore'` is critical for backward DynamoDB compat.
+  4. Do NOT change: TokenUsage, Achievement, TargetRole, VPRRequest, VPRResponse.
+     Only update VPRResponse.vpr field type to the new VPR class.
+
+  ## Models to create (in order, each used by the next)
+  Follow the models list in this spec exactly. Create them in top-to-bottom dependency order.
+
+  ## After writing
+  Run: cd src/backend && uv run mypy careervp --strict
+  Fix all type errors before declaring done.
+  Run: uv run pytest tests/unit/ -v --tb=short
+  Update any test fixtures that instantiate VPR with the old shape.

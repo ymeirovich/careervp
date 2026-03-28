@@ -1,0 +1,211 @@
+id: "04-fvs-validation"
+title: "FVS Validation Extension — 6 Structural Rules + Quality Gate Wiring"
+status: pending
+priority: 4
+depends_on: ["01-pydantic-schema", "03-pipeline"]
+
+summary: |
+  Extend the FVS Stage 6 quality gate with 5 structural validators (the existing
+  anti-AI pattern check = rule 1, so 5 new = 6 total). Wire the already-implemented
+  grammar, tone, and ATS checks into the VPR gate.
+
+  All new functions are ADDITIONS only. Zero existing functions are modified.
+  The pipeline calls into the gate via a new aggregate function: run_vpr_quality_gate().
+
+context:
+  read_files:
+    - "src/backend/careervp/logic/fvs_validator.py"   # add new functions only
+    - "src/backend/careervp/models/vpr.py"             # VPR shape reference (post spec 01)
+    - "src/backend/careervp/logic/vpr_generator.py"    # integration point (post spec 03)
+  do_not_read:
+    - "src/backend/careervp/logic/prompts/vpr_prompt.py"
+    - "src/backend/careervp/dal/dynamo_dal_handler.py"
+  inline_reference: |
+    Key existing functions to know (do NOT re-implement, just call them):
+      check_anti_ai_patterns(content: str) -> AntiAIPatternResult
+        score: float (0-10), issues: list[str], passed = score >= 9.0
+      validate_grammar(content: str) -> ValidationCheckResult
+        score: float, issues: list[str], min_score=9.0
+      validate_tone(content: str) -> ValidationCheckResult
+        score: float, issues: list[str], min_score=8.0
+      validate_vpr_against_cv(vpr: VPR, user_cv: UserCV) -> Result[FVSValidationResult]
+        checks hallucinated company names, years, job titles vs. CV facts
+
+    Existing gate thresholds (do not change):
+      ANTI_AI_MIN_SCORE = 9.0
+      GRAMMAR_MIN_SCORE = 9.0
+      TONE_MIN_SCORE = 8.0
+
+    New threshold to add:
+      STRUCTURAL_MIN_SCORE = 8.0  # 6-rule structural gate
+
+changes:
+  new_functions:
+    - name: validate_evidence_traceability
+      signature: "(vpr: VPR, cv_text: str, gap_response_text: str) -> ValidationCheckResult"
+      description: |
+        Rule 1 (structural): Verify top-level quantified claims in executive_summary
+        and value_proposition appear in cv_text or gap_response_text.
+        Check: executive_summary.fit_rationale, value_proposition.primary_value.evidence,
+               value_proposition.elevator_pitch.
+        Method: Extract numbers and proper nouns from claim; verify at least one token
+                appears in cv_text or gap_response_text (case-insensitive).
+        Scoring: starts at 10.0; -0.8 per unverifiable claim, max deduction -4.0.
+      min_score: 8.0
+
+    - name: validate_quantification_consistency
+      signature: "(vpr: VPR) -> ValidationCheckResult"
+      description: |
+        Rule 2 (structural): Detect metric paraphrasing across sections.
+        Extract all NUMBER_PATTERN matches (digits + optional % or currency symbol)
+        from all text fields. For each unique numeric value, verify it appears with
+        consistent surrounding context (e.g. "$1M+" not "$1 million" elsewhere).
+        Scoring: starts at 10.0; -0.5 per inconsistency pair, max deduction -3.0.
+      min_score: 8.0
+
+    - name: validate_alignment_scores
+      signature: "(vpr: VPR) -> ValidationCheckResult"
+      description: |
+        Rule 3 (structural): Alignment score must match evidence_quality in
+        role_alignment.core_responsibilities[].
+        Rubric:
+          evidence_quality='direct'       → alignment_score 80-100
+          evidence_quality='analogous'    → alignment_score 60-79
+          evidence_quality='transferable' → alignment_score 40-59
+          evidence_quality='weak'         → alignment_score 0-39
+        Scoring: starts at 10.0; -1.0 per responsibility where score/quality mismatch, max -4.0.
+      min_score: 8.0
+
+    - name: validate_gap_severity_calibration
+      signature: "(vpr: VPR) -> ValidationCheckResult"
+      description: |
+        Rule 4 (structural): Confirm priority_gaps_to_address items have
+        gap_severity=critical or gap_severity=high in identified_gaps.
+        Scoring: starts at 10.0; -1.5 if a priority gap with deadline='before_application'
+                 has severity 'medium' or 'low' in identified_gaps (likely miscalibrated).
+        Also check: if any identified_gap has gap_severity='critical', it should appear
+                    in priority_gaps_to_address (priority 1-2). -1.0 if missing.
+      min_score: 8.0
+
+    - name: validate_differentiator_rarity
+      signature: "(vpr: VPR) -> ValidationCheckResult"
+      description: |
+        Rule 5 (structural): Rarity of unique_strengths must be defensible.
+        Proxy heuristic: a strength with rarity='very_rare' must have a proof field
+        containing at least one quantified metric (number pattern).
+        A strength with rarity='uncommon' must have a non-empty relevance field > 20 words.
+        Scoring: starts at 10.0; -1.0 per strength that fails its rarity level proof.
+      min_score: 8.0
+
+    - name: validate_mitigation_substance
+      signature: "(vpr: VPR) -> ValidationCheckResult"
+      description: |
+        Rule 6 (structural): Mitigation messaging must be specific, not generic.
+        Generic detection: messaging < 30 words OR messaging contains no proper nouns
+        (company names, technology names) from the evidence pool.
+        Scoring: starts at 10.0; -1.2 per objection with weak/generic messaging, max -4.8.
+      min_score: 8.0
+
+    - name: run_vpr_quality_gate
+      signature: "(vpr: VPR, user_cv: UserCV, cv_text: str, gap_response_text: str) -> FinalVPRData"
+      description: |
+        Aggregate gate function. Replaces the inline check_anti_ai_patterns call in
+        _final_meta_evaluation. Runs all 7 checks and computes:
+          - anti_ai_score (from check_anti_ai_patterns on serialized text)
+          - structural_score (average of 6 structural validators, weighted equally)
+          - grammar_score (from validate_grammar)
+          - tone_score (from validate_tone)
+          - passed_gate: ALL of the following must be true:
+              anti_ai_score >= ANTI_AI_MIN_SCORE (9.0)
+              structural_score >= STRUCTURAL_MIN_SCORE (8.0)
+              grammar_score >= GRAMMAR_MIN_SCORE (9.0)
+              tone_score >= TONE_MIN_SCORE (8.0)
+        Returns FinalVPRData with the first-failing check's issues in anti_ai_issues
+        (existing field; repurpose as "all quality issues" for regeneration feedback).
+      note: |
+        FinalVPRData already has anti_ai_score: float, anti_ai_issues: list[str], passed_gate: bool.
+        Add structural_score: float to FinalVPRData dataclass (with default=10.0 for
+        backward compat with existing tests that construct FinalVPRData directly).
+
+  pipeline_integration:
+    file: "src/backend/careervp/logic/vpr_generator.py"
+    method: "_final_meta_evaluation(vpr_data: VPRData) -> FinalVPRData"
+    change: |
+      Replace the current body:
+        content = _serialize_vpr_for_quality(vpr.vpr)
+        anti_ai_assessment = check_anti_ai_patterns(content)
+        return FinalVPRData(vpr=vpr.vpr, anti_ai_score=..., anti_ai_issues=..., passed_gate=...)
+
+      With:
+        cv_text = _serialize_cv_for_quality(self._user_cv)   # new helper, see below
+        gap_text = ' '.join(gr.response for gr in self._request.gap_responses if gr.response)
+        return run_vpr_quality_gate(vpr.vpr, self._user_cv, cv_text, gap_text)
+
+  new_helpers_in_generator:
+    - name: _serialize_cv_for_quality
+      signature: "(user_cv: UserCV) -> str"
+      description: |
+        Flatten all text from UserCV into a single string for traceability checks.
+        Include: full_name, experience[].company, experience[].role, experience[].achievements,
+                 education[].institution, top_achievements, skills[].name.
+        Exclude: contact info (email, phone).
+
+  preserve_all_existing_fvs:
+    - "check_anti_ai_patterns() — unchanged"
+    - "validate_grammar() — unchanged"
+    - "validate_tone() — unchanged"
+    - "validate_vpr_against_cv() — unchanged"
+    - "validate_immutable_facts() — unchanged"
+    - "validate_cv_against_baseline() — unchanged"
+    - "All constants: ANTI_AI_MIN_SCORE, GRAMMAR_MIN_SCORE, TONE_MIN_SCORE, ANTI_AI_BANNED_TERMS, etc."
+    - "FVSViolation, FVSValidationResult, AntiAIPatternResult, ValidationCheckResult, FVSQualityReport — unchanged"
+
+acceptance_criteria:
+  - "run_vpr_quality_gate() returns FinalVPRData with all 4 scores computed"
+  - "passed_gate=False when anti-AI score < 9.0 (existing behavior preserved)"
+  - "passed_gate=False when structural_score < 8.0"
+  - "passed_gate=False when grammar_score < 9.0"
+  - "Regeneration loop still triggers on passed_gate=False (no change to loop)"
+  - "FinalVPRData has structural_score field (default=10.0 for backward compat)"
+  - "`uv run mypy careervp --strict` passes"
+  - "`uv run pytest tests/unit/ -v --tb=short` passes"
+
+implementation_prompt: |
+  You are adding new validation functions to `src/backend/careervp/logic/fvs_validator.py`
+  and integrating them into the pipeline via `src/backend/careervp/logic/vpr_generator.py`.
+
+  ## Context (read these 3 files only)
+  1. src/backend/careervp/logic/fvs_validator.py  — add new functions at the end (before the Phase 9 helpers)
+  2. src/backend/careervp/models/vpr.py           — VPR shape reference
+  3. src/backend/careervp/logic/vpr_generator.py  — update _final_meta_evaluation only
+
+  ## CRITICAL: additions only in fvs_validator.py
+  Do NOT modify any existing function. Add all new code at the bottom of the file,
+  before the "Phase 9 CV Tailoring helpers" section.
+
+  ## New constant to add
+  STRUCTURAL_MIN_SCORE = 8.0
+
+  ## New dataclass field to add
+  In FinalVPRData (in vpr_generator.py):
+    structural_score: float = field(default=10.0)
+
+  ## Add 6 structural validators
+  Implement all 6 validate_* functions per this spec. Each returns ValidationCheckResult.
+  Key patterns already available in fvs_validator.py to reuse:
+    _bounded_score(), _split_sentences(), _count_phrase_hits()
+    NUMBER_PATTERN (for quantification checks)
+    COMPANY_PATTERN (for proper noun extraction in mitigation checks)
+
+  ## Add run_vpr_quality_gate()
+  Calls all 6 + existing check_anti_ai_patterns + validate_grammar + validate_tone.
+  The cv_text passed in is plain text (pre-serialized).
+  Structural score = average of all 6 structural validator scores.
+  Returns FinalVPRData.
+
+  ## Update _final_meta_evaluation in vpr_generator.py
+  Replace current body with call to run_vpr_quality_gate().
+  Add import: from careervp.logic.fvs_validator import run_vpr_quality_gate
+  Add _serialize_cv_for_quality(user_cv) helper in vpr_generator.py (NOT in fvs_validator).
+
+  After writing: cd src/backend && uv run mypy careervp --strict && uv run pytest tests/unit/ -v --tb=short

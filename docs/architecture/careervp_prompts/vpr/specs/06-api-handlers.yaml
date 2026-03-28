@@ -1,0 +1,150 @@
+id: "06-api-handlers"
+title: "API Handlers & Response Serialization"
+status: pending
+priority: 6
+depends_on: ["01-pydantic-schema", "05-dal"]
+
+summary: |
+  Update VPR API handlers to:
+    1. Serialize VPR responses as camelCase (by_alias=True) for frontend consumers
+    2. Call get_next_vpr_version() before generating to set correct version
+    3. Return new VPRResponse shape (VPR field is now 10-section)
+    4. Pass correct HTTP status codes for new failure modes
+
+  Handler logic (generate_vpr call, CV fetch, error mapping) is UNCHANGED.
+  Only serialization and version plumbing change.
+
+context:
+  read_files:
+    - "src/backend/careervp/handlers/vpr_handler.py"         # sync handler
+    - "src/backend/careervp/handlers/vpr_worker_handler.py"  # async worker
+    - "src/backend/careervp/models/vpr.py"                   # post spec 01
+  do_not_read:
+    - "src/backend/careervp/logic/vpr_generator.py"  # spec 03 handles this
+    - "src/backend/careervp/logic/fvs_validator.py"  # spec 04 handles this
+  inline_reference: |
+    Current vpr_handler.py flow:
+      1. Parse VPRRequest from event body
+      2. Fetch CV from DynamoDB
+      3. Call generate_vpr(request, user_cv, dal)
+      4. Serialize result as JSON → HTTP response
+
+    Current serialization (likely):
+      response_body = result.data  # VPRResponse object
+      return {'statusCode': 200, 'body': json.dumps(response_body.model_dump())}
+      ← PROBLEM: model_dump() is snake_case; frontend expects camelCase
+
+changes:
+  camelcase_serialization:
+    description: |
+      All VPR API responses must serialize as camelCase for frontend.
+      Change model_dump() → model_dump(by_alias=True, mode='json')
+      wherever VPRResponse or VPR is serialized to JSON in handler files.
+    applies_to:
+      - "vpr_handler.py: _serialize_response() helper or equivalent"
+      - "vpr_worker_handler.py: wherever final VPR is returned/stored as JSON"
+    note: |
+      Do not use by_alias=True for DynamoDB writes (spec 05 already handled that).
+      Only use by_alias=True for HTTP response bodies.
+
+  version_plumbing:
+    description: |
+      Call dal.get_next_vpr_version(request.application_id) before calling generate_vpr().
+      Pass the version into VPRRequest or directly to the pipeline.
+    approach: |
+      Option A (preferred): Add optional target_version: int = 1 field to VPRRequest.
+        In vpr_handler.py:
+          next_version = dal.get_next_vpr_version(request.application_id)
+          request_with_version = request.model_copy(update={'target_version': next_version})
+          result = generate_vpr(request_with_version, user_cv, dal)
+      Option B: Pass version as a separate parameter to generate_vpr().
+      Pick whichever requires fewer changes in generate_vpr() (spec 03 territory).
+    note: |
+      VPRRequest already has application_id. If you add target_version to VPRRequest,
+      make it optional with default=1 so existing callers don't break.
+
+  http_status_updates:
+    new_codes:
+      - code: 422
+        condition: "result.code == ResultCode.FVS_VALIDATION_FAILED (anti-AI gate exhausted)"
+        already_mapped: true  # verify in _map_result_code_to_http_status()
+    verify_existing:
+      - "200 OK: VPR generated successfully"
+      - "400 Bad Request: invalid request body"
+      - "404 Not Found: CV not found"
+      - "422 Unprocessable: FVS validation failed"
+      - "502 Bad Gateway: LLM API error"
+      - "504 Gateway Timeout: LLM timeout"
+
+  vpr_response_serialization:
+    change: |
+      VPRResponse.vpr is now a 10-section VPR. The JSON output will be larger.
+      Ensure response body size does not exceed API Gateway 10MB limit.
+      Typical VPR JSON (10 sections, full): ~8-15KB. Well within limits.
+    check: |
+      Verify VPRResponse.model_dump(by_alias=True, mode='json') produces
+      the expected camelCase shape before returning. Add a log line:
+        logger.info('VPR response size', bytes=len(json.dumps(response_dict)))
+
+  submit_handler:
+    file: "vpr_submit_handler.py"
+    note: |
+      The async submit path stores the VPR job result somewhere (SQS → worker).
+      Ensure the worker handler also uses by_alias=True when serializing VPR
+      to any storage or event payload that the frontend will read.
+
+preserves:
+  - "Lambda handler entry point signature — unchanged"
+  - "Powertools decorators (@logger, @tracer, @metrics) — unchanged"
+  - "CV fetch logic — unchanged"
+  - "generate_vpr() call — unchanged (except version param)"
+  - "_map_result_code_to_http_status() — unchanged (verify 422 mapping)"
+  - "_emit_success_metrics() — unchanged"
+  - "vpr_status_handler.py — no changes needed"
+
+do_not_change:
+  - "infra/careervp/ CDK stacks"
+  - "Any auth handlers"
+  - "Any non-VPR handlers"
+  - "DynamoDB table configuration"
+
+acceptance_criteria:
+  - "API response JSON uses camelCase keys (e.g., 'applicationId', 'executiveSummary')"
+  - "VPR version increments correctly on re-generation of same application_id"
+  - "422 status returned when FVS gate exhausted"
+  - "Response body is valid JSON parseable by the frontend"
+  - "`uv run mypy careervp --strict` passes"
+  - "`uv run pytest tests/unit/ -v --tb=short` passes"
+
+implementation_prompt: |
+  You are making targeted updates to the VPR API handlers to add camelCase
+  serialization and version plumbing.
+
+  ## Context (read these 3 files only)
+  1. src/backend/careervp/handlers/vpr_handler.py
+  2. src/backend/careervp/handlers/vpr_worker_handler.py
+  3. src/backend/careervp/models/vpr.py  (post spec 01, for type reference)
+
+  ## Change 1: camelCase serialization
+  Find all places that serialize a VPRResponse or VPR to JSON for an HTTP response body.
+  Change model_dump() → model_dump(by_alias=True, mode='json').
+  This is ONLY for HTTP responses. Do not change DynamoDB write paths.
+
+  ## Change 2: version plumbing in vpr_handler.py
+  After fetching the CV, before calling generate_vpr():
+    next_version = dal.get_next_vpr_version(request.application_id)
+  Pass next_version into VPRRequest or generate_vpr() as appropriate.
+  (Check what generate_vpr() / VPRSixStagePipeline accepts after spec 03.)
+
+  ## Change 3: response size logging
+  After serializing the VPR response dict, add:
+    logger.info('VPR response generated', size_bytes=len(json.dumps(response_dict)))
+
+  ## What you are NOT changing
+  - Handler entry point signatures
+  - Powertools decorators
+  - CV fetch, error mapping, metrics emission
+  - vpr_status_handler.py
+  - vpr_submit_handler.py (only update worker serialization if needed)
+
+  After writing: cd src/backend && uv run mypy careervp --strict && uv run pytest tests/unit/ -v --tb=short

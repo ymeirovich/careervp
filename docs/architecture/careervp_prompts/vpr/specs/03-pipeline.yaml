@@ -1,0 +1,249 @@
+id: "03-pipeline"
+title: "VPR Generator Pipeline — Orchestration Update"
+status: pending
+priority: 3
+depends_on: ["01-pydantic-schema", "02-vpr-prompts"]
+
+summary: |
+  Update VPRSixStagePipeline in vpr_generator.py to:
+    - Stage 3: call Phase 2 Prompt 2.1 (build_phase2_prompt) instead of Stage 3 template
+    - Stage 4: call Phase 2 Prompt 2.2 (build_phase2_validation_prompt) instead of Stage 4 template
+    - Stage 5: build new 10-section VPR model from Stage 4 output
+    - Stage 6: wire new FVS structural validators (added in spec 04) — stubbed here
+
+  Stages 1 and 2 (rule-based) are UNCHANGED.
+  The regeneration loop (max 3 retries with feedback injection) is UNCHANGED.
+  The fallback rule-based self-correction (Stage 4 LLM failure) is UPDATED to
+  handle the new schema shape.
+
+context:
+  read_files:
+    - "src/backend/careervp/logic/vpr_generator.py"            # primary edit target
+    - "src/backend/careervp/models/vpr.py"                     # new model shapes (post spec 01)
+    - "src/backend/careervp/logic/prompts/vpr_prompt.py"       # new builder functions (post spec 02)
+  do_not_read:
+    - "src/backend/careervp/logic/fvs_validator.py"    # spec 04 handles FVS changes
+    - "src/backend/careervp/dal/dynamo_dal_handler.py" # spec 05 handles DAL
+
+  inline_reference: |
+    Current pipeline stages (for reference when editing):
+
+    Stage 1 — _analyze_input(cv, job) -> AnalysisResult
+      rule-based: extract key_skills, experience_level, job_requirements, cv_achievements
+      PRESERVE AS-IS
+
+    Stage 2 — _extract_evidence(analysis) -> EvidenceList
+      rule-based: token-overlap matching, produces matches[] + uncovered_requirements[]
+      PRESERVE AS-IS
+
+    Stage 3 — _synthesize(evidence, feedback) -> DraftProposition  [REPLACE]
+      was: build_stage_3_prompt() → LLM → _parse_draft_proposition()
+      becomes: build_phase2_prompt() → LLM → _parse_phase2_vpr_draft()
+
+    Stage 4 — _self_correct(draft, feedback) -> CorrectedProposition  [REPLACE]
+      was: build_stage_4_prompt() → LLM → _parse_corrected_proposition()
+      becomes: build_phase2_validation_prompt() → LLM → _parse_phase2_validated_vpr()
+      fallback: _rule_based_self_correction() — UPDATE for new schema shape
+
+    Stage 5 — _generate_output(corrected) -> VPRData  [REPLACE]
+      was: build new flat VPR from corrected fields
+      becomes: call _parse_full_vpr_model(payload, request) which builds new 10-section VPR
+
+    Stage 6 — _final_meta_evaluation(vpr_data) -> FinalVPRData  [EXTEND in spec 04]
+      currently: check_anti_ai_patterns() only
+      spec 04 adds: 5 additional structural checks
+      this spec: keep current anti-AI gate; add TODO comment for spec 04 extension point
+
+changes:
+  new_dataclasses:
+    - name: Phase2Draft
+      purpose: "Stage 3 output contract for new 10-section schema"
+      description: |
+        Thin container for the raw dict returned by Phase 2 Prompt 2.1.
+        Parsing into typed VPR sub-models happens in Stage 5.
+      fields:
+        - "raw_payload: dict[str, Any]  # unparsed LLM JSON response"
+        - "evidence_context: EvidenceList  # Stage 2 output, used as fallback"
+
+    - name: ValidatedDraft
+      purpose: "Stage 4 output contract for new 10-section schema"
+      fields:
+        - "raw_payload: dict[str, Any]  # corrected JSON from Phase 2 Prompt 2.2"
+        - "validation_notes: list[str]  # changes the LLM made during validation"
+        - "evidence_context: EvidenceList"
+
+  stage_3_replacement:
+    method: "_synthesize(evidence, feedback) -> Phase2Draft"
+    prompt_call: "build_phase2_prompt(evidence_payload, self._user_cv, self._request, feedback)"
+    evidence_payload_shape: |
+      Same as current Stage 3 input:
+      {
+        "matches": [{"requirement", "evidence", "alignment_score", "impact_potential"}],
+        "uncovered_requirements": [...],
+        "key_skills": [...],
+        "experience_level": "..."
+      }
+    max_tokens: 6000  # increased from 3000 — 10-section output is larger
+    temperature: 0.65  # unchanged
+    system_prompt: "PHASE2_SYSTEM_PROMPT"
+    on_success: "return Phase2Draft(raw_payload=payload, evidence_context=evidence)"
+    on_failure: "raise RuntimeError (caught by run() → returns error Result)"
+
+  stage_4_replacement:
+    method: "_self_correct(draft: Phase2Draft, feedback) -> ValidatedDraft"
+    prompt_call: "build_phase2_validation_prompt(draft.raw_payload, self._user_cv, feedback)"
+    max_tokens: 6000
+    temperature: 0.35  # unchanged
+    system_prompt: "PHASE2_VALIDATION_SYSTEM_PROMPT"
+    on_success: |
+      validation_notes = _ensure_str_list(payload.get('validation_notes'))
+      return ValidatedDraft(raw_payload=payload, validation_notes=validation_notes, evidence_context=draft.evidence_context)
+    on_failure: |
+      # Fallback: rule-based banned-term replacement on executive-level text fields only
+      return _rule_based_validation_fallback(draft)
+
+  rule_based_fallback_update:
+    method: "_rule_based_validation_fallback(draft: Phase2Draft) -> ValidatedDraft"
+    description: |
+      When Stage 4 LLM fails, apply banned-term replacement to text-heavy fields only.
+      Do NOT attempt to restructure the JSON — just clean the obvious text violations.
+    fields_to_clean:
+      - "executive_summary.fit_rationale"
+      - "differentiators.positioning_statement"
+      - "value_proposition.elevator_pitch"
+      - "value_proposition.primary_value.statement"
+    approach: |
+      Extract the field value from draft.raw_payload, apply _replace_banned_terms(),
+      put it back. Return ValidatedDraft with validation_notes=['Fallback: banned terms removed from text fields'].
+
+  stage_5_replacement:
+    method: "_generate_output(validated: ValidatedDraft) -> VPRData"
+    description: |
+      Parse validated.raw_payload into the new 10-section VPR Pydantic model.
+      Use _parse_full_vpr_model(payload, request, evidence_context).
+    parse_function: "_parse_full_vpr_model(payload, request, evidence_context) -> VPR"
+    parse_strategy: |
+      Use pydantic's model_validate() where possible. For each section:
+        vpr = VPR(
+          application_id=request.application_id,
+          user_id=request.user_id,
+          metadata=VPRMetadata.model_validate(payload.get('metadata', {})),
+          executive_summary=VPRExecutiveSummary.model_validate(payload.get('executive_summary', {})),
+          role_alignment=VPRRoleAlignment.model_validate(payload.get('role_alignment', {})),
+          ... (all 10 sections)
+          company_insights=VPRCompanyInsight.model_validate(payload['company_insights']) if 'company_insights' in payload else None,
+          verification_summary=VPRVerificationSummary.model_validate(payload['verification_summary']) if 'verification_summary' in payload else None,
+          language=request.job_posting.language,
+          version=1,
+        )
+      Catch ValidationError per section and fall back to a minimal valid default
+      (use _build_minimal_* helpers) rather than failing the whole VPR.
+      Calculate word_count after assembly using existing _calculate_word_count() — update it
+      to count words across all new text fields.
+    word_count_update: |
+      Update _calculate_word_count(vpr: VPR) to accumulate text from:
+        executive_summary.fit_rationale
+        executive_summary.top_three_strengths[].strength + evidence + relevance_to_role
+        executive_summary.top_three_concerns[].concern + mitigation
+        role_alignment.core_responsibilities[].responsibility
+        experience_mapping.relevant_experiences[].relevance_to_target_role
+        experience_mapping.experience_gaps[].missing_experience + mitigation_strategy
+        skills_analysis.technical_skills[].evidence
+        evidence_gaps.identified_gaps[].current_evidence
+        differentiators.positioning_statement
+        concerns_and_mitigations.likely_objections[].objection + mitigation.messaging
+        value_proposition.elevator_pitch + primary_value.statement + primary_value.evidence
+        application_strategy.messaging_approach
+        company_insights.mission_and_position (if present)
+
+  stage_6_extension_point:
+    description: |
+      Stage 6 currently calls check_anti_ai_patterns() on serialized VPR text.
+      Spec 04 adds 5 more structural validators. Add a comment here as the integration point:
+        # SPEC-04-EXTENSION: add structural_validation_result here
+      Keep the current anti-AI gate logic unchanged.
+    serialize_for_quality_update: |
+      Update _serialize_vpr_for_quality(vpr) to include text from new sections:
+        - differentiators.positioning_statement
+        - differentiators.unique_strengths[].strength + relevance
+        - value_proposition.elevator_pitch
+        - concerns_and_mitigations.likely_objections[].mitigation.messaging
+        - application_strategy.messaging_approach
+        - executive_summary.fit_rationale
+
+  run_method_signature_unchanged: true
+  generate_vpr_function_unchanged: true
+
+preserves:
+  - "_analyze_input() — no changes"
+  - "_extract_evidence() — no changes"
+  - "AnalysisResult, EvidenceList, EvidenceMatch dataclasses — no changes"
+  - "MAX_STAGE6_RETRIES = 3 — no changes"
+  - "ANTI_AI_MIN_SCORE = 9.0 — no changes"
+  - "_build_regeneration_feedback() — no changes"
+  - "_replace_banned_terms() — no changes"
+  - "_parse_json_payload() — no changes"
+  - "_select_best_evidence(), _text_tokens(), _alignment_from_overlap() — no changes"
+  - "_infer_experience_level() — no changes"
+  - "generate_vpr() public function — signature unchanged, behavior preserved"
+
+do_not_change:
+  - "models/vpr.py — post spec 01, treat as read-only here"
+  - "prompts/vpr_prompt.py — post spec 02, treat as read-only here"
+  - "fvs_validator.py — spec 04 handles this"
+  - "dynamo_dal_handler.py — spec 05 handles this"
+
+acceptance_criteria:
+  - "VPR generation flow calls build_phase2_prompt for Stage 3 and build_phase2_validation_prompt for Stage 4"
+  - "Stage 5 produces a valid VPR with all 10 required sections populated"
+  - "Stage 6 anti-AI gate still runs and triggers regeneration on score < 9.0"
+  - "Regeneration loop still injects feedback into Stage 3 (Phase2 prompt) on retry"
+  - "Stage 4 LLM failure still falls back to rule-based correction without crashing"
+  - "generate_vpr() still persists VPR via dal.save_vpr() and returns VPRResponse"
+  - "`uv run mypy careervp --strict` passes"
+  - "`uv run pytest tests/unit/ -v --tb=short` passes"
+
+implementation_prompt: |
+  You are updating `src/backend/careervp/logic/vpr_generator.py` to use the new
+  Phase 2 prompts and produce the new 10-section VPR model.
+
+  ## Context (read these 3 files only, in this order)
+  1. src/backend/careervp/models/vpr.py          — new 10-section VPR types (from spec 01)
+  2. src/backend/careervp/logic/prompts/vpr_prompt.py — new Phase 2 builder functions (from spec 02)
+  3. src/backend/careervp/logic/vpr_generator.py  — the file you are editing
+
+  ## What you are changing
+  Replace stages 3, 4, and 5 with new implementations. Stages 1, 2, 6 and all
+  public functions (generate_vpr, run) are UNCHANGED.
+
+  ## Stage 3 (_synthesize)
+  - Call build_phase2_prompt(evidence_payload, self._user_cv, self._request, feedback)
+  - max_tokens=6000, temperature=0.65, system_prompt=PHASE2_SYSTEM_PROMPT
+  - Return Phase2Draft(raw_payload=payload, evidence_context=evidence)
+
+  ## Stage 4 (_self_correct)
+  - Call build_phase2_validation_prompt(draft.raw_payload, self._user_cv, feedback)
+  - max_tokens=6000, temperature=0.35, system_prompt=PHASE2_VALIDATION_SYSTEM_PROMPT
+  - On failure: call _rule_based_validation_fallback(draft) — clean banned terms from
+    text fields in the raw_payload dict, return ValidatedDraft
+  - Return ValidatedDraft(raw_payload=payload, validation_notes=[...], evidence_context=draft.evidence_context)
+
+  ## Stage 5 (_generate_output)
+  - Call _parse_full_vpr_model(validated.raw_payload, self._request, validated.evidence_context)
+  - Use VPRMetadata.model_validate(), VPRExecutiveSummary.model_validate(), etc. for each section
+  - Wrap each section parse in try/except ValidationError → use _build_minimal_{section}() fallback
+  - Set application_id, user_id, language from request
+  - Call _calculate_word_count(vpr) after building — update it to cover new text fields
+  - Return VPRData(vpr=vpr)
+
+  ## Regeneration loop
+  The run() method loop (for attempt in range(max_stage6_retries)) is UNCHANGED.
+  feedback is still passed from _build_regeneration_feedback(last_meta) into _synthesize
+  and _self_correct on retries.
+
+  ## Anti-context-rot reminder
+  Do NOT look at fvs_validator.py — Stage 6 anti-AI check call is unchanged.
+  Do NOT look at dynamo_dal_handler.py.
+  All imports you need are already in scope (or add from careervp.logic.prompts.vpr_prompt).
+
+  After writing: cd src/backend && uv run mypy careervp --strict && uv run pytest tests/unit/ -v --tb=short

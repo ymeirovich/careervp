@@ -1,0 +1,83 @@
+id: "00-overview"
+title: "VPR Upgrade — Spec Catalog & Implementation Order"
+description: |
+  Upgrade the VPR system from a flat 9-field output to the 10-section schema
+  defined in vpr.json, validated against the ideal rendered output in
+  SysAid_Value_Proposition_Report_Yitzchak_Meirovich.docx.
+
+  Each spec is independently implementable in a single LLM session.
+  Do not mix specs — context rot is the primary failure mode.
+
+reference_files:
+  ground_truth_schema: "docs/architecture/careervp_prompts/vpr.json"
+  ground_truth_output: "docs/architecture/careervp_prompts/SysAid_Value_Proposition_Report_Yitzchak_Meirovich.docx"
+  current_architecture: "docs/architecture/careervp_prompts/current_implementation.md"
+  prompt_library: "docs/architecture/careervp_prompts/prompt.md"
+
+# ─────────────────────────────────────────────────────────────
+# IMPLEMENTATION ORDER (strict — each depends on prior)
+# ─────────────────────────────────────────────────────────────
+implementation_order:
+  - spec: "01-pydantic-schema"
+    title: "VPR Pydantic models — 10-section schema"
+    depends_on: []
+    est_complexity: high
+    why_first: "All other specs import from models/vpr.py. Schema must be locked before prompts, pipeline, DAL, or API are touched."
+
+  - spec: "02-vpr-prompts"
+    title: "Phase 2 prompt templates — VPR generation & validation"
+    depends_on: ["01-pydantic-schema"]
+    est_complexity: medium
+    why_second: "Prompts define the JSON schema the LLM must output. Must align with spec 01 before pipeline can call them."
+
+  - spec: "03-pipeline"
+    title: "VPR generator pipeline — orchestration update"
+    depends_on: ["01-pydantic-schema", "02-vpr-prompts"]
+    est_complexity: high
+    why_third: "Wires schema + prompts together. Stages 3/4 now call Phase 2 prompts; Stage 5 builds new VPR model."
+
+  - spec: "04-fvs-validation"
+    title: "FVS validation extension — 6 structural rules + quality gate wiring"
+    depends_on: ["01-pydantic-schema", "03-pipeline"]
+    est_complexity: medium
+    why_fourth: "Extends Stage 6 gate. Needs final VPR shape from spec 01, and pipeline to call new validators from spec 03."
+
+  - spec: "05-dal"
+    title: "DAL/DynamoDB storage — schema migration & serialization"
+    depends_on: ["01-pydantic-schema"]
+    est_complexity: low
+    why_fifth: "Primarily a serialization concern. VPR.model_validate() and .model_dump() handle the heavy lifting once spec 01 is done."
+
+  - spec: "06-api-handlers"
+    title: "API handler & response model updates"
+    depends_on: ["01-pydantic-schema", "05-dal"]
+    est_complexity: low
+    why_sixth: "Thin layer. Updates VPRResponse to reference new VPR; adds camelCase serialization to API responses."
+
+# ─────────────────────────────────────────────────────────────
+# CONTEXT ROT GUARDRAILS (apply to every spec)
+# ─────────────────────────────────────────────────────────────
+context_rot_rules:
+  - "Read only the files listed in each spec's context.read_files. No extras."
+  - "Implement only the changes listed in that spec. Do not proactively refactor adjacent code."
+  - "Do not open vpr.json during implementation — key shapes are embedded inline in each spec."
+  - "Run mypy and pytest after each spec before starting the next."
+  - "If a file is not in context.read_files, do not modify it."
+
+# ─────────────────────────────────────────────────────────────
+# PRESERVED INVARIANTS (must survive all 6 specs)
+# ─────────────────────────────────────────────────────────────
+preserved_invariants:
+  - "VPR.application_id + VPR.user_id: idempotency keys — never remove"
+  - "VPR.language: Literal['en', 'he'] — Hebrew support is V1"
+  - "VPR.version + VPR.created_at — audit trail"
+  - "DynamoDB PK=application_id, SK=ARTIFACT#VPR#v{version} — do not change key scheme"
+  - "8-pattern anti-AI scoring in fvs_validator.py:check_anti_ai_patterns — never weaken"
+  - "Stage 1-2 rule-based pre-processing — do not replace with LLM calls"
+  - "Regeneration loop: max 3 retries with feedback injection — do not reduce"
+  - "TaskMode.STRATEGIC → claude-sonnet-4-5 for all VPR LLM calls — no Haiku"
+
+verify_commands:
+  typecheck: "cd src/backend && uv run mypy careervp --strict"
+  test: "uv run pytest tests/unit/ -v --tb=short"
+  lint: "uv run ruff check --fix . && uv run ruff format ."

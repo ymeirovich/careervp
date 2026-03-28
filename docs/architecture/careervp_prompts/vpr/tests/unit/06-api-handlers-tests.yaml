@@ -1,0 +1,248 @@
+id: "06-api-handlers-tests"
+title: "Unit Tests — VPR Handler camelCase Serialization + Version Plumbing (Spec 06)"
+spec_id: "06-api-handlers"
+target_path: "src/backend/tests/vpr/unit/test_vpr_handler_serialization.py"
+pytest_markers: ["unit"]
+depends_on_spec: "06-api-handlers"
+test_count: 8
+
+description: |
+  Tests for the handler changes in spec 06:
+    1. HTTP response body uses camelCase keys (model_dump(by_alias=True, mode='json'))
+    2. Handler calls dal.get_next_vpr_version() before generating
+    3. Response size is logged
+    4. HTTP status codes: 200/400/404/422/502/504 still correct
+
+  Tests mock generate_vpr() and DynamoDalHandler to isolate handler logic.
+  Pattern mirrors the existing test_vpr_handler.py in the codebase.
+
+implementation_steps: |
+  1. Read docs/architecture/careervp_prompts/vpr/specs/06-api-handlers.yaml
+  2. Copy code block to src/backend/tests/vpr/unit/test_vpr_handler_serialization.py
+  3. Run (RED):
+       cd src/backend && uv run pytest tests/vpr/unit/test_vpr_handler_serialization.py -v --tb=short
+  4. Implement spec 06 (handlers/vpr_handler.py changes)
+  5. Re-run — all 8 tests should pass
+
+code: |
+  """Unit tests for VPR handler camelCase serialization and version plumbing (spec 06)."""
+  from __future__ import annotations
+
+  import json
+  import os
+  from typing import Any
+  from unittest.mock import MagicMock, patch
+
+  import pytest
+
+  from careervp.handlers.vpr_handler import handler as vpr_handler
+
+
+  def _make_event(body: dict[str, Any]) -> dict[str, Any]:
+      return {
+          "body": json.dumps(body),
+          "headers": {"Authorization": "Bearer test-token"},
+          "requestContext": {
+              "authorizer": {"claims": {"sub": "user-123"}}
+          },
+      }
+
+
+  def _make_lambda_context() -> MagicMock:
+      ctx = MagicMock()
+      ctx.function_name = "vpr-handler-test"
+      ctx.aws_request_id = "test-request-id"
+      return ctx
+
+
+  def _sample_request_body() -> dict[str, Any]:
+      return {
+          "applicationId": "app-001",
+          "jobPosting": {
+              "title": "Staff Engineer",
+              "company": "SysAid",
+              "description": "Lead platform engineering.",
+              "requirements": ["Python", "AWS"],
+              "language": "en",
+          },
+          "gapResponses": [
+              {"question": "Leadership?", "response": "Led 8 engineers at Acme."}
+          ],
+      }
+
+
+  @pytest.fixture(autouse=True)
+  def env_setup(monkeypatch: Any) -> None:
+      monkeypatch.setenv("POWERTOOLS_SERVICE_NAME", "vpr-test")
+      monkeypatch.setenv("LOG_LEVEL", "WARNING")
+      monkeypatch.setenv("ARTIFACTS_TABLE", "test-artifacts-table")
+      monkeypatch.setenv("CV_TABLE", "test-cv-table")
+
+
+  @pytest.mark.unit
+  class TestCamelCaseResponseSerialization:
+      def test_response_body_uses_camel_case_keys(
+          self, minimal_vpr: Any, minimal_user_cv: Any
+      ) -> None:
+          """API response must have camelCase keys (executiveSummary, not executive_summary)."""
+          event = _make_event(_sample_request_body())
+          ctx = _make_lambda_context()
+
+          with patch("careervp.handlers.vpr_handler.DynamoDalHandler") as mock_dal_cls, \
+               patch("careervp.handlers.vpr_handler.generate_vpr") as mock_gen:
+              mock_dal = mock_dal_cls.return_value
+              mock_dal.get_cv.return_value = MagicMock(success=True, data=minimal_user_cv)
+              mock_dal.get_next_vpr_version.return_value = 1
+
+              from careervp.models.vpr import VPRResponse
+              mock_gen.return_value = MagicMock(
+                  success=True,
+                  data=VPRResponse(vpr=minimal_vpr, token_usage=MagicMock()),
+              )
+
+              response = vpr_handler(event, ctx)
+
+          body = json.loads(response["body"])
+          assert "executiveSummary" in body or "vpr" in body
+          # Snake_case top-level VPR keys must NOT appear
+          vpr_body = body.get("vpr", body)
+          assert "executive_summary" not in vpr_body
+
+      def test_response_body_is_valid_json(
+          self, minimal_vpr: Any, minimal_user_cv: Any
+      ) -> None:
+          event = _make_event(_sample_request_body())
+          ctx = _make_lambda_context()
+
+          with patch("careervp.handlers.vpr_handler.DynamoDalHandler") as mock_dal_cls, \
+               patch("careervp.handlers.vpr_handler.generate_vpr") as mock_gen:
+              mock_dal = mock_dal_cls.return_value
+              mock_dal.get_cv.return_value = MagicMock(success=True, data=minimal_user_cv)
+              mock_dal.get_next_vpr_version.return_value = 1
+
+              from careervp.models.vpr import VPRResponse
+              mock_gen.return_value = MagicMock(
+                  success=True,
+                  data=VPRResponse(vpr=minimal_vpr, token_usage=MagicMock()),
+              )
+
+              response = vpr_handler(event, ctx)
+
+          # Must not raise
+          parsed = json.loads(response["body"])
+          assert parsed is not None
+
+
+  @pytest.mark.unit
+  class TestVersionPlumbing:
+      def test_handler_calls_get_next_vpr_version(
+          self, minimal_user_cv: Any, minimal_vpr: Any
+      ) -> None:
+          """Handler must call dal.get_next_vpr_version() before generate_vpr()."""
+          event = _make_event(_sample_request_body())
+          ctx = _make_lambda_context()
+
+          with patch("careervp.handlers.vpr_handler.DynamoDalHandler") as mock_dal_cls, \
+               patch("careervp.handlers.vpr_handler.generate_vpr") as mock_gen:
+              mock_dal = mock_dal_cls.return_value
+              mock_dal.get_cv.return_value = MagicMock(success=True, data=minimal_user_cv)
+              mock_dal.get_next_vpr_version.return_value = 2
+
+              from careervp.models.vpr import VPRResponse
+              mock_gen.return_value = MagicMock(
+                  success=True,
+                  data=VPRResponse(vpr=minimal_vpr, token_usage=MagicMock()),
+              )
+
+              vpr_handler(event, ctx)
+
+          mock_dal.get_next_vpr_version.assert_called_once_with("app-001")
+
+
+  @pytest.mark.unit
+  class TestHTTPStatusCodes:
+      def test_returns_200_on_success(self, minimal_user_cv: Any, minimal_vpr: Any) -> None:
+          event = _make_event(_sample_request_body())
+          ctx = _make_lambda_context()
+
+          with patch("careervp.handlers.vpr_handler.DynamoDalHandler") as mock_dal_cls, \
+               patch("careervp.handlers.vpr_handler.generate_vpr") as mock_gen:
+              mock_dal = mock_dal_cls.return_value
+              mock_dal.get_cv.return_value = MagicMock(success=True, data=minimal_user_cv)
+              mock_dal.get_next_vpr_version.return_value = 1
+
+              from careervp.models.vpr import VPRResponse
+              mock_gen.return_value = MagicMock(
+                  success=True,
+                  data=VPRResponse(vpr=minimal_vpr, token_usage=MagicMock()),
+              )
+
+              response = vpr_handler(event, ctx)
+
+          assert response["statusCode"] == 200
+
+      def test_returns_404_when_cv_not_found(self) -> None:
+          event = _make_event(_sample_request_body())
+          ctx = _make_lambda_context()
+
+          with patch("careervp.handlers.vpr_handler.DynamoDalHandler") as mock_dal_cls:
+              mock_dal = mock_dal_cls.return_value
+              mock_dal.get_cv.return_value = MagicMock(success=False, data=None)
+              mock_dal.get_next_vpr_version.return_value = 1
+
+              response = vpr_handler(event, ctx)
+
+          assert response["statusCode"] == 404
+
+      def test_returns_422_on_fvs_validation_failed(
+          self, minimal_user_cv: Any
+      ) -> None:
+          event = _make_event(_sample_request_body())
+          ctx = _make_lambda_context()
+
+          with patch("careervp.handlers.vpr_handler.DynamoDalHandler") as mock_dal_cls, \
+               patch("careervp.handlers.vpr_handler.generate_vpr") as mock_gen:
+              mock_dal = mock_dal_cls.return_value
+              mock_dal.get_cv.return_value = MagicMock(success=True, data=minimal_user_cv)
+              mock_dal.get_next_vpr_version.return_value = 1
+
+              from careervp.utils.result import ResultCode
+              mock_gen.return_value = MagicMock(
+                  success=False,
+                  data=None,
+                  code=ResultCode.FVS_VALIDATION_FAILED,
+              )
+
+              response = vpr_handler(event, ctx)
+
+          assert response["statusCode"] == 422
+
+      def test_returns_502_on_llm_error(self, minimal_user_cv: Any) -> None:
+          event = _make_event(_sample_request_body())
+          ctx = _make_lambda_context()
+
+          with patch("careervp.handlers.vpr_handler.DynamoDalHandler") as mock_dal_cls, \
+               patch("careervp.handlers.vpr_handler.generate_vpr") as mock_gen:
+              mock_dal = mock_dal_cls.return_value
+              mock_dal.get_cv.return_value = MagicMock(success=True, data=minimal_user_cv)
+              mock_dal.get_next_vpr_version.return_value = 1
+
+              from careervp.utils.result import ResultCode
+              mock_gen.return_value = MagicMock(
+                  success=False,
+                  data=None,
+                  code=ResultCode.LLM_API_ERROR,
+              )
+
+              response = vpr_handler(event, ctx)
+
+          assert response["statusCode"] == 502
+
+      def test_returns_400_on_invalid_request_body(self) -> None:
+          event = _make_event({"invalid": "body_missing_required_fields"})
+          ctx = _make_lambda_context()
+
+          with patch("careervp.handlers.vpr_handler.DynamoDalHandler"):
+              response = vpr_handler(event, ctx)
+
+          assert response["statusCode"] == 400

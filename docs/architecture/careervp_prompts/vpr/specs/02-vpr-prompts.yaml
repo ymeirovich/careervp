@@ -1,0 +1,275 @@
+id: "02-vpr-prompts"
+title: "VPR Prompt Templates — Phase 2 Generation & Validation"
+status: pending
+priority: 2
+depends_on: ["01-pydantic-schema"]
+
+summary: |
+  Add Phase 2 prompt templates (Prompt 2.1 VPR generation, Prompt 2.2 validation/refinement)
+  to vpr_prompt.py. These replace the current STAGE 3/4 templates as the primary VPR
+  generation prompts.
+
+  The new prompts must:
+  - Output JSON matching the 10-section VPR schema from spec 01
+  - Include the DOCX's two extra sections (companyInsights, verificationSummary)
+  - Embed all anti-AI writing rules inline (no external references)
+  - Be self-contained so the LLM does not need any other file as context
+
+  Stage 3/4 prompts are PRESERVED as fallback (not deleted).
+
+context:
+  read_files:
+    - "src/backend/careervp/logic/prompts/vpr_prompt.py"  # extend, do not replace
+  do_not_read:
+    - "src/backend/careervp/logic/vpr_generator.py"  # wait for spec 03
+    - "docs/architecture/careervp_prompts/prompt.md"   # key content is embedded below
+  inline_reference: |
+    Prompt 2.1 source (from prompt.md Part 2):
+    Instruction: Generate complete VPR JSON. Requirements for output:
+      - Evidence-based: every claim traces to CV or gap_responses input
+      - Specific: use exact numbers, company names, role titles from CV
+      - Strategic: frame strengths in context of company challenges
+      - Actionable: each section provides executable tactics
+      - Honest: gaps are acknowledged, not hidden
+      - ATS-optimized: keywords appear naturally in narrative sections
+
+    Prompt 2.2 source (from prompt.md Part 2):
+    Validation pass checking:
+      1. Evidence traceability: every claim has a source
+      2. Quantification consistency: same metric used in all sections
+      3. Alignment score justification: 0-100 score matches evidence quality
+      4. Gap severity calibration: critical/high/medium/low correctly applied
+      5. Differentiator rarity: very_rare/uncommon/somewhat_rare is defensible
+      6. Mitigation substance: specific and actionable (not generic advice)
+
+changes:
+  add_constants:
+    - name: PHASE2_SYSTEM_PROMPT
+      value: |
+        You are CareerVP VPR Generator Phase 2. Your task is to produce a complete,
+        evidence-based Value Proposition Report in strict JSON. Every claim must be
+        verifiable from the CV and gap response inputs. Return only valid JSON — no
+        markdown, no code fences.
+
+    - name: PHASE2_VALIDATION_SYSTEM_PROMPT
+      value: |
+        You are CareerVP VPR Validator Phase 2. Review the VPR JSON for evidence
+        traceability, quantification consistency, alignment score accuracy, gap severity
+        calibration, differentiator rarity defensibility, and mitigation substance.
+        Return the corrected VPR JSON with a validation_notes field listing all changes.
+
+  add_templates:
+    - name: PHASE2_PROMPT_2_1_TEMPLATE
+      purpose: "Generate full 10-section VPR from pre-processed evidence (Stage 3 replacement)"
+      inputs: [evidence_json, cv_facts_json, job_requirements_json, company_research_json, gap_responses_json, feedback_block]
+      output_schema_inline: true  # embed the full 10-section JSON shape in the prompt
+      key_sections_to_embed: |
+        The prompt must include an inline JSON skeleton showing all 10 sections so
+        the LLM does not hallucinate field names. Use the actual field names from
+        spec 01 (snake_case, since the LLM response will be parsed before aliasing).
+
+        Skeleton structure to embed in prompt:
+        {
+          "metadata": { "report_date": "YYYY-MM-DD", "candidate_name": "...", "target_role": "...", "target_company": "...", "report_version": "1.0", "analysis_scope": "full" },
+          "executive_summary": {
+            "overall_fit_score": 0-100,
+            "fit_rationale": "2-3 sentence explanation (100-500 chars)",
+            "top_three_strengths": [{"strength": "10-15 words", "evidence": "quantified proof", "relevance_to_role": "direct connection"}],
+            "top_three_concerns": [{"concern": "10-15 words", "severity": "high|medium|low", "mitigation": "strategy"}],
+            "recommended_approach": "aggressive_apply|apply_with_customization|apply_after_preparation|do_not_apply"
+          },
+          "role_alignment": {
+            "core_responsibilities": [{"responsibility": "...", "alignment_score": 0-100, "candidate_evidence": ["..."], "evidence_quality": "direct|analogous|transferable|weak"}],
+            "requirement_breakdown": {
+              "must_have": [{"requirement": "...", "candidate_meets_requirement": true|false, "evidence": "...", "strength_of_evidence": "strong|moderate|weak|none"}],
+              "nice_to_have": [{"preference": "...", "candidate_has_this": true|false, "evidence": "..."}],
+              "assumed_prerequisites": [{"assumption": "...", "candidate_meets_this": true|false, "reasoning": "..."}]
+            }
+          },
+          "experience_mapping": {
+            "relevant_experiences": [{"role": "...", "organization": "...", "duration": "N years", "key_achievements": [{"achievement": "...", "metric": "...", "impact": "..."}], "relevance_to_target_role": "...", "relevance_score": 0-100}],
+            "experience_gaps": [{"missing_experience": "...", "impact_on_candidacy": "critical|significant|moderate|minimal", "compensating_factors": ["..."], "mitigation_strategy": "..."}]
+          },
+          "skills_analysis": {
+            "technical_skills": [{"skill": "...", "required_level": "expert|advanced|intermediate|basic", "candidate_level": "expert|advanced|intermediate|basic|none", "evidence": "...", "gap": false}],
+            "soft_skills": [{"skill": "...", "candidate_demonstrates": true|false, "evidence": "...", "strength_level": "exceptional|strong|adequate|developing"}],
+            "tool_proficiency": [{"tool": "...", "required_for_role": true|false, "candidate_proficiency": "expert|proficient|familiar|none", "evidence": "...", "needs_upskilling": false}]
+          },
+          "evidence_gaps": {
+            "identified_gaps": [{"requirement": "...", "current_evidence": "...", "gap_severity": "critical|high|medium|low", "suggested_evidence": ["..."], "can_be_created_quickly": false}],
+            "priority_gaps_to_address": [{"gap": "...", "priority": 1-5, "action_item": "...", "deadline": "before_application|before_interview|nice_to_have"}]
+          },
+          "differentiators": {
+            "unique_strengths": [{"strength": "...", "rarity": "very_rare|uncommon|somewhat_rare", "relevance": "...", "proof": "..."}],
+            "competitive_advantages": [{"advantage": "...", "vs_typical_candidate": "..."}],
+            "positioning_statement": "100-300 char paragraph"
+          },
+          "concerns_and_mitigations": {
+            "likely_objections": [{"objection": "...", "likelihood": "very_likely|likely|possible|unlikely", "mitigation": {"strategy": "reframe|acknowledge_and_address|provide_evidence|show_analogous_experience", "messaging": "..."}, "where_to_address": ["cover_letter|cv|portfolio|interview"]}],
+            "preemptive_responses": [{"concern": "...", "preemptive_action": "..."}]
+          },
+          "value_proposition": {
+            "primary_value": {"statement": "...", "evidence": "...", "outcome_for_company": "..."},
+            "secondary_values": [{"value": "...", "proof": "..."}],
+            "quantified_impact": [{"metric": "...", "expected_range": "...", "basis_for_projection": "..."}],
+            "elevator_pitch": "100-200 char 30-second pitch"
+          },
+          "application_strategy": {
+            "messaging_approach": "narrative of recommended communication approach",
+            "ats_keywords": {"primary": ["keyword"], "secondary": ["keyword"]},
+            "cv_lead_differentiator": "what to open CV with",
+            "sections_to_compress": ["which CV sections to minimize"]
+          },
+          "company_insights": {
+            "mission_and_position": "...",
+            "recent_initiatives": ["..."],
+            "current_challenges": ["..."]
+          },
+          "verification_summary": {
+            "entries": [{"category": "...", "confidence": "high|medium|growth_area", "basis": "..."}],
+            "key_evidence_sources": ["Master CV", "Gap Analysis Responses", "Company Research"]
+          }
+        }
+
+      anti_ai_rules_to_embed: |
+        BANNED WORDS (automatic failure if present):
+        leverage, delve into, landscape, robust, streamline, utilize, facilitate, implement,
+        cutting-edge, best practices, industry-leading, game-changer, paradigm shift, synergy
+
+        WRITING STYLE REQUIREMENTS:
+        - Sentence length: 8-25 words average (vary, do not exceed 26 word average)
+        - No repeated sentence openings (same 2-word start ≥ 3 times = failure)
+        - Lexical diversity: unique/total word ratio ≥ 0.42
+        - No formulaic transitions: furthermore, moreover, additionally, in conclusion, in summary
+        - No filler phrases: "in today's fast-paced", "across the organization", "in order to"
+        - Nominalization ratio: -tion/-ment/-ness endings ≤ 18% of total words
+        - Use approximations: "nearly 40%" not "39.7%"
+
+      fact_rules_to_embed: |
+        IMMUTABLE FACT RULES (violations = generation failure):
+        - NEVER invent companies, roles, dates, or metrics not in the CV input
+        - NEVER state the candidate worked at the target company
+        - Use exact company names and role titles from CV (e.g., "AllCloud", "Director of AWS Training")
+        - All years and company names must appear in the provided CV facts
+
+    - name: PHASE2_PROMPT_2_2_TEMPLATE
+      purpose: "Validate and refine generated VPR against 6 structural rules (Stage 4 replacement)"
+      inputs: [vpr_json, cv_facts_json, validation_feedback_block]
+      output_fields_to_add: ["validation_notes: list[str]  # changes made during this pass"]
+      six_rules_to_embed: |
+        VALIDATION CHECKLIST — review each rule and correct violations:
+
+        Rule 1 — Evidence Traceability:
+          Every factual claim in executive_summary, differentiators, value_proposition,
+          and experience_mapping must trace to either cv_facts_json or gap_responses_json.
+          If you cannot find the source, remove or soften the claim.
+
+        Rule 2 — Quantification Consistency:
+          If a metric appears in one section (e.g. "$1M+ revenue" in experience_mapping),
+          it must use identical wording wherever repeated. No paraphrasing of numbers.
+
+        Rule 3 — Alignment Score Justification:
+          role_alignment.core_responsibilities[].alignment_score must follow:
+            direct evidence   → 80-100
+            analogous evidence → 60-79
+            transferable evidence → 40-59
+            weak/no evidence → 0-39
+          evidence_quality field must match the score band.
+
+        Rule 4 — Gap Severity Calibration:
+          evidence_gaps.identified_gaps[].gap_severity definitions:
+            critical → role cannot be filled without this; application likely rejected
+            high → significant concern; must address in cover letter
+            medium → concern but not disqualifying; address if possible
+            low → minor gap; addressable in interview
+
+        Rule 5 — Differentiator Rarity:
+          differentiators.unique_strengths[].rarity must be defensible:
+            very_rare → <5% of comparable candidates have this
+            uncommon → 5-20% of comparable candidates have this
+            somewhat_rare → 20-40% of comparable candidates have this
+          If a strength is common (>40%), it should be in competitive_advantages instead.
+
+        Rule 6 — Mitigation Substance:
+          concerns_and_mitigations.likely_objections[].mitigation.messaging must be:
+            STRONG: specific to candidate's actual experience, addresses the concern directly
+            WEAK (rewrite): generic, could apply to any candidate, or repeats the concern
+
+  build_functions_to_add:
+    - "build_phase2_prompt(evidence_payload, user_cv, request, feedback=None) -> str"
+    - "build_phase2_validation_prompt(vpr_payload, user_cv, feedback=None) -> str"
+
+  preserve_all_existing:
+    - "VPR_GENERATION_PROMPT (keep as-is, even though pipeline no longer calls it)"
+    - "STAGE_1/2/3/4/5/6_SYSTEM_PROMPT (all preserved)"
+    - "STAGE_3/4_USER_PROMPT_TEMPLATE + FEW_SHOT examples (preserved as fallback)"
+    - "STAGE_1-6_USER_PROMPT_TEMPLATE functions (preserved)"
+    - "build_stage_1_prompt through build_stage_6_prompt (all preserved)"
+    - "build_vpr_prompt (preserved)"
+    - "check_anti_ai_patterns (move import — now from fvs_validator, not here)"
+    - "BANNED_WORDS list (preserved)"
+    - "_serialize_cv_for_prompt (preserved, reused by new build functions)"
+
+acceptance_criteria:
+  - "PHASE2_PROMPT_2_1_TEMPLATE contains the full 10-section JSON skeleton inline"
+  - "PHASE2_PROMPT_2_2_TEMPLATE contains all 6 validation rules verbatim"
+  - "build_phase2_prompt() and build_phase2_validation_prompt() callable with correct signatures"
+  - "No existing functions removed or signature-changed"
+  - "`uv run mypy careervp --strict` passes"
+
+implementation_prompt: |
+  You are extending `src/backend/careervp/logic/prompts/vpr_prompt.py` with Phase 2 prompt
+  templates for VPR generation and validation.
+
+  ## Context (read only this 1 file)
+  src/backend/careervp/logic/prompts/vpr_prompt.py
+
+  ## What you are building
+  Add two new template strings and two new builder functions. Do NOT remove or modify
+  any existing code — only add. The new templates are for the Phase 2 VPR generation
+  pipeline (replaces Stage 3 and Stage 4 as primary path).
+
+  ## PHASE2_PROMPT_2_1_TEMPLATE requirements
+  This template receives:
+    {evidence_json}      — pre-processed evidence matches from stages 1-2
+    {cv_facts_json}      — serialized UserCV (minus PII)
+    {job_requirements_json} — JobPosting.model_dump()
+    {company_research_json} — CompanyContext.model_dump() or {}
+    {gap_responses_json} — list of GapResponse.model_dump()
+    {feedback_block}     — empty string or regeneration feedback from Stage 6
+
+  Embed inline in the prompt:
+  1. The complete 10-section JSON output skeleton (all field names, all enum values)
+  2. Anti-AI writing rules (banned words + 7 style rules)
+  3. Immutable fact rules
+  See the spec for the exact content of each.
+
+  ## PHASE2_PROMPT_2_2_TEMPLATE requirements
+  This template receives:
+    {vpr_json}           — JSON of the VPR generated by prompt 2.1
+    {cv_facts_json}      — same CV used in 2.1
+    {validation_feedback_block} — empty or Stage 6 feedback
+
+  Embed the 6 validation rules verbatim (from spec). Output must include
+  validation_notes: list[str] listing all changes made.
+
+  ## Builder functions
+  def build_phase2_prompt(
+      evidence_payload: dict[str, Any],
+      user_cv: UserCV,
+      request: VPRRequest,
+      feedback: str | None = None,
+  ) -> str:
+      # Serialize cv_facts via existing _serialize_cv_for_prompt()
+      # Build feedback_block: '' or f'\nREGENERATION FEEDBACK:\n{feedback}\n'
+      # Return PHASE2_PROMPT_2_1_TEMPLATE.format(...)
+
+  def build_phase2_validation_prompt(
+      vpr_payload: dict[str, Any],
+      user_cv: UserCV,
+      feedback: str | None = None,
+  ) -> str:
+      # Build validation_feedback_block similarly
+      # Return PHASE2_PROMPT_2_2_TEMPLATE.format(...)
+
+  After writing, run: cd src/backend && uv run mypy careervp --strict
