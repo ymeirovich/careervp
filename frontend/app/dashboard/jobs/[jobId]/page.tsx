@@ -34,11 +34,23 @@ export default function ApplicationHubPage({
   const [ipTaskId, setIpTaskId] = useState<string | null>(null);
   const [cvTaskId, setCvTaskId] = useState<string | null>(null);
 
-  // Completed artifact IDs (session-local, because backend may not update artifact_statuses)
-  const [cvTailoredId, setCvTailoredId] = useState<string | null>(null);
-  const [vprLocalId, setVprLocalId] = useState<string | null>(null);
-  const [clLocalId, setClLocalId] = useState<string | null>(null);
-  const [ipLocalId, setIpLocalId] = useState<string | null>(null);
+  // Completed artifact IDs — persisted to localStorage so they survive navigation.
+  // The hub API is the authoritative source once the backend writes artifact_statuses;
+  // localStorage is a client-side fallback until that happens.
+  const storageKey = `cvp:artifacts:${jobId}`;
+  const _stored = (() => { try { return JSON.parse(localStorage.getItem(storageKey) || '{}'); } catch { return {}; } })();
+  const [cvTailoredId, setCvTailoredId] = useState<string | null>(_stored.cv ?? null);
+  const [vprLocalId, setVprLocalId] = useState<string | null>(_stored.vpr ?? null);
+  const [clLocalId, setClLocalId] = useState<string | null>(_stored.cl ?? null);
+  const [ipLocalId, setIpLocalId] = useState<string | null>(_stored.ip ?? null);
+
+  // Persist an artifact ID to localStorage so it survives Back-to-Hub navigation.
+  const persistArtifact = useCallback((type: "vpr" | "cl" | "ip" | "cv", id: string) => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(storageKey) || "{}");
+      localStorage.setItem(storageKey, JSON.stringify({ ...stored, [type]: id }));
+    } catch { /* ignore */ }
+  }, [storageKey]);
 
   // Action in-flight
   const [generatingVpr, setGeneratingVpr] = useState(false);
@@ -111,30 +123,34 @@ export default function ApplicationHubPage({
         hubData.artifacts.vpr.artifact_id
       ) {
         setVprLocalId(hubData.artifacts.vpr.artifact_id);
+        persistArtifact("vpr", hubData.artifacts.vpr.artifact_id);
       }
       if (
         hubData?.artifacts.cover_letter?.status === "completed" &&
         hubData.artifacts.cover_letter.artifact_id
       ) {
         setClLocalId(hubData.artifacts.cover_letter.artifact_id);
+        persistArtifact("cl", hubData.artifacts.cover_letter.artifact_id);
       }
       if (
         hubData?.artifacts.interview_prep?.status === "completed" &&
         hubData.artifacts.interview_prep.artifact_id
       ) {
         setIpLocalId(hubData.artifacts.interview_prep.artifact_id);
+        persistArtifact("ip", hubData.artifacts.interview_prep.artifact_id);
       }
       if (
         hubData?.artifacts.cv_tailored?.status === "completed" &&
         hubData.artifacts.cv_tailored.artifact_id
       ) {
         setCvTailoredId(hubData.artifacts.cv_tailored.artifact_id);
+        persistArtifact("cv", hubData.artifacts.cv_tailored.artifact_id);
       }
 
       setLoading(false);
     };
     init();
-  }, [jobId]);
+  }, [jobId, persistArtifact]);
 
   // VPR polling
   useEffect(() => {
@@ -146,6 +162,7 @@ export default function ApplicationHubPage({
           clearInterval(interval);
           if (result.status === "completed") {
             setVprLocalId(vprTaskId);
+            persistArtifact("vpr", vprTaskId);
           }
           setVprTaskId(null);
           refreshHub();
@@ -155,7 +172,7 @@ export default function ApplicationHubPage({
       }
     }, 3000);
     return () => clearInterval(interval);
-  }, [vprTaskId, refreshHub]);
+  }, [vprTaskId, refreshHub, persistArtifact]);
 
   // Cover Letter polling
   useEffect(() => {
@@ -167,6 +184,7 @@ export default function ApplicationHubPage({
           clearInterval(interval);
           if (result.status === "completed") {
             setClLocalId(clTaskId);
+            persistArtifact("cl", clTaskId);
           }
           setClTaskId(null);
           refreshHub();
@@ -176,7 +194,7 @@ export default function ApplicationHubPage({
       }
     }, 3000);
     return () => clearInterval(interval);
-  }, [clTaskId, refreshHub]);
+  }, [clTaskId, refreshHub, persistArtifact]);
 
   // Interview Prep polling
   useEffect(() => {
@@ -188,6 +206,7 @@ export default function ApplicationHubPage({
           clearInterval(interval);
           if (result.status === "completed") {
             setIpLocalId(ipTaskId);
+            persistArtifact("ip", ipTaskId);
           }
           setIpTaskId(null);
           refreshHub();
@@ -197,7 +216,7 @@ export default function ApplicationHubPage({
       }
     }, 3000);
     return () => clearInterval(interval);
-  }, [ipTaskId, refreshHub]);
+  }, [ipTaskId, refreshHub, persistArtifact]);
 
   // CV Tailored polling
   useEffect(() => {
@@ -209,6 +228,7 @@ export default function ApplicationHubPage({
           clearInterval(interval);
           if (result.status === "completed") {
             setCvTailoredId(cvTaskId);
+            persistArtifact("cv", cvTaskId);
           }
           setCvTaskId(null);
           refreshHub();
@@ -218,7 +238,7 @@ export default function ApplicationHubPage({
       }
     }, 3000);
     return () => clearInterval(interval);
-  }, [cvTaskId, refreshHub]);
+  }, [cvTaskId, refreshHub, persistArtifact]);
 
   // ── Generate handlers ────────────────────────────────────────────────────────
 
@@ -233,18 +253,25 @@ export default function ApplicationHubPage({
         cv_id: cv.cv_id,
         gap_response_ids: gapResponseIds,
       });
-      setVprTaskId(task.request_id);
-      setHub((prev) =>
-        prev
-          ? {
-              ...prev,
-              artifacts: {
-                ...prev.artifacts,
-                vpr: { status: "processing", artifact_id: null },
-              },
-            }
-          : prev
-      );
+      if (task.status === "completed") {
+        // Idempotent — VPR already done. Show Edit immediately without polling.
+        setVprLocalId(task.request_id);
+        persistArtifact("vpr", task.request_id);
+        refreshHub();
+      } else {
+        setVprTaskId(task.request_id);
+        setHub((prev) =>
+          prev
+            ? {
+                ...prev,
+                artifacts: {
+                  ...prev.artifacts,
+                  vpr: { status: "processing", artifact_id: null },
+                },
+              }
+            : prev
+        );
+      }
     } catch (err) {
       console.error("Generate VPR error:", err);
     } finally {
@@ -266,18 +293,25 @@ export default function ApplicationHubPage({
         company_research_id: research.id,
         gap_response_ids: gapResponseIds,
       });
-      setClTaskId(task.request_id);
-      setHub((prev) =>
-        prev
-          ? {
-              ...prev,
-              artifacts: {
-                ...prev.artifacts,
-                cover_letter: { status: "processing", artifact_id: null },
-              },
-            }
-          : prev
-      );
+      if (task.status === "completed") {
+        // Idempotent — cover letter already done. Show Edit immediately.
+        setClLocalId(task.request_id);
+        persistArtifact("cl", task.request_id);
+        refreshHub();
+      } else {
+        setClTaskId(task.request_id);
+        setHub((prev) =>
+          prev
+            ? {
+                ...prev,
+                artifacts: {
+                  ...prev.artifacts,
+                  cover_letter: { status: "processing", artifact_id: null },
+                },
+              }
+            : prev
+        );
+      }
     } catch (err) {
       console.error("Generate Cover Letter error:", err);
     } finally {
@@ -297,18 +331,25 @@ export default function ApplicationHubPage({
         gap_response_ids: gapResponseIds,
         job_id: jobId,
       });
-      setIpTaskId(task.request_id);
-      setHub((prev) =>
-        prev
-          ? {
-              ...prev,
-              artifacts: {
-                ...prev.artifacts,
-                interview_prep: { status: "processing", artifact_id: null },
-              },
-            }
-          : prev
-      );
+      if (task.status === "completed") {
+        // Idempotent — interview prep already done. Show Edit immediately.
+        setIpLocalId(task.request_id);
+        persistArtifact("ip", task.request_id);
+        refreshHub();
+      } else {
+        setIpTaskId(task.request_id);
+        setHub((prev) =>
+          prev
+            ? {
+                ...prev,
+                artifacts: {
+                  ...prev.artifacts,
+                  interview_prep: { status: "processing", artifact_id: null },
+                },
+              }
+            : prev
+        );
+      }
     } catch (err) {
       console.error("Generate Interview Prep error:", err);
     } finally {

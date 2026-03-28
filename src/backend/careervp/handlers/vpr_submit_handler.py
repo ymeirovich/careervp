@@ -95,6 +95,43 @@ def _normalize_submit_request(request_data: dict[str, Any], user_id: str) -> dic
     }
 
 
+def _backfill_application_artifact(application_id: str, user_id: str, job_id: str) -> None:
+    """Write VPR completion into the application record's artifact_statuses.
+
+    Called when the idempotency check returns an already-completed job so that
+    the hub page reflects the artifact_id on all subsequent loads — even if the
+    VPR worker originally ran before the CDK IAM grant was deployed.
+    """
+    if not application_id or not user_id:
+        return
+    app_table = os.environ.get('APPLICATIONS_TABLE_NAME') or ''
+    if not app_table:
+        return
+    try:
+        from careervp.dal.application_repository import ApplicationRepository
+        from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+
+        app_repo = ApplicationRepository(DynamoDalHandler(app_table))
+        app_repo.update_artifact_with_id(
+            application_id=application_id,
+            user_id=user_id,
+            artifact_type='vpr',
+            status='completed',
+            artifact_id=job_id,
+        )
+        logger.info(
+            'Wrote artifact_statuses for idempotent completed VPR',
+            job_id=job_id,
+            application_id=application_id,
+        )
+    except Exception as e:
+        logger.warning(
+            'Could not update application artifact_statuses on idempotent VPR',
+            job_id=job_id,
+            error=str(e),
+        )
+
+
 @logger.inject_lambda_context(log_event=False)
 @tracer.capture_lambda_handler(capture_response=False)
 @metrics.log_metrics(capture_cold_start_metric=True)
@@ -174,6 +211,16 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             job_id=existing_job_id,
             idempotency_key=idempotency_key,
         )
+
+        # If the existing job is already completed, ensure the application record
+        # reflects this — it may have been missed if the worker ran before the CDK
+        # IAM grant was deployed, or before update_artifact_with_id was added.
+        if existing_status == 'completed':
+            _backfill_application_artifact(
+                application_id=str(normalized_request.get('application_id', '')).strip(),
+                user_id=str(normalized_request.get('user_id', '')).strip(),
+                job_id=existing_job_id,
+            )
 
         return {
             'statusCode': int(HTTPStatus.ACCEPTED),
