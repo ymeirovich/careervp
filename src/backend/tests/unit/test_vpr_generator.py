@@ -9,9 +9,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from careervp.logic.vpr_generator import (
-    DraftGapStrategy,
-    DraftProposition,
-    EvidenceMatch,
+    EvidenceList,
+    Phase2Draft,
     VPRData,
     VPRSixStagePipeline,
     generate_vpr,
@@ -177,45 +176,43 @@ def test_stage_2_extract_evidence_maps_correctly(
     assert any('cross-functional' in item.evidence.lower() for item in evidence.matches)
 
 
-def test_stage_4_self_correct_improves_draft(
+def test_stage_4_self_correct_falls_back_to_rule_based_when_llm_fails(
     sample_request: VPRRequest,
     sample_user_cv: UserCV,
 ) -> None:
+    # LLM is mocked to always fail (from _build_pipeline), so fallback must run.
     pipeline = _build_pipeline(sample_request, sample_user_cv)
-
-    draft = DraftProposition(
-        executive_summary='I leverage robust synergy to streamline outcomes across teams.',
-        evidence_matrix=[
-            EvidenceMatch(
-                requirement='Product strategy leadership',
-                evidence='Led product strategy for a B2B platform with measurable growth.',
-                alignment_score='STRONG',
-                impact_potential='Can set a clear strategic direction quickly.',
-            )
-        ],
-        differentiators=['Leverages robust methods to facilitate delivery.'],
-        gap_strategies=[
-            DraftGapStrategy(
-                gap='No fintech domain experience',
-                mitigation_approach='Use adjacent product leadership examples.',
-                transferable_skills=['Product strategy'],
-            )
-        ],
-        cultural_fit='Collaborative and accountable style.',
-        talking_points=['Leverage robust prioritization patterns.'],
-        keywords=['Product Strategy'],
-    )
+    evidence = EvidenceList(matches=[], uncovered_requirements=[], key_skills=[], experience_level='mid')
+    raw_payload = {
+        'executive_summary': {
+            'fit_rationale': 'I leverage robust synergy to streamline outcomes across teams.',
+        },
+        'differentiators': {
+            'positioning_statement': 'Utilize robust methods to leverage game-changing paradigm shifts.',
+        },
+        'value_proposition': {
+            'elevator_pitch': 'Leverage robust synergy to streamline outcomes.',
+            'primary_value': {
+                'statement': 'Facilitate best practices to utilize robust frameworks.',
+            },
+        },
+    }
+    draft = Phase2Draft(raw_payload=raw_payload, evidence_context=evidence)
 
     corrected = pipeline._self_correct(draft)
 
-    assert corrected.executive_summary != draft.executive_summary
-    assert 'leverage' not in corrected.executive_summary.lower()
-    assert corrected.corrections_applied
+    fit_rationale = corrected.raw_payload.get('executive_summary', {}).get('fit_rationale', '')
+    positioning = corrected.raw_payload.get('differentiators', {}).get('positioning_statement', '')
+    elevator_pitch = corrected.raw_payload.get('value_proposition', {}).get('elevator_pitch', '')
+
+    assert 'leverage' not in fit_rationale.lower()
+    assert 'robust' not in fit_rationale.lower()
+    assert 'streamline' not in fit_rationale.lower()
+    assert 'leverage' not in positioning.lower()
+    assert 'leverage' not in elevator_pitch.lower()
+    assert corrected.validation_notes == ['Fallback: banned terms removed from text fields']
 
 
-@pytest.mark.xfail(
-    reason='Pending spec-03: vpr_generator._serialize_vpr_for_quality accesses old VPR fields (executive_summary as str, evidence_matrix, etc.)'
-)
 def test_stage_6_rejects_ai_patterns(
     sample_request: VPRRequest,
     sample_user_cv: UserCV,
@@ -352,9 +349,6 @@ def test_stage_6_rejects_ai_patterns(
     assert final_data.anti_ai_issues
 
 
-@pytest.mark.xfail(
-    reason='Pending spec-03: vpr_generator._generate_output builds VPR with old flat fields (executive_summary as str, evidence_matrix, etc.)'
-)
 @patch('careervp.logic.vpr_generator.LLMClient')
 def test_full_pipeline_produces_valid_vpr(
     mock_llm_client_cls: MagicMock,
