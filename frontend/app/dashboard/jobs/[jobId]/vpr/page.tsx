@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, use, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { Topbar } from "@/components/dashboard/Topbar";
 import { Badge } from "@/components/ui/Badge";
@@ -26,15 +26,12 @@ function ScoreBadge({ score }: { score: number }) {
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ─── Inner component (needs Suspense boundary for useSearchParams) ─────────────
 
-export default function VPRPage({
-  params,
-}: {
-  params: Promise<{ jobId: string }>;
-}) {
-  const { jobId } = use(params);
+function VPRContent({ jobId }: { jobId: string }) {
+  const searchParams = useSearchParams();
   const router = useRouter();
+  const queryId = searchParams.get("id");
 
   const [vpr, setVpr] = useState<VPRStatusResponse | null>(null);
   const [job, setJob] = useState<JobDetail | null>(null);
@@ -53,10 +50,12 @@ export default function VPRPage({
       const jobData = jobResult.status === "fulfilled" ? jobResult.value : null;
       setJob(jobData);
 
-      const artifactId = hub?.artifacts.vpr?.artifact_id;
+      // Prefer hub artifact_id; fall back to ?id= query param (set by hub page after polling)
+      const artifactId = hub?.artifacts.vpr?.artifact_id ?? queryId;
       const artifactStatus = hub?.artifacts.vpr?.status;
 
-      if (!artifactId || artifactStatus !== "completed") {
+      // Allow access if we have an ID (either from hub or query param)
+      if (!artifactId || (artifactStatus && artifactStatus !== "completed" && !queryId)) {
         router.replace(`/dashboard/jobs/${jobId}`);
         return;
       }
@@ -72,7 +71,7 @@ export default function VPRPage({
       }
     };
     init();
-  }, [jobId, router]);
+  }, [jobId, queryId, router]);
 
   // ── Derived ──────────────────────────────────────────────────────────────────
 
@@ -205,5 +204,21 @@ export default function VPRPage({
         )}
       </main>
     </>
+  );
+}
+
+// ─── Page (with Suspense wrapper for useSearchParams) ─────────────────────────
+
+export default function VPRPage({
+  params,
+}: {
+  params: Promise<{ jobId: string }>;
+}) {
+  const { jobId } = use(params);
+
+  return (
+    <Suspense fallback={null}>
+      <VPRContent jobId={jobId} />
+    </Suspense>
   );
 }

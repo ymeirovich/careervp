@@ -1,20 +1,17 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, use, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { Topbar } from "@/components/dashboard/Topbar";
 import type { JobDetail } from "@/lib/types";
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ─── Inner component (needs Suspense boundary for useSearchParams) ─────────────
 
-export default function CoverLetterPage({
-  params,
-}: {
-  params: Promise<{ jobId: string }>;
-}) {
-  const { jobId } = use(params);
+function CoverLetterContent({ jobId }: { jobId: string }) {
+  const searchParams = useSearchParams();
   const router = useRouter();
+  const queryId = searchParams.get("id");
 
   const [fullText, setFullText] = useState<string | null>(null);
   const [job, setJob] = useState<JobDetail | null>(null);
@@ -34,10 +31,11 @@ export default function CoverLetterPage({
       const jobData = jobResult.status === "fulfilled" ? jobResult.value : null;
       setJob(jobData);
 
-      const artifactId = hub?.artifacts.cover_letter?.artifact_id;
+      // Prefer hub artifact_id; fall back to ?id= query param (set by hub page after polling)
+      const artifactId = hub?.artifacts.cover_letter?.artifact_id ?? queryId;
       const artifactStatus = hub?.artifacts.cover_letter?.status;
 
-      if (!artifactId || artifactStatus !== "completed") {
+      if (!artifactId || (artifactStatus && artifactStatus !== "completed" && !queryId)) {
         router.replace(`/dashboard/jobs/${jobId}`);
         return;
       }
@@ -47,7 +45,6 @@ export default function CoverLetterPage({
         const text = data.result?.cover_letter ?? null;
         setFullText(text);
         if (!text) {
-          // No content — back to hub
           router.replace(`/dashboard/jobs/${jobId}`);
         }
       } catch (err) {
@@ -58,7 +55,7 @@ export default function CoverLetterPage({
       }
     };
     init();
-  }, [jobId, router]);
+  }, [jobId, queryId, router]);
 
   const handleCopy = async () => {
     if (!fullText) return;
@@ -151,5 +148,21 @@ export default function CoverLetterPage({
         )}
       </main>
     </>
+  );
+}
+
+// ─── Page (with Suspense wrapper for useSearchParams) ─────────────────────────
+
+export default function CoverLetterPage({
+  params,
+}: {
+  params: Promise<{ jobId: string }>;
+}) {
+  const { jobId } = use(params);
+
+  return (
+    <Suspense fallback={null}>
+      <CoverLetterContent jobId={jobId} />
+    </Suspense>
   );
 }

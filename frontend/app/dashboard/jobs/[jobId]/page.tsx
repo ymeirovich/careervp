@@ -34,8 +34,11 @@ export default function ApplicationHubPage({
   const [ipTaskId, setIpTaskId] = useState<string | null>(null);
   const [cvTaskId, setCvTaskId] = useState<string | null>(null);
 
-  // Completed artifact IDs (session-local for cv tailored)
+  // Completed artifact IDs (session-local, because backend may not update artifact_statuses)
   const [cvTailoredId, setCvTailoredId] = useState<string | null>(null);
+  const [vprLocalId, setVprLocalId] = useState<string | null>(null);
+  const [clLocalId, setClLocalId] = useState<string | null>(null);
+  const [ipLocalId, setIpLocalId] = useState<string | null>(null);
 
   // Action in-flight
   const [generatingVpr, setGeneratingVpr] = useState(false);
@@ -114,6 +117,9 @@ export default function ApplicationHubPage({
         const result = await api.pollVPRStatus(vprTaskId);
         if (result.status === "completed" || result.status === "failed") {
           clearInterval(interval);
+          if (result.status === "completed") {
+            setVprLocalId(vprTaskId);
+          }
           setVprTaskId(null);
           refreshHub();
         }
@@ -132,6 +138,9 @@ export default function ApplicationHubPage({
         const result = await api.pollCoverLetterStatus(clTaskId);
         if (result.status === "completed" || result.status === "failed") {
           clearInterval(interval);
+          if (result.status === "completed") {
+            setClLocalId(clTaskId);
+          }
           setClTaskId(null);
           refreshHub();
         }
@@ -150,6 +159,9 @@ export default function ApplicationHubPage({
         const result = await api.pollInterviewPrepStatus(ipTaskId);
         if (result.status === "completed" || result.status === "failed") {
           clearInterval(interval);
+          if (result.status === "completed") {
+            setIpLocalId(ipTaskId);
+          }
           setIpTaskId(null);
           refreshHub();
         }
@@ -215,7 +227,7 @@ export default function ApplicationHubPage({
 
   const handleGenerateCoverLetter = async () => {
     if (!cv?.cv_id || !hub || !research?.id) return;
-    const vprId = hub.artifacts.vpr?.artifact_id;
+    const vprId = hub.artifacts.vpr?.artifact_id ?? vprLocalId;
     if (!vprId) return;
     const gapResponseIds = hub.gap_analysis.responses.map((r) => r.question_id);
     setGeneratingCl(true);
@@ -248,7 +260,7 @@ export default function ApplicationHubPage({
 
   const handleGenerateInterviewPrep = async () => {
     if (!hub) return;
-    const vprId = hub.artifacts.vpr?.artifact_id;
+    const vprId = hub.artifacts.vpr?.artifact_id ?? vprLocalId;
     if (!vprId) return;
     const gapResponseIds = hub.gap_analysis.responses.map((r) => r.question_id);
     setGeneratingIp(true);
@@ -336,14 +348,32 @@ export default function ApplicationHubPage({
   const clStatus = clArtifact?.status ?? "not_started";
   const ipStatus = ipArtifact?.status ?? "not_started";
 
+  // Session-local artifact IDs: hub won't update artifact_statuses until app reload
+  // so we track the IDs locally when polling completes.
+  const vprArtifactId = vprArtifact?.artifact_id ?? vprLocalId;
+  const clArtifactId = clArtifact?.artifact_id ?? clLocalId;
+  const ipArtifactId = ipArtifact?.artifact_id ?? ipLocalId;
+
+  const vprReady = vprStatus === "completed" || !!vprLocalId;
+  const clReady = clStatus === "completed" || !!clLocalId;
+  const ipReady = ipStatus === "completed" || !!ipLocalId;
+
   const gapQuestions = hub?.gap_analysis.questions ?? [];
   const gapResponses = hub?.gap_analysis.responses ?? [];
+
+  // Application state is the authoritative signal for gap completion.
+  // gap_questions are stored in a separate table and may not appear in the hub
+  // record, so we also accept "responses exist" as a completion signal.
+  const appState = hub?.application?.state ?? "";
+  const gapSubmittedByState = ["gap_responses_submitted", "artifacts_generating", "artifacts_completed"].includes(appState);
   const gapComplete =
-    gapQuestions.length > 0 && gapResponses.length >= gapQuestions.length;
-  const gapInProgress = gapQuestions.length > 0 && !gapComplete;
+    gapSubmittedByState ||
+    (gapResponses.length > 0 &&
+      (gapQuestions.length === 0 || gapResponses.length >= gapQuestions.length));
+  const gapInProgress =
+    !gapComplete && gapQuestions.length > 0 && gapResponses.length > 0;
 
   const cvSelected = !!cv?.cv_id;
-  const vprReady = vprStatus === "completed";
   const vprProcessing = vprStatus === "processing" || !!vprTaskId;
   const clProcessing = clStatus === "processing" || !!clTaskId;
   const ipProcessing = ipStatus === "processing" || !!ipTaskId;
@@ -578,10 +608,10 @@ export default function ApplicationHubPage({
               disabled: !cvSelected || !gapComplete || vprProcessing,
             }}
             secondaryAction={
-              vprReady
+              vprArtifactId
                 ? {
                     label: "Edit",
-                    href: `/dashboard/jobs/${jobId}/vpr`,
+                    href: `/dashboard/jobs/${jobId}/vpr?id=${vprArtifactId}`,
                   }
                 : undefined
             }
@@ -598,24 +628,24 @@ export default function ApplicationHubPage({
           <ResourceCard
             title="Cover Letter"
             description={
-              clStatus === "completed"
+              clReady
                 ? "Your cover letter is ready"
                 : clProcessing
                   ? "Generating your letter…"
                   : "Draft your application letter"
             }
             status={
-              clStatus === "completed"
+              clReady
                 ? "ready"
                 : clProcessing
                   ? "processing"
                   : "not_started"
             }
-            statusLabel={clStatus === "completed" ? "Ready" : undefined}
+            statusLabel={clReady ? "Ready" : undefined}
             primaryAction={{
               label: clProcessing
                 ? "Generating…"
-                : clStatus === "completed"
+                : clReady
                   ? "Regenerate"
                   : "Generate Cover Letter",
               onClick: handleGenerateCoverLetter,
@@ -623,10 +653,10 @@ export default function ApplicationHubPage({
               disabled: !vprReady || clProcessing,
             }}
             secondaryAction={
-              clStatus === "completed"
+              clArtifactId
                 ? {
                     label: "Edit",
-                    href: `/dashboard/jobs/${jobId}/cover-letter`,
+                    href: `/dashboard/jobs/${jobId}/cover-letter?id=${clArtifactId}`,
                   }
                 : undefined
             }
@@ -637,24 +667,24 @@ export default function ApplicationHubPage({
           <ResourceCard
             title="Interview Prep"
             description={
-              ipStatus === "completed"
+              ipReady
                 ? "Your interview prep is ready"
                 : ipProcessing
                   ? "Generating interview questions…"
                   : "Prepare for your interview"
             }
             status={
-              ipStatus === "completed"
+              ipReady
                 ? "ready"
                 : ipProcessing
                   ? "processing"
                   : "not_started"
             }
-            statusLabel={ipStatus === "completed" ? "Ready" : undefined}
+            statusLabel={ipReady ? "Ready" : undefined}
             primaryAction={{
               label: ipProcessing
                 ? "Generating…"
-                : ipStatus === "completed"
+                : ipReady
                   ? "Regenerate"
                   : "Generate Prep",
               onClick: handleGenerateInterviewPrep,
@@ -662,10 +692,10 @@ export default function ApplicationHubPage({
               disabled: !vprReady || ipProcessing,
             }}
             secondaryAction={
-              ipStatus === "completed"
+              ipArtifactId
                 ? {
                     label: "Edit",
-                    href: `/dashboard/jobs/${jobId}/interview-prep`,
+                    href: `/dashboard/jobs/${jobId}/interview-prep?id=${ipArtifactId}`,
                   }
                 : undefined
             }
