@@ -184,7 +184,7 @@ export const api = {
   getVPR: (artifactId: string): Promise<VPRStatusResponse> =>
     apiFetch<VPRStatusResponse>(`/vpr/${artifactId}/status`),
   getCoverLetter: (artifactId: string): Promise<CoverLetterStatusResponse> =>
-    apiFetch<CoverLetterStatusResponse>(`/cover-letter/${artifactId}`),
+    apiFetch<CoverLetterStatusResponse>(`/cover-letter/${artifactId}/status`),
   getInterviewPrep: (
     artifactId: string
   ): Promise<InterviewPrepStatusResponse> =>
