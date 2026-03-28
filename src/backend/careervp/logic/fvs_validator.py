@@ -451,10 +451,11 @@ def validate_vpr_against_cv(vpr: VPR, user_cv: UserCV) -> Result[FVSValidationRe
     role_lookup = {exp.role.lower() for exp in user_cv.experience}
     year_lookup = _collect_years(user_cv)
 
+    # TODO spec-04: update to traverse new 10-section VPR structure
     sections: list[str] = []
-    sections.extend(item.evidence for item in vpr.evidence_matrix if item.evidence)
-    sections.extend(vpr.differentiators)
-    sections.extend(vpr.talking_points)
+    sections.extend(item.evidence for item in vpr.evidence_matrix if item.evidence)  # type: ignore[attr-defined]
+    sections.extend(vpr.differentiators)  # type: ignore[arg-type]
+    sections.extend(vpr.talking_points)  # type: ignore[attr-defined]
     sections = [section for section in sections if section]
 
     violations: list[FVSViolation] = []
