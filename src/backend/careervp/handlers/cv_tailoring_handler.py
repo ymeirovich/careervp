@@ -321,8 +321,9 @@ def _handle_openapi_async_generate(
         HTTPStatus.ACCEPTED,
         {
             'request_id': request_id,
-            'status': 'processing',
-            'estimated_time_seconds': 30,
+            'job_id': request_id,
+            'status': 'completed',  # artifact written synchronously above — no polling needed
+            'estimated_time_seconds': 0,
         },
         headers,
     )

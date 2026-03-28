@@ -178,7 +178,7 @@ export const api = {
       body: JSON.stringify(data),
     }),
   pollCVTailored: (cvTailoringId: string): Promise<CVTailoredStatusResponse> =>
-    apiFetch<CVTailoredStatusResponse>(`/cv-tailoring/${cvTailoringId}`),
+    apiFetch<CVTailoredStatusResponse>(`/cv-tailoring/${cvTailoringId}/status`),
 
   // Display pages — fetch completed artifact by artifact_id
   getVPR: (artifactId: string): Promise<VPRStatusResponse> =>
@@ -192,5 +192,5 @@ export const api = {
       `/interview-prep/${artifactId}/status`
     ),
   getCVTailored: (cvTailoringId: string): Promise<CVTailoredStatusResponse> =>
-    apiFetch<CVTailoredStatusResponse>(`/cv-tailoring/${cvTailoringId}`),
+    apiFetch<CVTailoredStatusResponse>(`/cv-tailoring/${cvTailoringId}/status`),
 };

@@ -344,7 +344,7 @@ export interface CompanyResearchResult {
 export interface CVTailoringRequest {
   cv_id: string;
   job_id: string;
-  vpr_id?: string;
+  vpr_id: string | null; // must be present (even as null) so backend detects new-API flow
 }
 
 export interface CVTailoredStatusResponse {
