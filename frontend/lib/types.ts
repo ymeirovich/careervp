@@ -54,7 +54,8 @@ export interface CreateJobInput {
 // ── Async task response (VPR / Cover Letter / Interview Prep generate) ──
 export interface AsyncTaskResponse {
   request_id: string; // async task ID — use to poll status (NOT the job posting ID)
-  status: "processing";
+  job_id?: string;    // alias for request_id returned by some endpoints
+  status: "processing" | "completed"; // "completed" returned for idempotent duplicate requests
   estimated_time_seconds?: number;
 }
 
