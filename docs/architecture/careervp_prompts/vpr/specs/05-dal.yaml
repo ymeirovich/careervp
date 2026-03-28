@@ -1,0 +1,157 @@
+id: "05-dal"
+title: "DAL/DynamoDB — Schema Migration & Serialization"
+status: pending
+priority: 5
+depends_on: ["01-pydantic-schema"]
+
+summary: |
+  Update DynamoDB storage layer to handle the new 10-section VPR. Because Pydantic
+  handles serialization/deserialization, the DAL changes are minimal. The primary
+  concerns are:
+    1. Storage format: snake_case keys in DynamoDB (NOT camelCase) — Pydantic aliases
+       are for API output only
+    2. Existing DynamoDB items with the old flat schema must still deserialize
+       without crashing (extra='ignore' in spec 01 handles this)
+    3. The save_vpr() call must use model_dump() not model_dump(by_alias=True) for storage
+    4. Word count and version increment logic
+
+context:
+  read_files:
+    - "src/backend/careervp/dal/dynamo_dal_handler.py"  # primary edit target
+    - "src/backend/careervp/models/vpr.py"               # post spec 01
+  do_not_read:
+    - "src/backend/careervp/logic/vpr_generator.py"
+    - "src/backend/careervp/logic/fvs_validator.py"
+    - "src/backend/careervp/handlers/vpr_handler.py"
+
+  inline_reference: |
+    Current save_vpr flow:
+      table.put_item(Item=item)   # item is VPR.model_dump() or similar
+      PK = application_id
+      SK = ARTIFACT#VPR#v{version}
+
+    Current get_vpr flow:
+      item = table.get_item(...)
+      vpr = VPR.model_validate(item)  # fails for old flat items if extra='ignore' not set
+
+    Current list_vprs flow:
+      vprs = [VPR.model_validate(item) for item in items]
+      vprs.sort(key=lambda item: item.version, reverse=True)
+
+changes:
+  save_vpr:
+    issue: |
+      Verify the Item passed to put_item uses snake_case keys (model_dump(), NOT
+      model_dump(by_alias=True)). If the current code wraps VPR in a dict with
+      extra DynamoDB keys (pk, sk, user_id for GSI), ensure those are added
+      alongside the Pydantic fields, not overwriting them.
+    target: |
+      item = {
+        'pk': vpr.application_id,
+        'sk': _build_vpr_sort_key(vpr.version),
+        'user_id': vpr.user_id,                    # for GSI
+        **vpr.model_dump(mode='json'),              # snake_case, no aliases
+      }
+      table.put_item(Item=item)
+    note: |
+      model_dump(mode='json') ensures datetimes are ISO strings, not Python objects.
+      This is already the correct behavior — verify it is used consistently.
+
+  get_vpr:
+    change: |
+      VPR.model_validate(item) already uses extra='ignore' (spec 01).
+      Old flat DynamoDB items will deserialize with all new sections missing/None.
+      No code change needed here IF spec 01 set extra='ignore' correctly.
+      Add a debug log: if vpr.metadata is None, log 'legacy VPR item loaded'.
+    version_resolution: |
+      Current code queries SK begins_with(VPR_SORT_KEY_PREFIX) for get_latest_vpr.
+      This is unchanged — version is still in the SK.
+
+  migration_strategy:
+    approach: "lazy migration — old items remain in DynamoDB with flat schema"
+    on_read: "extra='ignore' means old items deserialize to VPR with None sections"
+    on_write: "new items always written with full 10-section schema"
+    no_backfill_required: true
+    note: |
+      Do not implement a backfill migration. Old VPRs are historical artifacts.
+      If the frontend detects metadata=None, it can show a 'legacy report' notice.
+
+  version_increment:
+    description: |
+      When regenerating a VPR for the same application_id, version should increment.
+      Current behavior: VPRSixStagePipeline always sets version=1.
+      Check: does generate_vpr() check for existing VPRs and increment?
+    action: |
+      In generate_vpr() (vpr_generator.py, but flag it here):
+        Before running the pipeline, call dal.get_latest_vpr(request.application_id).
+        If found and version >= 1, set target_version = found_vpr.version + 1.
+        Pass target_version into the pipeline (new __init__ param, default=1).
+      This preserves idempotency: same input → same version (overwrite), new application → v1.
+    scope: |
+      Implement version increment in dynamo_dal_handler.py:
+        Add get_next_vpr_version(application_id: str) -> int method:
+          result = get_latest_vpr(application_id)
+          if result.success and result.data is not None:
+              return result.data.version + 1
+          return 1
+
+  new_methods:
+    - name: get_next_vpr_version
+      signature: "(self, application_id: str) -> int"
+      description: "Returns version+1 of latest existing VPR, or 1 if none exists"
+      location: "DynamoDalHandler class"
+
+preserves:
+  - "VPR_SORT_KEY_PREFIX = 'ARTIFACT#VPR#v' — unchanged"
+  - "USER_VPRS_INDEX = 'user_id-index' — unchanged"
+  - "PK = application_id scheme — unchanged"
+  - "save_vpr(), get_vpr(), get_latest_vpr(), list_vprs() signatures — unchanged"
+  - "All other DAL methods (CV, jobs, application, etc.) — do not touch"
+
+do_not_change:
+  - "DynamoDB table schema or CDK infra — no new GSIs, no schema changes"
+  - "PK/SK key format"
+  - "Any non-VPR DAL methods"
+
+acceptance_criteria:
+  - "save_vpr() uses model_dump(mode='json') (no by_alias=True)"
+  - "VPR.model_validate(old_flat_item) returns VPR with None for new sections (no crash)"
+  - "get_next_vpr_version() returns 1 for new applications, N+1 for existing"
+  - "`uv run mypy careervp --strict` passes"
+  - "`uv run pytest tests/unit/ -v --tb=short` passes"
+
+implementation_prompt: |
+  You are making minimal updates to `src/backend/careervp/dal/dynamo_dal_handler.py`
+  to support the new 10-section VPR schema.
+
+  ## Context (read these 2 files only)
+  1. src/backend/careervp/dal/dynamo_dal_handler.py  — primary edit target
+  2. src/backend/careervp/models/vpr.py              — post spec 01 (for type references)
+
+  ## What you are changing (3 things only)
+
+  ### 1. Verify save_vpr() uses model_dump(mode='json')
+  The item dict must use snake_case keys for DynamoDB storage.
+  Do NOT use model_dump(by_alias=True) — that produces camelCase which breaks
+  existing queries and GSI lookups.
+  Ensure the item dict looks like:
+    {'pk': vpr.application_id, 'sk': _build_vpr_sort_key(vpr.version), 'user_id': vpr.user_id, **vpr.model_dump(mode='json')}
+
+  ### 2. Add legacy item logging to get_vpr and get_latest_vpr
+  After VPR.model_validate(item), check if vpr.metadata is None:
+    if vpr.metadata is None:
+        logger.debug('legacy flat VPR loaded', application_id=application_id)
+
+  ### 3. Add get_next_vpr_version(application_id: str) -> int
+  Call self.get_latest_vpr(application_id).
+  If result.success and result.data is not None: return result.data.version + 1
+  Else: return 1
+  Add @tracer.capture_method(capture_response=False) decorator.
+
+  ## What you are NOT changing
+  - PK/SK scheme
+  - Any query/index logic
+  - Any non-VPR methods
+  - DynamoDB table configuration
+
+  After writing: cd src/backend && uv run mypy careervp --strict && uv run pytest tests/unit/ -v --tb=short

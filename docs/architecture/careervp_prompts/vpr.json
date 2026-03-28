@@ -1,0 +1,992 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ValuePropositionReport",
+  "description": "Comprehensive analysis mapping candidate qualifications to job requirements with evidence-based positioning strategy",
+  "type": "object",
+  "required": [
+    "metadata",
+    "executiveSummary",
+    "roleAlignment",
+    "experienceMapping",
+    "skillsAnalysis",
+    "evidenceGaps",
+    "differentiators",
+    "concernsAndMitigations",
+    "valueProposition",
+    "applicationStrategy"
+  ],
+  "properties": {
+    
+    "metadata": {
+      "type": "object",
+      "description": "Report generation metadata and context",
+      "required": ["reportDate", "candidateName", "targetRole", "targetCompany", "reportVersion"],
+      "properties": {
+        "reportDate": {
+          "type": "string",
+          "format": "date",
+          "description": "ISO 8601 date when report was generated",
+          "example": "2026-03-28"
+        },
+        "candidateName": {
+          "type": "string",
+          "description": "Full name of candidate",
+          "example": "Yitzchak Meirovich"
+        },
+        "targetRole": {
+          "type": "string",
+          "description": "Exact job title from posting",
+          "example": "Learning Experience Specialist"
+        },
+        "targetCompany": {
+          "type": "string",
+          "description": "Company name",
+          "example": "SysAid Technologies"
+        },
+        "reportVersion": {
+          "type": "string",
+          "description": "Version number for tracking iterations",
+          "pattern": "^\\d+\\.\\d+$",
+          "example": "1.0"
+        },
+        "jobPostingURL": {
+          "type": "string",
+          "format": "uri",
+          "description": "Optional URL to original job posting",
+          "example": "https://careers.sysaid.com/jobs/learning-experience-specialist"
+        },
+        "analysisScope": {
+          "type": "string",
+          "enum": ["full", "preliminary", "targeted"],
+          "description": "Depth of analysis performed",
+          "default": "full"
+        }
+      }
+    },
+
+    "executiveSummary": {
+      "type": "object",
+      "description": "High-level fit assessment and positioning summary",
+      "required": ["overallFitScore", "fitRationale", "topThreeStrengths", "topThreeConcerns", "recommendedApproach"],
+      "properties": {
+        "overallFitScore": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage fit score (0-100) based on requirement alignment",
+          "example": 85
+        },
+        "fitRationale": {
+          "type": "string",
+          "minLength": 100,
+          "maxLength": 500,
+          "description": "2-3 sentence explanation of fit score calculation",
+          "example": "Strong alignment on technical instruction, AI platform development, and L&D strategy. Gap exists in ITSM domain-specific experience, mitigated by transferable SaaS training background. Overall fit is high due to builder-educator positioning and quantified outcomes."
+        },
+        "topThreeStrengths": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "description": "Three strongest alignment points (most compelling selling points)",
+          "items": {
+            "type": "object",
+            "required": ["strength", "evidence", "relevanceToRole"],
+            "properties": {
+              "strength": {
+                "type": "string",
+                "description": "Concise statement of strength (10-15 words)",
+                "example": "Built operational AI platform (PresGen) demonstrating hands-on AI implementation capability"
+              },
+              "evidence": {
+                "type": "string",
+                "description": "Specific quantified proof point",
+                "example": "PresGen achieves 60-90% content development time reduction, integrates OpenAI/Gemini/Anthropic LLMs, serves production users"
+              },
+              "relevanceToRole": {
+                "type": "string",
+                "description": "Direct connection to job requirement",
+                "example": "Job requires AI expertise for SysAid Copilot training - PresGen proves ability to teach from production AI experience, not theory"
+              }
+            }
+          }
+        },
+        "topThreeConcerns": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "description": "Three most significant gaps or concerns hiring manager might have",
+          "items": {
+            "type": "object",
+            "required": ["concern", "severity", "mitigation"],
+            "properties": {
+              "concern": {
+                "type": "string",
+                "description": "Specific gap or weakness (10-15 words)",
+                "example": "No direct ITSM (IT Service Management) domain experience"
+              },
+              "severity": {
+                "type": "string",
+                "enum": ["high", "medium", "low"],
+                "description": "Impact level of this concern on candidacy",
+                "example": "medium"
+              },
+              "mitigation": {
+                "type": "string",
+                "description": "Strategy to address or reframe concern",
+                "example": "Frame as 'meta-skill': Built training programs across multiple technical domains (AWS, frontend dev, AI) - ITSM concepts are learnable, instructional design expertise is transferable"
+              }
+            }
+          }
+        },
+        "recommendedApproach": {
+          "type": "string",
+          "enum": ["aggressive_apply", "apply_with_customization", "apply_after_preparation", "do_not_apply"],
+          "description": "Strategic recommendation for application",
+          "example": "apply_with_customization"
+        }
+      }
+    },
+
+    "roleAlignment": {
+      "type": "object",
+      "description": "Detailed breakdown of role requirements vs. candidate qualifications",
+      "required": ["coreResponsibilities", "requirementBreakdown"],
+      "properties": {
+        "coreResponsibilities": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Primary job responsibilities extracted from posting",
+          "items": {
+            "type": "object",
+            "required": ["responsibility", "alignmentScore", "candidateEvidence"],
+            "properties": {
+              "responsibility": {
+                "type": "string",
+                "description": "Exact or paraphrased responsibility from job posting",
+                "example": "Build customer training portal and Academy from scratch (greenfield initiative)"
+              },
+              "alignmentScore": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100,
+                "description": "Percentage alignment (0-100) for this specific responsibility",
+                "example": 90
+              },
+              "candidateEvidence": {
+                "type": "array",
+                "minItems": 1,
+                "description": "Specific proof points from candidate background",
+                "items": {
+                  "type": "string",
+                  "example": "Built AllCloud AWS training partner program from zero to $1M+ revenue, designed curriculum structure, delivered across 6 countries"
+                }
+              },
+              "evidenceQuality": {
+                "type": "string",
+                "enum": ["direct", "analogous", "transferable", "weak"],
+                "description": "How closely evidence matches requirement",
+                "example": "direct"
+              }
+            }
+          }
+        },
+        "requirementBreakdown": {
+          "type": "object",
+          "description": "Categorized requirements analysis",
+          "required": ["mustHave", "niceToHave", "assumedPrerequisites"],
+          "properties": {
+            "mustHave": {
+              "type": "array",
+              "description": "Explicitly stated required qualifications",
+              "items": {
+                "type": "object",
+                "required": ["requirement", "candidateMeetsRequirement", "evidence"],
+                "properties": {
+                  "requirement": {
+                    "type": "string",
+                    "example": "Experience building training programs/academies"
+                  },
+                  "candidateMeetsRequirement": {
+                    "type": "boolean",
+                    "example": true
+                  },
+                  "evidence": {
+                    "type": "string",
+                    "example": "AllCloud AWS Training Partner program: built from scratch, generated $1M+ revenue, achieved 90%+ certification pass rates"
+                  },
+                  "strengthOfEvidence": {
+                    "type": "string",
+                    "enum": ["strong", "moderate", "weak", "none"],
+                    "example": "strong"
+                  }
+                }
+              }
+            },
+            "niceToHave": {
+              "type": "array",
+              "description": "Preferred but not required qualifications",
+              "items": {
+                "type": "object",
+                "required": ["preference", "candidateHasThis"],
+                "properties": {
+                  "preference": {
+                    "type": "string",
+                    "example": "LMS implementation experience (Cloud Academy, Udemy, etc.)"
+                  },
+                  "candidateHasThis": {
+                    "type": "boolean",
+                    "example": true
+                  },
+                  "evidence": {
+                    "type": "string",
+                    "example": "Implemented Cloud Academy LMS for 200+ users at AllCloud"
+                  }
+                }
+              }
+            },
+            "assumedPrerequisites": {
+              "type": "array",
+              "description": "Implicit requirements not explicitly stated in posting",
+              "items": {
+                "type": "object",
+                "required": ["assumption", "candidateMeetsThis", "reasoning"],
+                "properties": {
+                  "assumption": {
+                    "type": "string",
+                    "example": "Ability to work in fast-paced startup environment"
+                  },
+                  "candidateMeetsThis": {
+                    "type": "boolean",
+                    "example": true
+                  },
+                  "reasoning": {
+                    "type": "string",
+                    "example": "16 years at government (structured) + startup experience at AllCloud (agile, revenue-focused) demonstrates adaptability"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "experienceMapping": {
+      "type": "object",
+      "description": "Chronological experience mapped to job requirements",
+      "required": ["relevantExperiences", "experienceGaps"],
+      "properties": {
+        "relevantExperiences": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Past roles/projects most relevant to target role",
+          "items": {
+            "type": "object",
+            "required": ["role", "organization", "duration", "keyAchievements", "relevanceToTargetRole"],
+            "properties": {
+              "role": {
+                "type": "string",
+                "example": "Director of AWS Training"
+              },
+              "organization": {
+                "type": "string",
+                "example": "AllCloud"
+              },
+              "duration": {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d+)? (year|years|month|months)$",
+                "example": "3 years"
+              },
+              "keyAchievements": {
+                "type": "array",
+                "minItems": 1,
+                "description": "Quantified outcomes from this role",
+                "items": {
+                  "type": "object",
+                  "required": ["achievement", "metric", "impact"],
+                  "properties": {
+                    "achievement": {
+                      "type": "string",
+                      "example": "Built AWS Training Partner program from zero"
+                    },
+                    "metric": {
+                      "type": "string",
+                      "example": "$1M+ annual revenue"
+                    },
+                    "impact": {
+                      "type": "string",
+                      "example": "Established AllCloud as top-tier AWS training provider across 6 countries"
+                    }
+                  }
+                }
+              },
+              "relevanceToTargetRole": {
+                "type": "string",
+                "description": "Direct connection to SysAid Learning Experience Specialist responsibilities",
+                "example": "Demonstrates greenfield training program build capability - exactly what SysAid needs for customer Academy launch"
+              },
+              "relevanceScore": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100,
+                "description": "How relevant this experience is (0-100)",
+                "example": 95
+              }
+            }
+          }
+        },
+        "experienceGaps": {
+          "type": "array",
+          "description": "Types of experience candidate lacks",
+          "items": {
+            "type": "object",
+            "required": ["missingExperience", "impactOnCandidacy", "compensatingFactors"],
+            "properties": {
+              "missingExperience": {
+                "type": "string",
+                "example": "Direct ITSM domain experience (IT Service Management)"
+              },
+              "impactOnCandidacy": {
+                "type": "string",
+                "enum": ["critical", "significant", "moderate", "minimal"],
+                "example": "moderate"
+              },
+              "compensatingFactors": {
+                "type": "array",
+                "description": "What candidate has that offsets this gap",
+                "items": {
+                  "type": "string",
+                  "example": "Strong SaaS technical training background (AWS, frontend dev) - demonstrates ability to learn complex technical domains quickly"
+                }
+              },
+              "mitigationStrategy": {
+                "type": "string",
+                "description": "How to address in application materials",
+                "example": "Frame as transferable skill: 'Built training for multiple technical domains (cloud, dev, AI) - ITSM concepts are learnable, instructional design expertise is proven'"
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "skillsAnalysis": {
+      "type": "object",
+      "description": "Technical and soft skills mapping",
+      "required": ["technicalSkills", "softSkills", "toolProficiency"],
+      "properties": {
+        "technicalSkills": {
+          "type": "array",
+          "description": "Technical competencies required for role",
+          "items": {
+            "type": "object",
+            "required": ["skill", "requiredLevel", "candidateLevel", "evidence"],
+            "properties": {
+              "skill": {
+                "type": "string",
+                "example": "Instructional Design"
+              },
+              "requiredLevel": {
+                "type": "string",
+                "enum": ["expert", "advanced", "intermediate", "basic"],
+                "example": "advanced"
+              },
+              "candidateLevel": {
+                "type": "string",
+                "enum": ["expert", "advanced", "intermediate", "basic", "none"],
+                "example": "expert"
+              },
+              "evidence": {
+                "type": "string",
+                "example": "27 years technical instruction, designed multi-tier certification frameworks, implemented Cloud Academy LMS for 200+ users"
+              },
+              "gap": {
+                "type": "boolean",
+                "description": "True if candidate level below required level",
+                "example": false
+              },
+              "developmentPath": {
+                "type": "string",
+                "description": "If gap exists, how to close it (optional)",
+                "example": ""
+              }
+            }
+          }
+        },
+        "softSkills": {
+          "type": "array",
+          "description": "Interpersonal and professional competencies",
+          "items": {
+            "type": "object",
+            "required": ["skill", "candidateDemonstrates", "evidence"],
+            "properties": {
+              "skill": {
+                "type": "string",
+                "example": "Stakeholder Management"
+              },
+              "candidateDemonstrates": {
+                "type": "boolean",
+                "example": true
+              },
+              "evidence": {
+                "type": "string",
+                "example": "Delivered training across 6 countries, coordinated with sales/CS teams for customer success outcomes"
+              },
+              "strengthLevel": {
+                "type": "string",
+                "enum": ["exceptional", "strong", "adequate", "developing"],
+                "example": "strong"
+              }
+            }
+          }
+        },
+        "toolProficiency": {
+          "type": "array",
+          "description": "Specific tools/platforms mentioned in job posting or assumed necessary",
+          "items": {
+            "type": "object",
+            "required": ["tool", "requiredForRole", "candidateProficiency"],
+            "properties": {
+              "tool": {
+                "type": "string",
+                "example": "LMS platforms (Cloud Academy, Udemy, AWS Skillbuilder)"
+              },
+              "requiredForRole": {
+                "type": "boolean",
+                "description": "Is this explicitly required or just helpful?",
+                "example": true
+              },
+              "candidateProficiency": {
+                "type": "string",
+                "enum": ["expert", "proficient", "familiar", "none"],
+                "example": "proficient"
+              },
+              "evidence": {
+                "type": "string",
+                "example": "Implemented Cloud Academy LMS for 200+ AllCloud users, familiar with AWS Skillbuilder, Udemy course structures"
+              },
+              "needsUpskilling": {
+                "type": "boolean",
+                "example": false
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "evidenceGaps": {
+      "type": "object",
+      "description": "Analysis of where candidate lacks documented proof",
+      "required": ["identifiedGaps", "priorityGapsToAddress"],
+      "properties": {
+        "identifiedGaps": {
+          "type": "array",
+          "minItems": 1,
+          "description": "All evidence gaps discovered during analysis",
+          "items": {
+            "type": "object",
+            "required": ["requirement", "currentEvidence", "gapSeverity", "suggestedEvidence"],
+            "properties": {
+              "requirement": {
+                "type": "string",
+                "example": "Experience with gamification in learning programs"
+              },
+              "currentEvidence": {
+                "type": "string",
+                "description": "What candidate currently has (if anything)",
+                "example": "None documented in CV or portfolio"
+              },
+              "gapSeverity": {
+                "type": "string",
+                "enum": ["critical", "high", "medium", "low"],
+                "description": "How much this gap hurts candidacy",
+                "example": "medium"
+              },
+              "suggestedEvidence": {
+                "type": "array",
+                "description": "Recommendations for what to add/create",
+                "items": {
+                  "type": "string",
+                  "example": "Create gamification case study from PresGen-Assess module (badge system, progress tracking, adaptive assessments)"
+                }
+              },
+              "canBeCreatedQuickly": {
+                "type": "boolean",
+                "description": "Can this evidence be generated before application?",
+                "example": true
+              },
+              "estimatedTimeToCreate": {
+                "type": "string",
+                "pattern": "^\\d+(-\\d+)? (hour|hours|day|days|week|weeks)$",
+                "example": "2-3 hours"
+              }
+            }
+          }
+        },
+        "priorityGapsToAddress": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "description": "Top gaps to address before applying (ranked by impact)",
+          "items": {
+            "type": "object",
+            "required": ["gap", "priority", "actionItem"],
+            "properties": {
+              "gap": {
+                "type": "string",
+                "example": "No documented ITSM/customer academy examples"
+              },
+              "priority": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 5,
+                "description": "Priority ranking (1 = highest)",
+                "example": 1
+              },
+              "actionItem": {
+                "type": "string",
+                "description": "Specific task to close this gap",
+                "example": "Research SysAid Copilot documentation, create sample training module outline showing how you'd structure the Academy"
+              },
+              "deadline": {
+                "type": "string",
+                "enum": ["before_application", "before_interview", "nice_to_have"],
+                "example": "before_application"
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "differentiators": {
+      "type": "object",
+      "description": "What makes candidate uniquely valuable vs. other applicants",
+      "required": ["uniqueStrengths", "competitiveAdvantages", "positioningStatement"],
+      "properties": {
+        "uniqueStrengths": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "description": "Capabilities most candidates won't have",
+          "items": {
+            "type": "object",
+            "required": ["strength", "rarity", "relevance", "proof"],
+            "properties": {
+              "strength": {
+                "type": "string",
+                "example": "Built operational AI platform (PresGen) - not just taught about AI, but developed production AI system"
+              },
+              "rarity": {
+                "type": "string",
+                "enum": ["very_rare", "uncommon", "somewhat_rare"],
+                "description": "How many other candidates likely have this?",
+                "example": "very_rare"
+              },
+              "relevance": {
+                "type": "string",
+                "description": "Why this matters for SysAid role",
+                "example": "SysAid needs someone to train customers on AI Copilot - teaching from production AI experience vs. theoretical knowledge is massive credibility boost"
+              },
+              "proof": {
+                "type": "string",
+                "example": "PresGen integrates OpenAI, Gemini, Anthropic LLMs; includes presentation generation, video processing, adaptive assessments; serves production users"
+              }
+            }
+          }
+        },
+        "competitiveAdvantages": {
+          "type": "array",
+          "description": "Strategic positioning advantages",
+          "items": {
+            "type": "object",
+            "required": ["advantage", "vsTypicalCandidate"],
+            "properties": {
+              "advantage": {
+                "type": "string",
+                "example": "Builder-Educator hybrid profile"
+              },
+              "vsTypicalCandidate": {
+                "type": "string",
+                "description": "How this beats typical competitor",
+                "example": "Most L&D specialists teach about technology. Candidate BUILDS technology (40+ web apps at Ministry of Finance, PresGen AI platform) AND teaches about it - rare combination"
+              },
+              "howToLeverageInApplication": {
+                "type": "string",
+                "example": "Lead cover letter with: 'I don't just teach AI - I build AI platforms. Here's why that matters for your customer Academy...'"
+              }
+            }
+          }
+        },
+        "positioningStatement": {
+          "type": "string",
+          "minLength": 100,
+          "maxLength": 300,
+          "description": "One-paragraph positioning to use in cover letter opening or LinkedIn summary",
+          "example": "I'm a builder-educator: someone who teaches from hands-on technical experience, not theory alone. Over 27 years, I've built production systems (40+ web applications, AI platform serving users) and training programs generating $1M+ revenue with 90%+ certification pass rates. For SysAid's customer Academy, this means I can design training that resonates with technical admins because I've been in their shoes - configuring systems, troubleshooting issues, optimizing workflows."
+        }
+      }
+    },
+
+    "concernsAndMitigations": {
+      "type": "object",
+      "description": "Anticipated objections and how to address them",
+      "required": ["likelyObjections", "preemptiveResponses"],
+      "properties": {
+        "likelyObjections": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Concerns hiring manager will probably have",
+          "items": {
+            "type": "object",
+            "required": ["objection", "likelihood", "mitigation"],
+            "properties": {
+              "objection": {
+                "type": "string",
+                "example": "Candidate has no ITSM domain experience"
+              },
+              "likelihood": {
+                "type": "string",
+                "enum": ["very_likely", "likely", "possible", "unlikely"],
+                "example": "very_likely"
+              },
+              "mitigation": {
+                "type": "object",
+                "required": ["strategy", "messaging"],
+                "properties": {
+                  "strategy": {
+                    "type": "string",
+                    "enum": ["reframe", "acknowledge_and_address", "provide_evidence", "show_analogous_experience"],
+                    "example": "reframe"
+                  },
+                  "messaging": {
+                    "type": "string",
+                    "example": "ITSM is a domain I'll learn quickly (as I've done with cloud, frontend dev, AI). What I bring is proven ability to build training programs that drive measurable outcomes - that's the hard part. ITSM concepts are the easy part."
+                  }
+                }
+              },
+              "whereToAddress": {
+                "type": "array",
+                "description": "Which application materials should address this",
+                "items": {
+                  "type": "string",
+                  "enum": ["cover_letter", "cv", "portfolio", "interview"],
+                  "example": "cover_letter"
+                }
+              }
+            }
+          }
+        },
+        "preemptiveResponses": {
+          "type": "array",
+          "description": "Proactive ways to neutralize concerns before they're raised",
+          "items": {
+            "type": "object",
+            "required": ["concern", "preemptiveAction"],
+            "properties": {
+              "concern": {
+                "type": "string",
+                "example": "Will candidate understand SysAid's product well enough to train customers?"
+              },
+              "preemptiveAction": {
+                "type": "string",
+                "example": "Complete home assignment thoroughly, demonstrating deep dive into SysAid AI documentation and ability to create training content without product access - shows self-directed learning capability"
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "valueProposition": {
+      "type": "object",
+      "description": "Clear articulation of value candidate brings to role",
+      "required": ["primaryValue", "secondaryValues", "quantifiedImpact", "elevatorPitch"],
+      "properties": {
+        "primaryValue": {
+          "type": "object",
+          "required": ["statement", "evidence", "outcomeForSysAid"],
+          "description": "Single most compelling reason to hire this candidate",
+          "properties": {
+            "statement": {
+              "type": "string",
+              "example": "I build training programs that generate measurable business outcomes, not just completion certificates"
+            },
+            "evidence": {
+              "type": "string",
+              "example": "AllCloud program: $1M+ revenue, 90%+ certification pass rates, delivered across 6 countries. PresGen: 60-90% content development time reduction."
+            },
+            "outcomeForSysAid": {
+              "type": "string",
+              "example": "SysAid's customer Academy will drive ticket reduction, product adoption, and revenue - I've built programs that hit all three KPIs"
+            }
+          }
+        },
+        "secondaryValues": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 4,
+          "description": "Additional compelling selling points",
+          "items": {
+            "type": "object",
+            "required": ["value", "proof"],
+            "properties": {
+              "value": {
+                "type": "string",
+                "example": "Deep AI expertise from building production AI platform"
+              },
+              "proof": {
+                "type": "string",
+                "example": "PresGen integrates OpenAI, Gemini, Anthropic - I teach AI from hands-on experience, not theoretical knowledge"
+              }
+            }
+          }
+        },
+        "quantifiedImpact": {
+          "type": "array",
+          "description": "Specific metrics candidate can deliver for SysAid",
+          "items": {
+            "type": "object",
+            "required": ["metric", "expectedRange", "basisForProjection"],
+            "properties": {
+              "metric": {
+                "type": "string",
+                "example": "Academy enrollment rate"
+              },
+              "expectedRange": {
+                "type": "string",
+                "example": "200+ customers enrolled in first 90 days"
+              },
+              "basisForProjection": {
+                "type": "string",
+                "example": "At AllCloud, training programs achieved 200+ enrollments within first quarter of launch across similar SaaS customer base"
+              }
+            }
+          }
+        },
+        "elevatorPitch": {
+          "type": "string",
+          "minLength": 100,
+          "maxLength": 200,
+          "description": "30-second pitch summarizing entire value proposition",
+          "example": "I've spent 27 years building training programs that drive business outcomes: $1M+ revenue at AllCloud, 90%+ certification pass rates, reduced support tickets 40% through effective enablement. I also build technology - AI platforms, web applications - so I teach from hands-on experience, not theory. For SysAid's customer Academy, that means training that resonates with technical admins and delivers measurable ROI."
+        }
+      }
+    },
+
+    "applicationStrategy": {
+      "type": "object",
+      "description": "Tactical recommendations for application execution",
+      "required": ["cvCustomization", "coverLetterStructure", "linkedInOutreach", "interviewPreparation"],
+      "properties": {
+        "cvCustomization": {
+          "type": "object",
+          "required": ["leadWithDifferentiator", "keywordOptimization", "quantificationPriorities"],
+          "properties": {
+            "leadWithDifferentiator": {
+              "type": "string",
+              "description": "What should appear first on CV to grab attention",
+              "example": "Open with: 'Builder-Educator | Built $1M+ AWS Training Program + Production AI Platform' - immediately signals unique positioning"
+            },
+            "keywordOptimization": {
+              "type": "array",
+              "description": "Keywords to bold/emphasize for ATS",
+              "items": {
+                "type": "string",
+                "example": "Learning Experience Design"
+              }
+            },
+            "quantificationPriorities": {
+              "type": "array",
+              "description": "Which numbers to emphasize most",
+              "items": {
+                "type": "object",
+                "required": ["metric", "context", "placement"],
+                "properties": {
+                  "metric": {
+                    "type": "string",
+                    "example": "$1M+ revenue"
+                  },
+                  "context": {
+                    "type": "string",
+                    "example": "AllCloud AWS Training Partner program annual revenue"
+                  },
+                  "placement": {
+                    "type": "string",
+                    "enum": ["opening_summary", "experience_bullets", "both"],
+                    "example": "both"
+                  }
+                }
+              }
+            },
+            "sectionsToCompress": {
+              "type": "array",
+              "description": "Which CV sections to minimize for space",
+              "items": {
+                "type": "string",
+                "example": "Ministry of Finance experience (compress to 2-3 bullets, focus on relevant technical training aspects)"
+              }
+            }
+          }
+        },
+        "coverLetterStructure": {
+          "type": "object",
+          "required": ["openingHook", "paragraphBreakdown", "closingCTA"],
+          "properties": {
+            "openingHook": {
+              "type": "string",
+              "minLength": 50,
+              "maxLength": 150,
+              "description": "First sentence to grab attention",
+              "example": "I don't just teach AI - I build AI platforms. Here's why that matters for SysAid's customer Academy launch."
+            },
+            "paragraphBreakdown": {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 3,
+              "description": "Three-paragraph structure (standard for cover letters)",
+              "items": {
+                "type": "object",
+                "required": ["paragraphNumber", "purpose", "keyPoints"],
+                "properties": {
+                  "paragraphNumber": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3,
+                    "example": 1
+                  },
+                  "purpose": {
+                    "type": "string",
+                    "example": "Establish unique positioning (builder-educator)"
+                  },
+                  "keyPoints": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "example": "Built PresGen AI platform (production system, not just taught about AI)"
+                    }
+                  }
+                }
+              }
+            },
+            "closingCTA": {
+              "type": "string",
+              "description": "Call-to-action in final paragraph",
+              "example": "I'd welcome the chance to discuss how my builder-educator background can accelerate SysAid's customer Academy from concept to measurable impact. Can we schedule a conversation?"
+            }
+          }
+        },
+        "linkedInOutreach": {
+          "type": "object",
+          "required": ["targetContacts", "messageTemplate", "timing"],
+          "properties": {
+            "targetContacts": {
+              "type": "array",
+              "description": "Who to reach out to on LinkedIn",
+              "items": {
+                "type": "object",
+                "required": ["role", "rationale"],
+                "properties": {
+                  "role": {
+                    "type": "string",
+                    "example": "Hiring Manager (if identifiable)"
+                  },
+                  "rationale": {
+                    "type": "string",
+                    "example": "Direct decision-maker; personalized outreach shows initiative and allows you to address fit questions proactively"
+                  },
+                  "findingStrategy": {
+                    "type": "string",
+                    "example": "LinkedIn search: 'SysAid' + 'Learning' OR 'Training' OR 'Customer Success'; filter by current employees"
+                  }
+                }
+              }
+            },
+            "messageTemplate": {
+              "type": "string",
+              "minLength": 100,
+              "maxLength": 300,
+              "description": "Suggested LinkedIn connection request or InMail message",
+              "example": "Hi [Name], I just applied for the Learning Experience Specialist role at SysAid. I've built training programs generating $1M+ revenue and reduced support tickets 40% through effective enablement - exactly the outcomes SysAid's customer Academy should deliver. I'd love to briefly discuss how my builder-educator background aligns with what you're looking for. Are you open to a quick chat?"
+            },
+            "timing": {
+              "type": "string",
+              "enum": ["before_application", "same_day_as_application", "1-2_days_after_application", "after_no_response_2_weeks"],
+              "example": "same_day_as_application"
+            }
+          }
+        },
+        "interviewPreparation": {
+          "type": "object",
+          "required": ["anticipatedQuestions", "questionsToAsk", "portfolioPieces"],
+          "properties": {
+            "anticipatedQuestions": {
+              "type": "array",
+              "description": "Questions hiring manager likely to ask",
+              "items": {
+                "type": "object",
+                "required": ["question", "suggestedAnswer", "evidenceToProvide"],
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "example": "You don't have ITSM experience - how will you create training for a product you don't know?"
+                  },
+                  "suggestedAnswer": {
+                    "type": "string",
+                    "example": "Great question. I've built training for technologies I initially didn't know - AWS, frontend development frameworks, AI platforms - by immersing myself in the product, talking to users, and focusing on outcomes rather than just features. For this home assignment, I dove deep into SysAid AI documentation and created a certification blueprint without product access. That's exactly how I'd approach the Academy: learn the product deeply, understand customer pain points, design training that solves problems."
+                  },
+                  "evidenceToProvide": {
+                    "type": "string",
+                    "example": "Home assignment deliverables - show depth of SysAid AI understanding achieved through documentation review alone"
+                  }
+                }
+              }
+            },
+            "questionsToAsk": {
+              "type": "array",
+              "description": "Questions candidate should ask to demonstrate strategic thinking",
+              "items": {
+                "type": "object",
+                "required": ["question", "purpose"],
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "example": "What's the #1 customer pain point the Academy should solve in first 90 days?"
+                  },
+                  "purpose": {
+                    "type": "string",
+                    "example": "Shows outcome-focused mindset; reveals priorities to align answer with their goals"
+                  }
+                }
+              }
+            },
+            "portfolioPieces": {
+              "type": "array",
+              "description": "Work samples to bring/share in interview",
+              "items": {
+                "type": "object",
+                "required": ["piece", "relevance", "format"],
+                "properties": {
+                  "piece": {
+                    "type": "string",
+                    "example": "PresGen platform demo"
+                  },
+                  "relevance": {
+                    "type": "string",
+                    "example": "Demonstrates AI expertise, builder credibility, ability to explain complex technology simply"
+                  },
+                  "format": {
+                    "type": "string",
+                    "enum": ["live_demo", "video_recording", "screenshots", "written_case_study"],
+                    "example": "live_demo"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

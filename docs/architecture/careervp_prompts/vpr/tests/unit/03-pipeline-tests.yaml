@@ -1,0 +1,301 @@
+id: "03-pipeline-tests"
+title: "Unit Tests — VPR Generator Pipeline Stages 3-5 (Spec 03)"
+spec_id: "03-pipeline"
+target_path: "src/backend/tests/vpr/unit/test_vpr_generator_phase2.py"
+pytest_markers: ["unit"]
+depends_on_spec: "03-pipeline"
+test_count: 14
+
+description: |
+  Tests for the updated VPRSixStagePipeline stages 3-5 introduced in spec 03.
+  Stage 3 now calls build_phase2_prompt(); Stage 4 calls build_phase2_validation_prompt();
+  Stage 5 builds a 10-section VPR via _parse_full_vpr_model().
+
+  All tests mock the LLMClient and DAL — pure unit tests, no I/O.
+
+  Stages 1, 2, 6, and the generate_vpr() public function are unchanged and covered
+  in the existing test_vpr_generator.py file.
+
+implementation_steps: |
+  1. Read docs/architecture/careervp_prompts/vpr/specs/03-pipeline.yaml
+  2. Copy the `code` block below to src/backend/tests/vpr/unit/test_vpr_generator_phase2.py
+  3. Run (RED):
+       cd src/backend && uv run pytest tests/vpr/unit/test_vpr_generator_phase2.py -v --tb=short
+  4. Implement spec 03 (logic/vpr_generator.py changes)
+  5. Re-run — all 14 tests should pass
+
+code: |
+  """Unit tests for updated VPR generator pipeline stages 3-5 (spec 03)."""
+  from __future__ import annotations
+
+  import json
+  from typing import Any
+  from unittest.mock import MagicMock, patch
+
+  import pytest
+
+  from careervp.logic.vpr_generator import (
+      Phase2Draft,
+      ValidatedDraft,
+      VPRSixStagePipeline,
+      generate_vpr,
+  )
+  from careervp.models.vpr import VPR, VPRRequest
+
+
+  def _make_pipeline(
+      minimal_vpr_request: VPRRequest,
+      minimal_user_cv: Any,
+      mock_dal: MagicMock,
+  ) -> VPRSixStagePipeline:
+      return VPRSixStagePipeline(
+          request=minimal_vpr_request,
+          user_cv=minimal_user_cv,
+          dal=mock_dal,
+      )
+
+
+  @pytest.fixture
+  def mock_dal() -> MagicMock:
+      dal = MagicMock()
+      dal.save_vpr.return_value = MagicMock(success=True)
+      return dal
+
+
+  @pytest.mark.unit
+  class TestStage3Synthesize:
+      def test_stage3_calls_build_phase2_prompt(
+          self,
+          minimal_vpr_request: VPRRequest,
+          minimal_user_cv: Any,
+          mock_dal: MagicMock,
+          llm_phase2_response: dict[str, Any],
+      ) -> None:
+          pipeline = _make_pipeline(minimal_vpr_request, minimal_user_cv, mock_dal)
+
+          with patch(
+              "careervp.logic.vpr_generator.LLMClient"
+          ) as mock_llm_cls, patch(
+              "careervp.logic.prompts.vpr_prompt.build_phase2_prompt"
+          ) as mock_build:
+              mock_llm = mock_llm_cls.return_value
+              mock_llm.call.return_value = MagicMock(
+                  success=True,
+                  data={"text": json.dumps(llm_phase2_response), "input_tokens": 100, "output_tokens": 200, "cost": 0.003, "model": "claude-sonnet-4-5"},
+              )
+              mock_build.return_value = "Phase2 prompt text"
+
+              evidence = MagicMock()
+              pipeline._synthesize(evidence, feedback=None)
+
+          mock_build.assert_called_once()
+
+      def test_stage3_returns_phase2_draft_type(
+          self,
+          minimal_vpr_request: VPRRequest,
+          minimal_user_cv: Any,
+          mock_dal: MagicMock,
+          llm_phase2_response: dict[str, Any],
+      ) -> None:
+          pipeline = _make_pipeline(minimal_vpr_request, minimal_user_cv, mock_dal)
+
+          with patch("careervp.logic.vpr_generator.LLMClient") as mock_llm_cls:
+              mock_llm = mock_llm_cls.return_value
+              mock_llm.call.return_value = MagicMock(
+                  success=True,
+                  data={"text": json.dumps(llm_phase2_response), "input_tokens": 100, "output_tokens": 200, "cost": 0.003, "model": "claude-sonnet-4-5"},
+              )
+              evidence = MagicMock()
+              result = pipeline._synthesize(evidence, feedback=None)
+
+          assert isinstance(result, Phase2Draft)
+          assert isinstance(result.raw_payload, dict)
+
+      def test_stage3_with_feedback_passes_to_builder(
+          self,
+          minimal_vpr_request: VPRRequest,
+          minimal_user_cv: Any,
+          mock_dal: MagicMock,
+          llm_phase2_response: dict[str, Any],
+      ) -> None:
+          pipeline = _make_pipeline(minimal_vpr_request, minimal_user_cv, mock_dal)
+          feedback_text = "Fix anti-AI patterns in executive_summary."
+
+          with patch("careervp.logic.vpr_generator.LLMClient") as mock_llm_cls, patch(
+              "careervp.logic.prompts.vpr_prompt.build_phase2_prompt"
+          ) as mock_build:
+              mock_llm = mock_llm_cls.return_value
+              mock_llm.call.return_value = MagicMock(
+                  success=True,
+                  data={"text": json.dumps(llm_phase2_response), "input_tokens": 100, "output_tokens": 200, "cost": 0.003, "model": "claude-sonnet-4-5"},
+              )
+              mock_build.return_value = "prompt with feedback"
+              pipeline._synthesize(MagicMock(), feedback=feedback_text)
+
+          call_kwargs = mock_build.call_args
+          assert feedback_text in str(call_kwargs)
+
+
+  @pytest.mark.unit
+  class TestStage4SelfCorrect:
+      def test_stage4_returns_validated_draft_type(
+          self,
+          minimal_vpr_request: VPRRequest,
+          minimal_user_cv: Any,
+          mock_dal: MagicMock,
+          llm_phase2_response: dict[str, Any],
+      ) -> None:
+          pipeline = _make_pipeline(minimal_vpr_request, minimal_user_cv, mock_dal)
+          draft = Phase2Draft(raw_payload=llm_phase2_response, evidence_context=MagicMock())
+
+          with patch("careervp.logic.vpr_generator.LLMClient") as mock_llm_cls:
+              payload_with_notes = {**llm_phase2_response, "validation_notes": ["Score fixed"]}
+              mock_llm = mock_llm_cls.return_value
+              mock_llm.call.return_value = MagicMock(
+                  success=True,
+                  data={"text": json.dumps(payload_with_notes), "input_tokens": 100, "output_tokens": 200, "cost": 0.003, "model": "claude-sonnet-4-5"},
+              )
+              result = pipeline._self_correct(draft, feedback=None)
+
+          assert isinstance(result, ValidatedDraft)
+          assert isinstance(result.validation_notes, list)
+
+      def test_stage4_llm_failure_falls_back_to_rule_based(
+          self,
+          minimal_vpr_request: VPRRequest,
+          minimal_user_cv: Any,
+          mock_dal: MagicMock,
+          llm_phase2_response: dict[str, Any],
+      ) -> None:
+          pipeline = _make_pipeline(minimal_vpr_request, minimal_user_cv, mock_dal)
+          draft = Phase2Draft(raw_payload=llm_phase2_response, evidence_context=MagicMock())
+
+          with patch("careervp.logic.vpr_generator.LLMClient") as mock_llm_cls:
+              mock_llm = mock_llm_cls.return_value
+              mock_llm.call.return_value = MagicMock(success=False, data=None)
+              result = pipeline._self_correct(draft, feedback=None)
+
+          # Fallback must still return a ValidatedDraft without raising
+          assert isinstance(result, ValidatedDraft)
+          assert "Fallback" in " ".join(result.validation_notes)
+
+
+  @pytest.mark.unit
+  class TestStage5GenerateOutput:
+      def test_stage5_builds_vpr_with_all_10_sections(
+          self,
+          minimal_vpr_request: VPRRequest,
+          minimal_user_cv: Any,
+          mock_dal: MagicMock,
+          llm_phase2_response: dict[str, Any],
+      ) -> None:
+          pipeline = _make_pipeline(minimal_vpr_request, minimal_user_cv, mock_dal)
+          validated = ValidatedDraft(
+              raw_payload=llm_phase2_response,
+              validation_notes=["Scores verified"],
+              evidence_context=MagicMock(),
+          )
+          vpr_data = pipeline._generate_output(validated)
+          vpr = vpr_data.vpr
+
+          assert vpr.metadata is not None
+          assert vpr.executive_summary is not None
+          assert vpr.role_alignment is not None
+          assert vpr.experience_mapping is not None
+          assert vpr.skills_analysis is not None
+          assert vpr.evidence_gaps is not None
+          assert vpr.differentiators is not None
+          assert vpr.concerns_and_mitigations is not None
+          assert vpr.value_proposition is not None
+          assert vpr.application_strategy is not None
+
+      def test_stage5_sets_application_id_from_request(
+          self,
+          minimal_vpr_request: VPRRequest,
+          minimal_user_cv: Any,
+          mock_dal: MagicMock,
+          llm_phase2_response: dict[str, Any],
+      ) -> None:
+          pipeline = _make_pipeline(minimal_vpr_request, minimal_user_cv, mock_dal)
+          validated = ValidatedDraft(
+              raw_payload=llm_phase2_response,
+              validation_notes=[],
+              evidence_context=MagicMock(),
+          )
+          vpr_data = pipeline._generate_output(validated)
+          assert vpr_data.vpr.application_id == "app-001"
+          assert vpr_data.vpr.user_id == "user-123"
+
+      def test_stage5_section_parse_failure_uses_minimal_fallback(
+          self,
+          minimal_vpr_request: VPRRequest,
+          minimal_user_cv: Any,
+          mock_dal: MagicMock,
+      ) -> None:
+          """If a section fails to parse, pipeline should fall back to a minimal default."""
+          broken_payload = {
+              "metadata": {"report_date": "not-a-date"},  # invalid date format
+              "executive_summary": "WRONG_TYPE_NOT_DICT",  # wrong type
+          }
+          pipeline = _make_pipeline(minimal_vpr_request, minimal_user_cv, mock_dal)
+          validated = ValidatedDraft(
+              raw_payload=broken_payload,
+              validation_notes=[],
+              evidence_context=MagicMock(),
+          )
+          # Must not raise — fall back to minimal valid defaults
+          vpr_data = pipeline._generate_output(validated)
+          assert vpr_data.vpr is not None
+
+
+  @pytest.mark.unit
+  class TestGenerationLoop:
+      def test_generate_vpr_persists_via_dal(
+          self,
+          minimal_vpr_request: VPRRequest,
+          minimal_user_cv: Any,
+          mock_dal: MagicMock,
+          llm_phase2_response: dict[str, Any],
+      ) -> None:
+          with patch("careervp.logic.vpr_generator.LLMClient") as mock_llm_cls, patch(
+              "careervp.logic.vpr_generator.VPRSixStagePipeline"
+          ) as mock_pipeline_cls:
+              mock_pipeline = MagicMock()
+              mock_pipeline.run.return_value = MagicMock(success=True, data=MagicMock(vpr=MagicMock()))
+              mock_pipeline_cls.return_value = mock_pipeline
+              mock_dal.get_next_vpr_version.return_value = 1
+
+              generate_vpr(minimal_vpr_request, minimal_user_cv, mock_dal)
+
+          mock_dal.save_vpr.assert_called_once()
+
+      def test_regeneration_loop_retries_on_gate_failure(
+          self,
+          minimal_vpr_request: VPRRequest,
+          minimal_user_cv: Any,
+          mock_dal: MagicMock,
+          llm_phase2_response: dict[str, Any],
+      ) -> None:
+          pipeline = _make_pipeline(minimal_vpr_request, minimal_user_cv, mock_dal)
+          call_count = 0
+
+          def failing_then_passing_quality(*args: Any, **kwargs: Any) -> Any:
+              nonlocal call_count
+              call_count += 1
+              meta = MagicMock()
+              meta.passed_gate = call_count >= 2  # Fails on attempt 1, passes on attempt 2
+              return meta
+
+          with patch("careervp.logic.vpr_generator.LLMClient") as mock_llm_cls:
+              mock_llm = mock_llm_cls.return_value
+              mock_llm.call.return_value = MagicMock(
+                  success=True,
+                  data={"text": json.dumps(llm_phase2_response), "input_tokens": 100, "output_tokens": 200, "cost": 0.003, "model": "claude-sonnet-4-5"},
+              )
+              with patch.object(pipeline, "_final_meta_evaluation", side_effect=failing_then_passing_quality):
+                  with patch.object(pipeline, "_synthesize", return_value=Phase2Draft(raw_payload=llm_phase2_response, evidence_context=MagicMock())):
+                      with patch.object(pipeline, "_self_correct", return_value=ValidatedDraft(raw_payload=llm_phase2_response, validation_notes=[], evidence_context=MagicMock())):
+                          with patch.object(pipeline, "_generate_output", return_value=MagicMock(vpr=MagicMock())):
+                              pipeline.run()
+
+          assert call_count >= 2  # Gate was checked at least twice
