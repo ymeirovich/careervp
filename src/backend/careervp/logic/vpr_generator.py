@@ -15,16 +15,18 @@ from __future__ import annotations
 import json
 import re
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import date
 from typing import TYPE_CHECKING, Any, Literal, cast
+
+from pydantic import ValidationError
 
 from careervp.logic.fvs_validator import check_anti_ai_patterns
 from careervp.logic.prompts.vpr_prompt import (
-    STAGE_3_SYSTEM_PROMPT,
-    STAGE_4_SYSTEM_PROMPT,
-    build_stage_3_prompt,
-    build_stage_4_prompt,
+    PHASE2_SYSTEM_PROMPT,
+    PHASE2_VALIDATION_SYSTEM_PROMPT,
+    build_phase2_prompt,
+    build_phase2_validation_prompt,
 )
 
 if TYPE_CHECKING:
@@ -38,11 +40,38 @@ from careervp.models.job import JobPosting
 from careervp.models.result import Result, ResultCode
 from careervp.models.vpr import (
     VPR,
-    EvidenceItem,
-    GapStrategy,
     TokenUsage,
+    VPRApplicationStrategy,
+    VPRCompanyInsight,
+    VPRConcern,
+    VPRConcernsAndMitigations,
+    VPRDifferentiators,
+    VPREvidenceGaps,
+    VPRExecutiveSummary,
+    VPRExperienceMapping,
+    VPRIdentifiedGap,
+    VPRKeyAchievement,
+    VPRKeywordGroup,
+    VPRMetadata,
+    VPRMitigation,
+    VPRMustHave,
+    VPRNiceToHave,
+    VPRObjection,
+    VPRPrerequisite,
+    VPRPrimaryValue,
+    VPRPriorityGap,
+    VPRRelevantExperience,
     VPRRequest,
+    VPRRequirementBreakdown,
     VPRResponse,
+    VPRResponsibility,
+    VPRRoleAlignment,
+    VPRSecondaryValue,
+    VPRSkillsAnalysis,
+    VPRStrength,
+    VPRUniqueStrength,
+    VPRValueProposition,
+    VPRVerificationSummary,
 )
 
 if TYPE_CHECKING:
@@ -87,39 +116,20 @@ class EvidenceList:
 
 
 @dataclass(frozen=True)
-class DraftGapStrategy:
-    """Gap strategy draft element used in stages 3 and 4."""
+class Phase2Draft:
+    """Stage 3 output contract for new 10-section schema."""
 
-    gap: str
-    mitigation_approach: str
-    transferable_skills: list[str]
-
-
-@dataclass(frozen=True)
-class DraftProposition:
-    """Stage 3 output contract."""
-
-    executive_summary: str
-    evidence_matrix: list[EvidenceMatch]
-    differentiators: list[str]
-    gap_strategies: list[DraftGapStrategy]
-    cultural_fit: str | None
-    talking_points: list[str]
-    keywords: list[str]
+    raw_payload: dict[str, Any]
+    evidence_context: EvidenceList
 
 
 @dataclass(frozen=True)
-class CorrectedProposition:
-    """Stage 4 output contract."""
+class ValidatedDraft:
+    """Stage 4 output contract for new 10-section schema."""
 
-    executive_summary: str
-    evidence_matrix: list[EvidenceMatch]
-    differentiators: list[str]
-    gap_strategies: list[DraftGapStrategy]
-    cultural_fit: str | None
-    talking_points: list[str]
-    keywords: list[str]
-    corrections_applied: list[str] = field(default_factory=list)
+    raw_payload: dict[str, Any]
+    validation_notes: list[str]
+    evidence_context: EvidenceList
 
 
 @dataclass(frozen=True)
@@ -289,9 +299,9 @@ class VPRSixStagePipeline:
             experience_level=analysis.experience_level,
         )
 
-    def _synthesize(self, evidence: EvidenceList, feedback: str | None = None) -> DraftProposition:
-        """Stage 3: synthesize initial value proposition draft."""
-        prompt_payload = {
+    def _synthesize(self, evidence: EvidenceList, feedback: str | None = None) -> Phase2Draft:
+        """Stage 3: synthesize initial value proposition draft using Phase 2 prompt."""
+        evidence_payload = {
             'matches': [
                 {
                     'requirement': match.requirement,
@@ -306,71 +316,44 @@ class VPRSixStagePipeline:
             'experience_level': evidence.experience_level,
         }
 
-        prompt = build_stage_3_prompt(prompt_payload, feedback=feedback)
+        prompt = build_phase2_prompt(evidence_payload, self._user_cv, self._request, feedback)
         payload = self._invoke_stage_json(
             prompt=prompt,
-            system_prompt=STAGE_3_SYSTEM_PROMPT,
-            max_tokens=3000,
+            system_prompt=PHASE2_SYSTEM_PROMPT,
+            max_tokens=6000,
             temperature=0.65,
         )
-        return _parse_draft_proposition(payload, evidence)
+        return Phase2Draft(raw_payload=payload, evidence_context=evidence)
 
-    def _self_correct(self, draft: DraftProposition, feedback: str | None = None) -> CorrectedProposition:
-        """Stage 4: self-correct draft for quality and anti-AI style."""
-        prompt_payload = _draft_to_payload(draft)
-        prompt = build_stage_4_prompt(prompt_payload, feedback=feedback)
+    def _self_correct(self, draft: Phase2Draft, feedback: str | None = None) -> ValidatedDraft:
+        """Stage 4: validate and correct the Phase 2 draft."""
+        prompt = build_phase2_validation_prompt(draft.raw_payload, self._user_cv, feedback)
 
         try:
             payload = self._invoke_stage_json(
                 prompt=prompt,
-                system_prompt=STAGE_4_SYSTEM_PROMPT,
-                max_tokens=3000,
+                system_prompt=PHASE2_VALIDATION_SYSTEM_PROMPT,
+                max_tokens=6000,
                 temperature=0.35,
             )
-            return _parse_corrected_proposition(payload, draft)
+            validation_notes = _ensure_str_list(payload.get('validation_notes'))
+            return ValidatedDraft(
+                raw_payload=payload,
+                validation_notes=validation_notes,
+                evidence_context=draft.evidence_context,
+            )
         except (RuntimeError, ValueError):
-            return _rule_based_self_correction(draft)
+            return _rule_based_validation_fallback(draft)
 
-    def _generate_output(self, corrected: CorrectedProposition) -> VPRData:
-        """Stage 5: format corrected proposition into final VPR model."""
-        evidence_matrix = [
-            EvidenceItem(
-                requirement=item.requirement,
-                evidence=item.evidence,
-                alignment_score=item.alignment_score,
-                impact_potential=item.impact_potential,
-            )
-            for item in corrected.evidence_matrix
-        ]
-        gap_strategies = [
-            GapStrategy(
-                gap=strategy.gap,
-                mitigation_approach=strategy.mitigation_approach,
-                transferable_skills=strategy.transferable_skills,
-            )
-            for strategy in corrected.gap_strategies
-        ]
-
-        vpr = VPR(  # type: ignore[call-arg]  # TODO spec-03: update to 10-section VPR
-            application_id=self._request.application_id,
-            user_id=self._request.user_id,
-            executive_summary=corrected.executive_summary,  # type: ignore[arg-type]
-            evidence_matrix=evidence_matrix,
-            differentiators=corrected.differentiators,  # type: ignore[arg-type]
-            gap_strategies=gap_strategies,
-            cultural_fit=corrected.cultural_fit,
-            talking_points=corrected.talking_points,
-            keywords=corrected.keywords,
-            language=self._request.job_posting.language,
-            version=1,
-            created_at=datetime.now(timezone.utc),
-            word_count=0,
-        )
+    def _generate_output(self, validated: ValidatedDraft) -> VPRData:
+        """Stage 5: parse validated payload into new 10-section VPR model."""
+        vpr = _parse_full_vpr_model(validated.raw_payload, self._request, validated.evidence_context)
         vpr.word_count = _calculate_word_count(vpr)
         return VPRData(vpr=vpr)
 
     def _final_meta_evaluation(self, vpr: VPRData) -> FinalVPRData:
         """Stage 6: anti-AI gate and final quality check."""
+        # SPEC-04-EXTENSION: add structural_validation_result here
         content = _serialize_vpr_for_quality(vpr.vpr)
         anti_ai_assessment = check_anti_ai_patterns(content)
         return FinalVPRData(
@@ -458,207 +441,449 @@ def generate_vpr(request: VPRRequest, user_cv: UserCV, dal: DynamoDalHandler) ->
     return Result(success=True, data=response, code=ResultCode.VPR_GENERATED)
 
 
-def _parse_draft_proposition(payload: dict[str, Any], evidence: EvidenceList) -> DraftProposition:
-    """Parse Stage 3 JSON payload into DraftProposition."""
-    evidence_matrix = _parse_evidence_matrix(payload.get('evidence_matrix'), evidence.matches)
-    gap_strategies = _parse_gap_strategies(payload.get('gap_strategies'))
+def _parse_full_vpr_model(
+    payload: dict[str, Any],
+    request: VPRRequest,
+    evidence_context: EvidenceList,
+) -> VPR:
+    """Parse a validated Phase 2 payload into the 10-section VPR model.
 
-    executive_summary = str(payload.get('executive_summary', '')).strip()
-    if not executive_summary:
-        executive_summary = _default_executive_summary(evidence)
+    Each section is parsed individually; a ValidationError falls back to a
+    minimal valid default so a single bad section never aborts the whole VPR.
+    """
+    try:
+        metadata = VPRMetadata.model_validate(payload.get('metadata', {}))
+    except ValidationError:
+        metadata = _build_minimal_metadata(request)
 
-    differentiators = _ensure_str_list(payload.get('differentiators'))
-    if not differentiators:
-        differentiators = _default_differentiators(evidence)
+    try:
+        executive_summary = VPRExecutiveSummary.model_validate(payload.get('executive_summary', {}))
+    except ValidationError:
+        executive_summary = _build_minimal_executive_summary()
 
-    talking_points = _ensure_str_list(payload.get('talking_points'))
-    if not talking_points:
-        talking_points = _default_talking_points(evidence)
+    try:
+        role_alignment = VPRRoleAlignment.model_validate(payload.get('role_alignment', {}))
+    except ValidationError:
+        role_alignment = _build_minimal_role_alignment()
 
-    keywords = _ensure_str_list(payload.get('keywords'))
-    if not keywords:
-        keywords = evidence.key_skills[:10]
+    try:
+        experience_mapping = VPRExperienceMapping.model_validate(payload.get('experience_mapping', {}))
+    except ValidationError:
+        experience_mapping = _build_minimal_experience_mapping()
 
-    cultural_fit_raw = payload.get('cultural_fit')
-    cultural_fit = str(cultural_fit_raw).strip() if cultural_fit_raw else None
+    try:
+        skills_analysis = VPRSkillsAnalysis.model_validate(payload.get('skills_analysis', {}))
+    except ValidationError:
+        skills_analysis = _build_minimal_skills_analysis()
 
-    return DraftProposition(
+    try:
+        evidence_gaps = VPREvidenceGaps.model_validate(payload.get('evidence_gaps', {}))
+    except ValidationError:
+        evidence_gaps = _build_minimal_evidence_gaps(evidence_context)
+
+    try:
+        differentiators = VPRDifferentiators.model_validate(payload.get('differentiators', {}))
+    except ValidationError:
+        differentiators = _build_minimal_differentiators(evidence_context)
+
+    try:
+        concerns_and_mitigations = VPRConcernsAndMitigations.model_validate(payload.get('concerns_and_mitigations', {}))
+    except ValidationError:
+        concerns_and_mitigations = _build_minimal_concerns_and_mitigations()
+
+    try:
+        value_proposition = VPRValueProposition.model_validate(payload.get('value_proposition', {}))
+    except ValidationError:
+        value_proposition = _build_minimal_value_proposition()
+
+    try:
+        application_strategy = VPRApplicationStrategy.model_validate(payload.get('application_strategy', {}))
+    except ValidationError:
+        application_strategy = _build_minimal_application_strategy()
+
+    company_insights: VPRCompanyInsight | None = None
+    if 'company_insights' in payload:
+        try:
+            company_insights = VPRCompanyInsight.model_validate(payload['company_insights'])
+        except ValidationError:
+            pass
+
+    verification_summary: VPRVerificationSummary | None = None
+    if 'verification_summary' in payload:
+        try:
+            verification_summary = VPRVerificationSummary.model_validate(payload['verification_summary'])
+        except ValidationError:
+            pass
+
+    return VPR(
+        application_id=request.application_id,
+        user_id=request.user_id,
+        metadata=metadata,
         executive_summary=executive_summary,
-        evidence_matrix=evidence_matrix,
+        role_alignment=role_alignment,
+        experience_mapping=experience_mapping,
+        skills_analysis=skills_analysis,
+        evidence_gaps=evidence_gaps,
         differentiators=differentiators,
-        gap_strategies=gap_strategies,
-        cultural_fit=cultural_fit,
-        talking_points=talking_points,
-        keywords=keywords,
+        concerns_and_mitigations=concerns_and_mitigations,
+        value_proposition=value_proposition,
+        application_strategy=application_strategy,
+        company_insights=company_insights,
+        verification_summary=verification_summary,
+        language=request.job_posting.language,
+        version=1,
     )
 
 
-def _parse_corrected_proposition(payload: dict[str, Any], draft: DraftProposition) -> CorrectedProposition:
-    """Parse Stage 4 JSON payload into CorrectedProposition."""
-    evidence_matrix = _parse_evidence_matrix(payload.get('evidence_matrix'), draft.evidence_matrix)
-    gap_strategies = _parse_gap_strategies(payload.get('gap_strategies')) or draft.gap_strategies
+def _rule_based_validation_fallback(draft: Phase2Draft) -> ValidatedDraft:
+    """Fallback when Stage 4 LLM fails: clean banned terms from text-heavy fields."""
+    payload = dict(draft.raw_payload)
 
-    executive_summary = str(payload.get('executive_summary', draft.executive_summary)).strip() or draft.executive_summary
-    differentiators = _ensure_str_list(payload.get('differentiators')) or draft.differentiators
-    talking_points = _ensure_str_list(payload.get('talking_points')) or draft.talking_points
-    keywords = _ensure_str_list(payload.get('keywords')) or draft.keywords
+    def _clean_nested(d: dict[str, Any], *keys: str) -> None:
+        """Replace banned terms in a nested string field in-place."""
+        node: Any = d
+        for key in keys[:-1]:
+            if not isinstance(node, dict):
+                return
+            node = node.get(key)
+        if isinstance(node, dict):
+            last_key = keys[-1]
+            raw = node.get(last_key)
+            if isinstance(raw, str):
+                node[last_key] = _replace_banned_terms(raw)
 
-    cultural_fit_raw = payload.get('cultural_fit', draft.cultural_fit)
-    cultural_fit = str(cultural_fit_raw).strip() if cultural_fit_raw else None
+    _clean_nested(payload, 'executive_summary', 'fit_rationale')
+    _clean_nested(payload, 'differentiators', 'positioning_statement')
+    _clean_nested(payload, 'value_proposition', 'elevator_pitch')
+    _clean_nested(payload, 'value_proposition', 'primary_value', 'statement')
 
-    corrections_applied = _ensure_str_list(payload.get('corrections_applied'))
-
-    return CorrectedProposition(
-        executive_summary=executive_summary,
-        evidence_matrix=evidence_matrix,
-        differentiators=differentiators,
-        gap_strategies=gap_strategies,
-        cultural_fit=cultural_fit,
-        talking_points=talking_points,
-        keywords=keywords,
-        corrections_applied=corrections_applied,
+    return ValidatedDraft(
+        raw_payload=payload,
+        validation_notes=['Fallback: banned terms removed from text fields'],
+        evidence_context=draft.evidence_context,
     )
 
 
-def _rule_based_self_correction(draft: DraftProposition) -> CorrectedProposition:
-    """Fallback self-correction when Stage 4 LLM correction is unavailable."""
-    corrections_applied: list[str] = []
+# ---------------------------------------------------------------------------
+# Minimal section builders — used when model_validate() raises ValidationError
+# ---------------------------------------------------------------------------
 
-    corrected_summary = _replace_banned_terms(draft.executive_summary)
-    if corrected_summary != draft.executive_summary:
-        corrections_applied.append('Removed banned terms from executive summary')
 
-    corrected_differentiators = [_replace_banned_terms(value) for value in draft.differentiators]
-    if corrected_differentiators != draft.differentiators:
-        corrections_applied.append('Sanitized differentiators for anti-AI patterns')
-
-    corrected_talking_points = [_replace_banned_terms(value) for value in draft.talking_points]
-    if corrected_talking_points != draft.talking_points:
-        corrections_applied.append('Sanitized talking points for anti-AI patterns')
-
-    return CorrectedProposition(
-        executive_summary=corrected_summary,
-        evidence_matrix=draft.evidence_matrix,
-        differentiators=corrected_differentiators,
-        gap_strategies=draft.gap_strategies,
-        cultural_fit=draft.cultural_fit,
-        talking_points=corrected_talking_points,
-        keywords=draft.keywords,
-        corrections_applied=corrections_applied,
+def _build_minimal_metadata(request: VPRRequest) -> VPRMetadata:
+    job_data = request.job_posting.model_dump(mode='json')
+    return VPRMetadata(
+        report_date=date.today().isoformat(),
+        candidate_name='Candidate',
+        target_role=str(job_data.get('title', 'Target Role')),
+        target_company=str(job_data.get('company', 'Target Company')),
+        report_version='1.0',
+        job_posting_url=None,
+        analysis_scope='full',
     )
 
 
-def _parse_evidence_matrix(raw_value: object, fallback: list[EvidenceMatch]) -> list[EvidenceMatch]:
-    if not isinstance(raw_value, list):
-        return fallback
-
-    parsed: list[EvidenceMatch] = []
-    for entry in raw_value:
-        if not isinstance(entry, dict):
-            continue
-        parsed.append(
-            EvidenceMatch(
-                requirement=str(entry.get('requirement', '')).strip(),
-                evidence=str(entry.get('evidence', '')).strip(),
-                alignment_score=_normalize_alignment(entry.get('alignment_score')),
-                impact_potential=str(entry.get('impact_potential', '')).strip(),
-            )
-        )
-
-    return parsed or fallback
-
-
-def _parse_gap_strategies(raw_value: object) -> list[DraftGapStrategy]:
-    if raw_value is None:
-        return []
-
-    raw_entries: list[dict[str, Any]]
-    if isinstance(raw_value, list):
-        raw_entries = [entry for entry in raw_value if isinstance(entry, dict)]
-    elif isinstance(raw_value, dict):
-        raw_entries = [raw_value]
-    else:
-        return []
-
-    return [
-        DraftGapStrategy(
-            gap=str(entry.get('gap', '')).strip(),
-            mitigation_approach=str(entry.get('mitigation_approach', '')).strip(),
-            transferable_skills=_ensure_str_list(entry.get('transferable_skills')),
-        )
-        for entry in raw_entries
+def _build_minimal_executive_summary() -> VPRExecutiveSummary:
+    fit_rationale = (
+        'Candidate demonstrates relevant background for this role based on available evidence. '
+        'CV analysis indicates alignment with core requirements. '
+        'Application materials should highlight key experience areas.'
+    )
+    strengths = [
+        VPRStrength(
+            strength='Relevant professional experience in the field',
+            evidence='Detailed in CV work history',
+            relevance_to_role='Directly applicable to target role',
+        ),
+        VPRStrength(
+            strength='Transferable skills from prior positions',
+            evidence='Documented across CV experience sections',
+            relevance_to_role='Supports core role requirements',
+        ),
+        VPRStrength(
+            strength='Background aligned with job description needs',
+            evidence='CV facts corroborate this assessment',
+            relevance_to_role='Contributes to role success',
+        ),
     ]
+    concerns = [
+        VPRConcern(
+            concern='Evidence parsing encountered a validation issue',
+            severity='low',
+            mitigation='Review original CV and job posting for full context',
+        ),
+        VPRConcern(
+            concern='Full assessment may require supplementary review',
+            severity='low',
+            mitigation='Verify alignment manually before applying',
+        ),
+        VPRConcern(
+            concern='Some sections may benefit from additional detail',
+            severity='low',
+            mitigation='Address any gaps in cover letter',
+        ),
+    ]
+    return VPRExecutiveSummary(
+        overall_fit_score=50,
+        fit_rationale=fit_rationale,
+        top_three_strengths=strengths,
+        top_three_concerns=concerns,
+        recommended_approach='apply_with_customization',
+    )
 
 
-def _draft_to_payload(draft: DraftProposition) -> dict[str, Any]:
-    return {
-        'executive_summary': draft.executive_summary,
-        'evidence_matrix': [
-            {
-                'requirement': match.requirement,
-                'evidence': match.evidence,
-                'alignment_score': match.alignment_score,
-                'impact_potential': match.impact_potential,
-            }
-            for match in draft.evidence_matrix
+def _build_minimal_role_alignment() -> VPRRoleAlignment:
+    return VPRRoleAlignment(
+        core_responsibilities=[
+            VPRResponsibility(
+                responsibility='Core role responsibility',
+                alignment_score=50,
+                candidate_evidence=['Evidence from CV work history'],
+                evidence_quality='transferable',
+            )
         ],
-        'differentiators': draft.differentiators,
-        'gap_strategies': [
-            {
-                'gap': strategy.gap,
-                'mitigation_approach': strategy.mitigation_approach,
-                'transferable_skills': strategy.transferable_skills,
-            }
-            for strategy in draft.gap_strategies
+        requirement_breakdown=VPRRequirementBreakdown(
+            must_have=[
+                VPRMustHave(
+                    requirement='Core requirement',
+                    candidate_meets_requirement=True,
+                    evidence='CV experience supports this',
+                )
+            ],
+            nice_to_have=[
+                VPRNiceToHave(
+                    preference='Preferred skill',
+                    candidate_has_this=False,
+                )
+            ],
+            assumed_prerequisites=[
+                VPRPrerequisite(
+                    assumption='Basic professional qualification',
+                    candidate_meets_this=True,
+                    reasoning='Implied by overall experience level',
+                )
+            ],
+        ),
+    )
+
+
+def _build_minimal_experience_mapping() -> VPRExperienceMapping:
+    return VPRExperienceMapping(
+        relevant_experiences=[
+            VPRRelevantExperience(
+                role='Professional Role',
+                organization='Organization',
+                duration='1 year',
+                key_achievements=[
+                    VPRKeyAchievement(
+                        achievement='Delivered measurable results',
+                        metric='Outcome documented in CV',
+                        impact='Positive business contribution',
+                    )
+                ],
+                relevance_to_target_role='Experience is applicable to target role requirements',
+            )
         ],
-        'cultural_fit': draft.cultural_fit,
-        'talking_points': draft.talking_points,
-        'keywords': draft.keywords,
-    }
+        experience_gaps=[],
+    )
+
+
+def _build_minimal_skills_analysis() -> VPRSkillsAnalysis:
+    return VPRSkillsAnalysis(
+        technical_skills=[],
+        soft_skills=[],
+        tool_proficiency=[],
+    )
+
+
+def _build_minimal_evidence_gaps(evidence_context: EvidenceList) -> VPREvidenceGaps:
+    uncovered = evidence_context.uncovered_requirements[:1]
+    gap_requirement = uncovered[0] if uncovered else 'Core requirement area'
+    return VPREvidenceGaps(
+        identified_gaps=[
+            VPRIdentifiedGap(
+                requirement=gap_requirement,
+                current_evidence='Evidence from CV reviewed but parsing failed',
+                gap_severity='low',
+                suggested_evidence=['Provide supporting documentation in application'],
+            )
+        ],
+        priority_gaps_to_address=[
+            VPRPriorityGap(
+                gap=gap_requirement,
+                priority=1,
+                action_item='Review and address before submitting application',
+                deadline='before_application',
+            )
+        ],
+    )
+
+
+def _build_minimal_differentiators(evidence_context: EvidenceList) -> VPRDifferentiators:
+    skills_snippet = ', '.join(evidence_context.key_skills[:3]) if evidence_context.key_skills else 'relevant domain'
+    positioning = (
+        f'Candidate brings a distinct combination of {skills_snippet} expertise '
+        'that aligns with target role requirements and offers tangible value to the organization.'
+    )
+    # Ensure positioning_statement is within 100-300 chars
+    if len(positioning) < 100:
+        positioning = positioning + ' Professional background supports immediate contribution and long-term growth.'
+    positioning = positioning[:300]
+    return VPRDifferentiators(
+        unique_strengths=[
+            VPRUniqueStrength(
+                strength=f'Professional background in {skills_snippet}',
+                rarity='somewhat_rare',
+                relevance='Applicable to target role requirements',
+                proof='CV experience record',
+            )
+        ],
+        competitive_advantages=[],
+        positioning_statement=positioning,
+    )
+
+
+def _build_minimal_concerns_and_mitigations() -> VPRConcernsAndMitigations:
+    return VPRConcernsAndMitigations(
+        likely_objections=[
+            VPRObjection(
+                objection='Candidate background may not fully match all listed requirements',
+                likelihood='possible',
+                mitigation=VPRMitigation(
+                    strategy='acknowledge_and_address',
+                    messaging=('Candidate addresses gaps through transferable experience and a demonstrated capacity for rapid skill development.'),
+                ),
+                where_to_address=['cover_letter'],
+            )
+        ],
+        preemptive_responses=[],
+    )
+
+
+def _build_minimal_value_proposition() -> VPRValueProposition:
+    elevator_pitch = (
+        'Experienced professional with a strong track record, ready to deliver results and contribute effectively from day one in this role.'
+    )
+    return VPRValueProposition(
+        primary_value=VPRPrimaryValue(
+            statement='Delivers measurable results through applied expertise and a focused work style',
+            evidence='CV work history demonstrates consistent achievement across roles',
+            outcome_for_company='Contributes directly to team goals and organizational priorities',
+        ),
+        secondary_values=[
+            VPRSecondaryValue(
+                value='Technical depth in relevant domain',
+                proof='CV skills and project history',
+            ),
+            VPRSecondaryValue(
+                value='Collaborative cross-functional approach',
+                proof='Multi-stakeholder experience documented in CV',
+            ),
+        ],
+        quantified_impact=[],
+        elevator_pitch=elevator_pitch,
+    )
+
+
+def _build_minimal_application_strategy() -> VPRApplicationStrategy:
+    return VPRApplicationStrategy(
+        messaging_approach=('Focus on relevant experience and transferable skills to demonstrate fit for the core role requirements.'),
+        ats_keywords=VPRKeywordGroup(primary=[], secondary=[]),
+        cv_lead_differentiator='Lead with most relevant experience matching core role requirements',
+        sections_to_compress=[],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Word count and quality serialization — updated for new 10-section schema
+# ---------------------------------------------------------------------------
 
 
 def _calculate_word_count(vpr: VPR) -> int:
-    """Count words across all textual sections."""
-    # TODO spec-03: update to traverse new 10-section VPR structure
-    sections: list[str] = [vpr.executive_summary or '', vpr.cultural_fit or '']  # type: ignore[list-item, attr-defined]
-    sections.extend(vpr.differentiators)  # type: ignore[arg-type]
-    sections.extend(vpr.talking_points)  # type: ignore[attr-defined]
-    sections.extend(vpr.keywords)  # type: ignore[attr-defined]
+    """Count words across all textual sections of the new 10-section VPR."""
+    sections: list[str] = []
 
-    for evidence in vpr.evidence_matrix:  # type: ignore[attr-defined]
-        sections.extend([evidence.requirement, evidence.evidence, evidence.impact_potential])
+    # Section 2 — Executive Summary
+    sections.append(vpr.executive_summary.fit_rationale)
+    for strength in vpr.executive_summary.top_three_strengths:
+        sections.extend([strength.strength, strength.evidence, strength.relevance_to_role])
+    for concern in vpr.executive_summary.top_three_concerns:
+        sections.extend([concern.concern, concern.mitigation])
 
-    for strategy in vpr.gap_strategies:  # type: ignore[attr-defined]
-        sections.extend(
-            [
-                strategy.gap,
-                strategy.mitigation_approach,
-                ' '.join(strategy.transferable_skills),
-            ]
-        )
+    # Section 3 — Role Alignment
+    for resp in vpr.role_alignment.core_responsibilities:
+        sections.append(resp.responsibility)
 
-    words = WORD_PATTERN.findall(' '.join(sections))
+    # Section 4 — Experience Mapping
+    for exp in vpr.experience_mapping.relevant_experiences:
+        sections.append(exp.relevance_to_target_role)
+    for gap in vpr.experience_mapping.experience_gaps:
+        sections.append(gap.missing_experience)
+        if gap.mitigation_strategy:
+            sections.append(gap.mitigation_strategy)
+
+    # Section 5 — Skills Analysis
+    for skill in vpr.skills_analysis.technical_skills:
+        sections.append(skill.evidence)
+
+    # Section 6 — Evidence Gaps
+    for identified in vpr.evidence_gaps.identified_gaps:
+        sections.append(identified.current_evidence)
+
+    # Section 7 — Differentiators
+    sections.append(vpr.differentiators.positioning_statement)
+
+    # Section 8 — Concerns & Mitigations
+    for objection in vpr.concerns_and_mitigations.likely_objections:
+        sections.extend([objection.objection, objection.mitigation.messaging])
+
+    # Section 9 — Value Proposition
+    sections.extend(
+        [
+            vpr.value_proposition.elevator_pitch,
+            vpr.value_proposition.primary_value.statement,
+            vpr.value_proposition.primary_value.evidence,
+        ]
+    )
+
+    # Section 10 — Application Strategy
+    sections.append(vpr.application_strategy.messaging_approach)
+
+    # Additional — Company Insights (optional)
+    if vpr.company_insights:
+        sections.append(vpr.company_insights.mission_and_position)
+
+    words = WORD_PATTERN.findall(' '.join(s for s in sections if s))
     return len(words)
 
 
 def _serialize_vpr_for_quality(vpr: VPR) -> str:
-    """Serialize VPR content into plain text for anti-AI checks."""
-    # TODO spec-03: update to traverse new 10-section VPR structure
-    sections: list[str] = [vpr.executive_summary]  # type: ignore[list-item]
-    if vpr.cultural_fit:  # type: ignore[attr-defined]
-        sections.append(vpr.cultural_fit)  # type: ignore[attr-defined]
-    sections.extend(vpr.differentiators)  # type: ignore[arg-type]
-    sections.extend(vpr.talking_points)  # type: ignore[attr-defined]
-    sections.extend(vpr.keywords)  # type: ignore[attr-defined]
+    """Serialize VPR content into plain text for anti-AI pattern checks."""
+    sections: list[str] = []
 
-    for item in vpr.evidence_matrix:  # type: ignore[attr-defined]
-        sections.append(f'{item.requirement}. {item.evidence}. {item.impact_potential}')
+    # Section 2 — Executive Summary
+    sections.append(vpr.executive_summary.fit_rationale)
 
-    for strategy in vpr.gap_strategies:  # type: ignore[attr-defined]
-        sections.append(f'{strategy.gap}. {strategy.mitigation_approach}.')
-        sections.extend(strategy.transferable_skills)
+    # Section 7 — Differentiators
+    sections.append(vpr.differentiators.positioning_statement)
+    for strength in vpr.differentiators.unique_strengths:
+        sections.extend([strength.strength, strength.relevance])
 
-    return '\n'.join([section for section in sections if section])
+    # Section 9 — Value Proposition
+    sections.append(vpr.value_proposition.elevator_pitch)
+
+    # Section 8 — Concerns & Mitigations
+    for objection in vpr.concerns_and_mitigations.likely_objections:
+        sections.append(objection.mitigation.messaging)
+
+    # Section 10 — Application Strategy
+    sections.append(vpr.application_strategy.messaging_approach)
+
+    return '\n'.join(s for s in sections if s)
+
+
+# ---------------------------------------------------------------------------
+# Preserved utility functions
+# ---------------------------------------------------------------------------
 
 
 def _ensure_str_list(value: object) -> list[str]:
@@ -738,31 +963,6 @@ def _infer_experience_level(cv: UserCV) -> str:
     if len(cv.experience) >= 2:
         return 'mid'
     return 'early'
-
-
-def _default_executive_summary(evidence: EvidenceList) -> str:
-    covered = len([match for match in evidence.matches if match.alignment_score != 'DEVELOPING'])
-    total = len(evidence.matches)
-    return (
-        f'Candidate shows {evidence.experience_level} readiness with direct evidence for '
-        f'{covered}/{total} priority requirements and clear plans for remaining gaps.'
-    )
-
-
-def _default_differentiators(evidence: EvidenceList) -> list[str]:
-    differentiators: list[str] = []
-    if evidence.key_skills:
-        differentiators.append(f'Breadth across skills: {", ".join(evidence.key_skills[:4])}')
-    if evidence.matches:
-        differentiators.append(f'Role-aligned evidence across {len(evidence.matches)} requirements')
-    return differentiators or ['Consistent track record tied to role requirements']
-
-
-def _default_talking_points(evidence: EvidenceList) -> list[str]:
-    points: list[str] = []
-    for match in evidence.matches[:5]:
-        points.append(f"Explain {match.evidence} and how it supports '{match.requirement}'.")
-    return points
 
 
 def _build_regeneration_feedback(final_data: FinalVPRData) -> str:
