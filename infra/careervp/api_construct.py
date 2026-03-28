@@ -179,6 +179,7 @@ class ApiConstruct(Construct):
         self.vpr_worker_func = self._add_vpr_worker_stream_lambda(
             jobs_table=self.api_db.jobs_table,
             artifacts_table=self.api_db.artifacts_table,
+            applications_table=self.api_db.applications_table,
             dlq=self.vpr_worker_dlq,
         )
         self.cv_tailor_worker_func = self._add_cv_tailor_worker_lambda(
@@ -1306,6 +1307,7 @@ class ApiConstruct(Construct):
         self,
         jobs_table: dynamodb.TableV2,
         artifacts_table: dynamodb.TableV2,
+        applications_table: dynamodb.TableV2,
         dlq: aws_sqs.Queue,
     ) -> _lambda.Function:
         """Create vpr_worker (DynamoDB stream -> Lambda) with stream failure DLQ."""
@@ -1358,6 +1360,7 @@ class ApiConstruct(Construct):
         jobs_table.grant_stream_read(lambda_function)
         jobs_table.grant_read_write_data(lambda_function)
         artifacts_table.grant_read_write_data(lambda_function)
+        applications_table.grant_read_write_data(lambda_function)
         return lambda_function
 
     def _add_cv_tailor_worker_lambda(

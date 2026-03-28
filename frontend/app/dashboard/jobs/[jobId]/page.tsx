@@ -104,6 +104,33 @@ export default function ApplicationHubPage({
         setCvTaskId(hubData.artifacts.cv_tailored.artifact_id);
       }
 
+      // Populate local IDs from already-completed artifacts so the Edit button
+      // appears immediately on page load (same check used during generation).
+      if (
+        hubData?.artifacts.vpr?.status === "completed" &&
+        hubData.artifacts.vpr.artifact_id
+      ) {
+        setVprLocalId(hubData.artifacts.vpr.artifact_id);
+      }
+      if (
+        hubData?.artifacts.cover_letter?.status === "completed" &&
+        hubData.artifacts.cover_letter.artifact_id
+      ) {
+        setClLocalId(hubData.artifacts.cover_letter.artifact_id);
+      }
+      if (
+        hubData?.artifacts.interview_prep?.status === "completed" &&
+        hubData.artifacts.interview_prep.artifact_id
+      ) {
+        setIpLocalId(hubData.artifacts.interview_prep.artifact_id);
+      }
+      if (
+        hubData?.artifacts.cv_tailored?.status === "completed" &&
+        hubData.artifacts.cv_tailored.artifact_id
+      ) {
+        setCvTailoredId(hubData.artifacts.cv_tailored.artifact_id);
+      }
+
       setLoading(false);
     };
     init();
