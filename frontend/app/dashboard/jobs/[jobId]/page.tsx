@@ -377,7 +377,10 @@ export default function ApplicationHubPage({
 
   const handleGenerateCV = async () => {
     if (!cv?.cv_id) return;
-    const vprId = hub?.artifacts.vpr?.artifact_id ?? undefined;
+    // Use hub artifact_id if available, fall back to localStorage-persisted ID.
+    // Send null (not undefined) so JSON.stringify includes the key and the
+    // backend detects the new-API flow via the {cv_id, job_id, vpr_id} subset check.
+    const vprId = hub?.artifacts.vpr?.artifact_id ?? vprLocalId ?? null;
     setGeneratingCv(true);
     try {
       const task = await api.generateCV({
@@ -385,18 +388,25 @@ export default function ApplicationHubPage({
         cv_id: cv.cv_id,
         vpr_id: vprId,
       });
-      setCvTaskId(task.request_id);
-      setHub((prev) =>
-        prev
-          ? {
-              ...prev,
-              artifacts: {
-                ...prev.artifacts,
-                cv_tailored: { status: "processing", artifact_id: null },
-              },
-            }
-          : prev
-      );
+      if (task.status === "completed") {
+        // Idempotent — CV tailoring already done. Show Edit immediately.
+        setCvTailoredId(task.request_id);
+        persistArtifact("cv", task.request_id);
+        refreshHub();
+      } else {
+        setCvTaskId(task.request_id);
+        setHub((prev) =>
+          prev
+            ? {
+                ...prev,
+                artifacts: {
+                  ...prev.artifacts,
+                  cv_tailored: { status: "processing", artifact_id: null },
+                },
+              }
+            : prev
+        );
+      }
     } catch (err) {
       console.error("Generate CV error:", err);
     } finally {
