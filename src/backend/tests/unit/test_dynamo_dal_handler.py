@@ -14,7 +14,33 @@ from pytest_mock import MockerFixture
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.models.result import ResultCode
-from careervp.models.vpr import VPR, EvidenceItem, GapStrategy
+from careervp.models.vpr import (
+    VPR,
+    VPRApplicationStrategy,
+    VPRConcern,
+    VPRConcernsAndMitigations,
+    VPRDifferentiators,
+    VPREvidenceGaps,
+    VPRExecutiveSummary,
+    VPRExperienceMapping,
+    VPRIdentifiedGap,
+    VPRKeyAchievement,
+    VPRKeywordGroup,
+    VPRMetadata,
+    VPRMitigation,
+    VPRObjection,
+    VPRPrimaryValue,
+    VPRPriorityGap,
+    VPRRelevantExperience,
+    VPRRequirementBreakdown,
+    VPRResponsibility,
+    VPRRoleAlignment,
+    VPRSecondaryValue,
+    VPRSkillsAnalysis,
+    VPRStrength,
+    VPRUniqueStrength,
+    VPRValueProposition,
+)
 
 TABLE_NAME = 'test-vpr-table'
 
@@ -81,26 +107,135 @@ def _build_vpr(version: int = 1, application_id: str = 'app-123', user_id: str =
     return VPR(
         application_id=application_id,
         user_id=user_id,
-        executive_summary='Candidate summary with strategic framing.',
-        evidence_matrix=[
-            EvidenceItem(
-                requirement='Leadership',
-                evidence='Led cross-functional teams for 3 years at Apex Labs.',
-                alignment_score='STRONG',
-                impact_potential='Scaled delivery velocity by 25%.',
-            )
-        ],
-        differentiators=['Scaled cross-functional delivery'],
-        gap_strategies=[
-            GapStrategy(
-                gap='AI certifications',
-                mitigation_approach='Highlight hands-on pilots with internal AI tooling.',
-                transferable_skills=['ML Ops'],
-            )
-        ],
-        cultural_fit='Values-first operator with transparent communication.',
-        talking_points=['Discuss recent platform migration'],
-        keywords=['Leadership', 'AI strategy'],
+        metadata=VPRMetadata(
+            report_date='2024-01-15',
+            candidate_name='Alex Rivers',
+            target_role='Principal Platform Engineer',
+            target_company='Apex Labs',
+        ),
+        executive_summary=VPRExecutiveSummary(
+            overall_fit_score=82,
+            fit_rationale=(
+                'Strong cross-functional delivery track record aligns with platform leadership requirements. '
+                'AWS and Python expertise directly map to the core technical stack.'
+            ),
+            top_three_strengths=[
+                VPRStrength(
+                    strength='Cross-functional delivery leadership', evidence='Led 5+ cross-functional teams', relevance_to_role='Team scaling'
+                ),
+                VPRStrength(strength='AWS cloud architecture', evidence='Designed 3 production platforms', relevance_to_role='Infrastructure'),
+                VPRStrength(strength='Python backend expertise', evidence='5 years production Python', relevance_to_role='Core stack'),
+            ],
+            top_three_concerns=[
+                VPRConcern(concern='Limited AI certification track record', severity='medium', mitigation='Showcase hands-on pilots'),
+                VPRConcern(concern='No direct platform migration projects listed', severity='low', mitigation='Reference adjacent work'),
+                VPRConcern(concern='Emerging ML Ops exposure only', severity='low', mitigation='Highlight transferable skills'),
+            ],
+            recommended_approach='apply_with_customization',
+        ),
+        role_alignment=VPRRoleAlignment(
+            core_responsibilities=[
+                VPRResponsibility(
+                    responsibility='Lead cross-functional platform delivery',
+                    alignment_score=88,
+                    candidate_evidence=['Led cross-functional teams at Apex Labs for 3 years'],
+                    evidence_quality='direct',
+                )
+            ],
+            requirement_breakdown=VPRRequirementBreakdown(
+                must_have=[],
+                nice_to_have=[],
+                assumed_prerequisites=[],
+            ),
+        ),
+        experience_mapping=VPRExperienceMapping(
+            relevant_experiences=[
+                VPRRelevantExperience(
+                    role='Platform Lead',
+                    organization='Apex Labs',
+                    duration='3 years',
+                    key_achievements=[
+                        VPRKeyAchievement(achievement='Scaled delivery velocity', metric='25% improvement', impact='Reduced cycle time')
+                    ],
+                    relevance_to_target_role='Direct platform leadership match',
+                )
+            ],
+            experience_gaps=[],
+        ),
+        skills_analysis=VPRSkillsAnalysis(
+            technical_skills=[],
+            soft_skills=[],
+            tool_proficiency=[],
+        ),
+        evidence_gaps=VPREvidenceGaps(
+            identified_gaps=[
+                VPRIdentifiedGap(
+                    requirement='AI certifications',
+                    current_evidence='Hands-on pilot work only',
+                    gap_severity='medium',
+                    suggested_evidence=['Complete AWS ML specialty cert'],
+                )
+            ],
+            priority_gaps_to_address=[
+                VPRPriorityGap(
+                    gap='AI certifications',
+                    priority=1,
+                    action_item='Enroll in AWS ML specialty certification',
+                    deadline='before_interview',
+                )
+            ],
+        ),
+        differentiators=VPRDifferentiators(
+            unique_strengths=[
+                VPRUniqueStrength(
+                    strength='Cross-functional delivery at scale',
+                    rarity='uncommon',
+                    relevance='Platform team leadership',
+                    proof='Scaled 5+ teams over 3 years',
+                )
+            ],
+            competitive_advantages=[],
+            positioning_statement=(
+                'Proven platform leader combining deep AWS expertise with cross-functional delivery discipline '
+                'and measurable track record of scaling engineering velocity.'
+            ),
+        ),
+        concerns_and_mitigations=VPRConcernsAndMitigations(
+            likely_objections=[
+                VPRObjection(
+                    objection='Limited AI certification track record',
+                    likelihood='possible',
+                    mitigation=VPRMitigation(
+                        strategy='show_analogous_experience',
+                        messaging='Internal AI tooling pilots demonstrate hands-on ML Ops adjacency.',
+                    ),
+                    where_to_address=['interview'],
+                )
+            ],
+            preemptive_responses=[],
+        ),
+        value_proposition=VPRValueProposition(
+            primary_value=VPRPrimaryValue(
+                statement='Scale platform delivery velocity',
+                evidence='25% delivery improvement at Apex Labs',
+                outcome_for_company='Faster time-to-market',
+            ),
+            secondary_values=[
+                VPRSecondaryValue(value='Infrastructure cost efficiency', proof='30% cost reduction on cloud spend'),
+                VPRSecondaryValue(value='Cross-team alignment', proof='Managed 5+ cross-functional teams'),
+            ],
+            quantified_impact=[],
+            elevator_pitch=(
+                'Platform leader with proven track record of scaling engineering delivery and reducing infrastructure '
+                'costs through disciplined cross-functional execution.'
+            ),
+        ),
+        application_strategy=VPRApplicationStrategy(
+            messaging_approach='Lead with cross-functional delivery track record and quantified platform impact.',
+            ats_keywords=VPRKeywordGroup(primary=['Leadership', 'AI strategy'], secondary=['AWS', 'Python']),
+            cv_lead_differentiator='Platform leader combining delivery discipline with hands-on cloud expertise.',
+            sections_to_compress=[],
+        ),
         version=version,
         language='en',
         created_at=datetime.now(timezone.utc),

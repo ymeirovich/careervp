@@ -169,8 +169,36 @@ class TestDynamoDalHandlerSchema:
 
     def test_vpr_sk_prefix(self):
         """save_vpr() sk starts with 'ARTIFACT#VPR#'."""
+        from datetime import datetime, timezone
+
         from careervp.dal.dynamo_dal_handler import DynamoDalHandler
-        from careervp.models.vpr import VPR
+        from careervp.models.vpr import (
+            VPR,
+            VPRApplicationStrategy,
+            VPRConcern,
+            VPRConcernsAndMitigations,
+            VPRDifferentiators,
+            VPREvidenceGaps,
+            VPRExecutiveSummary,
+            VPRExperienceMapping,
+            VPRIdentifiedGap,
+            VPRKeyAchievement,
+            VPRKeywordGroup,
+            VPRMetadata,
+            VPRMitigation,
+            VPRObjection,
+            VPRPrimaryValue,
+            VPRPriorityGap,
+            VPRRelevantExperience,
+            VPRRequirementBreakdown,
+            VPRResponsibility,
+            VPRRoleAlignment,
+            VPRSecondaryValue,
+            VPRSkillsAnalysis,
+            VPRStrength,
+            VPRUniqueStrength,
+            VPRValueProposition,
+        )
 
         with patch('careervp.dal.dynamo_dal_handler.DynamoDalHandler._get_db_handler') as mock_table:
             mock_tbl = MagicMock()
@@ -179,8 +207,119 @@ class TestDynamoDalHandlerSchema:
             vpr = VPR(
                 user_id='user-test-123',
                 application_id='app-001',
-                vpr_text='Value Proposition Report content',
-                executive_summary='Senior Python engineer delivering 40% cost reduction.',
+                metadata=VPRMetadata(
+                    report_date='2024-01-15',
+                    candidate_name='Test Candidate',
+                    target_role='Senior Python Engineer',
+                    target_company='Tech Corp',
+                ),
+                executive_summary=VPRExecutiveSummary(
+                    overall_fit_score=80,
+                    fit_rationale=(
+                        'Senior Python engineer delivering 40% cost reduction with proven cloud architecture skills '
+                        'that directly align with the core infrastructure requirements.'
+                    ),
+                    top_three_strengths=[
+                        VPRStrength(strength='Python expertise', evidence='8 years Python', relevance_to_role='Core stack'),
+                        VPRStrength(strength='Cost reduction track record', evidence='40% cost cut', relevance_to_role='Efficiency'),
+                        VPRStrength(strength='Cloud architecture', evidence='AWS production systems', relevance_to_role='Infrastructure'),
+                    ],
+                    top_three_concerns=[
+                        VPRConcern(concern='Limited ML background', severity='low', mitigation='Adjacent data work'),
+                        VPRConcern(concern='No team leadership listed', severity='medium', mitigation='Highlight mentoring'),
+                        VPRConcern(concern='Domain experience gap', severity='low', mitigation='Transfer skills'),
+                    ],
+                    recommended_approach='apply_with_customization',
+                ),
+                role_alignment=VPRRoleAlignment(
+                    core_responsibilities=[
+                        VPRResponsibility(
+                            responsibility='Backend Python development',
+                            alignment_score=90,
+                            candidate_evidence=['8 years Python development'],
+                            evidence_quality='direct',
+                        )
+                    ],
+                    requirement_breakdown=VPRRequirementBreakdown(must_have=[], nice_to_have=[], assumed_prerequisites=[]),
+                ),
+                experience_mapping=VPRExperienceMapping(
+                    relevant_experiences=[
+                        VPRRelevantExperience(
+                            role='Senior Python Engineer',
+                            organization='Tech Corp',
+                            duration='3 years',
+                            key_achievements=[VPRKeyAchievement(achievement='Cost reduction', metric='40%', impact='Saved $200k')],
+                            relevance_to_target_role='Direct match',
+                        )
+                    ],
+                    experience_gaps=[],
+                ),
+                skills_analysis=VPRSkillsAnalysis(technical_skills=[], soft_skills=[], tool_proficiency=[]),
+                evidence_gaps=VPREvidenceGaps(
+                    identified_gaps=[
+                        VPRIdentifiedGap(
+                            requirement='ML experience',
+                            current_evidence='Adjacent data work',
+                            gap_severity='low',
+                            suggested_evidence=['ML projects'],
+                        )
+                    ],
+                    priority_gaps_to_address=[
+                        VPRPriorityGap(gap='ML experience', priority=1, action_item='Complete ML course', deadline='nice_to_have')
+                    ],
+                ),
+                differentiators=VPRDifferentiators(
+                    unique_strengths=[
+                        VPRUniqueStrength(
+                            strength='Cost reduction engineering',
+                            rarity='uncommon',
+                            relevance='Efficiency focus',
+                            proof='40% cost reduction delivered',
+                        )
+                    ],
+                    competitive_advantages=[],
+                    positioning_statement=(
+                        'Proven Python engineer combining deep backend expertise with cost-reduction track record '
+                        'and scalable cloud architecture skills that deliver measurable business impact.'
+                    ),
+                ),
+                concerns_and_mitigations=VPRConcernsAndMitigations(
+                    likely_objections=[
+                        VPRObjection(
+                            objection='Limited ML background',
+                            likelihood='unlikely',
+                            mitigation=VPRMitigation(
+                                strategy='show_analogous_experience',
+                                messaging='Data pipeline work demonstrates ML adjacency.',
+                            ),
+                            where_to_address=['interview'],
+                        )
+                    ],
+                    preemptive_responses=[],
+                ),
+                value_proposition=VPRValueProposition(
+                    primary_value=VPRPrimaryValue(
+                        statement='Reduce infrastructure cost',
+                        evidence='40% cost reduction at previous role',
+                        outcome_for_company='Significant infrastructure savings',
+                    ),
+                    secondary_values=[
+                        VPRSecondaryValue(value='Delivery speed', proof='Reduced deploy time by 30%'),
+                        VPRSecondaryValue(value='Code quality', proof='Zero critical bugs in production'),
+                    ],
+                    quantified_impact=[],
+                    elevator_pitch=(
+                        'Senior Python engineer with proven track record of delivering 40% cost reductions '
+                        'through cloud-native architecture and disciplined engineering practices.'
+                    ),
+                ),
+                application_strategy=VPRApplicationStrategy(
+                    messaging_approach='Lead with cost reduction track record and cloud expertise.',
+                    ats_keywords=VPRKeywordGroup(primary=['Python', 'AWS'], secondary=['Cost optimization']),
+                    cv_lead_differentiator='Backend engineer with measurable cost reduction impact.',
+                    sections_to_compress=[],
+                ),
+                created_at=datetime.now(timezone.utc),
             )
             dal.save_vpr(vpr)
             mock_tbl.put_item.assert_called_once()

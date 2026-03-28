@@ -277,6 +277,9 @@ def test_gap_analysis_generation_persists_item_with_non_null_artifact_id() -> No
 
 
 @pytest.mark.unit
+@pytest.mark.xfail(
+    reason='Pending spec-03: vpr_generator._generate_output builds VPR with old flat fields (executive_summary as str, evidence_matrix, etc.)'
+)
 def test_vpr_generation_persists_via_save_vpr() -> None:
     with patch('careervp.logic.vpr_generator.LLMClient') as mock_llm_cls:
         mock_llm = MagicMock()

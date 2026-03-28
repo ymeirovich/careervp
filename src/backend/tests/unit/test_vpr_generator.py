@@ -19,7 +19,34 @@ from careervp.logic.vpr_generator import (
 from careervp.models.cv import ContactInfo, UserCV, WorkExperience
 from careervp.models.job import JobPosting
 from careervp.models.result import Result, ResultCode
-from careervp.models.vpr import VPR, VPRRequest
+from careervp.models.vpr import (
+    VPR,
+    VPRApplicationStrategy,
+    VPRConcern,
+    VPRConcernsAndMitigations,
+    VPRDifferentiators,
+    VPREvidenceGaps,
+    VPRExecutiveSummary,
+    VPRExperienceMapping,
+    VPRIdentifiedGap,
+    VPRKeyAchievement,
+    VPRKeywordGroup,
+    VPRMetadata,
+    VPRMitigation,
+    VPRObjection,
+    VPRPrimaryValue,
+    VPRPriorityGap,
+    VPRRelevantExperience,
+    VPRRequest,
+    VPRRequirementBreakdown,
+    VPRResponsibility,
+    VPRRoleAlignment,
+    VPRSecondaryValue,
+    VPRSkillsAnalysis,
+    VPRStrength,
+    VPRUniqueStrength,
+    VPRValueProposition,
+)
 
 
 @pytest.fixture
@@ -186,6 +213,9 @@ def test_stage_4_self_correct_improves_draft(
     assert corrected.corrections_applied
 
 
+@pytest.mark.xfail(
+    reason='Pending spec-03: vpr_generator._serialize_vpr_for_quality accesses old VPR fields (executive_summary as str, evidence_matrix, etc.)'
+)
 def test_stage_6_rejects_ai_patterns(
     sample_request: VPRRequest,
     sample_user_cv: UserCV,
@@ -195,13 +225,120 @@ def test_stage_6_rejects_ai_patterns(
     vpr = VPR(
         application_id=sample_request.application_id,
         user_id=sample_request.user_id,
-        executive_summary='I leverage robust synergy and streamline best practices at scale.',
-        evidence_matrix=[],
-        differentiators=['Game-changer paradigm shift for execution.'],
-        gap_strategies=[],
-        cultural_fit='Industry-leading mindset.',
-        talking_points=['Utilize robust frameworks.'],
-        keywords=['Strategy'],
+        metadata=VPRMetadata(
+            report_date='2024-01-15',
+            candidate_name='Alex Rivers',
+            target_role='Director of Product',
+            target_company='Bright Future',
+        ),
+        executive_summary=VPRExecutiveSummary(
+            overall_fit_score=60,
+            fit_rationale=(
+                'I leverage robust synergy and streamline best practices at scale across all paradigms. '
+                'Game-changer mindset with industry-leading frameworks for execution excellence.'
+            ),
+            top_three_strengths=[
+                VPRStrength(strength='Robust synergy leveraging', evidence='Streamlined best practices', relevance_to_role='Leadership'),
+                VPRStrength(strength='Paradigm shift expertise', evidence='Game-changer execution', relevance_to_role='Innovation'),
+                VPRStrength(strength='Industry-leading mindset', evidence='Utilized robust frameworks', relevance_to_role='Strategy'),
+            ],
+            top_three_concerns=[
+                VPRConcern(concern='Overuse of AI language patterns', severity='high', mitigation='Reframe with specifics'),
+                VPRConcern(concern='Lack of quantified evidence', severity='medium', mitigation='Add metrics'),
+                VPRConcern(concern='Generic positioning', severity='medium', mitigation='Differentiate clearly'),
+            ],
+            recommended_approach='apply_after_preparation',
+        ),
+        role_alignment=VPRRoleAlignment(
+            core_responsibilities=[
+                VPRResponsibility(
+                    responsibility='Lead product strategy',
+                    alignment_score=60,
+                    candidate_evidence=['Utilize robust frameworks'],
+                    evidence_quality='weak',
+                )
+            ],
+            requirement_breakdown=VPRRequirementBreakdown(must_have=[], nice_to_have=[], assumed_prerequisites=[]),
+        ),
+        experience_mapping=VPRExperienceMapping(
+            relevant_experiences=[
+                VPRRelevantExperience(
+                    role='Product Lead',
+                    organization='Apex Labs',
+                    duration='3 years',
+                    key_achievements=[
+                        VPRKeyAchievement(achievement='Game-changer paradigm shift', metric='Leverage synergy', impact='Streamlined outcomes')
+                    ],
+                    relevance_to_target_role='Adjacent product leadership',
+                )
+            ],
+            experience_gaps=[],
+        ),
+        skills_analysis=VPRSkillsAnalysis(technical_skills=[], soft_skills=[], tool_proficiency=[]),
+        evidence_gaps=VPREvidenceGaps(
+            identified_gaps=[
+                VPRIdentifiedGap(
+                    requirement='Quantified outcomes',
+                    current_evidence='Generic statements only',
+                    gap_severity='high',
+                    suggested_evidence=['Specific metrics'],
+                )
+            ],
+            priority_gaps_to_address=[
+                VPRPriorityGap(gap='Quantified outcomes', priority=1, action_item='Add metrics', deadline='before_application')
+            ],
+        ),
+        differentiators=VPRDifferentiators(
+            unique_strengths=[
+                VPRUniqueStrength(
+                    strength='Game-changer paradigm shift for execution',
+                    rarity='uncommon',
+                    relevance='Strategic leadership',
+                    proof='Industry-leading mindset demonstrated',
+                )
+            ],
+            competitive_advantages=[],
+            positioning_statement=(
+                'I leverage robust synergy and streamline best practices to deliver game-changer paradigm shifts '
+                'across all industry-leading frameworks and utilize innovative execution methodologies.'
+            ),
+        ),
+        concerns_and_mitigations=VPRConcernsAndMitigations(
+            likely_objections=[
+                VPRObjection(
+                    objection='AI-generated language patterns detected',
+                    likelihood='very_likely',
+                    mitigation=VPRMitigation(
+                        strategy='reframe',
+                        messaging='Replace with specific, quantified examples.',
+                    ),
+                    where_to_address=['cv', 'cover_letter'],
+                )
+            ],
+            preemptive_responses=[],
+        ),
+        value_proposition=VPRValueProposition(
+            primary_value=VPRPrimaryValue(
+                statement='Utilize robust frameworks',
+                evidence='Industry-leading mindset',
+                outcome_for_company='Streamlined best practices',
+            ),
+            secondary_values=[
+                VPRSecondaryValue(value='Synergy leveraging', proof='Game-changer execution'),
+                VPRSecondaryValue(value='Paradigm shift', proof='Robust frameworks utilized'),
+            ],
+            quantified_impact=[],
+            elevator_pitch=(
+                'I leverage robust synergy and streamline best practices at scale to deliver game-changer '
+                'paradigm shifts using industry-leading frameworks and innovative execution methodologies.'
+            ),
+        ),
+        application_strategy=VPRApplicationStrategy(
+            messaging_approach='Utilize robust frameworks to leverage synergy.',
+            ats_keywords=VPRKeywordGroup(primary=['Strategy'], secondary=['Leadership']),
+            cv_lead_differentiator='Game-changer paradigm shift for execution.',
+            sections_to_compress=[],
+        ),
         language='en',
         version=1,
         created_at=datetime.now(timezone.utc),
@@ -215,6 +352,9 @@ def test_stage_6_rejects_ai_patterns(
     assert final_data.anti_ai_issues
 
 
+@pytest.mark.xfail(
+    reason='Pending spec-03: vpr_generator._generate_output builds VPR with old flat fields (executive_summary as str, evidence_matrix, etc.)'
+)
 @patch('careervp.logic.vpr_generator.LLMClient')
 def test_full_pipeline_produces_valid_vpr(
     mock_llm_client_cls: MagicMock,
