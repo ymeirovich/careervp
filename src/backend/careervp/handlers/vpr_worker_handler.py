@@ -25,6 +25,7 @@ import boto3
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from botocore.exceptions import ClientError as BotoClientError
 
+from careervp.dal.application_repository import ApplicationRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.utils.observability import logger, metrics, tracer
@@ -288,6 +289,29 @@ def _execute_job(
             'word_count': vpr.word_count,
         },
     )
+
+    # Propagate completion to the application record so the hub reflects the
+    # artifact status and artifact_id across page reloads.
+    application_id_str = str(job.get('application_id', '')).strip()
+    if application_id_str and user_id:
+        app_table = os.environ.get('APPLICATIONS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or ''
+        if app_table:
+            try:
+                app_repo = ApplicationRepository(DynamoDalHandler(app_table))
+                app_repo.update_artifact_with_id(
+                    application_id=application_id_str,
+                    user_id=user_id,
+                    artifact_type='vpr',
+                    status='completed',
+                    artifact_id=job_id,
+                )
+            except Exception as e:
+                logger.warning(
+                    'Could not update application artifact_statuses for VPR',
+                    job_id=job_id,
+                    application_id=application_id_str,
+                    error=str(e),
+                )
 
     # Emit metrics
     metrics.add_metric(name='VPRJobCompleted', unit='Count', value=1)

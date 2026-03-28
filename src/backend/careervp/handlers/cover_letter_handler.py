@@ -432,6 +432,15 @@ def _generate_and_persist_from_sqs(
         result_data=_convert_decimal_to_float(cover_letter_payload),
     )
 
+    # Propagate completion to the application record so the hub reflects the
+    # artifact status and artifact_id across page reloads.
+    _update_application_artifact(
+        application_id=str(request_data.get('job_id', '') or ''),
+        user_id=user_id,
+        artifact_type='cover_letter',
+        artifact_id=job_id,
+    )
+
     metrics.add_metric(name='CoverLetterWorkerGenerated', unit=MetricUnit.Count, value=1)
     logger.info('Cover letter SQS job completed', job_id=job_id)
 
@@ -496,6 +505,42 @@ def _update_artifact_status(
             return
         logger.error('Failed to update artifact status', job_id=job_id, error=str(exc))
         raise
+
+
+def _update_application_artifact(
+    application_id: str,
+    user_id: str,
+    artifact_type: str,
+    artifact_id: str,
+) -> None:
+    """Propagate artifact completion to the application record's artifact_statuses.
+
+    Silently ignored when the application record does not exist — non-fatal
+    because the session-local frontend fallback handles this case.
+    """
+    if not application_id or not user_id:
+        return
+    app_table = os.environ.get('APPLICATIONS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or ''
+    if not app_table:
+        return
+    try:
+        from careervp.dal.application_repository import ApplicationRepository
+        from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+
+        app_repo = ApplicationRepository(DynamoDalHandler(app_table))
+        app_repo.update_artifact_with_id(
+            application_id=application_id,
+            user_id=user_id,
+            artifact_type=artifact_type,
+            status='completed',
+            artifact_id=artifact_id,
+        )
+    except Exception as e:
+        logger.warning(
+            'Could not update application artifact_statuses',
+            artifact_type=artifact_type,
+            error=str(e),
+        )
 
 
 def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:

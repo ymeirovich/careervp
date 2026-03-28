@@ -164,6 +164,46 @@ class ApplicationRepository:
             },
         )
 
+    def update_artifact_with_id(
+        self,
+        application_id: str,
+        user_id: str,
+        artifact_type: str,
+        status: str,
+        artifact_id: str,
+    ) -> None:
+        """Write both artifact status and artifact_id into artifact_statuses.
+
+        The hub reads ``artifact_statuses.<type>`` for status and
+        ``artifact_statuses.<type>_artifact_id`` for the artifact ID.  This
+        method writes both atomically so the hub reflects the completed
+        artifact across page reloads.
+
+        Silently ignored when the application record does not yet exist or
+        when the artifact_statuses map has not been initialised — both are
+        non-fatal races that the session-local frontend fallback handles.
+        """
+        try:
+            self._table().update_item(
+                Key={
+                    'userId': user_id,
+                    'applicationId': application_id,
+                },
+                UpdateExpression=('SET artifact_statuses.#at = :status, artifact_statuses.#at_id = :artifact_id, updated_at = :updated_at'),
+                ConditionExpression='attribute_exists(userId) AND attribute_exists(applicationId)',
+                ExpressionAttributeNames={
+                    '#at': artifact_type,
+                    '#at_id': f'{artifact_type}_artifact_id',
+                },
+                ExpressionAttributeValues={
+                    ':status': status,
+                    ':artifact_id': artifact_id,
+                    ':updated_at': self._now_iso(),
+                },
+            )
+        except Exception:
+            pass  # Record absent or map path not yet initialised — non-fatal
+
     def _ensure_valid_transition(self, expected_state: str, new_state: str) -> None:
         if expected_state not in VALID_TRANSITIONS:
             raise ValueError(f'Invalid state transition: unknown from_state={expected_state}')

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, use, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { Topbar } from "@/components/dashboard/Topbar";
 import type { PrepQuestion, JobDetail } from "@/lib/types";
@@ -95,15 +95,12 @@ function QuestionCard({ q, index }: { q: PrepQuestion; index: number }) {
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ─── Inner component (needs Suspense boundary for useSearchParams) ─────────────
 
-export default function InterviewPrepPage({
-  params,
-}: {
-  params: Promise<{ jobId: string }>;
-}) {
-  const { jobId } = use(params);
+function InterviewPrepContent({ jobId }: { jobId: string }) {
+  const searchParams = useSearchParams();
   const router = useRouter();
+  const queryId = searchParams.get("id");
 
   const [prep, setPrep] = useState<PrepResult | null>(null);
   const [job, setJob] = useState<JobDetail | null>(null);
@@ -123,10 +120,11 @@ export default function InterviewPrepPage({
       const jobData = jobResult.status === "fulfilled" ? jobResult.value : null;
       setJob(jobData);
 
-      const artifactId = hub?.artifacts.interview_prep?.artifact_id;
+      // Prefer hub artifact_id; fall back to ?id= query param (set by hub page after polling)
+      const artifactId = hub?.artifacts.interview_prep?.artifact_id ?? queryId;
       const artifactStatus = hub?.artifacts.interview_prep?.status;
 
-      if (!artifactId || artifactStatus !== "completed") {
+      if (!artifactId || (artifactStatus && artifactStatus !== "completed" && !queryId)) {
         router.replace(`/dashboard/jobs/${jobId}`);
         return;
       }
@@ -146,7 +144,7 @@ export default function InterviewPrepPage({
       }
     };
     init();
-  }, [jobId, router]);
+  }, [jobId, queryId, router]);
 
   const breadcrumb = [
     { label: "Dashboard", href: "/dashboard" },
@@ -292,5 +290,21 @@ export default function InterviewPrepPage({
           )}
       </main>
     </>
+  );
+}
+
+// ─── Page (with Suspense wrapper for useSearchParams) ─────────────────────────
+
+export default function InterviewPrepPage({
+  params,
+}: {
+  params: Promise<{ jobId: string }>;
+}) {
+  const { jobId } = use(params);
+
+  return (
+    <Suspense fallback={null}>
+      <InterviewPrepContent jobId={jobId} />
+    </Suspense>
   );
 }
