@@ -179,18 +179,31 @@ class ApplicationRepository:
         method writes both atomically so the hub reflects the completed
         artifact across page reloads.
 
-        Silently ignored when the application record does not yet exist or
-        when the artifact_statuses map has not been initialised — both are
-        non-fatal races that the session-local frontend fallback handles.
+        Uses a two-step approach to handle legacy application records that
+        pre-date the artifact_statuses field: step 1 initialises the map if
+        absent, step 2 sets the nested keys.  If the application record does
+        not exist at all, step 1 raises ConditionalCheckFailedException and
+        we return early (non-fatal).
         """
+        key = {'userId': user_id, 'applicationId': application_id}
+        item_exists_condition = 'attribute_exists(userId) AND attribute_exists(applicationId)'
         try:
+            # Step 1: ensure artifact_statuses exists as a map.
+            # DynamoDB raises ValidationException when setting a nested path
+            # on a missing/null parent attribute, so we initialise it first.
             self._table().update_item(
-                Key={
-                    'userId': user_id,
-                    'applicationId': application_id,
-                },
-                UpdateExpression=('SET artifact_statuses.#at = :status, artifact_statuses.#at_id = :artifact_id, updated_at = :updated_at'),
-                ConditionExpression='attribute_exists(userId) AND attribute_exists(applicationId)',
+                Key=key,
+                UpdateExpression='SET artifact_statuses = if_not_exists(artifact_statuses, :empty)',
+                ConditionExpression=item_exists_condition,
+                ExpressionAttributeValues={':empty': {}},
+            )
+        except Exception:
+            return  # Application record absent — non-fatal, frontend has local fallback
+        try:
+            # Step 2: set the nested artifact keys now that the map is guaranteed to exist.
+            self._table().update_item(
+                Key=key,
+                UpdateExpression='SET artifact_statuses.#at = :status, artifact_statuses.#at_id = :artifact_id, updated_at = :updated_at',
                 ExpressionAttributeNames={
                     '#at': artifact_type,
                     '#at_id': f'{artifact_type}_artifact_id',
@@ -202,7 +215,7 @@ class ApplicationRepository:
                 },
             )
         except Exception:
-            pass  # Record absent or map path not yet initialised — non-fatal
+            pass  # Non-fatal — frontend localStorage fallback handles missing artifact_id
 
     def _ensure_valid_transition(self, expected_state: str, new_state: str) -> None:
         if expected_state not in VALID_TRANSITIONS:
