@@ -1,6 +1,6 @@
 id: "06-api-handlers"
 title: "API Handlers & Response Serialization"
-status: pending
+status: done
 priority: 6
 depends_on: ["01-pydantic-schema", "05-dal"]
 

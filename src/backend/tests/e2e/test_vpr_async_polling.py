@@ -85,7 +85,7 @@ def _submit_event(user_id: str = 'user-123') -> dict[str, Any]:
         'httpMethod': 'POST',
         'path': '/vpr/generate',
         'headers': {'Content-Type': 'application/json'},
-        'requestContext': {'authorizer': {'user_id': user_id}},
+        'requestContext': {'authorizer': {'claims': {'sub': user_id}}},
         'body': json.dumps(
             {
                 'cv_id': 'cv-123',
@@ -103,7 +103,7 @@ def _status_event(vpr_id: str, user_id: str = 'user-123') -> dict[str, Any]:
         'path': f'/vpr/{vpr_id}',
         'pathParameters': {'vprId': vpr_id},
         'headers': {'Content-Type': 'application/json'},
-        'requestContext': {'authorizer': {'user_id': user_id}},
+        'requestContext': {'authorizer': {'claims': {'sub': user_id}}},
     }
 
 

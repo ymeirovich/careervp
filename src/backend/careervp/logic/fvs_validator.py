@@ -981,6 +981,272 @@ def check_anti_anti_ai_patterns(content: str) -> AntiAIPatternResult:
     return check_anti_ai_patterns(content)
 
 
+STRUCTURAL_MIN_SCORE = 8.0
+
+
+@dataclass(frozen=True)
+class VPRGateResult:
+    """Quality gate output for VPR — consumed by VPRSixStagePipeline._final_meta_evaluation."""
+
+    anti_ai_score: float
+    structural_score: float
+    grammar_score: float
+    tone_score: float
+    passed_gate: bool
+    issues: list[str]
+
+
+def validate_evidence_traceability(vpr: VPR, cv_text: str, gap_response_text: str) -> ValidationCheckResult:
+    """Rule 1 (structural): Verify top-level quantified claims appear in cv_text or gap_response_text."""
+    if vpr.executive_summary is None or vpr.value_proposition is None:
+        return ValidationCheckResult(score=10.0, issues=[], min_score=STRUCTURAL_MIN_SCORE)
+    source_text = (cv_text + ' ' + gap_response_text).lower()
+    score = 10.0
+    issues: list[str] = []
+    deduction = 0.0
+
+    claims = [
+        vpr.executive_summary.fit_rationale,
+        vpr.value_proposition.primary_value.evidence,
+        vpr.value_proposition.elevator_pitch,
+    ]
+
+    for claim in claims:
+        if not claim:
+            continue
+        numbers = NUMBER_PATTERN.findall(claim)
+        proper_nouns = re.findall(r'\b[A-Z][a-zA-Z0-9]{2,}\b', claim)
+        tokens = numbers + proper_nouns
+        if not tokens:
+            continue
+        verified = any(token.lower() in source_text for token in tokens)
+        if not verified:
+            deduction += 0.8
+            issues.append(f'Unverifiable claim (no token found in source): "{claim[:60]}..."')
+
+    score -= min(deduction, 4.0)
+    return ValidationCheckResult(score=_bounded_score(score), issues=issues, min_score=STRUCTURAL_MIN_SCORE)
+
+
+def validate_quantification_consistency(vpr: VPR) -> ValidationCheckResult:
+    """Rule 2 (structural): Detect metric paraphrasing across sections."""
+    if vpr.executive_summary is None or vpr.value_proposition is None or vpr.differentiators is None or vpr.concerns_and_mitigations is None:
+        return ValidationCheckResult(score=10.0, issues=[], min_score=STRUCTURAL_MIN_SCORE)
+    all_text_fields: list[str] = [
+        vpr.executive_summary.fit_rationale,
+        vpr.value_proposition.elevator_pitch,
+        vpr.value_proposition.primary_value.statement,
+        vpr.value_proposition.primary_value.evidence,
+        vpr.differentiators.positioning_statement,
+        *[sv.value for sv in vpr.value_proposition.secondary_values],
+        *[sv.proof for sv in vpr.value_proposition.secondary_values],
+        *[s.strength for s in vpr.differentiators.unique_strengths],
+        *[s.proof for s in vpr.differentiators.unique_strengths],
+        *[s.relevance for s in vpr.differentiators.unique_strengths],
+        *[o.mitigation.messaging for o in vpr.concerns_and_mitigations.likely_objections],
+    ]
+
+    score = 10.0
+    issues: list[str] = []
+    deduction = 0.0
+
+    value_contexts: dict[str, list[str]] = {}
+    for field_text in all_text_fields:
+        if not field_text:
+            continue
+        for match in NUMBER_PATTERN.finditer(field_text):
+            num_val = match.group()
+            start = max(0, match.start() - 8)
+            end = min(len(field_text), match.end() + 8)
+            context = field_text[start:end]
+            if num_val not in value_contexts:
+                value_contexts[num_val] = []
+            value_contexts[num_val].append(context)
+
+    for num_val, contexts in value_contexts.items():
+        if len(contexts) < 2:
+            continue
+        normalized = {re.sub(r'[^\w%$]', '', c).lower() for c in contexts}
+        if len(normalized) > 1:
+            deduction += 0.5
+            issues.append(f'Metric "{num_val}" appears with inconsistent context across sections')
+
+    score -= min(deduction, 3.0)
+    return ValidationCheckResult(score=_bounded_score(score), issues=issues, min_score=STRUCTURAL_MIN_SCORE)
+
+
+def validate_alignment_scores(vpr: VPR) -> ValidationCheckResult:
+    """Rule 3 (structural): alignment_score must match evidence_quality in core_responsibilities."""
+    if vpr.role_alignment is None:
+        return ValidationCheckResult(score=10.0, issues=[], min_score=STRUCTURAL_MIN_SCORE)
+    quality_ranges: dict[str, tuple[int, int]] = {
+        'direct': (80, 100),
+        'analogous': (60, 79),
+        'transferable': (40, 59),
+        'weak': (0, 39),
+    }
+    score = 10.0
+    issues: list[str] = []
+    deduction = 0.0
+
+    for resp in vpr.role_alignment.core_responsibilities:
+        expected_range = quality_ranges.get(resp.evidence_quality)
+        if expected_range is None:
+            continue
+        low, high = expected_range
+        if not (low <= resp.alignment_score <= high):
+            deduction += 1.0
+            issues.append(
+                f'Responsibility "{resp.responsibility[:50]}" has evidence_quality="{resp.evidence_quality}" '
+                f'but alignment_score={resp.alignment_score} (expected {low}-{high})'
+            )
+
+    score -= min(deduction, 4.0)
+    return ValidationCheckResult(score=_bounded_score(score), issues=issues, min_score=STRUCTURAL_MIN_SCORE)
+
+
+def validate_gap_severity_calibration(vpr: VPR) -> ValidationCheckResult:
+    """Rule 4 (structural): priority_gaps with before_application should be critical/high; critical gaps must be prioritized."""
+    if vpr.evidence_gaps is None:
+        return ValidationCheckResult(score=10.0, issues=[], min_score=STRUCTURAL_MIN_SCORE)
+    score = 10.0
+    issues: list[str] = []
+    deduction = 0.0
+
+    gap_severity_map: dict[str, str] = {g.requirement.lower(): g.gap_severity for g in vpr.evidence_gaps.identified_gaps}
+
+    for priority_gap in vpr.evidence_gaps.priority_gaps_to_address:
+        if priority_gap.deadline == 'before_application':
+            severity = gap_severity_map.get(priority_gap.gap.lower())
+            if severity in ('medium', 'low'):
+                deduction += 1.5
+                issues.append(
+                    f'Priority gap "{priority_gap.gap[:50]}" has deadline=before_application but severity="{severity}" (should be critical/high)'
+                )
+
+    priority_gap_texts = {pg.gap.lower() for pg in vpr.evidence_gaps.priority_gaps_to_address if pg.priority <= 2}
+    for identified_gap in vpr.evidence_gaps.identified_gaps:
+        if identified_gap.gap_severity == 'critical':
+            if identified_gap.requirement.lower() not in priority_gap_texts:
+                deduction += 1.0
+                issues.append(f'Critical gap "{identified_gap.requirement[:50]}" not found in priority_gaps_to_address (priority 1-2)')
+
+    score -= deduction
+    return ValidationCheckResult(score=_bounded_score(score), issues=issues, min_score=STRUCTURAL_MIN_SCORE)
+
+
+def validate_differentiator_rarity(vpr: VPR) -> ValidationCheckResult:
+    """Rule 5 (structural): rarity claims must be supported by proof/relevance evidence."""
+    if vpr.differentiators is None:
+        return ValidationCheckResult(score=10.0, issues=[], min_score=STRUCTURAL_MIN_SCORE)
+    score = 10.0
+    issues: list[str] = []
+    deduction = 0.0
+
+    for strength in vpr.differentiators.unique_strengths:
+        if strength.rarity == 'very_rare':
+            if not NUMBER_PATTERN.search(strength.proof):
+                deduction += 1.0
+                issues.append(f'Strength "{strength.strength[:50]}" claimed very_rare but proof lacks quantified metric')
+        elif strength.rarity == 'uncommon':
+            relevance_words = len(strength.relevance.split()) if strength.relevance else 0
+            if relevance_words <= 20:
+                deduction += 1.0
+                issues.append(f'Strength "{strength.strength[:50]}" claimed uncommon but relevance is too short (<= 20 words)')
+
+    return ValidationCheckResult(score=_bounded_score(score), issues=issues, min_score=STRUCTURAL_MIN_SCORE)
+
+
+def validate_mitigation_substance(vpr: VPR) -> ValidationCheckResult:
+    """Rule 6 (structural): mitigation messaging must be specific, not generic."""
+    if vpr.concerns_and_mitigations is None:
+        return ValidationCheckResult(score=10.0, issues=[], min_score=STRUCTURAL_MIN_SCORE)
+    score = 10.0
+    issues: list[str] = []
+    deduction = 0.0
+
+    for objection in vpr.concerns_and_mitigations.likely_objections:
+        messaging = objection.mitigation.messaging or ''
+        word_count = len(messaging.split())
+        proper_nouns = re.findall(r'\b[A-Z][a-zA-Z0-9]{2,}\b', messaging)
+        if word_count < 30 or not proper_nouns:
+            deduction += 1.2
+            issues.append(
+                f'Objection "{objection.objection[:50]}" has weak/generic mitigation (words={word_count}, proper_nouns={len(proper_nouns)})'
+            )
+
+    score -= min(deduction, 4.8)
+    return ValidationCheckResult(score=_bounded_score(score), issues=issues, min_score=STRUCTURAL_MIN_SCORE)
+
+
+def run_vpr_quality_gate(vpr: VPR, user_cv: UserCV, cv_text: str, gap_response_text: str) -> VPRGateResult:
+    """Aggregate gate: run all 7 quality checks and return structured result."""
+    if (
+        vpr.executive_summary is None
+        or vpr.differentiators is None
+        or vpr.value_proposition is None
+        or vpr.application_strategy is None
+        or vpr.concerns_and_mitigations is None
+    ):
+        return VPRGateResult(
+            anti_ai_score=10.0,
+            structural_score=10.0,
+            grammar_score=10.0,
+            tone_score=10.0,
+            passed_gate=True,
+            issues=[],
+        )
+    content = '\n'.join(
+        s
+        for s in [
+            vpr.executive_summary.fit_rationale,
+            vpr.differentiators.positioning_statement,
+            vpr.value_proposition.elevator_pitch,
+            vpr.application_strategy.messaging_approach,
+            *[o.mitigation.messaging for o in vpr.concerns_and_mitigations.likely_objections],
+            *[s.relevance for s in vpr.differentiators.unique_strengths],
+        ]
+        if s
+    )
+
+    anti_ai = check_anti_ai_patterns(content)
+
+    structural_results = [
+        validate_evidence_traceability(vpr, cv_text, gap_response_text),
+        validate_quantification_consistency(vpr),
+        validate_alignment_scores(vpr),
+        validate_gap_severity_calibration(vpr),
+        validate_differentiator_rarity(vpr),
+        validate_mitigation_substance(vpr),
+    ]
+    structural_score = _bounded_score(sum(r.score for r in structural_results) / len(structural_results))
+
+    grammar = validate_grammar(content)
+    tone = validate_tone(content)
+
+    passed_gate = (
+        anti_ai.score >= ANTI_AI_MIN_SCORE
+        and structural_score >= STRUCTURAL_MIN_SCORE
+        and grammar.score >= GRAMMAR_MIN_SCORE
+        and tone.score >= TONE_MIN_SCORE
+    )
+
+    all_issues: list[str] = [*anti_ai.issues]
+    for r in structural_results:
+        all_issues.extend(r.issues)
+    all_issues.extend(grammar.issues)
+    all_issues.extend(tone.issues)
+
+    return VPRGateResult(
+        anti_ai_score=anti_ai.score,
+        structural_score=structural_score,
+        grammar_score=grammar.score,
+        tone_score=tone.score,
+        passed_gate=passed_gate,
+        issues=all_issues,
+    )
+
+
 # Phase 9 CV Tailoring helpers (delegates to cv_tailoring implementation)
 def create_fvs_baseline(master_cv: Any) -> TailoringFVSBaseline:
     """Create FVS baseline for CV tailoring flow."""

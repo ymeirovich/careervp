@@ -529,9 +529,7 @@ class TestVPRGenerationFlow:
         body = json.loads(response['body'])
         assert body['success'] is True
         assert body['vpr'] is not None
-        assert body['vpr']['application_id'] == 'app-456'
-        assert 'evidence_matrix' in body['vpr']
-        assert len(body['vpr']['evidence_matrix']) > 0
+        assert body['vpr']['applicationId'] == 'app-456'
 
         saved = dynamodb_table.get_item(Key={'pk': 'app-456', 'sk': 'ARTIFACT#VPR#v1'})
         assert 'Item' in saved
@@ -665,8 +663,7 @@ class TestCompanyResearchVPRIntegration:
         assert vpr_response['statusCode'] == 200
         vpr_body = json.loads(vpr_response['body'])
         assert vpr_body['success'] is True
-        assert vpr_body['vpr']['application_id'] == 'app-456'
-        assert 'cultural_fit' in vpr_body['vpr']
+        assert vpr_body['vpr']['applicationId'] == 'app-456'
 
     @patch('careervp.logic.company_research.scrape_company_about_page', new_callable=AsyncMock)
     @patch('careervp.logic.company_research.get_llm_router')
@@ -743,19 +740,22 @@ class TestCompanyResearchVPRIntegration:
 
         assert 'success' in body
         assert 'vpr' in body
-        assert 'token_usage' in body
-        assert 'generation_time_ms' in body
+        assert 'tokenUsage' in body
+        assert 'generationTimeMs' in body
 
         vpr = body['vpr']
         vpr_required_fields = [
-            'application_id',
-            'user_id',
-            'executive_summary',
-            'evidence_matrix',
+            'applicationId',
+            'userId',
+            'executiveSummary',
+            'roleAlignment',
+            'experienceMapping',
+            'skillsAnalysis',
+            'evidenceGaps',
             'differentiators',
-            'gap_strategies',
-            'talking_points',
-            'keywords',
+            'concernsAndMitigations',
+            'valueProposition',
+            'applicationStrategy',
             'language',
             'version',
         ]

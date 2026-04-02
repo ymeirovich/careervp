@@ -240,6 +240,8 @@ def _execute_job(
         logger.exception('Failed to build VPR request', job_id=job_id, error=str(e))
         return
 
+    next_version = cv_dal.get_next_vpr_version(vpr_request.application_id)
+    vpr_request = vpr_request.model_copy(update={'target_version': next_version})
     result = generate_vpr(vpr_request, user_cv, cv_dal)
 
     if not result.success or not result.data:
@@ -260,7 +262,7 @@ def _execute_job(
         s3.put_object(
             Bucket=bucket,
             Key=result_key,
-            Body=vpr.model_dump_json(),
+            Body=vpr.model_dump_json(by_alias=True),
             ContentType='application/json',
         )
         logger.info('Uploaded VPR to S3', job_id=job_id, bucket=bucket, key=result_key)

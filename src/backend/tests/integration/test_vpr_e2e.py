@@ -178,7 +178,7 @@ class TestVPREndToEnd:
         assert response['statusCode'] == 200
         body = json.loads(response['body'])
         assert body['success'] is True
-        assert body['vpr']['application_id'] == 'app-456'
+        assert body['vpr']['applicationId'] == 'app-456'
 
         saved = dynamodb_table.get_item(Key={'pk': 'app-456', 'sk': 'ARTIFACT#VPR#v1'})
         assert 'Item' in saved

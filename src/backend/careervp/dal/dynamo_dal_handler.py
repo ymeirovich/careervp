@@ -203,10 +203,12 @@ class DynamoDalHandler(DalHandler):
         logger.info('saving VPR artifact to DynamoDB')
         try:
             table = self._get_db_handler(self.table_name)
-            item = vpr.model_dump(mode='json')
-            item['pk'] = vpr.application_id
-            item['sk'] = self._build_vpr_sort_key(vpr.version)
-            item['user_id'] = vpr.user_id
+            item = {
+                'pk': vpr.application_id,
+                'sk': self._build_vpr_sort_key(vpr.version),
+                'user_id': vpr.user_id,
+                **vpr.model_dump(mode='json'),
+            }
             table.put_item(Item=item)
         except (ClientError, ValidationError):
             error_msg = 'failed to save VPR'
@@ -235,6 +237,8 @@ class DynamoDalHandler(DalHandler):
             if not item:
                 return Result(success=True, data=None, code=ResultCode.SUCCESS)
             vpr = VPR.model_validate(item)
+            if vpr.metadata is None:
+                logger.debug('legacy flat VPR loaded', application_id=application_id)
             return Result(success=True, data=vpr, code=ResultCode.SUCCESS)
         except (ClientError, ValidationError):
             error_msg = 'failed to get VPR'
@@ -275,6 +279,8 @@ class DynamoDalHandler(DalHandler):
 
             latest_item = max(items, key=_parse_record_version)
             vpr = VPR.model_validate(latest_item)
+            if vpr.metadata is None:
+                logger.debug('legacy flat VPR loaded', application_id=application_id)
             return Result(success=True, data=vpr, code=ResultCode.SUCCESS)
         except (ClientError, ValidationError, InvalidVersionError):
             error_msg = 'failed to get latest VPR'
@@ -311,6 +317,14 @@ class DynamoDalHandler(DalHandler):
             error_msg = 'failed to list VPRs'
             logger.exception(error_msg, user_id=user_id)
             return Result(success=False, error=error_msg, code=ResultCode.DYNAMODB_ERROR)
+
+    @tracer.capture_method(capture_response=False)
+    def get_next_vpr_version(self, application_id: str) -> int:
+        """Return version+1 of the latest existing VPR, or 1 if none exists."""
+        result = self.get_latest_vpr(application_id)
+        if result.success and result.data is not None:
+            return result.data.version + 1
+        return 1
 
     @tracer.capture_method(capture_response=False)
     def save_tailored_cv(
