@@ -1,0 +1,156 @@
+"""E2E tests — full VPR generation flow (sync POST /api/vpr).
+
+Skipped unless RUN_E2E=true is set in environment.
+Requires API_BASE_URL and COGNITO_ID_TOKEN env vars for real endpoint tests.
+"""
+
+from __future__ import annotations
+
+import os
+from typing import Any
+
+import pytest
+import requests
+
+E2E_ENABLED = os.getenv('RUN_E2E', 'false').lower() == 'true'
+API_BASE_URL = os.getenv('API_BASE_URL', 'http://localhost:3000')
+ID_TOKEN = os.getenv('COGNITO_ID_TOKEN', 'test-token')
+
+pytestmark = pytest.mark.skipif(not E2E_ENABLED, reason='Set RUN_E2E=true to run E2E tests')
+
+
+def _vpr_request_payload() -> dict[str, Any]:
+    return {
+        'applicationId': 'e2e-test-app-001',
+        'jobPosting': {
+            'title': 'Staff Engineer',
+            'company': 'SysAid',
+            'description': (
+                'Lead the platform engineering team. Own infrastructure reliability, cloud architecture, and developer tooling for 200+ engineers.'
+            ),
+            'requirements': [
+                'Python',
+                'AWS (EC2, ECS, RDS, Lambda)',
+                'Team leadership',
+                'Infrastructure as Code',
+            ],
+            'language': 'en',
+        },
+        'gapResponses': [
+            {
+                'question': 'Describe your most significant infrastructure project.',
+                'response': ('Led a $2M AWS migration at Acme Corp, moving 500 microservices from on-prem to ECS with zero downtime over 8 months.'),
+            },
+            {
+                'question': 'How have you managed engineering teams?',
+                'response': 'Led a team of 8 engineers at Acme Corp for 3 years.',
+            },
+        ],
+    }
+
+
+@pytest.mark.e2e
+@pytest.mark.slow
+class TestVPRGenerationE2E:
+    def test_e2e_vpr_sync_generation_returns_200(self) -> None:
+        """POST /api/vpr must return 200 OK for a valid request."""
+        response = requests.post(
+            f'{API_BASE_URL}/api/vpr',
+            json=_vpr_request_payload(),
+            headers={'Authorization': f'Bearer {ID_TOKEN}'},
+            timeout=120,  # VPR generation can take up to 90s
+        )
+        assert response.status_code == 200, f'Expected 200, got {response.status_code}. Body: {response.text[:500]}'
+
+    def test_e2e_vpr_response_is_valid_json(self) -> None:
+        response = requests.post(
+            f'{API_BASE_URL}/api/vpr',
+            json=_vpr_request_payload(),
+            headers={'Authorization': f'Bearer {ID_TOKEN}'},
+            timeout=120,
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body is not None
+
+    def test_e2e_vpr_response_uses_camel_case(self) -> None:
+        """API response must use camelCase keys throughout."""
+        response = requests.post(
+            f'{API_BASE_URL}/api/vpr',
+            json=_vpr_request_payload(),
+            headers={'Authorization': f'Bearer {ID_TOKEN}'},
+            timeout=120,
+        )
+        assert response.status_code == 200
+        body = response.json()
+        vpr = body.get('vpr', body)
+
+        assert 'executiveSummary' in vpr, f'Missing executiveSummary. Keys: {list(vpr.keys())[:10]}'
+        assert 'roleAlignment' in vpr
+        assert 'experienceMapping' in vpr
+        assert 'skillsAnalysis' in vpr
+        assert 'evidenceGaps' in vpr
+        assert 'differentiators' in vpr
+        assert 'concernsAndMitigations' in vpr
+        assert 'valueProposition' in vpr
+        assert 'applicationStrategy' in vpr
+
+        # snake_case must NOT appear at top level
+        assert 'executive_summary' not in vpr
+        assert 'role_alignment' not in vpr
+
+    def test_e2e_vpr_has_10_sections(self) -> None:
+        """All 10 required sections must be present and non-null."""
+        response = requests.post(
+            f'{API_BASE_URL}/api/vpr',
+            json=_vpr_request_payload(),
+            headers={'Authorization': f'Bearer {ID_TOKEN}'},
+            timeout=120,
+        )
+        assert response.status_code == 200
+        body = response.json()
+        vpr = body.get('vpr', body)
+
+        required_sections = [
+            'metadata',
+            'executiveSummary',
+            'roleAlignment',
+            'experienceMapping',
+            'skillsAnalysis',
+            'evidenceGaps',
+            'differentiators',
+            'concernsAndMitigations',
+            'valueProposition',
+            'applicationStrategy',
+        ]
+        for section in required_sections:
+            assert section in vpr and vpr[section] is not None, f"Section '{section}' missing or null in response"
+
+    def test_e2e_vpr_executive_summary_has_fit_score(self) -> None:
+        response = requests.post(
+            f'{API_BASE_URL}/api/vpr',
+            json=_vpr_request_payload(),
+            headers={'Authorization': f'Bearer {ID_TOKEN}'},
+            timeout=120,
+        )
+        assert response.status_code == 200
+        body = response.json()
+        vpr = body.get('vpr', body)
+        es = vpr.get('executiveSummary', {})
+
+        assert 'overallFitScore' in es, 'executiveSummary.overallFitScore missing'
+        assert isinstance(es['overallFitScore'], (int, float))
+
+    def test_e2e_vpr_executive_summary_score_in_range(self) -> None:
+        response = requests.post(
+            f'{API_BASE_URL}/api/vpr',
+            json=_vpr_request_payload(),
+            headers={'Authorization': f'Bearer {ID_TOKEN}'},
+            timeout=120,
+        )
+        assert response.status_code == 200
+        body = response.json()
+        vpr = body.get('vpr', body)
+        score = vpr.get('executiveSummary', {}).get('overallFitScore', -1)
+
+        assert 0 <= score <= 100, f'overallFitScore {score} out of range [0, 100]'

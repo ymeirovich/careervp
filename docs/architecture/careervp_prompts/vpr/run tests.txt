@@ -1,0 +1,66 @@
+Run All Test Suites
+
+# Run all integration + e2e + regression tests
+uv run pytest tests/integration/ tests/e2e/ tests/regression/ -v
+
+# Same, but with minimal output (just pass/fail counts)
+uv run pytest tests/integration/ tests/e2e/ tests/regression/ -q
+Run Individual Test Suites
+
+# Integration tests only
+uv run pytest tests/integration/ -v
+
+# E2E tests only
+uv run pytest tests/e2e/ -v
+
+# Regression tests only
+uv run pytest tests/regression/ -v
+Run Specific Test Files
+
+# VPR pipeline contract tests
+uv run pytest tests/integration/test_vpr_pipeline_contract.py -v
+
+# Handler-DAL contract tests  
+uv run pytest tests/integration/test_vpr_dal_handler_contract.py -v
+
+# Schema serialization tests
+uv run pytest tests/integration/test_vpr_schema_serialization.py -v
+
+# FVS pipeline wiring tests
+uv run pytest tests/integration/test_fvs_pipeline_wiring.py -v
+Useful Test Options
+
+# Stop on first failure (helpful for debugging)
+uv run pytest tests/integration/ tests/e2e/ tests/regression/ -x
+
+# Show print statements and logging output
+uv run pytest tests/integration/ -v -s
+
+# Show slowest 10 tests
+uv run pytest tests/integration/ -v --durations=10
+
+# Run only tests matching a pattern
+uv run pytest tests/integration/ -v -k "camel_case"
+
+# Run with coverage report
+uv run pytest tests/integration/ tests/e2e/ tests/regression/ --cov=careervp --cov-report=html
+Full CI/CD Pipeline (All Tests)
+
+# Run complete test suite (unit + integration + e2e + regression)
+uv run pytest tests/unit/ tests/integration/ tests/e2e/ tests/regression/ -v --tb=short
+
+# With build check first
+uv run ruff check careervp && uv run mypy careervp --strict && uv run pytest tests/ -v
+Expected Results After Implementation
+After you implement specs 05-06, you should see:
+
+✅ All 13 unit tests passing (currently passing)
+✅ 3 additional unit tests passing (get_next_vpr_version tests)
+✅ Integration tests passing (handler-DAL contracts, schema serialization, pipeline contracts)
+✅ E2E tests passing (VPR generation flow, regeneration flow)
+✅ Regression tests passing (DynamoDB key scheme, pipeline stages, schema stability)
+Quick health check command:
+
+
+uv run pytest tests/ -q --tb=line
+This shows a summary without verbose output, making it easy to spot failures.
