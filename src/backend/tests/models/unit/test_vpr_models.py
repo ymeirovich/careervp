@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from careervp.models.vpr import VPR, Achievement, EvidenceItem, TargetRole, ValueProposition
+from careervp.models.vpr import VPR, Achievement, TargetRole, ValueProposition
 
 
 def test_new_vpr_models_exist() -> None:
@@ -36,20 +36,13 @@ def test_value_proposition_references_achievement_and_target_role() -> None:
 
 
 def test_existing_vpr_models_still_work() -> None:
+    """VPR model accepts minimal required fields; all 10 sections are optional for legacy compat."""
     vpr = VPR(
         application_id='app-1',
         user_id='user-1',
-        executive_summary='A strong match.',
-        evidence_matrix=[
-            EvidenceItem(
-                requirement='Python',
-                evidence='8 years with Python',
-                alignment_score='STRONG',
-                impact_potential='Immediate productivity',
-            )
-        ],
-        differentiators=['Cloud migration expertise'],
-        gap_strategies=[],
     )
     assert vpr.application_id == 'app-1'
-    assert len(vpr.evidence_matrix) == 1
+    assert vpr.user_id == 'user-1'
+    # All 10 content sections are optional (None by default) for legacy DynamoDB items
+    assert vpr.executive_summary is None
+    assert vpr.evidence_gaps is None

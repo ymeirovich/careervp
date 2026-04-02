@@ -15,13 +15,13 @@ from __future__ import annotations
 import json
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from pydantic import ValidationError
 
-from careervp.logic.fvs_validator import check_anti_ai_patterns
+from careervp.logic.fvs_validator import check_anti_ai_patterns, run_vpr_quality_gate
 from careervp.logic.prompts.vpr_prompt import (
     PHASE2_SYSTEM_PROMPT,
     PHASE2_VALIDATION_SYSTEM_PROMPT,
@@ -148,6 +148,7 @@ class FinalVPRData:
     anti_ai_issues: list[str]
     passed_gate: bool
     regeneration_count: int
+    structural_score: float = field(default=10.0)
 
 
 class LLMClient:
@@ -352,15 +353,16 @@ class VPRSixStagePipeline:
         return VPRData(vpr=vpr)
 
     def _final_meta_evaluation(self, vpr: VPRData) -> FinalVPRData:
-        """Stage 6: anti-AI gate and final quality check."""
-        # SPEC-04-EXTENSION: add structural_validation_result here
-        content = _serialize_vpr_for_quality(vpr.vpr)
-        anti_ai_assessment = check_anti_ai_patterns(content)
+        """Stage 6: structural + anti-AI + grammar + tone quality gate."""
+        cv_text = _serialize_cv_for_quality(self._user_cv)
+        gap_text = ' '.join(gr.answer for gr in self._request.gap_responses if gr.answer)
+        gate = run_vpr_quality_gate(vpr.vpr, self._user_cv, cv_text, gap_text)
         return FinalVPRData(
             vpr=vpr.vpr,
-            anti_ai_score=anti_ai_assessment.score,
-            anti_ai_issues=anti_ai_assessment.issues,
-            passed_gate=anti_ai_assessment.score >= ANTI_AI_MIN_SCORE,
+            anti_ai_score=gate.anti_ai_score,
+            anti_ai_issues=gate.issues,
+            structural_score=gate.structural_score,
+            passed_gate=gate.passed_gate,
             regeneration_count=self._regeneration_count,
         )
 
@@ -531,7 +533,7 @@ def _parse_full_vpr_model(
         company_insights=company_insights,
         verification_summary=verification_summary,
         language=request.job_posting.language,
-        version=1,
+        version=request.target_version,
     )
 
 
@@ -803,50 +805,59 @@ def _calculate_word_count(vpr: VPR) -> int:
     sections: list[str] = []
 
     # Section 2 — Executive Summary
-    sections.append(vpr.executive_summary.fit_rationale)
-    for strength in vpr.executive_summary.top_three_strengths:
-        sections.extend([strength.strength, strength.evidence, strength.relevance_to_role])
-    for concern in vpr.executive_summary.top_three_concerns:
-        sections.extend([concern.concern, concern.mitigation])
+    if vpr.executive_summary:
+        sections.append(vpr.executive_summary.fit_rationale)
+        for strength in vpr.executive_summary.top_three_strengths:
+            sections.extend([strength.strength, strength.evidence, strength.relevance_to_role])
+        for concern in vpr.executive_summary.top_three_concerns:
+            sections.extend([concern.concern, concern.mitigation])
 
     # Section 3 — Role Alignment
-    for resp in vpr.role_alignment.core_responsibilities:
-        sections.append(resp.responsibility)
+    if vpr.role_alignment:
+        for resp in vpr.role_alignment.core_responsibilities:
+            sections.append(resp.responsibility)
 
     # Section 4 — Experience Mapping
-    for exp in vpr.experience_mapping.relevant_experiences:
-        sections.append(exp.relevance_to_target_role)
-    for gap in vpr.experience_mapping.experience_gaps:
-        sections.append(gap.missing_experience)
-        if gap.mitigation_strategy:
-            sections.append(gap.mitigation_strategy)
+    if vpr.experience_mapping:
+        for exp in vpr.experience_mapping.relevant_experiences:
+            sections.append(exp.relevance_to_target_role)
+        for gap in vpr.experience_mapping.experience_gaps:
+            sections.append(gap.missing_experience)
+            if gap.mitigation_strategy:
+                sections.append(gap.mitigation_strategy)
 
     # Section 5 — Skills Analysis
-    for skill in vpr.skills_analysis.technical_skills:
-        sections.append(skill.evidence)
+    if vpr.skills_analysis:
+        for skill in vpr.skills_analysis.technical_skills:
+            sections.append(skill.evidence)
 
     # Section 6 — Evidence Gaps
-    for identified in vpr.evidence_gaps.identified_gaps:
-        sections.append(identified.current_evidence)
+    if vpr.evidence_gaps:
+        for identified in vpr.evidence_gaps.identified_gaps:
+            sections.append(identified.current_evidence)
 
     # Section 7 — Differentiators
-    sections.append(vpr.differentiators.positioning_statement)
+    if vpr.differentiators:
+        sections.append(vpr.differentiators.positioning_statement)
 
     # Section 8 — Concerns & Mitigations
-    for objection in vpr.concerns_and_mitigations.likely_objections:
-        sections.extend([objection.objection, objection.mitigation.messaging])
+    if vpr.concerns_and_mitigations:
+        for objection in vpr.concerns_and_mitigations.likely_objections:
+            sections.extend([objection.objection, objection.mitigation.messaging])
 
     # Section 9 — Value Proposition
-    sections.extend(
-        [
-            vpr.value_proposition.elevator_pitch,
-            vpr.value_proposition.primary_value.statement,
-            vpr.value_proposition.primary_value.evidence,
-        ]
-    )
+    if vpr.value_proposition:
+        sections.extend(
+            [
+                vpr.value_proposition.elevator_pitch,
+                vpr.value_proposition.primary_value.statement,
+                vpr.value_proposition.primary_value.evidence,
+            ]
+        )
 
     # Section 10 — Application Strategy
-    sections.append(vpr.application_strategy.messaging_approach)
+    if vpr.application_strategy:
+        sections.append(vpr.application_strategy.messaging_approach)
 
     # Additional — Company Insights (optional)
     if vpr.company_insights:
@@ -861,24 +872,49 @@ def _serialize_vpr_for_quality(vpr: VPR) -> str:
     sections: list[str] = []
 
     # Section 2 — Executive Summary
-    sections.append(vpr.executive_summary.fit_rationale)
+    if vpr.executive_summary:
+        sections.append(vpr.executive_summary.fit_rationale)
 
     # Section 7 — Differentiators
-    sections.append(vpr.differentiators.positioning_statement)
-    for strength in vpr.differentiators.unique_strengths:
-        sections.extend([strength.strength, strength.relevance])
+    if vpr.differentiators:
+        sections.append(vpr.differentiators.positioning_statement)
+        for strength in vpr.differentiators.unique_strengths:
+            sections.extend([strength.strength, strength.relevance])
 
     # Section 9 — Value Proposition
-    sections.append(vpr.value_proposition.elevator_pitch)
+    if vpr.value_proposition:
+        sections.append(vpr.value_proposition.elevator_pitch)
 
     # Section 8 — Concerns & Mitigations
-    for objection in vpr.concerns_and_mitigations.likely_objections:
-        sections.append(objection.mitigation.messaging)
+    if vpr.concerns_and_mitigations:
+        for objection in vpr.concerns_and_mitigations.likely_objections:
+            sections.append(objection.mitigation.messaging)
 
     # Section 10 — Application Strategy
-    sections.append(vpr.application_strategy.messaging_approach)
+    if vpr.application_strategy:
+        sections.append(vpr.application_strategy.messaging_approach)
 
     return '\n'.join(s for s in sections if s)
+
+
+def _serialize_cv_for_quality(user_cv: UserCV) -> str:
+    """Flatten all relevant UserCV text for traceability checks (excludes contact info)."""
+    parts: list[str] = []
+    if user_cv.full_name:
+        parts.append(user_cv.full_name)
+    for exp in user_cv.experience:
+        if exp.company:
+            parts.append(exp.company)
+        if exp.role:
+            parts.append(exp.role)
+        parts.extend(exp.achievements)
+    for edu in user_cv.education:
+        if edu.institution:
+            parts.append(edu.institution)
+    parts.extend(user_cv.top_achievements)
+    for skill in user_cv.skills:
+        parts.append(skill.name if hasattr(skill, 'name') else str(skill))
+    return ' '.join(p for p in parts if p)
 
 
 # ---------------------------------------------------------------------------

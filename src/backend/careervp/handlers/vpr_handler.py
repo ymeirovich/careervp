@@ -56,6 +56,8 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         logger.info('User CV not found', user_id=request.user_id)
         return _build_error_response('CV not found. Upload a CV before generating a VPR.', HTTPStatus.NOT_FOUND)
 
+    next_version = dal.get_next_vpr_version(request.application_id)
+    request = request.model_copy(update={'target_version': next_version})
     result = generate_vpr(request, user_cv, dal)
     if not result.success or result.data is None:
         status = _map_result_code_to_http_status(result.code)
@@ -112,10 +114,12 @@ def _default_error_response(message: str) -> VPRResponse:
 
 def _serialize_response(response: VPRResponse, status: HTTPStatus) -> dict[str, Any]:
     """Serialize a VPRResponse into the API Gateway response format."""
+    response_json = response.model_dump_json(by_alias=True)
+    logger.info('VPR response generated', size_bytes=len(response_json))
     return {
         'statusCode': int(status),
         'headers': JSON_HEADERS,
-        'body': response.model_dump_json(),
+        'body': response_json,
     }
 
 

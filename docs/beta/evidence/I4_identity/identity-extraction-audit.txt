@@ -1,3 +1,6 @@
 /Users/yitzchak/Documents/dev/careervp/src/backend/careervp/handlers/auth_utils.py:44:        for header_name in ('x-user-id', 'X-User-Id'):
-/Users/yitzchak/Documents/dev/careervp/src/backend/careervp/handlers/cover_letter_handler.py:121:        user_id = body.get('user_id', '')
-/Users/yitzchak/Documents/dev/careervp/src/backend/careervp/handlers/interview_prep_handler.py:105:        user_id = body.get('user_id', '')
+/Users/yitzchak/Documents/dev/careervp/src/backend/careervp/handlers/cover_letter_handler.py:334:        user_id = body.get('user_id', '')
+/Users/yitzchak/Documents/dev/careervp/src/backend/careervp/handlers/interview_prep_handler.py:107:        user_id = body.get('user_id', '')
+/Users/yitzchak/Documents/dev/careervp/src/backend/careervp/handlers/interview_prep_handler.py:225:    logger.info('Interview prep worker persisting generation payload', job_id=job_id, user_id=user_id, interview_prep_payload=prep_payload)
+/Users/yitzchak/Documents/dev/careervp/src/backend/careervp/handlers/interview_prep_handler.py:695:        logger.info('Interview prep context CV lookup payload', user_id=user_id, table_name=cv_table_name, cv_payload=cv_dict)
+/Users/yitzchak/Documents/dev/careervp/src/backend/careervp/handlers/interview_prep_handler.py:773:            'Interview prep context gap responses lookup payload', user_id=user_id, table_name=gap_table_name, gap_responses_payload=all_responses

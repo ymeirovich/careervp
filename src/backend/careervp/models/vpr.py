@@ -10,9 +10,9 @@ Use .model_dump(by_alias=True) to produce camelCase for API/frontend consumers.
 """
 
 from datetime import datetime, timezone
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
 
 from careervp.models.job import CompanyContext, GapResponse, JobPosting
@@ -515,11 +515,31 @@ class VPRVerificationSummary(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+_VPR_SECTION_FIELDS: frozenset[str] = frozenset(
+    {
+        'metadata',
+        'executive_summary',
+        'role_alignment',
+        'experience_mapping',
+        'skills_analysis',
+        'evidence_gaps',
+        'differentiators',
+        'concerns_and_mitigations',
+        'value_proposition',
+        'application_strategy',
+    }
+)
+
+
 class VPR(BaseModel):
     """Complete 10-section Value Proposition Report.
 
     Stored in DynamoDB as snake_case field names.
     Serialized as camelCase for API/frontend consumers via .model_dump(by_alias=True).
+
+    Sections are Optional to support graceful loading of legacy flat DynamoDB items
+    that pre-date the 10-section schema.  Freshly generated VPRs always have all
+    sections populated; the pipeline and fvs_validator only receive those.
     """
 
     model_config = ConfigDict(
@@ -528,21 +548,40 @@ class VPR(BaseModel):
         alias_generator=to_camel,
     )
 
+    @model_validator(mode='before')
+    @classmethod
+    def _coerce_legacy_section_types(cls, values: Any) -> Any:
+        """Drop section values that are not dicts or model instances.
+
+        Legacy DynamoDB items stored sections as flat strings or lists.
+        Replacing them with None allows the model to parse without crashing;
+        the section fields will be None for those legacy items.
+
+        Valid types are kept: dict (raw DynamoDB/JSON), BaseModel instance
+        (already-parsed section), or None.
+        """
+        if not isinstance(values, dict):
+            return values
+        for field_name in _VPR_SECTION_FIELDS:
+            if field_name in values and not isinstance(values[field_name], (dict, BaseModel, type(None))):
+                values[field_name] = None
+        return values
+
     # Identity
     application_id: str
     user_id: str
 
-    # 10 content sections (all required)
-    metadata: VPRMetadata
-    executive_summary: VPRExecutiveSummary
-    role_alignment: VPRRoleAlignment
-    experience_mapping: VPRExperienceMapping
-    skills_analysis: VPRSkillsAnalysis
-    evidence_gaps: VPREvidenceGaps
-    differentiators: VPRDifferentiators
-    concerns_and_mitigations: VPRConcernsAndMitigations
-    value_proposition: VPRValueProposition
-    application_strategy: VPRApplicationStrategy
+    # 10 content sections — Optional to support legacy flat DynamoDB items
+    metadata: VPRMetadata | None = None
+    executive_summary: VPRExecutiveSummary | None = None
+    role_alignment: VPRRoleAlignment | None = None
+    experience_mapping: VPRExperienceMapping | None = None
+    skills_analysis: VPRSkillsAnalysis | None = None
+    evidence_gaps: VPREvidenceGaps | None = None
+    differentiators: VPRDifferentiators | None = None
+    concerns_and_mitigations: VPRConcernsAndMitigations | None = None
+    value_proposition: VPRValueProposition | None = None
+    application_strategy: VPRApplicationStrategy | None = None
 
     # 2 additional DOCX sections (optional)
     company_insights: VPRCompanyInsight | None = None
@@ -573,6 +612,7 @@ class VPRRequest(BaseModel):
         Field(default_factory=list, description='Optional gap analysis responses'),
     ]
     company_context: Annotated[CompanyContext | None, Field(description='Optional company research data')] = None
+    target_version: Annotated[int, Field(default=1, description='VPR version to write; set by handler before generation')] = 1
 
 
 class VPRResponse(BaseModel):
