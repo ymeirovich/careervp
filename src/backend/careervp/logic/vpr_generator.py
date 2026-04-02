@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 from pydantic import ValidationError
 
-from careervp.logic.fvs_validator import check_anti_ai_patterns, run_vpr_quality_gate
+from careervp.logic.fvs_validator import run_vpr_quality_gate
 from careervp.logic.prompts.vpr_prompt import (
     PHASE2_SYSTEM_PROMPT,
     PHASE2_VALIDATION_SYSTEM_PROMPT,

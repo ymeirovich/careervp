@@ -1,0 +1,113 @@
+"""Regression tests — VPR schema must have all 10 sections and key sub-fields."""
+
+from __future__ import annotations
+
+import pytest
+
+
+@pytest.mark.regression
+class TestVPRTopLevelSections:
+    """All 10 required sections must exist as fields on the VPR model."""
+
+    def test_vpr_has_metadata_field(self) -> None:
+        from careervp.models.vpr import VPR
+
+        assert 'metadata' in VPR.model_fields
+
+    def test_vpr_has_executive_summary_field(self) -> None:
+        from careervp.models.vpr import VPR
+
+        assert 'executive_summary' in VPR.model_fields
+
+    def test_vpr_has_role_alignment_field(self) -> None:
+        from careervp.models.vpr import VPR
+
+        assert 'role_alignment' in VPR.model_fields
+
+    def test_vpr_has_experience_mapping_field(self) -> None:
+        from careervp.models.vpr import VPR
+
+        assert 'experience_mapping' in VPR.model_fields
+
+    def test_vpr_has_skills_analysis_field(self) -> None:
+        from careervp.models.vpr import VPR
+
+        assert 'skills_analysis' in VPR.model_fields
+
+    def test_vpr_has_evidence_gaps_field(self) -> None:
+        from careervp.models.vpr import VPR
+
+        assert 'evidence_gaps' in VPR.model_fields
+
+    def test_vpr_has_differentiators_field(self) -> None:
+        from careervp.models.vpr import VPR
+
+        assert 'differentiators' in VPR.model_fields
+
+    def test_vpr_has_concerns_and_mitigations_field(self) -> None:
+        from careervp.models.vpr import VPR
+
+        assert 'concerns_and_mitigations' in VPR.model_fields
+
+    def test_vpr_has_value_proposition_field(self) -> None:
+        from careervp.models.vpr import VPR
+
+        assert 'value_proposition' in VPR.model_fields
+
+    def test_vpr_has_application_strategy_field(self) -> None:
+        from careervp.models.vpr import VPR
+
+        assert 'application_strategy' in VPR.model_fields
+
+    def test_vpr_identity_fields_present(self) -> None:
+        """application_id, user_id, version, language, word_count must always be present."""
+        from careervp.models.vpr import VPR
+
+        required_identity_fields = ['application_id', 'user_id', 'version', 'language', 'word_count']
+        for field in required_identity_fields:
+            assert field in VPR.model_fields, f"Identity field '{field}' removed from VPR model"
+
+
+@pytest.mark.regression
+class TestVPRSubFieldStability:
+    """Critical sub-fields within each section must remain."""
+
+    def test_executive_summary_has_overall_fit_score(self) -> None:
+        from careervp.models.vpr import VPRExecutiveSummary
+
+        assert 'overall_fit_score' in VPRExecutiveSummary.model_fields
+
+    def test_executive_summary_has_top_three_strengths(self) -> None:
+        from careervp.models.vpr import VPRExecutiveSummary
+
+        assert 'top_three_strengths' in VPRExecutiveSummary.model_fields
+
+    def test_responsibility_has_alignment_score(self) -> None:
+        from careervp.models.vpr import VPRResponsibility
+
+        assert 'alignment_score' in VPRResponsibility.model_fields
+
+    def test_responsibility_has_evidence_quality(self) -> None:
+        from careervp.models.vpr import VPRResponsibility
+
+        assert 'evidence_quality' in VPRResponsibility.model_fields
+
+    def test_identified_gap_has_gap_severity(self) -> None:
+        from careervp.models.vpr import VPRIdentifiedGap
+
+        assert 'gap_severity' in VPRIdentifiedGap.model_fields
+
+    def test_unique_strength_has_rarity(self) -> None:
+        from careervp.models.vpr import VPRUniqueStrength
+
+        assert 'rarity' in VPRUniqueStrength.model_fields
+
+    def test_objection_has_mitigation(self) -> None:
+        from careervp.models.vpr import VPRObjection
+
+        assert 'mitigation' in VPRObjection.model_fields
+
+    def test_value_proposition_has_elevator_pitch(self) -> None:
+        from careervp.models.vpr import VPRValueProposition
+
+        assert 'elevator_pitch' in VPRValueProposition.model_fields
