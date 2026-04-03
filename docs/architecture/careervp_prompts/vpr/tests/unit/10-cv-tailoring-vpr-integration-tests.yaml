@@ -1,0 +1,345 @@
+id: "10-cv-tailoring-vpr-integration-tests"
+title: "Unit Tests — CV Tailoring VPR Integration (Spec 10)"
+spec_id: "10-cv-tailoring-vpr-integration"
+target_path: "src/backend/tests/unit/test_cv_tailoring_vpr.py"
+pytest_markers: ["unit"]
+depends_on_spec: "10-cv-tailoring-vpr-integration"
+test_count: 14
+
+description: |
+  Tests for the optional VPR integration in CV tailoring (spec 10). Covers:
+    1. TailorCVRequest accepts vpr_id (model field test)
+    2. build_user_prompt() injects VPR JSON when vpr is present
+    3. build_user_prompt() output is unchanged when vpr is None (no regression)
+    4. CVTailoringLogic.tailor_cv() fetches VPR via DAL when vpr_id is present
+    5. CVTailoringLogic.tailor_cv() proceeds without VPR when fetch fails
+    6. CVTailoringLogic.tailor_cv() proceeds without VPR when vpr_id is absent
+
+  Uses fixtures from the existing conftest.py where available.
+  Mocks DAL and LLM client — no network calls.
+
+implementation_steps: |
+  1. Read docs/architecture/careervp_prompts/vpr/specs/10-cv-tailoring-vpr-integration.yaml
+  2. Copy the code block below to src/backend/tests/unit/test_cv_tailoring_vpr.py
+  3. Run (RED — most tests fail until spec 10 is implemented):
+       cd src/backend && uv run pytest tests/unit/test_cv_tailoring_vpr.py -v --tb=short
+  4. Implement spec 10
+  5. Re-run — all 14 tests should pass (GREEN)
+
+code: |
+  """Unit tests for spec 10: optional VPR integration in CV tailoring.
+
+  Tests confirm:
+  - TailorCVRequest.vpr_id field exists and accepts None or a string
+  - build_user_prompt() injects '# VPR Strategic Guide' section when vpr is provided
+  - build_user_prompt() output is unchanged when vpr is None
+  - VPR JSON is serialized as a readable blob in the prompt
+  - CVTailoringLogic.tailor_cv() calls dal.get_vpr() when vpr_id is set
+  - Failure to fetch VPR logs a warning and does not fail the request
+  - vpr_id absent → dal.get_vpr() never called
+  """
+  from __future__ import annotations
+
+  import json
+  from typing import Any
+  from unittest.mock import MagicMock, patch
+
+  import pytest
+
+  from careervp.models.cv_tailoring_models import TailorCVRequest
+
+
+  # ── Helpers ───────────────────────────────────────────────────────────────────
+
+  def _minimal_vpr() -> Any:
+      """Build a minimal valid VPR object for testing."""
+      from datetime import datetime, timezone
+
+      from careervp.models.vpr import (
+          VPR,
+          VPRApplicationStrategy,
+          VPRConcernsAndMitigations,
+          VPRDifferentiators,
+          VPREvidenceGaps,
+          VPRExecutiveSummary,
+          VPRExperienceMapping,
+          VPRKeywordGroup,
+          VPRMetadata,
+          VPRPrimaryValue,
+          VPRRequirementBreakdown,
+          VPRRoleAlignment,
+          VPRSkillsAnalysis,
+          VPRStrength,
+          VPRConcern,
+          VPRUniqueStrength,
+          VPRValueProposition,
+      )
+
+      return VPR(
+          application_id='app-001',
+          user_id='user-123',
+          version=1,
+          language='en',
+          word_count=200,
+          created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+          metadata=VPRMetadata(
+              report_date='2025-01-01',
+              candidate_name='Jane Smith',
+              target_role='Staff Engineer',
+              target_company='SysAid',
+              report_version='1.0',
+              analysis_scope='full',
+          ),
+          executive_summary=VPRExecutiveSummary(
+              overall_fit_score=82,
+              fit_rationale='Jane has strong platform engineering experience.',
+              top_three_strengths=[
+                  VPRStrength(strength='AWS depth', evidence='$2M migration', relevance_to_role='Direct'),
+                  VPRStrength(strength='Python expertise', evidence='5 years daily use', relevance_to_role='Core skill'),
+                  VPRStrength(strength='Team leadership', evidence='Led 8 engineers', relevance_to_role='Required'),
+              ],
+              top_three_concerns=[
+                  VPRConcern(concern='No SaaS background', severity='medium', mitigation='Acme scale comparable'),
+                  VPRConcern(concern='Limited ITIL exposure', severity='low', mitigation='Fast learner'),
+                  VPRConcern(concern='Smaller team than SysAid', severity='low', mitigation='Metrics show leadership'),
+              ],
+              recommended_approach='apply_with_customization',
+          ),
+          role_alignment=VPRRoleAlignment(
+              core_responsibilities=[],
+              requirement_breakdown=VPRRequirementBreakdown(
+                  must_have=[], nice_to_have=[], assumed_prerequisites=[]
+              ),
+          ),
+          experience_mapping=VPRExperienceMapping(relevant_experiences=[], experience_gaps=[]),
+          skills_analysis=VPRSkillsAnalysis(technical_skills=[], soft_skills=[], tool_proficiency=[]),
+          evidence_gaps=VPREvidenceGaps(identified_gaps=[], priority_gaps_to_address=[]),
+          differentiators=VPRDifferentiators(
+              unique_strengths=[
+                  VPRUniqueStrength(
+                      strength='AWS migration at $2M scale with zero downtime',
+                      rarity='uncommon',
+                      relevance='Direct fit for platform scope',
+                      proof='$2M project at Acme Corp',
+                  )
+              ],
+              competitive_advantages=[],
+              positioning_statement='Platform engineer with $2M zero-downtime migration track record.',
+          ),
+          concerns_and_mitigations=VPRConcernsAndMitigations(likely_objections=[], preemptive_responses=[]),
+          value_proposition=VPRValueProposition(
+              primary_value=VPRPrimaryValue(
+                  statement='Scale SysAid platform reliably.',
+                  evidence='$2M AWS migration with zero downtime',
+                  outcome_for_company='Faster feature delivery',
+              ),
+              secondary_values=[],
+              quantified_impact=[],
+              elevator_pitch='Platform engineer with $2M track record ready to scale SysAid.',
+          ),
+          application_strategy=VPRApplicationStrategy(
+              messaging_approach='Lead with infrastructure outcomes.',
+              ats_keywords=VPRKeywordGroup(primary=['AWS', 'Python'], secondary=['cloud']),
+              cv_lead_differentiator='$2M AWS migration with zero downtime',
+              sections_to_compress=['Early career'],
+          ),
+      )
+
+
+  def _minimal_cv() -> Any:
+      """Build a minimal UserCV for prompt testing."""
+      from careervp.models.cv import ContactInfo, UserCV, WorkExperience
+
+      return UserCV(
+          user_id='user-123',
+          full_name='Jane Smith',
+          language='en',
+          contact_info=ContactInfo(email='jane@example.com'),
+          experience=[
+              WorkExperience(
+                  company='Acme Corp',
+                  role='Senior Engineer',
+                  dates='2020-2024',
+                  achievements=['Led $2M AWS migration with zero downtime'],
+                  technologies=['AWS', 'Python'],
+              )
+          ],
+          education=[],
+          certifications=[],
+          skills=['AWS', 'Python'],
+          top_achievements=['$2M AWS migration with zero downtime'],
+          languages=[],
+          is_parsed=True,
+      )
+
+
+  # ── Group 1: TailorCVRequest model ───────────────────────────────────────────
+
+  @pytest.mark.unit
+  class TestTailorCVRequestModel:
+      def test_vpr_id_field_exists(self) -> None:
+          """TailorCVRequest must accept vpr_id as an optional field."""
+          req = TailorCVRequest(
+              cv_id='cv-001',
+              job_description='Lead platform engineering team for enterprise SaaS product.',
+              vpr_id='app-001',
+          )
+          assert req.vpr_id == 'app-001'
+
+      def test_vpr_id_defaults_to_none(self) -> None:
+          """vpr_id must default to None — existing callers must not break."""
+          req = TailorCVRequest(
+              cv_id='cv-001',
+              job_description='Lead platform engineering team for enterprise SaaS product.',
+          )
+          assert req.vpr_id is None
+
+      def test_vpr_id_accepts_none_explicitly(self) -> None:
+          """vpr_id=None must be accepted explicitly."""
+          req = TailorCVRequest(
+              cv_id='cv-001',
+              job_description='Lead platform engineering team for enterprise SaaS product.',
+              vpr_id=None,
+          )
+          assert req.vpr_id is None
+
+
+  # ── Group 2: build_user_prompt VPR injection ─────────────────────────────────
+
+  @pytest.mark.unit
+  class TestBuildUserPromptVprInjection:
+      """build_user_prompt() must inject VPR JSON when vpr is provided."""
+
+      def test_vpr_section_header_present_when_vpr_provided(self) -> None:
+          """'# VPR Strategic Guide' must appear in prompt when VPR is given."""
+          from careervp.logic.cv_tailoring_prompt import build_user_prompt
+
+          vpr = _minimal_vpr()
+          cv = _minimal_cv()
+          prompt = build_user_prompt(
+              cv=cv,
+              job_description='Lead platform engineering team.',
+              vpr=vpr,
+          )
+          assert '# VPR Strategic Guide' in prompt
+
+      def test_vpr_json_blob_in_prompt(self) -> None:
+          """VPR content (e.g., positioning_statement) must appear in prompt."""
+          from careervp.logic.cv_tailoring_prompt import build_user_prompt
+
+          vpr = _minimal_vpr()
+          cv = _minimal_cv()
+          prompt = build_user_prompt(
+              cv=cv,
+              job_description='Lead platform engineering team.',
+              vpr=vpr,
+          )
+          # positioning_statement content from _minimal_vpr must appear
+          assert 'zero-downtime migration track record' in prompt
+
+      def test_vpr_section_absent_when_vpr_is_none(self) -> None:
+          """No VPR section must appear when vpr=None (no regression)."""
+          from careervp.logic.cv_tailoring_prompt import build_user_prompt
+
+          cv = _minimal_cv()
+          prompt = build_user_prompt(
+              cv=cv,
+              job_description='Lead platform engineering team.',
+              vpr=None,
+          )
+          assert '# VPR Strategic Guide' not in prompt
+
+      def test_prompt_without_vpr_unchanged(self) -> None:
+          """Prompt output with vpr=None must match output with no vpr kwarg."""
+          from careervp.logic.cv_tailoring_prompt import build_user_prompt
+
+          cv = _minimal_cv()
+          job = 'Lead platform engineering team for enterprise SaaS.'
+          prompt_no_kwarg = build_user_prompt(cv=cv, job_description=job)
+          prompt_none = build_user_prompt(cv=cv, job_description=job, vpr=None)
+          assert prompt_no_kwarg == prompt_none
+
+
+  # ── Group 3: CVTailoringLogic VPR fetch behaviour ────────────────────────────
+
+  @pytest.mark.unit
+  class TestCVTailoringLogicVprFetch:
+      """CVTailoringLogic.tailor_cv() must fetch VPR when vpr_id is present."""
+
+      def _make_logic(self, mock_dal: Any, mock_llm: Any) -> Any:
+          from careervp.logic.cv_tailoring_logic import CVTailoringLogic
+
+          return CVTailoringLogic(dal=mock_dal, llm_client=mock_llm)
+
+      def _make_mock_dal(self, vpr: Any | None = None, fetch_success: bool = True) -> MagicMock:
+          from careervp.models.result import Result, ResultCode
+
+          mock_dal = MagicMock()
+          # get_cv returns a valid CV
+          mock_dal.get_cv.return_value = _minimal_cv()
+          # get_tailored_cv returns no existing (forces generation)
+          mock_dal.get_tailored_cv.return_value = Result(
+              success=True, data=None, code=ResultCode.SUCCESS
+          )
+          # get_vpr returns success or failure
+          if fetch_success and vpr is not None:
+              mock_dal.get_vpr.return_value = Result(
+                  success=True, data=vpr, code=ResultCode.SUCCESS
+              )
+          else:
+              mock_dal.get_vpr.return_value = Result(
+                  success=False, data=None, code=ResultCode.NOT_FOUND, error='Not found'
+              )
+          return mock_dal
+
+      def test_get_vpr_called_when_vpr_id_provided(self) -> None:
+          """dal.get_vpr() must be called when request.vpr_id is set."""
+          mock_llm = MagicMock()
+          mock_llm.generate.return_value = {'text': '{}', 'input_tokens': 100, 'output_tokens': 50}
+          vpr = _minimal_vpr()
+          mock_dal = self._make_mock_dal(vpr=vpr, fetch_success=True)
+          logic = self._make_logic(mock_dal, mock_llm)
+
+          req = TailorCVRequest(
+              cv_id='cv-001',
+              job_description='Lead platform engineering team for enterprise SaaS product.',
+              vpr_id='app-001',
+          )
+          logic.tailor_cv(req, user_id='user-123')
+
+          mock_dal.get_vpr.assert_called_once_with('app-001')
+
+      def test_get_vpr_not_called_when_vpr_id_absent(self) -> None:
+          """dal.get_vpr() must NOT be called when request.vpr_id is None."""
+          mock_llm = MagicMock()
+          mock_llm.generate.return_value = {'text': '{}', 'input_tokens': 100, 'output_tokens': 50}
+          mock_dal = self._make_mock_dal(vpr=None, fetch_success=False)
+          logic = self._make_logic(mock_dal, mock_llm)
+
+          req = TailorCVRequest(
+              cv_id='cv-001',
+              job_description='Lead platform engineering team for enterprise SaaS product.',
+          )
+          logic.tailor_cv(req, user_id='user-123')
+
+          mock_dal.get_vpr.assert_not_called()
+
+      def test_vpr_fetch_failure_does_not_fail_request(self) -> None:
+          """A failed VPR fetch must not cause tailor_cv() to return an error."""
+          mock_llm = MagicMock()
+          mock_llm.generate.return_value = {'text': '{}', 'input_tokens': 100, 'output_tokens': 50}
+          mock_dal = self._make_mock_dal(vpr=None, fetch_success=False)
+          logic = self._make_logic(mock_dal, mock_llm)
+
+          req = TailorCVRequest(
+              cv_id='cv-001',
+              job_description='Lead platform engineering team for enterprise SaaS product.',
+              vpr_id='app-001',  # fetch will fail
+          )
+          result = logic.tailor_cv(req, user_id='user-123')
+
+          # Result must not be a VPR-specific failure — may succeed or fail for other reasons,
+          # but NOT because of the VPR fetch failure
+          if not result.success:
+              assert result.error != 'VPR not found'
+              assert 'VPR' not in (result.error or '').upper()

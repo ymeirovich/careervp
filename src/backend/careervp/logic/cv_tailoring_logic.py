@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.handlers.utils.observability import logger
@@ -12,6 +12,9 @@ from careervp.logic.cv_tailoring import create_fvs_baseline, tailor_cv
 from careervp.logic.llm_client import LLMClient
 from careervp.models.cv_tailoring_models import TailorCVRequest, TailoredCVResponse
 from careervp.models.result import Result, ResultCode
+
+if TYPE_CHECKING:
+    from careervp.models.vpr import VPR
 
 
 class RetryingLLMClient:
@@ -73,6 +76,20 @@ class CVTailoringLogic:
 
         baseline = create_fvs_baseline(master_cv)
         retrying_llm = RetryingLLMClient(self.llm_client)
+
+        # Fetch VPR for strategic guidance (optional — graceful degradation)
+        vpr: 'VPR | None' = None
+        if request.vpr_id:
+            vpr_result = self.dal.get_vpr(request.vpr_id)
+            if vpr_result.success and vpr_result.data is not None:
+                vpr = vpr_result.data
+            else:
+                logger.warning(
+                    'CV tailoring: VPR not found or fetch failed — proceeding without strategic guide',
+                    vpr_id=request.vpr_id,
+                    error=vpr_result.error,
+                )
+
         return tailor_cv(
             master_cv=master_cv,
             job_description=request.job_description,
@@ -80,4 +97,5 @@ class CVTailoringLogic:
             fvs_baseline=baseline,
             dal=self.dal,
             llm_client=retrying_llm,
+            vpr=vpr,
         )

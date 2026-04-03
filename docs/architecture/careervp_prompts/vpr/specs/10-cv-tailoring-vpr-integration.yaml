@@ -1,0 +1,287 @@
+id: "10-cv-tailoring-vpr-integration"
+title: "CV Tailoring — Optional VPR Strategic Guide Integration"
+status: pending
+priority: 3
+depends_on: ["08-prompt-quality-reorder"]
+
+summary: |
+  Thread an optional VPR parameter through the CV tailoring call stack so the LLM
+  can use the generated VPR as a strategic filter when tailoring the CV.
+
+  Motivation (from JSA spec): CV tailoring currently ignores the VPR entirely. The JSA
+  specifies that CV tailoring should consume the VPR to:
+    1. Use differentiators.unique_strengths as a content priority filter — expand bullet
+       points for roles/skills that map to unique strengths, compress or cut sections
+       that don't appear in the VPR's evidence matrix
+    2. Align the professional_summary with differentiators.positioning_statement
+    3. Surface ats_keywords.primary from application_strategy into tailored bullet points
+
+  BEHAVIOR:
+    - VPR present: inject full VPR JSON as a "# VPR Strategic Guide" section in the
+      tailoring prompt. Update system prompt to instruct use of VPR as a strategic filter.
+    - VPR absent: proceed with existing tailoring logic unchanged. Log a warning.
+      Graceful degradation — not a hard error.
+
+  The VPR passing pattern matches the cover letter: the full serialized VPR object is
+  passed as a JSON blob, not extracted fields. The prompt navigates paths inline.
+
+context:
+  read_files:
+    - "src/backend/careervp/models/cv_tailoring_models.py"   # add vpr_id field
+    - "src/backend/careervp/logic/cv_tailoring_logic.py"     # thread vpr through
+    - "src/backend/careervp/logic/cv_tailoring.py"           # tailor_cv + _tailor_cv_legacy
+    - "src/backend/careervp/logic/cv_tailoring_prompt.py"    # build_user_prompt
+    - "src/backend/careervp/models/vpr.py"                   # VPR, VPRResponse types
+    - "src/backend/careervp/logic/prompts/cover_letter_prompt.py"  # pattern reference
+  do_not_read:
+    - "src/backend/careervp/handlers/"  # handler changes are out of scope for this spec
+
+  verified_facts: |
+    - TailorCVRequest (cv_tailoring_models.py:30) has: cv_id, job_description, user_id,
+      preferences, idempotency_key — NO vpr_id or vpr field
+    - CVTailoringLogic.tailor_cv() (cv_tailoring_logic.py:46) calls:
+        tailor_cv(master_cv, job_description, preferences, fvs_baseline, dal, llm_client)
+      with no VPR parameter
+    - tailor_cv() (cv_tailoring.py:212) dispatches to _tailor_cv_legacy() for str
+      job_description path — this is the active production path
+    - _tailor_cv_legacy() calls build_tailoring_prompt() (cv_tailoring.py:274)
+    - build_tailoring_prompt() wraps cv_tailoring_prompt.build_user_prompt()
+    - build_user_prompt() (cv_tailoring_prompt.py:25) has no VPR parameter
+    - dal.get_vpr(application_id, version=None) exists in dynamo_dal_handler.py:222
+      and returns Result[VPR | None]
+    - Cover letter uses VPRResponse type (the wrapper); we use VPR directly (the inner
+      model) since CV tailoring only needs the content, not success/token metadata
+
+  key_question_resolved: |
+    Q: Should VPR be fetched by the handler or by CVTailoringLogic?
+    A: CVTailoringLogic fetches it (using self.dal.get_vpr(request.vpr_id)).
+       Rationale: the handler already constructs TailorCVRequest from the HTTP body;
+       adding VPR fetch to the handler would split the logic. The logic layer owns
+       data loading for dependencies it uses.
+
+    Q: What if VPR fetch fails (network error, not found)?
+    A: Treat as VPR absent — log warning and proceed without VPR.
+       A failed VPR fetch must NOT fail the CV tailoring request.
+
+changes:
+  # ── CHANGE 1: TailorCVRequest ─────────────────────────────────────────────────
+
+  model_change:
+    file: "src/backend/careervp/models/cv_tailoring_models.py"
+    target_class: "TailorCVRequest"
+    add_field: |
+      vpr_id: str | None = None
+      # When present, the CV tailoring logic will fetch this VPR and use it as a
+      # strategic guide. Optional — graceful degradation when absent.
+    note: |
+      No validator needed — None is the default, and the logic layer handles
+      the optional fetch. vpr_id is the application_id used by dal.get_vpr().
+
+  # ── CHANGE 2: CVTailoringLogic.tailor_cv ─────────────────────────────────────
+
+  logic_layer_change:
+    file: "src/backend/careervp/logic/cv_tailoring_logic.py"
+    target_method: "CVTailoringLogic.tailor_cv"
+    description: |
+      After fetching master_cv and before calling tailor_cv(), attempt to fetch the
+      VPR if request.vpr_id is provided. Pass VPR (or None) to tailor_cv().
+
+    new_logic_block: |
+      # Fetch VPR for strategic guidance (optional — graceful degradation)
+      vpr: VPR | None = None
+      if request.vpr_id:
+          vpr_result = self.dal.get_vpr(request.vpr_id)
+          if vpr_result.success and vpr_result.data is not None:
+              vpr = vpr_result.data
+          else:
+              logger.warning(
+                  'CV tailoring: VPR not found or fetch failed — proceeding without strategic guide',
+                  vpr_id=request.vpr_id,
+                  error=vpr_result.error,
+              )
+
+    updated_call: |
+      return tailor_cv(
+          master_cv=master_cv,
+          job_description=request.job_description,
+          preferences=request.preferences,
+          fvs_baseline=baseline,
+          dal=self.dal,
+          llm_client=retrying_llm,
+          vpr=vpr,             # ← new parameter
+      )
+
+    new_imports_needed:
+      - "from careervp.models.vpr import VPR"
+
+  # ── CHANGE 3: tailor_cv() and _tailor_cv_legacy() ────────────────────────────
+
+  tailoring_function_changes:
+    file: "src/backend/careervp/logic/cv_tailoring.py"
+
+    tailor_cv_overloads:
+      description: |
+        Add vpr: VPR | None = None to both @overload signatures (the str path and the
+        KeywordMap path) and to the actual function implementation.
+      note: |
+        Only the str/legacy path uses VPR — the KeywordMap step-2 path does not need it.
+        Thread vpr to _tailor_cv_legacy() only in the legacy dispatch branch.
+
+    _tailor_cv_legacy_change:
+      description: |
+        Add vpr: VPR | None = None parameter. Pass it to build_tailoring_prompt().
+
+      updated_signature: |
+        def _tailor_cv_legacy(
+            master_cv: CVUserCV | UserCV,
+            job_description: str,
+            preferences: TailoringPreferences | None = None,
+            fvs_baseline: FVSBaseline | None = None,
+            dal: Any | None = None,
+            llm_client: Any | None = None,
+            timeout: int = 300,
+            vpr: VPR | None = None,    # ← new, keyword-only by convention
+        ) -> Result[TailorCVResultData]:
+
+      updated_build_call: |
+        prompt = build_tailoring_prompt(
+            cv=master_cv,
+            job_description=job_description,
+            relevance_scores=relevance_scores,
+            fvs_baseline=fvs_baseline,
+            target_keywords=keyword_matches,
+            preferences=preferences,
+            vpr=vpr,    # ← new
+        )
+
+    build_tailoring_prompt_change:
+      description: |
+        Add vpr parameter and thread it to cv_tailoring_prompt.build_user_prompt().
+
+      updated_signature: |
+        def build_tailoring_prompt(
+            cv: CVUserCV | UserCV,
+            job_description: str,
+            relevance_scores: dict[str, float] | None = None,
+            fvs_baseline: FVSBaseline | None = None,
+            target_keywords: Iterable[str] | None = None,
+            preferences: TailoringPreferences | None = None,
+            vpr: VPR | None = None,    # ← new
+        ) -> str:
+
+    new_imports_needed:
+      - "from careervp.models.vpr import VPR"
+
+  # ── CHANGE 4: build_user_prompt() in cv_tailoring_prompt.py ──────────────────
+
+  prompt_builder_change:
+    file: "src/backend/careervp/logic/cv_tailoring_prompt.py"
+
+    updated_build_user_prompt_signature: |
+      def build_user_prompt(
+          cv: CVUserCV | UserCV,
+          job_description: str,
+          relevance_scores: dict[str, float] | None = None,
+          fvs_baseline: FVSBaseline | None = None,
+          target_keywords: Iterable[str] | None = None,
+          preferences: TailoringPreferences | None = None,
+          vpr: VPR | None = None,    # ← new
+      ) -> str:
+
+    vpr_injection_logic: |
+      # Add after the existing sections list construction, before the join:
+      if vpr is not None:
+          import json
+          sections.append('# VPR Strategic Guide')
+          sections.append(
+              'Use this VPR to prioritize CV content. Expand bullet points for roles and '
+              'skills that map to unique_strengths and evidence_matrix. Align the '
+              'professional_summary with differentiators.positioning_statement. '
+              'Surface ats_keywords.primary into tailored bullet points naturally.\n\n'
+              + json.dumps(vpr.model_dump(mode='json'), indent=2)
+          )
+
+    updated_build_system_prompt: |
+      Add the following instruction to build_system_prompt() when VPR is present.
+      Since build_system_prompt() currently takes no parameters, either:
+        (a) Add an optional vpr_present: bool = False parameter and add the instruction
+            conditionally, OR
+        (b) Append the VPR instruction to the user prompt section header instead.
+      Preferred: option (b) — keep build_system_prompt() stateless.
+      The user prompt header instruction should read:
+        "When # VPR Strategic Guide is present: use it as the primary strategic filter.
+         The VPR represents the candidate's best positioning for this role — tailor the
+         CV to reinforce those strengths, not to deviate from them."
+      Add this as a comment block at the top of the VPR section in the prompt, not
+      to build_system_prompt().
+
+    new_imports_needed:
+      - "import json"
+      - "from careervp.models.vpr import VPR"
+
+acceptance_criteria:
+  - "TailorCVRequest has vpr_id: str | None = None field"
+  - "CVTailoringLogic.tailor_cv() fetches VPR via dal.get_vpr() when vpr_id is set"
+  - "VPR fetch failure logs a warning and proceeds without VPR (does not return error)"
+  - "build_user_prompt() accepts vpr: VPR | None = None parameter"
+  - "When VPR present, prompt contains '# VPR Strategic Guide' section with full JSON"
+  - "When VPR absent, prompt is identical to pre-change output (no regression)"
+  - "`uv run mypy careervp --strict` passes"
+  - "`uv run pytest tests/unit/ -v --tb=short` passes (all existing tests)"
+
+do_not_change:
+  - "TailoredCV model"
+  - "TailoredCVResponse model"
+  - "TailoringPreferences model"
+  - "_tailor_cv_step2() function (KeywordMap path)"
+  - "Any handler file"
+  - "Any DAL file"
+
+known_risks:
+  - risk: "mypy overload signatures must stay consistent — both @overload stubs and
+           the implementation must include vpr parameter"
+    mitigation: "Add vpr: VPR | None = None to all three (both @overload stubs +
+                 implementation). The KeywordMap overload can have vpr but ignore it."
+
+  - risk: "cv_tailoring.py imports — VPR import may trigger circular imports if
+           models/vpr.py transitively imports cv models"
+    mitigation: "Use TYPE_CHECKING guard: from __future__ import annotations +
+                 if TYPE_CHECKING: from careervp.models.vpr import VPR. At runtime
+                 the type is only used in isinstance checks, which are not needed
+                 (vpr is already typed by the caller)."
+
+  - risk: "VPR JSON blob size — a full VPR can be 8-15KB serialized. This will
+           increase prompt token count and cost for Haiku CV tailoring"
+    mitigation: "Acceptable per CLAUDE.md cost target. VPR is optional; users who
+                 have not generated a VPR are unaffected. Monitor token usage delta."
+
+implementation_prompt: |
+  You are threading an optional VPR parameter through the CV tailoring call stack.
+  Make changes in the order below. Read each file before editing.
+
+  ## Step 1 — cv_tailoring_models.py
+  Add vpr_id: str | None = None field to TailorCVRequest.
+
+  ## Step 2 — cv_tailoring_logic.py
+  Import VPR from careervp.models.vpr (use TYPE_CHECKING guard if needed).
+  After fetching master_cv, add the VPR fetch block (see new_logic_block in spec).
+  Add vpr=vpr to the tailor_cv() call.
+
+  ## Step 3 — cv_tailoring.py
+  Import VPR (TYPE_CHECKING guard if needed).
+  Add vpr: VPR | None = None to both @overload stubs and the implementation signature.
+  In the legacy branch, add vpr=vpr to the _tailor_cv_legacy() call.
+  Add vpr: VPR | None = None to _tailor_cv_legacy() signature.
+  Add vpr=vpr to the build_tailoring_prompt() call.
+  Add vpr: VPR | None = None to build_tailoring_prompt() signature.
+  Thread it to cv_tailoring_prompt.build_user_prompt(vpr=vpr).
+
+  ## Step 4 — cv_tailoring_prompt.py
+  Import VPR (TYPE_CHECKING guard if needed), import json.
+  Add vpr: VPR | None = None to build_user_prompt() signature.
+  Add the VPR injection block at the end of the sections list (before the join).
+
+  ## Verify
+  cd src/backend && uv run ruff check --fix .
+  uv run mypy careervp --strict
+  uv run pytest tests/unit/ -v --tb=short

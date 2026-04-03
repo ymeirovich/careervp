@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Iterable
+import json
+from typing import TYPE_CHECKING, Iterable
 
 from careervp.models.cv import UserCV as CVUserCV
 from careervp.models.cv_models import UserCV
 from careervp.models.cv_tailoring_models import TailoringPreferences
 from careervp.models.fvs import FVSBaseline
+
+if TYPE_CHECKING:
+    from careervp.models.vpr import VPR
 
 
 def build_system_prompt() -> str:
@@ -29,6 +33,7 @@ def build_user_prompt(
     fvs_baseline: FVSBaseline | None = None,
     target_keywords: Iterable[str] | None = None,
     preferences: TailoringPreferences | None = None,
+    vpr: 'VPR | None' = None,
 ) -> str:
     """Build the user prompt with CV, job description, and constraints."""
     sections = [
@@ -53,6 +58,16 @@ def build_user_prompt(
     if preferences:
         sections.append('# Preferences')
         sections.append(format_preferences(preferences))
+
+    # VPR strategic guide injection
+    if vpr is not None:
+        sections.append('# VPR Strategic Guide')
+        sections.append(
+            'Use this VPR to prioritize CV content. Expand bullet points for roles and '
+            'skills that map to unique_strengths and evidence_matrix. Align the '
+            'professional_summary with differentiators.positioning_statement. '
+            'Surface ats_keywords.primary into tailored bullet points naturally.\n\n' + json.dumps(vpr.model_dump(mode='json'), indent=2)
+        )
 
     return '\n\n'.join(sections)
 

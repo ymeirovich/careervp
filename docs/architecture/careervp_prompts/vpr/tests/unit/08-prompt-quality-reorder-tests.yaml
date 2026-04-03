@@ -1,0 +1,169 @@
+id: "08-prompt-quality-reorder-tests"
+title: "Unit Tests — VPR Prompt Quality Reorder (Spec 08)"
+spec_id: "08-prompt-quality-reorder"
+target_path: "src/backend/tests/unit/test_vpr_prompt_quality.py"
+pytest_markers: ["unit"]
+depends_on_spec: "08-prompt-quality-reorder"
+test_count: 12
+
+description: |
+  Tests confirming the two changes in spec 08:
+    1. Output schema section ordering: differentiators at position 3,
+       value_proposition at position 4 (both before role_alignment)
+    2. Generation guidance block present with required content
+
+  All tests are pure string assertions on PHASE2_PROMPT_2_1_TEMPLATE — no LLM calls,
+  no fixture dependencies. Tests are intentionally narrow so a wrong ordering or
+  missing guidance phrase causes a clear failure message.
+
+implementation_steps: |
+  1. Read docs/architecture/careervp_prompts/vpr/specs/08-prompt-quality-reorder.yaml
+  2. Copy the code block below to src/backend/tests/unit/test_vpr_prompt_quality.py
+  3. Run (RED — fails until spec 08 implemented):
+       cd src/backend && uv run pytest tests/unit/test_vpr_prompt_quality.py -v --tb=short
+  4. Implement spec 08
+  5. Re-run — all 12 tests should pass (GREEN)
+
+code: |
+  """Unit tests for spec 08: VPR prompt quality reordering and generation guidance.
+
+  All tests are pure string assertions on PHASE2_PROMPT_2_1_TEMPLATE.
+  No fixtures, no LLM calls.
+  """
+  from __future__ import annotations
+
+  import pytest
+
+  from careervp.logic.prompts.vpr_prompt import PHASE2_PROMPT_2_1_TEMPLATE
+
+
+  def _section_position(template: str, section_key: str) -> int:
+      """Return the character position of a top-level schema key in the template."""
+      # Find the key as it appears in the schema skeleton: `"key": {` or `"key": [`
+      marker = f'"{section_key}":'
+      pos = template.find(marker)
+      assert pos != -1, f'Schema key "{section_key}" not found in template'
+      return pos
+
+
+  @pytest.mark.unit
+  class TestSectionOrdering:
+      """differentiators and value_proposition must appear before role_alignment."""
+
+      def test_differentiators_before_role_alignment(self) -> None:
+          """differentiators schema block must appear before role_alignment."""
+          diff_pos = _section_position(PHASE2_PROMPT_2_1_TEMPLATE, 'differentiators')
+          role_pos = _section_position(PHASE2_PROMPT_2_1_TEMPLATE, 'role_alignment')
+          assert diff_pos < role_pos, (
+              f'differentiators (pos {diff_pos}) must appear before '
+              f'role_alignment (pos {role_pos})'
+          )
+
+      def test_value_proposition_before_role_alignment(self) -> None:
+          """value_proposition schema block must appear before role_alignment."""
+          vp_pos = _section_position(PHASE2_PROMPT_2_1_TEMPLATE, 'value_proposition')
+          role_pos = _section_position(PHASE2_PROMPT_2_1_TEMPLATE, 'role_alignment')
+          assert vp_pos < role_pos, (
+              f'value_proposition (pos {vp_pos}) must appear before '
+              f'role_alignment (pos {role_pos})'
+          )
+
+      def test_differentiators_before_value_proposition(self) -> None:
+          """differentiators must appear before value_proposition."""
+          diff_pos = _section_position(PHASE2_PROMPT_2_1_TEMPLATE, 'differentiators')
+          vp_pos = _section_position(PHASE2_PROMPT_2_1_TEMPLATE, 'value_proposition')
+          assert diff_pos < vp_pos, (
+              f'differentiators (pos {diff_pos}) must appear before '
+              f'value_proposition (pos {vp_pos})'
+          )
+
+      def test_executive_summary_before_differentiators(self) -> None:
+          """executive_summary must still appear before differentiators."""
+          exec_pos = _section_position(PHASE2_PROMPT_2_1_TEMPLATE, 'executive_summary')
+          diff_pos = _section_position(PHASE2_PROMPT_2_1_TEMPLATE, 'differentiators')
+          assert exec_pos < diff_pos
+
+      def test_metadata_first(self) -> None:
+          """metadata must remain first in the schema."""
+          meta_pos = _section_position(PHASE2_PROMPT_2_1_TEMPLATE, 'metadata')
+          exec_pos = _section_position(PHASE2_PROMPT_2_1_TEMPLATE, 'executive_summary')
+          assert meta_pos < exec_pos
+
+      def test_all_10_required_sections_present(self) -> None:
+          """All 10 required schema sections must still be present after reorder."""
+          required = [
+              'metadata',
+              'executive_summary',
+              'differentiators',
+              'value_proposition',
+              'role_alignment',
+              'experience_mapping',
+              'skills_analysis',
+              'evidence_gaps',
+              'concerns_and_mitigations',
+              'application_strategy',
+          ]
+          for section in required:
+              assert f'"{section}"' in PHASE2_PROMPT_2_1_TEMPLATE, (
+                  f'Required section "{section}" missing from schema'
+              )
+
+
+  @pytest.mark.unit
+  class TestGenerationGuidanceBlock:
+      """Generation guidance block must be present with required content."""
+
+      def test_guidance_header_present(self) -> None:
+          """The generation guidance section header must be in the template."""
+          assert 'GENERATION GUIDANCE FOR HIGH-IMPACT SECTIONS' in PHASE2_PROMPT_2_1_TEMPLATE
+
+      def test_five_percent_test_present(self) -> None:
+          """The '5% test' rarity rule must be stated explicitly."""
+          assert '5%' in PHASE2_PROMPT_2_1_TEMPLATE or '5 %' in PHASE2_PROMPT_2_1_TEMPLATE
+
+      def test_proof_citation_requirement_present(self) -> None:
+          """Guidance must require proof to cite a specific metric or named fact."""
+          template_lower = PHASE2_PROMPT_2_1_TEMPLATE.lower()
+          # Any of these phrases indicate the proof citation requirement
+          assert any(phrase in template_lower for phrase in [
+              'specific metric',
+              'named outcome',
+              'quantified fact',
+              'cite a specific',
+          ]), 'Proof citation requirement not found in generation guidance'
+
+      def test_positioning_statement_guidance_present(self) -> None:
+          """Guidance must include positioning_statement construction instruction."""
+          assert 'positioning_statement' in PHASE2_PROMPT_2_1_TEMPLATE
+          # Must appear in guidance block (before output schema), check it mentions company
+          guidance_start = PHASE2_PROMPT_2_1_TEMPLATE.find('GENERATION GUIDANCE')
+          schema_start = PHASE2_PROMPT_2_1_TEMPLATE.find('OUTPUT SCHEMA')
+          assert guidance_start != -1 and schema_start != -1
+          guidance_block = PHASE2_PROMPT_2_1_TEMPLATE[guidance_start:schema_start]
+          assert 'positioning_statement' in guidance_block, (
+              'positioning_statement guidance must appear in the guidance block, not only in the schema'
+          )
+          assert 'company' in guidance_block.lower() or 'TargetCompany' in guidance_block, (
+              'positioning_statement guidance must mention naming the target company'
+          )
+
+      def test_elevator_pitch_guidance_present(self) -> None:
+          """Guidance must include elevator_pitch metric requirement."""
+          guidance_start = PHASE2_PROMPT_2_1_TEMPLATE.find('GENERATION GUIDANCE')
+          schema_start = PHASE2_PROMPT_2_1_TEMPLATE.find('OUTPUT SCHEMA')
+          assert guidance_start != -1 and schema_start != -1
+          guidance_block = PHASE2_PROMPT_2_1_TEMPLATE[guidance_start:schema_start]
+          assert 'elevator_pitch' in guidance_block, (
+              'elevator_pitch guidance must appear in the guidance block'
+          )
+
+      def test_guidance_appears_before_schema(self) -> None:
+          """Generation guidance block must appear BEFORE the OUTPUT SCHEMA section."""
+          guidance_pos = PHASE2_PROMPT_2_1_TEMPLATE.find('GENERATION GUIDANCE')
+          schema_pos = PHASE2_PROMPT_2_1_TEMPLATE.find('OUTPUT SCHEMA')
+          assert guidance_pos != -1, 'GENERATION GUIDANCE block not found'
+          assert schema_pos != -1, 'OUTPUT SCHEMA block not found'
+          assert guidance_pos < schema_pos, (
+              f'GENERATION GUIDANCE (pos {guidance_pos}) must appear before '
+              f'OUTPUT SCHEMA (pos {schema_pos})'
+          )

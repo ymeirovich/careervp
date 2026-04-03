@@ -1,0 +1,197 @@
+id: "08-prompt-quality-reorder"
+title: "VPR Prompt Quality — Section Priority Reordering + Differentiator Generation Guidance"
+status: pending
+priority: 1
+depends_on: ["02-vpr-prompts", "07-pipeline-timeout-fix"]
+
+summary: |
+  Two targeted changes to PHASE2_PROMPT_2_1_TEMPLATE in vpr_prompt.py to improve
+  output quality for differentiators and value_proposition, which are consistently
+  weak in generated VPRs.
+
+  1. REORDER output schema: move differentiators (currently position 7) to position 3
+     and value_proposition (currently position 9) to position 4 — immediately after
+     executive_summary.
+
+     Rationale: LLMs generate tokens left-to-right. With max_tokens=16000, sections at
+     positions 7 and 9 receive their generation budget only after ~8,000+ tokens have been
+     spent on role_alignment and experience_mapping. By that point the model has already
+     described the candidate's strengths repeatedly, leading to recycled phrasing instead
+     of genuinely distinctive positioning. Moving these sections to positions 3 and 4
+     ensures they receive full contextual attention before the model's creative budget
+     is consumed by lower-level detail sections.
+
+  2. ADD a generation guidance block immediately before the OUTPUT REQUIREMENTS header.
+     The current schema shows field names and allowed enum values but gives no behavioral
+     instructions on HOW to fill differentiators and value_proposition. Without guidance,
+     the model produces generic leadership statements ("strong communicator", "results-
+     driven") that fail the rarity test and carry zero differentiation. The guidance block
+     specifies the 5% rarity test, proof citation requirements, positioning_statement
+     construction rules, and elevator_pitch metric requirements.
+
+  SCOPE: Only PHASE2_PROMPT_2_1_TEMPLATE is modified. No Python logic, no function
+  signatures, no other templates, no test files.
+
+context:
+  read_files:
+    - "src/backend/careervp/logic/prompts/vpr_prompt.py"  # only file to change
+  do_not_read:
+    - "src/backend/careervp/logic/vpr_generator.py"
+    - "src/backend/careervp/models/vpr.py"
+
+  key_facts: |
+    - build_phase2_prompt() is the only production caller of PHASE2_PROMPT_2_1_TEMPLATE
+    - _generate_output() (Stage 5) parses the LLM response by key name, not position —
+      section reordering in the prompt does not affect parsing
+    - PHASE2_SYSTEM_PROMPT already contains the 6 self-validation rules (added in spec 07)
+    - PHASE2_PROMPT_2_1_TEMPLATE ends with "Generate the VPR JSON now:"
+
+changes:
+  file: "src/backend/careervp/logic/prompts/vpr_prompt.py"
+  target_constant: "PHASE2_PROMPT_2_1_TEMPLATE"
+
+  change_1_section_reorder:
+    description: |
+      In the OUTPUT SCHEMA block of PHASE2_PROMPT_2_1_TEMPLATE, reorder the top-level
+      JSON keys so differentiators and value_proposition appear at positions 3 and 4,
+      immediately after executive_summary.
+
+    current_order:
+      - "metadata"
+      - "executive_summary"
+      - "role_alignment"           # position 3 (stays at 5 after move)
+      - "experience_mapping"       # position 4 (stays at 6 after move)
+      - "skills_analysis"          # position 5 (stays at 7 after move)
+      - "evidence_gaps"            # position 6 (stays at 8 after move)
+      - "differentiators"          # position 7 ← token-starved, move to 3
+      - "concerns_and_mitigations" # position 8 (stays at 9 after move)
+      - "value_proposition"        # position 9 ← token-starved, move to 4
+      - "application_strategy"     # position 10 (unchanged)
+      - "company_insights"         # optional (unchanged)
+      - "verification_summary"     # optional (unchanged)
+
+    new_order:
+      - "metadata"
+      - "executive_summary"
+      - "differentiators"          # moved from position 7 → position 3
+      - "value_proposition"        # moved from position 9 → position 4
+      - "role_alignment"           # shifted from 3 → 5
+      - "experience_mapping"       # shifted from 4 → 6
+      - "skills_analysis"          # shifted from 5 → 7
+      - "evidence_gaps"            # shifted from 6 → 8
+      - "concerns_and_mitigations" # shifted from 8 → 9
+      - "application_strategy"     # unchanged at 10
+      - "company_insights"         # optional, unchanged
+      - "verification_summary"     # optional, unchanged
+
+  change_2_generation_guidance:
+    description: |
+      Insert the block below into PHASE2_PROMPT_2_1_TEMPLATE immediately before the
+      "=== OUTPUT REQUIREMENTS ===" line (after {feedback_block} and before the schema).
+
+    insertion_point: |
+      Insert between {feedback_block} line and "=== OUTPUT REQUIREMENTS ===" header.
+
+    guidance_block: |
+      === GENERATION GUIDANCE FOR HIGH-IMPACT SECTIONS ===
+
+      Before writing differentiators and value_proposition, apply these tests.
+      Fail-safe: if the candidate's CV does not support a strong answer, write a
+      moderate honest one — never invent strength that isn't evidenced.
+
+      DIFFERENTIATORS — unique_strengths:
+      - Apply the "5% test": would fewer than 5% of comparable candidates have this
+        specific combination? Generic traits (e.g., "strong communicator", "team player",
+        "results-driven") fail. Candidate-specific combinations (e.g., "built a
+        certification program that generated $180K in recurring revenue while managing
+        the platform infrastructure") pass.
+      - rarity must match the definition literally:
+          very_rare    → <5% of comparable candidates have this
+          uncommon     → 5-20% of comparable candidates have this
+          somewhat_rare → 20-40% of comparable candidates have this
+        If a strength is possessed by >40% of candidates in this field, it belongs
+        in competitive_advantages, not unique_strengths.
+      - proof must cite a specific metric, project name, or outcome from the CV
+        or gap responses. "Extensive experience" and "proven track record" are not
+        proof — replace with the nearest quantified fact from the inputs.
+
+      DIFFERENTIATORS — positioning_statement:
+      - Must name the target company AND target role explicitly.
+      - Must include at least one specific metric or named achievement from the CV.
+      - Length: 100-300 characters.
+      - Bad:  "Experienced leader with strong technical background."
+      - Good: "Platform engineer with a $2M zero-downtime migration on record, ready
+               to scale [TargetCompany]'s infrastructure for [TargetRole] growth."
+
+      VALUE PROPOSITION — primary_value.statement:
+      - Starts with a forward-looking verb: Reduce, Scale, Build, Drive, Accelerate.
+      - States what the candidate will DO for the company, not what they are.
+      - Bad:  "Experienced in cloud infrastructure."
+      - Good: "Reduce deployment risk while scaling [TargetCompany]'s platform."
+
+      VALUE PROPOSITION — primary_value.outcome_for_company:
+      - Must be company-specific and measurable or directionally concrete.
+      - Must be forward-looking (what the company gains, not what the candidate did).
+      - Bad:  "Increased productivity."
+      - Good: "Faster feature delivery on a stable platform, reducing estimated
+               time-to-merge by 20-30% in the first two quarters."
+
+      VALUE PROPOSITION — quantified_impact:
+      - Each entry must have a projected range (e.g., "20-30% faster") AND a
+        basis_for_projection that cites a specific CV benchmark.
+      - Do not project without a basis; omit the entry instead.
+      - Bad:  expected_range: "significant improvement", basis: "industry standards"
+      - Good: expected_range: "20-30% reduction in onboarding time",
+              basis_for_projection: "Based on 85% latency reduction achieved at Acme Corp"
+
+      VALUE PROPOSITION — elevator_pitch:
+      - 100-200 characters. Speakable in 30 seconds.
+      - Must include: (a) one specific metric or named outcome from CV,
+        (b) the target company or target role.
+      - No banned words.
+      - Bad:  "Experienced engineer leveraging robust skills to streamline outcomes."
+      - Good: "Platform engineer with a $2M AWS migration track record — ready to
+               scale [TargetCompany]'s infrastructure without disrupting delivery."
+
+acceptance_criteria:
+  - "differentiators is the 3rd key in the OUTPUT SCHEMA block (after executive_summary)"
+  - "value_proposition is the 4th key in the OUTPUT SCHEMA block (after differentiators)"
+  - "PHASE2_PROMPT_2_1_TEMPLATE contains '5% test' verbatim"
+  - "PHASE2_PROMPT_2_1_TEMPLATE contains 'forward-looking verb' guidance for primary_value"
+  - "PHASE2_PROMPT_2_1_TEMPLATE contains elevator_pitch construction example"
+  - "PHASE2_PROMPT_2_1_TEMPLATE contains positioning_statement named-company example"
+  - "All 10 required schema sections still present"
+  - "No Python functions, classes, or other constants changed"
+  - "`uv run mypy careervp --strict` passes (no type changes — trivially)"
+  - "`uv run pytest tests/unit/ -v --tb=short` passes (no logic changes)"
+
+do_not_change:
+  - "PHASE2_SYSTEM_PROMPT"
+  - "PHASE2_VALIDATION_SYSTEM_PROMPT"
+  - "Any build_* function"
+  - "Any test file"
+  - "vpr_generator.py"
+  - "models/vpr.py"
+
+implementation_prompt: |
+  You are editing ONLY the constant PHASE2_PROMPT_2_1_TEMPLATE in
+  src/backend/careervp/logic/prompts/vpr_prompt.py.
+
+  Read the file first. Make exactly two changes:
+
+  ## Change 1 — Reorder sections in the OUTPUT SCHEMA block
+  Find the JSON skeleton in the "OUTPUT SCHEMA:" section. Move the
+  "differentiators" object to immediately follow "executive_summary" (position 3).
+  Move "value_proposition" to immediately follow "differentiators" (position 4).
+  Keep role_alignment, experience_mapping, skills_analysis, evidence_gaps, and
+  concerns_and_mitigations in their original relative order (now positions 5-9).
+  Keep application_strategy, company_insights, and verification_summary at the end.
+
+  ## Change 2 — Add generation guidance block
+  Insert the === GENERATION GUIDANCE FOR HIGH-IMPACT SECTIONS === block
+  (from spec changes.change_2_generation_guidance.guidance_block) at the position
+  after {feedback_block} and before "=== OUTPUT REQUIREMENTS ===".
+
+  ## Verify
+  cd src/backend && uv run mypy careervp --strict
+  uv run pytest tests/unit/ -v --tb=short
