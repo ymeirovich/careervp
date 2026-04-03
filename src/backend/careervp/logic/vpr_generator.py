@@ -24,9 +24,7 @@ from pydantic import ValidationError
 from careervp.logic.fvs_validator import run_vpr_quality_gate
 from careervp.logic.prompts.vpr_prompt import (
     PHASE2_SYSTEM_PROMPT,
-    PHASE2_VALIDATION_SYSTEM_PROMPT,
     build_phase2_prompt,
-    build_phase2_validation_prompt,
 )
 
 if TYPE_CHECKING:
@@ -327,24 +325,8 @@ class VPRSixStagePipeline:
         return Phase2Draft(raw_payload=payload, evidence_context=evidence)
 
     def _self_correct(self, draft: Phase2Draft, feedback: str | None = None) -> ValidatedDraft:
-        """Stage 4: validate and correct the Phase 2 draft."""
-        prompt = build_phase2_validation_prompt(draft.raw_payload, self._user_cv, feedback)
-
-        try:
-            payload = self._invoke_stage_json(
-                prompt=prompt,
-                system_prompt=PHASE2_VALIDATION_SYSTEM_PROMPT,
-                max_tokens=16000,
-                temperature=0.35,
-            )
-            validation_notes = _ensure_str_list(payload.get('validation_notes'))
-            return ValidatedDraft(
-                raw_payload=payload,
-                validation_notes=validation_notes,
-                evidence_context=draft.evidence_context,
-            )
-        except (RuntimeError, ValueError):
-            return _rule_based_validation_fallback(draft)
+        """Stage 4: rule-based structural validation only (LLM merged into Stage 3)."""
+        return _rule_based_validation_fallback(draft)
 
     def _generate_output(self, validated: ValidatedDraft) -> VPRData:
         """Stage 5: parse validated payload into new 10-section VPR model."""

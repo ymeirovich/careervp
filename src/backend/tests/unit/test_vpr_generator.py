@@ -124,20 +124,6 @@ def _stage_3_payload() -> str:
     )
 
 
-def _stage_4_payload() -> str:
-    return json.dumps(
-        {
-            'executive_summary': (
-                'Alex has led product strategy in operating environments that required strong tradeoff '
-                'decisions, clear communication, and rapid execution.'
-            ),
-            'differentiators': ['Balances strategy, speed, and stakeholder alignment.'],
-            'talking_points': ['Share one launch where cross-team planning improved delivery confidence.'],
-            'corrections_applied': ['Tightened wording for natural tone'],
-        }
-    )
-
-
 def _build_pipeline(sample_request: VPRRequest, sample_user_cv: UserCV) -> VPRSixStagePipeline:
     llm_client = MagicMock()
     llm_client.invoke.return_value = Result(
@@ -368,17 +354,6 @@ def test_full_pipeline_produces_valid_vpr(
             },
             code=ResultCode.SUCCESS,
         ),
-        Result(
-            success=True,
-            data={
-                'text': _stage_4_payload(),
-                'input_tokens': 550,
-                'output_tokens': 350,
-                'cost': 0.009,
-                'model': 'claude-sonnet-4-5',
-            },
-            code=ResultCode.SUCCESS,
-        ),
     ]
     mock_llm_client_cls.return_value = mock_llm_instance
 
@@ -394,6 +369,6 @@ def test_full_pipeline_produces_valid_vpr(
     assert result.data.vpr.user_id == sample_request.user_id
     assert result.data.vpr.word_count > 0
     assert result.data.token_usage is not None
-    assert result.data.token_usage.input_tokens == 1150
-    assert result.data.token_usage.output_tokens == 750
+    assert result.data.token_usage.input_tokens == 600
+    assert result.data.token_usage.output_tokens == 400
     mock_dal.save_vpr.assert_called_once()

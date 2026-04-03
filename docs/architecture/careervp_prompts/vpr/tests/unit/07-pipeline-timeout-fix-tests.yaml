@@ -1,0 +1,313 @@
+id: "07-pipeline-timeout-fix-tests"
+title: "Unit Tests — Pipeline Timeout Fix (Spec 07)"
+spec_id: "07-pipeline-timeout-fix"
+target_path: "src/backend/tests/unit/test_vpr_pipeline_timeout_fix.py"
+pytest_markers: ["unit"]
+depends_on_spec: "07-pipeline-timeout-fix"
+test_count: 14
+
+description: |
+  Tests for the three changes in spec 07:
+    1. Stage 4 no longer makes an LLM call (merge into Stage 3)
+    2. _self_correct() falls back to rule-based validation only
+    3. DLQ Lambda marks orphaned jobs FAILED without touching terminal jobs
+
+  These tests are written to the existing test patterns in tests/unit/.
+  Mock LLMClient as in test_vpr_handler.py — patch careervp.logic.vpr_generator.LLMClient.
+
+implementation_steps: |
+  1. Read docs/architecture/careervp_prompts/vpr/specs/07-pipeline-timeout-fix.yaml
+  2. Copy the code block below to src/backend/tests/unit/test_vpr_pipeline_timeout_fix.py
+  3. Run (expect failures until spec 07 is implemented):
+       cd src/backend && uv run pytest tests/unit/test_vpr_pipeline_timeout_fix.py -v --tb=short
+  4. Implement spec 07
+  5. Re-run — all 14 tests should pass
+
+code: |
+  """Unit tests for spec 07: pipeline timeout fix.
+
+  Tests confirm:
+  - Stage 4 (_self_correct) makes zero LLM calls after the merge
+  - _self_correct applies rule-based banned-term cleanup
+  - PHASE2_SYSTEM_PROMPT contains the 6 self-validation rules
+  - DLQ handler marks PROCESSING/PENDING jobs FAILED
+  - DLQ handler skips COMPLETED and FAILED jobs
+  - DLQ handler handles missing job_id, missing job, and JSON errors gracefully
+  """
+  from __future__ import annotations
+
+  import json
+  from typing import Any
+  from unittest.mock import MagicMock, call, patch
+
+  import pytest
+
+  from careervp.logic.vpr_generator import (
+      EvidenceList,
+      EvidenceMatch,
+      Phase2Draft,
+      VPRSixStagePipeline,
+  )
+  from careervp.logic.prompts.vpr_prompt import PHASE2_SYSTEM_PROMPT
+
+
+  # ── Helpers ──────────────────────────────────────────────────────────────
+
+  def _make_phase2_draft(overrides: dict[str, Any] | None = None) -> Phase2Draft:
+      evidence = EvidenceList(
+          matches=[
+              EvidenceMatch(
+                  requirement="LMS implementation",
+                  evidence="Built PresGen on Google Vertex AI + FastAPI",
+                  alignment_score="STRONG",
+                  impact_potential="High — directly maps to academy infrastructure",
+              )
+          ],
+          uncovered_requirements=[],
+          key_skills=["LMS", "instructional design", "AWS"],
+          experience_level="senior",
+      )
+      payload: dict[str, Any] = {
+          "metadata": {"report_date": "2026-04-03", "candidate_name": "Test User",
+                       "target_role": "Learning Experience Specialist",
+                       "target_company": "SysAid", "report_version": "1.0",
+                       "analysis_scope": "full"},
+          "executive_summary": {
+              "overall_fit_score": 82,
+              "fit_rationale": "Strong background in LMS and instructional design.",
+              "top_three_strengths": [
+                  {"strength": "LMS expertise", "evidence": "Built PresGen platform",
+                   "relevance_to_role": "Direct match for academy infrastructure"},
+                  {"strength": "Certification design", "evidence": "AWS DEA-C01",
+                   "relevance_to_role": "Certification framework design"},
+                  {"strength": "Revenue generation", "evidence": "$180K–$240K annually",
+                   "relevance_to_role": "Paid certification programs"},
+              ],
+              "top_three_concerns": [
+                  {"concern": "No SysAid product experience", "severity": "medium",
+                   "mitigation": "Technical learning curve is short"},
+                  {"concern": "CS background not listed", "severity": "low",
+                   "mitigation": "Transferable via instructional design"},
+                  {"concern": "Enterprise sales exposure limited", "severity": "low",
+                   "mitigation": "Partner evaluation framework demonstrates exposure"},
+              ],
+              "recommended_approach": "aggressive_apply",
+          },
+          "role_alignment": {"core_responsibilities": [], "requirement_breakdown": {
+              "must_have": [], "nice_to_have": [], "assumed_prerequisites": []}},
+          "experience_mapping": {"relevant_experiences": [], "experience_gaps": []},
+          "skills_analysis": {"technical_skills": [], "soft_skills": [], "tool_proficiency": []},
+          "evidence_gaps": {"identified_gaps": [], "priority_gaps_to_address": []},
+          "differentiators": {"unique_strengths": [], "competitive_advantages": [],
+                              "positioning_statement": "Unique blend of cognitive science and AI."},
+          "concerns_and_mitigations": {"likely_objections": [], "preemptive_responses": []},
+          "value_proposition": {
+              "primary_value": {"statement": "Build and scale the SysAid Academy.",
+                                "evidence": "PresGen platform, 85% performance improvement",
+                                "outcome_for_company": "Faster customer onboarding"},
+              "secondary_values": [],
+              "quantified_impact": [],
+              "elevator_pitch": "27-year instructional designer with AI platform track record.",
+          },
+          "application_strategy": {"messaging_approach": "Lead with platform build story.",
+                                   "ats_keywords": {"primary": ["LMS"], "secondary": ["certification"]},
+                                   "cv_lead_differentiator": "PresGen platform",
+                                   "sections_to_compress": ["older roles"]},
+      }
+      if overrides:
+          payload.update(overrides)
+      return Phase2Draft(raw_payload=payload, evidence_context=evidence)
+
+
+  # ── Group 1: Stage 4 makes no LLM call ───────────────────────────────────
+
+  class TestSelfCorrectNoLLM:
+      """_self_correct() must not invoke the LLM after spec 07."""
+
+      def _make_pipeline(self) -> tuple[VPRSixStagePipeline, MagicMock]:
+          mock_llm = MagicMock()
+          mock_request = MagicMock()
+          mock_request.gap_responses = []
+          mock_request.job_posting = MagicMock()
+          mock_cv = MagicMock()
+          mock_cv.skill_names.return_value = ["LMS", "AWS"]
+          pipeline = VPRSixStagePipeline(
+              request=mock_request, user_cv=mock_cv, llm_client=mock_llm
+          )
+          return pipeline, mock_llm
+
+      def test_self_correct_does_not_call_llm(self) -> None:
+          """Stage 4 must make zero LLM calls."""
+          pipeline, mock_llm = self._make_pipeline()
+          draft = _make_phase2_draft()
+          pipeline._self_correct(draft)
+          mock_llm.invoke.assert_not_called()
+
+      def test_self_correct_with_feedback_does_not_call_llm(self) -> None:
+          """Feedback arg does not trigger an LLM call."""
+          pipeline, mock_llm = self._make_pipeline()
+          draft = _make_phase2_draft()
+          pipeline._self_correct(draft, feedback="Fix banned words")
+          mock_llm.invoke.assert_not_called()
+
+      def test_self_correct_returns_validated_draft(self) -> None:
+          """_self_correct() must return a ValidatedDraft with the same payload keys."""
+          from careervp.logic.vpr_generator import ValidatedDraft
+          pipeline, _ = self._make_pipeline()
+          draft = _make_phase2_draft()
+          result = pipeline._self_correct(draft)
+          assert isinstance(result, ValidatedDraft)
+          assert "executive_summary" in result.raw_payload
+          assert isinstance(result.validation_notes, list)
+
+      def test_self_correct_preserves_evidence_context(self) -> None:
+          """evidence_context must pass through unchanged."""
+          pipeline, _ = self._make_pipeline()
+          draft = _make_phase2_draft()
+          result = pipeline._self_correct(draft)
+          assert result.evidence_context is draft.evidence_context
+
+
+  # ── Group 2: Banned-term cleanup ─────────────────────────────────────────
+
+  class TestSelfCorrectBannedTerms:
+      """_self_correct() rule-based pass must clean banned terms from text fields."""
+
+      def _make_pipeline(self) -> VPRSixStagePipeline:
+          mock_request = MagicMock()
+          mock_request.gap_responses = []
+          mock_request.job_posting = MagicMock()
+          mock_cv = MagicMock()
+          mock_cv.skill_names.return_value = []
+          return VPRSixStagePipeline(
+              request=mock_request, user_cv=mock_cv, llm_client=MagicMock()
+          )
+
+      def test_banned_word_in_elevator_pitch_is_removed(self) -> None:
+          """'leverage' in elevator_pitch must be replaced."""
+          pipeline = self._make_pipeline()
+          draft = _make_phase2_draft({
+              "value_proposition": {
+                  "primary_value": {"statement": "Build the academy.", "evidence": "PresGen",
+                                    "outcome_for_company": "Faster onboarding"},
+                  "secondary_values": [],
+                  "quantified_impact": [],
+                  "elevator_pitch": "I leverage instructional design to build platforms.",
+              }
+          })
+          result = pipeline._self_correct(draft)
+          pitch = result.raw_payload["value_proposition"]["elevator_pitch"]
+          assert "leverage" not in pitch.lower()
+
+      def test_banned_word_in_fit_rationale_is_removed(self) -> None:
+          """'robust' in fit_rationale must be replaced."""
+          pipeline = self._make_pipeline()
+          original = dict(_make_phase2_draft().raw_payload)
+          original["executive_summary"] = dict(original["executive_summary"])
+          original["executive_summary"]["fit_rationale"] = "Robust background in LMS."
+          draft = Phase2Draft(
+              raw_payload=original,
+              evidence_context=_make_phase2_draft().evidence_context,
+          )
+          result = pipeline._self_correct(draft)
+          rationale = result.raw_payload["executive_summary"]["fit_rationale"]
+          assert "robust" not in rationale.lower()
+
+
+  # ── Group 3: PHASE2_SYSTEM_PROMPT contains validation rules ──────────────
+
+  class TestPhase2SystemPrompt:
+      """PHASE2_SYSTEM_PROMPT must contain the 6 merged self-validation rules."""
+
+      def test_contains_self_validation_header(self) -> None:
+          assert "SELF-VALIDATION RULES" in PHASE2_SYSTEM_PROMPT
+
+      def test_contains_banned_words_rule(self) -> None:
+          assert "leverage" in PHASE2_SYSTEM_PROMPT
+          assert "BANNED WORDS" in PHASE2_SYSTEM_PROMPT
+
+      def test_contains_evidence_grounding_rule(self) -> None:
+          assert "EVIDENCE GROUNDING" in PHASE2_SYSTEM_PROMPT
+
+      def test_contains_section_completeness_rule(self) -> None:
+          assert "SECTION COMPLETENESS" in PHASE2_SYSTEM_PROMPT
+
+      def test_contains_array_minimums_rule(self) -> None:
+          assert "ARRAY MINIMUMS" in PHASE2_SYSTEM_PROMPT
+
+      def test_contains_score_ranges_rule(self) -> None:
+          assert "SCORE RANGES" in PHASE2_SYSTEM_PROMPT
+
+      def test_contains_enum_values_rule(self) -> None:
+          assert "ENUM VALUES" in PHASE2_SYSTEM_PROMPT
+
+
+  # ── Group 4: DLQ handler ─────────────────────────────────────────────────
+
+  class TestVprDlqHandler:
+      """vpr_dlq_handler.lambda_handler must mark orphaned jobs FAILED."""
+
+      def _make_event(self, job_id: str) -> dict[str, Any]:
+          return {
+              "Records": [
+                  {"body": json.dumps({"job_id": job_id})}
+              ]
+          }
+
+      def _make_context(self) -> MagicMock:
+          return MagicMock()
+
+      @patch("careervp.handlers.vpr_dlq_handler.JobsRepository")
+      def test_processing_job_is_marked_failed(self, mock_repo_cls: MagicMock) -> None:
+          """A PROCESSING job must be updated to FAILED."""
+          from careervp.handlers.vpr_dlq_handler import lambda_handler
+          mock_repo = mock_repo_cls.return_value
+          mock_repo.get_job.return_value = {"job_id": "abc-123", "status": "PROCESSING"}
+          lambda_handler(self._make_event("abc-123"), self._make_context())
+          mock_repo.update_job_status.assert_called_once()
+          args = mock_repo.update_job_status.call_args
+          assert args[0][1] == "FAILED" or args[1].get("status") == "FAILED"
+
+      @patch("careervp.handlers.vpr_dlq_handler.JobsRepository")
+      def test_pending_job_is_marked_failed(self, mock_repo_cls: MagicMock) -> None:
+          """A PENDING job must also be updated to FAILED."""
+          from careervp.handlers.vpr_dlq_handler import lambda_handler
+          mock_repo = mock_repo_cls.return_value
+          mock_repo.get_job.return_value = {"job_id": "def-456", "status": "PENDING"}
+          lambda_handler(self._make_event("def-456"), self._make_context())
+          mock_repo.update_job_status.assert_called_once()
+
+      @patch("careervp.handlers.vpr_dlq_handler.JobsRepository")
+      def test_completed_job_is_skipped(self, mock_repo_cls: MagicMock) -> None:
+          """A COMPLETED job must not be touched."""
+          from careervp.handlers.vpr_dlq_handler import lambda_handler
+          mock_repo = mock_repo_cls.return_value
+          mock_repo.get_job.return_value = {"job_id": "ghi-789", "status": "COMPLETED"}
+          lambda_handler(self._make_event("ghi-789"), self._make_context())
+          mock_repo.update_job_status.assert_not_called()
+
+      @patch("careervp.handlers.vpr_dlq_handler.JobsRepository")
+      def test_already_failed_job_is_skipped(self, mock_repo_cls: MagicMock) -> None:
+          """A job already in FAILED status must not be updated again."""
+          from careervp.handlers.vpr_dlq_handler import lambda_handler
+          mock_repo = mock_repo_cls.return_value
+          mock_repo.get_job.return_value = {"job_id": "jkl-000", "status": "FAILED"}
+          lambda_handler(self._make_event("jkl-000"), self._make_context())
+          mock_repo.update_job_status.assert_not_called()
+
+      @patch("careervp.handlers.vpr_dlq_handler.JobsRepository")
+      def test_missing_job_id_does_not_raise(self, mock_repo_cls: MagicMock) -> None:
+          """Records with no job_id must be skipped without raising."""
+          from careervp.handlers.vpr_dlq_handler import lambda_handler
+          event = {"Records": [{"body": json.dumps({})}]}
+          lambda_handler(event, self._make_context())  # must not raise
+          mock_repo_cls.return_value.get_job.assert_not_called()
+
+      @patch("careervp.handlers.vpr_dlq_handler.JobsRepository")
+      def test_job_not_found_does_not_raise(self, mock_repo_cls: MagicMock) -> None:
+          """If the job no longer exists in DynamoDB, handler must not raise."""
+          from careervp.handlers.vpr_dlq_handler import lambda_handler
+          mock_repo = mock_repo_cls.return_value
+          mock_repo.get_job.return_value = None
+          lambda_handler(self._make_event("missing-job"), self._make_context())
+          mock_repo.update_job_status.assert_not_called()

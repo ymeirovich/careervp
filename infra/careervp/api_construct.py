@@ -133,6 +133,9 @@ class ApiConstruct(Construct):
             self.vpr_jobs_queue,
             appconfig_app_name,
         )
+        self.vpr_dlq_handler_func = self._add_vpr_dlq_handler_lambda(
+            self.vpr_jobs_dlq, self.api_db.jobs_table
+        )
         self.company_research_func = self._add_company_research_lambda_integration(
             company_research_resource,
             self.lambda_role,
@@ -975,7 +978,7 @@ class ApiConstruct(Construct):
             self,
             constants.VPR_JOBS_QUEUE,
             queue_name=self.naming.queue_name(constants.VPR_JOBS_QUEUE),
-            visibility_timeout=Duration.seconds(300),  # 5 minutes for worker timeout
+            visibility_timeout=Duration.minutes(10),  # must be >= Lambda timeout
             receive_message_wait_time=Duration.seconds(20),  # Long polling
             encryption=aws_sqs.QueueEncryption.KMS,
             encryption_master_key=sqs_key,
@@ -1221,7 +1224,9 @@ class ApiConstruct(Construct):
             },
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=2,
-            timeout=Duration.seconds(300),  # 5 minutes for VPR generation
+            timeout=Duration.minutes(
+                10
+            ),  # 10 minutes for VPR generation (single LLM call ~2:20 min)
             memory_size=1024,
             role=role,
             log_group=log_group,
@@ -1234,6 +1239,49 @@ class ApiConstruct(Construct):
         lambda_function.add_event_source(
             eventsources.SqsEventSource(queue, batch_size=1)
         )
+
+        return lambda_function
+
+    def _add_vpr_dlq_handler_lambda(
+        self,
+        dlq: aws_sqs.Queue,
+        jobs_table: dynamodb.TableV2,
+    ) -> _lambda.Function:
+        """Add Lambda triggered by VPR jobs DLQ to mark orphaned jobs FAILED."""
+        function_name = self.naming.lambda_name("vpr-dlq-handler")
+        log_group = logs.LogGroup(
+            self,
+            "VprDlqHandlerLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
+
+        lambda_function = _lambda.Function(
+            self,
+            "VprDlqHandlerLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.vpr_dlq_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-vpr-dlq-handler",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+                "VPR_JOBS_TABLE_NAME": jobs_table.table_name,
+            },
+            tracing=_lambda.Tracing.ACTIVE,
+            timeout=Duration.seconds(30),
+            memory_size=128,
+            role=self.lambda_role,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+        lambda_function.add_event_source(eventsources.SqsEventSource(dlq, batch_size=1))
 
         return lambda_function
 
@@ -1335,7 +1383,7 @@ class ApiConstruct(Construct):
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
                 constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
-            timeout=Duration.seconds(300),
+            timeout=Duration.minutes(10),  # keep in sync with SQS worker — same handler
             memory_size=1024,
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=2,
