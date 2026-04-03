@@ -518,6 +518,16 @@ class ApiDbConstruct(Construct):
                     enabled=True,
                 ),
             ],
+            cors=[
+                s3.CorsRule(
+                    allowed_methods=[
+                        s3.HttpMethods.GET,
+                    ],
+                    allowed_origins=["https://careervp.com", "http://localhost:3000"],
+                    allowed_headers=["*"],
+                    max_age=3000,
+                )
+            ],
         )
         return bucket
 
