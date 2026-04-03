@@ -206,35 +206,44 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         # Duplicate request - return existing job_id
         existing_job_id = str(existing_job.get('job_id', ''))
         existing_status = str(existing_job.get('status', 'PROCESSING')).lower()
-        logger.info(
-            'Idempotent duplicate request',
-            job_id=existing_job_id,
-            idempotency_key=idempotency_key,
-        )
 
-        # If the existing job is already completed, ensure the application record
-        # reflects this — it may have been missed if the worker ran before the CDK
-        # IAM grant was deployed, or before update_artifact_with_id was added.
-        if existing_status == 'completed':
-            _backfill_application_artifact(
-                application_id=str(normalized_request.get('application_id', '')).strip(),
-                user_id=str(normalized_request.get('user_id', '')).strip(),
+        # Failed jobs should not block retries — fall through to create a new job.
+        if existing_status != 'failed':
+            logger.info(
+                'Idempotent duplicate request',
                 job_id=existing_job_id,
+                idempotency_key=idempotency_key,
             )
 
-        return {
-            'statusCode': int(HTTPStatus.ACCEPTED),
-            'headers': JSON_HEADERS,
-            'body': json.dumps(
-                {
-                    'request_id': existing_job_id,
-                    'job_id': existing_job_id,
-                    'status': existing_status,
-                    'estimated_time_seconds': 120,
-                    'webhook_url': f'/vpr/{existing_job_id}',
-                }
-            ),
-        }
+            # If the existing job is already completed, ensure the application record
+            # reflects this — it may have been missed if the worker ran before the CDK
+            # IAM grant was deployed, or before update_artifact_with_id was added.
+            if existing_status == 'completed':
+                _backfill_application_artifact(
+                    application_id=str(normalized_request.get('application_id', '')).strip(),
+                    user_id=str(normalized_request.get('user_id', '')).strip(),
+                    job_id=existing_job_id,
+                )
+
+            return {
+                'statusCode': int(HTTPStatus.ACCEPTED),
+                'headers': JSON_HEADERS,
+                'body': json.dumps(
+                    {
+                        'request_id': existing_job_id,
+                        'job_id': existing_job_id,
+                        'status': existing_status,
+                        'estimated_time_seconds': 120,
+                        'webhook_url': f'/vpr/{existing_job_id}',
+                    }
+                ),
+            }
+
+        logger.info(
+            'Previous job failed — creating new job for retry',
+            previous_job_id=existing_job_id,
+            idempotency_key=idempotency_key,
+        )
 
     # Generate new job_id
     job_id = str(uuid.uuid4())
