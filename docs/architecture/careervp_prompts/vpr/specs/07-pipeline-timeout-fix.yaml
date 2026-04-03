@@ -1,0 +1,305 @@
+id: "07-pipeline-timeout-fix"
+title: "VPR Pipeline Reliability — Merge Stage 4, Raise Lambda Timeout, DLQ Handler"
+status: pending
+priority: 1
+depends_on: ["03-pipeline"]
+
+summary: |
+  Three coordinated changes that eliminate the Lambda timeout failure mode in VPR generation:
+
+  1. MERGE Stage 3 + Stage 4 into a single LLM call.
+     Stage 4 (self-correct) re-sends the full ~35KB VPR JSON back to Claude asking for
+     minor corrections. With max_tokens=16000 this consumes ~2:20 min, leaving insufficient
+     headroom in a 5-minute Lambda for Stage 3 (~2:20 min). The self-correction benefit
+     does not justify the cost or latency. Fold the 6 validation rules directly into the
+     Stage 3 (build_phase2_prompt) system prompt so one call produces correct output.
+
+  2. RAISE Lambda timeout to 10 minutes; raise SQS visibility timeout to match.
+     After the merge, a single LLM call takes ~2:20 min. 10 minutes gives 4x headroom
+     for retries, cold starts, and outlier inputs. SQS visibility timeout MUST equal or
+     exceed Lambda timeout — a mismatch caused the stuck-PROCESSING bug observed in
+     job 4e43dbb4.
+
+  3. ADD a DLQ Lambda that marks orphaned jobs FAILED.
+     When the SQS worker Lambda times out or crashes, no cleanup runs — the job stays
+     PROCESSING permanently and the user cannot regenerate. A lightweight DLQ consumer
+     reads dead-lettered messages and writes status=FAILED + error to the DynamoDB jobs
+     table, unblocking the idempotency check.
+
+context:
+  read_files:
+    - "src/backend/careervp/logic/vpr_generator.py"               # primary code edit
+    - "src/backend/careervp/logic/prompts/vpr_prompt.py"           # prompt builders
+    - "src/backend/careervp/handlers/vpr_worker_handler.py"        # DLQ handler target (new)
+    - "infra/careervp/api_construct.py"                            # CDK Lambda + SQS config
+  do_not_read:
+    - "src/backend/careervp/models/vpr.py"
+    - "src/backend/careervp/dal/jobs_repository.py"
+
+  inline_reference: |
+    Current 6-stage pipeline LLM call map:
+      Stage 1 — _analyze_input()       rule-based, no LLM
+      Stage 2 — _extract_evidence()    rule-based, no LLM
+      Stage 3 — _synthesize()          LLM call A: build_phase2_prompt → 16000 tokens ~2:20 min
+      Stage 4 — _self_correct()        LLM call B: build_phase2_validation_prompt → 16000 tokens ~2:20 min
+      Stage 5 — _generate_output()     parse only, no LLM
+      Stage 6 — _final_meta_evaluation() rule-based quality gate, no LLM
+
+    Lambda timeout: 300s  SQS visibility_timeout: 300s  → total budget exhausted by Stage 3 alone.
+
+    Observed failure (job 4e43dbb4-2a97-4a68-a50b-0657a34f4671):
+      08:53:28 Stage 3 starts
+      08:55:47 Stage 3 completes (8811 output tokens, $0.147, 2m 19s)
+      08:55:47 Stage 4 starts
+      08:58:27 Lambda timeout — Stage 4 killed mid-response
+      08:58:28 SQS re-queues — second invocation sees status=PROCESSING, skips (atomic lock)
+      Job permanently stuck in PROCESSING.
+
+changes:
+  # ── CHANGE 1: Merge Stage 4 into Stage 3 ──────────────────────────────────
+
+  merge_stage_4_into_stage_3:
+    description: |
+      Remove the _self_correct() LLM call. Fold its 6 validation rules into the
+      PHASE2_SYSTEM_PROMPT so Stage 3 produces correct output in a single pass.
+      Keep _self_correct() as a rule-based-only method (no LLM) for structural
+      consistency with the pipeline dataclass chain.
+
+    prompt_change:
+      file: "src/backend/careervp/logic/prompts/vpr_prompt.py"
+      target: "PHASE2_SYSTEM_PROMPT"
+      action: |
+        Append the following block to PHASE2_SYSTEM_PROMPT (after existing instructions,
+        before any closing delimiter):
+
+          === SELF-VALIDATION RULES (apply before returning) ===
+
+          Before returning your JSON, verify ALL of the following. If any rule fails,
+          correct it inline — do NOT return a separate validation_notes field.
+
+          1. BANNED WORDS: confirm none of these appear anywhere in string values:
+             leverage, delve into, landscape, robust, streamline, utilize, facilitate,
+             implement, cutting-edge, best-practices, industry-leading, game-changer,
+             paradigm shift, synergy
+             If found: replace with plain direct language.
+
+          2. EVIDENCE GROUNDING: every field named "evidence" or "proof" must quote
+             a specific metric, project name, or outcome from the CV or gap responses.
+             Vague phrases like "extensive experience" are not evidence — replace with
+             the nearest quantified fact.
+
+          3. SECTION COMPLETENESS: all 10 top-level keys must be present and non-empty:
+             metadata, executive_summary, role_alignment, experience_mapping,
+             skills_analysis, evidence_gaps, differentiators, concerns_and_mitigations,
+             value_proposition, application_strategy.
+             company_insights and verification_summary are optional.
+
+          4. ARRAY MINIMUMS:
+             executive_summary.top_three_strengths: exactly 3 items
+             executive_summary.top_three_concerns: exactly 3 items
+             role_alignment.core_responsibilities: at least 3 items
+             role_alignment.requirement_breakdown.must_have: at least 3 items
+             differentiators.unique_strengths: at least 2 items
+             concerns_and_mitigations.likely_objections: at least 2 items
+             value_proposition.secondary_values: at least 2 items
+
+          5. SCORE RANGES:
+             executive_summary.overall_fit_score: integer 1–100
+             role_alignment.core_responsibilities[].alignment_score: integer 1–10
+             experience_mapping.relevant_experiences[].relevance_score: integer 1–10
+
+          6. ENUM VALUES: verify all enum fields use only the allowed values listed
+             in the schema. Replace any free-text variants with the nearest valid enum.
+
+    vpr_generator_change:
+      file: "src/backend/careervp/logic/vpr_generator.py"
+      description: |
+        Remove the LLM invocation from _self_correct(). Replace with rule-based
+        fallback only (the existing _rule_based_validation_fallback path).
+        Stage 4 still exists in the pipeline to maintain the dataclass chain
+        (Phase2Draft → ValidatedDraft), but it no longer makes an LLM call.
+
+      method: "_self_correct(draft: Phase2Draft, feedback: str | None) -> ValidatedDraft"
+      new_implementation: |
+        def _self_correct(self, draft: Phase2Draft, feedback: str | None = None) -> ValidatedDraft:
+            """Stage 4: rule-based structural validation only (LLM merged into Stage 3)."""
+            return _rule_based_validation_fallback(draft)
+
+      constants_to_remove:
+        - "PHASE2_VALIDATION_SYSTEM_PROMPT import (if only used in _self_correct)"
+        - "build_phase2_validation_prompt import (if only used in _self_correct)"
+      note: |
+        Check whether PHASE2_VALIDATION_SYSTEM_PROMPT and build_phase2_validation_prompt
+        are used anywhere else before removing imports. If unused after this change, remove them
+        to avoid F401 ruff errors.
+
+  # ── CHANGE 2: Lambda + SQS timeout ────────────────────────────────────────
+
+  cdk_timeout_change:
+    file: "infra/careervp/api_construct.py"
+
+    sqs_worker_lambda:
+      method: "_add_vpr_sqs_worker_lambda_integration"
+      change: "timeout=Duration.seconds(300) → timeout=Duration.minutes(10)"
+
+    sqs_queue:
+      method: "_build_vpr_jobs_queue"
+      change: "visibility_timeout=Duration.seconds(300) → visibility_timeout=Duration.minutes(10)"
+      rationale: |
+        SQS visibility timeout must be >= Lambda timeout. If Lambda runs for 9:55 and SQS
+        visibility timeout is 5 min, SQS re-queues the message at 5:00 while Lambda is still
+        running — second invocation picks it up, fails the atomic PENDING→PROCESSING lock,
+        and logs "Skipping job: failed atomic transition to PROCESSING". The original job
+        then completes successfully but the second invocation has already consumed the
+        SQS message, so max_receive_count is incremented unnecessarily.
+
+    stream_worker_lambda:
+      method: "_add_vpr_worker_stream_lambda"
+      change: "timeout=Duration.seconds(300) → timeout=Duration.minutes(10)"
+      note: "Keep in sync with SQS worker — both run the same handler."
+
+  # ── CHANGE 3: DLQ Lambda ───────────────────────────────────────────────────
+
+  dlq_lambda:
+    description: |
+      Add a new Lambda triggered by the VPR jobs DLQ. When the SQS worker exhausts
+      max_receive_count (3 attempts), the SQS message lands in the DLQ. This Lambda
+      reads the job_id from the message, fetches the job from DynamoDB, and if the
+      job is not already COMPLETED or FAILED, sets status=FAILED with a descriptive
+      error message. This unblocks the idempotency check so the user can regenerate.
+
+    new_handler:
+      file: "src/backend/careervp/handlers/vpr_dlq_handler.py"
+      handler_function: "lambda_handler"
+      description: |
+        Minimal handler. Reads SQS records from event['Records'], extracts job_id
+        from the message body (JSON: {"job_id": "..."}), then calls
+        jobs_repo.update_job_status_if_not_terminal(job_id, 'FAILED', error=error_msg).
+
+      implementation: |
+        import json
+        from typing import Any
+        from aws_lambda_powertools.utilities.typing import LambdaContext
+        from careervp.dal.jobs_repository import JobsRepository
+        from careervp.handlers.utils.observability import logger
+
+        _TERMINAL_STATUSES = {'COMPLETED', 'FAILED'}
+
+        def lambda_handler(event: dict[str, Any], context: LambdaContext) -> None:
+            jobs_repo = JobsRepository()
+            for record in event.get('Records', []):
+                try:
+                    body = json.loads(record.get('body', '{}'))
+                    job_id = str(body.get('job_id', ''))
+                    if not job_id:
+                        logger.warning('DLQ record missing job_id', record=record)
+                        continue
+                    job = jobs_repo.get_job(job_id)
+                    if job is None:
+                        logger.warning('DLQ: job not found', job_id=job_id)
+                        continue
+                    current_status = str(job.get('status', '')).upper()
+                    if current_status in _TERMINAL_STATUSES:
+                        logger.info('DLQ: job already terminal, skipping', job_id=job_id, status=current_status)
+                        continue
+                    jobs_repo.update_job_status(job_id, 'FAILED',
+                        error='Job exhausted retry attempts — see DLQ for details')
+                    logger.info('DLQ: marked job FAILED', job_id=job_id)
+                except Exception as exc:
+                    logger.error('DLQ handler error', error=str(exc), record=record)
+
+    jobs_repository_change:
+      file: "src/backend/careervp/dal/jobs_repository.py"
+      description: |
+        Confirm that update_job_status() accepts an optional error: str parameter and
+        writes it to the DynamoDB item. If it does not, add the optional error kwarg.
+        The DLQ handler needs to persist the error string alongside status=FAILED.
+
+    cdk_change:
+      file: "infra/careervp/api_construct.py"
+      description: |
+        Add a new method _add_vpr_dlq_handler_lambda() that:
+          1. Creates a Lambda function pointing at careervp.handlers.vpr_dlq_handler.lambda_handler
+          2. Gives it read/write access to the jobs DynamoDB table
+          3. Adds the VPR jobs DLQ as its SQS event source (batch_size=1)
+          4. Timeout: 30 seconds, memory: 128 MB (minimal — no LLM calls)
+        Wire it in the main construct where the DLQ is created.
+
+      lambda_config: |
+        _lambda.Function(
+            self,
+            "VprDlqHandlerLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.vpr_dlq_handler.lambda_handler",
+            function_name=self.naming.function_name("vpr-dlq-handler"),
+            timeout=Duration.seconds(30),
+            memory_size=128,
+            ...
+        )
+        lambda_function.add_event_source(
+            eventsources.SqsEventSource(dlq, batch_size=1)
+        )
+
+preserves:
+  - "_analyze_input() — unchanged"
+  - "_extract_evidence() — unchanged"
+  - "_synthesize() — unchanged (max_tokens=16000 stays)"
+  - "_generate_output() — unchanged"
+  - "_final_meta_evaluation() — unchanged"
+  - "run() loop — unchanged"
+  - "MAX_STAGE6_RETRIES = 3 — unchanged"
+  - "generate_vpr() public function — unchanged"
+  - "SQS max_receive_count=3 — unchanged"
+  - "DLQ retention/encryption — unchanged"
+
+do_not_change:
+  - "models/vpr.py"
+  - "fvs_validator.py"
+  - "dynamo_dal_handler.py"
+  - "vpr_submit_handler.py"
+  - "vpr_status_handler.py"
+
+acceptance_criteria:
+  - "VPR generation completes with a single LLM call (Stage 3 only) — confirmed in CloudWatch logs"
+  - "Stage 4 _self_correct() makes no LLM invocation — verified by absence of second 'Invoking LLM' log entry"
+  - "PHASE2_SYSTEM_PROMPT contains all 6 self-validation rules"
+  - "Lambda timeout is 10 minutes in CDK; SQS visibility timeout is 10 minutes"
+  - "vpr_dlq_handler.py exists and is wired to the DLQ in CDK"
+  - "When a job is dead-lettered, DynamoDB status transitions to FAILED within 30 seconds"
+  - "User can regenerate after a failed job without waiting 24 hours"
+  - "`uv run mypy careervp --strict` passes"
+  - "`uv run pytest tests/unit/ -v --tb=short` passes"
+
+implementation_prompt: |
+  You are implementing spec 07-pipeline-timeout-fix across three files.
+  Read this spec fully before starting. Make all changes in the order listed below.
+
+  ## Step 1 — Merge Stage 4 into Stage 3 prompt
+  File: src/backend/careervp/logic/prompts/vpr_prompt.py
+  Append the 6 self-validation rules block (see merge_stage_4_into_stage_3.prompt_change)
+  to PHASE2_SYSTEM_PROMPT.
+
+  ## Step 2 — Remove LLM call from _self_correct()
+  File: src/backend/careervp/logic/vpr_generator.py
+  Replace _self_correct() body with a single call to _rule_based_validation_fallback(draft).
+  Remove PHASE2_VALIDATION_SYSTEM_PROMPT and build_phase2_validation_prompt imports if
+  they are no longer referenced anywhere else in the file.
+
+  ## Step 3 — Raise Lambda + SQS timeouts
+  File: infra/careervp/api_construct.py
+  Change Duration.seconds(300) → Duration.minutes(10) in:
+    - _add_vpr_sqs_worker_lambda_integration (Lambda timeout)
+    - _build_vpr_jobs_queue (visibility_timeout)
+    - _add_vpr_worker_stream_lambda (Lambda timeout)
+
+  ## Step 4 — Add DLQ Lambda handler
+  Create: src/backend/careervp/handlers/vpr_dlq_handler.py
+  Use the implementation block in dlq_lambda.new_handler.implementation above verbatim.
+  Then add _add_vpr_dlq_handler_lambda() to infra/careervp/api_construct.py and wire it
+  where _build_vpr_jobs_dlq() result is used.
+
+  ## Verify
+  cd src/backend && uv run ruff check --fix . && uv run mypy careervp --strict
+  uv run pytest tests/unit/ -v --tb=short
+  cd ../../infra && cdk synth
