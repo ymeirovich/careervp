@@ -1,0 +1,156 @@
+id: "09-dead-code-removal-tests"
+title: "Unit Tests — Dead Code Removal Verification (Spec 09)"
+spec_id: "09-dead-code-removal"
+target_path: "src/backend/tests/unit/test_vpr_dead_code_removed.py"
+pytest_markers: ["unit"]
+depends_on_spec: "09-dead-code-removal"
+test_count: 8
+
+description: |
+  Tests confirming the dead symbols are gone from vpr_prompt.py and __init__.py.
+  These tests assert ImportError on the deleted symbols so regressions are caught
+  immediately if anyone adds the symbols back.
+
+  Additionally, the test spec documents the CHANGES to make in existing test files
+  (which cannot themselves be tested — they are edits, not additions).
+
+  For the existing test file edits, see the `existing_file_edits` section below.
+
+implementation_steps: |
+  1. Read docs/architecture/careervp_prompts/vpr/specs/09-dead-code-removal.yaml
+  2. Make the four changes described in that spec (vpr_prompt.py, __init__.py,
+     test_vpr_prompt.py, test_vpr_prompts_phase2.py)
+  3. Copy the code block below to src/backend/tests/unit/test_vpr_dead_code_removed.py
+  4. Run all unit tests:
+       cd src/backend && uv run pytest tests/unit/ -v --tb=short
+  5. All 8 new tests should pass; existing test count should be lower by:
+       - 2 from TestBuildVPRPrompt (test_vpr_prompt.py)
+       - 1 from TestExistingPromptsPreserved.test_build_vpr_prompt_still_callable
+       - 2 from TestPhase2SystemPrompts (validation tests)
+       - 5 from TestBuildPhase2ValidationPrompt
+     Total removed: 10 old tests, replaced by 8 cleaner guard tests
+
+existing_file_edits:
+  description: |
+    These are the changes to make to existing test files (spec 09 steps 3 and 4).
+    They are documented here for review, not as runnable test code.
+
+  test_vpr_prompt_py:
+    file: "src/backend/tests/unit/test_vpr_prompt.py"
+    change: |
+      BEFORE:
+        from careervp.logic.prompts.vpr_prompt import BANNED_WORDS, build_vpr_prompt, check_anti_ai_patterns
+        ...
+        class TestBuildVPRPrompt:
+            def test_prompt_includes_serialized_context(self) -> None: ...
+            def test_prompt_excludes_removed_fields(self) -> None: ...
+
+      AFTER:
+        from careervp.logic.prompts.vpr_prompt import BANNED_WORDS, check_anti_ai_patterns
+        # Remove: build_vpr_prompt import, _sample_user_cv(), _sample_request(), TestBuildVPRPrompt class
+        # Keep: TestAntiAIPatterns class unchanged
+
+  test_vpr_prompts_phase2_py:
+    file: "src/backend/tests/unit/test_vpr_prompts_phase2.py"
+    change: |
+      Remove from imports:
+        - PHASE2_VALIDATION_SYSTEM_PROMPT
+        - build_phase2_validation_prompt
+        - build_vpr_prompt
+
+      Remove from TestPhase2SystemPrompts:
+        - test_phase2_validation_system_prompt_is_non_empty_string
+        - test_phase2_validation_prompt_mentions_validation
+
+      Remove entirely:
+        - class TestBuildPhase2ValidationPrompt (5 tests)
+
+      Remove from TestExistingPromptsPreserved:
+        - test_build_vpr_prompt_still_callable
+
+      Keep unchanged:
+        - TestPhase2SystemPrompts.test_phase2_system_prompt_is_non_empty_string
+        - TestPhase2SystemPrompts.test_phase2_system_prompt_mentions_json
+        - TestBuildPhase2Prompt (all 6 tests)
+        - TestExistingPromptsPreserved.test_build_stage_3_prompt_still_callable
+        - TestExistingPromptsPreserved.test_build_stage_4_prompt_still_callable
+        - TestExistingPromptsPreserved.test_banned_words_list_still_present
+
+code: |
+  """Guard tests confirming dead VPR prompt symbols are removed (spec 09).
+
+  These tests assert that importing the deleted symbols raises ImportError,
+  preventing silent regressions if the symbols are accidentally re-added.
+  """
+  from __future__ import annotations
+
+  import importlib
+  import pytest
+
+
+  @pytest.mark.unit
+  class TestDeadSymbolsRemovedFromVprPrompt:
+      """Dead symbols must not exist in careervp.logic.prompts.vpr_prompt."""
+
+      def test_vpr_generation_prompt_not_importable(self) -> None:
+          """VPR_GENERATION_PROMPT must be removed from vpr_prompt.py."""
+          import careervp.logic.prompts.vpr_prompt as m
+          assert not hasattr(m, 'VPR_GENERATION_PROMPT'), (
+              'VPR_GENERATION_PROMPT is dead code — it should not exist in vpr_prompt.py'
+          )
+
+      def test_build_vpr_prompt_not_importable(self) -> None:
+          """build_vpr_prompt() must be removed from vpr_prompt.py."""
+          import careervp.logic.prompts.vpr_prompt as m
+          assert not hasattr(m, 'build_vpr_prompt'), (
+              'build_vpr_prompt is dead code — it should not exist in vpr_prompt.py'
+          )
+
+      def test_phase2_validation_system_prompt_not_importable(self) -> None:
+          """PHASE2_VALIDATION_SYSTEM_PROMPT must be removed from vpr_prompt.py."""
+          import careervp.logic.prompts.vpr_prompt as m
+          assert not hasattr(m, 'PHASE2_VALIDATION_SYSTEM_PROMPT'), (
+              'PHASE2_VALIDATION_SYSTEM_PROMPT is dead code — Stage 4 LLM call was removed in spec 07'
+          )
+
+      def test_build_phase2_validation_prompt_not_importable(self) -> None:
+          """build_phase2_validation_prompt() must be removed from vpr_prompt.py."""
+          import careervp.logic.prompts.vpr_prompt as m
+          assert not hasattr(m, 'build_phase2_validation_prompt'), (
+              'build_phase2_validation_prompt is dead code — Stage 4 LLM call was removed in spec 07'
+          )
+
+
+  @pytest.mark.unit
+  class TestDeadSymbolsRemovedFromInit:
+      """Dead symbols must not be exported from careervp.logic.prompts."""
+
+      def test_vpr_generation_prompt_not_in_init(self) -> None:
+          """VPR_GENERATION_PROMPT must not be in prompts/__init__.py exports."""
+          import careervp.logic.prompts as m
+          assert not hasattr(m, 'VPR_GENERATION_PROMPT'), (
+              'VPR_GENERATION_PROMPT must be removed from prompts/__init__.py __all__'
+          )
+
+      def test_build_vpr_prompt_not_in_init(self) -> None:
+          """build_vpr_prompt must not be in prompts/__init__.py exports."""
+          import careervp.logic.prompts as m
+          assert not hasattr(m, 'build_vpr_prompt'), (
+              'build_vpr_prompt must be removed from prompts/__init__.py __all__'
+          )
+
+
+  @pytest.mark.unit
+  class TestLiveSymbolsStillPresent:
+      """Live symbols must still be importable after the removal."""
+
+      def test_phase2_system_prompt_still_present(self) -> None:
+          """PHASE2_SYSTEM_PROMPT must still exist — imported by vpr_generator.py."""
+          from careervp.logic.prompts.vpr_prompt import PHASE2_SYSTEM_PROMPT
+          assert isinstance(PHASE2_SYSTEM_PROMPT, str)
+          assert len(PHASE2_SYSTEM_PROMPT) > 50
+
+      def test_build_phase2_prompt_still_present(self) -> None:
+          """build_phase2_prompt() must still exist — imported by vpr_generator.py."""
+          from careervp.logic.prompts.vpr_prompt import build_phase2_prompt
+          assert callable(build_phase2_prompt)

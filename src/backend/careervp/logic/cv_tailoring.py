@@ -7,7 +7,10 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass, field, replace
-from typing import Any, Iterable, Literal, TypeAlias, cast, overload
+from typing import TYPE_CHECKING, Any, Iterable, Literal, TypeAlias, cast, overload
+
+if TYPE_CHECKING:
+    from careervp.models.vpr import VPR
 
 from careervp.logic import cv_tailoring_prompt
 from careervp.logic.fvs_validator import check_anti_ai_patterns
@@ -194,6 +197,7 @@ def tailor_cv(
     dal: Any | None = None,
     llm_client: Any | None = None,
     timeout: int = 300,
+    vpr: 'VPR | None' = None,
 ) -> Result[TailorCVResultData]: ...
 
 
@@ -206,6 +210,7 @@ def tailor_cv(
     dal: Any | None = None,
     llm_client: Any | None = None,
     timeout: int = 300,
+    vpr: 'VPR | None' = None,
 ) -> TailoredCVDraft: ...
 
 
@@ -217,6 +222,7 @@ def tailor_cv(  # noqa: C901
     dal: Any | None = None,
     llm_client: Any | None = None,
     timeout: int = 300,
+    vpr: 'VPR | None' = None,
 ) -> Result[TailorCVResultData] | TailoredCVDraft:
     """
     Tailor CV content.
@@ -238,6 +244,7 @@ def tailor_cv(  # noqa: C901
         dal=dal,
         llm_client=llm_client,
         timeout=timeout,
+        vpr=vpr,
     )
 
 
@@ -249,6 +256,7 @@ def _tailor_cv_legacy(  # noqa: C901
     dal: Any | None = None,
     llm_client: Any | None = None,
     timeout: int = 300,
+    vpr: 'VPR | None' = None,
 ) -> Result[TailorCVResultData]:
     """Tailor a master CV to a job description."""
     if dal is not None:
@@ -278,6 +286,7 @@ def _tailor_cv_legacy(  # noqa: C901
         fvs_baseline=fvs_baseline,
         target_keywords=keyword_matches,
         preferences=preferences,
+        vpr=vpr,
     )
 
     llm_payload: dict[str, Any] | None = None
@@ -1174,6 +1183,7 @@ def build_tailoring_prompt(
     fvs_baseline: FVSBaseline | None = None,
     target_keywords: Iterable[str] | None = None,
     preferences: TailoringPreferences | None = None,
+    vpr: 'VPR | None' = None,
 ) -> str:
     """Wrapper to build the tailoring prompt."""
     return cv_tailoring_prompt.build_user_prompt(
@@ -1183,6 +1193,7 @@ def build_tailoring_prompt(
         fvs_baseline=fvs_baseline,
         target_keywords=target_keywords,
         preferences=preferences,
+        vpr=vpr,
     )
 
 

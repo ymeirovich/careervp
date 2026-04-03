@@ -11,169 +11,9 @@ from typing import Any
 from careervp.models.cv import UserCV
 from careervp.models.vpr import VPRRequest
 
-# Grounding: docs/specs/03-vpr-generator.md:95 requires this prompt template.
-VPR_GENERATION_PROMPT = """You are an expert career strategist creating a Value Proposition Report (VPR) for a job application.
+# VPR_GENERATION_PROMPT removed per spec 09 (superseded by PHASE2_PROMPT_2_1_TEMPLATE)
+# build_vpr_prompt, PHASE2_VALIDATION_SYSTEM_PROMPT, and build_phase2_validation_prompt also removed.
 
-STRICT RULES (VIOLATIONS WILL CAUSE FAILURE):
-- NEVER mention the target company name (SysAid, etc.) as if the candidate worked there
-- NEVER invent companies, roles, or achievements not explicitly in the CV
-- NEVER use the gap responses to fabricate new facts - only use them to ELABORATE on CV facts
-- ALL facts must be DIRECTLY VERIFIABLE from the provided CV text
-- If you cannot find a fact in the CV, do NOT include it
-- Use exact company names and roles from the CV (e.g., "AllCloud", "Director of AWS Training")
-
-INPUT DATA:
-
-CV FACTS (IMMUTABLE - DO NOT INVENT):
-{cv_facts_json}
-
-GAP ANALYSIS RESPONSES (PRIMARY EVIDENCE):
-{gap_responses_json}
-
-JOB REQUIREMENTS:
-{job_requirements_json}
-
-COMPANY RESEARCH:
-{company_research_json}
-
-PREVIOUS APPLICATION INSIGHTS (if any):
-{previous_insights_json}
-
----
-
-VPR STRUCTURE:
-
-## 1. EXECUTIVE SUMMARY (200-250 words)
-Synthesize the candidate's unique value proposition in 3-4 compelling paragraphs:
-- Opening: Why this candidate is exceptional fit for this specific role
-- Core strengths: 3-5 key differentiators with quantified evidence
-- Strategic fit: How their background aligns with company's needs
-- Compelling close: Forward-looking statement about impact
-
-## 2. EVIDENCE & ALIGNMENT MATRIX (600-800 words)
-
-For each major job requirement, provide:
-
-**Requirement:** [Exact requirement from job posting]
-**Evidence:** [Specific facts from CV + gap responses with quantification]
-**Alignment Score:** [Strong/Moderate/Developing]
-**Impact Potential:** [How this experience translates to role success]
-
-Use this format:
-```
-### LMS Implementation Experience (Example from CV)
-**Evidence:** Led LMS setup and deployment of Cloud Academy serving 200+ internal employees
-    and external customers; created 30+ learning plans including comprehensive 8-week
-    DevOps Bootcamp (CV fact).
-
-**Alignment:** STRONG - Direct LMS implementation experience matching requirement for LMS selection and management.
-
-**Impact Potential:** Can immediately set up and scale SysAid Customer Academy infrastructure.
-```
-
-## 3. STRATEGIC DIFFERENTIATORS (300-400 words)
-
-Identify 3-5 unique strengths that set candidate apart:
-- Technical depth + business acumen
-- Leadership + hands-on execution
-- Innovation + operational excellence
-- Cross-functional collaboration
-- Industry-specific expertise
-
-Support each with quantified examples from gap responses.
-
-## 4. GAP MITIGATION STRATEGIES (200-300 words)
-
-For any missing requirements:
-- Acknowledge the gap honestly
-- Highlight transferable skills
-- Demonstrate learning agility with examples
-- Propose 30-60-90 day plan to close gap
-
-## 5. CULTURAL FIT ANALYSIS (150-200 words)
-
-Based on company research:
-- Alignment with company values
-- Work style compatibility
-- Team collaboration approach
-- Growth mindset examples
-
-## 6. RECOMMENDED TALKING POINTS (150-200 words)
-
-5-7 key messages for interviews:
-- Strongest technical capabilities
-- Most impressive quantified achievements
-- Unique value proposition
-- Questions that demonstrate strategic thinking
-
----
-
-ANTI-AI DETECTION RULES:
-
-BANNED WORDS (never use):
-- leverage, delve into, landscape, robust, streamline
-- utilize, facilitate, implement (use sparingly)
-- cutting-edge, best practices, industry-leading
-- game-changer, paradigm shift, synergy
-
-WRITING STYLE:
-- Vary sentence length (8-25 words)
-- Use natural transitions, not formulaic
-- Include conversational phrases
-- Use approximations not exact percentages (e.g., "nearly 40%" not "39.7%")
-- Mix active and passive voice naturally
-
-DOCUMENT-LEVEL PATTERNS:
-- Avoid formulaic structure (vary section order slightly)
-- Use different header styles
-- Include brief narrative examples
-- Natural language flow, not bullet-point heavy
-
----
-
-FACT VERIFICATION CHECKLIST:
-Before including ANY achievement or fact:
-- [ ] Is this explicitly stated in CV or gap responses?
-- [ ] Are the numbers exact from source?
-- [ ] Is the company name/title correct?
-- [ ] Are dates accurate?
-- [ ] Can I quote the source if questioned?
-
-If you cannot verify a fact, DO NOT INCLUDE IT.
-
----
-
-OUTPUT FORMAT: Return ONLY valid JSON (no markdown formatting, no code blocks). The JSON will be parsed programmatically.
-
-```json
-{{
-  "executive_summary": "...",
-  "evidence_matrix": [
-    {{
-      "requirement": "Exact requirement from job posting",
-      "evidence": "Specific facts from CV + gap responses",
-      "alignment_score": "STRONG|MODERATE|DEVELOPING",
-      "impact_potential": "How this translates to role success"
-    }}
-  ],
-  "differentiators": ["different strength 1", "different strength 2"],
-  "gap_strategies": [
-    {{
-      "gap": "Missing requirement",
-      "mitigation_approach": "How to address this",
-      "transferable_skills": ["skill 1", "skill 2"]
-    }}
-  ],
-  "cultural_fit": "Analysis based on company research",
-  "talking_points": ["point 1", "point 2"],
-  "keywords": ["keyword 1", "keyword 2"],
-  "language": "en",
-  "version": 1,
-  "word_count": 1500
-}}
-```
-
-Generate the JSON VPR now:"""
 
 # Anti-AI detection list from docs/specs/03-vpr-generator.md lines 80-84.
 BANNED_WORDS: list[str] = [
@@ -358,23 +198,7 @@ def build_stage_6_prompt(vpr_payload: dict[str, Any]) -> str:
     return STAGE_6_USER_PROMPT_TEMPLATE.format(vpr_json=json.dumps(vpr_payload, indent=2))
 
 
-def build_vpr_prompt(user_cv: UserCV, request: VPRRequest) -> str:
-    """
-    Build the formatted prompt for Sonnet 4.5 (spec line 95).
-    """
-    cv_facts = _serialize_cv_for_prompt(user_cv)
-    job_requirements = request.job_posting.model_dump(mode='json')
-    gap_responses = [gr.model_dump(mode='json') for gr in request.gap_responses]
-    company_research = request.company_context.model_dump(mode='json') if request.company_context else {}
-    previous_insights: dict[str, Any] = {}
-
-    return VPR_GENERATION_PROMPT.format(
-        cv_facts_json=json.dumps(cv_facts, indent=2),
-        job_requirements_json=json.dumps(job_requirements, indent=2),
-        gap_responses_json=json.dumps(gap_responses, indent=2),
-        company_research_json=json.dumps(company_research, indent=2),
-        previous_insights_json=json.dumps(previous_insights, indent=2),
-    )
+# build_vpr_prompt removed per spec 09 (replaced by build_phase2_prompt)
 
 
 def check_anti_ai_patterns(content: str) -> list[str]:
@@ -454,12 +278,7 @@ PHASE2_SYSTEM_PROMPT = (
     '   in the schema. Replace any free-text variants with the nearest valid enum.\n'
 )
 
-PHASE2_VALIDATION_SYSTEM_PROMPT = (
-    'You are CareerVP VPR Validator Phase 2. Review the VPR JSON for evidence\n'
-    'traceability, quantification consistency, alignment score accuracy, gap severity\n'
-    'calibration, differentiator rarity defensibility, and mitigation substance.\n'
-    'Return the corrected VPR JSON with a validation_notes field listing all changes.'
-)
+# PHASE2_VALIDATION_SYSTEM_PROMPT removed per spec 09 (Stage 4 LLM call removed in spec 07)
 
 # ── Phase 2 Prompt 2.1 — full VPR generation (replaces Stage 3 as primary) ───
 
@@ -482,6 +301,14 @@ COMPANY RESEARCH:
 GAP ANALYSIS RESPONSES:
 {gap_responses_json}
 {feedback_block}
+=== GENERATION GUIDANCE FOR HIGH-IMPACT SECTIONS ===
+
+- DIFFERENTIATORS & VALUE_POSITION: Prioritize claims that are rare — your differentiator should be in the top 5% of what candidates offer. If a strength is common among applicants, it is NOT a differentiator. Cite specific metrics or named outcomes.
+- PROOF CITATION: Every claim must cite a specific metric, quantified fact, or named outcome from the CV or gap analysis. Vague assertions fail.
+- POSITIONING_STATEMENT: Name the target company in your positioning_statement — "for CompanyName" rather than generic language.
+- elevator_pitch: Summarize value in 1-2 sentences that a hiring manager would remember.
+- PRIMARY_VALUE.STATEMENT: Make forward-looking commitments — describe impact you will reduce, scale, build, or drive.
+
 === OUTPUT REQUIREMENTS ===
 
 Return only valid JSON matching the exact schema below — no markdown, no code fences.
@@ -507,6 +334,33 @@ OUTPUT SCHEMA:
       {{"concern": "10-15 words", "severity": "high|medium|low", "mitigation": "strategy"}}
     ],
     "recommended_approach": "aggressive_apply|apply_with_customization|apply_after_preparation|do_not_apply"
+  }},
+  "differentiators": {{
+    "top_differentiators": [
+      {{
+        "differentiator": "15-25 words describing unique value",
+        "evidence": "specific metric or named outcome",
+        "rarity": "top_1%|top_5%|top_10%|common",
+        "relevance_to_target_role": "direct connection"
+      }}
+    ],
+    "competitive_advantages": [
+      {{
+        "advantage": "...",
+        "evidence": "...",
+        "impact": "..."
+      }}
+    ]
+  }},
+  "value_proposition": {{
+    "primary_value_statement": "forward-looking promise: impact you will reduce, scale, build, or drive",
+    "secondary_value_points": [
+      {{
+        "value_point": "...",
+        "supporting_evidence": "..."
+      }}
+    ],
+    "target_company_fit": "why this role specifically"
   }},
   "role_alignment": {{
     "core_responsibilities": [
@@ -761,16 +615,4 @@ def build_phase2_prompt(
     )
 
 
-def build_phase2_validation_prompt(
-    vpr_payload: dict[str, Any],
-    user_cv: UserCV,
-    feedback: str | None = None,
-) -> str:
-    """Build Phase 2 validation prompt (primary replacement for Stage 4)."""
-    cv_facts = _serialize_cv_for_prompt(user_cv)
-    validation_feedback_block = f'\nREGENERATION FEEDBACK:\n{feedback}\n' if feedback else ''
-    return PHASE2_PROMPT_2_2_TEMPLATE.format(
-        vpr_json=json.dumps(vpr_payload, indent=2),
-        cv_facts_json=json.dumps(cv_facts, indent=2),
-        validation_feedback_block=validation_feedback_block,
-    )
+# build_phase2_validation_prompt removed per spec 09 (Stage 4 LLM call removed in spec 07)

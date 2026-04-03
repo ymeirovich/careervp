@@ -1,0 +1,219 @@
+id: "09-dead-code-removal"
+title: "VPR Prompt — Remove Dead Code (VPR_GENERATION_PROMPT, build_vpr_prompt, PHASE2_VALIDATION_SYSTEM_PROMPT)"
+status: pending
+priority: 2
+depends_on: ["02-vpr-prompts", "07-pipeline-timeout-fix"]
+
+summary: |
+  Remove four dead-code items from vpr_prompt.py and clean up their exports and tests.
+
+  These items were live in earlier specs but are no longer called by any production code:
+    - VPR_GENERATION_PROMPT: original v1 prompt string (superseded by PHASE2_PROMPT_2_1_TEMPLATE
+      in spec 02, never used after that)
+    - build_vpr_prompt(): builder for VPR_GENERATION_PROMPT (same situation)
+    - PHASE2_VALIDATION_SYSTEM_PROMPT: system prompt for Stage 4 LLM call (spec 07 removed
+      the LLM call from _self_correct(); now a dead constant)
+    - build_phase2_validation_prompt(): builder for Stage 4 LLM call (same)
+
+  Impact of keeping them:
+    - VPR_GENERATION_PROMPT is ~3.5KB of misleadingly-named text that future maintainers
+      may believe is the active prompt
+    - build_vpr_prompt() shares its name with the logical concept of "building a VPR prompt"
+      but does the opposite of what the codebase now does — a naming trap
+    - PHASE2_VALIDATION_SYSTEM_PROMPT and build_phase2_validation_prompt() give the false
+      impression that a validation LLM call still exists
+
+  SCOPE: vpr_prompt.py + prompts/__init__.py + two test files. No handler, no model changes.
+
+  IMPORTANT: Stage 1-6 individual prompts (STAGE_1_SYSTEM_PROMPT through STAGE_6_SYSTEM_PROMPT,
+  build_stage_1_prompt through build_stage_6_prompt) are NOT removed by this spec —
+  they were explicitly preserved in spec 02 and tests assert their callability.
+  Removal of stage prompts is deferred to a future spec.
+
+context:
+  read_files:
+    - "src/backend/careervp/logic/prompts/vpr_prompt.py"
+    - "src/backend/careervp/logic/prompts/__init__.py"
+    - "src/backend/tests/unit/test_vpr_prompt.py"
+    - "src/backend/tests/unit/test_vpr_prompts_phase2.py"
+  do_not_read:
+    - "src/backend/careervp/logic/vpr_generator.py"  # does not import dead symbols
+
+  verified_non_callers: |
+    Confirmed by grep that the following files do NOT import the dead symbols:
+      - vpr_generator.py: imports only PHASE2_SYSTEM_PROMPT and build_phase2_prompt
+      - Any handler file: confirmed by grep (no VPR_GENERATION_PROMPT reference outside
+        prompts/ and tests/)
+    The only references to the dead symbols are:
+      - vpr_prompt.py (definitions)
+      - prompts/__init__.py (exports)
+      - tests/unit/test_vpr_prompt.py (TestBuildVPRPrompt class)
+      - tests/unit/test_vpr_prompts_phase2.py (TestPhase2SystemPrompts partial,
+        TestBuildPhase2ValidationPrompt class, TestExistingPromptsPreserved partial)
+
+changes:
+  # ── CHANGE 1: vpr_prompt.py ──────────────────────────────────────────────────
+
+  vpr_prompt_removals:
+    file: "src/backend/careervp/logic/prompts/vpr_prompt.py"
+    remove_constants:
+      - name: "VPR_GENERATION_PROMPT"
+        line_range: "~15-176"  # large multi-line string
+        note: "Remove entire constant including the comment line above it"
+
+      - name: "PHASE2_VALIDATION_SYSTEM_PROMPT"
+        line_range: "~457-462"
+        note: "Remove entire constant including the comment line above it"
+
+    remove_functions:
+      - name: "build_vpr_prompt"
+        line_range: "~361-377"
+        note: |
+          Remove entire function. It is the only caller of VPR_GENERATION_PROMPT.
+          Remove the docstring comment above it too.
+
+      - name: "build_phase2_validation_prompt"
+        line_range: "~764-776"
+        note: |
+          Remove entire function. It is the only caller of PHASE2_PROMPT_2_1_TEMPLATE
+          in the validation path, which no longer runs via LLM (spec 07).
+          Remove the comment line above it too.
+
+    preserve:
+      - "All STAGE_*_SYSTEM_PROMPT constants"
+      - "All STAGE_*_USER_PROMPT_TEMPLATE constants"
+      - "All STAGE_*_FEW_SHOT_EXAMPLE constants"
+      - "All build_stage_*_prompt() functions"
+      - "PHASE2_PROMPT_2_1_TEMPLATE"
+      - "PHASE2_PROMPT_2_2_TEMPLATE"
+      - "PHASE2_SYSTEM_PROMPT"
+      - "build_phase2_prompt()"
+      - "BANNED_WORDS"
+      - "check_anti_ai_patterns()"
+      - "_serialize_cv_for_prompt()"
+
+  # ── CHANGE 2: prompts/__init__.py ────────────────────────────────────────────
+
+  init_removals:
+    file: "src/backend/careervp/logic/prompts/__init__.py"
+    remove_from_imports: |
+      from careervp.logic.prompts.vpr_prompt import (
+          BANNED_WORDS,
+          VPR_GENERATION_PROMPT,   # ← remove this line
+          build_vpr_prompt,        # ← remove this line
+          check_anti_ai_patterns,
+      )
+    remove_from_all: |
+      __all__ = [
+          'BANNED_WORDS',
+          'VPR_GENERATION_PROMPT',   # ← remove
+          'build_vpr_prompt',        # ← remove
+          'check_anti_ai_patterns',
+          ...
+      ]
+
+  # ── CHANGE 3: test_vpr_prompt.py ─────────────────────────────────────────────
+
+  test_vpr_prompt_changes:
+    file: "src/backend/tests/unit/test_vpr_prompt.py"
+    description: |
+      Remove the TestBuildVPRPrompt class (2 tests) and the build_vpr_prompt import.
+      Keep TestAntiAIPatterns class (3 tests) — it tests check_anti_ai_patterns and
+      BANNED_WORDS which are still live.
+
+    remove:
+      - "import of build_vpr_prompt from the import line"
+      - "class TestBuildVPRPrompt (entire class, 2 tests)"
+
+    keep:
+      - "import of BANNED_WORDS"
+      - "import of check_anti_ai_patterns"
+      - "_sample_user_cv() helper function"
+      - "_sample_request() helper function"
+      - "class TestAntiAIPatterns"
+      - "Note: _sample_user_cv and _sample_request are no longer used after removing
+         TestBuildVPRPrompt — also remove them if they become unused"
+
+  # ── CHANGE 4: test_vpr_prompts_phase2.py ─────────────────────────────────────
+
+  test_vpr_prompts_phase2_changes:
+    file: "src/backend/tests/unit/test_vpr_prompts_phase2.py"
+    description: |
+      Remove imports and test cases that cover the dead symbols.
+      Keep all tests for live symbols.
+
+    remove_imports:
+      - "PHASE2_VALIDATION_SYSTEM_PROMPT"
+      - "build_phase2_validation_prompt"
+      - "build_vpr_prompt  (from the 'Existing builders' comment section)"
+
+    remove_test_cases:
+      - class: "TestPhase2SystemPrompts"
+        remove_methods:
+          - "test_phase2_validation_system_prompt_is_non_empty_string"
+          - "test_phase2_validation_prompt_mentions_validation"
+        keep_methods:
+          - "test_phase2_system_prompt_is_non_empty_string"
+          - "test_phase2_system_prompt_mentions_json"
+
+      - class: "TestBuildPhase2ValidationPrompt"
+        action: "Remove entire class (5 tests for build_phase2_validation_prompt)"
+
+      - class: "TestExistingPromptsPreserved"
+        remove_methods:
+          - "test_build_vpr_prompt_still_callable"
+        keep_methods:
+          - "test_build_stage_3_prompt_still_callable"
+          - "test_build_stage_4_prompt_still_callable"
+          - "test_banned_words_list_still_present"
+
+acceptance_criteria:
+  - "vpr_prompt.py no longer defines VPR_GENERATION_PROMPT, build_vpr_prompt,
+     PHASE2_VALIDATION_SYSTEM_PROMPT, or build_phase2_validation_prompt"
+  - "prompts/__init__.py no longer exports VPR_GENERATION_PROMPT or build_vpr_prompt"
+  - "test_vpr_prompt.py no longer imports build_vpr_prompt; TestBuildVPRPrompt is gone"
+  - "test_vpr_prompts_phase2.py no longer imports the four dead symbols"
+  - "TestBuildPhase2ValidationPrompt class is gone from test_vpr_prompts_phase2.py"
+  - "All remaining tests pass: `uv run pytest tests/unit/ -v --tb=short`"
+  - "`uv run ruff check .` passes — no unused imports"
+  - "`uv run mypy careervp --strict` passes"
+
+do_not_change:
+  - "PHASE2_SYSTEM_PROMPT (live — imported by vpr_generator.py)"
+  - "PHASE2_PROMPT_2_1_TEMPLATE (live)"
+  - "PHASE2_PROMPT_2_2_TEMPLATE (keep for now — low noise, documents the validation structure)"
+  - "build_phase2_prompt() (live — imported by vpr_generator.py)"
+  - "Any STAGE_* constant or build_stage_*_prompt() function"
+  - "BANNED_WORDS / check_anti_ai_patterns (live — imported by fvs_validator.py)"
+
+implementation_prompt: |
+  You are removing dead code from three files. Make changes in this order:
+
+  ## Step 1 — vpr_prompt.py
+  Read src/backend/careervp/logic/prompts/vpr_prompt.py.
+  Remove: VPR_GENERATION_PROMPT (large string ~15-176), build_vpr_prompt() function,
+  PHASE2_VALIDATION_SYSTEM_PROMPT constant (~457-462), build_phase2_validation_prompt() function.
+  Keep: everything else.
+
+  ## Step 2 — prompts/__init__.py
+  Read src/backend/careervp/logic/prompts/__init__.py.
+  Remove VPR_GENERATION_PROMPT and build_vpr_prompt from both the import block
+  and the __all__ list.
+
+  ## Step 3 — test_vpr_prompt.py
+  Read src/backend/tests/unit/test_vpr_prompt.py.
+  Remove: build_vpr_prompt import, TestBuildVPRPrompt class, _sample_user_cv and
+  _sample_request helpers (now unused). Keep: TestAntiAIPatterns and its imports.
+
+  ## Step 4 — test_vpr_prompts_phase2.py
+  Read src/backend/tests/unit/test_vpr_prompts_phase2.py.
+  Remove: PHASE2_VALIDATION_SYSTEM_PROMPT, build_phase2_validation_prompt, build_vpr_prompt
+  from imports. Remove: TestBuildPhase2ValidationPrompt class entirely.
+  Remove: test_phase2_validation_system_prompt_is_non_empty_string and
+  test_phase2_validation_prompt_mentions_validation from TestPhase2SystemPrompts.
+  Remove: test_build_vpr_prompt_still_callable from TestExistingPromptsPreserved.
+
+  ## Verify
+  cd src/backend && uv run ruff check --fix .
+  uv run mypy careervp --strict
+  uv run pytest tests/unit/ -v --tb=short

@@ -35,6 +35,9 @@ class TailorCVRequest(BaseModel):
     user_id: str | None = None
     preferences: TailoringPreferences | None = None
     idempotency_key: str | None = None
+    vpr_id: str | None = None
+    # When present, CV tailoring fetches this VPR and uses it as a
+    # strategic guide. Optional — graceful degradation when absent.
 
     @model_validator(mode='after')
     def _ensure_preferences(self) -> 'TailorCVRequest':
