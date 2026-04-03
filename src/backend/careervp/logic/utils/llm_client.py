@@ -144,7 +144,7 @@ class LLMRouter:
         self._client = Anthropic(
             api_key=self._api_key,
             max_retries=3,
-            timeout=60.0,
+            timeout=180.0,  # 3 minutes for long VPR generation requests with large context
         )
 
     def _fetch_from_ssm(self, parameter_name: str) -> str | None:
