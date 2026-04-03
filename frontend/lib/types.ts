@@ -213,6 +213,122 @@ export interface VPRStatusResponse {
   completed_at?: string;
 }
 
+// ── VPR Full Data (fetched from S3 download_url) ──
+export interface VPRFullStrength {
+  strength: string;
+  evidence: string;
+  relevanceToRole: string;
+}
+export interface VPRFullConcern {
+  concern: string;
+  severity: string;
+  mitigation: string;
+}
+export interface VPRCoreResponsibility {
+  responsibility: string;
+  alignmentScore: number;
+  candidateEvidence: string[];
+  evidenceQuality: string;
+}
+export interface VPRMustHave {
+  requirement: string;
+  candidateMeetsRequirement: boolean;
+  evidence: string;
+  strengthOfEvidence: string;
+}
+export interface VPRRelevantExperience {
+  role: string;
+  organization: string;
+  duration: string;
+  keyAchievements: Array<{ achievement: string; metric: string; impact: string }>;
+  relevanceToTargetRole: string;
+  relevanceScore: number;
+}
+export interface VPRObjection {
+  objection: string;
+  likelihood: string;
+  mitigation: { strategy: string; messaging: string };
+  whereToAddress: string[];
+}
+export interface VPRFullData {
+  applicationId: string;
+  metadata: {
+    reportDate: string;
+    candidateName: string;
+    targetRole: string;
+    targetCompany: string;
+  };
+  executiveSummary: {
+    overallFitScore: number;
+    fitRationale: string;
+    topThreeStrengths: VPRFullStrength[];
+    topThreeConcerns: VPRFullConcern[];
+    recommendedApproach: string;
+  };
+  roleAlignment: {
+    coreResponsibilities: VPRCoreResponsibility[];
+    requirementBreakdown: {
+      mustHave: VPRMustHave[];
+      niceToHave: Array<{ preference: string; candidateHasThis: boolean; evidence: string }>;
+    };
+  };
+  experienceMapping: {
+    relevantExperiences: VPRRelevantExperience[];
+    experienceGaps: Array<{
+      missingExperience: string;
+      impactOnCandidacy: string;
+      compensatingFactors: string[];
+      mitigationStrategy: string;
+    }>;
+  };
+  skillsAnalysis: {
+    technicalSkills: Array<{
+      skill: string;
+      requiredLevel: string;
+      candidateLevel: string;
+      evidence: string;
+      gap: boolean;
+    }>;
+    softSkills: Array<{
+      skill: string;
+      candidateDemonstrates: boolean;
+      evidence: string;
+      strengthLevel: string;
+    }>;
+  };
+  evidenceGaps: {
+    priorityGapsToAddress: Array<{
+      gap: string;
+      priority: number;
+      actionItem: string;
+      deadline: string;
+    }>;
+  };
+  differentiators: {
+    uniqueStrengths: Array<{ strength: string; rarity: string; relevance: string; proof: string }>;
+    positioningStatement: string;
+  };
+  concernsAndMitigations: {
+    likelyObjections: VPRObjection[];
+    preemptiveResponses: Array<{ concern: string; preemptiveAction: string }>;
+  };
+  valueProposition: {
+    primaryValue: { statement: string; evidence: string; outcomeForCompany: string };
+    elevatorPitch: string;
+  };
+  applicationStrategy: {
+    messagingApproach: string;
+    atsKeywords: { primary: string[]; secondary: string[] };
+    cvLeadDifferentiator: string;
+    sectionsToCompress: string[];
+  };
+  companyInsights?: {
+    missionAndPosition: string;
+    recentInitiatives: string[];
+    currentChallenges: string[];
+  };
+}
+
 // ── Cover Letter ──
 export interface CoverLetterParagraph {
   type: "hook" | "proof_points" | "close";
