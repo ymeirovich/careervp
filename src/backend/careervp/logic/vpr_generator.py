@@ -321,7 +321,7 @@ class VPRSixStagePipeline:
         payload = self._invoke_stage_json(
             prompt=prompt,
             system_prompt=PHASE2_SYSTEM_PROMPT,
-            max_tokens=8000,
+            max_tokens=16000,
             temperature=0.65,
         )
         return Phase2Draft(raw_payload=payload, evidence_context=evidence)
@@ -334,7 +334,7 @@ class VPRSixStagePipeline:
             payload = self._invoke_stage_json(
                 prompt=prompt,
                 system_prompt=PHASE2_VALIDATION_SYSTEM_PROMPT,
-                max_tokens=8000,
+                max_tokens=16000,
                 temperature=0.35,
             )
             validation_notes = _ensure_str_list(payload.get('validation_notes'))
