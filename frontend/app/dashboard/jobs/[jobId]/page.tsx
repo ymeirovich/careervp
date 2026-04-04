@@ -397,6 +397,17 @@ export default function ApplicationHubPage({
         // Idempotent — CV tailoring already done. Show Edit immediately.
         setCvTailoredId(task.request_id);
         persistArtifact("cv", task.request_id);
+        setHub((prev) =>
+          prev
+            ? {
+                ...prev,
+                artifacts: {
+                  ...prev.artifacts,
+                  cv_tailored: { status: "completed", artifact_id: task.request_id },
+                },
+              }
+            : prev
+        );
         refreshHub();
       } else {
         setCvTaskId(task.request_id);

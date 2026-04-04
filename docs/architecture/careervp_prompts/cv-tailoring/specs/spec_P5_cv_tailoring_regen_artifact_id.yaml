@@ -1,0 +1,366 @@
+################################################################################
+# CAREERVP — CV TAILORING IMPROVEMENT PLAN
+# Spec: P5 — CV Tailoring Regenerate shows stale Edit link (artifact_id not persisted)
+################################################################################
+
+spec_id: CVT-P5
+title: "Persist cv_tailored artifact_id in application record after async generate"
+priority: high
+status: draft
+owner: backend+frontend
+created_at: "2026-04-04"
+updated_at: "2026-04-04"
+
+depends_on: []
+blocks: []
+
+################################################################################
+# PROBLEM STATEMENT
+################################################################################
+
+problem_statement:
+  exact_failing_behavior: >
+    Clicking "Regenerate" on the Tailored CV card correctly creates a new
+    artifact in DynamoDB (cv-tail-<uuid>) but the Edit link continues pointing
+    to the OLD artifact from the previous generation.
+
+    Root cause (two-part):
+
+    1. BACKEND: _handle_openapi_async_generate() in cv_tailoring_handler.py writes
+       the new artifact item directly via put_item() but never calls
+       _update_application_artifact() to persist the new request_id into
+       artifact_statuses.cv_tailored_artifact_id on the application record.
+       After refreshHub(), the hub still returns the old artifact_id (or null),
+       which overrides the session-local cvTailoredId state via the precedence
+       rule: cvTailoredArtifactId = cvTailoredArtifact?.artifact_id ?? cvTailoredId.
+       When cvTailoredArtifact?.artifact_id is truthy (an old request_id), the
+       ?? fallback never fires.
+
+    2. FRONTEND: handleGenerateCV's task.status === "completed" branch calls
+       setCvTailoredId(task.request_id) and refreshHub(), but does NOT call
+       setHub() to update the in-memory hub state optimistically. During the
+       async gap between the generate response and refreshHub() resolving,
+       cvTailoredArtifact?.artifact_id remains stale, overriding the new
+       cvTailoredId value in every render.
+
+  expected_behavior: >
+    After clicking Regenerate:
+      1. The backend writes artifact_statuses.cv_tailored_artifact_id = request_id
+         into the application record so refreshHub() returns the correct new ID.
+      2. The frontend immediately updates hub state with the new artifact_id
+         (optimistic update, before refreshHub() resolves) so the Edit link
+         reflects the new artifact within the same render cycle.
+
+  user_business_impact: >
+    Users who click Regenerate see the old tailored CV when they click Edit,
+    and have no way to access the newly generated result without a hard page reload.
+
+  reproducibility: >
+    1. Generate a CV tailoring (first time).
+    2. Navigate away and back to the Application Hub.
+    3. Click "Regenerate" on the Tailored CV card.
+    4. When the card shows "Ready", click "Edit".
+    5. Observe: the cv-tailored page shows the FIRST generation, not the second.
+
+################################################################################
+# EVIDENCE
+################################################################################
+
+evidence:
+  diagnosis_confirmed: true
+  root_cause_confirmed: >
+    _handle_openapi_async_generate (cv_tailoring_handler.py:265-329) always calls
+    uuid.uuid4() to create a fresh request_id (line 286) — no idempotency cache.
+    It writes the artifact via put_item() (line 318) but NEVER calls
+    ApplicationRepository.update_artifact_with_id(). The stated diagnosis
+    ("backend caches on job_id") was incorrect; the actual failure is the missing
+    artifact_statuses write.
+
+  correct_precedent: >
+    cover_letter_handler.py and interview_prep_handler.py both call
+    _update_application_artifact(application_id=job_id, user_id, artifact_type,
+    artifact_id) after completing their artifact writes (lines 437-442 and 370-376
+    respectively). cv_tailoring_handler.py is the only handler missing this call.
+
+  failing_code_locations:
+    backend: "src/backend/careervp/handlers/cv_tailoring_handler.py:265-329 (_handle_openapi_async_generate)"
+    frontend: "frontend/app/dashboard/jobs/[jobId]/page.tsx:396-414 (handleGenerateCV completed branch)"
+
+  non_issue: >
+    The crypto.randomUUID() change on the frontend is a no-op against this bug
+    (the backend never used job_id as a cache key) but is harmless and can stay.
+
+################################################################################
+# ARCHITECTURE AND OWNERSHIP MAP
+################################################################################
+
+architecture:
+  backend_handler: "src/backend/careervp/handlers/cv_tailoring_handler.py"
+  frontend_page: "frontend/app/dashboard/jobs/[jobId]/page.tsx"
+  application_repository: "src/backend/careervp/dal/application_repository.py"
+
+  data_flow_after_fix: |
+    POST /cv-tailoring/generate
+      → _handle_openapi_async_generate()
+          → put_item(artifact)                        ← already exists
+          → _update_application_artifact(             ← NEW: must add
+              application_id=job_id,
+              user_id=user_id,
+              artifact_type='cv_tailored',
+              artifact_id=request_id,
+            )
+      ← returns { request_id, status: "completed" }
+
+    Frontend handleGenerateCV (task.status === "completed"):
+      setCvTailoredId(task.request_id)
+      persistArtifact("cv", task.request_id)
+      setHub(prev => ...cv_tailored: {              ← NEW: optimistic update
+        status: "completed",
+        artifact_id: task.request_id
+      })
+      refreshHub()
+
+  hub_read_path: >
+    GET /applications/{jobId}
+      → application_handler._build_artifacts()
+          reads artifact_statuses.cv_tailored_artifact_id from DynamoDB
+          → returns { artifact_id: <value or null> }
+    Frontend: cvTailoredArtifactId = cvTailoredArtifact?.artifact_id ?? cvTailoredId
+
+################################################################################
+# FIX PLAN
+################################################################################
+
+fix_plan:
+  files_to_modify:
+    - path: src/backend/careervp/handlers/cv_tailoring_handler.py
+      changes:
+        - description: "Add _update_application_artifact helper (copy pattern from cover_letter_handler.py)"
+          where: "After _validate_openapi_cv_tailoring_payload function (around line 340)"
+          implementation: |
+            def _update_application_artifact(
+                application_id: str,
+                user_id: str,
+                artifact_type: str,
+                artifact_id: str,
+            ) -> None:
+                """Propagate artifact completion to the application record's artifact_statuses.
+
+                Silently ignored when the application record does not exist — non-fatal
+                because the session-local frontend fallback handles this case.
+                """
+                if not application_id or not user_id:
+                    return
+                app_table = os.environ.get('APPLICATIONS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or ''
+                if not app_table:
+                    return
+                try:
+                    from careervp.dal.application_repository import ApplicationRepository
+                    app_repo = ApplicationRepository(DynamoDalHandler(app_table))
+                    app_repo.update_artifact_with_id(
+                        application_id=application_id,
+                        user_id=user_id,
+                        artifact_type=artifact_type,
+                        status='completed',
+                        artifact_id=artifact_id,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        'Could not update application artifact_statuses for cv_tailored',
+                        artifact_type=artifact_type,
+                        error=str(e),
+                    )
+
+        - description: "Call _update_application_artifact after put_item in _handle_openapi_async_generate"
+          where: "After line 318 (_dal2._get_db_handler(...).put_item(Item=artifact)), before the return statement"
+          before: |
+            return _response(
+                HTTPStatus.ACCEPTED,
+                {
+                    'request_id': request_id,
+                    'job_id': request_id,
+                    'status': 'completed',  # artifact written synchronously above — no polling needed
+                    'estimated_time_seconds': 0,
+                },
+                headers,
+            )
+          after: |
+            _update_application_artifact(
+                application_id=job_id,
+                user_id=user_id,
+                artifact_type='cv_tailored',
+                artifact_id=request_id,
+            )
+
+            return _response(
+                HTTPStatus.ACCEPTED,
+                {
+                    'request_id': request_id,
+                    'job_id': request_id,
+                    'status': 'completed',  # artifact written synchronously above — no polling needed
+                    'estimated_time_seconds': 0,
+                },
+                headers,
+            )
+
+    - path: frontend/app/dashboard/jobs/[jobId]/page.tsx
+      changes:
+        - description: "Add optimistic hub state update in handleGenerateCV completed branch"
+          where: "Inside handleGenerateCV, task.status === 'completed' branch (around line 396-400)"
+          before: |
+            if (task.status === "completed") {
+              // Idempotent — CV tailoring already done. Show Edit immediately without polling.
+              setCvTailoredId(task.request_id);
+              persistArtifact("cv", task.request_id);
+              refreshHub();
+            }
+          after: |
+            if (task.status === "completed") {
+              // Idempotent — CV tailoring already done. Show Edit immediately without polling.
+              setCvTailoredId(task.request_id);
+              persistArtifact("cv", task.request_id);
+              setHub((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      artifacts: {
+                        ...prev.artifacts,
+                        cv_tailored: { status: "completed", artifact_id: task.request_id },
+                      },
+                    }
+                  : prev
+              );
+              refreshHub();
+            }
+
+  non_goals:
+    - "Do not change the VPR, cover letter, or interview prep handlers"
+    - "Do not change how the polling branch (task.status !== completed) works"
+    - "Do not add deduplication/idempotency checks — each Regenerate creates a new artifact by design"
+    - "Do not change crypto.randomUUID() on the frontend — harmless, can stay"
+
+  rollback_plan: >
+    Remove the _update_application_artifact call from _handle_openapi_async_generate.
+    Remove the setHub call from the completed branch in handleGenerateCV.
+    Behaviour degrades to pre-fix (stale Edit link after regenerate).
+
+################################################################################
+# ACCEPTANCE CRITERIA
+################################################################################
+
+acceptance_criteria:
+  - id: AC-P5-01
+    description: "_handle_openapi_async_generate calls _update_application_artifact with artifact_type='cv_tailored', artifact_id=request_id, application_id=job_id"
+    verification: "Unit test: mock _update_application_artifact; call _handle_openapi_async_generate; assert called with correct kwargs"
+    blocking: true
+
+  - id: AC-P5-02
+    description: "_update_application_artifact exists in cv_tailoring_handler and accepts (application_id, user_id, artifact_type, artifact_id)"
+    verification: "Import test: from careervp.handlers.cv_tailoring_handler import _update_application_artifact"
+    blocking: true
+
+  - id: AC-P5-03
+    description: "_update_application_artifact calls ApplicationRepository.update_artifact_with_id with status='completed'"
+    verification: "Unit test: mock ApplicationRepository; call _update_application_artifact; assert update_artifact_with_id called with status='completed'"
+    blocking: true
+
+  - id: AC-P5-04
+    description: "_update_application_artifact is non-fatal when APPLICATIONS_TABLE_NAME is absent (returns without raising)"
+    verification: "Unit test: unset env var; call _update_application_artifact; assert no exception raised"
+    blocking: true
+
+  - id: AC-P5-05
+    description: "Frontend handleGenerateCV completed branch calls setHub to update cv_tailored.artifact_id = task.request_id"
+    verification: "Code inspection test: scan page.tsx handleGenerateCV for setHub call containing cv_tailored and artifact_id in completed branch"
+    blocking: true
+
+################################################################################
+# BASELINE AND REGRESSION BUDGET
+################################################################################
+
+baseline_and_regression_budget:
+  baseline_artifact: "N/A — no stored baseline affected"
+  blocked_regressions:
+    - "cv-tailoring generate endpoint returns 500 when APPLICATIONS_TABLE_NAME is absent"
+    - "Edit link breaks for first-time generation (non-regenerate path)"
+  allowed_deltas:
+    - "After fix, Edit link immediately points to the new artifact after regenerate"
+    - "_update_application_artifact failure is logged as WARNING and swallowed — existing behavior preserved"
+
+################################################################################
+# VERIFICATION CONTRACT
+################################################################################
+
+verification_contract:
+  - requirement_id: AC-P5-01
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P5-02
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P5-03
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P5-04
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P5-05
+    verification_type: static
+    blocking_gate: pre_merge
+    artifact_required: false
+
+################################################################################
+# VALIDATION PLAN
+################################################################################
+
+validation_plan:
+  static:
+    - "uv run mypy careervp --strict"
+    - "uv run ruff check src/backend/careervp/handlers/cv_tailoring_handler.py"
+  unit:
+    - command: "uv run pytest src/backend/tests/unit/cv_tailoring/test_regen_artifact_id.py -v"
+  manual:
+    - "Generate CV tailoring for a job → navigate away → Regenerate → Edit → confirm new content appears"
+
+################################################################################
+# TRACEABILITY MATRIX
+################################################################################
+
+traceability:
+  - requirement_id: AC-P5-01
+    code_reference: "src/backend/careervp/handlers/cv_tailoring_handler.py::_handle_openapi_async_generate"
+    test_reference: "docs/architecture/careervp_prompts/cv-tailoring/tests/test_P5_cv_tailoring_regen_artifact_id.yaml::test_handle_openapi_async_generate_calls_update_application_artifact"
+    result: pending
+  - requirement_id: AC-P5-02
+    code_reference: "src/backend/careervp/handlers/cv_tailoring_handler.py::_update_application_artifact"
+    test_reference: "docs/architecture/careervp_prompts/cv-tailoring/tests/test_P5_cv_tailoring_regen_artifact_id.yaml::test_cv_tailoring_handler_has_update_application_artifact"
+    result: pending
+  - requirement_id: AC-P5-05
+    code_reference: "frontend/app/dashboard/jobs/[jobId]/page.tsx::handleGenerateCV"
+    test_reference: "docs/architecture/careervp_prompts/cv-tailoring/tests/test_P5_cv_tailoring_regen_artifact_id.yaml::test_handle_generate_cv_updates_hub_on_completed_status"
+    result: pending
+
+################################################################################
+# ROLLBACK TRIGGER MATRIX
+################################################################################
+
+rollback_triggers:
+  - trigger_id: RT-P5-001
+    condition: "cv-tailoring generate endpoint returns 500"
+    detection_source: "Smoke test POST /cv-tailoring/generate with valid payload"
+    action: "Remove _update_application_artifact call; verify endpoint recovers"
+    owner: backend
+
+################################################################################
+# COMPLETION EVIDENCE
+################################################################################
+
+completion_evidence:
+  required:
+    - pytest output showing all AC-P5-* tests pass
+    - mypy output for cv_tailoring_handler.py showing zero errors
+    - Manual test: regenerate → Edit link shows new content
