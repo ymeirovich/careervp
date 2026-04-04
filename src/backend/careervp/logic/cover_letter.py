@@ -28,7 +28,7 @@ WORD_COUNT_TARGETS = {'short': 220, 'standard': 300, 'long': 350}
 MAX_WORD_COUNT = 350
 MIN_PARAGRAPH_COUNT = 2
 MAX_PARAGRAPH_COUNT = 3
-ANTI_AI_MIN_SCORE = 9.0
+ANTI_AI_MIN_SCORE = 90  # 0-100 scale (P4)
 DISALLOWED_OUTPUT_MARKERS = (
     'company for ',
     'role for ',

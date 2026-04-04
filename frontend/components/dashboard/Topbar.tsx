@@ -3,9 +3,6 @@
 import Link from "next/link";
 import { useDashboard } from "@/app/dashboard/dashboard-context";
 
-const ASSET_DROPDOWN_ARROW =
-  "https://www.figma.com/api/mcp/asset/29ba343a-ed50-4f60-ab33-814b014f47b8";
-
 interface TopbarProps {
   title: string;
   breadcrumb?: { label: string; href: string }[];
@@ -56,13 +53,19 @@ export function Topbar({ title, breadcrumb }: TopbarProps) {
           <span className="text-base font-normal text-[#1e2229] whitespace-nowrap leading-none">
             {userName || "…"}
           </span>
-          <img
-            src={ASSET_DROPDOWN_ARROW}
-            alt=""
-            aria-hidden
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
             className="h-[14px] w-[14px] object-contain"
             style={{ transform: "scaleY(-1)" }}
-          />
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
         </div>
       </div>
     </div>

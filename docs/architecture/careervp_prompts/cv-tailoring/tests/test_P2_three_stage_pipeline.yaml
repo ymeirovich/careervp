@@ -1,0 +1,562 @@
+################################################################################
+# TEST SPEC: P2 — Three-Stage LLM Pipeline
+# Spec ref: CVT-P2
+# When implemented: create src/backend/tests/unit/cv_tailoring/test_pipeline.py
+################################################################################
+
+test_spec_id: TEST-CVT-P2
+spec_ref: CVT-P2
+title: "Three-stage pipeline: Stage1Output, Stage2Output, Stage3Result unit tests"
+test_file: "src/backend/tests/unit/cv_tailoring/test_pipeline.py"
+markers:
+  - "@pytest.mark.unit"
+status: pending_implementation
+non_self_closing: true
+
+description: >
+  All tests fail with ImportError until cv_tailoring_pipeline.py is created with
+  Stage1Output, Stage2Output, Stage3Result, run_stage1_keyword_mapping,
+  run_stage2_cv_generation, run_stage3_fact_verification exports.
+  LLM calls are mocked — tests verify routing logic, output shapes, and fact
+  verification correctness, NOT actual LLM quality.
+
+################################################################################
+# FIXTURES
+################################################################################
+
+fixtures:
+  - id: SAMPLE_PARSED_FACTS
+    implementation: |
+      import pytest
+      from careervp.models.cv_tailoring_models import ParsedFacts
+
+      @pytest.fixture
+      def sample_parsed_facts() -> ParsedFacts:
+          return ParsedFacts(
+              name="Alex Candidate",
+              email="alex@example.com",
+              phone="+1-555-0100",
+              location="New York, NY",
+              work_experience=[
+                  {
+                      "company": "Nimbus Labs",
+                      "title": "Senior Software Engineer",
+                      "start_date": "01/2021",
+                      "end_date": "Present",
+                      "is_current": True,
+                      "responsibilities": [
+                          "Led Kubernetes migration for 12 production services"
+                      ],
+                      "achievements": [
+                          "Increased deployment reliability by 35%",
+                          "Reduced pipeline duration by 22%",
+                      ],
+                  }
+              ],
+              education=[],
+              skills={"technical": ["Python", "AWS", "Kubernetes"], "soft": ["Leadership"]},
+              certifications=[],
+              languages=["English"],
+              summary_original="Engineering leader with platform and cloud expertise.",
+          )
+
+  - id: MOCK_LLM_STAGE1
+    description: "LLM client that returns a valid Stage1 JSON for mocking"
+    implementation: |
+      from unittest.mock import MagicMock
+
+      VALID_STAGE1_JSON = {
+          "uvp_statement": "Platform engineer with cloud expertise and 35% reliability improvement track record",
+          "key_differentiators": ["Kubernetes automation", "Python tooling", "SRE mindset"],
+          "primary_keywords": [
+              {"keyword": "Kubernetes", "category": "technical_skill", "priority": "mandatory",
+               "supporting_evidence": "work_experience[0].achievements[0]"},
+              {"keyword": "Python", "category": "technical_skill", "priority": "mandatory",
+               "supporting_evidence": "work_experience[0].skills"},
+              {"keyword": "AWS", "category": "technical_skill", "priority": "mandatory",
+               "supporting_evidence": "skills.technical"},
+              {"keyword": "CI/CD", "category": "responsibility", "priority": "preferred",
+               "supporting_evidence": "work_experience[0].responsibilities[0]"},
+              {"keyword": "reliability", "category": "domain", "priority": "mandatory",
+               "supporting_evidence": "work_experience[0].achievements[0]"},
+              {"keyword": "microservices", "category": "domain", "priority": "preferred",
+               "supporting_evidence": "work_experience[0].responsibilities[0]"},
+              {"keyword": "platform", "category": "domain", "priority": "mandatory",
+               "supporting_evidence": "work_experience[0].title"},
+              {"keyword": "observability", "category": "responsibility", "priority": "preferred",
+               "supporting_evidence": None},
+              {"keyword": "Terraform", "category": "technical_skill", "priority": "preferred",
+               "supporting_evidence": None},
+              {"keyword": "SRE", "category": "domain", "priority": "preferred",
+               "supporting_evidence": None},
+              {"keyword": "distributed systems", "category": "domain", "priority": "preferred",
+               "supporting_evidence": "work_experience[0].title"},
+              {"keyword": "incident response", "category": "responsibility", "priority": "preferred",
+               "supporting_evidence": None},
+          ],
+          "keywords_to_emphasize": ["Kubernetes", "Python", "AWS", "CI/CD", "reliability",
+                                     "microservices", "platform", "observability", "Terraform",
+                                     "SRE", "distributed systems", "incident response"],
+          "keywords_missing_from_cv": ["Terraform", "observability", "SRE", "incident response"],
+          "experience_items_to_include": [
+              {
+                  "company": "Nimbus Labs",
+                  "title": "Senior Software Engineer",
+                  "relevance_reason": "Direct platform and reliability experience",
+                  "bullets_to_emphasize": ["Increased deployment reliability by 35%"]
+              }
+          ],
+          "experience_items_to_exclude": [],
+          "summary_focus": "Emphasize reliability engineering and Kubernetes automation",
+          "skills_to_feature": {
+              "technical": ["Python", "AWS", "Kubernetes"],
+              "soft": ["Leadership"]
+          }
+      }
+
+      @pytest.fixture
+      def mock_llm_stage1() -> MagicMock:
+          client = MagicMock()
+          client.generate = MagicMock(return_value={"content": json.dumps(VALID_STAGE1_JSON)})
+          return client
+
+################################################################################
+# TESTS — STAGE 1
+################################################################################
+
+tests:
+  - id: T-P2-01
+    name: test_stage1_output_model_is_importable
+    maps_to_ac: AC-P2-01
+    description: "Stage1Output must be importable — fails with ImportError until pipeline created"
+    implementation: |
+      @pytest.mark.unit
+      def test_stage1_output_model_is_importable() -> None:
+          from careervp.logic.cv_tailoring_pipeline import Stage1Output  # noqa: F401
+
+  - id: T-P2-02
+    name: test_stage1_returns_12_to_18_primary_keywords
+    maps_to_ac: AC-P2-01
+    description: "run_stage1_keyword_mapping() returns Stage1Output with 12-18 primary_keywords"
+    implementation: |
+      @pytest.mark.unit
+      def test_stage1_returns_12_to_18_primary_keywords(
+          sample_parsed_facts: ParsedFacts,
+          mock_llm_stage1: MagicMock,
+      ) -> None:
+          from careervp.logic.cv_tailoring_pipeline import Stage1Output, run_stage1_keyword_mapping
+          from careervp.models.cv_tailoring_models import GapAnalysisResponses
+
+          result = run_stage1_keyword_mapping(
+              vpr=None,
+              job_description="Lead cloud platform reliability and microservices adoption for SaaS products.",
+              parsed_facts=sample_parsed_facts,
+              gap_responses=GapAnalysisResponses(responses=[]),
+              llm_client=mock_llm_stage1,
+          )
+          assert isinstance(result, Stage1Output), (
+              f"Expected Stage1Output, got {type(result).__name__} — CVT-P2 not implemented"
+          )
+          assert 12 <= len(result.primary_keywords) <= 18, (
+              f"Stage1 returned {len(result.primary_keywords)} keywords, expected 12-18"
+          )
+
+  - id: T-P2-03
+    name: test_stage1_output_has_uvp_statement
+    maps_to_ac: AC-P2-01
+    description: "Stage1Output.uvp_statement must be non-empty string"
+    implementation: |
+      @pytest.mark.unit
+      def test_stage1_output_has_uvp_statement(
+          sample_parsed_facts: ParsedFacts,
+          mock_llm_stage1: MagicMock,
+      ) -> None:
+          from careervp.logic.cv_tailoring_pipeline import run_stage1_keyword_mapping
+          from careervp.models.cv_tailoring_models import GapAnalysisResponses
+
+          result = run_stage1_keyword_mapping(
+              vpr=None,
+              job_description="Lead cloud platform reliability.",
+              parsed_facts=sample_parsed_facts,
+              gap_responses=GapAnalysisResponses(responses=[]),
+              llm_client=mock_llm_stage1,
+          )
+          assert result.uvp_statement, "uvp_statement must be non-empty — CVT-P2 not implemented"
+          assert len(result.uvp_statement) > 10, "uvp_statement too short"
+
+  - id: T-P2-04
+    name: test_stage1_keywords_have_required_fields
+    maps_to_ac: AC-P2-02
+    description: "Each primary_keyword must have keyword, category, priority, supporting_evidence"
+    implementation: |
+      @pytest.mark.unit
+      def test_stage1_keywords_have_required_fields(
+          sample_parsed_facts: ParsedFacts,
+          mock_llm_stage1: MagicMock,
+      ) -> None:
+          from careervp.logic.cv_tailoring_pipeline import run_stage1_keyword_mapping
+          from careervp.models.cv_tailoring_models import GapAnalysisResponses
+
+          result = run_stage1_keyword_mapping(
+              vpr=None,
+              job_description="Lead cloud platform reliability.",
+              parsed_facts=sample_parsed_facts,
+              gap_responses=GapAnalysisResponses(responses=[]),
+              llm_client=mock_llm_stage1,
+          )
+          for kw in result.primary_keywords:
+              assert hasattr(kw, "keyword"), f"primary_keyword missing 'keyword' field: {kw}"
+              assert hasattr(kw, "category"), f"primary_keyword missing 'category' field: {kw}"
+              assert hasattr(kw, "priority"), f"primary_keyword missing 'priority' field: {kw}"
+              assert hasattr(kw, "supporting_evidence"), f"primary_keyword missing 'supporting_evidence'"
+
+################################################################################
+# TESTS — STAGE 2
+################################################################################
+
+  - id: T-P2-05
+    name: test_stage2_output_has_verification_block
+    maps_to_ac: AC-P2-03
+    description: "Stage2Output must have a verification block with ats_keyword_score, hallucination_flags"
+    implementation: |
+      @pytest.mark.unit
+      def test_stage2_output_has_verification_block(
+          sample_parsed_facts: ParsedFacts,
+          mock_llm_stage1: MagicMock,
+      ) -> None:
+          import json
+          from unittest.mock import MagicMock
+          from careervp.logic.cv_tailoring_pipeline import Stage2Output, run_stage2_cv_generation
+          from careervp.models.cv_tailoring_models import CompanyContext
+
+          stage2_json = {
+              "verification": {
+                  "ats_keyword_score": 8,
+                  "keywords_added_in_review": ["Terraform"],
+                  "summary_rewritten": True,
+                  "fact_verification_passed": True,
+                  "hallucination_flags": [],
+              },
+              "cv_sections": {
+                  "contact": {"name": "Alex Candidate", "email": "alex@example.com",
+                               "phone": "+1-555-0100", "linkedin": None, "location": "New York, NY"},
+                  "summary": "Platform engineer with Kubernetes and AWS expertise driving reliability.",
+                  "skills": {"technical": ["Python", "AWS", "Kubernetes"], "soft": ["Leadership"]},
+                  "experience": [
+                      {
+                          "company": "Nimbus Labs",
+                          "title": "Senior Software Engineer",
+                          "start_date": "01/2021",
+                          "end_date": "Present",
+                          "bullets": [
+                              "Drove | Kubernetes migration for 12 services | Increased reliability by 35%"
+                          ],
+                      }
+                  ],
+                  "education": [],
+                  "certifications": [],
+              },
+          }
+          mock_stage2_llm = MagicMock()
+          mock_stage2_llm.generate = MagicMock(return_value={"content": json.dumps(stage2_json)})
+
+          # Build a minimal Stage1Output via mock_llm_stage1
+          from careervp.logic.cv_tailoring_pipeline import run_stage1_keyword_mapping
+          from careervp.models.cv_tailoring_models import GapAnalysisResponses
+          stage1 = run_stage1_keyword_mapping(
+              vpr=None,
+              job_description="Lead cloud reliability.",
+              parsed_facts=sample_parsed_facts,
+              gap_responses=GapAnalysisResponses(responses=[]),
+              llm_client=mock_llm_stage1,
+          )
+
+          result = run_stage2_cv_generation(
+              stage1_output=stage1,
+              parsed_facts=sample_parsed_facts,
+              job_description="Lead cloud reliability.",
+              company_context=CompanyContext(company_name="Acme Cloud", company_culture="", products_services=[]),
+              user_feedback=None,
+              llm_client=mock_stage2_llm,
+          )
+          assert isinstance(result, Stage2Output), (
+              f"Expected Stage2Output, got {type(result).__name__} — CVT-P2 not implemented"
+          )
+          assert hasattr(result, "verification"), "Stage2Output missing verification block"
+          assert hasattr(result.verification, "ats_keyword_score"), "Missing ats_keyword_score"
+          assert hasattr(result.verification, "hallucination_flags"), "Missing hallucination_flags"
+
+################################################################################
+# TESTS — STAGE 3
+################################################################################
+
+  - id: T-P2-06
+    name: test_stage3_strips_hallucination_flags
+    maps_to_ac: AC-P2-05
+    description: "Stage3 must set items_removed > 0 when hallucination_flags is non-empty"
+    implementation: |
+      @pytest.mark.unit
+      def test_stage3_strips_hallucination_flags(sample_parsed_facts: ParsedFacts) -> None:
+          from careervp.logic.cv_tailoring_pipeline import Stage2Output, run_stage3_fact_verification
+          from careervp.models.cv_tailoring_models import (
+              CVContact, CVExperienceItem, CVSections, CVSkills, Stage2Verification,
+          )
+
+          sections_with_flagged_bullet = CVSections(
+              contact=CVContact(name="Alex Candidate", email="alex@example.com",
+                                phone=None, linkedin=None, location="New York, NY"),
+              summary="Platform engineer.",
+              skills=CVSkills(technical=["Python", "AWS"], soft=[]),
+              experience=[
+                  CVExperienceItem(
+                      company="Nimbus Labs",
+                      title="Senior Software Engineer",
+                      start_date="01/2021",
+                      end_date="Present",
+                      bullets=["HALLUCINATED_FACT: Closed 3 acquisitions worth $500M"],
+                  )
+              ],
+              education=[],
+              certifications=[],
+          )
+          stage2 = Stage2Output(
+              verification=Stage2Verification(
+                  ats_keyword_score=7,
+                  keywords_added_in_review=[],
+                  summary_rewritten=False,
+                  fact_verification_passed=False,
+                  hallucination_flags=["Closed 3 acquisitions worth $500M"],
+              ),
+              cv_sections=sections_with_flagged_bullet,
+          )
+
+          result = run_stage3_fact_verification(stage2_output=stage2, parsed_facts=sample_parsed_facts)
+          assert result.items_removed >= 1, (
+              f"Stage3 must remove hallucinated items, items_removed={result.items_removed} — CVT-P2"
+          )
+
+  - id: T-P2-07
+    name: test_stage3_rejects_hallucinated_company
+    maps_to_ac: AC-P2-06
+    description: "Stage3 returns fact_verification_passed=False when experience company not in parsed_facts"
+    implementation: |
+      @pytest.mark.unit
+      def test_stage3_rejects_hallucinated_company(sample_parsed_facts: ParsedFacts) -> None:
+          from careervp.logic.cv_tailoring_pipeline import Stage2Output, run_stage3_fact_verification
+          from careervp.models.cv_tailoring_models import (
+              CVContact, CVExperienceItem, CVSections, CVSkills, Stage2Verification,
+          )
+
+          sections_with_fake_company = CVSections(
+              contact=CVContact(name="Alex Candidate", email="alex@example.com",
+                                phone=None, linkedin=None, location=None),
+              summary="Engineer.",
+              skills=CVSkills(technical=["Python"], soft=[]),
+              experience=[
+                  CVExperienceItem(
+                      company="FAKE CORP INC",  # not in parsed_facts
+                      title="Senior Engineer",
+                      start_date="01/2021",
+                      end_date="Present",
+                      bullets=["Built platform."],
+                  )
+              ],
+              education=[],
+              certifications=[],
+          )
+          stage2 = Stage2Output(
+              verification=Stage2Verification(
+                  ats_keyword_score=8,
+                  keywords_added_in_review=[],
+                  summary_rewritten=False,
+                  fact_verification_passed=True,  # LLM claimed OK — Stage3 must catch it
+                  hallucination_flags=[],
+              ),
+              cv_sections=sections_with_fake_company,
+          )
+
+          result = run_stage3_fact_verification(stage2_output=stage2, parsed_facts=sample_parsed_facts)
+          assert result.fact_verification_passed is False, (
+              "Stage3 must return fact_verification_passed=False for unrecognized company — CVT-P2"
+          )
+
+################################################################################
+# TESTS — PROMPT CONTENT
+################################################################################
+
+  - id: T-P2-08
+    name: test_stage1_system_prompt_matches_spec
+    maps_to_ac: AC-P2-09
+    description: "build_stage1_system_prompt() must contain the ATS expert role and CRITICAL RULE"
+    implementation: |
+      @pytest.mark.unit
+      def test_stage1_system_prompt_matches_spec() -> None:
+          from careervp.logic.cv_tailoring_prompt import build_stage1_system_prompt
+
+          prompt = build_stage1_system_prompt()
+          assert "senior technical recruiter" in prompt.lower(), (
+              "Stage1 system prompt must establish recruiter persona — CVT-P2 not implemented"
+          )
+          assert "CRITICAL RULE" in prompt, (
+              "Stage1 system prompt must contain CRITICAL RULE for hallucination prevention"
+          )
+          assert "parsed_facts" in prompt, (
+              "Stage1 system prompt must reference parsed_facts as ground truth"
+          )
+          assert "ONLY valid JSON" in prompt, (
+              "Stage1 system prompt must instruct JSON-only output"
+          )
+
+  - id: T-P2-09
+    name: test_stage2_system_prompt_has_7_rules
+    maps_to_ac: AC-P2-09
+    description: "build_stage2_system_prompt() must contain all 7 non-negotiable rules from spec"
+    implementation: |
+      @pytest.mark.unit
+      def test_stage2_system_prompt_has_7_rules() -> None:
+          from careervp.logic.cv_tailoring_prompt import build_stage2_system_prompt
+
+          prompt = build_stage2_system_prompt()
+          required_phrases = [
+              "ZERO HALLUCINATIONS",
+              "CAR/STAR",
+              "Keyword density",
+              "450-600 words",
+              "no tables",
+              "Anti-AI detection",
+              "Self-correct",
+          ]
+          for phrase in required_phrases:
+              assert phrase in prompt, (
+                  f"Stage2 system prompt missing required rule phrase: '{phrase}' — CVT-P2"
+              )
+
+  - id: T-P2-10
+    name: test_stage2_system_prompt_bans_specific_ai_phrases
+    maps_to_ac: AC-P2-09
+    description: "Stage2 system prompt must explicitly ban overused AI phrases from spec"
+    implementation: |
+      @pytest.mark.unit
+      def test_stage2_system_prompt_bans_specific_ai_phrases() -> None:
+          from careervp.logic.cv_tailoring_prompt import build_stage2_system_prompt
+
+          prompt = build_stage2_system_prompt()
+          banned_phrases = ["leverage", "delve", "robust", "streamline", "spearhead"]
+          for phrase in banned_phrases:
+              assert phrase in prompt, (
+                  f"Stage2 system prompt must list '{phrase}' as banned phrase — CVT-P2"
+              )
+
+################################################################################
+# FULL FILE TEMPLATE
+################################################################################
+
+full_file_template: |
+  """
+  Unit tests for the three-stage CV tailoring pipeline.
+  Spec: CVT-P2 — Three-Stage LLM Pipeline
+  Tests fail with ImportError until cv_tailoring_pipeline.py is created.
+  LLM calls are mocked — tests verify shapes, routing, and fact verification correctness.
+  """
+
+  from __future__ import annotations
+
+  import json
+  from unittest.mock import MagicMock
+
+  import pytest
+
+  from careervp.models.cv_tailoring_models import (
+      CompanyContext,
+      GapAnalysisResponses,
+      ParsedFacts,
+  )
+
+  # --- Fixtures are defined in conftest.py for this test module ---
+  # See test_P2_three_stage_pipeline.yaml fixtures section for fixture implementations.
+
+  # fmt: off
+
+
+  @pytest.mark.unit
+  def test_stage1_output_model_is_importable() -> None:
+      from careervp.logic.cv_tailoring_pipeline import Stage1Output  # noqa: F401
+
+
+  @pytest.mark.unit
+  def test_stage1_returns_12_to_18_primary_keywords(
+      sample_parsed_facts: ParsedFacts,
+      mock_llm_stage1: MagicMock,
+  ) -> None:
+      from careervp.logic.cv_tailoring_pipeline import Stage1Output, run_stage1_keyword_mapping
+
+      result = run_stage1_keyword_mapping(
+          vpr=None,
+          job_description="Lead cloud platform reliability and microservices adoption.",
+          parsed_facts=sample_parsed_facts,
+          gap_responses=GapAnalysisResponses(responses=[]),
+          llm_client=mock_llm_stage1,
+      )
+      assert isinstance(result, Stage1Output)
+      assert 12 <= len(result.primary_keywords) <= 18, (
+          f"Stage1 returned {len(result.primary_keywords)} keywords, expected 12-18"
+      )
+
+
+  @pytest.mark.unit
+  def test_stage3_rejects_hallucinated_company(sample_parsed_facts: ParsedFacts) -> None:
+      from careervp.logic.cv_tailoring_pipeline import Stage2Output, run_stage3_fact_verification
+      from careervp.models.cv_tailoring_models import (
+          CVContact, CVExperienceItem, CVSections, CVSkills, Stage2Verification,
+      )
+
+      fake_sections = CVSections(
+          contact=CVContact(name="Alex Candidate", email="alex@example.com",
+                            phone=None, linkedin=None, location=None),
+          summary="Engineer.",
+          skills=CVSkills(technical=["Python"], soft=[]),
+          experience=[
+              CVExperienceItem(
+                  company="FAKE CORP INC",
+                  title="Senior Engineer",
+                  start_date="01/2021",
+                  end_date="Present",
+                  bullets=["Built platform."],
+              )
+          ],
+          education=[],
+          certifications=[],
+      )
+      stage2 = Stage2Output(
+          verification=Stage2Verification(
+              ats_keyword_score=8,
+              keywords_added_in_review=[],
+              summary_rewritten=False,
+              fact_verification_passed=True,
+              hallucination_flags=[],
+          ),
+          cv_sections=fake_sections,
+      )
+
+      result = run_stage3_fact_verification(stage2_output=stage2, parsed_facts=sample_parsed_facts)
+      assert result.fact_verification_passed is False, (
+          "Stage3 must catch hallucinated company — CVT-P2"
+      )
+
+
+  @pytest.mark.unit
+  def test_stage1_system_prompt_matches_spec() -> None:
+      from careervp.logic.cv_tailoring_prompt import build_stage1_system_prompt
+
+      prompt = build_stage1_system_prompt()
+      assert "CRITICAL RULE" in prompt
+      assert "ONLY valid JSON" in prompt
+
+
+  @pytest.mark.unit
+  def test_stage2_system_prompt_has_7_rules() -> None:
+      from careervp.logic.cv_tailoring_prompt import build_stage2_system_prompt
+
+      prompt = build_stage2_system_prompt()
+      for phrase in ["ZERO HALLUCINATIONS", "CAR/STAR", "450-600 words", "Anti-AI detection"]:
+          assert phrase in prompt, f"Missing rule: {phrase}"

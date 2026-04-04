@@ -85,8 +85,8 @@ def test_ats_scoring_returns_numeric_score() -> None:
     assert isinstance(draft, TailoredCVDraft)
 
     score = calculate_ats_score(draft.tailored_cv, keyword_map)
-    assert isinstance(score, float)
-    assert 0.0 <= score <= 10.0
+    assert isinstance(score, int)
+    assert 0 <= score <= 100
 
 
 def test_self_correction_iterates_max_3_times() -> None:
@@ -105,9 +105,9 @@ def test_self_correction_iterates_max_3_times() -> None:
     final = validate_and_finalize(weak_draft)
 
     assert final.iterations <= 3
-    assert final.ats_score >= 8.0
+    assert final.ats_score >= 80
     for iteration in final.iteration_history:
-        assert iteration['improvement'] >= 0.5
+        assert iteration['improvement'] >= 5  # 0-100 scale (was 0.5)
 
 
 def test_star_format_validation_accepts_valid_bullets() -> None:

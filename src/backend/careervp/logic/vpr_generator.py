@@ -76,7 +76,7 @@ if TYPE_CHECKING:
     from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 
 DEFAULT_SYSTEM_PROMPT = 'You are CareerVP VPR Generator. Follow instructions exactly and return valid JSON.'
-ANTI_AI_MIN_SCORE = 9.0
+ANTI_AI_MIN_SCORE = 90  # 0-100 scale (P4)
 MAX_STAGE6_RETRIES = 3
 WORD_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9+#./'-]*")
 
@@ -425,7 +425,7 @@ def generate_vpr(request: VPRRequest, user_cv: UserCV, dal: DynamoDalHandler) ->
     return Result(success=True, data=response, code=ResultCode.VPR_GENERATED)
 
 
-def _parse_full_vpr_model(
+def _parse_full_vpr_model(  # noqa: C901 - complex but well-structured
     payload: dict[str, Any],
     request: VPRRequest,
     evidence_context: EvidenceList,
@@ -782,7 +782,7 @@ def _build_minimal_application_strategy() -> VPRApplicationStrategy:
 # ---------------------------------------------------------------------------
 
 
-def _calculate_word_count(vpr: VPR) -> int:
+def _calculate_word_count(vpr: VPR) -> int:  # noqa: C901
     """Count words across all textual sections of the new 10-section VPR."""
     sections: list[str] = []
 

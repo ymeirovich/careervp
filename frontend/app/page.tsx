@@ -34,10 +34,6 @@ const sansFont = DM_Sans({
   display: "swap",
 });
 
-// ─── Assets ────────────────────────────────────────────────────────────────
-const FIREWORKS_SRC =
-  "https://www.figma.com/api/mcp/asset/d930558f-3a56-483d-91c3-6355e90301e5";
-
 // ─── Page ──────────────────────────────────────────────────────────────────
 export default function CareerVPTest1() {
   const [clicked, setClicked] = useState(false);
@@ -76,14 +72,12 @@ export default function CareerVPTest1() {
         )}
       >
         {clicked && (
-          <img
-            src={FIREWORKS_SRC}
-            alt="Fireworks celebration"
-            width={500}
-            height={500}
-            className="h-[500px] w-[500px] rounded-2xl object-cover shadow-[0_32px_80px_rgba(0,0,0,0.35)]"
+          <div
+            aria-hidden
+            className="h-[500px] w-[500px] rounded-2xl shadow-[0_32px_80px_rgba(0,0,0,0.35)]"
             style={{
               animation: "fireworks-pop 0.55s cubic-bezier(0.34,1.56,0.64,1) forwards",
+              background: "linear-gradient(135deg, #f97316 0%, #fb923c 25%, #facc15 50%, #22c55e 75%, #3b82f6 100%)",
             }}
           />
         )}

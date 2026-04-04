@@ -1,0 +1,551 @@
+################################################################################
+# TEST SPEC: P3 — Ground Truth Inputs (parsed_facts, gap analysis, company research)
+# Spec ref: CVT-P3
+# When implemented: create src/backend/tests/unit/cv_tailoring/test_ground_truth_inputs.py
+################################################################################
+
+test_spec_id: TEST-CVT-P3
+spec_ref: CVT-P3
+title: "parsed_facts, GapAnalysisResponses, CompanyContext wiring and graceful degradation tests"
+test_file: "src/backend/tests/unit/cv_tailoring/test_ground_truth_inputs.py"
+markers:
+  - "@pytest.mark.unit"
+status: pending_implementation
+non_self_closing: true
+
+async_requirement: true
+pytest_asyncio: true
+conftest_requirement: "asyncio_mode = 'auto' in pytest.ini OR @pytest.mark.asyncio on async test functions"
+
+description: >
+  These tests verify that CVTailoringLogic.tailor_cv() correctly fetches and passes
+  parsed_facts to the pipeline, and degrades gracefully when gap_responses or
+  company_research are unavailable.
+  CVTailoringLogic.tailor_cv() is async def — tests use @pytest.mark.asyncio.
+  run_stage3_fact_verification() is synchronous — those tests remain sync.
+  Tests also cover BOTH parsed_facts paths: populated (real user) and absent (test data).
+  All tests fail with ImportError until CVT-P3 is implemented.
+
+################################################################################
+# FIXTURES
+################################################################################
+
+fixtures:
+  - id: MOCK_CV_DAL_WITH_PARSED_FACTS
+    implementation: |
+      import pytest
+      from unittest.mock import AsyncMock, MagicMock
+
+      @pytest.fixture
+      def mock_cv_dal_with_parsed_facts() -> MagicMock:
+          """DAL that returns a CV record with parsed_facts populated."""
+          dal = MagicMock()
+          dal.get_cv = AsyncMock(return_value=MagicMock(
+              user_id="user-001",
+              cv_id="cv-001",
+              full_name="Alex Candidate",
+              parsed_facts={
+                  "name": "Alex Candidate",
+                  "email": "alex@example.com",
+                  "phone": "+1-555-0100",
+                  "location": "New York, NY",
+                  "work_experience": [
+                      {
+                          "company": "Nimbus Labs",
+                          "title": "Senior Software Engineer",
+                          "start_date": "01/2021",
+                          "end_date": "Present",
+                          "is_current": True,
+                          "responsibilities": ["Led Kubernetes migration"],
+                          "achievements": ["Increased deployment reliability by 35%"],
+                      }
+                  ],
+                  "education": [],
+                  "skills": {"technical": ["Python", "AWS", "Kubernetes"], "soft": ["Leadership"]},
+                  "certifications": [],
+                  "languages": ["English"],
+                  "summary_original": "Engineering leader.",
+              }
+          ))
+          return dal
+
+  - id: MOCK_ARTIFACT_DAL_MISSING_GAP
+    implementation: |
+      @pytest.fixture
+      def mock_artifact_dal_missing_gap() -> MagicMock:
+          """Artifact DAL that raises KeyError for GAP_ANALYSIS_RESPONSES."""
+          from unittest.mock import AsyncMock, MagicMock
+          dal = MagicMock()
+          dal.get_artifact = AsyncMock(side_effect=KeyError("GAP_ANALYSIS_RESPONSES not found"))
+          return dal
+
+  - id: MOCK_COMPANY_RESEARCH_DAL_MISS
+    implementation: |
+      @pytest.fixture
+      def mock_company_research_dal_miss() -> MagicMock:
+          """Company research DAL that returns None (cache miss)."""
+          from unittest.mock import AsyncMock, MagicMock
+          dal = MagicMock()
+          dal.get_company_research = AsyncMock(return_value=None)
+          return dal
+
+################################################################################
+# TESTS — MODEL SCHEMA CONFORMANCE
+################################################################################
+
+tests:
+  - id: T-P3-01
+    name: test_parsed_facts_model_is_importable
+    maps_to_ac: AC-P3-05
+    description: "ParsedFacts must be importable — fails with ImportError until P3 implemented"
+    implementation: |
+      @pytest.mark.unit
+      def test_parsed_facts_model_is_importable() -> None:
+          from careervp.models.cv_tailoring_models import ParsedFacts  # noqa: F401
+
+  - id: T-P3-02
+    name: test_parsed_facts_validates_with_valid_fixture
+    maps_to_ac: AC-P3-05
+    description: "ParsedFacts must accept a valid parsed_facts JSON conforming to schema"
+    implementation: |
+      @pytest.mark.unit
+      def test_parsed_facts_validates_with_valid_fixture() -> None:
+          from careervp.models.cv_tailoring_models import ParsedFacts
+
+          pf = ParsedFacts(
+              name="Alex Candidate",
+              email="alex@example.com",
+              phone="+1-555-0100",
+              location="New York, NY",
+              work_experience=[
+                  {
+                      "company": "Nimbus Labs",
+                      "title": "Senior Software Engineer",
+                      "start_date": "01/2021",
+                      "end_date": "Present",
+                      "is_current": True,
+                      "responsibilities": ["Led Kubernetes migration"],
+                      "achievements": [],
+                  }
+              ],
+              education=[],
+              skills={"technical": ["Python"], "soft": []},
+              certifications=[],
+              languages=["English"],
+              summary_original="Engineering leader.",
+          )
+          assert pf.name == "Alex Candidate"
+          assert len(pf.work_experience) == 1
+          assert pf.work_experience[0]["company"] == "Nimbus Labs"
+
+  - id: T-P3-03
+    name: test_parsed_facts_rejects_missing_required_fields
+    maps_to_ac: AC-P3-05
+    description: "ParsedFacts must raise ValidationError when name or email missing"
+    implementation: |
+      @pytest.mark.unit
+      def test_parsed_facts_rejects_missing_required_fields() -> None:
+          import pytest
+          from pydantic import ValidationError
+          from careervp.models.cv_tailoring_models import ParsedFacts
+
+          with pytest.raises((ValidationError, TypeError)):
+              ParsedFacts(
+                  # name intentionally omitted
+                  email="alex@example.com",
+                  work_experience=[],
+                  education=[],
+                  skills={"technical": [], "soft": []},
+                  certifications=[],
+                  languages=[],
+                  summary_original="",
+              )
+
+  - id: T-P3-04
+    name: test_gap_analysis_responses_model_is_importable
+    maps_to_ac: AC-P3-06
+    description: "GapAnalysisResponses must be importable"
+    implementation: |
+      @pytest.mark.unit
+      def test_gap_analysis_responses_model_is_importable() -> None:
+          from careervp.models.cv_tailoring_models import GapAnalysisResponses  # noqa: F401
+
+  - id: T-P3-05
+    name: test_gap_analysis_responses_accepts_empty_list
+    maps_to_ac: AC-P3-06
+    description: "GapAnalysisResponses(responses=[]) must succeed — graceful empty case"
+    implementation: |
+      @pytest.mark.unit
+      def test_gap_analysis_responses_accepts_empty_list() -> None:
+          from careervp.models.cv_tailoring_models import GapAnalysisResponses
+          gar = GapAnalysisResponses(responses=[])
+          assert gar.responses == []
+
+  - id: T-P3-06
+    name: test_company_context_model_is_importable
+    maps_to_ac: AC-P3-06
+    description: "CompanyContext must be importable"
+    implementation: |
+      @pytest.mark.unit
+      def test_company_context_model_is_importable() -> None:
+          from careervp.models.cv_tailoring_models import CompanyContext  # noqa: F401
+
+################################################################################
+# TESTS — LOGIC WIRING
+################################################################################
+
+  - id: T-P3-07
+    name: test_parsed_facts_passed_to_stage1
+    maps_to_ac: AC-P3-01
+    description: "CVTailoringLogic.tailor_cv() must pass parsed_facts to run_stage1_keyword_mapping"
+    markers: ["@pytest.mark.unit", "@pytest.mark.asyncio"]
+    implementation: |
+      @pytest.mark.unit
+      @pytest.mark.asyncio
+      async def test_parsed_facts_passed_to_stage1(
+          mock_cv_dal_with_parsed_facts: MagicMock,
+      ) -> None:
+          from unittest.mock import patch, MagicMock
+          from careervp.logic.cv_tailoring_logic import CVTailoringLogic
+
+          with patch(
+              "careervp.logic.cv_tailoring_logic.run_cv_tailoring_pipeline"
+          ) as mock_pipeline:
+              mock_pipeline.return_value = MagicMock(
+                  cv_sections=MagicMock(),
+                  fact_verification_passed=True,
+                  items_corrected=0,
+                  items_removed=0,
+              )
+              logic = CVTailoringLogic(
+                  cv_dal=mock_cv_dal_with_parsed_facts,
+                  llm_client=MagicMock(),
+              )
+              await logic.tailor_cv(
+                  user_id="user-001",
+                  cv_id="cv-001",
+                  job_description="Lead cloud platform reliability.",
+                  vpr=None,
+              )
+
+          assert mock_pipeline.called, "run_cv_tailoring_pipeline was never called — CVT-P3"
+          call_kwargs = mock_pipeline.call_args.kwargs
+          parsed_facts_arg = call_kwargs.get("parsed_facts")
+          assert parsed_facts_arg is not None, (
+              "parsed_facts not passed to pipeline — CVT-P3 not implemented"
+          )
+          from careervp.models.cv_tailoring_models import ParsedFacts
+          assert isinstance(parsed_facts_arg, ParsedFacts), (
+              f"Expected ParsedFacts, got {type(parsed_facts_arg).__name__}"
+          )
+
+  - id: T-P3-07b
+    name: test_parsed_facts_constructed_from_user_cv_when_absent
+    maps_to_ac: AC-P3-01
+    description: "When cv_record.parsed_facts is None, logic must construct ParsedFacts from UserCV fields (test data path)"
+    markers: ["@pytest.mark.unit", "@pytest.mark.asyncio"]
+    implementation: |
+      @pytest.mark.unit
+      @pytest.mark.asyncio
+      async def test_parsed_facts_constructed_from_user_cv_when_absent(
+      ) -> None:
+          """
+          Covers the current test-data state: cv_record.parsed_facts is None.
+          Logic must NOT fail — it must construct a ParsedFacts from UserCV fields.
+          """
+          from unittest.mock import patch, MagicMock, AsyncMock
+          from careervp.logic.cv_tailoring_logic import CVTailoringLogic
+          from careervp.models.cv_tailoring_models import ParsedFacts
+
+          # DAL returns a CV record with NO parsed_facts
+          dal_no_parsed_facts = MagicMock()
+          dal_no_parsed_facts.get_cv = AsyncMock(return_value=MagicMock(
+              user_id="user-001",
+              cv_id="cv-001",
+              full_name="Alex Candidate",
+              parsed_facts=None,  # ← test data state
+          ))
+
+          with patch(
+              "careervp.logic.cv_tailoring_logic.run_cv_tailoring_pipeline"
+          ) as mock_pipeline:
+              mock_pipeline.return_value = MagicMock(
+                  cv_sections=MagicMock(), fact_verification_passed=True,
+                  items_corrected=0, items_removed=0,
+              )
+              logic = CVTailoringLogic(cv_dal=dal_no_parsed_facts, llm_client=MagicMock())
+              await logic.tailor_cv(
+                  user_id="user-001", cv_id="cv-001",
+                  job_description="Lead cloud platform.", vpr=None,
+              )
+
+          # Must still have called pipeline with a ParsedFacts instance (constructed from UserCV)
+          call_kwargs = mock_pipeline.call_args.kwargs
+          parsed_facts_arg = call_kwargs.get("parsed_facts")
+          assert isinstance(parsed_facts_arg, ParsedFacts), (
+              "When parsed_facts is None, logic must construct ParsedFacts from UserCV — CVT-P3"
+          )
+          assert parsed_facts_arg.name == "Alex Candidate", (
+              "Constructed ParsedFacts must use UserCV.full_name"
+          )
+
+  - id: T-P3-08
+    name: test_gap_responses_fetch_failure_does_not_abort_pipeline
+    maps_to_ac: AC-P3-02
+    description: "KeyError on gap_responses fetch must not raise — pipeline continues with empty GapAnalysisResponses"
+    markers: ["@pytest.mark.unit", "@pytest.mark.asyncio"]
+    implementation: |
+      @pytest.mark.unit
+      @pytest.mark.asyncio
+      async def test_gap_responses_fetch_failure_does_not_abort_pipeline(
+          mock_cv_dal_with_parsed_facts: MagicMock,
+          mock_artifact_dal_missing_gap: MagicMock,
+      ) -> None:
+          from unittest.mock import patch, MagicMock
+          from careervp.logic.cv_tailoring_logic import CVTailoringLogic
+
+          with patch(
+              "careervp.logic.cv_tailoring_logic.run_cv_tailoring_pipeline"
+          ) as mock_pipeline:
+              mock_pipeline.return_value = MagicMock(
+                  cv_sections=MagicMock(), fact_verification_passed=True,
+                  items_corrected=0, items_removed=0,
+              )
+              logic = CVTailoringLogic(
+                  cv_dal=mock_cv_dal_with_parsed_facts,
+                  artifact_dal=mock_artifact_dal_missing_gap,
+                  llm_client=MagicMock(),
+              )
+              # Must NOT raise — graceful degradation required
+              await logic.tailor_cv(
+                  user_id="user-001", cv_id="cv-001",
+                  job_description="Lead cloud platform.", vpr=None,
+              )
+
+          from careervp.models.cv_tailoring_models import GapAnalysisResponses
+          call_kwargs = mock_pipeline.call_args.kwargs
+          gap_arg = call_kwargs.get("gap_responses")
+          assert isinstance(gap_arg, GapAnalysisResponses), "gap_responses must be GapAnalysisResponses"
+          assert gap_arg.responses == [], "gap_responses must be empty when fetch fails"
+
+  - id: T-P3-09
+    name: test_company_research_cache_miss_does_not_abort_pipeline
+    maps_to_ac: AC-P3-03
+    description: "None from company_research_dal must not abort pipeline — empty CompanyContext used"
+    markers: ["@pytest.mark.unit", "@pytest.mark.asyncio"]
+    implementation: |
+      @pytest.mark.unit
+      @pytest.mark.asyncio
+      async def test_company_research_cache_miss_does_not_abort_pipeline(
+          mock_cv_dal_with_parsed_facts: MagicMock,
+          mock_company_research_dal_miss: MagicMock,
+      ) -> None:
+          from unittest.mock import patch, MagicMock
+          from careervp.logic.cv_tailoring_logic import CVTailoringLogic
+
+          with patch(
+              "careervp.logic.cv_tailoring_logic.run_cv_tailoring_pipeline"
+          ) as mock_pipeline:
+              mock_pipeline.return_value = MagicMock(
+                  cv_sections=MagicMock(), fact_verification_passed=True,
+                  items_corrected=0, items_removed=0,
+              )
+              logic = CVTailoringLogic(
+                  cv_dal=mock_cv_dal_with_parsed_facts,
+                  company_research_dal=mock_company_research_dal_miss,
+                  llm_client=MagicMock(),
+              )
+              await logic.tailor_cv(
+                  user_id="user-001", cv_id="cv-001",
+                  job_description="Lead cloud platform.", vpr=None,
+                  company_name="Acme Cloud",
+              )
+
+          from careervp.models.cv_tailoring_models import CompanyContext
+          call_kwargs = mock_pipeline.call_args.kwargs
+          ctx = call_kwargs.get("company_context")
+          assert isinstance(ctx, CompanyContext), "company_context must be CompanyContext"
+          assert ctx.company_name == "Acme Cloud", "company_name preserved even on cache miss"
+
+  - id: T-P3-10
+    name: test_stage3_uses_parsed_facts_not_user_cv_for_company_match
+    maps_to_ac: AC-P3-04
+    description: "Company in Stage2 output that IS in UserCV but NOT in parsed_facts must be rejected"
+    implementation: |
+      @pytest.mark.unit
+      def test_stage3_uses_parsed_facts_not_user_cv_for_company_match() -> None:
+          """
+          Scenario:
+          - parsed_facts only has 'Nimbus Labs'
+          - Stage2 output includes 'Legacy Corp' (present in UserCV but absent from parsed_facts)
+          Stage3 must reject 'Legacy Corp' — not accept it just because UserCV has it.
+          """
+          from careervp.logic.cv_tailoring_pipeline import Stage2Output, run_stage3_fact_verification
+          from careervp.models.cv_tailoring_models import (
+              CVContact, CVExperienceItem, CVSections, CVSkills,
+              ParsedFacts, Stage2Verification,
+          )
+
+          parsed_facts_nimbus_only = ParsedFacts(
+              name="Alex Candidate",
+              email="alex@example.com",
+              phone=None,
+              location=None,
+              work_experience=[
+                  {
+                      "company": "Nimbus Labs",
+                      "title": "Senior Software Engineer",
+                      "start_date": "01/2021",
+                      "end_date": "Present",
+                      "is_current": True,
+                      "responsibilities": [],
+                      "achievements": [],
+                  }
+              ],
+              education=[],
+              skills={"technical": [], "soft": []},
+              certifications=[],
+              languages=[],
+              summary_original="",
+          )
+
+          stage2_with_legacy_corp = Stage2Output(
+              verification=Stage2Verification(
+                  ats_keyword_score=8,
+                  keywords_added_in_review=[],
+                  summary_rewritten=False,
+                  fact_verification_passed=True,
+                  hallucination_flags=[],
+              ),
+              cv_sections=CVSections(
+                  contact=CVContact(name="Alex Candidate", email="alex@example.com",
+                                    phone=None, linkedin=None, location=None),
+                  summary="Engineer.",
+                  skills=CVSkills(technical=[], soft=[]),
+                  experience=[
+                      CVExperienceItem(
+                          company="Legacy Corp",  # in UserCV but NOT in parsed_facts
+                          title="Engineer",
+                          start_date="01/2018",
+                          end_date="12/2020",
+                          bullets=["Managed servers."],
+                      )
+                  ],
+                  education=[],
+                  certifications=[],
+              ),
+          )
+
+          result = run_stage3_fact_verification(
+              stage2_output=stage2_with_legacy_corp,
+              parsed_facts=parsed_facts_nimbus_only,
+          )
+          assert result.fact_verification_passed is False, (
+              "Stage3 must reject company not in parsed_facts even if in UserCV — CVT-P3"
+          )
+
+################################################################################
+# FULL FILE TEMPLATE
+################################################################################
+
+full_file_template: |
+  """
+  Unit tests: parsed_facts, GapAnalysisResponses, CompanyContext wiring in CVTailoringLogic.
+  Spec: CVT-P3 — Ground Truth Inputs
+  Tests fail with ImportError until CVT-P3 is implemented.
+  tailor_cv() is async — uses @pytest.mark.asyncio.
+  run_stage3_fact_verification() is sync — those tests remain sync.
+  """
+
+  from __future__ import annotations
+
+  from unittest.mock import AsyncMock, MagicMock, patch
+
+  import pytest
+  from pydantic import ValidationError
+
+  from careervp.models.cv_tailoring_models import (
+      CompanyContext,
+      GapAnalysisResponses,
+      ParsedFacts,
+  )
+
+
+  # Fixtures are defined in conftest.py for this test module.
+  # See test_P3_ground_truth_inputs.yaml fixtures section.
+
+
+  @pytest.mark.unit
+  def test_parsed_facts_model_is_importable() -> None:
+      from careervp.models.cv_tailoring_models import ParsedFacts  # noqa: F401
+
+
+  @pytest.mark.unit
+  def test_parsed_facts_rejects_missing_required_fields() -> None:
+      with pytest.raises((ValidationError, TypeError)):
+          ParsedFacts(  # type: ignore[call-arg]
+              email="alex@example.com",
+              work_experience=[],
+              education=[],
+              skills={"technical": [], "soft": []},
+              certifications=[],
+              languages=[],
+              summary_original="",
+          )
+
+
+  @pytest.mark.unit
+  def test_gap_analysis_responses_accepts_empty_list() -> None:
+      gar = GapAnalysisResponses(responses=[])
+      assert gar.responses == []
+
+
+  @pytest.mark.unit
+  @pytest.mark.asyncio
+  async def test_parsed_facts_passed_to_stage1(mock_cv_dal_with_parsed_facts: MagicMock) -> None:
+      from careervp.logic.cv_tailoring_logic import CVTailoringLogic
+
+      with patch("careervp.logic.cv_tailoring_logic.run_cv_tailoring_pipeline") as mock_pipeline:
+          mock_pipeline.return_value = MagicMock(
+              cv_sections=MagicMock(), fact_verification_passed=True,
+              items_corrected=0, items_removed=0,
+          )
+          logic = CVTailoringLogic(cv_dal=mock_cv_dal_with_parsed_facts, llm_client=MagicMock())
+          await logic.tailor_cv(
+              user_id="user-001", cv_id="cv-001",
+              job_description="Lead cloud platform.", vpr=None,
+          )
+
+      call_kwargs = mock_pipeline.call_args.kwargs
+      assert isinstance(call_kwargs.get("parsed_facts"), ParsedFacts), (
+          "parsed_facts not passed to pipeline — CVT-P3 not implemented"
+      )
+
+
+  @pytest.mark.unit
+  @pytest.mark.asyncio
+  async def test_parsed_facts_constructed_from_user_cv_when_absent() -> None:
+      """Covers test-data state: cv_record.parsed_facts is None."""
+      from careervp.logic.cv_tailoring_logic import CVTailoringLogic
+
+      dal_no_parsed_facts = MagicMock()
+      dal_no_parsed_facts.get_cv = AsyncMock(return_value=MagicMock(
+          user_id="user-001", cv_id="cv-001",
+          full_name="Alex Candidate", parsed_facts=None,
+      ))
+
+      with patch("careervp.logic.cv_tailoring_logic.run_cv_tailoring_pipeline") as mock_pipeline:
+          mock_pipeline.return_value = MagicMock(
+              cv_sections=MagicMock(), fact_verification_passed=True,
+              items_corrected=0, items_removed=0,
+          )
+          logic = CVTailoringLogic(cv_dal=dal_no_parsed_facts, llm_client=MagicMock())
+          await logic.tailor_cv(
+              user_id="user-001", cv_id="cv-001",
+              job_description="Lead cloud platform.", vpr=None,
+          )
+
+      call_kwargs = mock_pipeline.call_args.kwargs
+      pf = call_kwargs.get("parsed_facts")
+      assert isinstance(pf, ParsedFacts), "Must construct ParsedFacts from UserCV — CVT-P3"
+      assert pf.name == "Alex Candidate"

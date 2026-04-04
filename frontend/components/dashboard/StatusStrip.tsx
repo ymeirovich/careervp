@@ -1,9 +1,6 @@
 import { cn } from "@/lib/utils";
 import type { Usage, SubscriptionResponse } from "@/lib/types";
 
-const ASSET_STATUS_DOT =
-  "https://www.figma.com/api/mcp/asset/62714d3b-6e61-40cf-917d-9ad5f45735ac";
-
 function getPlanLabel(
   usage: Usage | null,
   sub: SubscriptionResponse | null
@@ -63,11 +60,7 @@ export function StatusStrip({ usage, subscription }: StatusStripProps) {
           </span>
         </div>
         {active && (
-          <img
-            src={ASSET_STATUS_DOT}
-            alt="active"
-            className="h-4 w-4 object-contain shrink-0"
-          />
+          <span className="h-4 w-4 rounded-full bg-[#16b44b] shrink-0" />
         )}
       </div>
     </div>

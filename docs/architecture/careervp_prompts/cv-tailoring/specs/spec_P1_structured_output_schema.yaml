@@ -1,0 +1,371 @@
+################################################################################
+# CAREERVP — CV TAILORING IMPROVEMENT PLAN
+# Spec: P1 — Structured cv_sections Output Schema
+# Priority: P1 (blocker for P2–P4; ship before pipeline refactor)
+################################################################################
+
+spec_id: CVT-P1
+title: "Replace single-string tailored_cv response with structured cv_sections JSON"
+priority: critical
+status: draft
+owner: backend
+created_at: "2026-04-04"
+updated_at: "2026-04-04"
+
+depends_on: []
+blocks: [CVT-P2, CVT-P3, CVT-P4]
+
+################################################################################
+# PROBLEM STATEMENT
+################################################################################
+
+problem_statement:
+  exact_failing_behavior: >
+    The cv-tailoring endpoint currently returns:
+      {
+        "tailored_cv": "<single text blob>",
+        "ats_score": 9.0,           ← float on 0-10 scale
+        "keyword_matches": { "matched": ["Python", "AWS"] },  ← only 2 keywords
+        "suggestions": ["Tailored for role requirements and ATS keywords."],
+        "fvs_validation": { "is_valid": true, "violations": [] }
+      }
+    The spec (careervp_cv_tailoring_spec.yaml §3 output.artifact_record) and
+    JSON schema (careervp_cv_tailoring_schemas.json#CVArtifact) require a
+    structured cv_sections object with contact, summary, skills, experience[],
+    education[], and certifications[] sub-fields.
+
+  expected_behavior: >
+    The endpoint returns a CVArtifact-compliant response:
+      {
+        "cv_sections": {
+          "contact": { "name": "...", "email": "...", "phone": "...", "linkedin": null, "location": "..." },
+          "summary": "<3-4 sentence professional summary>",
+          "skills": { "technical": [...], "soft": [...] },
+          "experience": [
+            {
+              "company": "...", "title": "...",
+              "start_date": "MM/YYYY", "end_date": "MM/YYYY",
+              "bullets": ["<CAR verb + context + quantified result>", ...]
+            }
+          ],
+          "education": [...],
+          "certifications": [...]
+        },
+        "ats_score": 85,             ← integer 0-100
+        "ats_issues": [],
+        "keyword_match_score": 9,    ← 1-10
+        "keywords_missing": [],
+        "fact_verification_passed": true,
+        "language": "en"
+      }
+
+  user_business_impact: >
+    - Frontend CV edit form cannot be built without structured sections — editing
+      a text blob provides no per-field control.
+    - ATS score displayed in dashboard is meaningless on the wrong scale (9.0/10
+      looks like 90% but means something different from the spec's 85/100).
+    - Spec §8 editing interface (summary textarea, skills tag input, bullets
+      ordered-list editor) has no JSON target to bind to.
+
+  reproducibility: >
+    Call GET /api/proxy/cv-tailoring/<id>/status for any completed tailoring request.
+    Response body will contain "tailored_cv" string key instead of "cv_sections" object.
+
+################################################################################
+# EVIDENCE
+################################################################################
+
+evidence:
+  failing_endpoint: "GET /api/proxy/cv-tailoring/cv-tail-e89fee85-3a50-4c22-87c2-f2ccd7d72caf/status"
+  observed_response:
+    tailored_cv: "Strategic Learning Experience Specialist with 27 years..."
+    ats_score: 9.0
+    keyword_matches:
+      missing: []
+      matched: ["Python", "AWS"]
+    suggestions: ["Tailored for role requirements and ATS keywords."]
+    fvs_validation:
+      is_valid: true
+      violations: []
+  expected_schema_ref: "docs/architecture/careervp_prompts/cv-tailoring/careervp_cv_tailoring_schemas.json#CVArtifact"
+  environment: "http://localhost:3000 (dev)"
+
+################################################################################
+# ARCHITECTURE AND OWNERSHIP MAP
+################################################################################
+
+architecture:
+  handler: "src/backend/careervp/handlers/cv_tailoring_handler.py"
+  logic: "src/backend/careervp/logic/cv_tailoring.py"
+  prompt: "src/backend/careervp/logic/cv_tailoring_prompt.py"
+  models:
+    response_model: "src/backend/careervp/models/cv_tailoring_models.py → TailoredCVResponse"
+    cv_model: "src/backend/careervp/models/cv_tailoring_models.py → TailoredCV"
+  schema_source: "docs/architecture/careervp_prompts/cv-tailoring/careervp_cv_tailoring_schemas.json"
+
+  data_flow:
+    - "Handler receives POST /cv-tailor/generate or GET /cv-tailoring/{id}/status"
+    - "_tailor_cv_legacy() calls build_tailoring_prompt() → LLM → parse_llm_response()"
+    - "parse_llm_response() returns TailoredCV (currently free-form text in professional_summary)"
+    - "TailoredCVResponse wraps TailoredCV and returns to handler"
+    - "Handler serializes via json.dumps → API Gateway → frontend"
+
+################################################################################
+# ROOT CAUSE ANALYSIS
+################################################################################
+
+root_cause:
+  hypothesis_1:
+    description: "LLM prompt does not instruct the model to return structured JSON"
+    evidence: >
+      build_system_prompt() in cv_tailoring_prompt.py returns 5 generic lines with
+      no JSON output contract. The LLM returns free-form text which parse_llm_response()
+      stores in TailoredCV.professional_summary as a blob.
+    confirmed: true
+
+  hypothesis_2:
+    description: "TailoredCV and TailoredCVResponse models do not match CVArtifact schema"
+    evidence: >
+      TailoredCV in cv_tailoring_models.py has professional_summary: str (text blob)
+      rather than cv_sections: CVSections. TailoredCVResponse has tailored_cv key
+      not cv_sections key.
+    confirmed: true
+
+  contributing_factors:
+    - Prompt was scaffolded without referencing the JSON schema contract
+    - parse_llm_response() does not attempt JSON parsing of the LLM output
+    - No schema validation on the outgoing API response
+
+################################################################################
+# FIX PLAN
+################################################################################
+
+fix_plan:
+  files_to_modify:
+    - path: src/backend/careervp/models/cv_tailoring_models.py
+      changes:
+        - "Add CVContact, CVSkills, CVExperienceItem, CVEducationItem, CVCertificationItem dataclasses"
+        - "Add CVSections dataclass with fields: contact, summary, skills, experience, education, certifications"
+        - "Replace TailoredCV.professional_summary: str with TailoredCV.cv_sections: CVSections"
+        - "Rename TailoredCVResponse.tailored_cv field to cv_sections"
+        - "Add TailoredCVResponse fields: ats_score: int (0-100), ats_issues: list[str], keyword_match_score: int, keywords_missing: list[str], fact_verification_passed: bool, language: str"
+
+    - path: src/backend/careervp/logic/cv_tailoring_prompt.py
+      changes:
+        - "Replace build_system_prompt() with spec §4 stage_2_cv_generation system_prompt (7 non-negotiable rules)"
+        - "Add JSON output contract to user prompt instructing LLM to return cv_sections structure"
+        - "Add verification check chain-of-thought block before JSON output"
+
+    - path: src/backend/careervp/logic/cv_tailoring.py
+      changes:
+        - "Replace parse_llm_response() text extraction with JSON parsing into CVSections"
+        - "Update _build_tailored_cv() to populate CVSections fields from parsed JSON"
+        - "Update _serialize_tailored_cv_text() to flatten CVSections to text for ATS scoring"
+        - "Update TailoredCVResponse construction to use cv_sections key"
+
+    - path: src/backend/careervp/handlers/cv_tailoring_handler.py
+      changes:
+        - "Update response serialization to output cv_sections not tailored_cv"
+        - "Update ATS score field to integer 0-100"
+
+  non_goals:
+    - Do not change the DynamoDB table schema in this spec (P3 covers parsed_facts integration)
+    - Do not implement the 3-stage LLM pipeline (P2)
+    - Do not change the frontend CV display component (separate task, depends on P1 completion)
+
+  rollback_plan: >
+    Revert to previous TailoredCVResponse schema. Frontend display falls back to
+    text blob rendering. No data loss — existing DynamoDB records retain prior format.
+
+################################################################################
+# ACCEPTANCE CRITERIA
+################################################################################
+
+acceptance_criteria:
+  - id: AC-P1-01
+    description: "GET /cv-tailoring/{id}/status response body contains cv_sections object with contact, summary, skills, experience, education sub-fields"
+    verification: >
+      jq '.cv_sections | keys' response.json == ["certifications","contact","education","experience","skills","summary"]
+    blocking: true
+
+  - id: AC-P1-02
+    description: "cv_sections.experience[] contains bullets[] array with at least 1 CAR-format string per role"
+    verification: >
+      jq '.cv_sections.experience[0].bullets | length' response.json >= 1
+    blocking: true
+
+  - id: AC-P1-03
+    description: "ats_score is an integer in range 0-100 (not a 0-10 float)"
+    verification: >
+      jq '.ats_score' response.json is integer, 0 <= value <= 100
+    blocking: true
+
+  - id: AC-P1-04
+    description: "fact_verification_passed field is present and boolean"
+    verification: "jq '.fact_verification_passed' response.json == true or false"
+    blocking: true
+
+  - id: AC-P1-05
+    description: "tailored_cv text blob key is absent from response (no schema regression)"
+    verification: "jq 'has(\"tailored_cv\")' response.json == false"
+    blocking: true
+
+  - id: AC-P1-06
+    description: "cv_sections.contact.name matches the candidate name in DynamoDB CV record"
+    verification: "contact.name == parsed CV full_name"
+    blocking: true
+
+  - id: AC-P1-07
+    description: "MyPy strict passes with no type errors in modified files"
+    verification: "uv run mypy careervp --strict exits 0"
+    blocking: true
+
+  - id: AC-P1-08
+    description: "keywords_missing is a list (may be empty); keyword_match_score is 1-10 int"
+    verification: "Schema structure validation"
+    blocking: true
+
+################################################################################
+# BASELINE AND REGRESSION BUDGET
+################################################################################
+
+baseline_and_regression_budget:
+  baseline_artifact: "docs/evidence/cv-tailoring-baseline-render.json"
+  blocked_regressions:
+    - "new_non_2xx_on_changed_endpoints: GET /cv-tailoring/{id}/status must still return 200 on completed jobs"
+    - "fvs_validation disappeared from response (must remain for FVS audit trail)"
+    - "Empty cv_sections on successful completed job"
+  allowed_deltas:
+    - "tailored_cv key removed from response: intentional breaking change, frontend updated in same PR"
+    - "ats_score scale change 0-10 → 0-100: requires frontend display update"
+
+################################################################################
+# VERIFICATION CONTRACT
+################################################################################
+
+verification_contract:
+  - requirement_id: AC-P1-01
+    verification_type: integration
+    blocking_gate: pre_merge
+    artifact_required: true
+  - requirement_id: AC-P1-02
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P1-03
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P1-04
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P1-05
+    verification_type: contract
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P1-06
+    verification_type: integration
+    blocking_gate: pre_deploy
+    artifact_required: true
+  - requirement_id: AC-P1-07
+    verification_type: static
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P1-08
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+
+################################################################################
+# DEPLOYED PARITY PLAN
+################################################################################
+
+deployed_parity:
+  route_surface_parity: >
+    Route GET /cv-tailoring/{id}/status unchanged. Response body schema changes.
+    OpenAPI spec must be updated to reflect cv_sections response shape.
+  authorizer_parity: "No auth changes."
+  runtime_env_resolution_parity: "No table/index changes in P1. DynamoDB write format unchanged."
+
+################################################################################
+# VALIDATION PLAN
+################################################################################
+
+validation_plan:
+  static:
+    - "uv run ruff format --check src/backend/careervp/"
+    - "uv run ruff check src/backend/careervp/"
+    - "uv run mypy careervp --strict"
+  unit:
+    - command: "uv run pytest src/backend/tests/unit/cv_tailoring/ -q -m unit"
+      test_files:
+        - "src/backend/tests/unit/cv_tailoring/test_output_schema.py"
+        - "src/backend/tests/unit/cv_tailoring/test_cv_sections_model.py"
+  integration:
+    - command: "uv run pytest src/backend/tests/integration/test_cv_tailoring_response_contract.py -q"
+  contract:
+    - command: "uv run pytest src/backend/tests/unit/cv_tailoring/test_response_schema_contract.py -q"
+  regression:
+    - command: "uv run pytest src/backend/tests/unit/test_cv_tailoring.py -q"
+      note: "Existing tests — update assertions for ats_score range change (0-10 → 0-100)"
+
+################################################################################
+# TRACEABILITY MATRIX
+################################################################################
+
+traceability:
+  - requirement_id: AC-P1-01
+    code_reference: "src/backend/careervp/models/cv_tailoring_models.py (CVSections)"
+    test_reference: "docs/architecture/careervp_prompts/cv-tailoring/tests/test_P1_output_schema.yaml::test_response_has_cv_sections"
+    verification_type: integration
+    blocking_gate: pre_merge
+    artifact_required: true
+    result: pending
+
+  - requirement_id: AC-P1-03
+    code_reference: "src/backend/careervp/logic/cv_tailoring.py (calculate_ats_score)"
+    test_reference: "docs/architecture/careervp_prompts/cv-tailoring/tests/test_P1_output_schema.yaml::test_ats_score_is_0_to_100_integer"
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+    result: pending
+
+  - requirement_id: AC-P1-05
+    code_reference: "src/backend/careervp/models/cv_tailoring_models.py (TailoredCVResponse)"
+    test_reference: "docs/architecture/careervp_prompts/cv-tailoring/tests/test_P1_output_schema.yaml::test_response_has_no_tailored_cv_text_blob"
+    verification_type: contract
+    blocking_gate: pre_merge
+    artifact_required: false
+    result: pending
+
+################################################################################
+# ROLLBACK TRIGGER MATRIX
+################################################################################
+
+rollback_triggers:
+  - trigger_id: RT-P1-001
+    condition: "GET /cv-tailoring/{id}/status returns 500 or empty cv_sections after deploy"
+    detection_source: "Post-deploy smoke test"
+    action: "Revert to prior TailoredCVResponse schema"
+    owner: backend
+
+  - trigger_id: RT-P1-002
+    condition: "Frontend CV display page renders blank after ats_score scale change"
+    detection_source: "Post-deploy visual smoke"
+    action: "Hotfix frontend ats_score rendering, or revert P1 if broader breakage"
+    owner: frontend
+
+################################################################################
+# COMPLETION EVIDENCE
+################################################################################
+
+completion_evidence:
+  required:
+    - pytest output from test_output_schema.py showing all tests pass
+    - mypy output showing zero errors in modified files
+    - curl response sample showing cv_sections structure with experience[].bullets[]
+    - ats_score value in 0-100 range in response
+  residual_risks:
+    - "Existing callers of TailoredCVResponse.tailored_cv must be updated (frontend)"
+    - "DynamoDB artifact records written before P1 will have old format — read path needs to handle both during transition"

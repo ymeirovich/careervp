@@ -1,0 +1,1060 @@
+################################################################################
+# CAREERVP - CV TAILORING COMPONENT SPECIFICATION
+# Component: cv-tailor Lambda Function
+# Version: 1.0
+# Architecture: AWS Serverless (React → API Gateway → Lambda → DynamoDB)
+# Last Updated: 2026-04-04
+################################################################################
+
+metadata:
+  component: cv-tailor
+  version: "1.0"
+  status: READY_FOR_DEVELOPMENT
+  sprint: Sprint 5
+  dependencies:
+    - vp-report-generator        # VPR must exist before tailoring begins
+    - cv-parser                  # Parsed facts required as ground truth
+    - gap-analysis-questions     # Gap responses enrich achievement bullets
+    - company-research-v1        # Company keywords inform tailoring strategy
+  estimated_cost_per_call: "$0.005"
+
+################################################################################
+# 1. COMPONENT OVERVIEW
+################################################################################
+
+overview:
+  purpose: >
+    Transform a candidate's master CV into a job-specific, ATS-optimized
+    document using the Value Proposition Report as the strategic north star.
+    The tailoring process never invents facts — it selects, reorders, and
+    re-expresses only what the parsed CV facts contain, using the VPR
+    differentiators to decide what to emphasize.
+
+  critical_constraint: >
+    ZERO HALLUCINATIONS. Every achievement, date, company name, metric, title,
+    and skill must trace back to the parsed_facts JSON from the cv-parser
+    Lambda. If a fact cannot be verified against parsed_facts, it must not
+    appear in the output. This is enforced at generation time via a
+    fact-verification prompt stage and again at the review layer.
+
+  skill_fidelity: >
+    This Lambda must replicate the behavior of Phase 2 (CV Tailoring) from the
+    Job Search Assistant Skill exactly. The skill uses a three-step process:
+    (1) Keyword mapping + selection, (2) Self-correction verification,
+    (3) Final output with ATS-verified content. All three steps must be
+    implemented, even though they occur within a single Lambda invocation.
+
+################################################################################
+# 2. AWS ARCHITECTURE
+################################################################################
+
+architecture:
+  trigger:
+    type: AWS Step Functions task
+    invoked_by: orchestrator-state-machine
+    state: GenerateCV
+    invocation_mode: synchronous  # Orchestrator waits for result
+
+  runtime:
+    service: AWS Lambda
+    function_name: cv-tailor
+    runtime: python3.11
+    memory_mb: 512
+    timeout_seconds: 60
+    reserved_concurrency: 10      # Prevent runaway AI cost spikes
+
+  api_exposure:
+    # Direct user-triggered regeneration (after initial generation via orchestrator)
+    endpoint: POST /api/applications/{applicationId}/regenerate
+    method: POST
+    auth: JWT (Cognito)
+    body_params:
+      - artifact_type: CV
+      - feedback: string (optional — user's natural language instruction)
+      - version: integer (current version being replaced)
+
+  iam_permissions:
+    - dynamodb:GetItem          # Read application, cv, artifacts
+    - dynamodb:PutItem          # Write generated CV artifact
+    - dynamodb:UpdateItem       # Update application stage
+    - dynamodb:Query            # List artifact versions
+    - s3:PutObject              # Store DOCX/PDF to artifacts bucket
+    - s3:GetObject              # Read original CV from uploads bucket
+    - ssm:GetParameter          # Retrieve Anthropic API key
+    - logs:CreateLogGroup
+    - logs:CreateLogStream
+    - logs:PutLogEvents
+    - cloudwatch:PutMetricData  # Emit cost and quality metrics
+
+  environment_variables:
+    ANTHROPIC_API_KEY_SSM_PATH: /careervp/{env}/anthropic_api_key
+    ARTIFACTS_BUCKET: careervp-artifacts-{env}
+    UPLOADS_BUCKET: careervp-cv-uploads-{env}
+    DYNAMODB_TABLE_APPLICATIONS: careervp-applications
+    DYNAMODB_TABLE_ARTIFACTS: careervp-artifacts
+    DYNAMODB_TABLE_CVS: careervp-cvs
+    MODEL_ID: claude-haiku-4-5-20251001
+    MAX_TOKENS: 4096
+    LOG_LEVEL: INFO
+    ENV: "{env}"  # dev | staging | prod
+
+################################################################################
+# 3. DATA CONTRACTS
+################################################################################
+
+data_contracts:
+
+  input:
+    # All inputs loaded from DynamoDB by the Lambda itself given applicationId
+    source_records:
+
+      application_record:
+        table: careervp-applications
+        pk: userId
+        sk: applicationId
+        fields_used:
+          - job_title
+          - company_name
+          - job_description
+          - cv_id
+          - stage
+          - language_cv        # Set by language-detector Lambda
+          - language_job       # Set by language-detector Lambda
+
+      cv_record:
+        table: careervp-cvs
+        pk: userId
+        sk: cv_id
+        fields_used:
+          - parsed_facts        # CRITICAL — the ground truth object
+          - extracted_text      # Fallback if parsed_facts incomplete
+
+      vpr_artifact:
+        table: careervp-artifacts
+        pk: applicationId
+        sk: "ARTIFACT#VPR#v1"   # Always use latest finalized VPR
+        fields_used:
+          - content             # Full VPR markdown text
+          - status              # Must be DRAFT or FINAL, not FAILED
+
+      gap_analysis_responses:
+        table: careervp-artifacts (or careervp-applications depending on schema)
+        pk: applicationId
+        sk: GAP_ANALYSIS_RESPONSES
+        fields_used:
+          - responses           # Array of {question_id, response_text, skipped}
+        optional: true          # Proceed without if user skipped gap analysis
+
+      company_research:
+        table: careervp-company-research-cache
+        pk: company_name_normalized
+        fields_used:
+          - company_overview
+          - culture_values
+          - products_services   # For keyword extraction
+
+  parsed_facts_schema:
+    # Canonical structure from cv-parser — used as the sole source of truth
+    name: string
+    email: string
+    phone: string
+    linkedin_url: string (optional)
+    location: string
+    work_experience:
+      - company: string
+        title: string
+        start_date: "MM/YYYY"
+        end_date: "MM/YYYY | Present"
+        responsibilities: [string]
+        achievements: [string]    # May be null if not parsed separately
+    education:
+      - institution: string
+        degree: string
+        field: string
+        graduation_date: "MM/YYYY"
+        gpa: string (optional)
+    skills:
+      technical: [string]
+      soft: [string]
+    certifications:
+      - name: string
+        issuer: string
+        date: "MM/YYYY"
+        expiry: "MM/YYYY" (optional)
+    languages: [string]
+    summary_original: string     # Original CV summary verbatim
+
+  output:
+
+    artifact_record:
+      table: careervp-artifacts
+      pk: applicationId
+      sk: "ARTIFACT#CV#v{N}"
+      attributes:
+        artifact_type: "CV"
+        status: "DRAFT"
+        version: integer
+        content:                 # Structured JSON — NOT raw markdown
+          sections:
+            contact: object
+            summary: string
+            skills: object
+            experience: [object]
+            education: [object]
+            certifications: [object]
+        content_markdown: string  # Rendered markdown for preview
+        ats_score: integer        # 0-100 from internal ATS checker
+        ats_issues: [string]
+        keyword_match_score: integer  # 1-10 per skill SKILL.md rubric
+        keywords_missing: [string]
+        language: string          # "en" | "he" | "both"
+        s3_key_docx: string       # Set after docx-export runs
+        s3_key_pdf: string        # Set after pdf-export runs
+        generated_at: string      # ISO 8601
+        model_used: "claude-haiku-4-5-20251001"
+        input_tokens: integer
+        output_tokens: integer
+        token_cost_usd: float
+        generation_time_ms: integer
+        feedback_used: string (optional)
+        fact_verification_passed: boolean
+
+################################################################################
+# 4. PROMPT ARCHITECTURE
+################################################################################
+
+# The Lambda runs a 3-stage prompt sequence matching the JSA Skill's
+# three-step process exactly. Each stage uses a separate API call to
+# maintain chain-of-thought clarity and enable targeted retry on failure.
+
+prompt_architecture:
+
+  # ----- STAGE 1: KEYWORD EXTRACTION & SELECTION PLAN -----
+  stage_1_keyword_mapping:
+    model: claude-haiku-4-5-20251001
+    max_tokens: 1500
+    purpose: >
+      Replicate JSA Skill Step 1 — extract core UVP + top 3 differentiators
+      from VPR, extract 12-18 mandatory keywords from job posting, then map
+      which specific parsed_facts items support each keyword. Output is a
+      structured JSON plan consumed by Stage 2.
+
+    system_prompt: |
+      You are a senior technical recruiter and ATS optimization expert.
+      Your task is to analyze a job posting and a Value Proposition Report,
+      then create a precise keyword-to-evidence mapping plan for CV tailoring.
+      
+      You must return ONLY valid JSON. No preamble, no markdown, no explanation.
+      The JSON structure is defined in the user message.
+      
+      CRITICAL RULE: You may only reference skills, job titles, companies,
+      dates, and achievements that exist verbatim in the provided parsed_facts.
+      Do not invent, infer, or embellish any candidate information.
+
+    user_prompt_template: |
+      ## INPUTS
+      
+      ### Value Proposition Report
+      {vpr_content}
+      
+      ### Job Posting
+      {job_description}
+      
+      ### Candidate Parsed Facts (GROUND TRUTH — use only these facts)
+      {parsed_facts_json}
+      
+      ### Gap Analysis Responses (additional evidence from candidate)
+      {gap_responses_json}
+      
+      ## TASK
+      
+      Return a JSON object with this exact structure:
+      
+      {
+        "uvp_statement": "<1-sentence unique value proposition from the VPR>",
+        "key_differentiators": ["<differentiator 1>", "<differentiator 2>", "<differentiator 3>"],
+        "primary_keywords": [
+          {
+            "keyword": "<exact term from job posting>",
+            "category": "technical_skill | responsibility | certification | soft_skill | domain",
+            "priority": "mandatory | preferred",
+            "supporting_evidence": "<exact field + value from parsed_facts that proves this, or null>"
+          }
+        ],
+        "keywords_to_emphasize": ["<top 12-18 keywords>"],
+        "keywords_missing_from_cv": ["<keywords in job posting not evidenced in parsed_facts>"],
+        "experience_items_to_include": [
+          {
+            "company": "<must match parsed_facts exactly>",
+            "title": "<must match parsed_facts exactly>",
+            "relevance_reason": "<why this role is relevant>",
+            "bullets_to_emphasize": ["<responsibility or achievement text from parsed_facts>"]
+          }
+        ],
+        "experience_items_to_exclude": ["<company names irrelevant to this role>"],
+        "summary_focus": "<what the professional summary must emphasize based on UVP>",
+        "skills_to_feature": {
+          "technical": ["<subset of parsed_facts.skills.technical>"],
+          "soft": ["<subset of parsed_facts.skills.soft>"]
+        }
+      }
+
+    error_handling:
+      on_json_parse_failure: retry_once_then_fallback
+      on_missing_keywords: proceed_with_available
+      on_no_supporting_evidence: mark_keyword_as_missing
+
+  # ----- STAGE 2: CV GENERATION WITH SELF-CORRECTION -----
+  stage_2_cv_generation:
+    model: claude-haiku-4-5-20251001
+    max_tokens: 2500
+    purpose: >
+      Using the mapping plan from Stage 1, generate the full tailored CV
+      content as structured JSON. Implements JSA Skill Steps 2 and 3 in a
+      single call by embedding both Verification Checks as internal
+      chain-of-thought before producing final output.
+
+    system_prompt: |
+      You are an expert CV writer specializing in technical roles.
+      You create ATS-optimized CVs that pass automated screening AND
+      impress human reviewers.
+      
+      RULES (non-negotiable):
+      1. ZERO HALLUCINATIONS — every fact, date, metric, company name, and
+         job title must appear in the provided parsed_facts. If unsure, omit.
+      2. CAR/STAR format for ALL experience bullets — Challenge/Action/Result
+         with a quantifiable metric whenever one exists in the source data.
+      3. Keyword density — primary keywords must appear 2-3x naturally across
+         summary, skills, and experience sections.
+      4. Length — 1 page (approximately 450-600 words of body content).
+         Do not pad. Do not truncate relevant experience.
+      5. ATS formatting — no tables, no text boxes, no columns in the content
+         structure. Simple flat sections only.
+      6. Anti-AI detection — vary sentence structure, use natural transitions,
+         avoid "leverage", "delve", "robust", "streamline", "landscape",
+         "spearhead" (overused). Use concrete verbs tied to actual work.
+      7. Self-correct before finalizing — explicitly check keyword match and
+         summary alignment before producing output JSON.
+      
+      Return ONLY valid JSON. No preamble, no markdown, no explanation.
+
+    user_prompt_template: |
+      ## TAILORING PLAN (from Stage 1 analysis)
+      {stage_1_output_json}
+      
+      ## CANDIDATE PARSED FACTS (GROUND TRUTH)
+      {parsed_facts_json}
+      
+      ## JOB POSTING
+      {job_description}
+      
+      ## TARGET COMPANY CONTEXT
+      Company: {company_name}
+      Culture/Values: {company_culture}
+      
+      ## USER REGENERATION FEEDBACK (if applicable)
+      {user_feedback}
+      
+      ## INTERNAL VERIFICATION (chain-of-thought before output)
+      Before generating the final JSON, work through these checks:
+      
+      VERIFICATION CHECK 1 — ATS KEYWORD MATCH:
+      - Rate keyword match score 1-10 against job posting
+      - List any critical missing keywords that DO exist in parsed_facts
+        but weren't included in the draft
+      - If score < 8, revise bullets to add missing keywords
+      
+      VERIFICATION CHECK 2 — HIRING MANAGER ALIGNMENT:
+      - Does the Professional Summary directly reflect the UVP from the plan?
+      - Does it address the core problem the company is trying to solve?
+      - If not, rewrite the summary before finalizing
+      
+      After verification, produce this JSON:
+      
+      {
+        "verification": {
+          "ats_keyword_score": <1-10>,
+          "keywords_added_in_review": ["<keyword>"],
+          "summary_rewritten": <true|false>,
+          "fact_verification_passed": <true|false>,
+          "hallucination_flags": ["<any fact you are uncertain about — will be stripped>"]
+        },
+        "cv_sections": {
+          "contact": {
+            "name": "<from parsed_facts.name>",
+            "email": "<from parsed_facts.email>",
+            "phone": "<from parsed_facts.phone>",
+            "linkedin": "<from parsed_facts.linkedin_url or null>",
+            "location": "<from parsed_facts.location>"
+          },
+          "summary": "<3-4 sentences, opens with title + years, embeds top keywords, reflects UVP>",
+          "skills": {
+            "technical": ["<keyword-rich list from plan>"],
+            "soft": ["<only if backed by evidence>"]
+          },
+          "experience": [
+            {
+              "company": "<exact match to parsed_facts>",
+              "title": "<exact match to parsed_facts>",
+              "start_date": "<MM/YYYY from parsed_facts>",
+              "end_date": "<MM/YYYY or Present from parsed_facts>",
+              "bullets": [
+                "<CAR format: strong verb + context + quantified result>",
+                "<CAR format: strong verb + context + quantified result>"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "<exact match to parsed_facts>",
+              "degree": "<exact match>",
+              "field": "<exact match>",
+              "graduation_date": "<MM/YYYY>",
+              "gpa": "<only if present in parsed_facts>"
+            }
+          ],
+          "certifications": [
+            {
+              "name": "<exact match to parsed_facts>",
+              "issuer": "<exact match>",
+              "date": "<MM/YYYY>"
+            }
+          ]
+        }
+      }
+
+    error_handling:
+      on_hallucination_flags_present:
+        action: strip_flagged_facts
+        log: true
+        alert_if_count_exceeds: 2
+      on_ats_score_below_6:
+        action: retry_with_stronger_keyword_instruction
+        max_retries: 1
+      on_json_parse_failure:
+        action: retry_once_with_format_reminder
+
+  # ----- STAGE 3: STRUCTURED FACT VERIFICATION -----
+  stage_3_fact_verification:
+    # This stage is NOT an AI call — it is deterministic Python code
+    type: python_validation
+    purpose: >
+      After the AI generates the CV JSON, a Python function cross-checks
+      every extracted value against parsed_facts before the artifact is
+      written to DynamoDB. This is the hard safety net — the AI's own
+      self-correction in Stage 2 is the soft check.
+
+    checks:
+      - name: name_match
+        rule: cv_sections.contact.name must equal parsed_facts.name (case-insensitive)
+        on_fail: replace_with_parsed_facts_value
+
+      - name: email_match
+        rule: cv_sections.contact.email must equal parsed_facts.email (exact)
+        on_fail: replace_with_parsed_facts_value
+
+      - name: experience_company_match
+        rule: every cv_sections.experience[].company must appear in parsed_facts.work_experience[].company
+        on_fail: remove_unmatched_entry, log_warning
+
+      - name: experience_title_match
+        rule: every cv_sections.experience[].title must appear in parsed_facts.work_experience (matched by company)
+        on_fail: remove_unmatched_entry, log_warning
+
+      - name: date_format_check
+        rule: all dates must match MM/YYYY or "Present"
+        on_fail: attempt_reformat, else remove_date
+
+      - name: date_range_plausibility
+        rule: start_date must be before end_date for each role
+        on_fail: log_warning, flag_for_review
+
+      - name: certification_name_match
+        rule: every certification must appear in parsed_facts.certifications
+        on_fail: remove_unmatched_certification
+
+      - name: hallucination_flag_strip
+        rule: if verification.hallucination_flags is non-empty, strip those facts from output
+        on_fail: abort_generation, return_error
+
+    result:
+      fact_verification_passed: boolean
+      items_corrected: integer
+      items_removed: integer
+      final_cv_sections: object    # The clean, verified CV JSON
+
+################################################################################
+# 5. MULTI-LANGUAGE HANDLING
+################################################################################
+
+language_handling:
+  detection_input:
+    language_cv: loaded from application_record.language_cv (set by language-detector)
+    language_job: loaded from application_record.language_job
+
+  rules:
+    same_language:
+      condition: language_cv == language_job
+      action: generate single CV in that language
+      artifact_sk: "ARTIFACT#CV#v{N}"
+
+    different_languages:
+      condition: language_cv != language_job
+      action: generate CV in BOTH languages
+      artifacts:
+        - sk: "ARTIFACT#CV_EN#v{N}"
+          language_instruction: "Generate in English with native-level fluency"
+        - sk: "ARTIFACT#CV_HE#v{N}"
+          language_instruction: |
+            Generate in Hebrew (עברית) with native-level fluency.
+            Use right-to-left text direction markers in the structured output.
+            Hebrew professional tone — formal but not stiff.
+            Transliterate technical terms that have no standard Hebrew equivalent
+            (e.g., keep "DevOps", "Kubernetes", "AWS" as-is).
+      cost_impact: "2x AI cost for this application (~$0.010 total)"
+
+  hebrew_specific_notes:
+    - CV section headers must be in Hebrew
+    - Dates remain in MM/YYYY (universal format)
+    - English technical acronyms kept in Latin script inline
+    - Contact info (email, LinkedIn URL, phone) stays in original format
+    - ATS note: Israeli ATS systems generally parse Hebrew PDFs correctly
+      when using standard fonts (Arial, David, Narkissim)
+
+################################################################################
+# 6. ATS SCORING (INTERNAL POST-GENERATION CHECK)
+################################################################################
+
+# Immediately after fact verification, the Lambda runs an ATS scoring pass.
+# This is deterministic code (no AI call) using the ats-checker rules engine.
+
+ats_scoring:
+  algorithm:
+    max_score: 100
+    components:
+      keyword_match:
+        weight: 40
+        calculation: >
+          Count primary_keywords from stage_1 that appear in the generated CV.
+          Score = (matched_count / total_primary_keywords) * 40
+          Cap at 40.
+
+      quantified_bullets:
+        weight: 20
+        calculation: >
+          For each experience entry, check each bullet for a numeric value
+          (regex: \d+[%$MKx]? or \d+\s*(percent|hours|users|million|k\b)).
+          Score = min((quantified_bullets / total_bullets) * 20, 20)
+
+      section_headers:
+        weight: 15
+        rule: required sections present — summary, skills, experience, education
+        score_per_section: 3.75
+
+      formatting_safety:
+        weight: 15
+        checks:
+          - no_tables_in_content: 5 points
+          - no_column_structure: 5 points
+          - standard_date_format: 5 points
+
+      summary_keyword_density:
+        weight: 10
+        calculation: >
+          Count primary_keywords appearing in summary field.
+          Score = min((keyword_count_in_summary / 6) * 10, 10)
+
+  thresholds:
+    green: 90-100
+    yellow: 70-89
+    red: 0-69
+
+  on_red_score:
+    action: log_warning + include ats_issues array in artifact record
+    notify_user: via application status field ats_score + ats_issues
+
+################################################################################
+# 7. VERSION CONTROL & REGENERATION
+################################################################################
+
+versioning:
+  initial_generation:
+    sk_pattern: "ARTIFACT#CV#v1"
+    triggered_by: orchestrator state machine (post-VPR)
+
+  regeneration:
+    sk_pattern: "ARTIFACT#CV#v{N}"  # N increments each regeneration
+    triggered_by: POST /api/applications/{applicationId}/regenerate
+    feedback_handling:
+      when_provided: >
+        Append user_feedback to Stage 2 user_prompt_template.
+        The feedback is natural language (e.g., "make it more technical",
+        "reduce the summary to 2 sentences", "emphasize cloud architecture more").
+        AI must apply feedback while maintaining fact-verification rules.
+      when_empty: regenerate with same inputs (useful for non-determinism)
+
+  version_storage:
+    all_versions_retained: true
+    active_version_pointer:
+      table: careervp-applications
+      field: active_cv_artifact_sk  # Updated on each regeneration
+    max_versions: 10  # Soft limit — warn user after v10, don't block
+
+  revert:
+    endpoint: POST /api/applications/{applicationId}/artifacts/revert
+    body: { artifact_type: "CV", target_version: N }
+    action: update active_cv_artifact_sk to point to v{N}
+
+################################################################################
+# 8. EDITING INTERFACE CONTRACT
+################################################################################
+
+# The frontend structured form edits the cv_sections JSON directly.
+# No WYSIWYG. The form maps to cv_sections fields as follows:
+
+editing_interface:
+  principle: >
+    Users edit the cv_sections JSON structure via a form UI.
+    This avoids WYSIWYG editors that break ATS formatting.
+    Each field in cv_sections has a corresponding form element.
+
+  editable_fields:
+    contact:
+      - field: summary       form_type: textarea     max_chars: 600
+      
+    skills:
+      - field: technical     form_type: tag_input    note: "comma-separated, user can add/remove"
+      - field: soft          form_type: tag_input
+
+    experience_bullets:
+      - form_type: ordered_list_editor
+      - user_can: add, edit, delete, reorder bullets
+      - constraint: >
+          When user edits a bullet, flag it as user_edited: true.
+          On regeneration, lock user_edited bullets (don't regenerate them).
+          User_edited bullets are persisted to knowledge base for reuse.
+
+    experience_metadata:
+      - company, title, start_date, end_date are READ-ONLY
+      - changes require re-uploading CV (source of truth)
+
+    education: READ-ONLY (metadata cannot be fabricated)
+    certifications: READ-ONLY
+
+  save_behavior:
+    auto_save: every 30 seconds (PATCH /api/applications/{applicationId}/artifacts/{sk})
+    optimistic_ui: true (show changes immediately, confirm on 200 response)
+    conflict_resolution: last_write_wins (single user context)
+
+  knowledge_base_sync:
+    on_finalize:
+      action: >
+        Extract user_edited bullets and confirmed facts to
+        careervp-knowledge-base table for reuse in future applications.
+      table: careervp-knowledge-base
+      record:
+        pk: userId
+        sk: "KB_FACT#{hash(company+title)}"
+        user_edited_bullets: [string]
+        confirmed_dates: object
+        source_application_id: string
+
+################################################################################
+# 9. ORCHESTRATOR INTEGRATION
+################################################################################
+
+orchestrator_integration:
+  state_machine: careervp-application-processing
+  state_name: GenerateCV
+  position: After GenerateVPR, Before GenerateCoverLetter
+
+  input_from_previous_state:
+    - applicationId
+    - userId
+    - vpr_artifact_sk   # Passed so Lambda doesn't need to query for latest
+
+  output_to_next_state:
+    - cv_artifact_sk    # e.g., "ARTIFACT#CV#v1"
+    - cv_language       # "en" | "he" | "both"
+    - ats_score         # Forwarded to application status
+
+  error_states:
+    GENERATION_FAILED:
+      action: update application status to FAILED
+      retry_policy: retry 2x with exponential backoff (30s, 60s)
+      on_persistent_failure: notify user via SNS, allow manual retry
+
+    FACT_VERIFICATION_FAILED:
+      action: >
+        Do not write artifact. Update application stage to
+        GENERATION_FAILED with reason = "fact_verification_failed".
+        Log full hallucination_flags to CloudWatch for review.
+      alert: CloudWatch alarm → admin SNS topic
+
+    PARTIAL_SUCCESS:
+      condition: ats_score < 70
+      action: >
+        Write artifact with status = "DRAFT_LOW_ATS".
+        Include ats_issues in artifact record.
+        User sees yellow warning on review page.
+      do_not_block: pipeline continues to cover letter generation
+
+  progress_updates:
+    # Published to WebSocket connection (V1.1) and polled via HTTP (V1)
+    - stage: "CV_TAILORING_STARTED"    progress: 50    message: "Analyzing job keywords..."
+    - stage: "CV_KEYWORDS_MAPPED"      progress: 55    message: "Mapping your experience to requirements..."
+    - stage: "CV_DRAFT_GENERATED"      progress: 65    message: "Verifying facts..."
+    - stage: "CV_VERIFIED"             progress: 70    message: "Running ATS compatibility check..."
+    - stage: "CV_COMPLETE"             progress: 75    message: "CV tailored successfully"
+
+################################################################################
+# 10. COST MANAGEMENT
+################################################################################
+
+cost_management:
+  model: claude-haiku-4-5-20251001
+  
+  token_estimates:
+    stage_1_keyword_mapping:
+      input_tokens: 3500    # VPR (~1500) + job desc (~800) + parsed_facts (~700) + prompt (~500)
+      output_tokens: 600
+      cost_usd: 0.0013
+
+    stage_2_cv_generation:
+      input_tokens: 2800    # Stage 1 output (~600) + parsed_facts (~700) + job desc (~800) + prompt (~700)
+      output_tokens: 1400
+      cost_usd: 0.0025
+
+    stage_3_fact_verification:
+      type: python_code      # No AI cost
+      cost_usd: 0.0000
+
+    total_per_cv: "$0.0038"  # Well within $0.005 target
+
+  dual_language_cost:
+    # When language_cv != language_job, stages 1-2 run twice
+    total_per_cv_dual: "$0.0076"  # Still under $0.010
+
+  token_tracking:
+    # Record actual tokens used for cost analytics
+    write_to_artifact_record:
+      - input_tokens: integer
+      - output_tokens: integer
+      - token_cost_usd: float
+    write_to_cloudwatch:
+      metric_name: CVTailorTokenCost
+      dimensions: [env, language]
+
+  prompt_caching:
+    # The system_prompt for both stages is identical across requests.
+    # Enable Anthropic prompt caching on system_prompt to save ~90% of
+    # system_prompt token costs at scale.
+    cache_system_prompts: true
+    cache_ttl_seconds: 300    # Anthropic's default
+
+################################################################################
+# 11. LAMBDA IMPLEMENTATION STRUCTURE
+################################################################################
+
+implementation:
+
+  file_structure:
+    handler: lambda_function.py::lambda_handler
+    modules:
+      - cv_tailor/loader.py           # DynamoDB data loading
+      - cv_tailor/stage1_keyword.py   # Stage 1 keyword mapping prompt
+      - cv_tailor/stage2_generate.py  # Stage 2 CV generation prompt
+      - cv_tailor/stage3_verify.py    # Stage 3 Python fact verification
+      - cv_tailor/ats_scorer.py       # ATS scoring rules engine
+      - cv_tailor/artifact_writer.py  # DynamoDB + S3 write
+      - cv_tailor/language.py         # Multi-language orchestration
+      - cv_tailor/markdown_renderer.py # cv_sections JSON → markdown string
+      - shared/anthropic_client.py    # Shared API wrapper with retry logic
+      - shared/dynamodb_client.py     # Shared DynamoDB wrapper
+      - shared/exceptions.py          # Custom exception types
+
+  lambda_handler_pseudocode: |
+    def lambda_handler(event, context):
+        application_id = event['applicationId']
+        user_id = event['userId']
+        feedback = event.get('feedback', '')
+        is_regeneration = event.get('is_regeneration', False)
+
+        # 1. Load all required data
+        data = loader.load_all(application_id, user_id)
+        validate_prerequisites(data)  # Raise if VPR missing or FAILED
+
+        # 2. Determine language(s) to generate
+        languages = language.resolve(data.language_cv, data.language_job)
+
+        results = []
+        for lang in languages:
+            # 3. Stage 1 — Keyword mapping (AI)
+            stage1_result = stage1_keyword.run(
+                data=data, language=lang, feedback=feedback
+            )
+
+            # 4. Stage 2 — CV generation with self-correction (AI)
+            stage2_result = stage2_generate.run(
+                data=data, stage1=stage1_result, language=lang, feedback=feedback
+            )
+
+            # 5. Stage 3 — Fact verification (Python)
+            stage3_result = stage3_verify.run(
+                cv_sections=stage2_result['cv_sections'],
+                parsed_facts=data.parsed_facts
+            )
+
+            if not stage3_result.fact_verification_passed:
+                raise FactVerificationError(stage3_result)
+
+            # 6. ATS scoring (Python)
+            ats_result = ats_scorer.score(
+                cv_sections=stage3_result.final_cv_sections,
+                keywords=stage1_result['keywords_to_emphasize'],
+                job_description=data.job_description
+            )
+
+            # 7. Render markdown from structured JSON
+            markdown = markdown_renderer.render(stage3_result.final_cv_sections)
+
+            # 8. Write artifact to DynamoDB
+            version = artifact_writer.get_next_version(application_id, lang)
+            artifact = artifact_writer.write(
+                application_id=application_id,
+                language=lang,
+                cv_sections=stage3_result.final_cv_sections,
+                markdown=markdown,
+                ats_result=ats_result,
+                stage2_verification=stage2_result['verification'],
+                tokens=stage2_result['token_usage'],
+                version=version
+            )
+            results.append(artifact)
+
+        # 9. Update application stage
+        loader.update_application_stage(application_id, 'CV_COMPLETE')
+
+        # 10. Emit CloudWatch metrics
+        emit_metrics(results)
+
+        return {
+            'statusCode': 200,
+            'artifacts': [r.sk for r in results],
+            'ats_scores': {r.language: r.ats_score for r in results}
+        }
+
+  error_handling:
+    prerequisites_not_met:
+      condition: VPR artifact missing or status = FAILED
+      raise: PrerequisiteError
+      message: "CV tailoring requires a completed VPR artifact"
+
+    anthropic_api_timeout:
+      condition: API call exceeds 15s
+      action: retry once, then raise AnthropicTimeoutError
+      orchestrator_handles: marks application FAILED, triggers user notification
+
+    json_parse_error:
+      condition: AI response is not valid JSON
+      action: retry once with explicit format reminder appended to prompt
+      on_second_failure: log full response to CloudWatch, raise ParseError
+
+    fact_verification_error:
+      condition: stage3_verify finds unresolvable hallucinations
+      action: raise FactVerificationError
+      log: full hallucination_flags array to CloudWatch
+      admin_alert: if hallucination_count > 3
+
+  dependencies:
+    python_packages:
+      - anthropic>=0.25.0
+      - boto3>=1.34.0
+      - pydantic>=2.0.0    # Data validation for parsed_facts schema
+      - langdetect>=1.0.9  # Language detection (shared with language-detector)
+    lambda_layer: careervp-common-layer  # Shared packages across Lambdas
+
+################################################################################
+# 12. MONITORING & OBSERVABILITY
+################################################################################
+
+monitoring:
+  cloudwatch_metrics:
+    - name: CVTailorSuccess
+      unit: Count
+      emit_on: successful artifact write
+
+    - name: CVTailorFailure
+      unit: Count
+      dimensions: [failure_reason]
+      emit_on: any exception caught in handler
+
+    - name: CVTailorATSScore
+      unit: None
+      emit_on: every generation
+      note: track score distribution over time
+
+    - name: CVTailorTokenCost
+      unit: None  # USD float as metric value
+      emit_on: every generation
+
+    - name: CVTailorLatencyMs
+      unit: Milliseconds
+      emit_on: every generation
+
+    - name: CVTailorHallucinationCount
+      unit: Count
+      emit_on: stage3 verification (even if 0)
+      alert_threshold: > 3 in any single call
+
+  cloudwatch_alarms:
+    - name: CVTailorHighFailureRate
+      metric: CVTailorFailure
+      threshold: > 5 failures in 5 minutes
+      action: SNS → careervp-admin-alerts
+
+    - name: CVTailorHallucinationSpike
+      metric: CVTailorHallucinationCount
+      threshold: > 3 in any call
+      action: SNS → careervp-admin-alerts
+      note: Investigate prompt drift or parsed_facts quality issues
+
+    - name: CVTailorCostSpike
+      metric: CVTailorTokenCost
+      threshold: > $5.00 in 1 hour
+      action: SNS → careervp-admin-alerts
+
+  structured_logging:
+    format: JSON
+    fields:
+      - application_id
+      - user_id
+      - language
+      - stage  # stage_1 | stage_2 | stage_3 | ats_scoring
+      - success: boolean
+      - ats_score: integer
+      - keyword_score: integer
+      - token_cost_usd: float
+      - latency_ms: integer
+      - hallucination_count: integer
+      - error_type: string (if applicable)
+    log_group: /aws/lambda/cv-tailor
+    retention_days: 90
+
+################################################################################
+# 13. TESTING REQUIREMENTS
+################################################################################
+
+testing:
+  unit_tests:
+    stage3_verify:
+      - test: name mismatch detected and corrected
+      - test: phantom company removed
+      - test: date format normalised MM/YYYY
+      - test: backward date range flagged
+      - test: clean input passes with 0 corrections
+
+    ats_scorer:
+      - test: all keywords present scores 40/40 on keyword component
+      - test: zero quantified bullets scores 0/20
+      - test: missing required section reduces score correctly
+
+    markdown_renderer:
+      - test: contact section renders name, email, phone
+      - test: experience with 3 bullets renders 3 bullet points
+      - test: Hebrew content renders with correct section labels
+
+  integration_tests:
+    end_to_end_english:
+      inputs:
+        - sample_parsed_facts: fixtures/parsed_facts_aws_architect.json
+        - sample_vpr: fixtures/vpr_aws_devops_role.md
+        - sample_job: fixtures/job_aws_solutions_architect.txt
+      assertions:
+        - artifact written to DynamoDB
+        - ats_score >= 75
+        - keyword_match_score >= 7
+        - fact_verification_passed: true
+        - all experience companies match parsed_facts
+
+    end_to_end_hebrew:
+      inputs:
+        - sample_parsed_facts: fixtures/parsed_facts_hebrew.json
+        - language_cv: he
+        - language_job: he
+      assertions:
+        - artifact language = he
+        - Hebrew section headers present in markdown
+        - English technical terms preserved as-is
+
+    dual_language:
+      inputs:
+        - language_cv: en
+        - language_job: he
+      assertions:
+        - two artifacts written (CV_EN and CV_HE)
+        - both artifacts pass fact verification
+
+    regeneration_with_feedback:
+      inputs:
+        - existing_artifact: v1
+        - feedback: "Emphasize the FinOps experience more heavily"
+      assertions:
+        - new artifact written as v2
+        - v1 still accessible
+        - FinOps keyword appears in summary or first experience bullet
+
+  performance_tests:
+    target_p95_latency: 45_seconds  # Well within 60s Lambda timeout
+    concurrent_executions: 10
+    expected_cost_per_run: "$0.005"
+
+################################################################################
+# 14. OPEN QUESTIONS & DECISIONS NEEDED
+################################################################################
+
+open_questions:
+  - id: OQ-001
+    question: >
+      Should the structured form allow users to add NEW experience bullets
+      that don't exist in parsed_facts (e.g., they remember an achievement
+      they forgot to put on their master CV)? This would be a user-initiated
+      fact, not an AI hallucination, but it bypasses the verification chain.
+    options:
+      a: Allow, mark as user_added: true, exclude from hallucination checks
+      b: Disallow, require user to re-upload CV with updated master CV
+    recommendation: >
+      Option A — allow user additions marked as user_added: true. This gives
+      users flexibility while keeping AI-generated facts verifiable.
+      User_added bullets are written to knowledge base as confirmed facts.
+
+  - id: OQ-002
+    question: >
+      The JSA Skill targets 1-page CVs. The technical spec allows up to 3 pages
+      (matching the CV upload limit). For senior candidates with 15+ years
+      experience, 1 page may be too aggressive. What is the official target?
+    options:
+      a: Hard 1-page limit (JSA Skill default)
+      b: 1-2 pages for V1 (matches F-JOB-006 acceptance criteria)
+      c: User-selectable in job input form
+    recommendation: >
+      Option B — default to 1-2 pages, matching F-JOB-006. Add user preference
+      field "preferred_cv_length": "1_page" | "2_page" | "auto" in
+      application record. Auto = 1 page for <= 8 years experience, 2 pages for
+      9+ years.
+
+  - id: OQ-003
+    question: >
+      When gap_analysis_responses contain specific metrics not in parsed_facts
+      (e.g., user answered "I reduced costs by 40%" to a gap question), should
+      these metrics be usable in CV bullets?
+    recommendation: >
+      Yes — gap responses are treated as user-attested facts. Mark bullets
+      derived from gap responses with source: "gap_response" in the JSON.
+      Include them in fact verification but with a different validation rule:
+      they are verified against gap_responses rather than parsed_facts.
+      Write them to knowledge base on finalization.
+
+################################################################################
+# END OF SPECIFICATION
+################################################################################

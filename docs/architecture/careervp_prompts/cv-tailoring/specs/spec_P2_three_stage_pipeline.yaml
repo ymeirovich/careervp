@@ -1,0 +1,445 @@
+################################################################################
+# CAREERVP — CV TAILORING IMPROVEMENT PLAN
+# Spec: P2 — Implement True 3-Stage LLM Pipeline
+# Priority: P1 complete before starting this spec.
+################################################################################
+
+spec_id: CVT-P2
+title: "Implement 3-stage LLM pipeline: keyword mapping → CV generation → fact verification"
+priority: critical
+status: draft
+owner: backend
+created_at: "2026-04-04"
+updated_at: "2026-04-04"
+
+depends_on: [CVT-P1]
+blocks: [CVT-P3]
+
+################################################################################
+# PROBLEM STATEMENT
+################################################################################
+
+problem_statement:
+  exact_failing_behavior: >
+    The current CV tailoring flow uses a single LLM call with a 4-line system prompt
+    (cv_tailoring_prompt.py:17-26). The spec (careervp_cv_tailoring_spec.yaml §4)
+    requires a three-stage prompt architecture:
+      Stage 1: LLM call — keyword extraction + evidence mapping (Haiku, max 1500 tokens)
+      Stage 2: LLM call — CV generation with chain-of-thought self-correction (Haiku, max 2500 tokens)
+      Stage 3: Deterministic Python — fact verification cross-checking every value against parsed_facts
+    The current implementation does Stage 1 purely in Python (analyze_and_map_keywords),
+    skips the LLM's own verification chain-of-thought in Stage 2, and Stage 3 partially
+    exists but does not enforce parsed_facts as the authoritative ground truth.
+
+  expected_behavior: >
+    run_cv_tailoring_pipeline() executes three distinct stages:
+      1. run_stage1_keyword_mapping(vpr, job_description, parsed_facts, gap_responses)
+         → Stage1Output JSON with uvp_statement, key_differentiators, primary_keywords,
+           keywords_to_emphasize, experience_items_to_include, summary_focus, skills_to_feature
+      2. run_stage2_cv_generation(stage1_output, parsed_facts, job_description, company_context)
+         → Stage2Output JSON with verification block (ats_keyword_score, hallucination_flags,
+           summary_rewritten, fact_verification_passed) + cv_sections
+      3. run_stage3_fact_verification(stage2_output, parsed_facts)
+         → CVSections with hallucination_flags stripped, corrections logged
+
+  user_business_impact: >
+    - Current system only matches 2 keywords (Python, AWS) vs the spec requirement of
+      12-18 keyword extraction. Candidates get uncompetitive CVs.
+    - No UVP statement from VPR flows into the CV summary, wasting the VPR investment.
+    - The ground truth CV file created manually using the spec demonstrates the quality
+      gap: structured sections, CAR bullets, 12+ matched keywords vs current text blob.
+
+  reproducibility: >
+    Submit any CV tailoring request. Inspect result — tailored_cv is a single paragraph,
+    keyword_matches.matched contains 2-3 generic terms, no per-role CAR bullets.
+
+################################################################################
+# EVIDENCE
+################################################################################
+
+evidence:
+  current_prompt_location: "src/backend/careervp/logic/cv_tailoring_prompt.py:17-26"
+  current_system_prompt_content: |
+    You are a CV tailoring assistant.
+    Role: Optimize a candidate CV for a specific job description.
+    Instructions:
+    - Preserve IMMUTABLE facts (names, dates, companies, roles).
+    - Do not change employment dates or factual details.
+    - Focus on relevance and ATS-friendly wording.
+  spec_required_stage1_system_prompt_ref: "careervp_cv_tailoring_spec.yaml §4.stage_1_keyword_mapping.system_prompt"
+  spec_required_stage2_system_prompt_ref: "careervp_cv_tailoring_spec.yaml §4.stage_2_cv_generation.system_prompt"
+  keyword_gap:
+    current_matched: ["Python", "AWS"]
+    expected_matched_count: "12-18 from job description"
+  ground_truth_cv: "docs/architecture/careervp_prompts/02_Yitzchak_Meirovich_Learning_Experience_Specialist_SysAid.docx"
+
+################################################################################
+# ARCHITECTURE AND OWNERSHIP MAP
+################################################################################
+
+architecture:
+  new_module: "src/backend/careervp/logic/cv_tailoring_pipeline.py"
+  modified_modules:
+    - "src/backend/careervp/logic/cv_tailoring_prompt.py"
+    - "src/backend/careervp/logic/cv_tailoring.py"
+    - "src/backend/careervp/logic/cv_tailoring_logic.py"
+
+  stage_1_python:
+    type: "Deterministic Python — NO LLM call (preferred approach)"
+    rationale: >
+      The existing analyze_and_map_keywords() Python implementation already produces
+      reliable 12-18 keyword extraction. Adding an LLM Stage 1 call would add ~1-2s
+      latency, ~$0.001 cost per request, and non-determinism without meaningfully
+      better results for the keyword selection task.
+      Instead Stage 1 is extended in Python to also extract structured VPR data
+      (uvp_statement, key_differentiators) from the VPR Pydantic model fields,
+      and to produce an evidence map from parsed_facts.
+    inputs: [vpr, job_description, parsed_facts, gap_responses]
+    function: "run_stage1_keyword_mapping(vpr, job_description, parsed_facts, gap_responses) -> Stage1Output"
+    implementation:
+      uvp_statement: "Extracted from vpr.positioning_statement (already structured in VPR model)"
+      key_differentiators: "Extracted from vpr.unique_strengths[:3] (already structured)"
+      primary_keywords: "analyze_and_map_keywords() output + evidence lookup against parsed_facts"
+      keywords_missing_from_cv: "Keywords in job description not found in any parsed_facts field"
+      experience_items_to_include: "Roles from parsed_facts.work_experience where any primary keyword appears"
+      summary_focus: "Derived from uvp_statement + top 3 primary keywords"
+      skills_to_feature: "Intersection of parsed_facts.skills and primary_keywords"
+    llm_call: false
+
+  stage_2_call:
+    model: "claude-haiku-4-5-20251001"
+    max_tokens: 2500
+    inputs: [stage1_output_json, parsed_facts_json, job_description, company_name, company_culture, user_feedback]
+    output_type: "Stage2Output (JSON with verification block + cv_sections)"
+    function: "run_stage2_cv_generation()"
+    self_correction: "Chain-of-thought VERIFICATION CHECK 1 and CHECK 2 embedded in prompt before output JSON"
+
+  stage_3_python:
+    type: "Deterministic Python — no LLM call"
+    inputs: [stage2_output, parsed_facts]
+    checks:
+      - "contact.name == parsed_facts.name"
+      - "contact.email == parsed_facts.email"
+      - "every experience[].company in parsed_facts.work_experience[].company"
+      - "every experience[].title matched by company in parsed_facts"
+      - "all dates match MM/YYYY or Present"
+      - "strip hallucination_flags from stage2_output.verification"
+      - "every certification in parsed_facts.certifications"
+    output_type: "Stage3Result (CVSections + fact_verification_passed + items_corrected)"
+    function: "run_stage3_fact_verification()"
+
+################################################################################
+# ROOT CAUSE ANALYSIS
+################################################################################
+
+root_cause:
+  confirmed: >
+    The JSA Skill's 3-stage process was documented in the spec but the initial
+    Lambda implementation was scaffolded with a minimal single-pass prompt. The
+    Python keyword extractor (analyze_and_map_keywords) approximates Stage 1 but
+    lacks the LLM's ability to read VPR differentiators, provide supporting evidence
+    per keyword, and generate an experience_items_to_include plan that Stage 2 uses.
+
+  contributing_factors:
+    - Stage 1 Python keyword extraction ignores VPR content (just reads job description)
+    - Stage 2 prompt has no chain-of-thought verification checks before output
+    - Stage 3 Python validator checks FVS baseline but not parsed_facts structure
+
+################################################################################
+# FIX PLAN
+################################################################################
+
+fix_plan:
+  new_file:
+    path: src/backend/careervp/logic/cv_tailoring_pipeline.py
+    purpose: "Three-stage orchestrator. Replaces run_cv_tailoring_pipeline() in cv_tailoring.py."
+    exports:
+      - "Stage1Output: Pydantic model matching schemas.json#Stage1Output"
+      - "Stage2Output: Pydantic model matching schemas.json#Stage2Output"
+      - "Stage3Result: Pydantic model with cv_sections, fact_verification_passed, items_corrected, items_removed"
+      - "run_stage1_keyword_mapping(vpr, job_description, parsed_facts, gap_responses, llm_client) -> Stage1Output"
+      - "run_stage2_cv_generation(stage1, parsed_facts, job_description, company_context, user_feedback, llm_client) -> Stage2Output"
+      - "run_stage3_fact_verification(stage2, parsed_facts) -> Stage3Result"
+      - "run_cv_tailoring_pipeline(cv, job, vpr, gap_responses, company_context, llm_client) -> Stage3Result"
+
+  files_to_modify:
+    - path: src/backend/careervp/logic/cv_tailoring_prompt.py
+      changes:
+        - "Replace build_system_prompt() with build_stage1_system_prompt() and build_stage2_system_prompt()"
+        - "build_stage1_system_prompt(): returns spec §4.stage_1_keyword_mapping.system_prompt verbatim"
+        - "build_stage2_system_prompt(): returns spec §4.stage_2_cv_generation.system_prompt verbatim"
+        - "Add build_stage1_user_prompt(vpr, job_description, parsed_facts, gap_responses) -> str"
+        - "Add build_stage2_user_prompt(stage1, parsed_facts, job_description, company_context, user_feedback) -> str"
+
+    - path: src/backend/careervp/logic/cv_tailoring.py
+      changes:
+        - "Deprecate _tailor_cv_legacy() — keep for backward compat during transition only"
+        - "Update run_cv_tailoring_pipeline() to delegate to cv_tailoring_pipeline.run_cv_tailoring_pipeline()"
+
+    - path: src/backend/careervp/logic/cv_tailoring_logic.py
+      changes:
+        - "Update CVTailoringLogic.tailor_cv() to call run_cv_tailoring_pipeline() from new module"
+        - "Pass parsed_facts (from DynamoDB cv_record.parsed_facts) to the pipeline"
+
+  prompt_content:
+    stage_1_system_prompt: |
+      You are a senior technical recruiter and ATS optimization expert.
+      Your task is to analyze a job posting and a Value Proposition Report,
+      then create a precise keyword-to-evidence mapping plan for CV tailoring.
+
+      You must return ONLY valid JSON. No preamble, no markdown, no explanation.
+      The JSON structure is defined in the user message.
+
+      CRITICAL RULE: You may only reference skills, job titles, companies,
+      dates, and achievements that exist verbatim in the provided parsed_facts.
+      Do not invent, infer, or embellish any candidate information.
+
+    stage_2_system_prompt: |
+      You are an expert CV writer specializing in technical roles.
+      You create ATS-optimized CVs that pass automated screening AND
+      impress human reviewers.
+
+      RULES (non-negotiable):
+      1. ZERO HALLUCINATIONS — every fact, date, metric, company name, and
+         job title must appear in the provided parsed_facts. If unsure, omit.
+      2. CAR/STAR format for ALL experience bullets — Challenge/Action/Result
+         with a quantifiable metric whenever one exists in the source data.
+      3. Keyword density — primary keywords must appear 2-3x naturally across
+         summary, skills, and experience sections.
+      4. Length — 1 page (approximately 450-600 words of body content).
+         Do not pad. Do not truncate relevant experience.
+      5. ATS formatting — no tables, no text boxes, no columns in the content
+         structure. Simple flat sections only.
+      6. Anti-AI detection — vary sentence structure, use natural transitions,
+         avoid "leverage", "delve", "robust", "streamline", "landscape",
+         "spearhead" (overused). Use concrete verbs tied to actual work.
+      7. Self-correct before finalizing — explicitly check keyword match and
+         summary alignment before producing output JSON.
+
+      Return ONLY valid JSON. No preamble, no markdown, no explanation.
+
+  error_handling:
+    stage_1_json_parse_failure: "Retry once with explicit JSON format reminder; fall back to Python keyword extraction"
+    stage_2_json_parse_failure: "Retry once; if second failure abort and return error"
+    stage_2_hallucination_flags: "Strip flagged facts in Stage 3; log warning; alert if count > 2"
+    stage_2_ats_score_below_6: "Retry Stage 2 with stronger keyword instruction (max 1 retry)"
+
+  non_goals:
+    - "Do not change DynamoDB table structure (P3)"
+    - "Do not add gap_analysis_responses fetch from DB (P3 — use empty dict if missing)"
+    - "Do not implement multi-language dual-CV generation (V2)"
+    - "Do not change the Lambda timeout or memory in this spec (already 60s/512MB)"
+
+  rollback_plan: >
+    Keep _tailor_cv_legacy() in cv_tailoring.py. If pipeline fails in production,
+    CVTailoringLogic can fall back to _tailor_cv_legacy() via a feature flag
+    ENV var PIPELINE_V2_ENABLED=false.
+
+################################################################################
+# ACCEPTANCE CRITERIA
+################################################################################
+
+acceptance_criteria:
+  - id: AC-P2-01
+    description: "run_stage1_keyword_mapping() returns Stage1Output with uvp_statement and primary_keywords list of 12-18 entries"
+    verification: "len(stage1.primary_keywords) >= 12 and stage1.uvp_statement is not None"
+    blocking: true
+
+  - id: AC-P2-02
+    description: "Each primary_keyword entry has keyword, category, priority, and supporting_evidence fields"
+    verification: "All Stage1Output.primary_keywords items conform to schemas.json#Stage1Output.primary_keywords item schema"
+    blocking: true
+
+  - id: AC-P2-03
+    description: "run_stage2_cv_generation() returns Stage2Output.verification.ats_keyword_score >= 6 on the sample job/CV fixture"
+    verification: "stage2.verification.ats_keyword_score >= 6"
+    blocking: true
+
+  - id: AC-P2-04
+    description: "Stage2Output.cv_sections.experience[] has CAR-format bullets (strong verb + context + quantified result)"
+    verification: "Each bullet passes validate_star_bullet() or contains a numeric metric (regex \\d+[%$kKmM])"
+    blocking: true
+
+  - id: AC-P2-05
+    description: "run_stage3_fact_verification() strips hallucination_flags entries from cv_sections before returning"
+    verification: "If stage2.verification.hallucination_flags is non-empty, Stage3Result.items_removed >= 1"
+    blocking: true
+
+  - id: AC-P2-06
+    description: "run_stage3_fact_verification() returns fact_verification_passed: false and does not persist if any experience company is not in parsed_facts.work_experience"
+    verification: "Inject company 'FAKE CORP' into stage2 output → Stage3Result.fact_verification_passed == False"
+    blocking: true
+
+  - id: AC-P2-07
+    description: "End-to-end pipeline run_cv_tailoring_pipeline() completes in <= 60s on dev Lambda"
+    verification: "Lambda execution duration in CloudWatch <= 60000ms"
+    blocking: true
+
+  - id: AC-P2-08
+    description: "FEATURE_FLAG: PIPELINE_V2_ENABLED=false falls back to _tailor_cv_legacy() without error"
+    verification: "Set env var, call endpoint, response shape is backward-compat (or old cv_tailoring_models shape)"
+    blocking: false
+
+  - id: AC-P2-09
+    description: "Stage 1 and Stage 2 prompts match the verbatim text from careervp_cv_tailoring_spec.yaml §4"
+    verification: "build_stage1_system_prompt() and build_stage2_system_prompt() string content matches spec"
+    blocking: true
+
+  - id: AC-P2-10
+    description: "MyPy strict passes for cv_tailoring_pipeline.py and cv_tailoring_prompt.py"
+    verification: "uv run mypy careervp --strict exits 0"
+    blocking: true
+
+################################################################################
+# BASELINE AND REGRESSION BUDGET
+################################################################################
+
+baseline_and_regression_budget:
+  baseline_artifact: "docs/evidence/cv-tailoring-baseline-render.json"
+  blocked_regressions:
+    - "new_non_2xx_on_changed_endpoints: cv-tailoring generate and status endpoints"
+    - "stage1_returns_fewer_than_12_keywords: regression in keyword extraction coverage"
+    - "fact_verification_accepts_hallucinated_company: FVS safety regression"
+  allowed_deltas:
+    - "Response latency increase: Stage 1 adds ~1-2s LLM call; acceptable within 60s timeout"
+    - "Token cost increase: Stage 1 adds ~4100 input tokens; within $0.005 target per spec"
+
+################################################################################
+# VERIFICATION CONTRACT
+################################################################################
+
+verification_contract:
+  - requirement_id: AC-P2-01
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P2-02
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P2-03
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P2-04
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P2-05
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P2-06
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P2-07
+    verification_type: live
+    blocking_gate: post_deploy
+    artifact_required: true
+  - requirement_id: AC-P2-09
+    verification_type: static
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P2-10
+    verification_type: static
+    blocking_gate: pre_merge
+    artifact_required: false
+
+################################################################################
+# DEPLOYED PARITY PLAN
+################################################################################
+
+deployed_parity:
+  route_surface_parity: "No route changes. Internal pipeline refactor only."
+  authorizer_parity: "No auth changes."
+  runtime_env_resolution_parity: >
+    New env var PIPELINE_V2_ENABLED (default: true) controls pipeline version.
+    Must be set in Lambda environment for both dev and staging.
+
+################################################################################
+# VALIDATION PLAN
+################################################################################
+
+validation_plan:
+  static:
+    - "uv run mypy careervp --strict"
+    - "uv run ruff check src/backend/careervp/logic/cv_tailoring_pipeline.py"
+  unit:
+    - command: "uv run pytest src/backend/tests/unit/cv_tailoring/ -q -m unit"
+      test_files:
+        - "src/backend/tests/unit/cv_tailoring/test_stage1_keyword_mapping.py"
+        - "src/backend/tests/unit/cv_tailoring/test_stage2_cv_generation.py"
+        - "src/backend/tests/unit/cv_tailoring/test_stage3_fact_verification.py"
+        - "src/backend/tests/unit/cv_tailoring/test_pipeline_prompts.py"
+  integration:
+    - command: "uv run pytest src/backend/tests/integration/test_cv_tailoring_pipeline_integration.py -q"
+
+################################################################################
+# TRACEABILITY MATRIX
+################################################################################
+
+traceability:
+  - requirement_id: AC-P2-01
+    code_reference: "src/backend/careervp/logic/cv_tailoring_pipeline.py::run_stage1_keyword_mapping"
+    test_reference: "docs/architecture/careervp_prompts/cv-tailoring/tests/test_P2_three_stage_pipeline.yaml::test_stage1_returns_12_to_18_keywords"
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+    result: pending
+
+  - requirement_id: AC-P2-05
+    code_reference: "src/backend/careervp/logic/cv_tailoring_pipeline.py::run_stage3_fact_verification"
+    test_reference: "docs/architecture/careervp_prompts/cv-tailoring/tests/test_P2_three_stage_pipeline.yaml::test_stage3_strips_hallucination_flags"
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+    result: pending
+
+  - requirement_id: AC-P2-06
+    code_reference: "src/backend/careervp/logic/cv_tailoring_pipeline.py::run_stage3_fact_verification"
+    test_reference: "docs/architecture/careervp_prompts/cv-tailoring/tests/test_P2_three_stage_pipeline.yaml::test_stage3_rejects_hallucinated_company"
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+    result: pending
+
+  - requirement_id: AC-P2-09
+    code_reference: "src/backend/careervp/logic/cv_tailoring_prompt.py::build_stage1_system_prompt, build_stage2_system_prompt"
+    test_reference: "docs/architecture/careervp_prompts/cv-tailoring/tests/test_P2_three_stage_pipeline.yaml::test_stage1_system_prompt_matches_spec"
+    verification_type: static
+    blocking_gate: pre_merge
+    artifact_required: false
+    result: pending
+
+################################################################################
+# ROLLBACK TRIGGER MATRIX
+################################################################################
+
+rollback_triggers:
+  - trigger_id: RT-P2-001
+    condition: "Stage 1 LLM call exceeds 60s Lambda timeout in production"
+    detection_source: "CloudWatch Lambda duration alarm"
+    action: "Set PIPELINE_V2_ENABLED=false to fall back to legacy single-call flow"
+    owner: backend
+
+  - trigger_id: RT-P2-002
+    condition: "fact_verification_passed rate drops below 95% in post-deploy window"
+    detection_source: "CloudWatch custom metric cv_tailoring_fact_verification_pass_rate"
+    action: "Investigate Stage 3 logic; roll back if hallucination_flags stripping is too aggressive"
+    owner: backend
+
+################################################################################
+# COMPLETION EVIDENCE
+################################################################################
+
+completion_evidence:
+  required:
+    - pytest output showing all Stage1/Stage2/Stage3 unit tests pass
+    - mypy output showing zero errors in cv_tailoring_pipeline.py
+    - sample Stage1Output JSON with >= 12 primary_keywords
+    - sample Stage3Result showing fact_verification_passed: true on valid fixture
+    - Lambda CloudWatch duration < 60000ms
+  residual_risks:
+    - LLM non-determinism: Stage 1 keyword count may occasionally fall below 12 if job description is very short; Python fallback handles this
+    - Stage 2 hallucination_flags self-reporting: LLM may not always flag its own hallucinations; Stage 3 Python cross-check is the hard safety net

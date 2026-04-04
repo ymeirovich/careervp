@@ -3,6 +3,7 @@
 import json
 import os
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -644,3 +645,72 @@ def llm_phase2_response() -> dict[str, Any]:
             'sections_to_compress': ['Education'],
         },
     }
+
+
+# P2: Three-stage pipeline test fixtures
+@pytest.fixture
+def sample_parsed_facts() -> 'UserCV':
+    """UserCV with work experience for pipeline tests."""
+    from careervp.models.cv_models import Skill, SkillLevel, UserCV, WorkExperience
+
+    return UserCV(
+        user_id='user-123',
+        full_name='Alex Candidate',
+        email='alex@example.com',
+        phone='+1-555-0100',
+        location='New York, NY',
+        professional_summary='Engineering leader with platform and cloud expertise.',
+        work_experience=[
+            WorkExperience(
+                company='Nimbus Labs',
+                role='Senior Software Engineer',
+                start_date='2021-01',
+                end_date='Present',
+                is_current=True,
+                responsibilities=['Led Kubernetes migration for 12 production services'],
+                achievements=[
+                    'Increased deployment reliability by 35%',
+                    'Reduced pipeline duration by 22%',
+                ],
+                technologies=['Kubernetes', 'AWS', 'Python'],
+            ),
+        ],
+        education=[],
+        skills=[
+            Skill(name='Python', level=SkillLevel.EXPERT),
+            Skill(name='AWS', level=SkillLevel.ADVANCED),
+            Skill(name='Kubernetes', level=SkillLevel.EXPERT),
+            Skill(name='Leadership', level=SkillLevel.INTERMEDIATE),
+        ],
+        certifications=[],
+        languages=['English'],
+    )
+
+
+@pytest.fixture
+def mock_llm_stage1() -> MagicMock:
+    """LLM client that returns a valid Stage1 JSON for mocking."""
+    mock = MagicMock()
+    mock.complete.return_value = MagicMock(
+        text=json.dumps(
+            {
+                'uvp_statement': 'Platform engineer with cloud expertise and 35% reliability improvement track record',
+                'key_differentiators': ['Kubernetes automation', 'Python tooling', 'SRE mindset'],
+                'primary_keywords': [
+                    {
+                        'keyword': 'Kubernetes',
+                        'category': 'technical_skill',
+                        'priority': 1,
+                        'supporting_evidence': 'work_experience[0].achievements[0]',
+                    },
+                    {'keyword': 'Python', 'category': 'technical_skill', 'priority': 2, 'supporting_evidence': 'work_experience[0].skills'},
+                    {'keyword': 'AWS', 'category': 'technical_skill', 'priority': 3, 'supporting_evidence': 'work_experience[0].skills'},
+                ],
+                'keywords_to_emphasize': ['Kubernetes', 'Python', 'AWS'],
+                'keywords_missing_from_cv': [],
+                'experience_items_to_include': [],
+                'summary_focus': 'Platform engineer with cloud expertise',
+            }
+        )
+    )
+    return mock

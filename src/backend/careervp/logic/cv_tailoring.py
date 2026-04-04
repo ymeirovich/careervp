@@ -18,6 +18,12 @@ from careervp.models.cv import UserCV as CVUserCV
 from careervp.models.cv_models import Certification, ContactInfo, Skill, UserCV, WorkExperience
 from careervp.models.cv_tailoring_models import (
     ChangeLog,
+    CVCertificationSection,
+    CVContactSection,
+    CVEducationSection,
+    CVExperienceSection,
+    CVSections,
+    CVSkillsSection,
     TailoredCV,
     TailoredCVResponse,
     TailoringPreferences,
@@ -32,8 +38,8 @@ STAR_ACTION_VERB_PATTERN = re.compile(r'^[A-Za-z]+')
 
 MIN_KEYWORDS = 12
 MAX_KEYWORDS = 18
-TARGET_ATS_SCORE = 8.0
-ANTI_AI_MIN_SCORE = 9.0
+TARGET_ATS_SCORE = 80  # 0-100 scale (was 8.0 on 0-10 scale)
+ANTI_AI_MIN_SCORE = 90  # 0-100 scale (was 9.0 on 0-10 scale)
 MAX_SELF_CORRECTION_ITERATIONS = 3
 
 KeywordCategory = Literal['required', 'preferred', 'nice_to_have']
@@ -162,13 +168,13 @@ class KeywordMap:
 
 @dataclass(frozen=True)
 class TailoredCVDraft:
-    """Step 2 output including preliminary ATS score."""
+    """Step 2 output including preliminary ATS score. P4: 0-100 scale."""
 
     source_cv: CVUserCV | UserCV
     keyword_map: KeywordMap
     tailored_cv: TailoredCV
     section_order: list[str]
-    preliminary_ats_score: float
+    preliminary_ats_score: int
     integrated_keywords: list[str]
     feedback_applied: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -176,10 +182,10 @@ class TailoredCVDraft:
 
 @dataclass(frozen=True)
 class FinalTailoredCV:
-    """Final CV package produced after Step 3 validation."""
+    """Final CV package produced after Step 3 validation. P4: 0-100 scale."""
 
     tailored_cv: TailoredCV
-    ats_score: float
+    ats_score: int
     keyword_map: KeywordMap
     iterations: int
     iteration_history: list[dict[str, Any]]
@@ -331,8 +337,12 @@ def _tailor_cv_legacy(  # noqa: C901
     average_score = _average_score(relevance_scores)
     estimated_ats_score = int(round(average_score * 100))
 
+    # P1: Build cv_sections from parsed JSON data
+    cv_sections = _build_cv_sections(master_cv, parsed.data)
+
     response = TailoredCVResponse(
-        tailored_cv=tailored_cv,
+        cv_sections=cv_sections,  # P1: structured sections
+        ats_score=estimated_ats_score,  # P1: 0-100 scale (int)
         changes_made=changes_made,
         relevance_scores=relevance_scores,
         average_relevance_score=average_score,
@@ -465,28 +475,36 @@ def analyze_and_map_keywords(cv: CVUserCV | UserCV, job: Job | str) -> KeywordMa
     )
 
 
-def calculate_ats_score(tailored_cv: TailoredCV, keyword_map: KeywordMap) -> float:
-    """Score CV quality on a 0-10 ATS scale."""
+def calculate_ats_score(tailored_cv: TailoredCV, keyword_map: KeywordMap) -> int:
+    """Score CV quality on a 0-100 ATS scale (P4)."""
     keywords = keyword_map.all_keywords
     combined_text = _serialize_tailored_cv_text(tailored_cv).lower()
 
+    # Keyword density: 0-40 points
     if keywords:
         matched_keywords = [keyword for keyword in keywords if keyword in combined_text]
-        coverage = len(matched_keywords) / len(keywords)
+        keyword_density = len(matched_keywords) / len(keywords)
     else:
-        coverage = 0.0
+        keyword_density = 0.0
+    keyword_score = int(40 * keyword_density)
 
+    # Required keyword coverage: 0-20 points
     required_keywords = keyword_map.required or keywords
-    required_coverage = (
-        len([keyword for keyword in required_keywords if keyword in combined_text]) / len(required_keywords) if required_keywords else 0.0
-    )
+    if required_keywords:
+        required_matches = [keyword for keyword in required_keywords if keyword in combined_text]
+        required_coverage = len(required_matches) / len(required_keywords)
+    else:
+        required_coverage = 0.0
+    required_score = int(20 * required_coverage)
 
-    section_presence = _section_presence_score(tailored_cv)
-    star_score = _star_compliance_score(tailored_cv)
-    formatting_score = _formatting_score(tailored_cv)
+    # Formatting: 0-20 points
+    formatting_score = int(20 * _formatting_score(tailored_cv))
 
-    score = 4.0 * coverage + 2.0 * required_coverage + 1.5 * section_presence + 1.5 * star_score + 1.0 * formatting_score
-    return round(max(0.0, min(10.0, score)), 2)
+    # STAR compliance: 0-20 points
+    star_score = int(20 * _star_compliance_score(tailored_cv))
+
+    total = keyword_score + required_score + formatting_score + star_score
+    return max(0, min(100, total))
 
 
 def validate_star_bullet(bullet: str) -> bool:
@@ -552,7 +570,7 @@ def validate_and_finalize(tailored: TailoredCVDraft | TailoredCV) -> FinalTailor
             raise TypeError('Self-correction expected TailoredCVDraft response')
 
         new_score = calculate_ats_score(improved.tailored_cv, improved.keyword_map)
-        minimum_expected_score = min(10.0, ats_score + 0.5)
+        minimum_expected_score = min(100, ats_score + 5)
         if new_score < minimum_expected_score:
             new_score = minimum_expected_score
             improved = replace(
@@ -688,7 +706,7 @@ def _tailor_cv_step2(
     section_order = _rank_sections_for_cv(tailored_cv, keyword_map)
     preliminary_score = calculate_ats_score(tailored_cv, keyword_map)
     if iteration_hint > 0:
-        preliminary_score = min(10.0, preliminary_score + (0.55 * iteration_hint))
+        preliminary_score = min(100, preliminary_score + (5 * iteration_hint))
 
     integrated_keywords = [keyword for keyword in prioritized_keywords if keyword.lower() in _serialize_tailored_cv_text(tailored_cv).lower()]
     return TailoredCVDraft(
@@ -696,7 +714,7 @@ def _tailor_cv_step2(
         keyword_map=keyword_map,
         tailored_cv=tailored_cv,
         section_order=section_order,
-        preliminary_ats_score=round(preliminary_score, 2),
+        preliminary_ats_score=preliminary_score,
         integrated_keywords=integrated_keywords,
         feedback_applied=feedback,
         metadata={
@@ -1560,6 +1578,107 @@ def _build_tailored_cv(master_cv: CVUserCV | UserCV, payload: dict[str, Any]) ->
         languages=master_cv.languages,
         created_at=master_cv.created_at,
     )
+
+
+def _build_cv_sections(master_cv: CVUserCV | UserCV, payload: dict[str, Any]) -> CVSections | None:  # noqa: C901
+    """Build CVSections from LLM JSON output (P1 spec).
+
+    Extracts structured cv_sections from parse_llm_response JSON payload.
+    Falls back to master_cv data if payload is incomplete.
+    """
+    try:
+        # Extract contact
+        contact_data = payload.get('contact', {})
+        contact = CVContactSection(
+            name=contact_data.get('name') or master_cv.full_name,
+            email=contact_data.get('email') or master_cv.email,
+            phone=contact_data.get('phone') or master_cv.phone,
+            linkedin=contact_data.get('linkedin'),
+            location=contact_data.get('location') or master_cv.location,
+        )
+
+        # Extract summary
+        summary = payload.get('summary') or master_cv.professional_summary or ''
+
+        # Extract skills
+        skills_data = payload.get('skills', {})
+        skills = CVSkillsSection(
+            technical=skills_data.get('technical', []),
+            soft=skills_data.get('soft', []),
+        )
+
+        # Extract experience
+        exp_list: list[CVExperienceSection] = []
+        for exp in payload.get('experience', []):
+            if isinstance(exp, dict):
+                exp_list.append(
+                    CVExperienceSection(
+                        company=exp.get('company', ''),
+                        title=exp.get('title', ''),
+                        start_date=exp.get('start_date', ''),
+                        end_date=exp.get('end_date'),
+                        is_current=exp.get('is_current', False),
+                        bullets=exp.get('bullets', []),
+                        location=exp.get('location'),
+                    )
+                )
+
+        # Extract education
+        edu_list: list[CVEducationSection] = []
+        for edu in payload.get('education', []):
+            if isinstance(edu, dict):
+                edu_list.append(
+                    CVEducationSection(
+                        institution=edu.get('institution', ''),
+                        degree=edu.get('degree', ''),
+                        field=edu.get('field', ''),
+                        graduation_date=edu.get('graduation_date', ''),
+                        gpa=edu.get('gpa'),
+                    )
+                )
+        # Fallback to master_cv education if empty
+        if not edu_list and master_cv.education:
+            for edu in master_cv.education:
+                gpa_str: str | None = None
+                if edu.gpa is not None:
+                    gpa_str = str(edu.gpa)
+                edu_list.append(
+                    CVEducationSection(
+                        institution=edu.institution,
+                        degree=edu.degree,
+                        field=edu.field_of_study or '',
+                        graduation_date=edu.graduation_date or '',
+                        gpa=gpa_str,
+                    )
+                )
+
+        # Extract certifications
+        cert_list: list[CVCertificationSection] = []
+        for cert in payload.get('certifications', []) or []:
+            if isinstance(cert, dict):
+                cert_list.append(
+                    CVCertificationSection(
+                        name=cert.get('name', ''),
+                        issuer=cert.get('issuer', ''),
+                        date=cert.get('date', ''),
+                    )
+                )
+
+        # Extract languages
+        languages = payload.get('languages') or master_cv.languages or None
+
+        return CVSections(
+            contact=contact,
+            summary=summary,
+            skills=skills,
+            experience=exp_list or [],  # Require at least 1
+            education=edu_list,
+            certifications=cert_list,
+            languages=languages,
+        )
+    except Exception:
+        # If parsing fails, return None — response will use legacy TailoredCV
+        return None
 
 
 def _build_change_log(

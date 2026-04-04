@@ -152,24 +152,24 @@ def test_cv_tailoring_returns_non_null_cv_id_and_persists_with_dal() -> None:
 
 @pytest.mark.unit
 def test_cv_tailoring_ats_score_meets_threshold(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Finalized ATS score must be at least 8.0."""
+    """Finalized ATS score must be at least 80 (P4: 0-100 scale)."""
     monkeypatch.setattr(
         'careervp.logic.cv_tailoring.check_anti_ai_patterns',
-        lambda _text: SimpleNamespace(score=9.4, issues=[]),
+        lambda _text: SimpleNamespace(score=94, issues=[]),
     )
     final = validate_and_finalize(_weak_draft())
-    assert final.ats_score >= 8.0
+    assert final.ats_score >= 80
 
 
 @pytest.mark.unit
 def test_cv_tailoring_anti_ai_score_meets_threshold(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Finalized anti-AI score must be at least 9.0."""
+    """Finalized anti-AI score must be at least 90 (P4: 0-100 scale)."""
     monkeypatch.setattr(
         'careervp.logic.cv_tailoring.check_anti_ai_patterns',
-        lambda _text: SimpleNamespace(score=9.3, issues=[]),
+        lambda _text: SimpleNamespace(score=93, issues=[]),
     )
     final = validate_and_finalize(_weak_draft())
-    assert float(final.metadata.get('anti_ai_score', 0.0)) >= 9.0
+    assert final.metadata.get('anti_ai_score', 0) >= 90
 
 
 @pytest.mark.unit
@@ -180,8 +180,8 @@ def test_cv_tailoring_self_correction_triggers_on_low_score(monkeypatch: pytest.
     def _low_then_high(_text: str) -> SimpleNamespace:
         call_count['value'] += 1
         if call_count['value'] == 1:
-            return SimpleNamespace(score=8.1, issues=['templated language'])
-        return SimpleNamespace(score=9.2, issues=[])
+            return SimpleNamespace(score=81, issues=['templated language'])
+        return SimpleNamespace(score=92, issues=[])
 
     monkeypatch.setattr('careervp.logic.cv_tailoring.check_anti_ai_patterns', _low_then_high)
     final = validate_and_finalize(_weak_draft())
@@ -202,10 +202,10 @@ def test_cv_tailoring_max_3_correction_iterations(monkeypatch: pytest.MonkeyPatc
         repair_calls['count'] += 1
         return weak_draft
 
-    monkeypatch.setattr('careervp.logic.cv_tailoring.calculate_ats_score', lambda _cv, _map: 5.5)
+    monkeypatch.setattr('careervp.logic.cv_tailoring.calculate_ats_score', lambda _cv, _map: 55)
     monkeypatch.setattr(
         'careervp.logic.cv_tailoring.check_anti_ai_patterns',
-        lambda _text: SimpleNamespace(score=9.6, issues=[]),
+        lambda _text: SimpleNamespace(score=96, issues=[]),
     )
     monkeypatch.setattr('careervp.logic.cv_tailoring.tailor_cv', _fake_repair)
 

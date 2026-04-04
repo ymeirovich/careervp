@@ -1,0 +1,411 @@
+################################################################################
+# TEST SPEC: P1 — Structured cv_sections Output Schema
+# Spec ref: CVT-P1
+# When implemented: create src/backend/tests/unit/cv_tailoring/test_output_schema.py
+#                   and src/backend/tests/unit/cv_tailoring/test_cv_sections_model.py
+################################################################################
+
+test_spec_id: TEST-CVT-P1
+spec_ref: CVT-P1
+title: "cv_sections structured output and TailoredCVResponse schema tests"
+test_files:
+  - "src/backend/tests/unit/cv_tailoring/test_output_schema.py"
+  - "src/backend/tests/unit/cv_tailoring/test_cv_sections_model.py"
+markers:
+  - "@pytest.mark.unit"
+status: pending_implementation
+non_self_closing: true
+
+description: >
+  All tests in this spec fail with ImportError or AttributeError until CVT-P1 is
+  implemented. Specifically: CVSections, CVContact, CVExperienceItem must be
+  importable from careervp.models.cv_tailoring_models. The tailored_cv field must
+  not exist on TailoredCVResponse. ats_score must be an int.
+
+################################################################################
+# FIXTURES
+################################################################################
+
+fixtures:
+  - id: SAMPLE_CV_SECTIONS
+    description: "Minimal valid CVSections object for assertion tests"
+    implementation: |
+      import pytest
+      from careervp.models.cv_tailoring_models import (
+          CVContact,
+          CVExperienceItem,
+          CVSections,
+          CVSkills,
+      )
+
+      @pytest.fixture
+      def sample_cv_sections() -> CVSections:
+          return CVSections(
+              contact=CVContact(
+                  name="Alex Candidate",
+                  email="alex@example.com",
+                  phone="+1-555-0100",
+                  linkedin=None,
+                  location="New York, NY",
+              ),
+              summary=(
+                  "Platform engineer with 8 years driving cloud reliability across "
+                  "distributed SaaS products. Led Kubernetes migration at Nimbus Labs, "
+                  "achieving 35% deployment reliability gain and reducing pipeline duration by 22%."
+              ),
+              skills=CVSkills(
+                  technical=["Python", "AWS", "Kubernetes", "Terraform"],
+                  soft=["Leadership", "Stakeholder management"],
+              ),
+              experience=[
+                  CVExperienceItem(
+                      company="Nimbus Labs",
+                      title="Senior Software Engineer",
+                      start_date="01/2021",
+                      end_date="Present",
+                      bullets=[
+                          "Drove | In distributed platform at Nimbus Labs | Kubernetes migration for 12 services | Increased deployment reliability by 35%",
+                          "Built | In CI/CD pipeline operations | Python tooling for test orchestration | Reduced pipeline duration by 22%",
+                      ],
+                  )
+              ],
+              education=[],
+              certifications=[],
+          )
+
+  - id: SAMPLE_TAILORED_CV_RESPONSE
+    description: "Minimal valid TailoredCVResponse with new schema"
+    implementation: |
+      from careervp.models.cv_tailoring_models import TailoredCVResponse
+
+      @pytest.fixture
+      def sample_tailored_cv_response(sample_cv_sections: CVSections) -> TailoredCVResponse:
+          return TailoredCVResponse(
+              cv_sections=sample_cv_sections,
+              ats_score=82,
+              ats_issues=[],
+              keyword_match_score=9,
+              keywords_missing=[],
+              fact_verification_passed=True,
+              language="en",
+          )
+
+################################################################################
+# TESTS — MODEL SHAPE
+################################################################################
+
+tests:
+  - id: T-P1-01
+    name: test_cv_sections_model_is_importable
+    maps_to_ac: AC-P1-01
+    description: "CVSections and sub-models must be importable — fails with ImportError until P1 implemented"
+    implementation: |
+      @pytest.mark.unit
+      def test_cv_sections_model_is_importable() -> None:
+          from careervp.models.cv_tailoring_models import (  # noqa: F401
+              CVContact,
+              CVExperienceItem,
+              CVSections,
+              CVSkills,
+          )
+
+  - id: T-P1-02
+    name: test_cv_sections_has_required_fields
+    maps_to_ac: AC-P1-01
+    description: "CVSections must expose contact, summary, skills, experience, education, certifications"
+    implementation: |
+      @pytest.mark.unit
+      def test_cv_sections_has_required_fields(sample_cv_sections: CVSections) -> None:
+          assert hasattr(sample_cv_sections, "contact"), "CVSections missing contact"
+          assert hasattr(sample_cv_sections, "summary"), "CVSections missing summary"
+          assert hasattr(sample_cv_sections, "skills"), "CVSections missing skills"
+          assert hasattr(sample_cv_sections, "experience"), "CVSections missing experience"
+          assert hasattr(sample_cv_sections, "education"), "CVSections missing education"
+          assert hasattr(sample_cv_sections, "certifications"), "CVSections missing certifications"
+
+  - id: T-P1-03
+    name: test_experience_item_has_bullets_array
+    maps_to_ac: AC-P1-02
+    description: "CVExperienceItem must have a bullets field that is a list of strings"
+    implementation: |
+      @pytest.mark.unit
+      def test_experience_item_has_bullets_array(sample_cv_sections: CVSections) -> None:
+          assert sample_cv_sections.experience, "experience list must not be empty in fixture"
+          exp = sample_cv_sections.experience[0]
+          assert hasattr(exp, "bullets"), "CVExperienceItem missing bullets field"
+          assert isinstance(exp.bullets, list), "CVExperienceItem.bullets must be a list"
+          assert len(exp.bullets) >= 1, "CVExperienceItem.bullets must have at least one entry"
+          assert all(isinstance(b, str) for b in exp.bullets), "All bullets must be strings"
+
+  - id: T-P1-04
+    name: test_tailored_cv_response_has_cv_sections_not_text_blob
+    maps_to_ac: [AC-P1-01, AC-P1-05]
+    description: "TailoredCVResponse must have cv_sections field; must NOT have tailored_cv field"
+    implementation: |
+      @pytest.mark.unit
+      def test_tailored_cv_response_has_cv_sections_not_text_blob(
+          sample_tailored_cv_response: TailoredCVResponse,
+      ) -> None:
+          assert hasattr(sample_tailored_cv_response, "cv_sections"), (
+              "TailoredCVResponse must have cv_sections field — CVT-P1 not implemented"
+          )
+          assert not hasattr(sample_tailored_cv_response, "tailored_cv"), (
+              "TailoredCVResponse must NOT have tailored_cv text blob field — CVT-P1 not implemented"
+          )
+          # Ensure the field is a structured object, not a string
+          assert not isinstance(sample_tailored_cv_response.cv_sections, str), (
+              "cv_sections must be a CVSections object, not a string"
+          )
+
+  - id: T-P1-05
+    name: test_ats_score_is_int_in_0_to_100_range
+    maps_to_ac: AC-P1-03
+    description: "TailoredCVResponse.ats_score must be int in 0-100"
+    implementation: |
+      @pytest.mark.unit
+      def test_ats_score_is_int_in_0_to_100_range(
+          sample_tailored_cv_response: TailoredCVResponse,
+      ) -> None:
+          score = sample_tailored_cv_response.ats_score
+          assert isinstance(score, int), (
+              f"ats_score must be int, got {type(score).__name__} — CVT-P1 not implemented"
+          )
+          assert 0 <= score <= 100, (
+              f"ats_score {score} is out of 0-100 range — CVT-P1 not implemented"
+          )
+
+  - id: T-P1-06
+    name: test_fact_verification_passed_is_bool
+    maps_to_ac: AC-P1-04
+    description: "TailoredCVResponse.fact_verification_passed must be bool"
+    implementation: |
+      @pytest.mark.unit
+      def test_fact_verification_passed_is_bool(
+          sample_tailored_cv_response: TailoredCVResponse,
+      ) -> None:
+          assert hasattr(sample_tailored_cv_response, "fact_verification_passed"), (
+              "TailoredCVResponse missing fact_verification_passed — CVT-P1 not implemented"
+          )
+          assert isinstance(sample_tailored_cv_response.fact_verification_passed, bool), (
+              "fact_verification_passed must be bool"
+          )
+
+  - id: T-P1-07
+    name: test_keywords_missing_and_keyword_match_score_present
+    maps_to_ac: AC-P1-08
+    description: "keywords_missing must be a list; keyword_match_score must be int 1-10"
+    implementation: |
+      @pytest.mark.unit
+      def test_keywords_missing_and_keyword_match_score_present(
+          sample_tailored_cv_response: TailoredCVResponse,
+      ) -> None:
+          assert isinstance(sample_tailored_cv_response.keywords_missing, list), (
+              "keywords_missing must be a list — CVT-P1 not implemented"
+          )
+          assert isinstance(sample_tailored_cv_response.keyword_match_score, int), (
+              "keyword_match_score must be an int — CVT-P1 not implemented"
+          )
+          assert 1 <= sample_tailored_cv_response.keyword_match_score <= 10, (
+              f"keyword_match_score {sample_tailored_cv_response.keyword_match_score} out of 1-10 range"
+          )
+
+  - id: T-P1-08
+    name: test_cv_sections_contact_name_preserved
+    maps_to_ac: AC-P1-06
+    description: "cv_sections.contact.name must equal the input CV's full_name"
+    implementation: |
+      @pytest.mark.unit
+      def test_cv_sections_contact_name_preserved(
+          sample_cv_sections: CVSections,
+      ) -> None:
+          # The fixture sets name="Alex Candidate"
+          assert sample_cv_sections.contact.name == "Alex Candidate", (
+              f"contact.name mismatch: expected 'Alex Candidate', got '{sample_cv_sections.contact.name}'"
+          )
+          assert "@" in sample_cv_sections.contact.email, (
+              "contact.email must be a valid email address"
+          )
+
+  - id: T-P1-09
+    name: test_tailored_cv_response_mypy_compliant
+    maps_to_ac: AC-P1-07
+    description: "TailoredCVResponse construction with correct types must not raise TypeError"
+    implementation: |
+      @pytest.mark.unit
+      def test_tailored_cv_response_mypy_compliant(sample_cv_sections: CVSections) -> None:
+          """
+          Constructing TailoredCVResponse with the new fields must succeed.
+          Passing wrong types will raise ValidationError (Pydantic) or TypeError.
+          """
+          from careervp.models.cv_tailoring_models import TailoredCVResponse
+
+          response = TailoredCVResponse(
+              cv_sections=sample_cv_sections,
+              ats_score=75,
+              ats_issues=["Missing keyword: Terraform"],
+              keyword_match_score=7,
+              keywords_missing=["Terraform"],
+              fact_verification_passed=True,
+              language="en",
+          )
+          assert response.ats_score == 75
+          assert response.language == "en"
+          assert "Terraform" in response.keywords_missing
+
+  - id: T-P1-10
+    name: test_tailored_cv_response_rejects_float_ats_score
+    maps_to_ac: AC-P1-03
+    description: "Passing a float ats_score must raise ValidationError — strict int type"
+    implementation: |
+      @pytest.mark.unit
+      def test_tailored_cv_response_rejects_float_ats_score(
+          sample_cv_sections: CVSections,
+      ) -> None:
+          import pytest
+          from pydantic import ValidationError
+          from careervp.models.cv_tailoring_models import TailoredCVResponse
+
+          with pytest.raises((ValidationError, TypeError)):
+              TailoredCVResponse(
+                  cv_sections=sample_cv_sections,
+                  ats_score=8.5,  # float — must be rejected
+                  ats_issues=[],
+                  keyword_match_score=9,
+                  keywords_missing=[],
+                  fact_verification_passed=True,
+                  language="en",
+              )
+
+################################################################################
+# FULL FILE TEMPLATE
+################################################################################
+
+full_file_template: |
+  """
+  Unit tests: TailoredCVResponse schema must use cv_sections (not tailored_cv text blob).
+  Spec: CVT-P1 — Structured cv_sections Output Schema
+  These tests fail if CVT-P1 has not been implemented.
+  """
+
+  from __future__ import annotations
+
+  import pytest
+  from pydantic import ValidationError
+
+  from careervp.models.cv_tailoring_models import (
+      CVContact,
+      CVExperienceItem,
+      CVSections,
+      CVSkills,
+      TailoredCVResponse,
+  )
+
+
+  @pytest.fixture
+  def sample_cv_sections() -> CVSections:
+      return CVSections(
+          contact=CVContact(
+              name="Alex Candidate",
+              email="alex@example.com",
+              phone="+1-555-0100",
+              linkedin=None,
+              location="New York, NY",
+          ),
+          summary=(
+              "Platform engineer with 8 years driving cloud reliability across "
+              "distributed SaaS products. Led Kubernetes migration at Nimbus Labs."
+          ),
+          skills=CVSkills(
+              technical=["Python", "AWS", "Kubernetes", "Terraform"],
+              soft=["Leadership"],
+          ),
+          experience=[
+              CVExperienceItem(
+                  company="Nimbus Labs",
+                  title="Senior Software Engineer",
+                  start_date="01/2021",
+                  end_date="Present",
+                  bullets=[
+                      "Drove | Kubernetes migration for 12 services | Increased reliability by 35%",
+                  ],
+              )
+          ],
+          education=[],
+          certifications=[],
+      )
+
+
+  @pytest.fixture
+  def sample_response(sample_cv_sections: CVSections) -> TailoredCVResponse:
+      return TailoredCVResponse(
+          cv_sections=sample_cv_sections,
+          ats_score=82,
+          ats_issues=[],
+          keyword_match_score=9,
+          keywords_missing=[],
+          fact_verification_passed=True,
+          language="en",
+      )
+
+
+  @pytest.mark.unit
+  def test_cv_sections_model_is_importable() -> None:
+      from careervp.models.cv_tailoring_models import CVContact, CVExperienceItem, CVSections, CVSkills  # noqa: F401
+
+
+  @pytest.mark.unit
+  def test_tailored_cv_response_has_cv_sections_not_text_blob(
+      sample_response: TailoredCVResponse,
+  ) -> None:
+      assert hasattr(sample_response, "cv_sections"), (
+          "TailoredCVResponse must have cv_sections — CVT-P1 not implemented"
+      )
+      assert not hasattr(sample_response, "tailored_cv"), (
+          "tailored_cv text blob must be removed — CVT-P1 not implemented"
+      )
+      assert not isinstance(sample_response.cv_sections, str)
+
+
+  @pytest.mark.unit
+  def test_ats_score_is_int_in_0_to_100_range(sample_response: TailoredCVResponse) -> None:
+      assert isinstance(sample_response.ats_score, int), (
+          f"ats_score must be int, got {type(sample_response.ats_score).__name__} — CVT-P1"
+      )
+      assert 0 <= sample_response.ats_score <= 100
+
+
+  @pytest.mark.unit
+  def test_fact_verification_passed_is_bool(sample_response: TailoredCVResponse) -> None:
+      assert hasattr(sample_response, "fact_verification_passed"), "Missing field — CVT-P1"
+      assert isinstance(sample_response.fact_verification_passed, bool)
+
+
+  @pytest.mark.unit
+  def test_experience_item_has_bullets_array(sample_cv_sections: CVSections) -> None:
+      exp = sample_cv_sections.experience[0]
+      assert isinstance(exp.bullets, list)
+      assert len(exp.bullets) >= 1
+      assert all(isinstance(b, str) for b in exp.bullets)
+
+
+  @pytest.mark.unit
+  def test_keywords_missing_is_list_and_keyword_match_score_is_1_to_10(
+      sample_response: TailoredCVResponse,
+  ) -> None:
+      assert isinstance(sample_response.keywords_missing, list)
+      assert isinstance(sample_response.keyword_match_score, int)
+      assert 1 <= sample_response.keyword_match_score <= 10
+
+
+  @pytest.mark.unit
+  def test_tailored_cv_response_rejects_float_ats_score(sample_cv_sections: CVSections) -> None:
+      with pytest.raises((ValidationError, TypeError)):
+          TailoredCVResponse(
+              cv_sections=sample_cv_sections,
+              ats_score=8.5,  # type: ignore[arg-type]
+              ats_issues=[],
+              keyword_match_score=9,
+              keywords_missing=[],
+              fact_verification_passed=True,
+              language="en",
+          )

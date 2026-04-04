@@ -1,0 +1,1073 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://careervp.com/schemas/cv-tailoring/v1.0.0",
+  "title": "CareerVP CV Tailoring — Complete JSON Schema Suite",
+  "description": "All data structures consumed and produced by the cv-tailor Lambda. Six top-level schemas: ParsedFacts, GapAnalysisResponses, Stage1Output, Stage2Output, CVArtifact, RegenerationRequest.",
+
+  "definitions": {
+
+    "MMYYYYDate": {
+      "$id": "#/definitions/MMYYYYDate",
+      "title": "MM/YYYY Date",
+      "description": "Month/year string in MM/YYYY format, or the literal string 'Present'",
+      "type": "string",
+      "pattern": "^(0[1-9]|1[0-2])\\/\\d{4}$|^Present$",
+      "examples": ["03/2022", "12/2019", "Present"]
+    },
+
+    "ISO8601DateTime": {
+      "$id": "#/definitions/ISO8601DateTime",
+      "title": "ISO 8601 DateTime",
+      "type": "string",
+      "format": "date-time",
+      "examples": ["2026-04-04T14:30:00Z"]
+    },
+
+    "NonEmptyString": {
+      "$id": "#/definitions/NonEmptyString",
+      "type": "string",
+      "minLength": 1
+    },
+
+    "LanguageCode": {
+      "$id": "#/definitions/LanguageCode",
+      "type": "string",
+      "enum": ["en", "he"],
+      "description": "ISO 639-1 language code. Only English and Hebrew supported in V1."
+    },
+
+    "WorkExperienceItem": {
+      "$id": "#/definitions/WorkExperienceItem",
+      "title": "Work Experience Item",
+      "description": "A single role from the candidate's employment history. All fields are source-of-truth from the uploaded CV.",
+      "type": "object",
+      "required": ["company", "title", "start_date"],
+      "additionalProperties": false,
+      "properties": {
+        "company": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Exact company name as it appears on the CV."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Exact job title as it appears on the CV."
+        },
+        "start_date": {
+          "$ref": "#/definitions/MMYYYYDate",
+          "description": "Start month/year of this role."
+        },
+        "end_date": {
+          "oneOf": [
+            { "$ref": "#/definitions/MMYYYYDate" },
+            { "type": "null" }
+          ],
+          "description": "End month/year, or null if role is current (see is_current)."
+        },
+        "is_current": {
+          "type": "boolean",
+          "default": false,
+          "description": "True when end_date is 'Present'. Must be consistent with end_date."
+        },
+        "responsibilities": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 10 },
+          "description": "Duty/responsibility bullets as parsed from the CV. May overlap with achievements."
+        },
+        "achievements": {
+          "type": ["array", "null"],
+          "items": { "type": "string", "minLength": 10 },
+          "description": "Achievement bullets as parsed. Null when parser did not separate them from responsibilities."
+        },
+        "location": {
+          "type": ["string", "null"],
+          "maxLength": 200,
+          "description": "City/country for this role if present on CV."
+        }
+      }
+    },
+
+    "EducationItem": {
+      "$id": "#/definitions/EducationItem",
+      "title": "Education Item",
+      "type": "object",
+      "required": ["institution", "degree", "field", "graduation_date"],
+      "additionalProperties": false,
+      "properties": {
+        "institution": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "degree": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "e.g. 'Bachelor of Science', 'Master of Engineering'"
+        },
+        "field": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "e.g. 'Computer Science', 'Electrical Engineering'"
+        },
+        "graduation_date": {
+          "$ref": "#/definitions/MMYYYYDate"
+        },
+        "gpa": {
+          "type": ["string", "null"],
+          "maxLength": 10,
+          "description": "GPA string as it appears on CV (e.g. '3.8/4.0'). Null if not present."
+        }
+      }
+    },
+
+    "CertificationItem": {
+      "$id": "#/definitions/CertificationItem",
+      "title": "Certification Item",
+      "type": "object",
+      "required": ["name", "issuer", "date"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "description": "Full certification name as it appears on the CV."
+        },
+        "issuer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Issuing organisation (e.g. 'Amazon Web Services', 'Google')."
+        },
+        "date": {
+          "$ref": "#/definitions/MMYYYYDate",
+          "description": "Date certification was awarded."
+        },
+        "expiry": {
+          "oneOf": [
+            { "$ref": "#/definitions/MMYYYYDate" },
+            { "type": "null" }
+          ],
+          "description": "Expiry date, or null if certification does not expire."
+        },
+        "credential_id": {
+          "type": ["string", "null"],
+          "maxLength": 200,
+          "description": "Credential ID or verification URL if present on CV."
+        }
+      }
+    },
+
+    "SkillsObject": {
+      "$id": "#/definitions/SkillsObject",
+      "title": "Skills",
+      "type": "object",
+      "required": ["technical", "soft"],
+      "additionalProperties": false,
+      "properties": {
+        "technical": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "minItems": 0,
+          "description": "Technical skills extracted from CV (tools, languages, platforms, methodologies)."
+        },
+        "soft": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "minItems": 0,
+          "description": "Soft skills extracted from CV. Only included when explicitly stated on CV."
+        }
+      }
+    },
+
+    "GapResponseItem": {
+      "$id": "#/definitions/GapResponseItem",
+      "title": "Gap Analysis Response Item",
+      "type": "object",
+      "required": ["question_id", "skipped"],
+      "additionalProperties": false,
+      "properties": {
+        "question_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique identifier matching the question in GAP_ANALYSIS_QUESTIONS record."
+        },
+        "response_text": {
+          "type": ["string", "null"],
+          "minLength": 10,
+          "maxLength": 1000,
+          "description": "Candidate's free-text response. Null when skipped=true."
+        },
+        "skipped": {
+          "type": "boolean",
+          "description": "True when candidate explicitly skipped this question."
+        },
+        "word_count": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Word count of response_text. Null when skipped=true."
+        }
+      }
+    },
+
+    "PrimaryKeyword": {
+      "$id": "#/definitions/PrimaryKeyword",
+      "title": "Primary Keyword",
+      "description": "A single keyword extracted from the job posting with its evidence mapping.",
+      "type": "object",
+      "required": ["keyword", "category", "priority"],
+      "additionalProperties": false,
+      "properties": {
+        "keyword": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Exact term as it appears in the job posting."
+        },
+        "category": {
+          "type": "string",
+          "enum": ["technical_skill", "responsibility", "certification", "soft_skill", "domain"],
+          "description": "Classification of the keyword type."
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["mandatory", "preferred"],
+          "description": "mandatory = from 'required'/'must have' sections; preferred = 'nice to have'."
+        },
+        "supporting_evidence": {
+          "type": ["string", "null"],
+          "description": "Reference to the parsed_facts field+value that proves this keyword (e.g., 'skills.technical[3]: Kubernetes'). Null when no evidence found."
+        }
+      }
+    },
+
+    "ExperienceItemInPlan": {
+      "$id": "#/definitions/ExperienceItemInPlan",
+      "title": "Experience Item In Stage 1 Plan",
+      "type": "object",
+      "required": ["company", "title", "relevance_reason", "bullets_to_emphasize"],
+      "additionalProperties": false,
+      "properties": {
+        "company": {
+          "type": "string",
+          "description": "Must exactly match a company in parsed_facts.work_experience."
+        },
+        "title": {
+          "type": "string",
+          "description": "Must exactly match the title for this company in parsed_facts."
+        },
+        "relevance_reason": {
+          "type": "string",
+          "minLength": 10,
+          "description": "Brief explanation of why this role is relevant to the target job."
+        },
+        "bullets_to_emphasize": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 10 },
+          "minItems": 1,
+          "description": "Subset of responsibility/achievement text from parsed_facts to prioritise."
+        }
+      }
+    },
+
+    "CVContactSection": {
+      "$id": "#/definitions/CVContactSection",
+      "title": "CV Contact Section",
+      "description": "Candidate contact details. All values must match parsed_facts exactly.",
+      "type": "object",
+      "required": ["name", "email"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "email": {
+          "type": "string",
+          "format": "email"
+        },
+        "phone": {
+          "type": ["string", "null"],
+          "maxLength": 50
+        },
+        "linkedin": {
+          "type": ["string", "null"],
+          "maxLength": 300,
+          "description": "LinkedIn profile URL. Null if not in parsed_facts."
+        },
+        "location": {
+          "type": ["string", "null"],
+          "maxLength": 200,
+          "description": "City/Country (e.g. 'Tel Aviv, Israel'). Null if not in parsed_facts."
+        }
+      }
+    },
+
+    "CVExperienceBullet": {
+      "$id": "#/definitions/CVExperienceBullet",
+      "title": "CV Experience Bullet",
+      "type": "object",
+      "required": ["text", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 20,
+          "maxLength": 400,
+          "description": "CAR/STAR formatted bullet. Must begin with an action verb."
+        },
+        "source": {
+          "type": "string",
+          "enum": ["parsed_facts", "gap_response", "user_edited"],
+          "description": "parsed_facts = verified from CV; gap_response = from user's gap analysis answer; user_edited = manually changed in review UI."
+        },
+        "user_edited": {
+          "type": "boolean",
+          "default": false,
+          "description": "True when the user has manually edited this bullet in the review interface. Locked from AI regeneration."
+        },
+        "quantified": {
+          "type": "boolean",
+          "description": "True when bullet contains at least one numeric metric."
+        }
+      }
+    },
+
+    "CVExperienceSection": {
+      "$id": "#/definitions/CVExperienceSection",
+      "title": "CV Experience Section Item",
+      "type": "object",
+      "required": ["company", "title", "start_date", "bullets"],
+      "additionalProperties": false,
+      "properties": {
+        "company": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Must match parsed_facts.work_experience[].company exactly."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Must match parsed_facts.work_experience[].title exactly."
+        },
+        "start_date": {
+          "$ref": "#/definitions/MMYYYYDate"
+        },
+        "end_date": {
+          "oneOf": [
+            { "$ref": "#/definitions/MMYYYYDate" },
+            { "type": "null" }
+          ]
+        },
+        "is_current": {
+          "type": "boolean",
+          "default": false
+        },
+        "location": {
+          "type": ["string", "null"],
+          "maxLength": 200
+        },
+        "bullets": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/CVExperienceBullet" },
+          "minItems": 1,
+          "maxItems": 8,
+          "description": "CAR/STAR bullets for this role. 2-5 recommended for relevance, max 8."
+        }
+      }
+    },
+
+    "CVEducationSection": {
+      "$id": "#/definitions/CVEducationSection",
+      "title": "CV Education Section Item",
+      "description": "Read-only in the editing interface. Must match parsed_facts exactly.",
+      "type": "object",
+      "required": ["institution", "degree", "field", "graduation_date"],
+      "additionalProperties": false,
+      "properties": {
+        "institution": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "degree": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "field": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "graduation_date": { "$ref": "#/definitions/MMYYYYDate" },
+        "gpa": { "type": ["string", "null"], "maxLength": 10 }
+      }
+    },
+
+    "CVCertificationSection": {
+      "$id": "#/definitions/CVCertificationSection",
+      "title": "CV Certification Section Item",
+      "description": "Read-only in the editing interface. Must match parsed_facts exactly.",
+      "type": "object",
+      "required": ["name", "issuer", "date"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "issuer": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "date": { "$ref": "#/definitions/MMYYYYDate" },
+        "expiry": {
+          "oneOf": [
+            { "$ref": "#/definitions/MMYYYYDate" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+
+    "CVSkillsSection": {
+      "$id": "#/definitions/CVSkillsSection",
+      "title": "CV Skills Section",
+      "type": "object",
+      "required": ["technical"],
+      "additionalProperties": false,
+      "properties": {
+        "technical": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "minItems": 1,
+          "description": "Keyword-rich technical skill list. Subset of parsed_facts.skills.technical, prioritised for this job."
+        },
+        "soft": {
+          "type": ["array", "null"],
+          "items": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "description": "Soft skills. Only included when backed by evidence in parsed_facts."
+        }
+      }
+    },
+
+    "CVSections": {
+      "$id": "#/definitions/CVSections",
+      "title": "CV Sections",
+      "description": "The structured content of the generated CV. This is the canonical representation stored in DynamoDB and rendered by the editing UI and DOCX/PDF exporters.",
+      "type": "object",
+      "required": ["contact", "summary", "skills", "experience"],
+      "additionalProperties": false,
+      "properties": {
+        "contact": { "$ref": "#/definitions/CVContactSection" },
+        "summary": {
+          "type": "string",
+          "minLength": 50,
+          "maxLength": 600,
+          "description": "Professional summary. 3-4 sentences. Opens with title + years experience. Embeds top 5-7 keywords. Directly reflects VPR UVP statement."
+        },
+        "skills": { "$ref": "#/definitions/CVSkillsSection" },
+        "experience": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/CVExperienceSection" },
+          "minItems": 1,
+          "description": "Work experience in reverse chronological order."
+        },
+        "education": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/CVEducationSection" },
+          "minItems": 0,
+          "description": "Education history in reverse chronological order."
+        },
+        "certifications": {
+          "type": ["array", "null"],
+          "items": { "$ref": "#/definitions/CVCertificationSection" },
+          "description": "Certifications relevant to the target role. Null if none exist in parsed_facts."
+        },
+        "languages": {
+          "type": ["array", "null"],
+          "items": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "description": "Spoken/written languages from parsed_facts. Null if not on CV."
+        }
+      }
+    },
+
+    "ATSResult": {
+      "$id": "#/definitions/ATSResult",
+      "title": "ATS Scoring Result",
+      "description": "Output from the deterministic ATS scoring rules engine run post-generation.",
+      "type": "object",
+      "required": ["total_score", "components", "issues"],
+      "additionalProperties": false,
+      "properties": {
+        "total_score": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Composite ATS score. Green ≥90, Yellow 70-89, Red <70."
+        },
+        "grade": {
+          "type": "string",
+          "enum": ["green", "yellow", "red"]
+        },
+        "components": {
+          "type": "object",
+          "required": ["keyword_match", "quantified_bullets", "section_headers", "formatting_safety", "summary_keyword_density"],
+          "additionalProperties": false,
+          "properties": {
+            "keyword_match": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 40,
+              "description": "Score out of 40. (matched_primary_keywords / total_primary_keywords) × 40."
+            },
+            "quantified_bullets": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 20,
+              "description": "Score out of 20. Proportion of experience bullets containing a numeric metric."
+            },
+            "section_headers": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 15,
+              "description": "Score out of 15. 3.75 points per required section present."
+            },
+            "formatting_safety": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 15,
+              "description": "Score out of 15. No tables (5), no columns (5), standard date format (5)."
+            },
+            "summary_keyword_density": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10,
+              "description": "Score out of 10. Primary keywords present in professional summary."
+            }
+          }
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["code", "severity", "message", "suggestion"],
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "Machine-readable issue code (e.g. 'MISSING_KEYWORD', 'UNQUANTIFIED_BULLET')."
+              },
+              "severity": {
+                "type": "string",
+                "enum": ["critical", "warning", "info"]
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable description of the issue."
+              },
+              "suggestion": {
+                "type": "string",
+                "description": "Actionable fix suggestion shown in the review UI."
+              }
+            }
+          }
+        },
+        "keywords_matched": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of primary keywords found in the generated CV."
+        },
+        "keywords_missing": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Primary keywords from the job posting absent from the CV."
+        },
+        "keyword_match_score_1_10": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "description": "1-10 score per JSA Skill rubric. Used for UI display alongside the 0-100 composite."
+        }
+      }
+    },
+
+    "FactVerificationResult": {
+      "$id": "#/definitions/FactVerificationResult",
+      "title": "Fact Verification Result",
+      "description": "Output from the Stage 3 Python fact-verification pass. Records every correction and removal.",
+      "type": "object",
+      "required": ["passed", "items_corrected", "items_removed", "checks"],
+      "additionalProperties": false,
+      "properties": {
+        "passed": {
+          "type": "boolean",
+          "description": "True when all critical checks pass (after auto-corrections). False triggers FactVerificationError."
+        },
+        "items_corrected": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of fields auto-corrected (e.g. contact fields replaced from parsed_facts)."
+        },
+        "items_removed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of entries removed (e.g. phantom companies stripped)."
+        },
+        "hallucination_flags_from_ai": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Flags raised by the AI in Stage 2 verification.hallucination_flags. These are stripped before artifact is written."
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["check_name", "passed", "action_taken"],
+            "additionalProperties": false,
+            "properties": {
+              "check_name": {
+                "type": "string",
+                "description": "e.g. 'name_match', 'experience_company_match', 'date_range_plausibility'"
+              },
+              "passed": { "type": "boolean" },
+              "action_taken": {
+                "type": "string",
+                "enum": ["none", "corrected", "removed", "flagged"],
+                "description": "What the verifier did when the check failed."
+              },
+              "detail": {
+                "type": ["string", "null"],
+                "description": "Specific detail about what was corrected or removed."
+              }
+            }
+          }
+        }
+      }
+    }
+
+  },
+
+  "oneOf": [
+    { "$ref": "#/definitions/schemas/ParsedFacts" },
+    { "$ref": "#/definitions/schemas/GapAnalysisResponses" },
+    { "$ref": "#/definitions/schemas/Stage1Output" },
+    { "$ref": "#/definitions/schemas/Stage2Output" },
+    { "$ref": "#/definitions/schemas/CVArtifact" },
+    { "$ref": "#/definitions/schemas/RegenerationRequest" }
+  ],
+
+  "schemas": {
+
+    "ParsedFacts": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "$id": "https://careervp.com/schemas/cv-tailoring/parsed-facts/v1.0.0",
+      "title": "ParsedFacts",
+      "description": "Ground-truth candidate data extracted by the cv-parser Lambda from the uploaded CV. This object is the ONLY authorised source for candidate facts throughout CV tailoring. No AI generation step may introduce facts not present here (except gap_response sourced bullets, which are marked separately).",
+      "type": "object",
+      "required": ["name", "email", "work_experience", "education", "skills"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Candidate's full name as it appears on the CV."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Primary email address from CV."
+        },
+        "phone": {
+          "type": ["string", "null"],
+          "maxLength": 50,
+          "description": "Phone number as it appears on the CV. Null if not present."
+        },
+        "linkedin_url": {
+          "type": ["string", "null"],
+          "maxLength": 300,
+          "description": "LinkedIn profile URL. Null if not on CV."
+        },
+        "location": {
+          "type": ["string", "null"],
+          "maxLength": 200,
+          "description": "City/Country as it appears on the CV (e.g. 'Tel Aviv, Israel')."
+        },
+        "summary_original": {
+          "type": ["string", "null"],
+          "maxLength": 2000,
+          "description": "The original professional summary verbatim from the CV. Null if CV has no summary section."
+        },
+        "work_experience": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/WorkExperienceItem" },
+          "minItems": 0,
+          "description": "All work experience entries in the order they appear on the CV (parser preserves original order; typically reverse-chronological)."
+        },
+        "education": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/EducationItem" },
+          "minItems": 0
+        },
+        "skills": { "$ref": "#/definitions/SkillsObject" },
+        "certifications": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/CertificationItem" },
+          "minItems": 0
+        },
+        "languages": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "description": "Spoken/written languages listed on CV (e.g. ['English — Native', 'Hebrew — Fluent'])."
+        },
+        "cv_language_detected": {
+          "$ref": "#/definitions/LanguageCode",
+          "description": "Language of the CV as detected by the language-detector Lambda."
+        }
+      }
+    },
+
+    "GapAnalysisResponses": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "$id": "https://careervp.com/schemas/cv-tailoring/gap-analysis-responses/v1.0.0",
+      "title": "GapAnalysisResponses",
+      "description": "Stored in DynamoDB under SK=GAP_ANALYSIS_RESPONSES. Contains user's answers to gap questions generated by gap-analysis-questions Lambda. Used by cv-tailor as supplementary evidence for bullet points.",
+      "type": "object",
+      "required": ["application_id", "responses", "completed_at"],
+      "additionalProperties": false,
+      "properties": {
+        "application_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "FK to careervp-applications PK."
+        },
+        "responses": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/GapResponseItem" },
+          "minItems": 0,
+          "maxItems": 10,
+          "description": "One entry per gap question. May be empty if user skipped the entire gap analysis stage."
+        },
+        "completed_at": {
+          "$ref": "#/definitions/ISO8601DateTime",
+          "description": "Timestamp when user submitted or skipped the gap analysis form."
+        },
+        "all_critical_answered": {
+          "type": "boolean",
+          "description": "True when all CRITICAL priority questions have non-skipped responses."
+        }
+      }
+    },
+
+    "Stage1Output": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "$id": "https://careervp.com/schemas/cv-tailoring/stage1-output/v1.0.0",
+      "title": "Stage1Output",
+      "description": "JSON returned by the Stage 1 keyword mapping AI call. Consumed immediately by Stage 2 — not persisted to DynamoDB independently (embedded in CloudWatch logs only for debugging).",
+      "type": "object",
+      "required": [
+        "uvp_statement",
+        "key_differentiators",
+        "primary_keywords",
+        "keywords_to_emphasize",
+        "keywords_missing_from_cv",
+        "experience_items_to_include",
+        "experience_items_to_exclude",
+        "summary_focus",
+        "skills_to_feature"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "uvp_statement": {
+          "type": "string",
+          "minLength": 20,
+          "maxLength": 300,
+          "description": "1-sentence unique value proposition extracted from the VPR."
+        },
+        "key_differentiators": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 10, "maxLength": 200 },
+          "minItems": 1,
+          "maxItems": 5,
+          "description": "Top 3-5 differentiators from the VPR that Stage 2 must weave into the CV."
+        },
+        "primary_keywords": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/PrimaryKeyword" },
+          "minItems": 5,
+          "maxItems": 25,
+          "description": "12-18 keywords extracted from the job posting with evidence mapping. May be up to 25 for verbose job postings."
+        },
+        "keywords_to_emphasize": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "minItems": 5,
+          "maxItems": 18,
+          "description": "Ordered shortlist of the most critical keywords for Stage 2. These must appear in the generated CV."
+        },
+        "keywords_missing_from_cv": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "description": "Keywords required by the job posting but not evidenced in parsed_facts. Stage 2 cannot fabricate these — they are surfaced as ats_issues instead."
+        },
+        "experience_items_to_include": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ExperienceItemInPlan" },
+          "minItems": 1,
+          "description": "Roles from parsed_facts that are relevant to this job. Stage 2 builds bullets only from these items."
+        },
+        "experience_items_to_exclude": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Company names from parsed_facts to omit (irrelevant to this role). Stage 2 must not include these."
+        },
+        "summary_focus": {
+          "type": "string",
+          "minLength": 20,
+          "maxLength": 400,
+          "description": "Instruction for Stage 2 on what the professional summary must emphasise, derived from UVP and top keywords."
+        },
+        "skills_to_feature": {
+          "$ref": "#/definitions/SkillsObject",
+          "description": "Subset of parsed_facts.skills prioritised for this application. Stage 2 populates the skills section from this list."
+        }
+      }
+    },
+
+    "Stage2Output": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "$id": "https://careervp.com/schemas/cv-tailoring/stage2-output/v1.0.0",
+      "title": "Stage2Output",
+      "description": "JSON returned by the Stage 2 CV generation AI call. Contains both the AI's own self-verification metadata and the generated cv_sections. Stage 3 Python verifier reads hallucination_flags and strips them before cv_sections is written to DynamoDB.",
+      "type": "object",
+      "required": ["verification", "cv_sections"],
+      "additionalProperties": false,
+      "properties": {
+        "verification": {
+          "type": "object",
+          "required": [
+            "ats_keyword_score",
+            "keywords_added_in_review",
+            "summary_rewritten",
+            "fact_verification_passed",
+            "hallucination_flags"
+          ],
+          "additionalProperties": false,
+          "description": "The AI's own self-correction pass (JSA Skill Verification Checks 1 and 2). Consumed by Stage 3 but not stored in the final artifact.",
+          "properties": {
+            "ats_keyword_score": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10,
+              "description": "AI's self-rated ATS keyword match score 1-10. If <8, AI must have revised before producing final cv_sections."
+            },
+            "keywords_added_in_review": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Keywords the AI added to cv_sections after its own review pass (may be empty)."
+            },
+            "summary_rewritten": {
+              "type": "boolean",
+              "description": "True if the AI rewrote the summary during Verification Check 2 to better align with UVP."
+            },
+            "fact_verification_passed": {
+              "type": "boolean",
+              "description": "AI's own assessment of fact integrity. Stage 3 independently verifies — this is supplementary."
+            },
+            "hallucination_flags": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Facts the AI is uncertain about. Stage 3 strips these from cv_sections. If count >3, admin alert is triggered."
+            }
+          }
+        },
+        "cv_sections": { "$ref": "#/definitions/CVSections" }
+      }
+    },
+
+    "CVArtifact": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "$id": "https://careervp.com/schemas/cv-tailoring/cv-artifact/v1.0.0",
+      "title": "CVArtifact",
+      "description": "The DynamoDB record written to careervp-artifacts after all three stages and ATS scoring complete. PK=applicationId, SK=ARTIFACT#CV#v{N} (or ARTIFACT#CV_EN#v{N} / ARTIFACT#CV_HE#v{N} for dual-language applications).",
+      "type": "object",
+      "required": [
+        "application_id",
+        "artifact_type",
+        "status",
+        "version",
+        "content",
+        "content_markdown",
+        "language",
+        "ats_score",
+        "ats_grade",
+        "ats_issues",
+        "keyword_match_score",
+        "keywords_missing",
+        "fact_verification_passed",
+        "generated_at",
+        "model_used",
+        "input_tokens",
+        "output_tokens",
+        "token_cost_usd",
+        "generation_time_ms"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "application_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "FK to careervp-applications PK."
+        },
+        "artifact_type": {
+          "type": "string",
+          "const": "CV"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["DRAFT", "DRAFT_LOW_ATS", "EDITED", "FINAL", "FAILED"],
+          "description": "DRAFT = generated, not reviewed. DRAFT_LOW_ATS = generated but ATS score <70. EDITED = user has made edits. FINAL = user finalised. FAILED = generation error."
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Monotonically incrementing version number. v1 = initial generation."
+        },
+        "content": {
+          "$ref": "#/definitions/CVSections",
+          "description": "Structured CV content. This is the authoritative representation — markdown is derived from this."
+        },
+        "content_markdown": {
+          "type": "string",
+          "minLength": 100,
+          "description": "Rendered markdown string for the review UI preview panel and DOCX/PDF export input."
+        },
+        "language": {
+          "type": "string",
+          "enum": ["en", "he"],
+          "description": "Language this artifact was generated in. One artifact per language in dual-language mode."
+        },
+        "ats_score": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Composite ATS score from the deterministic rules engine (0-100)."
+        },
+        "ats_grade": {
+          "type": "string",
+          "enum": ["green", "yellow", "red"]
+        },
+        "ats_issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["code", "severity", "message", "suggestion"],
+            "properties": {
+              "code": { "type": "string" },
+              "severity": { "type": "string", "enum": ["critical", "warning", "info"] },
+              "message": { "type": "string" },
+              "suggestion": { "type": "string" }
+            }
+          },
+          "description": "ATS issues surfaced to the user in the review UI."
+        },
+        "keyword_match_score": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "description": "1-10 ATS keyword score per JSA Skill rubric. Displayed in review UI alongside ats_score."
+        },
+        "keywords_missing": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Primary job keywords absent from the CV. These are job requirements the candidate cannot claim — NOT hallucination opportunities."
+        },
+        "fact_verification_passed": {
+          "type": "boolean",
+          "description": "True when Stage 3 Python verifier completed with no unresolvable issues."
+        },
+        "fact_verification_detail": {
+          "$ref": "#/definitions/FactVerificationResult",
+          "description": "Full Stage 3 verification result. Stored for auditability. Not exposed in review UI."
+        },
+        "s3_key_docx": {
+          "type": ["string", "null"],
+          "description": "S3 key in careervp-artifacts bucket. Null until docx-export Lambda runs."
+        },
+        "s3_key_pdf": {
+          "type": ["string", "null"],
+          "description": "S3 key in careervp-artifacts bucket. Null until pdf-export Lambda runs."
+        },
+        "generated_at": {
+          "$ref": "#/definitions/ISO8601DateTime"
+        },
+        "model_used": {
+          "type": "string",
+          "const": "claude-haiku-4-5-20251001"
+        },
+        "input_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total input tokens across Stage 1 + Stage 2 calls."
+        },
+        "output_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total output tokens across Stage 1 + Stage 2 calls."
+        },
+        "token_cost_usd": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Actual AI cost in USD for this artifact generation."
+        },
+        "generation_time_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Wall-clock time from Lambda invocation to artifact write, in milliseconds."
+        },
+        "feedback_used": {
+          "type": ["string", "null"],
+          "maxLength": 1000,
+          "description": "The user's regeneration feedback instruction passed to Stage 2. Null for initial generation."
+        },
+        "is_regeneration": {
+          "type": "boolean",
+          "default": false,
+          "description": "True when this artifact replaced an earlier version via the regeneration flow."
+        },
+        "previous_version_sk": {
+          "type": ["string", "null"],
+          "description": "SK of the artifact this version replaced (e.g. 'ARTIFACT#CV#v1'). Null for initial generation."
+        }
+      }
+    },
+
+    "RegenerationRequest": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "$id": "https://careervp.com/schemas/cv-tailoring/regeneration-request/v1.0.0",
+      "title": "RegenerationRequest",
+      "description": "Request body for POST /api/applications/{applicationId}/regenerate when artifact_type=CV. Validated by the API Gateway request validator before reaching the Lambda.",
+      "type": "object",
+      "required": ["artifact_type", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "artifact_type": {
+          "type": "string",
+          "const": "CV",
+          "description": "Must be 'CV' for cv-tailor Lambda. Other types route to different Lambdas."
+        },
+        "feedback": {
+          "type": ["string", "null"],
+          "minLength": 5,
+          "maxLength": 1000,
+          "description": "Optional natural language instruction for the regeneration (e.g. 'Emphasise FinOps experience more. Reduce summary to 2 sentences.'). Null means regenerate with same inputs."
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Current active version being replaced. Used to compute the new version number and set previous_version_sk."
+        },
+        "language": {
+          "oneOf": [
+            { "$ref": "#/definitions/LanguageCode" },
+            { "type": "null" }
+          ],
+          "description": "Optionally target a specific language version for regeneration in dual-language mode. Null = regenerate all languages."
+        }
+      }
+    }
+
+  }
+}
