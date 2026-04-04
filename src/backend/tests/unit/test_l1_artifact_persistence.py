@@ -232,8 +232,39 @@ def test_cv_tailoring_async_generate_persists_with_artifact_prefix() -> None:
     dal.get_cv.return_value = _user_cv()
     dal._get_db_handler.return_value = table
 
+    from careervp.models.cv_tailoring_models import (
+        CVContactSection,
+        CVExperienceSection,
+        CVSections,
+        CVSkillsSection,
+        Stage3Result,
+    )
+
+    pipeline_stage3 = Stage3Result(
+        cv_sections=CVSections(
+            contact=CVContactSection(name='Test User', email='test@example.com'),
+            summary='Senior engineer with 10 years of experience building scalable cloud systems.',
+            skills=CVSkillsSection(technical=['Python'], soft=['Communication']),
+            experience=[CVExperienceSection(company='Acme', title='Engineer', start_date='01/2020', bullets=['Built X'])],
+            education=[],
+            certifications=[],
+        ),
+        fact_verification_passed=True,
+        items_corrected=[],
+        items_removed=[],
+    )
+    mock_pipeline_result = MagicMock()
+    mock_pipeline_result.success = True
+    mock_pipeline_result.data = pipeline_stage3
+    mock_pipeline_result.error = None
+
     with patch('careervp.handlers.cv_tailoring_handler.DynamoDalHandler', return_value=dal):
-        response = lambda_handler(_cv_tailoring_event(), MagicMock())
+        with patch('careervp.handlers.cv_tailoring_handler.JobsRepository') as mock_jobs_cls:
+            mock_jobs_cls.return_value.get_job.return_value = {'description': 'Test job description', 'title': 'Engineer'}
+            with patch('careervp.handlers.cv_tailoring_handler.LLMClient'):
+                with patch('careervp.handlers.cv_tailoring_handler.run_cv_tailoring_pipeline', return_value=mock_pipeline_result):
+                    with patch('careervp.handlers.cv_tailoring_handler._update_application_artifact'):
+                        response = lambda_handler(_cv_tailoring_event(), MagicMock())
 
     assert response['statusCode'] == 202
     body = json.loads(response['body'])

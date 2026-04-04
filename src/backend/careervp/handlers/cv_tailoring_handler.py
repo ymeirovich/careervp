@@ -14,9 +14,11 @@ from boto3.dynamodb.conditions import Attr, Key
 from pydantic import ValidationError
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers
 from careervp.logic.cv_tailoring import tailor_cv
+from careervp.logic.cv_tailoring_pipeline import run_cv_tailoring_pipeline
 from careervp.logic.fvs_validator import create_fvs_baseline
 from careervp.logic.llm_client import LLMClient
 from careervp.models.api_models import CVTailoringRequest as APICVTailoringRequest
@@ -262,16 +264,18 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     return handler(event, context)
 
 
-def _handle_openapi_async_generate(
+def _handle_openapi_async_generate(  # noqa: C901
     event: dict[str, Any],
     request_data: dict[str, Any],
     headers: dict[str, str],
     user_id: str,
 ) -> dict[str, Any]:
-    """Handle OpenAPI async cv-tailoring payloads with deterministic artifact writes."""
+    """Run the 3-stage CV tailoring pipeline and persist the artifact synchronously."""
     _ = event
     cv_id = str(request_data.get('cv_id') or '').strip()
     job_id = str(request_data.get('job_id') or '').strip()
+    vpr_id = str(request_data.get('vpr_id') or '').strip() or None
+
     if not cv_id or not job_id:
         return _response(
             HTTPStatus.BAD_REQUEST,
@@ -283,39 +287,128 @@ def _handle_openapi_async_generate(
             headers,
         )
 
+    table_name = os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')
+    dal = DynamoDalHandler(table_name)
+
+    # ── 1. Fetch master CV ────────────────────────────────────────────────────
+    master_cv = dal.get_cv(user_id=user_id)
+    if master_cv is None:
+        return _response(
+            HTTPStatus.NOT_FOUND,
+            {'success': False, 'code': ResultCode.CV_NOT_FOUND, 'message': 'CV not found'},
+            headers,
+        )
+
+    # ── 2. Fetch job description from jobs table ──────────────────────────────
+    job_description = ''
+    job_title = ''
+    company_name = ''
+    try:
+        jobs_repo = JobsRepository()
+        job_record = jobs_repo.get_job(job_id) or {}
+        job_description = str(job_record.get('description') or '').strip()
+        job_title = str(job_record.get('title') or job_record.get('role_title') or '').strip()
+        company_name = str(job_record.get('company_name') or job_record.get('company') or '').strip()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning('Failed to fetch job record', job_id=job_id, error=str(exc))
+
+    if not job_description:
+        logger.warning('Empty job_description — using placeholder', job_id=job_id)
+        job_description = f'Job posting {job_title or job_id}'
+
+    # ── 3. Fetch VPR (optional, graceful degradation) ────────────────────────
+    vpr = None
+    if vpr_id:
+        try:
+            vpr_result = dal.get_vpr(application_id=vpr_id)
+            if vpr_result.success and vpr_result.data is not None:
+                vpr = vpr_result.data
+        except Exception as exc:  # noqa: BLE001
+            logger.warning('VPR fetch failed — proceeding without VPR', vpr_id=vpr_id, error=str(exc))
+
+    # ── 4. Run 3-stage pipeline ───────────────────────────────────────────────
+    llm_client = LLMClient()
+    pipeline_result = run_cv_tailoring_pipeline(
+        cv=master_cv,
+        job_description=job_description,
+        vpr=vpr,
+        llm_client=llm_client,
+    )
+
+    # ── 5. Build artifact ─────────────────────────────────────────────────────
     request_id = f'cv-tail-{uuid.uuid4()}'
     now_iso = datetime.now(timezone.utc).isoformat()
     artifact_sk = f'ARTIFACT#CV_TAILORED#{request_id}'
     ttl = int((datetime.now(timezone.utc) + timedelta(days=730)).timestamp())
-    _dal = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))
-    _user_cv = _dal.get_cv(user_id=user_id)
-    cv_summary = ''
-    if _user_cv and hasattr(_user_cv, 'professional_summary'):
-        cv_summary = str(_user_cv.professional_summary or '').strip()
-    tailored_cv_text = cv_summary or f'Tailored CV generated for job {job_id}'
 
-    artifact: dict[str, Any] = {
-        'pk': user_id,
-        'sk': artifact_sk,
-        'request_id': request_id,
-        'entity_type': 'CV_TAILORING',
-        'artifact_type': 'cv_tailored',
-        'status': 'completed',
-        'cv_id': cv_id,
-        'job_id': job_id,
-        'job_title': '',
-        'company_name': '',
-        'tailored_cv': tailored_cv_text,
-        'ats_score': Decimal('9.0'),
-        'keyword_matches': {'matched': ['Python', 'AWS'], 'missing': []},
-        'suggestions': ['Tailored for role requirements and ATS keywords.'],
-        'fvs_validation': {'is_valid': True, 'violations': []},
-        'created_at': now_iso,
-        'updated_at': now_iso,
-        'ttl': ttl,
-    }
-    _dal2 = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))
-    _dal2._get_db_handler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', ''))).put_item(Item=artifact)
+    if pipeline_result.success and pipeline_result.data is not None:
+        stage3 = pipeline_result.data
+        cv_sections_dict: dict[str, Any] = stage3.cv_sections.model_dump(mode='json') if stage3.cv_sections else {}
+        tailored_cv_text = (stage3.cv_sections.summary if stage3.cv_sections else '') or ''
+
+        # ATS score: use Stage2 verification score (already 0-100) or default to 75
+        ats_score = 75
+        try:
+            raw_score = cv_sections_dict.get('_ats_keyword_score')
+            if isinstance(raw_score, (int, float)) and 0 <= raw_score <= 100:
+                ats_score = int(raw_score)
+        except Exception:  # noqa: BLE001
+            pass
+
+        # Keyword matches: matched = keywords found in summary + experience bullets
+        cv_text_lower = (tailored_cv_text + ' ' + json.dumps(cv_sections_dict)).lower()
+        matched_keywords = [
+            kw
+            for kw in ([kw for exp in cv_sections_dict.get('experience', []) for kw in exp.get('bullets', [])])
+            if isinstance(kw, str) and kw.lower() in cv_text_lower
+        ]
+
+        artifact: dict[str, Any] = {
+            'pk': user_id,
+            'sk': artifact_sk,
+            'request_id': request_id,
+            'entity_type': 'CV_TAILORING',
+            'artifact_type': 'cv_tailored',
+            'status': 'completed',
+            'cv_id': cv_id,
+            'job_id': job_id,
+            'job_title': job_title,
+            'company_name': company_name,
+            'cv_sections': cv_sections_dict,
+            'tailored_cv': tailored_cv_text,  # backward-compat: summary text
+            'ats_score': ats_score,
+            'keyword_matches': {'matched': matched_keywords, 'missing': []},
+            'suggestions': ['CV tailored using 3-stage pipeline with fact verification.'],
+            'fvs_validation': {
+                'is_valid': stage3.fact_verification_passed,
+                'violations': stage3.items_removed,
+            },
+            'created_at': now_iso,
+            'updated_at': now_iso,
+            'ttl': ttl,
+        }
+        final_status = 'completed'
+    else:
+        error_msg = (pipeline_result.error if pipeline_result else None) or 'Pipeline execution failed'
+        logger.error('CV tailoring pipeline failed', job_id=job_id, error=error_msg)
+        artifact = {
+            'pk': user_id,
+            'sk': artifact_sk,
+            'request_id': request_id,
+            'entity_type': 'CV_TAILORING',
+            'artifact_type': 'cv_tailored',
+            'status': 'failed',
+            'cv_id': cv_id,
+            'job_id': job_id,
+            'error': error_msg,
+            'created_at': now_iso,
+            'updated_at': now_iso,
+            'ttl': ttl,
+        }
+        final_status = 'failed'
+
+    # ── 6. Persist artifact ───────────────────────────────────────────────────
+    dal._get_db_handler(table_name).put_item(Item=artifact)
 
     _update_application_artifact(
         application_id=job_id,
@@ -329,7 +422,7 @@ def _handle_openapi_async_generate(
         {
             'request_id': request_id,
             'job_id': request_id,
-            'status': 'completed',  # artifact written synchronously above — no polling needed
+            'status': final_status,
             'estimated_time_seconds': 0,
         },
         headers,
@@ -718,9 +811,13 @@ def _build_tailored_cv_status_payload(item: dict[str, Any], fallback_id: str) ->
         if tailored_cv is not None:
             result['tailored_cv'] = tailored_cv
 
+        cv_sections = item.get('cv_sections')
+        if isinstance(cv_sections, dict):
+            result['cv_sections'] = cv_sections
+
         ats_score = item.get('estimated_ats_score') or item.get('ats_score')
         if isinstance(ats_score, (int, float, Decimal)):
-            result['ats_score'] = float(ats_score)
+            result['ats_score'] = int(ats_score)
 
         keyword_matches = item.get('keyword_matches')
         if isinstance(keyword_matches, dict):

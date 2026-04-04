@@ -26,6 +26,15 @@ DEFAULT_RETRY_BASE_DELAY_SECONDS = 0.5
 logger = logging.getLogger(__name__)
 
 
+class _LLMTextResponse:
+    """Thin response wrapper returned by LLMClient.complete() for the pipeline interface."""
+
+    __slots__ = ('text',)
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+
 class BedrockInvocationError(RuntimeError):
     """Compatibility error name used by resilience configuration."""
 
@@ -109,6 +118,81 @@ class LLMClient:
             raise
 
         return self._handle_response(response, cache_key)
+
+    def complete(
+        self,
+        prompt: str,
+        system_prompt: str = '',
+        max_tokens: int = 2500,
+        model_name: str = DEFAULT_MODEL,
+        temperature: float = DEFAULT_TEMPERATURE,
+    ) -> _LLMTextResponse:
+        """Invoke Anthropic API with a separate system prompt; used by the 3-stage pipeline.
+
+        Unlike generate(), this returns a _LLMTextResponse with a .text attribute containing
+        the raw model output so the caller can parse it as needed.
+        """
+        try:
+            with self._circuit_breaker:
+                response = self._invoke_model_with_system(
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    max_tokens=max_tokens,
+                    model_name=model_name,
+                    temperature=temperature,
+                )
+        except CircuitBreakerBlockedError as exc:
+            raise CircuitBreakerOpen(retry_after=exc.retry_after) from exc
+
+        for block in response.content:
+            if block.type == 'text':
+                return _LLMTextResponse(str(block.text))
+        return _LLMTextResponse('')
+
+    def _invoke_model_with_system(
+        self,
+        prompt: str,
+        system_prompt: str,
+        max_tokens: int,
+        model_name: str,
+        temperature: float,
+    ) -> Any:
+        """Invoke Anthropic API with separate system and user messages, with retry logic."""
+        attempts = self._retry_max_attempts()
+        base_delay_seconds = self._retry_base_delay_seconds()
+        last_exc: Exception | None = None
+
+        kwargs: dict[str, Any] = {
+            'model': model_name,
+            'max_tokens': max_tokens,
+            'temperature': temperature,
+            'messages': [{'role': 'user', 'content': prompt}],
+        }
+        if system_prompt:
+            kwargs['system'] = system_prompt
+
+        for attempt in range(1, attempts + 1):
+            try:
+                return self._client.messages.create(**kwargs)
+            except Exception as exc:  # noqa: BLE001
+                last_exc = exc
+                is_transient = self._is_transient_provider_error(exc)
+                should_retry = is_transient and attempt < attempts
+                if should_retry:
+                    delay_seconds = base_delay_seconds * (2 ** (attempt - 1))
+                    logger.warning(
+                        'Transient LLM provider error (complete); retrying attempt=%s/%s delay_seconds=%.2f',
+                        attempt,
+                        attempts,
+                        delay_seconds,
+                    )
+                    time.sleep(delay_seconds)
+                    continue
+                break
+
+        if last_exc is None:
+            raise BedrockInvocationError('Failed to invoke LLM model: unknown error')
+        raise BedrockInvocationError(f'Failed to invoke LLM model: {type(last_exc).__name__}: {last_exc}') from last_exc
 
     def _get_cache_key(
         self,
