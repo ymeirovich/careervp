@@ -299,24 +299,7 @@ def _handle_openapi_async_generate(  # noqa: C901
             headers,
         )
 
-    # ── 2. Fetch job description from jobs table ──────────────────────────────
-    job_description = ''
-    job_title = ''
-    company_name = ''
-    try:
-        jobs_repo = JobsRepository()
-        job_record = jobs_repo.get_job(job_id) or {}
-        job_description = str(job_record.get('description') or '').strip()
-        job_title = str(job_record.get('title') or job_record.get('role_title') or '').strip()
-        company_name = str(job_record.get('company_name') or job_record.get('company') or '').strip()
-    except Exception as exc:  # noqa: BLE001
-        logger.warning('Failed to fetch job record', job_id=job_id, error=str(exc))
-
-    if not job_description:
-        logger.warning('Empty job_description — using placeholder', job_id=job_id)
-        job_description = f'Job posting {job_title or job_id}'
-
-    # ── 3. Fetch VPR (optional, graceful degradation) ────────────────────────
+    # ── 2. Fetch VPR first (primary source of job description) ──────────────────
     vpr = None
     if vpr_id:
         try:
@@ -325,6 +308,41 @@ def _handle_openapi_async_generate(  # noqa: C901
                 vpr = vpr_result.data
         except Exception as exc:  # noqa: BLE001
             logger.warning('VPR fetch failed — proceeding without VPR', vpr_id=vpr_id, error=str(exc))
+
+    # ── 3. Resolve job description (VPR → JobsRepository → placeholder) ─────
+    job_description = ''
+    job_title = ''
+    company_name = ''
+
+    # Primary: extract from VPR.job_posting (most reliable — already structured)
+    if vpr is not None and hasattr(vpr, 'job_posting') and vpr.job_posting is not None:
+        jp = vpr.job_posting
+        job_description = str(getattr(jp, 'description', '') or '').strip()
+        if not job_description and hasattr(jp, 'requirements'):
+            reqs = getattr(jp, 'requirements', [])
+            if isinstance(reqs, list) and reqs:
+                job_description = '\n'.join(str(r) for r in reqs)
+        job_title = str(getattr(jp, 'role_title', '') or getattr(jp, 'title', '') or '').strip()
+        company_name = str(getattr(jp, 'company_name', '') or getattr(jp, 'company', '') or '').strip()
+        if job_description:
+            logger.info('job_description resolved from VPR.job_posting', job_id=job_id)
+
+    # Secondary fallback: JobsRepository (stores API-submitted job records; not VPR queue entries)
+    if not job_description:
+        try:
+            jobs_repo = JobsRepository()
+            job_record = jobs_repo.get_job(job_id) or {}
+            job_description = str(job_record.get('description') or '').strip()
+            job_title = job_title or str(job_record.get('title') or job_record.get('role_title') or '').strip()
+            company_name = company_name or str(job_record.get('company_name') or job_record.get('company') or '').strip()
+            if job_description:
+                logger.info('job_description resolved from JobsRepository', job_id=job_id)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning('Failed to fetch job record from JobsRepository', job_id=job_id, error=str(exc))
+
+    if not job_description:
+        logger.warning('job_description unavailable — using placeholder; set vpr_id or ensure job record exists', job_id=job_id)
+        job_description = f'Job posting for {job_title or job_id}'
 
     # ── 4. Run 3-stage pipeline ───────────────────────────────────────────────
     llm_client = LLMClient()
@@ -346,14 +364,8 @@ def _handle_openapi_async_generate(  # noqa: C901
         cv_sections_dict: dict[str, Any] = stage3.cv_sections.model_dump(mode='json') if stage3.cv_sections else {}
         tailored_cv_text = (stage3.cv_sections.summary if stage3.cv_sections else '') or ''
 
-        # ATS score: use Stage2 verification score (already 0-100) or default to 75
-        ats_score = 75
-        try:
-            raw_score = cv_sections_dict.get('_ats_keyword_score')
-            if isinstance(raw_score, (int, float)) and 0 <= raw_score <= 100:
-                ats_score = int(raw_score)
-        except Exception:  # noqa: BLE001
-            pass
+        # ATS score: propagated from Stage2 verification through Stage3Result (0-100 scale)
+        ats_score = stage3.ats_keyword_score if stage3.ats_keyword_score > 0 else 75
 
         # Keyword matches: matched = keywords found in summary + experience bullets
         cv_text_lower = (tailored_cv_text + ' ' + json.dumps(cv_sections_dict)).lower()
@@ -798,7 +810,7 @@ def _normalize_tailoring_status(raw_status: Any) -> str:
     return 'completed'
 
 
-def _build_tailored_cv_status_payload(item: dict[str, Any], fallback_id: str) -> dict[str, Any]:
+def _build_tailored_cv_status_payload(item: dict[str, Any], fallback_id: str) -> dict[str, Any]:  # noqa: C901
     status = _normalize_tailoring_status(item.get('status'))
     payload: dict[str, Any] = {
         'id': str(item.get('request_id') or item.get('sk') or fallback_id),
@@ -832,6 +844,10 @@ def _build_tailored_cv_status_payload(item: dict[str, Any], fallback_id: str) ->
         fvs_validation = item.get('fvs_validation')
         if isinstance(fvs_validation, dict):
             result['fvs_validation'] = fvs_validation
+
+        error = item.get('error')
+        if error is not None:
+            result['error'] = str(error)
 
         if result:
             payload['result'] = result
