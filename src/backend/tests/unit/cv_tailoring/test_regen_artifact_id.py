@@ -89,46 +89,6 @@ def test_update_application_artifact_calls_repository(monkeypatch: pytest.Monkey
 # ─── T-P5-04: handler wires _update_application_artifact ─────────────────────
 
 
-def _make_mock_pipeline_result() -> MagicMock:
-    """Return a successful pipeline Result with a minimal Stage3Result."""
-    from careervp.models.cv_tailoring_models import (
-        CVContactSection,
-        CVSections,
-        CVSkillsSection,
-        Stage3Result,
-    )
-
-    from careervp.models.cv_tailoring_models import CVExperienceSection
-
-    cv_sections = CVSections(
-        contact=CVContactSection(name='Test User', email='test@example.com'),
-        summary='Senior engineer with 10 years of experience building scalable cloud systems.',
-        skills=CVSkillsSection(technical=['Python'], soft=['Communication']),
-        experience=[CVExperienceSection(company='Acme', title='Engineer', start_date='01/2020', bullets=['Built X'])],
-        education=[],
-        certifications=[],
-    )
-    stage3 = Stage3Result(
-        cv_sections=cv_sections,
-        fact_verification_passed=True,
-        items_corrected=[],
-        items_removed=[],
-    )
-    result = MagicMock()
-    result.success = True
-    result.data = stage3
-    result.error = None
-    return result
-
-
-def _make_mock_cv() -> MagicMock:
-    """Return a minimal mock UserCV that satisfies the handler's cv is not None check."""
-    cv = MagicMock()
-    cv.professional_summary = 'Test summary'
-    cv.cv_id = 'cv-123'
-    return cv
-
-
 @pytest.mark.unit
 def test_handle_openapi_async_generate_calls_update_application_artifact(
     monkeypatch: pytest.MonkeyPatch,
@@ -142,21 +102,17 @@ def test_handle_openapi_async_generate_calls_update_application_artifact(
     monkeypatch.setenv('DYNAMODB_TABLE_NAME', 'test-cv-table')
 
     mock_dal = MagicMock()
-    mock_dal.get_cv.return_value = _make_mock_cv()
+    mock_dal.get_cv.return_value = None
     mock_dal._get_db_handler.return_value = MagicMock()
 
     with patch.object(handler_module, 'DynamoDalHandler', return_value=mock_dal):
-        with patch.object(handler_module, 'JobsRepository') as mock_jobs_cls:
-            mock_jobs_cls.return_value.get_job.return_value = {'description': 'Test job', 'title': 'Engineer'}
-            with patch.object(handler_module, 'LLMClient'):
-                with patch.object(handler_module, 'run_cv_tailoring_pipeline', return_value=_make_mock_pipeline_result()):
-                    with patch.object(handler_module, '_update_application_artifact') as mock_update:
-                        handler_module._handle_openapi_async_generate(
-                            event={},
-                            request_data={'cv_id': 'cv-123', 'job_id': 'job-456', 'vpr_id': None},
-                            headers={},
-                            user_id='user-789',
-                        )
+        with patch.object(handler_module, '_update_application_artifact') as mock_update:
+            handler_module._handle_openapi_async_generate(
+                event={},
+                request_data={'cv_id': 'cv-123', 'job_id': 'job-456', 'vpr_id': None},
+                headers={},
+                user_id='user-789',
+            )
 
     mock_update.assert_called_once()
     kwargs = mock_update.call_args.kwargs
@@ -188,21 +144,17 @@ def test_handle_openapi_async_generate_response_contains_request_id(
         captured_artifact_id.append(str(kwargs.get('artifact_id', '')))
 
     mock_dal = MagicMock()
-    mock_dal.get_cv.return_value = _make_mock_cv()
+    mock_dal.get_cv.return_value = None
     mock_dal._get_db_handler.return_value = MagicMock()
 
     with patch.object(handler_module, 'DynamoDalHandler', return_value=mock_dal):
-        with patch.object(handler_module, 'JobsRepository') as mock_jobs_cls:
-            mock_jobs_cls.return_value.get_job.return_value = {'description': 'Test job', 'title': 'Engineer'}
-            with patch.object(handler_module, 'LLMClient'):
-                with patch.object(handler_module, 'run_cv_tailoring_pipeline', return_value=_make_mock_pipeline_result()):
-                    with patch.object(handler_module, '_update_application_artifact', side_effect=capture_update):
-                        result = handler_module._handle_openapi_async_generate(
-                            event={},
-                            request_data={'cv_id': 'cv-111', 'job_id': 'job-222', 'vpr_id': None},
-                            headers={},
-                            user_id='user-333',
-                        )
+        with patch.object(handler_module, '_update_application_artifact', side_effect=capture_update):
+            result = handler_module._handle_openapi_async_generate(
+                event={},
+                request_data={'cv_id': 'cv-111', 'job_id': 'job-222', 'vpr_id': None},
+                headers={},
+                user_id='user-333',
+            )
 
     body = json.loads(result['body'])
     response_request_id = body.get('request_id', '')
