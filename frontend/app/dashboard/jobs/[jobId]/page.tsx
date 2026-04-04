@@ -244,12 +244,14 @@ export default function ApplicationHubPage({
 
   const handleGenerateVpr = async () => {
     if (!cv?.cv_id) return;
+    // Generate new job_id for each regenerate to bypass cache
+    const newJobId = crypto.randomUUID();
     const gapResponseIds =
       hub?.gap_analysis.responses.map((r) => r.question_id) ?? [];
     setGeneratingVpr(true);
     try {
       const task = await api.generateVPR({
-        job_id: jobId,
+        job_id: newJobId,
         cv_id: cv.cv_id,
         gap_response_ids: gapResponseIds,
       });
@@ -281,13 +283,15 @@ export default function ApplicationHubPage({
 
   const handleGenerateCoverLetter = async () => {
     if (!cv?.cv_id || !hub || !research?.id) return;
+    // Generate new job_id for each regenerate to bypass cache
+    const newJobId = crypto.randomUUID();
     const vprId = hub.artifacts.vpr?.artifact_id ?? vprLocalId;
     if (!vprId) return;
     const gapResponseIds = hub.gap_analysis.responses.map((r) => r.question_id);
     setGeneratingCl(true);
     try {
       const task = await api.generateCoverLetter({
-        job_id: jobId,
+        job_id: newJobId,
         cv_id: cv.cv_id,
         vpr_id: vprId,
         company_research_id: research.id,
@@ -321,6 +325,8 @@ export default function ApplicationHubPage({
 
   const handleGenerateInterviewPrep = async () => {
     if (!hub) return;
+    // Generate new job_id for each regenerate to bypass cache
+    const newJobId = crypto.randomUUID();
     const vprId = hub.artifacts.vpr?.artifact_id ?? vprLocalId;
     if (!vprId) return;
     const gapResponseIds = hub.gap_analysis.responses.map((r) => r.question_id);
@@ -329,7 +335,7 @@ export default function ApplicationHubPage({
       const task = await api.generateInterviewPrep({
         vpr_id: vprId,
         gap_response_ids: gapResponseIds,
-        job_id: jobId,
+        job_id: newJobId,
       });
       if (task.status === "completed") {
         // Idempotent — interview prep already done. Show Edit immediately.
@@ -377,14 +383,13 @@ export default function ApplicationHubPage({
 
   const handleGenerateCV = async () => {
     if (!cv?.cv_id) return;
-    // Use hub artifact_id if available, fall back to localStorage-persisted ID.
-    // Send null (not undefined) so JSON.stringify includes the key and the
-    // backend detects the new-API flow via the {cv_id, job_id, vpr_id} subset check.
+    // Generate new job_id for each regenerate to bypass cache
+    const newJobId = crypto.randomUUID();
     const vprId = hub?.artifacts.vpr?.artifact_id ?? vprLocalId ?? null;
     setGeneratingCv(true);
     try {
       const task = await api.generateCV({
-        job_id: jobId,
+        job_id: newJobId,
         cv_id: cv.cv_id,
         vpr_id: vprId,
       });
