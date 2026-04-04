@@ -241,6 +241,7 @@ class Stage3Result(BaseModel):
     fact_verification_passed: bool
     items_corrected: list[str] = Field(default_factory=list)
     items_removed: list[str] = Field(default_factory=list)
+    ats_keyword_score: int = Field(default=0, ge=0, le=100)
 
 
 # P2/P3: Ground Truth Input Models

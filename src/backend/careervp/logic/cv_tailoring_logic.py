@@ -44,6 +44,21 @@ class RetryingLLMClient:
                 time.sleep(delay)
         raise last_exception or RuntimeError('LLM retries exhausted')
 
+    def complete(
+        self,
+        prompt: str,
+        system_prompt: str = '',
+        max_tokens: int = 2500,
+        **kwargs: Any,
+    ) -> Any:
+        """Delegate to inner LLMClient.complete() — no retry logic needed (circuit breaker handles it)."""
+        return self._client.complete(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            max_tokens=max_tokens,
+            **kwargs,
+        )
+
 
 class CVTailoringLogic:
     """Encapsulates CV tailoring business logic with dependency injection."""

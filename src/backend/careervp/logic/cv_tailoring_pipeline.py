@@ -391,6 +391,7 @@ def _parse_cv_sections(data: dict[str, Any]) -> CVSections:
 def run_stage3_fact_verification(  # noqa: C901
     stage2_output: Stage2Output,
     parsed_facts: UserCV,
+    ats_keyword_score: int = 0,
 ) -> Stage3Result:
     """Stage 3: Cross-check Stage 2 output against parsed_facts.
 
@@ -456,6 +457,7 @@ def run_stage3_fact_verification(  # noqa: C901
         fact_verification_passed=fact_verification_passed,
         items_corrected=items_corrected,
         items_removed=items_removed,
+        ats_keyword_score=ats_keyword_score,
     )
 
 
@@ -507,9 +509,13 @@ def run_cv_tailoring_pipeline(
     stage2_output = stage2_result.data
 
     # Stage 3: Fact verification
+    # Convert Stage2 1-10 scale to 0-100 scale for the artifact
+    raw_ats = stage2_output.verification.ats_keyword_score
+    ats_score_100 = min(100, max(0, raw_ats * 10))
     stage3_result = run_stage3_fact_verification(
         stage2_output=stage2_output,
         parsed_facts=fact_verification_source,
+        ats_keyword_score=ats_score_100,
     )
 
     return Result(

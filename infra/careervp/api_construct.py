@@ -1646,6 +1646,7 @@ class ApiConstruct(Construct):
                 "CONFIGURATION_MAX_AGE_MINUTES": constants.CONFIGURATION_MAX_AGE_MINUTES,
                 "TABLE_NAME": db.table_name,
                 "IDEMPOTENCY_TABLE_NAME": idempotency_table.table_name,
+                "VPR_JOBS_TABLE_NAME": self.api_db.jobs_table.table_name,
                 "AUTHORIZER_DISABLED": "true"
                 if constants.ENVIRONMENT != "prod"
                 else "false",
@@ -1663,6 +1664,20 @@ class ApiConstruct(Construct):
             architecture=_lambda.Architecture.X86_64,
         )
 
+        self.api_db.jobs_table.grant_read_data(lambda_function)
+        lambda_function.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["ssm:GetParameter"],
+                resources=[
+                    (
+                        f"arn:aws:ssm:{self.naming.region}:"
+                        f"{self.naming.account_id}:parameter/"
+                        f"{constants.ANTHROPIC_API_KEY_SSM_PARAM.lstrip('/')}"
+                    )
+                ],
+                effect=iam.Effect.ALLOW,
+            )
+        )
         # Legacy /api/* routes removed. Canonical route registration lives in
         # _add_openapi_contract_routes().
         return lambda_function
