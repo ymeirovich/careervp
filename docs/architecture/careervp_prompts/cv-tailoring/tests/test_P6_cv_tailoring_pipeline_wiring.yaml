@@ -1,0 +1,770 @@
+################################################################################
+# CAREERVP — CV TAILORING TEST SPECIFICATION
+# Test Spec: P6 — Pipeline execution wiring (JOBS env, SSM IAM, ATS score, error field, RetryingLLMClient)
+################################################################################
+
+spec_id: TEST-CVT-P6
+title: "Unit tests: CV Tailoring pipeline wiring — ATS score propagation, error surfacing, RetryingLLMClient.complete()"
+priority: critical
+status: draft
+owner: backend
+created_at: "2026-04-04"
+updated_at: "2026-04-04"
+
+source_spec: CVT-P6
+test_file: "src/backend/tests/unit/cv_tailoring/test_pipeline_wiring.py"
+
+################################################################################
+# DESIGN PRINCIPLES
+################################################################################
+
+design_principles:
+  fail_before_implementation: true
+  failure_modes:
+    - "ImportError — class/function absent"
+    - "AttributeError — method or field absent"
+    - "AssertionError — wrong value or missing field in response"
+  self_closing_tests: false
+  markers:
+    - "@pytest.mark.unit"
+  isolation: "All LLM, DAL, and SSM calls must be mocked. No real AWS calls."
+
+################################################################################
+# FIXTURES
+################################################################################
+
+fixtures:
+  VALID_CV_SECTIONS: |
+    CVSections(
+        contact=CVContactSection(name='Test User', email='test@example.com'),
+        summary='Senior engineer with 10 years of experience building scalable cloud systems at a global level.',
+        skills=CVSkillsSection(technical=['Python', 'AWS'], soft=['Communication']),
+        experience=[CVExperienceSection(
+            company='Acme',
+            title='Engineer',
+            start_date='01/2020',
+            bullets=['Built distributed system handling 1M+ events per day using Python and AWS Lambda.'],
+        )],
+        education=[],
+        certifications=[],
+    )
+
+  VALID_STAGE2_VERIFICATION: |
+    Stage2Verification(
+        ats_keyword_score=7,
+        keywords_added_in_review=['Python', 'AWS'],
+        summary_rewritten=True,
+        fact_verification_passed=True,
+        hallucination_flags=[],
+    )
+
+  VALID_STAGE2_OUTPUT: |
+    Stage2Output(
+        verification=VALID_STAGE2_VERIFICATION,
+        cv_sections=VALID_CV_SECTIONS,
+    )
+
+  VALID_STAGE3_RESULT: |
+    Stage3Result(
+        cv_sections=VALID_CV_SECTIONS,
+        fact_verification_passed=True,
+        items_corrected=[],
+        items_removed=[],
+        ats_keyword_score=70,
+    )
+
+  VALID_USER_CV: |
+    UserCV(
+        user_id='user-123',
+        cv_id='cv-123',
+        full_name='Test User',
+        language='en',
+        contact_info=ContactInfo(email='test@example.com'),
+        professional_summary='Backend engineer with 10 years of experience building scalable distributed systems.',
+        experience=[WorkExperience(
+            company='Acme',
+            role='Engineer',
+            dates='2020 - Present',
+            achievements=['Built X'],
+            technologies=['Python'],
+        )],
+        education=[],
+        certifications=[],
+        skills=['Python', 'AWS'],
+        top_achievements=['Built X'],
+        languages=['English'],
+        is_parsed=True,
+    )
+
+################################################################################
+# TEST CASES
+################################################################################
+
+tests:
+  - id: T-P6-01
+    name: test_retrying_llm_client_has_complete_method
+    maps_to: AC-P6-01
+    description: "RetryingLLMClient must have a callable .complete() method"
+    failure_before_implementation: "AttributeError: type object 'RetryingLLMClient' has no attribute 'complete'"
+    implementation: |
+      from careervp.logic.cv_tailoring_logic import RetryingLLMClient
+      from careervp.logic.llm_client import LLMClient
+      from unittest.mock import MagicMock
+
+      mock_client = MagicMock(spec=LLMClient)
+      retrying = RetryingLLMClient(client=mock_client)
+
+      assert hasattr(retrying, 'complete'), (
+          "RetryingLLMClient must have a .complete() method — CVT-P6 not implemented"
+      )
+      assert callable(retrying.complete), (
+          "RetryingLLMClient.complete must be callable — CVT-P6 not implemented"
+      )
+
+  - id: T-P6-02
+    name: test_retrying_llm_client_complete_delegates
+    maps_to: AC-P6-01
+    description: "RetryingLLMClient.complete() must delegate to inner client.complete() with same args"
+    failure_before_implementation: "AttributeError: 'RetryingLLMClient' object has no attribute 'complete'"
+    implementation: |
+      from careervp.logic.cv_tailoring_logic import RetryingLLMClient
+      from careervp.logic.llm_client import LLMClient, _LLMTextResponse
+      from unittest.mock import MagicMock
+
+      mock_client = MagicMock(spec=LLMClient)
+      mock_client.complete.return_value = _LLMTextResponse(text='{"cv_sections": {}}')
+
+      retrying = RetryingLLMClient(client=mock_client)
+      result = retrying.complete(
+          prompt='test prompt',
+          system_prompt='test system',
+          max_tokens=100,
+      )
+
+      mock_client.complete.assert_called_once_with(
+          prompt='test prompt',
+          system_prompt='test system',
+          max_tokens=100,
+      )
+      assert result.text == '{"cv_sections": {}}', (
+          f'RetryingLLMClient.complete() must return inner client result, got {result!r}'
+      )
+
+  - id: T-P6-03
+    name: test_stage3_result_has_ats_keyword_score_field
+    maps_to: AC-P6-02
+    description: "Stage3Result must have ats_keyword_score field (int, 0-100)"
+    failure_before_implementation: "pydantic.ValidationError or AttributeError — field does not exist"
+    implementation: |
+      from careervp.models.cv_tailoring_models import (
+          CVContactSection,
+          CVExperienceSection,
+          CVSections,
+          CVSkillsSection,
+          Stage3Result,
+      )
+
+      cv_sections = CVSections(
+          contact=CVContactSection(name='Test User', email='test@example.com'),
+          summary='Senior engineer with 10 years of experience building scalable cloud systems.',
+          skills=CVSkillsSection(technical=['Python'], soft=[]),
+          experience=[CVExperienceSection(
+              company='Acme',
+              title='Engineer',
+              start_date='01/2020',
+              bullets=['Built distributed system handling 1M+ events per day.'],
+          )],
+          education=[],
+          certifications=[],
+      )
+
+      result = Stage3Result(
+          cv_sections=cv_sections,
+          fact_verification_passed=True,
+          items_corrected=[],
+          items_removed=[],
+          ats_keyword_score=70,
+      )
+
+      assert result.ats_keyword_score == 70, (
+          f'Stage3Result.ats_keyword_score must be 70, got {result.ats_keyword_score!r} — CVT-P6 not implemented'
+      )
+
+      # Default should be 0
+      result_default = Stage3Result(
+          cv_sections=cv_sections,
+          fact_verification_passed=True,
+      )
+      assert result_default.ats_keyword_score == 0, (
+          f'Stage3Result.ats_keyword_score default must be 0, got {result_default.ats_keyword_score!r}'
+      )
+
+  - id: T-P6-04
+    name: test_run_stage3_propagates_ats_score
+    maps_to: AC-P6-03
+    description: "run_stage3_fact_verification() must accept ats_keyword_score param and set it on Stage3Result"
+    failure_before_implementation: "TypeError (unexpected keyword argument) or AssertionError (field not set)"
+    implementation: |
+      from careervp.logic.cv_tailoring_pipeline import run_stage3_fact_verification
+      from careervp.models.cv_tailoring_models import (
+          CVContactSection,
+          CVExperienceSection,
+          CVSections,
+          CVSkillsSection,
+          Stage2Output,
+          Stage2Verification,
+      )
+      from careervp.models.cv import UserCV, ContactInfo, WorkExperience
+
+      cv_sections = CVSections(
+          contact=CVContactSection(name='Test User', email='test@example.com'),
+          summary='Senior engineer with 10 years of experience building scalable cloud systems.',
+          skills=CVSkillsSection(technical=['Python'], soft=[]),
+          experience=[CVExperienceSection(
+              company='Acme',
+              title='Engineer',
+              start_date='01/2020',
+              bullets=['Built distributed system handling 1M+ events per day.'],
+          )],
+          education=[],
+          certifications=[],
+      )
+      stage2_out = Stage2Output(
+          verification=Stage2Verification(
+              ats_keyword_score=7,
+              keywords_added_in_review=[],
+              summary_rewritten=False,
+              fact_verification_passed=True,
+              hallucination_flags=[],
+          ),
+          cv_sections=cv_sections,
+      )
+      parsed_facts = UserCV(
+          user_id='u',
+          cv_id='c',
+          full_name='Test User',
+          language='en',
+          contact_info=ContactInfo(email='test@example.com'),
+          professional_summary='Senior engineer.',
+          experience=[WorkExperience(
+              company='Acme',
+              role='Engineer',
+              dates='2020 - Present',
+              achievements=['Built X'],
+              technologies=['Python'],
+          )],
+          education=[],
+          certifications=[],
+          skills=['Python'],
+          top_achievements=[],
+          languages=['English'],
+          is_parsed=True,
+      )
+
+      result = run_stage3_fact_verification(
+          stage2_output=stage2_out,
+          parsed_facts=parsed_facts,
+          ats_keyword_score=70,
+      )
+
+      assert result.ats_keyword_score == 70, (
+          f'run_stage3_fact_verification must propagate ats_keyword_score=70 to Stage3Result, '
+          f'got {result.ats_keyword_score!r} — CVT-P6 not implemented'
+      )
+
+  - id: T-P6-05
+    name: test_pipeline_ats_score_scaled_to_100
+    maps_to: AC-P6-04
+    description: "run_cv_tailoring_pipeline() must convert Stage2 ats_keyword_score from 1-10 to 0-100"
+    failure_before_implementation: "AssertionError — ats_keyword_score not propagated to Stage3Result"
+    implementation: |
+      import json
+      from unittest.mock import MagicMock, patch
+      from careervp.logic.cv_tailoring_pipeline import run_cv_tailoring_pipeline
+      from careervp.models.cv_tailoring_models import (
+          CVContactSection,
+          CVExperienceSection,
+          CVSections,
+          CVSkillsSection,
+          Stage2Output,
+          Stage2Verification,
+      )
+      from careervp.models.cv import UserCV, ContactInfo, WorkExperience
+
+      cv_sections = CVSections(
+          contact=CVContactSection(name='Test User', email='test@example.com'),
+          summary='Senior engineer with 10 years of experience building scalable cloud systems.',
+          skills=CVSkillsSection(technical=['Python'], soft=[]),
+          experience=[CVExperienceSection(
+              company='Acme',
+              title='Engineer',
+              start_date='01/2020',
+              bullets=['Built distributed system handling 1M+ events per day.'],
+          )],
+          education=[],
+          certifications=[],
+      )
+      stage2_response = Stage2Output(
+          verification=Stage2Verification(
+              ats_keyword_score=7,
+              keywords_added_in_review=[],
+              summary_rewritten=False,
+              fact_verification_passed=True,
+              hallucination_flags=[],
+          ),
+          cv_sections=cv_sections,
+      )
+
+      mock_llm = MagicMock()
+      from careervp.models.result import Result, ResultCode
+      from careervp.models.cv import ContactInfo, WorkExperience
+
+      with patch('careervp.logic.cv_tailoring_pipeline.run_stage2_cv_generation',
+                 return_value=Result(success=True, data=stage2_response, code=ResultCode.SUCCESS)):
+          user_cv = UserCV(
+              user_id='u',
+              cv_id='c',
+              full_name='Test User',
+              language='en',
+              contact_info=ContactInfo(email='test@example.com'),
+              professional_summary='Senior engineer with 10 years of experience.',
+              experience=[WorkExperience(
+                  company='Acme',
+                  role='Engineer',
+                  dates='2020 - Present',
+                  achievements=['Built X'],
+                  technologies=['Python'],
+              )],
+              education=[],
+              certifications=[],
+              skills=['Python'],
+              top_achievements=[],
+              languages=['English'],
+              is_parsed=True,
+          )
+          pipeline_result = run_cv_tailoring_pipeline(
+              cv=user_cv,
+              job_description='Senior Python engineer role at a cloud company.',
+              vpr=None,
+              llm_client=mock_llm,
+          )
+
+      assert pipeline_result.success is True, (
+          f'Pipeline must succeed, got error: {pipeline_result.error!r}'
+      )
+      assert pipeline_result.data is not None
+      assert pipeline_result.data.ats_keyword_score == 70, (
+          f'Pipeline must scale ats_keyword_score from 7 (1-10) to 70 (0-100), '
+          f'got {pipeline_result.data.ats_keyword_score!r} — CVT-P6 not implemented'
+      )
+
+  - id: T-P6-06
+    name: test_status_payload_surfaces_error_field
+    maps_to: AC-P6-05
+    description: "_build_tailored_cv_status_payload must include result.error when item has error field and status=failed"
+    failure_before_implementation: "AssertionError — error key absent from result dict"
+    implementation: |
+      from careervp.handlers.cv_tailoring_handler import _build_tailored_cv_status_payload
+
+      item = {
+          'request_id': 'cv-tail-123',
+          'status': 'failed',
+          'error': 'Stage 2 LLM call failed: AccessDeniedException',
+      }
+      payload = _build_tailored_cv_status_payload(item, 'fallback-id')
+
+      assert payload['status'] == 'failed', f"Expected status='failed', got {payload['status']!r}"
+      assert 'result' in payload, (
+          "Failed artifact status payload must include 'result' dict with error detail — CVT-P6 not implemented"
+      )
+      assert 'error' in payload['result'], (
+          f"result dict must contain 'error' key, got keys: {list(payload['result'].keys())} — CVT-P6 not implemented"
+      )
+      assert 'AccessDeniedException' in payload['result']['error'], (
+          f"result.error must contain error message, got: {payload['result']['error']!r}"
+      )
+
+  - id: T-P6-07
+    name: test_handle_async_generate_artifact_ats_score_from_pipeline
+    maps_to: AC-P6-06
+    description: "_handle_openapi_async_generate must write stage3.ats_keyword_score to artifact, not the hardcoded 75 default"
+    failure_before_implementation: "AssertionError — artifact['ats_score'] is 75 instead of 80"
+    implementation: |
+      import json
+      from unittest.mock import MagicMock, patch
+      import careervp.handlers.cv_tailoring_handler as handler_module
+      from careervp.models.cv_tailoring_models import (
+          CVContactSection,
+          CVExperienceSection,
+          CVSections,
+          CVSkillsSection,
+          Stage3Result,
+      )
+      from careervp.models.result import Result, ResultCode
+
+      cv_sections = CVSections(
+          contact=CVContactSection(name='Test User', email='test@example.com'),
+          summary='Senior engineer with 10 years of experience building scalable cloud systems.',
+          skills=CVSkillsSection(technical=['Python'], soft=[]),
+          experience=[CVExperienceSection(
+              company='Acme',
+              title='Engineer',
+              start_date='01/2020',
+              bullets=['Built distributed system handling 1M+ events per day.'],
+          )],
+          education=[],
+          certifications=[],
+      )
+      stage3 = Stage3Result(
+          cv_sections=cv_sections,
+          fact_verification_passed=True,
+          items_corrected=[],
+          items_removed=[],
+          ats_keyword_score=80,
+      )
+      pipeline_result = Result(success=True, data=stage3, code=ResultCode.SUCCESS)
+
+      mock_dal = MagicMock()
+      mock_dal.get_cv.return_value = MagicMock(professional_summary='Backend engineer', cv_id='cv-123')
+      mock_table = MagicMock()
+      mock_dal._get_db_handler.return_value = mock_table
+
+      with patch.object(handler_module, 'DynamoDalHandler', return_value=mock_dal):
+          with patch.object(handler_module, 'JobsRepository') as mock_jobs_cls:
+              mock_jobs_cls.return_value.get_job.return_value = {'description': 'Test job', 'title': 'Engineer'}
+              with patch.object(handler_module, 'LLMClient'):
+                  with patch.object(handler_module, 'run_cv_tailoring_pipeline', return_value=pipeline_result):
+                      with patch.object(handler_module, '_update_application_artifact'):
+                          handler_module._handle_openapi_async_generate(
+                              event={},
+                              request_data={'cv_id': 'cv-123', 'job_id': 'job-456', 'vpr_id': None},
+                              headers={},
+                              user_id='user-789',
+                          )
+
+      mock_table.put_item.assert_called_once()
+      artifact = mock_table.put_item.call_args.kwargs['Item']
+      assert artifact.get('ats_score') == 80, (
+          f"Artifact ats_score must be 80 (from stage3.ats_keyword_score), "
+          f"got {artifact.get('ats_score')!r}. "
+          "Handler is reading cv_sections_dict instead of stage3.ats_keyword_score — CVT-P6 not implemented"
+      )
+
+################################################################################
+# FULL FILE TEMPLATE
+################################################################################
+
+full_file_template: |
+  # THIS FILE WAS GENERATED FROM: docs/architecture/careervp_prompts/cv-tailoring/tests/test_P6_cv_tailoring_pipeline_wiring.yaml
+  # Spec ID: TEST-CVT-P6
+  # Re-run generate_tests_from_yaml.py to regenerate, or edit manually then remove this header.
+  #
+  # IMPORTANT: These tests fail until the corresponding spec is implemented.
+  # See the YAML spec for acceptance criteria and traceability matrix.
+  """
+  Unit tests: CV Tailoring pipeline wiring — ATS score propagation, error surfacing,
+              RetryingLLMClient.complete() delegate, jobs table env var.
+  Spec: CVT-P6 — Pipeline execution fails in production (four-part diagnosis)
+
+  These tests fail if CVT-P6 has not been implemented:
+    - T-P6-01..02: AttributeError (RetryingLLMClient.complete absent)
+    - T-P6-03:     pydantic.ValidationError or AttributeError (Stage3Result.ats_keyword_score absent)
+    - T-P6-04:     TypeError or AssertionError (run_stage3_fact_verification ats_keyword_score param absent)
+    - T-P6-05:     AssertionError (pipeline does not scale/propagate ATS score)
+    - T-P6-06:     AssertionError (error field absent from failed status payload)
+    - T-P6-07:     AssertionError (artifact ats_score is always 75)
+  """
+
+  from __future__ import annotations
+
+  import json
+  from unittest.mock import MagicMock, patch
+
+  import pytest
+
+  from careervp.models.cv import ContactInfo, UserCV, WorkExperience
+  from careervp.models.result import Result, ResultCode
+
+
+  # ─── Shared helpers ──────────────────────────────────────────────────────────
+
+
+  def _make_valid_cv_sections():
+      from careervp.models.cv_tailoring_models import (
+          CVContactSection,
+          CVExperienceSection,
+          CVSections,
+          CVSkillsSection,
+      )
+
+      return CVSections(
+          contact=CVContactSection(name='Test User', email='test@example.com'),
+          summary='Senior engineer with 10 years of experience building scalable cloud systems.',
+          skills=CVSkillsSection(technical=['Python', 'AWS'], soft=['Communication']),
+          experience=[
+              CVExperienceSection(
+                  company='Acme',
+                  title='Engineer',
+                  start_date='01/2020',
+                  bullets=['Built distributed system handling 1M+ events per day.'],
+              )
+          ],
+          education=[],
+          certifications=[],
+      )
+
+
+  def _make_valid_user_cv(user_id: str = 'u', full_name: str = 'Test User') -> UserCV:
+      return UserCV(
+          user_id=user_id,
+          cv_id='cv-123',
+          full_name=full_name,
+          language='en',
+          contact_info=ContactInfo(email='test@example.com'),
+          professional_summary='Senior engineer with 10 years of experience building scalable distributed systems.',
+          experience=[
+              WorkExperience(
+                  company='Acme',
+                  role='Engineer',
+                  dates='2020 - Present',
+                  achievements=['Built X'],
+                  technologies=['Python'],
+              )
+          ],
+          education=[],
+          certifications=[],
+          skills=['Python', 'AWS'],
+          top_achievements=[],
+          languages=['English'],
+          is_parsed=True,
+      )
+
+
+  # ─── T-P6-01: RetryingLLMClient has .complete() ──────────────────────────────
+
+
+  @pytest.mark.unit
+  def test_retrying_llm_client_has_complete_method() -> None:
+      from careervp.logic.cv_tailoring_logic import RetryingLLMClient
+      from careervp.logic.llm_client import LLMClient
+
+      mock_client = MagicMock(spec=LLMClient)
+      retrying = RetryingLLMClient(client=mock_client)
+
+      assert hasattr(retrying, 'complete'), (
+          "RetryingLLMClient must have a .complete() method — CVT-P6 not implemented"
+      )
+      assert callable(retrying.complete), (
+          "RetryingLLMClient.complete must be callable — CVT-P6 not implemented"
+      )
+
+
+  # ─── T-P6-02: RetryingLLMClient.complete() delegates ─────────────────────────
+
+
+  @pytest.mark.unit
+  def test_retrying_llm_client_complete_delegates() -> None:
+      from careervp.logic.cv_tailoring_logic import RetryingLLMClient
+      from careervp.logic.llm_client import LLMClient, _LLMTextResponse
+
+      mock_client = MagicMock(spec=LLMClient)
+      mock_client.complete.return_value = _LLMTextResponse(text='{"cv_sections": {}}')
+
+      retrying = RetryingLLMClient(client=mock_client)
+      result = retrying.complete(
+          prompt='test prompt',
+          system_prompt='test system',
+          max_tokens=100,
+      )
+
+      mock_client.complete.assert_called_once_with(
+          prompt='test prompt',
+          system_prompt='test system',
+          max_tokens=100,
+      )
+      assert result.text == '{"cv_sections": {}}', (
+          f'RetryingLLMClient.complete() must return inner client result, got {result!r}'
+      )
+
+
+  # ─── T-P6-03: Stage3Result has ats_keyword_score field ───────────────────────
+
+
+  @pytest.mark.unit
+  def test_stage3_result_has_ats_keyword_score_field() -> None:
+      from careervp.models.cv_tailoring_models import Stage3Result
+
+      cv_sections = _make_valid_cv_sections()
+
+      result = Stage3Result(
+          cv_sections=cv_sections,
+          fact_verification_passed=True,
+          items_corrected=[],
+          items_removed=[],
+          ats_keyword_score=70,
+      )
+
+      assert result.ats_keyword_score == 70, (
+          f'Stage3Result.ats_keyword_score must be 70, got {result.ats_keyword_score!r} — CVT-P6 not implemented'
+      )
+
+      result_default = Stage3Result(
+          cv_sections=cv_sections,
+          fact_verification_passed=True,
+      )
+      assert result_default.ats_keyword_score == 0, (
+          f'Stage3Result.ats_keyword_score default must be 0, got {result_default.ats_keyword_score!r}'
+      )
+
+
+  # ─── T-P6-04: run_stage3_fact_verification propagates ats_score ──────────────
+
+
+  @pytest.mark.unit
+  def test_run_stage3_propagates_ats_score() -> None:
+      from careervp.logic.cv_tailoring_pipeline import run_stage3_fact_verification
+      from careervp.models.cv_tailoring_models import Stage2Output, Stage2Verification
+
+      cv_sections = _make_valid_cv_sections()
+      stage2_out = Stage2Output(
+          verification=Stage2Verification(
+              ats_keyword_score=7,
+              keywords_added_in_review=[],
+              summary_rewritten=False,
+              fact_verification_passed=True,
+              hallucination_flags=[],
+          ),
+          cv_sections=cv_sections,
+      )
+      parsed_facts = _make_valid_user_cv()
+
+      result = run_stage3_fact_verification(
+          stage2_output=stage2_out,
+          parsed_facts=parsed_facts,
+          ats_keyword_score=70,
+      )
+
+      assert result.ats_keyword_score == 70, (
+          f'run_stage3_fact_verification must propagate ats_keyword_score=70 to Stage3Result, '
+          f'got {result.ats_keyword_score!r} — CVT-P6 not implemented'
+      )
+
+
+  # ─── T-P6-05: run_cv_tailoring_pipeline scales ATS score to 0-100 ────────────
+
+
+  @pytest.mark.unit
+  def test_pipeline_ats_score_scaled_to_100() -> None:
+      from careervp.logic.cv_tailoring_pipeline import run_cv_tailoring_pipeline
+      from careervp.models.cv_tailoring_models import Stage2Output, Stage2Verification
+
+      cv_sections = _make_valid_cv_sections()
+      stage2_response = Stage2Output(
+          verification=Stage2Verification(
+              ats_keyword_score=7,
+              keywords_added_in_review=[],
+              summary_rewritten=False,
+              fact_verification_passed=True,
+              hallucination_flags=[],
+          ),
+          cv_sections=cv_sections,
+      )
+
+      mock_llm = MagicMock()
+      with patch(
+          'careervp.logic.cv_tailoring_pipeline.run_stage2_cv_generation',
+          return_value=Result(success=True, data=stage2_response, code=ResultCode.SUCCESS),
+      ):
+          pipeline_result = run_cv_tailoring_pipeline(
+              cv=_make_valid_user_cv(),
+              job_description='Senior Python engineer role at a cloud company with distributed systems experience.',
+              vpr=None,
+              llm_client=mock_llm,
+          )
+
+      assert pipeline_result.success is True, (
+          f'Pipeline must succeed, got error: {pipeline_result.error!r}'
+      )
+      assert pipeline_result.data is not None
+      assert pipeline_result.data.ats_keyword_score == 70, (
+          f'Pipeline must scale ats_keyword_score from 7 (1-10) to 70 (0-100), '
+          f'got {pipeline_result.data.ats_keyword_score!r} — CVT-P6 not implemented'
+      )
+
+
+  # ─── T-P6-06: _build_tailored_cv_status_payload surfaces error ───────────────
+
+
+  @pytest.mark.unit
+  def test_status_payload_surfaces_error_field() -> None:
+      from careervp.handlers.cv_tailoring_handler import _build_tailored_cv_status_payload
+
+      item = {
+          'request_id': 'cv-tail-123',
+          'status': 'failed',
+          'error': 'Stage 2 LLM call failed: AccessDeniedException',
+      }
+      payload = _build_tailored_cv_status_payload(item, 'fallback-id')
+
+      assert payload['status'] == 'failed', f"Expected status='failed', got {payload['status']!r}"
+      assert 'result' in payload, (
+          "Failed artifact status payload must include 'result' dict with error detail — CVT-P6 not implemented"
+      )
+      assert 'error' in payload['result'], (
+          f"result dict must contain 'error' key, got keys: {list(payload['result'].keys())} — CVT-P6 not implemented"
+      )
+      assert 'AccessDeniedException' in payload['result']['error'], (
+          f"result.error must contain error message, got: {payload['result']['error']!r}"
+      )
+
+
+  # ─── T-P6-07: handler artifact uses stage3.ats_keyword_score ─────────────────
+
+
+  @pytest.mark.unit
+  def test_handle_async_generate_artifact_ats_score_from_pipeline(
+      monkeypatch: pytest.MonkeyPatch,
+  ) -> None:
+      import careervp.handlers.cv_tailoring_handler as handler_module
+      from careervp.models.cv_tailoring_models import Stage3Result
+
+      monkeypatch.setenv('DYNAMODB_TABLE_NAME', 'test-table')
+
+      cv_sections = _make_valid_cv_sections()
+      stage3 = Stage3Result(
+          cv_sections=cv_sections,
+          fact_verification_passed=True,
+          items_corrected=[],
+          items_removed=[],
+          ats_keyword_score=80,
+      )
+      pipeline_result = Result(success=True, data=stage3, code=ResultCode.SUCCESS)
+
+      mock_dal = MagicMock()
+      mock_dal.get_cv.return_value = _make_valid_user_cv()
+      mock_table = MagicMock()
+      mock_dal._get_db_handler.return_value = mock_table
+
+      with patch.object(handler_module, 'DynamoDalHandler', return_value=mock_dal):
+          with patch.object(handler_module, 'JobsRepository') as mock_jobs_cls:
+              mock_jobs_cls.return_value.get_job.return_value = {
+                  'description': 'Test job description for senior engineer role.',
+                  'title': 'Senior Engineer',
+              }
+              with patch.object(handler_module, 'LLMClient'):
+                  with patch.object(handler_module, 'run_cv_tailoring_pipeline', return_value=pipeline_result):
+                      with patch.object(handler_module, '_update_application_artifact'):
+                          handler_module._handle_openapi_async_generate(
+                              event={},
+                              request_data={'cv_id': 'cv-123', 'job_id': 'job-456', 'vpr_id': None},
+                              headers={},
+                              user_id='user-789',
+                          )
+
+      mock_table.put_item.assert_called_once()
+      artifact = mock_table.put_item.call_args.kwargs['Item']
+      assert artifact.get('ats_score') == 80, (
+          f"Artifact ats_score must be 80 (from stage3.ats_keyword_score=80), "
+          f"got {artifact.get('ats_score')!r}. "
+          "Handler is still using cv_sections_dict.get('_ats_keyword_score') fallback to 75 — CVT-P6 not implemented"
+      )

@@ -1,0 +1,559 @@
+################################################################################
+# CAREERVP — CV TAILORING IMPROVEMENT PLAN
+# Spec: P6 — Pipeline execution fails in production (four-part diagnosis)
+################################################################################
+
+spec_id: CVT-P6
+title: "Fix CV Tailoring pipeline: JOBS table env var, SSM IAM grant, ATS score propagation, error surfacing, RetryingLLMClient.complete()"
+priority: critical
+status: draft
+owner: backend+infra
+created_at: "2026-04-04"
+updated_at: "2026-04-04"
+
+depends_on:
+  - CVT-P5
+
+blocks: []
+
+################################################################################
+# PROBLEM STATEMENT
+################################################################################
+
+problem_statement:
+  exact_failing_behavior: >
+    After wiring the real 3-stage CV tailoring pipeline (replacing the stub),
+    POST /cv-tailoring/generate returns status="failed" in production.
+    CloudWatch logs show the pipeline result is a failure.
+
+    Four confirmed root causes (all must be fixed together):
+
+    1. INFRA — JOBS table env var missing:
+       _add_cv_tailoring_lambda_integration() in api_construct.py does NOT inject
+       VPR_JOBS_TABLE_NAME into the Lambda environment. JobsRepository._get_table_name()
+       falls back to the naming-convention table name, which may not be readable because
+       the Lambda execution role lacks DynamoDB read permission on that table.
+
+    2. INFRA — SSM IAM grant missing:
+       LLMClient._get_anthropic_client() reads ANTHROPIC_API_KEY_SSM_PARAM from the
+       environment and calls ssm.get_parameter() to fetch the actual API key.
+       The CV Tailoring Lambda role has no ssm:GetParameter policy, causing a
+       ClientError:AccessDeniedException at runtime.
+       Other lambdas (cover_letter_worker, interview_prep_worker) already have this
+       policy at lines 1529-1541 and 1598-1610.
+
+    3. BACKEND — ATS score extraction reads wrong key:
+       _handle_openapi_async_generate() tries to extract the ATS score via
+       cv_sections_dict.get('_ats_keyword_score'). This key does not exist in the
+       CVSections model_dump() output; the score lives in
+       stage2_output.verification.ats_keyword_score, which is lost after
+       run_stage3_fact_verification() returns a Stage3Result that carries no score field.
+       Result: ats_score is always 75 (the hardcoded default).
+
+    4. BACKEND — Failed artifact error not surfaced:
+       _build_tailored_cv_status_payload() includes the 'error' field in the artifact
+       DynamoDB record but never copies it into the response payload when status='failed'.
+       The API consumer receives {"status": "failed"} with no diagnostic detail.
+
+    5. BACKEND — RetryingLLMClient.complete() missing:
+       RetryingLLMClient in cv_tailoring_logic.py only wraps LLMClient.generate() with
+       retry logic. It has no .complete() method. If code calls
+       RetryingLLMClient.tailor_cv() → run_cv_tailoring_pipeline() → Stage 2 LLM call,
+       Stage 2 calls llm_client.complete() and receives AttributeError.
+       (Currently the handler creates LLMClient() directly so this is latent but must
+       be fixed before any code path uses RetryingLLMClient with the new pipeline.)
+
+  expected_behavior: >
+    After this fix:
+      1. CV Tailoring Lambda can read from the jobs DynamoDB table via the injected
+         VPR_JOBS_TABLE_NAME env var and the Lambda role's DynamoDB read grant.
+      2. CV Tailoring Lambda can fetch the Anthropic API key from SSM via the
+         ssm:GetParameter IAM policy.
+      3. ATS score flows from Stage2Verification.ats_keyword_score (1-10 scale) through
+         Stage3Result.ats_keyword_score (converted to 0-100 scale) into the artifact.
+      4. When status='failed', the status response includes result.error with the
+         diagnostic message from the artifact record.
+      5. RetryingLLMClient.complete() delegates to its inner LLMClient.complete() with
+         the same signature, so any code path using RetryingLLMClient works with Stage 2.
+
+  user_business_impact: >
+    Every CV Tailoring generation attempt fails with status="failed" after deployment.
+    Users see a failure card with no diagnostic detail and cannot generate tailored CVs.
+    ATS scores are always 75 even when the pipeline succeeds.
+
+  reproducibility: >
+    1. Deploy current code to AWS dev.
+    2. POST /cv-tailoring/generate with valid {cv_id, job_id}.
+    3. Observe: response body shows status="failed".
+    4. CloudWatch log group /aws/lambda/careervp-cvtailor-lambda-dev shows
+       AccessDeniedException on ssm:GetParameter or DynamoDB table not found.
+
+################################################################################
+# EVIDENCE
+################################################################################
+
+evidence:
+  diagnosis_confirmed: true
+
+  root_cause_P6a_jobs_table: >
+    _add_cv_tailoring_lambda_integration() at api_construct.py:1613-1667 does not
+    include VPR_JOBS_TABLE_NAME in its environment dict. VPR submit (line 1109),
+    VPR status (line 1164), VPR SQS worker (line 1219), and VPR DLQ handler (line 1272)
+    all inject VPR_JOBS_TABLE_NAME. Cover letter worker uses self.api_db.jobs_table
+    at line 1528. CV Tailoring is the only lambda missing the table name AND grant.
+
+  root_cause_P6b_ssm_iam: >
+    Cover letter worker adds ssm:GetParameter policy at lines 1529-1541.
+    Interview prep worker adds the same policy at lines 1598-1610.
+    CV Tailoring lambda has no add_to_role_policy call for SSM in its method body.
+    LLMClient._get_anthropic_client() at llm_client.py:50-67 calls
+    ssm_client.get_parameter(Name=ssm_param, WithDecryption=True) which requires
+    this IAM permission.
+
+  root_cause_P6c_ats_score: >
+    cv_tailoring_handler.py line 352: cv_sections_dict.get('_ats_keyword_score').
+    CVSections.model_dump(mode='json') never contains '_ats_keyword_score' — that
+    field does not exist on the CVSections Pydantic model.
+    Stage2Verification.ats_keyword_score (ge=1, le=10) is consumed inside
+    run_stage3_fact_verification() but Stage3Result (lines 237-244) has only:
+    cv_sections, fact_verification_passed, items_corrected, items_removed.
+    The score is never propagated to the handler.
+
+  root_cause_P6d_error_field: >
+    _build_tailored_cv_status_payload() at cv_tailoring_handler.py:801-838 enters the
+    'failed' branch (status in {'completed', 'failed'}) but only checks tailored_cv,
+    cv_sections, ats_score, keyword_matches, suggestions, fvs_validation.
+    None of these exist on a failed artifact, so result stays empty and payload['result']
+    is never set. The 'error' key written to DynamoDB at line ~395 is never read back.
+
+  root_cause_P6e_retrying: >
+    RetryingLLMClient at cv_tailoring_logic.py:27-45 wraps only .generate().
+    run_cv_tailoring_pipeline() Stage 2 at cv_tailoring_pipeline.py:246 calls
+    llm_client.complete(prompt, system_prompt, max_tokens). If any caller wraps the
+    client in RetryingLLMClient before passing it to run_cv_tailoring_pipeline,
+    Stage 2 raises AttributeError: 'RetryingLLMClient' object has no attribute 'complete'.
+
+  failing_code_locations:
+    infra_jobs_env: "infra/careervp/api_construct.py:1638-1653 (_add_cv_tailoring_lambda_integration env dict)"
+    infra_ssm_policy: "infra/careervp/api_construct.py:1663-1666 (return lambda_function — missing add_to_role_policy)"
+    backend_ats_score: "src/backend/careervp/handlers/cv_tailoring_handler.py:352 (cv_sections_dict.get('_ats_keyword_score'))"
+    backend_error_field: "src/backend/careervp/handlers/cv_tailoring_handler.py:801-838 (_build_tailored_cv_status_payload)"
+    backend_retrying: "src/backend/careervp/logic/cv_tailoring_logic.py:27-45 (RetryingLLMClient — no .complete())"
+
+################################################################################
+# ARCHITECTURE AND OWNERSHIP MAP
+################################################################################
+
+architecture:
+  infra: "infra/careervp/api_construct.py"
+  backend_handler: "src/backend/careervp/handlers/cv_tailoring_handler.py"
+  backend_pipeline: "src/backend/careervp/logic/cv_tailoring_pipeline.py"
+  backend_models: "src/backend/careervp/models/cv_tailoring_models.py"
+  backend_logic: "src/backend/careervp/logic/cv_tailoring_logic.py"
+  backend_llm_client: "src/backend/careervp/logic/llm_client.py"
+
+  data_flow_after_fix: |
+    CDK deploy:
+      CV Tailoring Lambda env:
+        VPR_JOBS_TABLE_NAME = jobs_table.table_name    ← NEW
+        ANTHROPIC_API_KEY_SSM_PARAM = /careervp/...    ← already set
+      CV Tailoring Lambda role:
+        DynamoDB:ReadItem on jobs_table                ← NEW
+        ssm:GetParameter on ANTHROPIC_API_KEY_SSM_PARAM ← NEW
+
+    POST /cv-tailoring/generate → _handle_openapi_async_generate():
+      JobsRepository().get_job(job_id)                ← reads VPR_JOBS_TABLE_NAME ✓
+      LLMClient() → _get_anthropic_client()            ← ssm.get_parameter() ✓
+        → run_cv_tailoring_pipeline(cv, job_description, vpr, llm_client)
+          Stage 1: keyword mapping (Python)
+          Stage 2: llm_client.complete()               ← LLMClient has .complete() ✓
+          Stage 3: run_stage3_fact_verification()
+            → Stage3Result.ats_keyword_score = stage2.verification.ats_keyword_score * 10  ← NEW
+      artifact['ats_score'] = stage3.ats_keyword_score ← reads real score, not cv_sections_dict ← NEW
+      dal.put_item(artifact)
+      _update_application_artifact(...)
+
+    GET /cv-tailoring/{id}/status → _build_tailored_cv_status_payload():
+      status='failed': result['error'] = item.get('error')  ← NEW
+
+################################################################################
+# FIX PLAN
+################################################################################
+
+fix_plan:
+  files_to_modify:
+
+    # ── P6a + P6b: Infrastructure ───────────────────────────────────────────────
+    - path: infra/careervp/api_construct.py
+      changes:
+        - description: "Add VPR_JOBS_TABLE_NAME to CV Tailoring Lambda environment"
+          where: "Inside _add_cv_tailoring_lambda_integration() environment dict, after IDEMPOTENCY_TABLE_NAME line"
+          before: |
+                    "IDEMPOTENCY_TABLE_NAME": idempotency_table.table_name,
+                    "AUTHORIZER_DISABLED": "true"
+          after: |
+                    "IDEMPOTENCY_TABLE_NAME": idempotency_table.table_name,
+                    "VPR_JOBS_TABLE_NAME": self.api_db.jobs_table.table_name,
+                    "AUTHORIZER_DISABLED": "true"
+
+        - description: "Grant DynamoDB read on jobs_table and SSM GetParameter to CV Tailoring Lambda"
+          where: "After lambda_function creation, before return statement in _add_cv_tailoring_lambda_integration()"
+          before: |
+                    # Legacy /api/* routes removed. Canonical route registration lives in
+                    # _add_openapi_contract_routes().
+                    return lambda_function
+          after: |
+                    self.api_db.jobs_table.grant_read_data(lambda_function)
+                    lambda_function.add_to_role_policy(
+                        iam.PolicyStatement(
+                            actions=["ssm:GetParameter"],
+                            resources=[
+                                (
+                                    f"arn:aws:ssm:{self.naming.region}:"
+                                    f"{self.naming.account_id}:parameter/"
+                                    f"{constants.ANTHROPIC_API_KEY_SSM_PARAM.lstrip('/')}"
+                                )
+                            ],
+                            effect=iam.Effect.ALLOW,
+                        )
+                    )
+                    # Legacy /api/* routes removed. Canonical route registration lives in
+                    # _add_openapi_contract_routes().
+                    return lambda_function
+
+    # ── P6c: ATS score propagation ───────────────────────────────────────────────
+    - path: src/backend/careervp/models/cv_tailoring_models.py
+      changes:
+        - description: "Add ats_keyword_score to Stage3Result"
+          where: "Stage3Result class definition"
+          before: |
+            class Stage3Result(BaseModel):
+                """Stage 3: Fact verification result (Python, no LLM call)."""
+
+                cv_sections: CVSections
+                fact_verification_passed: bool
+                items_corrected: list[str] = Field(default_factory=list)
+                items_removed: list[str] = Field(default_factory=list)
+          after: |
+            class Stage3Result(BaseModel):
+                """Stage 3: Fact verification result (Python, no LLM call)."""
+
+                cv_sections: CVSections
+                fact_verification_passed: bool
+                items_corrected: list[str] = Field(default_factory=list)
+                items_removed: list[str] = Field(default_factory=list)
+                ats_keyword_score: int = Field(default=0, ge=0, le=100)
+
+    - path: src/backend/careervp/logic/cv_tailoring_pipeline.py
+      changes:
+        - description: "Accept ats_keyword_score param in run_stage3_fact_verification and set on result"
+          where: "run_stage3_fact_verification() function signature and return statement"
+          before: |
+            def run_stage3_fact_verification(  # noqa: C901
+                stage2_output: Stage2Output,
+                parsed_facts: UserCV,
+            ) -> Stage3Result:
+          after: |
+            def run_stage3_fact_verification(  # noqa: C901
+                stage2_output: Stage2Output,
+                parsed_facts: UserCV,
+                ats_keyword_score: int = 0,
+            ) -> Stage3Result:
+
+        - description: "Pass ats_keyword_score to Stage3Result constructor"
+          where: "Return statement at end of run_stage3_fact_verification()"
+          before: |
+                return Stage3Result(
+                    cv_sections=corrected_sections,
+                    fact_verification_passed=fact_verification_passed,
+                    items_corrected=items_corrected,
+                    items_removed=items_removed,
+                )
+          after: |
+                return Stage3Result(
+                    cv_sections=corrected_sections,
+                    fact_verification_passed=fact_verification_passed,
+                    items_corrected=items_corrected,
+                    items_removed=items_removed,
+                    ats_keyword_score=ats_keyword_score,
+                )
+
+        - description: "Pass scaled ATS score from Stage2 to run_stage3_fact_verification"
+          where: "run_cv_tailoring_pipeline() call to run_stage3_fact_verification()"
+          before: |
+                # Stage 3: Fact verification
+                stage3_result = run_stage3_fact_verification(
+                    stage2_output=stage2_output,
+                    parsed_facts=fact_verification_source,
+                )
+          after: |
+                # Stage 3: Fact verification
+                # Convert Stage2 1-10 scale to 0-100 scale for the artifact
+                raw_ats = stage2_output.verification.ats_keyword_score
+                ats_score_100 = min(100, max(0, raw_ats * 10))
+                stage3_result = run_stage3_fact_verification(
+                    stage2_output=stage2_output,
+                    parsed_facts=fact_verification_source,
+                    ats_keyword_score=ats_score_100,
+                )
+
+    - path: src/backend/careervp/handlers/cv_tailoring_handler.py
+      changes:
+        - description: "Read ATS score from stage3.ats_keyword_score instead of cv_sections_dict"
+          where: "ATS score extraction block inside _handle_openapi_async_generate() success branch"
+          before: |
+                # ATS score: use Stage2 verification score (already 0-100) or default to 75
+                ats_score = 75
+                try:
+                    raw_score = cv_sections_dict.get('_ats_keyword_score')
+                    if isinstance(raw_score, (int, float)) and 0 <= raw_score <= 100:
+                        ats_score = int(raw_score)
+                except Exception:  # noqa: BLE001
+                    pass
+          after: |
+                # ATS score: propagated from Stage2 verification through Stage3Result (0-100 scale)
+                ats_score = stage3.ats_keyword_score if stage3.ats_keyword_score > 0 else 75
+
+        - description: "Surface error field in _build_tailored_cv_status_payload for failed status"
+          where: "_build_tailored_cv_status_payload() inside the status in {'completed', 'failed'} block"
+          before: |
+                fvs_validation = item.get('fvs_validation')
+                if isinstance(fvs_validation, dict):
+                    result['fvs_validation'] = fvs_validation
+
+                if result:
+                    payload['result'] = result
+          after: |
+                fvs_validation = item.get('fvs_validation')
+                if isinstance(fvs_validation, dict):
+                    result['fvs_validation'] = fvs_validation
+
+                error = item.get('error')
+                if error is not None:
+                    result['error'] = str(error)
+
+                if result:
+                    payload['result'] = result
+
+    # ── P6e: RetryingLLMClient.complete() delegate ───────────────────────────────
+    - path: src/backend/careervp/logic/cv_tailoring_logic.py
+      changes:
+        - description: "Add complete() delegate to RetryingLLMClient"
+          where: "After RetryingLLMClient.generate() method"
+          before: |
+            class CVTailoringLogic:
+          after: |
+                def complete(
+                    self,
+                    prompt: str,
+                    system_prompt: str = '',
+                    max_tokens: int = 2500,
+                    **kwargs: Any,
+                ) -> Any:
+                    """Delegate to inner LLMClient.complete() — no retry logic needed (circuit breaker handles it)."""
+                    return self._client.complete(
+                        prompt=prompt,
+                        system_prompt=system_prompt,
+                        max_tokens=max_tokens,
+                        **kwargs,
+                    )
+
+            class CVTailoringLogic:
+
+  non_goals:
+    - "Do not change Stage2Verification.ats_keyword_score field constraints (ge=1, le=10)"
+    - "Do not change any VPR, gap, cover letter, or interview prep handlers"
+    - "Do not add retry logic to RetryingLLMClient.complete() — circuit breaker in LLMClient handles resilience"
+    - "Do not change the frontend"
+    - "Do not change the LLM prompts or Stage 1/2/3 logic beyond what is specified"
+
+  rollback_plan: >
+    Revert infra changes: remove VPR_JOBS_TABLE_NAME from env dict and remove the two
+    add_to_role_policy calls. Revert Stage3Result to its 4-field form. Revert the ATS
+    extraction to the cv_sections_dict.get('_ats_keyword_score') pattern.
+    Revert _build_tailored_cv_status_payload to not include error.
+    Remove RetryingLLMClient.complete(). Pipeline reverts to always-75 ATS score
+    but continues to work for production requests once SSM and jobs table are fixed
+    via other means.
+
+################################################################################
+# ACCEPTANCE CRITERIA
+################################################################################
+
+acceptance_criteria:
+  - id: AC-P6-01
+    description: "RetryingLLMClient has a .complete() method that delegates to its inner LLMClient.complete()"
+    verification: "Unit test: create RetryingLLMClient(mock_client); call complete(prompt, system_prompt, max_tokens); assert mock_client.complete called with same args"
+    blocking: true
+
+  - id: AC-P6-02
+    description: "Stage3Result model has ats_keyword_score: int field with default=0, ge=0, le=100"
+    verification: "Unit test: Stage3Result(..., ats_keyword_score=70) — field exists and validates"
+    blocking: true
+
+  - id: AC-P6-03
+    description: "run_stage3_fact_verification() accepts ats_keyword_score param and sets it on the returned Stage3Result"
+    verification: "Unit test: call with ats_keyword_score=70; assert result.ats_keyword_score == 70"
+    blocking: true
+
+  - id: AC-P6-04
+    description: "run_cv_tailoring_pipeline() propagates Stage2 ATS score (×10) into Stage3Result.ats_keyword_score"
+    verification: "Unit test: mock stage2 returning ats_keyword_score=7; assert pipeline result.data.ats_keyword_score == 70"
+    blocking: true
+
+  - id: AC-P6-05
+    description: "_build_tailored_cv_status_payload returns result.error when item has error field and status='failed'"
+    verification: "Unit test: item={'status':'failed', 'error':'Pipeline failed'}; assert payload['result']['error'] == 'Pipeline failed'"
+    blocking: true
+
+  - id: AC-P6-06
+    description: "_handle_openapi_async_generate writes stage3.ats_keyword_score into the artifact instead of the hardcoded 75 default"
+    verification: "Unit test: mock pipeline returning Stage3Result with ats_keyword_score=80; assert artifact['ats_score']==80"
+    blocking: true
+
+  - id: AC-P6-07
+    description: "CDK CV Tailoring Lambda environment dict contains VPR_JOBS_TABLE_NAME (infra change)"
+    verification: "Manual: cdk synth; check CloudFormation template for VPR_JOBS_TABLE_NAME in CV Tailoring Lambda Properties.Environment.Variables"
+    blocking: true
+
+  - id: AC-P6-08
+    description: "CDK CV Tailoring Lambda role has ssm:GetParameter policy for ANTHROPIC_API_KEY_SSM_PARAM (infra change)"
+    verification: "Manual: cdk synth; check CloudFormation template for ssm:GetParameter in CV Tailoring Lambda role"
+    blocking: true
+
+################################################################################
+# BASELINE AND REGRESSION BUDGET
+################################################################################
+
+baseline_and_regression_budget:
+  baseline_artifact: "N/A — production is broken; no stable baseline to protect"
+  blocked_regressions:
+    - "cv-tailoring generate endpoint returns 500 or 400 for valid requests"
+    - "ATS score regresses from int to float in the status response"
+    - "P5 tests (test_regen_artifact_id.py) must remain passing"
+    - "test_l1_artifact_persistence.py::test_cv_tailoring_async_generate_persists_with_artifact_prefix must remain passing"
+  allowed_deltas:
+    - "ATS score changes from always-75 to a real value between 0-100"
+    - "Status response for failed artifacts now includes result.error diagnostic"
+    - "Stage3Result gains an ats_keyword_score field"
+
+################################################################################
+# VERIFICATION CONTRACT
+################################################################################
+
+verification_contract:
+  - requirement_id: AC-P6-01
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P6-02
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P6-03
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P6-04
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P6-05
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P6-06
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P6-07
+    verification_type: manual
+    blocking_gate: pre_deploy
+    artifact_required: true
+  - requirement_id: AC-P6-08
+    verification_type: manual
+    blocking_gate: pre_deploy
+    artifact_required: true
+
+################################################################################
+# VALIDATION PLAN
+################################################################################
+
+validation_plan:
+  static:
+    - "cd src/backend && uv run ruff format . && uv run ruff check --fix ."
+    - "cd src/backend && uv run mypy careervp --strict"
+  unit:
+    - command: "cd src/backend && uv run pytest tests/unit/cv_tailoring/ -v --tb=short"
+    - command: "cd src/backend && uv run pytest tests/unit/test_l1_artifact_persistence.py -v --tb=short"
+  infra:
+    - command: "cd infra && cdk synth 2>&1 | grep -A3 VPR_JOBS_TABLE_NAME"
+    - command: "cd infra && cdk synth 2>&1 | grep -A3 ssm:GetParameter"
+  manual:
+    - "POST /cv-tailoring/generate with valid {cv_id, job_id}; confirm status=completed"
+    - "GET /cv-tailoring/{id}/status; confirm result.ats_score is a real value 0-100 (not 75)"
+    - "Trigger a failure path; confirm result.error contains diagnostic message"
+
+################################################################################
+# TRACEABILITY MATRIX
+################################################################################
+
+traceability:
+  - requirement_id: AC-P6-01
+    code_reference: "src/backend/careervp/logic/cv_tailoring_logic.py::RetryingLLMClient.complete"
+    test_reference: "tests/unit/cv_tailoring/test_pipeline_wiring.py::test_retrying_llm_client_has_complete_method"
+    result: pending
+  - requirement_id: AC-P6-01
+    code_reference: "src/backend/careervp/logic/cv_tailoring_logic.py::RetryingLLMClient.complete"
+    test_reference: "tests/unit/cv_tailoring/test_pipeline_wiring.py::test_retrying_llm_client_complete_delegates"
+    result: pending
+  - requirement_id: AC-P6-02
+    code_reference: "src/backend/careervp/models/cv_tailoring_models.py::Stage3Result"
+    test_reference: "tests/unit/cv_tailoring/test_pipeline_wiring.py::test_stage3_result_has_ats_keyword_score_field"
+    result: pending
+  - requirement_id: AC-P6-03
+    code_reference: "src/backend/careervp/logic/cv_tailoring_pipeline.py::run_stage3_fact_verification"
+    test_reference: "tests/unit/cv_tailoring/test_pipeline_wiring.py::test_run_stage3_propagates_ats_score"
+    result: pending
+  - requirement_id: AC-P6-04
+    code_reference: "src/backend/careervp/logic/cv_tailoring_pipeline.py::run_cv_tailoring_pipeline"
+    test_reference: "tests/unit/cv_tailoring/test_pipeline_wiring.py::test_pipeline_ats_score_scaled_to_100"
+    result: pending
+  - requirement_id: AC-P6-05
+    code_reference: "src/backend/careervp/handlers/cv_tailoring_handler.py::_build_tailored_cv_status_payload"
+    test_reference: "tests/unit/cv_tailoring/test_pipeline_wiring.py::test_status_payload_surfaces_error_field"
+    result: pending
+  - requirement_id: AC-P6-06
+    code_reference: "src/backend/careervp/handlers/cv_tailoring_handler.py::_handle_openapi_async_generate"
+    test_reference: "tests/unit/cv_tailoring/test_pipeline_wiring.py::test_handle_async_generate_artifact_ats_score_from_pipeline"
+    result: pending
+
+################################################################################
+# ROLLBACK TRIGGER MATRIX
+################################################################################
+
+rollback_triggers:
+  - trigger_id: RT-P6-001
+    condition: "cv-tailoring generate endpoint returns 500 after deployment"
+    detection_source: "POST /cv-tailoring/generate smoke test"
+    action: "Roll back CDK stack; revert backend code changes"
+    owner: backend+infra
+
+  - trigger_id: RT-P6-002
+    condition: "P5 tests fail after P6 changes"
+    detection_source: "pytest tests/unit/cv_tailoring/test_regen_artifact_id.py"
+    action: "Revert Stage3Result changes; check CVSections field compatibility"
+    owner: backend
+
+################################################################################
+# COMPLETION EVIDENCE
+################################################################################
+
+completion_evidence:
+  required:
+    - pytest output showing all AC-P6-* tests pass (test_pipeline_wiring.py)
+    - pytest output showing P5 tests still pass (test_regen_artifact_id.py)
+    - mypy output showing zero errors for modified files
+    - cdk synth output confirming VPR_JOBS_TABLE_NAME in Lambda env
+    - cdk synth output confirming ssm:GetParameter in Lambda policy
+    - Manual test showing status=completed with real ats_score (not 75) after deploy
