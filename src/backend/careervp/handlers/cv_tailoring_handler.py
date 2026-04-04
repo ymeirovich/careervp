@@ -354,6 +354,7 @@ def _update_application_artifact(
         return
     try:
         from careervp.dal.application_repository import ApplicationRepository
+
         app_repo = ApplicationRepository(DynamoDalHandler(app_table))
         app_repo.update_artifact_with_id(
             application_id=application_id,

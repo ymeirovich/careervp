@@ -26,15 +26,16 @@ import pytest
 
 # ─── T-P5-01: function must be importable ─────────────────────────────────────
 
+
 @pytest.mark.unit
 def test_cv_tailoring_handler_has_update_application_artifact() -> None:
     from careervp.handlers.cv_tailoring_handler import _update_application_artifact  # noqa: F401
-    assert callable(_update_application_artifact), (
-        "_update_application_artifact must be a callable in cv_tailoring_handler — CVT-P5 not implemented"
-    )
+
+    assert callable(_update_application_artifact), '_update_application_artifact must be a callable in cv_tailoring_handler — CVT-P5 not implemented'
 
 
 # ─── T-P5-02: non-fatal without env var ───────────────────────────────────────
+
 
 @pytest.mark.unit
 def test_update_application_artifact_is_non_fatal_without_table_env(
@@ -55,6 +56,7 @@ def test_update_application_artifact_is_non_fatal_without_table_env(
 
 
 # ─── T-P5-03: calls ApplicationRepository.update_artifact_with_id ─────────────
+
 
 @pytest.mark.unit
 def test_update_application_artifact_calls_repository(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -86,6 +88,7 @@ def test_update_application_artifact_calls_repository(monkeypatch: pytest.Monkey
 
 # ─── T-P5-04: handler wires _update_application_artifact ─────────────────────
 
+
 @pytest.mark.unit
 def test_handle_openapi_async_generate_calls_update_application_artifact(
     monkeypatch: pytest.MonkeyPatch,
@@ -93,7 +96,7 @@ def test_handle_openapi_async_generate_calls_update_application_artifact(
     import careervp.handlers.cv_tailoring_handler as handler_module
 
     assert hasattr(handler_module, '_update_application_artifact'), (
-        "_update_application_artifact not found in cv_tailoring_handler — CVT-P5 not implemented"
+        '_update_application_artifact not found in cv_tailoring_handler — CVT-P5 not implemented'
     )
 
     monkeypatch.setenv('DYNAMODB_TABLE_NAME', 'test-cv-table')
@@ -113,22 +116,15 @@ def test_handle_openapi_async_generate_calls_update_application_artifact(
 
     mock_update.assert_called_once()
     kwargs = mock_update.call_args.kwargs
-    assert kwargs.get('application_id') == 'job-456', (
-        f"application_id must equal job_id='job-456', got {kwargs.get('application_id')}"
-    )
-    assert kwargs.get('user_id') == 'user-789', (
-        f"user_id must be 'user-789', got {kwargs.get('user_id')}"
-    )
-    assert kwargs.get('artifact_type') == 'cv_tailored', (
-        f"artifact_type must be 'cv_tailored', got {kwargs.get('artifact_type')}"
-    )
+    assert kwargs.get('application_id') == 'job-456', f"application_id must equal job_id='job-456', got {kwargs.get('application_id')}"
+    assert kwargs.get('user_id') == 'user-789', f"user_id must be 'user-789', got {kwargs.get('user_id')}"
+    assert kwargs.get('artifact_type') == 'cv_tailored', f"artifact_type must be 'cv_tailored', got {kwargs.get('artifact_type')}"
     artifact_id = kwargs.get('artifact_id', '')
-    assert isinstance(artifact_id, str) and artifact_id.startswith('cv-tail-'), (
-        f"artifact_id must start with 'cv-tail-', got {artifact_id!r}"
-    )
+    assert isinstance(artifact_id, str) and artifact_id.startswith('cv-tail-'), f"artifact_id must start with 'cv-tail-', got {artifact_id!r}"
 
 
 # ─── T-P5-05: response request_id matches artifact_id ────────────────────────
+
 
 @pytest.mark.unit
 def test_handle_openapi_async_generate_response_contains_request_id(
@@ -137,7 +133,7 @@ def test_handle_openapi_async_generate_response_contains_request_id(
     import careervp.handlers.cv_tailoring_handler as handler_module
 
     assert hasattr(handler_module, '_update_application_artifact'), (
-        "_update_application_artifact not in cv_tailoring_handler — CVT-P5 not implemented"
+        '_update_application_artifact not in cv_tailoring_handler — CVT-P5 not implemented'
     )
 
     monkeypatch.setenv('DYNAMODB_TABLE_NAME', 'test-cv-table')
@@ -162,22 +158,19 @@ def test_handle_openapi_async_generate_response_contains_request_id(
 
     body = json.loads(result['body'])
     response_request_id = body.get('request_id', '')
-    assert len(captured_artifact_id) == 1, "Expected exactly one _update_application_artifact call"
+    assert len(captured_artifact_id) == 1, 'Expected exactly one _update_application_artifact call'
     assert captured_artifact_id[0] == response_request_id, (
-        f"artifact_id passed to _update_application_artifact ({captured_artifact_id[0]!r}) "
-        f"must match response request_id ({response_request_id!r})"
+        f'artifact_id passed to _update_application_artifact ({captured_artifact_id[0]!r}) must match response request_id ({response_request_id!r})'
     )
 
 
 # ─── T-P5-06: frontend optimistic hub update ─────────────────────────────────
 
+
 @pytest.mark.unit
 def test_handle_generate_cv_updates_hub_on_completed_status() -> None:
-    page_path = (
-        Path(__file__).parents[5]
-        / 'frontend' / 'app' / 'dashboard' / 'jobs' / '[jobId]' / 'page.tsx'
-    )
-    assert page_path.exists(), f"page.tsx not found at {page_path}"
+    page_path = Path(__file__).parents[5] / 'frontend' / 'app' / 'dashboard' / 'jobs' / '[jobId]' / 'page.tsx'
+    assert page_path.exists(), f'page.tsx not found at {page_path}'
 
     content = page_path.read_text(encoding='utf-8')
 
@@ -186,7 +179,7 @@ def test_handle_generate_cv_updates_hub_on_completed_status() -> None:
         content,
         re.DOTALL | re.MULTILINE,
     )
-    assert func_match, "handleGenerateCV function not found in page.tsx"
+    assert func_match, 'handleGenerateCV function not found in page.tsx'
     func_body = func_match.group(0)
 
     completed_idx = func_body.find('"completed"')
@@ -208,8 +201,8 @@ def test_handle_generate_cv_updates_hub_on_completed_status() -> None:
         missing.append('task.request_id value')
 
     assert not missing, (
-        "handleGenerateCV completed branch is missing optimistic hub update. "
-        f"Not found: {', '.join(missing)}. "
-        "Add setHub updating cv_tailored.artifact_id = task.request_id "
-        "before refreshHub() — CVT-P5 not implemented"
+        'handleGenerateCV completed branch is missing optimistic hub update. '
+        f'Not found: {", ".join(missing)}. '
+        'Add setHub updating cv_tailored.artifact_id = task.request_id '
+        'before refreshHub() — CVT-P5 not implemented'
     )
