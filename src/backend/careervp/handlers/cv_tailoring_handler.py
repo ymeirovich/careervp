@@ -317,6 +317,13 @@ def _handle_openapi_async_generate(
     _dal2 = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))
     _dal2._get_db_handler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', ''))).put_item(Item=artifact)
 
+    _update_application_artifact(
+        application_id=job_id,
+        user_id=user_id,
+        artifact_type='cv_tailored',
+        artifact_id=request_id,
+    )
+
     return _response(
         HTTPStatus.ACCEPTED,
         {
@@ -327,6 +334,40 @@ def _handle_openapi_async_generate(
         },
         headers,
     )
+
+
+def _update_application_artifact(
+    application_id: str,
+    user_id: str,
+    artifact_type: str,
+    artifact_id: str,
+) -> None:
+    """Propagate artifact completion to the application record's artifact_statuses.
+
+    Silently ignored when the application record does not exist — non-fatal
+    because the session-local frontend fallback handles this case.
+    """
+    if not application_id or not user_id:
+        return
+    app_table = os.environ.get('APPLICATIONS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or ''
+    if not app_table:
+        return
+    try:
+        from careervp.dal.application_repository import ApplicationRepository
+        app_repo = ApplicationRepository(DynamoDalHandler(app_table))
+        app_repo.update_artifact_with_id(
+            application_id=application_id,
+            user_id=user_id,
+            artifact_type=artifact_type,
+            status='completed',
+            artifact_id=artifact_id,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning(
+            'Could not update application artifact_statuses for cv_tailored',
+            artifact_type=artifact_type,
+            error=str(e),
+        )
 
 
 def _validate_openapi_cv_tailoring_payload(body: dict[str, Any]) -> None:
