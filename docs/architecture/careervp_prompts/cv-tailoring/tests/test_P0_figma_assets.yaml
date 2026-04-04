@@ -1,0 +1,280 @@
+################################################################################
+# TEST SPEC: P0 — No Figma MCP Asset URLs in Frontend Components
+# Spec ref: CVT-P0
+# When implemented: create src/backend/tests/unit/test_frontend_asset_hygiene.py
+################################################################################
+
+test_spec_id: TEST-CVT-P0
+spec_ref: CVT-P0
+title: "Figma asset URL removal — static analysis tests"
+test_file: "src/backend/tests/unit/test_frontend_asset_hygiene.py"
+markers:
+  - "@pytest.mark.unit"
+  - "@pytest.mark.static"
+status: pending_implementation
+non_self_closing: true  # All tests fail if Figma URLs remain in source
+
+description: >
+  These are static analysis tests. They open TypeScript/TSX source files directly
+  and assert that no figma.com/api/mcp/asset/ URLs remain. They do NOT need a
+  running server. They fail immediately if the code fix has not been applied.
+
+################################################################################
+# FIXTURES
+################################################################################
+
+fixtures:
+  - id: FRONTEND_ROOT
+    description: "Absolute path to the frontend/ directory"
+    implementation: |
+      import pathlib
+
+      @pytest.fixture(scope="module")
+      def frontend_root() -> pathlib.Path:
+          root = pathlib.Path(__file__).parents[4]  # repo root
+          path = root / "frontend"
+          assert path.is_dir(), f"frontend/ directory not found at {path}"
+          return path
+
+  - id: FIGMA_PATTERN
+    description: "Regex pattern matching any Figma MCP asset URL"
+    implementation: |
+      import re
+
+      FIGMA_ASSET_PATTERN = re.compile(
+          r"https?://www\.figma\.com/api/mcp/asset/[0-9a-f\-]+"
+      )
+
+################################################################################
+# TESTS
+################################################################################
+
+tests:
+  - id: T-P0-01
+    name: test_no_figma_urls_in_topbar
+    maps_to_ac: AC-P0-02
+    description: "Topbar.tsx must not contain any figma.com/api/mcp/asset/ URL"
+    markers: ["@pytest.mark.unit", "@pytest.mark.static"]
+    implementation: |
+      def test_no_figma_urls_in_topbar(frontend_root: pathlib.Path) -> None:
+          topbar = frontend_root / "components" / "dashboard" / "Topbar.tsx"
+          assert topbar.exists(), "Topbar.tsx not found — check frontend/ path"
+          content = topbar.read_text(encoding="utf-8")
+          matches = FIGMA_ASSET_PATTERN.findall(content)
+          assert matches == [], (
+              f"Topbar.tsx still contains Figma MCP asset URLs (CVT-P0 not implemented): {matches}"
+          )
+
+  - id: T-P0-02
+    name: test_no_figma_urls_in_sidebar
+    maps_to_ac: AC-P0-02
+    description: "Sidebar.tsx must not contain any figma.com/api/mcp/asset/ URL"
+    markers: ["@pytest.mark.unit", "@pytest.mark.static"]
+    implementation: |
+      def test_no_figma_urls_in_sidebar(frontend_root: pathlib.Path) -> None:
+          sidebar = frontend_root / "components" / "dashboard" / "Sidebar.tsx"
+          assert sidebar.exists(), "Sidebar.tsx not found"
+          content = sidebar.read_text(encoding="utf-8")
+          matches = FIGMA_ASSET_PATTERN.findall(content)
+          assert matches == [], (
+              f"Sidebar.tsx still contains Figma MCP asset URLs (CVT-P0 not implemented): {matches}"
+          )
+
+  - id: T-P0-03
+    name: test_no_figma_urls_in_status_strip
+    maps_to_ac: AC-P0-02
+    description: "StatusStrip.tsx must not contain any figma.com/api/mcp/asset/ URL"
+    markers: ["@pytest.mark.unit", "@pytest.mark.static"]
+    implementation: |
+      def test_no_figma_urls_in_status_strip(frontend_root: pathlib.Path) -> None:
+          strip = frontend_root / "components" / "dashboard" / "StatusStrip.tsx"
+          assert strip.exists(), "StatusStrip.tsx not found"
+          content = strip.read_text(encoding="utf-8")
+          matches = FIGMA_ASSET_PATTERN.findall(content)
+          assert matches == [], (
+              f"StatusStrip.tsx still contains Figma MCP asset URLs (CVT-P0 not implemented): {matches}"
+          )
+
+  - id: T-P0-04
+    name: test_no_figma_urls_in_frontend_components_directory
+    maps_to_ac: AC-P0-04
+    description: "Whole frontend/components/ tree must be Figma-URL-free"
+    markers: ["@pytest.mark.unit", "@pytest.mark.static"]
+    implementation: |
+      def test_no_figma_urls_in_frontend_components_directory(frontend_root: pathlib.Path) -> None:
+          components_dir = frontend_root / "components"
+          assert components_dir.is_dir(), "frontend/components/ not found"
+          violations: list[str] = []
+          for tsx_file in components_dir.rglob("*.tsx"):
+              content = tsx_file.read_text(encoding="utf-8")
+              matches = FIGMA_ASSET_PATTERN.findall(content)
+              if matches:
+                  violations.append(f"{tsx_file.relative_to(frontend_root)}: {matches}")
+          assert violations == [], (
+              "Figma MCP asset URLs found in frontend/components/ — CVT-P0 not fully implemented:\n"
+              + "\n".join(violations)
+          )
+
+  - id: T-P0-05
+    name: test_no_figma_urls_in_frontend_app_directory
+    maps_to_ac: AC-P0-04
+    description: "frontend/app/ directory must be Figma-URL-free"
+    markers: ["@pytest.mark.unit", "@pytest.mark.static"]
+    implementation: |
+      def test_no_figma_urls_in_frontend_app_directory(frontend_root: pathlib.Path) -> None:
+          app_dir = frontend_root / "app"
+          assert app_dir.is_dir(), "frontend/app/ not found"
+          violations: list[str] = []
+          for source_file in app_dir.rglob("*.tsx"):
+              content = source_file.read_text(encoding="utf-8")
+              matches = FIGMA_ASSET_PATTERN.findall(content)
+              if matches:
+                  violations.append(f"{source_file.relative_to(frontend_root)}: {matches}")
+          assert violations == [], (
+              "Figma MCP asset URLs found in frontend/app/ — CVT-P0 not fully implemented:\n"
+              + "\n".join(violations)
+          )
+
+  - id: T-P0-06
+    name: test_local_svg_assets_exist_for_replaced_icons
+    maps_to_ac: AC-P0-03
+    description: "Local replacement SVG assets must exist in frontend/public/assets/"
+    markers: ["@pytest.mark.unit", "@pytest.mark.static"]
+    implementation: |
+      def test_local_svg_assets_exist_for_replaced_icons(frontend_root: pathlib.Path) -> None:
+          """
+          This test enforces that replacement local assets were actually committed.
+          It fails if the Figma URLs were simply deleted without adding local files.
+          """
+          assets_dir = frontend_root / "public" / "assets"
+          assert assets_dir.is_dir(), (
+              "frontend/public/assets/ does not exist — "
+              "local replacement assets have not been added (CVT-P0 not complete)"
+          )
+          required_assets = [
+              "dropdown-arrow.svg",
+              "careervp-logo.svg",
+              "status-dot.svg",
+          ]
+          missing = [name for name in required_assets if not (assets_dir / name).exists()]
+          assert missing == [], (
+              f"Missing local SVG assets in frontend/public/assets/: {missing} — "
+              "CVT-P0 asset export not complete"
+          )
+
+################################################################################
+# FULL FILE TEMPLATE
+################################################################################
+
+# When implementing, create the following file verbatim:
+full_file_template: |
+  """Static analysis tests: assert no Figma MCP asset URLs remain in frontend source."""
+
+  from __future__ import annotations
+
+  import pathlib
+  import re
+
+  import pytest
+
+  FIGMA_ASSET_PATTERN = re.compile(
+      r"https?://www\.figma\.com/api/mcp/asset/[0-9a-f\-]+"
+  )
+
+
+  @pytest.fixture(scope="module")
+  def frontend_root() -> pathlib.Path:
+      root = pathlib.Path(__file__).parents[4]  # navigate up: unit/ → tests/ → backend/ → src/ → repo
+      path = root / "frontend"
+      assert path.is_dir(), f"frontend/ directory not found at {path}"
+      return path
+
+
+  @pytest.mark.unit
+  @pytest.mark.static
+  def test_no_figma_urls_in_topbar(frontend_root: pathlib.Path) -> None:
+      topbar = frontend_root / "components" / "dashboard" / "Topbar.tsx"
+      assert topbar.exists(), "Topbar.tsx not found — check frontend/ path"
+      content = topbar.read_text(encoding="utf-8")
+      matches = FIGMA_ASSET_PATTERN.findall(content)
+      assert matches == [], (
+          f"Topbar.tsx still contains Figma MCP asset URLs (CVT-P0 not implemented): {matches}"
+      )
+
+
+  @pytest.mark.unit
+  @pytest.mark.static
+  def test_no_figma_urls_in_sidebar(frontend_root: pathlib.Path) -> None:
+      sidebar = frontend_root / "components" / "dashboard" / "Sidebar.tsx"
+      assert sidebar.exists(), "Sidebar.tsx not found"
+      content = sidebar.read_text(encoding="utf-8")
+      matches = FIGMA_ASSET_PATTERN.findall(content)
+      assert matches == [], (
+          f"Sidebar.tsx still contains Figma MCP asset URLs (CVT-P0 not implemented): {matches}"
+      )
+
+
+  @pytest.mark.unit
+  @pytest.mark.static
+  def test_no_figma_urls_in_status_strip(frontend_root: pathlib.Path) -> None:
+      strip = frontend_root / "components" / "dashboard" / "StatusStrip.tsx"
+      assert strip.exists(), "StatusStrip.tsx not found"
+      content = strip.read_text(encoding="utf-8")
+      matches = FIGMA_ASSET_PATTERN.findall(content)
+      assert matches == [], (
+          f"StatusStrip.tsx still contains Figma MCP asset URLs (CVT-P0 not implemented): {matches}"
+      )
+
+
+  @pytest.mark.unit
+  @pytest.mark.static
+  def test_no_figma_urls_in_frontend_components_directory(frontend_root: pathlib.Path) -> None:
+      components_dir = frontend_root / "components"
+      assert components_dir.is_dir(), "frontend/components/ not found"
+      violations: list[str] = []
+      for tsx_file in components_dir.rglob("*.tsx"):
+          content = tsx_file.read_text(encoding="utf-8")
+          matches = FIGMA_ASSET_PATTERN.findall(content)
+          if matches:
+              violations.append(f"{tsx_file.relative_to(frontend_root)}: {matches}")
+      assert violations == [], (
+          "Figma MCP asset URLs found in frontend/components/ — CVT-P0 not fully implemented:\n"
+          + "\n".join(violations)
+      )
+
+
+  @pytest.mark.unit
+  @pytest.mark.static
+  def test_no_figma_urls_in_frontend_app_directory(frontend_root: pathlib.Path) -> None:
+      app_dir = frontend_root / "app"
+      assert app_dir.is_dir(), "frontend/app/ not found"
+      violations: list[str] = []
+      for source_file in app_dir.rglob("*.tsx"):
+          content = source_file.read_text(encoding="utf-8")
+          matches = FIGMA_ASSET_PATTERN.findall(content)
+          if matches:
+              violations.append(f"{source_file.relative_to(frontend_root)}: {matches}")
+      assert violations == [], (
+          "Figma MCP asset URLs found in frontend/app/ — CVT-P0 not fully implemented:\n"
+          + "\n".join(violations)
+      )
+
+
+  @pytest.mark.unit
+  @pytest.mark.static
+  def test_local_svg_assets_exist_for_replaced_icons(frontend_root: pathlib.Path) -> None:
+      assets_dir = frontend_root / "public" / "assets"
+      assert assets_dir.is_dir(), (
+          "frontend/public/assets/ does not exist — "
+          "local replacement assets have not been added (CVT-P0 not complete)"
+      )
+      required_assets = [
+          "dropdown-arrow.svg",
+          "careervp-logo.svg",
+          "status-dot.svg",
+      ]
+      missing = [name for name in required_assets if not (assets_dir / name).exists()]
+      assert missing == [], (
+          f"Missing local SVG assets in frontend/public/assets/: {missing} — "
+          "CVT-P0 asset export not complete"
+      )

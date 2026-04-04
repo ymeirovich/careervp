@@ -4,9 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-const ASSET_CVP_LOGO =
-  "https://www.figma.com/api/mcp/asset/661cfe6f-1041-4faa-8666-3d001bb92746";
-
 type SectionItem = { label: string; isSection: true };
 type NavLinkItem = { label: string; href: string; exact?: boolean };
 type NavItem = SectionItem | NavLinkItem;
@@ -29,11 +26,14 @@ export function Sidebar() {
       style={{ minHeight: "900px" }}
     >
       <div className="flex items-center gap-2.5 px-[26px] py-5">
-        <img
-          src={ASSET_CVP_LOGO}
-          alt="CareerVP"
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 30 30"
           className="h-[30px] w-[30px] rounded-[4px] object-cover shrink-0"
-        />
+        >
+          <rect width="30" height="30" rx="4" fill="#2563eb" />
+          <text x="15" y="20" textAnchor="middle" fontSize="14" fontWeight="bold" fill="white">C</text>
+        </svg>
         <span className="text-lg font-bold text-[#1e2229] leading-none whitespace-nowrap">
           CareerVP
         </span>

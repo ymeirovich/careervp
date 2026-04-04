@@ -1,0 +1,435 @@
+################################################################################
+# CAREERVP — CV TAILORING IMPROVEMENT PLAN
+# Spec: P4 — Fix ATS Scoring from 0-10 Float to 0-100 Integer (Spec §6)
+# NOTE: This is a BREAKING CHANGE for all consumers of ats_score.
+################################################################################
+
+spec_id: CVT-P4
+title: "Change ATS scoring algorithm and scale from 0-10 float to 0-100 integer per spec §6"
+priority: high
+status: draft
+owner: backend
+created_at: "2026-04-04"
+updated_at: "2026-04-04"
+
+depends_on: [CVT-P1]
+blocks: []
+
+################################################################################
+# PROBLEM STATEMENT
+################################################################################
+
+problem_statement:
+  exact_failing_behavior: >
+    calculate_ats_score() in cv_tailoring.py:468 returns a float in range 0.0-10.0.
+    The current formula weights:
+      4.0 * keyword_coverage + 2.0 * required_coverage + 1.5 * section_presence
+      + 1.5 * star_score + 1.0 * formatting_score
+    The current response shows ats_score: 9.0 (displayed as "9.0/10" implicitly).
+    The spec (careervp_cv_tailoring_spec.yaml §6) defines ATS scoring as:
+      keyword_match: 40 points (matched_count / total_primary_keywords * 40)
+      quantified_bullets: 20 points (quantified_bullets / total_bullets * 20, capped at 20)
+      section_headers: 15 points (4 required sections × 3.75 each)
+      formatting_safety: 15 points (3 checks × 5 each)
+      summary_keyword_density: 10 points (keyword_count_in_summary / 6 * 10, capped at 10)
+    Max score: 100. Thresholds: green 90-100, yellow 70-89, red 0-69.
+
+  expected_behavior: >
+    calculate_ats_score() returns int in range 0-100, not float 0-10.
+    Response ats_score field is an integer (e.g., 85, not 8.5).
+    Internal threshold TARGET_ATS_SCORE changes from 8.0 to 80.
+    Internal threshold ANTI_AI_MIN_SCORE changes from 9.0 to 90.
+    Existing test asserting 0.0 <= score <= 10.0 must be updated to 0 <= score <= 100.
+
+  user_business_impact: >
+    - Dashboard displays 9.0 which looks like a percentage (90%) but actually represents
+      something different from the spec's 100-point scale.
+    - Hiring manager context: LinkedIn and job board ATS systems report 0-100 scores.
+      Showing a 0-10 score creates a mismatch in user mental model.
+    - Thresholds for green/yellow/red color coding on dashboard are wrong (9.0 vs 90).
+
+  breaking_change_impact:
+    - "Frontend ats_score display component must handle int 0-100"
+    - "Existing DynamoDB records have ats_score as float 0-10; read path must handle both during migration"
+    - "Existing unit tests asserting 0.0 <= score <= 10.0 must be updated"
+
+  reproducibility: >
+    Call calculate_ats_score() — observe float return. Check API response ats_score — observe float <= 10.
+
+################################################################################
+# EVIDENCE
+################################################################################
+
+evidence:
+  failing_code_location: "src/backend/careervp/logic/cv_tailoring.py:468-489"
+  current_constants:
+    - "TARGET_ATS_SCORE = 8.0  (line 35)"
+    - "ANTI_AI_MIN_SCORE = 9.0  (line 36)"
+  current_formula: "score = 4.0 * coverage + 2.0 * required_coverage + 1.5 * section_presence + 1.5 * star_score + 1.0 * formatting_score"
+  spec_formula_ref: "careervp_cv_tailoring_spec.yaml §6.ats_scoring.algorithm"
+
+  # ── CRITICAL SCOPING NOTE ─────────────────────────────────────────────────
+  # ANTI_AI_MIN_SCORE and ATS_MIN_SCORE appear in MULTIPLE modules.
+  # Only the cv_tailoring.py copies change. All others are on the 0-10 FVS
+  # quality scale and must NOT be touched.
+  #
+  #   CHANGE  → cv_tailoring.py ANTI_AI_MIN_SCORE (line 36): 9.0 → 90
+  #   CHANGE  → cv_tailoring.py TARGET_ATS_SCORE (line 35): 8.0 → 80
+  #   NO CHANGE → fvs_validator.py ANTI_AI_MIN_SCORE (line 115): stays 9.0
+  #   NO CHANGE → fvs_validator.py ATS_MIN_SCORE (line 118): stays 8.0
+  #   NO CHANGE → cover_letter.py ANTI_AI_MIN_SCORE (line 31): stays 9.0
+  #   NO CHANGE → vpr_generator.py ANTI_AI_MIN_SCORE (line 79): stays 9.0
+  #   NO CHANGE → models/fvs.py score fields: all stay Field(ge=0.0, le=10.0)
+
+################################################################################
+# COMPLETE CHANGE AUDIT — ALL FILES REQUIRING MODIFICATION
+################################################################################
+
+complete_change_audit:
+
+  backend_source:
+    - file: src/backend/careervp/logic/cv_tailoring.py
+      changes:
+        - "line 35: TARGET_ATS_SCORE = 8.0 → 80"
+        - "line 36: ANTI_AI_MIN_SCORE = 9.0 → 90"
+        - "line 171: preliminary_ats_score: float → int"
+        - "line 182: ats_score: float → int"
+        - "line 468: def calculate_ats_score(...) -> float → int"
+        - "line 489: return round(max(0.0, min(10.0, score)), 2) → int(round(max(0, min(100, score))))"
+        - "line 555: minimum_expected_score = min(10.0, ats_score + 0.5) → min(100, ats_score + 5)"
+        - "line 567: 'score_before': round(ats_score, 2) → ats_score (int, no rounding)"
+        - "line 613: ats_score=round(ats_score, 2) → ats_score=ats_score"
+        - "line 689: preliminary_score = calculate_ats_score(...) → type already int"
+        - "line 699: preliminary_ats_score=round(preliminary_score, 2) → preliminary_ats_score=preliminary_score"
+        - "line 925: preliminary_ats_score=calculate_ats_score(...) → type already int"
+        - "line 958: ats_score: float → int in _log_tailoring_result signature"
+        - "line 969: f'ats_score={ats_score:.2f}' → f'ats_score={ats_score}'"
+
+    - file: src/backend/careervp/models/api_models.py
+      changes:
+        - "line 306: ats_score: float | None = None → int | None = None"
+
+    - file: src/backend/careervp/handlers/cv_tailoring_handler.py
+      changes:
+        - "line 309: Decimal('9.0') → Decimal('85')  (hardcoded stub value)"
+        - "line 681: float(ats_score) → int(ats_score)  (read-path coercion from DynamoDB)"
+
+  backend_do_not_change:
+    - "src/backend/careervp/logic/fvs_validator.py — ANTI_AI_MIN_SCORE (line 115) and ATS_MIN_SCORE (line 118) are on 0-10 FVS quality scale"
+    - "src/backend/careervp/logic/cover_letter.py — ANTI_AI_MIN_SCORE (line 31) is cover letter anti-AI gate on 0-10 scale"
+    - "src/backend/careervp/logic/vpr_generator.py — ANTI_AI_MIN_SCORE (line 79) is VPR anti-AI gate on 0-10 scale"
+    - "src/backend/careervp/models/fvs.py — all score fields (lines 58-72) are FVS quality metrics on 0-10 scale"
+
+  frontend:
+    - file: frontend/app/dashboard/jobs/[jobId]/cv-tailored/page.tsx
+      changes:
+        - "line 96: atsScore >= 8 → atsScore >= 80  (green threshold)"
+        - "line 98: atsScore >= 6 → atsScore >= 70  (yellow threshold)"
+        - "line 103: {Math.round(atsScore * 10)} → {atsScore}  (remove * 10 hack; value now natively 0-100)"
+      explanation: >
+        The current frontend MULTIPLIES atsScore by 10 to display a fake percentage.
+        This was a workaround for the 0-10 backend. After P4 the value is already
+        0-100, so the multiplication must be removed or the display shows e.g. 850.
+
+  tests_to_update:
+    unit:
+      - file: src/backend/tests/unit/test_cv_tailoring.py
+        changes:
+          - "line 89: assert 0.0 <= score <= 10.0 → assert 0 <= score <= 100"
+          - "line 104: preliminary_ats_score=3.5 → preliminary_ats_score=35"
+          - "line 108: assert final.ats_score >= 8.0 → assert final.ats_score >= 80"
+
+      - file: src/backend/tests/unit/test_l0_cv_tailoring_scores.py
+        changes:
+          - "line 111: preliminary_ats_score=3.2 → preliminary_ats_score=32"
+          - "line 155: docstring 'must be at least 8.0' → 'must be at least 80'"
+          - "line 161: assert final.ats_score >= 8.0 → assert final.ats_score >= 80"
+          - "line 172: assert ... >= 9.0  ← DO NOT CHANGE (anti_ai_score stays on 0-10 scale)"
+          - "line 205: lambda _cv, _map: 5.5 → lambda _cv, _map: 55"
+
+    integration:
+      - file: src/backend/tests/integration/test_workflow_pattern_integration.py
+        changes:
+          - "line 91: float(tailoring_payload.get('ats_score', 0)) >= 8.0 → >= 80"
+
+      - file: src/backend/tests/integration/test_dal_migration_integration.py
+        changes:
+          - "line 64: 'ats_score': 8.5 → 'ats_score': 85"
+
+      - file: src/backend/tests/integration/test_full_pipeline_integration.py
+        changes:
+          - "line 116: float(tailoring_payload.get('ats_score', 0)) >= 8.0 → >= 80"
+
+      - file: src/backend/tests/integration/test_cv_tailoring_async_flow_integration.py
+        changes:
+          - "line 70: float(payload.get('ats_score', 0)) >= 8.0 → >= 80"
+
+    e2e:
+      - file: src/backend/tests/e2e/test_e2e_happy_path_full_job_application.py
+        changes:
+          - "line 103: float(cvt_result.get('ats_score', 0)) >= 8.0 → >= 80"
+
+      - file: src/backend/tests/e2e/test_e2e_quality_gates.py
+        changes:
+          - "line 78: float(cvt_result.get('ats_score', 0)) >= 8.0 → >= 80"
+
+  dynamodb_migration_note: >
+    Existing DynamoDB records with ats_score stored as Decimal('9.0') or float 8.5
+    will still be read by the handler. Line 680-681 in cv_tailoring_handler.py
+    reads: float(ats_score). After P4 this becomes int(ats_score).
+    Records with old 0-10 values will be displayed as 8 or 9 (not 80 or 90).
+    This is ACCEPTABLE for the test data phase — there are no real user records yet.
+    When real users onboard, all new tailoring requests will produce 0-100 values.
+
+################################################################################
+# ARCHITECTURE AND OWNERSHIP MAP
+################################################################################
+
+architecture:
+  affected_code:
+    - "src/backend/careervp/logic/cv_tailoring.py: calculate_ats_score(), TARGET_ATS_SCORE, ANTI_AI_MIN_SCORE"
+    - "src/backend/careervp/logic/cv_tailoring.py: _section_presence_score(), _star_compliance_score(), _formatting_score() sub-scorers"
+    - "src/backend/careervp/models/cv_tailoring_models.py: TailoredCVResponse.ats_score type annotation"
+    - "src/backend/tests/unit/test_cv_tailoring.py: score range assertions"
+    - "src/backend/tests/unit/test_l0_cv_tailoring_scores.py: all score assertions"
+
+  frontend_impact:
+    - "frontend display of ats_score: update rendering from /10 to /100 or as percentage"
+    - "dashboard color coding: red < 70, yellow 70-89, green >= 90"
+
+################################################################################
+# ROOT CAUSE ANALYSIS
+################################################################################
+
+root_cause:
+  confirmed: >
+    The initial implementation chose a 0-10 scale as a simpler range. The spec was
+    written after the initial implementation and defined a 0-100 scale with
+    component-specific weights that differ from the current formula.
+
+################################################################################
+# FIX PLAN
+################################################################################
+
+fix_plan:
+  files_to_modify:
+    - path: src/backend/careervp/logic/cv_tailoring.py
+      changes:
+        - "Change TARGET_ATS_SCORE from 8.0 to 80"
+        - "Change ANTI_AI_MIN_SCORE from 9.0 to 90"
+        - "Rewrite calculate_ats_score() to return int 0-100 using spec §6 formula"
+        - "Return type annotation: float → int"
+        - "New formula components:"
+        - "  keyword_match = min((matched_count / total_keywords) * 40, 40)"
+        - "  quantified_bullets = min((bullets_with_metric / total_bullets) * 20, 20)"
+        - "  section_headers = present_required_sections * 3.75  (required: summary, skills, experience, education)"
+        - "  formatting_safety = (no_tables * 5) + (no_columns * 5) + (standard_dates * 5)"
+        - "  summary_kw_density = min((kw_in_summary / 6) * 10, 10)"
+        - "  score = int(round(keyword_match + quantified_bullets + section_headers + formatting_safety + summary_kw_density))"
+        - "Update _section_presence_score() to return 0-15 (not 0-1)"
+        - "Update _star_compliance_score() to return quantified_bullets score 0-20"
+        - "Update _formatting_score() to return 0-15"
+
+    - path: src/backend/careervp/models/cv_tailoring_models.py
+      changes:
+        - "ats_score: float → ats_score: int (in TailoredCVResponse)"
+        - "estimated_ats_score: int (already int via round — update to 0-100 range comment)"
+
+    - path: src/backend/tests/unit/test_cv_tailoring.py
+      changes:
+        - "Line 89: assert 0.0 <= score <= 10.0 → assert 0 <= score <= 100"
+        - "Line 108: assert final.ats_score >= 8.0 → assert final.ats_score >= 80"
+
+    - path: src/backend/tests/unit/test_l0_cv_tailoring_scores.py
+      changes:
+        - "Review and update all ats_score threshold assertions from 0-10 to 0-100 scale"
+
+  metric_regex_for_quantified_bullets: "\\d+[%$MKkx]? or \\d+\\s*(percent|hours|users|million|k\\b)"
+
+  non_goals:
+    - "Do not change keyword_match_score (remains 1-10 per SKILL.md rubric — different field)"
+    - "Do not change anti-AI pattern detection logic — only update the score threshold constant"
+    - "Do not change how ats_issues are generated — only the scoring formula"
+
+  rollback_plan: >
+    Revert constant and formula changes. ats_score returns to float 0-10.
+    Frontend rendering update must be rolled back in the same PR.
+
+################################################################################
+# ACCEPTANCE CRITERIA
+################################################################################
+
+acceptance_criteria:
+  - id: AC-P4-01
+    description: "calculate_ats_score() returns int (not float) in range 0-100"
+    verification: >
+      assert isinstance(calculate_ats_score(tailored_cv, keyword_map), int)
+      assert 0 <= calculate_ats_score(tailored_cv, keyword_map) <= 100
+    blocking: true
+
+  - id: AC-P4-02
+    description: "A CV with all required sections (summary, skills, experience, education) scores >= 15 on section_headers component alone"
+    verification: "section_headers score == 15.0 when all 4 sections present"
+    blocking: true
+
+  - id: AC-P4-03
+    description: "A CV with 100% keyword match scores == 40 on keyword_match component"
+    verification: "keyword_match == 40 when all primary_keywords present in cv text"
+    blocking: true
+
+  - id: AC-P4-04
+    description: "A perfect CV (all keywords, quantified bullets, all sections, clean formatting, dense summary) scores 100"
+    verification: "Construct perfect fixture — assert score == 100"
+    blocking: false
+
+  - id: AC-P4-05
+    description: "An empty CV scores 0"
+    verification: "Pass empty TailoredCV with empty keyword_map — assert score == 0"
+    blocking: true
+
+  - id: AC-P4-06
+    description: "API response ats_score is an integer (JSON type number with no decimal)"
+    verification: "jq '.ats_score | type' response.json == 'number' and '.ats_score % 1' == 0"
+    blocking: true
+
+  - id: AC-P4-07
+    description: "TARGET_ATS_SCORE constant is 80 (not 8.0)"
+    verification: "assert TARGET_ATS_SCORE == 80"
+    blocking: true
+
+  - id: AC-P4-08
+    description: "ANTI_AI_MIN_SCORE constant is 90 (not 9.0)"
+    verification: "assert ANTI_AI_MIN_SCORE == 90"
+    blocking: true
+
+  - id: AC-P4-09
+    description: "Existing tests in test_cv_tailoring.py and test_l0_cv_tailoring_scores.py pass with updated assertions"
+    verification: "uv run pytest tests/unit/test_cv_tailoring.py tests/unit/test_l0_cv_tailoring_scores.py -q exits 0"
+    blocking: true
+
+################################################################################
+# BASELINE AND REGRESSION BUDGET
+################################################################################
+
+baseline_and_regression_budget:
+  baseline_artifact: "docs/evidence/cv-tailoring-baseline-render.json"
+  blocked_regressions:
+    - "calculate_ats_score returns > 100 or < 0 on any valid input"
+    - "API response ats_score is a float (e.g., 8.5) after deploy"
+    - "Green/yellow/red dashboard classification breaks (wrong thresholds)"
+  allowed_deltas:
+    - "Existing DynamoDB records with float ats_score: read path tolerates both int and float during migration window"
+    - "Absolute ats_score values will change for previously computed CVs (scale change)"
+
+################################################################################
+# VERIFICATION CONTRACT
+################################################################################
+
+verification_contract:
+  - requirement_id: AC-P4-01
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P4-02
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P4-03
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P4-05
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P4-06
+    verification_type: contract
+    blocking_gate: pre_deploy
+    artifact_required: true
+  - requirement_id: AC-P4-07
+    verification_type: static
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P4-08
+    verification_type: static
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P4-09
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+
+################################################################################
+# DEPLOYED PARITY PLAN
+################################################################################
+
+deployed_parity:
+  route_surface_parity: "No route changes. ats_score field type changes in response body."
+  authorizer_parity: "No auth changes."
+  runtime_env_resolution_parity: "No table/index changes."
+
+################################################################################
+# VALIDATION PLAN
+################################################################################
+
+validation_plan:
+  static:
+    - "uv run mypy careervp --strict"
+    - "grep -n 'TARGET_ATS_SCORE\\|ANTI_AI_MIN_SCORE' src/backend/careervp/logic/cv_tailoring.py"
+    - "  Expected: TARGET_ATS_SCORE = 80  and  ANTI_AI_MIN_SCORE = 90"
+  unit:
+    - command: "uv run pytest src/backend/tests/unit/cv_tailoring/test_ats_scoring_100pt.py -q"
+    - command: "uv run pytest src/backend/tests/unit/test_cv_tailoring.py src/backend/tests/unit/test_l0_cv_tailoring_scores.py -q"
+  contract:
+    - command: "uv run pytest src/backend/tests/unit/cv_tailoring/test_response_schema_contract.py -q -k ats_score"
+
+################################################################################
+# TRACEABILITY MATRIX
+################################################################################
+
+traceability:
+  - requirement_id: AC-P4-01
+    code_reference: "src/backend/careervp/logic/cv_tailoring.py::calculate_ats_score"
+    test_reference: "docs/architecture/careervp_prompts/cv-tailoring/tests/test_P4_ats_scoring_100pt.yaml::test_ats_score_returns_int_0_to_100"
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+    result: pending
+
+  - requirement_id: AC-P4-07
+    code_reference: "src/backend/careervp/logic/cv_tailoring.py:35 TARGET_ATS_SCORE"
+    test_reference: "docs/architecture/careervp_prompts/cv-tailoring/tests/test_P4_ats_scoring_100pt.yaml::test_constants_updated_to_100pt_scale"
+    verification_type: static
+    blocking_gate: pre_merge
+    artifact_required: false
+    result: pending
+
+################################################################################
+# ROLLBACK TRIGGER MATRIX
+################################################################################
+
+rollback_triggers:
+  - trigger_id: RT-P4-001
+    condition: "Dashboard shows ats_score > 100 or as float after deploy"
+    detection_source: "Post-deploy visual smoke of CV tailoring result page"
+    action: "Hotfix calculate_ats_score() bounds; revert if broader breakage"
+    owner: backend
+
+  - trigger_id: RT-P4-002
+    condition: "Frontend CV display page shows wrong color classification (green when score is 68)"
+    detection_source: "Post-deploy visual smoke"
+    action: "Fix frontend threshold constants (70 not 7.0)"
+    owner: frontend
+
+################################################################################
+# COMPLETION EVIDENCE
+################################################################################
+
+completion_evidence:
+  required:
+    - pytest output showing AC-P4-01 through AC-P4-09 all pass
+    - API response sample showing ats_score as integer (e.g., 85)
+    - grep showing TARGET_ATS_SCORE = 80
+  residual_risks:
+    - "Legacy DynamoDB records have float ats_score — frontend must tolerate both during migration"
+    - "Absolute score values for previously generated CVs will change, affecting historical comparisons"

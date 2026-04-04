@@ -1,0 +1,375 @@
+################################################################################
+# CAREERVP — CV TAILORING IMPROVEMENT PLAN
+# Spec: P3 — Wire parsed_facts, gap_analysis_responses, and company_research as pipeline inputs
+################################################################################
+
+spec_id: CVT-P3
+title: "Add parsed_facts, gap analysis responses, and company research as pipeline stage inputs"
+priority: high
+status: draft
+owner: backend
+created_at: "2026-04-04"
+updated_at: "2026-04-04"
+
+depends_on: [CVT-P1, CVT-P2]
+blocks: []
+
+################################################################################
+# PROBLEM STATEMENT
+################################################################################
+
+problem_statement:
+  exact_failing_behavior: >
+    CVTailoringLogic.tailor_cv() fetches the master CV and (optionally) the VPR,
+    but does NOT fetch:
+      1. parsed_facts  — the cv-parser ground truth stored in DynamoDB cv_record.parsed_facts
+      2. gap_analysis_responses — user answers to gap questions (careervp-artifacts GAP_ANALYSIS_RESPONSES)
+      3. company_research — cached company context (careervp-company-research-cache)
+    As a result:
+      - Stage 1 prompt receives {} for parsed_facts_json and {} for gap_responses_json
+      - Stage 2 prompt receives empty strings for company_name and company_culture
+      - Stage 3 verifies contact.name against the full UserCV model, not parsed_facts.name,
+        allowing minor format differences to pass or fail incorrectly
+
+  expected_behavior: >
+    CVTailoringLogic.tailor_cv() fetches all four inputs before calling the pipeline:
+      1. cv_record.parsed_facts → ParsedFacts Pydantic model → passed to Stage 1 and Stage 2
+      2. GAP_ANALYSIS_RESPONSES artifact → GapAnalysisResponses model → passed to Stage 1
+         (graceful empty dict if user skipped gap analysis)
+      3. company_research cache → company_name + company_culture strings → passed to Stage 2
+         (graceful empty strings if cache miss)
+    Stage 3 verifies ONLY against parsed_facts.work_experience (not the full UserCV model)
+    so that company/title exact-match rules enforce true ground truth fidelity.
+
+  user_business_impact: >
+    Without parsed_facts as the authoritative source:
+      - Stage 1 cannot produce supporting_evidence entries (no ground truth to reference)
+      - Stage 3 cannot detect fabricated job titles or companies (no exact-match baseline)
+    Without gap analysis:
+      - Achievements the user described in gap responses are absent from keyword evidence
+    Without company research:
+      - Stage 2 cannot align the professional summary with company culture keywords
+
+  reproducibility: >
+    Set a breakpoint in CVTailoringLogic.tailor_cv() — inspect parsed_facts argument
+    passed to run_stage1_keyword_mapping(). It will be None or empty.
+
+################################################################################
+# EVIDENCE
+################################################################################
+
+evidence:
+  failing_code_location: "src/backend/careervp/logic/cv_tailoring_logic.py (CVTailoringLogic.tailor_cv)"
+  current_fetches:
+    - "master CV from DB: YES"
+    - "VPR (optional): YES"
+    - "parsed_facts: NO"
+    - "gap_analysis_responses: NO"
+    - "company_research: NO"
+  spec_reference: "careervp_cv_tailoring_spec.yaml §3.data_contracts.input.source_records"
+  schema_reference: "careervp_cv_tailoring_schemas.json#ParsedFacts and #GapAnalysisResponses"
+
+################################################################################
+# ARCHITECTURE AND OWNERSHIP MAP
+################################################################################
+
+architecture:
+  dal_file: "src/backend/careervp/dal/cv_dal.py (or equivalent DAL for artifacts)"
+  logic_file: "src/backend/careervp/logic/cv_tailoring_logic.py"
+  pipeline_file: "src/backend/careervp/logic/cv_tailoring_pipeline.py"
+  models_file: "src/backend/careervp/models/cv_tailoring_models.py"
+
+  dynamodb_tables:
+    cv_record:
+      table: "careervp-cvs"
+      pk: userId
+      sk: cv_id
+      field: "parsed_facts (JSON blob)"
+    gap_analysis_responses:
+      table: "careervp-artifacts (or careervp-applications based on final schema)"
+      pk: applicationId
+      sk: "GAP_ANALYSIS_RESPONSES"
+      field: "responses [{question_id, response_text, skipped}]"
+      optional: true
+    company_research:
+      table: "careervp-company-research-cache"
+      pk: "company_name_normalized"
+      fields_used: ["company_overview", "culture_values", "products_services"]
+      optional: true
+
+################################################################################
+# ROOT CAUSE ANALYSIS
+################################################################################
+
+root_cause:
+  confirmed: >
+    CVTailoringLogic.tailor_cv() was implemented before the 3-stage pipeline was
+    specified. The DAL calls for gap analysis and company research never existed.
+    parsed_facts was stored in DynamoDB but the tailor_cv method never fetched it —
+    the full UserCV model (parsed from the upload) was used instead, which has a
+    different schema than the parsed_facts JSON contract.
+
+################################################################################
+# ASYNC ARCHITECTURE NOTE
+################################################################################
+
+async_architecture:
+  requirement: >
+    CVTailoringLogic.tailor_cv() is async (async def). All DAL fetches use await.
+    The _maybe_await() helper in cv_tailoring.py handles legacy sync/async bridge
+    for the old path, but the new pipeline path is fully async throughout.
+  test_pattern: >
+    All tests for CVTailoringLogic MUST use:
+      @pytest.mark.asyncio
+      async def test_...(fixture):
+          result = await logic.tailor_cv(...)
+    Do NOT use asyncio.run() in test functions — use pytest-asyncio instead.
+    Tests calling run_stage3_fact_verification() (pure Python, synchronous) may
+    remain sync.
+  pytest_asyncio_setup: >
+    Ensure pytest-asyncio is installed and conftest.py contains:
+      pytest_plugins = ["anyio"]  or  asyncio_mode = "auto" in pytest.ini
+
+################################################################################
+# PARSED_FACTS STRATEGY (FORWARD-THINKING)
+################################################################################
+
+parsed_facts_strategy:
+  current_state: >
+    As of 2026-04-04, only test data exists in the system. No real user CVs have
+    been processed by the cv-parser Lambda. Therefore parsed_facts is NULL or
+    absent in all current DynamoDB cv_record entries.
+  forward_state: >
+    When real users onboard, the cv-parser Lambda will populate parsed_facts on
+    every CV upload. This spec designs for that state from day one so no rework
+    is needed at launch.
+  construction_strategy:
+    priority_1_real_parsed_facts: >
+      If cv_record.parsed_facts exists (non-null dict), deserialize to ParsedFacts
+      model. This is the authoritative ground truth path for real users.
+    priority_2_construct_from_user_cv: >
+      If cv_record.parsed_facts is None (test data, pre-cv-parser uploads), construct
+      a ParsedFacts instance from the UserCV Pydantic model fields:
+        ParsedFacts(
+          name=cv.full_name,
+          email=cv.contact_info.email,
+          phone=cv.contact_info.phone,
+          location=cv.location,
+          work_experience=[
+            WorkExperienceItem from each cv.experience entry
+          ],
+          education=cv.education,
+          skills={"technical": cv.skills, "soft": []},
+          certifications=cv.certifications,
+          languages=cv.languages,
+          summary_original=cv.professional_summary or "",
+        )
+      Log a WARNING: "parsed_facts absent for cv_id={cv_id} — constructing from UserCV fields"
+    rationale: >
+      This ensures Stage 3 always has a ParsedFacts ground truth, even during the
+      current test phase. When real cv-parser output becomes available, the code
+      automatically uses the richer structured data with no changes needed.
+  test_data_implications: >
+    Integration tests should test BOTH paths:
+      - With parsed_facts populated (simulates real user post-cv-parser)
+      - With parsed_facts absent (simulates current test data or legacy CV uploads)
+
+################################################################################
+# FIX PLAN
+################################################################################
+
+fix_plan:
+  files_to_modify:
+    - path: src/backend/careervp/logic/cv_tailoring_logic.py
+      changes:
+        - "Add self.artifact_dal dependency for fetching GAP_ANALYSIS_RESPONSES artifact"
+        - "Add self.company_research_dal dependency for cache lookup"
+        - "In tailor_cv(): fetch cv_record.parsed_facts via DAL; deserialize to ParsedFacts model"
+        - "If parsed_facts is None: construct from UserCV fields (see parsed_facts_strategy.priority_2)"
+        - "In tailor_cv(): attempt fetch of GAP_ANALYSIS_RESPONSES; use empty GapAnalysisResponses on miss"
+        - "In tailor_cv(): attempt fetch of company research by company_name_normalized; use empty context on miss"
+        - "Pass parsed_facts, gap_responses, company_context to run_cv_tailoring_pipeline()"
+
+    - path: src/backend/careervp/models/cv_tailoring_models.py
+      changes:
+        - "Add ParsedFacts Pydantic model matching careervp_cv_tailoring_schemas.json#ParsedFacts"
+        - "Add GapAnalysisResponses Pydantic model matching schemas.json#GapAnalysisResponses"
+        - "Add CompanyContext dataclass: company_name: str, company_culture: str, products_services: list[str]"
+
+    - path: src/backend/careervp/logic/cv_tailoring_pipeline.py
+      changes:
+        - "Update run_stage1_keyword_mapping() signature: add parsed_facts: ParsedFacts, gap_responses: GapAnalysisResponses"
+        - "Update run_stage2_cv_generation() signature: add company_context: CompanyContext"
+        - "Update run_stage3_fact_verification() to validate against parsed_facts.work_experience (not UserCV)"
+
+  parsed_facts_fetch_logic: |
+    async def _fetch_parsed_facts(self, user_id: str, cv_id: str) -> ParsedFacts | None:
+        cv_record = await self.cv_dal.get_cv(user_id, cv_id)
+        if cv_record and cv_record.parsed_facts:
+            return ParsedFacts.model_validate(cv_record.parsed_facts)
+        return None  # Stage 3 will use UserCV fields as fallback
+
+  graceful_degradation:
+    parsed_facts_missing: >
+      If parsed_facts is None (cv-parser not yet run), fall back to constructing
+      a minimal ParsedFacts from the UserCV model fields. Log warning.
+      Do NOT abort the pipeline — CV tailoring must succeed even without cv-parser output.
+    gap_responses_missing: >
+      Use GapAnalysisResponses(responses=[]) — Stage 1 prompt gracefully handles empty array.
+    company_research_missing: >
+      Use CompanyContext(company_name="", company_culture="", products_services=[]) —
+      Stage 2 prompt gracefully handles empty company context.
+
+  non_goals:
+    - "Do not implement cv-parser Lambda (already exists; this spec only wires its output)"
+    - "Do not change gap_analysis Lambda or its DynamoDB write format"
+    - "Do not implement company_research caching logic (already exists)"
+
+  rollback_plan: >
+    Remove parsed_facts and gap_responses from tailor_cv() call signature.
+    Pipeline falls back to empty inputs (same behavior as before P3).
+
+################################################################################
+# ACCEPTANCE CRITERIA
+################################################################################
+
+acceptance_criteria:
+  - id: AC-P3-01
+    description: "CVTailoringLogic.tailor_cv() fetches cv_record.parsed_facts before calling the pipeline"
+    verification: "Mock cv_dal.get_cv returns a cv_record with parsed_facts; assert run_stage1_keyword_mapping called with ParsedFacts instance"
+    blocking: true
+
+  - id: AC-P3-02
+    description: "GAP_ANALYSIS_RESPONSES fetch failure (KeyError / missing artifact) does not raise — pipeline continues with empty GapAnalysisResponses"
+    verification: "Mock artifact_dal.get_artifact raises KeyError; pipeline completes successfully; Stage1Output.primary_keywords non-empty"
+    blocking: true
+
+  - id: AC-P3-03
+    description: "Company research cache miss does not raise — Stage 2 runs with empty company context"
+    verification: "Mock company_research_dal returns None; pipeline completes; cv_sections.summary is non-empty"
+    blocking: true
+
+  - id: AC-P3-04
+    description: "Stage 3 validates experience company names against parsed_facts.work_experience (not UserCV.work_experience)"
+    verification: "Inject mismatched company in Stage2Output that IS in UserCV but NOT in parsed_facts → Stage3Result.fact_verification_passed == False"
+    blocking: true
+
+  - id: AC-P3-05
+    description: "ParsedFacts model validates against careervp_cv_tailoring_schemas.json#ParsedFacts (required fields, date format)"
+    verification: "ParsedFacts(name='', email='') raises ValidationError; ParsedFacts with valid fixture passes"
+    blocking: true
+
+  - id: AC-P3-06
+    description: "GapAnalysisResponses model validates against schemas.json#GapAnalysisResponses"
+    verification: "Unit test with valid and invalid gap_responses payloads"
+    blocking: true
+
+################################################################################
+# BASELINE AND REGRESSION BUDGET
+################################################################################
+
+baseline_and_regression_budget:
+  baseline_artifact: "docs/evidence/cv-tailoring-baseline-render.json"
+  blocked_regressions:
+    - "cv-tailoring endpoint returns 500 when parsed_facts is None in DynamoDB"
+    - "Gap analysis fetch failure aborts tailoring"
+  allowed_deltas:
+    - "Stage 3 rejection rate may increase as parsed_facts strict matching catches more inconsistencies — expected improvement in quality"
+
+################################################################################
+# VERIFICATION CONTRACT
+################################################################################
+
+verification_contract:
+  - requirement_id: AC-P3-01
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P3-02
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P3-03
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P3-04
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P3-05
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P3-06
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+
+################################################################################
+# DEPLOYED PARITY PLAN
+################################################################################
+
+deployed_parity:
+  route_surface_parity: "No route changes."
+  authorizer_parity: "No auth changes."
+  runtime_env_resolution_parity: >
+    Lambda IAM role must already have dynamodb:GetItem on careervp-company-research-cache.
+    Verify in infra/careervp/ CDK stack that this permission exists.
+
+################################################################################
+# VALIDATION PLAN
+################################################################################
+
+validation_plan:
+  static:
+    - "uv run mypy careervp --strict"
+  unit:
+    - command: "uv run pytest src/backend/tests/unit/cv_tailoring/test_ground_truth_inputs.py -q"
+  integration:
+    - command: "uv run pytest src/backend/tests/integration/test_cv_tailoring_pipeline_integration.py -q"
+
+################################################################################
+# TRACEABILITY MATRIX
+################################################################################
+
+traceability:
+  - requirement_id: AC-P3-01
+    code_reference: "src/backend/careervp/logic/cv_tailoring_logic.py::CVTailoringLogic.tailor_cv"
+    test_reference: "docs/architecture/careervp_prompts/cv-tailoring/tests/test_P3_ground_truth_inputs.yaml::test_parsed_facts_passed_to_stage1"
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+    result: pending
+
+  - requirement_id: AC-P3-04
+    code_reference: "src/backend/careervp/logic/cv_tailoring_pipeline.py::run_stage3_fact_verification"
+    test_reference: "docs/architecture/careervp_prompts/cv-tailoring/tests/test_P3_ground_truth_inputs.yaml::test_stage3_uses_parsed_facts_not_user_cv"
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+    result: pending
+
+################################################################################
+# ROLLBACK TRIGGER MATRIX
+################################################################################
+
+rollback_triggers:
+  - trigger_id: RT-P3-001
+    condition: "cv-tailoring endpoint returns 500 when parsed_facts is absent from DynamoDB record"
+    detection_source: "Post-deploy smoke test on an application with no cv-parser output"
+    action: "Apply hotfix: make parsed_facts fallback to UserCV fields; do not abort"
+    owner: backend
+
+################################################################################
+# COMPLETION EVIDENCE
+################################################################################
+
+completion_evidence:
+  required:
+    - pytest output showing all AC-P3-* tests pass
+    - mypy output for cv_tailoring_logic.py showing zero errors
+    - Integration test log showing pipeline completes when gap_responses absent
+  residual_risks:
+    - parsed_facts schema evolves as cv-parser improves; ParsedFacts model must be kept in sync
+    - company_research cache may be stale; Stage 2 will use cached culture even if it's outdated

@@ -1,0 +1,506 @@
+################################################################################
+# TEST SPEC: P4 — ATS Scoring 0-100 Integer Scale
+# Spec ref: CVT-P4
+# When implemented:
+#   CREATE: src/backend/tests/unit/cv_tailoring/test_ats_scoring_100pt.py
+#   UPDATE: src/backend/tests/unit/test_cv_tailoring.py (lines 89, 108)
+#   UPDATE: src/backend/tests/unit/test_l0_cv_tailoring_scores.py (all score assertions)
+################################################################################
+
+test_spec_id: TEST-CVT-P4
+spec_ref: CVT-P4
+title: "ATS scoring 0-100 integer algorithm tests"
+test_files:
+  primary: "src/backend/tests/unit/cv_tailoring/test_ats_scoring_100pt.py"
+  update_required:
+    - file: "src/backend/tests/unit/test_cv_tailoring.py"
+      lines: [89, 108]
+      change: "assert 0.0 <= score <= 10.0 → assert 0 <= score <= 100; assert final.ats_score >= 8.0 → >= 80"
+    - file: "src/backend/tests/unit/test_l0_cv_tailoring_scores.py"
+      change: "Review and update all ats_score threshold assertions"
+markers:
+  - "@pytest.mark.unit"
+status: pending_implementation
+non_self_closing: true
+
+description: >
+  These tests verify the 0-100 integer ATS scoring algorithm defined in spec §6.
+  They fail by asserting the WRONG scale (0-10) until CVT-P4 is implemented.
+  Additionally, the existing tests in test_cv_tailoring.py must be updated to
+  use the new scale; those existing tests will fail after P4 is applied unless updated.
+
+breaking_change_note: >
+  CVT-P4 BREAKS the following existing assertions:
+    - test_cv_tailoring.py:89: assert 0.0 <= score <= 10.0  → becomes 0 <= score <= 100
+    - test_cv_tailoring.py:108: assert final.ats_score >= 8.0 → becomes >= 80
+    - test_l0_cv_tailoring_scores.py: all assertions with score <= 10.0 or >= 8.0
+  These must be updated IN THE SAME PR as the P4 implementation.
+
+################################################################################
+# FIXTURES
+################################################################################
+
+fixtures:
+  - id: PERFECT_CV_SECTIONS
+    description: "A CVSections object that should score 100: all sections, quantified bullets, keyword-dense summary"
+    implementation: |
+      import pytest
+      from careervp.models.cv_tailoring_models import (
+          CVContact, CVExperienceItem, CVSections, CVSkills,
+      )
+
+      SAMPLE_KEYWORDS = [
+          "Kubernetes", "Python", "AWS", "CI/CD", "reliability",
+          "microservices", "platform", "observability", "Terraform",
+          "SRE", "distributed", "incident",
+      ]
+
+      @pytest.fixture
+      def perfect_cv_sections() -> CVSections:
+          summary = (
+              "Senior Kubernetes platform engineer with AWS and Python expertise, "
+              "driving CI/CD reliability across distributed microservices. "
+              "Built observability frameworks at Nimbus Labs using Terraform and SRE practices, "
+              "reducing incident response time by 40% and improving platform uptime by 99.9%."
+          )
+          return CVSections(
+              contact=CVContact(name="Alex Candidate", email="alex@example.com",
+                                phone=None, linkedin=None, location=None),
+              summary=summary,
+              skills=CVSkills(
+                  technical=["Python", "AWS", "Kubernetes", "Terraform", "CI/CD"],
+                  soft=["Leadership"],
+              ),
+              experience=[
+                  CVExperienceItem(
+                      company="Nimbus Labs",
+                      title="Senior Software Engineer",
+                      start_date="01/2021",
+                      end_date="Present",
+                      bullets=[
+                          "Built | Kubernetes CI/CD pipeline for 12 microservices | Increased reliability by 35%",
+                          "Automated | AWS observability with Terraform | Reduced incident response by 40%",
+                          "Led | Distributed platform SRE migration | Improved uptime from 99.5% to 99.9%",
+                      ],
+                  )
+              ],
+              education=[
+                  {"institution": "MIT", "degree": "BSc", "field": "Computer Science",
+                   "graduation_date": "06/2016", "gpa": None},
+              ],
+              certifications=[],
+          )
+
+  - id: EMPTY_CV_SECTIONS
+    implementation: |
+      @pytest.fixture
+      def empty_cv_sections() -> CVSections:
+          return CVSections(
+              contact=CVContact(name="Alex", email="alex@example.com",
+                                phone=None, linkedin=None, location=None),
+              summary="",
+              skills=CVSkills(technical=[], soft=[]),
+              experience=[],
+              education=[],
+              certifications=[],
+          )
+
+  - id: MINIMAL_KEYWORD_MAP
+    implementation: |
+      from careervp.logic.cv_tailoring import KeywordMap
+
+      @pytest.fixture
+      def sample_keyword_map() -> KeywordMap:
+          return KeywordMap(
+              required=["Kubernetes", "Python", "AWS"],
+              preferred=["CI/CD", "reliability", "microservices"],
+              nice_to_have=["platform", "observability", "Terraform", "SRE", "distributed", "incident"],
+              mapped_keywords={k: ["experience"] for k in SAMPLE_KEYWORDS},
+              keyword_categories={k: "required" if k in ["Kubernetes", "Python", "AWS"] else "preferred"
+                                   for k in SAMPLE_KEYWORDS},
+          )
+
+################################################################################
+# TESTS — CONSTANTS
+################################################################################
+
+tests:
+  - id: T-P4-01
+    name: test_target_ats_score_constant_is_80
+    maps_to_ac: AC-P4-07
+    description: "TARGET_ATS_SCORE constant must equal 80 (not 8.0)"
+    implementation: |
+      @pytest.mark.unit
+      def test_target_ats_score_constant_is_80() -> None:
+          from careervp.logic.cv_tailoring import TARGET_ATS_SCORE
+          assert TARGET_ATS_SCORE == 80, (
+              f"TARGET_ATS_SCORE is {TARGET_ATS_SCORE}, expected 80 — CVT-P4 not implemented"
+          )
+
+  - id: T-P4-02
+    name: test_anti_ai_min_score_constant_is_90
+    maps_to_ac: AC-P4-08
+    description: "ANTI_AI_MIN_SCORE constant must equal 90 (not 9.0)"
+    implementation: |
+      @pytest.mark.unit
+      def test_anti_ai_min_score_constant_is_90() -> None:
+          from careervp.logic.cv_tailoring import ANTI_AI_MIN_SCORE
+          assert ANTI_AI_MIN_SCORE == 90, (
+              f"ANTI_AI_MIN_SCORE is {ANTI_AI_MIN_SCORE}, expected 90 — CVT-P4 not implemented"
+          )
+
+################################################################################
+# TESTS — RETURN TYPE AND RANGE
+################################################################################
+
+  - id: T-P4-03
+    name: test_ats_score_returns_int_not_float
+    maps_to_ac: AC-P4-01
+    description: "calculate_ats_score() must return int, not float"
+    implementation: |
+      @pytest.mark.unit
+      def test_ats_score_returns_int_not_float(
+          perfect_cv_sections: CVSections,
+          sample_keyword_map: KeywordMap,
+      ) -> None:
+          from careervp.logic.cv_tailoring import calculate_ats_score
+          score = calculate_ats_score(perfect_cv_sections, sample_keyword_map)
+          assert isinstance(score, int), (
+              f"calculate_ats_score must return int, got {type(score).__name__} "
+              f"with value {score} — CVT-P4 not implemented"
+          )
+
+  - id: T-P4-04
+    name: test_ats_score_range_is_0_to_100
+    maps_to_ac: AC-P4-01
+    description: "calculate_ats_score() must return a value in 0-100 range"
+    implementation: |
+      @pytest.mark.unit
+      def test_ats_score_range_is_0_to_100(
+          perfect_cv_sections: CVSections,
+          sample_keyword_map: KeywordMap,
+      ) -> None:
+          from careervp.logic.cv_tailoring import calculate_ats_score
+          score = calculate_ats_score(perfect_cv_sections, sample_keyword_map)
+          assert 0 <= score <= 100, (
+              f"calculate_ats_score returned {score}, outside 0-100 range — CVT-P4 not implemented"
+          )
+
+  - id: T-P4-05
+    name: test_empty_cv_scores_0
+    maps_to_ac: AC-P4-05
+    description: "Empty CVSections with empty keyword_map must score 0"
+    implementation: |
+      @pytest.mark.unit
+      def test_empty_cv_scores_0(empty_cv_sections: CVSections) -> None:
+          from careervp.logic.cv_tailoring import KeywordMap, calculate_ats_score
+
+          empty_map = KeywordMap(
+              required=[], preferred=[], nice_to_have=[],
+              mapped_keywords={}, keyword_categories={},
+          )
+          score = calculate_ats_score(empty_cv_sections, empty_map)
+          assert score == 0, (
+              f"Empty CV must score 0, got {score} — CVT-P4 not implemented"
+          )
+
+################################################################################
+# TESTS — COMPONENT SCORES
+################################################################################
+
+  - id: T-P4-06
+    name: test_section_headers_component_scores_15_when_all_present
+    maps_to_ac: AC-P4-02
+    description: "CV with all 4 required sections (summary, skills, experience, education) scores >= 15 on section component"
+    implementation: |
+      @pytest.mark.unit
+      def test_section_headers_component_scores_15_when_all_present(
+          perfect_cv_sections: CVSections,
+          sample_keyword_map: KeywordMap,
+      ) -> None:
+          """
+          The spec states: section_headers weight=15, 4 required sections × 3.75 each.
+          A CV with all 4 sections must achieve the full 15 section points.
+          We verify this by checking the total score is at least 15.
+          """
+          from careervp.logic.cv_tailoring import calculate_ats_score
+          score = calculate_ats_score(perfect_cv_sections, sample_keyword_map)
+          # Score must be >= 15 just from section headers alone
+          assert score >= 15, (
+              f"CV with all required sections scored {score}, expected >= 15 — CVT-P4"
+          )
+
+  - id: T-P4-07
+    name: test_100_percent_keyword_match_contributes_40_points
+    maps_to_ac: AC-P4-03
+    description: "CV containing all 12 keywords must receive full 40 keyword_match points"
+    implementation: |
+      @pytest.mark.unit
+      def test_100_percent_keyword_match_contributes_40_points(
+          perfect_cv_sections: CVSections,
+          sample_keyword_map: KeywordMap,
+      ) -> None:
+          """
+          perfect_cv_sections has all 12 SAMPLE_KEYWORDS in its text.
+          Score should be >= 40 (keyword contribution alone).
+          """
+          from careervp.logic.cv_tailoring import calculate_ats_score
+          score = calculate_ats_score(perfect_cv_sections, sample_keyword_map)
+          assert score >= 40, (
+              f"CV with 100% keyword match scored {score}, expected >= 40 — CVT-P4"
+          )
+
+  - id: T-P4-08
+    name: test_quantified_bullets_contribute_to_score
+    maps_to_ac: AC-P4-02
+    description: "CVExperienceItem with quantified bullets (35%, 40%, 99.9%) contributes > 0 on quantified_bullets component"
+    implementation: |
+      @pytest.mark.unit
+      def test_quantified_bullets_contribute_to_score(
+          perfect_cv_sections: CVSections,
+          sample_keyword_map: KeywordMap,
+      ) -> None:
+          """
+          perfect_cv_sections has 3 bullets all with numeric metrics.
+          Score must be > the section_headers + keyword baseline, proving quantified
+          bullets were counted.
+          """
+          from careervp.logic.cv_tailoring import CVSections, calculate_ats_score, CVExperienceItem, CVSkills, CVContact
+
+          # Compare score with vs without quantified bullets
+          no_metrics_cv = CVSections(
+              contact=perfect_cv_sections.contact,
+              summary=perfect_cv_sections.summary,
+              skills=perfect_cv_sections.skills,
+              experience=[
+                  CVExperienceItem(
+                      company="Nimbus Labs",
+                      title="Senior Software Engineer",
+                      start_date="01/2021",
+                      end_date="Present",
+                      bullets=[
+                          "Led Kubernetes migration for production services",
+                          "Automated AWS observability with Terraform",
+                          "Improved platform uptime significantly",
+                      ],
+                  )
+              ],
+              education=perfect_cv_sections.education,
+              certifications=[],
+          )
+          score_with_metrics = calculate_ats_score(perfect_cv_sections, sample_keyword_map)
+          score_without_metrics = calculate_ats_score(no_metrics_cv, sample_keyword_map)
+          assert score_with_metrics > score_without_metrics, (
+              f"Quantified bullets must increase ATS score: "
+              f"with={score_with_metrics}, without={score_without_metrics} — CVT-P4"
+          )
+
+  - id: T-P4-09
+    name: test_score_cap_is_100_not_higher
+    maps_to_ac: AC-P4-01
+    description: "Even a perfect CV must not exceed 100 (no overflow)"
+    implementation: |
+      @pytest.mark.unit
+      def test_score_cap_is_100_not_higher(
+          perfect_cv_sections: CVSections,
+          sample_keyword_map: KeywordMap,
+      ) -> None:
+          from careervp.logic.cv_tailoring import calculate_ats_score
+          score = calculate_ats_score(perfect_cv_sections, sample_keyword_map)
+          assert score <= 100, (
+              f"ATS score {score} exceeds maximum 100 — CVT-P4 formula has overflow"
+          )
+
+################################################################################
+# TESTS — EXISTING TEST UPDATE VERIFICATION
+################################################################################
+
+  - id: T-P4-10
+    name: test_existing_test_cv_tailoring_uses_new_scale
+    maps_to_ac: AC-P4-09
+    description: "Regression: test_cv_tailoring.py line 89 assertion must use 0-100 range (not 0-10)"
+    implementation: |
+      @pytest.mark.unit
+      def test_existing_test_cv_tailoring_uses_new_scale() -> None:
+          """
+          This test reads test_cv_tailoring.py and checks that the old 0-10 assertion
+          has been updated to 0-100. It fails until the existing test is updated.
+          """
+          import pathlib
+          test_file = pathlib.Path(__file__).parents[2] / "test_cv_tailoring.py"
+          assert test_file.exists(), f"test_cv_tailoring.py not found at {test_file}"
+          content = test_file.read_text(encoding="utf-8")
+          assert "0.0 <= score <= 10.0" not in content, (
+              "test_cv_tailoring.py still uses 0-10 scale assertion — update per CVT-P4 spec"
+          )
+          assert "0 <= score <= 100" in content, (
+              "test_cv_tailoring.py missing updated 0-100 scale assertion — CVT-P4 not applied"
+          )
+
+  - id: T-P4-11
+    name: test_existing_final_ats_score_threshold_uses_new_scale
+    maps_to_ac: AC-P4-09
+    description: "test_cv_tailoring.py line 108 must use >= 80 threshold (not >= 8.0)"
+    implementation: |
+      @pytest.mark.unit
+      def test_existing_final_ats_score_threshold_uses_new_scale() -> None:
+          import pathlib
+          test_file = pathlib.Path(__file__).parents[2] / "test_cv_tailoring.py"
+          assert test_file.exists()
+          content = test_file.read_text(encoding="utf-8")
+          assert "ats_score >= 8.0" not in content, (
+              "test_cv_tailoring.py still uses >= 8.0 threshold — update per CVT-P4 spec"
+          )
+          assert "ats_score >= 80" in content, (
+              "test_cv_tailoring.py missing updated >= 80 threshold — CVT-P4 not applied"
+          )
+
+################################################################################
+# FULL FILE TEMPLATE
+################################################################################
+
+full_file_template: |
+  """
+  Unit tests: ATS scoring algorithm on 0-100 integer scale per spec §6.
+  Spec: CVT-P4 — ATS Scoring 0-100
+  Tests T-P4-01 and T-P4-02 fail immediately until TARGET_ATS_SCORE/ANTI_AI_MIN_SCORE are updated.
+  Tests T-P4-03 through T-P4-09 fail until calculate_ats_score() returns int 0-100.
+  Tests T-P4-10 and T-P4-11 fail until existing tests are updated to new scale.
+  """
+
+  from __future__ import annotations
+
+  import pathlib
+
+  import pytest
+
+  from careervp.logic.cv_tailoring import KeywordMap
+  from careervp.models.cv_tailoring_models import (
+      CVContact,
+      CVExperienceItem,
+      CVSections,
+      CVSkills,
+  )
+
+  SAMPLE_KEYWORDS = [
+      "Kubernetes", "Python", "AWS", "CI/CD", "reliability",
+      "microservices", "platform", "observability", "Terraform",
+      "SRE", "distributed", "incident",
+  ]
+
+
+  @pytest.fixture
+  def sample_keyword_map() -> KeywordMap:
+      return KeywordMap(
+          required=["Kubernetes", "Python", "AWS"],
+          preferred=["CI/CD", "reliability", "microservices"],
+          nice_to_have=["platform", "observability", "Terraform", "SRE", "distributed", "incident"],
+          mapped_keywords={k: ["experience"] for k in SAMPLE_KEYWORDS},
+          keyword_categories={
+              k: "required" if k in ["Kubernetes", "Python", "AWS"] else "preferred"
+              for k in SAMPLE_KEYWORDS
+          },
+      )
+
+
+  @pytest.fixture
+  def perfect_cv_sections() -> CVSections:
+      summary = (
+          "Senior Kubernetes platform engineer with AWS and Python expertise, "
+          "driving CI/CD reliability across distributed microservices. "
+          "Built observability frameworks using Terraform and SRE practices, "
+          "reducing incident response time by 40% and improving platform uptime by 99.9%."
+      )
+      return CVSections(
+          contact=CVContact(name="Alex Candidate", email="alex@example.com",
+                            phone=None, linkedin=None, location=None),
+          summary=summary,
+          skills=CVSkills(technical=["Python", "AWS", "Kubernetes", "Terraform", "CI/CD"], soft=[]),
+          experience=[
+              CVExperienceItem(
+                  company="Nimbus Labs",
+                  title="Senior Software Engineer",
+                  start_date="01/2021",
+                  end_date="Present",
+                  bullets=[
+                      "Built | Kubernetes CI/CD pipeline for 12 microservices | Increased reliability by 35%",
+                      "Automated | AWS observability with Terraform | Reduced incident response by 40%",
+                      "Led | Distributed SRE platform migration | Improved uptime from 99.5% to 99.9%",
+                  ],
+              )
+          ],
+          education=[{"institution": "MIT", "degree": "BSc", "field": "CS",
+                       "graduation_date": "06/2016", "gpa": None}],
+          certifications=[],
+      )
+
+
+  @pytest.fixture
+  def empty_cv_sections() -> CVSections:
+      return CVSections(
+          contact=CVContact(name="A", email="a@b.com", phone=None, linkedin=None, location=None),
+          summary="",
+          skills=CVSkills(technical=[], soft=[]),
+          experience=[],
+          education=[],
+          certifications=[],
+      )
+
+
+  @pytest.mark.unit
+  def test_target_ats_score_constant_is_80() -> None:
+      from careervp.logic.cv_tailoring import TARGET_ATS_SCORE
+      assert TARGET_ATS_SCORE == 80, f"TARGET_ATS_SCORE={TARGET_ATS_SCORE}, expected 80 — CVT-P4"
+
+
+  @pytest.mark.unit
+  def test_anti_ai_min_score_constant_is_90() -> None:
+      from careervp.logic.cv_tailoring import ANTI_AI_MIN_SCORE
+      assert ANTI_AI_MIN_SCORE == 90, f"ANTI_AI_MIN_SCORE={ANTI_AI_MIN_SCORE}, expected 90 — CVT-P4"
+
+
+  @pytest.mark.unit
+  def test_ats_score_returns_int_not_float(
+      perfect_cv_sections: CVSections, sample_keyword_map: KeywordMap
+  ) -> None:
+      from careervp.logic.cv_tailoring import calculate_ats_score
+      score = calculate_ats_score(perfect_cv_sections, sample_keyword_map)
+      assert isinstance(score, int), (
+          f"calculate_ats_score must return int, got {type(score).__name__} — CVT-P4"
+      )
+
+
+  @pytest.mark.unit
+  def test_ats_score_range_is_0_to_100(
+      perfect_cv_sections: CVSections, sample_keyword_map: KeywordMap
+  ) -> None:
+      from careervp.logic.cv_tailoring import calculate_ats_score
+      score = calculate_ats_score(perfect_cv_sections, sample_keyword_map)
+      assert 0 <= score <= 100, f"Score {score} outside 0-100 — CVT-P4"
+
+
+  @pytest.mark.unit
+  def test_empty_cv_scores_0(empty_cv_sections: CVSections) -> None:
+      from careervp.logic.cv_tailoring import calculate_ats_score
+
+      empty_map = KeywordMap(required=[], preferred=[], nice_to_have=[],
+                              mapped_keywords={}, keyword_categories={})
+      assert calculate_ats_score(empty_cv_sections, empty_map) == 0
+
+
+  @pytest.mark.unit
+  def test_existing_test_cv_tailoring_uses_new_scale() -> None:
+      test_file = pathlib.Path(__file__).parents[2] / "test_cv_tailoring.py"
+      assert test_file.exists()
+      content = test_file.read_text(encoding="utf-8")
+      assert "0.0 <= score <= 10.0" not in content, "Old 0-10 scale assertion not updated — CVT-P4"
+      assert "0 <= score <= 100" in content, "Missing 0-100 scale assertion — CVT-P4"
+
+
+  @pytest.mark.unit
+  def test_existing_final_ats_score_threshold_uses_new_scale() -> None:
+      test_file = pathlib.Path(__file__).parents[2] / "test_cv_tailoring.py"
+      assert test_file.exists()
+      content = test_file.read_text(encoding="utf-8")
+      assert "ats_score >= 8.0" not in content, "Old >= 8.0 threshold not updated — CVT-P4"
+      assert "ats_score >= 80" in content, "Missing >= 80 threshold — CVT-P4"

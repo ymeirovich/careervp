@@ -1,0 +1,276 @@
+################################################################################
+# CAREERVP — CV TAILORING IMPROVEMENT PLAN
+# Spec: P0 — Replace Figma MCP Asset URLs with Local Static Assets
+# Priority: P0 (independent of CV tailoring pipeline work, ship first)
+################################################################################
+
+spec_id: CVT-P0
+title: "Replace Figma MCP asset URLs in frontend components with local SVG assets"
+priority: high
+status: draft
+owner: frontend
+created_at: "2026-04-04"
+updated_at: "2026-04-04"
+
+################################################################################
+# PROBLEM STATEMENT
+################################################################################
+
+problem_statement:
+  exact_failing_behavior: >
+    Three frontend components embed Figma MCP asset URLs as <img src>:
+      - frontend/components/dashboard/Topbar.tsx:7  → ASSET_DROPDOWN_ARROW (29ba343a…)
+      - frontend/components/dashboard/Sidebar.tsx:8 → ASSET_CVP_LOGO (661cfe6f…)
+      - frontend/components/dashboard/StatusStrip.tsx:5 → ASSET_STATUS_DOT (62714d3b…)
+    Every page render triggers live HTTP requests to
+    https://www.figma.com/api/mcp/asset/<uuid> for decorative icons.
+    In the CV Tailoring page specifically, the Topbar renders ASSET_DROPDOWN_ARROW
+    for the user chip dropdown arrow, producing an observable failed/slow asset load.
+
+  expected_behavior: >
+    All decorative icons are served from frontend/public/assets/ as local SVG files.
+    No outbound HTTP requests to figma.com at runtime.
+
+  user_business_impact: >
+    - Broken icon display in any environment without Figma API credentials (CI, staging,
+      offline, corporate networks with egress filtering).
+    - Privacy leak: every page visit telegraphs user activity to Figma's servers.
+    - CSP violations once a strict Content-Security-Policy is applied to careervp.com.
+
+  reproducibility: >
+    Reproducible on every page load. Open browser DevTools Network tab, filter by
+    figma.com — three requests appear for every dashboard page render.
+
+################################################################################
+# EVIDENCE
+################################################################################
+
+evidence:
+  failing_component: "frontend/components/dashboard/Topbar.tsx:7"
+  failing_asset_url: "https://www.figma.com/api/mcp/asset/29ba343a-ed50-4f60-ab33-814b014f47b8"
+  observed_behavior: "Browser attempts to load external Figma URL on CV Tailoring page render"
+  environment: "http://localhost:3000/dashboard/jobs/*/cv-tailored"
+  additional_occurrences:
+    - file: "frontend/components/dashboard/Sidebar.tsx:8"
+      constant: ASSET_CVP_LOGO
+      uuid: "661cfe6f-1041-4faa-8666-3d001bb92746"
+    - file: "frontend/components/dashboard/StatusStrip.tsx:5"
+      constant: ASSET_STATUS_DOT
+      uuid: "62714d3b-6e61-40cf-917d-9ad5f45735ac"
+    - file: "frontend/standalone.html:200 and frontend/app/page.tsx:39"
+      constant: FIREWORKS_SRC
+      uuid: "d930558f-3a56-483d-91c3-6355e90301e5"
+      note: "Landing page only — lower priority but same fix pattern"
+
+################################################################################
+# ARCHITECTURE AND OWNERSHIP MAP
+################################################################################
+
+architecture:
+  affected_files:
+    - path: frontend/components/dashboard/Topbar.tsx
+      change: Replace ASSET_DROPDOWN_ARROW URL with inline SVG or /assets/dropdown-arrow.svg
+    - path: frontend/components/dashboard/Sidebar.tsx
+      change: Replace ASSET_CVP_LOGO URL with /assets/careervp-logo.svg
+    - path: frontend/components/dashboard/StatusStrip.tsx
+      change: Replace ASSET_STATUS_DOT URL with /assets/status-dot.svg
+    - path: frontend/standalone.html
+      change: Replace FIREWORKS_SRC URL with /assets/fireworks.png or remove if decorative
+    - path: frontend/app/page.tsx
+      change: Replace FIREWORKS_SRC URL with local asset reference
+    - path: frontend/public/assets/
+      change: Add dropdown-arrow.svg, careervp-logo.svg, status-dot.svg (extract from Figma export)
+
+  no_backend_changes: true
+
+################################################################################
+# ROOT CAUSE ANALYSIS
+################################################################################
+
+root_cause:
+  confirmed: >
+    Figma MCP Code Connect tooling generated frontend component stubs with
+    asset URLs pointing to Figma's CDN API. These URLs were intended as
+    design-tool previews during development, never as production asset sources.
+    They were committed without replacement by local files.
+
+  contributing_factors:
+    - No CSP enforcement catches external image sources during development
+    - No linting rule forbids figma.com URLs in component source files
+    - No CI check validates that <img src> values are local paths
+
+################################################################################
+# FIX PLAN
+################################################################################
+
+fix_plan:
+  files_to_modify:
+    - frontend/components/dashboard/Topbar.tsx
+    - frontend/components/dashboard/Sidebar.tsx
+    - frontend/components/dashboard/StatusStrip.tsx
+    - frontend/standalone.html
+    - frontend/app/page.tsx
+
+  files_to_add:
+    - frontend/public/assets/dropdown-arrow.svg
+    - frontend/public/assets/careervp-logo.svg
+    - frontend/public/assets/status-dot.svg
+
+  exact_behavior_changes:
+    - Remove all constants whose value matches https://www.figma.com/api/mcp/asset/*
+    - Replace <img src={FIGMA_CONSTANT}> with <img src="/assets/<name>.svg"> or inline <svg>
+    - For ASSET_DROPDOWN_ARROW: use a simple 14×14 chevron SVG (available inline, no file needed)
+    - For ASSET_CVP_LOGO: export from Figma once, commit as /public/assets/careervp-logo.svg
+    - For ASSET_STATUS_DOT: 8×8 green circle SVG, inline or file
+    - For FIREWORKS_SRC: replace with /assets/fireworks.png from Figma export
+
+  prevent_recurrence:
+    - Add ESLint rule (no-figma-urls): forbid src/href values matching figma.com
+    - Document in CLAUDE.md: "Do not commit Figma MCP asset URLs — export and commit locally"
+
+  non_goals:
+    - Do not redesign or restyle any component
+    - Do not change component props, layout, or logic
+    - Do not add image optimization (Next.js Image component swap) in this spec
+
+  rollback_plan: >
+    Git revert the commit. No database or infrastructure changes involved.
+
+################################################################################
+# ACCEPTANCE CRITERIA
+################################################################################
+
+acceptance_criteria:
+  - id: AC-P0-01
+    description: "Zero requests to figma.com/api/mcp/asset/* on any dashboard page load"
+    verification: "DevTools Network tab filtered by figma.com shows 0 requests"
+    blocking: true
+
+  - id: AC-P0-02
+    description: "ASSET_DROPDOWN_ARROW (Topbar), ASSET_CVP_LOGO (Sidebar), ASSET_STATUS_DOT (StatusStrip) constants removed from source"
+    verification: "grep -r 'figma.com/api/mcp/asset' frontend/components/ returns no results"
+    blocking: true
+
+  - id: AC-P0-03
+    description: "Icons render visually on dashboard pages (no broken image placeholder)"
+    verification: "Visual inspection of /dashboard/jobs page: sidebar logo, topbar user chip arrow, status dot all render"
+    blocking: true
+
+  - id: AC-P0-04
+    description: "No figma.com URLs remain in frontend/ directory (excluding docs)"
+    verification: "grep -r 'figma.com/api/mcp/asset' frontend/ returns no results"
+    blocking: true
+
+  - id: AC-P0-05
+    description: "CI Figma URL linting check passes on PR"
+    verification: "New ESLint or grep-based CI step exits 0"
+    blocking: true
+
+################################################################################
+# BASELINE AND REGRESSION BUDGET
+################################################################################
+
+baseline_and_regression_budget:
+  baseline_artifact: "docs/evidence/cv-tailoring-baseline-render.json"
+  blocked_regressions:
+    - Dashboard layout breaks (Topbar height, Sidebar width)
+    - Logo disappears from Sidebar
+    - User chip missing dropdown arrow
+    - Status strip loses colored dot indicator
+  allowed_deltas: {}
+
+################################################################################
+# VERIFICATION CONTRACT
+################################################################################
+
+verification_contract:
+  - requirement_id: AC-P0-01
+    verification_type: live
+    blocking_gate: post_deploy
+    artifact_required: true
+  - requirement_id: AC-P0-02
+    verification_type: static
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P0-03
+    verification_type: live
+    blocking_gate: post_deploy
+    artifact_required: false
+  - requirement_id: AC-P0-04
+    verification_type: static
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P0-05
+    verification_type: static
+    blocking_gate: pre_merge
+    artifact_required: false
+
+################################################################################
+# DEPLOYED PARITY PLAN
+################################################################################
+
+deployed_parity:
+  route_surface_parity: "No route changes. All assets served from Next.js public/."
+  authorizer_parity: "No auth changes."
+  runtime_env_resolution_parity: "N/A — static file serving only."
+
+################################################################################
+# VALIDATION PLAN
+################################################################################
+
+validation_plan:
+  static:
+    - command: "grep -r 'figma.com/api/mcp/asset' frontend/components/ && echo FAIL || echo PASS"
+      expected: "PASS (no output + exit 0)"
+    - command: "grep -r 'figma.com/api/mcp/asset' frontend/app/ && echo FAIL || echo PASS"
+      expected: "PASS"
+  unit:
+    - test_file: "src/backend/tests/unit/test_frontend_asset_hygiene.py"
+      note: "Static analysis test — verifies no Figma URLs in TSX files"
+  live:
+    - action: "Load http://localhost:3000/dashboard — open Network tab — filter figma.com"
+      expected: "0 requests"
+
+################################################################################
+# TRACEABILITY MATRIX
+################################################################################
+
+traceability:
+  - requirement_id: AC-P0-02
+    code_reference: "frontend/components/dashboard/Topbar.tsx:7"
+    test_reference: "docs/architecture/careervp_prompts/cv-tailoring/tests/test_P0_figma_assets.yaml::test_no_figma_urls_in_tsx_components"
+    verification_type: static
+    blocking_gate: pre_merge
+    artifact_required: false
+    result: pending
+
+  - requirement_id: AC-P0-04
+    code_reference: "frontend/components/ and frontend/app/"
+    test_reference: "docs/architecture/careervp_prompts/cv-tailoring/tests/test_P0_figma_assets.yaml::test_no_figma_urls_in_frontend_directory"
+    verification_type: static
+    blocking_gate: pre_merge
+    artifact_required: false
+    result: pending
+
+################################################################################
+# ROLLBACK TRIGGER MATRIX
+################################################################################
+
+rollback_triggers:
+  - trigger_id: RT-P0-001
+    condition: "Dashboard page renders broken layout or missing logo after deploy"
+    detection_source: "Post-deploy visual smoke test"
+    action: "Revert commit, restore Figma URLs temporarily, re-export SVGs correctly"
+    owner: frontend
+
+################################################################################
+# COMPLETION EVIDENCE
+################################################################################
+
+completion_evidence:
+  required:
+    - grep output showing zero figma.com matches in frontend/components/
+    - Screenshot of rendered Sidebar logo, Topbar user chip, StatusStrip dot
+    - CI static check step passing in PR
+  residual_risks:
+    - SVG icons extracted from Figma may differ slightly in pixel rendering from the Figma preview

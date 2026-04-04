@@ -50,9 +50,9 @@ class FVSValidationResult:
 
 @dataclass(frozen=True)
 class AntiAIPatternResult:
-    """Structured anti-AI pattern assessment output."""
+    """Structured anti-AI pattern assessment output (P4: 0-100 scale)."""
 
-    score: float
+    score: int
     issues: list[str]
 
 
@@ -110,12 +110,12 @@ class FVSQualityReport:
         return base_pass and ats_pass and consistency_pass
 
 
-GRAMMAR_MIN_SCORE = 9.0
-TONE_MIN_SCORE = 8.0
-ANTI_AI_MIN_SCORE = 9.0
-FORMATTING_MIN_SCORE = 8.0
-STRUCTURE_MIN_SCORE = 8.0
-ATS_MIN_SCORE = 8.0
+GRAMMAR_MIN_SCORE = 90  # 0-100 scale (was 9.0)
+TONE_MIN_SCORE = 80  # 0-100 scale (was 8.0)
+ANTI_AI_MIN_SCORE = 90  # 0-100 scale (was 9.0)
+FORMATTING_MIN_SCORE = 80  # 0-100 scale (was 8.0)
+STRUCTURE_MIN_SCORE = 80  # 0-100 scale (was 8.0)
+ATS_MIN_SCORE = 80  # 0-100 scale (was 8.0)
 
 
 def validate_immutable_facts(baseline: dict[str, Any], generated: UserCV) -> FVSValidationResult:  # noqa: C901 - explicit comparisons aid readability
@@ -902,26 +902,26 @@ def check_anti_ai_patterns(content: str) -> AntiAIPatternResult:  # noqa: C901
     Score content on anti-AI writing patterns.
 
     Uses an 8-pattern detection framework.
-    The score is 0.0-10.0 where >=9.0 passes the quality gate.
+    The score is 0-100 where >=90 passes the quality gate (P4).
     """
     normalized = content.strip()
     if not normalized:
-        return AntiAIPatternResult(score=0.0, issues=['Content is empty'])
+        return AntiAIPatternResult(score=0, issues=['Content is empty'])
 
     lowered = normalized.lower()
     issues: list[str] = []
-    score = 10.0
+    score = 100  # 0-100 scale (P4)
 
     # Pattern 1: banned buzzwords.
     matched_banned = [term for term in ANTI_AI_BANNED_TERMS if term in lowered]
     if matched_banned:
-        score -= min(len(matched_banned) * 0.6, 4.0)
+        score -= min(len(matched_banned) * 6, 40)
         issues.append(f'Pattern 1 - banned terms detected: {", ".join(sorted(matched_banned))}')
 
     # Pattern 2: too-short shape.
     sentences = [part.strip() for part in re.split(r'[.!?]+', normalized) if part.strip()]
     if len(sentences) < 2:
-        score -= 0.4
+        score -= 4
         issues.append('Pattern 2 - very short response shape; expand with more natural variation')
 
     if sentences:
@@ -929,7 +929,7 @@ def check_anti_ai_patterns(content: str) -> AntiAIPatternResult:  # noqa: C901
         avg_sentence_len = sum(lengths) / len(lengths)
         # Pattern 3: heavy sentence length.
         if avg_sentence_len > 26:
-            score -= 0.4
+            score -= 4
             issues.append('Pattern 3 - average sentence length is too high and sounds formulaic')
 
         starters: list[str] = []
@@ -940,14 +940,14 @@ def check_anti_ai_patterns(content: str) -> AntiAIPatternResult:  # noqa: C901
         if starters:
             repeated_start_count = max(starters.count(starter) for starter in set(starters))
             if repeated_start_count >= 3:
-                score -= 0.4
+                score -= 4
                 issues.append('Pattern 4 - repeated sentence openings suggest templated writing')
 
         # Pattern 5: unusually uniform sentence lengths.
         if len(lengths) >= 4:
             length_spread = max(lengths) - min(lengths)
             if length_spread <= 4:
-                score -= 0.5
+                score -= 5
                 issues.append('Pattern 5 - sentence lengths are overly uniform')
 
     # Pattern 6: low lexical diversity.
@@ -955,14 +955,14 @@ def check_anti_ai_patterns(content: str) -> AntiAIPatternResult:  # noqa: C901
     if tokens:
         diversity = len(set(tokens)) / len(tokens)
         if diversity < 0.42:
-            score -= 0.4
+            score -= 4
             issues.append('Pattern 6 - low lexical diversity suggests repetitive AI-like phrasing')
 
     # Pattern 7: formulaic transitions and fillers.
     transition_hits = _count_phrase_hits(lowered, ROBOTIC_TRANSITIONS)
     filler_hits = _count_phrase_hits(lowered, ROBOTIC_FILLER_PHRASES)
     if transition_hits + filler_hits >= 3:
-        score -= 0.6
+        score -= 6
         issues.append('Pattern 7 - formulaic transition/filler phrases detected')
 
     # Pattern 8: overuse of nominalized vocabulary.
@@ -970,10 +970,10 @@ def check_anti_ai_patterns(content: str) -> AntiAIPatternResult:  # noqa: C901
         nominalized_count = sum(1 for token in tokens if token.endswith(('tion', 'ment', 'ness')))
         nominalized_ratio = nominalized_count / len(tokens)
         if nominalized_ratio > 0.18:
-            score -= 0.5
+            score -= 5
             issues.append('Pattern 8 - heavy nominalization can sound robotic')
 
-    return AntiAIPatternResult(score=_bounded_score(score), issues=issues)
+    return AntiAIPatternResult(score=max(0, min(100, score)), issues=issues)
 
 
 def check_anti_anti_ai_patterns(content: str) -> AntiAIPatternResult:
