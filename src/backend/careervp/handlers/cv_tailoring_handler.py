@@ -346,8 +346,14 @@ def _handle_openapi_async_generate(  # noqa: C901
         cv_sections_dict: dict[str, Any] = stage3.cv_sections.model_dump(mode='json') if stage3.cv_sections else {}
         tailored_cv_text = (stage3.cv_sections.summary if stage3.cv_sections else '') or ''
 
-        # ATS score: propagated from Stage2 verification through Stage3Result (0-100 scale)
-        ats_score = stage3.ats_keyword_score if stage3.ats_keyword_score > 0 else 75
+        # ATS score: use Stage2 verification score (already 0-100) or default to 75
+        ats_score = 75
+        try:
+            raw_score = cv_sections_dict.get('_ats_keyword_score')
+            if isinstance(raw_score, (int, float)) and 0 <= raw_score <= 100:
+                ats_score = int(raw_score)
+        except Exception:  # noqa: BLE001
+            pass
 
         # Keyword matches: matched = keywords found in summary + experience bullets
         cv_text_lower = (tailored_cv_text + ' ' + json.dumps(cv_sections_dict)).lower()
@@ -792,7 +798,7 @@ def _normalize_tailoring_status(raw_status: Any) -> str:
     return 'completed'
 
 
-def _build_tailored_cv_status_payload(item: dict[str, Any], fallback_id: str) -> dict[str, Any]:  # noqa: C901
+def _build_tailored_cv_status_payload(item: dict[str, Any], fallback_id: str) -> dict[str, Any]:
     status = _normalize_tailoring_status(item.get('status'))
     payload: dict[str, Any] = {
         'id': str(item.get('request_id') or item.get('sk') or fallback_id),
@@ -826,10 +832,6 @@ def _build_tailored_cv_status_payload(item: dict[str, Any], fallback_id: str) ->
         fvs_validation = item.get('fvs_validation')
         if isinstance(fvs_validation, dict):
             result['fvs_validation'] = fvs_validation
-
-        error = item.get('error')
-        if error is not None:
-            result['error'] = str(error)
 
         if result:
             payload['result'] = result
