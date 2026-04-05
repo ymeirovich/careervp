@@ -76,7 +76,7 @@ def test_stage3_rejects_hallucinated_company(sample_parsed_facts: ParsedFacts) -
                 title="Senior Engineer",
                 start_date="01/2021",
                 end_date="Present",
-                bullets=["Built platform."],
+                bullets=["Built and maintained cloud infrastructure platform."],
             )
         ],
         education=[],

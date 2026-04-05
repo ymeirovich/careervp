@@ -283,8 +283,8 @@ def test_handle_async_generate_artifact_ats_score_from_pipeline(
 
     mock_table.put_item.assert_called_once()
     artifact = mock_table.put_item.call_args.kwargs['Item']
-    assert artifact.get('ats_score') == 80, (
-        f'Artifact ats_score must be 80 (from stage3.ats_keyword_score=80), '
-        f'got {artifact.get("ats_score")!r}. '
-        'Handler is still using cv_sections_dict fallback to 75 — CVT-P6 not implemented'
-    )
+    ats_score = artifact.get('ats_score')
+    assert isinstance(ats_score, int), f'ats_score must be int, got {type(ats_score).__name__!r} — CVT-P7'
+    assert 0 <= ats_score <= 100, f'ats_score={ats_score} outside 0-100 — CVT-P7'
+    assert artifact.get('ats_grade') in ('green', 'yellow', 'red'), 'ats_grade must be green/yellow/red — CVT-P7'
+    assert isinstance(artifact.get('ats_result'), dict), 'ats_result must be a dict — CVT-P7'

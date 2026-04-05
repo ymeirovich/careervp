@@ -18,6 +18,7 @@ from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers
 from careervp.logic.cv_tailoring import tailor_cv
+from careervp.logic.cv_tailoring_ats import compute_ats_result
 from careervp.logic.cv_tailoring_pipeline import run_cv_tailoring_pipeline
 from careervp.logic.fvs_validator import create_fvs_baseline
 from careervp.logic.llm_client import LLMClient
@@ -389,16 +390,19 @@ def _handle_openapi_async_generate(  # noqa: C901
         cv_sections_dict: dict[str, Any] = stage3.cv_sections.model_dump(mode='json') if stage3.cv_sections else {}
         tailored_cv_text = (stage3.cv_sections.summary if stage3.cv_sections else '') or ''
 
-        # ATS score: propagated from Stage2 verification through Stage3Result (0-100 scale)
-        ats_score = stage3.ats_keyword_score if stage3.ats_keyword_score > 0 else 75
+        # Deterministic ATS rules engine — 5-component breakdown
+        ats_result = compute_ats_result(stage3.cv_sections, stage3.keywords_to_emphasize)
 
-        # Keyword matches: matched = keywords found in summary + experience bullets
-        cv_text_lower = (tailored_cv_text + ' ' + json.dumps(cv_sections_dict)).lower()
-        matched_keywords = [
-            kw
-            for kw in ([kw for exp in cv_sections_dict.get('experience', []) for kw in exp.get('bullets', [])])
-            if isinstance(kw, str) and kw.lower() in cv_text_lower
-        ]
+        fact_verification_detail: dict[str, Any] = {
+            'passed': stage3.fact_verification_passed,
+            'items_corrected': len(stage3.items_corrected),
+            'items_removed': len(stage3.items_removed),
+            'hallucination_flags_from_ai': [],
+            'checks': (
+                [{'check_name': m, 'passed': False, 'action_taken': 'corrected', 'detail': m} for m in stage3.items_corrected]
+                + [{'check_name': m, 'passed': False, 'action_taken': 'removed', 'detail': m} for m in stage3.items_removed]
+            ),
+        }
 
         artifact: dict[str, Any] = {
             'pk': user_id,
@@ -413,13 +417,20 @@ def _handle_openapi_async_generate(  # noqa: C901
             'company_name': company_name,
             'cv_sections': cv_sections_dict,
             'tailored_cv': tailored_cv_text,  # backward-compat: summary text
-            'ats_score': ats_score,
-            'keyword_matches': {'matched': matched_keywords, 'missing': []},
-            'suggestions': ['CV tailored using 3-stage pipeline with fact verification.'],
+            'ats_score': ats_result.total_score,
+            'ats_grade': ats_result.grade,
+            'ats_result': ats_result.model_dump(),
+            'keywords_matched': ats_result.keywords_matched,
+            'keywords_missing': ats_result.keywords_missing,
+            'keyword_match_score': ats_result.keyword_match_score_1_10,
+            'fact_verification_detail': fact_verification_detail,
+            # Kept for backward-compat (old UI versions may read fvs_validation)
             'fvs_validation': {
                 'is_valid': stage3.fact_verification_passed,
                 'violations': stage3.items_removed,
             },
+            'version': 1,
+            'language': 'en',
             'created_at': now_iso,
             'updated_at': now_iso,
             'ttl': ttl,
@@ -842,8 +853,20 @@ def _build_tailored_cv_status_payload(item: dict[str, Any], fallback_id: str) ->
         'status': status,
     }
 
+    # Top-level metadata fields
+    version = item.get('version')
+    if version is not None:
+        payload['version'] = int(version)
+    language = item.get('language')
+    if language is not None:
+        payload['language'] = str(language)
+    generated_at = item.get('created_at') or item.get('generated_at')
+    if generated_at is not None:
+        payload['generated_at'] = str(generated_at)
+
     if status in {'completed', 'failed'}:
         result: dict[str, Any] = {}
+
         tailored_cv = item.get('tailored_cv')
         if tailored_cv is not None:
             result['tailored_cv'] = tailored_cv
@@ -856,19 +879,34 @@ def _build_tailored_cv_status_payload(item: dict[str, Any], fallback_id: str) ->
         if isinstance(ats_score, (int, float, Decimal)):
             result['ats_score'] = int(ats_score)
 
-        keyword_matches = item.get('keyword_matches')
-        if isinstance(keyword_matches, dict):
-            result['keyword_matches'] = keyword_matches
-        elif isinstance(keyword_matches, list):
-            result['keyword_matches'] = {'matched': keyword_matches, 'missing': []}
+        ats_grade = item.get('ats_grade')
+        if isinstance(ats_grade, str):
+            result['ats_grade'] = ats_grade
+
+        ats_result_raw = item.get('ats_result')
+        if isinstance(ats_result_raw, dict):
+            result['ats_result'] = ats_result_raw
+
+        keyword_match_score = item.get('keyword_match_score')
+        if isinstance(keyword_match_score, (int, float, Decimal)):
+            result['keyword_match_score'] = int(keyword_match_score)
+
+        keywords_matched = item.get('keywords_matched')
+        if isinstance(keywords_matched, list):
+            result['keywords_matched'] = keywords_matched
+
+        keywords_missing = item.get('keywords_missing')
+        if isinstance(keywords_missing, list):
+            result['keywords_missing'] = keywords_missing
+
+        fact_verification_detail = item.get('fact_verification_detail')
+        if isinstance(fact_verification_detail, dict):
+            result['fact_verification_detail'] = fact_verification_detail
+        # fvs_validation is intentionally NOT exposed in the API response
 
         suggestions = item.get('suggestions')
         if isinstance(suggestions, list):
             result['suggestions'] = [str(entry) for entry in suggestions if str(entry).strip()]
-
-        fvs_validation = item.get('fvs_validation')
-        if isinstance(fvs_validation, dict):
-            result['fvs_validation'] = fvs_validation
 
         error = item.get('error')
         if error is not None:

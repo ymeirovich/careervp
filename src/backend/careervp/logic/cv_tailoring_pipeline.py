@@ -380,6 +380,30 @@ def _format_parsed_facts_for_prompt(cv: UserCV) -> str:
     return '\n'.join(lines)
 
 
+def _find_parsed_experience(
+    company: str,
+    title: str,
+    parsed_facts: UserCV,
+) -> Any | None:
+    """Return the best-matching WorkExperience from parsed_facts.
+
+    Tries exact company+role match first, then company-only.
+    """
+    if not parsed_facts.work_experience:
+        return None
+    company_lower = company.lower()
+    title_lower = title.lower()
+    # Exact match first
+    for exp in parsed_facts.work_experience:
+        if exp.company.lower() == company_lower and exp.role.lower() == title_lower:
+            return exp
+    # Company-only fallback
+    for exp in parsed_facts.work_experience:
+        if exp.company.lower() == company_lower:
+            return exp
+    return None
+
+
 def _parse_dates_string(dates_str: str) -> tuple[str, str | None]:
     """Parse a freeform dates string into (start_date, end_date) in MM/YYYY format.
 
@@ -613,10 +637,31 @@ def run_stage3_fact_verification(  # noqa: C901
     # Check contact info against parsed_facts (initialize here)
     fact_verification_passed = True
 
-    # Check each experience entry against known companies
+    # Check each experience entry against known companies; backfill dates from parsed_facts
     verified_experience: list[CVExperienceSection] = []
     for exp_item in cv_sections.experience:
         if exp_item.company.lower() in known_companies:
+            # Backfill dates if Stage 2 left them empty
+            if not exp_item.start_date and parsed_facts.work_experience:
+                pf_exp = _find_parsed_experience(exp_item.company, exp_item.title, parsed_facts)
+                if pf_exp is not None:
+                    start = getattr(pf_exp, 'start_date', '') or ''
+                    if not start and getattr(pf_exp, 'dates', None):
+                        start, _end = _parse_dates_string(str(pf_exp.dates))
+                    end = exp_item.end_date
+                    if end is None:
+                        end_from_pf = getattr(pf_exp, 'end_date', None)
+                        if not end_from_pf and getattr(pf_exp, 'dates', None):
+                            _, end_from_pf = _parse_dates_string(str(pf_exp.dates))
+                        end = end_from_pf
+                    is_current = bool(getattr(pf_exp, 'current', False)) or end is None
+                    exp_item = exp_item.model_copy(
+                        update={
+                            'start_date': start,
+                            'end_date': end,
+                            'is_current': is_current,
+                        }
+                    )
             verified_experience.append(exp_item)
         else:
             items_removed.append(f'Company not in parsed_facts: {exp_item.company}')
@@ -654,6 +699,30 @@ def run_stage3_fact_verification(  # noqa: C901
         certifications=cv_sections.certifications,
         languages=cv_sections.languages,
     )
+
+    # Enrich contact: backfill phone/location/linkedin from parsed_facts.contact_info
+    ci = getattr(parsed_facts, 'contact_info', None)
+    if ci is not None:
+        updated_contact = corrected_sections.contact.model_copy(
+            update={
+                'phone': getattr(ci, 'phone', None) or corrected_sections.contact.phone or None,
+                'location': getattr(ci, 'location', None) or corrected_sections.contact.location or None,
+                'linkedin': getattr(ci, 'linkedin', None) or corrected_sections.contact.linkedin or None,
+            }
+        )
+        corrected_sections = corrected_sections.model_copy(update={'contact': updated_contact})
+
+    # Backfill certifications from parsed_facts when Stage 2 produced an empty list
+    if not corrected_sections.certifications and getattr(parsed_facts, 'certifications', None):
+        pf_certs: list[CVCertificationSection] = []
+        for cert in parsed_facts.certifications:
+            name = str(getattr(cert, 'name', '') or '')
+            issuer = str(getattr(cert, 'issuer', '') or getattr(cert, 'issuing_organization', '') or '')
+            date = str(getattr(cert, 'date', '') or getattr(cert, 'issue_date', '') or '')
+            if name:
+                pf_certs.append(CVCertificationSection(name=name, issuer=issuer, date=date))
+        if pf_certs:
+            corrected_sections = corrected_sections.model_copy(update={'certifications': pf_certs})
 
     return Stage3Result(
         cv_sections=corrected_sections,
@@ -720,6 +789,9 @@ def run_cv_tailoring_pipeline(
         parsed_facts=fact_verification_source,
         ats_keyword_score=ats_score_100,
     )
+
+    # Carry Stage 1 keywords forward so the handler can run compute_ats_result
+    stage3_result = stage3_result.model_copy(update={'keywords_to_emphasize': stage1_output.keywords_to_emphasize})
 
     return Result(
         success=True,
