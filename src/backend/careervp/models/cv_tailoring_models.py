@@ -118,7 +118,7 @@ class CVSections(BaseModel):
     """Structured CV content section — P1 spec contract."""
 
     contact: CVContactSection
-    summary: str = Field(min_length=50, max_length=600)
+    summary: str = Field(min_length=50, max_length=1000)
     skills: CVSkillsSection
     experience: list[CVExperienceSection] = Field(min_length=1)
     education: list[CVEducationSection] = Field(default_factory=list)

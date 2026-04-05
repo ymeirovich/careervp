@@ -61,6 +61,7 @@ RULES (non-negotiable):
    summary, skills, and experience sections.
 4. Length — 1 page (approximately 450-600 words of body content).
    Do not pad. Do not truncate relevant experience.
+   Summary field specifically: 50-500 characters (2-3 sentences). Do not exceed 500 characters.
 5. ATS formatting — no tables, no text boxes, no columns in the content
    structure. Simple flat sections only.
 6. Anti-AI detection — vary sentence structure, use natural transitions,
@@ -79,7 +80,7 @@ REQUIRED JSON STRUCTURE — you MUST use exactly these top-level keys:
       "location": "City, Country",
       "linkedin": "linkedin.com/in/..."
     },
-    "summary": "Professional summary of 50-600 characters",
+    "summary": "Professional summary of 50-500 characters (2-3 sentences max)",
     "skills": {
       "technical": ["Skill1", "Skill2"],
       "soft": ["Skill1", "Skill2"]
@@ -566,9 +567,22 @@ def _parse_cv_sections(data: dict[str, Any]) -> CVSections:
             )
         )
 
+    # Clamp summary to model constraints (50–1000 chars) at a word boundary
+    summary_raw: str = data.get('summary', '')
+    _SUMMARY_MAX = 1000
+    if len(summary_raw) > _SUMMARY_MAX:
+        truncated = summary_raw[:_SUMMARY_MAX]
+        # Step back to the last complete word
+        last_space = truncated.rfind(' ')
+        summary_raw = truncated[:last_space].rstrip() if last_space > 50 else truncated[:_SUMMARY_MAX]
+        logger.warning(
+            'Stage2 summary truncated to fit CVSections.max_length=1000',
+            extra={'original_length': len(data.get('summary', '')), 'truncated_length': len(summary_raw)},
+        )
+
     return CVSections(
         contact=contact,
-        summary=data.get('summary', ''),
+        summary=summary_raw,
         skills=skills,
         experience=experience,
         education=education,
