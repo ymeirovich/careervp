@@ -530,3 +530,31 @@ def test_protected_routes_require_authorizer(synthesized_template: Template) -> 
     assert len(protected_methods) >= 20, (
         f"Expected at least 20 protected routes, found {len(protected_methods)}"
     )
+
+
+def test_vpr_stream_worker_has_required_env_vars(
+    synthesized_template: Template,
+) -> None:
+    """
+    Regression guard: the DynamoDB Stream VPR worker must carry the same critical
+    env vars as the SQS worker.  Missing VPR_RESULTS_BUCKET_NAME or
+    DYNAMODB_TABLE_NAME causes the worker to fail mid-job, leaving it stuck in
+    PROCESSING and blocking the SQS worker from retrying (ConditionalCheckFailed).
+    """
+    vpr_stream_worker = _lambda_resource_by_handler(
+        synthesized_template,
+        "careervp.handlers.vpr_worker_handler.lambda_handler",
+        function_name_contains="vpr-worker",
+    )
+    env_vars: dict = (
+        vpr_stream_worker["Properties"].get("Environment", {}).get("Variables", {})
+    )
+
+    assert "VPR_RESULTS_BUCKET_NAME" in env_vars, (
+        "Stream worker missing VPR_RESULTS_BUCKET_NAME — S3 upload will fall back "
+        "to a guessed bucket name and likely fail or use the wrong bucket."
+    )
+    assert "DYNAMODB_TABLE_NAME" in env_vars, (
+        "Stream worker missing DYNAMODB_TABLE_NAME — CV lookup falls back to "
+        "'careervp-users-dev' which may be wrong and lacks IAM permissions."
+    )
