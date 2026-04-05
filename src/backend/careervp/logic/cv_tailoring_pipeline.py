@@ -69,7 +69,51 @@ RULES (non-negotiable):
 7. Self-correct before finalizing — explicitly check keyword match and
    summary alignment before producing output JSON.
 
-Return ONLY valid JSON. No preamble, no markdown, no explanation."""
+REQUIRED JSON STRUCTURE — you MUST use exactly these top-level keys:
+{
+  "cv_sections": {
+    "contact": {
+      "name": "Full Name",
+      "email": "email@example.com",
+      "phone": "+1-555-0123",
+      "location": "City, Country",
+      "linkedin": "linkedin.com/in/..."
+    },
+    "summary": "Professional summary of 50-600 characters",
+    "skills": {
+      "technical": ["Skill1", "Skill2"],
+      "soft": ["Skill1", "Skill2"]
+    },
+    "experience": [
+      {
+        "company": "Company Name",
+        "title": "Job Title",
+        "start_date": "MM/YYYY",
+        "end_date": "MM/YYYY",
+        "bullets": ["Achievement with metric", "Achievement 2"]
+      }
+    ],
+    "education": [
+      {
+        "institution": "University Name",
+        "degree": "Degree Type",
+        "field": "Field of Study",
+        "graduation_date": "MM/YYYY"
+      }
+    ],
+    "certifications": []
+  },
+  "verification": {
+    "ats_keyword_score": 8,
+    "keywords_added_in_review": ["keyword1"],
+    "summary_rewritten": false,
+    "fact_verification_passed": true,
+    "hallucination_flags": []
+  }
+}
+
+Return ONLY valid JSON matching this exact structure. No preamble, no markdown, no explanation.
+Do NOT use alternate key names such as cv_output, professional_summary, core_skills, or professional_experience."""
 
 
 # Stage 1: Keyword mapping (Python, no LLM call)
@@ -278,14 +322,16 @@ def run_stage2_cv_generation(
 
     # Build Stage2Output from parsed response
     try:
+        verification_raw = parsed.get('verification', {})
         verification = Stage2Verification(
-            ats_keyword_score=parsed.get('verification', {}).get('ats_keyword_score', 5),
-            keywords_added_in_review=parsed.get('verification', {}).get('keywords_added_in_review', []),
-            summary_rewritten=parsed.get('verification', {}).get('summary_rewritten', False),
-            fact_verification_passed=parsed.get('verification', {}).get('fact_verification_passed', False),
-            hallucination_flags=parsed.get('verification', {}).get('hallucination_flags', []),
+            ats_keyword_score=verification_raw.get('ats_keyword_score', 5),
+            keywords_added_in_review=verification_raw.get('keywords_added_in_review', []),
+            summary_rewritten=verification_raw.get('summary_rewritten', False),
+            fact_verification_passed=verification_raw.get('fact_verification_passed', False),
+            hallucination_flags=verification_raw.get('hallucination_flags', []),
         )
-        cv_sections = _parse_cv_sections(parsed.get('cv_sections', {}))
+        cv_sections_raw = _normalize_cv_sections(parsed)
+        cv_sections = _parse_cv_sections(cv_sections_raw)
 
         return Result(
             success=True,
@@ -331,6 +377,141 @@ def _format_parsed_facts_for_prompt(cv: UserCV) -> str:
             lines.append(f'- {edu.institution}: {edu.degree} in {edu.field_of_study}')
 
     return '\n'.join(lines)
+
+
+def _parse_dates_string(dates_str: str) -> tuple[str, str | None]:
+    """Parse a freeform dates string into (start_date, end_date) in MM/YYYY format.
+
+    Handles formats like:
+    - "January 2020 - Present"
+    - "2020 - 2023"
+    - "01/2020 - 12/2023"
+    - "Present"
+    """
+    import re
+
+    if not dates_str:
+        return '', None
+
+    # Normalise dash variants (em dash, en dash)
+    normalised = dates_str.replace('\u2014', '-').replace('\u2013', '-')
+
+    # Split on ' - ' or just '-' with surrounding space
+    parts = re.split(r'\s*[-]\s*', normalised, maxsplit=1)
+
+    month_map = {
+        'january': '01',
+        'february': '02',
+        'march': '03',
+        'april': '04',
+        'may': '05',
+        'june': '06',
+        'july': '07',
+        'august': '08',
+        'september': '09',
+        'october': '10',
+        'november': '11',
+        'december': '12',
+        'jan': '01',
+        'feb': '02',
+        'mar': '03',
+        'apr': '04',
+        'jun': '06',
+        'jul': '07',
+        'aug': '08',
+        'sep': '09',
+        'oct': '10',
+        'nov': '11',
+        'dec': '12',
+    }
+
+    def _single(s: str) -> str | None:
+        s = s.strip()
+        if not s or s.lower() == 'present':
+            return None
+        # Already MM/YYYY
+        if re.match(r'^\d{2}/\d{4}$', s):
+            return s
+        # Month YYYY
+        m = re.match(r'^([A-Za-z]+)\s+(\d{4})$', s)
+        if m:
+            mon = month_map.get(m.group(1).lower(), '01')
+            return f'{mon}/{m.group(2)}'
+        # YYYY only
+        m2 = re.match(r'^(\d{4})$', s)
+        if m2:
+            return f'01/{m2.group(1)}'
+        # Anything containing a 4-digit year
+        yr = re.search(r'\d{4}', s)
+        if yr:
+            return f'01/{yr.group()}'
+        return None
+
+    start = _single(parts[0]) or ''
+    end = _single(parts[1]) if len(parts) > 1 else None
+    return start, end
+
+
+def _normalize_cv_sections(parsed: dict[str, Any]) -> dict[str, Any]:
+    """Return the cv_sections sub-dict regardless of the schema the LLM used.
+
+    Handles three observed response shapes:
+      1. {'cv_sections': {...}, 'verification': {...}}  — ideal / spec-compliant
+      2. {'cv_output': {'header': ..., 'professional_summary': ..., ...}}  — alternate
+      3. {'summary': ..., 'contact': ..., 'experience': [...]}  — unwrapped
+    """
+    # Shape 1 — ideal
+    if 'cv_sections' in parsed:
+        cv_sections_val: dict[str, Any] = parsed['cv_sections']
+        return cv_sections_val
+
+    # Shape 2 — cv_output wrapper with different field names
+    if 'cv_output' in parsed:
+        cv_out: dict[str, Any] = parsed['cv_output']
+        header: dict[str, Any] = cv_out.get('header', {})
+
+        raw_experience: list[dict[str, Any]] = cv_out.get('professional_experience', [])
+        experience: list[dict[str, Any]] = []
+        for exp in raw_experience:
+            start, end = _parse_dates_string(str(exp.get('dates', '')))
+            experience.append(
+                {
+                    'company': exp.get('company', ''),
+                    'title': exp.get('position', exp.get('title', exp.get('role', ''))),
+                    'start_date': start,
+                    'end_date': end,
+                    'bullets': exp.get('bullets', exp.get('responsibilities', [])),
+                }
+            )
+
+        core_skills: list[str] = cv_out.get('core_skills', [])
+        # core_skills may contain dicts if the LLM added categories
+        technical_skills: list[str] = [s if isinstance(s, str) else str(s.get('name', s)) for s in core_skills]
+
+        return {
+            'contact': {
+                'name': header.get('name', ''),
+                'email': header.get('email', ''),
+                'phone': header.get('phone', ''),
+                'location': header.get('location', ''),
+                'linkedin': header.get('linkedin', ''),
+            },
+            'summary': cv_out.get('professional_summary', cv_out.get('summary', '')),
+            'skills': {
+                'technical': technical_skills,
+                'soft': cv_out.get('soft_skills', []),
+            },
+            'experience': experience,
+            'education': cv_out.get('education', []),
+            'certifications': cv_out.get('certifications', []),
+        }
+
+    # Shape 3 — unwrapped (the dict IS the cv_sections)
+    if any(k in parsed for k in ('summary', 'contact', 'experience', 'skills')):
+        return parsed
+
+    # Unknown shape — return as-is, _parse_cv_sections will surface validation errors
+    return parsed
 
 
 def _parse_cv_sections(data: dict[str, Any]) -> CVSections:
