@@ -334,6 +334,41 @@ def _handle_openapi_async_generate(  # noqa: C901
         except Exception as exc:  # noqa: BLE001
             logger.warning('VPR fetch failed — proceeding without VPR', vpr_id=vpr_id, error=str(exc))
 
+    # ── 3. Resolve job description (VPR → JobsRepository → placeholder) ─────
+    job_description = ''
+    job_title = ''
+    company_name = ''
+
+    # Primary: extract from VPR.job_posting (most reliable — already structured)
+    if vpr is not None and hasattr(vpr, 'job_posting') and vpr.job_posting is not None:
+        jp = vpr.job_posting
+        job_description = str(getattr(jp, 'description', '') or '').strip()
+        if not job_description and hasattr(jp, 'requirements'):
+            reqs = getattr(jp, 'requirements', [])
+            if isinstance(reqs, list) and reqs:
+                job_description = '\n'.join(str(r) for r in reqs)
+        job_title = str(getattr(jp, 'role_title', '') or getattr(jp, 'title', '') or '').strip()
+        company_name = str(getattr(jp, 'company_name', '') or getattr(jp, 'company', '') or '').strip()
+        if job_description:
+            logger.info('job_description resolved from VPR.job_posting', job_id=job_id)
+
+    # Secondary fallback: JobsRepository (stores API-submitted job records; not VPR queue entries)
+    if not job_description:
+        try:
+            jobs_repo = JobsRepository()
+            job_record = jobs_repo.get_job(job_id) or {}
+            job_description = str(job_record.get('description') or '').strip()
+            job_title = job_title or str(job_record.get('title') or job_record.get('role_title') or '').strip()
+            company_name = company_name or str(job_record.get('company_name') or job_record.get('company') or '').strip()
+            if job_description:
+                logger.info('job_description resolved from JobsRepository', job_id=job_id)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning('Failed to fetch job record from JobsRepository', job_id=job_id, error=str(exc))
+
+    if not job_description:
+        logger.warning('job_description unavailable — using placeholder; set vpr_id or ensure job record exists', job_id=job_id)
+        job_description = f'Job posting for {job_title or job_id}'
+
     # ── 4. Run 3-stage pipeline ───────────────────────────────────────────────
     llm_client = LLMClient()
     pipeline_result = run_cv_tailoring_pipeline(
