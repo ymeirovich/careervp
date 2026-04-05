@@ -72,11 +72,11 @@ def _build_job_posting_input(
         if company_name and role_title:
             return raw_job_posting
 
-    job_id = str(input_data.get('job_id', '')).strip()
-    if not job_id:
+    posting_id = str(input_data.get('application_id') or input_data.get('job_id') or '').strip()
+    if not posting_id:
         return raw_job_posting if isinstance(raw_job_posting, dict) else {}
 
-    job_record = jobs_repo.get_job(job_id) or {}
+    job_record = jobs_repo.get_job(posting_id) or {}
     company_name = str(job_record.get('company_name') or job_record.get('company') or '').strip()
     role_title = str(job_record.get('title') or '').strip()
 

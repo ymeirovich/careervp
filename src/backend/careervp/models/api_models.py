@@ -144,6 +144,7 @@ class VPRGenerateOptions(APIModel):
 class VPRGenerateRequest(APIModel):
     cv_id: str = Field(min_length=1)
     job_id: str = Field(min_length=1)
+    application_id: str | None = None
     gap_response_ids: list[str]
     options: VPRGenerateOptions | None = None
 
