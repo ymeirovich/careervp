@@ -383,13 +383,11 @@ export default function ApplicationHubPage({
 
   const handleGenerateCV = async () => {
     if (!cv?.cv_id) return;
-    // Generate new job_id for each regenerate to bypass cache
-    const newJobId = crypto.randomUUID();
     const vprId = hub?.artifacts.vpr?.artifact_id ?? vprLocalId ?? null;
     setGeneratingCv(true);
     try {
       const task = await api.generateCV({
-        job_id: newJobId,
+        job_id: jobId,
         cv_id: cv.cv_id,
         vpr_id: vprId,
       });

@@ -8,6 +8,7 @@ Stage 3: Fact verification (Python) — cross-checks against parsed_facts, strip
 from __future__ import annotations
 
 import json
+import logging
 from typing import TYPE_CHECKING, Any
 
 from careervp.models.cv import UserCV as CVUserCV
@@ -29,6 +30,8 @@ from careervp.models.result import Result, ResultCode
 
 if TYPE_CHECKING:
     from careervp.models.vpr import VPR
+
+logger = logging.getLogger(__name__)
 
 
 # P2: Stage 1 system prompt (verbatim from spec)
@@ -290,6 +293,11 @@ def run_stage2_cv_generation(
             code=ResultCode.SUCCESS,
         )
     except Exception as e:
+        # Log the raw LLM response so the actual content is visible in CloudWatch
+        logger.error(
+            'Stage2 parse failed — raw LLM response follows',
+            extra={'raw_response': response_text[:2000]},
+        )
         return Result(
             success=False,
             error=f'Failed to parse Stage2Output: {str(e)}',
