@@ -256,10 +256,11 @@ def _resolve_cover_letter_context(
     user_id: str,
     api_request: CoverLetterRequest,
 ) -> dict[str, Any]:
-    job_record = _resolve_job_record(user_id=user_id, job_id=api_request.job_id)
+    posting_id = api_request.application_id or api_request.job_id
+    job_record = _resolve_job_record(user_id=user_id, job_id=posting_id)
     job_context = _extract_job_context(job_record)
     for field_name, field_value in job_context.items():
-        if _is_placeholder_context_value(field_value, job_id=api_request.job_id):
+        if _is_placeholder_context_value(field_value, job_id=posting_id):
             raise ValueError(f'Missing required non-placeholder job context field: {field_name}')
 
     context = {

@@ -352,6 +352,7 @@ export interface CoverLetter {
 
 export interface CoverLetterRequest {
   job_id: string;
+  application_id: string;
   cv_id: string;
   vpr_id: string;
   gap_response_ids: string[];
@@ -463,14 +464,100 @@ export interface CVTailoringRequest {
   vpr_id: string | null; // must be present (even as null) so backend detects new-API flow
 }
 
+export interface CVBullet {
+  text: string;
+  source: string;
+  user_edited: boolean;
+  quantified: boolean;
+}
+
+export interface CVExperience {
+  company: string;
+  title: string;
+  start_date: string;
+  end_date?: string | null;
+  is_current: boolean;
+  location?: string | null;
+  bullets: CVBullet[];
+}
+
+export interface CVEducation {
+  degree: string;
+  field: string;
+  institution: string;
+  graduation_date: string;
+  gpa?: string | null;
+}
+
+export interface CVCertification {
+  name: string;
+  issuer: string;
+  date: string;
+}
+
+export interface CVContact {
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  linkedin?: string | null;
+  location?: string | null;
+}
+
+export interface CVSkills {
+  technical: string[];
+  soft: string[];
+}
+
+export interface CVSections {
+  contact: CVContact;
+  summary: string;
+  skills: CVSkills;
+  experience: CVExperience[];
+  education: CVEducation[];
+  certifications: CVCertification[];
+  languages?: string[] | null;
+}
+
+export interface ATSComponents {
+  keyword_match: number;
+  quantified_bullets: number;
+  section_headers: number;
+  formatting_safety: number;
+  summary_keyword_density: number;
+}
+
+export interface ATSResult {
+  total_score: number;
+  grade: string;
+  components: ATSComponents;
+  keywords_matched: string[];
+  keywords_missing: string[];
+  keyword_match_score_1_10: number;
+}
+
 export interface CVTailoredStatusResponse {
   id?: string;
   status: ArtifactStatus;
+  version?: number;
+  language?: string;
+  generated_at?: string;
   result?: {
     tailored_cv?: string;
+    cv_sections?: CVSections;
     ats_score?: number;
-    keyword_matches?: { matched: string[]; missing: string[] };
+    ats_grade?: string;
+    ats_result?: ATSResult;
+    keyword_match_score?: number;
+    keywords_matched?: string[];
+    keywords_missing?: string[];
+    fact_verification_detail?: {
+      passed: boolean;
+      items_corrected: number;
+      items_removed: number;
+    };
     suggestions?: string[];
+    // Legacy field (backward compat with old artifacts)
+    keyword_matches?: { matched: string[]; missing: string[] };
   };
 }
 

@@ -292,6 +292,7 @@ export default function ApplicationHubPage({
     try {
       const task = await api.generateCoverLetter({
         job_id: newJobId,
+        application_id: jobId,
         cv_id: cv.cv_id,
         vpr_id: vprId,
         company_research_id: research.id,

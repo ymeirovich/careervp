@@ -333,6 +333,7 @@ class CoverLetterOptions(APIModel):
 class CoverLetterRequest(APIModel):
     cv_id: str = Field(min_length=1)
     job_id: str = Field(min_length=1)
+    application_id: str | None = None
     vpr_id: str = Field(min_length=1)
     gap_response_ids: list[str]
     company_research_id: str = Field(min_length=1)
