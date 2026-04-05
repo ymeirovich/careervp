@@ -26,7 +26,6 @@ import pytest
 from careervp.models.cv import ContactInfo, UserCV, WorkExperience
 from careervp.models.result import Result, ResultCode
 
-
 # ─── Shared helpers ────────────────────────────────────────────────────────────
 
 

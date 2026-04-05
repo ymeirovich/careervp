@@ -299,7 +299,32 @@ def _handle_openapi_async_generate(  # noqa: C901
             headers,
         )
 
-    # ── 2. Fetch VPR first (primary source of job description) ──────────────────
+    # ── 2. Fetch job record from Jobs table (primary source of job description) ──
+    # job_id == the application's stable job UUID from the URL (jobId param).
+    # The VPR stored model (VPR) does not carry the original job_posting —
+    # that lives only on VPRRequest. The Jobs table (VPR_JOBS_TABLE_NAME) is the
+    # canonical store for job title, company, and description.
+    job_description = ''
+    job_title = ''
+    company_name = ''
+    try:
+        job_record = JobsRepository().get_job(job_id) or {}
+        job_description = str(job_record.get('description') or '').strip()
+        job_title = str(job_record.get('title') or job_record.get('role_title') or '').strip()
+        company_name = str(job_record.get('company_name') or job_record.get('company') or '').strip()
+        if job_description:
+            logger.info('job_description resolved from JobsRepository', job_id=job_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning('Failed to fetch job record', job_id=job_id, error=str(exc))
+
+    if not job_description:
+        logger.error(
+            'job_description unavailable — CV tailoring will produce poor output. Ensure job_id matches a record in VPR_JOBS_TABLE_NAME.',
+            job_id=job_id,
+        )
+        job_description = f'Job posting for {job_title or job_id}'
+
+    # ── 3. Fetch VPR (optional, enriches Stage 1 keyword mapping) ───────────────
     vpr = None
     if vpr_id:
         try:
