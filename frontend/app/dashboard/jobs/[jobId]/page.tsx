@@ -252,6 +252,7 @@ export default function ApplicationHubPage({
     try {
       const task = await api.generateVPR({
         job_id: newJobId,
+        application_id: jobId,
         cv_id: cv.cv_id,
         gap_response_ids: gapResponseIds,
       });

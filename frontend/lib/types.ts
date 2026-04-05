@@ -185,7 +185,8 @@ export interface VPR {
 }
 
 export interface VPRGenerateRequest {
-  job_id: string; // the job posting job_id
+  job_id: string; // cache-busting artifact tracking UUID
+  application_id: string; // actual job posting ID for DB lookup
   cv_id: string;
   gap_response_ids: string[];
   options?: Record<string, unknown>;

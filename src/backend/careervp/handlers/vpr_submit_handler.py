@@ -74,12 +74,14 @@ def _normalize_submit_request(request_data: dict[str, Any], user_id: str) -> dic
     if {'cv_id', 'job_id', 'gap_response_ids'}.issubset(request_data):
         openapi_request = VPRGenerateRequest.model_validate(request_data)
         options = openapi_request.options.model_dump(mode='json', exclude_none=True) if openapi_request.options else {}
+        application_id = openapi_request.application_id or openapi_request.job_id
         return {
-            'application_id': openapi_request.job_id,
+            'application_id': application_id,
             'user_id': user_id,
             'input_data': {
                 'cv_id': openapi_request.cv_id,
                 'job_id': openapi_request.job_id,
+                'application_id': application_id,
                 'gap_response_ids': openapi_request.gap_response_ids,
                 'options': options,
             },
