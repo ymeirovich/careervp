@@ -59,6 +59,11 @@ export default function ApplicationHubPage({
   const [generatingResearch, setGeneratingResearch] = useState(false);
   const [generatingCv, setGeneratingCv] = useState(false);
 
+  // Generation failure messages
+  const [vprError, setVprError] = useState<string | null>(null);
+  const [clError, setClError] = useState<string | null>(null);
+  const [ipError, setIpError] = useState<string | null>(null);
+
   const refreshHub = useCallback(async () => {
     const data = await api.getApplication(jobId);
     setHub(data);
@@ -163,6 +168,9 @@ export default function ApplicationHubPage({
           if (result.status === "completed") {
             setVprLocalId(vprTaskId);
             persistArtifact("vpr", vprTaskId);
+            setVprError(null);
+          } else if (result.error) {
+            setVprError(result.error);
           }
           setVprTaskId(null);
           refreshHub();
@@ -185,6 +193,9 @@ export default function ApplicationHubPage({
           if (result.status === "completed") {
             setClLocalId(clTaskId);
             persistArtifact("cl", clTaskId);
+            setClError(null);
+          } else if (result.error) {
+            setClError(result.error);
           }
           setClTaskId(null);
           refreshHub();
@@ -207,6 +218,9 @@ export default function ApplicationHubPage({
           if (result.status === "completed") {
             setIpLocalId(ipTaskId);
             persistArtifact("ip", ipTaskId);
+            setIpError(null);
+          } else if (result.error) {
+            setIpError(result.error);
           }
           setIpTaskId(null);
           refreshHub();
@@ -248,6 +262,7 @@ export default function ApplicationHubPage({
     const newJobId = crypto.randomUUID();
     const gapResponseIds =
       hub?.gap_analysis.responses.map((r) => r.question_id) ?? [];
+    setVprError(null);
     setGeneratingVpr(true);
     try {
       const task = await api.generateVPR({
@@ -289,6 +304,7 @@ export default function ApplicationHubPage({
     const vprId = hub.artifacts.vpr?.artifact_id ?? vprLocalId;
     if (!vprId) return;
     const gapResponseIds = hub.gap_analysis.responses.map((r) => r.question_id);
+    setClError(null);
     setGeneratingCl(true);
     try {
       const task = await api.generateCoverLetter({
@@ -332,6 +348,7 @@ export default function ApplicationHubPage({
     const vprId = hub.artifacts.vpr?.artifact_id ?? vprLocalId;
     if (!vprId) return;
     const gapResponseIds = hub.gap_analysis.responses.map((r) => r.question_id);
+    setIpError(null);
     setGeneratingIp(true);
     try {
       const task = await api.generateInterviewPrep({
@@ -691,6 +708,7 @@ export default function ApplicationHubPage({
               vprReady ? "ready" : vprProcessing ? "processing" : "not_started"
             }
             statusLabel={vprReady ? "Ready" : undefined}
+            errorMessage={vprError ?? undefined}
             primaryAction={{
               label: vprProcessing
                 ? "Generating…"
@@ -736,6 +754,7 @@ export default function ApplicationHubPage({
                   : "not_started"
             }
             statusLabel={clReady ? "Ready" : undefined}
+            errorMessage={clError ?? undefined}
             primaryAction={{
               label: clProcessing
                 ? "Generating…"
@@ -775,6 +794,7 @@ export default function ApplicationHubPage({
                   : "not_started"
             }
             statusLabel={ipReady ? "Ready" : undefined}
+            errorMessage={ipError ?? undefined}
             primaryAction={{
               label: ipProcessing
                 ? "Generating…"

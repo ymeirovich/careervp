@@ -28,7 +28,8 @@ SONNET_MODEL_ID = 'claude-sonnet-4-5-20250929'
 HAIKU_MODEL_ID = 'claude-haiku-4-5-20251001'
 
 # Cost thresholds for alerting (per CLAUDE.md Emergency Contacts)
-MAX_COST_PER_APPLICATION = 0.15
+# VPR Sonnet baseline ~$0.16/run; $0.25 gives headroom for one retry
+MAX_COST_PER_APPLICATION = 0.25
 
 
 class TaskMode(str, Enum):

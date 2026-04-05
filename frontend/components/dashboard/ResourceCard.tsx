@@ -20,6 +20,7 @@ interface ResourceCardProps {
     href?: string;
   };
   dependency?: string;
+  errorMessage?: string;
 }
 
 const statusDotColor: Record<ResourceCardProps["status"], string> = {
@@ -38,6 +39,7 @@ export function ResourceCard({
   primaryAction,
   secondaryAction,
   dependency,
+  errorMessage,
 }: ResourceCardProps) {
   const dotColor = statusDotColor[status];
   const isProcessing = status === "processing";
@@ -57,6 +59,9 @@ export function ResourceCard({
           )}
         </div>
         <p className="text-xs text-[#6b7280] pl-4">{description}</p>
+        {errorMessage && (
+          <p className="text-xs text-red-600 pl-4 mt-1">{errorMessage}</p>
+        )}
         {preview && (
           <p className="text-xs text-[#1e2229] pl-4 line-clamp-2">{preview}</p>
         )}
