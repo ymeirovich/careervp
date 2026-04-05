@@ -29,11 +29,14 @@ from careervp.validation.cv_tailoring_validation import validate_job_description
 
 
 class CustomJSONEncoder(json.JSONEncoder):
-    """Custom JSON encoder that handles datetime and Pydantic objects."""
+    """Custom JSON encoder that handles datetime, Decimal, and Pydantic objects."""
 
     def default(self, obj: Any) -> Any:
         if isinstance(obj, datetime):
             return obj.isoformat()
+        if isinstance(obj, Decimal):
+            # DynamoDB returns Decimal for all numbers; preserve int/float distinction.
+            return int(obj) if obj % 1 == 0 else float(obj)
         if hasattr(obj, 'model_dump'):
             return obj.model_dump(mode='json')
         return super().default(obj)
