@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field, field_serializer, model_validator
+from pydantic import BaseModel, Field, field_serializer, field_validator, model_validator
 
 from careervp.models.cv_models import Certification, ContactInfo, Education, Skill, WorkExperience
 
@@ -80,6 +81,16 @@ class CVSkillsSection(BaseModel):
 CVSkills = CVSkillsSection
 
 
+class CVExperienceBullet(BaseModel):
+    """A single experience bullet with provenance tracking."""
+
+    text: str = Field(min_length=20, max_length=400)
+    source: str = Field(default='parsed_facts')
+    # source enum: 'parsed_facts' | 'gap_response' | 'user_edited'
+    user_edited: bool = False
+    quantified: bool = False  # True when bullet contains a numeric metric
+
+
 class CVExperienceSection(BaseModel):
     """Work experience entry for CV."""
 
@@ -88,8 +99,29 @@ class CVExperienceSection(BaseModel):
     start_date: str  # MM/YYYY format
     end_date: str | None = None
     is_current: bool = False
-    bullets: list[str] = Field(default_factory=list)  # CAR format: "Action + Context + Result"
+    bullets: list[CVExperienceBullet] = Field(default_factory=list)
     location: str | None = None
+
+    @field_validator('bullets', mode='before')
+    @classmethod
+    def _coerce_str_bullets(cls, v: object) -> list[object]:
+        """Accept plain strings from LLM responses; convert to CVExperienceBullet dicts."""
+        if not isinstance(v, list):
+            return v  # type: ignore[return-value]
+        result: list[object] = []
+        for item in v:
+            if isinstance(item, str):
+                result.append(
+                    {
+                        'text': item,
+                        'source': 'parsed_facts',
+                        'user_edited': False,
+                        'quantified': bool(re.search(r'\d+|%|\$', item)),
+                    }
+                )
+            else:
+                result.append(item)
+        return result
 
 
 # Alias for test compatibility
@@ -185,6 +217,28 @@ class ATSIssue(BaseModel):
     suggestion: str
 
 
+class ATSComponents(BaseModel):
+    """Five-component breakdown of the deterministic ATS score."""
+
+    keyword_match: float = Field(ge=0, le=40)  # 40pt max
+    quantified_bullets: float = Field(ge=0, le=20)  # 20pt max
+    section_headers: float = Field(ge=0, le=15)  # 15pt max
+    formatting_safety: float = Field(ge=0, le=15)  # 15pt max
+    summary_keyword_density: float = Field(ge=0, le=10)  # 10pt max
+
+
+class ATSResult(BaseModel):
+    """Output from the deterministic ATS scoring rules engine."""
+
+    total_score: int = Field(ge=0, le=100)
+    grade: str  # 'green' | 'yellow' | 'red'
+    components: ATSComponents
+    issues: list[ATSIssue] = Field(default_factory=list)
+    keywords_matched: list[str] = Field(default_factory=list)
+    keywords_missing: list[str] = Field(default_factory=list)
+    keyword_match_score_1_10: int = Field(default=5, ge=1, le=10)
+
+
 # P2: Three-Stage Pipeline Models
 class PrimaryKeyword(BaseModel):
     """A keyword with evidence mapping from Stage 1."""
@@ -242,6 +296,7 @@ class Stage3Result(BaseModel):
     items_corrected: list[str] = Field(default_factory=list)
     items_removed: list[str] = Field(default_factory=list)
     ats_keyword_score: int = Field(default=0, ge=0, le=100)
+    keywords_to_emphasize: list[str] = Field(default_factory=list)
 
 
 # P2/P3: Ground Truth Input Models

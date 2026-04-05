@@ -1,0 +1,876 @@
+################################################################################
+# CAREERVP — CV TAILORING IMPROVEMENT PLAN
+# Spec: P7 — Schema compliance, Stage 3 enrichment, ATS rules engine, handler
+#        response alignment
+################################################################################
+
+spec_id: CVT-P7
+title: "CV Tailoring: CVExperienceBullet model, Stage 3 parsed_facts enrichment, deterministic ATS engine, handler response schema compliance"
+priority: high
+status: draft
+owner: backend
+created_at: "2026-04-05"
+updated_at: "2026-04-05"
+
+depends_on:
+  - CVT-P6
+
+blocks: []
+
+deferred:
+  - P7-D: content_markdown renderer — not required for frontend display; see docs/architecture/future-upgrades/cv-tailoring-content-export.yaml
+  - P7-F: DOCX export Lambda — blocked on P7-D; see docs/architecture/future-upgrades/cv-tailoring-content-export.yaml
+
+################################################################################
+# PROBLEM STATEMENT
+################################################################################
+
+problem_statement:
+  exact_failing_behavior: >
+    The CV tailoring pipeline now generates valid CV content (P6 resolved), but the
+    JSON output has four categories of non-compliance vs. careervp_cv_tailoring_schemas.json
+    and the JSA ground truth (02_Yitzchak_Meirovich_Learning_Experience_Specialist_SysAid.docx):
+
+    1. SCHEMA — CVExperienceBullet missing:
+       CVExperienceSection.bullets is list[str].
+       The ground truth schema requires list[CVExperienceBullet] objects with
+       text, source, user_edited, and quantified fields.
+       The UI cannot show per-bullet source attribution, lock icons, or quantified badges.
+
+    2. DATA QUALITY — Stage 3 does not enrich from parsed_facts:
+       a. Experience dates (start_date / end_date) are empty — Stage 2 frequently omits
+          them; Stage 3 verifies company names but never backfills dates from parsed_facts.
+       b. Contact phone / location / linkedin are empty — Stage 3 corrects name and email
+          but ignores the remaining ContactInfo fields.
+       c. Certifications list is empty — Stage 2 omits them; Stage 3 never populates from
+          parsed_facts.certifications.
+
+    3. SCHEMA — ATS score is a passthrough, not a rules engine:
+       The current ats_score is Stage2Verification.ats_keyword_score × 10 (LLM self-report).
+       The ground truth schema specifies a deterministic 5-component scoring engine:
+       keyword_match (40pt), quantified_bullets (20pt), section_headers (15pt),
+       formatting_safety (15pt), summary_keyword_density (10pt).
+       Neither the ATSResult / ATSComponents models nor the compute_ats_result()
+       function exist.
+
+    4. SCHEMA — Handler response field naming and structure:
+       a. fvs_validation → fact_verification_detail (renamed + restructured per schema).
+       b. keyword_matches.matched contains full bullet sentences, not keyword strings.
+       c. ats_grade, ats_result (full breakdown), keyword_match_score (1-10),
+          keywords_matched, keywords_missing are all absent from the response.
+       d. version, language, generated_at are absent from the top-level response.
+       e. Stage3Result does not carry keywords_to_emphasize — the handler cannot call
+          compute_ats_result without primary keywords from Stage 1.
+
+  expected_behavior: >
+    After P7:
+      1. CVExperienceBullet model exists. CVExperienceSection.bullets is
+         list[CVExperienceBullet] with a backward-compat validator that auto-coerces
+         str inputs. _parse_cv_sections() converts LLM strings to CVExperienceBullet
+         with source='parsed_facts' and quantified=True if bullet contains \d+|%|\$.
+
+      2. Stage 3 backfills:
+         - start_date/end_date/is_current from the matching parsed_facts.work_experience
+           entry (matched by company, then company+role) for each verified experience.
+         - phone/location/linkedin from parsed_facts.contact_info into contact section.
+         - certifications from parsed_facts.certifications when Stage 2 produces [].
+
+      3. ATSResult + ATSComponents Pydantic models exist. compute_ats_result() in
+         cv_tailoring_ats.py computes all 5 components deterministically.
+         Stage3Result.keywords_to_emphasize carries Stage 1 keywords so the handler
+         can call compute_ats_result without re-running Stage 1.
+
+      4. Handler response includes ats_result (full breakdown), ats_grade, ats_grade,
+         keyword_match_score, keywords_matched, keywords_missing, fact_verification_detail,
+         version, language, generated_at. keyword_matches.matched is replaced by
+         keywords_matched containing short keyword strings.
+
+  user_business_impact: >
+    UI displays empty dates, empty phone/location, empty certifications.
+    ATS score widget cannot show component breakdown or grade colour.
+    Keyword match chips show full bullet sentences instead of short tags.
+    Future DOCX export is blocked until cv_sections is fully populated.
+
+  reproducibility: >
+    1. POST /cv-tailoring/generate with valid {cv_id, job_id}.
+    2. GET /cv-tailoring/{id}/status.
+    3. Observe: experience[].start_date is "", contact.phone/location/linkedin are "",
+       certifications is [], ats_result is absent, fact_verification_detail is absent.
+
+################################################################################
+# EVIDENCE
+################################################################################
+
+evidence:
+  ground_truth_schema: "docs/architecture/careervp_prompts/cv-tailoring/careervp_cv_tailoring_schemas.json"
+  ground_truth_cv: "docs/architecture/careervp_prompts/cv-tailoring/02_Yitzchak_Meirovich_Learning_Experience_Specialist_SysAid.docx"
+
+  observed_output_problems:
+    bullets_are_strings: >
+      GET /cv-tailoring/status returns
+      experience[0].bullets = ["Led strategic vision...", ...]
+      instead of [{"text": "...", "source": "parsed_facts", "user_edited": false, "quantified": true}]
+
+    dates_empty: >
+      experience[0].start_date = ""
+      experience[0].end_date = "Present"  (raw LLM string, not null)
+      Ground truth: Director of AWS Training | AllCloud | May 2021 – July 2025
+
+    contact_empty: >
+      contact.phone = "", contact.location = "", contact.linkedin = ""
+      Ground truth: 052-756-3792 | Modiin, Israel | www.linkedin.com/in/ymeirovich
+      ContactInfo fields (confirmed): name, phone, email, location, linkedin
+
+    certifications_empty: >
+      certifications = []
+      Ground truth: AWS AAI, SA Associate, Developer Associate, AI Practitioner
+
+    ats_result_absent: >
+      Response has ats_score: 90 (int) but no ats_grade, no ats_result breakdown,
+      no components, no issues, no keywords_matched/missing.
+
+    fvs_validation_wrong_name_and_schema: >
+      Response has fvs_validation.is_valid / fvs_validation.violations
+      Schema requires fact_verification_detail.passed / .items_corrected (int) /
+      .items_removed (int) / .checks (array)
+
+    keyword_matches_are_bullets: >
+      keyword_matches.matched = ["Led strategic vision and execution of...", ...]
+      Must be short keyword strings: ["Python", "AWS", "LMS Implementation", ...]
+
+  failing_code_locations:
+    bullets_str: "src/backend/careervp/models/cv_tailoring_models.py::CVExperienceSection.bullets (list[str])"
+    stage3_no_dates: "src/backend/careervp/logic/cv_tailoring_pipeline.py::run_stage3_fact_verification (no date backfill)"
+    stage3_no_contact: "src/backend/careervp/logic/cv_tailoring_pipeline.py::run_stage3_fact_verification (no phone/location/linkedin)"
+    stage3_no_certs: "src/backend/careervp/logic/cv_tailoring_pipeline.py::run_stage3_fact_verification (no cert backfill)"
+    no_ats_engine: "src/backend/careervp/logic/cv_tailoring_ats.py (does not exist)"
+    handler_keywords_wrong: "src/backend/careervp/handlers/cv_tailoring_handler.py::_handle_openapi_async_generate (builds matched from bullet text)"
+    handler_response_incomplete: "src/backend/careervp/handlers/cv_tailoring_handler.py::_build_tailored_cv_status_payload (missing ats_result, fact_verification_detail, version, language)"
+
+################################################################################
+# ARCHITECTURE AND OWNERSHIP MAP
+################################################################################
+
+architecture:
+  backend_models: "src/backend/careervp/models/cv_tailoring_models.py"
+  backend_pipeline: "src/backend/careervp/logic/cv_tailoring_pipeline.py"
+  backend_ats: "src/backend/careervp/logic/cv_tailoring_ats.py  (NEW)"
+  backend_handler: "src/backend/careervp/handlers/cv_tailoring_handler.py"
+
+  data_flow_after_fix: |
+    POST /cv-tailoring/generate → _handle_openapi_async_generate():
+      run_cv_tailoring_pipeline(cv, job_description, ...)
+        Stage 1: run_stage1_keyword_mapping()  → Stage1Output.keywords_to_emphasize
+        Stage 2: LLM generate                  → Stage2Output (CVSections with str bullets)
+        _parse_cv_sections(): str bullets → CVExperienceBullet objects (backward-compat)
+        Stage 3: run_stage3_fact_verification()
+          → backfill dates from parsed_facts.work_experience  ← NEW (P7-B)
+          → overwrite phone/location/linkedin from parsed_facts.contact_info  ← NEW (P7-B)
+          → populate certifications from parsed_facts.certifications if empty  ← NEW (P7-B)
+          → Stage3Result.keywords_to_emphasize = stage1.keywords_to_emphasize  ← NEW (P7-B)
+        return Stage3Result
+      ats_result = compute_ats_result(stage3.cv_sections, stage3.keywords_to_emphasize)  ← NEW (P7-C)
+      artifact = {
+        ...,
+        'ats_result':              ats_result.model_dump(),  ← NEW
+        'ats_grade':               ats_result.grade,         ← NEW
+        'keywords_matched':        ats_result.keywords_matched,  ← NEW (short strings)
+        'keywords_missing':        ats_result.keywords_missing,  ← NEW
+        'keyword_match_score':     ats_result.keyword_match_score_1_10,  ← NEW
+        'fact_verification_detail': {...},  ← NEW (replaces fvs_validation)
+        'version':                 1,  ← NEW
+        'language':                'en',  ← NEW
+      }
+
+    GET /cv-tailoring/{id}/status → _build_tailored_cv_status_payload():
+      payload top-level: version, language, generated_at  ← NEW
+      result: ats_result, ats_grade, keywords_matched, keywords_missing,
+              keyword_match_score, fact_verification_detail  ← NEW
+
+################################################################################
+# FIX PLAN
+################################################################################
+
+fix_plan:
+  files_to_modify:
+
+    # ── P7-A: CVExperienceBullet model ─────────────────────────────────────────
+    - path: src/backend/careervp/models/cv_tailoring_models.py
+      changes:
+        - description: "Add CVExperienceBullet Pydantic model"
+          where: "After CVCertificationSection class, before CVSections class"
+          after: |
+            class CVExperienceBullet(BaseModel):
+                """A single experience bullet with provenance tracking."""
+                text: str = Field(min_length=20, max_length=400)
+                source: str = Field(default='parsed_facts')
+                # source enum: 'parsed_facts' | 'gap_response' | 'user_edited'
+                user_edited: bool = False
+                quantified: bool = False  # True when bullet contains a numeric metric
+
+        - description: "Change CVExperienceSection.bullets to list[CVExperienceBullet] with backward-compat validator"
+          where: "CVExperienceSection.bullets field"
+          before: |
+            bullets: list[str] = Field(default_factory=list)  # CAR format: "Action + Context + Result"
+          after: |
+            bullets: list[CVExperienceBullet] = Field(default_factory=list)
+
+            @field_validator('bullets', mode='before')
+            @classmethod
+            def _coerce_str_bullets(cls, v: object) -> list[object]:
+                """Accept plain strings from LLM responses; convert to CVExperienceBullet."""
+                import re as _re
+                if not isinstance(v, list):
+                    return v  # type: ignore[return-value]
+                result: list[object] = []
+                for item in v:
+                    if isinstance(item, str):
+                        result.append({
+                            'text': item,
+                            'source': 'parsed_facts',
+                            'user_edited': False,
+                            'quantified': bool(_re.search(r'\d+|%|\$', item)),
+                        })
+                    else:
+                        result.append(item)
+                return result
+
+        - description: "Add ATSComponents and ATSResult models"
+          where: "After ATSIssue class, before PrimaryKeyword class"
+          after: |
+            class ATSComponents(BaseModel):
+                """Five-component breakdown of ATS score."""
+                keyword_match: float = Field(ge=0, le=40)          # 40pt max
+                quantified_bullets: float = Field(ge=0, le=20)     # 20pt max
+                section_headers: float = Field(ge=0, le=15)        # 15pt max
+                formatting_safety: float = Field(ge=0, le=15)      # 15pt max
+                summary_keyword_density: float = Field(ge=0, le=10) # 10pt max
+
+            class ATSResult(BaseModel):
+                """Output from the deterministic ATS scoring rules engine."""
+                total_score: int = Field(ge=0, le=100)
+                grade: str  # 'green' | 'yellow' | 'red'
+                components: ATSComponents
+                issues: list[ATSIssue] = Field(default_factory=list)
+                keywords_matched: list[str] = Field(default_factory=list)
+                keywords_missing: list[str] = Field(default_factory=list)
+                keyword_match_score_1_10: int = Field(default=5, ge=1, le=10)
+
+        - description: "Add keywords_to_emphasize to Stage3Result"
+          where: "Stage3Result class — after ats_keyword_score field"
+          before: |
+            ats_keyword_score: int = Field(default=0, ge=0, le=100)
+          after: |
+            ats_keyword_score: int = Field(default=0, ge=0, le=100)
+            keywords_to_emphasize: list[str] = Field(default_factory=list)
+
+    # ── P7-B: Stage 3 enrichment ───────────────────────────────────────────────
+    - path: src/backend/careervp/logic/cv_tailoring_pipeline.py
+      changes:
+        - description: "Add _find_parsed_experience helper"
+          where: "After _find_keyword_evidence(); before run_stage2_cv_generation()"
+          after: |
+            def _find_parsed_experience(
+                company: str,
+                title: str,
+                parsed_facts: UserCV,
+            ) -> Any | None:
+                """Return the best-matching WorkExperience from parsed_facts.
+
+                Tries exact company+title match first, then company-only.
+                """
+                company_lower = company.lower()
+                title_lower = title.lower()
+                if not parsed_facts.work_experience:
+                    return None
+                # exact match
+                for exp in parsed_facts.work_experience:
+                    if exp.company.lower() == company_lower and exp.role.lower() == title_lower:
+                        return exp
+                # company-only fallback
+                for exp in parsed_facts.work_experience:
+                    if exp.company.lower() == company_lower:
+                        return exp
+                return None
+
+        - description: "Backfill dates, contact fields, and certifications in run_stage3_fact_verification"
+          where: "run_stage3_fact_verification — after known_companies is built, in the experience verification loop and after"
+          notes: |
+            Inside the experience verification loop (where we currently just append exp_item):
+              pf_exp = _find_parsed_experience(exp_item.company, exp_item.title, parsed_facts)
+              if pf_exp:
+                  start = exp_item.start_date or (pf_exp.start_date or '')
+                  if not start and pf_exp.dates:
+                      start, _end = _parse_dates_string(pf_exp.dates)
+                  end = exp_item.end_date
+                  if end is None and pf_exp.dates:
+                      _, end = _parse_dates_string(pf_exp.dates)
+                  is_current = getattr(pf_exp, 'current', False) or end is None
+                  exp_item = exp_item.model_copy(update={
+                      'start_date': start,
+                      'end_date': end,
+                      'is_current': is_current,
+                  })
+
+            After building corrected_sections, before return Stage3Result:
+              # Overwrite contact from parsed_facts (phone, location, linkedin)
+              ci = parsed_facts.contact_info if hasattr(parsed_facts, 'contact_info') else None
+              if ci:
+                  corrected_contact = corrected_sections.contact.model_copy(update={
+                      'phone': ci.phone or corrected_sections.contact.phone,
+                      'location': ci.location or corrected_sections.contact.location,
+                      'linkedin': getattr(ci, 'linkedin', None) or corrected_sections.contact.linkedin,
+                  })
+                  corrected_sections = corrected_sections.model_copy(update={'contact': corrected_contact})
+
+              # Populate certifications from parsed_facts if Stage 2 produced []
+              if not corrected_sections.certifications and parsed_facts.certifications:
+                  from careervp.models.cv_tailoring_models import CVCertificationSection
+                  certs = []
+                  for cert in parsed_facts.certifications:
+                      name = getattr(cert, 'name', '') or ''
+                      issuer = getattr(cert, 'issuer', '') or getattr(cert, 'issuing_organization', '') or ''
+                      date = getattr(cert, 'date', '') or getattr(cert, 'issue_date', '') or ''
+                      if name:
+                          certs.append(CVCertificationSection(name=name, issuer=issuer, date=date or ''))
+                  corrected_sections = corrected_sections.model_copy(update={'certifications': certs})
+
+        - description: "Pass keywords_to_emphasize from stage1 through to Stage3Result"
+          where: "run_cv_tailoring_pipeline — Stage3Result construction call"
+          notes: |
+            After run_stage3_fact_verification() returns, the pipeline sets:
+              stage3_result.keywords_to_emphasize = stage1_output.keywords_to_emphasize
+            Or pass as a param to run_stage3_fact_verification() analogously to ats_keyword_score.
+
+    # ── P7-C: ATS rules engine ─────────────────────────────────────────────────
+    - path: src/backend/careervp/logic/cv_tailoring_ats.py
+      changes:
+        - description: "Create new module with compute_ats_result()"
+          where: "New file"
+          after: |
+            """Deterministic ATS scoring rules engine — 5-component 100-point scale."""
+            from __future__ import annotations
+            import re
+            from typing import TYPE_CHECKING
+
+            from careervp.models.cv_tailoring_models import ATSComponents, ATSIssue, ATSResult
+
+            if TYPE_CHECKING:
+                from careervp.models.cv_tailoring_models import CVSections
+
+            _REQUIRED_SECTIONS = ('summary', 'skills', 'experience', 'education')
+            _SECTION_PT = 15.0 / len(_REQUIRED_SECTIONS)  # 3.75 per section
+
+            def compute_ats_result(
+                cv_sections: CVSections,
+                primary_keywords: list[str],
+            ) -> ATSResult:
+                """Run all 5 scoring components and return a structured ATSResult."""
+                # ─ Component 1: keyword_match (0-40) ─────────────────────
+                cv_text = _cv_to_text(cv_sections).lower()
+                matched = [kw for kw in primary_keywords if kw.lower() in cv_text]
+                missing = [kw for kw in primary_keywords if kw.lower() not in cv_text]
+                keyword_match = round((len(matched) / max(len(primary_keywords), 1)) * 40, 1)
+
+                # ─ Component 2: quantified_bullets (0-20) ────────────────
+                all_bullets = [
+                    b.text if hasattr(b, 'text') else str(b)
+                    for exp in cv_sections.experience
+                    for b in exp.bullets
+                ]
+                quant_count = sum(1 for b in all_bullets if re.search(r'\d+|%|\$', b))
+                quantified_bullets = round((quant_count / max(len(all_bullets), 1)) * 20, 1)
+
+                # ─ Component 3: section_headers (0-15) ───────────────────
+                present = sum([
+                    bool(cv_sections.summary),
+                    bool(cv_sections.skills.technical or cv_sections.skills.soft),
+                    bool(cv_sections.experience),
+                    bool(cv_sections.education),
+                ])
+                section_headers = round(present * _SECTION_PT, 1)
+
+                # ─ Component 4: formatting_safety (0-15) ─────────────────
+                # No tables (5pt), no columns (5pt), standard date format (5pt)
+                # All content is structured JSON — tables/columns impossible by design.
+                # Date format check: experience entries should have MM/YYYY or null.
+                dates_ok = all(
+                    (not exp.start_date) or bool(re.match(r'^\d{2}/\d{4}$', exp.start_date))
+                    for exp in cv_sections.experience
+                )
+                formatting_safety = 10.0 + (5.0 if dates_ok else 0.0)
+
+                # ─ Component 5: summary_keyword_density (0-10) ───────────
+                summary_lower = cv_sections.summary.lower()
+                kw_in_summary = sum(1 for kw in matched if kw.lower() in summary_lower)
+                summary_keyword_density = min(10.0, round(kw_in_summary * 2.5, 1))
+
+                total = int(keyword_match + quantified_bullets + section_headers + formatting_safety + summary_keyword_density)
+                grade = 'green' if total >= 90 else ('yellow' if total >= 70 else 'red')
+
+                issues = _build_issues(keyword_match, quantified_bullets, section_headers, missing)
+                kw_score_10 = max(1, min(10, round(total / 10)))
+
+                return ATSResult(
+                    total_score=total,
+                    grade=grade,
+                    components=ATSComponents(
+                        keyword_match=keyword_match,
+                        quantified_bullets=quantified_bullets,
+                        section_headers=section_headers,
+                        formatting_safety=formatting_safety,
+                        summary_keyword_density=summary_keyword_density,
+                    ),
+                    issues=issues,
+                    keywords_matched=matched,
+                    keywords_missing=missing,
+                    keyword_match_score_1_10=kw_score_10,
+                )
+
+            def _cv_to_text(cv_sections: CVSections) -> str:
+                parts = [cv_sections.summary]
+                parts.extend(cv_sections.skills.technical)
+                parts.extend(cv_sections.skills.soft)
+                for exp in cv_sections.experience:
+                    parts.append(exp.title)
+                    for b in exp.bullets:
+                        parts.append(b.text if hasattr(b, 'text') else str(b))
+                return ' '.join(parts)
+
+            def _build_issues(
+                keyword_match: float,
+                quantified_bullets: float,
+                section_headers: float,
+                missing_keywords: list[str],
+            ) -> list[ATSIssue]:
+                issues: list[ATSIssue] = []
+                if keyword_match < 24:  # < 60% of 40
+                    issues.append(ATSIssue(
+                        code='LOW_KEYWORD_MATCH',
+                        severity='critical',
+                        message=f'Only {round(keyword_match/40*100)}% of primary keywords matched.',
+                        suggestion=f'Add these keywords naturally: {", ".join(missing_keywords[:5])}',
+                    ))
+                if quantified_bullets < 10:  # < 50% of 20
+                    issues.append(ATSIssue(
+                        code='FEW_QUANTIFIED_BULLETS',
+                        severity='warning',
+                        message='Fewer than half of experience bullets contain a numeric metric.',
+                        suggestion='Add specific numbers, percentages, or dollar amounts to bullets.',
+                    ))
+                if section_headers < 11.25:  # < 3 sections
+                    issues.append(ATSIssue(
+                        code='MISSING_SECTIONS',
+                        severity='critical',
+                        message='One or more required CV sections are absent.',
+                        suggestion='Ensure summary, skills, experience, and education sections are present.',
+                    ))
+                return issues
+
+    # ── P7-E: Handler response compliance ──────────────────────────────────────
+    - path: src/backend/careervp/handlers/cv_tailoring_handler.py
+      changes:
+        - description: "Import compute_ats_result in handler"
+          where: "Top-level imports"
+          after: |
+            from careervp.logic.cv_tailoring_ats import compute_ats_result
+
+        - description: "Replace keyword_matches logic; add ats_result, fact_verification_detail, version, language"
+          where: "_handle_openapi_async_generate — inside the success branch, after stage3 is set"
+          notes: |
+            # Replace:
+            #   cv_text_lower = ...
+            #   matched_keywords = [kw for kw in ... bullets ...]
+            # With:
+            ats_result = compute_ats_result(stage3.cv_sections, stage3.keywords_to_emphasize)
+
+            fact_verification_detail = {
+                'passed': stage3.fact_verification_passed,
+                'items_corrected': len(stage3.items_corrected),
+                'items_removed': len(stage3.items_removed),
+                'hallucination_flags_from_ai': [],
+                'checks': (
+                    [{'check_name': m, 'passed': False, 'action_taken': 'corrected', 'detail': m}
+                     for m in stage3.items_corrected]
+                    + [{'check_name': m, 'passed': False, 'action_taken': 'removed', 'detail': m}
+                       for m in stage3.items_removed]
+                ),
+            }
+
+            # Artifact additions:
+            artifact.update({
+                'ats_result': ats_result.model_dump(),
+                'ats_grade': ats_result.grade,
+                'keywords_matched': ats_result.keywords_matched,
+                'keywords_missing': ats_result.keywords_missing,
+                'keyword_match_score': ats_result.keyword_match_score_1_10,
+                'fact_verification_detail': fact_verification_detail,
+                'version': 1,
+                'language': 'en',
+            })
+            # Remove old fields from artifact:
+            # keyword_matches (replace with keywords_matched / keywords_missing)
+            # fvs_validation (replace with fact_verification_detail)
+
+        - description: "Update _build_tailored_cv_status_payload to include new fields"
+          where: "_build_tailored_cv_status_payload — after existing result dict construction"
+          notes: |
+            Top-level payload additions (not inside result):
+              payload['version'] = item.get('version', 1)
+              payload['language'] = item.get('language', 'en')
+              payload['generated_at'] = item.get('created_at') or item.get('generated_at')
+
+            Inside result dict:
+              ats_result = item.get('ats_result')
+              if isinstance(ats_result, dict):
+                  result['ats_result'] = ats_result
+              ats_grade = item.get('ats_grade')
+              if ats_grade:
+                  result['ats_grade'] = ats_grade
+              keyword_match_score = item.get('keyword_match_score')
+              if isinstance(keyword_match_score, (int, float, Decimal)):
+                  result['keyword_match_score'] = int(keyword_match_score)
+              keywords_matched = item.get('keywords_matched')
+              if isinstance(keywords_matched, list):
+                  result['keywords_matched'] = keywords_matched
+              keywords_missing = item.get('keywords_missing')
+              if isinstance(keywords_missing, list):
+                  result['keywords_missing'] = keywords_missing
+              fvd = item.get('fact_verification_detail')
+              if isinstance(fvd, dict):
+                  result['fact_verification_detail'] = fvd
+
+  non_goals:
+    - "Do not change any VPR, gap analysis, cover letter, or interview prep handlers"
+    - "Do not implement DOCX/PDF export (deferred to P7-F)"
+    - "Do not implement content_markdown renderer (deferred to P7-D)"
+    - "Do not change the LLM prompts beyond what was done in Stage2 schema fix"
+    - "Do not add Hebrew (multi-language) support (V2 scope)"
+    - "Do not remove fvs_validation from the DynamoDB artifact — keep for backward compat"
+    - "Do not break existing P6 tests — CVExperienceSection must still accept str bullets via validator"
+
+  rollback_plan: >
+    Revert CVExperienceBullet model addition and CVExperienceSection.bullets back to list[str].
+    Revert Stage3Result.keywords_to_emphasize removal.
+    Delete cv_tailoring_ats.py.
+    Revert handler _handle_openapi_async_generate and _build_tailored_cv_status_payload
+    to P6 state. Stage 3 enrichment reverts to company-name-only verification.
+
+################################################################################
+# ACCEPTANCE CRITERIA
+################################################################################
+
+acceptance_criteria:
+
+  # P7-A: CVExperienceBullet
+  - id: AC-P7-01
+    description: "CVExperienceBullet Pydantic model exists in cv_tailoring_models.py with fields: text (str, 20-400), source (str, default='parsed_facts'), user_edited (bool, default=False), quantified (bool, default=False)"
+    verification: "Unit test: import CVExperienceBullet; construct with text+source; assert all fields present with correct types"
+    blocking: true
+
+  - id: AC-P7-02
+    description: "CVExperienceSection.bullets is list[CVExperienceBullet] with backward-compat validator: plain strings are auto-coerced to CVExperienceBullet with source='parsed_facts' and quantified computed from regex \\d+|%|\\$"
+    verification: "Unit test: CVExperienceSection(bullets=['$1M revenue generated in 18 months.']) → bullets[0] is CVExperienceBullet with quantified=True"
+    blocking: true
+
+  - id: AC-P7-03
+    description: "_parse_cv_sections() converts string bullets from LLM JSON to CVExperienceBullet objects with source='parsed_facts'"
+    verification: "Unit test: _parse_cv_sections(data with bullets=['Built system serving 1M+ users.']) → bullets[0].source == 'parsed_facts' and bullets[0].quantified == True"
+    blocking: true
+
+  # P7-B: Stage 3 enrichment
+  - id: AC-P7-04
+    description: "Stage3Result has keywords_to_emphasize: list[str] = Field(default_factory=list); run_cv_tailoring_pipeline sets it from stage1_output.keywords_to_emphasize"
+    verification: "Unit test: mock stage1 returning keywords=['Python','AWS']; assert pipeline_result.data.keywords_to_emphasize == ['Python','AWS']"
+    blocking: true
+
+  - id: AC-P7-05
+    description: "run_stage3_fact_verification backfills start_date/end_date/is_current from the matching parsed_facts.work_experience entry (matched by company) for each verified experience with empty dates"
+    verification: "Unit test: Stage 2 experience has start_date=''; parsed_facts has WorkExperience(company='Acme', start_date='05/2021'); assert result.cv_sections.experience[0].start_date == '05/2021'"
+    blocking: true
+
+  - id: AC-P7-06
+    description: "run_stage3_fact_verification overwrites contact phone/location/linkedin from parsed_facts.contact_info when those fields are available; preserves existing values when parsed_facts has None"
+    verification: "Unit test: Stage 2 contact has phone=''; parsed_facts.contact_info.phone='052-756-3792'; assert result.cv_sections.contact.phone == '052-756-3792'"
+    blocking: true
+
+  - id: AC-P7-07
+    description: "run_stage3_fact_verification populates cv_sections.certifications from parsed_facts.certifications when Stage 2 produced an empty certifications list"
+    verification: "Unit test: Stage 2 certifications=[]; parsed_facts.certifications=[Certification(name='AWS AAI', issuer='Amazon')]; assert len(result.cv_sections.certifications) == 1 and result.cv_sections.certifications[0].name == 'AWS AAI'"
+    blocking: true
+
+  # P7-C: ATS engine
+  - id: AC-P7-08
+    description: "ATSResult and ATSComponents Pydantic models exist in cv_tailoring_models.py with all fields from careervp_cv_tailoring_schemas.json (total_score, grade, components, issues, keywords_matched, keywords_missing, keyword_match_score_1_10)"
+    verification: "Unit test: construct ATSResult with all required fields; assert model validates"
+    blocking: true
+
+  - id: AC-P7-09
+    description: "compute_ats_result(cv_sections, primary_keywords) exists in cv_tailoring_ats.py and returns ATSResult"
+    verification: "Unit test: import compute_ats_result; call with valid cv_sections and primary_keywords; assert return type is ATSResult"
+    blocking: true
+
+  - id: AC-P7-10
+    description: "keyword_match component = round((matched/max(total,1)) * 40, 1); 2 of 4 keywords matched → keyword_match == 20.0"
+    verification: "Unit test: primary_keywords=['Python','AWS','Java','Kubernetes']; only Python+AWS in CV text → keyword_match == 20.0"
+    blocking: true
+
+  - id: AC-P7-11
+    description: "ATS grade: total_score >= 90 → 'green'; 70 <= score < 90 → 'yellow'; score < 70 → 'red'"
+    verification: "Unit test: assert compute_ats_result returning total=90 has grade='green'; total=89 → 'yellow'; total=69 → 'red'"
+    blocking: true
+
+  # P7-E: Handler response
+  - id: AC-P7-12
+    description: "_handle_openapi_async_generate calls compute_ats_result and stores ats_result (dict), ats_grade (str), keywords_matched (list[str]), keywords_missing (list[str]), keyword_match_score (int) in the DynamoDB artifact"
+    verification: "Unit test: mock compute_ats_result returning ATSResult(total_score=85, grade='yellow', ...); assert artifact['ats_result']['total_score'] == 85 and artifact['ats_grade'] == 'yellow'"
+    blocking: true
+
+  - id: AC-P7-13
+    description: "_build_tailored_cv_status_payload includes result.ats_result (dict with total_score/grade/components/issues) and result.ats_grade when the stored artifact has these fields"
+    verification: "Unit test: item with ats_result={'total_score':85,'grade':'yellow',...}; assert 'ats_result' in payload['result'] and payload['result']['ats_grade'] == 'yellow'"
+    blocking: true
+
+  - id: AC-P7-14
+    description: "_build_tailored_cv_status_payload includes result.fact_verification_detail (with passed/items_corrected/items_removed/checks) from the stored artifact; fvs_validation is NOT exposed in the response"
+    verification: "Unit test: item with fact_verification_detail={'passed':True,'items_corrected':0,'items_removed':0,'hallucination_flags_from_ai':[],'checks':[]}; assert 'fact_verification_detail' in payload['result'] and 'fvs_validation' not in payload['result']"
+    blocking: true
+
+  - id: AC-P7-15
+    description: "_build_tailored_cv_status_payload includes result.keywords_matched (list of short keyword strings) and result.keywords_missing from the stored artifact; all matched keyword strings are ≤ 50 characters"
+    verification: "Unit test: item with keywords_matched=['Python','AWS','LMS Implementation']; assert payload['result']['keywords_matched'] == ['Python','AWS','LMS Implementation'] and all(len(k)<=50 for k in ...)"
+    blocking: true
+
+  - id: AC-P7-16
+    description: "_build_tailored_cv_status_payload includes top-level version (int), language (str), generated_at (str) from the stored artifact"
+    verification: "Unit test: item with version=1, language='en', created_at='2026-04-05T08:31:00Z'; assert payload['version']==1 and payload['language']=='en' and payload['generated_at']=='2026-04-05T08:31:00Z'"
+    blocking: true
+
+################################################################################
+# BASELINE AND REGRESSION BUDGET
+################################################################################
+
+baseline_and_regression_budget:
+  baseline_artifact: "P6 passing state — all 7 test_pipeline_wiring.py tests passing"
+  blocked_regressions:
+    - "P6 tests (test_pipeline_wiring.py) must remain passing"
+    - "P5 tests (test_regen_artifact_id.py) must remain passing"
+    - "CVExperienceSection must still accept plain str bullets (backward-compat validator)"
+    - "cv-tailoring generate endpoint must not regress to 500 or empty response"
+    - "ats_score (int, 0-100) must remain in the response for backward compat"
+  allowed_deltas:
+    - "CVExperienceSection.bullets changes type from list[str] to list[CVExperienceBullet]"
+    - "fvs_validation removed from API response; replaced by fact_verification_detail"
+    - "keyword_matches.matched replaced by keywords_matched (short strings)"
+    - "New top-level payload fields: version, language, generated_at"
+    - "New result fields: ats_result, ats_grade, keyword_match_score, keywords_matched, keywords_missing, fact_verification_detail"
+    - "Experience dates and certifications now populated (previously empty)"
+
+################################################################################
+# VERIFICATION CONTRACT
+################################################################################
+
+verification_contract:
+  - requirement_id: AC-P7-01
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P7-02
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P7-03
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P7-04
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P7-05
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P7-06
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P7-07
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P7-08
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P7-09
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P7-10
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P7-11
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P7-12
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P7-13
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P7-14
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P7-15
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-P7-16
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+
+################################################################################
+# DEPLOYED PARITY PLAN
+################################################################################
+
+deployed_parity_plan:
+  route_surface_parity: "No new routes added. Existing POST /cv-tailoring/generate and GET /cv-tailoring/{id}/status response shape changes are backward-additive (new fields only, except fvs_validation removal)."
+  authorizer_parity: "No auth changes."
+  runtime_env_resolution_parity: "No new env vars. cv_tailoring_ats module is pure Python with no external calls."
+
+################################################################################
+# VALIDATION PLAN
+################################################################################
+
+validation_plan:
+  static:
+    - "cd src/backend && uv run ruff format . && uv run ruff check --fix ."
+    - "cd src/backend && uv run mypy careervp --strict"
+  unit:
+    - command: "cd src/backend && uv run pytest tests/unit/cv_tailoring/test_schema_compliance.py -v --tb=short"
+    - command: "cd src/backend && uv run pytest tests/unit/cv_tailoring/ -v --tb=short"
+  regression:
+    - command: "cd src/backend && uv run pytest tests/unit/ -v --tb=short"
+  manual:
+    - "POST /cv-tailoring/generate; GET /cv-tailoring/{id}/status; verify experience[].start_date is populated"
+    - "Verify contact.phone / location / linkedin are populated from parsed_facts"
+    - "Verify certifications list is non-empty"
+    - "Verify ats_result.components breakdown is present in the response"
+    - "Verify fact_verification_detail (not fvs_validation) is in the response"
+    - "Verify keywords_matched contains short strings, not full bullet sentences"
+
+################################################################################
+# TRACEABILITY MATRIX
+################################################################################
+
+traceability:
+  - requirement_id: AC-P7-01
+    code_reference: "src/backend/careervp/models/cv_tailoring_models.py::CVExperienceBullet"
+    test_reference: "tests/unit/cv_tailoring/test_schema_compliance.py::test_cv_experience_bullet_model_exists"
+    result: pending
+  - requirement_id: AC-P7-02
+    code_reference: "src/backend/careervp/models/cv_tailoring_models.py::CVExperienceSection._coerce_str_bullets"
+    test_reference: "tests/unit/cv_tailoring/test_schema_compliance.py::test_cv_experience_section_bullets_accepts_strings"
+    result: pending
+  - requirement_id: AC-P7-03
+    code_reference: "src/backend/careervp/logic/cv_tailoring_pipeline.py::_parse_cv_sections"
+    test_reference: "tests/unit/cv_tailoring/test_schema_compliance.py::test_parse_cv_sections_converts_bullets"
+    result: pending
+  - requirement_id: AC-P7-04
+    code_reference: "src/backend/careervp/models/cv_tailoring_models.py::Stage3Result.keywords_to_emphasize"
+    test_reference: "tests/unit/cv_tailoring/test_schema_compliance.py::test_stage3_result_has_keywords_to_emphasize"
+    result: pending
+  - requirement_id: AC-P7-05
+    code_reference: "src/backend/careervp/logic/cv_tailoring_pipeline.py::run_stage3_fact_verification"
+    test_reference: "tests/unit/cv_tailoring/test_schema_compliance.py::test_stage3_backfills_experience_dates"
+    result: pending
+  - requirement_id: AC-P7-06
+    code_reference: "src/backend/careervp/logic/cv_tailoring_pipeline.py::run_stage3_fact_verification"
+    test_reference: "tests/unit/cv_tailoring/test_schema_compliance.py::test_stage3_backfills_contact_fields"
+    result: pending
+  - requirement_id: AC-P7-07
+    code_reference: "src/backend/careervp/logic/cv_tailoring_pipeline.py::run_stage3_fact_verification"
+    test_reference: "tests/unit/cv_tailoring/test_schema_compliance.py::test_stage3_populates_certifications"
+    result: pending
+  - requirement_id: AC-P7-08
+    code_reference: "src/backend/careervp/models/cv_tailoring_models.py::ATSResult, ATSComponents"
+    test_reference: "tests/unit/cv_tailoring/test_schema_compliance.py::test_ats_result_model_exists"
+    result: pending
+  - requirement_id: AC-P7-09
+    code_reference: "src/backend/careervp/logic/cv_tailoring_ats.py::compute_ats_result"
+    test_reference: "tests/unit/cv_tailoring/test_schema_compliance.py::test_compute_ats_result_returns_ats_result"
+    result: pending
+  - requirement_id: AC-P7-10
+    code_reference: "src/backend/careervp/logic/cv_tailoring_ats.py::compute_ats_result"
+    test_reference: "tests/unit/cv_tailoring/test_schema_compliance.py::test_ats_keyword_match_component"
+    result: pending
+  - requirement_id: AC-P7-11
+    code_reference: "src/backend/careervp/logic/cv_tailoring_ats.py::compute_ats_result"
+    test_reference: "tests/unit/cv_tailoring/test_schema_compliance.py::test_ats_grade_boundaries"
+    result: pending
+  - requirement_id: AC-P7-12
+    code_reference: "src/backend/careervp/handlers/cv_tailoring_handler.py::_handle_openapi_async_generate"
+    test_reference: "tests/unit/cv_tailoring/test_schema_compliance.py::test_handler_stores_ats_result_in_artifact"
+    result: pending
+  - requirement_id: AC-P7-13
+    code_reference: "src/backend/careervp/handlers/cv_tailoring_handler.py::_build_tailored_cv_status_payload"
+    test_reference: "tests/unit/cv_tailoring/test_schema_compliance.py::test_status_payload_includes_ats_result"
+    result: pending
+  - requirement_id: AC-P7-14
+    code_reference: "src/backend/careervp/handlers/cv_tailoring_handler.py::_build_tailored_cv_status_payload"
+    test_reference: "tests/unit/cv_tailoring/test_schema_compliance.py::test_status_payload_uses_fact_verification_detail"
+    result: pending
+  - requirement_id: AC-P7-15
+    code_reference: "src/backend/careervp/handlers/cv_tailoring_handler.py::_build_tailored_cv_status_payload"
+    test_reference: "tests/unit/cv_tailoring/test_schema_compliance.py::test_status_payload_keywords_matched_are_short_strings"
+    result: pending
+  - requirement_id: AC-P7-16
+    code_reference: "src/backend/careervp/handlers/cv_tailoring_handler.py::_build_tailored_cv_status_payload"
+    test_reference: "tests/unit/cv_tailoring/test_schema_compliance.py::test_status_payload_includes_version_language_generated_at"
+    result: pending
+
+################################################################################
+# ROLLBACK TRIGGER MATRIX
+################################################################################
+
+rollback_triggers:
+  - trigger_id: RT-P7-001
+    condition: "cv-tailoring generate endpoint returns 500 or produces status=failed after P7 deploy"
+    detection_source: "POST /cv-tailoring/generate smoke test"
+    action: "Roll back backend code; revert cv_tailoring_ats.py creation; revert model changes"
+    owner: backend
+
+  - trigger_id: RT-P7-002
+    condition: "P6 tests (test_pipeline_wiring.py) fail after P7 model changes"
+    detection_source: "pytest tests/unit/cv_tailoring/test_pipeline_wiring.py"
+    action: "Verify CVExperienceSection backward-compat validator accepts list[str] inputs"
+    owner: backend
+
+  - trigger_id: RT-P7-003
+    condition: "mypy --strict fails on cv_tailoring_ats.py or cv_tailoring_models.py"
+    detection_source: "pre_merge static check"
+    action: "Fix type annotations before merge; do not bypass with type: ignore"
+    owner: backend
+
+################################################################################
+# COMPLETION EVIDENCE
+################################################################################
+
+completion_evidence:
+  required:
+    - pytest output showing all 16 T-P7-* tests pass (test_schema_compliance.py)
+    - pytest output showing all P6 tests still pass (test_pipeline_wiring.py)
+    - pytest output showing P5 tests still pass (test_regen_artifact_id.py)
+    - mypy --strict output showing zero errors for modified files
+    - Manual test showing experience[].start_date populated (not empty)
+    - Manual test showing certifications list non-empty
+    - Manual test showing ats_result.components in GET /cv-tailoring/{id}/status response
+    - Manual test showing fact_verification_detail (not fvs_validation) in response
+    - Manual test showing keywords_matched contains short strings (<= 50 chars each)

@@ -18,6 +18,7 @@ from pydantic import ValidationError
 
 from careervp.models.cv_tailoring_models import (
     CVContact,
+    CVExperienceBullet,
     CVExperienceItem,
     CVSections,
     CVSkills,
@@ -102,7 +103,7 @@ def test_experience_item_has_bullets_array(sample_cv_sections: CVSections) -> No
     exp = sample_cv_sections.experience[0]
     assert isinstance(exp.bullets, list)
     assert len(exp.bullets) >= 1
-    assert all(isinstance(b, str) for b in exp.bullets)
+    assert all(isinstance(b, CVExperienceBullet) for b in exp.bullets)
 
 
 @pytest.mark.unit

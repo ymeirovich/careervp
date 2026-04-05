@@ -1,0 +1,166 @@
+################################################################################
+# CAREERVP — FUTURE UPGRADE
+# P7-D: content_markdown renderer
+# P7-F: DOCX export Lambda
+################################################################################
+
+upgrade_id: FU-CVT-01
+title: "CV Tailoring: content_markdown renderer (P7-D) and DOCX export (P7-F)"
+status: deferred
+deferred_reason: >
+  content_markdown is not required for the current frontend display.
+  The frontend renders structured cv_sections JSON directly into the review UI.
+  DOCX export is blocked on P7-D and on the decision of which export runtime to use.
+  Both are deferred until the review UI is stable and DOCX is a user-facing requirement.
+created_at: "2026-04-05"
+review_trigger: >
+  Re-evaluate when any of these conditions are met:
+    1. Frontend requests a "Download CV" button that produces a formatted document.
+    2. A DOCX-format CV is required by a job board integration.
+    3. The review UI switches from JSON-rendered sections to a document preview pane
+       (which would require content_markdown as its rendering input).
+
+################################################################################
+# P7-D: content_markdown Renderer
+################################################################################
+
+P7_D:
+  title: "Render CVSections to Markdown string for UI preview and export"
+  priority: medium
+  blocked_by: "No current blocker — can be implemented independently of P7-F"
+
+  problem: >
+    The CVArtifact schema requires content_markdown (str, minLength=100) as the
+    authoritative rendered representation of the CV. The current artifact has no
+    content_markdown field. The DOCX exporter (P7-F) will use this field as its input.
+    The review UI preview pane may also render it for a document-like view.
+
+  proposed_solution:
+    function_name: "render_cv_markdown"
+    file: "src/backend/careervp/logic/cv_tailoring_pipeline.py (or new cv_tailoring_render.py)"
+    signature: "def render_cv_markdown(cv_sections: CVSections) -> str"
+
+    output_structure: |
+      # {contact.name}
+      {contact.email} | {contact.phone} | {contact.linkedin} | {contact.location}
+
+      ## Professional Summary
+      {summary}
+
+      ## Core Competencies
+      {skills.technical joined with " | "}
+
+      ## Professional Experience
+      **{title} | {company} | {start_date} – {end_date or "Present"}**
+      - {bullet.text}
+      (repeat per experience entry)
+
+      ## Education
+      **{degree} in {field} | {institution} | {graduation_date}**
+
+      ## Certifications
+      - {name} | {issuer} | {date}
+
+      ## Languages
+      {languages joined with ", "}
+
+    ground_truth_reference: >
+      docs/architecture/careervp_prompts/cv-tailoring/02_Yitzchak_Meirovich_Learning_Experience_Specialist_SysAid.docx
+      Section ordering and formatting must match this document.
+
+  artifact_integration:
+    where: "cv_tailoring_handler.py::_handle_openapi_async_generate success branch"
+    after: "stage3_result is returned from run_cv_tailoring_pipeline()"
+    add_to_artifact: |
+      'content_markdown': render_cv_markdown(stage3.cv_sections),
+
+  acceptance_criteria:
+    - "render_cv_markdown(cv_sections) returns a str with len >= 100"
+    - "Output contains candidate name as first line"
+    - "Output contains all experience companies in order"
+    - "Output contains all certification names"
+    - "Bullet text is indented with '- ' prefix"
+    - "mypy --strict passes on the renderer"
+    - "ruff check passes"
+
+  test_file: "src/backend/tests/unit/cv_tailoring/test_content_markdown.py"
+
+################################################################################
+# P7-F: DOCX Export
+################################################################################
+
+P7_F:
+  title: "Export CVSections / content_markdown to DOCX format matching ground truth"
+  priority: medium
+  blocked_by:
+    - "P7-D must be completed first (DOCX input = content_markdown)"
+    - "Decision required: export in Lambda handler or dedicated export Lambda?"
+    - "python-docx must be added to backend dependencies"
+
+  problem: >
+    Users need a downloadable .docx file of their tailored CV.
+    The CVArtifact schema has s3_key_docx (nullable) and s3_key_pdf (nullable).
+    Currently both are null; no export capability exists.
+
+  proposed_solution:
+    approach: "In-handler export (simplest path for V1)"
+    library: "python-docx (python-docx >= 1.1.0)"
+    file: "src/backend/careervp/logic/cv_tailoring_docx.py (NEW)"
+
+    function_name: "render_cv_docx"
+    signature: "def render_cv_docx(cv_sections: CVSections) -> bytes"
+
+    docx_style_guide:
+      name_heading:
+        style: "Heading 1"
+        font_size_pt: 18
+        bold: true
+        alignment: "CENTER"
+      contact_line:
+        style: "Normal"
+        font_size_pt: 10
+        alignment: "CENTER"
+      section_heading:
+        style: "Heading 2"
+        font_size_pt: 13
+        bold: true
+        space_before_pt: 12
+      experience_role_line:
+        format: "{title} | {company} | {start_date} – {end_date}"
+        bold: true
+        font_size_pt: 11
+      experience_bullet:
+        style: "List Bullet"
+        font_size_pt: 10
+      body_text:
+        style: "Normal"
+        font_size_pt: 10
+
+    s3_integration:
+      bucket_env_var: "ARTIFACTS_BUCKET_NAME"
+      key_pattern: "cv-docx/{user_id}/{artifact_id}.docx"
+      update_artifact_field: "s3_key_docx"
+      presigned_url_expiry_seconds: 3600
+
+    ground_truth_reference: >
+      docs/architecture/careervp_prompts/cv-tailoring/02_Yitzchak_Meirovich_Learning_Experience_Specialist_SysAid.docx
+      Font, section order, and heading hierarchy must match this document.
+
+  infra_changes_required:
+    - "Add python-docx to src/backend/pyproject.toml dependencies"
+    - "Add ARTIFACTS_BUCKET_NAME env var to CV Tailoring Lambda in api_construct.py"
+    - "Grant s3:PutObject on artifacts bucket to CV Tailoring Lambda role"
+    - "Add s3_key_docx to CVArtifact DynamoDB update call"
+
+  acceptance_criteria:
+    - "render_cv_docx(cv_sections) returns bytes (valid .docx)"
+    - "DOCX contains name as Heading 1, contact line, all experience entries"
+    - "DOCX certifications section present and non-empty when certifications exist"
+    - "s3_key_docx is set in the artifact after successful export"
+    - "GET /cv-tailoring/{id}/status includes s3_key_docx (or a presigned download URL)"
+    - "Downloaded .docx opens correctly in LibreOffice and Microsoft Word"
+    - "mypy --strict passes"
+    - "python-docx added to pyproject.toml and uv.lock updated"
+
+  test_file: "src/backend/tests/unit/cv_tailoring/test_cv_docx.py"
+  spec_file_to_create: "docs/architecture/careervp_prompts/cv-tailoring/specs/spec_P7F_docx_export.yaml"

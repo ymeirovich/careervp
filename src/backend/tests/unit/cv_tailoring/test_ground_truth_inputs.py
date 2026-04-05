@@ -174,7 +174,7 @@ async def test_parsed_facts_constructed_from_user_cv_when_absent() -> None:
                 title='Engineer',
                 start_date='01/2018',
                 end_date='12/2020',
-                bullets=['Built APIs'],
+                bullets=['Built REST APIs for internal data ingestion workflows.'],
             )
         ],
         education=[],
