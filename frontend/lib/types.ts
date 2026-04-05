@@ -212,6 +212,7 @@ export interface VPRStatusResponse {
   result?: VPRStatusResult;
   created_at?: string;
   completed_at?: string;
+  error?: string;
 }
 
 // ── VPR Full Data (fetched from S3 download_url) ──
@@ -365,6 +366,7 @@ export interface CoverLetterStatusResponse {
   id?: string;
   status: string;
   result?: { cover_letter?: string };
+  error?: string;
 }
 
 // ── Interview Prep ──
@@ -436,6 +438,7 @@ export interface InterviewPrepStatusResponse {
     salary_guidance?: string | null;
     interview_report?: { readiness_summary: string };
   };
+  error?: string;
 }
 
 // ── Company Research ──

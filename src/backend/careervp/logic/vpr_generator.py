@@ -21,7 +21,12 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 from pydantic import ValidationError
 
-from careervp.logic.fvs_validator import run_vpr_quality_gate
+from careervp.logic.fvs_validator import (
+    GRAMMAR_MIN_SCORE,
+    STRUCTURAL_MIN_SCORE,
+    TONE_MIN_SCORE,
+    run_vpr_quality_gate,
+)
 from careervp.logic.prompts.vpr_prompt import (
     PHASE2_SYSTEM_PROMPT,
     build_phase2_prompt,
@@ -147,6 +152,8 @@ class FinalVPRData:
     passed_gate: bool
     regeneration_count: int
     structural_score: float = field(default=10.0)
+    grammar_score: float = field(default=10.0)
+    tone_score: float = field(default=10.0)
 
 
 class LLMClient:
@@ -239,10 +246,20 @@ class VPRSixStagePipeline:
                 code=ResultCode.INTERNAL_ERROR,
             )
 
+        failing_gates: list[str] = []
+        if last_meta.anti_ai_score < ANTI_AI_MIN_SCORE:
+            failing_gates.append(f'anti-AI {last_meta.anti_ai_score:.1f}<{ANTI_AI_MIN_SCORE:.1f}')
+        if last_meta.grammar_score < GRAMMAR_MIN_SCORE:
+            failing_gates.append(f'grammar {last_meta.grammar_score:.1f}<{GRAMMAR_MIN_SCORE:.1f}')
+        if last_meta.tone_score < TONE_MIN_SCORE:
+            failing_gates.append(f'tone {last_meta.tone_score:.1f}<{TONE_MIN_SCORE:.1f}')
+        if last_meta.structural_score < STRUCTURAL_MIN_SCORE:
+            failing_gates.append(f'structural {last_meta.structural_score:.1f}<{STRUCTURAL_MIN_SCORE:.1f}')
+        gates_summary = ', '.join(failing_gates) if failing_gates else 'unknown gate'
         return Result(
             success=False,
             data=last_meta,
-            error=(f'Anti-AI score {last_meta.anti_ai_score:.2f} below threshold {ANTI_AI_MIN_SCORE:.1f} after {self._max_stage6_retries} attempts'),
+            error=(f'Quality gate failed after {self._max_stage6_retries} attempts: {gates_summary}'),
             code=ResultCode.FVS_VALIDATION_FAILED,
         )
 
@@ -344,6 +361,8 @@ class VPRSixStagePipeline:
             anti_ai_score=gate.anti_ai_score,
             anti_ai_issues=gate.issues,
             structural_score=gate.structural_score,
+            grammar_score=gate.grammar_score,
+            tone_score=gate.tone_score,
             passed_gate=gate.passed_gate,
             regeneration_count=self._regeneration_count,
         )
@@ -984,10 +1003,37 @@ def _infer_experience_level(cv: UserCV) -> str:
 
 
 def _build_regeneration_feedback(final_data: FinalVPRData) -> str:
-    issues_text = '; '.join(final_data.anti_ai_issues) if final_data.anti_ai_issues else 'No explicit issue details provided.'
-    return (
-        f'Anti-AI score {final_data.anti_ai_score:.2f} is below {ANTI_AI_MIN_SCORE:.1f}. Regenerate with more natural wording. Issues: {issues_text}'
-    )
+    """Build targeted feedback for the LLM based on which gate(s) actually failed."""
+    parts: list[str] = []
+
+    if final_data.anti_ai_score < ANTI_AI_MIN_SCORE:
+        parts.append(
+            f'Anti-AI score {final_data.anti_ai_score:.2f} is below {ANTI_AI_MIN_SCORE:.1f}. '
+            'Use more natural, varied sentence structure and avoid formulaic phrases.'
+        )
+
+    if final_data.grammar_score < GRAMMAR_MIN_SCORE:
+        parts.append(
+            f'Grammar score {final_data.grammar_score:.2f} is below {GRAMMAR_MIN_SCORE:.1f}. Correct grammatical errors and improve sentence clarity.'
+        )
+
+    if final_data.tone_score < TONE_MIN_SCORE:
+        parts.append(
+            f'Tone score {final_data.tone_score:.2f} is below {TONE_MIN_SCORE:.1f}. '
+            'Use a confident, professional tone without hedging or overly passive language.'
+        )
+
+    if final_data.structural_score < STRUCTURAL_MIN_SCORE:
+        parts.append(
+            f'Structural score {final_data.structural_score:.2f} is below {STRUCTURAL_MIN_SCORE:.1f}. '
+            'Ensure all required VPR sections are present and substantive.'
+        )
+
+    issues_text = '; '.join(final_data.anti_ai_issues) if final_data.anti_ai_issues else ''
+    if issues_text:
+        parts.append(f'Detected issues: {issues_text}')
+
+    return ' | '.join(parts) if parts else 'Quality gate failed. Regenerate with improved clarity and structure.'
 
 
 def _replace_banned_terms(text: str) -> str:
