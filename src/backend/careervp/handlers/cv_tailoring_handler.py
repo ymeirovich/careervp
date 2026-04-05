@@ -456,7 +456,10 @@ def _handle_openapi_async_generate(  # noqa: C901
         final_status = 'failed'
 
     # ── 6. Persist artifact ───────────────────────────────────────────────────
-    dal._get_db_handler(table_name).put_item(Item=artifact)
+    # DynamoDB rejects Python float — convert via JSON round-trip so all
+    # floating-point values (e.g. ATSComponents scores) become Decimal.
+    artifact_for_dynamo: dict[str, Any] = json.loads(json.dumps(artifact), parse_float=Decimal)
+    dal._get_db_handler(table_name).put_item(Item=artifact_for_dynamo)
 
     _update_application_artifact(
         application_id=job_id,
