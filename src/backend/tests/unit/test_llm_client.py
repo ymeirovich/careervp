@@ -208,10 +208,10 @@ class TestCostThresholds:
     """Test cost alerting thresholds per CLAUDE.md."""
 
     def test_max_cost_per_application(self):
-        """MAX_COST_PER_APPLICATION should be $0.15 per spec."""
+        """MAX_COST_PER_APPLICATION should be $0.25 per spec (raised from $0.15 to cover VPR baseline cost)."""
         from careervp.logic.utils.llm_client import MAX_COST_PER_APPLICATION
 
-        assert MAX_COST_PER_APPLICATION == 0.15
+        assert MAX_COST_PER_APPLICATION == 0.25
 
 
 class TestLLMClientCircuitBreaker:

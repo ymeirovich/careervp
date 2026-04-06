@@ -610,7 +610,7 @@ def validate_grammar(content: str) -> ValidationCheckResult:
         score -= 0.4
         issues.append('Multiple sentence fragments detected')
 
-    return ValidationCheckResult(score=_bounded_score(score), issues=issues, min_score=GRAMMAR_MIN_SCORE)
+    return ValidationCheckResult(score=_bounded_score(score) * 10.0, issues=issues, min_score=GRAMMAR_MIN_SCORE)
 
 
 def validate_tone(content: str) -> ValidationCheckResult:
@@ -657,7 +657,7 @@ def validate_tone(content: str) -> ValidationCheckResult:
         score -= min(1.4, (ANTI_AI_MIN_SCORE - anti_ai_assessment.score))
         issues.append('Robotic phrasing patterns detected')
 
-    return ValidationCheckResult(score=_bounded_score(score), issues=issues, min_score=TONE_MIN_SCORE)
+    return ValidationCheckResult(score=_bounded_score(score) * 10.0, issues=issues, min_score=TONE_MIN_SCORE)
 
 
 def validate_formatting(content: str) -> ValidationCheckResult:

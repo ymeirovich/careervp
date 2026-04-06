@@ -189,9 +189,9 @@ class TestRunVPRQualityGate:
             patch('careervp.logic.fvs_validator.validate_grammar') as mock_grammar,
             patch('careervp.logic.fvs_validator.validate_tone') as mock_tone,
         ):
-            mock_anti_ai.return_value = MagicMock(score=9.5, issues=[], passed=True)
-            mock_grammar.return_value = MagicMock(score=9.2, issues=[], passed=True)
-            mock_tone.return_value = MagicMock(score=8.5, issues=[], passed=True)
+            mock_anti_ai.return_value = MagicMock(score=95.0, issues=[], passed=True)
+            mock_grammar.return_value = MagicMock(score=92.0, issues=[], passed=True)
+            mock_tone.return_value = MagicMock(score=85.0, issues=[], passed=True)
 
             result = run_vpr_quality_gate(minimal_vpr, minimal_user_cv, cv_text, gap_text)
 
@@ -206,14 +206,14 @@ class TestRunVPRQualityGate:
             patch('careervp.logic.fvs_validator.validate_grammar') as mock_grammar,
             patch('careervp.logic.fvs_validator.validate_tone') as mock_tone,
         ):
-            mock_anti_ai.return_value = MagicMock(score=7.0, issues=['too many buzzwords'], passed=False)
-            mock_grammar.return_value = MagicMock(score=9.5, issues=[], passed=True)
-            mock_tone.return_value = MagicMock(score=9.0, issues=[], passed=True)
+            mock_anti_ai.return_value = MagicMock(score=70.0, issues=['too many buzzwords'], passed=False)
+            mock_grammar.return_value = MagicMock(score=95.0, issues=[], passed=True)
+            mock_tone.return_value = MagicMock(score=90.0, issues=[], passed=True)
 
             result = run_vpr_quality_gate(minimal_vpr, minimal_user_cv, cv_text, gap_text)
 
         assert result.passed_gate is False
-        assert result.anti_ai_score == 7.0
+        assert result.anti_ai_score == 70.0
 
     def test_structural_score_below_8_sets_passed_gate_false(self, minimal_vpr: Any, minimal_user_cv: Any) -> None:
         """If all 6 structural validators average below 8.0, gate must fail."""
@@ -225,9 +225,9 @@ class TestRunVPRQualityGate:
             patch('careervp.logic.fvs_validator.validate_grammar') as mock_grammar,
             patch('careervp.logic.fvs_validator.validate_tone') as mock_tone,
         ):
-            mock_anti_ai.return_value = MagicMock(score=9.5, issues=[], passed=True)
-            mock_grammar.return_value = MagicMock(score=9.5, issues=[], passed=True)
-            mock_tone.return_value = MagicMock(score=9.0, issues=[], passed=True)
+            mock_anti_ai.return_value = MagicMock(score=95.0, issues=[], passed=True)
+            mock_grammar.return_value = MagicMock(score=95.0, issues=[], passed=True)
+            mock_tone.return_value = MagicMock(score=90.0, issues=[], passed=True)
 
             # With empty cv/gap_text, traceability score should drop significantly
             # Use a VPR with many un-traceable claims to trigger low structural score
@@ -246,9 +246,9 @@ class TestRunVPRQualityGate:
             patch('careervp.logic.fvs_validator.validate_grammar') as mock_grammar,
             patch('careervp.logic.fvs_validator.validate_tone') as mock_tone,
         ):
-            mock_anti_ai.return_value = MagicMock(score=9.5, issues=[], passed=True)
-            mock_grammar.return_value = MagicMock(score=7.0, issues=['grammar errors'], passed=False)
-            mock_tone.return_value = MagicMock(score=9.0, issues=[], passed=True)
+            mock_anti_ai.return_value = MagicMock(score=95.0, issues=[], passed=True)
+            mock_grammar.return_value = MagicMock(score=70.0, issues=['grammar errors'], passed=False)
+            mock_tone.return_value = MagicMock(score=90.0, issues=[], passed=True)
 
             result = run_vpr_quality_gate(minimal_vpr, minimal_user_cv, cv_text, gap_text)
 
@@ -265,9 +265,9 @@ class TestRunVPRQualityGate:
             patch('careervp.logic.fvs_validator.validate_grammar') as mock_grammar,
             patch('careervp.logic.fvs_validator.validate_tone') as mock_tone,
         ):
-            mock_anti_ai.return_value = MagicMock(score=9.5, issues=[], passed=True)
-            mock_grammar.return_value = MagicMock(score=9.5, issues=[], passed=True)
-            mock_tone.return_value = MagicMock(score=9.0, issues=[], passed=True)
+            mock_anti_ai.return_value = MagicMock(score=95.0, issues=[], passed=True)
+            mock_grammar.return_value = MagicMock(score=95.0, issues=[], passed=True)
+            mock_tone.return_value = MagicMock(score=90.0, issues=[], passed=True)
 
             result = run_vpr_quality_gate(minimal_vpr, minimal_user_cv, cv_text, gap_text)
 

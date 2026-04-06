@@ -331,7 +331,7 @@ def test_stage_6_rejects_ai_patterns(
     final_data = pipeline._final_meta_evaluation(VPRData(vpr=vpr))
 
     assert final_data.passed_gate is False
-    assert final_data.anti_ai_score < 9.0
+    assert final_data.anti_ai_score < 90.0
     assert final_data.anti_ai_issues
 
 
