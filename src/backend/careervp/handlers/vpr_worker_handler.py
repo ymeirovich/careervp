@@ -142,28 +142,11 @@ def _build_gap_responses_input(input_data: dict[str, Any]) -> list[dict[str, str
 
 
 def _extract_job_id_from_record(record: dict[str, Any]) -> str | None:
+    """Extract job_id from an SQS record body.
+
+    Returns None (and logs a warning) instead of raising if 'body' is absent,
+    so a malformed record never crashes the entire batch.
     """
-    Extract job_id from either an SQS record or a DynamoDB Stream record.
-
-    SQS records have a 'body' key (JSON string with job_id).
-    DynamoDB Stream records have 'dynamodb' + 'eventName'; only INSERT events
-    should trigger processing — MODIFY events are status updates from the worker
-    itself and must be ignored to avoid infinite loops.
-    """
-    event_source = record.get('eventSource', '')
-
-    if event_source == 'aws:dynamodb' or 'dynamodb' in record:
-        # DynamoDB Stream record — only process INSERT of PENDING jobs
-        if record.get('eventName') != 'INSERT':
-            return None
-        dynamo_payload = record.get('dynamodb', {})
-        new_image = dynamo_payload.get('NewImage', {})
-        # DynamoDB typed attribute format: {"S": "value"}
-        job_id_attr = new_image.get('job_id', {})
-        job_id = job_id_attr.get('S', '') if isinstance(job_id_attr, dict) else str(job_id_attr)
-        return job_id or None
-
-    # SQS record
     raw_body = record.get('body')
     if not raw_body:
         logger.warning('SQS record missing body field', record_keys=list(record.keys()))
@@ -177,17 +160,11 @@ def _process_job_record(
     record: dict[str, Any],
     bucket: str,
 ) -> None:
-    """Process a single SQS or DynamoDB Stream record."""
+    """Process a single SQS record."""
     job_id = _extract_job_id_from_record(record)
 
     if not job_id:
-        event_source = record.get('eventSource', 'unknown')
-        event_name = record.get('eventName', '')
-        logger.warning(
-            'Skipping record: no job_id extracted',
-            event_source=event_source,
-            event_name=event_name,
-        )
+        logger.warning('Skipping record: no job_id extracted')
         return
 
     logger.append_keys(job_id=job_id)

@@ -167,7 +167,6 @@ class ApiConstruct(Construct):
 
         # Async worker DLQs (ASYNC_004): one DLQ per worker for failed events.
         self.cv_upload_worker_dlq = self._build_worker_dlq("cv-upload-worker")
-        self.vpr_worker_dlq = self._build_worker_dlq("vpr-worker")
         self.cv_tailor_worker_dlq = self._build_worker_dlq("cv-tailor-worker")
         self.cover_letter_worker_dlq = self._build_worker_dlq("cover-letter-worker")
         self.interview_prep_worker_dlq = self._build_worker_dlq("interview-prep-worker")
@@ -179,13 +178,12 @@ class ApiConstruct(Construct):
             idempotency_table=self.api_db.idempotency_db,
             dlq=self.cv_upload_worker_dlq,
         )
-        self.vpr_worker_func = self._add_vpr_worker_stream_lambda(
+        self.vpr_worker_func = self._add_vpr_worker_lambda(
             jobs_table=self.api_db.jobs_table,
             artifacts_table=self.api_db.artifacts_table,
             applications_table=self.api_db.applications_table,
             users_table=self.api_db.users_table,
             results_bucket=self.api_db.vpr_results_bucket,
-            dlq=self.vpr_worker_dlq,
         )
         self.cv_tailor_worker_func = self._add_cv_tailor_worker_lambda(
             artifacts_table=self.api_db.artifacts_table,
@@ -1353,16 +1351,16 @@ class ApiConstruct(Construct):
         idempotency_table.grant_read_write_data(lambda_function)
         return lambda_function
 
-    def _add_vpr_worker_stream_lambda(
+    def _add_vpr_worker_lambda(
         self,
         jobs_table: dynamodb.TableV2,
         artifacts_table: dynamodb.TableV2,
         applications_table: dynamodb.TableV2,
         users_table: dynamodb.TableV2,
         results_bucket: s3.Bucket,
-        dlq: aws_sqs.Queue,
     ) -> _lambda.Function:
-        """Create vpr_worker (DynamoDB stream -> Lambda) with stream failure DLQ."""
+        """Create vpr_worker Lambda. Triggered exclusively by the SQS worker DLQ recovery
+        path; the authoritative trigger is vpr-sqs-worker via the VPR jobs SQS queue."""
         function_name = self.naming.lambda_name("vpr-worker")
         log_group = logs.LogGroup(
             self,
@@ -1399,19 +1397,6 @@ class ApiConstruct(Construct):
             architecture=_lambda.Architecture.X86_64,
         )
 
-        # ASYNC_004: failed stream batches are sent to a worker-specific DLQ.
-        lambda_function.add_event_source(
-            eventsources.DynamoEventSource(
-                jobs_table,
-                starting_position=_lambda.StartingPosition.LATEST,
-                batch_size=1,
-                bisect_batch_on_error=True,
-                retry_attempts=2,
-                on_failure=eventsources.SqsDlq(dlq),
-            )
-        )
-
-        jobs_table.grant_stream_read(lambda_function)
         jobs_table.grant_read_write_data(lambda_function)
         artifacts_table.grant_read_write_data(lambda_function)
         applications_table.grant_read_write_data(lambda_function)
