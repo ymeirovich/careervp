@@ -411,6 +411,7 @@ class JobsRepository:
             'time',
             'year',
             'month',
+            'ttl',
         }
 
         update_parts = []
