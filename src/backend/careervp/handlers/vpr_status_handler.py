@@ -330,6 +330,12 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
     # Repository returns dict or None
     if job_result is None:
+        # DynamoDB record may have expired (24-hour TTL on pending jobs).
+        # Fall back to S3 if the completed result is still present there.
+        s3_fallback = _try_build_response_from_s3(vpr_id)
+        if s3_fallback is not None:
+            logger.info('Served VPR status from S3 fallback (DynamoDB record expired)', job_id=vpr_id)
+            return s3_fallback
         logger.error('Job not found', job_id=vpr_id)
         return _build_error_response('Job not found', HTTPStatus.NOT_FOUND)
 
@@ -371,6 +377,31 @@ def _emit_status_metrics(status: str) -> None:
         metrics.add_metric(name='VPRStatusCompleted', unit='Count', value=1)
     elif status == 'failed':
         metrics.add_metric(name='VPRStatusFailed', unit='Count', value=1)
+
+
+def _try_build_response_from_s3(vpr_id: str) -> dict[str, Any] | None:
+    """Return a completed-status response if results/{vpr_id}.json exists in S3."""
+    result_key = f'results/{vpr_id}.json'
+    try:
+        s3.head_object(Bucket=_get_results_bucket(), Key=result_key)
+    except Exception:
+        return None
+
+    result_url = _generate_presigned_url(result_key)
+    result_payload: dict[str, Any] = {'download_url': result_url}
+    _enrich_vpr_result_from_s3(result_payload, result_key, vpr_id)
+    _ensure_vpr_contract_shape(result_payload)
+    response_data = {
+        'id': vpr_id,
+        'job_id': vpr_id,
+        'status': 'completed',
+        'result': result_payload,
+    }
+    return {
+        'statusCode': int(HTTPStatus.OK),
+        'headers': JSON_HEADERS,
+        'body': json.dumps(response_data),
+    }
 
 
 def _build_error_response(message: str, status: HTTPStatus) -> dict[str, Any]:

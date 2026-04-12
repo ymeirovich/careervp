@@ -292,6 +292,7 @@ def _execute_job(
     # Update job to COMPLETED
     completed_at = datetime.now(timezone.utc).isoformat()
     result_url = _generate_presigned_url(result_key)
+    one_year_ttl = int(datetime.now(timezone.utc).timestamp() + 365 * 24 * 3600)
 
     jobs_repo.update_job(
         job_id=job_id,
@@ -302,6 +303,7 @@ def _execute_job(
             'result_url': result_url,
             'vpr_version': vpr.version,
             'word_count': vpr.word_count,
+            'ttl': one_year_ttl,
         },
     )
 
