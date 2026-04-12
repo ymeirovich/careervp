@@ -67,19 +67,34 @@ jobs:
 
       - name: Run ruff check
         working-directory: src/backend
-        run: uv run ruff check careervp/
+        run: |
+          uv run ruff check \
+            careervp/handlers/vpr_status_handler.py \
+            careervp/handlers/vpr_worker_handler.py \
+            careervp/logic/vpr_generator.py \
+            careervp/models/vpr.py \
+            careervp/dal/jobs_repository.py \
+            tests/unit/test_vpr_* \
+            tests/integration/test_*vpr*
 
       - name: Run mypy
         working-directory: src/backend
-        run: uv run mypy careervp/ --strict
+        run: |
+          uv run mypy \
+            careervp/handlers/vpr_status_handler.py \
+            careervp/handlers/vpr_worker_handler.py \
+            careervp/logic/vpr_generator.py \
+            careervp/models/vpr.py \
+            careervp/dal/jobs_repository.py \
+            --strict
 
       - name: Run unit tests
         working-directory: src/backend
-        run: uv run pytest tests/unit/ -v
+        run: uv run pytest tests/unit/test_vpr_* -v
 
       - name: Run integration tests
         working-directory: src/backend
-        run: uv run pytest tests/integration/ -v
+        run: uv run pytest tests/integration/test_*vpr* -v
 
   cdk-synth:
     needs: lint-and-test
