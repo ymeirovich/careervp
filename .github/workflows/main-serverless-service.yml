@@ -13,9 +13,6 @@ env:
 on:
   workflow_dispatch:
 
-  push:
-    branches: [main]
-
 jobs:
   staging:
     runs-on: ubuntu-latest
