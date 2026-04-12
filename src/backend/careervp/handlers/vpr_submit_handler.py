@@ -18,6 +18,7 @@ import datetime
 import json
 import os
 import uuid
+from datetime import timezone
 from http import HTTPStatus
 from typing import Any
 
@@ -95,6 +96,29 @@ def _normalize_submit_request(request_data: dict[str, Any], user_id: str) -> dic
         'user_id': legacy_request.user_id,
         'input_data': request_data,
     }
+
+
+def _is_stuck_processing(job: dict[str, Any]) -> bool:
+    """Return True if the job has been in PROCESSING/PENDING state longer than the worker timeout.
+
+    The worker Lambda times out after 10 minutes.  Any job still in a non-terminal
+    state after 15 minutes has either been silently swallowed or the SQS message was
+    never delivered — treat it as stuck so the user can retry.
+    """
+    status = str(job.get('status', '')).lower()
+    if status not in {'processing', 'pending'}:
+        return False
+    created_at_str = str(job.get('created_at') or job.get('started_at') or '').strip()
+    if not created_at_str:
+        return False
+    try:
+        created_at = datetime.datetime.fromisoformat(created_at_str)
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        age_seconds = (datetime.datetime.now(timezone.utc) - created_at).total_seconds()
+        return age_seconds > 900  # 15 minutes
+    except (ValueError, TypeError):
+        return False
 
 
 def _backfill_application_artifact(application_id: str, user_id: str, job_id: str) -> None:
@@ -209,8 +233,9 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         existing_job_id = str(existing_job.get('job_id', ''))
         existing_status = str(existing_job.get('status', 'PROCESSING')).lower()
 
-        # Failed jobs should not block retries — fall through to create a new job.
-        if existing_status != 'failed':
+        # Failed jobs (or stuck processing jobs) should not block retries — fall through.
+        is_stuck = existing_status != 'failed' and _is_stuck_processing(existing_job)
+        if existing_status != 'failed' and not is_stuck:
             logger.info(
                 'Idempotent duplicate request',
                 job_id=existing_job_id,
@@ -242,8 +267,9 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             }
 
         logger.info(
-            'Previous job failed — creating new job for retry',
+            'Previous job failed or stuck — creating new job for retry',
             previous_job_id=existing_job_id,
+            previous_status=existing_status,
             idempotency_key=idempotency_key,
         )
 
