@@ -41,6 +41,33 @@
                 }
             }
         },
+        "/billing/checkout": {
+            "post": {
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/billing/portal": {
+            "post": {
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/billing/webhook": {
+            "post": {
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
         "/company-research/fetch": {
             "post": {
                 "responses": {
@@ -88,6 +115,15 @@
         },
         "/cv-tailoring/generate": {
             "post": {
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/cv-tailoring/{job_id}": {
+            "delete": {
                 "responses": {
                     "200": {
                         "description": "OK"
@@ -242,6 +278,15 @@
                 }
             },
             "post": {
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/users/me/subscription": {
+            "get": {
                 "responses": {
                     "200": {
                         "description": "OK"
