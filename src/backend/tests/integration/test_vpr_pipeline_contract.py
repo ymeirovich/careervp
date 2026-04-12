@@ -56,6 +56,8 @@ class TestVPRPipelineContract:
                 mock_gate.return_value = MagicMock(
                     vpr=MagicMock(spec=VPR),
                     anti_ai_score=9.5,
+                    grammar_score=9.5,
+                    tone_score=9.5,
                     structural_score=9.0,
                     anti_ai_issues=[],
                     passed_gate=True,
@@ -123,6 +125,8 @@ class TestVPRPipelineContract:
             mock_gate.return_value = MagicMock(
                 vpr=MagicMock(spec=VPR),
                 anti_ai_score=9.5,
+                grammar_score=9.5,
+                tone_score=9.5,
                 structural_score=9.0,
                 anti_ai_issues=[],
                 passed_gate=True,
@@ -154,6 +158,8 @@ class TestVPRPipelineContract:
             mock_gate.return_value = MagicMock(
                 vpr=MagicMock(spec=VPR, version=3),
                 anti_ai_score=9.5,
+                grammar_score=9.5,
+                tone_score=9.5,
                 structural_score=9.0,
                 anti_ai_issues=[],
                 passed_gate=True,
@@ -181,6 +187,8 @@ class TestVPRPipelineContract:
             return MagicMock(
                 vpr=MagicMock(spec=VPR),
                 anti_ai_score=9.5 if gate_call_count > 1 else 6.0,
+                grammar_score=9.5 if gate_call_count > 1 else 6.0,
+                tone_score=9.5 if gate_call_count > 1 else 6.0,
                 structural_score=9.0,
                 anti_ai_issues=[] if gate_call_count > 1 else ['buzzwords'],
                 passed_gate=gate_call_count > 1,
@@ -229,6 +237,8 @@ class TestVPRPipelineContract:
             mock_gate.return_value = MagicMock(
                 vpr=MagicMock(spec=VPR),
                 anti_ai_score=5.0,
+                grammar_score=5.0,
+                tone_score=5.0,
                 structural_score=5.0,
                 anti_ai_issues=['many issues'],
                 passed_gate=False,
@@ -267,7 +277,7 @@ class TestVPRPipelineContract:
         """VPRResponse serialized with by_alias=True must produce camelCase JSON."""
         from careervp.models.vpr import VPRResponse
 
-        response = VPRResponse(success=True, vpr=minimal_vpr)
+        response = VPRResponse(success=True, vpr=minimal_vpr, generation_time_ms=0)
         dumped = response.model_dump(by_alias=True, mode='json')
         json_str = json.dumps(dumped)
         parsed = json.loads(json_str)
