@@ -148,16 +148,111 @@ class DynamoDalHandler(DalHandler):
                     str(item.get('cvId', item.get('cv_id', item.get('sk', '')))),
                 ),
             )
-            normalized = dict(latest_item)
-            if 'user_id' not in normalized and 'userId' in normalized:
-                normalized['user_id'] = normalized['userId']
-            if 'cv_id' not in normalized and 'cvId' in normalized:
-                normalized['cv_id'] = normalized['cvId']
-            return UserCV.model_validate(normalized)
+            return UserCV.model_validate(self._normalize_cv_item(latest_item))
         except (ClientError, ValidationError) as exc:  # pragma: no cover
             error_msg = 'failed to get CV'
             logger.exception(error_msg, user_id=user_id)
             raise InternalServerException(error_msg) from exc
+
+    @staticmethod
+    def _normalize_cv_item(item: dict[str, Any]) -> dict[str, Any]:
+        """Normalize a raw DynamoDB CV item into a shape UserCV.model_validate accepts."""
+        normalized = dict(item)
+        if 'user_id' not in normalized and 'userId' in normalized:
+            normalized['user_id'] = normalized['userId']
+        if 'cv_id' not in normalized and 'cvId' in normalized:
+            normalized['cv_id'] = normalized['cvId']
+        return normalized
+
+    @tracer.capture_method(capture_response=False)
+    def get_all_cvs(self, user_id: str) -> list[UserCV]:
+        """Return all CVs for *user_id*, sorted newest-first."""
+        logger.append_keys(user_id=user_id)
+        logger.info('fetching all CVs from DynamoDB')
+        try:
+            table = self._get_db_handler(self.table_name)
+            items: list[dict[str, Any]] = []
+            try:
+                response = table.query(
+                    KeyConditionExpression=Key('userId').eq(user_id),
+                    ScanIndexForward=False,
+                    Limit=20,
+                )
+                items.extend(response.get('Items', []))
+            except ClientError as exc:
+                error_code, _ = self._client_error_details(exc)
+                if error_code != 'ValidationException':
+                    raise
+                response = table.query(
+                    KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with('CV#'),
+                    ScanIndexForward=False,
+                    Limit=20,
+                )
+                items.extend(response.get('Items', []))
+
+            cvs: list[UserCV] = []
+            for item in items:
+                try:
+                    cvs.append(UserCV.model_validate(self._normalize_cv_item(item)))
+                except ValidationError:
+                    logger.warning('Skipping malformed CV item', cv_id=item.get('cvId'))
+            cvs.sort(key=lambda c: str(c.updated_at or c.created_at or ''), reverse=True)
+            return cvs
+        except ClientError as exc:  # pragma: no cover
+            error_msg = 'failed to list CVs'
+            logger.exception(error_msg, user_id=user_id)
+            raise InternalServerException(error_msg) from exc
+
+    @tracer.capture_method(capture_response=False)
+    def get_cv_by_id(self, user_id: str, cv_id: str) -> UserCV | None:
+        """Return a single CV by composite key, or *None* if not found."""
+        logger.append_keys(user_id=user_id, cv_id=cv_id)
+        logger.info('fetching CV by id from DynamoDB')
+        try:
+            table = self._get_db_handler(self.table_name)
+            # Try canonical key schema first.
+            try:
+                resp = table.get_item(Key={'userId': user_id, 'cvId': cv_id})
+                item = resp.get('Item')
+            except ClientError as exc:
+                error_code, _ = self._client_error_details(exc)
+                if error_code != 'ValidationException':
+                    raise
+                # Fallback to legacy pk/sk schema.
+                resp = table.get_item(Key={'pk': user_id, 'sk': f'CV#{cv_id}'})
+                item = resp.get('Item')
+
+            if not isinstance(item, dict):
+                return None
+            return UserCV.model_validate(self._normalize_cv_item(item))
+        except (ClientError, ValidationError) as exc:  # pragma: no cover
+            error_msg = 'failed to get CV by id'
+            logger.exception(error_msg, user_id=user_id, cv_id=cv_id)
+            raise InternalServerException(error_msg) from exc
+
+    @tracer.capture_method(capture_response=False)
+    def delete_cv(self, user_id: str, cv_id: str) -> tuple[bool, str | None]:
+        """Delete a CV record.
+
+        Returns (deleted, source_file_key):
+            deleted: True if the record existed and was removed.
+            source_file_key: S3 key of the original file (for cleanup), or None.
+        """
+        logger.append_keys(user_id=user_id, cv_id=cv_id)
+        logger.info('deleting CV from DynamoDB')
+        existing = self.get_cv_by_id(user_id, cv_id)
+        if existing is None:
+            return False, None
+
+        source_file_key = existing.source_file_key
+        table = self._get_db_handler(self.table_name)
+        try:
+            table.delete_item(Key={'userId': user_id, 'cvId': cv_id})
+        except ClientError:
+            # Legacy schema fallback.
+            table.delete_item(Key={'pk': user_id, 'sk': f'CV#{cv_id}'})
+        logger.info('CV deleted successfully', user_id=user_id, cv_id=cv_id)
+        return True, source_file_key
 
     @staticmethod
     def _build_vpr_sort_key(version: int) -> str:
