@@ -187,6 +187,7 @@ class UserCV(BaseModel):
     # Parsing metadata
     is_parsed: Annotated[bool, Field(default=False, description='Whether CV has been parsed')]
     source_file_key: Annotated[str | None, Field(description='S3 key of source document')] = None
+    label: Annotated[str | None, Field(description='User-friendly name derived from upload filename')] = None
 
     model_config = {'populate_by_name': True}
 

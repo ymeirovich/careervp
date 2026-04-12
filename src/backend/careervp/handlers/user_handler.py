@@ -5,6 +5,8 @@ Implements OpenAPI endpoints:
 - GET /users/me
 - PUT /users/me
 - GET /users/me/cv
+- GET /users/me/cv/<cvId>
+- DELETE /users/me/cv/<cvId>
 - GET /users/me/usage
 """
 
@@ -223,6 +225,60 @@ def list_user_cvs() -> Response[str]:
         'cursor': next_cursor or '',
     }
     return _json_response(HTTPStatus.OK, body)
+
+
+@app.get('/users/me/cv/<cv_id>')
+@tracer.capture_method(capture_response=False)
+def get_user_cv(cv_id: str) -> Response[str]:
+    """Get a single CV by its ID."""
+    user_id = _get_authenticated_user_id()
+    if not user_id:
+        return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Authentication required'})
+
+    table_name = os.environ.get('TABLE_NAME')
+    if not table_name:
+        return _json_response(HTTPStatus.SERVICE_UNAVAILABLE, {'error': 'CV storage not configured'})
+
+    dal = DynamoDalHandler(table_name=table_name)
+    cv = dal.get_cv_by_id(user_id, cv_id)
+    if cv is None:
+        return _json_response(HTTPStatus.NOT_FOUND, {'error': 'CV not found'})
+
+    return _json_response(HTTPStatus.OK, cv.model_dump(mode='json', exclude_none=True))
+
+
+@app.delete('/users/me/cv/<cv_id>')
+@tracer.capture_method(capture_response=False)
+def delete_user_cv(cv_id: str) -> Response[str]:
+    """Delete a CV by its ID, including its S3 source file."""
+    user_id = _get_authenticated_user_id()
+    if not user_id:
+        return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Authentication required'})
+
+    table_name = os.environ.get('TABLE_NAME')
+    if not table_name:
+        return _json_response(HTTPStatus.SERVICE_UNAVAILABLE, {'error': 'CV storage not configured'})
+
+    dal = DynamoDalHandler(table_name=table_name)
+    deleted, source_file_key = dal.delete_cv(user_id, cv_id)
+
+    if not deleted:
+        return _json_response(HTTPStatus.NOT_FOUND, {'error': 'CV not found'})
+
+    if source_file_key:
+        bucket_name = os.environ.get('CV_BUCKET_NAME', '')
+        if bucket_name:
+            try:
+                boto3.client('s3').delete_object(Bucket=bucket_name, Key=source_file_key)
+                logger.info('Deleted CV source file from S3', s3_key=source_file_key)
+            except Exception as exc:
+                logger.warning('Failed to delete CV source file from S3', s3_key=source_file_key, error=str(exc))
+
+    return Response(
+        status_code=HTTPStatus.NO_CONTENT.value,
+        content_type=content_types.APPLICATION_JSON,
+        body='',
+    )
 
 
 @app.get('/users/me/usage')

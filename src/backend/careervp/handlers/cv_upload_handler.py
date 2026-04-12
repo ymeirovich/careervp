@@ -7,6 +7,7 @@ Handles CV upload requests, orchestrates parsing and storage.
 
 import base64
 import json
+import os
 import time
 import uuid
 from http import HTTPStatus
@@ -171,10 +172,14 @@ def upload_cv() -> Response[str]:  # noqa: C901
             body=response.model_dump_json(),
         )
 
-    # Set S3 key on parsed CV
+    # Set S3 key and label on parsed CV
     user_cv = parse_result.data
     if s3_key:
         user_cv.source_file_key = s3_key
+
+    raw_file_name = body.get('_file_name') or body.get('file_name') or ''
+    if raw_file_name:
+        user_cv.label = os.path.splitext(os.path.basename(raw_file_name))[0]
 
     # Store parsed CV in DynamoDB
     try:
@@ -254,6 +259,7 @@ def _normalize_request_payload(body: Any) -> dict[str, Any]:
         return {
             'user_id': user_id,
             'text_content': openapi_request.cv_content,
+            '_file_name': openapi_request.file_name,
         }
 
     return body
