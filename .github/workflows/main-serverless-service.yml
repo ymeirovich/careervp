@@ -18,7 +18,7 @@ on:
 
 jobs:
   staging:
-    runs-on: ubuntu-24.04-arm64 # Native ARM64 runner for faster builds
+    runs-on: ubuntu-latest
     environment: staging
     permissions:
       id-token: write # required for requesting the JWT (GitHub OIDC)
@@ -82,7 +82,7 @@ jobs:
           ENVIRONMENT: staging # Custom environment variable
 
   production:
-    runs-on: ubuntu-24.04-arm64 # Native ARM64 runner for faster builds
+    runs-on: ubuntu-latest
     needs: [staging]
     environment: production
     permissions:
