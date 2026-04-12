@@ -274,7 +274,19 @@ jobs:
 
       - name: Deploy VPR Async Stack
         working-directory: infra
-        run: npx cdk deploy --all --require-approval never --outputs-file cdk-outputs.json
+        run: |
+          set -o pipefail
+          npx cdk deploy --all --require-approval never --outputs-file cdk-outputs.json 2>&1 | tee /tmp/vpr-async-deploy.log || {
+            if grep -Eq "(_IN_PROGRESS state and can not be updated|UPDATE_COMPLETE_CLEANUP_IN_PROGRESS|is in .*_IN_PROGRESS state)" /tmp/vpr-async-deploy.log; then
+              echo "::warning::Stack update lock detected. Waiting for stack stability and retrying deploy..."
+              STACK_NAME="CareerVpCrudDev"
+              aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME" 2>/dev/null || \
+              aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" 2>/dev/null || true
+              npx cdk deploy --all --require-approval never --outputs-file cdk-outputs.json
+            else
+              exit 1
+            fi
+          }
 
       - name: Extract stack outputs
         id: stack-outputs
