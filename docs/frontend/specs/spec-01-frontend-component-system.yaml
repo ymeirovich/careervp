@@ -1,0 +1,314 @@
+spec_id: frontend-01
+title: Frontend Component System
+version: "1.0"
+status: done
+output_path: src/frontend/
+
+---
+
+design_tokens:
+  source: Figma (pages/00 Foundations)
+  output: src/frontend/styles/tokens.css + tailwind.config.ts
+
+  colors:
+    background_page: "#FCF7F5"
+    surface_card: "#FFFFFF"
+    primary_action: "#F97316"
+    text_primary: "#1E2229"
+    text_muted: "#6B7280"
+    state_active: "#16B44B"
+    state_warning: "#D97706"
+    state_error: "#DC2626"
+    state_info: "#2563EB"
+    border_default: "#CBD5E1"
+
+  spacing_scale: [4, 8, 12, 16, 20, 24, 32, 40, 48]
+
+  border_radius:
+    sm: 6
+    md: 8
+    lg: 12
+    xl: 16
+
+  typography:
+    semantic_tokens:
+      - pageTitle
+      - sectionTitle
+      - cardTitle
+      - body
+      - bodySmall
+      - label
+      - navItem
+      - button
+      - caption
+      - tableHeader
+      - tableBody
+    note: All type styles mapped from Figma token names. Do NOT use raw font-size/weight inline.
+
+  tailwind_config:
+    extend:
+      colors:
+        background:
+          page: "var(--color-background-page)"
+        surface:
+          card: "var(--color-surface-card)"
+        primary:
+          action: "var(--color-primary-action)"
+        state:
+          active: "var(--color-state-active)"
+          warning: "var(--color-state-warning)"
+          error: "var(--color-state-error)"
+          info: "var(--color-state-info)"
+        border:
+          default: "var(--color-border-default)"
+      borderRadius:
+        sm: "6px"
+        md: "8px"
+        lg: "12px"
+        xl: "16px"
+
+---
+
+enums:
+  HubStatus:
+    - INIT
+    - LOADING
+    - READY_PARTIAL
+    - READY_COMPLETE
+    - PROCESSING_BLOCKED
+    - ERROR_RECOVERABLE
+    - STALE_DEPENDENCIES
+    - FINALIZED
+
+  ModuleStatus:
+    - notStarted
+    - processing
+    - ready
+    - complete
+    - edited
+    - stale
+    - failed
+    - timeout
+    - final
+
+  ModuleType:
+    - companyResearch
+    - baseCV
+    - gapAnalysis
+    - vpr
+    - tailoredCV
+    - coverLetter
+    - interviewPrep
+
+  output_path: src/frontend/types/enums.ts
+  note: Single source of truth. Components MUST import from here. No string literals.
+
+---
+
+component_layers:
+  layer_1_primitives:
+    description: Atomic unstyled building blocks
+    components:
+      - name: Button
+        variants: [primary, secondary, ghost, destructive]
+        sizes: [sm, md, lg]
+        states: [default, hover, active, disabled, loading]
+        props:
+          - variant: ButtonVariant
+          - size: ButtonSize
+          - isLoading: boolean
+          - disabled: boolean
+          - onClick: () => void
+          - children: ReactNode
+        note: loading state shows spinner, disables click, aria-busy=true
+
+      - name: Badge
+        variants: [success, warning, error, info, neutral, final, edited, stale]
+        props:
+          - variant: BadgeVariant
+          - label: string
+          - icon?: ReactNode
+        note: maps to state colors from tokens
+
+      - name: Spinner
+        sizes: [sm, md, lg]
+        props:
+          - size: SpinnerSize
+          - label?: string  # aria-label for screen readers
+
+      - name: ProgressBar
+        props:
+          - value: number  # 0-100
+          - label?: string
+          - color?: "primary" | "warning" | "error"
+
+      - name: Tooltip
+        props:
+          - content: string
+          - children: ReactNode
+          - placement: "top" | "bottom" | "left" | "right"
+
+  layer_2_system:
+    description: Composed design system components
+    components:
+      - name: Card
+        variants: [default, elevated, bordered]
+        props:
+          - variant: CardVariant
+          - className?: string
+          - children: ReactNode
+
+      - name: StatusBadge
+        description: Renders correct Badge variant from ModuleStatus enum
+        props:
+          - status: ModuleStatus
+        mapping:
+          ready: success
+          complete: success
+          processing: info
+          stale: warning
+          edited: warning
+          failed: error
+          timeout: error
+          notStarted: neutral
+          final: final
+
+      - name: WarningBanner
+        props:
+          - message: string
+          - staleModules?: ModuleType[]
+          - onDismiss?: () => void
+
+      - name: EmptyState
+        props:
+          - title: string
+          - description?: string
+          - action?: ReactNode
+
+  layer_3_module_card:
+    description: >
+      THE core component. Single component handles all 7 module types × 9 states.
+      NO separate VPRCard, CVCard, etc. — this is the single source of truth.
+    output: src/frontend/components/ModuleCard/ModuleCard.tsx
+
+    props:
+      - module: ModuleType
+      - state: ModuleStatus
+      - title: string
+      - subtitle?: string
+      - description?: string
+      - meta?: string           # e.g. "ATS score: 74"
+      - warningText?: string
+      - progressText?: string
+      - badgeLabel?: string     # "Outdated" | "Final" | "Edited"
+      - primaryAction?: ModuleAction
+      - secondaryActions?: ModuleAction[]
+
+    ModuleAction:
+      - label: string
+      - onClick: () => void
+      - variant: ButtonVariant
+      - isLoading?: boolean
+
+    state_behavior:
+      notStarted:
+        cta_primary: "Generate"  # or "Start" for baseCV
+        cta_secondary: []
+        badge: null
+        warning: null
+      processing:
+        cta_primary: null
+        cta_secondary: []
+        badge: null
+        shows_spinner: true
+        shows_progress_text: true
+      ready:
+        cta_primary: "View"
+        cta_secondary: ["Edit", "Regenerate"]
+        badge: null
+      complete:
+        cta_primary: "View"
+        cta_secondary: ["Edit", "History"]
+        badge: null
+      edited:
+        cta_primary: "View"
+        cta_secondary: ["Regenerate", "History"]
+        badge: "Edited"
+      stale:
+        cta_primary: "Regenerate"
+        cta_secondary: ["View"]
+        badge: "Outdated"
+        shows_warning: true
+      failed:
+        cta_primary: "Retry"
+        cta_secondary: []
+        badge: null
+        shows_error_text: true
+      timeout:
+        cta_primary: "Refresh"
+        cta_secondary: []
+        note: "Still processing — check back shortly"
+      final:
+        cta_primary: "Export"
+        cta_secondary: ["History"]
+        badge: "Final"
+
+    cta_label_rules:
+      - Use "Generate" for first-time creation (notStarted)
+      - Use "Regenerate" when artifact exists but is stale/edited
+      - Use "Start" only for baseCV (first-time)
+      - Use "Retry" only for failed state
+      - NEVER swap these — must stay consistent with Figma spec
+
+    accessibility:
+      - aria-label includes module title + current state
+      - Focus management on state transitions
+      - Spinner has aria-live="polite"
+
+  layer_4_app_shell:
+    description: Layout wrappers
+    components:
+      - name: AppShell
+        props:
+          - user: UserProfile
+          - children: ReactNode
+        layout:
+          - TopNav (logo, nav links, user menu)
+          - Sidebar (optional, collapsed on mobile)
+          - MainContent
+          - Footer
+
+      - name: HubLayout
+        props:
+          - hubStatus: HubStatus
+          - children: ReactNode
+        note: renders HubStatusBanner when hubStatus is STALE_DEPENDENCIES or ERROR_RECOVERABLE
+
+      - name: PageContainer
+        props:
+          - title: string
+          - subtitle?: string
+          - children: ReactNode
+          - actions?: ReactNode
+
+---
+
+responsive_breakpoints:
+  mobile: "< 768px"
+  tablet: "768px - 1024px"
+  desktop: "> 1024px"
+  strategy: desktop-first (design is desktop-first; mobile must be supported)
+  module_card_grid:
+    desktop: 2 columns
+    tablet: 1 column
+    mobile: 1 column (full width)
+
+---
+
+storybook:
+  required: true
+  output: src/frontend/stories/
+  requirement: >
+    Every component in layer_1, layer_2, layer_3 MUST have a .stories.tsx file.
+    ModuleCard stories MUST cover all 9 states (not just notStarted/processing/ready).
+  format: CSF3 (Component Story Format 3.0)

@@ -56,3 +56,7 @@ careervp/docs/refactor3/payloads/*
 *.log
 
 .gitignore
+
+# Next.js (src/frontend app)
+src/frontend/.next/
+src/frontend/next-env.d.ts

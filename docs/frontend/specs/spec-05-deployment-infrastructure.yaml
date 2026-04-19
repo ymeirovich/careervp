@@ -1,0 +1,205 @@
+spec_id: frontend-05
+title: Deployment Infrastructure
+version: "1.0"
+status: pending
+output_path: infra/careervp/ + .github/workflows/
+
+---
+
+architecture:
+  pattern: CloudFront → S3 (frontend static assets)
+  cdn: Amazon CloudFront
+  origin: S3 bucket (static Next.js export or SSR via Lambda@Edge)
+  rendering_mode: Static Site Generation (SSG) + Client-Side Rendering
+  note: >
+    Next.js App Router supports both SSG and SSR.
+    For MVP, use `output: 'export'` in next.config.ts for pure static S3 deployment.
+    SSR via Lambda@Edge can be added later for SEO-sensitive pages.
+
+---
+
+environments:
+  dev:
+    domain: dev.careervp.com
+    aws_region: us-east-1
+    s3_bucket: careervp-frontend-dev
+    cloudfront_distribution: careervp-cf-dev
+    api_url: https://api.dev.careervp.com
+
+  staging:
+    domain: staging.careervp.com
+    s3_bucket: careervp-frontend-staging
+    cloudfront_distribution: careervp-cf-staging
+
+  prod:
+    domain: careervp.com + www.careervp.com
+    s3_bucket: careervp-frontend-prod
+    cloudfront_distribution: careervp-cf-prod
+
+---
+
+cdk_stack:
+  output: infra/careervp/frontend_stack.py
+  class_name: FrontendStack
+  depends_on: ApiStack (for API URL output)
+
+  constructs:
+    s3_bucket:
+      type: aws_cdk.aws_s3.Bucket
+      props:
+        bucket_name: "careervp-frontend-{env}"
+        block_public_access: BLOCK_ALL
+        versioned: true
+        removal_policy: RETAIN  # prod; DESTROY for dev
+        cors:
+          - allowed_methods: [GET, HEAD]
+            allowed_origins: ["https://{domain}"]
+            allowed_headers: ["*"]
+            max_age: 3600
+
+    cloudfront_distribution:
+      type: aws_cdk.aws_cloudfront.Distribution
+      props:
+        default_behavior:
+          origin: S3Origin(bucket)
+          viewer_protocol_policy: REDIRECT_TO_HTTPS
+          cache_policy: CachingOptimized
+          compress: true
+        error_responses:
+          - http_status: 403
+            response_http_status: 200
+            response_page_path: "/index.html"
+            ttl_seconds: 0
+          - http_status: 404
+            response_http_status: 200
+            response_page_path: "/index.html"
+            ttl_seconds: 0
+        domain_names: ["{domain}"]
+        certificate: acm_cert
+
+    acm_certificate:
+      type: aws_cdk.aws_certificatemanager.Certificate
+      region: us-east-1  # REQUIRED for CloudFront (must be us-east-1)
+      domains:
+        - "careervp.com"
+        - "*.careervp.com"
+      validation: DNS  # Route53 auto-validation
+
+    route53_record:
+      type: aws_cdk.aws_route53.ARecord
+      props:
+        zone: hosted_zone  # import existing HostedZone by domain name
+        record_name: "{subdomain}"
+        target: RecordTarget.from_alias(CloudFrontTarget(distribution))
+
+  stack_outputs:
+    - CloudFrontUrl
+    - BucketName
+    - DistributionId
+
+---
+
+nextjs_config:
+  output: src/frontend/next.config.ts
+  settings:
+    output: "export"  # static export for S3 deployment
+    trailingSlash: true  # required for S3 static hosting
+    images:
+      unoptimized: true  # required for static export (no Next.js image server)
+    env:
+      NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL
+      NEXT_PUBLIC_COGNITO_USER_POOL_ID: process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID
+      NEXT_PUBLIC_COGNITO_CLIENT_ID: process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID
+      NEXT_PUBLIC_COGNITO_REGION: "us-east-1"
+
+  environment_files:
+    dev: src/frontend/.env.development.local
+    prod: SSM Parameter Store / GitHub Actions secrets (NOT committed)
+
+  env_vars:
+    NEXT_PUBLIC_API_URL: "https://api.dev.careervp.com"
+    NEXT_PUBLIC_COGNITO_USER_POOL_ID: "us-east-1_WiHMRqLpe"
+    NEXT_PUBLIC_COGNITO_CLIENT_ID: "7blipbarsisbctqh6hlsj46sqa"
+
+---
+
+github_actions:
+  frontend_deploy:
+    output: .github/workflows/deploy-frontend.yml
+    trigger:
+      push:
+        branches: [main]
+      paths: ["src/frontend/**"]
+
+    steps:
+      1_install:
+        name: Install dependencies
+        run: cd src/frontend && npm ci
+
+      2_build:
+        name: Build Next.js static export
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.API_URL }}
+          NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${{ secrets.COGNITO_USER_POOL_ID }}
+          NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ secrets.COGNITO_CLIENT_ID }}
+        run: cd src/frontend && npm run build
+
+      3_lint_type_check:
+        name: Type check
+        run: cd src/frontend && npm run typecheck
+
+      4_test:
+        name: Unit tests
+        run: cd src/frontend && npm test -- --passWithNoTests
+
+      5_deploy_s3:
+        name: Sync to S3
+        run: |
+          aws s3 sync src/frontend/out/ s3://${{ secrets.S3_BUCKET_NAME }} \
+            --delete \
+            --cache-control "public, max-age=31536000, immutable" \
+            --exclude "*.html" \
+            --exclude "*.json"
+          aws s3 sync src/frontend/out/ s3://${{ secrets.S3_BUCKET_NAME }} \
+            --delete \
+            --cache-control "no-cache" \
+            --include "*.html" \
+            --include "*.json"
+
+      6_invalidate_cloudfront:
+        name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*"
+
+  rollback:
+    strategy: >
+      Tag successful deployments with git tag v{version}.
+      On failure, trigger rollback job that deploys previous S3 version
+      (S3 versioning enabled) and invalidates CloudFront.
+    rollback_command: |
+      aws s3 cp s3://{bucket}/{key}?versionId={prev_version_id} \
+        s3://{bucket}/{key}
+
+---
+
+local_development:
+  frontend_dev_server:
+    command: "cd src/frontend && npm run dev"
+    port: 3000
+    env_file: src/frontend/.env.development.local
+
+  backend_proxy:
+    description: >
+      In development, Next.js proxies API calls to the real API Gateway
+      (dev environment). No local Lambda simulation required.
+    next_config_rewrites: |
+      async rewrites() {
+        return [
+          {
+            source: '/api/:path*',
+            destination: `${process.env.NEXT_PUBLIC_API_URL}/:path*`,
+          },
+        ];
+      }

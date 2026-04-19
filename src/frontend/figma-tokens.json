@@ -1,0 +1,167 @@
+{
+  "global": {
+    "colors": {
+      "background": {
+        "page": {
+          "value": "#FCF7F5",
+          "type": "color",
+          "description": "Page background — very light warm"
+        }
+      },
+      "surface": {
+        "card": {
+          "value": "#FFFFFF",
+          "type": "color",
+          "description": "Card and surface background"
+        },
+        "subtle": {
+          "value": "#F8FAFC",
+          "type": "color",
+          "description": "Subtle surface for hover/selected states"
+        },
+        "selected": {
+          "value": "#F3F4F6",
+          "type": "color",
+          "description": "Selected item background"
+        },
+        "disabled": {
+          "value": "#F1F5F9",
+          "type": "color",
+          "description": "Disabled element background"
+        }
+      },
+      "primary": {
+        "action": {
+          "value": "#F97316",
+          "type": "color",
+          "description": "Primary action button — orange"
+        }
+      },
+      "text": {
+        "primary": {
+          "value": "#1E2229",
+          "type": "color",
+          "description": "Primary text color"
+        },
+        "muted": {
+          "value": "#6B7280",
+          "type": "color",
+          "description": "Muted/secondary text"
+        },
+        "subtle": {
+          "value": "#9CA3AF",
+          "type": "color",
+          "description": "Subtle/tertiary text"
+        },
+        "inverse": {
+          "value": "#FFFFFF",
+          "type": "color",
+          "description": "Text on dark backgrounds"
+        }
+      },
+      "border": {
+        "default": {
+          "value": "#CBD5E1",
+          "type": "color",
+          "description": "Default border color — thin"
+        },
+        "strong": {
+          "value": "#94A3B8",
+          "type": "color",
+          "description": "Strong/emphasized border"
+        }
+      },
+      "state": {
+        "active": {
+          "value": "#16B44B",
+          "type": "color",
+          "description": "Active/success state — green"
+        },
+        "warning": {
+          "value": "#D97706",
+          "type": "color",
+          "description": "Warning state — amber"
+        },
+        "error": {
+          "value": "#DC2626",
+          "type": "color",
+          "description": "Error state — red"
+        },
+        "info": {
+          "value": "#2563EB",
+          "type": "color",
+          "description": "Info state — blue"
+        }
+      }
+    },
+    "spacing": {
+      "4": {
+        "value": "4",
+        "type": "sizing",
+        "description": "4px spacing unit"
+      },
+      "8": {
+        "value": "8",
+        "type": "sizing",
+        "description": "8px spacing unit"
+      },
+      "12": {
+        "value": "12",
+        "type": "sizing",
+        "description": "12px spacing unit"
+      },
+      "16": {
+        "value": "16",
+        "type": "sizing",
+        "description": "16px spacing unit"
+      },
+      "20": {
+        "value": "20",
+        "type": "sizing",
+        "description": "20px spacing unit"
+      },
+      "24": {
+        "value": "24",
+        "type": "sizing",
+        "description": "24px spacing unit"
+      },
+      "32": {
+        "value": "32",
+        "type": "sizing",
+        "description": "32px spacing unit"
+      },
+      "40": {
+        "value": "40",
+        "type": "sizing",
+        "description": "40px spacing unit"
+      },
+      "48": {
+        "value": "48",
+        "type": "sizing",
+        "description": "48px spacing unit"
+      }
+    },
+    "radius": {
+      "sm": {
+        "value": "6",
+        "type": "sizing",
+        "description": "Small border radius"
+      },
+      "md": {
+        "value": "8",
+        "type": "sizing",
+        "description": "Medium border radius"
+      },
+      "lg": {
+        "value": "12",
+        "type": "sizing",
+        "description": "Large border radius"
+      },
+      "xl": {
+        "value": "16",
+        "type": "sizing",
+        "description": "Extra large border radius"
+      }
+    }
+  }
+}

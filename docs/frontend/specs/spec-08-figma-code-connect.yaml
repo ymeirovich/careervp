@@ -1,0 +1,183 @@
+spec_id: frontend-08
+title: Figma Code Connect & Design Extraction
+version: "1.0"
+status: pending
+output_path: src/frontend/
+
+---
+
+purpose: >
+  Code Connect maps Figma component nodes to React component implementations.
+  When a designer updates a Figma component, developers can see the linked
+  React code directly in Figma Dev Mode.
+  When running figma connect publish, the mappings are synced to the Figma file.
+  This prevents design-code drift in future redesign iterations.
+
+---
+
+figma_file_structure:
+  pages:
+    "00 Foundations": Design tokens (colors, spacing, typography, icons)
+    "01 Components": Layer 1 + 2 primitives (Button, Badge, Spinner, etc.)
+    "02 Patterns": Layer 3 (ModuleCard, HubLayout, AppShell)
+    "03 Screens": Layer 4 pages (Dashboard, Application Hub, Gap Analysis, etc.)
+    "04 Archive": Previous versions (ignore)
+
+---
+
+design_token_extraction:
+  tool: Figma Tokens Plugin (or Figma Variables API)
+  output:
+    css_variables: src/frontend/styles/tokens.css
+    tailwind_config: src/frontend/tailwind.config.ts
+
+  extraction_steps:
+    1: Open Figma file → "00 Foundations" page
+    2: Open Figma Tokens plugin → Export tokens as JSON
+    3: Save to src/frontend/figma-tokens.json (gitignored — source of truth is tokens.css)
+    4: Run token transform script: npm run tokens:transform
+    5: Verify tokens.css and tailwind.config.ts are updated
+
+  token_transform_script:
+    output: src/frontend/scripts/transform-tokens.ts
+    description: >
+      Reads figma-tokens.json, outputs CSS custom properties to tokens.css
+      and Tailwind extend config to tailwind.config.ts.
+      Normalize Figma token names to CSS variable naming convention.
+
+  token_mapping:
+    figma_name: css_variable
+    "color/background/page": "--color-background-page"
+    "color/surface/card": "--color-surface-card"
+    "color/primary/action": "--color-primary-action"
+    "color/text/primary": "--color-text-primary"
+    "color/text/muted": "--color-text-muted"
+    "color/state/active": "--color-state-active"
+    "color/state/warning": "--color-state-warning"
+    "color/state/error": "--color-state-error"
+    "color/state/info": "--color-state-info"
+    "color/border/default": "--color-border-default"
+
+---
+
+code_connect_setup:
+  package: "@figma/code-connect"
+  install: npm install --save-dev @figma/code-connect
+  config_file: src/frontend/figma.config.json
+
+  config_content: |
+    {
+      "codeConnect": {
+        "include": ["src/frontend/components/**/*.figma.tsx"],
+        "parser": "react"
+      }
+    }
+
+  cli_commands:
+    connect: figma connect create  # scaffolds .figma.tsx files from Figma node IDs
+    publish: figma connect publish  # syncs to Figma file
+    unpublish: figma connect unpublish
+
+---
+
+code_connect_mappings:
+  description: >
+    Each component needs a .figma.tsx file that links the Figma node to the
+    React component and maps Figma variant props to React prop values.
+
+  button:
+    file: src/frontend/components/Button/Button.figma.tsx
+    figma_node_url: "REPLACE_WITH_FIGMA_NODE_URL_FOR_BUTTON"
+    props_mapping:
+      Variant Primary: "{ variant: 'primary' }"
+      Variant Secondary: "{ variant: 'secondary' }"
+      Variant Ghost: "{ variant: 'ghost' }"
+      Size SM: "{ size: 'sm' }"
+      Size MD: "{ size: 'md' }"
+      Size LG: "{ size: 'lg' }"
+      State Loading: "{ isLoading: true }"
+      State Disabled: "{ disabled: true }"
+
+  badge:
+    file: src/frontend/components/Badge/Badge.figma.tsx
+    figma_node_url: "REPLACE_WITH_FIGMA_NODE_URL_FOR_BADGE"
+    props_mapping:
+      variant_success: "{ variant: 'success' }"
+      variant_warning: "{ variant: 'warning' }"
+      variant_error: "{ variant: 'error' }"
+      variant_final: "{ variant: 'final' }"
+      variant_edited: "{ variant: 'edited' }"
+      variant_stale: "{ variant: 'stale' }"
+
+  module_card:
+    file: src/frontend/components/ModuleCard/ModuleCard.figma.tsx
+    figma_node_url: "REPLACE_WITH_FIGMA_NODE_URL_FOR_MODULE_CARD"
+    note: >
+      ModuleCard has 63 variants in Figma (7 module types × 9 states).
+      Code Connect maps the Figma "State" variant prop to the React "state" prop.
+      The Figma "Module" variant maps to the React "module" prop.
+    props_mapping:
+      "State=Not Started": "{ state: 'notStarted' }"
+      "State=Processing": "{ state: 'processing' }"
+      "State=Ready": "{ state: 'ready' }"
+      "State=Complete": "{ state: 'complete' }"
+      "State=Edited": "{ state: 'edited' }"
+      "State=Stale": "{ state: 'stale' }"
+      "State=Failed": "{ state: 'failed' }"
+      "State=Timeout": "{ state: 'timeout' }"
+      "State=Final": "{ state: 'final' }"
+      "Module=VPR": "{ module: 'vpr' }"
+      "Module=CV": "{ module: 'tailoredCV' }"
+      "Module=Cover Letter": "{ module: 'coverLetter' }"
+      "Module=Interview Prep": "{ module: 'interviewPrep' }"
+      "Module=Gap Analysis": "{ module: 'gapAnalysis' }"
+      "Module=Company Research": "{ module: 'companyResearch' }"
+      "Module=Base CV": "{ module: 'baseCV' }"
+
+---
+
+figma_mcp_integration:
+  description: >
+    The Figma MCP server (available in this workspace) allows direct Figma API
+    access from Claude Code sessions. Use it to extract component metadata,
+    variable definitions, and screenshots during development.
+
+  useful_tools:
+    get_variable_defs:
+      when: Extracting exact design token values from Figma Variables
+      purpose: Verify token hex values match tokens.css
+    get_design_context:
+      when: Understanding component layout and spacing from a specific Figma node
+      purpose: Implement pixel-accurate spacing from Figma frames
+    get_screenshot:
+      when: Visual QA — compare Figma frame vs implemented React component
+      purpose: Identify visual drift between design and code
+    get_code_connect_map:
+      when: Auditing which components have Code Connect mappings configured
+    add_code_connect_map:
+      when: Adding new component → Figma node linkages programmatically
+    get_code_connect_suggestions:
+      when: Figma suggests components that should be linked but aren't yet
+
+  extraction_workflow:
+    1: Run get_variable_defs on "00 Foundations" page → validate tokens.css values
+    2: Run get_design_context on ModuleCard variants → verify layout implementation
+    3: Run get_screenshot on each screen → visual QA comparison
+    4: Run get_code_connect_suggestions → identify unmapped components
+    5: Run add_code_connect_map for each unmapped component
+
+---
+
+figma_todos_from_design_doc:
+  description: >
+    The Version 4 Documentation listed remaining Figma work. These are NOT
+    required before frontend implementation — React components are the source
+    of truth. Figma work is for design fidelity only.
+  high_priority:
+    - Mobile-specific ModuleCard layout (touch targets, spacing)
+    - Error and empty states for all screens
+    - Loading skeleton frames for each module type
+  medium_priority:
+    - Gap Analysis question page mobile layout
+    - Export/finalization confirmation modal
+    - Notification/toast system frames

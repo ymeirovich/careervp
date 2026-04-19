@@ -1,0 +1,166 @@
+spec_id: frontend-06
+title: Authentication Flow
+version: "1.0"
+status: pending
+output_path: src/frontend/
+
+---
+
+provider: Amazon Cognito
+library: amazon-cognito-identity-js v6.3.16
+
+cognito:
+  user_pool_id: "us-east-1_WiHMRqLpe"
+  client_id: "7blipbarsisbctqh6hlsj46sqa"
+  region: "us-east-1"
+  domain_pattern: "careervp-{environment}.auth.us-east-1.amazoncognito.com"
+
+token_validity:
+  access_token: 1 hour
+  id_token: 1 hour
+  refresh_token: 30 days
+  note: >
+    API Gateway Cognito Authorizer validates idToken, not accessToken.
+    Frontend must send idToken in Authorization header.
+
+---
+
+auth_context:
+  output: src/frontend/contexts/AuthContext.tsx
+  description: React context wrapping Cognito session state
+
+  state:
+    - user: CognitoUser | null
+    - idToken: string | null
+    - isLoading: boolean
+    - isAuthenticated: boolean
+
+  methods:
+    - signIn: (email: string, password: string) => Promise<void>
+    - signOut: () => Promise<void>
+    - signUp: (email: string, password: string) => Promise<void>
+    - confirmSignUp: (email: string, code: string) => Promise<void>
+    - forgotPassword: (email: string) => Promise<void>
+    - confirmForgotPassword: (email: string, code: string, newPassword: string) => Promise<void>
+    - refreshSession: () => Promise<string>  # returns fresh idToken
+
+  token_management:
+    on_mount: >
+      Check for existing Cognito session via CognitoUserPool.getCurrentUser().
+      If session exists and valid, hydrate auth state.
+      If session expired, attempt silent refresh via refreshSession().
+      If refresh fails, clear state and redirect to /login.
+    on_api_401: >
+      Attempt one silent refresh. If refresh fails, call signOut() and redirect.
+
+---
+
+routes:
+  public:
+    - /login
+    - /register
+    - /forgot-password
+    - /reset-password
+  protected:
+    - /dashboard/*
+    - /jobs/*
+    - /profile/*
+    - /cv/*
+
+  middleware:
+    output: src/frontend/middleware.ts
+    description: >
+      Next.js middleware checks for Cognito session token in cookie/localStorage.
+      Redirects unauthenticated users to /login.
+      Redirects authenticated users away from /login to /dashboard.
+    implementation: |
+      export function middleware(request: NextRequest) {
+        const token = request.cookies.get('cognito_id_token')?.value;
+        const isProtected = request.nextUrl.pathname.startsWith('/dashboard');
+        if (isProtected && !token) {
+          return NextResponse.redirect(new URL('/login', request.url));
+        }
+        return NextResponse.next();
+      }
+    note: >
+      Cookie-based check is for middleware only (edge runtime, no JS SDK).
+      Actual token validation happens in the API Gateway Cognito Authorizer.
+      A missing or expired cookie in middleware = redirect to login.
+      An expired token that passes middleware will get 401 from API (handled in api/client.ts).
+
+---
+
+pages:
+  login:
+    output: src/frontend/app/(auth)/login/page.tsx
+    fields: [email, password]
+    actions:
+      - submit: calls signIn()
+      - forgot_password_link: navigates to /forgot-password
+      - register_link: navigates to /register
+    on_success: redirect to /dashboard
+    error_handling:
+      UserNotConfirmedException: "Redirect to /confirm-signup with email pre-filled"
+      NotAuthorizedException: "Inline error: Incorrect email or password"
+      UserNotFoundException: "Inline error: No account found for this email"
+
+  register:
+    output: src/frontend/app/(auth)/register/page.tsx
+    fields: [email, password, confirm_password]
+    password_policy: "Min 8 chars, uppercase + lowercase + digits"
+    actions:
+      - submit: calls signUp()
+    on_success: redirect to /confirm-signup?email={email}
+    note: Cognito sends verification email automatically
+
+  confirm_signup:
+    output: src/frontend/app/(auth)/confirm-signup/page.tsx
+    fields: [verification_code]
+    pre_filled: email from query param
+    actions:
+      - submit: calls confirmSignUp()
+      - resend_code: calls CognitoUser.resendConfirmationCode()
+    on_success: redirect to /login
+
+  forgot_password:
+    output: src/frontend/app/(auth)/forgot-password/page.tsx
+    fields: [email]
+    actions:
+      - submit: calls forgotPassword() — triggers Cognito email with reset code
+    on_success: redirect to /reset-password?email={email}
+
+  reset_password:
+    output: src/frontend/app/(auth)/reset-password/page.tsx
+    fields: [verification_code, new_password, confirm_password]
+    actions:
+      - submit: calls confirmForgotPassword()
+    on_success: redirect to /login with success toast
+
+---
+
+missing_backend_features:
+  logout_endpoint:
+    description: >
+      POST /auth/logout does not exist in current API (see swagger).
+      Client-side signOut() clears local Cognito session but does NOT invalidate
+      the server-side Cognito session (global sign-out).
+    fix_required:
+      endpoint: "POST /auth/logout"
+      implementation: |
+        cognito_client.admin_user_global_sign_out(
+            UserPoolId=user_pool_id,
+            Username=username
+        )
+      output: src/backend/careervp/handlers/auth_handler.py
+      note: >
+        Until this is implemented, token revocation is not enforced.
+        For MVP, client-side-only logout is acceptable but should be noted
+        as a security gap for the security review.
+
+  password_change:
+    description: >
+      In-app password change (authenticated user) uses cognito-identity-js
+      CognitoUser.changePassword() — no backend endpoint needed.
+    implementation: >
+      Add to AuthContext: changePassword(oldPassword, newPassword) => Promise<void>
+      Add Settings page with password change form.

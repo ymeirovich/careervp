@@ -1,0 +1,248 @@
+spec_id: frontend-02
+title: State Machine Adapters
+version: "1.0"
+status: done
+output_path: src/frontend/adapters/
+
+---
+
+principle: >
+  API responses NEVER contain HubStatus or ModuleStatus directly.
+  The frontend derives these from raw API data in dedicated adapter functions.
+  Components consume ONLY HubState / ModuleState — never raw API shapes.
+  This is the firewall between API contracts and UI rendering logic.
+
+---
+
+types:
+  output: src/frontend/types/hub-state.ts
+
+  RawApplicationData:
+    description: Shape returned by GET /applications/{application_id}
+    fields:
+      - application_id: string
+      - job_id: string
+      - user_id: string
+      - created_at: string  # ISO 8601
+      - updated_at: string  # ISO 8601
+      - is_finalized: boolean
+      - finalized_at?: string
+
+  RawModuleData:
+    description: Shape returned by GET /{module}/{job_id}/status
+    fields:
+      - job_id: string
+      - status: "pending" | "processing" | "completed" | "failed"  # raw API 4-state
+      - created_at: string
+      - updated_at: string
+      - result_url?: string    # S3 presigned URL (only when completed)
+      - error_message?: string  # only when failed
+      - progress_text?: string  # optional progress label
+
+  RawGapAnalysisData:
+    fields:
+      - job_id: string
+      - questions: GapQuestion[]
+      - responses?: GapResponse[]
+      - responses_submitted_at?: string
+
+  RawCVData:
+    fields:
+      - cv_id: string
+      - created_at: string
+      - updated_at: string
+      - version: number
+
+  HubModuleState:
+    description: Derived per-module state consumed by ModuleCard
+    fields:
+      - type: ModuleType
+      - status: ModuleStatus  # derived, not raw
+      - title: string
+      - subtitle?: string
+      - meta?: string
+      - warningText?: string
+      - progressText?: string
+      - badgeLabel?: string
+      - resultUrl?: string
+      - primaryAction?: ModuleAction
+      - secondaryActions?: ModuleAction[]
+      - isStale: boolean
+      - staleReason?: string
+
+  HubState:
+    description: Top-level derived state consumed by ApplicationHub page
+    fields:
+      - hubStatus: HubStatus
+      - modules: Record<ModuleType, HubModuleState>
+      - completedCount: number
+      - totalCount: number   # always 7
+      - progressPercent: number  # 0-100
+      - staleModules: ModuleType[]
+      - blockedReason?: string  # shown when PROCESSING_BLOCKED
+      - isFinalized: boolean
+
+---
+
+adapter_functions:
+  output: src/frontend/adapters/mapApplicationDataToHubState.ts
+
+  main_function:
+    signature: >
+      function mapApplicationDataToHubState(
+        application: RawApplicationData,
+        moduleData: Partial<Record<ModuleType, RawModuleData>>,
+        gapAnalysis: RawGapAnalysisData | null,
+        cvData: RawCVData | null,
+        previousCvUpdatedAt: string | null
+      ): HubState
+
+    steps:
+      1: >
+        Derive each module's ModuleStatus from its raw API status + cross-module
+        dependency rules. Call deriveModuleStatus() for each module.
+      2: >
+        Detect stale modules using detectStaleness(). Returns Set<ModuleType>.
+      3: >
+        Derive HubStatus from the full set of module statuses + stale set.
+        Call deriveHubStatus().
+      4: >
+        Build HubModuleState for each module with correct CTAs and labels.
+      5: >
+        Return HubState with computed completedCount and progressPercent.
+
+  deriveModuleStatus:
+    signature: >
+      function deriveModuleStatus(
+        moduleType: ModuleType,
+        rawStatus: RawModuleData["status"] | null,
+        isStale: boolean,
+        isFinalized: boolean
+      ): ModuleStatus
+
+    mapping:
+      null_or_missing: "notStarted"
+      "pending": "processing"
+      "processing": "processing"
+      "completed + isFinalized": "final"
+      "completed + isStale": "stale"
+      "completed": "ready"
+      "failed": "failed"
+    note: >
+      "edited" state requires checking if the module's result_url exists AND
+      the user has manually edited the artifact (tracked in local state or
+      a dedicated API field). Not derivable from raw status alone.
+      Fallback: treat as "ready" until edit tracking is implemented.
+
+  detectStaleness:
+    signature: >
+      function detectStaleness(
+        moduleData: Partial<Record<ModuleType, RawModuleData>>,
+        cvData: RawCVData | null,
+        previousCvUpdatedAt: string | null,
+        gapAnalysis: RawGapAnalysisData | null
+      ): Set<ModuleType>
+
+    rules:
+      cv_changed:
+        trigger: cvData.updated_at > previousCvUpdatedAt
+        invalidates:
+          - gapAnalysis
+          - vpr
+          - tailoredCV
+          - coverLetter
+          - interviewPrep
+        note: >
+          previousCvUpdatedAt is the cv.updated_at at the time each downstream
+          artifact was generated. In MVP, approximate by comparing timestamps.
+
+      gap_responses_edited:
+        trigger: gapAnalysis.responses_submitted_at > vprModule.created_at
+        invalidates:
+          - vpr
+          - coverLetter
+          - interviewPrep
+
+      company_research_regenerated:
+        trigger: companyResearchModule.updated_at > vprModule.created_at
+        invalidates:
+          - vpr
+          - coverLetter
+          - interviewPrep
+        severity: soft  # show warning, don't block
+
+  deriveHubStatus:
+    signature: >
+      function deriveHubStatus(
+        moduleStatuses: Record<ModuleType, ModuleStatus>,
+        staleModules: Set<ModuleType>,
+        isFinalized: boolean
+      ): HubStatus
+
+    rules:
+      - condition: "isFinalized = true"
+        result: FINALIZED
+      - condition: "all modules = notStarted"
+        result: INIT
+      - condition: "any module = processing"
+        result: LOADING
+      - condition: "any module = failed AND critical module"
+        result: ERROR_RECOVERABLE
+        critical_modules: [vpr, gapAnalysis, baseCV]
+      - condition: "staleModules.size > 0"
+        result: STALE_DEPENDENCIES
+      - condition: "gapAnalysis.status = notStarted AND vpr.status != notStarted"
+        result: PROCESSING_BLOCKED
+        note: Gap analysis must complete before VPR can be generated
+      - condition: "all modules complete OR final"
+        result: READY_COMPLETE
+      - condition: "at least 1 module complete/ready AND others notStarted"
+        result: READY_PARTIAL
+      - default: LOADING
+
+  buildHubModuleState:
+    signature: >
+      function buildHubModuleState(
+        moduleType: ModuleType,
+        status: ModuleStatus,
+        rawData: RawModuleData | null,
+        isStale: boolean,
+        isFinalized: boolean
+      ): HubModuleState
+    note: >
+      Computes title, subtitle, meta, warningText, progressText, badgeLabel,
+      primaryAction, secondaryActions from status + moduleType.
+      CTA labels MUST follow the cta_label_rules in spec-01.
+
+---
+
+state_selectors:
+  output: src/frontend/adapters/selectors.ts
+  description: Memoized selector functions for React Query / Zustand
+
+  functions:
+    - selectHubStatus: "(hubState: HubState) => HubStatus"
+    - selectModuleState: "(hubState: HubState, moduleType: ModuleType) => HubModuleState"
+    - selectStaleModules: "(hubState: HubState) => ModuleType[]"
+    - selectIsBlocked: "(hubState: HubState) => boolean"
+    - selectProgressPercent: "(hubState: HubState) => number"
+
+---
+
+zustand_store:
+  output: src/frontend/store/useApplicationStore.ts
+  state:
+    - selectedCvId: string | null
+    - activeJobId: string | null
+    - editedModules: Set<ModuleType>   # tracks user edits for "edited" state
+    - dismissedWarnings: Set<string>
+  actions:
+    - setSelectedCv: "(cvId: string) => void"
+    - setActiveJob: "(jobId: string) => void"
+    - markModuleEdited: "(moduleType: ModuleType) => void"
+    - dismissWarning: "(warningId: string) => void"
+    - clearJob: "() => void"
+
+  note: >
+    editedModules is the client-side signal that determines "edited" ModuleStatus.
+    Persisted to sessionStorage. Cleared when a Regenerate action succeeds.
