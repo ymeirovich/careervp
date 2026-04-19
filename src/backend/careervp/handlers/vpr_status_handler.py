@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from typing import Any
 
@@ -46,15 +47,54 @@ def _get_results_bucket() -> str:
     return f'careervp-{env}-vpr-results-us-east-1'
 
 
+_URL_TTL_SECONDS = 604800  # 7 days
+_URL_MIN_REMAINING_SECONDS = 3600  # regenerate if less than 1 hour left
+
+
 def _generate_presigned_url(result_key: str) -> str:
     """Generate presigned URL for downloading result."""
     bucket = _get_results_bucket()
     url = s3.generate_presigned_url(
         'get_object',
         Params={'Bucket': bucket, 'Key': result_key},
-        ExpiresIn=604800,  # 7 days — reduces expiry-related download failures
+        ExpiresIn=_URL_TTL_SECONDS,
     )
     assert isinstance(url, str), 'S3 presigned URL should return a string'
+    return url
+
+
+def _get_or_cache_presigned_url(
+    job: dict[str, Any],
+    result_key: str,
+    jobs_repo: Any,
+    job_id: str,
+) -> str:
+    """Return cached presigned URL or generate and cache a new one."""
+    expires_at_str = job.get('result_url_expires_at')
+    cached_url = job.get('result_url_cached')
+
+    if cached_url and expires_at_str:
+        try:
+            expires_at = datetime.fromisoformat(str(expires_at_str).replace('Z', '+00:00'))
+            if expires_at - datetime.now(tz=timezone.utc) > timedelta(seconds=_URL_MIN_REMAINING_SECONDS):
+                return str(cached_url)
+        except (ValueError, TypeError):
+            pass
+
+    url = _generate_presigned_url(result_key)
+    now = datetime.now(tz=timezone.utc)
+    expires_at = now + timedelta(seconds=_URL_TTL_SECONDS)
+    try:
+        jobs_repo.update_job(
+            job_id,
+            {
+                'result_url_cached': url,
+                'result_url_cached_at': now.isoformat(),
+                'result_url_expires_at': expires_at.isoformat(),
+            },
+        )
+    except Exception as e:
+        logger.warning('Failed to cache presigned URL in DynamoDB', job_id=job_id, error=str(e))
     return url
 
 
@@ -76,11 +116,11 @@ def _build_processing_response(job: dict[str, Any], job_id: str) -> dict[str, An
     }
 
 
-def _build_completed_response(job: dict[str, Any], job_id: str) -> dict[str, Any]:
+def _build_completed_response(job: dict[str, Any], job_id: str, jobs_repo: Any = None) -> dict[str, Any]:
     """Build response for COMPLETED status."""
     result_key = job.get('result_key')
     if result_key:
-        result_url = _generate_presigned_url(result_key)
+        result_url = _get_or_cache_presigned_url(job, str(result_key), jobs_repo, job_id)
     else:
         result_url = job.get('result_url', '')
 
@@ -352,7 +392,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     if normalized_status == 'processing':
         response_data = _build_processing_response(job, vpr_id)
     elif normalized_status == 'completed':
-        response_data = _build_completed_response(job, vpr_id)
+        response_data = _build_completed_response(job, vpr_id, jobs_repo)
     elif normalized_status == 'failed':
         response_data = _build_failed_response(job, vpr_id)
     else:

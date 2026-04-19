@@ -1,0 +1,365 @@
+spec_id: frontend-11
+title: Polling, Async Workflows & Mutation Hooks
+version: "1.0"
+status: pending
+depends_on:
+  - frontend-09  # AuthContext for token injection
+  - frontend-10  # api methods + types
+output_path: >
+  src/frontend/hooks/
+  src/frontend/lib/artifactStorage.ts
+
+---
+
+principle: >
+  Every async artifact (VPR, Cover Letter, Interview Prep, CV Tailoring) follows
+  the same lifecycle: trigger generate → receive asyncTaskId → poll status every
+  3 seconds → stop when completed or failed. The asyncTaskId is persisted to
+  localStorage so polling can resume if the user navigates away mid-generation.
+
+  Cache-busting: every /generate call receives a fresh crypto.randomUUID() as
+  job_id in the request body. This is NOT the application's jobId — it is a
+  per-request UUID that prevents the backend from returning a cached prior result.
+  The actual job posting ID is sent as application_id.
+
+  Two-source reconciliation: on page load, check (1) the hub's artifact_id from
+  GET /applications/{jobId} first; (2) localStorage fallback. Only if both are
+  null is the module unstarted.
+
+---
+
+artifact_storage:
+  output: src/frontend/lib/artifactStorage.ts
+  description: >
+    localStorage helpers for persisting artifact task IDs across navigation.
+    Keys are namespaced per job+module to avoid collision.
+
+  storage_key_pattern: "cvp:artifacts:{jobId}:{moduleType}"
+
+  exports:
+    persistArtifact:
+      signature: "(jobId: string, moduleType: string, taskId: string) => void"
+      behavior: write taskId to localStorage under the namespaced key
+    getArtifact:
+      signature: "(jobId: string, moduleType: string) => string | null"
+      behavior: return taskId from localStorage or null
+    clearArtifact:
+      signature: "(jobId: string, moduleType: string) => void"
+      behavior: remove key from localStorage
+    clearAllArtifacts:
+      signature: "(jobId: string) => void"
+      behavior: remove all artifact keys for a given jobId
+
+  error_handling: >
+    Wrap all localStorage calls in try/catch — private browsing or storage quota
+    errors must not crash the app. Fail silently (log to console.warn only).
+
+---
+
+hooks:
+  output: src/frontend/hooks/
+
+  useModuleStatus:
+    file: useModuleStatus.ts
+    description: >
+      Per-module polling hook. Polls a status endpoint every 3 seconds until
+      the artifact is completed or failed, then clears the interval.
+      If taskId is null and no hub artifact_id exists, returns null immediately.
+    signature: |
+      function useModuleStatus(
+        moduleType: ModuleType,
+        jobId: string,
+        initialTaskId: string | null,
+        enabled: boolean
+      ): {
+        status: ArtifactStatus | null;
+        result: unknown | null;  // typed per module in consuming hooks
+        taskId: string | null;
+        isPolling: boolean;
+      }
+    implementation:
+      interval_ms: 3000
+      poll_fn_map:
+        vpr: api.pollVPRStatus(taskId)
+        coverLetter: api.pollCoverLetterStatus(taskId)
+        interviewPrep: api.pollInterviewPrepStatus(taskId)
+        cvTailoring: api.pollCVTailored(taskId)
+      lifecycle: |
+        useEffect(() => {
+          if (!enabled || !taskId) return;
+
+          const interval = setInterval(async () => {
+            try {
+              const response = await pollFn(taskId);
+              setStatus(response.status);
+              setResult(response.result ?? null);
+
+              if (response.status === 'completed' || response.status === 'failed') {
+                clearInterval(interval);
+                setIsPolling(false);
+                if (response.status === 'completed') {
+                  persistArtifact(jobId, moduleType, taskId);
+                }
+              }
+            } catch {
+              // Transient network errors: do not stop polling, log to console
+            }
+          }, 3000);
+
+          setIsPolling(true);
+          return () => clearInterval(interval);
+        }, [taskId, enabled]);
+    on_unmount: clearInterval is called automatically via useEffect cleanup
+
+  useGenerateModule:
+    file: useGenerateModule.ts
+    description: >
+      Mutation hook for triggering module generation.
+      Handles the cache-busting UUID and starts polling via useModuleStatus.
+    signature: |
+      function useGenerateModule(moduleType: ModuleType, jobId: string): {
+        generate: (options?: GenerateOptions) => Promise<void>;
+        isGenerating: boolean;
+        taskId: string | null;
+        error: string | null;
+      }
+    GenerateOptions:
+      cvId: "string | undefined"
+      vprId: "string | undefined"
+      gapResponseIds: "string[] | undefined"
+      companyResearchId: "string | undefined"
+    implementation:
+      cache_busting: |
+        const cacheBustingId = crypto.randomUUID();
+        // sent as job_id in request body
+        // application_id = actual jobId from route
+      generate_fn_map:
+        vpr: |
+          api.generateVPR({
+            job_id: cacheBustingId,
+            application_id: jobId,
+            cv_id: options.cvId!,
+            gap_response_ids: options.gapResponseIds ?? [],
+          })
+        coverLetter: |
+          api.generateCoverLetter({
+            job_id: cacheBustingId,
+            application_id: jobId,
+            cv_id: options.cvId!,
+            vpr_id: options.vprId!,
+            gap_response_ids: options.gapResponseIds ?? [],
+            company_research_id: options.companyResearchId ?? '',
+          })
+        interviewPrep: |
+          api.generateInterviewPrep({
+            vpr_id: options.vprId!,
+            gap_response_ids: options.gapResponseIds ?? [],
+            application_id: jobId,
+          })
+        cvTailoring: |
+          api.generateCV({
+            cv_id: options.cvId!,
+            job_id: jobId,
+            vpr_id: options.vprId ?? null,
+          })
+      on_success: |
+        setTaskId(response.request_id ?? response.job_id);
+        // useModuleStatus picks up the new taskId and starts polling
+
+  useApplicationHub:
+    file: useApplicationHub.ts
+    description: >
+      Updated version — now uses real polling via useModuleStatus and the
+      two-source reconciliation pattern (hub artifact_id first, localStorage fallback).
+    signature: |
+      function useApplicationHub(jobId: string): {
+        hubState: HubState | null;
+        isLoading: boolean;
+        error: Error | null;
+        refetch: () => void;
+      }
+    implementation:
+      initial_load: |
+        // Parallel fetch of hub, cv, job, research, gap questions
+        const results = await Promise.allSettled([
+          api.getApplication(jobId),
+          api.getCV(),
+          api.getJob(jobId),
+          api.getCompanyResearch(jobId),
+          api.getGapQuestions(jobId),
+        ]);
+      task_id_resolution: |
+        // For each async module, resolve taskId:
+        // 1. hub.artifacts[module].artifact_id (if status is processing or completed)
+        // 2. artifactStorage.getArtifact(jobId, module)
+        // 3. null → not started
+      polling_modules: [vpr, coverLetter, interviewPrep, cvTailoring]
+      merge: |
+        // Pass all raw data through mapApplicationDataToHubState() from spec-02
+        // Include live polling status to override hub artifact status for in-progress modules
+
+  useGapAnalysis:
+    file: useGapAnalysis.ts
+    signature: |
+      function useGapAnalysis(jobId: string): {
+        questions: GapQuestion[];
+        responses: Record<string, { answer: string; destination: 'CV_IMPACT' | 'INTERVIEW_MVP_ONLY' | '' }>;
+        savedResponses: Record<string, unknown>;
+        isLoading: boolean;
+        isGenerating: boolean;
+        isSaving: boolean;
+        generateQuestions: (cvId: string) => Promise<void>;
+        saveResponses: (responses: GapResponse[]) => Promise<void>;
+        error: string | null;
+      }
+    implementation:
+      fetch_on_mount: api.getGapQuestions(jobId)
+      generate: api.generateGapQuestions({ job_id: jobId, cv_id: cvId })
+      save: api.saveGapResponses(jobId, responses)
+
+  useCV:
+    file: useCV.ts
+    signature: |
+      function useCV(): {
+        cv: UserCV | null;
+        isLoading: boolean;
+        isSaving: boolean;
+        saveCV: (data: Partial<UserCV>) => Promise<UserCV>;
+        error: string | null;
+      }
+
+  useJobs:
+    file: useJobs.ts
+    signature: |
+      function useJobs(): {
+        jobs: Job[];
+        isLoading: boolean;
+        createJob: (input: CreateJobInput) => Promise<Job>;
+        isCreating: boolean;
+        error: string | null;
+      }
+    tanstack_query:
+      list_key: ["jobs"]
+      on_create_success: invalidate ["jobs"] query
+
+  useUserContext:
+    file: useUserContext.ts
+    description: >
+      Fetches user profile, usage, and subscription in parallel.
+      Used by StatsRow, UsageGate, and billing page.
+    signature: |
+      function useUserContext(): {
+        user: User | null;
+        usage: Usage | null;
+        subscription: SubscriptionResponse | null;
+        isLoading: boolean;
+        hasActiveAccess: boolean;  // true if trial active OR subscription active
+        applicationsRemaining: number | null;
+      }
+    implementation:
+      parallel_queries:
+        - api.getMe()
+        - api.getUsage()
+        - api.getSubscription()
+      hasActiveAccess: |
+        usage?.trial?.active === true
+        || subscription?.has_active_subscription === true
+      applicationsRemaining: usage?.applications?.remaining ?? null
+
+---
+
+tests:
+  unit:
+    file: src/frontend/tests/unit/artifact-storage.test.ts
+    framework: vitest (no React needed — pure logic)
+
+    cases:
+      - name: "persistArtifact writes to localStorage under namespaced key"
+        action: persistArtifact('job1', 'vpr', 'task-abc')
+        assert: localStorage.getItem('cvp:artifacts:job1:vpr') === 'task-abc'
+        expect_to_fail_before_implementation: true
+
+      - name: "getArtifact returns taskId for existing key"
+        precondition: persistArtifact('job1', 'vpr', 'task-abc') called
+        action: getArtifact('job1', 'vpr')
+        assert: result === 'task-abc'
+        expect_to_fail_before_implementation: true
+
+      - name: "getArtifact returns null for unknown key"
+        action: getArtifact('job1', 'vpr')
+        assert: result === null
+        expect_to_fail_before_implementation: true
+
+      - name: "clearArtifact removes the key"
+        precondition: persistArtifact('job1', 'vpr', 'task-abc') called
+        action: clearArtifact('job1', 'vpr')
+        assert: getArtifact('job1', 'vpr') === null
+        expect_to_fail_before_implementation: true
+
+      - name: "persistArtifact does not throw when localStorage is unavailable"
+        precondition: localStorage.setItem mocked to throw QuotaExceededError
+        action: persistArtifact('job1', 'vpr', 'task-abc')
+        assert: no exception thrown (fails silently)
+        expect_to_fail_before_implementation: true
+
+  integration:
+    file: src/frontend/tests/integration/api-polling.test.ts
+    framework: vitest + msw + @testing-library/react
+
+    cases:
+      - name: "useModuleStatus polls every 3 seconds until completed"
+        precondition:
+          - First two polls return { status: 'processing' }
+          - Third poll returns { status: 'completed', result: {...} }
+        action: render hook with taskId='task1', wait 10 seconds (fake timers)
+        assert:
+          - status === 'completed' after third poll
+          - isPolling === false after completion
+        expect_to_fail_before_implementation: true
+
+      - name: "useModuleStatus stops polling on failed status"
+        precondition: Poll returns { status: 'failed' }
+        action: render hook, advance timer
+        assert:
+          - status === 'failed'
+          - isPolling === false
+          - No further poll calls after failure
+        expect_to_fail_before_implementation: true
+
+      - name: "useModuleStatus does NOT poll when enabled=false"
+        action: render hook with enabled=false
+        assert:
+          - No API calls made
+          - isPolling === false
+        expect_to_fail_before_implementation: true
+
+      - name: "useModuleStatus resumes from localStorage taskId on mount"
+        precondition:
+          - persistArtifact('job1', 'vpr', 'stored-task') was previously called
+          - initialTaskId = null (hub shows no in-progress task)
+          - artifactStorage.getArtifact('job1', 'vpr') returns 'stored-task'
+          - MSW returns processing then completed for 'stored-task'
+        action: render useModuleStatus with initialTaskId=null
+        assert:
+          - polling starts with taskId 'stored-task'
+          - completes successfully
+        expect_to_fail_before_implementation: true
+
+      - name: "generateVPR sends different job_id UUID on each call (cache-busting)"
+        precondition: MSW captures POST /vpr/generate body on two calls
+        action: call generate() twice
+        assert:
+          - first_call.job_id !== second_call.job_id
+          - both are valid UUIDs (crypto.randomUUID() format)
+          - both have application_id === actual jobId
+        expect_to_fail_before_implementation: true
+
+      - name: "transient poll error does not stop the polling interval"
+        precondition:
+          - First poll throws network error
+          - Second poll returns { status: 'completed' }
+        action: render hook, advance timers through both polls
+        assert:
+          - status === 'completed' after second poll
+          - no exception propagated to component
+        expect_to_fail_before_implementation: true

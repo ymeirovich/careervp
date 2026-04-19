@@ -1,0 +1,486 @@
+spec_id: frontend-09
+title: Auth Context, Session Management & Backend Logout
+version: "1.0"
+status: pending
+supersedes: frontend-06
+output_path: >
+  src/frontend/lib/auth.ts
+  src/frontend/contexts/AuthContext.tsx
+  src/frontend/app/(auth)/
+  src/frontend/app/layout.tsx
+  src/frontend/app/dashboard/layout.tsx
+  src/frontend/middleware.ts
+  src/backend/careervp/handlers/auth_handler.py
+
+---
+
+principle: >
+  Auth state lives in a single React context (AuthContext). The Cognito SDK owns
+  token storage (localStorage via amazon-cognito-identity-js). On every signIn,
+  the raw idToken is ALSO written to a JS-accessible cookie so that Next.js
+  middleware can read it (middleware runs on the edge and cannot access localStorage).
+  Route protection is a two-layer defence: middleware rejects requests with no
+  cookie (fast, no SDK); AuthContext rejects on mount if the cookie exists but
+  the Cognito session is invalid or expired (accurate). signOut clears both.
+
+  NOTE: The middleware cookie check is NOT a security boundary — API Gateway's
+  Cognito Authorizer performs real token validation. The cookie prevents
+  unauthenticated page renders only.
+
+---
+
+cognito:
+  user_pool_id: "us-east-1_WiHMRqLpe"
+  client_id: "7blipbarsisbctqh6hlsj46sqa"
+  region: "us-east-1"
+  env_var_pool_id: NEXT_PUBLIC_COGNITO_USER_POOL_ID
+  env_var_client_id: NEXT_PUBLIC_COGNITO_APP_CLIENT_ID
+  note: >
+    Frontend MUST send idToken (not accessToken) in Authorization header.
+    API Gateway Cognito Authorizer validates idToken.
+
+---
+
+cookie:
+  name: cognito_id_token
+  write_on: signIn success
+  clear_on: signOut
+  implementation: |
+    // Write after successful Cognito auth
+    document.cookie = `cognito_id_token=${idToken}; path=/; max-age=3600; SameSite=Lax`;
+    // Clear on sign-out
+    document.cookie = 'cognito_id_token=; path=/; max-age=0';
+  security_note: >
+    Not httpOnly — must be JS-readable so AuthContext can clear it.
+    Real security enforcement is at API Gateway, not the cookie.
+
+---
+
+lib_auth:
+  output: src/frontend/lib/auth.ts
+  description: >
+    Pure Cognito SDK wrapper — no React. Ported from
+    frontend/lib/auth.ts and extended with signUp/confirm/forgotPassword.
+  dependencies:
+    - amazon-cognito-identity-js
+  exports:
+    signIn:
+      signature: "(email: string, password: string) => Promise<string>"
+      returns: idToken JWT string
+      throws:
+        - NotAuthorizedException
+        - UserNotFoundException
+        - UserNotConfirmedException
+    signOut:
+      signature: "() => void"
+      implementation: userPool.getCurrentUser()?.signOut()
+    signUp:
+      signature: "(email: string, password: string, name: string) => Promise<void>"
+    confirmSignUp:
+      signature: "(email: string, code: string) => Promise<void>"
+    resendConfirmationCode:
+      signature: "(email: string) => Promise<void>"
+    forgotPassword:
+      signature: "(email: string) => Promise<void>"
+    confirmForgotPassword:
+      signature: "(email: string, code: string, newPassword: string) => Promise<void>"
+    getCurrentToken:
+      signature: "() => Promise<string | null>"
+      behavior: >
+        Calls userPool.getCurrentUser()?.getSession().
+        Returns idToken JWT if session valid; null otherwise.
+        amazon-cognito-identity-js handles refresh automatically within getSession().
+    getCurrentCognitoUser:
+      signature: "() => CognitoUser | null"
+
+---
+
+auth_context:
+  output: src/frontend/contexts/AuthContext.tsx
+  description: >
+    React context wrapping Cognito session state. Must be placed at the root
+    layout so all pages and hooks can read auth state.
+
+  state:
+    user: "CognitoUser | null"
+    idToken: "string | null"
+    isLoading: "boolean — true only during initial session restoration on mount"
+    isAuthenticated: "boolean — derived: !!user && !!idToken"
+
+  methods:
+    signIn:
+      signature: "(email: string, password: string) => Promise<void>"
+      steps:
+        1: Call lib/auth.ts signIn(email, password) → returns idToken
+        2: Call userPool.getCurrentUser() → set user state
+        3: Set idToken state
+        4: Write cookie (see cookie section)
+        5: "Throws Cognito error codes — let pages handle: NotAuthorizedException, UserNotConfirmedException"
+    signOut:
+      signature: "() => Promise<void>"
+      steps:
+        1: Call POST /api/proxy/auth/logout with current token (fire-and-forget — do not block UI on failure)
+        2: Call lib/auth.ts signOut()
+        3: Clear cookie
+        4: Set user=null, idToken=null
+        5: router.push('/login')
+    signUp:
+      signature: "(email: string, password: string, name: string) => Promise<void>"
+      delegates_to: lib/auth.ts signUp()
+    confirmSignUp:
+      signature: "(email: string, code: string) => Promise<void>"
+      delegates_to: lib/auth.ts confirmSignUp()
+    resendConfirmationCode:
+      signature: "(email: string) => Promise<void>"
+      delegates_to: lib/auth.ts resendConfirmationCode()
+    forgotPassword:
+      signature: "(email: string) => Promise<void>"
+      delegates_to: lib/auth.ts forgotPassword()
+    confirmForgotPassword:
+      signature: "(email: string, code: string, newPassword: string) => Promise<void>"
+      delegates_to: lib/auth.ts confirmForgotPassword()
+    refreshSession:
+      signature: "() => Promise<string>"
+      behavior: >
+        Calls getCurrentToken(). If null, calls signOut() and throws.
+        Returns fresh idToken string. Updates idToken state and cookie.
+    changePassword:
+      signature: "(oldPassword: string, newPassword: string) => Promise<void>"
+      behavior: >
+        Uses CognitoUser.changePassword(). No backend endpoint needed.
+        User must be authenticated; throws AliasExistsException or InvalidPasswordException.
+
+  session_restoration_on_mount:
+    description: >
+      On mount, attempt to restore an existing Cognito session silently.
+      This prevents logged-in users seeing a flash of the login page.
+    steps:
+      1: Set isLoading=true
+      2: Call getCurrentToken()
+      3a: "If token returned: set user + idToken, write/refresh cookie, set isLoading=false"
+      3b: "If null: clear cookie (stale), set isLoading=false (user stays null)"
+    note: >
+      amazon-cognito-identity-js getSession() auto-refreshes with the refresh token
+      if the access/id tokens are expired. If the refresh token itself is expired,
+      getSession() calls back with an error and getCurrentToken() returns null.
+
+  on_api_401:
+    description: >
+      Called by api/client.ts response interceptor when a 401 is received.
+    steps:
+      1: Call refreshSession()
+      2a: "If success: return new token to interceptor to retry the failed request once"
+      2b: "If failure: call signOut() → redirects to /login"
+    note: >
+      Retry-once pattern prevents infinite loops. The interceptor must track
+      whether a request has already been retried.
+
+---
+
+middleware:
+  output: src/frontend/middleware.ts
+  description: >
+    Thin Next.js edge middleware — checks for cookie presence only.
+    Does NOT validate the JWT (no SDK available at edge).
+    Real validation is at API Gateway.
+
+  protected_prefixes:
+    - /dashboard
+    - /applications
+    - /cv-center
+    - /billing
+    - /settings
+
+  public_prefixes:
+    - /login
+    - /register
+    - /confirm-signup
+    - /forgot-password
+    - /reset-password
+
+  implementation: |
+    import { NextRequest, NextResponse } from 'next/server';
+
+    const PROTECTED = ['/dashboard', '/applications', '/cv-center', '/billing', '/settings'];
+    const AUTH_PAGES = ['/login', '/register', '/confirm-signup', '/forgot-password', '/reset-password'];
+    const COOKIE = 'cognito_id_token';
+
+    export function middleware(request: NextRequest) {
+      const { pathname } = request.nextUrl;
+      const token = request.cookies.get(COOKIE)?.value;
+
+      const isProtected = PROTECTED.some(p => pathname.startsWith(p));
+      const isAuthPage  = AUTH_PAGES.some(p => pathname.startsWith(p));
+
+      if (isProtected && !token) {
+        return NextResponse.redirect(new URL('/login', request.url));
+      }
+      if (isAuthPage && token) {
+        return NextResponse.redirect(new URL('/dashboard', request.url));
+      }
+      return NextResponse.next();
+    }
+
+    export const config = {
+      matcher: ['/((?!_next/static|_next/image|favicon.ico|api/).*)'],
+    };
+
+---
+
+root_layout:
+  output: src/frontend/app/layout.tsx
+  description: >
+    Root layout wraps the entire app with AuthProvider and QueryClientProvider.
+    QueryClientProvider must be inside AuthProvider so hooks can read auth state.
+  structure: |
+    <AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    </AuthProvider>
+  note: >
+    QueryClient must be created with new QueryClient() inside a 'use client'
+    boundary component to avoid SSR hydration issues with static export.
+
+dashboard_layout:
+  output: src/frontend/app/dashboard/layout.tsx
+  description: >
+    Client-side auth guard for all /dashboard/* routes.
+    Middleware provides first-pass protection; this is the accurate check.
+  implementation: |
+    'use client';
+    export default function DashboardLayout({ children }) {
+      const { isAuthenticated, isLoading } = useAuth();
+      const router = useRouter();
+
+      useEffect(() => {
+        if (!isLoading && !isAuthenticated) {
+          router.replace('/login');
+        }
+      }, [isAuthenticated, isLoading, router]);
+
+      if (isLoading || !isAuthenticated) {
+        return <FullPageSpinner />;   // AppShell-aware loading screen
+      }
+      return <>{children}</>;
+    }
+
+---
+
+pages:
+  auth_layout:
+    output: src/frontend/app/(auth)/layout.tsx
+    behavior: Redirect authenticated users to /dashboard (use useAuth)
+
+  login:
+    output: src/frontend/app/(auth)/login/page.tsx
+    data_testid_map:
+      email_input: email-input
+      password_input: password-input
+      submit_button: sign-in-button
+      error_banner: auth-error-banner
+    fields: [email, password]
+    on_submit: calls useAuth().signIn(email, password)
+    on_success: router.replace('/dashboard')
+    error_map:
+      NotAuthorizedException: "Incorrect email or password"
+      UserNotFoundException: "No account found for this email"
+      UserNotConfirmedException:
+        action: router.push('/confirm-signup?email={email}')
+    links:
+      forgot_password: /forgot-password
+      register: /register
+
+  register:
+    output: src/frontend/app/(auth)/register/page.tsx
+    fields: [email, password, confirm_password, name]
+    password_policy: "Min 8 chars, 1 uppercase, 1 lowercase, 1 digit"
+    on_submit: calls useAuth().signUp(email, password, name)
+    on_success: router.push('/confirm-signup?email={email}')
+    validation: confirm_password must match password (client-side, before API call)
+
+  confirm_signup:
+    output: src/frontend/app/(auth)/confirm-signup/page.tsx
+    fields: [verification_code]
+    pre_filled: email from ?email= query param
+    on_submit: calls useAuth().confirmSignUp(email, code)
+    on_success: router.push('/login')
+    resend_link: calls useAuth().resendConfirmationCode(email)
+
+  forgot_password:
+    output: src/frontend/app/(auth)/forgot-password/page.tsx
+    fields: [email]
+    on_submit: calls useAuth().forgotPassword(email)
+    on_success: router.push('/reset-password?email={email}')
+
+  reset_password:
+    output: src/frontend/app/(auth)/reset-password/page.tsx
+    fields: [verification_code, new_password, confirm_password]
+    pre_filled: email from ?email= query param
+    on_submit: calls useAuth().confirmForgotPassword(email, code, new_password)
+    on_success: router.push('/login') with success toast
+
+---
+
+backend_logout:
+  description: >
+    Add POST /auth/logout to auth_handler.py.
+    Calls Cognito admin_user_global_sign_out to invalidate ALL active tokens
+    for the user across all devices — not just the current session.
+  output: src/backend/careervp/handlers/auth_handler.py
+
+  endpoint:
+    method: POST
+    path: /auth/logout
+    auth: Bearer idToken in Authorization header (standard Cognito Authorizer)
+    request_body: none required
+    response_200: '{"message": "Logged out successfully"}'
+    response_401: '{"error": "Unauthorized"}' — token missing or invalid
+
+  implementation: |
+    import boto3
+    from jwt import decode as jwt_decode
+
+    COGNITO_USER_POOL_ID = os.getenv('COGNITO_USER_POOL_ID')
+
+    @app.post('/auth/logout')
+    @tracer.capture_method(capture_response=False)
+    def logout_user() -> Response[str]:
+        """Invalidate all Cognito tokens for the authenticated user."""
+        # Extract username from the Authorization header idToken claims
+        headers = app.current_event.headers or {}
+        auth_header = headers.get('Authorization') or headers.get('authorization') or ''
+        if not auth_header.startswith('Bearer '):
+            return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Unauthorized'})
+
+        token = auth_header[7:]
+        try:
+            claims = jwt_decode(
+                token,
+                options={'verify_signature': False},
+                algorithms=['RS256'],
+            )
+            username = claims.get('cognito:username') or claims.get('email')
+        except Exception:
+            return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Invalid token'})
+
+        if not username or not COGNITO_USER_POOL_ID:
+            return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Configuration error'})
+
+        try:
+            boto3.client('cognito-idp', region_name='us-east-1').admin_user_global_sign_out(
+                UserPoolId=COGNITO_USER_POOL_ID,
+                Username=username,
+            )
+        except Exception as exc:
+            logger.exception('Logout failed', error=str(exc))
+            return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Logout failed'})
+
+        return _json_response(HTTPStatus.OK, {'message': 'Logged out successfully'})
+
+  lambda_env_var_needed:
+    name: COGNITO_USER_POOL_ID
+    source: infra/careervp/api_construct.py — already available as cognito_user_pool.user_pool_id
+    action: >
+      Add to the shared _build_common_env() dict in api_construct.py:
+        "COGNITO_USER_POOL_ID": user_pool.user_pool_id,
+    note: >
+      auth_handler Lambda must have cognito-idp:AdminUserGlobalSignOut IAM permission.
+      Add to _build_lambda_role() in api_construct.py:
+        iam.PolicyStatement(
+            actions=['cognito-idp:AdminUserGlobalSignOut'],
+            resources=[user_pool.user_pool_arn],
+        )
+
+---
+
+tests:
+  unit:
+    file: src/frontend/tests/unit/auth-context.test.tsx
+    framework: vitest + @testing-library/react + happy-dom
+    setup: mock amazon-cognito-identity-js with vi.mock()
+
+    cases:
+      - name: "signIn sets user, idToken, and writes cookie"
+        precondition: CognitoUser.authenticateUser mocked to succeed with token 'test-token'
+        action: call signIn('user@test.com', 'password')
+        assert:
+          - idToken === 'test-token'
+          - isAuthenticated === true
+          - document.cookie contains 'cognito_id_token=test-token'
+        expect_to_fail_before_implementation: true
+
+      - name: "signOut clears user, idToken, and removes cookie"
+        precondition: user is authenticated
+        action: call signOut()
+        assert:
+          - user === null
+          - idToken === null
+          - document.cookie does not contain 'cognito_id_token'
+        expect_to_fail_before_implementation: true
+
+      - name: "session restored on mount when valid Cognito session exists"
+        precondition: getCurrentToken() mocked to return 'restored-token'
+        action: render AuthProvider, wait for isLoading to become false
+        assert:
+          - isAuthenticated === true
+          - idToken === 'restored-token'
+        expect_to_fail_before_implementation: true
+
+      - name: "session NOT restored when no Cognito session"
+        precondition: getCurrentToken() mocked to return null
+        action: render AuthProvider, wait for isLoading to become false
+        assert:
+          - isAuthenticated === false
+          - isLoading === false
+        expect_to_fail_before_implementation: true
+
+      - name: "signIn throws NotAuthorizedException — context state unchanged"
+        precondition: authenticateUser mocked to call onFailure with NotAuthorizedException
+        action: call signIn() and expect rejection
+        assert:
+          - isAuthenticated === false
+          - idToken === null
+        expect_to_fail_before_implementation: true
+
+  integration:
+    file: src/frontend/tests/integration/cognito-auth.test.ts
+    framework: vitest + msw (mock api/proxy calls)
+
+    cases:
+      - name: "401 response triggers token refresh then retries"
+        precondition:
+          - First request returns 401
+          - refreshSession() succeeds with new token
+          - Retry with new token succeeds
+        assert: original request eventually resolves with data
+        expect_to_fail_before_implementation: true
+
+      - name: "401 + refresh failure triggers signOut and redirect"
+        precondition:
+          - Request returns 401
+          - refreshSession() throws (refresh token expired)
+        assert:
+          - signOut() was called
+          - router.replace('/login') was called
+        expect_to_fail_before_implementation: true
+
+  backend:
+    file: src/backend/tests/unit/test_auth_handler_logout.py
+    framework: pytest
+
+    cases:
+      - name: "POST /auth/logout returns 200 and calls admin_user_global_sign_out"
+        precondition: valid idToken in Authorization header; boto3 client mocked
+        assert:
+          - response status 200
+          - admin_user_global_sign_out called with correct UserPoolId and Username
+        expect_to_fail_before_implementation: true
+
+      - name: "POST /auth/logout returns 401 when Authorization header missing"
+        assert: response status 401
+        expect_to_fail_before_implementation: true
+
+      - name: "POST /auth/logout returns 401 when token is malformed"
+        assert: response status 401
+        expect_to_fail_before_implementation: true

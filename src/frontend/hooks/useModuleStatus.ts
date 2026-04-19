@@ -1,11 +1,10 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { useRef } from 'react';
 import { apiClient } from '../api/client';
 import { queryKeys } from '../api/queryKeys';
 import type { ModuleType, RawModuleData } from '../types/hub-state';
-
-const POLL_INTERVAL_MS = 3_000;
 
 const STATUS_ENDPOINTS: Record<ModuleType, ((jobId: string) => string) | null> = {
   vpr: (jobId) => `/vpr/${jobId}/status`,
@@ -31,6 +30,13 @@ function isActiveStatus(status: RawModuleData['status'] | undefined): boolean {
   return status === 'pending' || status === 'processing';
 }
 
+function adaptiveInterval(elapsedMs: number): number {
+  if (elapsedMs < 30_000) return 3_000;
+  if (elapsedMs < 180_000) return 8_000;
+  if (elapsedMs < 480_000) return 15_000;
+  return 30_000;
+}
+
 export function useModuleStatus(
   moduleType: ModuleType,
   jobId: string,
@@ -42,6 +48,7 @@ export function useModuleStatus(
   const endpointFn = STATUS_ENDPOINTS[moduleType];
   const keyFn = STATUS_QUERY_KEYS[moduleType];
   const hasEndpoint = endpointFn !== null && keyFn !== null;
+  const pollingStartRef = useRef<number | null>(null);
 
   const { data } = useQuery<RawModuleData>({
     queryKey: keyFn ? keyFn(jobId) : ['noop', moduleType, jobId],
@@ -52,7 +59,14 @@ export function useModuleStatus(
     enabled: enabled && hasEndpoint && jobId.length > 0,
     refetchInterval: (query) => {
       const status = query.state.data?.status;
-      return isActiveStatus(status) ? POLL_INTERVAL_MS : false;
+      if (!isActiveStatus(status)) {
+        pollingStartRef.current = null;
+        return false;
+      }
+      if (pollingStartRef.current === null) {
+        pollingStartRef.current = Date.now();
+      }
+      return adaptiveInterval(Date.now() - pollingStartRef.current);
     },
     staleTime: 0,
   });

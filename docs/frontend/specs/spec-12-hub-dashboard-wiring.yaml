@@ -1,0 +1,418 @@
+spec_id: frontend-12
+title: Application Hub, Dashboard Wiring, UsageGate & Error Boundaries
+version: "1.0"
+status: pending
+depends_on:
+  - frontend-09  # AuthContext, auth pages
+  - frontend-10  # api methods + types
+  - frontend-11  # useApplicationHub, useJobs, useUserContext
+  - frontend-01  # ModuleCard, UI primitives
+  - frontend-02  # mapApplicationDataToHubState, HubState
+output_path: >
+  src/frontend/app/applications/[id]/page.tsx
+  src/frontend/app/applications/page.tsx
+  src/frontend/app/dashboard/page.tsx
+  src/frontend/app/dashboard/layout.tsx
+  src/frontend/components/NewApplicationModal/
+  src/frontend/components/UsageGate/
+  src/frontend/components/ErrorBoundary/
+  src/frontend/contexts/DashboardContext.tsx
+
+---
+
+principle: >
+  This spec wires the three main pages (Dashboard, Applications list, Application Hub)
+  to real data and gives every ModuleCard a real action handler.
+  Two cross-cutting concerns are introduced here:
+
+  UsageGate: blocks new applications when the user's trial is expired and they have
+  no active subscription — shows an upgrade prompt instead of the creation flow.
+
+  ErrorBoundary: every major page section is wrapped in a React ErrorBoundary.
+  User-facing message: friendly and non-technical.
+  Developer message: full error + stack in console.error (visible in Dev Tools).
+  Significant errors (5xx, unexpected): logged to CloudWatch via the backend's
+  structured logging infrastructure.
+
+---
+
+error_boundaries:
+  description: >
+    A reusable ErrorBoundary component wraps all pages that make API calls.
+    The boundary distinguishes between expected errors (user-facing) and
+    unexpected errors (also logged to CloudWatch).
+
+  output: src/frontend/components/ErrorBoundary/ErrorBoundary.tsx
+
+  props:
+    fallback: "ReactNode | ((error: Error, reset: () => void) => ReactNode)"
+    onError: "(error: Error, info: ErrorInfo) => void  — optional"
+    cloudwatchKey: "string — identifies the boundary in CloudWatch logs"
+
+  user_facing_messages:
+    default: "Something went wrong. Please refresh the page."
+    api_5xx: "We're having trouble loading this page. Please try again in a moment."
+    api_403: "You don't have access to this content."
+    api_404: "This content could not be found."
+    network: "Check your connection and try again."
+
+  dev_tools_behavior: |
+    // In ErrorBoundary componentDidCatch:
+    console.error(`[ErrorBoundary:${cloudwatchKey}]`, error, info.componentStack);
+
+  cloudwatch_logging:
+    trigger: ApiError with status >= 500 OR unexpected (non-ApiError) errors
+    implementation: |
+      // Fire-and-forget — do not await, do not block render
+      // POST /api/errors with { error, stack, boundary_key, user_agent, url }
+      // Backend logs to CloudWatch via existing Powertools logger
+      // Frontend never shows this call in UI
+    endpoint:
+      note: >
+        This does NOT require a new backend Lambda. The frontend calls a lightweight
+        Next.js API route (/api/errors) that proxies to a CloudWatch log group
+        via AWS SDK in a server action. Alternatively, use CloudWatch RUM agent
+        (preferred for production — see spec-05 monitoring section).
+    fallback: >
+      If CloudWatch logging fails, log to console.error only. Never surface
+      infrastructure errors to the user.
+
+  standard_boundaries:
+    ApplicationHubBoundary:
+      wraps: entire /applications/[id] page content
+      cloudwatchKey: application-hub
+    ModuleSectionBoundary:
+      wraps: each individual ModuleCard row
+      cloudwatchKey: module-card-{moduleType}
+    DashboardBoundary:
+      wraps: jobs table and stats row
+      cloudwatchKey: dashboard
+
+---
+
+dashboard_context:
+  output: src/frontend/contexts/DashboardContext.tsx
+  description: >
+    Provides user profile, usage, and subscription to all /dashboard/* descendants.
+    Ported from frontend/app/dashboard/dashboard-context.tsx and connected to
+    the real useUserContext hook.
+  interface:
+    userName: string
+    usage: "Usage | null"
+    subscription: "SubscriptionResponse | null"
+    hasActiveAccess: boolean
+    applicationsRemaining: "number | null"
+  provider_location: src/frontend/app/dashboard/layout.tsx
+
+dashboard_layout:
+  output: src/frontend/app/dashboard/layout.tsx
+  description: >
+    Updated layout — adds auth guard (from spec-09), fetches DashboardContext data,
+    and wraps content in DashboardBoundary.
+  implementation: |
+    'use client';
+    export default function DashboardLayout({ children }) {
+      const { isAuthenticated, isLoading } = useAuth();
+      const userCtx = useUserContext();
+      const router = useRouter();
+
+      useEffect(() => {
+        if (!isLoading && !isAuthenticated) router.replace('/login');
+      }, [isAuthenticated, isLoading]);
+
+      if (isLoading || !isAuthenticated) return <FullPageSpinner />;
+
+      return (
+        <DashboardContext.Provider value={{
+          userName: userCtx.user?.name ?? userCtx.user?.email ?? '',
+          usage: userCtx.usage,
+          subscription: userCtx.subscription,
+          hasActiveAccess: userCtx.hasActiveAccess,
+          applicationsRemaining: userCtx.applicationsRemaining,
+        }}>
+          <AppShell>
+            <ErrorBoundary cloudwatchKey="dashboard" fallback={<DashboardError />}>
+              {children}
+            </ErrorBoundary>
+          </AppShell>
+        </DashboardContext.Provider>
+      );
+    }
+
+---
+
+usage_gate:
+  output: src/frontend/components/UsageGate/UsageGate.tsx
+  description: >
+    Wraps any action that requires an active subscription or trial credit.
+    When the user has no access, renders an upgrade prompt instead of the children.
+    When the user has access but has exhausted their application quota, shows a
+    different prompt (quota exhausted vs. no subscription).
+
+  props:
+    children: ReactNode
+    action: '"new_application" | "generate_module"'
+
+  access_logic:
+    has_access: "useDashboard().hasActiveAccess === true"
+    quota_ok: "useDashboard().applicationsRemaining === null || applicationsRemaining > 0"
+    pass_through: "has_access && quota_ok → render children"
+    no_subscription: >
+      has_access === false → render NoSubscriptionPrompt
+      (trial expired, no active plan)
+    quota_exhausted: >
+      has_access && !quota_ok → render QuotaExhaustedPrompt
+      (on a plan but monthly limit hit)
+
+  NoSubscriptionPrompt:
+    message: "Your free trial has ended. Upgrade to continue building your applications."
+    cta_label: "View Plans"
+    cta_action: router.push('/billing')
+    data_testid: usage-gate-no-subscription
+
+  QuotaExhaustedPrompt:
+    message: "You've used all your applications this month. Your quota resets on {reset_date}."
+    cta_label: "Upgrade Plan"
+    cta_action: router.push('/billing')
+    data_testid: usage-gate-quota-exhausted
+
+---
+
+new_application_modal:
+  output: src/frontend/components/NewApplicationModal/NewApplicationModal.tsx
+  description: >
+    Ported from frontend/components/NewApplicationModal.tsx.
+    Uses useJobs().createJob() mutation. On success, navigates to the new
+    application hub at /applications/{newJobId}.
+  props:
+    isOpen: boolean
+    onClose: "() => void"
+  fields:
+    title:
+      label: "Job Title"
+      required: true
+      data_testid: new-app-title-input
+    company_name:
+      label: "Company Name"
+      required: true
+      data_testid: new-app-company-input
+    description:
+      label: "Job Description"
+      placeholder: "Paste the full job posting here"
+      required: true
+      multiline: true
+      data_testid: new-app-description-input
+    url:
+      label: "Job URL"
+      required: false
+  on_submit: |
+    const job = await createJob({ title, company_name, description, url });
+    router.push(`/applications/${job.job_id}`);
+    onClose();
+  data_testid: new-application-modal
+
+---
+
+pages:
+  dashboard:
+    output: src/frontend/app/dashboard/page.tsx
+    description: >
+      Main dashboard — job list + stats row, both connected to real data.
+      "New Application" button is wrapped in UsageGate.
+    data_sources:
+      - useJobs()  → jobs list
+      - useDashboard()  → stats row (from layout context)
+    components:
+      - StatsRow: receives usage + subscription from DashboardContext
+      - JobsTable: receives jobs from useJobs()
+      - NewApplicationModal: controlled by isModalOpen state
+    usage_gate: |
+      <UsageGate action="new_application">
+        <Button onClick={() => setIsModalOpen(true)} data-testid="new-application-btn">
+          New Application
+        </Button>
+      </UsageGate>
+    empty_state: >
+      When jobs list is empty: EmptyState component with "Create your first application" CTA
+      (also wrapped in UsageGate)
+    data_testid_map:
+      new_application_btn: new-application-btn
+      jobs_table: jobs-table
+      stats_row: stats-row
+
+  applications_list:
+    output: src/frontend/app/applications/page.tsx
+    description: Thin redirect page — redirects to /dashboard (jobs list lives there)
+    implementation: |
+      import { redirect } from 'next/navigation';
+      export default function ApplicationsPage() {
+        redirect('/dashboard');
+      }
+
+  application_hub:
+    output: src/frontend/app/applications/[id]/page.tsx
+    description: >
+      Full Application Hub page. Fetches real hub state via useApplicationHub.
+      Renders 7 ModuleCards with real action handlers. Wrapped in ErrorBoundary.
+    data_sources:
+      - useApplicationHub(jobId)
+      - useDashboard()  → for UsageGate access check
+    layout: HubLayout (from spec-01)
+    error_boundary: ApplicationHubBoundary
+
+    module_action_handlers:
+      description: >
+        Each ModuleCard's primaryAction and secondaryActions map to these handlers.
+        The hub page owns the handlers and passes them down via ModuleCard props.
+
+      generate:
+        trigger: primaryAction CTA on notStarted or failed modules
+        handler: |
+          const { generate } = useGenerateModule(moduleType, jobId);
+          // Wrapped in UsageGate for new generations
+          async function handleGenerate(moduleType: ModuleType) {
+            const cvId = hubState?.cv?.cv_id;
+            const vprArtifactId = hubState?.modules.vpr?.artifactId;
+            await generate({ cvId, vprId: vprArtifactId, gapResponseIds: [] });
+          }
+
+      view:
+        trigger: primaryAction CTA on completed modules
+        handler: |
+          function handleView(moduleType: ModuleType, artifactId: string) {
+            const moduleRoutes: Record<ModuleType, string> = {
+              vpr: `/applications/${jobId}/vpr?id=${artifactId}`,
+              coverLetter: `/applications/${jobId}/cover-letter?id=${artifactId}`,
+              interviewPrep: `/applications/${jobId}/interview-prep?id=${artifactId}`,
+              cvTailoring: `/applications/${jobId}/cv-tailored?id=${artifactId}`,
+              gapAnalysis: `/applications/${jobId}/gap-analysis`,
+              companyResearch: `/applications/${jobId}/company-research`,
+              baseCV: '/cv-center',
+            };
+            router.push(moduleRoutes[moduleType]);
+          }
+
+      regenerate:
+        trigger: secondaryAction CTA (already-completed modules)
+        handler: same as generate — cache-busting UUID ensures fresh result
+
+      gap_analysis_start:
+        trigger: primaryAction on gapAnalysis module
+        handler: router.push(`/applications/${jobId}/gap-analysis`)
+
+      cv_upload:
+        trigger: primaryAction on baseCV module when cv is null
+        handler: router.push('/cv-center')
+
+    polling_status_display:
+      behavior: >
+        When a module is polling (useModuleStatus.isPolling), ModuleCard renders
+        a Spinner and "Generating…" label instead of the primary CTA.
+        The module's status drives this — no separate isPolling prop needed.
+
+    data_testid_map:
+      module_card: "module-card-{moduleType}"  # e.g. module-card-vpr
+      primary_cta: primary-cta
+      hub_blocked_banner: hub-blocked-banner
+
+---
+
+tests:
+  unit:
+    file: src/frontend/tests/unit/module-card-actions.test.tsx
+    framework: vitest + @testing-library/react + happy-dom
+
+    cases:
+      - name: "Generate CTA calls useGenerateModule.generate with correct moduleType"
+        precondition:
+          - hubState has vpr module with status notStarted
+          - useGenerateModule mock provided
+        action: click primary CTA on VPR ModuleCard
+        assert: generate() called once with vpr moduleType
+        expect_to_fail_before_implementation: true
+
+      - name: "View CTA navigates to artifact page with artifact ID"
+        precondition:
+          - hubState has vpr module with status completed and artifactId='art1'
+        action: click primary CTA on VPR ModuleCard
+        assert: router.push called with '/applications/job1/vpr?id=art1'
+        expect_to_fail_before_implementation: true
+
+      - name: "Spinner shown when module status is processing"
+        precondition: hubState has vpr module with status processing
+        action: render hub page
+        assert:
+          - Spinner is in the document (data-testid="spinner")
+          - Generate CTA is NOT in the document
+        expect_to_fail_before_implementation: true
+
+      - name: "UsageGate hides New Application button when hasActiveAccess=false"
+        precondition: useDashboard().hasActiveAccess === false
+        action: render dashboard page
+        assert:
+          - "New Application" button not in document
+          - NoSubscriptionPrompt in document (data-testid="usage-gate-no-subscription")
+        expect_to_fail_before_implementation: true
+
+      - name: "UsageGate shows New Application button when hasActiveAccess=true"
+        precondition: useDashboard().hasActiveAccess === true
+        action: render dashboard page
+        assert:
+          - "New Application" button in document (data-testid="new-application-btn")
+          - NoSubscriptionPrompt NOT in document
+        expect_to_fail_before_implementation: true
+
+      - name: "NewApplicationModal submits correct fields and navigates to hub"
+        precondition:
+          - Modal is open
+          - createJob mock returns { job_id: 'new-job-123', ... }
+        action:
+          - fill title, company_name, description
+          - click submit
+        assert:
+          - createJob called with { title, company_name, description }
+          - router.push called with '/applications/new-job-123'
+        expect_to_fail_before_implementation: true
+
+  integration:
+    file: src/frontend/tests/integration/hub-state.test.ts
+    framework: vitest + msw + @testing-library/react
+
+    cases:
+      - name: "Hub page renders 7 ModuleCards when hub data loads"
+        precondition: MSW returns full ApplicationHubData
+        action: render /applications/[id] page
+        assert: 7 elements with data-testid matching module-card-* are in the document
+        expect_to_fail_before_implementation: true
+
+      - name: "Hub blocked banner shown when baseCV module has no CV"
+        precondition: ApplicationHubData has cv: null
+        action: render hub page
+        assert: data-testid="hub-blocked-banner" in document
+        expect_to_fail_before_implementation: true
+
+      - name: "Dashboard jobs table renders job rows from API"
+        precondition: MSW returns { jobs: [{ job_id: 'j1', title: 'Engineer', company_name: 'Acme' }] }
+        action: render /dashboard
+        assert: element containing 'Engineer' in document
+        expect_to_fail_before_implementation: true
+
+  e2e:
+    file: src/frontend/tests/e2e/application-hub-flow.e2e.test.ts
+    framework: playwright
+    note: Update existing file — mock routes must point to /applications/{id} not /dashboard/jobs/{id}
+
+    cases:
+      - name: "Full create → hub → generate flow"
+        steps:
+          1: Mock POST /jobs → { job_id: 'test-job' }
+          2: Mock GET /applications/test-job → hub data with cv present
+          3: Mock POST /vpr/generate → { request_id: 'task1' }
+          4: Mock GET /vpr/task1/status → first processing, then completed
+          5: Navigate to /dashboard
+          6: Click "New Application", fill form, submit
+          7: Assert redirected to /applications/test-job
+          8: Click Generate on VPR ModuleCard
+          9: Assert Spinner appears
+          10: Assert status changes to completed
+        expect_to_fail_before_implementation: true
