@@ -10,11 +10,12 @@ const BASE_URL = "http://localhost:3000";
 
 const server = setupServer();
 
-beforeEach(() => server.listen({ onUnhandledRequest: "warn" }));
+beforeAll(() => server.listen({ onUnhandledRequest: "warn" }));
 afterEach(() => {
   server.resetHandlers();
   vi.restoreAllMocks();
 });
+afterAll(() => server.close());
 
 function makeWrapper() {
   const queryClient = new QueryClient({
@@ -108,6 +109,7 @@ describe("useModuleStatus — polling lifecycle", () => {
   });
 
   it("transitions through pending → processing → completed", async () => {
+    // Requires 2 poll cycles at 3s each; allow 10s total
     const responses = [
       { status: "pending" },
       { status: "processing" },
@@ -133,9 +135,9 @@ describe("useModuleStatus — polling lifecycle", () => {
     );
 
     await waitFor(() => expect(result.current.rawStatus?.status).toBe("completed"), {
-      timeout: 5000,
+      timeout: 10_000,
     });
-  });
+  }, 12_000);
 });
 
 describe("useModuleStatus — different module types", () => {

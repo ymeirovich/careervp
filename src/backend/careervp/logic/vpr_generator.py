@@ -82,7 +82,7 @@ if TYPE_CHECKING:
 
 DEFAULT_SYSTEM_PROMPT = 'You are CareerVP VPR Generator. Follow instructions exactly and return valid JSON.'
 ANTI_AI_MIN_SCORE = 90  # 0-100 scale (P4)
-MAX_STAGE6_RETRIES = 3
+MAX_STAGE6_RETRIES = 1  # 1 retry; on second failure accept with quality_warning
 WORD_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9+#./'-]*")
 
 AlignmentScore = Literal['STRONG', 'MODERATE', 'DEVELOPING']
@@ -154,6 +154,15 @@ class FinalVPRData:
     structural_score: float = field(default=10.0)
     grammar_score: float = field(default=10.0)
     tone_score: float = field(default=10.0)
+    quality_warning: bool = field(default=False)
+
+    @property
+    def quality_score(self) -> float:
+        """Composite quality score (0–10) averaged across gate dimensions."""
+        return round(
+            (self.anti_ai_score / 10.0 + self.grammar_score + self.tone_score + self.structural_score) / 4.0,
+            1,
+        )
 
 
 class LLMClient:
@@ -220,7 +229,7 @@ class VPRSixStagePipeline:
         feedback: str | None = None
         last_meta: FinalVPRData | None = None
 
-        for attempt in range(self._max_stage6_retries):
+        for attempt in range(self._max_stage6_retries + 1):
             self._regeneration_count = attempt
 
             try:
@@ -246,22 +255,19 @@ class VPRSixStagePipeline:
                 code=ResultCode.INTERNAL_ERROR,
             )
 
-        failing_gates: list[str] = []
-        if last_meta.anti_ai_score < ANTI_AI_MIN_SCORE:
-            failing_gates.append(f'anti-AI {last_meta.anti_ai_score:.1f}<{ANTI_AI_MIN_SCORE:.1f}')
-        if last_meta.grammar_score < GRAMMAR_MIN_SCORE:
-            failing_gates.append(f'grammar {last_meta.grammar_score:.1f}<{GRAMMAR_MIN_SCORE:.1f}')
-        if last_meta.tone_score < TONE_MIN_SCORE:
-            failing_gates.append(f'tone {last_meta.tone_score:.1f}<{TONE_MIN_SCORE:.1f}')
-        if last_meta.structural_score < STRUCTURAL_MIN_SCORE:
-            failing_gates.append(f'structural {last_meta.structural_score:.1f}<{STRUCTURAL_MIN_SCORE:.1f}')
-        gates_summary = ', '.join(failing_gates) if failing_gates else 'unknown gate'
-        return Result(
-            success=False,
-            data=last_meta,
-            error=(f'Quality gate failed after {self._max_stage6_retries} attempts: {gates_summary}'),
-            code=ResultCode.FVS_VALIDATION_FAILED,
+        # Accept stage-5 output with quality_warning rather than failing the user
+        accepted = FinalVPRData(
+            vpr=last_meta.vpr,
+            anti_ai_score=last_meta.anti_ai_score,
+            anti_ai_issues=last_meta.anti_ai_issues,
+            passed_gate=False,
+            regeneration_count=last_meta.regeneration_count,
+            structural_score=last_meta.structural_score,
+            grammar_score=last_meta.grammar_score,
+            tone_score=last_meta.tone_score,
+            quality_warning=True,
         )
+        return Result(success=True, data=accepted, code=ResultCode.SUCCESS)
 
     def _analyze_input(self, cv: UserCV, job: JobPosting) -> AnalysisResult:
         """Stage 1: extract key skills, experience level, and role requirements."""

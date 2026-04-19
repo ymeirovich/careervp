@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
 import { queryKeys } from '../api/queryKeys';
 import { mapApplicationDataToHubState } from '../adapters/mapApplicationDataToHubState';
@@ -26,6 +26,7 @@ export function useApplicationHub(jobId: string): {
       return res.data;
     },
     enabled,
+    placeholderData: keepPreviousData,
   });
 
   const cvQuery = useQuery<RawCVData>({
@@ -35,6 +36,7 @@ export function useApplicationHub(jobId: string): {
       return res.data;
     },
     enabled,
+    placeholderData: keepPreviousData,
   });
 
   const gapQuery = useQuery<RawGapAnalysisData>({
@@ -44,6 +46,7 @@ export function useApplicationHub(jobId: string): {
       return res.data;
     },
     enabled,
+    placeholderData: keepPreviousData,
   });
 
   const vprStatus = useModuleStatus('vpr', jobId, enabled);

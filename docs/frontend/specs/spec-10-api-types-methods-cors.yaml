@@ -1,0 +1,459 @@
+spec_id: frontend-10
+title: API Types, Method Layer & CORS Configuration
+version: "1.0"
+status: pending
+output_path: >
+  src/frontend/lib/types.ts
+  src/frontend/api/methods.ts
+  src/frontend/api/client.ts
+  infra/careervp/api_construct.py
+
+---
+
+principle: >
+  The production deployment target is CloudFront + S3 static export (see spec-05).
+  A Next.js API proxy route (server-side) cannot exist in a static export.
+  Therefore: configure CORS properly on API Gateway so the frontend can call the
+  backend directly with Axios. The frontend's Axios client talks to NEXT_PUBLIC_API_URL
+  directly — no proxy hop.
+
+  The backend already has cors_utils.py with origin validation. What is missing is:
+  (a) API Gateway gateway-level CORS for OPTIONS preflight responses, and
+  (b) the CloudFront distribution domain in ALLOWED_ORIGINS at deploy time.
+
+  In local development, NEXT_PUBLIC_API_URL points to the deployed dev API Gateway,
+  and localhost:3000 must be in the dev ALLOWED_ORIGINS Lambda env var.
+
+  API endpoint paths MUST match the old working site exactly — do not rename or
+  restructure any backend URL patterns. Types MUST be ported verbatim from
+  frontend/lib/types.ts with additive extensions only.
+
+---
+
+cors_configuration:
+  description: >
+    Two-layer CORS setup: API Gateway OPTIONS handling + Lambda response headers.
+    Both layers are required — API Gateway handles preflight, Lambda handles
+    actual request headers.
+
+  layer_1_api_gateway:
+    output: infra/careervp/api_construct.py
+    description: >
+      Add default_cors_preflight_options to the RestApi construct so that
+      API Gateway responds to OPTIONS requests without invoking a Lambda.
+    implementation: |
+      # In _build_api_gw() method, update RestApi instantiation:
+      self.rest_api = aws_apigateway.RestApi(
+          self,
+          f"{self.id_}RestApi",
+          rest_api_name=self.naming.prefix,
+          default_cors_preflight_options=aws_apigateway.CorsOptions(
+              allow_origins=aws_apigateway.Cors.ALL_ORIGINS,  # gated at Lambda layer
+              allow_methods=aws_apigateway.Cors.ALL_METHODS,
+              allow_headers=[
+                  'Content-Type',
+                  'Authorization',
+                  'X-Amz-Date',
+                  'X-Api-Key',
+                  'X-Amz-Security-Token',
+              ],
+              max_age=Duration.hours(1),
+          ),
+          # ... rest of existing config unchanged
+      )
+    note: >
+      allow_origins=ALL_ORIGINS here is safe because the Lambda cors_utils.py
+      performs the real origin validation before returning CORS headers.
+      API Gateway CORS only handles OPTIONS preflight — it does not validate origin.
+
+  layer_2_lambda_allowed_origins:
+    output: infra/careervp/api_construct.py
+    description: >
+      Expose ALLOWED_ORIGINS as a CDK stack parameter so per-environment
+      values (including CloudFront domain) can be set at deploy time without
+      hardcoding. Keep existing production values; add dev localhost.
+    implementation: |
+      # In _build_common_env() method, replace hardcoded ALLOWED_ORIGINS:
+      allowed_origins = scope_context.node.try_get_context('allowed_origins') \
+          or "https://careervp.app,https://www.careervp.app"
+
+      # In env dict:
+      "ALLOWED_ORIGINS": allowed_origins,
+    deploy_commands:
+      production: >
+        cdk deploy --context allowed_origins="https://careervp.app,https://www.careervp.app,https://{cloudfront_domain}"
+      development: >
+        cdk deploy --context allowed_origins="https://careervp.app,http://localhost:3000,http://localhost:3001"
+    note: >
+      Once the spec-05 CloudFront stack is deployed, add its domain output
+      to the production allowed_origins context value.
+
+  env_vars:
+    frontend:
+      NEXT_PUBLIC_API_URL: "https://{api_gateway_id}.execute-api.us-east-1.amazonaws.com/prod"
+      note: No /api/proxy prefix — direct to API Gateway
+    backend:
+      ALLOWED_ORIGINS: comma-separated list of allowed origins (see deploy_commands above)
+
+---
+
+types:
+  output: src/frontend/lib/types.ts
+  description: >
+    Port ALL interfaces from frontend/lib/types.ts verbatim.
+    These are the canonical API response shapes — do not modify field names.
+    Additive extensions (e.g. VPRFullData sub-interfaces) are included.
+  source_file: frontend/lib/types.ts
+
+  interfaces:
+    # ── User & Subscription ──
+    - User
+    - Usage
+    - SubscriptionDetails
+    - SubscriptionResponse
+
+    # ── Jobs ──
+    - Job
+    - CreateJobInput
+    - JobDetail
+      note: >
+        GET /jobs/{jobId} returns role_title + company (not title + company_name).
+        The api.getJob() wrapper normalizes these — see methods section.
+
+    # ── Async Artifacts ──
+    - AsyncTaskResponse
+      fields:
+        request_id: string  # async task ID for polling — NOT the job posting ID
+        job_id: "string | undefined"  # some endpoints return this as alias
+        status: '"processing" | "completed"'
+        estimated_time_seconds: "number | undefined"
+    - ArtifactStatus: '"pending" | "processing" | "completed" | "failed"'
+    - HubArtifact
+
+    # ── Application Hub ──
+    - ApplicationHubData
+      note: >
+        GET /applications/{application_id} — application_id equals job_id.
+        artifacts.vpr.artifact_id is the polling task ID once generation starts.
+
+    # ── CV ──
+    - ContactInfo
+    - WorkExperience
+    - Education
+    - Certification
+    - UserCV
+
+    # ── Gap Analysis ──
+    - GapQuestion
+      note: Backend may return id+text OR question_id+question — normalise in api.getGapQuestions()
+    - GapResponse
+    - GapAnalysisRequest
+    - GapAnalysisResponse
+
+    # ── VPR ──
+    - VPR
+    - VPRGenerateRequest
+      fields:
+        job_id: string  # cache-busting UUID (crypto.randomUUID()) — NOT the job posting ID
+        application_id: string  # actual job posting ID for DB lookup
+        cv_id: string
+        gap_response_ids: string[]
+    - VPRStatusResult
+    - VPRStatusResponse
+    - VPRFullData  # fetched from S3 download_url
+    - VPRFullStrength
+    - VPRFullConcern
+    - VPRCoreResponsibility
+    - VPRMustHave
+    - VPRRelevantExperience
+    - VPRObjection
+    - VPRDifferentiator
+
+    # ── Cover Letter ──
+    - CoverLetterParagraph
+    - CoverLetter
+    - CoverLetterRequest
+      fields:
+        job_id: string  # cache-busting UUID
+        application_id: string  # actual job posting ID
+        cv_id: string
+        vpr_id: string
+        gap_response_ids: string[]
+        company_research_id: string
+    - CoverLetterStatusResponse
+
+    # ── Interview Prep ──
+    - STARAnswer
+    - InterviewQuestion
+    - InterviewerQuestion
+    - InterviewPrep
+    - InterviewPrepRequest
+    - PrepQuestion
+    - InterviewPrepStatusResponse
+
+    # ── Company Research ──
+    - CompanyResearchRequest
+    - CompanyResearchResult
+
+    # ── CV Tailoring ──
+    - CVTailoringRequest
+      fields:
+        cv_id: string
+        job_id: string
+        vpr_id: "string | null"  # must be present even as null (backend API detection)
+    - CVBullet
+    - CVExperience
+    - CVEducation
+    - CVCertification
+    - CVContact
+    - CVSkills
+    - CVSections
+    - ATSComponents
+    - ATSResult
+    - CVTailoredStatusResponse
+
+    # ── Export (prepared for spec-13 export feature) ──
+    - ExportRequest:
+        job_id: string
+        module_type: '"vpr" | "cover_letter" | "interview_prep" | "cv_tailored"'
+        format: '"docx" | "pdf"'
+    - ExportResponse:
+        download_url: string
+        expires_at: string  # ISO timestamp
+
+---
+
+api_client:
+  output: src/frontend/api/client.ts
+  description: >
+    Axios instance configured for direct API Gateway calls.
+    Token injection via request interceptor.
+    401 retry-once via response interceptor (delegates to AuthContext).
+  env_var: NEXT_PUBLIC_API_URL
+  base_url_pattern: process.env.NEXT_PUBLIC_API_URL  # e.g. https://abc123.execute-api.us-east-1.amazonaws.com/prod
+
+  request_interceptor: |
+    apiClient.interceptors.request.use(async (config) => {
+      const token = await getCurrentToken();
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    });
+
+  response_interceptor: |
+    // 401 retry-once pattern — prevents infinite loops
+    apiClient.interceptors.response.use(
+      (response) => response,
+      async (error) => {
+        const originalRequest = error.config;
+        if (error.response?.status === 401 && !originalRequest._retry) {
+          originalRequest._retry = true;
+          try {
+            const newToken = await authContext.refreshSession();
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            return apiClient(originalRequest);
+          } catch {
+            authContext.signOut();
+            return Promise.reject(error);
+          }
+        }
+        const status = error.response?.status ?? 0;
+        const message = error.response?.data?.error ?? error.message;
+        throw new ApiError(status, message);
+      }
+    );
+
+  ApiError:
+    fields:
+      - status: number
+      - message: string
+    is404: "() => this.status === 404"
+
+  apiFetchOrNull_pattern: |
+    // Use this wrapper for endpoints that legitimately return 404
+    async function apiFetchOrNull<T>(fn: () => Promise<T>): Promise<T | null> {
+      try {
+        return await fn();
+      } catch (err) {
+        if (err instanceof ApiError && err.is404()) return null;
+        throw err;
+      }
+    }
+
+---
+
+api_methods:
+  output: src/frontend/api/methods.ts
+  description: >
+    Typed wrappers for every backend endpoint.
+    Endpoint paths MUST match old working site (frontend/lib/api.ts) exactly.
+    All methods use apiClient (Axios) directly — no proxy.
+
+  user:
+    getMe: "GET /users/me → User"
+    getUsage: "GET /users/me/usage → Usage"
+    getSubscription: "GET /users/me/subscription → SubscriptionResponse"
+
+  jobs:
+    getJobs: |
+      GET /jobs → { jobs: Job[] }
+      Unwrap: return data.jobs ?? []
+    createJob: "POST /jobs body: CreateJobInput → Job"
+    getJob: |
+      GET /jobs/{jobId} → { role_title, company, ...rest }
+      Normalize: return { ...rest, title: data.role_title, company_name: data.company }
+      Type: JobDetail
+
+  applications:
+    getApplication: |
+      GET /applications/{jobId} → ApplicationHubData | null
+      Use apiFetchOrNull
+
+  company_research:
+    fetchCompanyResearch: |
+      POST /company-research/fetch body: CompanyResearchRequest → AsyncTaskResponse
+    getCompanyResearch: |
+      GET /company-research/{jobId} → CompanyResearchResult | null
+      Use apiFetchOrNull
+
+  cv:
+    getCV: |
+      GET /users/me/cv → { cvs: UserCV[] } | null
+      Unwrap: return data?.cvs?.[0] ?? null
+    saveCV: "POST /users/me/cv body: Partial<UserCV> → UserCV"
+
+  gap_analysis:
+    getGapQuestions: |
+      GET /jobs/{jobId}/gap-questions → { questions: RawQuestion[] } | null
+      Normalize question_id/id and question/text fields
+      Return: GapQuestion[]
+    generateGapQuestions: |
+      POST /gap-analysis/questions body: GapAnalysisRequest → GapAnalysisResponse
+    saveGapResponses: |
+      POST /jobs/{jobId}/gap-responses body: { responses: GapResponse[] } → void
+
+  vpr:
+    generateVPR: |
+      POST /vpr/generate body: VPRGenerateRequest → AsyncTaskResponse
+      IMPORTANT: job_id in body = crypto.randomUUID() (cache-busting)
+                 application_id in body = actual jobId from route params
+    pollVPRStatus: "GET /vpr/{asyncTaskId}/status → VPRStatusResponse"
+    getVPR: "GET /vpr/{artifactId}/status → VPRStatusResponse"
+
+  cover_letter:
+    generateCoverLetter: |
+      POST /cover-letter/generate body: CoverLetterRequest → AsyncTaskResponse
+      IMPORTANT: job_id in body = crypto.randomUUID() (cache-busting)
+    pollCoverLetterStatus: "GET /cover-letter/{asyncTaskId}/status → CoverLetterStatusResponse"
+    getCoverLetter: "GET /cover-letter/{artifactId}/status → CoverLetterStatusResponse"
+
+  interview_prep:
+    generateInterviewPrep: |
+      POST /interview-prep/generate body: InterviewPrepRequest → AsyncTaskResponse
+    pollInterviewPrepStatus: "GET /interview-prep/{asyncTaskId}/status → InterviewPrepStatusResponse"
+    getInterviewPrep: "GET /interview-prep/{artifactId}/status → InterviewPrepStatusResponse"
+
+  cv_tailoring:
+    generateCV: |
+      POST /cv-tailoring/generate body: CVTailoringRequest → AsyncTaskResponse
+      Note: method named generateCV to match old site convention
+    pollCVTailored: "GET /cv-tailoring/{cvTailoringId}/status → CVTailoredStatusResponse"
+    getCVTailored: "GET /cv-tailoring/{cvTailoringId}/status → CVTailoredStatusResponse"
+
+  display_convenience_aliases:
+    note: >
+      Artifact viewer pages call getVPR/getCoverLetter/etc with the stored artifact_id
+      to load completed content — same endpoint as poll, just with known artifact_id.
+    getCoverLetter: "GET /cover-letter/{artifactId}/status → CoverLetterStatusResponse"
+    getInterviewPrep: "GET /interview-prep/{artifactId}/status → InterviewPrepStatusResponse"
+
+---
+
+tests:
+  unit:
+    file: src/frontend/tests/unit/api-methods.test.ts
+    framework: vitest + msw
+
+    cases:
+      - name: "getJob normalises role_title → title and company → company_name"
+        precondition: MSW returns { role_title: 'Engineer', company: 'Acme', job_id: '1' }
+        action: call api.getJob('1')
+        assert:
+          - result.title === 'Engineer'
+          - result.company_name === 'Acme'
+        expect_to_fail_before_implementation: true
+
+      - name: "getApplication returns null on 404"
+        precondition: MSW returns 404 for /applications/missing
+        action: call api.getApplication('missing')
+        assert: result === null
+        expect_to_fail_before_implementation: true
+
+      - name: "getCV unwraps cvs array and returns first element"
+        precondition: MSW returns { cvs: [{ cv_id: 'cv1', ... }] }
+        action: call api.getCV()
+        assert: result.cv_id === 'cv1'
+        expect_to_fail_before_implementation: true
+
+      - name: "getCV returns null when cvs array is empty"
+        precondition: MSW returns { cvs: [] }
+        action: call api.getCV()
+        assert: result === null
+        expect_to_fail_before_implementation: true
+
+      - name: "generateVPR sends cache-busting UUID as job_id, actual jobId as application_id"
+        precondition: MSW captures POST /vpr/generate body
+        action: call api.generateVPR({ application_id: 'job123', cv_id: 'cv1', gap_response_ids: [] })
+        assert:
+          - captured_body.application_id === 'job123'
+          - captured_body.job_id is a valid UUID (not 'job123')
+          - captured_body.job_id !== captured_body.application_id
+        expect_to_fail_before_implementation: true
+
+      - name: "ApiError thrown with status and message on 4xx"
+        precondition: MSW returns 422 with { error: 'Invalid input' }
+        action: call any api method that hits 422
+        assert:
+          - error instanceof ApiError
+          - error.status === 422
+          - error.message === 'Invalid input'
+        expect_to_fail_before_implementation: true
+
+  integration:
+    file: src/frontend/tests/integration/api-client.test.ts
+    framework: vitest + msw
+
+    cases:
+      - name: "Authorization header is set from Cognito idToken on every request"
+        precondition: getCurrentToken() returns 'test-jwt'
+        action: call any api method
+        assert: request.headers.Authorization === 'Bearer test-jwt'
+        expect_to_fail_before_implementation: true
+
+      - name: "Request without valid token sends no Authorization header"
+        precondition: getCurrentToken() returns null
+        action: call any api method
+        assert: request.headers.Authorization is undefined
+        expect_to_fail_before_implementation: true
+
+      - name: "401 triggers one retry with refreshed token"
+        precondition:
+          - First call returns 401
+          - refreshSession() returns 'new-jwt'
+          - Second call returns 200
+        action: call any api method
+        assert:
+          - refreshSession() called once
+          - Second request has Authorization 'Bearer new-jwt'
+          - Final result resolves successfully
+        expect_to_fail_before_implementation: true
+
+      - name: "Second consecutive 401 (after retry) does NOT retry again"
+        precondition: Both first and retry calls return 401
+        action: call api method
+        assert:
+          - refreshSession() called once (not twice)
+          - signOut() called
+          - Promise rejects with ApiError status 401
+        expect_to_fail_before_implementation: true

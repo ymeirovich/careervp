@@ -1,0 +1,565 @@
+spec_id: frontend-13
+title: Artifact Viewer Pages, Placeholder Pages & Export API
+version: "1.0"
+status: pending
+depends_on:
+  - frontend-10  # api methods + types (VPRFullData, S3 fetch pattern)
+  - frontend-11  # polling hooks for in-progress detection
+  - frontend-12  # ErrorBoundary, hub navigation patterns
+output_path: >
+  src/frontend/app/applications/[id]/vpr/page.tsx
+  src/frontend/app/applications/[id]/cover-letter/page.tsx
+  src/frontend/app/applications/[id]/interview-prep/page.tsx
+  src/frontend/app/applications/[id]/gap-analysis/page.tsx
+  src/frontend/app/applications/[id]/cv-tailored/page.tsx
+  src/frontend/app/applications/[id]/company-research/page.tsx
+  src/frontend/app/cv-center/page.tsx
+  src/frontend/app/settings/page.tsx
+  src/frontend/app/billing/page.tsx
+  src/frontend/components/ExportDropdown/ExportDropdown.tsx
+  src/backend/careervp/handlers/export_handler.py
+
+---
+
+principle: >
+  Artifact pages are migrated from the working old site (frontend/app/dashboard/jobs/[jobId]/*)
+  and adapted to use the new design tokens, component system, and hook patterns from spec-01
+  through spec-12. The S3 presigned URL fetch pattern is documented here as the canonical
+  reference for all artifact pages — do not fetch content through API Gateway, fetch directly
+  from the S3 URL returned in the status response.
+
+  Export: the ExportDropdown is built as a prepared UI component backed by a new backend
+  endpoint. The dropdown renders in all artifact pages but can be feature-flagged until
+  the document generation feature is ready. The backend endpoint is implemented now
+  so the integration is clean.
+
+  Error boundaries wrap every page. User-friendly messages are shown; HTTP details
+  go to Dev Tools; 5xx errors go to CloudWatch.
+
+  Placeholder pages (company-research, billing, settings) are functional — they display
+  real data where available — but have a "beta" or "coming soon" visual treatment for
+  unfinished sections.
+
+---
+
+s3_presigned_url_pattern:
+  description: >
+    VPR (and potentially future artifacts) store their full content as JSON
+    in S3. The status endpoint returns a download_url field pointing to a
+    presigned S3 URL. The frontend fetches this URL directly — not through
+    API Gateway — to get the full content.
+  flow: |
+    1. GET /vpr/{artifactId}/status → VPRStatusResponse
+       { status: 'completed', result: { download_url: 'https://s3.amazonaws.com/...' } }
+    2. fetch(download_url)  ← direct to S3, no auth header needed (presigned)
+    3. response.json() → VPRFullData
+  notes:
+    - download_url is only present when status === 'completed'
+    - Presigned URLs expire (typically 1 hour); do not cache the URL itself
+    - If download_url is absent, fall back to result.uvp / result.strategic_narrative
+      (the status endpoint also contains a summary subset of the VPR)
+    - No Authorization header should be sent to S3 presigned URLs
+
+---
+
+export_api:
+  description: >
+    Backend endpoint that generates a downloadable file (DOCX or PDF) for a
+    completed artifact. Returns a presigned S3 URL valid for 15 minutes.
+    This endpoint is designed for future use — the frontend ExportDropdown
+    will call it once document generation is implemented.
+
+  output: src/backend/careervp/handlers/export_handler.py
+
+  endpoint:
+    method: GET
+    path: /jobs/{job_id}/artifacts/{module_type}/export
+    auth: Bearer idToken (standard Cognito Authorizer)
+    query_params:
+      format:
+        type: '"docx" | "pdf"'
+        required: true
+    path_params:
+      job_id: string  # job posting ID
+      module_type: '"vpr" | "cover_letter" | "interview_prep" | "cv_tailored"'
+    response_200:
+      download_url: string  # presigned S3 URL, valid 15 minutes
+      expires_at: string    # ISO timestamp
+      format: '"docx" | "pdf"'
+      module_type: string
+    response_404:
+      error: "Artifact not found or not yet completed"
+    response_400:
+      error: "Unsupported format. Use docx or pdf."
+
+  implementation:
+    phase: stub  # Full document generation is a future feature
+    stub_behavior: |
+      @app.get('/jobs/{job_id}/artifacts/{module_type}/export')
+      def export_artifact(job_id: str, module_type: str) -> Response[str]:
+          """
+          Stub — returns 501 Not Implemented until document generation is built.
+          Endpoint is registered now so frontend integration requires no future
+          API Gateway changes.
+          """
+          export_format = app.current_event.query_string_parameters.get('format', '')
+          if export_format not in ('docx', 'pdf'):
+              return _json_response(HTTPStatus.BAD_REQUEST, {'error': 'Unsupported format. Use docx or pdf.'})
+
+          logger.info(
+              'Export requested (not yet implemented)',
+              job_id=job_id,
+              module_type=module_type,
+              format=export_format,
+          )
+          return _json_response(
+              HTTPStatus.NOT_IMPLEMENTED,
+              {'error': 'Export is coming soon. This endpoint will return a download URL once ready.'},
+          )
+    note: >
+      When document generation is implemented, replace the stub body with:
+      1. Look up artifact from DynamoDB (artifacts_table) by job_id + module_type
+      2. Generate DOCX/PDF from artifact content (Lambda or Step Function)
+      3. Upload to a dedicated exports S3 bucket with 15-min expiry
+      4. Return presigned download URL
+
+  infra:
+    output: infra/careervp/api_construct.py
+    action: >
+      Add a new Lambda function for export_handler.py and wire to API Gateway
+      at GET /jobs/{job_id}/artifacts/{module_type}/export.
+      Lambda needs read access to artifacts_table and write access to exports bucket.
+      Add exports bucket to api_db_construct.py.
+
+---
+
+export_dropdown:
+  output: src/frontend/components/ExportDropdown/ExportDropdown.tsx
+  description: >
+    Dropdown button rendered in artifact viewer pages.
+    Calls the export endpoint and initiates a browser download.
+  props:
+    jobId: string
+    moduleType: '"vpr" | "cover_letter" | "interview_prep" | "cv_tailored"'
+    artifactId: string
+  formats:
+    - label: "Download as Word (.docx)"
+      format: docx
+    - label: "Download as PDF"
+      format: pdf
+  behavior: |
+    async function handleExport(format: 'docx' | 'pdf') {
+      setIsLoading(true);
+      try {
+        const response = await api.exportArtifact(jobId, moduleType, format);
+        // Trigger browser download
+        const a = document.createElement('a');
+        a.href = response.download_url;
+        a.download = `${moduleType}-${jobId}.${format}`;
+        a.click();
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 501) {
+          setError('Export is coming soon!');
+        } else {
+          setError('Download failed. Please try again.');
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  coming_soon_ui: >
+    While status === 501, show a tooltip "Export coming soon" on hover
+    and render the dropdown items as disabled. This makes the feature
+    visible to users without being misleading.
+  data_testid: export-dropdown
+
+  api_method_to_add:
+    file: src/frontend/api/methods.ts
+    method: |
+      exportArtifact: (jobId: string, moduleType: string, format: 'docx' | 'pdf') =>
+        apiClient.get<ExportResponse>(
+          `/jobs/${jobId}/artifacts/${moduleType}/export?format=${format}`
+        ).then(r => r.data)
+
+---
+
+artifact_pages:
+  shared_page_pattern:
+    description: >
+      All artifact pages follow this pattern. Adapt per-module.
+    structure: |
+      1. Extract jobId from params (use React.use(params) for async params)
+      2. Extract artifactId from ?id= query param (useSearchParams — needs Suspense)
+      3. On mount: fetch hub (api.getApplication) + job detail (api.getJob) in parallel
+      4. Resolve artifactId: hub.artifacts[module].artifact_id ?? queryParam
+      5. If no artifactId or artifact not completed: redirect back to hub
+      6. Fetch artifact content
+      7. For VPR: also fetch S3 download_url if present
+      8. Render content with new design tokens
+      9. Render ExportDropdown (where applicable)
+      10. Render ErrorBoundary around content
+    back_navigation: router.push(`/applications/${jobId}`)
+    breadcrumb_pattern:
+      - label: "Dashboard"
+        href: /dashboard
+      - label: "{job.title} at {job.company_name}"
+        href: "/applications/{jobId}"
+      - label: "{page title}"
+
+  vpr_page:
+    output: src/frontend/app/applications/[id]/vpr/page.tsx
+    source: frontend/app/dashboard/jobs/[jobId]/vpr/page.tsx
+    title: "Value Proposition Report"
+    data_source:
+      primary: api.getVPR(artifactId) → VPRStatusResponse
+      s3_full: fetch(result.download_url) → VPRFullData
+    content_sections:
+      full_vpr_available:
+        - ExecSummarySection (fit score, rationale, strengths, concerns)
+        - AppStrategySection (messaging, ATS keywords, CV opening line)
+        - RoleAlignmentSection (core responsibilities with alignment bars)
+        - ExperienceSection (relevant experiences with achievement metrics)
+        - ObjectionsSection (likely objections + response scripts)
+        - GapsSection (priority action items)
+        - SkillsSection (technical skills analysis)
+      fallback_summary:
+        - result.uvp or result.strategic_narrative as plain text card
+        - result.differentiators list if present
+    design_adaptation:
+      colors: replace raw hex with design token variables from spec-01
+      typography: replace inline font classes with token classes (cardTitle, body, etc.)
+      radius: replace rounded-[8px] with rounded-md from tailwind.config
+    export: ExportDropdown(jobId, 'vpr', artifactId)
+    data_testid_map:
+      page: vpr-page
+      fit_score: vpr-fit-score
+      exec_summary: vpr-exec-summary
+
+  cover_letter_page:
+    output: src/frontend/app/applications/[id]/cover-letter/page.tsx
+    source: frontend/app/dashboard/jobs/[jobId]/cover-letter/page.tsx
+    title: "Cover Letter"
+    data_source: api.getCoverLetter(artifactId) → CoverLetterStatusResponse
+    content:
+      - Full text display: result.cover_letter as formatted paragraphs
+      - Copy to clipboard button
+    export: ExportDropdown(jobId, 'cover_letter', artifactId)
+    data_testid_map:
+      page: cover-letter-page
+      full_text: cover-letter-text
+      copy_btn: copy-to-clipboard
+
+  interview_prep_page:
+    output: src/frontend/app/applications/[id]/interview-prep/page.tsx
+    source: frontend/app/dashboard/jobs/[jobId]/interview-prep/page.tsx
+    title: "Interview Preparation"
+    data_source: api.getInterviewPrep(artifactId) → InterviewPrepStatusResponse
+    content:
+      - questions list with expandable STAR answers (accordion pattern)
+      - question_type badges (behavioral, technical, situational, gap_focused)
+      - Questions to ask the interviewer section
+      - Pre-interview checklist section
+      - Salary guidance section (if present)
+    question_card_behavior: click to expand STAR answer; click again to collapse
+    data_testid_map:
+      page: interview-prep-page
+      question_card: "question-card-{index}"
+      expand_btn: expand-question
+
+  gap_analysis_page:
+    output: src/frontend/app/applications/[id]/gap-analysis/page.tsx
+    source: frontend/app/dashboard/jobs/[jobId]/gap-analysis/page.tsx
+    title: "Gap Analysis"
+    data_source: useGapAnalysis(jobId)
+    content:
+      - Questions list with answer form (textarea per question)
+      - Impact + probability badges per question
+      - "Generate Questions" button (if no questions exist and CV is present)
+      - Save responses button
+      - Success toast on save
+    modes: view | edit | saving
+    note: >
+      This page does NOT require an artifact_id — gap analysis is synchronous
+      and questions are fetched directly from /jobs/{jobId}/gap-questions.
+    data_testid_map:
+      page: gap-analysis-page
+      generate_btn: generate-gap-questions
+      save_btn: save-responses
+      question_row: "question-row-{index}"
+
+  cv_tailored_page:
+    output: src/frontend/app/applications/[id]/cv-tailored/page.tsx
+    title: "Tailored CV"
+    data_source: api.getCVTailored(artifactId) → CVTailoredStatusResponse
+    content:
+      - ATS score display (score + grade + component breakdown)
+      - Tailored CV sections rendered in structured format:
+          - Contact, Summary, Skills, Experience (with bullets), Education, Certifications
+      - Keyword match display: matched (green chips) + missing (red chips)
+      - Fact verification badge (if result.fact_verification_detail present)
+    fallback: result.tailored_cv as raw text if cv_sections absent
+    export: ExportDropdown(jobId, 'cv_tailored', artifactId)
+    data_testid_map:
+      page: cv-tailored-page
+      ats_score: ats-score
+      keyword_matched: keyword-matched-list
+
+---
+
+placeholder_pages:
+  description: >
+    Pages that have real data where available but a "coming soon" treatment
+    for features not yet fully implemented.
+
+  company_research:
+    output: src/frontend/app/applications/[id]/company-research/page.tsx
+    title: "Company Research"
+    status: beta_placeholder
+    data_source: api.getCompanyResearch(jobId) → CompanyResearchResult | null
+    content:
+      available_now:
+        - Company name + industry + size range
+        - Mission statement
+        - Values list
+        - Recent news (title + date)
+        - Products/services list
+        - Funding status
+      culture_section:
+        label: "Culture & Environment"
+        content: result.culture if present
+      beta_badge: >
+        Show "Beta" chip next to page title. Content is AI-researched and may
+        be incomplete or outdated.
+    trigger_research:
+      description: >
+        If getCompanyResearch returns null, show "Research this company" CTA.
+        On click: call api.fetchCompanyResearch({ job_id: jobId }) then reload.
+      note: Company research is synchronous — no polling needed.
+    data_testid_map:
+      page: company-research-page
+      trigger_btn: research-company-btn
+
+  cv_center:
+    output: src/frontend/app/cv-center/page.tsx
+    title: "CV Center"
+    data_source: useCV()
+    content:
+      has_cv:
+        - CV preview: contact info, professional summary, experience timeline
+        - "Edit CV" button → renders inline edit form
+        - Last updated timestamp
+      no_cv:
+        - EmptyState: "Upload your base CV to get started"
+        - "Create CV" button → renders creation form
+    cv_form_fields:
+      - full_name, language (en/he dropdown)
+      - contact_info: name, email, phone, location, linkedin
+      - professional_summary (textarea)
+      - experience: repeating fields (company, role, dates, current toggle, achievements, technologies)
+      - education: repeating fields (institution, degree, graduation_date, field_of_study)
+      - skills (tag input)
+      - certifications: repeating fields
+    on_save: useCV().saveCV(formData)
+
+  settings:
+    output: src/frontend/app/settings/page.tsx
+    title: "Settings"
+    content:
+      profile_section:
+        - Display name field (reads from user.name)
+        - Email field (read-only — email cannot be changed via Cognito without special flow)
+        - Save button → api.saveProfile (requires new endpoint — mark as TODO)
+      security_section:
+        - Change password form: old_password, new_password, confirm_new_password
+        - uses useAuth().changePassword(old, new)
+      placeholder_sections:
+        - Notification preferences: "Coming soon" badge
+        - API access: "Coming soon" badge
+    data_testid_map:
+      page: settings-page
+      change_password_form: change-password-form
+
+  billing:
+    output: src/frontend/app/billing/page.tsx
+    title: "Billing & Plan"
+    data_source: useUserContext()
+    content:
+      current_plan_card:
+        trial_active: >
+          Show trial status: "{days_remaining} days remaining in your trial"
+          + CTA to choose a plan
+        subscription_active: >
+          Show plan type (Monthly $20/month | Annual $16/month)
+          + status (active / expires {date})
+          + "Manage Subscription" button
+        no_access: >
+          Show "Your trial has ended" + plan selection
+      plan_cards:
+        monthly:
+          label: "Monthly"
+          price: "$20/month"
+          cta: "Get Monthly"
+        annual:
+          label: "Annual"
+          price: "$16/month (billed $192/year)"
+          badge: "Save 20%"
+          cta: "Get Annual"
+      payment_integration:
+        note: >
+          Actual Stripe checkout integration is a separate backend concern.
+          Plan CTAs link to /billing/checkout or call a Stripe session endpoint.
+          For now, render the pricing UI with "Contact us" fallback if no
+          Stripe session endpoint exists.
+    data_testid_map:
+      page: billing-page
+      current_plan: current-plan-card
+
+---
+
+tests:
+  unit:
+    file: src/frontend/tests/unit/vpr-page.test.tsx
+    framework: vitest + @testing-library/react + happy-dom
+
+    cases:
+      - name: "VPR page renders executive summary section from full VPR data"
+        precondition:
+          - api.getApplication returns hub with vpr artifact_id='art1'
+          - api.getVPR('art1') returns { status: 'completed', result: { download_url: 'https://s3.../...' } }
+          - fetch(download_url) returns full VPRFullData fixture
+        action: render VPR page with jobId, wait for load
+        assert:
+          - data-testid="vpr-exec-summary" in document
+          - data-testid="vpr-fit-score" shows fixture's overallFitScore
+        expect_to_fail_before_implementation: true
+
+      - name: "VPR page shows fallback summary when no S3 download_url"
+        precondition:
+          - api.getVPR returns { status: 'completed', result: { uvp: 'Test UVP' } }
+          - No download_url in result
+        action: render VPR page
+        assert: element containing 'Test UVP' in document
+        expect_to_fail_before_implementation: true
+
+      - name: "VPR page shows error state when fetch fails"
+        precondition: api.getVPR throws ApiError(500, 'Server error')
+        action: render VPR page
+        assert:
+          - ErrorBoundary fallback message shown to user
+          - console.error called with error details
+        expect_to_fail_before_implementation: true
+
+      - name: "VPR page redirects to hub when artifact not completed"
+        precondition:
+          - api.getApplication returns hub with vpr.status='processing', artifact_id=null
+          - No ?id= query param
+        action: render VPR page
+        assert: router.replace called with '/applications/{jobId}'
+        expect_to_fail_before_implementation: true
+
+  unit_gap:
+    file: src/frontend/tests/unit/gap-analysis-page.test.tsx
+    framework: vitest + @testing-library/react
+
+    cases:
+      - name: "Questions render with impact badges"
+        precondition:
+          - useGapAnalysis returns 3 questions with varying impact levels
+        action: render gap analysis page
+        assert:
+          - 3 question rows rendered (data-testid="question-row-0", etc.)
+          - HIGH impact badge shown for high-impact question
+        expect_to_fail_before_implementation: true
+
+      - name: "Save button dispatches responses to API"
+        precondition:
+          - 2 questions loaded
+          - User types answers into both textareas
+        action: click save button
+        assert:
+          - api.saveGapResponses called with jobId and both responses
+        expect_to_fail_before_implementation: true
+
+      - name: "Generate questions button shows when no questions and CV exists"
+        precondition:
+          - useGapAnalysis returns empty questions array
+          - hub has cv present
+        action: render page
+        assert: data-testid="generate-gap-questions" in document
+        expect_to_fail_before_implementation: true
+
+  unit_export:
+    file: src/frontend/tests/unit/export-dropdown.test.tsx
+    framework: vitest + @testing-library/react
+
+    cases:
+      - name: "Export dropdown renders DOCX and PDF options"
+        action: render ExportDropdown, open dropdown
+        assert:
+          - "Download as Word (.docx)" option visible
+          - "Download as PDF" option visible
+        expect_to_fail_before_implementation: true
+
+      - name: "Export dropdown shows coming-soon tooltip when API returns 501"
+        precondition: api.exportArtifact throws ApiError(501, ...)
+        action: click DOCX option
+        assert: error message "Export is coming soon!" shown
+        expect_to_fail_before_implementation: true
+
+      - name: "Export dropdown triggers browser download on 200 response"
+        precondition:
+          - api.exportArtifact returns { download_url: 'https://example.com/file.docx' }
+          - document.createElement('a').click mocked
+        action: click DOCX option
+        assert: mock anchor element created with href === 'https://example.com/file.docx'
+        expect_to_fail_before_implementation: true
+
+  backend:
+    file: src/backend/tests/unit/test_export_handler.py
+    framework: pytest
+
+    cases:
+      - name: "GET /jobs/{job_id}/artifacts/{module_type}/export returns 501 stub"
+        action: call endpoint with format=docx
+        assert:
+          - status_code === 501
+          - body contains 'coming soon'
+        expect_to_fail_before_implementation: true
+
+      - name: "Returns 400 for unsupported format"
+        action: call endpoint with format=xlsx
+        assert: status_code === 400
+        expect_to_fail_before_implementation: true
+
+      - name: "Endpoint is registered and reachable (not 404)"
+        action: call endpoint with valid params
+        assert: status_code != 404
+        expect_to_fail_before_implementation: true
+
+  e2e:
+    file: src/frontend/tests/e2e/artifact-viewers.e2e.test.ts
+    framework: playwright
+
+    cases:
+      - name: "Navigate from hub to VPR page and back"
+        steps:
+          1: Mock GET /applications/job1 with completed VPR artifact_id='art1'
+          2: Mock GET /vpr/art1/status with completed status and download_url
+          3: Mock fetch(download_url) with VPRFullData fixture
+          4: Navigate to /applications/job1
+          5: Click View CTA on VPR ModuleCard
+          6: Assert URL is /applications/job1/vpr?id=art1
+          7: Assert vpr-exec-summary in page
+          8: Click "← Back to Hub"
+          9: Assert URL is /applications/job1
+        expect_to_fail_before_implementation: true
+
+      - name: "Gap analysis page shows questions and allows saving"
+        steps:
+          1: Mock GET /jobs/job1/gap-questions with 2 questions
+          2: Navigate to /applications/job1/gap-analysis
+          3: Assert 2 question rows visible
+          4: Fill in answer for first question
+          5: Click save button
+          6: Assert POST /jobs/job1/gap-responses was called
+        expect_to_fail_before_implementation: true
