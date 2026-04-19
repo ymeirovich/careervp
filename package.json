@@ -1,6 +1,6 @@
 {
     "devDependencies": {
-        "aws-cdk": "2.1100.3",
+        "aws-cdk": "2.1118.2",
         "aws-cdk-lib": "^2.239.0",
         "cdk-monitoring-constructs": "^9.19.2",
         "cdk-nag": "^2.37.55",
