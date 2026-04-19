@@ -1,0 +1,198 @@
+spec_id: frontend-04
+title: Performance Fixes
+version: "1.0"
+status: pending
+priority: high
+
+---
+
+problem_1_fixed_polling:
+  location: src/frontend/app/dashboard/jobs/[jobId]/page.tsx:160-249
+  symptom: >
+    4 separate setInterval() loops fixed at 3s regardless of module state.
+    Polls even after modules complete. No backoff on fast success or slow processing.
+    Generates 80+ API calls per 4-minute VPR generation.
+  fix: Replace all setInterval polling with adaptive polling in TanStack Query.
+
+  adaptive_polling_spec:
+    output: src/frontend/hooks/useModuleStatus.ts
+
+    implementation:
+      library: TanStack Query v5 refetchInterval
+      strategy: exponential_backoff_with_ceiling
+
+    intervals:
+      phase_initial:
+        description: First 30 seconds after generation triggers
+        interval_ms: 3000
+        reason: VPR fast-path can complete in ~15s on simple profiles
+      phase_normal:
+        description: 30s–3 minutes
+        interval_ms: 8000
+        reason: Most modules complete in this window
+      phase_slow:
+        description: 3–8 minutes
+        interval_ms: 15000
+        reason: VPR quality gate failures can cause retries; no need to hammer
+      phase_timeout:
+        description: "> 8 minutes"
+        interval_ms: 30000
+        reason: Something is wrong; preserve user bandwidth
+      stop_condition: status = "completed" OR status = "failed"
+
+    code_pattern: |
+      useQuery({
+        queryKey: queryKeys.vpr.status(jobId),
+        queryFn: () => fetchModuleStatus("vpr", jobId),
+        refetchInterval: (query) => {
+          const status = query.state.data?.status;
+          if (status === "completed" || status === "failed") return false;
+
+          const elapsedMs = Date.now() - (query.state.dataUpdatedAt ?? Date.now());
+          if (elapsedMs < 30_000) return 3_000;
+          if (elapsedMs < 180_000) return 8_000;
+          if (elapsedMs < 480_000) return 15_000;
+          return 30_000;
+        },
+        enabled: !!jobId && isPollingEnabled,
+      })
+
+    impact:
+      before: "~1,200 API calls for a 1-hour session with 4 active modules"
+      after: "~120 API calls for the same session"
+
+---
+
+problem_2_s3_presigned_url:
+  location: src/backend/careervp/handlers/vpr_status_handler.py:79-107
+  symptom: >
+    _build_completed_response() calls S3 GetObject + generates new presigned URL
+    on EVERY status poll. At 3s intervals = ~200 unnecessary S3 calls per session.
+    Each adds 50–150ms to status response latency.
+  fix: Cache presigned URL in DynamoDB after first generation.
+
+  backend_fix_spec:
+    output: src/backend/careervp/handlers/vpr_status_handler.py
+    note: This is a BACKEND fix but is included here to document the full chain.
+
+    approach:
+      1: >
+        On first "completed" status write, generate presigned URL with 7-day TTL.
+        Store in DynamoDB: result_url_cached, result_url_cached_at, result_url_expires_at.
+      2: >
+        On subsequent status reads, check result_url_expires_at.
+        If URL valid (> 1 hour remaining), return cached URL.
+        If expired, regenerate and re-cache.
+      3: >
+        7-day presigned URL TTL is safe for authenticated users behind Cognito.
+
+    dynamodb_fields_to_add:
+      - result_url_cached: str
+      - result_url_cached_at: str  # ISO 8601
+      - result_url_expires_at: str  # ISO 8601
+
+    applies_to:
+      - vpr_status_handler.py
+      - cv_tailoring_status_handler.py
+      - cover_letter_status_handler.py
+      - interview_prep_status_handler.py
+
+    impact:
+      before: "S3 GetObject on every poll = 50–150ms per status call"
+      after: "S3 GetObject only on first completion + once per 7 days"
+
+---
+
+problem_3_vpr_retry_strategy:
+  location: src/backend/careervp/logic/vpr_generator.py:215-264
+  symptom: >
+    Stage 6 (quality gate) has MAX_STAGE6_RETRIES=3. Each retry is a full
+    Claude Sonnet 4.5 call (~8–12s). On worst case: 3 retries × 12s = 36s
+    added to an already 40–60s pipeline. This directly causes page loading
+    latency visible to users.
+  fix: Accept quality gate failures gracefully instead of retrying.
+
+  backend_fix_spec:
+    output: src/backend/careervp/logic/vpr_generator.py
+    note: Backend fix — documented here for full context.
+
+    approach:
+      1: >
+        Reduce MAX_STAGE6_RETRIES from 3 to 1.
+        On second failure, accept the stage 5 output with a quality_warning flag.
+      2: >
+        Add quality_score to the VPR result payload.
+        Expose via GET /vpr/{job_id}/status as meta field.
+      3: >
+        Frontend displays "ATS score: {quality_score}" in ModuleCard meta.
+
+    fallback_behavior:
+      quality_gate_pass: normal flow, mark completed
+      quality_gate_fail_once: retry once with adjusted prompt
+      quality_gate_fail_twice: accept stage 5 output, set quality_warning=true, mark completed
+      result: user sees artifact with visual score indicator
+
+    impact:
+      before: "worst-case pipeline = 60s + 36s retries = 96s"
+      after: "worst-case pipeline = 60s + 12s one-retry = 72s"
+
+---
+
+problem_4_page_load_perception:
+  symptom: >
+    User perceives blank/loading state on job page because all module statuses
+    are fetched sequentially or after full page hydration.
+  fix: Optimistic loading with skeleton states and staggered data arrival.
+
+  frontend_fix_spec:
+    output: src/frontend/app/dashboard/jobs/[jobId]/page.tsx
+
+    approach:
+      1: >
+        Render ModuleCard in "processing" skeleton state immediately on page mount
+        while queries are in-flight. Never show blank page.
+      2: >
+        Use TanStack Query `placeholderData: keepPreviousData` to prevent
+        flash-of-empty when navigating between jobs.
+      3: >
+        Add React Suspense boundary around the module grid with a loading fallback
+        that matches the actual card grid layout (prevents layout shift).
+      4: >
+        Prefetch application data on hover over job list items using
+        queryClient.prefetchQuery().
+
+---
+
+logging_and_tracing:
+  description: Frontend performance instrumentation
+  output: src/frontend/lib/instrumentation.ts
+
+  metrics_to_capture:
+    - module_generation_start_ms: performance.now() when Generate CTA clicked
+    - module_generation_end_ms: performance.now() when status = "completed"
+    - module_generation_duration_ms: end - start
+    - poll_count: number of polls before completion
+    - time_to_first_module_complete_ms: wall clock from page load
+
+  cloudwatch_log_events:
+    frontend_module_timing:
+      fields:
+        - event: "module_generation_completed"
+        - module_type: ModuleType
+        - duration_ms: number
+        - poll_count: number
+        - quality_score?: number
+    frontend_error:
+      fields:
+        - event: "module_generation_failed"
+        - module_type: ModuleType
+        - error_code: string
+        - duration_ms: number
+
+  implementation:
+    library: AWS RUM (Real User Monitoring) via Amazon CloudWatch RUM
+    alternative: Custom fetch wrapper that POSTs to a /metrics Lambda endpoint
+    note: >
+      AWS RUM is preferred — it captures Core Web Vitals automatically.
+      Setup: create RUM app monitor in CloudWatch, inject generated snippet
+      into Next.js _app.tsx or layout.tsx.

@@ -1,0 +1,255 @@
+spec_id: frontend-07
+title: Testing Strategy
+version: "1.0"
+status: pending
+output_path: src/frontend/tests/
+
+---
+
+principle: >
+  Tests validate behavior, not implementation details.
+  State machine transitions and cross-module dependency rules are the
+  highest-value test targets — they are complex, non-obvious, and break silently.
+  Do NOT test CSS or exact DOM structure. Test what the user experiences.
+
+test_framework:
+  unit: Vitest + React Testing Library
+  integration: Vitest + MSW (Mock Service Worker) for API mocking
+  e2e: Playwright
+  regression: Vitest (state machine logic, pure functions)
+
+---
+
+unit_tests:
+  output: src/frontend/tests/unit/
+
+  module_card_states:
+    file: module-card.test.tsx
+    description: >
+      Verify ModuleCard renders the correct CTA labels, badges, and UI elements
+      for each of the 9 ModuleStatus states. Each module type × each state
+      that has unique behavior should be covered.
+    coverage_targets:
+      - notStarted → shows "Generate" CTA, no badge, no warning
+      - notStarted (baseCV) → shows "Start" CTA
+      - processing → shows spinner, no CTAs, aria-busy=true
+      - ready → shows "View" primary CTA, "Edit" + "Regenerate" secondary
+      - complete → shows "View" primary, "Edit" + "History" secondary
+      - edited → shows "Edited" badge, "Regenerate" primary
+      - stale → shows "Outdated" badge, "Regenerate" primary, warning text
+      - failed → shows "Retry" CTA, error text visible
+      - timeout → shows "Refresh" CTA, "Still processing" message
+      - final → shows "Final" badge, "Export" primary, "History" secondary
+      - processing → spinner has aria-label for screen readers
+      - stale → warningText rendered when provided
+
+  state_adapters:
+    file: state-adapters.test.ts
+    description: Unit tests for mapApplicationDataToHubState and helper functions
+    coverage_targets:
+      - deriveModuleStatus: all 4 raw API statuses → ModuleStatus mappings
+      - deriveModuleStatus: null/missing → notStarted
+      - deriveModuleStatus: completed + isFinalized → final
+      - deriveModuleStatus: completed + isStale → stale
+      - deriveHubStatus: all modules notStarted → INIT
+      - deriveHubStatus: any module processing → LOADING
+      - deriveHubStatus: isFinalized → FINALIZED
+      - deriveHubStatus: stale modules → STALE_DEPENDENCIES
+      - deriveHubStatus: all complete → READY_COMPLETE
+      - deriveHubStatus: some complete, some notStarted → READY_PARTIAL
+      - detectStaleness: cv_changed invalidates correct 5 modules
+      - detectStaleness: gap_responses_edited invalidates vpr + coverLetter + interviewPrep
+      - detectStaleness: company_research_regenerated marks soft stale
+      - mapApplicationDataToHubState: complete integration of above
+
+  hub_status_deriver:
+    file: hub-status-deriver.test.ts
+    description: Property-based tests for HubStatus derivation
+    coverage_targets:
+      - FINALIZED always wins over other states when isFinalized=true
+      - PROCESSING_BLOCKED when gapAnalysis notStarted and vpr not notStarted
+      - ERROR_RECOVERABLE only when CRITICAL module (vpr/gapAnalysis/baseCV) fails
+      - Non-critical module failure alone does NOT cause ERROR_RECOVERABLE
+
+  auth_context:
+    file: auth-context.test.tsx
+    coverage_targets:
+      - signIn success → sets user + idToken
+      - signIn failure with NotAuthorizedException → error state
+      - signIn failure with UserNotConfirmedException → specific error code
+      - signOut → clears user + idToken
+      - token refresh on mount when session exists
+
+---
+
+integration_tests:
+  output: src/frontend/tests/integration/
+  setup: MSW handlers for all API endpoints
+
+  api_polling:
+    file: api-polling.test.ts
+    description: Verify adaptive polling behavior with simulated API responses
+    coverage_targets:
+      - poll stops when status = "completed"
+      - poll stops when status = "failed"
+      - poll interval increases after 30s (3s → 8s)
+      - poll interval increases after 3min (8s → 15s)
+      - no polling when enabled=false
+      - cache invalidated on generate() success
+      - MSW simulates pending → processing → completed lifecycle
+
+  cognito_auth:
+    file: cognito-auth.test.ts
+    description: Auth flow integration with MSW-mocked Cognito
+    coverage_targets:
+      - login form submission calls signIn()
+      - 401 response triggers token refresh attempt
+      - 401 + refresh failure → redirect to /login
+      - register form → confirmSignUp flow works end-to-end
+      - protected route redirects unauthenticated users
+
+  hub_state_integration:
+    file: hub-state-integration.test.ts
+    description: >
+      useApplicationHub hook fetches all module statuses in parallel and
+      returns merged HubState via adapter.
+    coverage_targets:
+      - all modules notStarted → HubState.hubStatus = INIT
+      - one module processing → HubState.hubStatus = LOADING
+      - completed module has correct CTAs in HubModuleState
+      - stale module detection triggers STALE_DEPENDENCIES hub status
+      - React Query staleTime prevents redundant refetches
+
+---
+
+e2e_tests:
+  output: src/frontend/tests/e2e/
+  tool: Playwright
+  base_url: http://localhost:3000
+  note: >
+    E2E tests run against a running Next.js dev server.
+    API calls are intercepted by Playwright route mocking (no real backend needed).
+
+  application_hub_flow:
+    file: application-hub-flow.e2e.test.ts
+    description: Full user journey from login → generate VPR → view artifact
+    steps:
+      - Navigate to /login
+      - Fill email + password, click Sign In
+      - Verify redirect to /dashboard
+      - Click "New Application" or select existing job
+      - Verify Application Hub loads with INIT state
+      - Click "Generate" on VPR module
+      - Verify module transitions to processing (spinner visible)
+      - Mock API returns completed status
+      - Verify module transitions to ready (View CTA appears)
+      - Click "View" on VPR module
+      - Verify artifact page loads with content
+
+  stale_dependency_flow:
+    file: stale-dependency-flow.e2e.test.ts
+    description: Verify stale dependency UI when CV is updated
+    steps:
+      - Hub in READY_COMPLETE state (all modules complete)
+      - User navigates to /cv and uploads a new CV version
+      - Navigate back to Application Hub
+      - Verify hub shows STALE_DEPENDENCIES status
+      - Verify 5 downstream modules show "Outdated" badge
+      - Verify companyResearch and baseCV do NOT show stale badge
+      - Click "Regenerate" on VPR module
+      - Verify only VPR transitions to processing
+      - Other stale modules remain stale (not auto-triggered)
+
+  auth_flow:
+    file: auth-flow.e2e.test.ts
+    description: Register → confirm → login → logout cycle
+    steps:
+      - Navigate to /register
+      - Fill email + password, submit
+      - Navigate to /confirm-signup?email=...
+      - Fill verification code (mocked Cognito), submit
+      - Verify redirect to /login with success message
+      - Fill credentials, sign in
+      - Verify redirect to /dashboard
+      - Click user menu → Sign Out
+      - Verify redirect to /login
+      - Verify direct navigation to /dashboard redirects to /login
+
+  gap_analysis_flow:
+    file: gap-analysis-flow.e2e.test.ts
+    description: Gap analysis Q&A completion unblocks downstream modules
+    steps:
+      - Hub in PROCESSING_BLOCKED state (gapAnalysis notStarted, vpr blocked)
+      - VPR module shows blocked/disabled Generate CTA
+      - User completes gap analysis (fills 10 questions)
+      - Submit gap responses
+      - Verify hub transitions away from PROCESSING_BLOCKED
+      - Verify VPR Generate CTA becomes active
+
+---
+
+regression_tests:
+  output: src/frontend/tests/regression/
+  description: >
+    Guard rails on state machine logic and cross-module dependency rules.
+    These should NEVER fail after initial green — if they do, a breaking
+    change was introduced to the core state machine.
+
+  state_machine_transitions:
+    file: state-machine-transitions.test.ts
+    description: Exhaustive state transition table validation
+    coverage_matrix:
+      - Each ModuleStatus → derived HubStatus combinations
+      - All 8 HubStatus values are reachable via valid input combinations
+      - No HubStatus value can be reached from an invalid module state set
+      - FINALIZED is terminal — no other status can be reached from FINALIZED
+      - INIT only when ALL 7 modules are notStarted
+
+  cross_module_invalidation:
+    file: cross-module-invalidation.test.ts
+    description: >
+      Validate that the staleness rules in detectStaleness() match the
+      design specification exactly (not approximated).
+    cases:
+      cv_change_invalidates_5:
+        trigger: cvData.updated_at > previousCvUpdatedAt
+        must_be_stale: [gapAnalysis, vpr, tailoredCV, coverLetter, interviewPrep]
+        must_not_be_stale: [companyResearch, baseCV]
+
+      gap_responses_invalidates_3:
+        trigger: responses_submitted_at > vprModule.created_at
+        must_be_stale: [vpr, coverLetter, interviewPrep]
+        must_not_be_stale: [gapAnalysis, tailoredCV, companyResearch, baseCV]
+
+      company_research_soft_stale:
+        trigger: companyResearchModule.updated_at > vprModule.created_at
+        must_be_stale: [vpr, coverLetter, interviewPrep]
+        severity: soft  # warning only, not blocking
+
+      no_false_positives:
+        description: Modules NOT in the invalidation chain must never be stale
+        verify: >
+          When only interviewPrep is edited, no other module becomes stale.
+
+  cta_label_consistency:
+    file: cta-label-consistency.test.ts
+    description: >
+      CTA labels must exactly match the design specification.
+      Any label drift causes UX confusion and design-code mismatch.
+    rules:
+      - notStarted → "Generate" (all modules except baseCV)
+      - notStarted (baseCV) → "Start"
+      - stale → "Regenerate" (primary)
+      - edited → "Regenerate" (primary)
+      - failed → "Retry"
+      - ready → "View"
+      - final → "Export"
+    assertion: >
+      For each (moduleType, moduleStatus) combination, assert the rendered
+      primaryAction.label matches the expected CTA exactly.
+
+---
+
+test_implementation_instructions:
+  output: docs/frontend/specs/TEST_IMPLEMENTATION.md  # separate instructions file
+  see: docs/frontend/specs/TEST_IMPLEMENTATION.md

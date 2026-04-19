@@ -1,0 +1,196 @@
+spec_id: frontend-03
+title: API Integration & Data Fetching
+version: "1.0"
+status: pending
+output_path: src/frontend/hooks/ + src/frontend/api/
+
+---
+
+principle: >
+  TanStack Query v5 owns all server state — caching, refetching, polling.
+  Zustand owns only UI-local state (auth tokens, active job, edit flags).
+  Raw API responses NEVER enter component props directly.
+  All data passes through adapters (spec-02) before reaching components.
+
+---
+
+api_client:
+  output: src/frontend/api/client.ts
+  description: Base Axios/fetch wrapper with auth headers
+
+  features:
+    - Attaches Bearer token from Cognito session to every request
+    - Reads base URL from NEXT_PUBLIC_API_URL env var
+    - Returns typed response or throws ApiError
+    - No retry logic here — TanStack Query handles retries
+
+  ApiError:
+    fields:
+      - status: number
+      - code: string
+      - message: string
+
+  auth_injection:
+    source: amazon-cognito-identity-js getCurrentUser().getSession()
+    header: "Authorization: Bearer {idToken.getJwtToken()}"
+    note: >
+      Use idToken (not accessToken) — API Gateway Cognito Authorizer
+      validates idToken. Refresh is handled by cognito-identity-js automatically.
+
+---
+
+query_keys:
+  output: src/frontend/api/queryKeys.ts
+  description: Centralized query key factory — prevents stale cache mismatches
+
+  keys:
+    applications:
+      list: ["applications"]
+      detail: (applicationId: string) => ["applications", applicationId]
+    vpr:
+      status: (jobId: string) => ["vpr", "status", jobId]
+    coverLetter:
+      status: (jobId: string) => ["coverLetter", "status", jobId]
+    interviewPrep:
+      status: (jobId: string) => ["interviewPrep", "status", jobId]
+    cvTailoring:
+      status: (jobId: string) => ["cvTailoring", "status", jobId]
+    gapAnalysis:
+      detail: (jobId: string) => ["gapAnalysis", jobId]
+    companyResearch:
+      detail: (companyName: string) => ["companyResearch", companyName]
+    cv:
+      detail: ["cv", "me"]
+    user:
+      me: ["user", "me"]
+
+---
+
+hooks:
+  output: src/frontend/hooks/
+
+  useApplicationHub:
+    file: useApplicationHub.ts
+    description: >
+      Master hook for the Application Hub page. Fetches all module statuses
+      in parallel, merges into HubState via adapters, returns derived state.
+    signature: >
+      function useApplicationHub(jobId: string): {
+        hubState: HubState | null;
+        isLoading: boolean;
+        error: Error | null;
+        refetch: () => void;
+      }
+    implementation:
+      - Parallel useQuery calls for each module status endpoint
+      - One useQuery for GET /applications/{id}
+      - One useQuery for GET /users/me/cv
+      - Merge results with mapApplicationDataToHubState()
+      - Individual module queries have polling enabled (see spec-04)
+
+  useModuleStatus:
+    file: useModuleStatus.ts
+    description: >
+      Per-module polling hook. Implements adaptive polling (see spec-04).
+      Used internally by useApplicationHub.
+    signature: >
+      function useModuleStatus(
+        moduleType: ModuleType,
+        jobId: string,
+        enabled: boolean
+      ): {
+        rawStatus: RawModuleData | null;
+        isPolling: boolean;
+      }
+    polling_behavior: "see spec-04 for adaptive polling rules"
+
+  useGenerateModule:
+    file: useGenerateModule.ts
+    description: Mutation hook for triggering module generation
+    signature: >
+      function useGenerateModule(moduleType: ModuleType): {
+        generate: (jobId: string) => Promise<{ newJobId: string }>;
+        isGenerating: boolean;
+        error: Error | null;
+      }
+    on_success:
+      - Invalidate corresponding TanStack Query cache key
+      - Update Zustand activeJobId if changed
+      - Start polling via useModuleStatus
+
+  useGapAnalysis:
+    file: useGapAnalysis.ts
+    signature: >
+      function useGapAnalysis(jobId: string): {
+        questions: GapQuestion[];
+        responses: GapResponse[];
+        submitResponses: (responses: GapResponse[]) => Promise<void>;
+        isSubmitting: boolean;
+      }
+
+  useCV:
+    file: useCV.ts
+    signature: >
+      function useCV(): {
+        cv: RawCVData | null;
+        uploadCV: (file: File) => Promise<void>;
+        isUploading: boolean;
+      }
+
+---
+
+endpoint_mapping:
+  description: Frontend hook → API endpoint mapping
+
+  module_generate_endpoints:
+    vpr: "POST /vpr/generate"
+    tailoredCV: "POST /cv-tailoring/generate"
+    coverLetter: "POST /cover-letter/generate"
+    interviewPrep: "POST /interview-prep/generate"
+    companyResearch: "GET /company-research/{company_name}"  # synchronous
+    gapAnalysis: "POST /jobs/{job_id}/gap-questions"         # synchronous
+    baseCV: "POST /users/me/cv"
+
+  module_status_endpoints:
+    vpr: "GET /vpr/{job_id}/status"
+    tailoredCV: "GET /cv-tailoring/{job_id}/status"
+    coverLetter: "GET /cover-letter/{job_id}/status"
+    interviewPrep: "GET /interview-prep/{job_id}/status"
+    companyResearch: null   # synchronous — no status polling needed
+    gapAnalysis: null       # synchronous — use GET /jobs/{job_id}/gap-questions
+    baseCV: null            # use GET /users/me/cv
+
+  missing_endpoints:
+    note: >
+      The following endpoints are required by the design but do NOT exist in
+      the current API. These must be added to the backend before frontend
+      integration can be completed.
+    endpoints:
+      - "POST /applications/{application_id}/finalize"
+        reason: "Hub finalization action (FINALIZED state)"
+      - "GET /applications/{application_id}/history/{module_type}"
+        reason: "History CTA in ModuleCard secondary actions"
+      - "PUT /jobs/{job_id}/artifacts/{module_type}"
+        reason: "In-app edit of artifact content"
+
+---
+
+error_handling:
+  strategy: >
+    HTTP errors surface as TanStack Query error state.
+    Components render ErrorState UI from HubModuleState.status = "failed".
+    Network errors trigger retry via TanStack Query default retry (3x with backoff).
+
+  http_401:
+    action: Redirect to /login, clear Zustand auth state
+
+  http_403:
+    action: Show "Access denied" inline error — do not redirect
+
+  http_429:
+    action: Show "Usage limit reached" banner with upgrade CTA
+
+  http_5xx:
+    action: >
+      Show recoverable error UI (ERROR_RECOVERABLE HubStatus).
+      Allow user to retry. Log to CloudWatch (see spec-08).
