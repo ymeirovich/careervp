@@ -142,7 +142,7 @@ jobs:
         run: |
           set -o pipefail
           make deploy 2>&1 | tee /tmp/deploy.log || {
-            if grep -Eq "(_IN_PROGRESS state and can not be updated|UPDATE_COMPLETE_CLEANUP_IN_PROGRESS|is in .*_IN_PROGRESS state|ChangeSetNotFoundException: ChangeSet .* does not exist)" /tmp/deploy.log; then
+            if grep -Eq "(_IN_PROGRESS state and can not be updated|UPDATE_COMPLETE_CLEANUP_IN_PROGRESS|is in .*_IN_PROGRESS state|ChangeSetNotFoundException: ChangeSet .* does not exist|InvalidChangeSetStatusException: Cannot delete ChangeSet in status CREATE_IN_PROGRESS)" /tmp/deploy.log; then
               echo "::warning::Transient CloudFormation deploy issue detected. Re-running CFN guard and retrying deploy..."
               "$GITHUB_WORKSPACE/.github/scripts/cfn-guard.sh" "${{ env.STACK_NAME }}" "${{ env.AWS_REGION }}"
               make deploy
@@ -403,7 +403,7 @@ jobs:
         run: |
           set -o pipefail
           make deploy 2>&1 | tee /tmp/deploy.log || {
-            if grep -Eq "(_IN_PROGRESS state and can not be updated|UPDATE_COMPLETE_CLEANUP_IN_PROGRESS|is in .*_IN_PROGRESS state)" /tmp/deploy.log; then
+            if grep -Eq "(_IN_PROGRESS state and can not be updated|UPDATE_COMPLETE_CLEANUP_IN_PROGRESS|is in .*_IN_PROGRESS state|InvalidChangeSetStatusException: Cannot delete ChangeSet in status CREATE_IN_PROGRESS)" /tmp/deploy.log; then
               echo "::warning::Stack update lock detected. Re-running CFN guard and retrying deploy..."
               "$GITHUB_WORKSPACE/.github/scripts/cfn-guard.sh" "$STACK_NAME" "${{ env.AWS_REGION }}"
               make deploy
