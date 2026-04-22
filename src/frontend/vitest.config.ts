@@ -7,6 +7,14 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./tests/vitest-setup.ts'],
-    include: ['tests/**/*.vitest.ts', 'tests/**/*.vitest.tsx', 'tests/integration/api-polling.test.ts', 'tests/integration/cognito-auth.test.ts'],
+    include: [
+      'tests/**/*.vitest.ts',
+      'tests/**/*.vitest.tsx',
+      'tests/unit/**/*.test.{ts,tsx}',
+      'tests/regression/**/*.test.{ts,tsx}',
+      'tests/integration/api-polling.test.ts',
+      'tests/integration/cognito-auth.test.ts',
+      'tests/integration/hub-state-integration.test.ts',
+    ],
   },
 });
