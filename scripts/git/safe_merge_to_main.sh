@@ -58,3 +58,6 @@ else
   echo "Error: merge commit ${merge_oid} not found on origin/main."
   exit 1
 fi
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+"${script_dir}/safe_sync_main.sh"
