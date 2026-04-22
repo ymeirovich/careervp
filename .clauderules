@@ -113,6 +113,16 @@ uv run ruff check careervp/logic/<file>.py --fix
 - Run tests with: `uv run pytest tests/unit/<test_file>.py -v`
 - All tests MUST pass before marking any task complete.
 
+### Frontend Checks (Required for Commit)
+
+- When any file under `src/frontend/` changes, run checks from `src/frontend/` before commit.
+- Required baseline checks: `npm run typecheck`, `npm run test:unit`, `npm run test:integration`.
+- Run `npm run test:e2e` for route/page/flow changes (`app/`, `components/`, `tests/e2e/`).
+- Run `npm run test:regression` for state-machine/polling/store changes (`adapters/`, `store/`, `hooks/`, `tests/regression/`).
+- Run `npx vitest run --config vitest.config.ts` for Vitest-covered files (`*.vitest.ts`, `*.vitest.tsx`, `tests/integration/api-polling.test.ts`).
+- If any required frontend check fails, you MUST fix and rerun until all required checks pass.
+- You are NOT allowed to present code as complete, and you are NOT allowed to commit, until required frontend checks pass.
+
 ### Mocking Requirements
 
 - Use `moto` for AWS service mocking (DynamoDB, S3).
@@ -155,3 +165,9 @@ Upon a Blocking Issue, the Architect must analyze if the Spec is wrong or if the
 - Infrastructure Scripts: `kebab-case.py` (e.g., `validate-naming.py`)
 - Documentation/Tasks: `task-##-name.md`
 - Tests: `test_*.py` located in `src/backend/tests/unit/`
+
+## Git Workflow Rules
+- Before every commit, run mandatory backend/frontend checks based on changed paths.
+- Use `scripts/git/safe_commit.sh "<message>"` for commit flows where formatters may rewrite files.
+- Use `scripts/git/safe_merge_to_main.sh <branch>` to push/create PR/merge/verify safely.
+- Do NOT use `gh pr merge --delete-branch` because it can fail when `main` is attached to another worktree.

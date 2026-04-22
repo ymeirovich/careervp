@@ -1,12 +1,16 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '../../../components/ui/Button';
+import { useAuth } from '../../../contexts/AuthContext';
 
-// TODO: Wire to AuthContext signIn() (spec-06)
-// Cognito User Pool: us-east-1_WiHMRqLpe | Client: 7blipbarsisbctqh6hlsja46sqa
+function LoginForm() {
+  const { signIn } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const resetSuccess = searchParams.get('reset') === 'success';
 
-export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -17,11 +21,20 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      // TODO: await signIn(email, password);
-      // TODO: router.push('/dashboard');
-      console.log('Sign in', email);
-    } catch {
-      setError('Invalid email or password.');
+      await signIn(email, password);
+      router.push('/dashboard');
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code;
+      if (code === 'UserNotConfirmedException') {
+        router.push(`/confirm-signup?email=${encodeURIComponent(email)}`);
+        return;
+      } else if (code === 'NotAuthorizedException') {
+        setError('Incorrect email or password.');
+      } else if (code === 'UserNotFoundException') {
+        setError('No account found for this email.');
+      } else {
+        setError('Sign in failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -36,6 +49,12 @@ export default function LoginPage() {
           </div>
           <h1 className="font-bold text-text-primary text-2xl">Sign in to CareerVP</h1>
         </div>
+
+        {resetSuccess && (
+          <p className="text-state-success text-sm text-center">
+            Password reset successfully. Please sign in.
+          </p>
+        )}
 
         {error && (
           <p className="text-state-error text-sm text-center">{error}</p>
@@ -57,7 +76,12 @@ export default function LoginPage() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="password" className="text-text-primary text-sm font-medium">Password</label>
+            <div className="flex items-center justify-between">
+              <label htmlFor="password" className="text-text-primary text-sm font-medium">Password</label>
+              <a href="/forgot-password" className="text-primary-action hover:underline text-sm">
+                Forgot password?
+              </a>
+            </div>
             <input
               id="password"
               data-testid="password-input"
@@ -90,5 +114,13 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }
