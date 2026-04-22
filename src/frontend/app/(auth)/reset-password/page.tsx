@@ -64,7 +64,7 @@ function ResetPasswordForm() {
               type="text"
               required
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              onChange={(e) => setCode(e.currentTarget.value)}
               className="border border-border-default rounded-lg px-3 py-2 text-base text-text-primary bg-card outline-none focus:ring-2 focus:ring-primary-action"
               placeholder="Enter 6-digit code"
             />
@@ -81,7 +81,7 @@ function ResetPasswordForm() {
               required
               minLength={8}
               value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
+              onChange={(e) => setNewPassword(e.currentTarget.value)}
               className="border border-border-default rounded-lg px-3 py-2 text-base text-text-primary bg-card outline-none focus:ring-2 focus:ring-primary-action"
               placeholder="Min. 8 characters"
             />
@@ -98,7 +98,7 @@ function ResetPasswordForm() {
               required
               minLength={8}
               value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              onChange={(e) => setConfirmPassword(e.currentTarget.value)}
               className="border border-border-default rounded-lg px-3 py-2 text-base text-text-primary bg-card outline-none focus:ring-2 focus:ring-primary-action"
               placeholder="Repeat new password"
             />
@@ -109,7 +109,7 @@ function ResetPasswordForm() {
             type="submit"
             variant="primary"
             size="lg"
-            loading={loading}
+            isLoading={loading}
             className="w-full mt-2"
           >
             Reset Password

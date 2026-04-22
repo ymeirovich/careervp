@@ -52,7 +52,7 @@ export default function ForgotPasswordPage() {
               type="email"
               required
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => setEmail(e.currentTarget.value)}
               className="border border-border-default rounded-lg px-3 py-2 text-base text-text-primary bg-card outline-none focus:ring-2 focus:ring-primary-action"
               placeholder="you@example.com"
             />
@@ -63,7 +63,7 @@ export default function ForgotPasswordPage() {
             type="submit"
             variant="primary"
             size="lg"
-            loading={loading}
+            isLoading={loading}
             className="w-full mt-2"
           >
             Send Reset Code

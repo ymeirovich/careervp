@@ -177,7 +177,7 @@ export function ModuleCard({
             </Button>
           )}
 
-          {(secondaryActions ?? defaultSecondary.map((label) => ({ label, onClick: onSecondaryAction ?? (() => {}), variant: 'secondary' as ButtonVariant }))).map((action) => (
+          {(secondaryActions ?? defaultSecondary.map((label): ModuleAction => ({ label, onClick: onSecondaryAction ?? (() => {}), variant: 'secondary' }))).map((action) => (
             <Button
               key={action.label}
               variant={action.variant ?? 'secondary'}

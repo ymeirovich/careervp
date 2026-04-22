@@ -41,5 +41,5 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # no
     svc = _get_reconciliation_service()
     result = svc.reconcile_all()
 
-    logger.info('reconcile_complete', **result)
+    logger.info(f'reconcile_complete {result}')
     return {'status': 'ok', **result}

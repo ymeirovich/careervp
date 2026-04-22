@@ -60,3 +60,6 @@ careervp/docs/refactor3/payloads/*
 # Next.js (src/frontend app)
 src/frontend/.next/
 src/frontend/next-env.d.ts
+
+# Figma Tokens Plugin export (source of truth is tokens.css)
+src/frontend/figma-tokens.json

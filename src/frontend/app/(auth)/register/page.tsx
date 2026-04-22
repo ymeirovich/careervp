@@ -57,7 +57,7 @@ export default function RegisterPage() {
               type="email"
               required
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => setEmail(e.currentTarget.value)}
               className="border border-border-default rounded-lg px-3 py-2 text-base text-text-primary bg-card outline-none focus:ring-2 focus:ring-primary-action"
               placeholder="you@example.com"
             />
@@ -72,7 +72,7 @@ export default function RegisterPage() {
               required
               minLength={8}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => setPassword(e.currentTarget.value)}
               className="border border-border-default rounded-lg px-3 py-2 text-base text-text-primary bg-card outline-none focus:ring-2 focus:ring-primary-action"
               placeholder="Min. 8 characters"
             />
@@ -89,7 +89,7 @@ export default function RegisterPage() {
               required
               minLength={8}
               value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              onChange={(e) => setConfirmPassword(e.currentTarget.value)}
               className="border border-border-default rounded-lg px-3 py-2 text-base text-text-primary bg-card outline-none focus:ring-2 focus:ring-primary-action"
               placeholder="Repeat password"
             />
@@ -100,7 +100,7 @@ export default function RegisterPage() {
             type="submit"
             variant="primary"
             size="lg"
-            loading={loading}
+            isLoading={loading}
             className="w-full mt-2"
           >
             Create Account

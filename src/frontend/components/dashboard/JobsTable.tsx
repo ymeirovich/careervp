@@ -18,10 +18,10 @@ interface JobsTableProps {
   onNewApplication?: () => void;
 }
 
-const STATUS_BADGE_VARIANT: Record<JobStatus, 'active' | 'draft' | 'archived'> = {
-  active: 'active',
-  draft: 'draft',
-  archived: 'archived',
+const STATUS_BADGE_VARIANT: Record<JobStatus, 'success' | 'neutral'> = {
+  active: 'success',
+  draft: 'neutral',
+  archived: 'neutral',
 };
 
 const STATUS_LABEL: Record<JobStatus, string> = {

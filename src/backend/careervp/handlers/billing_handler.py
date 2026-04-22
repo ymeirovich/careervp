@@ -12,7 +12,7 @@ import base64
 import json
 import os
 from http import HTTPStatus
-from typing import Any
+from typing import Any, cast
 
 from careervp.dal.subscription_repository import SubscriptionRepository
 from careervp.dal.user_repository import UserRepository
@@ -102,25 +102,25 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: ARG
 
     # ── POST /billing/checkout ────────────────────────────────────────────────
     if method == 'POST' and path == '/billing/checkout':
-        body = _parse_body(event)
-        if body is None:
+        checkout_body = _parse_body(event)
+        if checkout_body is None:
             return _response(HTTPStatus.BAD_REQUEST, {'error': 'Invalid JSON body'}, headers)
         result = svc.handle_checkout(
             user_id=user_id,
-            plan=str(body.get('plan') or ''),
-            success_url=str(body.get('success_url') or ''),
-            cancel_url=str(body.get('cancel_url') or ''),
+            plan=str(checkout_body.get('plan') or ''),
+            success_url=str(checkout_body.get('success_url') or ''),
+            cancel_url=str(checkout_body.get('cancel_url') or ''),
         )
         return _billing_response(result, headers)
 
     # ── POST /billing/portal ──────────────────────────────────────────────────
     if method == 'POST' and path == '/billing/portal':
-        body = _parse_body(event)
-        if body is None:
+        portal_body = _parse_body(event)
+        if portal_body is None:
             return _response(HTTPStatus.BAD_REQUEST, {'error': 'Invalid JSON body'}, headers)
         result = svc.handle_portal(
             user_id=user_id,
-            return_url=str(body.get('return_url') or ''),
+            return_url=str(portal_body.get('return_url') or ''),
         )
         return _billing_response(result, headers)
 
@@ -129,7 +129,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: ARG
 
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Standard Lambda entrypoint alias."""
-    return handler(event, context)  # type: ignore[no-any-return]
+    return cast(dict[str, Any], handler(event, context))
 
 
 # ─── Utilities ────────────────────────────────────────────────────────────────
