@@ -38,6 +38,10 @@
 **Active Commands:**
 - Backend: cd src/backend && uv run ruff format . && uv run ruff check --fix . && uv run mypy careervp --strict.
 - Testing: uv run pytest tests/unit/ -v --tb=short.
+- Frontend: cd src/frontend && npm run typecheck && npm run test:unit && npm run test:integration.
+- Frontend (conditional): cd src/frontend && npm run test:e2e && npm run test:regression && npx vitest run --config vitest.config.ts.
+- Git Commit Helper: scripts/git/safe_commit.sh "<commit-message>".
+- Git Merge Helper: scripts/git/safe_merge_to_main.sh <feature-branch>.
 - Infra: cd infra && uv sync && cdk synth.
 - Naming Check: python src/backend/scripts/validate_naming.py --path infra --strict.
 
@@ -52,3 +56,6 @@
 - **Don't switch branches with uncommitted changes** - use `git stash` first to avoid accidentally deleting files
 - **Merge via gh CLI directly from the feature branch** - avoids needing to checkout main
 - **Only clean up local branch after successful merge**
+- **Before every commit, run mandatory backend/frontend checks based on changed paths**
+- **Use `scripts/git/safe_commit.sh` and `scripts/git/safe_merge_to_main.sh` for resilient commit/merge flows**
+- **Do not use `gh pr merge --delete-branch` in this repo**

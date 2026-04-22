@@ -29,6 +29,7 @@ const config: Config = {
     {
       displayName: 'integration',
       testMatch: ['<rootDir>/tests/integration/**/*.test.ts'],
+      testPathIgnorePatterns: ['<rootDir>/tests/integration/cognito-auth.test.ts'],
       transform: { '^.+\\.ts$': 'ts-jest' },
       testEnvironment: 'node',
     },

@@ -74,6 +74,15 @@ python src/backend/scripts/validate_naming.py --path infra --strict
 - Run the project's pytest suites relevant to your change (`pytest` targets live under `src/backend/tests`). Never declare success without green tests.
 - Respect the pre-commit toolchain (Ruff lint/format, mypy, etc.) defined in `.pre-commit-config.yaml` and the `pyproject.toml` settings (line length 150, single quotes, Python 3.14).
 
+## Frontend Testing & Linting (Mandatory)
+
+- When any file under `src/frontend/` changes, run all required checks from `src/frontend/` before committing.
+- Required baseline checks: `npm run typecheck`, `npm run test:unit`, `npm run test:integration`.
+- Run `npm run test:e2e` when changing UI flows/routes/pages (for example `app/`, `components/`, `tests/e2e/`).
+- Run `npm run test:regression` when changing state and flow behavior (for example `adapters/`, `store/`, `hooks/`, `tests/regression/`).
+- Run `npx vitest run --config vitest.config.ts` when changing Vitest-covered files (`*.vitest.ts`, `*.vitest.tsx`, `tests/integration/api-polling.test.ts`).
+- Do NOT commit, and do NOT mark a task complete, until all required frontend checks are green.
+
 ## Mandatory Ruff Test Before Task Completion
 
 **CRITICAL:** ALL code edits MUST pass Ruff checks before completing any task.
@@ -143,3 +152,6 @@ Upon a Blocking Issue, the Architect must analyze if the Spec is wrong or if the
 - **Don't switch branches with uncommitted changes** - use `git stash` first to avoid accidentally deleting files
 - **Merge via gh CLI directly from the feature branch** - avoids needing to checkout main
 - **Only clean up local branch after successful merge**
+- **Before every commit, run mandatory backend/frontend checks based on changed paths**
+- **Use `scripts/git/safe_commit.sh "<message>"` to handle formatter-mutated files and retry hooks automatically**
+- **Use `scripts/git/safe_merge_to_main.sh <branch>` for PR create/merge/verification; do NOT use `gh pr merge --delete-branch`**
