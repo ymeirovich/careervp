@@ -23,13 +23,21 @@ const config: Config = {
     {
       displayName: 'unit',
       testMatch: ['<rootDir>/tests/unit/**/*.test.ts'],
+      testPathIgnorePatterns: [
+        '<rootDir>/tests/unit/state-adapters.test.ts',
+        '<rootDir>/tests/unit/hub-status-deriver.test.ts',
+      ],
       transform: { '^.+\\.ts$': 'ts-jest' },
       testEnvironment: 'node',
     },
     {
       displayName: 'integration',
       testMatch: ['<rootDir>/tests/integration/**/*.test.ts'],
-      testPathIgnorePatterns: ['<rootDir>/tests/integration/cognito-auth.test.ts'],
+      testPathIgnorePatterns: [
+        '<rootDir>/tests/integration/cognito-auth.test.ts',
+        '<rootDir>/tests/integration/api-polling.test.ts',
+        '<rootDir>/tests/integration/hub-state-integration.test.ts',
+      ],
       transform: { '^.+\\.ts$': 'ts-jest' },
       testEnvironment: 'node',
     },
@@ -41,8 +49,13 @@ const config: Config = {
     },
     {
       displayName: 'regression',
-      testMatch: ['<rootDir>/tests/regression/**/*.test.ts'],
-      transform: { '^.+\\.ts$': 'ts-jest' },
+      testMatch: ['<rootDir>/tests/regression/**/*.test.{ts,tsx}'],
+      testPathIgnorePatterns: [
+        '<rootDir>/tests/regression/state-machine-transitions.test.ts',
+        '<rootDir>/tests/regression/cross-module-invalidation.test.ts',
+        '<rootDir>/tests/regression/cta-label-consistency.test.tsx',
+      ],
+      transform: { '^.+\\.[tj]sx?$': 'ts-jest' },
       testEnvironment: 'node',
     },
     {

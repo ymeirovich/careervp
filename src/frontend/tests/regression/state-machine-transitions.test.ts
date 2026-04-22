@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { deriveHubStatus } from "../../adapters/mapApplicationDataToHubState";
-import type { ModuleType } from "../../types/enums";
+import type { ModuleType, ModuleStatus } from "../../types/enums";
 
-type ModuleStatusMap = Record<ModuleType, string>;
+type ModuleStatusMap = Record<ModuleType, ModuleStatus>;
 
 const ALL_MODULE_TYPES: ModuleType[] = [
   "vpr",
@@ -14,7 +14,7 @@ const ALL_MODULE_TYPES: ModuleType[] = [
   "baseCV",
 ];
 
-function allWith(status: string): ModuleStatusMap {
+function allWith(status: ModuleStatus): ModuleStatusMap {
   return Object.fromEntries(ALL_MODULE_TYPES.map((m) => [m, status])) as ModuleStatusMap;
 }
 
