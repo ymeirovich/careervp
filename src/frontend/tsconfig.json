@@ -3,7 +3,9 @@
     "target": "ES2020",
     "module": "commonjs",
     "lib": [
-      "ES2020"
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
     ],
     "strict": true,
     "esModuleInterop": true,
@@ -30,12 +32,29 @@
     ]
   },
   "include": [
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "contexts/**/*.ts",
+    "contexts/**/*.tsx",
+    "hooks/**/*.ts",
+    "hooks/**/*.tsx",
+    "store/**/*.ts",
+    "store/**/*.tsx",
+    "types/**/*.ts",
+    "lib/**/*.ts",
     "tests/**/*.ts",
+    "tests/**/*.tsx",
+    "next-env.d.ts",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "tests/e2e/**",
+    "**/*.figma.ts",
+    "**/*.figma.tsx"
   ]
 }

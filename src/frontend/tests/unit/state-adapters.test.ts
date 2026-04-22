@@ -6,7 +6,7 @@ import {
   mapApplicationDataToHubState,
 } from "../../adapters/mapApplicationDataToHubState";
 import type { RawModuleData, RawApplicationData, RawGapAnalysisData, RawCVData } from "../../types/hub-state";
-import type { ModuleType } from "../../types/enums";
+import type { ModuleType, ModuleStatus } from "../../types/enums";
 
 const makeRawModule = (
   overrides: Partial<RawModuleData> = {}
@@ -148,15 +148,15 @@ describe("detectStaleness", () => {
 });
 
 describe("deriveHubStatus", () => {
-  const allNotStarted = {
-    vpr: "notStarted",
-    tailoredCV: "notStarted",
-    coverLetter: "notStarted",
-    interviewPrep: "notStarted",
-    gapAnalysis: "notStarted",
-    companyResearch: "notStarted",
-    baseCV: "notStarted",
-  } as Record<ModuleType, any>;
+  const allNotStarted: Record<ModuleType, ModuleStatus> = {
+    vpr: 'notStarted',
+    tailoredCV: 'notStarted',
+    coverLetter: 'notStarted',
+    interviewPrep: 'notStarted',
+    gapAnalysis: 'notStarted',
+    companyResearch: 'notStarted',
+    baseCV: 'notStarted',
+  };
 
   it("all modules notStarted → INIT", () => {
     expect(deriveHubStatus(allNotStarted, new Set(), false)).toBe("INIT");
@@ -167,36 +167,36 @@ describe("deriveHubStatus", () => {
   });
 
   it("any module processing → LOADING", () => {
-    const statuses = { ...allNotStarted, vpr: "processing" };
+    const statuses: Record<ModuleType, ModuleStatus> = { ...allNotStarted, vpr: 'processing' };
     expect(deriveHubStatus(statuses, new Set(), false)).toBe("LOADING");
   });
 
   it("stale modules present → STALE_DEPENDENCIES", () => {
-    const statuses = { ...allNotStarted, vpr: "ready" };
-    const staleModules = new Set<ModuleType>(["vpr"]);
+    const statuses: Record<ModuleType, ModuleStatus> = { ...allNotStarted, vpr: 'ready' };
+    const staleModules = new Set<ModuleType>(['vpr']);
     expect(deriveHubStatus(statuses, staleModules, false)).toBe("STALE_DEPENDENCIES");
   });
 
   it("critical module failed → ERROR_RECOVERABLE", () => {
-    const statuses = { ...allNotStarted, vpr: "failed" };
+    const statuses: Record<ModuleType, ModuleStatus> = { ...allNotStarted, vpr: 'failed' };
     expect(deriveHubStatus(statuses, new Set(), false)).toBe("ERROR_RECOVERABLE");
   });
 
   it("non-critical module failed alone → does NOT produce ERROR_RECOVERABLE", () => {
-    const statuses = { ...allNotStarted, companyResearch: "failed" };
+    const statuses: Record<ModuleType, ModuleStatus> = { ...allNotStarted, companyResearch: 'failed' };
     const result = deriveHubStatus(statuses, new Set(), false);
     expect(result).not.toBe("ERROR_RECOVERABLE");
   });
 
   it("all modules complete or final → READY_COMPLETE", () => {
     const statuses = Object.fromEntries(
-      Object.keys(allNotStarted).map((k) => [k, "complete"])
-    ) as Record<ModuleType, any>;
+      Object.keys(allNotStarted).map((k) => [k, 'complete' as ModuleStatus])
+    ) as Record<ModuleType, ModuleStatus>;
     expect(deriveHubStatus(statuses, new Set(), false)).toBe("READY_COMPLETE");
   });
 
   it("some complete, some notStarted → READY_PARTIAL", () => {
-    const statuses = { ...allNotStarted, vpr: "ready", gapAnalysis: "complete" };
+    const statuses: Record<ModuleType, ModuleStatus> = { ...allNotStarted, vpr: 'ready', gapAnalysis: 'complete' };
     expect(deriveHubStatus(statuses, new Set(), false)).toBe("READY_PARTIAL");
   });
 });
