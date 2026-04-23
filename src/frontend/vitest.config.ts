@@ -23,6 +23,8 @@ export default defineConfig({
       'tests/unit/api-methods.test.ts',
       'tests/unit/artifact-storage.test.ts',
       'tests/integration/api-client.test.ts',
+      'tests/unit/module-card-actions.test.tsx',
+      'tests/integration/hub-state.test.ts',
     ],
   },
 });
