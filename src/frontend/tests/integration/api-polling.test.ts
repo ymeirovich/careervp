@@ -1,19 +1,37 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
-import { setupServer } from "msw/node";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import React from "react";
-import { useModuleStatus } from "../../hooks/useModuleStatus";
+import { describe, it, expect, beforeEach, afterEach, vi, beforeAll, afterAll } from 'vitest';
+import { renderHook, waitFor, act } from '@testing-library/react';
+import { http, HttpResponse } from 'msw';
+import { setupServer } from 'msw/node';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import React from 'react';
+import { useModuleStatus } from '../../hooks/useModuleStatus';
+import { useGenerateModule } from '../../hooks/useGenerateModule';
+import { persistArtifact } from '../../lib/artifactStorage';
+import { api } from '../../api/methods';
 
-const BASE_URL = "http://localhost:3000";
+// Mock lib/auth so tests don't touch real Cognito
+vi.mock('../../lib/auth', () => ({
+  getCurrentToken: vi.fn().mockResolvedValue('test-jwt'),
+  signOut: vi.fn(),
+  signIn: vi.fn(),
+  signUp: vi.fn(),
+  confirmSignUp: vi.fn(),
+  resendConfirmationCode: vi.fn(),
+  forgotPassword: vi.fn(),
+  confirmForgotPassword: vi.fn(),
+  getCurrentCognitoUser: vi.fn().mockReturnValue(null),
+}));
+
+const BASE_URL = 'http://localhost:3000';
 
 const server = setupServer();
 
-beforeAll(() => server.listen({ onUnhandledRequest: "warn" }));
+beforeAll(() => server.listen({ onUnhandledRequest: 'warn' }));
 afterEach(() => {
   server.resetHandlers();
   vi.restoreAllMocks();
+  localStorage.clear();
+  vi.useRealTimers();
 });
 afterAll(() => server.close());
 
@@ -26,150 +44,177 @@ function makeWrapper() {
   };
 }
 
-describe("useModuleStatus — polling lifecycle", () => {
-  it("starts in loading state and resolves to completed", async () => {
-    server.use(
-      http.get(`${BASE_URL}/vpr/job-123/status`, () =>
-        HttpResponse.json({ job_id: "job-123", status: "completed", created_at: "2024-01-01T10:00:00Z", updated_at: "2024-01-01T10:05:00Z", result_url: "https://s3.example.com/result" })
-      )
-    );
+describe('useModuleStatus — spec-11 polling lifecycle', () => {
+  it('polls every 3 seconds until completed', async () => {
+    vi.useFakeTimers();
+
+    // Spy directly on the api method to avoid MSW + fake timer conflicts
+    const pollSpy = vi
+      .spyOn(api, 'pollVPRStatus')
+      .mockResolvedValueOnce({ status: 'processing' })
+      .mockResolvedValueOnce({ status: 'processing' })
+      .mockResolvedValueOnce({ status: 'completed', result: { uvp: 'Great fit' } });
 
     const { result } = renderHook(
-      () => useModuleStatus("vpr", "job-123", true),
-      { wrapper: makeWrapper() }
+      () => useModuleStatus('vpr', 'job1', 'task1', true),
+      { wrapper: makeWrapper() },
     );
 
-    await waitFor(() => expect(result.current.rawStatus?.status).toBe("completed"));
-  });
+    // Advance through 3 polling intervals (3s each)
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
 
-  it("stops polling when status is completed", async () => {
-    let callCount = 0;
-    server.use(
-      http.get(`${BASE_URL}/vpr/job-123/status`, () => {
-        callCount++;
-        return HttpResponse.json({
-          job_id: "job-123",
-          status: "completed",
-          created_at: "2024-01-01T10:00:00Z",
-          updated_at: "2024-01-01T10:05:00Z",
-        });
-      })
-    );
-
-    const { result } = renderHook(
-      () => useModuleStatus("vpr", "job-123", true),
-      { wrapper: makeWrapper() }
-    );
-
-    await waitFor(() => expect(result.current.rawStatus?.status).toBe("completed"));
-
-    const countAfterComplete = callCount;
-    // Wait a polling interval — should NOT increase call count
-    await new Promise((r) => setTimeout(r, 100));
-    expect(callCount).toBe(countAfterComplete);
-  });
-
-  it("stops polling when status is failed", async () => {
-    server.use(
-      http.get(`${BASE_URL}/vpr/job-123/status`, () =>
-        HttpResponse.json({
-          job_id: "job-123",
-          status: "failed",
-          created_at: "2024-01-01T10:00:00Z",
-          updated_at: "2024-01-01T10:01:00Z",
-          error_message: "Stage 6 quality gate failure",
-        })
-      )
-    );
-
-    const { result } = renderHook(
-      () => useModuleStatus("vpr", "job-123", true),
-      { wrapper: makeWrapper() }
-    );
-
-    await waitFor(() => expect(result.current.rawStatus?.status).toBe("failed"));
+    expect(result.current.status).toBe('completed');
     expect(result.current.isPolling).toBe(false);
+    expect(pollSpy).toHaveBeenCalledTimes(3);
   });
 
-  it("does not fetch when enabled=false", async () => {
-    let callCount = 0;
-    server.use(
-      http.get(`${BASE_URL}/vpr/job-123/status`, () => {
-        callCount++;
-        return HttpResponse.json({ job_id: "job-123", status: "pending" });
-      })
-    );
+  it('stops polling on failed status', async () => {
+    vi.useFakeTimers();
 
-    renderHook(() => useModuleStatus("vpr", "job-123", false), {
-      wrapper: makeWrapper(),
-    });
-
-    await new Promise((r) => setTimeout(r, 100));
-    expect(callCount).toBe(0);
-  });
-
-  it("transitions through pending → processing → completed", async () => {
-    // Requires 2 poll cycles at 3s each; allow 10s total
-    const responses = [
-      { status: "pending" },
-      { status: "processing" },
-      { status: "completed", result_url: "https://s3.example.com/result" },
-    ];
-    let responseIndex = 0;
-
-    server.use(
-      http.get(`${BASE_URL}/vpr/job-123/status`, () => {
-        const response = responses[Math.min(responseIndex++, responses.length - 1)];
-        return HttpResponse.json({
-          job_id: "job-123",
-          created_at: "2024-01-01T10:00:00Z",
-          updated_at: "2024-01-01T10:00:00Z",
-          ...response,
-        });
-      })
-    );
+    const pollSpy = vi
+      .spyOn(api, 'pollVPRStatus')
+      .mockResolvedValue({ status: 'failed' });
 
     const { result } = renderHook(
-      () => useModuleStatus("vpr", "job-123", true),
-      { wrapper: makeWrapper() }
+      () => useModuleStatus('vpr', 'job1', 'task-fail', true),
+      { wrapper: makeWrapper() },
     );
 
-    await waitFor(() => expect(result.current.rawStatus?.status).toBe("completed"), {
-      timeout: 10_000,
-    });
-  }, 12_000);
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+
+    expect(result.current.status).toBe('failed');
+    expect(result.current.isPolling).toBe(false);
+
+    const callCountAfterFail = pollSpy.mock.calls.length;
+    // Advance more time — should not trigger additional polls
+    await act(async () => { await vi.advanceTimersByTimeAsync(9000); });
+    expect(pollSpy.mock.calls.length).toBe(callCountAfterFail);
+  });
+
+  it('does NOT poll when enabled=false', async () => {
+    vi.useFakeTimers();
+
+    const pollSpy = vi.spyOn(api, 'pollVPRStatus').mockResolvedValue({ status: 'processing' });
+
+    renderHook(
+      () => useModuleStatus('vpr', 'job1', 'task-disabled', false),
+      { wrapper: makeWrapper() },
+    );
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(9000); });
+
+    expect(pollSpy).not.toHaveBeenCalled();
+  });
+
+  it('resumes from localStorage taskId when initialTaskId is null', async () => {
+    vi.useFakeTimers();
+
+    persistArtifact('job1', 'vpr', 'stored-task');
+
+    const pollSpy = vi
+      .spyOn(api, 'pollVPRStatus')
+      .mockResolvedValueOnce({ status: 'processing' })
+      .mockResolvedValueOnce({ status: 'completed', result: {} });
+
+    const { result } = renderHook(
+      () => useModuleStatus('vpr', 'job1', null, true),
+      { wrapper: makeWrapper() },
+    );
+
+    // taskId should be resolved from localStorage immediately
+    expect(result.current.taskId).toBe('stored-task');
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+
+    expect(result.current.status).toBe('completed');
+    expect(pollSpy).toHaveBeenCalledWith('stored-task');
+  });
+
+  it('transient poll error does not stop the polling interval', async () => {
+    vi.useFakeTimers();
+
+    const pollSpy = vi
+      .spyOn(api, 'pollVPRStatus')
+      .mockRejectedValueOnce(new Error('Network error'))
+      .mockResolvedValueOnce({ status: 'completed', result: {} });
+
+    const { result } = renderHook(
+      () => useModuleStatus('vpr', 'job1', 'task-err', true),
+      { wrapper: makeWrapper() },
+    );
+
+    // First poll: network error — status should stay null, no exception propagated
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(result.current.status).toBeNull();
+
+    // Second poll: returns completed
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(result.current.status).toBe('completed');
+    expect(pollSpy).toHaveBeenCalledTimes(2);
+  });
 });
 
-describe("useModuleStatus — different module types", () => {
-  const moduleEndpoints: Array<{ module: string; path: string }> = [
-    { module: "vpr", path: "/vpr/job-123/status" },
-    { module: "coverLetter", path: "/cover-letter/job-123/status" },
-    { module: "interviewPrep", path: "/interview-prep/job-123/status" },
-    { module: "tailoredCV", path: "/cv-tailoring/job-123/status" },
-  ];
+describe('useGenerateModule — cache-busting', () => {
+  it('sends different job_id UUID on each VPR generate call', async () => {
+    const capturedBodies: Array<Record<string, unknown>> = [];
 
-  moduleEndpoints.forEach(({ module, path }) => {
-    it(`polls correct endpoint for ${module}`, async () => {
-      let wasCalled = false;
-      server.use(
-        http.get(`${BASE_URL}${path}`, () => {
-          wasCalled = true;
-          return HttpResponse.json({
-            job_id: "job-123",
-            status: "completed",
-            created_at: "2024-01-01T10:00:00Z",
-            updated_at: "2024-01-01T10:05:00Z",
-          });
-        })
-      );
+    server.use(
+      http.post(`${BASE_URL}/vpr/generate`, async ({ request }) => {
+        const body = await request.json() as Record<string, unknown>;
+        capturedBodies.push(body);
+        return HttpResponse.json({ request_id: 'task-new', status: 'processing' });
+      }),
+    );
 
-      const { result } = renderHook(
-        () => useModuleStatus(module as any, "job-123", true),
-        { wrapper: makeWrapper() }
-      );
+    const { result } = renderHook(
+      () => useGenerateModule('vpr', 'actual-job-id'),
+      { wrapper: makeWrapper() },
+    );
 
-      await waitFor(() => expect(result.current.rawStatus).not.toBeNull());
-      expect(wasCalled).toBe(true);
+    await act(async () => {
+      await result.current.generate({ cvId: 'cv-1', gapResponseIds: [] });
     });
+    await act(async () => {
+      await result.current.generate({ cvId: 'cv-1', gapResponseIds: [] });
+    });
+
+    expect(capturedBodies).toHaveLength(2);
+    const [first, second] = capturedBodies;
+
+    // Each call must have a unique cache-busting job_id
+    expect(first.job_id).not.toBe(second.job_id);
+
+    // Both must be valid UUIDs
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    expect(first.job_id).toMatch(uuidRegex);
+    expect(second.job_id).toMatch(uuidRegex);
+
+    // Both must use the actual job ID as application_id
+    expect(first.application_id).toBe('actual-job-id');
+    expect(second.application_id).toBe('actual-job-id');
+  });
+
+  it('sets taskId from response after successful generate', async () => {
+    server.use(
+      http.post(`${BASE_URL}/vpr/generate`, () =>
+        HttpResponse.json({ request_id: 'returned-task', status: 'processing' }),
+      ),
+    );
+
+    const { result } = renderHook(
+      () => useGenerateModule('vpr', 'job-abc'),
+      { wrapper: makeWrapper() },
+    );
+
+    expect(result.current.taskId).toBeNull();
+
+    await act(async () => {
+      await result.current.generate({ cvId: 'cv-1', gapResponseIds: [] });
+    });
+
+    expect(result.current.taskId).toBe('returned-task');
   });
 });

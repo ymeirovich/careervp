@@ -1,41 +1,58 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '../api/client';
-import { queryKeys } from '../api/queryKeys';
-import type { RawCVData } from '../types/hub-state';
+import { useState, useEffect } from 'react';
+import { api } from '../api/methods';
+import type { UserCV } from '../lib/types';
 
 export function useCV(): {
-  cv: RawCVData | null;
-  uploadCV: (file: File) => Promise<void>;
-  isUploading: boolean;
+  cv: UserCV | null;
+  isLoading: boolean;
+  isSaving: boolean;
+  saveCV: (data: Partial<UserCV>) => Promise<UserCV>;
+  error: string | null;
 } {
-  const queryClient = useQueryClient();
+  const [cv, setCv] = useState<UserCV | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const { data } = useQuery<RawCVData>({
-    queryKey: queryKeys.cv.detail(),
-    queryFn: async () => {
-      const res = await apiClient.get<RawCVData>('/users/me/cv');
-      return res.data;
-    },
-  });
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    setError(null);
 
-  const { mutateAsync, isPending } = useMutation<void, Error, File>({
-    mutationFn: async (file: File) => {
-      const form = new FormData();
-      form.append('file', file);
-      await apiClient.post('/users/me/cv', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+    api
+      .getCV()
+      .then((data) => {
+        if (!cancelled) setCv(data);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load CV');
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
       });
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.cv.detail() });
-    },
-  });
 
-  return {
-    cv: data ?? null,
-    uploadCV: mutateAsync,
-    isUploading: isPending,
-  };
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function saveCV(data: Partial<UserCV>): Promise<UserCV> {
+    setIsSaving(true);
+    setError(null);
+    try {
+      const saved = await api.saveCV(data);
+      setCv(saved);
+      return saved;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to save CV';
+      setError(msg);
+      throw err;
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return { cv, isLoading, isSaving, saveCV, error };
 }

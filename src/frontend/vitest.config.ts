@@ -21,6 +21,7 @@ export default defineConfig({
       'tests/integration/cognito-auth.test.ts',
       'tests/integration/hub-state-integration.test.ts',
       'tests/unit/api-methods.test.ts',
+      'tests/unit/artifact-storage.test.ts',
       'tests/integration/api-client.test.ts',
     ],
   },
