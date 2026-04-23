@@ -64,7 +64,7 @@ function makeHubState(overrides: Partial<HubState> = {}): HubState {
         secondaryActions: [],
       },
     ]),
-  ) as HubState['modules'];
+  ) as unknown as HubState['modules'];
 
   return {
     hubStatus: 'INIT',
