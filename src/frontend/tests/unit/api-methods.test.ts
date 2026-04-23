@@ -26,9 +26,8 @@ afterEach(() => {
 });
 afterAll(() => server.close());
 
-// Import after mocks are set up
-const { api } = await import('../../api/methods');
-const { ApiError } = await import('../../api/client');
+import { api } from '../../api/methods';
+import { ApiError } from '../../api/client';
 
 describe('api.getJob', () => {
   it('normalises role_title → title and company → company_name', async () => {
