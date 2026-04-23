@@ -290,6 +290,18 @@ class ApiConstruct(Construct):
             "service-rest-api",
             rest_api_name=self.naming.api_name(constants.API_FEATURE),
             description="CareerVP API - AI-powered job application assistant",
+            default_cors_preflight_options=aws_apigateway.CorsOptions(
+                allow_origins=aws_apigateway.Cors.ALL_ORIGINS,  # gated at Lambda layer
+                allow_methods=aws_apigateway.Cors.ALL_METHODS,
+                allow_headers=[
+                    "Content-Type",
+                    "Authorization",
+                    "X-Amz-Date",
+                    "X-Api-Key",
+                    "X-Amz-Security-Token",
+                ],
+                max_age=Duration.hours(1),
+            ),
             deploy_options=aws_apigateway.StageOptions(
                 throttling_rate_limit=2,
                 throttling_burst_limit=10,
@@ -787,7 +799,8 @@ class ApiConstruct(Construct):
                 self.api_db.company_research_cache_table.table_name
             ),
             "USERS_TABLE_NAME": self.api_db.users_table.table_name,
-            "ALLOWED_ORIGINS": "https://careervp.app,https://www.careervp.app",
+            "ALLOWED_ORIGINS": self.node.try_get_context("allowed_origins")
+            or "https://careervp.app,https://www.careervp.app",
         }
 
     def _build_common_layer(self) -> PythonLayerVersion:

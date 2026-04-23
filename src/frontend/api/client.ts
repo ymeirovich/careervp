@@ -1,58 +1,88 @@
-import axios, { type AxiosError } from 'axios';
-import {
-  CognitoUserPool,
-  type CognitoUserSession,
-} from 'amazon-cognito-identity-js';
+import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
+import { getCurrentToken } from '../lib/auth';
+
+// Extend Axios config to support _retry flag for 401 retry-once pattern
+declare module 'axios' {
+  interface InternalAxiosRequestConfig {
+    _retry?: boolean;
+  }
+}
 
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
-    public readonly code: string,
     message: string,
   ) {
     super(message);
     this.name = 'ApiError';
   }
+
+  is404(): boolean {
+    return this.status === 404;
+  }
 }
 
-const userPool = new CognitoUserPool({
-  UserPoolId: process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID ?? '',
-  ClientId: process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID ?? '',
-});
+interface AuthContextHandle {
+  refreshSession(): Promise<string>;
+  signOut(): void;
+}
 
-async function getIdToken(): Promise<string | null> {
-  return new Promise((resolve) => {
-    const user = userPool.getCurrentUser();
-    if (!user) return resolve(null);
-    user.getSession((err: Error | null, session: CognitoUserSession) => {
-      if (err || !session?.isValid()) return resolve(null);
-      resolve(session.getIdToken().getJwtToken());
-    });
-  });
+let authContext: AuthContextHandle = {
+  refreshSession: () => Promise.reject(new Error('AuthContext not initialised')),
+  signOut: () => undefined,
+};
+
+export function setAuthContext(ctx: AuthContextHandle): void {
+  authContext = ctx;
 }
 
 export const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL,
 });
 
-apiClient.interceptors.request.use(async (config) => {
-  const token = await getIdToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+  // Don't override Authorization if already set (e.g. by the 401 retry path)
+  if (!config.headers.Authorization) {
+    const token = await getCurrentToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
   }
   return config;
 });
 
 apiClient.interceptors.response.use(
   (response) => response,
-  (error: AxiosError<{ code?: string; message?: string }>) => {
-    if (error.response) {
-      throw new ApiError(
-        error.response.status,
-        error.response.data?.code ?? 'UNKNOWN_ERROR',
-        error.response.data?.message ?? error.message,
-      );
+  async (error: AxiosError<{ error?: string; message?: string }>) => {
+    const originalRequest = error.config!;
+
+    if (error.response?.status === 401) {
+      if (!originalRequest._retry) {
+        originalRequest._retry = true;
+        try {
+          const newToken = await authContext.refreshSession();
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          return apiClient(originalRequest);
+        } catch {
+          authContext.signOut();
+          return Promise.reject(error);
+        }
+      }
+      // Second 401 after retry — session is truly expired
+      authContext.signOut();
     }
-    throw error;
+
+    const status = error.response?.status ?? 0;
+    const message = error.response?.data?.error ?? error.message;
+    throw new ApiError(status, message);
   },
 );
+
+export async function apiFetchOrNull<T>(fn: () => Promise<T>): Promise<T | null> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof ApiError && err.is404()) return null;
+    throw err;
+  }
+}
