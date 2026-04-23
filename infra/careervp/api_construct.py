@@ -757,6 +757,7 @@ class ApiConstruct(Construct):
                             actions=[
                                 "cognito-idp:AdminConfirmSignUp",
                                 "cognito-idp:AdminGetUser",
+                                "cognito-idp:AdminUserGlobalSignOut",
                             ],
                             resources=[self.cognito_user_pool.user_pool_arn],
                             effect=iam.Effect.ALLOW,

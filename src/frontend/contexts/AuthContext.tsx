@@ -1,14 +1,10 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
-import {
-  CognitoUserPool,
-  CognitoUser,
-  AuthenticationDetails,
-  CognitoUserAttribute,
-  type CognitoUserSession,
-} from 'amazon-cognito-identity-js';
+import { useRouter } from 'next/navigation';
+import { CognitoUserPool, CognitoUser, type CognitoUserSession } from 'amazon-cognito-identity-js';
+import * as auth from '../lib/auth';
 
 interface AuthContextValue {
   user: CognitoUser | null;
@@ -17,35 +13,41 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, name: string) => Promise<void>;
   confirmSignUp: (email: string, code: string) => Promise<void>;
+  resendConfirmationCode: (email: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   confirmForgotPassword: (email: string, code: string, newPassword: string) => Promise<void>;
   refreshSession: () => Promise<string>;
+  changePassword: (oldPassword: string, newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function setTokenCookie(token: string) {
   if (typeof document !== 'undefined') {
-    document.cookie = `cognito_id_token=${token}; path=/; SameSite=Strict`;
+    document.cookie = `cognito_id_token=${token}; path=/; max-age=3600; SameSite=Lax`;
   }
 }
 
 function clearTokenCookie() {
   if (typeof document !== 'undefined') {
-    document.cookie = 'cognito_id_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    document.cookie = 'cognito_id_token=; path=/; max-age=0';
   }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const poolRef = useRef<CognitoUserPool | null>(null);
 
   function getPool(): CognitoUserPool {
     if (!poolRef.current) {
       poolRef.current = new CognitoUserPool({
         UserPoolId: process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID ?? 'us-east-1_WiHMRqLpe',
-        ClientId: process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID ?? '7blipbarsisbctqh6hlsj46sqa',
+        ClientId:
+          process.env.NEXT_PUBLIC_COGNITO_APP_CLIENT_ID ??
+          process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID ??
+          '7blipbarsisbctqh6hlsj46sqa',
       });
     }
     return poolRef.current;
@@ -55,135 +57,123 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [idToken, setIdToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Session restoration on mount
   useEffect(() => {
-    const pool = getPool();
-    const currentUser = pool.getCurrentUser();
-    if (!currentUser) {
-      setIsLoading(false);
-      return;
-    }
-    currentUser.getSession((err: Error | null, session: CognitoUserSession | null) => {
-      if (err || !session?.isValid()) {
-        setIsLoading(false);
-        return;
+    auth.getCurrentToken().then((token) => {
+      if (token) {
+        const currentUser = getPool().getCurrentUser();
+        setUser(currentUser);
+        setIdToken(token);
+        setTokenCookie(token);
+      } else {
+        clearTokenCookie();
       }
-      const token = session.getIdToken().getJwtToken();
-      setUser(currentUser);
-      setIdToken(token);
-      setTokenCookie(token);
+      setIsLoading(false);
+    }).catch(() => {
+      clearTokenCookie();
       setIsLoading(false);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const signIn = useCallback((email: string, password: string): Promise<void> => {
-    return new Promise((resolve, reject) => {
+    return auth.signIn(email, password).then((token) => {
       const pool = getPool();
-      const authDetails = new AuthenticationDetails({ Username: email, Password: password });
-      const cognitoUser = new CognitoUser({ Username: email, Pool: pool });
-      cognitoUser.authenticateUser(authDetails, {
-        onSuccess(session: CognitoUserSession) {
-          const token = session.getIdToken().getJwtToken();
-          flushSync(() => {
-            setUser(cognitoUser);
-            setIdToken(token);
-          });
-          setTokenCookie(token);
-          resolve();
-        },
-        onFailure(err: Error) {
-          flushSync(() => {
-            setUser(null);
-            setIdToken(null);
-          });
-          clearTokenCookie();
-          reject(err);
-        },
+      const cognitoUser = pool.getCurrentUser() ?? new CognitoUser({ Username: email, Pool: pool });
+      flushSync(() => {
+        setUser(cognitoUser);
+        setIdToken(token);
       });
+      setTokenCookie(token);
+    }).catch((err) => {
+      flushSync(() => {
+        setUser(null);
+        setIdToken(null);
+      });
+      clearTokenCookie();
+      throw err;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const signOut = useCallback((): Promise<void> => {
-    return new Promise((resolve) => {
-      const pool = getPool();
-      const currentUser = user ?? pool.getCurrentUser();
-      if (currentUser) {
-        currentUser.signOut();
-      }
-      setUser(null);
-      setIdToken(null);
-      clearTokenCookie();
-      resolve();
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+    // Fire-and-forget backend logout — do not block UI on failure
+    if (idToken) {
+      fetch('/api/proxy/auth/logout', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${idToken}` },
+      }).catch(() => undefined);
+    }
+    auth.signOut();
+    clearTokenCookie();
+    setUser(null);
+    setIdToken(null);
+    router.push('/login');
+    return Promise.resolve();
+  }, [idToken, router]);
 
-  const signUp = useCallback((email: string, password: string): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      const pool = getPool();
-      const attributes = [new CognitoUserAttribute({ Name: 'email', Value: email })];
-      pool.signUp(email, password, attributes, [], (err) => {
-        if (err) { reject(err); return; }
-        resolve();
-      });
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const signUp = useCallback(
+    (email: string, password: string, name: string): Promise<void> =>
+      auth.signUp(email, password, name),
+    [],
+  );
 
-  const confirmSignUp = useCallback((email: string, code: string): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      const pool = getPool();
-      const cognitoUser = new CognitoUser({ Username: email, Pool: pool });
-      cognitoUser.confirmRegistration(code, true, (err) => {
-        if (err) { reject(err); return; }
-        resolve();
-      });
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const confirmSignUp = useCallback(
+    (email: string, code: string): Promise<void> => auth.confirmSignUp(email, code),
+    [],
+  );
 
-  const forgotPassword = useCallback((email: string): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      const pool = getPool();
-      const cognitoUser = new CognitoUser({ Username: email, Pool: pool });
-      cognitoUser.forgotPassword({
-        onSuccess: () => resolve(),
-        onFailure: (err) => reject(err),
-      });
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const resendConfirmationCode = useCallback(
+    (email: string): Promise<void> => auth.resendConfirmationCode(email),
+    [],
+  );
+
+  const forgotPassword = useCallback(
+    (email: string): Promise<void> => auth.forgotPassword(email),
+    [],
+  );
 
   const confirmForgotPassword = useCallback(
-    (email: string, code: string, newPassword: string): Promise<void> => {
+    (email: string, code: string, newPassword: string): Promise<void> =>
+      auth.confirmForgotPassword(email, code, newPassword),
+    [],
+  );
+
+  const refreshSession = useCallback((): Promise<string> => {
+    return auth.getCurrentToken().then((token) => {
+      if (!token) {
+        return signOut().then(() => { throw new Error('Session expired'); });
+      }
+      setIdToken(token);
+      setTokenCookie(token);
+      return token;
+    });
+  }, [signOut]);
+
+  const changePassword = useCallback(
+    (oldPassword: string, newPassword: string): Promise<void> => {
       return new Promise((resolve, reject) => {
         const pool = getPool();
-        const cognitoUser = new CognitoUser({ Username: email, Pool: pool });
-        cognitoUser.confirmPassword(code, newPassword, {
-          onSuccess: () => resolve(),
-          onFailure: (err) => reject(err),
+        const currentUser = user ?? pool.getCurrentUser();
+        if (!currentUser) {
+          reject(new Error('No authenticated user'));
+          return;
+        }
+        currentUser.getSession((err: Error | null, session: CognitoUserSession | null) => {
+          if (err || !session?.isValid()) {
+            reject(err ?? new Error('Invalid session'));
+            return;
+          }
+          currentUser.changePassword(oldPassword, newPassword, (changeErr) => {
+            if (changeErr) { reject(changeErr); return; }
+            resolve();
+          });
         });
       });
     },
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  []);
-
-  const refreshSession = useCallback((): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const pool = getPool();
-      const currentUser = user ?? pool.getCurrentUser();
-      if (!currentUser) { reject(new Error('No current user')); return; }
-      currentUser.getSession((err: Error | null, session: CognitoUserSession | null) => {
-        if (err || !session?.isValid()) { reject(err ?? new Error('Invalid session')); return; }
-        const token = session.getIdToken().getJwtToken();
-        setIdToken(token);
-        setTokenCookie(token);
-        resolve(token);
-      });
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user],
+  );
 
   return (
     <AuthContext.Provider
@@ -196,9 +186,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signOut,
         signUp,
         confirmSignUp,
+        resendConfirmationCode,
         forgotPassword,
         confirmForgotPassword,
         refreshSession,
+        changePassword,
       }}
     >
       {children}

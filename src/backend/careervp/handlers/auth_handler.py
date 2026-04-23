@@ -218,6 +218,44 @@ def refresh_token() -> Response[str]:
     return _json_response(HTTPStatus.OK, tokens.to_response())
 
 
+COGNITO_USER_POOL_ID = os.getenv('COGNITO_USER_POOL_ID')
+
+
+@app.post('/auth/logout')
+@tracer.capture_method(capture_response=False)
+def logout_user() -> Response[str]:
+    """Invalidate all Cognito tokens for the authenticated user."""
+    headers = app.current_event.headers or {}
+    auth_header = headers.get('Authorization') or headers.get('authorization') or ''
+    if not auth_header.startswith('Bearer '):
+        return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Unauthorized'})
+
+    token = auth_header[7:]
+    try:
+        claims = jwt_decode(
+            token,
+            options={'verify_signature': False},
+            algorithms=['RS256'],
+        )
+        username = claims.get('cognito:username') or claims.get('email')
+    except Exception:
+        return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Invalid token'})
+
+    if not username or not COGNITO_USER_POOL_ID:
+        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Configuration error'})
+
+    try:
+        boto3.client('cognito-idp', region_name='us-east-1').admin_user_global_sign_out(
+            UserPoolId=COGNITO_USER_POOL_ID,
+            Username=username,
+        )
+    except Exception as exc:
+        logger.exception('Logout failed', error=str(exc))
+        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Logout failed'})
+
+    return _json_response(HTTPStatus.OK, {'message': 'Logged out successfully'})
+
+
 @logger.inject_lambda_context(correlation_id_path=API_GATEWAY_REST)
 @tracer.capture_lambda_handler(capture_response=False)
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:

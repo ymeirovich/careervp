@@ -4,6 +4,12 @@ import React from "react";
 import { useAuth, AuthProvider } from "../../contexts/AuthContext";
 import { CognitoUser } from "amazon-cognito-identity-js";
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}));
+
+vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+
 vi.mock("amazon-cognito-identity-js", () => {
   const mockSession = {
     isValid: vi.fn().mockReturnValue(true),

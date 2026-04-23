@@ -9,6 +9,7 @@ export default function RegisterPage() {
   const { signUp } = useAuth();
   const router = useRouter();
 
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -24,7 +25,7 @@ export default function RegisterPage() {
     }
     setLoading(true);
     try {
-      await signUp(email, password);
+      await signUp(email, password, name);
       router.push(`/confirm-signup?email=${encodeURIComponent(email)}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Registration failed. Please try again.';
@@ -49,6 +50,20 @@ export default function RegisterPage() {
         )}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="name" className="text-text-primary text-sm font-medium">Full name</label>
+            <input
+              id="name"
+              data-testid="name-input"
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.currentTarget.value)}
+              className="border border-border-default rounded-lg px-3 py-2 text-base text-text-primary bg-card outline-none focus:ring-2 focus:ring-primary-action"
+              placeholder="Jane Smith"
+            />
+          </div>
+
           <div className="flex flex-col gap-1.5">
             <label htmlFor="email" className="text-text-primary text-sm font-medium">Email</label>
             <input

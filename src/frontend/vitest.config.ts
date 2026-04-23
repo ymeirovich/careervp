@@ -10,6 +10,7 @@ export default defineConfig({
     include: [
       'tests/**/*.vitest.ts',
       'tests/**/*.vitest.tsx',
+      'tests/unit/auth-context.test.tsx',
       'tests/unit/state-adapters.test.ts',
       'tests/unit/hub-status-deriver.test.ts',
       'tests/unit/module-card.test.tsx',
