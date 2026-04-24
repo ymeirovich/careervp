@@ -23,6 +23,7 @@ import type {
   InterviewPrepStatusResponse,
   CVTailoringRequest,
   CVTailoredStatusResponse,
+  ExportResponse,
 } from '../lib/types';
 
 type RawGapQuestion = {
@@ -180,5 +181,11 @@ export const api = {
   getCVTailored: (cvTailoringId: string): Promise<CVTailoredStatusResponse> =>
     apiClient
       .get<CVTailoredStatusResponse>(`/cv-tailoring/${cvTailoringId}/status`)
+      .then((r) => r.data),
+
+  // ── Export ──
+  exportArtifact: (jobId: string, moduleType: string, format: 'docx' | 'pdf'): Promise<ExportResponse> =>
+    apiClient
+      .get<ExportResponse>(`/jobs/${jobId}/artifacts/${moduleType}/export?format=${format}`)
       .then((r) => r.data),
 };
