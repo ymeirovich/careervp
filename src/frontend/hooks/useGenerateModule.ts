@@ -1,75 +1,75 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '../api/client';
-import { queryKeys } from '../api/queryKeys';
-import { useApplicationStore } from '../store/useApplicationStore';
+import { useState } from 'react';
+import { api } from '../api/methods';
 import type { ModuleType } from '../types/enums';
 
-interface GenerateResponse {
-  job_id: string;
+export interface GenerateOptions {
+  cvId?: string;
+  vprId?: string;
+  gapResponseIds?: string[];
+  companyResearchId?: string;
 }
 
-type GenerateEndpointFn = (jobId: string) => { method: 'GET' | 'POST'; url: string };
-
-const GENERATE_ENDPOINTS: Record<ModuleType, GenerateEndpointFn> = {
-  vpr: () => ({ method: 'POST', url: '/vpr/generate' }),
-  tailoredCV: () => ({ method: 'POST', url: '/cv-tailoring/generate' }),
-  coverLetter: () => ({ method: 'POST', url: '/cover-letter/generate' }),
-  interviewPrep: () => ({ method: 'POST', url: '/interview-prep/generate' }),
-  companyResearch: (jobId) => ({ method: 'GET', url: `/company-research/${jobId}` }),
-  gapAnalysis: (jobId) => ({ method: 'POST', url: `/jobs/${jobId}/gap-questions` }),
-  baseCV: () => ({ method: 'POST', url: '/users/me/cv' }),
-};
-
-const INVALIDATION_KEYS: Partial<Record<ModuleType, (jobId: string) => readonly string[]>> = {
-  vpr: queryKeys.vpr.status,
-  tailoredCV: queryKeys.cvTailoring.status,
-  coverLetter: queryKeys.coverLetter.status,
-  interviewPrep: queryKeys.interviewPrep.status,
-  gapAnalysis: queryKeys.gapAnalysis.detail,
-  baseCV: queryKeys.cv.detail,
-};
-
-export function useGenerateModule(moduleType: ModuleType): {
-  generate: (jobId: string) => Promise<{ newJobId: string }>;
+export function useGenerateModule(
+  moduleType: ModuleType,
+  jobId: string,
+): {
+  generate: (options?: GenerateOptions) => Promise<void>;
   isGenerating: boolean;
-  error: Error | null;
+  taskId: string | null;
+  error: string | null;
 } {
-  const queryClient = useQueryClient();
-  const setActiveJob = useApplicationStore((s) => s.setActiveJob);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [taskId, setTaskId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const { mutateAsync, isPending, error } = useMutation<GenerateResponse, Error, string>({
-    mutationFn: async (jobId: string) => {
-      const { method, url } = GENERATE_ENDPOINTS[moduleType](jobId);
-      const res =
-        method === 'GET'
-          ? await apiClient.get<GenerateResponse>(url)
-          : await apiClient.post<GenerateResponse>(url, { job_id: jobId });
-      return res.data;
-    },
-    onSuccess: (data, jobId) => {
-      const newJobId = data.job_id;
-
-      const keyFn = INVALIDATION_KEYS[moduleType];
-      if (keyFn) {
-        void queryClient.invalidateQueries({ queryKey: keyFn(newJobId) });
+  async function generate(options: GenerateOptions = {}): Promise<void> {
+    setIsGenerating(true);
+    setError(null);
+    try {
+      let response;
+      switch (moduleType) {
+        case 'vpr':
+          response = await api.generateVPR({
+            application_id: jobId,
+            cv_id: options.cvId!,
+            gap_response_ids: options.gapResponseIds ?? [],
+          });
+          break;
+        case 'coverLetter':
+          response = await api.generateCoverLetter({
+            application_id: jobId,
+            cv_id: options.cvId!,
+            vpr_id: options.vprId!,
+            gap_response_ids: options.gapResponseIds ?? [],
+            company_research_id: options.companyResearchId ?? '',
+          });
+          break;
+        case 'interviewPrep':
+          response = await api.generateInterviewPrep({
+            vpr_id: options.vprId!,
+            gap_response_ids: options.gapResponseIds ?? [],
+            application_id: jobId,
+          });
+          break;
+        case 'tailoredCV':
+          response = await api.generateCV({
+            cv_id: options.cvId!,
+            job_id: jobId,
+            vpr_id: options.vprId ?? null,
+          });
+          break;
+        default:
+          throw new Error(`Unsupported module type: ${moduleType}`);
       }
-
-      if (newJobId !== jobId) {
-        setActiveJob(newJobId);
-      }
-    },
-  });
-
-  async function generate(jobId: string): Promise<{ newJobId: string }> {
-    const data = await mutateAsync(jobId);
-    return { newJobId: data.job_id };
+      setTaskId(response.request_id ?? response.job_id ?? null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Generation failed');
+    } finally {
+      setIsGenerating(false);
+    }
   }
 
-  return {
-    generate,
-    isGenerating: isPending,
-    error,
-  };
+  return { generate, isGenerating, taskId, error };
 }

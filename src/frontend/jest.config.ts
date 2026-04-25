@@ -26,6 +26,9 @@ const config: Config = {
       testPathIgnorePatterns: [
         '<rootDir>/tests/unit/state-adapters.test.ts',
         '<rootDir>/tests/unit/hub-status-deriver.test.ts',
+        '<rootDir>/tests/unit/api-methods.test.ts',
+        '<rootDir>/tests/unit/artifact-storage.test.ts',
+        '<rootDir>/tests/unit/module-card-actions.test.tsx',
       ],
       transform: { '^.+\\.ts$': 'ts-jest' },
       testEnvironment: 'node',
@@ -37,6 +40,8 @@ const config: Config = {
         '<rootDir>/tests/integration/cognito-auth.test.ts',
         '<rootDir>/tests/integration/api-polling.test.ts',
         '<rootDir>/tests/integration/hub-state-integration.test.ts',
+        '<rootDir>/tests/integration/api-client.test.ts',
+        '<rootDir>/tests/integration/hub-state.test.ts',
       ],
       transform: { '^.+\\.ts$': 'ts-jest' },
       testEnvironment: 'node',

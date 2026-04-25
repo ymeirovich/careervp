@@ -21,7 +21,13 @@ export default defineConfig({
       'tests/integration/cognito-auth.test.ts',
       'tests/integration/hub-state-integration.test.ts',
       'tests/unit/api-methods.test.ts',
+      'tests/unit/artifact-storage.test.ts',
       'tests/integration/api-client.test.ts',
+      'tests/unit/module-card-actions.test.tsx',
+      'tests/integration/hub-state.test.ts',
+      'tests/unit/vpr-page.test.tsx',
+      'tests/unit/gap-analysis-page.test.tsx',
+      'tests/unit/export-dropdown.test.tsx',
     ],
   },
 });

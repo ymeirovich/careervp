@@ -2,7 +2,9 @@ import { describe, it, expect, beforeAll, afterEach, afterAll, vi } from 'vitest
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 
-const mockGetCurrentToken = vi.fn<() => Promise<string | null>>();
+const { mockGetCurrentToken } = vi.hoisted(() => ({
+  mockGetCurrentToken: vi.fn<() => Promise<string | null>>(),
+}));
 
 vi.mock('../../lib/auth', () => ({
   getCurrentToken: mockGetCurrentToken,
@@ -27,7 +29,7 @@ afterEach(() => {
 });
 afterAll(() => server.close());
 
-const { apiClient, setAuthContext, ApiError } = await import('../../api/client');
+import { apiClient, setAuthContext, ApiError } from '../../api/client';
 
 describe('Authorization header injection', () => {
   it('sets Authorization header from token on every request', async () => {

@@ -1,78 +1,73 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import { useRef } from 'react';
-import { apiClient } from '../api/client';
-import { queryKeys } from '../api/queryKeys';
-import type { ModuleType, RawModuleData } from '../types/hub-state';
+import { useEffect, useState } from 'react';
+import { api } from '../api/methods';
+import { persistArtifact, getArtifact } from '../lib/artifactStorage';
+import type { ArtifactStatus } from '../lib/types';
+import type { ModuleType } from '../types/enums';
 
-const STATUS_ENDPOINTS: Record<ModuleType, ((jobId: string) => string) | null> = {
-  vpr: (jobId) => `/vpr/${jobId}/status`,
-  tailoredCV: (jobId) => `/cv-tailoring/${jobId}/status`,
-  coverLetter: (jobId) => `/cover-letter/${jobId}/status`,
-  interviewPrep: (jobId) => `/interview-prep/${jobId}/status`,
-  companyResearch: null,
-  gapAnalysis: null,
-  baseCV: null,
+type PollFn = (taskId: string) => Promise<{ status: ArtifactStatus; result?: unknown }>;
+
+// Some status response types use `status: string` — cast to ArtifactStatus since the
+// backend only ever returns values within that union.
+const POLL_FN_MAP: Partial<Record<ModuleType, PollFn>> = {
+  vpr: (taskId) => api.pollVPRStatus(taskId),
+  coverLetter: (taskId) =>
+    api.pollCoverLetterStatus(taskId) as Promise<{ status: ArtifactStatus; result?: unknown }>,
+  interviewPrep: (taskId) =>
+    api.pollInterviewPrepStatus(taskId) as Promise<{ status: ArtifactStatus; result?: unknown }>,
+  tailoredCV: (taskId) => api.pollCVTailored(taskId),
 };
-
-const STATUS_QUERY_KEYS: Record<ModuleType, ((jobId: string) => readonly string[]) | null> = {
-  vpr: queryKeys.vpr.status,
-  tailoredCV: queryKeys.cvTailoring.status,
-  coverLetter: queryKeys.coverLetter.status,
-  interviewPrep: queryKeys.interviewPrep.status,
-  companyResearch: null,
-  gapAnalysis: null,
-  baseCV: null,
-};
-
-function isActiveStatus(status: RawModuleData['status'] | undefined): boolean {
-  return status === 'pending' || status === 'processing';
-}
-
-function adaptiveInterval(elapsedMs: number): number {
-  if (elapsedMs < 30_000) return 3_000;
-  if (elapsedMs < 180_000) return 8_000;
-  if (elapsedMs < 480_000) return 15_000;
-  return 30_000;
-}
 
 export function useModuleStatus(
   moduleType: ModuleType,
   jobId: string,
+  initialTaskId: string | null,
   enabled: boolean,
 ): {
-  rawStatus: RawModuleData | null;
+  status: ArtifactStatus | null;
+  result: unknown | null;
+  taskId: string | null;
   isPolling: boolean;
 } {
-  const endpointFn = STATUS_ENDPOINTS[moduleType];
-  const keyFn = STATUS_QUERY_KEYS[moduleType];
-  const hasEndpoint = endpointFn !== null && keyFn !== null;
-  const pollingStartRef = useRef<number | null>(null);
+  // Resolve taskId: prop first, then localStorage fallback
+  const taskId = initialTaskId ?? getArtifact(jobId, moduleType);
 
-  const { data } = useQuery<RawModuleData>({
-    queryKey: keyFn ? keyFn(jobId) : ['noop', moduleType, jobId],
-    queryFn: async () => {
-      const res = await apiClient.get<RawModuleData>(endpointFn!(jobId));
-      return res.data;
-    },
-    enabled: enabled && hasEndpoint && jobId.length > 0,
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      if (!isActiveStatus(status)) {
-        pollingStartRef.current = null;
-        return false;
+  const [status, setStatus] = useState<ArtifactStatus | null>(null);
+  const [result, setResult] = useState<unknown | null>(null);
+  const [isPolling, setIsPolling] = useState(false);
+
+  useEffect(() => {
+    if (!enabled || !taskId) return;
+
+    const pollFn = POLL_FN_MAP[moduleType];
+    if (!pollFn) return;
+
+    setIsPolling(true);
+
+    const interval = setInterval(async () => {
+      try {
+        const response = await pollFn(taskId);
+        setStatus(response.status);
+        setResult(response.result ?? null);
+
+        if (response.status === 'completed' || response.status === 'failed') {
+          clearInterval(interval);
+          setIsPolling(false);
+          if (response.status === 'completed') {
+            persistArtifact(jobId, moduleType, taskId);
+          }
+        }
+      } catch {
+        // transient network error — continue polling
       }
-      if (pollingStartRef.current === null) {
-        pollingStartRef.current = Date.now();
-      }
-      return adaptiveInterval(Date.now() - pollingStartRef.current);
-    },
-    staleTime: 0,
-  });
+    }, 3000);
 
-  const rawStatus = data ?? null;
-  const isPolling = hasEndpoint && enabled && isActiveStatus(rawStatus?.status);
+    return () => {
+      clearInterval(interval);
+      setIsPolling(false);
+    };
+  }, [taskId, enabled, moduleType, jobId]);
 
-  return { rawStatus, isPolling };
+  return { status, result, taskId, isPolling };
 }

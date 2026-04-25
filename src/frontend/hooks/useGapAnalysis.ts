@@ -1,43 +1,93 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '../api/client';
-import { queryKeys } from '../api/queryKeys';
-import type { GapQuestion, GapResponse, RawGapAnalysisData } from '../types/hub-state';
+import { useState, useEffect } from 'react';
+import { api } from '../api/methods';
+import type { GapQuestion, GapResponse } from '../lib/types';
 
 export function useGapAnalysis(jobId: string): {
   questions: GapQuestion[];
-  responses: GapResponse[];
-  submitResponses: (responses: GapResponse[]) => Promise<void>;
-  isSubmitting: boolean;
+  responses: Record<string, { answer: string; destination: 'CV_IMPACT' | 'INTERVIEW_MVP_ONLY' | '' }>;
+  savedResponses: Record<string, unknown>;
+  isLoading: boolean;
+  isGenerating: boolean;
+  isSaving: boolean;
+  generateQuestions: (cvId: string) => Promise<void>;
+  saveResponses: (responses: GapResponse[]) => Promise<void>;
+  error: string | null;
 } {
-  const queryClient = useQueryClient();
-  const enabled = jobId.length > 0;
+  const [questions, setQuestions] = useState<GapQuestion[]>([]);
+  const [responses, setResponses] = useState<
+    Record<string, { answer: string; destination: 'CV_IMPACT' | 'INTERVIEW_MVP_ONLY' | '' }>
+  >({});
+  const [savedResponses, setSavedResponses] = useState<Record<string, unknown>>({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const { data } = useQuery<RawGapAnalysisData>({
-    queryKey: queryKeys.gapAnalysis.detail(jobId),
-    queryFn: async () => {
-      const res = await apiClient.get<RawGapAnalysisData>(`/jobs/${jobId}/gap-questions`);
-      return res.data;
-    },
-    enabled,
-  });
+  useEffect(() => {
+    if (!jobId) return;
 
-  const { mutateAsync, isPending } = useMutation<void, Error, GapResponse[]>({
-    mutationFn: async (responses: GapResponse[]) => {
-      await apiClient.post(`/jobs/${jobId}/gap-questions/responses`, { responses });
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.gapAnalysis.detail(jobId),
+    let cancelled = false;
+    setIsLoading(true);
+    setError(null);
+
+    api
+      .getGapQuestions(jobId)
+      .then((qs) => {
+        if (!cancelled) setQuestions(qs);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load questions');
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
       });
-    },
-  });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [jobId]);
+
+  async function generateQuestions(cvId: string): Promise<void> {
+    setIsGenerating(true);
+    setError(null);
+    try {
+      const result = await api.generateGapQuestions({ job_id: jobId, cv_id: cvId });
+      setQuestions(result.questions);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate questions');
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  async function saveResponses(gapResponses: GapResponse[]): Promise<void> {
+    setIsSaving(true);
+    setError(null);
+    try {
+      await api.saveGapResponses(jobId, gapResponses);
+      const saved: Record<string, unknown> = {};
+      gapResponses.forEach((r) => {
+        saved[r.question_id] = r;
+      });
+      setSavedResponses(saved);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save responses');
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   return {
-    questions: data?.questions ?? [],
-    responses: data?.responses ?? [],
-    submitResponses: mutateAsync,
-    isSubmitting: isPending,
+    questions,
+    responses,
+    savedResponses,
+    isLoading,
+    isGenerating,
+    isSaving,
+    generateQuestions,
+    saveResponses,
+    error,
   };
 }
