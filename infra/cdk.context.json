@@ -1,5 +1,9 @@
 {
   "acknowledged-issue-numbers": [
     34892
-  ]
+  ],
+  "hosted-zone:account=788159322332:domainName=careervp.com:region=us-east-1": {
+    "Id": "/hostedzone/Z01014791EGUGL4O7OQJ1",
+    "Name": "careervp.com."
+  }
 }
