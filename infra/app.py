@@ -3,6 +3,7 @@ import os
 
 from aws_cdk import App, Environment
 from boto3 import client, session
+from careervp.frontend_stack import FrontendStack
 from careervp.naming_utils import NamingUtils
 from careervp.service_stack import ServiceStack
 
@@ -42,6 +43,25 @@ my_stack = ServiceStack(
     is_production_env=environment in ("prod", "production"),
     naming=naming,
     stack_feature=stack_feature,
+)
+
+_domain_map = {
+    "prod": "app.careervp.com",
+    "production": "app.careervp.com",
+    "stage": "stage.careervp.com",
+    "dev": "dev.careervp.com",
+}
+frontend_domain = os.getenv(
+    "FRONTEND_DOMAIN", _domain_map.get(environment, "dev.careervp.com")
+)
+
+FrontendStack(
+    scope=app,
+    construct_id=f"CareerVpFrontend-{environment.capitalize()}",
+    env=env_value,
+    environment=environment,
+    domain=frontend_domain,
+    is_production=environment in ("prod", "production"),
 )
 
 app.synth()

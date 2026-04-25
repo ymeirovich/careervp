@@ -67,7 +67,9 @@ class FrontendStack(Stack):
         )
 
         # ACM certificate (must be us-east-1 for CloudFront)
+        # Skip certificate if no hosted zone is configured (dev/testing)
         cert_env = self._resolve_cert_env()
+        has_hosted_zone = bool(os.environ.get("HOSTED_ZONE_NAME", "careervp.com"))
         self.certificate = (
             acm.Certificate(
                 self,
@@ -77,7 +79,7 @@ class FrontendStack(Stack):
                 validation=acm.CertificateValidation.from_dns(),
                 certificate_name=f"careervp-cert-{self._env_name}",
             )
-            if cert_env
+            if cert_env and has_hosted_zone
             else None
         )
 

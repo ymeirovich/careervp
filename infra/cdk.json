@@ -1,5 +1,8 @@
 {
   "app": "uv run python app.py",
+  "context": {
+    "allowed_origins": "https://careervp.app,https://www.careervp.app,https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com,https://app.careervp.com,https://dev.careervp.com,https://stage.careervp.com,http://localhost:3000"
+  },
   "watch": {
     "include": [
       "service/**",

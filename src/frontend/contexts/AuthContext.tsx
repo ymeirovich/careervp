@@ -77,9 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = useCallback((email: string, password: string): Promise<void> => {
-    return auth.signIn(email, password).then((token) => {
-      const pool = getPool();
-      const cognitoUser = pool.getCurrentUser() ?? new CognitoUser({ Username: email, Pool: pool });
+    return auth.signIn(email, password).then(({ token, user: cognitoUser }) => {
       flushSync(() => {
         setUser(cognitoUser);
         setIdToken(token);
