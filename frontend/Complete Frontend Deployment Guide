@@ -1,0 +1,328 @@
+Complete Frontend Deployment Guide
+Step 1: Verify CDK app.py Change
+Check the change I made:
+
+Read
+app.py
+Good, the app.py change is in place. Now I need to provide detailed step-by-step instructions with all commands and configuration.
+✅ Verified. Now follow these steps:
+
+Step 2: Verify AWS Credentials & Region
+# Check you're in the right AWS account
+aws sts get-caller-identity
+# Output should show:
+# Account: [your-aws-account-id]
+# Arn: arn:aws:iam::[account]:role/[your-role]
+
+# Set region
+export AWS_REGION=us-east-1
+export AWS_DEFAULT_REGION=us-east-1
+Step 3: Verify CDK can synth (local validation)
+cd /Users/yitzchak/Documents/dev/careervp/infra
+
+# Synth the CDK app - this validates the code without deploying
+ENVIRONMENT=dev npx cdk synth --quiet
+
+# If successful, output shows CloudFormation template
+# If failed, error message tells you what's wrong
+If synth fails with Route53 error: This is expected if you don't have careervp.com hosted zone in Route53 yet. It's non-blocking for now.
+
+Step 4: Deploy FrontendStack Infrastructure to AWS
+cd /Users/yitzchak/Documents/dev/careervp/infra
+
+# Deploy ONLY the frontend stack
+ENVIRONMENT=dev npx cdk deploy CareerVpFrontend-Dev \
+  --require-approval never \
+  --no-rollback
+
+# Output will show:
+# ✓ Stack created/updated
+# ✓ CloudFormation outputs:
+#   - BucketName: careervp-frontend-dev
+#   - DistributionId: E1A2B3C4D5E6F7
+#   - CloudFrontUrl: d123abc.cloudfront.net
+Save these outputs — you'll need them in the next step.
+
+Step 5: Get CloudFormation Outputs (if deploy succeeded)
+cd /Users/yitzchak/Documents/dev/careervp/infra
+
+# Get stack outputs
+aws cloudformation describe-stacks \
+  --stack-name CareerVpFrontend-Dev \
+  --query 'Stacks[0].Outputs' \
+  --region us-east-1
+
+# Store these values:
+export S3_BUCKET_NAME=$(aws cloudformation describe-stacks \
+  --stack-name CareerVpFrontend-Dev \
+  --query 'Stacks[0].Outputs[?OutputKey==`BucketName`].OutputValue' \
+  --region us-east-1 \
+  --output text)
+
+export CLOUDFRONT_DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
+  --stack-name CareerVpFrontend-Dev \
+  --query 'Stacks[0].Outputs[?OutputKey==`DistributionId`].OutputValue' \
+  --region us-east-1 \
+  --output text)
+
+echo "S3_BUCKET_NAME=$S3_BUCKET_NAME"
+echo "CLOUDFRONT_DISTRIBUTION_ID=$CLOUDFRONT_DISTRIBUTION_ID"
+Step 6: Get the AWS Deploy Role ARN
+The deploy-frontend.yml workflow needs AWS_DEPLOY_ROLE_ARN to assume a role. For dev, you can reuse your existing AWS credentials role.
+
+# Get your current role ARN
+aws sts get-caller-identity --query Arn --output text
+
+# Format should be: arn:aws:iam::[account]:role/[role-name]
+# Store this as AWS_DEPLOY_ROLE_ARN
+
+export AWS_DEPLOY_ROLE_ARN=$(aws sts get-caller-identity --query Arn --output text)
+echo "AWS_DEPLOY_ROLE_ARN=$AWS_DEPLOY_ROLE_ARN"
+Step 7: Build Frontend Locally (test before GitHub push)
+cd /Users/yitzchak/Documents/dev/careervp/src/frontend
+
+# Install dependencies
+npm ci
+
+# Run build with correct env vars
+NEXT_PUBLIC_API_URL="https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod" \
+NEXT_PUBLIC_COGNITO_USER_POOL_ID="us-east-1_WiHMRqLpe" \
+NEXT_PUBLIC_COGNITO_CLIENT_ID="7blipbarsisbctqh6hlsj46sqa" \
+npm run build
+
+# Verify output directory exists
+ls -la out/ | head -20
+# Should show: index.html, _next/, etc.
+Step 8: Upload Frontend to S3 Locally (test before GitHub automation)
+cd /Users/yitzchak/Documents/dev/careervp/src/frontend
+
+# Sync static assets (immutable cache)
+aws s3 sync out/ s3://$S3_BUCKET_NAME \
+  --delete \
+  --cache-control "public, max-age=31536000, immutable" \
+  --exclude "*.html" \
+  --exclude "*.json" \
+  --region us-east-1
+
+# Sync HTML/JSON (no cache)
+aws s3 sync out/ s3://$S3_BUCKET_NAME \
+  --delete \
+  --cache-control "no-cache" \
+  --include "*.html" \
+  --include "*.json" \
+  --region us-east-1
+
+# Verify upload
+aws s3 ls s3://$S3_BUCKET_NAME --recursive | head -20
+Step 9: Invalidate CloudFront Cache
+aws cloudfront create-invalidation \
+  --distribution-id $CLOUDFRONT_DISTRIBUTION_ID \
+  --paths "/*" \
+  --region us-east-1
+
+# Wait for invalidation (usually 1-2 min)
+aws cloudfront get-invalidation \
+  --distribution-id $CLOUDFRONT_DISTRIBUTION_ID \
+  --id <invalidation-id-from-previous-command> \
+  --region us-east-1 \
+  --query 'Invalidation.Status'
+Step 10: Test Frontend Access
+# Access the CloudFront distribution
+CLOUDFRONT_URL=$(aws cloudformation describe-stacks \
+  --stack-name CareerVpFrontend-Dev \
+  --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontUrl`].OutputValue' \
+  --region us-east-1 \
+  --output text)
+
+echo "Frontend URL: https://$CLOUDFRONT_URL"
+
+# Or access via custom domain (if Route53 is set up)
+echo "Custom domain URL: https://dev.careervp.com"
+Open browser and test:
+
+✅ Home page loads
+✅ Login redirects to Cognito
+✅ Dashboard shows applications (after login)
+✅ Artifact pages load
+Step 11: Set GitHub Secrets (for automated CI/CD)
+Go to GitHub repo → Settings → Secrets and Variables → Actions → New repository secret
+
+Add these 6 secrets:
+
+Secret Name	Value
+NEXT_PUBLIC_API_URL	https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod
+NEXT_PUBLIC_COGNITO_USER_POOL_ID	us-east-1_WiHMRqLpe
+NEXT_PUBLIC_COGNITO_CLIENT_ID	7blipbarsisbctqh6hlsj46sqa
+S3_BUCKET_NAME	(from Step 5) careervp-frontend-dev
+CLOUDFRONT_DISTRIBUTION_ID	(from Step 5) E1A2B3C4D5E6F7
+AWS_DEPLOY_ROLE_ARN	(from Step 6) arn:aws:iam::[account]:role/[role-name]
+Via GitHub CLI (faster):
+
+gh secret set NEXT_PUBLIC_API_URL -b "https://4xe2tdq8z6.execute-api.us-east-1.amazonaws.com/prod"
+gh secret set NEXT_PUBLIC_COGNITO_USER_POOL_ID -b "us-east-1_WiHMRqLpe"
+gh secret set NEXT_PUBLIC_COGNITO_CLIENT_ID -b "7blipbarsisbctqh6hlsj46sqa"
+gh secret set S3_BUCKET_NAME -b "$S3_BUCKET_NAME"
+gh secret set CLOUDFRONT_DISTRIBUTION_ID -b "$CLOUDFRONT_DISTRIBUTION_ID"
+gh secret set AWS_DEPLOY_ROLE_ARN -b "$AWS_DEPLOY_ROLE_ARN"
+Step 12: Test GitHub Automation (optional)
+Push a small change to trigger the workflow:
+
+cd /Users/yitzchak/Documents/dev/careervp
+
+# Make a trivial change
+echo "# Test deployment" >> src/frontend/README.md
+
+# Commit and push
+git add src/frontend/README.md
+git commit -m "test: trigger frontend deploy workflow"
+git push origin main
+
+# Watch the workflow
+gh run list -L 1
+gh run view <run-id> --log
+Troubleshooting Checklist
+Issue	Fix
+CDK synth fails: "cannot find module"	cd infra && uv sync
+Deploy fails: "AccessDenied"	Check AWS credentials (aws sts get-caller-identity)
+Deploy fails: "InvalidChangeSetStatusException"	Wait 30s, retry (CloudFormation lock)
+S3 upload fails: "NoSuchBucket"	Verify S3_BUCKET_NAME is correct, bucket exists
+CloudFront shows 403 Forbidden	Check Origin Access Control (OAC) in CloudFront settings
+Custom domain doesn't resolve	Route53 record not created — check hosted zone
+Frontend shows blank page	Check browser console for API errors, verify NEXT_PUBLIC_API_URL
+Verification Commands (run after each step)
+# Verify stack created
+aws cloudformation describe-stacks --stack-name CareerVpFrontend-Dev
+
+# Verify S3 bucket
+aws s3 ls s3://$S3_BUCKET_NAME
+
+# Verify CloudFront
+aws cloudfront get-distribution-config --id $CLOUDFRONT_DISTRIBUTION_ID | head -50
+
+# Verify frontend files uploaded
+aws s3api head-object --bucket $S3_BUCKET_NAME --key index.html
+Final Summary
+# All-in-one checklist:
+echo "✅ Step 1: app.py updated with FrontendStack"
+echo "✅ Step 2: AWS credentials verified"
+echo "✅ Step 3: CDK synth successful"
+echo "✅ Step 4: Frontend stack deployed to AWS"
+echo "✅ Step 5: Got S3 bucket + CloudFront ID"
+echo "✅ Step 6: Got AWS role ARN"
+echo "✅ Step 7: Frontend built locally"
+echo "✅ Step 8: Frontend uploaded to S3"
+echo "✅ Step 9: CloudFront cache invalidated"
+echo "✅ Step 10: Frontend accessible at https://dev.careervp.com (or CloudFront URL)"
+echo "✅ Step 11: GitHub secrets configured"
+echo "✅ Step 12: Future pushes to src/frontend/** auto-deploy via GitHub Actions"
+(aws-lambda-handler-cookbook) yitzchak@Yitzchaks-MacBook-Pro infra % ENVIRONMENT=dev npx cdk synth --quiet
+
+warning: VIRTUAL_ENV=/Users/yitzchak/Documents/dev/careervp/.venv does not match the project environment path .venv and will be ignored; use --active to target the active environment instead
+warning: VIRTUAL_ENV=/Users/yitzchak/Documents/dev/careervp/.venv does not match the project environment path .venv and will be ignored; use --active to target the active environment instead
+[Info at /CareerVpCrudDev] Number of resources: 437 is approaching allowed maximum of 500
+[Warning at /CareerVpCrudDev/CareerVpCrudDev-Cognito/UserPool/Resource] AwsSolutions-COG2: The Cognito user pool does not require MFA. Multi-factor authentication (MFA) increases security for the application by adding another authentication method, and not relying solely on user name and password.
+
+[Error at /CareerVpFrontend-Dev] Found zones: [] for dns:careervp.com, privateZone:undefined, vpcId:undefined, but wanted exactly 1 zone
+*****************************************************
+*** Newer version of CDK is available [2.1119.0
+] ***
+*** Upgrade recommended (npm install -g aws-cdk)  ***
+*****************************************************
+Found errors
+(aws-lambda-handler-cookbook) yitzchak@Yitzchaks-MacBook-Pro infra %
+
+The user is hitting an error during CDK synth. The issue is that the FrontendStack is trying to look up the Route53 hosted zone `careervp.com` but it doesn't exist in the account.
+
+Looking at the error:
+```
+[Error at /CareerVpFrontend-Dev] Found zones: [] for dns:careervp.com, privateZone:undefined, vpcId:undefined, but wanted exactly 1 zone
+```
+
+This happens in `frontend_stack.py` at the hosted zone lookup. Looking back at the code I read:
+
+```python
+hosted_zone_name = os.environ.get("HOSTED_ZONE_NAME", "careervp.com")
+self.record: route53.ARecord | None = None
+try:
+    hosted_zone = route53.HostedZone.from_lookup(
+        self,
+        "HostedZone",
+        domain_name=hosted_zone_name,
+    )
+```
+
+The issue is that `from_lookup` fails at synth time when the hosted zone doesn't exist. The code has a try/except that should catch this and continue, but apparently the error is being raised before the except catches it, or it's a synth-time vs deploy-time issue.
+
+Actually, looking more carefully, Route53 lookups happen at synth time in CDK, and if the hosted zone doesn't exist, it throws an error. The try/except is there but it seems the error is still happening.
+
+The fix is to:
+1. Either skip the Route53 lookup for dev (since the custom domain might not be needed for testing)
+2. Or create the Route53 hosted zone first
+3. Or set an environment variable to disable DNS setup for dev
+
+The easiest fix is to skip the hosted zone lookup for dev. We can do this by:
+- Setting HOSTED_ZONE_NAME to empty/null for dev
+
+
+- Or modifying the frontend_stack.py to be more lenient with the exception handling, since the try/except might not be catching the right exception type that `from_lookup` raises when the zone isn't found. For dev environments, I could skip DNS setup entirely by checking the environment and conditionally skipping the Route53 record creation.
+
+The most practical approach is to set `HOSTED_ZONE_NAME` to an empty string for dev, which would bypass the hosted zone lookup. Alternatively, I could add a check in frontend_stack.py to verify the hosted zone exists before attempting to reference it, or just disable Route53 for dev altogether since it's not critical for local development.
+The error is that Route53 hosted zone careervp.com doesn't exist. For dev, you can skip DNS setup. Fix:
+
+cd /Users/yitzchak/Documents/dev/careervp/infra
+
+# Synth again with HOSTED_ZONE_NAME disabled for dev
+ENVIRONMENT=dev HOSTED_ZONE_NAME="" npx cdk synth --quiet
+This should succeed. Then deploy:
+
+ENVIRONMENT=dev HOSTED_ZONE_NAME="" npx cdk deploy CareerVpFrontend-Dev \
+  --require-approval never \
+  --no-rollback
+Why this works: The frontend_stack.py tries to look up careervp.com in Route53 to create DNS records. Setting HOSTED_ZONE_NAME="" skips this entirely. You'll get a CloudFront .cloudfront.net URL instead of dev.careervp.com, which works fine for testing.
+
+To use the custom domain later: Create the Route53 hosted zone first, then omit HOSTED_ZONE_NAME="".
+
+After deploy succeeds, continue with Step 5 to get the S3 bucket and CloudFront distribution IDs.
+
+
+Outputs:
+CareerVpFrontend-Dev.BucketName = careervp-frontend-dev
+CareerVpFrontend-Dev.CloudFrontUrl = d2a5f5yepvuge0.cloudfront.net
+CareerVpFrontend-Dev.DistributionId = E3EWK5MNP9G7JV
+Stack ARN:
+arn:aws:cloudformation:us-east-1:788159322332:stack/CareerVpFrontend-Dev/ec2b2520-4083-11f1-941f-0afff88f1a87
+
+        "NameServers": [
+            "ns-590.awsdns-09.net",
+            "ns-2041.awsdns-63.co.uk",
+            "ns-1489.awsdns-58.org",
+            "ns-7.awsdns-00.com"
+        ]
+
+aws cloudformation describe-stacks \
+  --stack-name CareerVpFrontend-Dev \
+  --query 'Stacks[0].Outputs' \
+  --region us-east-1
+[
+    {
+        "OutputKey": "CloudFrontUrl",
+        "OutputValue": "d2a5f5yepvuge0.cloudfront.net"
+    },
+    {
+        "OutputKey": "BucketName",
+        "OutputValue": "careervp-frontend-dev"
+    },
+    {
+        "OutputKey": "DistributionId",
+        "OutputValue": "E3EWK5MNP9G7JV"
+    }
+]
+
+Verify DNS worked (24-48 hours later):
+
+# Check if dev.careervp.com is resolving to Route53 nameservers
+dig NS dev.careervp.com
+# Should show the 4 ns-*.awsdns-* entries
+
+# Check if stage.careervp.com is resolving
+dig NS stage.careervp.com
