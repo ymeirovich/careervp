@@ -48,3 +48,6 @@
 | `src/backend/careervp/handlers/cv_upload_handler.py` | CV upload handler stub                       |
 | `infra/careervp/service_stack.py`                    | Added S3 NAG suppression for dev             |
 | `src/backend/tests/unit/test_cv_parser.py`           | Unit tests for clean_text/detect_language/LLM parsing |
+| `src/frontend/canvas-app/App.jsx`                    | Change Base CV modal upload/choice behavior   |
+| `src/frontend/tests/ui/unit/ChangeBaseCVModal.test.tsx` | Modal spec verification                      |
+| `src/frontend/tests/ui/unit/NewApplicationForm.test.tsx` | Base CV modal consumer verification         |

@@ -2511,6 +2511,7 @@ Environment Variables:
 - [ ] CV tailoring review
 - [ ] Cover letter editor
 - [ ] Download buttons
+- [x] Change Base CV modal with upload-only and choice modes
 
 ### Task 18.5: Gap Analysis UI
 
