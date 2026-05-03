@@ -7,7 +7,7 @@
  * Default export: App
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 
 // ---------------------------------------------------------------------------
 // Demo seed data
@@ -517,6 +517,7 @@ function NewApplicationForm({ onSubmit, onCancel }) {
 // ---------------------------------------------------------------------------
 export function ChangeBaseCVModal({ isOpen, onClose, showChoices = false, onSelect }) {
   const [file, setFile] = useState(null);
+  const fileInputRef = useRef(null);
 
   if (!isOpen) return null;
 
@@ -567,21 +568,36 @@ export function ChangeBaseCVModal({ isOpen, onClose, showChoices = false, onSele
             <div style={S.formGroup}>
               <label style={S.label} htmlFor="cv-file-upload">CV File</label>
               <input
+                ref={fileInputRef}
                 id="cv-file-upload"
                 type="file"
                 accept=".pdf,.docx,.doc"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                style={{ display: 'none' }}
               />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  style={{ ...S.btn, ...S.secondary }}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Choose File
+                </button>
+                <span style={{ color: '#64748b', fontSize: '14px' }}>
+                  {file ? file.name : 'No file chosen'}
+                </span>
+              </div>
             </div>
             <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
               <button
+                type="button"
                 style={{ ...S.btn, ...S.primary, opacity: file ? 1 : 0.5 }}
                 disabled={!file}
                 onClick={handleUpload}
               >
                 Upload
               </button>
-              <button style={{ ...S.btn, ...S.secondary }} onClick={onClose}>
+              <button type="button" style={{ ...S.btn, ...S.secondary }} onClick={onClose}>
                 Cancel
               </button>
             </div>
