@@ -1,0 +1,111 @@
+spec_id: BASE_CV
+screen: BaseCVsTable
+description: >
+  CV Center sub-screen listing uploaded base CVs.
+  Matches design screenshot: "CV Center - Base CVs".
+component_path: src/frontend/canvas-app/App.jsx
+test_file: src/frontend/tests/ui/unit/BaseCVsTable.test.tsx
+switch_case: base-cvs
+
+design_requirements:
+  header:
+    title: "Base CVs"
+    upload_button: "+ Upload CV"
+  table_columns:
+    - File Name
+    - Upload Date
+    - Used In (count of applications using this CV)
+    - Actions (Set as Default / Delete)
+  empty_state:
+    text: "No base CVs uploaded yet"
+    cta: "Upload Your First CV"
+  row_actions:
+    set_default:
+      label: "Set as Default"
+      disabled_when: row is already the default
+    delete:
+      icon: trash icon
+      behavior: removes row after confirmation
+  default_indicator:
+    label: "Default"
+    badge: shown on the default CV row
+
+tests:
+  - id: BASE_CV_01
+    name: "renders page title 'Base CVs'"
+    arrange: >
+      Render app navigated to base-cvs screen.
+    act: >
+      Query heading element.
+    assert: >
+      Heading with text "Base CVs" is visible.
+    expected_failure: >
+      base-cvs switch case may not exist or heading may be wrong.
+
+  - id: BASE_CV_02
+    name: "renders Upload CV button"
+    arrange: >
+      Render app navigated to base-cvs screen.
+    act: >
+      Query for button with text matching "Upload CV" or "+ Upload CV".
+    assert: >
+      Upload CV button is present and clickable.
+    expected_failure: >
+      Upload button may not be rendered.
+
+  - id: BASE_CV_03
+    name: "renders all 4 table column headers"
+    arrange: >
+      Render app navigated to base-cvs screen with at least one CV entry.
+    act: >
+      Query table header cells.
+    assert: >
+      Column headers "File Name", "Upload Date", "Used In", "Actions" are all present.
+    expected_failure: >
+      Table may be absent or have wrong column structure.
+
+  - id: BASE_CV_04
+    name: "shows empty state when no CVs exist"
+    arrange: >
+      Render app navigated to base-cvs screen with empty CV list.
+    act: >
+      Query for empty state elements.
+    assert: >
+      Text "No base CVs uploaded yet" is visible.
+      "Upload Your First CV" CTA is rendered.
+    expected_failure: >
+      Empty state UI is not implemented.
+
+  - id: BASE_CV_05
+    name: "shows Default badge on the default CV row"
+    arrange: >
+      Render app navigated to base-cvs screen with one CV marked as default.
+    act: >
+      Query for Default badge element.
+    assert: >
+      A "Default" badge is visible on the default CV row.
+    expected_failure: >
+      Default badge indicator is not implemented.
+
+  - id: BASE_CV_06
+    name: "Set as Default button is disabled on the already-default CV"
+    arrange: >
+      Render app navigated to base-cvs screen with one CV marked as default.
+    act: >
+      Find the "Set as Default" button within the default CV row.
+    assert: >
+      "Set as Default" button is disabled on the already-default row.
+    expected_failure: >
+      Button disabled state on default row is not implemented.
+
+  - id: BASE_CV_07
+    name: "Set as Default calls handler and updates default indicator"
+    arrange: >
+      Render app navigated to base-cvs screen with two CVs, neither is default.
+    act: >
+      Click "Set as Default" on the first CV row.
+    assert: >
+      "Default" badge appears on the first CV row.
+      "Set as Default" on first row becomes disabled.
+    expected_failure: >
+      Set as Default interaction is not implemented.

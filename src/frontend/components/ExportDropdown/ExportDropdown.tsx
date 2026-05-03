@@ -57,7 +57,7 @@ export function ExportDropdown({ jobId, moduleType, artifactId }: ExportDropdown
       <button
         onClick={() => setOpen((o) => !o)}
         disabled={isLoading}
-        className="rounded-md border border-border-default px-3 py-2 text-sm text-text-primary hover:bg-bg-subtle disabled:opacity-50 flex items-center gap-1.5"
+        className="rounded-md border border-border-default px-3 py-2 text-sm text-text-primary hover:bg-surface-subtle disabled:opacity-50 flex items-center gap-1.5"
       >
         {isLoading ? 'Exporting…' : 'Export'}
         <span className="text-xs">{open ? '▲' : '▼'}</span>
@@ -69,7 +69,7 @@ export function ExportDropdown({ jobId, moduleType, artifactId }: ExportDropdown
             <button
               key={format}
               onClick={() => void handleExport(format)}
-              className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-subtle first:rounded-t-md last:rounded-b-md"
+              className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-surface-subtle first:rounded-t-md last:rounded-b-md"
               title="Export coming soon"
             >
               {label}

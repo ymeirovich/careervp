@@ -66,7 +66,7 @@ function CompanyResearchContent({ jobId }: { jobId: string }) {
         </div>
         <button
           onClick={() => router.push(`/applications/${jobId}`)}
-          className="rounded-md border border-border-default px-3 py-2 text-sm text-text-primary hover:bg-bg-subtle"
+          className="rounded-md border border-border-default px-3 py-2 text-sm text-text-primary hover:bg-surface-subtle"
         >
           ← Back to Hub
         </button>
@@ -86,7 +86,7 @@ function CompanyResearchContent({ jobId }: { jobId: string }) {
           <button
             onClick={() => void handleTrigger()}
             disabled={triggering}
-            className="rounded-md bg-brand-primary px-4 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
+            className="rounded-md bg-primary-action px-4 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
             data-testid="research-company-btn"
           >
             {triggering ? 'Researching…' : 'Research this company'}
@@ -119,7 +119,7 @@ function CompanyResearchContent({ jobId }: { jobId: string }) {
               <ul className="flex flex-col gap-1">
                 {research.values.map((v, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-text-primary">
-                    <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-brand-primary" />
+                    <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-primary-action" />
                     {v}
                   </li>
                 ))}
@@ -140,7 +140,7 @@ function CompanyResearchContent({ jobId }: { jobId: string }) {
               <ul className="flex flex-col gap-1">
                 {research.products.map((p, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-text-primary">
-                    <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-brand-primary" />
+                    <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-primary-action" />
                     {p}
                   </li>
                 ))}

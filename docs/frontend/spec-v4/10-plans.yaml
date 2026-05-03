@@ -1,0 +1,68 @@
+spec_id: PLANS
+screen: Plans
+description: >
+  Subscription plan selection screen showing available tiers.
+  Matches design screenshot: "Settings - Plans".
+component_path: src/frontend/canvas-app/App.jsx
+test_file: src/frontend/tests/ui/unit/Plans.test.tsx
+switch_case: plans
+
+design_requirements:
+  header:
+    title: "Plans"
+  plan_cards:
+    - id: monthly
+      name: "Monthly Pro"
+      price: "$20/month"
+      features:
+        - Unlimited applications
+        - All AI modules
+        - English & Hebrew
+      cta: "Get Started" (or "Current Plan" if active)
+    - id: annual
+      name: "Annual Pro"
+      price: "$192/year ($16/mo)"
+      badge: "Save 20%"
+      features:
+        - Same as monthly
+      cta: "Get Started" (or "Current Plan" if active)
+  current_plan_indicator:
+    highlight: current plan card has distinct border or badge
+  billing_link:
+    label: "Manage Billing"
+    navigates_to: billing screen
+
+tests:
+  - id: PLANS_01
+    name: "renders exactly two plan cards"
+    arrange: >
+      Render app navigated to plans screen.
+    act: >
+      Query all plan card containers.
+    assert: >
+      Exactly 2 plan cards are rendered (Monthly Pro and Annual Pro).
+    expected_failure: >
+      plans switch case may not exist or plan cards are not rendered.
+
+  - id: PLANS_02
+    name: "Annual plan card shows 'Save 20%' badge"
+    arrange: >
+      Render app navigated to plans screen.
+    act: >
+      Query Annual Pro plan card for a badge element.
+    assert: >
+      Badge with text "Save 20%" is visible on the Annual Pro card.
+    expected_failure: >
+      Annual plan savings badge is not rendered.
+
+  - id: PLANS_03
+    name: "current plan card shows 'Current Plan' CTA instead of 'Get Started'"
+    arrange: >
+      Render app navigated to plans screen with active Monthly Pro subscription.
+    act: >
+      Query CTA buttons on both plan cards.
+    assert: >
+      Monthly Pro card shows "Current Plan" button (disabled or highlighted).
+      Annual Pro card shows "Get Started" button.
+    expected_failure: >
+      Plans screen does not differentiate current plan from available plans.

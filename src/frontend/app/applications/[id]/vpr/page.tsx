@@ -26,7 +26,7 @@ const BODY = 'text-sm text-text-primary leading-relaxed';
 const MUTED = 'text-sm text-text-muted leading-relaxed';
 
 function FitScoreBadge({ score }: { score: number }) {
-  const color = score >= 80 ? 'bg-state-success' : score >= 60 ? 'bg-state-warning' : 'bg-state-error';
+  const color = score >= 80 ? 'bg-state-active' : score >= 60 ? 'bg-state-warning' : 'bg-state-error';
   return (
     <span
       data-testid="vpr-fit-score"
@@ -41,9 +41,9 @@ function SeverityBadge({ severity }: { severity: string }) {
   const map: Record<string, string> = {
     high: 'bg-state-error/10 text-state-error',
     medium: 'bg-state-warning/10 text-state-warning',
-    low: 'bg-state-success/10 text-state-success',
+    low: 'bg-state-active/10 text-state-active',
   };
-  const cls = map[severity.toLowerCase()] ?? 'bg-bg-subtle text-text-muted';
+  const cls = map[severity.toLowerCase()] ?? 'bg-surface-subtle text-text-muted';
   return (
     <span className={`inline-flex px-2 py-0.5 rounded text-xs font-semibold ${cls}`}>
       {severity}
@@ -53,12 +53,12 @@ function SeverityBadge({ severity }: { severity: string }) {
 
 function ApproachBadge({ approach }: { approach: string }) {
   const labels: Record<string, { label: string; className: string }> = {
-    aggressive_apply: { label: 'Apply Aggressively', className: 'bg-state-success text-white' },
+    aggressive_apply: { label: 'Apply Aggressively', className: 'bg-state-active text-white' },
     apply_with_customization: { label: 'Apply with Customization', className: 'bg-state-warning text-white' },
     apply_cautiously: { label: 'Apply Cautiously', className: 'bg-orange-500 text-white' },
     do_not_apply: { label: 'Do Not Apply', className: 'bg-state-error text-white' },
   };
-  const { label, className } = labels[approach] ?? { label: approach, className: 'bg-bg-subtle text-text-muted' };
+  const { label, className } = labels[approach] ?? { label: approach, className: 'bg-surface-subtle text-text-muted' };
   return (
     <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold ${className}`}>
       {label}
@@ -67,8 +67,8 @@ function ApproachBadge({ approach }: { approach: string }) {
 }
 
 function AlignmentBar({ score }: { score: number }) {
-  const colorClass = score >= 85 ? 'bg-state-success' : score >= 70 ? 'bg-state-warning' : 'bg-orange-500';
-  const textClass = score >= 85 ? 'text-state-success' : score >= 70 ? 'text-state-warning' : 'text-orange-500';
+  const colorClass = score >= 85 ? 'bg-state-active' : score >= 70 ? 'bg-state-warning' : 'bg-orange-500';
+  const textClass = score >= 85 ? 'text-state-active' : score >= 70 ? 'text-state-warning' : 'text-orange-500';
   return (
     <div className="flex items-center gap-2 shrink-0">
       <div className="w-20 h-1.5 bg-border-default rounded-full overflow-hidden">
@@ -97,10 +97,10 @@ function ExecSummarySection({ data }: { data: VPRFullData['executiveSummary'] })
           <p className={LABEL}>Top Strengths</p>
           <div className="flex flex-col gap-3">
             {data.topThreeStrengths.map((s: VPRFullStrength, i: number) => (
-              <div key={i} className="flex flex-col gap-1 border-l-2 border-state-success pl-3">
+              <div key={i} className="flex flex-col gap-1 border-l-2 border-state-active pl-3">
                 <p className="text-sm font-semibold text-text-primary">{s.strength}</p>
                 <p className={MUTED}>{s.evidence}</p>
-                <p className="text-xs text-state-success">{s.relevanceToRole}</p>
+                <p className="text-xs text-state-active">{s.relevanceToRole}</p>
               </div>
             ))}
           </div>
@@ -134,7 +134,7 @@ function AppStrategySection({ data }: { data: VPRFullData['applicationStrategy']
       </div>
       <div className="flex flex-col gap-1">
         <p className={LABEL}>CV Opening Line</p>
-        <div className="rounded-md bg-bg-subtle border border-border-default p-3">
+        <div className="rounded-md bg-surface-subtle border border-border-default p-3">
           <p className={BODY}>{data.cvLeadDifferentiator}</p>
         </div>
       </div>
@@ -149,7 +149,7 @@ function AppStrategySection({ data }: { data: VPRFullData['applicationStrategy']
         </div>
         <div className="flex flex-wrap gap-1.5">
           {data.atsKeywords.secondary.map((kw: string) => (
-            <span key={kw} className="px-2 py-0.5 rounded-full text-xs font-medium bg-bg-subtle text-text-muted">
+            <span key={kw} className="px-2 py-0.5 rounded-full text-xs font-medium bg-surface-subtle text-text-muted">
               {kw}
             </span>
           ))}
@@ -173,7 +173,7 @@ function RoleAlignmentSection({ data }: { data: VPRFullData['roleAlignment'] }) 
             <ul className="flex flex-col gap-0.5 pl-3">
               {r.candidateEvidence.map((e: string, j: number) => (
                 <li key={j} className="flex items-start gap-1.5 text-sm text-text-muted">
-                  <span className="mt-1.5 shrink-0 w-1 h-1 rounded-full bg-brand-primary" />
+                  <span className="mt-1.5 shrink-0 w-1 h-1 rounded-full bg-primary-action" />
                   {e}
                 </li>
               ))}
@@ -203,7 +203,7 @@ function ExperienceSection({ data }: { data: VPRFullData['experienceMapping'] })
             <div className="flex flex-col gap-1">
               {exp.keyAchievements.map((a, j) => (
                 <div key={j} className="flex items-start gap-2 text-sm">
-                  <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-brand-primary" />
+                  <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-primary-action" />
                   <span className="text-text-primary">{a.achievement}</span>
                   <span className="text-text-muted shrink-0">— {a.metric}</span>
                 </div>
@@ -227,8 +227,8 @@ function ObjectionsSection({ data }: { data: VPRFullData['concernsAndMitigations
               <p className="text-sm font-semibold text-text-primary flex-1">{o.objection}</p>
               <span className="text-xs text-text-muted shrink-0 capitalize">{o.likelihood}</span>
             </div>
-            <div className="rounded-md bg-state-success/5 border border-state-success/30 p-3">
-              <p className="text-xs font-semibold text-state-success mb-1 uppercase tracking-wide">Response Script</p>
+            <div className="rounded-md bg-state-active/5 border border-state-active/30 p-3">
+              <p className="text-xs font-semibold text-state-active mb-1 uppercase tracking-wide">Response Script</p>
               <p className={BODY}>{o.mitigation.messaging}</p>
             </div>
             <p className="text-xs text-text-muted">Address in: {o.whereToAddress.join(', ')}</p>
@@ -247,7 +247,7 @@ function GapsSection({ data }: { data: VPRFullData['evidenceGaps'] }) {
       <div className="flex flex-col gap-3">
         {data.priorityGapsToAddress.map((g, i) => (
           <div key={i} className="flex gap-3">
-            <span className="shrink-0 w-6 h-6 rounded-full bg-brand-primary text-white text-xs font-bold flex items-center justify-center mt-0.5">
+            <span className="shrink-0 w-6 h-6 rounded-full bg-primary-action text-white text-xs font-bold flex items-center justify-center mt-0.5">
               {g.priority}
             </span>
             <div className="flex flex-col gap-1">
@@ -345,7 +345,7 @@ function VPRContent({ jobId }: { jobId: string }) {
   const backButton = (
     <button
       onClick={() => router.push(`/applications/${jobId}`)}
-      className="shrink-0 rounded-md border border-border-default px-3 py-2 text-sm text-text-primary hover:bg-bg-subtle"
+      className="shrink-0 rounded-md border border-border-default px-3 py-2 text-sm text-text-primary hover:bg-surface-subtle"
     >
       ← Back to Hub
     </button>
@@ -422,7 +422,7 @@ function VPRContent({ jobId }: { jobId: string }) {
               <ul className="flex flex-col gap-2 pl-1">
                 {(vpr?.result?.differentiators ?? []).map((d, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-text-primary">
-                    <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-brand-primary" />
+                    <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-primary-action" />
                     {d.text}
                   </li>
                 ))}

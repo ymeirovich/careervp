@@ -1,0 +1,99 @@
+spec_id: MODAL
+screen: ChangeBaseCVModal
+description: >
+  Overlay modal for selecting or uploading a base CV.
+  Has two display modes: showChoices=false (upload only) and showChoices=true (select + upload).
+  Matches design screenshot: "Change Base CV Modal".
+component_path: src/frontend/canvas-app/App.jsx
+test_file: src/frontend/tests/ui/unit/ChangeBaseCVModal.test.tsx
+
+design_requirements:
+  modes:
+    upload_only:
+      title: "Upload Base CV"
+      content:
+        - file chooser input with "Choose File" button
+        - "Upload" submit button (disabled until file selected)
+    with_choices:
+      title: "Choose Base CV"
+      content:
+        - "Select Uploaded CV" button
+        - "Select Generated CV" button
+        - OR divider
+        - file chooser input with "Choose File" button
+        - "Upload" submit button (disabled until file selected)
+  close_button: X icon in top-right corner
+  backdrop: dark semi-transparent overlay
+
+tests:
+  - id: MODAL_01
+    name: "does not render when isOpen is false"
+    arrange: >
+      Render ChangeBaseCVModal with isOpen=false, showChoices=false.
+    act: >
+      Query DOM for modal container.
+    assert: >
+      No modal container is present in the DOM (returns null).
+    expected_failure: >
+      Modal may render regardless of isOpen prop if guard is missing.
+
+  - id: MODAL_02
+    name: "renders upload-only mode with title 'Upload Base CV'"
+    arrange: >
+      Render ChangeBaseCVModal with isOpen=true, showChoices=false.
+    act: >
+      Query DOM for modal heading.
+    assert: >
+      Heading with text "Upload Base CV" is visible.
+      "Select Uploaded CV" and "Select Generated CV" buttons are NOT present.
+    expected_failure: >
+      Modal may not exist yet or title text may be wrong.
+
+  - id: MODAL_03
+    name: "renders choice mode with 'Choose Base CV' title and two selection buttons"
+    arrange: >
+      Render ChangeBaseCVModal with isOpen=true, showChoices=true.
+    act: >
+      Query DOM for heading and selection buttons.
+    assert: >
+      Heading text is "Choose Base CV".
+      "Select Uploaded CV" button is present.
+      "Select Generated CV" button is present.
+      OR divider is visible.
+    expected_failure: >
+      showChoices=true branch may not be implemented in current App.jsx.
+
+  - id: MODAL_04
+    name: "Upload button is disabled until a file is selected"
+    arrange: >
+      Render ChangeBaseCVModal with isOpen=true, showChoices=false.
+    act: >
+      Query "Upload" button before any file is chosen.
+    assert: >
+      "Upload" button has disabled attribute.
+    expected_failure: >
+      Upload button may not track file selection state.
+
+  - id: MODAL_05
+    name: "Upload button enables after file is selected via input"
+    arrange: >
+      Render ChangeBaseCVModal with isOpen=true, showChoices=false.
+    act: >
+      Simulate file selection on the hidden file input (File: "cv.pdf").
+      Query "Upload" button state.
+    assert: >
+      "Upload" button is no longer disabled.
+      Filename "cv.pdf" appears in the display area.
+    expected_failure: >
+      File input onChange handler may not update state to enable button.
+
+  - id: MODAL_06
+    name: "close button (X) calls onClose callback"
+    arrange: >
+      Render ChangeBaseCVModal with isOpen=true, onClose spy function.
+    act: >
+      Click the X button in the top-right corner.
+    assert: >
+      onClose spy has been called exactly once.
+    expected_failure: >
+      Close button may not exist or may not call onClose.

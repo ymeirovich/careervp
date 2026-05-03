@@ -7,6 +7,7 @@ export interface UserProfile {
   email: string;
   creditsUsed?: number;
   creditsTotal?: number;
+  isUnlimited?: boolean;
 }
 
 export interface AppShellProps {
@@ -23,6 +24,7 @@ export function AppShell({ user, children }: AppShellProps) {
           userName={user.name}
           creditsUsed={user.creditsUsed ?? 0}
           creditsTotal={user.creditsTotal ?? 3}
+          isUnlimited={user.isUnlimited ?? false}
         />
         <main className="flex-1 overflow-y-auto p-6">
           {children}

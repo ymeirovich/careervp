@@ -1,0 +1,69 @@
+spec_id: APP_TABLE
+screen: ApplicationsTable
+description: >
+  The main dashboard screen listing all saved job applications in a data table.
+  Matches design screenshot: "Dashboard - Applications List".
+component_path: src/frontend/canvas-app/App.jsx
+test_file: src/frontend/tests/ui/unit/ApplicationsTable.test.tsx
+switch_case: dashboard
+
+design_requirements:
+  columns:
+    - Company
+    - Position
+    - Status
+    - Date Applied
+    - Match Score
+    - Actions (View Hub / Delete)
+  empty_state:
+    heading: "No applications yet"
+    cta: "Add Your First Application"
+  row_actions:
+    - "View Hub" button navigates to hub screen with application context
+    - "Delete" icon removes row (with confirmation)
+  header:
+    title: "My Applications"
+    add_button: "+ New Application"
+
+tests:
+  - id: APP_TABLE_01
+    name: "renders all 6 required column headers"
+    arrange: >
+      Render the app in dashboard state with mock applications data containing
+      at least one entry. Firebase mocks in place.
+    act: >
+      Inspect the rendered table header row.
+    assert: >
+      All 6 column headers are present: "Company", "Position", "Status",
+      "Date Applied", "Match Score", "Actions".
+    expected_failure: >
+      Current App.jsx renders only Company and Position columns (2 of 6).
+      Status, Date Applied, Match Score, and Actions columns are absent.
+
+  - id: APP_TABLE_02
+    name: "shows empty state with CTA when applications list is empty"
+    arrange: >
+      Render app in dashboard state with empty applications array.
+      Firebase auth mock returns authenticated user.
+    act: >
+      Query DOM for empty-state elements.
+    assert: >
+      Empty state heading "No applications yet" is visible.
+      "Add Your First Application" CTA button is rendered and clickable.
+    expected_failure: >
+      Current App.jsx shows an empty table with no empty-state UI;
+      the heading and CTA are not rendered when data is empty.
+
+  - id: APP_TABLE_03
+    name: "View Hub button navigates to hub screen with correct application id"
+    arrange: >
+      Render app in dashboard state with at least one application in the list.
+      Application has id "app-123".
+    act: >
+      Click the "View Hub" button on the first application row.
+    assert: >
+      The screen transitions to the hub view.
+      The hub screen renders with context showing application id "app-123".
+    expected_failure: >
+      Current App.jsx table rows do not render a "View Hub" action button;
+      clicking any row does nothing or there is no clickable target.

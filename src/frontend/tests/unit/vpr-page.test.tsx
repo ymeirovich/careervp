@@ -2,6 +2,13 @@ import React, { Suspense } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 
+const apiMocks = vi.hoisted(() => ({
+  getApplication: vi.fn(),
+  getJob: vi.fn(),
+  getVPR: vi.fn(),
+  exportArtifact: vi.fn(),
+}));
+
 // ─── Mock next/navigation ────────────────────────────────────────────────────
 
 const mockReplace = vi.fn();
@@ -16,15 +23,8 @@ vi.mock('next/navigation', () => ({
 // ─── Mock api ────────────────────────────────────────────────────────────────
 
 vi.mock('../../api/methods', () => ({
-  api: {
-    getApplication: vi.fn(),
-    getJob: vi.fn(),
-    getVPR: vi.fn(),
-    exportArtifact: vi.fn(),
-  },
+  api: apiMocks,
 }));
-
-const { api } = await import('../../api/methods');
 
 // ─── Helper: wrap in Suspense so use(params) can suspend ─────────────────────
 
@@ -99,9 +99,9 @@ describe('VPR page', () => {
   });
 
   it('renders executive summary section from full VPR data', async () => {
-    (api.getApplication as ReturnType<typeof vi.fn>).mockResolvedValue(HUB_WITH_VPR);
-    (api.getJob as ReturnType<typeof vi.fn>).mockResolvedValue(JOB_DETAIL);
-    (api.getVPR as ReturnType<typeof vi.fn>).mockResolvedValue(VPR_STATUS_WITH_URL);
+    apiMocks.getApplication.mockResolvedValue(HUB_WITH_VPR);
+    apiMocks.getJob.mockResolvedValue(JOB_DETAIL);
+    apiMocks.getVPR.mockResolvedValue(VPR_STATUS_WITH_URL);
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => FULL_VPR_DATA,
@@ -118,9 +118,9 @@ describe('VPR page', () => {
   });
 
   it('shows fallback summary when no S3 download_url', async () => {
-    (api.getApplication as ReturnType<typeof vi.fn>).mockResolvedValue(HUB_WITH_VPR);
-    (api.getJob as ReturnType<typeof vi.fn>).mockResolvedValue(JOB_DETAIL);
-    (api.getVPR as ReturnType<typeof vi.fn>).mockResolvedValue(VPR_STATUS_SUMMARY_ONLY);
+    apiMocks.getApplication.mockResolvedValue(HUB_WITH_VPR);
+    apiMocks.getJob.mockResolvedValue(JOB_DETAIL);
+    apiMocks.getVPR.mockResolvedValue(VPR_STATUS_SUMMARY_ONLY);
 
     const { default: VPRPage } = await import('../../app/applications/[id]/vpr/page');
     renderWithSuspense(<VPRPage params={Promise.resolve({ id: 'job1' })} />);
@@ -138,8 +138,8 @@ describe('VPR page', () => {
         vpr: { status: 'processing' as const, artifact_id: null },
       },
     };
-    (api.getApplication as ReturnType<typeof vi.fn>).mockResolvedValue(hubNoArtifact);
-    (api.getJob as ReturnType<typeof vi.fn>).mockResolvedValue(JOB_DETAIL);
+    apiMocks.getApplication.mockResolvedValue(hubNoArtifact);
+    apiMocks.getJob.mockResolvedValue(JOB_DETAIL);
 
     const { default: VPRPage } = await import('../../app/applications/[id]/vpr/page');
     renderWithSuspense(<VPRPage params={Promise.resolve({ id: 'job1' })} />);
@@ -150,11 +150,11 @@ describe('VPR page', () => {
   });
 
   it('shows error state when fetch fails', async () => {
-    (api.getApplication as ReturnType<typeof vi.fn>).mockResolvedValue(HUB_WITH_VPR);
-    (api.getJob as ReturnType<typeof vi.fn>).mockResolvedValue(JOB_DETAIL);
+    apiMocks.getApplication.mockResolvedValue(HUB_WITH_VPR);
+    apiMocks.getJob.mockResolvedValue(JOB_DETAIL);
 
     const apiError = Object.assign(new Error('Server error'), { status: 500, isApiError: true });
-    (api.getVPR as ReturnType<typeof vi.fn>).mockRejectedValue(apiError);
+    apiMocks.getVPR.mockRejectedValue(apiError);
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 

@@ -1,0 +1,170 @@
+spec_id: SETTINGS
+screen: Settings
+description: >
+  User account settings screen with profile, preferences, and notification controls.
+  Matches design screenshot: "Settings - Account".
+component_path: src/frontend/canvas-app/App.jsx
+test_file: src/frontend/tests/ui/unit/Settings.test.tsx
+switch_case: settings
+
+design_requirements:
+  header:
+    title: "Settings"
+  sections:
+    profile:
+      title: "Profile"
+      fields:
+        - Full Name (text input, editable)
+        - Email (text input, read-only — managed by Auth)
+        - Phone (text input, optional)
+      save_button: "Save Changes"
+    preferences:
+      title: "Preferences"
+      fields:
+        - Language (select: English, Hebrew)
+        - Default CV format (select: .docx, .pdf)
+    notifications:
+      title: "Notifications"
+      toggles:
+        - Email notifications for completed modules
+        - Weekly summary email
+    danger_zone:
+      title: "Danger Zone"
+      actions:
+        - "Delete Account" (red button, requires confirmation)
+
+tests:
+  - id: SETTINGS_01
+    name: "renders page title 'Settings'"
+    arrange: >
+      Render app navigated to settings screen.
+    act: >
+      Query heading element.
+    assert: >
+      Heading with text "Settings" is visible.
+    expected_failure: >
+      settings switch case may not exist.
+
+  - id: SETTINGS_02
+    name: "renders Profile section with Full Name field"
+    arrange: >
+      Render app navigated to settings screen with mock user (name: "John Doe").
+    act: >
+      Query for Full Name input within Profile section.
+    assert: >
+      Input labeled "Full Name" has value "John Doe".
+    expected_failure: >
+      Profile section or Full Name field is not implemented.
+
+  - id: SETTINGS_03
+    name: "Email field in Profile section is read-only"
+    arrange: >
+      Render app navigated to settings screen with user email "john@example.com".
+    act: >
+      Query Email input in Profile section.
+    assert: >
+      Email field displays "john@example.com" and has readOnly attribute.
+    expected_failure: >
+      Email field may be editable or not present.
+
+  - id: SETTINGS_04
+    name: "Save Changes button is present in Profile section"
+    arrange: >
+      Render app navigated to settings screen.
+    act: >
+      Query for "Save Changes" button within Profile section.
+    assert: >
+      "Save Changes" button is visible.
+    expected_failure: >
+      Profile save button is not implemented.
+
+  - id: SETTINGS_05
+    name: "Save Changes updates profile when clicked"
+    arrange: >
+      Render app navigated to settings screen.
+    act: >
+      Clear Full Name field. Type "Jane Doe". Click "Save Changes".
+    assert: >
+      Success feedback (toast or inline message) is shown.
+      Full Name field retains "Jane Doe".
+    expected_failure: >
+      Save Changes has no handler or success feedback.
+
+  - id: SETTINGS_06
+    name: "renders Preferences section with Language select"
+    arrange: >
+      Render app navigated to settings screen.
+    act: >
+      Query Language select element in Preferences section.
+    assert: >
+      A dropdown/select element with options "English" and "Hebrew" is present.
+    expected_failure: >
+      Preferences section is not implemented.
+
+  - id: SETTINGS_07
+    name: "renders Default CV format select with .docx and .pdf options"
+    arrange: >
+      Render app navigated to settings screen.
+    act: >
+      Query Default CV format select.
+    assert: >
+      Select element with ".docx" and ".pdf" options is present.
+    expected_failure: >
+      Default CV format preference is not implemented.
+
+  - id: SETTINGS_08
+    name: "renders Notifications section with two toggles"
+    arrange: >
+      Render app navigated to settings screen.
+    act: >
+      Query Notifications section toggle elements.
+    assert: >
+      Two toggle/checkbox elements for notification preferences are present.
+    expected_failure: >
+      Notifications section is not implemented.
+
+  - id: SETTINGS_09
+    name: "notification toggle changes state when clicked"
+    arrange: >
+      Render app navigated to settings screen. Email notification toggle is ON.
+    act: >
+      Click email notification toggle.
+    assert: >
+      Toggle changes to OFF state.
+    expected_failure: >
+      Toggle state management is not implemented.
+
+  - id: SETTINGS_10
+    name: "renders Danger Zone section with Delete Account button"
+    arrange: >
+      Render app navigated to settings screen.
+    act: >
+      Query Danger Zone section.
+    assert: >
+      "Danger Zone" section title is visible.
+      "Delete Account" button is present with danger styling.
+    expected_failure: >
+      Danger Zone section is not implemented.
+
+  - id: SETTINGS_11
+    name: "Delete Account button shows confirmation dialog"
+    arrange: >
+      Render app navigated to settings screen.
+    act: >
+      Click "Delete Account" button.
+    assert: >
+      A confirmation dialog appears asking user to confirm deletion.
+    expected_failure: >
+      Delete Account button has no confirmation step.
+
+  - id: SETTINGS_12
+    name: "phone number field is optional and accepts empty value"
+    arrange: >
+      Render app navigated to settings screen.
+    act: >
+      Verify Phone field is present but not required.
+      Leave it empty and click "Save Changes".
+    assert: >
+      No validation error is shown for empty Phone field.
+    expected_failure: >
+      Phone field validation may incorrectly block saving when empty.

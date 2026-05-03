@@ -97,7 +97,7 @@ function CoverLetterContent({ jobId }: { jobId: string }) {
         <div className="flex gap-2 shrink-0">
           <button
             onClick={() => void handleCopy()}
-            className="rounded-md bg-brand-primary px-3 py-2 text-sm font-bold text-white hover:opacity-90"
+            className="rounded-md bg-primary-action px-3 py-2 text-sm font-bold text-white hover:opacity-90"
             data-testid="copy-to-clipboard"
           >
             {copied ? 'Copied!' : 'Copy to Clipboard'}
@@ -107,7 +107,7 @@ function CoverLetterContent({ jobId }: { jobId: string }) {
           )}
           <button
             onClick={() => router.push(`/applications/${jobId}`)}
-            className="rounded-md border border-border-default px-3 py-2 text-sm text-text-primary hover:bg-bg-subtle"
+            className="rounded-md border border-border-default px-3 py-2 text-sm text-text-primary hover:bg-surface-subtle"
           >
             ← Back to Hub
           </button>
@@ -115,7 +115,7 @@ function CoverLetterContent({ jobId }: { jobId: string }) {
       </div>
 
       {copied && (
-        <div className="rounded-md bg-state-success/10 border border-state-success px-4 py-3 text-sm font-medium text-state-success">
+        <div className="rounded-md bg-state-active/10 border border-state-active px-4 py-3 text-sm font-medium text-state-active">
           Copied to clipboard
         </div>
       )}
