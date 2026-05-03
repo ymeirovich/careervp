@@ -1,0 +1,108 @@
+spec_id: CL_TABLE
+screen: CoverLettersTable
+description: >
+  CV Center sub-screen listing AI-generated cover letters.
+  Matches design screenshot: "CV Center - Cover Letters".
+component_path: src/frontend/canvas-app/App.jsx
+test_file: src/frontend/tests/ui/unit/CoverLettersTable.test.tsx
+switch_case: cover-letters
+
+design_requirements:
+  header:
+    title: "Cover Letters"
+  table_columns:
+    - Job Title
+    - Company
+    - Generated Date
+    - Status
+    - Actions (View / Copy / Download / Delete)
+  empty_state:
+    text: "No cover letters generated yet"
+    hint: "Generate a cover letter from an Application Hub"
+  row_actions:
+    view: navigates to cover-letter-view screen
+    copy: copies content to clipboard, shows CopySuccessModal
+    download: opens DownloadFormatModal
+    delete: removes row after confirmation
+  copy_feedback:
+    modal: CopySuccessModal with "Successfully Copied to Clipboard" + OK button
+
+tests:
+  - id: CL_TABLE_01
+    name: "renders page title 'Cover Letters'"
+    arrange: >
+      Render app navigated to cover-letters screen.
+    act: >
+      Query heading element.
+    assert: >
+      Heading with text "Cover Letters" is visible.
+    expected_failure: >
+      cover-letters switch case may not exist.
+
+  - id: CL_TABLE_02
+    name: "renders all 5 table column headers"
+    arrange: >
+      Render app navigated to cover-letters screen with at least one entry.
+    act: >
+      Query table header cells.
+    assert: >
+      Column headers "Job Title", "Company", "Generated Date", "Status", "Actions" are present.
+    expected_failure: >
+      Table columns are not implemented.
+
+  - id: CL_TABLE_03
+    name: "shows empty state when no cover letters exist"
+    arrange: >
+      Render app navigated to cover-letters screen with empty list.
+    act: >
+      Query for empty state text.
+    assert: >
+      "No cover letters generated yet" text is visible.
+    expected_failure: >
+      Empty state is not implemented.
+
+  - id: CL_TABLE_04
+    name: "View button navigates to cover-letter-view screen"
+    arrange: >
+      Render app navigated to cover-letters screen with one entry.
+    act: >
+      Click "View" button on the first row.
+    assert: >
+      App transitions to cover-letter-view screen.
+    expected_failure: >
+      cover-letter-view navigation is not wired up.
+
+  - id: CL_TABLE_05
+    name: "Copy button copies content and opens CopySuccessModal"
+    arrange: >
+      Render app navigated to cover-letters screen with one entry.
+      navigator.clipboard.writeText is mocked.
+    act: >
+      Click "Copy" button on the first row.
+    assert: >
+      clipboard.writeText was called with cover letter content.
+      CopySuccessModal is visible with "Successfully Copied to Clipboard".
+    expected_failure: >
+      Copy action is not wired to clipboard or CopySuccessModal.
+
+  - id: CL_TABLE_06
+    name: "CopySuccessModal OK button closes the modal"
+    arrange: >
+      Render app with CopySuccessModal open.
+    act: >
+      Click "OK" button in CopySuccessModal.
+    assert: >
+      CopySuccessModal is no longer in the DOM.
+    expected_failure: >
+      CopySuccessModal OK handler may not call onClose.
+
+  - id: CL_TABLE_07
+    name: "Download button opens DownloadFormatModal"
+    arrange: >
+      Render app navigated to cover-letters screen with one entry.
+    act: >
+      Click "Download" on first row.
+    assert: >
+      DownloadFormatModal is visible with .docx and .pdf format buttons.
+    expected_failure: >
+      Download action is not wired to DownloadFormatModal.

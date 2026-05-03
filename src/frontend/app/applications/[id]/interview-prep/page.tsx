@@ -14,7 +14,7 @@ const TYPE_BADGE: Record<string, { bg: string; text: string; label: string }> = 
   behavioral:  { bg: 'bg-state-info/10',    text: 'text-state-info',    label: 'Behavioral' },
   technical:   { bg: 'bg-purple-100',        text: 'text-purple-600',    label: 'Technical' },
   situational: { bg: 'bg-state-warning/10',  text: 'text-state-warning', label: 'Situational' },
-  gap_focused: { bg: 'bg-brand-primary/10',  text: 'text-brand-primary', label: 'Gap-Focused' },
+  gap_focused: { bg: 'bg-primary-action/10',  text: 'text-primary-action', label: 'Gap-Focused' },
 };
 
 function QuestionCard({ q, index }: { q: PrepQuestion; index: number }) {
@@ -22,7 +22,7 @@ function QuestionCard({ q, index }: { q: PrepQuestion; index: number }) {
   const sa = q.suggested_answer;
   const starKeys = ['situation', 'task', 'action', 'result'] as const;
   const hasStar = sa && starKeys.some((k) => sa[k]);
-  const badge = TYPE_BADGE[q.question_type?.toLowerCase()] ?? { bg: 'bg-bg-subtle', text: 'text-text-muted', label: q.question_type };
+  const badge = TYPE_BADGE[q.question_type?.toLowerCase()] ?? { bg: 'bg-surface-subtle', text: 'text-text-muted', label: q.question_type };
 
   return (
     <div
@@ -31,7 +31,7 @@ function QuestionCard({ q, index }: { q: PrepQuestion; index: number }) {
     >
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-start justify-between gap-3 px-4 py-3 text-left hover:bg-bg-subtle transition-colors"
+        className="flex items-start justify-between gap-3 px-4 py-3 text-left hover:bg-surface-subtle transition-colors"
         data-testid="expand-question"
       >
         <div className="flex items-start gap-2 min-w-0">
@@ -47,7 +47,7 @@ function QuestionCard({ q, index }: { q: PrepQuestion; index: number }) {
       </button>
 
       {expanded && (
-        <div className="border-t border-border-default px-4 py-4 flex flex-col gap-3 bg-bg-subtle">
+        <div className="border-t border-border-default px-4 py-4 flex flex-col gap-3 bg-surface-subtle">
           {hasStar ? (
             <div className="flex flex-col gap-2">
               <p className="text-xs font-semibold text-text-muted uppercase tracking-wide">Suggested STAR Answer</p>
@@ -56,7 +56,7 @@ function QuestionCard({ q, index }: { q: PrepQuestion; index: number }) {
                 if (!val) return null;
                 return (
                   <div key={key} className="flex gap-2 text-sm">
-                    <span className="shrink-0 font-semibold text-brand-primary w-20 capitalize">{key}:</span>
+                    <span className="shrink-0 font-semibold text-primary-action w-20 capitalize">{key}:</span>
                     <span className="text-text-primary leading-relaxed">{val as string}</span>
                   </div>
                 );
@@ -160,7 +160,7 @@ function InterviewPrepContent({ jobId }: { jobId: string }) {
           )}
           <button
             onClick={() => router.push(`/applications/${jobId}`)}
-            className="rounded-md border border-border-default px-3 py-2 text-sm text-text-primary hover:bg-bg-subtle"
+            className="rounded-md border border-border-default px-3 py-2 text-sm text-text-primary hover:bg-surface-subtle"
           >
             ← Back to Hub
           </button>
@@ -202,7 +202,7 @@ function InterviewPrepContent({ jobId }: { jobId: string }) {
                   type="checkbox"
                   checked={checkedItems[i] ?? false}
                   onChange={() => setCheckedItems((prev) => ({ ...prev, [i]: !prev[i] }))}
-                  className="mt-0.5 accent-brand-primary"
+                  className="mt-0.5 accent-primary-action"
                 />
                 <span className={`text-sm transition-colors ${checkedItems[i] ? 'line-through text-text-muted' : 'text-text-primary'}`}>
                   {item}

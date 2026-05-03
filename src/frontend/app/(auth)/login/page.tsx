@@ -51,7 +51,7 @@ function LoginForm() {
         </div>
 
         {resetSuccess && (
-          <p className="text-state-success text-sm text-center">
+          <p className="text-state-active text-sm text-center">
             Password reset successfully. Please sign in.
           </p>
         )}

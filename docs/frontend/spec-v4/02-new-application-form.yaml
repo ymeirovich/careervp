@@ -1,0 +1,129 @@
+spec_id: NEW_APP
+screen: NewApplicationForm
+description: >
+  Form screen for creating a new job application entry.
+  Matches design screenshot: "New Application Form".
+component_path: src/frontend/canvas-app/App.jsx
+test_file: src/frontend/tests/ui/unit/NewApplicationForm.test.tsx
+switch_case: new-app
+
+design_requirements:
+  fields:
+    - Job Title (text input, required)
+    - Company Name (text input, required)
+    - Job Description (textarea, required, large)
+    - Job URL (text input, optional)
+  base_cv_section:
+    label: "Base CV"
+    display: shows filename of currently selected base CV
+    change_button: "Change" — opens ChangeBaseCVModal
+  submit_button:
+    label: "Save & Analyze"
+    disabled_when: Job Title, Company Name, or Job Description is empty
+  cancel_link:
+    label: "Cancel"
+    navigates_to: dashboard
+  header:
+    title: "New Application"
+
+tests:
+  - id: NEW_APP_01
+    name: "renders Job Title input field"
+    arrange: >
+      Render app navigated to new-app screen.
+    act: >
+      Query for a labeled input with accessible name containing "Job Title".
+    assert: >
+      An input element with label "Job Title" is present and editable.
+    expected_failure: >
+      Current App.jsx new-app screen may not render a dedicated Job Title field.
+
+  - id: NEW_APP_02
+    name: "renders Company Name input field"
+    arrange: >
+      Render app navigated to new-app screen.
+    act: >
+      Query for a labeled input with accessible name containing "Company Name".
+    assert: >
+      An input element with label "Company Name" is present and editable.
+    expected_failure: >
+      Current App.jsx new-app screen may not render a Company Name field.
+
+  - id: NEW_APP_03
+    name: "renders Job Description textarea"
+    arrange: >
+      Render app navigated to new-app screen.
+    act: >
+      Query for a textarea element or role="textbox" with large dimensions.
+    assert: >
+      A textarea with label "Job Description" is present and accepts multi-line input.
+    expected_failure: >
+      Current App.jsx may only render a single-line input for description.
+
+  - id: NEW_APP_04
+    name: "renders optional Job URL input"
+    arrange: >
+      Render app navigated to new-app screen.
+    act: >
+      Query for an input with label containing "Job URL" or "URL".
+    assert: >
+      An optional URL input field is present.
+    expected_failure: >
+      Current App.jsx does not render a Job URL field.
+
+  - id: NEW_APP_05
+    name: "Save & Analyze button is disabled when required fields are empty"
+    arrange: >
+      Render app navigated to new-app screen. All fields empty.
+    act: >
+      Query submit button with text "Save & Analyze".
+    assert: >
+      Button is present and has disabled attribute or aria-disabled="true".
+    expected_failure: >
+      Current App.jsx submit button may not exist or may not enforce disabled state.
+
+  - id: NEW_APP_06
+    name: "Save & Analyze button enables when all required fields are filled"
+    arrange: >
+      Render app navigated to new-app screen.
+    act: >
+      Type "Engineer" into Job Title, "Acme" into Company Name,
+      "Build things" into Job Description. Query submit button.
+    assert: >
+      "Save & Analyze" button is no longer disabled.
+    expected_failure: >
+      Current App.jsx does not track field completion to enable/disable the submit button.
+
+  - id: NEW_APP_07
+    name: "shows selected base CV filename in Base CV section"
+    arrange: >
+      Render app with a base CV named "my-resume.pdf" pre-selected.
+      Navigate to new-app screen.
+    act: >
+      Query DOM for the base CV section.
+    assert: >
+      The text "my-resume.pdf" is visible in the Base CV display area.
+    expected_failure: >
+      Current App.jsx new-app screen does not render a Base CV section.
+
+  - id: NEW_APP_08
+    name: "Change button opens ChangeBaseCVModal"
+    arrange: >
+      Render app navigated to new-app screen.
+    act: >
+      Click the "Change" button in the Base CV section.
+    assert: >
+      ChangeBaseCVModal becomes visible (dialog or modal container appears in DOM).
+    expected_failure: >
+      Current App.jsx new-app screen does not render a Change button.
+
+  - id: NEW_APP_09
+    name: "Cancel link navigates back to dashboard"
+    arrange: >
+      Render app navigated to new-app screen.
+    act: >
+      Click element with text "Cancel".
+    assert: >
+      Dashboard screen (applications table) becomes visible.
+    expected_failure: >
+      Current App.jsx may not render a Cancel link on new-app screen.

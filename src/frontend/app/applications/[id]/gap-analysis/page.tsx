@@ -15,9 +15,9 @@ type LocalResponse = {
 };
 
 function impactBadgeClass(v?: string): string {
-  if (v === 'HIGH') return 'bg-state-success/10 text-state-success';
+  if (v === 'HIGH') return 'bg-state-active/10 text-state-active';
   if (v === 'MEDIUM') return 'bg-state-warning/10 text-state-warning';
-  return 'bg-bg-subtle text-text-muted';
+  return 'bg-surface-subtle text-text-muted';
 }
 
 function GapAnalysisContent({ jobId }: { jobId: string }) {
@@ -141,7 +141,7 @@ function GapAnalysisContent({ jobId }: { jobId: string }) {
             <button
               onClick={() => void handleGenerate()}
               disabled={generating || !cv?.cv_id}
-              className="rounded-md bg-brand-primary px-3 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
+              className="rounded-md bg-primary-action px-3 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
               data-testid="generate-gap-questions"
             >
               {generating ? 'Generating…' : 'Generate Questions'}
@@ -149,7 +149,7 @@ function GapAnalysisContent({ jobId }: { jobId: string }) {
           )}
           <button
             onClick={() => router.push(`/applications/${jobId}`)}
-            className="rounded-md border border-border-default px-3 py-2 text-sm text-text-primary hover:bg-bg-subtle"
+            className="rounded-md border border-border-default px-3 py-2 text-sm text-text-primary hover:bg-surface-subtle"
           >
             ← Back to Hub
           </button>
@@ -157,7 +157,7 @@ function GapAnalysisContent({ jobId }: { jobId: string }) {
       </div>
 
       {savedToast && (
-        <div className="rounded-md bg-state-success/10 border border-state-success px-4 py-3 text-sm font-medium text-state-success">
+        <div className="rounded-md bg-state-active/10 border border-state-active px-4 py-3 text-sm font-medium text-state-active">
           Saved successfully
         </div>
       )}
@@ -184,14 +184,14 @@ function GapAnalysisContent({ jobId }: { jobId: string }) {
                   <button
                     onClick={() => { setResponses({ ...savedResponses }); setMode('view'); }}
                     disabled={isSaving}
-                    className="px-4 py-2 text-sm border border-border-default rounded-md text-text-primary hover:bg-bg-subtle disabled:opacity-50"
+                    className="px-4 py-2 text-sm border border-border-default rounded-md text-text-primary hover:bg-surface-subtle disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={() => void handleSave()}
                     disabled={isSaving}
-                    className="px-4 py-2 text-sm bg-brand-primary text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                    className="px-4 py-2 text-sm bg-primary-action text-white rounded-md hover:opacity-90 disabled:opacity-50"
                     data-testid="save-responses"
                   >
                     {isSaving ? 'Saving…' : 'Save'}
@@ -200,7 +200,7 @@ function GapAnalysisContent({ jobId }: { jobId: string }) {
               ) : (
                 <button
                   onClick={() => { setResponses({ ...savedResponses }); setMode('edit'); }}
-                  className="px-4 py-2 text-sm bg-brand-primary text-white rounded-md hover:opacity-90"
+                  className="px-4 py-2 text-sm bg-primary-action text-white rounded-md hover:opacity-90"
                 >
                   Edit
                 </button>
@@ -246,7 +246,7 @@ function GapAnalysisContent({ jobId }: { jobId: string }) {
                               value={dest}
                               checked={r.destination === dest}
                               onChange={() => setResponse(q.question_id, { destination: dest })}
-                              className="accent-brand-primary"
+                              className="accent-primary-action"
                             />
                             {dest === 'CV_IMPACT' ? 'Include in CV' : 'Interview Only'}
                           </label>
@@ -257,7 +257,7 @@ function GapAnalysisContent({ jobId }: { jobId: string }) {
                         value={r.answer}
                         onChange={(e) => setResponse(q.question_id, { answer: e.target.value })}
                         placeholder="Your answer…"
-                        className="w-full rounded border border-border-default px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary resize-none bg-card"
+                        className="w-full rounded border border-border-default px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary-action focus:ring-1 focus:ring-primary-action resize-none bg-card"
                       />
                     </>
                   ) : (

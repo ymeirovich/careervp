@@ -1,0 +1,122 @@
+spec_id: NAV
+screen: Navigation
+description: >
+  Cross-screen navigation behavior including sidebar links, back button,
+  history stack management, and routing via currentScreen state.
+component_path: src/frontend/canvas-app/App.jsx
+test_file: src/frontend/tests/ui/integration/navigation-flows.test.tsx
+
+design_requirements:
+  sidebar:
+    sections:
+      main:
+        - My Applications (navigates to dashboard)
+        - Knowledge Base (navigates to knowledge-base)
+      cv_center:
+        header: "CV Center"
+        items:
+          - Base CVs (navigates to base-cvs)
+          - Tailored CVs (navigates to tailored-cvs)
+          - Cover Letters (navigates to cover-letters)
+      account:
+        - Billing (navigates to billing)
+        - Settings (navigates to settings)
+        - Plans (navigates to plans)
+  back_button:
+    behavior: pops history stack, navigates to previous screen
+    visible_on: all screens except dashboard
+  history_stack:
+    push: on each navigation forward
+    pop: on back button press
+    max_depth: unbounded
+
+tests:
+  - id: NAV_01
+    name: "sidebar 'My Applications' link navigates to dashboard"
+    arrange: >
+      Render app initially on billing screen.
+    act: >
+      Click "My Applications" in sidebar.
+    assert: >
+      Dashboard (applications table) is visible.
+    expected_failure: >
+      Sidebar may not render all navigation links.
+
+  - id: NAV_02
+    name: "sidebar 'Base CVs' link navigates to base-cvs screen"
+    arrange: >
+      Render app initially on dashboard.
+    act: >
+      Click "Base CVs" in sidebar under CV Center section.
+    assert: >
+      Base CVs screen is visible with heading "Base CVs".
+    expected_failure: >
+      CV Center section and Base CVs link may not be in sidebar.
+
+  - id: NAV_03
+    name: "sidebar 'Tailored CVs' link navigates to tailored-cvs screen"
+    arrange: >
+      Render app on dashboard.
+    act: >
+      Click "Tailored CVs" in sidebar.
+    assert: >
+      Tailored CVs screen is visible.
+    expected_failure: >
+      Tailored CVs sidebar link may not exist.
+
+  - id: NAV_04
+    name: "sidebar 'Cover Letters' link navigates to cover-letters screen"
+    arrange: >
+      Render app on dashboard.
+    act: >
+      Click "Cover Letters" in sidebar.
+    assert: >
+      Cover Letters screen is visible.
+    expected_failure: >
+      Cover Letters sidebar link may not exist.
+
+  - id: NAV_05
+    name: "back button returns to previous screen"
+    arrange: >
+      Render app. Navigate from dashboard to billing.
+    act: >
+      Click back button (← arrow) on billing screen.
+    assert: >
+      Dashboard screen is visible again.
+    expected_failure: >
+      Back button history stack navigation is not wired correctly.
+
+  - id: NAV_06
+    name: "back button is hidden on the dashboard (root screen)"
+    arrange: >
+      Render app at initial state (dashboard).
+    act: >
+      Query for back button.
+    assert: >
+      Back button is not rendered or is hidden.
+    expected_failure: >
+      Back button may always be rendered regardless of screen.
+
+  - id: NAV_07
+    name: "deep navigation history: back works through multiple levels"
+    arrange: >
+      Render app. Navigate: dashboard → billing → settings → plans.
+    act: >
+      Click back button 3 times.
+    assert: >
+      After 1 back: settings screen is visible.
+      After 2 backs: billing screen is visible.
+      After 3 backs: dashboard screen is visible.
+    expected_failure: >
+      History stack does not properly track multi-level navigation.
+
+  - id: NAV_08
+    name: "sidebar active link is highlighted for current screen"
+    arrange: >
+      Render app navigated to settings screen.
+    act: >
+      Query the Settings sidebar link for active/selected styling.
+    assert: >
+      The Settings link in the sidebar has an active class or aria-current="page".
+    expected_failure: >
+      Active link highlighting is not implemented.

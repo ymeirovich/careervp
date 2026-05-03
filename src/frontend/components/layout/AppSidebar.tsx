@@ -3,13 +3,21 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import {
+  LayoutDashboard,
+  Briefcase,
+  FileText,
+  CreditCard,
+  Settings as SettingsIcon,
+  type LucideIcon,
+} from 'lucide-react';
 
-const NAV_ITEMS = [
-  { href: '/dashboard', label: 'Dashboard' },
-  { href: '/applications', label: 'Applications' },
-  { href: '/cv-center', label: 'CV Center' },
-  { href: '/billing', label: 'Billing' },
-  { href: '/settings', label: 'Settings' },
+const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
+  { href: '/dashboard',    label: 'Dashboard',    icon: LayoutDashboard },
+  { href: '/applications', label: 'Applications', icon: Briefcase },
+  { href: '/cv-center',    label: 'CV Center',    icon: FileText },
+  { href: '/billing',      label: 'Billing',      icon: CreditCard },
+  { href: '/settings',     label: 'Settings',     icon: SettingsIcon },
 ];
 
 export function AppSidebar() {
@@ -25,7 +33,7 @@ export function AppSidebar() {
       </div>
 
       <nav className="flex flex-col gap-1 p-3 pt-4">
-        {NAV_ITEMS.map(({ href, label }) => {
+        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const isActive = pathname === href || pathname.startsWith(href + '/');
           return (
             <Link
@@ -35,10 +43,11 @@ export function AppSidebar() {
                 flex items-center gap-3 px-4 py-3 rounded-lg text-base font-bold transition-colors
                 ${isActive
                   ? 'bg-surface-selected text-text-primary'
-                  : 'text-text-primary hover:bg-surface-subtle'
+                  : 'text-text-muted hover:bg-surface-subtle hover:text-text-primary'
                 }
               `}
             >
+              <Icon size={18} className="shrink-0" aria-hidden="true" />
               {label}
             </Link>
           );

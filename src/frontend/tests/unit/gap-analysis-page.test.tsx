@@ -4,6 +4,14 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 const mockPush = vi.fn();
 
+const apiMocks = vi.hoisted(() => ({
+  getGapQuestions: vi.fn(),
+  getApplication: vi.fn(),
+  getCV: vi.fn(),
+  generateGapQuestions: vi.fn(),
+  saveGapResponses: vi.fn(),
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, replace: vi.fn() }),
   useSearchParams: () => ({ get: (_k: string) => null }),
@@ -11,16 +19,8 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('../../api/methods', () => ({
-  api: {
-    getGapQuestions: vi.fn(),
-    getApplication: vi.fn(),
-    getCV: vi.fn(),
-    generateGapQuestions: vi.fn(),
-    saveGapResponses: vi.fn(),
-  },
+  api: apiMocks,
 }));
-
-const { api } = await import('../../api/methods');
 
 function renderWithSuspense(ui: React.ReactElement) {
   return render(<Suspense fallback={<div data-testid="suspense-fallback" />}>{ui}</Suspense>);
@@ -49,12 +49,12 @@ const HUB_WITH_CV = {
 describe('Gap Analysis page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (api.getApplication as ReturnType<typeof vi.fn>).mockResolvedValue(HUB_WITH_CV);
-    (api.getCV as ReturnType<typeof vi.fn>).mockResolvedValue({ cv_id: 'cv1', user_id: 'u1', full_name: 'Jane', language: 'en', contact_info: {}, experience: [], education: [], skills: [], certifications: [], top_achievements: [], languages: [] });
+    apiMocks.getApplication.mockResolvedValue(HUB_WITH_CV);
+    apiMocks.getCV.mockResolvedValue({ cv_id: 'cv1', user_id: 'u1', full_name: 'Jane', language: 'en', contact_info: {}, experience: [], education: [], skills: [], certifications: [], top_achievements: [], languages: [] });
   });
 
   it('renders 3 question rows with impact badges', async () => {
-    (api.getGapQuestions as ReturnType<typeof vi.fn>).mockResolvedValue(QUESTIONS);
+    apiMocks.getGapQuestions.mockResolvedValue(QUESTIONS);
 
     const { default: GapPage } = await import('../../app/applications/[id]/gap-analysis/page');
     renderWithSuspense(<GapPage params={Promise.resolve({ id: 'job1' })} />);
@@ -71,8 +71,8 @@ describe('Gap Analysis page', () => {
   });
 
   it('save button calls saveGapResponses with filled responses', async () => {
-    (api.getGapQuestions as ReturnType<typeof vi.fn>).mockResolvedValue(QUESTIONS.slice(0, 2));
-    (api.saveGapResponses as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    apiMocks.getGapQuestions.mockResolvedValue(QUESTIONS.slice(0, 2));
+    apiMocks.saveGapResponses.mockResolvedValue(undefined);
 
     const { default: GapPage } = await import('../../app/applications/[id]/gap-analysis/page');
     renderWithSuspense(<GapPage params={Promise.resolve({ id: 'job1' })} />);
@@ -91,7 +91,7 @@ describe('Gap Analysis page', () => {
     fireEvent.click(screen.getByTestId('save-responses'));
 
     await waitFor(() => {
-      expect(api.saveGapResponses).toHaveBeenCalledWith('job1', expect.arrayContaining([
+      expect(apiMocks.saveGapResponses).toHaveBeenCalledWith('job1', expect.arrayContaining([
         expect.objectContaining({ question_id: 'q1', response: 'Answer 1' }),
         expect.objectContaining({ question_id: 'q2', response: 'Answer 2' }),
       ]));
@@ -99,7 +99,7 @@ describe('Gap Analysis page', () => {
   });
 
   it('shows generate button when no questions and CV exists', async () => {
-    (api.getGapQuestions as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    apiMocks.getGapQuestions.mockResolvedValue([]);
 
     const { default: GapPage } = await import('../../app/applications/[id]/gap-analysis/page');
     renderWithSuspense(<GapPage params={Promise.resolve({ id: 'job1' })} />);

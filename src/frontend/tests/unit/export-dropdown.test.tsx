@@ -5,12 +5,12 @@ import { ExportDropdown } from '../../components/ExportDropdown/ExportDropdown';
 import { ApiError } from '../../api/client';
 
 vi.mock('../../api/methods', () => ({
-  api: {
-    exportArtifact: vi.fn(),
-  },
+  api: apiMocks,
 }));
 
-const { api } = await import('../../api/methods');
+const apiMocks = vi.hoisted(() => ({
+  exportArtifact: vi.fn(),
+}));
 
 const DEFAULT_PROPS = {
   jobId: 'job1',
@@ -39,7 +39,7 @@ describe('ExportDropdown', () => {
   });
 
   it('shows coming-soon error message when API returns 501', async () => {
-    (api.exportArtifact as ReturnType<typeof vi.fn>).mockRejectedValue(
+    apiMocks.exportArtifact.mockRejectedValue(
       new ApiError(501, 'Not Implemented'),
     );
 
@@ -66,7 +66,7 @@ describe('ExportDropdown', () => {
       return originalCreateElement(tag);
     });
 
-    (api.exportArtifact as ReturnType<typeof vi.fn>).mockResolvedValue({
+    apiMocks.exportArtifact.mockResolvedValue({
       download_url: 'https://example.com/file.docx',
       expires_at: '2026-04-24T00:00:00Z',
     });
@@ -85,7 +85,7 @@ describe('ExportDropdown', () => {
   });
 
   it('shows generic error for non-501 failures', async () => {
-    (api.exportArtifact as ReturnType<typeof vi.fn>).mockRejectedValue(
+    apiMocks.exportArtifact.mockRejectedValue(
       new ApiError(500, 'Server error'),
     );
 

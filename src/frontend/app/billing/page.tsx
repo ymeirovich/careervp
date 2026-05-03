@@ -44,7 +44,7 @@ function BillingContent() {
         {hasActiveSubscription && sub && (
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-3">
-              <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-state-success/10 text-state-success capitalize">{sub.plan_type}</span>
+              <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-state-active/10 text-state-active capitalize">{sub.plan_type}</span>
               <p className="text-sm text-text-primary font-medium">
                 {sub.plan_type === 'annual' ? '$16/month (billed annually)' : '$20/month'}
               </p>
@@ -86,15 +86,15 @@ function BillingContent() {
           </ul>
           <a
             href="/billing/checkout?plan=monthly"
-            className="rounded-md bg-brand-primary px-4 py-2 text-sm font-bold text-white text-center hover:opacity-90"
+            className="rounded-md bg-primary-action px-4 py-2 text-sm font-bold text-white text-center hover:opacity-90"
           >
             Get Monthly
           </a>
         </div>
 
-        <div className="rounded-md border-2 border-brand-primary bg-card p-6 flex flex-col gap-4 relative">
+        <div className="rounded-md border-2 border-primary-action bg-card p-6 flex flex-col gap-4 relative">
           <div className="absolute -top-3 left-4">
-            <span className="inline-flex px-2 py-0.5 rounded text-xs font-bold bg-brand-primary text-white">Save 20%</span>
+            <span className="inline-flex px-2 py-0.5 rounded text-xs font-bold bg-primary-action text-white">Save 20%</span>
           </div>
           <h3 className="text-base font-bold text-text-primary">Annual</h3>
           <div className="flex flex-col gap-1">
@@ -108,7 +108,7 @@ function BillingContent() {
           </ul>
           <a
             href="/billing/checkout?plan=annual"
-            className="rounded-md bg-brand-primary px-4 py-2 text-sm font-bold text-white text-center hover:opacity-90"
+            className="rounded-md bg-primary-action px-4 py-2 text-sm font-bold text-white text-center hover:opacity-90"
           >
             Get Annual
           </a>

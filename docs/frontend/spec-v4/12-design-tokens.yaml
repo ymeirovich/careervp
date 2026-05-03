@@ -1,0 +1,60 @@
+spec_id: TOKENS
+screen: DesignTokens
+description: >
+  CSS custom property (design token) definitions that must be present in the app's
+  root stylesheet or injected style block. These tokens ensure visual consistency
+  across all screens.
+component_path: src/frontend/canvas-app/App.jsx
+
+design_tokens:
+  colors:
+    primary_action: "--color-primary-action: #F97316"
+    primary_action_hover: "--color-primary-action-hover: #EA6C0A"
+    primary_action_text: "--color-primary-action-text: #FFFFFF"
+    background_page: "--color-background-page: #FCF7F5"
+    background_sidebar: "--color-background-sidebar: #FFFFFF"
+    background_card: "--color-background-card: #FFFFFF"
+    text_primary: "--color-text-primary: #1A1A2E"
+    text_secondary: "--color-text-secondary: #6B7280"
+    border_default: "--color-border-default: #E5E7EB"
+    state_active: "--state-active: #22C55E"
+    state_stale: "--state-stale: #F59E0B"
+    state_failed: "--state-failed: #EF4444"
+    state_processing: "--state-processing: #3B82F6"
+
+  typography:
+    font_primary: "--font-primary: 'Inter', sans-serif"
+    size_heading_lg: "--size-heading-lg: 28px"
+    size_heading_md: "--size-heading-md: 22px"
+    size_body: "--size-body: 15px"
+    size_label: "--size-label: 13px"
+    weight_bold: "--weight-bold: 700"
+    weight_semibold: "--weight-semibold: 600"
+
+  spacing:
+    radius_card: "--radius-card: 16px"
+    radius_button: "--radius-button: 8px"
+    radius_modal: "--radius-modal: 24px"
+
+button_variants:
+  primary:
+    background: "var(--color-primary-action)"
+    text: "var(--color-primary-action-text)"
+    hover_background: "var(--color-primary-action-hover)"
+    border_radius: "var(--radius-button)"
+  secondary:
+    background: "transparent"
+    text: "var(--color-primary-action)"
+    border: "1px solid var(--color-primary-action)"
+  grey:
+    background: "#F3F4F6"
+    text: "var(--color-text-primary)"
+  danger:
+    background: "var(--state-failed)"
+    text: "#FFFFFF"
+
+notes: >
+  These tokens are defined as CSS custom properties in a <style> block within App.jsx
+  (injected via the `injectDesignTokens` function or root :root selector).
+  Tests should verify that the computed style of key elements matches these values
+  where testable, or that the CSS class/variable names are applied correctly.

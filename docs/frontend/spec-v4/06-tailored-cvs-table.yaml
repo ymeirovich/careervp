@@ -1,0 +1,96 @@
+spec_id: TAIL_CV
+screen: TailoredCVsTable
+description: >
+  CV Center sub-screen listing AI-generated tailored CVs.
+  Matches design screenshot: "CV Center - Tailored CVs".
+component_path: src/frontend/canvas-app/App.jsx
+test_file: src/frontend/tests/ui/unit/TailoredCVsTable.test.tsx
+switch_case: tailored-cvs
+
+design_requirements:
+  header:
+    title: "Tailored CVs"
+  table_columns:
+    - Job Title
+    - Company
+    - Generated Date
+    - Status (Ready / Stale / Processing)
+    - Actions (View / Download / Delete)
+  empty_state:
+    text: "No tailored CVs generated yet"
+    hint: "Generate a tailored CV from an Application Hub"
+  row_actions:
+    view: navigates to cv-view screen
+    download: opens DownloadFormatModal
+    delete: removes row after confirmation
+  status_badge_colors:
+    Ready: green
+    Stale: amber
+    Processing: blue/spinner
+
+tests:
+  - id: TAIL_CV_01
+    name: "renders page title 'Tailored CVs'"
+    arrange: >
+      Render app navigated to tailored-cvs screen.
+    act: >
+      Query heading element.
+    assert: >
+      Heading with text "Tailored CVs" is visible.
+    expected_failure: >
+      tailored-cvs switch case may not exist.
+
+  - id: TAIL_CV_02
+    name: "renders all 5 table column headers"
+    arrange: >
+      Render app navigated to tailored-cvs screen with at least one entry.
+    act: >
+      Query table header cells.
+    assert: >
+      Column headers "Job Title", "Company", "Generated Date", "Status", "Actions" are present.
+    expected_failure: >
+      Table columns are not implemented.
+
+  - id: TAIL_CV_03
+    name: "shows empty state when no tailored CVs exist"
+    arrange: >
+      Render app navigated to tailored-cvs screen with empty list.
+    act: >
+      Query for empty state text.
+    assert: >
+      "No tailored CVs generated yet" text is visible.
+    expected_failure: >
+      Empty state is not implemented.
+
+  - id: TAIL_CV_04
+    name: "View button navigates to cv-view screen"
+    arrange: >
+      Render app navigated to tailored-cvs screen with one entry.
+    act: >
+      Click "View" button on the first row.
+    assert: >
+      App transitions to cv-view screen.
+    expected_failure: >
+      View action / cv-view navigation is not implemented.
+
+  - id: TAIL_CV_05
+    name: "Download button opens DownloadFormatModal"
+    arrange: >
+      Render app navigated to tailored-cvs screen with one entry.
+    act: >
+      Click "Download" button on first row.
+    assert: >
+      DownloadFormatModal becomes visible with .docx and .pdf options.
+    expected_failure: >
+      Download action is not implemented or DownloadFormatModal is not triggered.
+
+  - id: TAIL_CV_06
+    name: "shows correct status badge color for Ready state"
+    arrange: >
+      Render app navigated to tailored-cvs screen with one entry in Ready status.
+    act: >
+      Query status badge element on the first row.
+    assert: >
+      Badge with text "Ready" is visible and has green color class or style.
+    expected_failure: >
+      Status badges are not implemented.

@@ -1,0 +1,175 @@
+spec_id: HUB
+screen: ApplicationHub
+description: >
+  Per-application hub screen showing all AI-generated modules for a single job application.
+  Matches design screenshots: "Application Hub - notStarted", "Application Hub - partial",
+  "Application Hub - processing".
+component_path: src/frontend/canvas-app/App.jsx
+test_file: src/frontend/tests/ui/unit/ApplicationHub.test.tsx
+switch_case: hub
+
+design_requirements:
+  header:
+    back_button: navigates to dashboard
+    title: "{Company Name} — {Position Title}"
+    subtitle: "Application Hub"
+  module_cards:
+    count: 6
+    modules:
+      - id: vpr
+        title: "Value Proposition Report"
+        subtitle: "AI match analysis"
+      - id: tailoredCV
+        title: "Tailored CV"
+        subtitle: "Customized resume"
+      - id: coverLetter
+        title: "Cover Letter"
+        subtitle: "Personalized letter"
+      - id: gapAnalysis
+        title: "Gap Analysis"
+        subtitle: "Skill gap review"
+      - id: interviewPrep
+        title: "Interview Prep"
+        subtitle: "Question bank"
+      - id: companyResearch
+        title: "Company Research"
+        subtitle: "Company insights"
+  module_states:
+    notStarted:
+      cta: "Generate" (or "Start" for baseCV)
+      badge: none
+    processing:
+      indicator: spinner
+      progress_text: optional stage text
+    ready:
+      cta: "View"
+      badge: "Ready" (green)
+      secondary: "Download", "Copy"
+    stale:
+      badge: "Stale" (amber)
+      cta: "Regenerate"
+    failed:
+      badge: "Failed" (red)
+      cta: "Retry"
+  generate_all_button:
+    label: "Generate All"
+    visible_when: at least one module is notStarted
+    position: below module card grid
+
+tests:
+  - id: HUB_01
+    name: "renders exactly 6 module cards"
+    arrange: >
+      Render app navigated to hub screen with application context.
+      All modules in notStarted state.
+    act: >
+      Query all module card containers.
+    assert: >
+      Exactly 6 module card elements are rendered.
+    expected_failure: >
+      Current App.jsx hub screen renders fewer than 6 module cards
+      (VPR and Cover Letter may be present but Tailored CV, Gap Analysis,
+      Interview Prep, Company Research may be missing).
+
+  - id: HUB_02
+    name: "renders Value Proposition Report module card"
+    arrange: >
+      Render app navigated to hub screen.
+    act: >
+      Query for text "Value Proposition Report".
+    assert: >
+      A module card with title "Value Proposition Report" is visible.
+    expected_failure: >
+      Title text may be wrong or card may not render.
+
+  - id: HUB_03
+    name: "renders Tailored CV module card"
+    arrange: >
+      Render app navigated to hub screen.
+    act: >
+      Query for text "Tailored CV".
+    assert: >
+      A module card with title "Tailored CV" is visible.
+    expected_failure: >
+      Tailored CV module card is missing from current hub implementation.
+
+  - id: HUB_04
+    name: "renders Gap Analysis module card"
+    arrange: >
+      Render app navigated to hub screen.
+    act: >
+      Query for text "Gap Analysis".
+    assert: >
+      A module card with title "Gap Analysis" is visible.
+    expected_failure: >
+      Gap Analysis module card is missing from current hub implementation.
+
+  - id: HUB_05
+    name: "renders Interview Prep module card"
+    arrange: >
+      Render app navigated to hub screen.
+    act: >
+      Query for text "Interview Prep".
+    assert: >
+      A module card with title "Interview Prep" is visible.
+    expected_failure: >
+      Interview Prep module card is missing from current hub implementation.
+
+  - id: HUB_06
+    name: "renders Company Research module card"
+    arrange: >
+      Render app navigated to hub screen.
+    act: >
+      Query for text "Company Research".
+    assert: >
+      A module card with title "Company Research" is visible.
+    expected_failure: >
+      Company Research module card is missing from current hub implementation.
+
+  - id: HUB_07
+    name: "shows Generate button on notStarted module card"
+    arrange: >
+      Render hub with VPR module in notStarted state.
+    act: >
+      Within the VPR module card, query for "Generate" button.
+    assert: >
+      "Generate" button is present and not disabled.
+    expected_failure: >
+      notStarted state CTA button may be labeled differently or absent.
+
+  - id: HUB_08
+    name: "shows processing spinner on module card in processing state"
+    arrange: >
+      Render hub with VPR module in processing state, progressText="Stage 2 of 5".
+    act: >
+      Query for spinner element and progress text within VPR card.
+    assert: >
+      Spinner (role="status") is visible.
+      Text "Stage 2 of 5" is displayed within the card.
+    expected_failure: >
+      processing state UI may not render spinner or progress text.
+
+  - id: HUB_09
+    name: "shows View and Download actions on ready module card"
+    arrange: >
+      Render hub with Cover Letter module in ready state.
+    act: >
+      Within Cover Letter card, query for View, Download, Copy buttons.
+    assert: >
+      "View" button is present.
+      "Download" button is present.
+      "Copy" button is present.
+      A "Ready" status badge is visible.
+    expected_failure: >
+      ready state secondary actions may be incomplete.
+
+  - id: HUB_10
+    name: "renders Generate All button when any module is notStarted"
+    arrange: >
+      Render hub with mixed states: 2 notStarted, 1 processing, 3 ready.
+    act: >
+      Query for "Generate All" button.
+    assert: >
+      "Generate All" button is visible and clickable.
+    expected_failure: >
+      Generate All button is not implemented in current hub screen.

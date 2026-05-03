@@ -1,0 +1,110 @@
+spec_id: BILLING
+screen: Billing
+description: >
+  Account billing screen showing subscription status, plan details, and payment management.
+  Matches design screenshot: "Settings - Billing".
+component_path: src/frontend/canvas-app/App.jsx
+test_file: src/frontend/tests/ui/unit/Billing.test.tsx
+switch_case: billing
+
+design_requirements:
+  header:
+    title: "Billing"
+  current_plan_card:
+    label: "Current Plan"
+    shows: plan name (e.g. "Monthly Pro"), renewal date, price
+  usage_summary:
+    label: "This Month"
+    shows: applications used / limit
+  payment_method_card:
+    label: "Payment Method"
+    shows: card brand and last 4 digits
+    action: "Update Payment Method" button
+  subscription_actions:
+    upgrade_button: "Upgrade Plan" (if on free tier)
+    cancel_button: "Cancel Subscription" (styled as danger/text link)
+  invoice_section:
+    title: "Billing History"
+    columns: [Date, Amount, Status, Download]
+
+tests:
+  - id: BILLING_01
+    name: "renders page title 'Billing'"
+    arrange: >
+      Render app navigated to billing screen.
+    act: >
+      Query heading element.
+    assert: >
+      Heading with text "Billing" is visible.
+    expected_failure: >
+      billing switch case may not exist or heading may be wrong.
+
+  - id: BILLING_02
+    name: "renders Current Plan card with plan name"
+    arrange: >
+      Render app navigated to billing screen with mock subscription data
+      (plan: "Monthly Pro", renewalDate: "2025-06-01", price: "$20/month").
+    act: >
+      Query "Current Plan" section.
+    assert: >
+      "Current Plan" label is present.
+      "Monthly Pro" plan name is visible.
+      Renewal date and price are displayed.
+    expected_failure: >
+      Current Plan card is not implemented.
+
+  - id: BILLING_03
+    name: "renders usage summary for current month"
+    arrange: >
+      Render app navigated to billing screen with usage data (3 of 10 applications used).
+    act: >
+      Query usage summary section.
+    assert: >
+      Text indicating "3" used applications and "10" or "unlimited" limit is visible.
+    expected_failure: >
+      Usage summary section is not implemented.
+
+  - id: BILLING_04
+    name: "renders Payment Method card with masked card number"
+    arrange: >
+      Render app navigated to billing screen with payment method (Visa, last4: "4242").
+    act: >
+      Query Payment Method section.
+    assert: >
+      Card brand "Visa" and masked number "•••• 4242" are visible.
+      "Update Payment Method" button is present.
+    expected_failure: >
+      Payment Method card is not implemented.
+
+  - id: BILLING_05
+    name: "renders Billing History table with correct columns"
+    arrange: >
+      Render app navigated to billing screen with at least one invoice.
+    act: >
+      Query billing history table headers.
+    assert: >
+      Columns "Date", "Amount", "Status", "Download" are present in Billing History.
+    expected_failure: >
+      Billing History section is not implemented.
+
+  - id: BILLING_06
+    name: "shows empty billing history when no invoices"
+    arrange: >
+      Render app navigated to billing screen with empty invoice list.
+    act: >
+      Query billing history section.
+    assert: >
+      "No billing history" or equivalent empty state text is visible.
+    expected_failure: >
+      Billing History empty state is not implemented.
+
+  - id: BILLING_07
+    name: "Cancel Subscription link/button is visible"
+    arrange: >
+      Render app navigated to billing screen with active subscription.
+    act: >
+      Query for Cancel Subscription element.
+    assert: >
+      "Cancel Subscription" button or link is present.
+    expected_failure: >
+      Cancel Subscription action is not rendered.

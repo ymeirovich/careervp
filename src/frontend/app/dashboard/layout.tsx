@@ -40,6 +40,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const creditsUsed = userCtx.usage?.applications.used ?? 0;
   const creditsTotal = creditsUsed + (userCtx.usage?.applications.remaining ?? 0);
+  const isUnlimited = userCtx.subscription?.has_active_subscription ?? false;
 
   return (
     <DashboardContext.Provider
@@ -57,6 +58,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           email: userCtx.user?.email ?? '',
           creditsUsed,
           creditsTotal: creditsTotal || 3,
+          isUnlimited,
         }}
       >
         <ErrorBoundary cloudwatchKey="dashboard" fallback={<DashboardError />}>

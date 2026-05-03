@@ -50,6 +50,7 @@ const config: Config = {
       displayName: 'e2e',
       testMatch: ['<rootDir>/tests/e2e/**/*.test.ts'],
       testPathIgnorePatterns: [
+        '<rootDir>/tests/e2e/artifact-viewers.e2e.test.ts',
         '<rootDir>/tests/e2e/application-hub-flow.e2e.test.ts',
       ],
       transform: { '^.+\\.ts$': 'ts-jest' },

@@ -59,7 +59,7 @@ function SettingsContent() {
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              className="rounded border border-border-default px-3 py-2 text-sm text-text-primary bg-card focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
+              className="rounded border border-border-default px-3 py-2 text-sm text-text-primary bg-card focus:outline-none focus:border-primary-action focus:ring-1 focus:ring-primary-action"
             />
           </div>
           <div className="flex flex-col gap-1">
@@ -68,14 +68,14 @@ function SettingsContent() {
               type="email"
               value={user?.email ?? ''}
               readOnly
-              className="rounded border border-border-default px-3 py-2 text-sm text-text-muted bg-bg-subtle cursor-not-allowed"
+              className="rounded border border-border-default px-3 py-2 text-sm text-text-muted bg-surface-subtle cursor-not-allowed"
             />
             <p className="text-xs text-text-muted">Email cannot be changed.</p>
           </div>
           <div className="flex justify-end">
             <button
               disabled
-              className="rounded-md bg-brand-primary px-3 py-2 text-sm font-bold text-white opacity-50 cursor-not-allowed"
+              className="rounded-md bg-primary-action px-3 py-2 text-sm font-bold text-white opacity-50 cursor-not-allowed"
               title="Save profile — coming soon"
             >
               Save Profile
@@ -99,7 +99,7 @@ function SettingsContent() {
                   value={values[i]}
                   onChange={(e) => setters[i](e.target.value)}
                   required
-                  className="rounded border border-border-default px-3 py-2 text-sm text-text-primary bg-card focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
+                  className="rounded border border-border-default px-3 py-2 text-sm text-text-primary bg-card focus:outline-none focus:border-primary-action focus:ring-1 focus:ring-primary-action"
                 />
               </div>
             );
@@ -108,13 +108,13 @@ function SettingsContent() {
             <div className="rounded-md bg-state-error/10 border border-state-error px-3 py-2 text-sm text-state-error">{pwError}</div>
           )}
           {pwSuccess && (
-            <div className="rounded-md bg-state-success/10 border border-state-success px-3 py-2 text-sm text-state-success">Password changed successfully.</div>
+            <div className="rounded-md bg-state-active/10 border border-state-active px-3 py-2 text-sm text-state-active">Password changed successfully.</div>
           )}
           <div className="flex justify-end">
             <button
               type="submit"
               disabled={changingPw}
-              className="rounded-md bg-brand-primary px-3 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
+              className="rounded-md bg-primary-action px-3 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
             >
               {changingPw ? 'Changing…' : 'Change Password'}
             </button>
@@ -126,7 +126,7 @@ function SettingsContent() {
       {(['Notification Preferences', 'API Access'] as const).map((section) => (
         <div key={section} className="rounded-md border border-border-default bg-card p-6 flex items-center justify-between">
           <h2 className="text-base font-bold text-text-primary">{section}</h2>
-          <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-bg-subtle text-text-muted">Coming soon</span>
+          <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-surface-subtle text-text-muted">Coming soon</span>
         </div>
       ))}
     </div>

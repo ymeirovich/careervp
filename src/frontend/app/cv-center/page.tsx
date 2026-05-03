@@ -37,7 +37,7 @@ function TagInput({
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-1.5">
         {tags.map((t) => (
-          <span key={t} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded bg-bg-subtle text-text-muted">
+          <span key={t} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded bg-surface-subtle text-text-muted">
             {t}
             <button type="button" onClick={() => onChange(tags.filter((x) => x !== t))} className="hover:text-state-error leading-none">×</button>
           </span>
@@ -50,7 +50,7 @@ function TagInput({
         onKeyDown={handleKey}
         onBlur={addTag}
         placeholder={placeholder ?? 'Type and press Enter'}
-        className="rounded border border-border-default px-3 py-2 text-sm text-text-primary bg-card focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
+        className="rounded border border-border-default px-3 py-2 text-sm text-text-primary bg-card focus:outline-none focus:border-primary-action focus:ring-1 focus:ring-primary-action"
       />
     </div>
   );
@@ -58,7 +58,7 @@ function TagInput({
 
 // ── CVForm ────────────────────────────────────────────────────────────────────
 
-const INPUT = 'rounded border border-border-default px-3 py-2 text-sm text-text-primary bg-card focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary';
+const INPUT = 'rounded border border-border-default px-3 py-2 text-sm text-text-primary bg-card focus:outline-none focus:border-primary-action focus:ring-1 focus:ring-primary-action';
 const CARD = 'rounded-md border border-border-default bg-card p-6 flex flex-col gap-4';
 const LABEL = 'text-xs font-semibold text-text-muted uppercase tracking-wide';
 
@@ -190,10 +190,10 @@ function CVForm({
 
       {/* Actions */}
       <div className="flex gap-3 justify-end">
-        <button type="button" onClick={onCancel} disabled={isSaving} className="rounded-md border border-border-default px-4 py-2 text-sm text-text-primary hover:bg-bg-subtle disabled:opacity-50">
+        <button type="button" onClick={onCancel} disabled={isSaving} className="rounded-md border border-border-default px-4 py-2 text-sm text-text-primary hover:bg-surface-subtle disabled:opacity-50">
           Cancel
         </button>
-        <button type="submit" disabled={isSaving} className="rounded-md bg-brand-primary px-4 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50">
+        <button type="submit" disabled={isSaving} className="rounded-md bg-primary-action px-4 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50">
           {isSaving ? 'Saving…' : 'Save CV'}
         </button>
       </div>
@@ -235,7 +235,7 @@ function CVPreview({ cv }: { cv: UserCV }) {
           <p className={LABEL}>Experience</p>
           <div className="flex flex-col gap-3">
             {cv.experience.map((exp, i) => (
-              <div key={i} className="border-l-2 border-brand-primary pl-3">
+              <div key={i} className="border-l-2 border-primary-action pl-3">
                 <p className="text-sm font-semibold text-text-primary">{exp.role} at {exp.company}</p>
                 <p className="text-xs text-text-muted">{exp.dates}{exp.current ? ' · Present' : ''}</p>
               </div>
@@ -250,7 +250,7 @@ function CVPreview({ cv }: { cv: UserCV }) {
           <p className={LABEL}>Skills</p>
           <div className="flex flex-wrap gap-1.5">
             {cv.skills.map((s, i) => (
-              <span key={i} className="px-2 py-0.5 rounded-full text-xs bg-bg-subtle text-text-muted">{s}</span>
+              <span key={i} className="px-2 py-0.5 rounded-full text-xs bg-surface-subtle text-text-muted">{s}</span>
             ))}
           </div>
         </div>
@@ -274,7 +274,7 @@ function CVPreview({ cv }: { cv: UserCV }) {
           <p className={LABEL}>Languages</p>
           <div className="flex flex-wrap gap-1.5">
             {languages.map((l, i) => (
-              <span key={i} className="px-2 py-0.5 rounded-full text-xs bg-bg-subtle text-text-muted">{l}</span>
+              <span key={i} className="px-2 py-0.5 rounded-full text-xs bg-surface-subtle text-text-muted">{l}</span>
             ))}
           </div>
         </div>
@@ -311,7 +311,7 @@ function CVCenterContent() {
       <div className="flex items-start justify-between gap-4">
         <h1 className="text-2xl font-bold text-text-primary">CV Center</h1>
         {cv && mode === 'view' && (
-          <button onClick={() => setMode('edit')} className="rounded-md bg-brand-primary px-3 py-2 text-sm font-bold text-white hover:opacity-90">
+          <button onClick={() => setMode('edit')} className="rounded-md bg-primary-action px-3 py-2 text-sm font-bold text-white hover:opacity-90">
             Edit CV
           </button>
         )}
@@ -326,7 +326,7 @@ function CVCenterContent() {
       {!cv && mode === 'view' ? (
         <div className="rounded-md border border-border-default bg-card px-6 py-12 text-center flex flex-col items-center gap-4">
           <p className="text-sm text-text-muted">Upload your base CV to get started</p>
-          <button onClick={() => setMode('create')} className="rounded-md bg-brand-primary px-4 py-2 text-sm font-bold text-white hover:opacity-90">
+          <button onClick={() => setMode('create')} className="rounded-md bg-primary-action px-4 py-2 text-sm font-bold text-white hover:opacity-90">
             Create CV
           </button>
         </div>

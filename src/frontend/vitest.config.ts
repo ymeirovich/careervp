@@ -6,8 +6,14 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
-    setupFiles: ['./tests/vitest-setup.ts'],
+    setupFiles: [
+      './tests/vitest-setup.ts',
+      './tests/ui/setup.ts',
+    ],
     include: [
+      // Canvas App UI tests (spec-v4)
+      'tests/ui/**/*.test.tsx',
+      'tests/ui/**/*.test.ts',
       'tests/**/*.vitest.ts',
       'tests/**/*.vitest.tsx',
       'tests/unit/auth-context.test.tsx',

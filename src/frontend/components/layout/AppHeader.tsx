@@ -14,20 +14,25 @@ const PAGE_TITLES: Record<string, string> = {
 interface AppHeaderProps {
   creditsUsed?: number;
   creditsTotal?: number;
+  isUnlimited?: boolean;
   userName?: string;
 }
 
-export function AppHeader({ creditsUsed = 0, creditsTotal = 3, userName = '' }: AppHeaderProps) {
+export function AppHeader({ creditsUsed = 0, creditsTotal = 3, isUnlimited = false, userName = '' }: AppHeaderProps) {
   const pathname = usePathname();
   const pageTitle = PAGE_TITLES[pathname] ?? 'CareerVP';
+
+  const creditsLabel = isUnlimited
+    ? 'Unlimited'
+    : `${creditsUsed} / ${creditsTotal} applications`;
 
   return (
     <header className="flex items-center justify-between h-20 px-6 bg-card border-b border-border-default shrink-0">
       <h1 className="font-bold text-text-primary text-2xl tracking-tight">{pageTitle}</h1>
 
       <div className="flex items-center gap-4">
-        <span className="text-text-primary text-base font-medium">
-          Credits: {creditsUsed} / {creditsTotal}
+        <span className="text-text-muted text-sm font-medium">
+          {creditsLabel}
         </span>
         <button className="flex items-center gap-2 bg-surface-subtle border border-border-strong rounded-xl px-3 py-1.5 text-text-primary text-base font-medium hover:bg-surface-selected transition-colors">
           {userName || 'Account'}
