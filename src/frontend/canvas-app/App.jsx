@@ -267,6 +267,7 @@ export default function App() {
   const [applications, setApplications] = useState(DEMO_APPLICATIONS);
   const [selectedApp, setSelectedApp] = useState(null);
   const [selectedTailoredCv, setSelectedTailoredCv] = useState(null);
+  const [selectedCoverLetter, setSelectedCoverLetter] = useState(null);
   const screen = navigationHistory[navigationHistory.length - 1];
 
   const addApplication = useCallback((data) => {
@@ -336,7 +337,16 @@ export default function App() {
           />
         )}
         {screen === 'cv-view' && <CvViewScreen onBack={goBack} cv={selectedTailoredCv} />}
-        {screen === 'cover-letters' && <CoverLettersScreen onBack={goBack} />}
+        {screen === 'cover-letters' && (
+          <CoverLettersScreen
+            onBack={goBack}
+            onNavigate={navigate}
+            onSelectCoverLetter={setSelectedCoverLetter}
+          />
+        )}
+        {screen === 'cover-letter-view' && (
+          <CoverLetterViewScreen onBack={goBack} coverLetter={selectedCoverLetter} />
+        )}
         {screen === 'billing' && <BillingScreen onBack={goBack} />}
         {screen === 'settings' && <SettingsScreen onBack={goBack} />}
         {screen === 'plans' && <PlansScreen onBack={goBack} />}
@@ -1030,8 +1040,37 @@ function TailoredCVsScreen({ onBack, onNavigate, onSelectCv }) {
 // ---------------------------------------------------------------------------
 // Cover Letters Screen
 // ---------------------------------------------------------------------------
-function CoverLettersScreen({ onBack }) {
-  const [items] = useState([]);
+const DEMO_COVER_LETTERS = [
+  {
+    id: 'cl-1',
+    jobTitle: 'Senior Software Engineer',
+    company: 'Acme Corp',
+    generatedDate: '2025-01-15',
+    status: 'Ready',
+    content: 'Dear Hiring Manager, I am excited to apply for the Senior Software Engineer role at Acme Corp...',
+  },
+];
+
+function CoverLettersScreen({ onBack, onNavigate, onSelectCoverLetter }) {
+  const [items, setItems] = useState(DEMO_COVER_LETTERS);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [showCopySuccess, setShowCopySuccess] = useState(false);
+  const isEmpty = items.length === 0;
+
+  const handleCopy = (item) => {
+    try { navigator.clipboard.writeText(item.content); } catch { /* ignore */ }
+    setShowCopySuccess(true);
+  };
+
+  const handleDelete = (id) => {
+    if (!window.confirm('Delete this cover letter?')) return;
+    setItems((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const handleView = (item) => {
+    onSelectCoverLetter?.(item);
+    onNavigate?.('cover-letter-view');
+  };
 
   return (
     <>
@@ -1046,6 +1085,19 @@ function CoverLettersScreen({ onBack }) {
         </div>
       </header>
       <div style={S.content}>
+        <div
+          data-testid="cover-letters-empty-state"
+          style={{
+            display: isEmpty ? 'block' : 'none',
+            textAlign: 'center',
+            padding: '48px 16px',
+          }}
+        >
+          <p style={{ margin: '0 0 8px', color: '#64748b' }}>No cover letters generated yet</p>
+          <p style={{ margin: 0, color: '#94a3b8', fontSize: '13px' }}>
+            Generate a cover letter from an Application Hub
+          </p>
+        </div>
         <table style={S.table}>
           <thead>
             <tr>
@@ -1057,11 +1109,9 @@ function CoverLettersScreen({ onBack }) {
             </tr>
           </thead>
           <tbody>
-            {items.length === 0 ? (
-              <tr>
-                <td colSpan={5} style={{ ...S.td, textAlign: 'center', padding: '48px 16px' }}>
-                  <p style={{ margin: 0, color: '#64748b' }}>No cover letters yet</p>
-                </td>
+            {isEmpty ? (
+              <tr aria-hidden="true" style={{ display: 'none' }}>
+                <td />
               </tr>
             ) : (
               items.map((item) => {
@@ -1075,9 +1125,30 @@ function CoverLettersScreen({ onBack }) {
                       <span style={{ ...S.badge, background: bg, color: text }}>{item.status}</span>
                     </td>
                     <td style={S.td}>
-                      <button style={{ ...S.small, background: '#dbeafe', color: '#1d4ed8', marginRight: '8px' }}>View</button>
-                      <button style={{ ...S.small, background: '#d1fae5', color: '#065f46', marginRight: '8px' }}>Download</button>
-                      <button style={{ ...S.small, background: '#faf5ff', color: '#6b21a8' }}>Copy</button>
+                      <button
+                        style={{ ...S.small, background: '#dbeafe', color: '#1d4ed8', marginRight: '8px' }}
+                        onClick={() => handleView(item)}
+                      >
+                        View
+                      </button>
+                      <button
+                        style={{ ...S.small, background: '#faf5ff', color: '#6b21a8', marginRight: '8px' }}
+                        onClick={() => handleCopy(item)}
+                      >
+                        Copy
+                      </button>
+                      <button
+                        style={{ ...S.small, background: '#d1fae5', color: '#065f46', marginRight: '8px' }}
+                        onClick={() => setShowDownloadModal(true)}
+                      >
+                        Download
+                      </button>
+                      <button
+                        style={{ ...S.small, background: '#fee2e2', color: '#dc2626' }}
+                        onClick={() => handleDelete(item.id)}
+                      >
+                        Delete
+                      </button>
                     </td>
                   </tr>
                 );
@@ -1085,6 +1156,60 @@ function CoverLettersScreen({ onBack }) {
             )}
           </tbody>
         </table>
+      </div>
+
+      <DownloadFormatModal
+        isOpen={showDownloadModal}
+        onClose={() => setShowDownloadModal(false)}
+        onDownload={() => {}}
+      />
+
+      <CopySuccessModal
+        isOpen={showCopySuccess}
+        onClose={() => setShowCopySuccess(false)}
+      />
+    </>
+  );
+}
+
+function CopySuccessModal({ isOpen, onClose }) {
+  if (!isOpen) return null;
+  return (
+    <div style={S.overlay} role="dialog" aria-modal="true" aria-label="Copy Success">
+      <div style={S.modal}>
+        <h2 style={{ margin: '0 0 12px' }}>Successfully Copied to Clipboard</h2>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button style={{ ...S.btn, ...S.primary }} onClick={onClose}>
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CoverLetterViewScreen({ onBack, coverLetter }) {
+  return (
+    <>
+      <header style={S.header}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button style={{ ...S.btn, ...S.secondary, fontSize: '13px', padding: '6px 12px' }} onClick={onBack}>
+            ← Back
+          </button>
+          <h1 style={S.h1}>Cover Letter Preview</h1>
+        </div>
+      </header>
+      <div style={S.content} data-testid="cover-letter-view">
+        <div style={S.card}>
+          {coverLetter && (
+            <p style={{ margin: '0 0 12px', color: '#64748b', fontSize: '14px' }}>
+              {coverLetter.jobTitle} — {coverLetter.company}
+            </p>
+          )}
+          <p style={{ margin: 0, fontSize: '14px', whiteSpace: 'pre-wrap' }}>
+            {coverLetter?.content || 'Cover letter content would appear here.'}
+          </p>
+        </div>
       </div>
     </>
   );
@@ -1273,7 +1398,7 @@ function SettingsScreen({ onBack }) {
               checked={form.emailNotifications}
               onChange={set('emailNotifications')}
             />
-            <label htmlFor="sett-email-notif">Inbox alerts</label>
+            <label htmlFor="sett-email-notif">Email notifications for completed modules</label>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <input
@@ -1282,7 +1407,7 @@ function SettingsScreen({ onBack }) {
               checked={form.smsNotifications}
               onChange={set('smsNotifications')}
             />
-            <label htmlFor="sett-sms-notif">Text alerts</label>
+            <label htmlFor="sett-sms-notif">Weekly summary email</label>
           </div>
         </div>
 

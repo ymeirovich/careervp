@@ -68,8 +68,9 @@ describe("SETTINGS_02 — Full Name field", () => {
 describe("SETTINGS_03 — Email field is read-only", () => {
   it("Email field is present and has readOnly attribute", () => {
     navigateToSettings();
-    const emailField = screen.queryByLabelText(/email/i)
-      ?? screen.queryByRole('textbox', { name: /email/i });
+    const emailField = screen.queryByLabelText(/^email$/i)
+      ?? screen.queryByRole('textbox', { name: /^email$/i })
+      ?? (document.querySelector('input[type="email"]') as HTMLElement | null);
     expect(emailField, 'Email field').not.toBeNull();
     if (emailField) {
       expect(
@@ -160,7 +161,9 @@ describe("SETTINGS_07 — Default CV format select", () => {
 describe("SETTINGS_08 — Notifications toggles", () => {
   it("renders two notification toggle controls", () => {
     navigateToSettings();
-    const notificationsSection = screen.queryByText(/notifications/i);
+    const notificationsSection = screen.queryByRole('heading', { name: /^notifications$/i })
+      ?? screen.queryByText(/^notifications$/i)
+      ?? screen.queryByText(/notifications/i);
     expect(notificationsSection, 'Notifications section').not.toBeNull();
 
     // Look for checkboxes or toggle switches
