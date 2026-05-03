@@ -9,6 +9,68 @@
 
 import { useState, useCallback, useRef } from 'react';
 
+const DESIGN_TOKEN_STYLES = `
+:root {
+  --color-primary-action: #F97316;
+  --color-primary-action-hover: #EA6C0A;
+  --color-primary-action-text: #FFFFFF;
+  --color-background-page: #FCF7F5;
+  --color-background-sidebar: #FFFFFF;
+  --color-background-card: #FFFFFF;
+  --color-text-primary: #1A1A2E;
+  --color-text-secondary: #6B7280;
+  --color-border-default: #E5E7EB;
+  --state-active: #22C55E;
+  --state-stale: #F59E0B;
+  --state-failed: #EF4444;
+  --state-processing: #3B82F6;
+  --font-primary: 'Inter', sans-serif;
+  --size-heading-lg: 28px;
+  --size-heading-md: 22px;
+  --size-body: 15px;
+  --size-label: 13px;
+  --weight-bold: 700;
+  --weight-semibold: 600;
+  --radius-card: 16px;
+  --radius-button: 8px;
+  --radius-modal: 24px;
+
+  --color-page-bg: var(--color-background-page);
+  --color-card: var(--color-background-card);
+  --color-surface-subtle: #F8FAFC;
+  --color-surface-selected: #F3F4F6;
+  --color-surface-disabled: #F1F5F9;
+  --color-text-muted: var(--color-text-secondary);
+  --color-text-subtle: #9CA3AF;
+  --color-text-inverse: #FFFFFF;
+  --color-border-strong: #94A3B8;
+  --color-state-active: var(--state-active);
+  --color-state-warning: #D97706;
+  --color-state-error: var(--state-failed);
+  --color-state-info: var(--state-processing);
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: var(--weight-bold);
+
+  --text-page-title: 2rem;
+  --text-section-title: 1.75rem;
+  --text-card-title: 1.25rem;
+  --text-body: 1rem;
+  --text-body-small: 0.875rem;
+  --text-label: 0.875rem;
+  --text-nav-item: 1.5rem;
+  --text-button: 1rem;
+  --text-caption: 0.75rem;
+  --text-table-header: 1.125rem;
+  --text-table-body: 1rem;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+}
+`;
+
 // ---------------------------------------------------------------------------
 // Demo seed data
 // ---------------------------------------------------------------------------
@@ -54,31 +116,57 @@ const MODULE_DEFINITIONS = [
 const initialModuleStates = () =>
   Object.fromEntries(MODULE_DEFINITIONS.map((m) => [m.key, 'notStarted']));
 
+const TOKENS = {
+  pageBackground: 'var(--color-background-page)',
+  sidebarBackground: 'var(--color-background-sidebar)',
+  cardBackground: 'var(--color-background-card)',
+  primaryAction: 'var(--color-primary-action)',
+  primaryActionHover: 'var(--color-primary-action-hover)',
+  primaryActionText: 'var(--color-primary-action-text)',
+  textPrimary: 'var(--color-text-primary)',
+  textSecondary: 'var(--color-text-secondary)',
+  borderDefault: 'var(--color-border-default)',
+  borderStrong: 'var(--color-border-strong)',
+  stateActive: 'var(--state-active)',
+  stateStale: 'var(--state-stale)',
+  stateFailed: 'var(--state-failed)',
+  stateProcessing: 'var(--state-processing)',
+  fontPrimary: 'var(--font-primary)',
+  radiusCard: 'var(--radius-card)',
+  radiusButton: 'var(--radius-button)',
+  radiusModal: 'var(--radius-modal)',
+};
+
+function injectDesignTokens() {
+  return <style>{DESIGN_TOKEN_STYLES}</style>;
+}
+
 // ---------------------------------------------------------------------------
 // Inline styles
 // ---------------------------------------------------------------------------
 const S = {
   app: {
-    fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
+    fontFamily: TOKENS.fontPrimary,
     minHeight: '100vh',
-    background: '#f8fafc',
-    color: '#1e293b',
+    background: TOKENS.pageBackground,
+    color: TOKENS.textPrimary,
     display: 'flex',
   },
   sidebar: {
     width: '200px',
     minHeight: '100vh',
-    background: '#1e293b',
-    color: '#e2e8f0',
+    background: TOKENS.sidebarBackground,
+    color: TOKENS.textPrimary,
     padding: '16px 0',
     flexShrink: 0,
+    borderRight: `1px solid ${TOKENS.borderDefault}`,
   },
   sidebarLogo: {
     padding: '8px 16px 16px',
     fontWeight: 700,
     fontSize: '16px',
-    color: '#f8fafc',
-    borderBottom: '1px solid #334155',
+    color: TOKENS.textPrimary,
+    borderBottom: `1px solid ${TOKENS.borderDefault}`,
     marginBottom: '8px',
   },
   navBtn: {
@@ -88,15 +176,15 @@ const S = {
     padding: '10px 16px',
     background: 'none',
     border: 'none',
-    color: '#94a3b8',
+    color: TOKENS.textSecondary,
     fontSize: '14px',
     cursor: 'pointer',
     fontWeight: 500,
     transition: 'color 0.15s, background 0.15s',
   },
   navBtnActive: {
-    color: '#f8fafc',
-    background: '#334155',
+    color: TOKENS.primaryAction,
+    background: 'var(--color-surface-subtle)',
   },
   main: {
     flex: 1,
@@ -105,30 +193,31 @@ const S = {
     minWidth: 0,
   },
   header: {
-    background: '#fff',
-    borderBottom: '1px solid #e2e8f0',
+    background: TOKENS.cardBackground,
+    borderBottom: `1px solid ${TOKENS.borderDefault}`,
     padding: '16px 24px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  h1: { margin: 0, fontSize: '20px', fontWeight: 700, color: '#0f172a' },
+  h1: { margin: 0, fontSize: '20px', fontWeight: 700, color: TOKENS.textPrimary },
   content: { padding: '24px', flex: 1 },
   btn: {
     cursor: 'pointer',
     border: 'none',
-    borderRadius: '6px',
+    borderRadius: TOKENS.radiusButton,
     padding: '8px 16px',
     fontSize: '14px',
     fontWeight: 500,
   },
-  primary: { background: '#3b82f6', color: '#fff' },
-  secondary: { background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1' },
-  danger: { background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5' },
+  primary: { background: TOKENS.primaryAction, color: TOKENS.primaryActionText },
+  secondary: { background: 'transparent', color: TOKENS.primaryAction, border: `1px solid ${TOKENS.primaryAction}` },
+  grey: { background: 'var(--color-surface-selected)', color: TOKENS.textPrimary },
+  danger: { background: TOKENS.stateFailed, color: TOKENS.primaryActionText, border: `1px solid ${TOKENS.stateFailed}` },
   small: {
     padding: '4px 10px',
     fontSize: '13px',
-    borderRadius: '4px',
+    borderRadius: TOKENS.radiusButton,
     cursor: 'pointer',
     border: 'none',
     fontWeight: 500,
@@ -136,26 +225,26 @@ const S = {
   table: {
     width: '100%',
     borderCollapse: 'collapse',
-    background: '#fff',
-    borderRadius: '8px',
+    background: TOKENS.cardBackground,
+    borderRadius: TOKENS.radiusCard,
     boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
   },
   th: {
     textAlign: 'left',
     padding: '12px 16px',
-    background: '#f8fafc',
-    borderBottom: '1px solid #e2e8f0',
+    background: 'var(--color-surface-subtle)',
+    borderBottom: `1px solid ${TOKENS.borderDefault}`,
     fontSize: '13px',
     fontWeight: 600,
-    color: '#64748b',
+    color: TOKENS.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: '0.04em',
   },
-  td: { padding: '12px 16px', borderBottom: '1px solid #f1f5f9', fontSize: '14px' },
+  td: { padding: '12px 16px', borderBottom: `1px solid ${TOKENS.borderDefault}`, fontSize: '14px' },
   card: {
-    background: '#fff',
-    borderRadius: '8px',
-    border: '1px solid #e2e8f0',
+    background: TOKENS.cardBackground,
+    borderRadius: TOKENS.radiusCard,
+    border: `1px solid ${TOKENS.borderDefault}`,
     padding: '20px',
     boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
   },
@@ -177,16 +266,16 @@ const S = {
   input: {
     width: '100%',
     padding: '8px 12px',
-    border: '1px solid #cbd5e1',
-    borderRadius: '6px',
+    border: `1px solid ${TOKENS.borderDefault}`,
+    borderRadius: TOKENS.radiusButton,
     fontSize: '14px',
     boxSizing: 'border-box',
   },
   textarea: {
     width: '100%',
     padding: '8px 12px',
-    border: '1px solid #cbd5e1',
-    borderRadius: '6px',
+    border: `1px solid ${TOKENS.borderDefault}`,
+    borderRadius: TOKENS.radiusButton,
     fontSize: '14px',
     boxSizing: 'border-box',
     minHeight: '100px',
@@ -202,8 +291,8 @@ const S = {
     zIndex: 100,
   },
   modal: {
-    background: '#fff',
-    borderRadius: '12px',
+    background: TOKENS.cardBackground,
+    borderRadius: TOKENS.radiusModal,
     padding: '24px',
     maxWidth: '480px',
     width: '90%',
@@ -214,12 +303,12 @@ const S = {
 function statusColors(status) {
   return (
     {
-      Applied: { bg: '#dbeafe', text: '#1d4ed8' },
-      Interviewing: { bg: '#d1fae5', text: '#065f46' },
-      Offer: { bg: '#fef3c7', text: '#92400e' },
-      Rejected: { bg: '#fee2e2', text: '#991b1b' },
-      Ready: { bg: '#d1fae5', text: '#065f46' },
-    }[status] || { bg: '#f1f5f9', text: '#475569' }
+      Applied: { bg: 'var(--color-surface-selected)', text: TOKENS.primaryAction },
+      Interviewing: { bg: 'var(--state-active)', text: '#065f46' },
+      Offer: { bg: 'var(--state-stale)', text: '#92400e' },
+      Rejected: { bg: 'var(--state-failed)', text: '#991b1b' },
+      Ready: { bg: 'var(--state-active)', text: '#065f46' },
+    }[status] || { bg: 'var(--color-surface-subtle)', text: TOKENS.textSecondary }
   );
 }
 
@@ -300,58 +389,52 @@ export default function App() {
   const showSidebar = MAIN_SCREENS.includes(screen);
 
   return (
-    <div style={S.app}>
-      {showSidebar && (
-        <Sidebar activeScreen={screen} onNavigate={navigate} />
-      )}
-      <div style={S.main}>
-        {screen === 'dashboard' && (
-          <DashboardScreen
-            applications={applications}
-            onViewHub={goToHub}
-            onDelete={removeApplication}
-            onAddNew={() => setNavigationHistory((prev) => [...prev, 'new-app'])}
-          />
-        )}
-        {screen === 'new-app' && (
-          <NewApplicationForm
-            onSubmit={(data) => {
-              addApplication(data);
-              setNavigationHistory((prev) => [...prev.slice(0, -1), 'hub']);
-            }}
-            onCancel={() => setNavigationHistory(['dashboard'])}
-          />
-        )}
-        {screen === 'hub' && (
-          <HubScreen
-            application={selectedApp || DEMO_APPLICATIONS[0]}
-            onBack={goBack}
-          />
-        )}
-        {screen === 'base-cvs' && <BaseCVsScreen onBack={goBack} />}
-        {screen === 'tailored-cvs' && (
-          <TailoredCVsScreen
-            onBack={goBack}
-            onNavigate={navigate}
-            onSelectCv={setSelectedTailoredCv}
-          />
-        )}
-        {screen === 'cv-view' && <CvViewScreen onBack={goBack} cv={selectedTailoredCv} />}
-        {screen === 'cover-letters' && (
-          <CoverLettersScreen
-            onBack={goBack}
-            onNavigate={navigate}
-            onSelectCoverLetter={setSelectedCoverLetter}
-          />
-        )}
-        {screen === 'cover-letter-view' && (
-          <CoverLetterViewScreen onBack={goBack} coverLetter={selectedCoverLetter} />
-        )}
-        {screen === 'billing' && <BillingScreen onBack={goBack} />}
-        {screen === 'settings' && <SettingsScreen onBack={goBack} />}
-        {screen === 'plans' && <PlansScreen onBack={goBack} />}
+    <>
+      {injectDesignTokens()}
+      <div style={S.app}>
+        {showSidebar && <Sidebar activeScreen={screen} onNavigate={navigate} />}
+        <div style={S.main}>
+          {screen === 'dashboard' && (
+            <DashboardScreen
+              applications={applications}
+              onViewHub={goToHub}
+              onDelete={removeApplication}
+              onAddNew={() => setNavigationHistory((prev) => [...prev, 'new-app'])}
+            />
+          )}
+          {screen === 'new-app' && (
+            <NewApplicationForm
+              onSubmit={(data) => {
+                addApplication(data);
+                setNavigationHistory((prev) => [...prev.slice(0, -1), 'hub']);
+              }}
+              onCancel={() => setNavigationHistory(['dashboard'])}
+            />
+          )}
+          {screen === 'hub' && <HubScreen application={selectedApp || DEMO_APPLICATIONS[0]} onBack={goBack} />}
+          {screen === 'base-cvs' && <BaseCVsScreen onBack={goBack} />}
+          {screen === 'tailored-cvs' && (
+            <TailoredCVsScreen
+              onBack={goBack}
+              onNavigate={navigate}
+              onSelectCv={setSelectedTailoredCv}
+            />
+          )}
+          {screen === 'cv-view' && <CvViewScreen onBack={goBack} cv={selectedTailoredCv} />}
+          {screen === 'cover-letters' && (
+            <CoverLettersScreen
+              onBack={goBack}
+              onNavigate={navigate}
+              onSelectCoverLetter={setSelectedCoverLetter}
+            />
+          )}
+          {screen === 'cover-letter-view' && <CoverLetterViewScreen onBack={goBack} coverLetter={selectedCoverLetter} />}
+          {screen === 'billing' && <BillingScreen onBack={goBack} />}
+          {screen === 'settings' && <SettingsScreen onBack={goBack} />}
+          {screen === 'plans' && <PlansScreen onBack={goBack} />}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -380,8 +463,8 @@ function DashboardScreen({ applications, onViewHub, onDelete, onAddNew }) {
             padding: '56px 16px',
           }}
         >
-          <h2 style={{ margin: '0 0 8px', color: '#64748b' }}>No applications yet</h2>
-          <p style={{ margin: '0 0 20px', color: '#94a3b8' }}>
+          <h2 style={{ margin: '0 0 8px', color: TOKENS.textSecondary }}>No applications yet</h2>
+          <p style={{ margin: '0 0 20px', color: 'var(--color-text-subtle)' }}>
             Track your job search from application to offer.
           </p>
           <button style={{ ...S.btn, ...S.primary }} onClick={onAddNew}>
@@ -414,14 +497,14 @@ function DashboardScreen({ applications, onViewHub, onDelete, onAddNew }) {
                   <td style={S.td}>{app.matchScore != null ? `${app.matchScore}%` : '—'}</td>
                   <td style={S.td}>
                     <button
-                      style={{ ...S.small, background: '#dbeafe', color: '#1d4ed8', marginRight: '8px' }}
+                      style={{ ...S.small, background: 'var(--color-surface-selected)', color: TOKENS.primaryAction, marginRight: '8px' }}
                       onClick={() => onViewHub(app)}
                       data-testid={`view-hub-${app.id}`}
                     >
                       View Hub
                     </button>
                     <button
-                      style={{ ...S.small, background: '#fee2e2', color: '#dc2626' }}
+                      style={{ ...S.small, background: 'var(--color-state-error)', color: TOKENS.primaryActionText }}
                       onClick={() => {
                         if (window.confirm('Delete this application?')) onDelete(app.id);
                       }}
@@ -510,7 +593,7 @@ function NewApplicationForm({ onSubmit, onCancel }) {
           </div>
           <div style={S.formGroup}>
             <label style={S.label} htmlFor="naf-url">
-              Job URL <span style={{ color: '#94a3b8', fontWeight: 400 }}>(optional)</span>
+              Job URL <span style={{ color: 'var(--color-text-subtle)', fontWeight: 400 }}>(optional)</span>
             </label>
             <input id="naf-url" style={S.input} type="url" placeholder="https://…"
               value={form.jobUrl} onChange={set('jobUrl')} />
@@ -519,7 +602,7 @@ function NewApplicationForm({ onSubmit, onCancel }) {
           <div style={{ ...S.formGroup, ...S.card }}>
             <p style={{ margin: '0 0 4px', fontWeight: 600 }}>Base CV</p>
             <p
-              style={{ margin: '0 0 8px', fontSize: '14px', color: '#475569' }}
+              style={{ margin: '0 0 8px', fontSize: '14px', color: TOKENS.textSecondary }}
               data-testid="selected-cv-name"
             >
               {baseCvName}
@@ -586,7 +669,7 @@ export function ChangeBaseCVModal({ isOpen, onClose, showChoices = false, onSele
         {showChoices ? (
           <>
             <h2 style={{ margin: '0 0 16px' }}>Choose Base CV</h2>
-            <p style={{ color: '#64748b', marginBottom: '16px' }}>
+            <p style={{ color: TOKENS.textSecondary, marginBottom: '16px' }}>
               Select from your uploaded CVs or use a generated tailored CV.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -596,7 +679,7 @@ export function ChangeBaseCVModal({ isOpen, onClose, showChoices = false, onSele
               >
                 Select Uploaded CV
               </button>
-              <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>OR</div>
+              <div style={{ textAlign: 'center', color: 'var(--color-text-subtle)', fontSize: '13px' }}>OR</div>
               <button
                 style={{ ...S.btn, ...S.secondary, textAlign: 'left' }}
                 onClick={() => onClose?.()}
@@ -608,7 +691,7 @@ export function ChangeBaseCVModal({ isOpen, onClose, showChoices = false, onSele
         ) : (
           <>
             <h2 style={{ margin: '0 0 16px' }}>Upload Base CV</h2>
-            <p style={{ color: '#64748b', marginBottom: '16px' }}>
+            <p style={{ color: TOKENS.textSecondary, marginBottom: '16px' }}>
               Upload your CV in PDF or DOCX format.
             </p>
             <div style={S.formGroup}>
@@ -629,7 +712,7 @@ export function ChangeBaseCVModal({ isOpen, onClose, showChoices = false, onSele
                 >
                   Choose File
                 </button>
-                <span style={{ color: '#64748b', fontSize: '14px' }}>
+                <span style={{ color: TOKENS.textSecondary, fontSize: '14px' }}>
                   {file ? file.name : 'No file chosen'}
                 </span>
               </div>
@@ -688,10 +771,10 @@ function HubScreen({ application, onBack }) {
             ← Back
           </button>
           <div>
-            <h1 style={{ margin: 0, fontWeight: 700, fontSize: '18px', color: '#0f172a' }}>
+            <h1 style={{ margin: 0, fontWeight: 700, fontSize: '18px', color: TOKENS.textPrimary }}>
               {app?.company} — {app?.position}
             </h1>
-            <p style={{ margin: '2px 0 0', fontSize: '13px', color: '#64748b' }}>Application Hub</p>
+            <p style={{ margin: '2px 0 0', fontSize: '13px', color: TOKENS.textSecondary }}>Application Hub</p>
           </div>
         </div>
       </header>
@@ -733,12 +816,12 @@ function ModuleCard({ moduleKey, label, subtitle, state, onGenerate }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '12px' }}>
         <div>
           <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600 }}>{label}</h3>
-          <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#64748b' }}>{subtitle}</p>
+          <p style={{ margin: '4px 0 0', fontSize: '13px', color: TOKENS.textSecondary }}>{subtitle}</p>
         </div>
-        {state === 'ready' && <span style={{ ...S.badge, background: '#d1fae5', color: '#065f46' }}>Ready</span>}
-        {state === 'processing' && <span style={{ ...S.badge, background: '#fef3c7', color: '#92400e' }}>Processing</span>}
-        {state === 'stale' && <span style={{ ...S.badge, background: '#fef3c7', color: '#92400e' }}>Stale</span>}
-        {state === 'failed' && <span style={{ ...S.badge, background: '#fee2e2', color: '#b91c1c' }}>Failed</span>}
+        {state === 'ready' && <span style={{ ...S.badge, background: TOKENS.stateActive, color: '#065f46' }}>Ready</span>}
+        {state === 'processing' && <span style={{ ...S.badge, background: TOKENS.stateStale, color: '#92400e' }}>Processing</span>}
+        {state === 'stale' && <span style={{ ...S.badge, background: TOKENS.stateStale, color: '#92400e' }}>Stale</span>}
+        {state === 'failed' && <span style={{ ...S.badge, background: TOKENS.stateFailed, color: '#b91c1c' }}>Failed</span>}
       </div>
 
       {state === 'notStarted' && (
@@ -758,20 +841,20 @@ function ModuleCard({ moduleKey, label, subtitle, state, onGenerate }) {
             aria-label="Processing"
             style={{
               width: '24px', height: '24px',
-              border: '3px solid #e2e8f0', borderTopColor: '#3b82f6',
+              border: `3px solid ${TOKENS.borderDefault}`, borderTopColor: TOKENS.stateProcessing,
               borderRadius: '50%', margin: '0 auto 8px',
             }}
           />
-          <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Generating…</p>
-          <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#94a3b8' }}>Stage 2 of 5</p>
+          <p style={{ margin: 0, fontSize: '13px', color: TOKENS.textSecondary }}>Generating…</p>
+          <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--color-text-subtle)' }}>Stage 2 of 5</p>
         </div>
       )}
 
       {state === 'ready' && (
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button style={{ ...S.small, background: '#dbeafe', color: '#1d4ed8' }}>View</button>
-          <button style={{ ...S.small, background: '#d1fae5', color: '#065f46' }}>Download</button>
-          <button style={{ ...S.small, background: '#faf5ff', color: '#6b21a8' }} onClick={handleCopy}>Copy</button>
+          <button style={{ ...S.small, background: 'var(--color-surface-selected)', color: TOKENS.primaryAction }}>View</button>
+          <button style={{ ...S.small, background: 'var(--state-active)', color: '#065f46' }}>Download</button>
+          <button style={{ ...S.small, ...S.grey }} onClick={handleCopy}>Copy</button>
         </div>
       )}
 
@@ -828,7 +911,7 @@ function BaseCVsScreen({ onBack }) {
             padding: '56px 16px',
           }}
         >
-          <p style={{ margin: '0 0 16px', color: '#64748b' }}>No base CVs uploaded yet</p>
+          <p style={{ margin: '0 0 16px', color: TOKENS.textSecondary }}>No base CVs uploaded yet</p>
           <button style={{ ...S.btn, ...S.primary }}>Upload Your First CV</button>
         </div>
 
@@ -847,21 +930,21 @@ function BaseCVsScreen({ onBack }) {
                 <td style={S.td}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     <span>{cv.name}</span>
-                    {cv.isDefault && <span style={{ ...S.badge, background: '#d1fae5', color: '#065f46' }}>Default</span>}
+                    {cv.isDefault && <span style={{ ...S.badge, background: TOKENS.stateActive, color: '#065f46' }}>Default</span>}
                   </div>
                 </td>
                 <td style={S.td}>{cv.uploadDate}</td>
                 <td style={S.td}>{cv.usedIn}</td>
                 <td style={S.td}>
                   <button
-                    style={{ ...S.small, background: '#dbeafe', color: '#1d4ed8', marginRight: '8px' }}
+                    style={{ ...S.small, background: 'var(--color-surface-selected)', color: TOKENS.primaryAction, marginRight: '8px' }}
                     onClick={() => handleSetDefault(cv.id)}
                     disabled={cv.isDefault}
                   >
                     Set as Default
                   </button>
                   <button
-                    style={{ ...S.small, background: '#fee2e2', color: '#dc2626' }}
+                    style={{ ...S.small, background: 'var(--color-state-error)', color: TOKENS.primaryActionText }}
                     onClick={() => handleDelete(cv.id)}
                   >
                     Delete
@@ -892,7 +975,7 @@ function DownloadFormatModal({ isOpen, onClose, onDownload }) {
           ✕
         </button>
         <h2 style={{ margin: '0 0 16px' }}>Select download format</h2>
-        <p style={{ color: '#64748b', marginBottom: '16px' }}>Choose a format to download your tailored CV.</p>
+        <p style={{ color: TOKENS.textSecondary, marginBottom: '16px' }}>Choose a format to download your tailored CV.</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <button
             style={{ ...S.btn, ...S.secondary, textAlign: 'left' }}
@@ -930,11 +1013,11 @@ function CvViewScreen({ onBack, cv }) {
         <div style={S.card}>
           <h2 style={{ margin: '0 0 8px', fontSize: '16px' }}>Tailored CV</h2>
           {cv && (
-            <p style={{ margin: '0 0 4px', color: '#64748b', fontSize: '14px' }}>
+            <p style={{ margin: '0 0 4px', color: TOKENS.textSecondary, fontSize: '14px' }}>
               {cv.jobTitle} — {cv.company}
             </p>
           )}
-          <p style={{ margin: '16px 0 0', color: '#94a3b8', fontSize: '14px' }}>
+          <p style={{ margin: '16px 0 0', color: 'var(--color-text-subtle)', fontSize: '14px' }}>
             CV content preview would appear here.
           </p>
         </div>
@@ -983,8 +1066,8 @@ function TailoredCVsScreen({ onBack, onNavigate, onSelectCv }) {
             {isEmpty ? (
               <tr data-testid="tailored-cvs-empty-state">
                 <td colSpan={5} style={{ ...S.td, textAlign: 'center', padding: '48px 16px' }}>
-                  <p style={{ margin: '0 0 8px', color: '#64748b' }}>No tailored CVs generated yet</p>
-                  <p style={{ margin: 0, color: '#94a3b8', fontSize: '13px' }}>
+                  <p style={{ margin: '0 0 8px', color: TOKENS.textSecondary }}>No tailored CVs generated yet</p>
+                  <p style={{ margin: 0, color: 'var(--color-text-subtle)', fontSize: '13px' }}>
                     Generate a tailored CV from an Application Hub
                   </p>
                 </td>
@@ -1002,19 +1085,19 @@ function TailoredCVsScreen({ onBack, onNavigate, onSelectCv }) {
                     </td>
                     <td style={S.td}>
                       <button
-                        style={{ ...S.small, background: '#dbeafe', color: '#1d4ed8', marginRight: '8px' }}
+                        style={{ ...S.small, background: 'var(--color-surface-selected)', color: TOKENS.primaryAction, marginRight: '8px' }}
                         onClick={() => { onSelectCv?.(item); onNavigate?.('cv-view'); }}
                       >
                         View
                       </button>
                       <button
-                        style={{ ...S.small, background: '#d1fae5', color: '#065f46', marginRight: '8px' }}
+                        style={{ ...S.small, background: TOKENS.stateActive, color: '#065f46', marginRight: '8px' }}
                         onClick={() => setShowDownloadModal(true)}
                       >
                         Download
                       </button>
                       <button
-                        style={{ ...S.small, background: '#fee2e2', color: '#dc2626' }}
+                        style={{ ...S.small, background: 'var(--color-state-error)', color: TOKENS.primaryActionText }}
                         onClick={() => handleDelete(item.id)}
                       >
                         Delete
@@ -1093,8 +1176,8 @@ function CoverLettersScreen({ onBack, onNavigate, onSelectCoverLetter }) {
             padding: '48px 16px',
           }}
         >
-          <p style={{ margin: '0 0 8px', color: '#64748b' }}>No cover letters generated yet</p>
-          <p style={{ margin: 0, color: '#94a3b8', fontSize: '13px' }}>
+          <p style={{ margin: '0 0 8px', color: TOKENS.textSecondary }}>No cover letters generated yet</p>
+          <p style={{ margin: 0, color: 'var(--color-text-subtle)', fontSize: '13px' }}>
             Generate a cover letter from an Application Hub
           </p>
         </div>
@@ -1126,25 +1209,25 @@ function CoverLettersScreen({ onBack, onNavigate, onSelectCoverLetter }) {
                     </td>
                     <td style={S.td}>
                       <button
-                        style={{ ...S.small, background: '#dbeafe', color: '#1d4ed8', marginRight: '8px' }}
+                        style={{ ...S.small, background: 'var(--color-surface-selected)', color: TOKENS.primaryAction, marginRight: '8px' }}
                         onClick={() => handleView(item)}
                       >
                         View
                       </button>
                       <button
-                        style={{ ...S.small, background: '#faf5ff', color: '#6b21a8', marginRight: '8px' }}
+                        style={{ ...S.small, ...S.grey, marginRight: '8px' }}
                         onClick={() => handleCopy(item)}
                       >
                         Copy
                       </button>
                       <button
-                        style={{ ...S.small, background: '#d1fae5', color: '#065f46', marginRight: '8px' }}
+                        style={{ ...S.small, background: TOKENS.stateActive, color: '#065f46', marginRight: '8px' }}
                         onClick={() => setShowDownloadModal(true)}
                       >
                         Download
                       </button>
                       <button
-                        style={{ ...S.small, background: '#fee2e2', color: '#dc2626' }}
+                        style={{ ...S.small, background: TOKENS.stateFailed, color: TOKENS.primaryActionText }}
                         onClick={() => handleDelete(item.id)}
                       >
                         Delete
@@ -1202,7 +1285,7 @@ function CoverLetterViewScreen({ onBack, coverLetter }) {
       <div style={S.content} data-testid="cover-letter-view">
         <div style={S.card}>
           {coverLetter && (
-            <p style={{ margin: '0 0 12px', color: '#64748b', fontSize: '14px' }}>
+            <p style={{ margin: '0 0 12px', color: TOKENS.textSecondary, fontSize: '14px' }}>
               {coverLetter.jobTitle} — {coverLetter.company}
             </p>
           )}
@@ -1246,8 +1329,8 @@ function BillingScreen({ onBack }) {
           <div style={S.card}>
             <h2 style={{ margin: '0 0 12px', fontSize: '16px' }}>Current Plan</h2>
             <p style={{ margin: '0 0 4px', fontWeight: 600 }}>{plan.name}</p>
-            <p style={{ margin: '0 0 4px', color: '#64748b', fontSize: '14px' }}>Renews: {plan.renewsAt}</p>
-            <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: '14px' }}>
+            <p style={{ margin: '0 0 4px', color: TOKENS.textSecondary, fontSize: '14px' }}>Renews: {plan.renewsAt}</p>
+            <p style={{ margin: '0 0 16px', color: TOKENS.textSecondary, fontSize: '14px' }}>
               Applications used this month: {plan.appsUsed}
             </p>
             <button style={{ ...S.btn, ...S.danger, fontSize: '13px' }}>
@@ -1257,8 +1340,8 @@ function BillingScreen({ onBack }) {
 
           <div style={S.card}>
             <h2 style={{ margin: '0 0 12px', fontSize: '16px' }}>Payment Method</h2>
-            <p style={{ margin: '0 0 4px', color: '#64748b', fontSize: '14px' }}>Visa ending in 4242</p>
-            <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: '14px' }}>Expires 12/27</p>
+            <p style={{ margin: '0 0 4px', color: TOKENS.textSecondary, fontSize: '14px' }}>Visa ending in 4242</p>
+            <p style={{ margin: '0 0 16px', color: TOKENS.textSecondary, fontSize: '14px' }}>Expires 12/27</p>
             <button style={{ ...S.btn, ...S.secondary, fontSize: '13px' }}>
               Update Payment
             </button>
@@ -1283,7 +1366,7 @@ function BillingScreen({ onBack }) {
                   <td style={S.td}>{inv.amount}</td>
                   <td style={S.td}>{inv.status}</td>
                   <td style={S.td}>
-                    <button style={{ ...S.small, background: '#dbeafe', color: '#1d4ed8' }}>
+                    <button style={{ ...S.small, background: 'var(--color-surface-selected)', color: TOKENS.primaryAction }}>
                       Download invoice
                     </button>
                   </td>
@@ -1353,7 +1436,7 @@ function SettingsScreen({ onBack }) {
             <input id="sett-email" style={S.input} type="email" value={form.email} readOnly />
           </div>
           <div style={S.formGroup}>
-            <label style={S.label} htmlFor="sett-phone">Phone <span style={{ color: '#94a3b8', fontWeight: 400 }}>(optional)</span></label>
+            <label style={S.label} htmlFor="sett-phone">Phone <span style={{ color: 'var(--color-text-subtle)', fontWeight: 400 }}>(optional)</span></label>
             <input id="sett-phone" style={S.input} type="tel" value={form.phone} onChange={set('phone')} placeholder="+1 555 000 0000" />
           </div>
           <button style={{ ...S.btn, ...S.primary }} onClick={handleSave}>
@@ -1362,7 +1445,7 @@ function SettingsScreen({ onBack }) {
           {saved && (
             <span
               role="alert"
-              style={{ marginLeft: '12px', color: '#065f46', fontSize: '14px', fontWeight: 500 }}
+              style={{ marginLeft: '12px', color: 'var(--color-state-active)', fontSize: '14px', fontWeight: 500 }}
             >
               Saved successfully
             </span>
@@ -1412,9 +1495,9 @@ function SettingsScreen({ onBack }) {
         </div>
 
         {/* Danger Zone */}
-        <div style={{ ...S.card, border: '1px solid #fca5a5' }}>
-          <h2 style={{ margin: '0 0 8px', fontSize: '16px', color: '#dc2626' }}>Danger Zone</h2>
-          <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: '14px' }}>
+        <div style={{ ...S.card, border: `1px solid ${TOKENS.stateFailed}` }}>
+          <h2 style={{ margin: '0 0 8px', fontSize: '16px', color: TOKENS.stateFailed }}>Danger Zone</h2>
+          <p style={{ margin: '0 0 16px', color: TOKENS.textSecondary, fontSize: '14px' }}>
             Permanently delete your account and all data.
           </p>
           <button style={{ ...S.btn, ...S.danger }} onClick={() => setShowDeleteConfirm(true)}>
@@ -1427,7 +1510,7 @@ function SettingsScreen({ onBack }) {
           <div style={S.overlay} role="dialog" aria-modal="true">
             <div style={S.modal}>
               <h3 style={{ margin: '0 0 12px' }}>Are you sure?</h3>
-              <p style={{ margin: '0 0 20px', color: '#64748b' }}>
+              <p style={{ margin: '0 0 20px', color: TOKENS.textSecondary }}>
                 This action cannot be undone. Your account and all data will be permanently deleted.
               </p>
               <div style={{ display: 'flex', gap: '12px' }}>
@@ -1495,8 +1578,8 @@ function PlansScreen({ onBack }) {
                 <span
                   style={{
                     ...S.badge,
-                    background: '#d1fae5',
-                    color: '#065f46',
+                    background: TOKENS.stateActive,
+                    color: TOKENS.stateActive,
                     position: 'absolute',
                     top: '12px',
                     right: '12px',
@@ -1506,9 +1589,9 @@ function PlansScreen({ onBack }) {
                 </span>
               )}
               <h2 style={{ margin: '0 0 4px', fontSize: '18px' }}>{plan.name}</h2>
-              <p style={{ margin: '0 0 16px', fontSize: '26px', fontWeight: 700, color: '#3b82f6' }}>
+              <p style={{ margin: '0 0 16px', fontSize: '26px', fontWeight: 700, color: TOKENS.primaryAction }}>
                 {plan.price}
-                <span style={{ fontSize: '14px', color: '#64748b', fontWeight: 400 }}>{plan.period}</span>
+                <span style={{ fontSize: '14px', color: TOKENS.textSecondary, fontWeight: 400 }}>{plan.period}</span>
               </p>
               <ul style={{ textAlign: 'left', padding: '0 0 0 16px', marginBottom: '16px' }}>
                 {plan.features.map((f) => (
