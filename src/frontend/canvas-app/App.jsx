@@ -26,12 +26,12 @@ const DEMO_APPLICATIONS = [
 ];
 
 const MODULE_DEFINITIONS = [
-  { key: 'vpr', label: 'Value Proposition Report' },
-  { key: 'tailoredCv', label: 'Tailored CV' },
-  { key: 'coverLetter', label: 'Cover Letter' },
-  { key: 'gapAnalysis', label: 'Gap Analysis' },
-  { key: 'interviewPrep', label: 'Interview Prep' },
-  { key: 'companyResearch', label: 'Company Research' },
+  { key: 'vpr', label: 'Value Proposition Report', subtitle: 'AI match analysis' },
+  { key: 'tailoredCv', label: 'Tailored CV', subtitle: 'Customized resume' },
+  { key: 'coverLetter', label: 'Cover Letter', subtitle: 'Personalized letter' },
+  { key: 'gapAnalysis', label: 'Gap Analysis', subtitle: 'Skill gap review' },
+  { key: 'interviewPrep', label: 'Interview Prep', subtitle: 'Question bank' },
+  { key: 'companyResearch', label: 'Company Research', subtitle: 'Company insights' },
 ];
 
 const initialModuleStates = () =>
@@ -641,35 +641,34 @@ function HubScreen({ application, onBack }) {
           <button style={{ ...S.btn, ...S.secondary, fontSize: '13px', padding: '6px 12px' }} onClick={onBack}>
             ← Back
           </button>
-          <span style={{ fontWeight: 700, fontSize: '18px' }}>Application Hub</span>
-        </div>
-        <div style={{ fontSize: '14px', color: '#64748b' }}>
-          {app?.company} — {app?.position}
+          <div>
+            <h1 style={{ margin: 0, fontWeight: 700, fontSize: '18px', color: '#0f172a' }}>
+              {app?.company} — {app?.position}
+            </h1>
+            <p style={{ margin: '2px 0 0', fontSize: '13px', color: '#64748b' }}>Application Hub</p>
+          </div>
         </div>
       </header>
       <div style={S.content} data-testid="hub-screen">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <div>
-            <h2 style={{ margin: 0 }}>{app?.company}</h2>
-            <p style={{ margin: '4px 0 0', color: '#64748b' }}>{app?.position}</p>
-          </div>
-          {anyNotStarted && (
-            <button style={{ ...S.btn, ...S.primary }} onClick={handleGenerateAll}>
-              Generate All
-            </button>
-          )}
-        </div>
         <div style={S.moduleGrid}>
           {MODULE_DEFINITIONS.map((mod) => (
             <ModuleCard
               key={mod.key}
               moduleKey={mod.key}
               label={mod.label}
+              subtitle={mod.subtitle}
               state={moduleStates[mod.key]}
               onGenerate={() => handleGenerate(mod.key)}
             />
           ))}
         </div>
+        {anyNotStarted && (
+          <div style={{ marginTop: '20px' }}>
+            <button style={{ ...S.btn, ...S.primary }} onClick={handleGenerateAll}>
+              Generate All
+            </button>
+          </div>
+        )}
       </div>
     </>
   );
@@ -678,18 +677,22 @@ function HubScreen({ application, onBack }) {
 // ---------------------------------------------------------------------------
 // Module Card
 // ---------------------------------------------------------------------------
-function ModuleCard({ moduleKey, label, state, onGenerate }) {
+function ModuleCard({ moduleKey, label, subtitle, state, onGenerate }) {
   const handleCopy = async () => {
     try { await navigator.clipboard.writeText(`[${label} output]`); } catch { /* ignore */ }
   };
 
   return (
     <article style={S.card} data-testid={`module-card-${moduleKey}`} data-module-state={state}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-        <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600 }}>{label}</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '12px' }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600 }}>{label}</h3>
+          <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#64748b' }}>{subtitle}</p>
+        </div>
         {state === 'ready' && <span style={{ ...S.badge, background: '#d1fae5', color: '#065f46' }}>Ready</span>}
         {state === 'processing' && <span style={{ ...S.badge, background: '#fef3c7', color: '#92400e' }}>Processing</span>}
-        {state === 'notStarted' && <span style={{ ...S.badge, background: '#f1f5f9', color: '#64748b' }}>Not Started</span>}
+        {state === 'stale' && <span style={{ ...S.badge, background: '#fef3c7', color: '#92400e' }}>Stale</span>}
+        {state === 'failed' && <span style={{ ...S.badge, background: '#fee2e2', color: '#b91c1c' }}>Failed</span>}
       </div>
 
       {state === 'notStarted' && (
@@ -714,6 +717,7 @@ function ModuleCard({ moduleKey, label, state, onGenerate }) {
             }}
           />
           <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Generating…</p>
+          <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#94a3b8' }}>Stage 2 of 5</p>
         </div>
       )}
 
@@ -722,6 +726,18 @@ function ModuleCard({ moduleKey, label, state, onGenerate }) {
           <button style={{ ...S.small, background: '#dbeafe', color: '#1d4ed8' }}>View</button>
           <button style={{ ...S.small, background: '#d1fae5', color: '#065f46' }}>Download</button>
           <button style={{ ...S.small, background: '#faf5ff', color: '#6b21a8' }} onClick={handleCopy}>Copy</button>
+        </div>
+      )}
+
+      {state === 'stale' && (
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button style={{ ...S.btn, ...S.secondary, width: '100%' }}>Regenerate</button>
+        </div>
+      )}
+
+      {state === 'failed' && (
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button style={{ ...S.btn, ...S.primary, width: '100%' }}>Retry</button>
         </div>
       )}
     </article>
