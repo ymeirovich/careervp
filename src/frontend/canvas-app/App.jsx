@@ -25,6 +25,23 @@ const DEMO_APPLICATIONS = [
   },
 ];
 
+const DEMO_BASE_CVS = [
+  {
+    id: 'base-cv-1',
+    name: 'my-resume.pdf',
+    uploadDate: '2025-01-12',
+    usedIn: 4,
+    isDefault: true,
+  },
+  {
+    id: 'base-cv-2',
+    name: 'product-manager-cv.pdf',
+    uploadDate: '2025-02-03',
+    usedIn: 1,
+    isDefault: false,
+  },
+];
+
 const MODULE_DEFINITIONS = [
   { key: 'vpr', label: 'Value Proposition Report', subtitle: 'AI match analysis' },
   { key: 'tailoredCv', label: 'Tailored CV', subtitle: 'Customized resume' },
@@ -228,6 +245,7 @@ function Sidebar({ activeScreen, onNavigate }) {
       {NAV_ITEMS.map(({ screen, label }) => (
         <button
           key={screen}
+          aria-current={activeScreen === screen ? 'page' : undefined}
           style={{
             ...S.navBtn,
             ...(activeScreen === screen ? S.navBtnActive : {}),
@@ -245,9 +263,11 @@ function Sidebar({ activeScreen, onNavigate }) {
 // Root App
 // ---------------------------------------------------------------------------
 export default function App() {
-  const [screen, setScreen] = useState('dashboard');
+  const [navigationHistory, setNavigationHistory] = useState(['dashboard']);
   const [applications, setApplications] = useState(DEMO_APPLICATIONS);
   const [selectedApp, setSelectedApp] = useState(null);
+  const [selectedTailoredCv, setSelectedTailoredCv] = useState(null);
+  const screen = navigationHistory[navigationHistory.length - 1];
 
   const addApplication = useCallback((data) => {
     const newApplication = { ...data, id: `app-${Date.now()}` };
@@ -262,10 +282,19 @@ export default function App() {
 
   const goToHub = useCallback((application) => {
     setSelectedApp(application);
-    setScreen('hub');
+    setNavigationHistory((prev) => [...prev, 'hub']);
   }, []);
 
-  const navigate = useCallback((s) => setScreen(s), []);
+  const navigate = useCallback((nextScreen) => {
+    setNavigationHistory((prev) => {
+      if (prev[prev.length - 1] === nextScreen) return prev;
+      return [...prev, nextScreen];
+    });
+  }, []);
+
+  const goBack = useCallback(() => {
+    setNavigationHistory((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
+  }, []);
 
   const showSidebar = MAIN_SCREENS.includes(screen);
 
@@ -280,30 +309,37 @@ export default function App() {
             applications={applications}
             onViewHub={goToHub}
             onDelete={removeApplication}
-            onAddNew={() => setScreen('new-app')}
+            onAddNew={() => setNavigationHistory((prev) => [...prev, 'new-app'])}
           />
         )}
         {screen === 'new-app' && (
           <NewApplicationForm
             onSubmit={(data) => {
               addApplication(data);
-              setScreen('hub');
+              setNavigationHistory((prev) => [...prev.slice(0, -1), 'hub']);
             }}
-            onCancel={() => setScreen('dashboard')}
+            onCancel={() => setNavigationHistory(['dashboard'])}
           />
         )}
         {screen === 'hub' && (
           <HubScreen
             application={selectedApp || DEMO_APPLICATIONS[0]}
-            onBack={() => setScreen('dashboard')}
+            onBack={goBack}
           />
         )}
-        {screen === 'base-cvs' && <BaseCVsScreen />}
-        {screen === 'tailored-cvs' && <TailoredCVsScreen />}
-        {screen === 'cover-letters' && <CoverLettersScreen />}
-        {screen === 'billing' && <BillingScreen />}
-        {screen === 'settings' && <SettingsScreen />}
-        {screen === 'plans' && <PlansScreen />}
+        {screen === 'base-cvs' && <BaseCVsScreen onBack={goBack} />}
+        {screen === 'tailored-cvs' && (
+          <TailoredCVsScreen
+            onBack={goBack}
+            onNavigate={navigate}
+            onSelectCv={setSelectedTailoredCv}
+          />
+        )}
+        {screen === 'cv-view' && <CvViewScreen onBack={goBack} cv={selectedTailoredCv} />}
+        {screen === 'cover-letters' && <CoverLettersScreen onBack={goBack} />}
+        {screen === 'billing' && <BillingScreen onBack={goBack} />}
+        {screen === 'settings' && <SettingsScreen onBack={goBack} />}
+        {screen === 'plans' && <PlansScreen onBack={goBack} />}
       </div>
     </div>
   );
@@ -747,17 +783,46 @@ function ModuleCard({ moduleKey, label, subtitle, state, onGenerate }) {
 // ---------------------------------------------------------------------------
 // Base CVs Screen
 // ---------------------------------------------------------------------------
-function BaseCVsScreen() {
-  const [cvs] = useState([]);
+function BaseCVsScreen({ onBack }) {
+  const [cvs, setCvs] = useState(DEMO_BASE_CVS);
+  const isEmpty = cvs.length === 0;
+
+  const handleSetDefault = (id) => {
+    setCvs((prev) => prev.map((cv) => ({ ...cv, isDefault: cv.id === id })));
+  };
+
+  const handleDelete = (id) => {
+    if (!window.confirm('Delete this CV?')) return;
+    setCvs((prev) => prev.filter((cv) => cv.id !== id));
+  };
 
   return (
     <>
       <header style={S.header}>
-        <h1 style={S.h1}>Base CVs</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {onBack && (
+            <button style={{ ...S.btn, ...S.secondary, fontSize: '13px', padding: '6px 12px' }} onClick={onBack}>
+              ← Back
+            </button>
+          )}
+          <h1 style={S.h1}>Base CVs</h1>
+        </div>
         <button style={{ ...S.btn, ...S.primary }}>+ Upload CV</button>
       </header>
       <div style={S.content}>
-        <table style={S.table}>
+        <div
+          data-testid="base-cvs-empty-state"
+          style={{
+            display: isEmpty ? 'block' : 'none',
+            textAlign: 'center',
+            padding: '56px 16px',
+          }}
+        >
+          <p style={{ margin: '0 0 16px', color: '#64748b' }}>No base CVs uploaded yet</p>
+          <button style={{ ...S.btn, ...S.primary }}>Upload Your First CV</button>
+        </div>
+
+        <table style={{ ...S.table, display: isEmpty ? 'none' : 'table' }}>
           <thead>
             <tr>
               <th style={S.th}>File Name</th>
@@ -767,27 +832,33 @@ function BaseCVsScreen() {
             </tr>
           </thead>
           <tbody>
-            {cvs.length === 0 ? (
-              <tr>
-                <td colSpan={4} style={{ ...S.td, textAlign: 'center', padding: '48px 16px' }}>
-                  <p style={{ margin: '0 0 16px', color: '#64748b' }}>No base CVs uploaded yet</p>
-                  <button style={{ ...S.btn, ...S.primary }}>Upload CV</button>
+            {cvs.map((cv) => (
+              <tr key={cv.id}>
+                <td style={S.td}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span>{cv.name}</span>
+                    {cv.isDefault && <span style={{ ...S.badge, background: '#d1fae5', color: '#065f46' }}>Default</span>}
+                  </div>
+                </td>
+                <td style={S.td}>{cv.uploadDate}</td>
+                <td style={S.td}>{cv.usedIn}</td>
+                <td style={S.td}>
+                  <button
+                    style={{ ...S.small, background: '#dbeafe', color: '#1d4ed8', marginRight: '8px' }}
+                    onClick={() => handleSetDefault(cv.id)}
+                    disabled={cv.isDefault}
+                  >
+                    Set as Default
+                  </button>
+                  <button
+                    style={{ ...S.small, background: '#fee2e2', color: '#dc2626' }}
+                    onClick={() => handleDelete(cv.id)}
+                  >
+                    Delete
+                  </button>
                 </td>
               </tr>
-            ) : (
-              cvs.map((cv) => (
-                <tr key={cv.id}>
-                  <td style={S.td}>{cv.name}</td>
-                  <td style={S.td}>{cv.uploadDate}</td>
-                  <td style={S.td}>{cv.usedIn}</td>
-                  <td style={S.td}>
-                    <button style={{ ...S.small, background: '#dbeafe', color: '#1d4ed8', marginRight: '8px' }}>View</button>
-                    <button style={{ ...S.small, background: '#d1fae5', color: '#065f46', marginRight: '8px' }}>Download</button>
-                    <button style={{ ...S.small, background: '#fee2e2', color: '#dc2626' }}>Delete</button>
-                  </td>
-                </tr>
-              ))
-            )}
+            ))}
           </tbody>
         </table>
       </div>
@@ -796,15 +867,96 @@ function BaseCVsScreen() {
 }
 
 // ---------------------------------------------------------------------------
+// DownloadFormatModal
+// ---------------------------------------------------------------------------
+function DownloadFormatModal({ isOpen, onClose, onDownload }) {
+  if (!isOpen) return null;
+  return (
+    <div style={S.overlay} role="dialog" aria-modal="true" aria-label="Download CV">
+      <div style={S.modal}>
+        <button
+          style={{ position: 'absolute', top: '12px', right: '12px', ...S.btn, ...S.secondary, padding: '4px 8px' }}
+          onClick={onClose}
+          aria-label="Close"
+        >
+          ✕
+        </button>
+        <h2 style={{ margin: '0 0 16px' }}>Select download format</h2>
+        <p style={{ color: '#64748b', marginBottom: '16px' }}>Choose a format to download your tailored CV.</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <button
+            style={{ ...S.btn, ...S.secondary, textAlign: 'left' }}
+            onClick={() => { onDownload?.('.docx'); onClose?.(); }}
+          >
+            Download as .docx
+          </button>
+          <button
+            style={{ ...S.btn, ...S.secondary, textAlign: 'left' }}
+            onClick={() => { onDownload?.('.pdf'); onClose?.(); }}
+          >
+            Download as .pdf
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// CV View Screen
+// ---------------------------------------------------------------------------
+function CvViewScreen({ onBack, cv }) {
+  return (
+    <>
+      <header style={S.header}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button style={{ ...S.btn, ...S.secondary, fontSize: '13px', padding: '6px 12px' }} onClick={onBack}>
+            ← Back
+          </button>
+          <h1 style={S.h1}>CV Preview</h1>
+        </div>
+      </header>
+      <div style={S.content} data-testid="cv-view-screen">
+        <div style={S.card}>
+          <h2 style={{ margin: '0 0 8px', fontSize: '16px' }}>Tailored CV</h2>
+          {cv && (
+            <p style={{ margin: '0 0 4px', color: '#64748b', fontSize: '14px' }}>
+              {cv.jobTitle} — {cv.company}
+            </p>
+          )}
+          <p style={{ margin: '16px 0 0', color: '#94a3b8', fontSize: '14px' }}>
+            CV content preview would appear here.
+          </p>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Tailored CVs Screen
 // ---------------------------------------------------------------------------
-function TailoredCVsScreen() {
-  const [items] = useState([]);
+function TailoredCVsScreen({ onBack, onNavigate, onSelectCv }) {
+  const [items, setItems] = useState([]);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const isEmpty = items.length === 0;
+
+  const handleDelete = (id) => {
+    if (!window.confirm('Delete this tailored CV?')) return;
+    setItems((prev) => prev.filter((item) => item.id !== id));
+  };
 
   return (
     <>
       <header style={S.header}>
-        <h1 style={S.h1}>Tailored CVs</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {onBack && (
+            <button style={{ ...S.btn, ...S.secondary, fontSize: '13px', padding: '6px 12px' }} onClick={onBack}>
+              ← Back
+            </button>
+          )}
+          <h1 style={S.h1}>Tailored CVs</h1>
+        </div>
       </header>
       <div style={S.content}>
         <table style={S.table}>
@@ -818,10 +970,13 @@ function TailoredCVsScreen() {
             </tr>
           </thead>
           <tbody>
-            {items.length === 0 ? (
-              <tr>
+            {isEmpty ? (
+              <tr data-testid="tailored-cvs-empty-state">
                 <td colSpan={5} style={{ ...S.td, textAlign: 'center', padding: '48px 16px' }}>
-                  <p style={{ margin: 0, color: '#64748b' }}>No tailored CVs yet</p>
+                  <p style={{ margin: '0 0 8px', color: '#64748b' }}>No tailored CVs generated yet</p>
+                  <p style={{ margin: 0, color: '#94a3b8', fontSize: '13px' }}>
+                    Generate a tailored CV from an Application Hub
+                  </p>
                 </td>
               </tr>
             ) : (
@@ -836,9 +991,24 @@ function TailoredCVsScreen() {
                       <span style={{ ...S.badge, background: bg, color: text }}>{item.status}</span>
                     </td>
                     <td style={S.td}>
-                      <button style={{ ...S.small, background: '#dbeafe', color: '#1d4ed8', marginRight: '8px' }}>View</button>
-                      <button style={{ ...S.small, background: '#d1fae5', color: '#065f46', marginRight: '8px' }}>Download</button>
-                      <button style={{ ...S.small, background: '#faf5ff', color: '#6b21a8' }}>Copy</button>
+                      <button
+                        style={{ ...S.small, background: '#dbeafe', color: '#1d4ed8', marginRight: '8px' }}
+                        onClick={() => { onSelectCv?.(item); onNavigate?.('cv-view'); }}
+                      >
+                        View
+                      </button>
+                      <button
+                        style={{ ...S.small, background: '#d1fae5', color: '#065f46', marginRight: '8px' }}
+                        onClick={() => setShowDownloadModal(true)}
+                      >
+                        Download
+                      </button>
+                      <button
+                        style={{ ...S.small, background: '#fee2e2', color: '#dc2626' }}
+                        onClick={() => handleDelete(item.id)}
+                      >
+                        Delete
+                      </button>
                     </td>
                   </tr>
                 );
@@ -847,6 +1017,12 @@ function TailoredCVsScreen() {
           </tbody>
         </table>
       </div>
+
+      <DownloadFormatModal
+        isOpen={showDownloadModal}
+        onClose={() => setShowDownloadModal(false)}
+        onDownload={() => {}}
+      />
     </>
   );
 }
@@ -854,13 +1030,20 @@ function TailoredCVsScreen() {
 // ---------------------------------------------------------------------------
 // Cover Letters Screen
 // ---------------------------------------------------------------------------
-function CoverLettersScreen() {
+function CoverLettersScreen({ onBack }) {
   const [items] = useState([]);
 
   return (
     <>
       <header style={S.header}>
-        <h1 style={S.h1}>Cover Letters</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {onBack && (
+            <button style={{ ...S.btn, ...S.secondary, fontSize: '13px', padding: '6px 12px' }} onClick={onBack}>
+              ← Back
+            </button>
+          )}
+          <h1 style={S.h1}>Cover Letters</h1>
+        </div>
       </header>
       <div style={S.content}>
         <table style={S.table}>
@@ -910,7 +1093,7 @@ function CoverLettersScreen() {
 // ---------------------------------------------------------------------------
 // Billing Screen
 // ---------------------------------------------------------------------------
-function BillingScreen() {
+function BillingScreen({ onBack }) {
   const [plan] = useState({ name: 'Monthly Pro', renewsAt: '2025-02-15', appsUsed: 2, appsLimit: 'Unlimited' });
   const [history] = useState([
     { id: 'inv-1', date: '2025-01-01', amount: '$20.00', status: 'Paid' },
@@ -920,7 +1103,18 @@ function BillingScreen() {
   return (
     <>
       <header style={S.header}>
-        <h1 style={S.h1}>Billing</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {onBack && (
+            <button
+              style={{ ...S.btn, ...S.secondary, fontSize: '13px', padding: '6px 12px' }}
+              onClick={onBack}
+              aria-label="Go back"
+            >
+              ← Back
+            </button>
+          )}
+          <h1 style={S.h1}>Billing</h1>
+        </div>
       </header>
       <div style={S.content}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
@@ -964,7 +1158,9 @@ function BillingScreen() {
                   <td style={S.td}>{inv.amount}</td>
                   <td style={S.td}>{inv.status}</td>
                   <td style={S.td}>
-                    <button style={{ ...S.small, background: '#dbeafe', color: '#1d4ed8' }}>Download</button>
+                    <button style={{ ...S.small, background: '#dbeafe', color: '#1d4ed8' }}>
+                      Download invoice
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -979,7 +1175,7 @@ function BillingScreen() {
 // ---------------------------------------------------------------------------
 // Settings Screen
 // ---------------------------------------------------------------------------
-function SettingsScreen() {
+function SettingsScreen({ onBack }) {
   const [form, setForm] = useState({
     fullName: 'Test User',
     email: 'test@example.com',
@@ -1006,7 +1202,18 @@ function SettingsScreen() {
   return (
     <>
       <header style={S.header}>
-        <h1 style={S.h1}>Settings</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {onBack && (
+            <button
+              style={{ ...S.btn, ...S.secondary, fontSize: '13px', padding: '6px 12px' }}
+              onClick={onBack}
+              aria-label="Go back"
+            >
+              ← Back
+            </button>
+          )}
+          <h1 style={S.h1}>Settings</h1>
+        </div>
       </header>
       <div style={{ ...S.content, maxWidth: '640px' }}>
         {/* Profile section */}
@@ -1066,7 +1273,7 @@ function SettingsScreen() {
               checked={form.emailNotifications}
               onChange={set('emailNotifications')}
             />
-            <label htmlFor="sett-email-notif">Email notifications</label>
+            <label htmlFor="sett-email-notif">Inbox alerts</label>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <input
@@ -1075,7 +1282,7 @@ function SettingsScreen() {
               checked={form.smsNotifications}
               onChange={set('smsNotifications')}
             />
-            <label htmlFor="sett-sms-notif">SMS notifications</label>
+            <label htmlFor="sett-sms-notif">Text alerts</label>
           </div>
         </div>
 
@@ -1113,7 +1320,7 @@ function SettingsScreen() {
 // ---------------------------------------------------------------------------
 // Plans Screen
 // ---------------------------------------------------------------------------
-function PlansScreen() {
+function PlansScreen({ onBack }) {
   const [currentPlan] = useState('monthly');
 
   const plans = [
@@ -1138,7 +1345,18 @@ function PlansScreen() {
   return (
     <>
       <header style={S.header}>
-        <h1 style={S.h1}>Plans</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {onBack && (
+            <button
+              style={{ ...S.btn, ...S.secondary, fontSize: '13px', padding: '6px 12px' }}
+              onClick={onBack}
+              aria-label="Go back"
+            >
+              ← Back
+            </button>
+          )}
+          <h1 style={S.h1}>Plans</h1>
+        </div>
       </header>
       <div style={S.content}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', maxWidth: '600px' }}>
