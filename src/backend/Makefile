@@ -101,7 +101,7 @@ coverage-tests:
 
 deploy: build
 	npx cdk acknowledge 34892
-	npx cdk deploy $${STACK_NAME:-CareerVpCrudDev} --app="$(PYTHON) ../../infra/app.py" --require-approval=never
+	npx cdk deploy CareerVpCrudDev --app="$(PYTHON) ../../infra/app.py" --require-approval=never
 
 destroy:
 	npx cdk acknowledge 34892
