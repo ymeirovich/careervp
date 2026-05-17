@@ -29,6 +29,7 @@ from pydantic import ValidationError
 
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
+from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.utils.constants import VPR_JOBS_QUEUE_NAME
 from careervp.models.api_models import VPRGenerateRequest
@@ -36,6 +37,11 @@ from careervp.models.result import ResultCode
 from careervp.models.vpr import VPRRequest
 
 JSON_HEADERS = {'Content-Type': 'application/json'}
+
+
+def _json_headers() -> dict[str, str]:
+    return {'Content-Type': 'application/json', **get_cors_headers(None)}
+
 
 # Module-level SQS client for testing/mocking
 sqs = boto3.client('sqs')
@@ -179,6 +185,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         400 Bad Request: Invalid request payload
         500 Internal Server Error: Infrastructure error
     """
+    set_request_origin(event)
     jobs_repo = JobsRepository()
     endpoint = str(event.get('path', ''))
     tracer.put_annotation(key='endpoint', value=endpoint)
@@ -254,7 +261,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
             return {
                 'statusCode': int(HTTPStatus.ACCEPTED),
-                'headers': JSON_HEADERS,
+                'headers': _json_headers(),
                 'body': json.dumps(
                     {
                         'request_id': existing_job_id,

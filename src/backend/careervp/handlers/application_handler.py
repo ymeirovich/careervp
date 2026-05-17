@@ -14,6 +14,7 @@ from careervp.dal.application_repository import ApplicationRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
+from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
 
 _application_repository: ApplicationRepository | None = None
@@ -56,9 +57,10 @@ def _get_jobs_repository() -> JobsRepository:
 
 
 def _response(status_code: HTTPStatus, body: dict[str, Any]) -> dict[str, Any]:
+    headers = {'Content-Type': 'application/json', **get_cors_headers(None)}
     return {
         'statusCode': status_code.value,
-        'headers': {'Content-Type': 'application/json'},
+        'headers': headers,
         'body': json.dumps(body, default=str),
     }
 
@@ -126,6 +128,7 @@ def _build_recovery_payload(application: dict[str, Any], job_record: dict[str, A
 @metrics.log_metrics(capture_cold_start_metric=True)
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     _ = context
+    set_request_origin(event)
     method = str(event.get('httpMethod', '')).upper()
     if method != 'GET':
         return _response(HTTPStatus.METHOD_NOT_ALLOWED, {'error': 'Method not allowed'})

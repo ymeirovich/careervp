@@ -25,9 +25,15 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
+from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
 
 JSON_HEADERS = {'Content-Type': 'application/json'}
+
+
+def _json_headers() -> dict[str, str]:
+    return {'Content-Type': 'application/json', **get_cors_headers(None)}
+
 
 # Module-level S3 client for testing/mocking
 s3 = boto3.client('s3')
@@ -343,6 +349,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         403 Forbidden: Cross-user access attempt
         404 Not Found: Job not found
     """
+    set_request_origin(event)
     jobs_repo = JobsRepository()
     user_id = _extract_authenticated_user_id(event)
     if not user_id:
@@ -354,7 +361,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         list_payload = {'vprs': [_build_vpr_list_item(job, jobs_repo=jobs_repo) for job in jobs]}
         return {
             'statusCode': int(HTTPStatus.OK),
-            'headers': JSON_HEADERS,
+            'headers': _json_headers(),
             'body': json.dumps(list_payload),
         }
 
