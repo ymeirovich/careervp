@@ -18,7 +18,7 @@ from pydantic import ValidationError
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
-from careervp.handlers.cors_utils import get_cors_headers
+from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.interview_prep import generate_interview_prep
 from careervp.models.api_models import InterviewPrepRequest
@@ -65,6 +65,7 @@ def _normalize_interview_prep_artifact_id(interview_prep_id: str) -> str:
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     """Handle interview prep API requests and SQS worker events."""
     _ = context
+    set_request_origin(event)
 
     # SQS worker dispatch: if triggered by SQS, process async jobs
     records = event.get('Records', [])

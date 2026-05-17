@@ -17,7 +17,7 @@ from typing import Any, cast
 from careervp.dal.subscription_repository import SubscriptionRepository
 from careervp.dal.user_repository import UserRepository
 from careervp.handlers.auth_utils import extract_user_id
-from careervp.handlers.cors_utils import get_cors_headers
+from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.billing_service import BillingService
 from careervp.logic.webhook_service import WebhookService
@@ -63,6 +63,7 @@ def _get_billing_service() -> BillingService:
 @metrics.log_metrics(raise_on_empty_metrics=False)
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: ARG001
     """Route billing API requests to BillingService methods."""
+    set_request_origin(event)
     headers = _cors_headers()
     method = str(event.get('httpMethod', '')).upper()
     path = str(event.get('path', '')).rstrip('/')

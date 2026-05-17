@@ -12,7 +12,7 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 
 from careervp.dal.knowledge_repository import KnowledgeRepository
 from careervp.handlers.auth_utils import extract_user_id
-from careervp.handlers.cors_utils import get_cors_headers
+from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.models.result import Result
 
@@ -22,6 +22,7 @@ from careervp.models.result import Result
 @metrics.log_metrics
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     """Route knowledge base requests based on HTTP method and path."""
+    set_request_origin(event)
     table_name = os.environ.get('KNOWLEDGE_TABLE_NAME', 'careervp-knowledge-table-dev')
     http_method = event.get('httpMethod', 'GET')
 
