@@ -28,6 +28,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.handlers.auth_utils import extract_user_id
+from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.models.env_vars import CVUploadEnvVars
 from careervp.handlers.utils.observability import logger, tracer
 from careervp.handlers.utils.rest_api_resolver import app
@@ -354,4 +355,11 @@ def _build_openapi_parsed_data(response: CVParseResponse) -> dict[str, Any]:
 @tracer.capture_lambda_handler(capture_response=False)
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     """Lambda entry point for CV upload."""
-    return app.resolve(event, context)
+    set_request_origin(event)
+    response: dict[str, Any] = app.resolve(event, context)
+    cors = get_cors_headers(None)
+    if cors:
+        headers: dict[str, str] = response.get('headers') or {}
+        headers.update(cors)
+        response['headers'] = headers
+    return response
