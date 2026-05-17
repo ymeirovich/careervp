@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from http import HTTPStatus
 from typing import Any
 
-from careervp.handlers.cors_utils import get_cors_headers
+from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 
 API_VERSION = '1.0.0'
 
@@ -30,6 +30,7 @@ def health_check() -> dict[str, Any]:
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Handle GET /health requests without authentication."""
     _ = context
+    set_request_origin(event)
     method = str(event.get('httpMethod', 'GET')).upper()
     path = str(event.get('path', '')).rstrip('/')
 

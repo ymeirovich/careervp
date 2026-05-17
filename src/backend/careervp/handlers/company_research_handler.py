@@ -20,7 +20,7 @@ from botocore.exceptions import ClientError
 from pydantic import ValidationError
 
 from careervp.handlers.auth_utils import extract_user_id
-from careervp.handlers.cors_utils import get_cors_headers
+from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.company_research import research_company
 from careervp.models.company import CompanyResearchRequest
@@ -36,6 +36,7 @@ COMPANY_RESEARCH_KB_PREFIX = 'COMPANY_RESEARCH#'
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     """Route company research requests based on HTTP method/path."""
     _ = context
+    set_request_origin(event)
     method = _resolve_http_method(event)
     path = str(event.get('path') or '').rstrip('/')
 

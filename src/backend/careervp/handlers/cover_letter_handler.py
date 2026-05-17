@@ -16,7 +16,7 @@ from pydantic import ValidationError
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
-from careervp.handlers.cors_utils import get_cors_headers
+from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.cover_letter import generate_cover_letter
 from careervp.models.api_models import CoverLetterRequest
@@ -292,6 +292,7 @@ def _resolve_cover_letter_context(
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     """Handle cover letter API requests and SQS worker events."""
     _ = context
+    set_request_origin(event)
 
     # SQS worker dispatch: if triggered by SQS, process async jobs
     records = event.get('Records', [])

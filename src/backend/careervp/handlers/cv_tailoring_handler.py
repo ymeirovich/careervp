@@ -16,7 +16,7 @@ from pydantic import ValidationError
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
-from careervp.handlers.cors_utils import get_cors_headers
+from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.logic.cv_tailoring import tailor_cv
 from careervp.logic.cv_tailoring_ats import compute_ats_result
 from careervp.logic.cv_tailoring_pipeline import run_cv_tailoring_pipeline
@@ -55,6 +55,7 @@ except Exception:  # pragma: no cover - fallback for tests
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C901
     """Handle CV tailoring request."""
+    set_request_origin(event)
     headers = _cors_headers()
     method = str(event.get('httpMethod', '')).upper()
     path = str(event.get('path', '')).rstrip('/')
