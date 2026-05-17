@@ -800,7 +800,7 @@ class ApiConstruct(Construct):
             ),
             "USERS_TABLE_NAME": self.api_db.users_table.table_name,
             "ALLOWED_ORIGINS": self.node.try_get_context("allowed_origins")
-            or "https://careervp.app,https://www.careervp.app",
+            or "https://main.d3j2wnm8g5clnw.amplifyapp.com,https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com,https://app.careervp.com,https://dev.careervp.com,https://stage.careervp.com,http://localhost:3000",
         }
 
     def _build_common_layer(self) -> PythonLayerVersion:
@@ -2144,6 +2144,8 @@ class ApiConstruct(Construct):
             environment={
                 "TABLE_NAME": self.api_db.db.table_name,
                 "IDEMPOTENCY_TABLE_NAME": self.api_db.idempotency_db.table_name,
+                "ALLOWED_ORIGINS": self.node.try_get_context("allowed_origins")
+                or "https://main.d3j2wnm8g5clnw.amplifyapp.com,https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com,https://app.careervp.com,https://dev.careervp.com,https://stage.careervp.com,http://localhost:3000",
                 constants.WEBHOOK_SECRET_ENV_VAR: ssm.StringParameter.value_for_string_parameter(
                     self, constants.WEBHOOK_SECRET_SSM_PARAM
                 ),

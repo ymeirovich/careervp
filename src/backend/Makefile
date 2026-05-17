@@ -99,9 +99,11 @@ pr: deps format pre-commit complex lint lint-docs unit deploy coverage-tests e2e
 coverage-tests:
 	uv run pytest tests/unit tests/integration  --cov-config=.coveragerc --cov=careervp --cov-report xml
 
+_CDK_ALLOWED_ORIGINS := $(shell node -e "try{const d=JSON.parse(require('fs').readFileSync('../../infra/cdk.json','utf8'));process.stdout.write(d.context.allowed_origins||'')}catch(e){}" 2>/dev/null)
+
 deploy: build
 	npx cdk acknowledge 34892
-	npx cdk deploy CareerVpCrudDev --app="$(PYTHON) ../../infra/app.py" --require-approval=never
+	npx cdk deploy CareerVpCrudDev --app="$(PYTHON) ../../infra/app.py" --require-approval=never --context "allowed_origins=$(_CDK_ALLOWED_ORIGINS)"
 
 destroy:
 	npx cdk acknowledge 34892
