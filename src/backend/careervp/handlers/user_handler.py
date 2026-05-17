@@ -26,6 +26,7 @@ from pydantic import ValidationError
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.user_repository import UserRepository
 from careervp.handlers.auth_utils import extract_user_id
+from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, tracer
 from careervp.handlers.utils.rest_api_resolver import app
 from careervp.logic.trial_service import TrialService
@@ -350,4 +351,11 @@ def reset_user_trial() -> Response[str]:
 @tracer.capture_lambda_handler(capture_response=False)
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     """Lambda entry point for user management API routes."""
-    return app.resolve(event, context)
+    set_request_origin(event)
+    response: dict[str, Any] = app.resolve(event, context)
+    cors = get_cors_headers(None)
+    if cors:
+        headers: dict[str, str] = response.get('headers') or {}
+        headers.update(cors)
+        response['headers'] = headers
+    return response
