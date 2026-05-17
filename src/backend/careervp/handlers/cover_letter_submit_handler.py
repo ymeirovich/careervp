@@ -24,12 +24,18 @@ from botocore.exceptions import ClientError as BotoClientError
 from pydantic import ValidationError
 
 from careervp.handlers.auth_utils import extract_user_id
+from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.utils.constants import COVER_LETTER_JOBS_QUEUE_NAME
 from careervp.models.api_models import CoverLetterRequest
 from careervp.models.result import ResultCode
 
 JSON_HEADERS = {'Content-Type': 'application/json'}
+
+
+def _json_headers() -> dict[str, str]:
+    return {'Content-Type': 'application/json', **get_cors_headers(None)}
+
 
 # Module-level clients for testing/mocking
 sqs = boto3.client('sqs')
@@ -85,6 +91,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         500 Internal Server Error: Infrastructure error
     """
     _ = context
+    set_request_origin(event)
     endpoint = str(event.get('path', ''))
     tracer.put_annotation(key='endpoint', value=endpoint)
     authenticated_user_id = _extract_authenticated_user_id(event)
@@ -220,7 +227,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
     return {
         'statusCode': int(HTTPStatus.ACCEPTED),
-        'headers': JSON_HEADERS,
+        'headers': _json_headers(),
         'body': json.dumps(
             {
                 'request_id': job_id,
@@ -273,7 +280,7 @@ def _build_error_response(
         payload['validation_errors'] = validation_errors
     return {
         'statusCode': int(status),
-        'headers': JSON_HEADERS,
+        'headers': _json_headers(),
         'body': json.dumps(payload),
     }
 
