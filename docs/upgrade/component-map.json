@@ -1,0 +1,416 @@
+{
+  "_meta": {
+    "generated": "2026-05-22",
+    "phase": "2 — Component Map (current state)",
+    "notes": [
+      "tier: ui-primitive = components/ui/ — highest cascade risk",
+      "tier: layout = components/layout/ — medium cascade risk",
+      "tier: feature = page-specific or shared feature component — local risk",
+      "tier: shared = used across many pages but not a design-system primitive",
+      "api_dependencies derived from hook source + direct api.* calls in page",
+      "test_files: only files that directly test this page's components"
+    ]
+  },
+
+  "pages": [
+
+    {
+      "route": "/dashboard",
+      "page_file": "app/dashboard/page.tsx",
+      "components": [
+        { "name": "StatsRow",            "file": "components/dashboard/StatsRow.tsx",                 "tier": "feature" },
+        { "name": "JobsTable",           "file": "components/dashboard/JobsTable.tsx",                "tier": "feature" },
+        { "name": "UsageGate",           "file": "components/UsageGate/UsageGate.tsx",                "tier": "feature" },
+        { "name": "NewApplicationModal", "file": "components/NewApplicationModal/NewApplicationModal.tsx", "tier": "feature" },
+        { "name": "EmptyState",          "file": "components/ui/EmptyState.tsx",                      "tier": "ui-primitive" },
+        { "name": "Button",              "file": "components/ui/Button.tsx",                          "tier": "ui-primitive" }
+      ],
+      "hooks": [
+        { "name": "useJobs",      "file": "hooks/useJobs.ts",                  "pattern": "React Query" },
+        { "name": "useDashboard", "file": "contexts/DashboardContext.tsx",      "pattern": "React Context" }
+      ],
+      "api_dependencies": ["GET /jobs", "POST /jobs"],
+      "test_files": {
+        "unit": [],
+        "integration": [],
+        "e2e": ["tests/e2e/application-hub-flow.e2e.test.ts"],
+        "regression": ["tests/regression/cta-label-consistency.test.tsx"]
+      },
+      "coverage_gaps": ["StatsRow — no unit test", "JobsTable — no unit test", "UsageGate — no unit test", "NewApplicationModal — no unit test (NewApplicationForm.test.tsx covers the form only)"]
+    },
+
+    {
+      "route": "/cv-center",
+      "page_file": "app/cv-center/page.tsx",
+      "components": [
+        { "name": "ErrorBoundary", "file": "components/ErrorBoundary/ErrorBoundary.tsx", "tier": "shared" },
+        { "name": "Spinner",       "file": "components/ui/Spinner.tsx",                  "tier": "ui-primitive" }
+      ],
+      "hooks": [
+        { "name": "useCV", "file": "hooks/useCV.ts", "pattern": "imperative async (not React Query)" }
+      ],
+      "api_dependencies": ["GET /cv", "POST /cv"],
+      "test_files": {
+        "unit": ["tests/ui/unit/BaseCVsTable.test.tsx"],
+        "integration": [],
+        "e2e": [],
+        "regression": []
+      },
+      "coverage_gaps": ["cv-center page itself has no unit or integration test — only BaseCVsTable sub-component is tested"]
+    },
+
+    {
+      "route": "/applications",
+      "page_file": "app/applications/page.tsx",
+      "components": [],
+      "hooks": [],
+      "api_dependencies": [],
+      "test_files": { "unit": [], "integration": [], "e2e": [], "regression": [] },
+      "coverage_gaps": [],
+      "_note": "REDIRECT ONLY — this page has no UI. It imports only next/navigation redirect. Any 'applications list' screenshot must belong to a different route."
+    },
+
+    {
+      "route": "/applications/[id]",
+      "page_file": "app/applications/[id]/page.tsx",
+      "components": [
+        { "name": "ModuleCard",    "file": "components/ModuleCard/ModuleCard.tsx",                  "tier": "feature" },
+        { "name": "HubLayout",     "file": "components/layout/HubLayout.tsx",                       "tier": "layout" },
+        { "name": "ErrorBoundary", "file": "components/ErrorBoundary/ErrorBoundary.tsx",            "tier": "shared" },
+        { "name": "Spinner",       "file": "components/ui/Spinner.tsx",                             "tier": "ui-primitive" }
+      ],
+      "hooks": [
+        { "name": "useApplicationHub", "file": "hooks/useApplicationHub.ts", "pattern": "React Query" },
+        { "name": "useGenerateModule", "file": "hooks/useGenerateModule.ts",  "pattern": "React Query mutation" },
+        { "name": "useCV",             "file": "hooks/useCV.ts",              "pattern": "imperative async" }
+      ],
+      "api_dependencies": ["GET /applications/{id}", "GET /cv", "GET /gap-questions/{id}"],
+      "test_files": {
+        "unit": ["tests/ui/unit/ApplicationHub.test.tsx", "tests/unit/module-card.test.tsx", "tests/unit/module-card-actions.test.tsx"],
+        "integration": ["tests/integration/hub-state-integration.test.ts", "tests/integration/hub-state.test.ts"],
+        "e2e": ["tests/e2e/application-hub-flow.e2e.test.ts"],
+        "regression": ["tests/regression/cross-module-invalidation.test.ts", "tests/regression/state-machine-transitions.test.ts"]
+      },
+      "coverage_gaps": ["HubLayout — no dedicated unit test"]
+    },
+
+    {
+      "route": "/applications/[id]/vpr",
+      "page_file": "app/applications/[id]/vpr/page.tsx",
+      "components": [
+        { "name": "ErrorBoundary",  "file": "components/ErrorBoundary/ErrorBoundary.tsx", "tier": "shared" },
+        { "name": "ExportDropdown", "file": "components/ExportDropdown/ExportDropdown.tsx", "tier": "feature" },
+        { "name": "Spinner",        "file": "components/ui/Spinner.tsx",                   "tier": "ui-primitive" }
+      ],
+      "hooks": [],
+      "api_dependencies": ["GET /applications/{id}", "GET /jobs/{id}", "GET /vpr/{artifactId}"],
+      "api_pattern": "direct api.* calls in useEffect — no React Query hook",
+      "test_files": {
+        "unit": ["tests/unit/vpr-page.test.tsx"],
+        "integration": [],
+        "e2e": ["tests/e2e/artifact-viewers.e2e.test.ts"],
+        "regression": []
+      },
+      "coverage_gaps": ["No integration test for vpr page"]
+    },
+
+    {
+      "route": "/applications/[id]/cover-letter",
+      "page_file": "app/applications/[id]/cover-letter/page.tsx",
+      "components": [
+        { "name": "ErrorBoundary",  "file": "components/ErrorBoundary/ErrorBoundary.tsx", "tier": "shared" },
+        { "name": "ExportDropdown", "file": "components/ExportDropdown/ExportDropdown.tsx", "tier": "feature" },
+        { "name": "Spinner",        "file": "components/ui/Spinner.tsx",                   "tier": "ui-primitive" }
+      ],
+      "hooks": [],
+      "api_dependencies": ["GET /applications/{id}", "GET /jobs/{id}", "GET /cover-letter/{artifactId}"],
+      "api_pattern": "direct api.* calls in useEffect — no React Query hook",
+      "test_files": {
+        "unit": ["tests/ui/unit/CoverLettersTable.test.tsx"],
+        "integration": [],
+        "e2e": ["tests/e2e/artifact-viewers.e2e.test.ts"],
+        "regression": []
+      },
+      "coverage_gaps": ["CoverLettersTable tests cover the table component only, not the full cover-letter page", "No integration test"]
+    },
+
+    {
+      "route": "/applications/[id]/cv-tailored",
+      "page_file": "app/applications/[id]/cv-tailored/page.tsx",
+      "components": [
+        { "name": "ErrorBoundary",  "file": "components/ErrorBoundary/ErrorBoundary.tsx", "tier": "shared" },
+        { "name": "ExportDropdown", "file": "components/ExportDropdown/ExportDropdown.tsx", "tier": "feature" },
+        { "name": "Spinner",        "file": "components/ui/Spinner.tsx",                   "tier": "ui-primitive" }
+      ],
+      "hooks": [],
+      "api_dependencies": ["GET /cv-tailored/{artifactId}", "GET /jobs/{id}"],
+      "api_pattern": "direct api.* calls in useEffect — no React Query hook",
+      "test_files": {
+        "unit": ["tests/ui/unit/TailoredCVsTable.test.tsx"],
+        "integration": [],
+        "e2e": ["tests/e2e/artifact-viewers.e2e.test.ts"],
+        "regression": []
+      },
+      "coverage_gaps": ["TailoredCVsTable covers table component only, not the full cv-tailored page", "No integration test"]
+    },
+
+    {
+      "route": "/applications/[id]/gap-analysis",
+      "page_file": "app/applications/[id]/gap-analysis/page.tsx",
+      "components": [
+        { "name": "ErrorBoundary", "file": "components/ErrorBoundary/ErrorBoundary.tsx", "tier": "shared" },
+        { "name": "Spinner",       "file": "components/ui/Spinner.tsx",                  "tier": "ui-primitive" }
+      ],
+      "_note": "ExportDropdown is NOT imported — gap analysis has no export functionality",
+      "hooks": [],
+      "api_dependencies": [
+        "GET /gap-questions/{id}", "GET /applications/{id}", "GET /cv",
+        "POST /gap-questions/generate", "POST /gap-responses/{id}"
+      ],
+      "api_pattern": "direct api.* calls in useEffect — no React Query hook",
+      "test_files": {
+        "unit": ["tests/unit/gap-analysis-page.test.tsx"],
+        "integration": [],
+        "e2e": [],
+        "regression": []
+      },
+      "coverage_gaps": ["No integration test", "No e2e test for gap analysis flow"]
+    },
+
+    {
+      "route": "/applications/[id]/interview-prep",
+      "page_file": "app/applications/[id]/interview-prep/page.tsx",
+      "components": [
+        { "name": "ErrorBoundary",  "file": "components/ErrorBoundary/ErrorBoundary.tsx", "tier": "shared" },
+        { "name": "ExportDropdown", "file": "components/ExportDropdown/ExportDropdown.tsx", "tier": "feature" },
+        { "name": "Spinner",        "file": "components/ui/Spinner.tsx",                   "tier": "ui-primitive" }
+      ],
+      "hooks": [],
+      "api_dependencies": ["GET /applications/{id}", "GET /jobs/{id}", "GET /interview-prep/{artifactId}"],
+      "api_pattern": "direct api.* calls in useEffect — no React Query hook",
+      "test_files": {
+        "unit": [],
+        "integration": [],
+        "e2e": ["tests/e2e/artifact-viewers.e2e.test.ts"],
+        "regression": []
+      },
+      "coverage_gaps": ["No unit test for interview-prep page", "No integration test"]
+    },
+
+    {
+      "route": "/applications/[id]/company-research",
+      "page_file": "app/applications/[id]/company-research/page.tsx",
+      "components": [
+        { "name": "ErrorBoundary", "file": "components/ErrorBoundary/ErrorBoundary.tsx", "tier": "shared" },
+        { "name": "Spinner",       "file": "components/ui/Spinner.tsx",                  "tier": "ui-primitive" }
+      ],
+      "_note": "ExportDropdown is NOT imported — company research has no export functionality",
+      "hooks": [],
+      "api_dependencies": ["GET /company-research/{id}", "POST /company-research/fetch"],
+      "api_pattern": "direct api.* calls in useEffect — no React Query hook",
+      "test_files": {
+        "unit": [],
+        "integration": [],
+        "e2e": [],
+        "regression": []
+      },
+      "coverage_gaps": ["No unit test", "No integration test", "No e2e test — least tested module page"]
+    },
+
+    {
+      "route": "/billing",
+      "page_file": "app/billing/page.tsx",
+      "components": [
+        { "name": "ErrorBoundary", "file": "components/ErrorBoundary/ErrorBoundary.tsx", "tier": "shared" },
+        { "name": "Spinner",       "file": "components/ui/Spinner.tsx",                  "tier": "ui-primitive" }
+      ],
+      "hooks": [
+        { "name": "useUserContext", "file": "hooks/useUserContext.ts", "pattern": "React Query (3 parallel queries)" }
+      ],
+      "api_dependencies": ["GET /me", "GET /usage", "GET /subscription"],
+      "test_files": {
+        "unit": ["tests/ui/unit/Billing.test.tsx", "tests/ui/unit/Plans.test.tsx"],
+        "integration": ["tests/integration/checkout.integration.test.ts", "tests/integration/concurrent-checkout.integration.test.ts"],
+        "e2e": ["tests/e2e/checkout-to-active.e2e.test.ts", "tests/e2e/upgrade-flow.e2e.test.ts", "tests/e2e/subscription-cancellation.e2e.test.ts", "tests/e2e/invoice-past-due.e2e.test.ts", "tests/e2e/invoice-recovery.e2e.test.ts"],
+        "regression": ["tests/regression/subscription-status-shapes.regression.test.ts", "tests/regression/trial-exhausted-boundary.regression.test.ts", "tests/regression/trial-expiry-boundary.regression.test.ts", "tests/regression/upgrade-quarterly.regression.test.ts"]
+      },
+      "coverage_gaps": [],
+      "_note": "Best-tested page in the codebase — extensive billing/subscription coverage"
+    },
+
+    {
+      "route": "/settings",
+      "page_file": "app/settings/page.tsx",
+      "components": [
+        { "name": "ErrorBoundary", "file": "components/ErrorBoundary/ErrorBoundary.tsx", "tier": "shared" }
+      ],
+      "hooks": [
+        { "name": "useUserContext", "file": "hooks/useUserContext.ts", "pattern": "React Query" },
+        { "name": "useAuth",        "file": "contexts/AuthContext.tsx", "pattern": "React Context" }
+      ],
+      "api_dependencies": ["GET /me", "GET /usage", "GET /subscription"],
+      "test_files": {
+        "unit": ["tests/ui/unit/Settings.test.tsx"],
+        "integration": [],
+        "e2e": [],
+        "regression": []
+      },
+      "coverage_gaps": ["No integration or e2e test for settings page"]
+    },
+
+    {
+      "route": "/login",
+      "page_file": "app/(auth)/login/page.tsx",
+      "components": [
+        { "name": "Button", "file": "components/ui/Button.tsx", "tier": "ui-primitive" }
+      ],
+      "hooks": [{ "name": "useAuth", "file": "contexts/AuthContext.tsx", "pattern": "React Context" }],
+      "api_dependencies": ["POST /auth/login (Cognito)"],
+      "test_files": {
+        "unit": ["tests/unit/auth-context.test.tsx"],
+        "integration": ["tests/integration/cognito-auth.test.ts"],
+        "e2e": [],
+        "regression": []
+      },
+      "coverage_gaps": ["No e2e test for login flow"]
+    },
+
+    {
+      "route": "/register",
+      "page_file": "app/(auth)/register/page.tsx",
+      "components": [
+        { "name": "Button", "file": "components/ui/Button.tsx", "tier": "ui-primitive" }
+      ],
+      "hooks": [{ "name": "useAuth", "file": "contexts/AuthContext.tsx", "pattern": "React Context" }],
+      "api_dependencies": ["POST /auth/register (Cognito)"],
+      "test_files": { "unit": ["tests/unit/auth-context.test.tsx"], "integration": [], "e2e": [], "regression": [] },
+      "coverage_gaps": ["No e2e test"]
+    },
+
+    {
+      "route": "/confirm-signup",
+      "page_file": "app/(auth)/confirm-signup/page.tsx",
+      "components": [
+        { "name": "Button", "file": "components/ui/Button.tsx", "tier": "ui-primitive" }
+      ],
+      "hooks": [{ "name": "useAuth", "file": "contexts/AuthContext.tsx", "pattern": "React Context" }],
+      "api_dependencies": ["POST /auth/confirm-signup (Cognito)"],
+      "test_files": { "unit": [], "integration": [], "e2e": [], "regression": [] },
+      "coverage_gaps": ["No tests at any level"]
+    },
+
+    {
+      "route": "/forgot-password",
+      "page_file": "app/(auth)/forgot-password/page.tsx",
+      "components": [
+        { "name": "Button", "file": "components/ui/Button.tsx", "tier": "ui-primitive" }
+      ],
+      "hooks": [{ "name": "useAuth", "file": "contexts/AuthContext.tsx", "pattern": "React Context" }],
+      "api_dependencies": ["POST /auth/forgot-password (Cognito)"],
+      "test_files": { "unit": [], "integration": [], "e2e": [], "regression": [] },
+      "coverage_gaps": ["No tests at any level"]
+    },
+
+    {
+      "route": "/reset-password",
+      "page_file": "app/(auth)/reset-password/page.tsx",
+      "components": [
+        { "name": "Button", "file": "components/ui/Button.tsx", "tier": "ui-primitive" }
+      ],
+      "hooks": [{ "name": "useAuth", "file": "contexts/AuthContext.tsx", "pattern": "React Context" }],
+      "api_dependencies": ["POST /auth/reset-password (Cognito)"],
+      "test_files": { "unit": [], "integration": [], "e2e": [], "regression": [] },
+      "coverage_gaps": ["No tests at any level"]
+    },
+
+    {
+      "route": "/dashboard/jobs/[jobId]",
+      "page_file": "app/dashboard/jobs/[jobId]/page.tsx",
+      "components": [
+        { "name": "ModuleCard", "file": "components/ModuleCard/ModuleCard.tsx", "tier": "feature" }
+      ],
+      "hooks": [
+        { "name": "useApplicationHub", "file": "hooks/useApplicationHub.ts", "pattern": "React Query" }
+      ],
+      "api_dependencies": ["GET /applications/{id}", "GET /cv", "GET /gap-questions/{id}"],
+      "test_files": {
+        "unit": ["tests/unit/module-card.test.tsx", "tests/unit/module-card-actions.test.tsx"],
+        "integration": [],
+        "e2e": [],
+        "regression": []
+      },
+      "coverage_gaps": ["No test specific to job-detail page; relies on ModuleCard unit tests only"]
+    },
+
+    {
+      "route": "/",
+      "page_file": "app/page.tsx",
+      "components": [],
+      "hooks": [],
+      "api_dependencies": [],
+      "test_files": { "unit": [], "integration": [], "e2e": [], "regression": [] },
+      "coverage_gaps": ["No tests — likely a landing/redirect page"],
+      "_note": "Imports not captured — check if this is a server component landing page or redirect"
+    }
+
+  ],
+
+  "shared_component_summary": {
+    "ErrorBoundary": {
+      "file": "components/ErrorBoundary/ErrorBoundary.tsx",
+      "tier": "shared",
+      "used_in_routes": 10,
+      "routes": ["/cv-center", "/applications/[id]", "/applications/[id]/vpr", "/applications/[id]/cover-letter", "/applications/[id]/cv-tailored", "/applications/[id]/gap-analysis", "/applications/[id]/interview-prep", "/applications/[id]/company-research", "/billing", "/settings"],
+      "existing_tests": "none",
+      "upgrade_risk": "CRITICAL — 10 routes, zero test coverage"
+    },
+    "Spinner": {
+      "file": "components/ui/Spinner.tsx",
+      "tier": "ui-primitive",
+      "used_in_routes": 9,
+      "routes": ["/cv-center", "/applications/[id]", "/applications/[id]/vpr", "/applications/[id]/cover-letter", "/applications/[id]/cv-tailored", "/applications/[id]/gap-analysis", "/applications/[id]/interview-prep", "/applications/[id]/company-research", "/billing"],
+      "existing_tests": "none",
+      "upgrade_risk": "HIGH — 9 routes, zero test coverage"
+    },
+    "Button": {
+      "file": "components/ui/Button.tsx",
+      "tier": "ui-primitive",
+      "used_in_routes": 6,
+      "routes": ["/dashboard", "/login", "/register", "/confirm-signup", "/forgot-password", "/reset-password"],
+      "existing_tests": "none — auth-context.test.tsx tests auth logic, not Button rendering",
+      "upgrade_risk": "HIGH — 6 routes, zero dedicated test coverage"
+    },
+    "ExportDropdown": {
+      "file": "components/ExportDropdown/ExportDropdown.tsx",
+      "tier": "feature",
+      "used_in_routes": 4,
+      "routes": ["/applications/[id]/vpr", "/applications/[id]/cover-letter", "/applications/[id]/cv-tailored", "/applications/[id]/interview-prep"],
+      "existing_tests": "tests/unit/export-dropdown.test.tsx",
+      "upgrade_risk": "MEDIUM — 4 routes, has unit test"
+    },
+    "ModuleCard": {
+      "file": "components/ModuleCard/ModuleCard.tsx",
+      "tier": "feature",
+      "used_in_routes": 2,
+      "routes": ["/applications/[id]", "/dashboard/jobs/[jobId]"],
+      "existing_tests": "tests/unit/module-card.test.tsx, tests/unit/module-card-actions.test.tsx",
+      "upgrade_risk": "LOW — 2 routes, has unit tests"
+    }
+  },
+
+  "coverage_summary": {
+    "pages_with_no_tests_at_any_level": [
+      "/confirm-signup",
+      "/forgot-password",
+      "/reset-password",
+      "/applications/[id]/company-research"
+    ],
+    "highest_risk_untested_components": [
+      "ErrorBoundary (10 routes, 0 tests)",
+      "Spinner (9 routes, 0 tests)",
+      "Button (6 routes, 0 tests)"
+    ],
+    "best_tested_area": "/billing — unit + integration + e2e + regression all present",
+    "module_pages_api_pattern": "All 6 module pages use direct api.* calls in useEffect instead of React Query hooks — state is managed locally per page, not shared"
+  }
+}
