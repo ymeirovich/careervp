@@ -1,0 +1,98 @@
+[
+  {
+    "question_id": "q1",
+    "component": "AccountSettingsCard",
+    "topic": "loading_state",
+    "question": "While user data is loading (GET /users/me), what should the Account Settings card show?",
+    "answer": "Skeleton placeholders matching field layout with shimmer (consistent with other pages)",
+    "applies_to_shared_component": false
+  },
+  {
+    "question_id": "q2",
+    "component": "AccountSettingsCard",
+    "topic": "error_state",
+    "question": "If GET /users/me fails, what error UX should the Account Settings card show?",
+    "answer": "Inline error message with Retry button inside the card (consistent with other pages)",
+    "applies_to_shared_component": false
+  },
+  {
+    "question_id": "q3",
+    "component": "AccountSettingsCard",
+    "topic": "edge_case",
+    "question": "When user clicks 'Change' next to Name, what interaction should occur?",
+    "answer": "Inline edit: field becomes editable input with Save/Cancel buttons",
+    "applies_to_shared_component": false
+  },
+  {
+    "question_id": "q4",
+    "component": "AccountSettingsCard",
+    "topic": "edge_case",
+    "question": "When user clicks 'Change' next to Email, what interaction should occur? (Note: email change may require verification.)",
+    "answer": "Inline edit: field becomes editable input with Save/Cancel",
+    "applies_to_shared_component": false
+  },
+  {
+    "question_id": "q5",
+    "component": "AccountSettingsCard",
+    "topic": "edge_case",
+    "question": "When user clicks 'Change' next to Password, what interaction should occur?",
+    "answer": "Inline expand: 3 password fields appear below the row",
+    "applies_to_shared_component": false
+  },
+  {
+    "question_id": "q6",
+    "component": "TwoFactorAuthCard",
+    "topic": "edge_case",
+    "question": "The screenshot shows a 2FA toggle. Does the current backend (Cognito + PUT /users/me) support enabling/disabling 2FA? If not, should this card be shown as disabled/'Coming soon', or omitted entirely?",
+    "answer": "Show card with toggle disabled + 'Coming soon' label (matches current approach for unbuilt features)",
+    "applies_to_shared_component": false
+  },
+  {
+    "question_id": "q7",
+    "component": "NotificationsCard",
+    "topic": "edge_case",
+    "question": "The screenshot shows 3 notification toggles. Does PUT /users/me currently accept notification preference fields (task_complete, special_offers, renewal_reminder)? If not, should toggles be disabled/'Coming soon', or omitted?",
+    "answer": "Show toggles as disabled with 'Coming soon' note until API supports notification preferences",
+    "applies_to_shared_component": false
+  },
+  {
+    "question_id": "q8",
+    "component": "DeleteAccountCard",
+    "topic": "edge_case",
+    "question": "When user clicks 'Delete Account', what confirmation flow should occur? (Note: a DELETE endpoint may not exist.)",
+    "answer": "Show 'Delete Account' as disabled/'Coming soon' until backend supports it",
+    "applies_to_shared_component": false
+  },
+  {
+    "question_id": "q9",
+    "component": "ToggleSwitch",
+    "topic": "accessibility",
+    "question": "The toggle switches need ARIA roles. Should they use role='switch' with aria-checked, or a standard checkbox with custom styling?",
+    "answer": "role='switch' with aria-checked (semantic, recommended for toggle UX)",
+    "applies_to_shared_component": false
+  },
+  {
+    "question_id": "q10",
+    "component": "SettingsContent",
+    "topic": "responsive",
+    "question": "How should the Settings page layout change on mobile (below md breakpoint)?",
+    "answer": "Same card stack layout, cards go full-width",
+    "applies_to_shared_component": false
+  },
+  {
+    "question_id": "q11",
+    "component": "SettingsContent",
+    "topic": "i18n",
+    "question": "New strings introduced: 'Account Settings', 'Manage your account settings', 'Enable 2-Factor Authentication', 'Add an extra layer of security...', 'Notifications', 'Customize your notification preferences', 'Email me when a pending task is complete', 'Email me with special offers', 'Email me 5 days before my subscription is scheduled to renew', 'Delete Account', 'Change'. Do all need Hebrew translations?",
+    "answer": "Yes — all strings need Hebrew translations (consistent with V1 i18n support)",
+    "applies_to_shared_component": false
+  },
+  {
+    "question_id": "q12",
+    "component": "AccountSettingsCard",
+    "topic": "edge_case",
+    "question": "The duplicate 'Account Settings' heading appears both as a page subtitle and as the card heading. Is this intentional or should one be removed?",
+    "answer": "Remove the card-level heading — page subtitle is sufficient",
+    "applies_to_shared_component": false
+  }
+]

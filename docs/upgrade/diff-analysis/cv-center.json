@@ -1,0 +1,79 @@
+{
+  "route": "/cv-center",
+  "page_title": "CV Center",
+  "screenshot_files": ["Base CVs View page.png", "Base CV New Upload modal.png"],
+  "is_new_route": false,
+  "token_changes": [
+    {
+      "token": "--color-status-ready-bg",
+      "current": "no dedicated token — uses --state-active (#22C55E) inline",
+      "desired": "light green background for 'Ready' badge (similar to #DCFCE7 or unknown exact)",
+      "confidence": "medium"
+    },
+    {
+      "token": "--color-status-ready-text",
+      "current": "no dedicated token",
+      "desired": "dark green text for 'Ready' badge (unknown exact hex)",
+      "confidence": "low"
+    }
+  ],
+  "layout_changes": [
+    {
+      "description": "Current page is a single-CV view/edit/create flow with form fields and preview cards. Screenshot shows a multi-CV table listing with Title, Language, Last Updated, Status, and Action columns inside a card container.",
+      "affects_component": "CVCenterContent",
+      "change_type": "replace"
+    },
+    {
+      "description": "Page header changes from 'CV Center' with Edit CV button to 'Base CVs' as page header bar text (matching sidebar item name).",
+      "affects_component": "CVCenterContent",
+      "change_type": "structure"
+    },
+    {
+      "description": "Card header row shows 'All Base CVs' title on left and '+ Upload New CV' orange button on right.",
+      "affects_component": "unknown",
+      "change_type": "addition"
+    },
+    {
+      "description": "Table rows show alternating or white background with data: Title (filename), Language, Last Updated (formatted date), Status badge, View action link.",
+      "affects_component": "unknown",
+      "change_type": "new-component"
+    },
+    {
+      "description": "Modal overlay added: 'Choose Base CV' modal with two orange choice buttons ('Select uploaded CV', 'Select generated CV'), OR divider, file upload section with Choose File input, and Cancel/Upload footer buttons.",
+      "affects_component": "unknown",
+      "change_type": "new-component"
+    }
+  ],
+  "component_changes": [
+    {
+      "component": "CVCenterContent",
+      "file": "app/cv-center/page.tsx",
+      "tier": "feature",
+      "change_type": "replace",
+      "visual_description": "Current single-CV view/edit/create flow (CVForm + CVPreview + TagInput) is entirely replaced by a multi-CV table listing. The current page renders form fields, preview cards with sections (experience, skills, achievements, languages), and inline editing. The screenshot shows a simple data table with 5 columns.",
+      "interaction_states_visible": ["base table state with 2 CVs listed", "View action link"],
+      "interaction_states_needed_but_not_shown": ["loading state", "error state", "empty state (0 CVs)", "hover on row", "hover on View link"],
+      "backend_data_required": "GET /users/me/cv must return a list with fields: title/filename, language, updated_at, status. Current API returns UserCV with full_name, language, updated_at but no 'status' field or 'title' as filename.",
+      "backend_available": "partial — GET /users/me/cv exists but may not return 'status' or filename-style 'title' fields"
+    }
+  ],
+  "new_components_needed": [
+    "BaseCVsTable — data table displaying all uploaded base CVs with columns: Title, Language, Last Updated, Status, Action",
+    "ChooseBaseCVModal — modal overlay for selecting or uploading a base CV, with two modes: choice mode (select uploaded/generated + upload) and upload-only mode",
+    "StatusBadge — reusable badge component for 'Ready' status (light green bg, dark green text); may also need other statuses like 'Processing'"
+  ],
+  "sidebar_change": {
+    "required": true,
+    "description": "Sidebar item label appears as 'Base CVs' in the screenshot (currently 'CV Center' in AppSidebar.tsx). The page header bar also reads 'Base CVs' instead of 'CV Center'. However, the route remains /cv-center."
+  },
+  "ambiguities": [
+    "The spec (05-base-cvs-table.yaml) defines columns as 'File Name, Upload Date, Used In, Actions' with 'Set as Default' and 'Delete' row actions, but the screenshot shows 'Title, Language, Last Updated, Status, Action(View)'. Which column set is canonical — spec or screenshot?",
+    "The screenshot shows a 'Ready' status badge but the current UserCV type has no 'status' field. Is this derived from backend data (cv processing status) or is it always 'Ready' for uploaded CVs?",
+    "The 'View' action in the table — does it navigate to a CV detail/preview page, or expand inline, or open a modal?",
+    "The 'Select uploaded CV' and 'Select generated CV' buttons in the modal — what is the difference between uploaded and generated CVs? Is there a separate data model or just a filter on the same GET /users/me/cv endpoint?",
+    "The modal 'Upload' button appears gray/disabled. Is there a distinct disabled style (muted brown vs active orange), or is this the same --color-primary-action with opacity?",
+    "The sidebar label in the screenshot says 'Base CVs' but the route slug is 'cv-center'. Should the sidebar label change to 'Base CVs' or remain 'CV Center'? (Screenshot is authoritative but confirming intent.)",
+    "The modal has no visible X close button in the screenshot (unlike spec which calls for one). Should an X button be added per spec, or follow screenshot exactly with Cancel button only?",
+    "The current CVForm and CVPreview components handle single-CV editing. Are these being removed entirely, or moved to a separate route/modal accessible via the 'View' action?"
+  ]
+}

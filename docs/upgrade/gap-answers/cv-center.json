@@ -1,0 +1,190 @@
+{
+  "route": "/cv-center",
+  "route_slug": "cv-center",
+  "prior_answers_applied": [
+    {
+      "from_route": "/dashboard",
+      "question_id": "q9",
+      "component": "AppSidebar",
+      "topic": "responsive",
+      "answer": "Collapse to icon-only rail on tablet, hamburger overlay on mobile",
+      "applies_here": "Same sidebar on all routes — already answered"
+    },
+    {
+      "from_route": "/dashboard",
+      "question_id": "q7",
+      "component": "ChooseBaseCVModal",
+      "topic": "edge_case",
+      "answer": "Shows a list/table of existing CVs to pick from within the same modal",
+      "applies_here": "Same ChooseBaseCVModal component — already answered for dashboard"
+    },
+    {
+      "from_route": "/dashboard",
+      "question_id": "q8",
+      "component": "ChooseBaseCVModal",
+      "topic": "empty_state",
+      "answer": "Disable both Select buttons, highlight the Upload New CV section",
+      "applies_here": "Same ChooseBaseCVModal component — already answered for dashboard"
+    },
+    {
+      "from_route": "/dashboard",
+      "question_id": "q12",
+      "component": "ChooseBaseCVModal",
+      "topic": "accessibility",
+      "answer": "Yes — but also add aria-describedby for the subtitle text",
+      "applies_here": "Same ChooseBaseCVModal component — already answered for dashboard"
+    }
+  ],
+  "answers": [
+    {
+      "question_id": "q1",
+      "component": "BaseCVsTable",
+      "topic": "loading_state",
+      "question": "While the GET /users/me/cv API call is loading the CV list, what should the BaseCVsTable show?",
+      "answer": "Skeleton rows (3 placeholder rows with shimmer)",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q2",
+      "component": "BaseCVsTable",
+      "topic": "error_state",
+      "question": "If the GET /users/me/cv API call fails, what should the BaseCVsTable display?",
+      "answer": "Inline error message inside the table card with a Retry button",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q3",
+      "component": "BaseCVsTable",
+      "topic": "empty_state",
+      "question": "When the user has zero base CVs uploaded, what should the table area show?",
+      "answer": "Table headers visible with centered 'No primary CVs uploaded yet' text + '+ Upload New CV' CTA",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q4",
+      "component": "BaseCVsTable",
+      "topic": "hover_state",
+      "question": "What should happen when a user hovers over a CV row in the table?",
+      "answer": "Row background highlight + 'View' text becomes underlined",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q5",
+      "component": "BaseCVsTable",
+      "topic": "edge_case",
+      "question": "The 'View' action in each row — what should it do?",
+      "answer": "Navigate to a CV detail/preview page (e.g. /cv-center/[cvId])",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q6",
+      "component": "BaseCVsTable",
+      "topic": "edge_case",
+      "question": "The screenshot columns differ from the spec (spec: File Name, Upload Date, Used In, Actions with Set as Default/Delete; screenshot: Title, Language, Last Updated, Status, View). Which column set is canonical?",
+      "answer": "Merge both — show all columns from spec and screenshot",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q7",
+      "component": "ChooseBaseCVModal",
+      "topic": "edge_case",
+      "question": "The '+ Upload New CV' button on the Base CVs page — should it open the ChooseBaseCVModal (with choice buttons) or a simpler upload-only modal?",
+      "answer": "Upload-only modal (showChoices=false — just file input + Upload)",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q8",
+      "component": "BaseCVsTable",
+      "topic": "responsive",
+      "question": "On mobile viewports, how should the 5-column BaseCVsTable adapt?",
+      "answer": "Stack into card layout (one card per CV)",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q9",
+      "component": "StatusBadge",
+      "topic": "edge_case",
+      "question": "The 'Ready' badge appears in green. What other statuses can a base CV have, and what colors should they use?",
+      "answer": "'Ready' (green) + 'Processing' (blue) + 'Failed' (red) — full lifecycle",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q10",
+      "component": "BaseCVsTable",
+      "topic": "edge_case",
+      "question": "Should the table support client-side sorting by clicking column headers (Title, Language, Last Updated, Status)?",
+      "answer": "Yes — client-side sorting on all columns (default: newest first)",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q11",
+      "component": "BaseCVsTable",
+      "topic": "accessibility",
+      "question": "Should the BaseCVsTable use a semantic <table> element with proper <th> headers for screen readers?",
+      "answer": "Yes — semantic <table> with <thead>/<th>/<tbody>/<tr>/<td>",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q12",
+      "component": "BaseCVsTable",
+      "topic": "i18n",
+      "question": "The CV Center page has new strings: 'All Base CVs', '+ Upload New CV', 'Title', 'Language', 'Last Updated', 'Status', 'Action', 'View', 'Ready', 'Choose Base CV', 'Select uploaded CV', 'Select generated CV', 'Upload New CV', 'Upload', 'Cancel'. Should Hebrew translations be added now?",
+      "answer": "Yes — add Hebrew translations for all new strings",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q13",
+      "component": "BaseCVsTable",
+      "topic": "edge_case",
+      "question": "The screenshot shows a 'Ready' status badge but the current UserCV type has no 'status' field. Where does the status value come from — is it a backend field, always hardcoded 'Ready', or derived client-side?",
+      "answer": "Backend field — the GET /users/me/cv response includes (or will include) a 'status' field reflecting CV processing state.",
+      "applies_to_shared_component": false,
+      "ambiguity_resolved": true
+    },
+    {
+      "question_id": "q14",
+      "component": "ChooseBaseCVModal",
+      "topic": "edge_case",
+      "question": "The modal has 'Select uploaded CV' and 'Select generated CV' buttons. What is the difference between uploaded and generated CVs — same model with a filter, or a separate data model?",
+      "answer": "Separate data model — generated CVs are a distinct type (e.g., TailoredCV produced by the VPR/tailoring flow), not the same as uploaded base CVs.",
+      "applies_to_shared_component": false,
+      "ambiguity_resolved": true
+    },
+    {
+      "question_id": "q15",
+      "component": "ChooseBaseCVModal",
+      "topic": "edge_case",
+      "question": "The modal 'Upload' button appears gray/disabled in the screenshot. Is this a distinct disabled color (muted brown) or the same --color-primary-action with reduced opacity?",
+      "answer": "Match the existing disabled pattern already defined for buttons in the design system — do not introduce a new variant.",
+      "applies_to_shared_component": false,
+      "ambiguity_resolved": true
+    },
+    {
+      "question_id": "q16",
+      "component": "AppSidebar",
+      "topic": "edge_case",
+      "question": "The sidebar label in the screenshot says 'Base CVs' but the route slug is 'cv-center'. Should the sidebar nav label change from 'CV Center' to match the screenshot?",
+      "answer": "Change to 'Primary CVs' — update the sidebar nav item text to 'Primary CVs'.",
+      "applies_to_shared_component": true,
+      "ambiguity_resolved": true
+    },
+    {
+      "question_id": "q17",
+      "component": "ChooseBaseCVModal",
+      "topic": "edge_case",
+      "question": "The upload modal in the screenshot has no visible X close button (only a 'Cancel' button). Should an X button be added per the spec?",
+      "answer": "Yes — add an X close icon in the top-right corner of the modal, following the spec.",
+      "applies_to_shared_component": false,
+      "ambiguity_resolved": true
+    },
+    {
+      "question_id": "q18",
+      "component": "CVForm",
+      "topic": "edge_case",
+      "question": "The current CVForm and CVPreview components handle single-CV editing. With the new table-based design, are these components being removed or repurposed?",
+      "answer": "Move to /cv-center/[cvId] detail route — keep them but relocate to the CV detail/preview page accessible via the table's 'View' action.",
+      "applies_to_shared_component": false,
+      "ambiguity_resolved": true
+    }
+  ]
+}

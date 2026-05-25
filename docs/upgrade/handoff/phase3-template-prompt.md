@@ -113,11 +113,16 @@ Route slug: {ROUTE_SLUG}
 Is new route: {true|false}
 Screenshot files attached: {SCREENSHOT_FILE(S)}
 
-Current components on this page (from component-map.json):
-{PASTE COMPONENT_MAP ENTRY FOR THIS ROUTE}
+API endpoints available to this page (backend contract — changes requiring data outside this list are BLOCKED):
+{PASTE API ENDPOINTS FROM EXECUTION GUIDE ROW FOR THIS PAGE}
 
-Current design tokens excerpt (tokens.css — paste only relevant sections):
-{PASTE RELEVANT TOKEN SECTIONS}
+Current components on this page (from component-map.json):
+- If component-map.json is in project knowledge: write "see component-map.json in project knowledge, route: {ROUTE}"
+- If using Claude Code: paste the single JSON object where "route" == "{ROUTE}"
+- For /cover-letters and /tailored-cvs: write "new route — no current entry. New page file required."
+
+Current design tokens (tokens.css — paste the entire file, all 61 lines):
+{PASTE FULL tokens.css}
 
 Prior gap answers for shared components (paste if available):
 {PASTE OR WRITE "none yet"}

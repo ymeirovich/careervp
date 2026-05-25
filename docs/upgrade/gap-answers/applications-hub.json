@@ -1,0 +1,169 @@
+{
+  "route": "/applications/[id]",
+  "route_slug": "applications-hub",
+    "prior_answers_applied": [
+    {
+      "from_route": "/dashboard",
+      "question_id": "q9",
+      "component": "AppSidebar",
+      "topic": "responsive",
+      "answer": "Collapse to icon-only rail on tablet, hamburger overlay on mobile",
+      "applies_here": "Same sidebar on all routes — already answered"
+    }
+  ],
+  "answers": [
+    {
+      "question_id": "q1",
+      "component": "ModuleCard",
+      "topic": "loading_state",
+      "question": "While the GET /applications/{id} API call is loading the hub data, what should the module card grid show?",
+      "answer": "Skeleton cards (6 placeholder cards matching card shape with shimmer)",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q2",
+      "component": "ModuleCard",
+      "topic": "error_state",
+      "question": "If the GET /applications/{id} API call fails, what should the hub page show?",
+      "answer": "Error banner above the card grid with a Retry button (inline)",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q3",
+      "component": "ModuleCard",
+      "topic": "hover_state",
+      "question": "What should happen when a user hovers over a module card?",
+      "answer": "Light background tint change",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q4",
+      "component": "JobDetailHeader",
+      "topic": "edge_case",
+      "question": "How should long job descriptions be handled in the Job Detail Header's 'Show more' toggle?",
+      "answer": "Truncate at 3 lines, expand inline on click",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q5",
+      "component": "ModuleCard",
+      "topic": "responsive",
+      "question": "The screenshots show a 2-column module card grid. How should it behave on smaller screens?",
+      "answer": "2 columns on desktop, 1 column on mobile (below md breakpoint)",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q6",
+      "component": "ModuleCard",
+      "topic": "edge_case",
+      "question": "The screenshots show a progress percentage (e.g., '85%', '65%') during processing. Should the ProgressBar label show 'Progress' text + percentage, or just the percentage?",
+      "answer": "'Progress' label on left + percentage on right (as shown in screenshots)",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q7",
+      "component": "ModuleCard",
+      "topic": "edge_case",
+      "question": "The failed state shows 'Failed 5 minutes ago'. Where does this relative timestamp come from?",
+      "answer": "Computed client-side from a 'failedAt' timestamp in the GET /applications/{id} response",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q8",
+      "component": "ModuleCard",
+      "topic": "accessibility",
+      "question": "The ProgressBar now shows visible percentage text. Should the existing aria-valuenow + aria-label remain, or should the visible label replace the sr-only span?",
+      "answer": "Keep both — aria attributes for screen readers + visible label for sighted users",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q9",
+      "component": "JobDetailHeader",
+      "topic": "edge_case",
+      "question": "Should the 'View Job Posting ↗' link open the external job URL in a new tab?",
+      "answer": "Yes — new tab with rel='noopener noreferrer'",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q10",
+      "component": "Badge",
+      "topic": "edge_case",
+      "question": "Screenshots show badges on ALL module states (Complete, Ready, Processing, Generating, Failed, Final, Edited, Active). Should the Badge component add new soft/outlined variants, or restyle existing solid variants?",
+      "answer": "Add a 'soft' prop to Badge that toggles between solid and outlined rendering",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q11",
+      "component": "ModuleCard",
+      "topic": "i18n",
+      "question": "The hub page has new strings: 'View Job Posting', 'Show more', 'Show less', 'Progress', 'Failed X minutes ago', 'Still processing...', 'Generating...', context descriptions per module. Should Hebrew translations be added now?",
+      "answer": "Yes — add Hebrew translations for all new strings",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q12",
+      "component": "ModuleCard",
+      "topic": "edge_case",
+      "question": "Secondary actions (Regenerate, Download, Export, History) appear as plain text links in the screenshots rather than ghost buttons. Should they have underline on hover, or remain plain text with color change?",
+      "answer": "Underline on hover",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q13",
+      "component": "ModuleCard",
+      "topic": "edge_case",
+      "question": "Some module cards in the screenshots show '(temp)' suffixed names — e.g. 'Skills Assessment (temp)', 'Job Fit Report (temp)'. Are these screenshot artifacts (placeholder names during design), or are the module display names actually changing from 'Gap Analysis' / 'Value Proposition Report'?",
+      "answer": "Screenshot artifact — keep existing module display names: Gap Analysis, Value Proposition Report, etc. The '(temp)' labels were placeholder text in the design files only.",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q14",
+      "component": "ModuleCard",
+      "topic": "edge_case",
+      "question": "The screenshots suggest the module grid order may differ from the current MODULE_ORDER. Is the new order intentional, and what is the exact sequence (left-to-right, top-to-bottom)?",
+      "answer": "Same as current order — VPR → Cover Letter → CV Tailoring → Gap Analysis → Interview Prep → Company Research. No reordering required.",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q15",
+      "component": "Badge",
+      "topic": "edge_case",
+      "question": "Screenshots show green-outlined badges for 'Complete' and 'Ready' states, and blue-outlined for 'Generating' and 'Processing'. What is the intended color-to-state semantic mapping for the soft Badge variant?",
+      "answer": "Confirmed mapping: green = terminal success states (Complete, Final, Edited); blue = in-progress states (Generating, Processing); red = failure (Failed); gray/neutral = idle states (Ready, Active).",
+      "applies_to_shared_component": true
+    },
+    {
+      "question_id": "q16",
+      "component": "ProgressBar",
+      "topic": "edge_case",
+      "question": "ProgressBar height in screenshots appears taller than the current h-2 (8px). Should the bar height increase (e.g. to h-3 or h-4), or does h-2 already match?",
+      "answer": "Keep h-2 (8px) — no height change needed. The current value already matches the screenshot.",
+      "applies_to_shared_component": true
+    },
+    {
+      "question_id": "q17",
+      "component": "ProgressBar",
+      "topic": "edge_case",
+      "question": "The progress 'Progress' label and percentage value (per q6) — should this be rendered as new props directly on the ProgressBar component, or rendered externally by ModuleCard wrapping the ProgressBar?",
+      "answer": "New props on ProgressBar — ProgressBar receives showLabel and value props and renders the label row itself, making it reusable across any context.",
+      "applies_to_shared_component": true
+    },
+    {
+      "question_id": "q18",
+      "component": "ProgressBar",
+      "topic": "edge_case",
+      "question": "In the Failed module card state there is a red bar at the bottom. Is this the existing ProgressBar at full width (value=100) with an error/red color variant, or a completely separate visual element?",
+      "answer": "ProgressBar at 100% with an error/destructive color variant — reuse the ProgressBar component with value=100 and a destructive color prop.",
+      "applies_to_shared_component": true
+    },
+    {
+      "question_id": "q19",
+      "component": "ModuleCard",
+      "topic": "responsive",
+      "question": "The current module grid uses xl:grid-cols-3 (3 columns on XL screens) but all screenshots show 2 columns. Should xl:grid-cols-3 be removed to cap the grid at 2 columns at all desktop viewport sizes?",
+      "answer": "Keep xl:grid-cols-3 — do not remove the 3-column breakpoint. Screenshots may not cover XL viewport widths, but the 3-column layout should be preserved for very wide screens.",
+      "applies_to_shared_component": false
+    }
+  ]
+
+}

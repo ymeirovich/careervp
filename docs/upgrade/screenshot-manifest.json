@@ -1,0 +1,173 @@
+[
+  {
+    "route": "/dashboard",
+    "page_title": "Dashboard",
+    "screenshot_files": [
+      "Dashboard View page.png",
+      "Dashboard page-Account dropdown.png",
+      "New Application Form.png",
+      "New Application-Job Description textbox edit.png",
+      "New Application Form-Choose Base CV Modal.png"
+    ],
+    "screenshot_count": 5,
+    "is_new_route": false,
+    "visible_states": ["default", "interactive", "modal", "edit", "nested-modal"],
+    "sidebar_change_required": false,
+    "components_visually_present": [
+      "AppSidebar",
+      "StatsRow",
+      "JobsTable",
+      "Button",
+      "NewApplicationModal",
+      "EmptyState",
+      "UsageGate"
+    ],
+    "notes": "Account dropdown is an interactive state of the top-nav/header user menu. New Application Form and its variants (job description edit, CV picker nested modal) are modal overlays on the dashboard base state."
+  },
+  {
+    "route": "/applications",
+    "page_title": "Applications View",
+    "screenshot_files": [
+      "Applications View page.png"
+    ],
+    "screenshot_count": 1,
+    "is_new_route": true,
+    "visible_states": ["default"],
+    "sidebar_change_required": false,
+    "components_visually_present": [
+      "AppSidebar",
+      "Button",
+      "EmptyState"
+    ],
+    "notes": "Replaces the current redirect-only page.tsx. Backend: GET /jobs (same data source as dashboard JobsTable). Existing sidebar item — no new sidebar entry required."
+  },
+  {
+    "route": "/applications/[id]",
+    "page_title": "Job Application Hub",
+    "screenshot_files": [
+      "Job Application Hub page-top.png",
+      "Job Application Hub page-middle.png",
+      "Job Application Hub page-bottom.png"
+    ],
+    "screenshot_count": 3,
+    "is_new_route": false,
+    "visible_states": ["scroll-continuation"],
+    "sidebar_change_required": false,
+    "components_visually_present": [
+      "HubLayout",
+      "ModuleCard",
+      "ErrorBoundary",
+      "Spinner"
+    ],
+    "notes": "Three screenshots represent one long scrollable page split into vertical thirds. Top shows VPR + Cover Letter module cards; middle shows Tailored CV + Company Research; bottom shows Gap Analysis + Interview Prep."
+  },
+  {
+    "route": "/applications/[id]/gap-analysis",
+    "page_title": "Gap Analysis Questionnaire",
+    "screenshot_files": [
+      "gap analysis questionnaire form.png",
+      "gap analysis questionnaire form continued.png",
+      "gap analysis questionnaire form question counter read state.png",
+      "gap analysis questionnaire form-rich textbox edit.png",
+      "gap analysis questionnaire form-rich textbox edit 2.png"
+    ],
+    "screenshot_count": 5,
+    "is_new_route": false,
+    "visible_states": ["default", "scroll-continuation", "read", "edit"],
+    "sidebar_change_required": false,
+    "components_visually_present": [
+      "ErrorBoundary",
+      "Spinner"
+    ],
+    "notes": "Five screenshots: base form state, scroll continuation, question-counter read-only state, and two rich-textbox edit variants. ExportDropdown is NOT present — gap analysis has no export functionality per component-map."
+  },
+  {
+    "route": "/cv-center",
+    "page_title": "Base CVs",
+    "screenshot_files": [
+      "Base CVs View page.png",
+      "Base CV New Upload modal.png"
+    ],
+    "screenshot_count": 2,
+    "is_new_route": false,
+    "visible_states": ["default", "modal"],
+    "sidebar_change_required": false,
+    "components_visually_present": [
+      "ErrorBoundary",
+      "Spinner",
+      "Button"
+    ],
+    "notes": "Base CV Upload modal is an overlay on the base state of the cv-center page."
+  },
+  {
+    "route": "/cover-letters",
+    "page_title": "Cover Letters",
+    "screenshot_files": [
+      "Cover Letters View page.png"
+    ],
+    "screenshot_count": 1,
+    "is_new_route": true,
+    "visible_states": ["default"],
+    "sidebar_change_required": true,
+    "components_visually_present": [
+      "AppSidebar",
+      "Button",
+      "EmptyState"
+    ],
+    "notes": "New route with no existing page file. Requires new app/cover-letters/page.tsx and a new sidebar item. Backend: GET /cover-letters (endpoint already exists)."
+  },
+  {
+    "route": "/tailored-cvs",
+    "page_title": "Tailored CVs",
+    "screenshot_files": [
+      "Tailored CVs View page.png"
+    ],
+    "screenshot_count": 1,
+    "is_new_route": true,
+    "visible_states": ["default"],
+    "sidebar_change_required": true,
+    "components_visually_present": [
+      "AppSidebar",
+      "Button",
+      "EmptyState"
+    ],
+    "notes": "New route with no existing page file. Requires new app/tailored-cvs/page.tsx and a new sidebar item. Backend: GET /cv-tailorings (endpoint already exists)."
+  },
+  {
+    "route": "/billing",
+    "page_title": "Billing & Subscription",
+    "screenshot_files": [
+      "Billing page.png",
+      "Billing page continued.png",
+      "subscription plans page.png",
+      "Subscription plan page 2.png"
+    ],
+    "screenshot_count": 4,
+    "is_new_route": false,
+    "visible_states": ["default", "scroll-continuation"],
+    "sidebar_change_required": false,
+    "components_visually_present": [
+      "ErrorBoundary",
+      "Spinner",
+      "Button"
+    ],
+    "notes": "All four screenshots are sections of a single long billing page. 'Billing page.png' and 'Billing page continued.png' show the current-plan/usage section; 'subscription plans page.png' and 'Subscription plan page 2.png' show the plan-picker section. Not a separate route."
+  },
+  {
+    "route": "/settings",
+    "page_title": "Settings",
+    "screenshot_files": [
+      "Settings page-Account Settings.png",
+      "Settings page.png"
+    ],
+    "screenshot_count": 2,
+    "is_new_route": false,
+    "visible_states": ["default", "scroll-continuation"],
+    "sidebar_change_required": false,
+    "components_visually_present": [
+      "ErrorBoundary",
+      "Button"
+    ],
+    "notes": "Two screenshots represent top and bottom sections of the settings page. Account Settings section is at the top; additional settings (e.g. danger zone / subscription info) at bottom."
+  }
+]

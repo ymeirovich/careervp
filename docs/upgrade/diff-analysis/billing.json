@@ -1,0 +1,114 @@
+{
+  "route": "/billing",
+  "page_title": "Billing",
+  "screenshot_files": ["Billing page.png", "Billing page continued.png", "subscription plans page.png", "Subscription plan page 2.png"],
+  "is_new_route": false,
+  "token_changes": [],
+  "layout_changes": [
+    {
+      "description": "Page title changed from 'Billing & Plan' to 'Billing'",
+      "affects_component": "BillingContent",
+      "change_type": "structure"
+    },
+    {
+      "description": "Current plan section restructured: now a 'Current Subscription' card with green 'Active' badge, plan-type pill ('Pro Monthly'), renewal date, next charge amount, and an orange 'View Plans' CTA button on the right side",
+      "affects_component": "BillingContent",
+      "change_type": "structure"
+    },
+    {
+      "description": "New 'Usage' card section added below subscription card showing 'Unlimited credits' and a blue 'Upgrade subscription to save money' link",
+      "affects_component": "unknown",
+      "change_type": "addition"
+    },
+    {
+      "description": "New 'Billing Info' card section added below Usage showing 'Payment method .... XXXX (Visa)', 'Billing handled securely via Stripe.' text, and an orange 'Manage Billing' button on the right",
+      "affects_component": "unknown",
+      "change_type": "addition"
+    },
+    {
+      "description": "Plan cards moved to a separate Plans page (likely /billing/plans or /plans), accessed via 'View Plans' button — no longer inline on the main billing page",
+      "affects_component": "BillingContent",
+      "change_type": "structure"
+    },
+    {
+      "description": "Plans page shows 3 plan cards in a horizontal row instead of the current 2-column grid: Monthly Plan ($30/mo), 3 Month Plan ($25/mo billed $75), 6 Month Plan ($20/mo billed $120)",
+      "affects_component": "unknown",
+      "change_type": "structure"
+    },
+    {
+      "description": "Pricing structure changed from Monthly $20 + Annual $16/mo ($192/yr) to Monthly $30, 3-Month $25/mo ($75), 6-Month $20/mo ($120)",
+      "affects_component": "BillingContent",
+      "change_type": "structure"
+    },
+    {
+      "description": "Current plan card on Plans page shows a grayed-out 'Current Plan' button instead of the active 'Choose Plan' CTA",
+      "affects_component": "unknown",
+      "change_type": "addition"
+    },
+    {
+      "description": "Recommended plan (3 Month Plan) has a thick rounded border highlight instead of the current 'Save 20%' badge approach",
+      "affects_component": "unknown",
+      "change_type": "structure"
+    },
+    {
+      "description": "'Questions? Contact us' link remains at the bottom of the Plans page as a centered line",
+      "affects_component": "unknown",
+      "change_type": "spacing"
+    }
+  ],
+  "component_changes": [
+    {
+      "component": "BillingContent",
+      "file": "app/billing/page.tsx",
+      "tier": "feature",
+      "change_type": "modify",
+      "visual_description": "Main billing page now shows three stacked cards (Current Subscription, Usage, Billing Info) instead of current plan status + inline plan cards. Page title shortened to 'Billing'. Plan selection moved to a separate route.",
+      "interaction_states_visible": ["active subscription with renewal info"],
+      "interaction_states_needed_but_not_shown": ["trial active state", "trial expired state", "cancelled/expiring subscription state", "past-due invoice state", "loading state", "error state"],
+      "backend_data_required": "GET /users/me/subscription for plan_type, status, current_period_end, next_charge_amount; GET /users/me/usage for credits info; payment method last4 and brand from subscription or portal",
+      "backend_available": "yes — GET /users/me/subscription and GET /users/me/usage exist; payment method details may require POST /billing/portal (Stripe portal)"
+    },
+    {
+      "component": "ErrorBoundary",
+      "file": "components/ErrorBoundary/ErrorBoundary.tsx",
+      "tier": "shared",
+      "change_type": "modify",
+      "visual_description": "No visual change — shared component decisions already finalized (React error boundary for uncaught exceptions only)",
+      "interaction_states_visible": [],
+      "interaction_states_needed_but_not_shown": [],
+      "backend_data_required": "none",
+      "backend_available": "yes"
+    },
+    {
+      "component": "Spinner",
+      "file": "components/ui/Spinner.tsx",
+      "tier": "ui-primitive",
+      "change_type": "modify",
+      "visual_description": "No visual change — shared component decisions already finalized (skeletons replace Spinner for data loading; Spinner retained for inline/button use)",
+      "interaction_states_visible": [],
+      "interaction_states_needed_but_not_shown": [],
+      "backend_data_required": "none",
+      "backend_available": "yes"
+    }
+  ],
+  "new_components_needed": [
+    "SubscriptionCard — displays current subscription status (Active badge, plan-type pill, renewal date, next charge, View Plans CTA)",
+    "UsageCard — shows credits remaining/unlimited with upgrade link",
+    "BillingInfoCard — shows payment method (masked card number, brand) with Manage Billing CTA",
+    "PlansPage — new route page with 3 plan cards (Monthly, 3-Month, 6-Month) including current-plan indicator and recommended-plan highlight",
+    "PlanCard — individual plan card with title, price, billing period, feature list, and Choose Plan / Current Plan button"
+  ],
+  "sidebar_change": {
+    "required": false,
+    "description": ""
+  },
+  "ambiguities": [
+    "The screenshots show pricing of $30/$25/$20 per month, but CLAUDE.md specifies $20 monthly and $192/year ($16/mo). Which pricing is correct for implementation?",
+    "Is the Plans page a separate route (e.g., /billing/plans) or a modal/overlay on the billing page?",
+    "Where does the payment method last4 and brand come from — is it returned in the existing GET /users/me/subscription response, or does it require a new API field?",
+    "The 'Manage Billing' button likely opens the Stripe Customer Portal via POST /billing/portal — should it open in a new tab or redirect?",
+    "The 'Upgrade subscription to save money' link in the Usage card — does it navigate to the Plans page, or scroll/link elsewhere?",
+    "What does the billing page look like for trial users (no payment method yet) — are Usage and Billing Info cards still shown?",
+    "The 3 Month Plan is highlighted with a thick border — is this always the recommended plan, or does the highlight depend on the user's current plan?"
+  ]
+}

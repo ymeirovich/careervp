@@ -1,0 +1,132 @@
+{
+  "route": "/applications",
+  "page_title": "Applications",
+  "screenshot_files": ["Applications View page.png"],
+  "is_new_route": true,
+  "token_changes": [
+    {
+      "token": "--color-badge-draft-bg",
+      "current": "no dedicated token — draft uses 'neutral' variant (bg-surface-subtle with border)",
+      "desired": "#unknown — screenshot shows warm orange-tinted background for Draft badge",
+      "confidence": "medium"
+    },
+    {
+      "token": "--color-badge-archived-bg",
+      "current": "no dedicated token — archived uses 'neutral' variant (bg-surface-subtle with border)",
+      "desired": "#unknown — screenshot shows muted beige/gray background for Archived badge",
+      "confidence": "medium"
+    },
+    {
+      "token": "--color-table-header-text",
+      "current": "no dedicated token — column headers use text-text-muted (#6B7280)",
+      "desired": "#F97316 or similar — screenshot shows orange/primary-action colored column headers",
+      "confidence": "medium"
+    }
+  ],
+  "layout_changes": [
+    {
+      "description": "New full-page route /applications replaces redirect-only page. Contains a card with page heading 'My Jobs', a '+ New Application' button, and a data table of jobs",
+      "affects_component": "unknown",
+      "change_type": "new-component"
+    },
+    {
+      "description": "Page heading is 'My Jobs' inside the card, while the top-level header shows 'My Jobs' as the route title — both visible simultaneously",
+      "affects_component": "unknown",
+      "change_type": "structure"
+    },
+    {
+      "description": "Jobs table shows 5 columns: Job Title, Company, Status, Updated, Action — same columns as dashboard JobsTable but this is the full list view (no 'View All' link, no 'Most Recent Jobs' heading)",
+      "affects_component": "JobsTable",
+      "change_type": "structure"
+    },
+    {
+      "description": "Table rows alternate with subtle background banding — rows appear to alternate between white and very light gray/cream",
+      "affects_component": "unknown",
+      "change_type": "spacing"
+    },
+    {
+      "description": "'+ New Application' button is positioned top-right inside the card header, aligned with the 'My Jobs' heading",
+      "affects_component": "unknown",
+      "change_type": "structure"
+    },
+    {
+      "description": "Column headers use orange/primary-action colored text instead of the current muted gray",
+      "affects_component": "JobsTable",
+      "change_type": "spacing"
+    },
+    {
+      "description": "Status badges have distinct per-status styling: Active = green filled, Draft = warm orange/peach outlined, Archived = muted gray outlined",
+      "affects_component": "Badge",
+      "change_type": "structure"
+    },
+    {
+      "description": "'View' action in the last column appears as bold dark text link rather than a ghost button",
+      "affects_component": "unknown",
+      "change_type": "structure"
+    }
+  ],
+  "component_changes": [
+    {
+      "component": "JobsTable",
+      "file": "components/dashboard/JobsTable.tsx",
+      "tier": "feature",
+      "change_type": "modify",
+      "visual_description": "Current component has 'Most Recent Jobs' heading with 'View All' link. Screenshot shows same table structure but with heading 'My Jobs', no 'View All' link, and displays the full job list. Column headers are orange. Badge variants differ (Draft has warm orange style, Archived has muted beige style). 'View' action is bold text, not ghost button. Rows have alternating background.",
+      "interaction_states_visible": ["default"],
+      "interaction_states_needed_but_not_shown": ["hover", "loading", "error", "empty"],
+      "backend_data_required": "GET /jobs — full list of jobs (same endpoint as dashboard)",
+      "backend_available": "yes"
+    },
+    {
+      "component": "Badge",
+      "file": "components/ui/Badge.tsx",
+      "tier": "ui-primitive",
+      "change_type": "modify",
+      "visual_description": "Current 'neutral' variant is gray bg with border. Screenshot shows Draft badge with a warm orange/peach background and dark text, Archived badge with a muted gray/beige background and dark text. Both appear outlined or lightly filled rather than solid. May need new 'draft' and 'archived' variants, or the neutral variant needs status-aware overrides.",
+      "interaction_states_visible": ["default"],
+      "interaction_states_needed_but_not_shown": [],
+      "backend_data_required": "none",
+      "backend_available": "yes"
+    },
+    {
+      "component": "AppSidebar",
+      "file": "components/layout/AppSidebar.tsx",
+      "tier": "layout",
+      "change_type": "modify",
+      "visual_description": "Applications nav item is active (orange icon, bold text, left border indicator). Same sidebar structure as dashboard analysis — 7 nav items: Dashboard, Applications, Base CVs, Tailored CVs, Cover Letters, Billing, Settings.",
+      "interaction_states_visible": ["default", "active"],
+      "interaction_states_needed_but_not_shown": ["hover"],
+      "backend_data_required": "none",
+      "backend_available": "yes"
+    },
+    {
+      "component": "AppHeader",
+      "file": "components/layout/AppHeader.tsx",
+      "tier": "layout",
+      "change_type": "modify",
+      "visual_description": "Shows 'My Jobs' as page title, 'Credits: 1 / 3' counter, and account dropdown showing 'Lisi'. Same structure as dashboard analysis.",
+      "interaction_states_visible": ["default"],
+      "interaction_states_needed_but_not_shown": [],
+      "backend_data_required": "none",
+      "backend_available": "yes"
+    }
+  ],
+  "new_components_needed": [
+    "ApplicationsPage — new page component at /applications with 'My Jobs' card containing the full jobs table and '+ New Application' button",
+    "ApplicationsJobsTable — variant of JobsTable for full-list view (no 'Most Recent' heading, no 'View All' link, heading is 'My Jobs'). Alternatively, refactor JobsTable to accept a mode prop."
+  ],
+  "sidebar_change": {
+    "required": false,
+    "description": "Sidebar changes already captured in dashboard analysis. Applications item active state matches existing pattern."
+  },
+  "ambiguities": [
+    "Is ApplicationsPage a new component or should the existing JobsTable be reused with different props (title, showViewAll)?",
+    "Row alternating background: is this a stripe pattern on even/odd rows, or is it only on hover?",
+    "Draft badge color: appears warm orange/peach but exact hex not determinable from PNG",
+    "Archived badge color: appears muted gray/beige but exact hex not determinable from PNG",
+    "Does the table show ALL jobs or is it paginated? No pagination controls are visible in the screenshot",
+    "The page heading 'My Jobs' appears both in the header bar and inside the card — is this intentional duplication or should the card heading be removed?",
+    "'View' text in Action column: is it a link navigating to /applications/[id], or a button triggering a side panel?",
+    "Column header text color appears to be --color-primary-action (#F97316) but could be a lighter orange variant"
+  ]
+}

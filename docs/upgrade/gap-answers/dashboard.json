@@ -1,0 +1,149 @@
+{
+  "route": "/dashboard",
+  "answers": [
+    {
+      "question_id": "q1",
+      "component": "JobsTable",
+      "topic": "loading_state",
+      "question": "While jobs data is loading from the API, what should the JobsTable show?",
+      "answer": "Skeleton rows (3 placeholder rows with shimmer)",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q2",
+      "component": "JobsTable",
+      "topic": "error_state",
+      "question": "If the GET /jobs API call fails, what should the JobsTable display?",
+      "answer": "Inline error message inside the table card with a Retry button",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q3",
+      "component": "StatsRow",
+      "topic": "loading_state",
+      "question": "While user usage data is loading, what should the StatsRow pills show?",
+      "answer": "Skeleton placeholders matching pill shape",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q4",
+      "component": "AccountDropdownMenu",
+      "topic": "edge_case",
+      "question": "Where does the 'Upgrade' button in the account dropdown navigate?",
+      "answer": "Navigate to /billing page",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q5",
+      "component": "NewApplicationPage",
+      "topic": "loading_state",
+      "question": "After clicking 'Create Application', what loading indicator should appear while the POST /jobs request is in flight?",
+      "answer": "Button text changes to 'Creating...' with disabled state",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q6",
+      "component": "NewApplicationPage",
+      "topic": "error_state",
+      "question": "If application creation fails (POST /jobs error), how should the error be shown?",
+      "answer": "Error banner at top of the form card",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q7",
+      "component": "ChooseBaseCVModal",
+      "topic": "edge_case",
+      "question": "What happens after the user clicks 'Select uploaded CV' or 'Select generated CV' in the Choose Base CV modal?",
+      "answer": "Shows a list/table of existing CVs to pick from within the same modal",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q8",
+      "component": "ChooseBaseCVModal",
+      "topic": "empty_state",
+      "question": "If the user has no uploaded or generated CVs, what should the Choose Base CV modal show?",
+      "answer": "Disable both Select buttons, highlight the Upload New CV section",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q9",
+      "component": "AppSidebar",
+      "topic": "responsive",
+      "question": "On mobile/tablet viewports, should the redesigned sidebar collapse, become a hamburger menu, or remain fixed?",
+      "answer": "Collapse to icon-only rail on tablet, hamburger overlay on mobile",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q10",
+      "component": "JobsTable",
+      "topic": "responsive",
+      "question": "On smaller screens, how should the 5-column JobsTable adapt?",
+      "answer": "Stack into card layout (one card per job)",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q11",
+      "component": "NewApplicationPage",
+      "topic": "i18n",
+      "question": "The New Application page has new strings ('← Back', 'Choose Base CV', 'Select uploaded CV', 'Select generated CV', 'Upload New CV'). Should these be added to the Hebrew translation file now?",
+      "answer": "Yes — add Hebrew translations for all new strings",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q12",
+      "component": "ChooseBaseCVModal",
+      "topic": "accessibility",
+      "question": "Should the Choose Base CV modal trap focus and be dismissible via Escape key, following the same pattern as the current NewApplicationModal?",
+      "answer": "Yes — but also add aria-describedby for the subtitle text",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q13",
+      "component": "NewApplicationPage",
+      "topic": "routing",
+      "question": "What is the exact frontend route for the New Application page?",
+      "answer": "POST /jobs — the New Application flow does not have its own standalone route; it submits to POST /jobs",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q14",
+      "component": "JobsTable",
+      "topic": "design_token",
+      "question": "What is the exact hex color for the Draft status badge?",
+      "answer": "#FED7AA (orange-200) — soft orange tint",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q15",
+      "component": "JobsTable",
+      "topic": "design_token",
+      "question": "What is the exact hex color for the Archived status badge?",
+      "answer": "#D1D5DB (gray-300) — neutral gray muted state",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q16",
+      "component": "ChooseBaseCVModal",
+      "topic": "edge_case",
+      "question": "Is the Upload button in the Choose Base CV modal disabled/muted when no file has been chosen?",
+      "answer": "No — the Upload button is always enabled and directly opens the OS file picker",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q17",
+      "component": "JobsTable",
+      "topic": "design_token",
+      "question": "What color should the JobsTable column header text use?",
+      "answer": "#6B7280 (gray-500) — standard neutral gray, not the primary action orange",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q18",
+      "component": "AppSidebar",
+      "topic": "design_token",
+      "question": "What Lucide icons should be used for the 'Base CVs' and 'Tailored CVs' sidebar nav items?",
+      "answer": "Base CVs = FileText, Tailored CVs = FilePen",
+      "applies_to_shared_component": false
+    }
+  ]
+}
