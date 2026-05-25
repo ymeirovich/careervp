@@ -1,0 +1,134 @@
+{
+  "route": "/applications/[id]/gap-analysis",
+  "route_slug": "gap-analysis",
+  "answers": [
+    {
+      "question_id": "q1",
+      "component": "GapAnalysisContent",
+      "topic": "loading_state",
+      "question": "While gap questions and application data are loading (3 parallel API calls), what should the page show?",
+      "answer": "Skeleton cards (3-4 placeholder question cards with shimmer)",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q2",
+      "component": "GapAnalysisContent",
+      "topic": "error_state",
+      "question": "If the GET /jobs/{jobId}/gap-questions API call fails, what should the page display?",
+      "answer": "Inline error banner above question list with Retry button",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q3",
+      "component": "GapAnalysisContent",
+      "topic": "empty_state",
+      "question": "When no gap questions exist yet (before generation), what should the page show? The 'Generate Questions' button is not visible in the screenshots.",
+      "answer": "Gap questions are generated as a product of submitting a New Application. Once the user submits the Job listing, the Company URL and their CV, the LLM conducts a web research report and generates gap questions. If no gap questions are generated from this process, show a message directing user back to the hub to retry submitting their application. There was an error and they can contact the site administrator.",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q4",
+      "component": "RichTextEditor",
+      "topic": "edge_case",
+      "question": "The screenshots show a rich text toolbar (B, I, U, bullet list, numbered list). Which library should power this editor?",
+      "answer": "TipTap (headless, extensible, React-native)",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q5",
+      "component": "RichTextEditor",
+      "topic": "edge_case",
+      "question": "Should the rich text answer be stored as HTML, Markdown, or plain text? The current API stores plain text in the response field.",
+      "answer": "Markdown (convert to/from HTML in editor)",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q6",
+      "component": "GapQuestionCard",
+      "topic": "edge_case",
+      "question": "When the user clicks 'Save' on a single question, should it save just that one answer or all answers at once?",
+      "answer": "Save only the current question's answer (individual POST per question)",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q7",
+      "component": "GapQuestionCard",
+      "topic": "edge_case",
+      "question": "The current code has destination radio buttons (CV_IMPACT / INTERVIEW_MVP_ONLY) and impact/probability badges. These are absent from all screenshots. Should they be removed?",
+      "answer": "Keep both features but show them in a collapsed/advanced section",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q8",
+      "component": "GapAnalysisContent",
+      "topic": "responsive",
+      "question": "On mobile viewports, how should the gap analysis question cards adapt?",
+      "answer": "Same layout, full-width cards stacked vertically",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q9",
+      "component": "RichTextEditor",
+      "topic": "edge_case",
+      "question": "Should the rich text editor support pasting formatted text (from Word, Google Docs, etc.), or strip formatting on paste?",
+      "answer": "Strip but keep basic formatting (bold, italic, lists only)",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q10",
+      "component": "GapQuestionCard",
+      "topic": "accessibility",
+      "question": "Should the rich text editor toolbar buttons have ARIA labels, and should the editor area have a descriptive aria-label linking it to the question?",
+      "answer": "Yes — toolbar buttons get aria-labels, editor gets aria-labelledby pointing to question text",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q11",
+      "component": "GapAnalysisContent",
+      "topic": "i18n",
+      "question": "New strings include: 'Gap Analysis Questions', 'Answer some questions to fill in gaps...', 'X out of Y answered', 'Answer', 'Edit', 'Save', '← Back'. Should Hebrew translations be added?",
+      "answer": "Yes — add Hebrew translations for all new strings",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q12",
+      "component": "GapQuestionCard",
+      "topic": "edge_case",
+      "question": "When a user is editing one question and clicks 'Answer' on a different unanswered question, what should happen to the first editor?",
+      "answer": "Prompt to save or discard the first before opening the second",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q13",
+      "component": "AppHeader",
+      "topic": "credits_display",
+      "question": "The header shows 'Credits: 1 / 3'. Does this refer to gap analysis credits, overall application credits, or trial-plan credits? Which API field and endpoint provides this data?",
+      "answer": "Trial-plan application credits only. Call GET /users/me/usage and read applications.used (numerator) and applications.remaining; derive total as used + remaining. The constant 3 comes from TRIAL_LIMIT_APPLICATIONS in trial_service.py. Data flow: useUserContext hook → api.getUsage() → AppHeader renders '{used} / {total} applications'. For paid subscribers isUnlimited=true and the header shows 'Unlimited' instead.",
+      "applies_to_shared_component": true
+    },
+    {
+      "question_id": "q14",
+      "component": "GapAnalysisContent",
+      "topic": "empty_state",
+      "question": "Should a 'Generate Questions' button exist anywhere on the gap-analysis page as a fallback for the empty state?",
+      "answer": "No 'Generate Questions' button anywhere on the page. Questions are always pre-generated before the user arrives here; the empty/error state instead directs the user back to the hub.",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q15",
+      "component": "GapQuestionCard",
+      "topic": "edge_case",
+      "question": "When a user saves a question without expanding the collapsed advanced section (destination radio), what value should be sent for the destination field in POST /jobs/{jobId}/gap-responses?",
+      "answer": "Send hardcoded default CV_IMPACT when the user has not interacted with the collapsed section.",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q16",
+      "component": "GapQuestionCard",
+      "topic": "edge_case",
+      "question": "Are the impact and probability badges read-only or interactive? Should they be visible in the collapsed header row before the advanced section is opened?",
+      "answer": "Read-only display badges showing LLM-assigned values. They must be visible even when the advanced section has never been opened — render them in the collapsed header row as a summary.",
+      "applies_to_shared_component": false
+    }
+  ]
+}

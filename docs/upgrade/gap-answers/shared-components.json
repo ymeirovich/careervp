@@ -1,0 +1,165 @@
+{
+  "description": "Consolidated shared-component decisions extracted from per-page gap answers. Paste into 'Prior gap answers for shared components' slot for all subsequent page analyses.",
+  "shared_component_answers": [
+    {
+      "component": "Spinner",
+      "file": "components/ui/Spinner.tsx",
+      "used_in_routes": ["/cv-center", "/applications/[id]", "/applications/[id]/vpr", "/applications/[id]/cover-letter", "/applications/[id]/cv-tailored", "/applications/[id]/gap-analysis", "/applications/[id]/interview-prep", "/applications/[id]/company-research", "/billing"],
+      "decisions": [
+        {
+          "topic": "loading_state",
+          "decision": "Data-loading states use skeleton placeholders with shimmer, NOT the Spinner component. Spinner remains for inline/button loading indicators only.",
+          "derived_from": [
+            { "route": "/dashboard", "question_id": "q1", "component": "JobsTable", "answer": "Skeleton rows (3 placeholder rows with shimmer)" },
+            { "route": "/dashboard", "question_id": "q3", "component": "StatsRow", "answer": "Skeleton placeholders matching pill shape" },
+            { "route": "/applications/[id]", "question_id": "q1", "component": "ModuleCard", "answer": "Skeleton cards (6 placeholder cards matching card shape with shimmer)" },
+            { "route": "/applications/[id]/gap-analysis", "question_id": "q1", "component": "GapAnalysisContent", "answer": "Skeleton cards (3-4 placeholder question cards with shimmer)" },
+            { "route": "/cv-center", "question_id": "q1", "component": "BaseCVsTable", "answer": "Skeleton rows (3 placeholder rows with shimmer)" }
+          ]
+        },
+        {
+          "topic": "usage_pattern",
+          "decision": "Spinner is still used for inline button loading states (e.g., 'Creating...' with disabled button). It is NOT used as the primary page/section loading indicator — skeletons replace that role in the redesign."
+        }
+      ]
+    },
+    {
+      "component": "ErrorBoundary",
+      "file": "components/ErrorBoundary/ErrorBoundary.tsx",
+      "used_in_routes": ["/cv-center", "/applications/[id]", "/applications/[id]/vpr", "/applications/[id]/cover-letter", "/applications/[id]/cv-tailored", "/applications/[id]/gap-analysis", "/applications/[id]/interview-prep", "/applications/[id]/company-research", "/billing", "/settings"],
+      "decisions": [
+        {
+          "topic": "error_state",
+          "decision": "API failures use inline error message with Retry button inside the affected section/card — NOT a full-page ErrorBoundary takeover. ErrorBoundary remains as the React error boundary for uncaught JS exceptions only.",
+          "derived_from": [
+            { "route": "/dashboard", "question_id": "q2", "component": "JobsTable", "answer": "Inline error message inside the table card with a Retry button" },
+            { "route": "/dashboard", "question_id": "q6", "component": "NewApplicationPage", "answer": "Error banner at top of the form card" },
+            { "route": "/applications/[id]", "question_id": "q2", "component": "ModuleCard", "answer": "Error banner above the card grid with a Retry button (inline)" },
+            { "route": "/applications/[id]/gap-analysis", "question_id": "q2", "component": "GapAnalysisContent", "answer": "Inline error banner above question list with Retry button" },
+            { "route": "/cv-center", "question_id": "q2", "component": "BaseCVsTable", "answer": "Inline error message inside the table card with a Retry button" }
+          ]
+        },
+        {
+          "topic": "scope",
+          "decision": "ErrorBoundary is kept for uncaught React render errors (JS exceptions). It should NOT change visually in the redesign — it is a safety net, not a primary error UX. All user-facing API error states are handled inline per-component."
+        }
+      ]
+    },
+    {
+      "component": "Button",
+      "file": "components/ui/Button.tsx",
+      "used_in_routes": ["/dashboard", "/login", "/register", "/confirm-signup", "/forgot-password", "/reset-password"],
+      "decisions": [
+        {
+          "topic": "loading_state",
+          "decision": "Buttons in loading state show text change (e.g., 'Create Application' → 'Creating...') with disabled state. No spinner inside button.",
+          "derived_from": [
+            { "route": "/dashboard", "question_id": "q5", "component": "NewApplicationPage", "answer": "Button text changes to 'Creating...' with disabled state" }
+          ]
+        },
+        {
+          "topic": "disabled_state",
+          "decision": "Disabled buttons use reduced opacity + cursor not-allowed. Text may change to indicate in-progress action."
+        },
+        {
+          "topic": "responsive",
+          "decision": "Buttons remain same size/style across breakpoints — no mobile-specific button variants needed."
+        }
+      ]
+    },
+    {
+      "component": "ModuleCard",
+      "file": "components/ModuleCard/ModuleCard.tsx",
+      "used_in_routes": ["/applications/[id]", "/dashboard/jobs/[jobId]"],
+      "decisions": [
+        {
+          "topic": "loading_state",
+          "decision": "Skeleton cards (6 placeholder cards matching card shape with shimmer) while hub data loads.",
+          "derived_from": [
+            { "route": "/applications/[id]", "question_id": "q1" }
+          ]
+        },
+        {
+          "topic": "error_state",
+          "decision": "Error banner above the card grid with a Retry button (inline).",
+          "derived_from": [
+            { "route": "/applications/[id]", "question_id": "q2" }
+          ]
+        },
+        {
+          "topic": "hover_state",
+          "decision": "Light background tint change on hover.",
+          "derived_from": [
+            { "route": "/applications/[id]", "question_id": "q3" }
+          ]
+        },
+        {
+          "topic": "responsive",
+          "decision": "2 columns on desktop, 1 column on mobile (below md breakpoint).",
+          "derived_from": [
+            { "route": "/applications/[id]", "question_id": "q5" }
+          ]
+        },
+        {
+          "topic": "progress_bar",
+          "decision": "'Progress' label on left + percentage on right. Visible ProgressBar with percentage replaces current inline spinner approach.",
+          "derived_from": [
+            { "route": "/applications/[id]", "question_id": "q6" }
+          ]
+        },
+        {
+          "topic": "failed_state",
+          "decision": "Shows 'Failed X minutes ago' — relative timestamp computed client-side from 'failedAt' in API response.",
+          "derived_from": [
+            { "route": "/applications/[id]", "question_id": "q7" }
+          ]
+        },
+        {
+          "topic": "accessibility",
+          "decision": "Keep both aria attributes (aria-valuenow, aria-label) for screen readers AND visible percentage label for sighted users.",
+          "derived_from": [
+            { "route": "/applications/[id]", "question_id": "q8" }
+          ]
+        },
+        {
+          "topic": "secondary_actions",
+          "decision": "Secondary actions (Regenerate, Download, Export, History) render as plain text links with underline on hover.",
+          "derived_from": [
+            { "route": "/applications/[id]", "question_id": "q12" }
+          ]
+        },
+        {
+          "topic": "badge_variants",
+          "decision": "Add 'soft' prop to Badge for toggling between solid and outlined rendering. Used across all module states (Complete, Ready, Processing, Generating, Failed, Final, Edited, Active).",
+          "derived_from": [
+            { "route": "/applications/[id]", "question_id": "q10" }
+          ]
+        },
+        {
+          "topic": "i18n",
+          "decision": "Hebrew translations required for all new strings: 'View Job Posting', 'Show more', 'Show less', 'Progress', 'Failed X minutes ago', 'Still processing...', 'Generating...', per-module context descriptions.",
+          "derived_from": [
+            { "route": "/applications/[id]", "question_id": "q11" }
+          ]
+        }
+      ]
+    },
+    {
+      "component": "ExportDropdown",
+      "file": "components/ExportDropdown/ExportDropdown.tsx",
+      "used_in_routes": ["/applications/[id]/vpr", "/applications/[id]/cover-letter", "/applications/[id]/cv-tailored", "/applications/[id]/interview-prep"],
+      "decisions": [],
+      "note": "Not yet addressed — all 4 routes using ExportDropdown have not been analyzed yet. Questions will be asked during those page analyses."
+    }
+  ],
+  "cross_cutting_patterns": {
+    "loading": "Skeleton placeholders with shimmer (matching container shape) — consistent across all pages. NOT spinner.",
+    "error_api": "Inline error message with Retry button inside the affected card/section — consistent across all pages. NOT full-page error.",
+    "error_js": "ErrorBoundary unchanged — React error boundary for uncaught exceptions only.",
+    "empty": "Table headers visible + centered message + CTA button — consistent for table-based pages.",
+    "responsive_tables": "Tables stack into card layout on mobile — consistent for JobsTable and BaseCVsTable.",
+    "responsive_sidebar": "Icon-only rail on tablet, hamburger overlay on mobile — answered once in /dashboard, applies globally.",
+    "i18n": "Hebrew translations required for all new strings — answered yes on every page.",
+    "accessibility_tables": "Semantic <table> with <thead>/<th>/<tbody>/<tr>/<td> — consistent for all data tables."
+  }
+}

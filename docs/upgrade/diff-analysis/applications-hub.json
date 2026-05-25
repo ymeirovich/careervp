@@ -1,0 +1,203 @@
+{
+  "route": "/applications/[id]",
+  "page_title": "Job Application Hub",
+  "screenshot_files": [
+    "Job Application Hub page-top.png",
+    "Job Application Hub page-middle.png",
+    "Job Application Hub page-bottom.png"
+  ],
+  "is_new_route": false,
+  "token_changes": [
+    {
+      "token": "--color-badge-complete-bg",
+      "current": "complete uses 'success' variant — bg-state-active (#22C55E) with white text",
+      "desired": "screenshot shows 'Complete' badge with green outlined/soft style — green bg with green text or green border with green text, not solid green with white",
+      "confidence": "medium"
+    },
+    {
+      "token": "--color-badge-generating-bg",
+      "current": "no 'generating' badge variant exists — processing state shows spinner text only, no badge",
+      "desired": "screenshot shows 'Generating' badge with blue/purple outlined style next to Tailored CV title; and 'Processing' badge with blue outlined style next to Job Fit Report title",
+      "confidence": "medium"
+    },
+    {
+      "token": "--color-badge-ready-bg",
+      "current": "no dedicated 'ready' badge — ready state has no badge by default",
+      "desired": "screenshot shows 'Ready' badge with green outlined/soft style next to Cover Letter title",
+      "confidence": "medium"
+    },
+    {
+      "token": "--color-badge-failed-bg",
+      "current": "failed uses 'error' variant — bg-state-error (#EF4444) with white text",
+      "desired": "screenshot shows 'Failed' badge — appears solid red with white text, consistent with current",
+      "confidence": "high"
+    },
+    {
+      "token": "--color-progress-bar-error",
+      "current": "ProgressBar has 'error' color option — bg-state-error (#EF4444)",
+      "desired": "screenshot shows a thick red progress bar for failed Skills Assessment — consistent with current error color",
+      "confidence": "high"
+    }
+  ],
+  "layout_changes": [
+    {
+      "description": "New job details header section at top of page: '← Back' link, job title (large heading), company name (subtitle text), 'View Job Posting ↗' orange link, truncated job description with 'Show more' expandable toggle — this section does not exist in current hub page",
+      "affects_component": "unknown",
+      "change_type": "new-component"
+    },
+    {
+      "description": "Module cards laid out in a 2-column grid (not the current 3-column grid on xl breakpoints). Cards are wider and taller with more internal spacing",
+      "affects_component": "HubLayout",
+      "change_type": "structure"
+    },
+    {
+      "description": "ModuleCard now shows a visible ProgressBar component with percentage label (e.g., 'Progress 85%', 'Progress 65%') during processing state, replacing the current inline spinner + text approach",
+      "affects_component": "ModuleCard",
+      "change_type": "structure"
+    },
+    {
+      "description": "ModuleCard in processing state shows italicized status text above the progress bar (e.g., 'Still processing...', 'Generating...') — current shows spinner icon + text inline",
+      "affects_component": "ModuleCard",
+      "change_type": "structure"
+    },
+    {
+      "description": "ModuleCard in failed state shows a thick red progress bar filling roughly full width, plus 'Failed X minutes ago' timestamp text — current shows only 'Generation failed. Please retry.' text",
+      "affects_component": "ModuleCard",
+      "change_type": "structure"
+    },
+    {
+      "description": "Status badges now appear on ALL module cards for every state (Complete, Ready, Failed, Processing, Generating, Final, Edited, Active) — current only shows badges for edited, stale, and final states",
+      "affects_component": "ModuleCard",
+      "change_type": "addition"
+    },
+    {
+      "description": "Badge styling changed: Complete and Ready badges appear with green outlined/soft style (not solid green). Generating/Processing badges appear with blue outlined style. Final badge appears with green outlined style. Edited badge appears with blue/purple outlined style.",
+      "affects_component": "Badge",
+      "change_type": "structure"
+    },
+    {
+      "description": "Cover Letter card secondary actions 'Regenerate' and 'Download' appear as plain text links (not ghost buttons) beside the primary 'View' CTA",
+      "affects_component": "ModuleCard",
+      "change_type": "structure"
+    },
+    {
+      "description": "Value Proposition Report card secondary actions 'Export' and 'History' appear as plain text links beside the primary 'View' CTA — current secondary actions render as ghost buttons",
+      "affects_component": "ModuleCard",
+      "change_type": "structure"
+    },
+    {
+      "description": "Module card title font appears slightly larger than current text-base — may need to increase to --text-card-title (1.25rem)",
+      "affects_component": "ModuleCard",
+      "change_type": "spacing"
+    },
+    {
+      "description": "Card description text ('Review your responses to identified skill gaps', 'Your cover letter has been generated and is ready for review', 'You've made custom edits to this document', 'Company research is complete and ready for review') — current ModuleCard uses subtitle prop; these appear as descriptive context lines not present in the current notStarted/processing states",
+      "affects_component": "ModuleCard",
+      "change_type": "addition"
+    },
+    {
+      "description": "Module cards show '(temp)' suffix in title for some modules (Skills Assessment (temp), Job Fit Report (temp)) — this appears to be screenshot placeholder naming, not a code change",
+      "affects_component": "ModuleCard",
+      "change_type": "structure"
+    },
+    {
+      "description": "Page header still shows 'Job Application Hub' as the top-level title in AppHeader, matching current behavior",
+      "affects_component": "AppHeader",
+      "change_type": "spacing"
+    },
+    {
+      "description": "The grid order of modules appears different from current MODULE_ORDER. Screenshot shows (top-to-bottom, left-to-right): Interview Prep, Skills Assessment, Job Fit Report (row 1-2 area), Gap Analysis, Tailored CV (row 3), Cover Letter, VPR (row 4), Company Research, Base CV (row 5). Current order is baseCV, gapAnalysis, vpr, tailoredCV, coverLetter, interviewPrep, companyResearch.",
+      "affects_component": "ApplicationHubPage",
+      "change_type": "order"
+    }
+  ],
+  "component_changes": [
+    {
+      "component": "ModuleCard",
+      "file": "components/ModuleCard/ModuleCard.tsx",
+      "tier": "feature",
+      "change_type": "modify",
+      "visual_description": "Major changes: (1) All states now show a status badge (not just edited/stale/final). (2) Processing state shows ProgressBar with percentage instead of inline spinner. (3) Failed state shows red progress bar + 'Failed X minutes ago' text. (4) Secondary actions render as plain text links rather than ghost buttons. (5) Card has more vertical padding and larger title text. (6) Description/context lines shown for ready/complete/edited states.",
+      "interaction_states_visible": ["notStarted", "processing", "ready", "complete", "edited", "failed", "final"],
+      "interaction_states_needed_but_not_shown": ["stale", "timeout", "hover", "disabled"],
+      "backend_data_required": "progress percentage value for processing state — must come from status polling endpoints",
+      "backend_available": "yes — GET /vpr/{id}/status, GET /cover-letter/{id}/status, GET /interview-prep/{id}/status, GET /cv-tailoring/{id}/status return progress data"
+    },
+    {
+      "component": "Badge",
+      "file": "components/ui/Badge.tsx",
+      "tier": "ui-primitive",
+      "change_type": "modify",
+      "visual_description": "Current badges are solid-fill with white text. Screenshot shows outlined/soft-fill style: Complete = green bg-green-50 text-green-700, Ready = same green soft, Generating = blue bg-blue-50 text-blue-700, Processing = blue soft, Failed = solid red with white text (unchanged), Final = green soft, Edited = blue/purple soft. Need new outlined/soft variants or restyle existing.",
+      "interaction_states_visible": ["default"],
+      "interaction_states_needed_but_not_shown": [],
+      "backend_data_required": "none",
+      "backend_available": "yes"
+    },
+    {
+      "component": "HubLayout",
+      "file": "components/layout/HubLayout.tsx",
+      "tier": "layout",
+      "change_type": "modify",
+      "visual_description": "Current renders children in a flex column with banners. Screenshot shows a job details header section (back link, title, company, job posting link, description) above the module grid. Grid is 2 columns instead of current 1/2/3 responsive grid. HubLayout or a new wrapper must include the job header.",
+      "interaction_states_visible": ["default"],
+      "interaction_states_needed_but_not_shown": ["stale_banner", "error_banner", "blocked_banner"],
+      "backend_data_required": "Job title, company name, job URL, job description — from GET /applications/{id} response",
+      "backend_available": "yes"
+    },
+    {
+      "component": "ProgressBar",
+      "file": "components/ui/ProgressBar.tsx",
+      "tier": "ui-primitive",
+      "change_type": "modify",
+      "visual_description": "Current is a thin 2px bar. Screenshot shows a thicker progress bar (approximately 8-12px height) with rounded ends. Processing modules show orange fill, failed module shows full-width red fill. Percentage label ('85%', '65%') shown to the right of the bar with 'Progress' label to the left.",
+      "interaction_states_visible": ["processing", "error"],
+      "interaction_states_needed_but_not_shown": [],
+      "backend_data_required": "none — receives value prop",
+      "backend_available": "yes"
+    },
+    {
+      "component": "AppSidebar",
+      "file": "components/layout/AppSidebar.tsx",
+      "tier": "layout",
+      "change_type": "modify",
+      "visual_description": "Same sidebar changes already captured in dashboard analysis. 7 nav items: Dashboard, Applications, Base CVs, Tailored CVs, Cover Letters, Billing, Settings.",
+      "interaction_states_visible": ["default"],
+      "interaction_states_needed_but_not_shown": [],
+      "backend_data_required": "none",
+      "backend_available": "yes"
+    },
+    {
+      "component": "AppHeader",
+      "file": "components/layout/AppHeader.tsx",
+      "tier": "layout",
+      "change_type": "modify",
+      "visual_description": "Shows 'Job Application Hub' as page title, 'Credits: 1 / 3' counter, and account dropdown showing 'Lisi'. Same structure as dashboard analysis.",
+      "interaction_states_visible": ["default"],
+      "interaction_states_needed_but_not_shown": [],
+      "backend_data_required": "none",
+      "backend_available": "yes"
+    }
+  ],
+  "new_components_needed": [
+    "JobDetailHeader — card section showing job title, company name, Active badge, 'View Job Posting ↗' link, truncated description with 'Show more' toggle, and '← Back' navigation link"
+  ],
+  "sidebar_change": {
+    "required": false,
+    "description": "Sidebar changes already captured in dashboard analysis."
+  },
+  "ambiguities": [
+    "Screenshot module titles show '(temp)' suffix on some cards (Skills Assessment, Job Fit Report) — are these renamed modules or screenshot artifacts? Current module names are 'Gap Analysis' and 'Value Proposition Report'.",
+    "Module grid order differs significantly from current MODULE_ORDER — is the new order intentional, and what is the exact sequence?",
+    "Badge styling: are the soft/outlined badges new Badge variants or a global restyle of existing variants? Some badges (Complete, Ready) look green-outlined while others (Generating, Processing) look blue-outlined.",
+    "ProgressBar height in screenshots appears ~8-12px vs current 2px (h-2 = 8px). The current h-2 may already match — unclear if it needs to be thicker.",
+    "Progress percentage label: is this a new prop on ProgressBar or rendered externally by ModuleCard?",
+    "Failed state red bar: is this the ProgressBar at 100% with error color, or a different visual element?",
+    "Failed state timestamp 'Failed 5 minutes ago': is this a new field from the API, or computed client-side from a timestamp in the application response?",
+    "Secondary actions (Regenerate, Download, Export, History) appear as text links — should they have hover underline, or some other interaction style?",
+    "Job description 'Show more' toggle: does this expand inline or navigate to the full job posting?",
+    "'View Job Posting ↗' link: does this open in a new tab, or navigate within the app?",
+    "The 2-column grid: does it collapse to 1-column on mobile? At what breakpoint?",
+    "Current grid uses xl:grid-cols-3 but screenshots show 2 columns — is the max always 2 columns now?"
+  ]
+}

@@ -1,0 +1,155 @@
+{
+  "route": "/dashboard",
+  "page_title": "dashboard",
+  "screenshot_files": [
+    "Dashboard View page.png",
+    "Dashboard page-Account dropdown.png",
+    "New Application Form.png",
+    "New Application-Job Description textbox edit.png",
+    "New Application Form-Choose Base CV Modal.png"
+  ],
+  "is_new_route": false,
+  "token_changes": [
+    {
+      "token": "--color-badge-draft-bg",
+      "current": "no dedicated token — draft uses neutral variant (bg-surface-subtle)",
+      "desired": "#unknown — screenshot shows orange-tinted badge for Draft",
+      "confidence": "medium"
+    },
+    {
+      "token": "--color-badge-archived-bg",
+      "current": "no dedicated token — archived uses neutral variant (bg-surface-subtle)",
+      "desired": "#unknown — screenshot shows muted/beige badge for Archived",
+      "confidence": "medium"
+    }
+  ],
+  "layout_changes": [
+    {
+      "description": "Sidebar nav items changed: 'CV Center' replaced by three items: 'Base CVs', 'Tailored CVs', 'Cover Letters'",
+      "affects_component": "AppSidebar",
+      "change_type": "structure"
+    },
+    {
+      "description": "Sidebar nav item icons changed — Applications uses a building/grid icon, Base CVs uses a document-with-clip icon, Tailored CVs uses a document-with-pen icon, Cover Letters uses an envelope icon",
+      "affects_component": "AppSidebar",
+      "change_type": "structure"
+    },
+    {
+      "description": "New Application changed from modal overlay to a dedicated full page at its own route with a '← Back' link",
+      "affects_component": "NewApplicationModal",
+      "change_type": "structure"
+    },
+    {
+      "description": "Account dropdown in header now includes 'Help', 'Log out' (red text), and an 'Upgrade' button (orange filled)",
+      "affects_component": "AppHeader",
+      "change_type": "addition"
+    },
+    {
+      "description": "Credits display in header changed from 'X / Y applications' text to 'Credits: X / Y' label",
+      "affects_component": "AppHeader",
+      "change_type": "structure"
+    },
+    {
+      "description": "New Application page includes a 'Choose Base CV' step/modal not present in current modal form",
+      "affects_component": "unknown",
+      "change_type": "new-component"
+    },
+    {
+      "description": "JobsTable column headers now use orange/primary-action color text instead of muted color",
+      "affects_component": "JobsTable",
+      "change_type": "spacing"
+    },
+    {
+      "description": "StatsRow pills appear visually unchanged — subtle background, border, rounded",
+      "affects_component": "StatsRow",
+      "change_type": "spacing"
+    }
+  ],
+  "component_changes": [
+    {
+      "component": "AppSidebar",
+      "file": "components/layout/AppSidebar.tsx",
+      "tier": "layout",
+      "change_type": "modify",
+      "visual_description": "Current has 5 nav items (Dashboard, Applications, CV Center, Billing, Settings). Screenshot shows 7 items: Dashboard, Applications, Base CVs, Tailored CVs, Cover Letters, Billing, Settings. Icons differ. Active state uses orange icon + bold dark text.",
+      "interaction_states_visible": ["default", "active"],
+      "interaction_states_needed_but_not_shown": ["hover"],
+      "backend_data_required": "none",
+      "backend_available": "yes"
+    },
+    {
+      "component": "AppHeader",
+      "file": "components/layout/AppHeader.tsx",
+      "tier": "layout",
+      "change_type": "modify",
+      "visual_description": "Current shows page title + credits text + account button. Screenshot shows same layout but credits formatted as 'Credits: 1 / 3', and account dropdown expanded shows Help, Log out (red), and Upgrade button (orange filled).",
+      "interaction_states_visible": ["default", "open"],
+      "interaction_states_needed_but_not_shown": ["hover"],
+      "backend_data_required": "none",
+      "backend_available": "yes"
+    },
+    {
+      "component": "JobsTable",
+      "file": "components/dashboard/JobsTable.tsx",
+      "tier": "feature",
+      "change_type": "modify",
+      "visual_description": "Current has muted column headers. Screenshot shows column headers in orange/primary-action color. Badge styles differ: 'Active' is green with white text, 'Draft' is orange-outlined, 'Archived' is muted beige/olive. 'View' action is bold dark text (not ghost button).",
+      "interaction_states_visible": ["default"],
+      "interaction_states_needed_but_not_shown": ["hover", "loading", "empty", "error"],
+      "backend_data_required": "none",
+      "backend_available": "yes"
+    },
+    {
+      "component": "StatsRow",
+      "file": "components/dashboard/StatsRow.tsx",
+      "tier": "feature",
+      "change_type": "modify",
+      "visual_description": "Visually very similar to current. Minor: pill corners may be slightly rounder. Content format unchanged.",
+      "interaction_states_visible": ["default"],
+      "interaction_states_needed_but_not_shown": [],
+      "backend_data_required": "none",
+      "backend_available": "yes"
+    },
+    {
+      "component": "NewApplicationModal",
+      "file": "components/NewApplicationModal/NewApplicationModal.tsx",
+      "tier": "feature",
+      "change_type": "replace",
+      "visual_description": "Current is a modal dialog. Screenshot shows a full page with '← Back' navigation, same form fields (Job Title, Company, Job URL, Job Description), plus a 'Choose Base CV' step accessible before submission. Form layout is single-column in a card. Cancel and Create Application buttons at bottom.",
+      "interaction_states_visible": ["default", "edit"],
+      "interaction_states_needed_but_not_shown": ["loading", "error", "disabled"],
+      "backend_data_required": "none — same POST /jobs endpoint",
+      "backend_available": "yes"
+    },
+    {
+      "component": "Badge",
+      "file": "components/ui/Badge.tsx",
+      "tier": "ui-primitive",
+      "change_type": "modify",
+      "visual_description": "Current neutral variant is gray-ish. Screenshot shows Draft badge with orange/warm outline style, Archived badge with muted olive/beige background. Need new variants or variant overrides.",
+      "interaction_states_visible": ["default"],
+      "interaction_states_needed_but_not_shown": [],
+      "backend_data_required": "none",
+      "backend_available": "yes"
+    }
+  ],
+  "new_components_needed": [
+    "NewApplicationPage — full page replacement for NewApplicationModal, at a new route (e.g., /dashboard/new or /applications/new)",
+    "ChooseBaseCVModal — modal with 'Select uploaded CV', 'Select generated CV' buttons and file upload option",
+    "AccountDropdownMenu — dropdown panel under account button with Help, Log out, Upgrade items"
+  ],
+  "sidebar_change": {
+    "required": true,
+    "description": "Replace 'CV Center' nav item with three new items: 'Base CVs' (/base-cvs or /cv-center/base), 'Tailored CVs' (/tailored-cvs), 'Cover Letters' (/cover-letters). Update icons for all items to match screenshot."
+  },
+  "ambiguities": [
+    "Exact route for the New Application page is unclear — could be /dashboard/new, /applications/new, or a route-based page",
+    "Draft badge color: appears orange-tinted but exact hex not determinable from PNG",
+    "Archived badge color: appears muted beige/olive but exact hex not determinable from PNG",
+    "Account dropdown: does 'Upgrade' navigate to /billing or open a separate modal?",
+    "Choose Base CV modal: what happens after selecting 'Select uploaded CV' or 'Select generated CV' — does it show a list picker or go to another view?",
+    "Choose Base CV modal: the 'Upload' button appears disabled/muted — is this intentional when no file is chosen?",
+    "Column header color in JobsTable: appears to be --color-primary-action (#F97316) but could be a lighter variant",
+    "Sidebar icon for Base CVs vs Tailored CVs — exact Lucide icon names not determinable from screenshot"
+  ]
+}

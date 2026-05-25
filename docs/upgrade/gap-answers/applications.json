@@ -1,0 +1,167 @@
+{
+  "route": "/applications",
+  "prior_answers_applied": [
+    {
+      "from_route": "/dashboard",
+      "question_id": "q1",
+      "component": "JobsTable",
+      "topic": "loading_state",
+      "answer": "Skeleton rows (3 placeholder rows with shimmer)",
+      "applies_here": "ApplicationsPage uses same JobsTable — same skeleton loading pattern applies"
+    },
+    {
+      "from_route": "/dashboard",
+      "question_id": "q2",
+      "component": "JobsTable",
+      "topic": "error_state",
+      "answer": "Inline error message inside the table card with a Retry button",
+      "applies_here": "ApplicationsPage uses same JobsTable — same inline error + retry pattern applies"
+    },
+    {
+      "from_route": "/dashboard",
+      "question_id": "q10",
+      "component": "JobsTable",
+      "topic": "responsive",
+      "answer": "Stack into card layout (one card per job)",
+      "applies_here": "ApplicationsPage uses same JobsTable — same card-stack responsive pattern applies"
+    },
+    {
+      "from_route": "/dashboard",
+      "question_id": "q9",
+      "component": "AppSidebar",
+      "topic": "responsive",
+      "answer": "Collapse to icon-only rail on tablet, hamburger overlay on mobile",
+      "applies_here": "Same sidebar on all routes — already answered"
+    }
+  ],
+  "answers": [
+    {
+      "question_id": "q1",
+      "component": "ApplicationsPage",
+      "topic": "empty_state",
+      "question": "When the user has zero jobs, what should the Applications page show?",
+      "answer": "Table headers visible with centered 'No applications yet' text + prominent '+ New Application' CTA — match current JobsTable empty state",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q2",
+      "component": "ApplicationsPage",
+      "topic": "edge_case",
+      "question": "Should the jobs table support pagination, infinite scroll, or show all jobs at once?",
+      "answer": "Show all jobs (no pagination) — V1 users have max ~50 jobs, default sorted latest application first",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q3",
+      "component": "ApplicationsPage",
+      "topic": "edge_case",
+      "question": "The header bar and the card both show 'My Jobs'. Is this intentional duplication?",
+      "answer": "Yes, keep both — header label changes to 'Applications' to show route context, card shows section title",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q4",
+      "component": "ApplicationsJobsTable",
+      "topic": "hover_state",
+      "question": "What should happen when a user hovers over a job row in the table?",
+      "answer": "Row background highlight + 'View' text becomes underlined",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q5",
+      "component": "ApplicationsJobsTable",
+      "topic": "edge_case",
+      "question": "Should the rows have alternating background colors (zebra striping)?",
+      "answer": "Yes — alternate between white and a very light gray/cream",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q6",
+      "component": "Badge",
+      "topic": "edge_case",
+      "question": "The screenshot shows Draft and Archived badges with distinct warm colors instead of the current neutral gray. Should new Badge variants be added?",
+      "answer": "Add 'draft' variant (warm orange/peach bg, dark text) and 'archived' variant (muted beige/gray bg, dark text)",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q7",
+      "component": "ApplicationsPage",
+      "topic": "accessibility",
+      "question": "Should the jobs table use a semantic <table> element with proper <th> headers for screen readers, or remain a CSS grid?",
+      "answer": "Use semantic <table> with <thead>/<th>/<tbody>/<tr>/<td> for full accessibility",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q8",
+      "component": "ApplicationsPage",
+      "topic": "i18n",
+      "question": "The Applications page has new strings ('My Jobs' as page/card title). Should Hebrew translations be added?",
+      "answer": "Yes — add Hebrew translations for all new strings on this page",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q9",
+      "component": "ApplicationsJobsTable",
+      "topic": "edge_case",
+      "question": "Should the 'View' action navigate to /applications/[id], or behave differently from the dashboard 'View'?",
+      "answer": "Navigate to /applications/[id] — same as dashboard View",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q10",
+      "component": "ApplicationsJobsTable",
+      "topic": "edge_case",
+      "question": "Should the table support sorting by clicking column headers (Job Title, Company, Status, Updated)?",
+      "answer": "Yes — client-side sorting on all columns",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q11",
+      "component": "ApplicationsJobsTable",
+      "topic": "edge_case",
+      "question": "Should the table support filtering or searching by status (Active/Draft/Archived) or job title?",
+      "answer": "Search input above the table for job title filtering",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q12",
+      "component": "ApplicationsPage",
+      "topic": "edge_case",
+      "question": "Does the '+ New Application' button on this page navigate to the same NewApplicationPage route identified in the dashboard analysis, or open a different flow?",
+      "answer": "Same route — navigates to the NewApplicationPage (e.g., /applications/new)",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q13",
+      "component": "JobsTable",
+      "topic": "architecture",
+      "question": "Is ApplicationsPage a new component or should the existing JobsTable be reused with different props (title, showViewAll)?",
+      "answer": "Reuse the existing JobsTable component — extend it via new props (e.g., enableSorting, enableSearch, hideViewAll) rather than creating a separate ApplicationsJobsTable file. Prior gap answers that reference 'ApplicationsJobsTable' as a component name refer to the table in context, not a new file.",
+      "applies_to_shared_component": true
+    },
+    {
+      "question_id": "q14",
+      "component": "Badge",
+      "topic": "design_token",
+      "question": "Draft badge background exact hex: appears warm orange/peach but not determinable from PNG. Which token should be used?",
+      "answer": "Map to the nearest existing warm token in tokens.css (e.g., --color-warning-bg or equivalent amber/peach surface token). Do not add new tokens; developer selects closest existing token that matches warm orange/peach. Mark for design QA if token doesn't exist.",
+      "applies_to_shared_component": true
+    },
+    {
+      "question_id": "q15",
+      "component": "Badge",
+      "topic": "design_token",
+      "question": "Archived badge background exact hex: appears muted gray/beige but not determinable from PNG. Which token should be used?",
+      "answer": "Map to the nearest existing neutral surface token in tokens.css (e.g., --color-neutral-100 or --color-surface-muted). Do not add new tokens; developer selects closest existing token that matches muted gray/beige. Mark for design QA if token doesn't exist.",
+      "applies_to_shared_component": true
+    },
+    {
+      "question_id": "q16",
+      "component": "ApplicationsJobsTable",
+      "topic": "design_token",
+      "question": "Column header text color appears to be --color-primary-action (#F97316) but could be a lighter orange variant. Which value is correct?",
+      "answer": "Use --color-primary-action (#F97316) directly — consistent with other interactive/accent text throughout the app.",
+      "applies_to_shared_component": false
+    }
+  ]
+}

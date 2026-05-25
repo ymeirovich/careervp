@@ -1,0 +1,91 @@
+{
+  "route": "/settings",
+  "page_title": "Settings",
+  "screenshot_files": ["Settings page-Account Settings.png", "Settings page.png"],
+  "is_new_route": false,
+  "token_changes": [
+    {
+      "token": "--color-card-border-accent",
+      "current": "not defined — cards use --color-border-default (#E5E7EB)",
+      "desired": "#unknown — screenshots show a subtle warm/cream tint on card borders, not the standard gray",
+      "confidence": "low"
+    }
+  ],
+  "layout_changes": [
+    {
+      "description": "Page content area is wider — current uses max-w-xl (~36rem), screenshots show cards spanning a wider content area (~50-60rem)",
+      "affects_component": "SettingsContent",
+      "change_type": "spacing"
+    },
+    {
+      "description": "Profile and Security sections replaced by a single 'Account Settings' card showing Name/Email/Password as read-only fields with 'Change' buttons aligned right",
+      "affects_component": "SettingsContent",
+      "change_type": "structure"
+    },
+    {
+      "description": "'Account Settings' subtitle added below page heading 'Settings' with secondary text 'Manage your account settings'",
+      "affects_component": "SettingsContent",
+      "change_type": "addition"
+    },
+    {
+      "description": "Notification Preferences placeholder replaced with full Notifications card containing 3 toggle switches",
+      "affects_component": "SettingsContent",
+      "change_type": "structure"
+    },
+    {
+      "description": "API Access placeholder section removed entirely",
+      "affects_component": "SettingsContent",
+      "change_type": "removal"
+    },
+    {
+      "description": "New 'Enable 2-Factor Authentication' card added above Notifications with a toggle switch",
+      "affects_component": "unknown",
+      "change_type": "addition"
+    },
+    {
+      "description": "New 'Delete Account' card added at the bottom with red text link",
+      "affects_component": "unknown",
+      "change_type": "addition"
+    },
+    {
+      "description": "Card corners use larger border radius (~16px) matching --radius-card token, current uses rounded-md (~6px)",
+      "affects_component": "SettingsContent",
+      "change_type": "spacing"
+    }
+  ],
+  "component_changes": [
+    {
+      "component": "SettingsContent",
+      "file": "app/settings/page.tsx",
+      "tier": "feature",
+      "change_type": "replace",
+      "visual_description": "Complete restructure: current inline-editable Profile form + Security password form + 2 'Coming soon' placeholders replaced by 4 distinct cards — Account Settings (read-only fields + Change buttons), 2FA toggle, Notifications toggles, Delete Account. Page heading now has a sub-heading 'Account Settings' with subtitle text.",
+      "interaction_states_visible": ["default/resting state with all toggles and fields visible"],
+      "interaction_states_needed_but_not_shown": ["Name change flow (what happens on 'Change' click)", "Email change flow (what happens on 'Change' click)", "Password change flow (what happens on 'Change' click)", "2FA toggle on state + setup flow", "Notification toggle loading/saving state", "Delete account confirmation flow", "Loading state while fetching user data", "Error state if API fails"],
+      "backend_data_required": "GET /users/me for name + email; notification_preferences object for toggle states; 2fa_enabled boolean for 2FA toggle state",
+      "backend_available": "partial — GET /users/me provides name + email. Notification preference fields and 2FA status may not exist in current API response. PUT /users/me may not accept notification_preferences or 2fa_enabled fields."
+    }
+  ],
+  "new_components_needed": [
+    "AccountSettingsCard — displays Name, Email, Password as labeled read-only rows with 'Change' button on each",
+    "TwoFactorAuthCard — card with heading, subtitle, and toggle switch for 2FA",
+    "NotificationsCard — card with heading, subtitle, and 3 labeled toggle switches for notification preferences",
+    "DeleteAccountCard — card with 'Delete Account' red text link/button",
+    "ToggleSwitch — reusable toggle/switch UI primitive (orange when on, gray when off)"
+  ],
+  "sidebar_change": {
+    "required": false,
+    "description": ""
+  },
+  "ambiguities": [
+    "What interaction occurs when 'Change' is clicked for Name — inline edit, modal, or expand to form?",
+    "What interaction occurs when 'Change' is clicked for Email — modal with email verification step, or inline?",
+    "What interaction occurs when 'Change' is clicked for Password — modal with current/new password fields, or inline expand?",
+    "Does the backend (GET /users/me) currently return notification preference fields? If not, this UI requires API changes which are BLOCKED by the frozen-backend constraint.",
+    "Does the backend support 2FA toggle? The current Cognito auth may not expose 2FA settings via PUT /users/me. If not, this feature is BLOCKED.",
+    "Does DELETE /users/me or equivalent endpoint exist for the Delete Account feature? If not, this is BLOCKED.",
+    "The card borders in the screenshot appear to have a subtle warm/cream tint rather than standard --color-border-default gray — is this an intentional new token or a screenshot artifact?",
+    "The 'Account Settings' heading appears twice (once as subtitle below 'Settings', once as card heading) — is the duplication intentional?",
+    "Should notification toggles save immediately on toggle (optimistic update), or require a separate Save button?"
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "route": "/tailored-cvs",
+  "page_title": "Tailored CVs",
+  "screenshot_files": ["Tailored CVs View page.png"],
+  "is_new_route": true,
+  "token_changes": [],
+  "layout_changes": [
+    {
+      "description": "New 'Tailored CVs' nav item in AppSidebar, positioned between 'Base CVs' and 'Cover Letters' — shown as active/selected state with orange left border accent",
+      "affects_component": "AppSidebar",
+      "change_type": "addition"
+    },
+    {
+      "description": "New full-page layout with 'Tailored CVs' header bar (title + credits counter + user dropdown) and 'All Tailored CVs' card containing a listing table",
+      "affects_component": "TailoredCVsPage",
+      "change_type": "addition"
+    }
+  ],
+  "component_changes": [
+    {
+      "component": "AppSidebar",
+      "file": "components/layout/AppSidebar.tsx",
+      "tier": "layout",
+      "change_type": "modify",
+      "visual_description": "Add 'Tailored CVs' nav item with document/page icon. Already addressed in cover-letters analysis — sidebar restructure (CV Center → Base CVs + Tailored CVs) confirmed in-scope there. This route confirms the selected/active state styling for the 'Tailored CVs' item."
+    }
+  ],
+  "new_components_needed": [
+    "TailoredCVsPage — top-level page at /tailored-cvs with header bar (title + credits + user dropdown) and table card",
+    "TailoredCVsListTable — table listing all tailored CVs across applications with columns: Title, Language, Last Updated, Status, Action (View link)"
+  ],
+  "sidebar_change": {
+    "required": true,
+    "description": "Add 'Tailored CVs' as a new sidebar nav item. Already confirmed in cover-letters analysis — sidebar restructure is in-scope. This route confirms the active/selected styling: orange left border accent and slightly different background on the 'Tailored CVs' item."
+  },
+  "ambiguities": [
+    "The 'Title' column shows truncated filenames (e.g., 'Yitzchak_Meirovich_Learning_E...'). Does the GET /cv-tailorings API return a 'title' or 'filename' field, or must this be derived from other fields (e.g., user name + job title)?",
+    "The 'Language' column shows 'English' — does GET /cv-tailorings return a language field directly, or is this derived from the base CV or application record?",
+    "The 'Edited' status badge has an ambiguous color — it appears light blue-green but is not clearly one of the existing token colors (--state-active green, --state-processing blue, --state-stale amber). Exact hex unknown from PNG. Note: 'Edited' is already listed as a valid Badge state in applications-hub analysis (q10), but no color token was assigned there either.",
+    "The second row has a light peach/cream background (zebra striping). The exact hex is ambiguous — it could be --color-background-page (#FCF7F5) or a new alternating-row token. Confirm if this matches the established zebra pattern from Applications/Cover Letters.",
+    "The 'View' action — does it navigate to the existing /applications/[id]/cv-tailored artifact viewer route?",
+    "The sidebar icon for 'Tailored CVs' — the screenshot shows a small document-style icon but the exact icon choice is not pixel-determinable. Is it the same icon as 'Base CVs' or a distinct one?",
+    "Credits display ('Credits: 1 / 3') — is this the same PageHeader component pattern used on Cover Letters and other pages?"
+  ]
+}

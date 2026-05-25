@@ -1,0 +1,219 @@
+{
+  "verified_at": "2026-05-23",
+  "summary": {
+    "total_component_changes": 25,
+    "yes": 6,
+    "derived": 1,
+    "blocked": 1,
+    "cosmetic": 17
+  },
+  "results": [
+    {
+      "route": "/applications/[id]",
+      "component": "ModuleCard",
+      "change_type": "modify",
+      "backend_classification": "yes",
+      "resolution": "Progress percentage for ProgressBar comes from GET /vpr/{id}/status, GET /cover-letter/{id}/status, GET /interview-prep/{id}/status, GET /cv-tailoring/{id}/status — all return progress data; status badge state (processing/complete/failed) derived from the same polling responses",
+      "in_scope": true
+    },
+    {
+      "route": "/applications/[id]",
+      "component": "Badge",
+      "change_type": "modify",
+      "backend_classification": "cosmetic",
+      "resolution": "Visual-only change: outlined/soft-fill variants (green for Complete/Ready, blue for Generating/Processing, unchanged solid red for Failed) replacing solid-fill style — no backend data required",
+      "in_scope": true
+    },
+    {
+      "route": "/applications/[id]",
+      "component": "HubLayout",
+      "change_type": "modify",
+      "backend_classification": "yes",
+      "resolution": "Job title, company name, job_url, and job description all available from GET /applications/{application_id} response",
+      "in_scope": true
+    },
+    {
+      "route": "/applications/[id]",
+      "component": "ProgressBar",
+      "change_type": "modify",
+      "backend_classification": "cosmetic",
+      "resolution": "Visual-only change: height increase to ~8-12px, rounded ends, percentage label added as sibling element — receives value prop from parent ModuleCard; no new backend data required",
+      "in_scope": true
+    },
+    {
+      "route": "/applications/[id]",
+      "component": "AppSidebar",
+      "change_type": "modify",
+      "backend_classification": "cosmetic",
+      "resolution": "Navigation structure change only (7 items, updated icons, active state styling) — no backend data required",
+      "in_scope": true
+    },
+    {
+      "route": "/applications/[id]",
+      "component": "AppHeader",
+      "change_type": "modify",
+      "backend_classification": "cosmetic",
+      "resolution": "Credits label format change only ('Credits: X / Y') — data already sourced from existing usage endpoint; no new API fields required",
+      "in_scope": true
+    },
+    {
+      "route": "/applications",
+      "component": "JobsTable",
+      "change_type": "modify",
+      "backend_classification": "yes",
+      "resolution": "Full job list from GET /jobs — same endpoint used by dashboard widget; heading change to 'My Jobs', removal of 'View All' link, and orange column headers are client-side config changes only",
+      "in_scope": true
+    },
+    {
+      "route": "/applications",
+      "component": "Badge",
+      "change_type": "modify",
+      "backend_classification": "cosmetic",
+      "resolution": "Visual-only change: new Draft (warm orange outlined) and Archived (muted beige outlined) style variants — no backend data required",
+      "in_scope": true
+    },
+    {
+      "route": "/applications",
+      "component": "AppSidebar",
+      "change_type": "modify",
+      "backend_classification": "cosmetic",
+      "resolution": "Applications nav item active state styling only — no backend data required",
+      "in_scope": true
+    },
+    {
+      "route": "/applications",
+      "component": "AppHeader",
+      "change_type": "modify",
+      "backend_classification": "cosmetic",
+      "resolution": "Page title 'My Jobs' and credits label format — all client-side; no new backend data required",
+      "in_scope": true
+    },
+    {
+      "route": "/billing",
+      "component": "BillingContent",
+      "change_type": "modify",
+      "backend_classification": "yes",
+      "resolution": "plan_type, status, current_period_end, next_charge_amount from GET /users/me/subscription; credits_used and credits_total from GET /users/me/usage; payment method last4 and brand from the payment_method object in GET /users/me/subscription response (standard Stripe subscription payload includes attached payment method details); Manage Billing CTA calls existing POST /billing/portal",
+      "in_scope": true
+    },
+    {
+      "route": "/billing",
+      "component": "ErrorBoundary",
+      "change_type": "modify",
+      "backend_classification": "cosmetic",
+      "resolution": "No visual change noted — shared component behavior finalized; no backend data required",
+      "in_scope": true
+    },
+    {
+      "route": "/billing",
+      "component": "Spinner",
+      "change_type": "modify",
+      "backend_classification": "cosmetic",
+      "resolution": "No visual change noted — shared component behavior finalized (Spinner retained for inline/button use only); no backend data required",
+      "in_scope": true
+    },
+    {
+      "route": "/cover-letters",
+      "component": "AppSidebar",
+      "change_type": "modify",
+      "backend_classification": "cosmetic",
+      "resolution": "Add 'Cover Letters' nav item (envelope icon) and split 'CV Center' into 'Base CVs' / 'Tailored CVs' — navigation structure change only; no backend data required",
+      "in_scope": true
+    },
+    {
+      "route": "/cv-center",
+      "component": "CVCenterContent",
+      "change_type": "replace",
+      "backend_classification": "derived",
+      "resolution": "GET /users/me/cv provides language and updated_at directly. Title derived from full_name field in the same response (render as display title for the row). Status derived client-side as constant 'Ready' — uploaded base CVs have no asynchronous processing pipeline and are immediately usable after upload; no polling or status field needed",
+      "in_scope": true
+    },
+    {
+      "route": "/dashboard",
+      "component": "AppSidebar",
+      "change_type": "modify",
+      "backend_classification": "cosmetic",
+      "resolution": "Nav restructure: 'CV Center' split into 'Base CVs', 'Tailored CVs', 'Cover Letters' (7 items total), icon updates, active state styling — no backend data required",
+      "in_scope": true
+    },
+    {
+      "route": "/dashboard",
+      "component": "AppHeader",
+      "change_type": "modify",
+      "backend_classification": "cosmetic",
+      "resolution": "Credits format change to 'Credits: X / Y' and account dropdown additions (Help link, Log out, Upgrade navigation) — all client-side; no new backend data required",
+      "in_scope": true
+    },
+    {
+      "route": "/dashboard",
+      "component": "JobsTable",
+      "change_type": "modify",
+      "backend_classification": "cosmetic",
+      "resolution": "Visual-only changes: orange column header text color, new Badge style variants for Draft/Archived, 'View' rendered as bold text link instead of ghost button, alternating row backgrounds — GET /jobs already supplies all row data; no new backend fields required",
+      "in_scope": true
+    },
+    {
+      "route": "/dashboard",
+      "component": "StatsRow",
+      "change_type": "modify",
+      "backend_classification": "cosmetic",
+      "resolution": "Minor visual adjustment (pill corner radius may increase slightly) — no backend data required",
+      "in_scope": true
+    },
+    {
+      "route": "/dashboard",
+      "component": "NewApplicationModal",
+      "change_type": "replace",
+      "backend_classification": "yes",
+      "resolution": "Replaced by full-page form at new route; form submission uses existing POST /jobs endpoint; ChooseBaseCVModal CV picker uses existing GET /users/me/cv endpoint — both exist in Swagger",
+      "in_scope": true
+    },
+    {
+      "route": "/dashboard",
+      "component": "Badge",
+      "change_type": "modify",
+      "backend_classification": "cosmetic",
+      "resolution": "Visual-only change: new Draft (warm orange outlined) and Archived (muted beige outlined) style variants — no backend data required",
+      "in_scope": true
+    },
+    {
+      "route": "/applications/[id]/gap-analysis",
+      "component": "GapAnalysisContent",
+      "change_type": "modify",
+      "backend_classification": "yes",
+      "resolution": "Questions from GET /jobs/{jobId}/gap-questions; per-question save via POST /jobs/{jobId}/gap-responses; application context (back link, breadcrumb) from GET /applications/{id} — all three endpoints exist in Swagger",
+      "in_scope": true
+    },
+    {
+      "route": "/applications/[id]/gap-analysis",
+      "component": "AppSidebar",
+      "change_type": "modify",
+      "backend_classification": "cosmetic",
+      "resolution": "Sidebar nav items updated consistent with redesign (Base CVs, Tailored CVs visible, Tailored CVs shown active) — no backend data required",
+      "in_scope": true
+    },
+    {
+      "route": "/settings",
+      "component": "SettingsContent",
+      "change_type": "replace",
+      "backend_classification": "blocked",
+      "resolution": "Name and email readable from GET /users/me; password change writable via PUT /users/me. Blocked: (1) 2FA toggle requires a 2fa_enabled field absent from GET /users/me and PUT /users/me responses; (2) three notification preference toggles require a notification_preferences object absent from both endpoints; (3) Delete Account card requires a DELETE /users/me endpoint absent from Swagger",
+      "in_scope": false
+    },
+    {
+      "route": "/tailored-cvs",
+      "component": "AppSidebar",
+      "change_type": "modify",
+      "backend_classification": "cosmetic",
+      "resolution": "Add 'Tailored CVs' nav item with active state styling (orange left border accent, bold text) — navigation structure change only; no backend data required",
+      "in_scope": true
+    }
+  ],
+  "blocked_items": [
+    {
+      "route": "/settings",
+      "component": "SettingsContent",
+      "reason": "Requires 2fa_enabled and notification_preferences fields not present in GET /users/me or PUT /users/me; also requires a DELETE /users/me endpoint for the Delete Account feature — none of these exist in the Swagger surface"
+    }
+  ]
+}

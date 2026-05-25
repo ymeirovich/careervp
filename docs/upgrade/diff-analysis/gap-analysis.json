@@ -1,0 +1,132 @@
+{
+  "route": "/applications/[id]/gap-analysis",
+  "page_title": "Gap Analysis",
+  "screenshot_files": [
+    "gap analysis questionnaire form.png",
+    "gap analysis questionnaire form continued.png",
+    "gap analysis questionnaire form question counter read state.png",
+    "gap analysis questionnaire form-rich textbox edit.png",
+    "gap analysis questionnaire form-rich textbox edit 2.png"
+  ],
+  "is_new_route": false,
+  "token_changes": [],
+  "layout_changes": [
+    {
+      "description": "Page title 'Gap Analysis Questions' is now larger (matches --text-page-title / --size-heading-lg) and bold, replacing the current smaller 'Gap Analysis' h1",
+      "affects_component": "GapAnalysisContent",
+      "change_type": "spacing"
+    },
+    {
+      "description": "Subtitle text changed from 'Answer questions to identify gaps between your CV and this role' to 'Answer some questions to fill in gaps between your CV and this role'",
+      "affects_component": "GapAnalysisContent",
+      "change_type": "spacing"
+    },
+    {
+      "description": "Progress bar added below subtitle showing 'X out of Y answered' with orange fill proportional to completion — replaces current plain text counter in sticky header",
+      "affects_component": "GapAnalysisContent",
+      "change_type": "addition"
+    },
+    {
+      "description": "'← Back' link added at top-left above subtitle, replacing '← Back to Hub' button in the top-right action bar",
+      "affects_component": "GapAnalysisContent",
+      "change_type": "structure"
+    },
+    {
+      "description": "'Credits: X / Y' display added in the top-right header area — this is a shared header element visible across pages",
+      "affects_component": "unknown",
+      "change_type": "addition"
+    },
+    {
+      "description": "User avatar/dropdown ('Lisi') shown in top-right corner of the header bar",
+      "affects_component": "unknown",
+      "change_type": "addition"
+    },
+    {
+      "description": "Each question card now shows the question number and text on the left with an 'Answer' button (orange, solid) on the right when unanswered, or an 'Edit' button (outlined) when already answered",
+      "affects_component": "GapQuestionCard",
+      "change_type": "structure"
+    },
+    {
+      "description": "Answered questions display the saved answer text below the question in a light-background block — current code shows inline text, new design shows a distinct quoted/card block",
+      "affects_component": "GapQuestionCard",
+      "change_type": "structure"
+    },
+    {
+      "description": "Edit mode now shows a rich text editor (toolbar with B, I, U, bullet list, numbered list) instead of a plain textarea",
+      "affects_component": "GapQuestionCard",
+      "change_type": "structure"
+    },
+    {
+      "description": "Save button in edit mode is now orange with a floppy disk icon, positioned inline to the right of the question (not in a sticky header bar)",
+      "affects_component": "GapQuestionCard",
+      "change_type": "structure"
+    },
+    {
+      "description": "Impact/Probability badges and CV_IMPACT/INTERVIEW_MVP_ONLY radio buttons are NOT visible in any screenshot — appears removed from the redesigned UI",
+      "affects_component": "GapQuestionCard",
+      "change_type": "removal"
+    },
+    {
+      "description": "The sticky header bar with global Edit/Save/Cancel buttons is removed — editing is now per-question via individual Answer/Edit/Save buttons",
+      "affects_component": "GapAnalysisContent",
+      "change_type": "removal"
+    },
+    {
+      "description": "'Generate Questions' button is not visible — questions appear pre-generated; generation may be triggered automatically or from the hub",
+      "affects_component": "GapAnalysisContent",
+      "change_type": "removal"
+    },
+    {
+      "description": "Sidebar now shows 'Tailored CVs' and 'Cover Letters' as separate nav items (consistent with other page redesigns)",
+      "affects_component": "AppSidebar",
+      "change_type": "structure"
+    },
+    {
+      "description": "Question cards use rounded-xl (--radius-card: 16px) borders with subtle shadow, replacing current rounded-md with border-only style",
+      "affects_component": "GapQuestionCard",
+      "change_type": "spacing"
+    }
+  ],
+  "component_changes": [
+    {
+      "component": "GapAnalysisContent",
+      "file": "app/applications/[id]/gap-analysis/page.tsx",
+      "tier": "feature",
+      "change_type": "modify",
+      "visual_description": "Major restructure: page title larger, subtitle changed, progress bar added, back link replaces back button, global edit/save bar removed in favor of per-question editing, impact badges and destination radios removed, generate button not shown",
+      "interaction_states_visible": ["read state with answered questions", "read state with unanswered questions (Answer button)", "edit state with rich text editor", "edit state with save button"],
+      "interaction_states_needed_but_not_shown": ["loading state", "error state (API failure)", "saving state (after clicking Save)", "empty state (no questions)", "generating state"],
+      "backend_data_required": "GET /jobs/{jobId}/gap-questions, POST /jobs/{jobId}/gap-responses, GET /applications/{id} — all existing",
+      "backend_available": "yes"
+    },
+    {
+      "component": "AppSidebar",
+      "file": "components/AppSidebar/AppSidebar.tsx",
+      "tier": "layout",
+      "change_type": "modify",
+      "visual_description": "Sidebar shows updated nav items including 'Base CVs', 'Tailored CVs', 'Cover Letters' — consistent with redesign across all pages",
+      "interaction_states_visible": ["default with Tailored CVs active"],
+      "interaction_states_needed_but_not_shown": [],
+      "backend_data_required": "none",
+      "backend_available": "yes"
+    }
+  ],
+  "new_components_needed": [
+    "GapQuestionCard — individual question card with Answer/Edit/Save per-question interaction pattern, replaces inline rendering in the questions.map loop",
+    "RichTextEditor — toolbar-based rich text input (Bold, Italic, Underline, Bullet List, Numbered List) replacing plain textarea; may use TipTap or similar",
+    "ProgressBar — orange progress bar showing 'X out of Y answered' with proportional fill (may reuse/adapt existing ProgressBar if one exists from hub module cards)"
+  ],
+  "sidebar_change": {
+    "required": false,
+    "description": "Sidebar changes already covered in prior page analyses (dashboard, applications). Same structure applies here."
+  },
+  "ambiguities": [
+    "Rich text editor: which library should be used? TipTap, Slate, Quill, or a custom implementation? The toolbar shows B/I/U/bullet/numbered list — need to confirm scope of formatting support.",
+    "Is the answer stored as HTML/markdown or plain text? Current API saves plain text responses. Rich text implies HTML storage — does the existing POST /jobs/{jobId}/gap-responses endpoint accept HTML in the response field?",
+    "The 'Credits: 1 / 3' display in the header — does this refer to gap analysis credits, application credits, or trial credits? Which API field provides this?",
+    "The 'Generate Questions' button is not visible in any screenshot. Is question generation now automatic (triggered from the hub), or should the button still exist as a fallback for the empty state?",
+    "Per-question saving: does clicking Save on one question trigger POST /jobs/{jobId}/gap-responses for just that question, or does it save all responses? The current API accepts an array of responses.",
+    "The destination radio buttons (CV_IMPACT / INTERVIEW_MVP_ONLY) are absent from all screenshots. Should this feature be removed entirely, or is it hidden and still sent with a default value?",
+    "Impact and Probability badges are not shown in any screenshot. Should these be removed from the UI, or are they simply not generated for the questions in this screenshot set?"
+  ]
+}

@@ -1,0 +1,125 @@
+{
+  "route": "/cover-letters",
+  "answers": [
+    {
+      "question_id": "q1",
+      "component": "CoverLettersListTable",
+      "topic": "loading_state",
+      "question": "While the GET /cover-letters data is loading, what should the table area show?",
+      "answer": "Skeleton rows (3 placeholder rows with shimmer) — matches established table pattern",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q2",
+      "component": "CoverLettersListTable",
+      "topic": "error_state",
+      "question": "If the GET /cover-letters API call fails, what should the page display?",
+      "answer": "Inline error message inside the table card with a Retry button — matches established pattern",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q3",
+      "component": "CoverLettersListTable",
+      "topic": "empty_state",
+      "question": "When the user has zero cover letters, what should this page show?",
+      "answer": "Table headers visible with centered 'No cover letters yet' text — matches Applications pattern",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q4",
+      "component": "CoverLettersListTable",
+      "topic": "hover_state",
+      "question": "What should happen when a user hovers over a cover letter row?",
+      "answer": "Row background highlight + 'View' text becomes underlined — matches Applications table",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q5",
+      "component": "CoverLettersListTable",
+      "topic": "edge_case",
+      "question": "Should rows have alternating background colors (zebra striping)?",
+      "answer": "Yes — alternate between white and very light gray/cream — matches Applications table",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q6",
+      "component": "CoverLettersListTable",
+      "topic": "responsive",
+      "question": "How should the cover letters table behave on mobile screens?",
+      "answer": "Stack into card layout (one card per cover letter) — matches Applications table pattern",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q7",
+      "component": "CoverLettersListTable",
+      "topic": "edge_case",
+      "question": "Should the table support sorting or filtering?",
+      "answer": "Client-side sorting on all columns + search input for filtering — matches Applications table",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q8",
+      "component": "CoverLettersListTable",
+      "topic": "edge_case",
+      "question": "Where does the 'View' action link navigate to?",
+      "answer": "Existing /applications/[id]/cover-letter route",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q9",
+      "component": "CoverLettersListTable",
+      "topic": "edge_case",
+      "question": "The screenshot shows only 'Ready' status. What other statuses can a cover letter have, and what badge colors?",
+      "answer": "Ready (green), Processing (blue), Failed (red) — matches existing artifact status pattern",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q10",
+      "component": "CoverLettersPage",
+      "topic": "edge_case",
+      "question": "The sidebar split (CV Center → Base CVs + Tailored CVs) is visible in the screenshot. Is this sidebar restructuring in-scope for this cover-letters page ticket?",
+      "answer": "Yes — implement the sidebar split as part of this ticket",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q11",
+      "component": "CoverLettersPage",
+      "topic": "accessibility",
+      "question": "Should the cover letters table use semantic HTML table elements for accessibility?",
+      "answer": "Yes — use <table>/<thead>/<th>/<tbody>/<tr>/<td> for full screen reader support — matches Applications table decision",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q12",
+      "component": "CoverLettersPage",
+      "topic": "i18n",
+      "question": "Are there new strings on this page that need Hebrew translations?",
+      "answer": "Yes — add Hebrew for: 'Cover Letters', 'All Cover Letters', 'Company', 'Job Title', 'Date', 'Status', 'Action', 'View', 'Ready', empty/error states",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q13",
+      "component": "CoverLettersPage",
+      "topic": "shared_component",
+      "question": "The Credits display ('Credits: 1 / 3') is shown in the header of the Cover Letters page. Is this the same PageHeader component used on other pages, or does the cover-letters page require a new/distinct header layout?",
+      "answer": "Same PageHeader component — reuse the existing PageHeader with credits already wired in, no new component needed",
+      "applies_to_shared_component": true
+    },
+    {
+      "question_id": "q14",
+      "component": "CoverLettersPage",
+      "topic": "shared_component",
+      "question": "The 'Lisi' user dropdown in the top-right of the Cover Letters page — is this the same UserMenu component used on other pages?",
+      "answer": "Same UserMenu component — reuse the existing UserMenu, no changes needed for this page",
+      "applies_to_shared_component": true
+    },
+    {
+      "question_id": "q15",
+      "component": "CoverLettersListTable",
+      "topic": "api_contract",
+      "question": "The GET /cover-letters API response — does it return company name and job title directly in the payload, or must those fields be resolved by joining against job/application records on the frontend?",
+      "answer": "Returned directly — company_name and job_title are top-level fields in each cover letter object, no extra fetch needed",
+      "applies_to_shared_component": false
+    }
+  ]
+}

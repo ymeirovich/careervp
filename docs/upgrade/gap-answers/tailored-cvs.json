@@ -1,0 +1,184 @@
+{
+  "route": "/tailored-cvs",
+  "route_slug": "tailored-cvs",
+  "prior_answers_applied": [
+    {
+      "from_route": "/dashboard",
+      "question_id": "q9",
+      "component": "AppSidebar",
+      "topic": "responsive",
+      "answer": "Collapse to icon-only rail on tablet, hamburger overlay on mobile",
+      "applies_here": "Same sidebar on all routes — already answered"
+    },
+    {
+      "from_route": "/applications",
+      "question_id": "q4",
+      "component": "ApplicationsJobsTable",
+      "topic": "hover_state",
+      "answer": "Row background highlight + 'View' text becomes underlined",
+      "applies_here": "Same hover pattern for all listing tables — confirmed across /applications, /cv-center, /cover-letters"
+    },
+    {
+      "from_route": "/applications",
+      "question_id": "q5",
+      "component": "ApplicationsJobsTable",
+      "topic": "zebra_striping",
+      "answer": "Yes — alternate between white and very light gray/cream",
+      "applies_here": "Cross-cutting table pattern — applies to TailoredCVsListTable"
+    },
+    {
+      "from_route": "/applications",
+      "question_id": "q7",
+      "component": "ApplicationsPage",
+      "topic": "accessibility",
+      "answer": "Use semantic <table> with <thead>/<th>/<tbody>/<tr>/<td> for full accessibility",
+      "applies_here": "Cross-cutting table pattern — applies to TailoredCVsListTable"
+    },
+    {
+      "from_route": "/applications",
+      "question_id": "q10",
+      "component": "ApplicationsJobsTable",
+      "topic": "sorting",
+      "answer": "Yes — client-side sorting on all columns",
+      "applies_here": "Cross-cutting table pattern — applies to TailoredCVsListTable"
+    },
+    {
+      "from_route": "/applications",
+      "question_id": "q11",
+      "component": "ApplicationsJobsTable",
+      "topic": "search",
+      "answer": "Search input above the table for filtering",
+      "applies_here": "Cross-cutting table pattern — applies to TailoredCVsListTable"
+    },
+    {
+      "from_route": "/applications/[id]",
+      "question_id": "q10",
+      "component": "Badge",
+      "topic": "badge_variants",
+      "answer": "Add a 'soft' prop to Badge that toggles between solid and outlined rendering. Used across all module states (Complete, Ready, Processing, Generating, Failed, Final, Edited, Active).",
+      "applies_here": "'Edited' is already an established Badge state — no need to ask if it's a 'new' status. Color token still unresolved."
+    },
+    {
+      "from_route": "/cover-letters",
+      "question_id": "q10",
+      "component": "CoverLettersPage",
+      "topic": "sidebar_restructure",
+      "answer": "Yes — implement the sidebar split as part of this ticket",
+      "applies_here": "Sidebar restructure (CV Center → Base CVs + Tailored CVs) already confirmed in-scope"
+    },
+    {
+      "from_route": "cross-cutting",
+      "question_id": "n/a",
+      "component": "all-tables",
+      "topic": "loading_state",
+      "answer": "Skeleton rows (3 placeholder rows with shimmer)",
+      "applies_here": "Established across /dashboard, /applications, /cv-center, /cover-letters — same pattern for TailoredCVsListTable"
+    },
+    {
+      "from_route": "cross-cutting",
+      "question_id": "n/a",
+      "component": "all-tables",
+      "topic": "error_state",
+      "answer": "Inline error message inside the table card with a Retry button",
+      "applies_here": "Established across all table pages — same pattern for TailoredCVsListTable"
+    },
+    {
+      "from_route": "cross-cutting",
+      "question_id": "n/a",
+      "component": "all-tables",
+      "topic": "responsive",
+      "answer": "Stack into card layout (one card per row) on mobile",
+      "applies_here": "Established across all table pages — same pattern for TailoredCVsListTable"
+    },
+    {
+      "from_route": "cross-cutting",
+      "question_id": "n/a",
+      "component": "all-pages",
+      "topic": "i18n",
+      "answer": "Yes — add Hebrew translations for all new strings",
+      "applies_here": "Confirmed on every prior page — same for TailoredCVsListTable"
+    }
+  ],
+  "answers": [
+    {
+      "question_id": "q1",
+      "component": "TailoredCVsListTable",
+      "topic": "data_mapping",
+      "question": "The 'Title' column shows truncated filenames (e.g., 'Yitzchak_Meirovich_Learning_E...'). What field from GET /cv-tailorings populates this column? Is it a dedicated title/filename field, or constructed from user name + job title + other data?",
+      "answer": "Original base CV filename with suffix",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q2",
+      "component": "TailoredCVsListTable",
+      "topic": "data_mapping",
+      "question": "The 'Language' column shows 'English'. Does GET /cv-tailorings return a language field directly, or is this derived from the base CV or the application record?",
+      "answer": "Inherited from base CV record",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q3",
+      "component": "TailoredCVsListTable",
+      "topic": "status_states",
+      "question": "The screenshot shows 'Ready' (green) and 'Edited' (light blue-green). Applications-hub analysis (q10) already lists 'Edited' as a valid Badge state, but the full status enum for tailored CVs specifically has not been confirmed. What is the complete set: Ready, Edited, Processing, Failed — or are there others (e.g., Draft)?",
+      "answer": "Same as cover letters (Ready/Processing/Failed) plus Edited",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q4",
+      "component": "TailoredCVsListTable",
+      "topic": "status_token",
+      "question": "The 'Edited' badge color appears light blue-green and doesn't clearly match any existing design token. Applications-hub confirms 'Edited' is a valid Badge state but assigned no color token. What color should the 'Edited' badge use across all pages where it appears?",
+      "answer": "Reuse --state-processing (#3B82F6) blue",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q5",
+      "component": "TailoredCVsListTable",
+      "topic": "navigation",
+      "question": "Where does the 'View' action link navigate to? The existing /applications/[id]/cv-tailored artifact viewer, or a new standalone route?",
+      "answer": "Existing /applications/[id]/cv-tailored route",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q6",
+      "component": "TailoredCVsListTable",
+      "topic": "empty_state",
+      "question": "When the user has zero tailored CVs, what specific message and CTA should be shown? (Pattern established: table headers visible + centered message + CTA.)",
+      "answer": "'No tailored CVs yet. Create one from an application.' with link to /applications",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q7",
+      "component": "TailoredCVsPage",
+      "topic": "sidebar_icon",
+      "question": "What icon should be used for the 'Tailored CVs' sidebar nav item? The screenshot shows a small document-style icon but the exact choice is not pixel-determinable.",
+      "answer": "Document with pencil/edit icon (to distinguish from Base CVs)",
+      "applies_to_shared_component": false
+    },
+    {
+      "question_id": "q8",
+      "component": "TailoredCVsListTable",
+      "topic": "date_format",
+      "question": "The 'Last Updated' column shows 'Mar 7, 2026' format. Should this match the same date format used on /cv-center and /cover-letters tables, and should it change for Hebrew locale (e.g., '7 במרץ 2026')?",
+      "answer": "Match existing table date format, locale-aware via Intl.DateTimeFormat",
+      "applies_to_shared_component": false
+    }
+  ],
+  "skipped_shared_questions": [
+    "Loading state — cross-cutting: skeleton rows (3 placeholder rows with shimmer). Source: /dashboard q1, /cv-center q1, /cover-letters q1",
+    "Error state — cross-cutting: inline error message inside table card with Retry button. Source: /dashboard q2, /cv-center q2, /cover-letters q2",
+    "Hover state — cross-cutting: row background highlight + 'View' underline. Source: /applications q4, /cv-center q4, /cover-letters q4",
+    "Zebra striping — cross-cutting: alternate white and light gray/cream. Source: /applications q5, /cover-letters q5",
+    "Responsive table — cross-cutting: card layout on mobile. Source: /dashboard q10, /cv-center q8, /cover-letters q6",
+    "Sorting — cross-cutting: client-side sorting on all columns. Source: /applications q10, /cv-center q10, /cover-letters q7",
+    "Search — cross-cutting: search input above table. Source: /applications q11, /cover-letters q7",
+    "Accessibility — cross-cutting: semantic <table>/<thead>/<th>/<tbody>/<tr>/<td>. Source: /applications q7, /cv-center q11, /cover-letters q11",
+    "i18n — cross-cutting: yes, Hebrew translations for all new strings. Source: every prior page",
+    "Spinner — shared-components.json: skeletons replace Spinner for data loading",
+    "ErrorBoundary — shared-components.json: kept for uncaught JS exceptions only, not API errors",
+    "AppSidebar responsive — /dashboard q9: icon rail on tablet, hamburger on mobile",
+    "Sidebar restructure — /cover-letters q10: CV Center splits into Base CVs + Tailored CVs, confirmed in-scope",
+    "Badge 'soft' prop — /applications-hub q10: already supports Edited state variant"
+  ]
+}

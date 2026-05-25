@@ -1,0 +1,49 @@
+{
+  "route": "/cover-letters",
+  "page_title": "Cover Letters",
+  "screenshot_files": ["Cover Letters View page.png"],
+  "is_new_route": true,
+  "token_changes": [],
+  "layout_changes": [
+    {
+      "description": "New 'Cover Letters' nav item added to AppSidebar between 'Tailored CVs' and 'Billing'",
+      "affects_component": "AppSidebar",
+      "change_type": "addition"
+    },
+    {
+      "description": "Sidebar now shows 'Base CVs' and 'Tailored CVs' as separate items instead of single 'CV Center'",
+      "affects_component": "AppSidebar",
+      "change_type": "modification"
+    },
+    {
+      "description": "New full-page layout with 'Cover Letters' header bar + 'All Cover Letters' card containing a listing table",
+      "affects_component": "CoverLettersPage",
+      "change_type": "addition"
+    }
+  ],
+  "component_changes": [
+    {
+      "component": "AppSidebar",
+      "file": "components/layout/AppSidebar.tsx",
+      "tier": "layout",
+      "change_type": "modify",
+      "visual_description": "Add 'Cover Letters' nav item with orange envelope icon. Sidebar now shows 'Base CVs' and 'Tailored CVs' as separate nav items instead of single 'CV Center'"
+    }
+  ],
+  "new_components_needed": [
+    "CoverLettersPage — top-level page at /cover-letters with header bar (title + credits + user dropdown) and table card",
+    "CoverLettersListTable — table listing all cover letters across applications with columns: Company, Job Title, Date, Status, Action (View link)"
+  ],
+  "sidebar_change": {
+    "required": true,
+    "description": "Add 'Cover Letters' nav item with envelope/mail icon. Also split 'CV Center' into 'Base CVs' and 'Tailored CVs' as separate sidebar items"
+  },
+  "ambiguities": [
+    "The sidebar in the screenshot shows 'Base CVs' and 'Tailored CVs' as separate items — the current sidebar has a single 'CV Center'. Is the sidebar split in-scope for this route or handled in a separate ticket?",
+    "The 'View' action links — do they navigate to the existing /applications/[id]/cover-letter route or to a new standalone cover letter viewer?",
+    "The 'Ready' status badge — are there other possible statuses for cover letters (e.g., Processing, Failed, Draft)?",
+    "Credits display ('Credits: 1 / 3') is shown in the header — is this the same PageHeader component used on other pages, or a new header layout?",
+    "The 'Lisi' user dropdown in the top-right — is this the same UserMenu component from other pages?",
+    "The GET /cover-letters API — does it return company name and job title directly, or do those need to be resolved from related job/application records?"
+  ]
+}
