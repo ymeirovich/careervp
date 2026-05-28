@@ -1,3 +1,6 @@
+import '../../vitest-setup';
+import '../setup';
+
 // spec_id: FE-UI-006  component: ErrorBoundary
 // file: src/frontend/components/ErrorBoundary/ErrorBoundary.tsx
 // Integration notes: No ACs are marked verification_type: integration in this spec.
@@ -5,10 +8,11 @@
 // These tests exercise the boundary within a minimal page context (React tree with
 // providers) to validate behaviour that requires a more realistic render environment.
 
-import { render, screen, act } from '@testing-library/react';
+import React from 'react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ReactNode } from 'react';
-import { ErrorBoundary } from '../../../src/frontend/components/ErrorBoundary/ErrorBoundary';
+import { ErrorBoundary } from '../../../components/ErrorBoundary/ErrorBoundary';
 
 // ---------------------------------------------------------------------------
 // wrapper — minimal page context (add providers here as the app grows)
@@ -27,10 +31,9 @@ function renderInPage(ui: ReactNode) {
 // helpers
 // ---------------------------------------------------------------------------
 
-function ThrowAfterMount({ onMount }: { onMount: () => void }): ReactNode {
-  // TODO: implement a component that calls onMount, then throws on re-render
-  //       (simulates a crash mid-lifecycle, not on initial mount)
-  return <div data-testid="async-child">mounted</div>;
+function ThrowingChild({ shouldThrow = true }: { shouldThrow?: boolean }): ReactNode {
+  if (shouldThrow) throw new Error('render error');
+  return <div data-testid="child">OK</div>;
 }
 
 // ---------------------------------------------------------------------------
@@ -43,15 +46,23 @@ describe('ErrorBoundary integration — renders within page context', () => {
   });
 
   it('test_renders_page_content_when_no_error_thrown', () => {
-    // TODO: renderInPage(<ErrorBoundary cloudwatchKey="page"><div testid="content" /></ErrorBoundary>)
-    // TODO: assert getByTestId("page-root") contains getByTestId("content")
-    expect.hasAssertions();
+    renderInPage(
+      <ErrorBoundary cloudwatchKey="page">
+        <div data-testid="content">Page Content</div>
+      </ErrorBoundary>
+    );
+
+    expect(screen.getByTestId('page-root')).toContainElement(screen.getByTestId('content'));
   });
 
   it('test_does_not_mount_fallback_into_page_root_when_children_healthy', () => {
-    // TODO: renderInPage(…)
-    // TODO: assert queryByRole("alert") is null
-    expect.hasAssertions();
+    renderInPage(
+      <ErrorBoundary cloudwatchKey="page">
+        <div data-testid="content">Page Content</div>
+      </ErrorBoundary>
+    );
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
 
@@ -66,35 +77,47 @@ describe('ErrorBoundary integration — crash recovery in page context', () => {
   });
 
   it('test_replaces_page_subtree_with_fallback_when_child_throws', () => {
-    // TODO: renderInPage(<ErrorBoundary cloudwatchKey="page"><ThrowingChild /></ErrorBoundary>)
-    // TODO: assert role="alert" is rendered inside getByTestId("page-root")
-    expect.hasAssertions();
+    renderInPage(
+      <ErrorBoundary cloudwatchKey="page">
+        <ThrowingChild />
+      </ErrorBoundary>
+    );
+
+    const pageRoot = screen.getByTestId('page-root');
+    const alert = screen.getByRole('alert');
+    expect(pageRoot).toContainElement(alert);
   });
 
   it('test_fallback_is_scoped_to_boundary_subtree_not_full_page', () => {
     // Verifies cascade risk mitigation: only the wrapped subtree is replaced.
-    // TODO: renderInPage(
-    //         <>
-    //           <header data-testid="page-header">Header</header>
-    //           <ErrorBoundary cloudwatchKey="main"><ThrowingChild /></ErrorBoundary>
-    //         </>
-    //       )
-    // TODO: assert getByTestId("page-header") is still visible
-    // TODO: assert role="alert" is visible (boundary caught the error)
-    expect.hasAssertions();
+    renderInPage(
+      <>
+        <header data-testid="page-header">Header</header>
+        <ErrorBoundary cloudwatchKey="main">
+          <ThrowingChild />
+        </ErrorBoundary>
+      </>
+    );
+
+    expect(screen.getByTestId('page-header')).toBeVisible();
+    expect(screen.getByRole('alert')).toBeVisible();
   });
 
   it('test_multiple_boundaries_isolate_crashes_independently', () => {
     // Two ErrorBoundary instances: only the one whose child throws activates.
-    // TODO: renderInPage(
-    //         <>
-    //           <ErrorBoundary cloudwatchKey="boundary-a"><ThrowingChild shouldThrow /></ErrorBoundary>
-    //           <ErrorBoundary cloudwatchKey="boundary-b"><div testid="sibling-ok">OK</div></ErrorBoundary>
-    //         </>
-    //       )
-    // TODO: assert exactly one role="alert" element exists
-    // TODO: assert getByTestId("sibling-ok") remains visible
-    expect.hasAssertions();
+    renderInPage(
+      <>
+        <ErrorBoundary cloudwatchKey="boundary-a">
+          <ThrowingChild shouldThrow />
+        </ErrorBoundary>
+        <ErrorBoundary cloudwatchKey="boundary-b">
+          <div data-testid="sibling-ok">OK</div>
+        </ErrorBoundary>
+      </>
+    );
+
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getByTestId('sibling-ok')).toBeVisible();
   });
 });
 
@@ -108,13 +131,34 @@ describe('ErrorBoundary integration — reset restores page content', () => {
     vi.clearAllMocks();
   });
 
-  it('test_re_renders_children_in_page_context_after_reset', async () => {
-    // TODO: render an ErrorBoundary wrapping a child controlled by external state
-    //       (starts throwing, stops after reset signal)
-    // TODO: click "Try again"
-    // TODO: await act(async () => { … })
-    // TODO: assert role="alert" is gone and page content is restored
-    expect.hasAssertions();
+  it('test_re_renders_children_in_page_context_after_reset', () => {
+    function Harness(): ReactNode {
+      const [shouldThrow, setShouldThrow] = React.useState(true);
+
+      return (
+        <>
+          <button type="button" data-testid="toggle" onClick={() => setShouldThrow(false)}>
+            Toggle
+          </button>
+          <ErrorBoundary cloudwatchKey="page">
+            <ThrowingChild shouldThrow={shouldThrow} />
+          </ErrorBoundary>
+        </>
+      );
+    }
+
+    renderInPage(<Harness />);
+
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+
+    // Batch reset + toggle so both state updates flush together before re-render
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+      fireEvent.click(screen.getByTestId('toggle'));
+    });
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByTestId('child')).toBeInTheDocument();
   });
 });
 
@@ -130,13 +174,22 @@ describe('ErrorBoundary integration — AC-001: API error does not reach boundar
   it('test_page_renders_inline_error_ui_without_triggering_boundary_takeover', () => {
     // Simulates a well-behaved page component that catches an API error and
     // renders its own error state — ErrorBoundary should remain transparent.
-    // TODO: create a mock page component that:
-    //         1. simulates a failed API call (mocked at client level)
-    //         2. catches the error internally and renders <p data-testid="inline-err">…</p>
-    //         3. does NOT throw to the parent
-    // TODO: renderInPage(<ErrorBoundary cloudwatchKey="page"><MockPage /></ErrorBoundary>)
-    // TODO: assert getByTestId("inline-err") is visible
-    // TODO: assert queryByRole("alert") is null (no boundary takeover)
-    expect.hasAssertions();
+    function MockPage(): ReactNode {
+      // Component handles error internally; does NOT throw to the parent
+      const hasError = true; // simulates a failed API response
+      if (hasError) {
+        return <p data-testid="inline-err">Failed to load data.</p>;
+      }
+      return <div data-testid="page-content">Content</div>;
+    }
+
+    renderInPage(
+      <ErrorBoundary cloudwatchKey="page">
+        <MockPage />
+      </ErrorBoundary>
+    );
+
+    expect(screen.getByTestId('inline-err')).toBeVisible();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

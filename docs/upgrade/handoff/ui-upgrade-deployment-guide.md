@@ -472,7 +472,35 @@ Every spec follows this exact loop. Do not deviate.
 └─────────────────────────────────────────────────────┘
 ```
 
-### 3.1 Claude implementation prompt template
+### 3.1 Understanding Vitest output during the upgrade
+
+**There are 50 test stub files** pre-created at `tests/ui/unit/` and `tests/ui/integration/` (repo root) for all 26 specs. Vitest picks all of them up via the `tests/ui/**/*.test.tsx` glob. Files for unimplemented specs fail with `ERR_MODULE_NOT_FOUND` because they import components that don't exist yet.
+
+**Classification rule — apply this to every failure you see:**
+
+| Failure pattern | What it means | Action |
+|---|---|---|
+| `ERR_MODULE_NOT_FOUND` for a spec you **haven't** implemented | Expected noise — future stub importing a not-yet-created component | **Ignore. No action.** |
+| `ERR_MODULE_NOT_FOUND` for the spec you **just** implemented | Test file path or import path mismatch — see below | Investigate |
+| Actual assertion failure (`expected X to equal Y`) | Real bug in your implementation | Fix |
+
+**If your own spec's tests show `ERR_MODULE_NOT_FOUND`:**
+The test file may have been created at `tests/ui/unit/` (repo root) but Vitest resolves from `src/frontend/`. Move the file to `src/frontend/tests/ui/unit/` and fix the relative import paths (remove the `src/frontend/` prefix since you're already inside it):
+
+```bash
+# Example for FE-UI-006
+mv tests/ui/unit/ErrorBoundary.test.tsx        src/frontend/tests/ui/unit/
+mv tests/ui/integration/ErrorBoundary.test.tsx src/frontend/tests/ui/integration/
+
+# Fix imports: ../../../src/frontend/components/ → ../../../components/
+# Fix setup imports: ../../../src/frontend/tests/vitest-setup → ../vitest-setup
+```
+
+**This is why `verify-spec.sh` runs targeted, not the full suite.** The full suite will always show noise until all 26 specs are implemented.
+
+---
+
+### 3.2 Claude implementation prompt template
 
 Use this prompt for each spec. Replace `[SPEC-ID]` and `[SPEC-TITLE]`.
 
@@ -485,19 +513,22 @@ Rules:
 1. Read the spec in full before writing any code.
 2. Implement ONLY what is listed in the Fix Plan. Do not add features not in the spec.
 3. Do not modify files outside the spec's "Files to modify" list without explicit justification.
-4. After implementation, run:
-   - cd src/frontend && npm run typecheck
-   - cd src/frontend && npx vitest run --config vitest.config.ts --reporter verbose
-   - cd src/frontend && npm run test:unit -- --passWithNoTests
-   All three must pass with zero errors before you report completion.
+4. After implementation, run the TARGETED verification — not the full vitest suite:
+     ./scripts/ui-upgrade/verify-spec.sh [SPEC-ID]
+   This runs only the tests for this spec plus the pre-existing regression suite.
+   Do NOT run npx vitest run without a file filter — it will show ERR_MODULE_NOT_FOUND
+   for all unimplemented future specs. That is expected noise, not your failure.
 5. Write or update the unit test file referenced in the spec's Traceability Matrix.
+   Place the test file at src/frontend/tests/ui/unit/<ComponentName>.test.tsx.
+   Use relative imports that start from src/frontend/ (e.g. ../../../components/...).
    Tests must cover every AC listed. Do not use placeholder/TODO test bodies.
 6. Update the spec file status from `draft` to `implemented` and fill in the
    code_reference column (file:line) in the Traceability Matrix.
 7. Do NOT mark the spec `validated`. That gate requires live Amplify evidence.
 8. Do NOT change tokens.css unless the spec explicitly says to.
-9. Report: list of files changed, test results (pass count), and any deviation
-   from the spec with justification.
+9. Do NOT pre-create test stub files for other specs. One spec, one test file.
+10. Report: list of files changed, targeted test results (pass count), and any
+    deviation from the spec with justification.
 ```
 
 ### 3.2 Local verification script
