@@ -221,7 +221,7 @@ class TestVPRPipelineContract:
         mock_dal_with_no_existing_vpr: MagicMock,
         llm_phase2_response: dict[str, Any],
     ) -> None:
-        """After MAX_STAGE6_RETRIES failures, generate_vpr must return error result."""
+        """After MAX_STAGE6_RETRIES failures, generate_vpr returns success with a quality warning."""
         with patch('careervp.logic.vpr_generator.LLMClient') as mock_llm_cls, patch('careervp.logic.vpr_generator.run_vpr_quality_gate') as mock_gate:
             mock_llm = mock_llm_cls.return_value
             mock_llm.invoke.return_value = MagicMock(
@@ -245,7 +245,9 @@ class TestVPRPipelineContract:
             )
             result = generate_vpr(minimal_vpr_request, minimal_user_cv, mock_dal_with_no_existing_vpr)
 
-        assert result.success is False
+        assert result.success is True
+        assert result.data is not None
+        assert result.data.vpr is not None
 
     def test_pipeline_stage4_fallback_produces_valid_vpr(
         self,

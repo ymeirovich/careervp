@@ -17,6 +17,7 @@ Expected state: RED until spec 10 is implemented. Specifically:
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -143,7 +144,12 @@ class TestCVTailoringLogicVprFetch:
         logic = self._make_logic(mock_dal)
 
         req = TailorCVRequest(cv_id='cv-001', job_description=self._JOB, vpr_id='app-001')
-        logic.tailor_cv(req, user_id='user-123')
+        mock_pipeline_result = MagicMock(success=False, data=None, error='pipeline stub failure')
+
+        from unittest.mock import patch
+
+        with patch('careervp.logic.cv_tailoring_logic.run_cv_tailoring_pipeline', return_value=mock_pipeline_result):
+            asyncio.run(logic.tailor_cv(req, user_id='user-123'))
 
         mock_dal.get_vpr.assert_called_once_with('app-001')
 
@@ -153,7 +159,11 @@ class TestCVTailoringLogicVprFetch:
         logic = self._make_logic(mock_dal)
 
         req = TailorCVRequest(cv_id='cv-001', job_description=self._JOB)
-        logic.tailor_cv(req, user_id='user-123')
+        mock_pipeline_result = MagicMock(success=False, data=None, error='pipeline stub failure')
+        from unittest.mock import patch
+
+        with patch('careervp.logic.cv_tailoring_logic.run_cv_tailoring_pipeline', return_value=mock_pipeline_result):
+            asyncio.run(logic.tailor_cv(req, user_id='user-123'))
 
         mock_dal.get_vpr.assert_not_called()
 
@@ -163,7 +173,11 @@ class TestCVTailoringLogicVprFetch:
         logic = self._make_logic(mock_dal)
 
         req = TailorCVRequest(cv_id='cv-001', job_description=self._JOB, vpr_id='app-001')
-        result = logic.tailor_cv(req, user_id='user-123')
+        mock_pipeline_result = MagicMock(success=False, data=None, error='pipeline stub failure')
+        from unittest.mock import patch
+
+        with patch('careervp.logic.cv_tailoring_logic.run_cv_tailoring_pipeline', return_value=mock_pipeline_result):
+            result = asyncio.run(logic.tailor_cv(req, user_id='user-123'))
 
         # Result may fail (e.g. LLM mock returns None → PARSE_ERROR) but
         # must NOT fail because of the VPR fetch — error must not mention VPR fetch

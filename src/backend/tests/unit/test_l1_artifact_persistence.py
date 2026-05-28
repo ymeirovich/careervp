@@ -234,6 +234,7 @@ def test_cv_tailoring_async_generate_persists_with_artifact_prefix() -> None:
 
     from careervp.models.cv_tailoring_models import (
         CVContactSection,
+        CVExperienceBullet,
         CVExperienceSection,
         CVSections,
         CVSkillsSection,
@@ -245,7 +246,21 @@ def test_cv_tailoring_async_generate_persists_with_artifact_prefix() -> None:
             contact=CVContactSection(name='Test User', email='test@example.com'),
             summary='Senior engineer with 10 years of experience building scalable cloud systems.',
             skills=CVSkillsSection(technical=['Python'], soft=['Communication']),
-            experience=[CVExperienceSection(company='Acme', title='Engineer', start_date='01/2020', bullets=['Built X'])],
+            experience=[
+                CVExperienceSection(
+                    company='Acme',
+                    title='Engineer',
+                    start_date='01/2020',
+                    bullets=[
+                        CVExperienceBullet(
+                            text='Built reliable cloud automation that improved deployment throughput by 20%.',
+                            source='parsed_facts',
+                            user_edited=False,
+                            quantified=True,
+                        )
+                    ],
+                )
+            ],
             education=[],
             certifications=[],
         ),
@@ -346,10 +361,9 @@ def test_list_methods_use_query_not_scan() -> None:
     dal = DynamoDalHandler('test-table')
     table = MagicMock()
     table.query.return_value = {'Items': []}
-    dal._get_db_handler = MagicMock(return_value=table)
-
-    list_cover_result = dal.list_cover_letters('user-123')
-    list_tailored_result = dal.list_tailored_cvs('user-123')
+    with patch.object(dal, '_get_db_handler', return_value=table):
+        list_cover_result = dal.list_cover_letters('user-123')
+        list_tailored_result = dal.list_tailored_cvs('user-123')
 
     assert list_cover_result.success is True
     assert list_tailored_result.success is True

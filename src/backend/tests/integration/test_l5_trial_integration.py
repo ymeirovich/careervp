@@ -60,7 +60,8 @@ class _InMemoryTrialTable:
     def update_item(self, **kwargs: object) -> dict[str, object]:
         _ = kwargs
         with self._lock:
-            application_count = int(self.item.get('application_count', 0))
+            application_value = self.item.get('application_count', 0)
+            application_count = int(application_value) if isinstance(application_value, (int, str)) else 0
             trial_active = bool(self.item.get('trial_active', True))
             if not trial_active or application_count >= 3:
                 raise ClientError(
@@ -141,7 +142,6 @@ class TestTrialExpiryEnforcement:
         with (
             patch.object(gap_handler, '_get_trial_service', return_value=_build_service(_InMemoryTrialTable(days_elapsed=15))),
             patch.object(gap_handler, '_get_application_repository', return_value=MagicMock()),
-            patch.object(gap_handler, '_get_table', return_value=MagicMock()),
             patch.object(gap_handler, 'generate_gap_questions', mock_llm),
         ):
             response = gap_handler.lambda_handler(_gap_event(), MagicMock())
@@ -157,7 +157,6 @@ class TestTrialExpiryEnforcement:
         with (
             patch.object(gap_handler, '_get_trial_service', return_value=_build_service(_InMemoryTrialTable(days_elapsed=15))),
             patch.object(gap_handler, '_get_application_repository', return_value=MagicMock()),
-            patch.object(gap_handler, '_get_table', return_value=MagicMock()),
             patch.object(gap_handler, 'generate_gap_questions', mock_llm),
         ):
             _ = gap_handler.lambda_handler(_gap_event(), MagicMock())
@@ -188,7 +187,6 @@ class TestApplicationCounterEnforcement:
         with (
             patch.object(gap_handler, '_get_trial_service', return_value=_build_service(_InMemoryTrialTable(application_count=3))),
             patch.object(gap_handler, '_get_application_repository', return_value=MagicMock()),
-            patch.object(gap_handler, '_get_table', return_value=MagicMock()),
             patch.object(gap_handler, 'generate_gap_questions', mock_llm),
         ):
             response = gap_handler.lambda_handler(_gap_event(), MagicMock())
@@ -204,7 +202,6 @@ class TestApplicationCounterEnforcement:
         with (
             patch.object(gap_handler, '_get_trial_service', return_value=_build_service(_InMemoryTrialTable(application_count=3))),
             patch.object(gap_handler, '_get_application_repository', return_value=MagicMock()),
-            patch.object(gap_handler, '_get_table', return_value=MagicMock()),
         ):
             response = gap_handler.lambda_handler(_gap_event(), MagicMock())
 
@@ -331,7 +328,6 @@ class TestTrialIntegration:
         with (
             patch.object(gap_handler, '_get_trial_service', return_value=_build_service(_InMemoryTrialTable(days_elapsed=15))),
             patch.object(gap_handler, '_get_application_repository', return_value=MagicMock()),
-            patch.object(gap_handler, '_get_table', return_value=MagicMock()),
         ):
             response = gap_handler.lambda_handler(_gap_event(), MagicMock())
 

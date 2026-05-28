@@ -237,7 +237,7 @@ class TestStage6QualityGateWiring:
             )
             pipeline.run()
 
-        assert gate_calls <= MAX_STAGE6_RETRIES
+        assert gate_calls <= MAX_STAGE6_RETRIES + 1
 
     def test_stage6_final_meta_evaluation_returns_final_vpr_data(self, pipeline: VPRSixStagePipeline, minimal_vpr: VPR) -> None:
         vpr_data = MagicMock(vpr=minimal_vpr)

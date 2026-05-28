@@ -110,5 +110,5 @@ def test_llm_router_initializes_anthropic_with_retry_timeout() -> None:
     mock_anthropic.assert_called_once_with(
         api_key='test-key',
         max_retries=3,
-        timeout=60.0,
+        timeout=180.0,
     )

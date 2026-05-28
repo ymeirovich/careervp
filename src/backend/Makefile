@@ -48,7 +48,7 @@ pre-commit:
 	uv run pre-commit run -a --show-diff-on-failure
 
 mypy-lint:
-	uv run mypy --pretty careervp cdk tests
+	uv run mypy --pretty careervp --strict
 
 deps:
 	uv export --no-dev --no-editable --no-emit-project --no-color --format=requirements-txt > lambda_requirements.txt

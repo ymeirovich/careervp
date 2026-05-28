@@ -478,6 +478,8 @@ def analyze_and_map_keywords(cv: CVUserCV | UserCV, job: Job | str) -> KeywordMa
 def calculate_ats_score(tailored_cv: TailoredCV, keyword_map: KeywordMap) -> int:
     """Score CV quality on a 0-100 ATS scale (P4)."""
     keywords = keyword_map.all_keywords
+    if not keywords:
+        return 0
     combined_text = _serialize_tailored_cv_text(tailored_cv).lower()
 
     # Keyword density: 0-40 points

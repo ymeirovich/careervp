@@ -90,7 +90,7 @@ class TestPipelineStageContracts:
         )
 
     def test_max_stage6_retries_is_3(self) -> None:
-        """MAX_STAGE6_RETRIES must remain 3 to control LLM retry cost."""
-        assert MAX_STAGE6_RETRIES == 3, (
+        """MAX_STAGE6_RETRIES must remain 1 after the quality-warning fallback change."""
+        assert MAX_STAGE6_RETRIES == 1, (
             f'MAX_STAGE6_RETRIES changed to {MAX_STAGE6_RETRIES}. Increasing retries multiplies LLM cost; decreasing reduces quality assurance.'
         )
