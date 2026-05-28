@@ -1,0 +1,93 @@
+name: UI Upgrade — E2E Smoke Tests
+
+# Manually triggered after you confirm Amplify deployment succeeded.
+# Runs Playwright tests against the Amplify preview URL.
+#
+# Trigger via CLI:
+#   gh workflow run e2e-smoke.yml \
+#     --ref ui-upgrade \
+#     --field batch=2 \
+#     --field preview_url="https://ui-upgrade.<app-id>.amplifyapp.com"
+#
+# Or from GitHub UI: Actions → UI Upgrade — E2E Smoke Tests → Run workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      preview_url:
+        description: "Amplify preview URL (leave blank to use AMPLIFY_PREVIEW_URL secret)"
+        required: false
+        default: ""
+      batch:
+        description: "Batch to test: 1 | 2 | 3 | 4 | 5 | 6 | all"
+        required: false
+        default: "all"
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: "Playwright E2E — Batch ${{ github.event.inputs.batch }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: cd src/frontend && npm ci
+
+      # Install only Chromium to keep the job fast
+      - name: Install Playwright + Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Resolve target URL
+        id: resolve-url
+        run: |
+          INPUT_URL="${{ github.event.inputs.preview_url }}"
+          SECRET_URL="${{ secrets.AMPLIFY_PREVIEW_URL }}"
+          FINAL="${INPUT_URL:-$SECRET_URL}"
+          if [[ -z "$FINAL" ]]; then
+            echo "::error::No preview URL provided. Set the preview_url input or AMPLIFY_PREVIEW_URL secret."
+            exit 1
+          fi
+          echo "base_url=$FINAL" >> "$GITHUB_OUTPUT"
+          echo "Target URL: $FINAL"
+
+      - name: Run Playwright e2e tests
+        run: |
+          BATCH="${{ github.event.inputs.batch }}"
+
+          if [ "$BATCH" = "all" ]; then
+            npx playwright test --config playwright.config.ts
+          else
+            npx playwright test --config playwright.config.ts \
+              --grep "@batch$BATCH"
+          fi
+        env:
+          BASE_URL: ${{ steps.resolve-url.outputs.base_url }}
+          E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+
+      - name: Upload Playwright HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "playwright-report-batch-${{ github.event.inputs.batch }}-${{ github.run_id }}"
+          path: playwright-report/
+          retention-days: 14
+
+      - name: Upload failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "playwright-failures-batch-${{ github.event.inputs.batch }}-${{ github.run_id }}"
+          path: test-results/
+          retention-days: 7

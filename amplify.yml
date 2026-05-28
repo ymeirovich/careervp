@@ -1,0 +1,20 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - cd src/frontend
+        - npm ci
+    build:
+      commands:
+        - cd src/frontend
+        - npm run typecheck
+        - npm run build
+  artifacts:
+    # Next.js static export output directory
+    baseDirectory: src/frontend/out
+    files:
+      - "**/*"
+  cache:
+    paths:
+      - src/frontend/node_modules/**/*

@@ -63,3 +63,4 @@ src/frontend/next-env.d.ts
 
 # Figma Tokens Plugin export (source of truth is tokens.css)
 src/frontend/figma-tokens.json
+tests/e2e/.auth/

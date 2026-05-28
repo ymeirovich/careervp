@@ -1,0 +1,76 @@
+name: UI Upgrade — Pre-merge Checks
+
+# Runs on every push to ui-upgrade that touches frontend code.
+# Blocks the branch if typecheck, vitest, or jest unit tests fail.
+# Amplify deploys in parallel — this workflow does NOT wait for it.
+
+on:
+  push:
+    branches: [ui-upgrade]
+    paths:
+      - "src/frontend/**"
+
+permissions:
+  contents: read
+
+jobs:
+  # ── TypeScript ──────────────────────────────────────────────────────────────
+  typecheck:
+    name: TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: cd src/frontend && npm ci
+
+      - name: Run tsc
+        run: cd src/frontend && npm run typecheck
+
+  # ── Vitest UI unit tests ────────────────────────────────────────────────────
+  vitest-ui:
+    name: Vitest UI tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: cd src/frontend && npm ci
+
+      - name: Run Vitest
+        run: cd src/frontend && npx vitest run --config vitest.config.ts --reporter verbose
+        env:
+          CI: true
+
+  # ── Jest unit tests ─────────────────────────────────────────────────────────
+  jest-unit:
+    name: Jest unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: cd src/frontend && npm ci
+
+      - name: Run Jest unit
+        run: cd src/frontend && npm run test:unit -- --passWithNoTests
+        env:
+          CI: true
