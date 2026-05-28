@@ -102,20 +102,28 @@ else
   echo "  Running targeted Vitest for component: $COMPONENT_NAME"
   echo "  (skipping stubs for unimplemented specs — that is expected behaviour)"
 
-  # Run the specific test file(s) for this component
-  UNIT_TEST="tests/ui/unit/${COMPONENT_NAME}.test.tsx"
-  INTEG_TEST="tests/ui/integration/${COMPONENT_NAME}.test.tsx"
+  # Canonical test location is src/frontend/tests/ui/ (preferred).
+  # Repo-root tests/ui/ is legacy/stub location (fallback only).
+  UNIT_CANONICAL="${FRONTEND}/tests/ui/unit/${COMPONENT_NAME}.test.tsx"
+  UNIT_STUB="${REPO_ROOT}/tests/ui/unit/${COMPONENT_NAME}.test.tsx"
+  INTEG_CANONICAL="${FRONTEND}/tests/ui/integration/${COMPONENT_NAME}.test.tsx"
+  INTEG_STUB="${REPO_ROOT}/tests/ui/integration/${COMPONENT_NAME}.test.tsx"
 
   FOUND_TESTS=0
 
-  if [[ -f "$REPO_ROOT/$UNIT_TEST" || -f "$FRONTEND/$UNIT_TEST" ]]; then
+  if [[ -f "$UNIT_CANONICAL" ]]; then
     FOUND_TESTS=1
-    TARGET="${FRONTEND}/tests/ui/unit/${COMPONENT_NAME}.test.tsx"
-    if [[ -f "$REPO_ROOT/$UNIT_TEST" ]]; then
-      TARGET="$REPO_ROOT/$UNIT_TEST"
+    echo "  → $UNIT_CANONICAL"
+    if npx vitest run --config vitest.config.ts --reporter verbose "$UNIT_CANONICAL" 2>&1; then
+      pass "Unit tests for $COMPONENT_NAME passed"
+    else
+      fail "Unit tests for $COMPONENT_NAME failed — fix before committing"
+      exit 1
     fi
-    echo "  → $TARGET"
-    if npx vitest run --config vitest.config.ts --reporter verbose "$TARGET" 2>&1; then
+  elif [[ -f "$UNIT_STUB" ]]; then
+    FOUND_TESTS=1
+    echo "  → $UNIT_STUB (stub — move to $UNIT_CANONICAL when implemented)"
+    if npx vitest run --config vitest.config.ts --reporter verbose "$UNIT_STUB" 2>&1; then
       pass "Unit tests for $COMPONENT_NAME passed"
     else
       fail "Unit tests for $COMPONENT_NAME failed — fix before committing"
@@ -123,14 +131,19 @@ else
     fi
   fi
 
-  if [[ -f "$REPO_ROOT/$INTEG_TEST" || -f "$FRONTEND/$INTEG_TEST" ]]; then
+  if [[ -f "$INTEG_CANONICAL" ]]; then
     FOUND_TESTS=1
-    TARGET="${FRONTEND}/tests/ui/integration/${COMPONENT_NAME}.test.tsx"
-    if [[ -f "$REPO_ROOT/$INTEG_TEST" ]]; then
-      TARGET="$REPO_ROOT/$INTEG_TEST"
+    echo "  → $INTEG_CANONICAL"
+    if npx vitest run --config vitest.config.ts --reporter verbose "$INTEG_CANONICAL" 2>&1; then
+      pass "Integration tests for $COMPONENT_NAME passed"
+    else
+      fail "Integration tests for $COMPONENT_NAME failed — fix before committing"
+      exit 1
     fi
-    echo "  → $TARGET"
-    if npx vitest run --config vitest.config.ts --reporter verbose "$TARGET" 2>&1; then
+  elif [[ -f "$INTEG_STUB" ]]; then
+    FOUND_TESTS=1
+    echo "  → $INTEG_STUB (stub — move to $INTEG_CANONICAL when implemented)"
+    if npx vitest run --config vitest.config.ts --reporter verbose "$INTEG_STUB" 2>&1; then
       pass "Integration tests for $COMPONENT_NAME passed"
     else
       fail "Integration tests for $COMPONENT_NAME failed — fix before committing"
@@ -140,9 +153,7 @@ else
 
   if [[ "$FOUND_TESTS" -eq 0 ]]; then
     fail "No test file found for component '$COMPONENT_NAME'"
-    echo "     Expected one of:"
-    echo "       $REPO_ROOT/tests/ui/unit/${COMPONENT_NAME}.test.tsx"
-    echo "       $FRONTEND/tests/ui/unit/${COMPONENT_NAME}.test.tsx"
+    echo "     Expected: $UNIT_CANONICAL"
     exit 1
   fi
 
