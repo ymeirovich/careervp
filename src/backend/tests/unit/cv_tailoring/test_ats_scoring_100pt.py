@@ -20,12 +20,8 @@ import pathlib
 import pytest
 
 from careervp.logic.cv_tailoring import KeywordMap
-from careervp.models.cv_tailoring_models import (
-    CVContact,
-    CVExperienceItem,
-    CVSections,
-    CVSkills,
-)
+from careervp.models.cv import ContactInfo, Education, Skill, WorkExperience
+from careervp.models.cv_tailoring_models import TailoredCV
 
 SAMPLE_KEYWORDS = [
     'Kubernetes',
@@ -55,44 +51,54 @@ def sample_keyword_map() -> KeywordMap:
 
 
 @pytest.fixture
-def perfect_cv_sections() -> CVSections:
-    summary = (
-        'Senior Kubernetes platform engineer with AWS and Python expertise, '
-        'driving CI/CD reliability across distributed microservices. '
-        'Built observability frameworks using Terraform and SRE practices, '
-        'reducing incident response time by 40% and improving platform uptime by 99.9%.'
-    )
-    return CVSections(
-        contact=CVContact(name='Alex Candidate', email='alex@example.com', phone=None, linkedin=None, location=None),
-        summary=summary,
-        skills=CVSkills(technical=['Python', 'AWS', 'Kubernetes', 'Terraform', 'CI/CD'], soft=[]),
-        experience=[
-            CVExperienceItem(
+def perfect_cv_sections() -> TailoredCV:
+    return TailoredCV(
+        user_id='user-1',
+        cv_id='cv-1',
+        full_name='Alex Candidate',
+        email='alex@example.com',
+        contact_info=ContactInfo(name='Alex Candidate', email='alex@example.com'),
+        professional_summary=(
+            'Senior Kubernetes platform engineer with AWS and Python expertise, '
+            'driving CI/CD reliability across distributed microservices. '
+            'Built observability frameworks using Terraform and SRE practices, '
+            'reducing incident response time by 40% and improving platform uptime by 99.9%.'
+        ),
+        work_experience=[
+            WorkExperience(
                 company='Nimbus Labs',
-                title='Senior Software Engineer',
+                role='Senior Software Engineer',
                 start_date='01/2021',
                 end_date='Present',
-                bullets=[
+                achievements=[
                     'Built | Kubernetes CI/CD pipeline for 12 microservices | Increased reliability by 35%',
                     'Automated | AWS observability with Terraform | Reduced incident response by 40%',
                     'Led | Distributed SRE platform migration | Improved uptime from 99.5% to 99.9%',
                 ],
+                technologies=['Python', 'AWS', 'Kubernetes', 'Terraform', 'CI/CD'],
             )
         ],
-        education=[{'institution': 'MIT', 'degree': 'BSc', 'field': 'CS', 'graduation_date': '06/2016', 'gpa': None}],
+        education=[Education(institution='MIT', degree='BSc', field_of_study='CS', graduation_date='06/2016', honors=[])],
+        skills=[Skill(name='Python'), Skill(name='AWS'), Skill(name='Kubernetes'), Skill(name='Terraform'), Skill(name='CI/CD')],
         certifications=[],
+        languages=['en'],
     )
 
 
 @pytest.fixture
-def empty_cv_sections() -> CVSections:
-    return CVSections(
-        contact=CVContact(name='A', email='a@b.com', phone=None, linkedin=None, location=None),
-        summary='',
-        skills=CVSkills(technical=[], soft=[]),
-        experience=[],
+def empty_cv_sections() -> TailoredCV:
+    return TailoredCV(
+        user_id='user-1',
+        cv_id='cv-1',
+        full_name='A',
+        email='a@b.com',
+        contact_info=ContactInfo(name='A', email='a@b.com'),
+        professional_summary='',
+        work_experience=[],
         education=[],
+        skills=[],
         certifications=[],
+        languages=['en'],
     )
 
 
@@ -111,7 +117,7 @@ def test_anti_ai_min_score_constant_is_90() -> None:
 
 
 @pytest.mark.unit
-def test_ats_score_returns_int_not_float(perfect_cv_sections: CVSections, sample_keyword_map: KeywordMap) -> None:
+def test_ats_score_returns_int_not_float(perfect_cv_sections: TailoredCV, sample_keyword_map: KeywordMap) -> None:
     from careervp.logic.cv_tailoring import calculate_ats_score
 
     score = calculate_ats_score(perfect_cv_sections, sample_keyword_map)
@@ -119,7 +125,7 @@ def test_ats_score_returns_int_not_float(perfect_cv_sections: CVSections, sample
 
 
 @pytest.mark.unit
-def test_ats_score_range_is_0_to_100(perfect_cv_sections: CVSections, sample_keyword_map: KeywordMap) -> None:
+def test_ats_score_range_is_0_to_100(perfect_cv_sections: TailoredCV, sample_keyword_map: KeywordMap) -> None:
     from careervp.logic.cv_tailoring import calculate_ats_score
 
     score = calculate_ats_score(perfect_cv_sections, sample_keyword_map)
@@ -127,7 +133,7 @@ def test_ats_score_range_is_0_to_100(perfect_cv_sections: CVSections, sample_key
 
 
 @pytest.mark.unit
-def test_empty_cv_scores_0(empty_cv_sections: CVSections) -> None:
+def test_empty_cv_scores_0(empty_cv_sections: TailoredCV) -> None:
     from careervp.logic.cv_tailoring import calculate_ats_score
 
     empty_map = KeywordMap(required=[], preferred=[], nice_to_have=[], mapped_keywords={}, keyword_categories={})
@@ -136,7 +142,7 @@ def test_empty_cv_scores_0(empty_cv_sections: CVSections) -> None:
 
 @pytest.mark.unit
 def test_existing_test_cv_tailoring_uses_new_scale() -> None:
-    test_file = pathlib.Path(__file__).parents[2] / 'test_cv_tailoring.py'
+    test_file = pathlib.Path(__file__).parents[1] / 'test_cv_tailoring.py'
     assert test_file.exists()
     content = test_file.read_text(encoding='utf-8')
     assert '0.0 <= score <= 10.0' not in content, 'Old 0-10 scale assertion not updated — CVT-P4'
@@ -145,7 +151,7 @@ def test_existing_test_cv_tailoring_uses_new_scale() -> None:
 
 @pytest.mark.unit
 def test_existing_final_ats_score_threshold_uses_new_scale() -> None:
-    test_file = pathlib.Path(__file__).parents[2] / 'test_cv_tailoring.py'
+    test_file = pathlib.Path(__file__).parents[1] / 'test_cv_tailoring.py'
     assert test_file.exists()
     content = test_file.read_text(encoding='utf-8')
     assert 'ats_score >= 8.0' not in content, 'Old >= 8.0 threshold not updated — CVT-P4'

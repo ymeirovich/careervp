@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -44,11 +45,23 @@ class TestCreditChargedBeforeLLM:
 
         call_order: list[str] = []
         trial_service = MagicMock()
-        trial_service.check_trial_status.side_effect = lambda user_id: call_order.append('check_trial_status') or {'is_active': True}
-        trial_service.consume_credit.side_effect = lambda user_id: call_order.append('consume_credit')
+
+        def _check_trial_status(_user_id: str) -> dict[str, bool]:
+            call_order.append('check_trial_status')
+            return {'is_active': True}
+
+        def _consume_credit(_user_id: str) -> None:
+            call_order.append('consume_credit')
+
+        trial_service.check_trial_status.side_effect = _check_trial_status
+        trial_service.consume_credit.side_effect = _consume_credit
 
         app_repo = MagicMock()
-        app_repo.update_state.side_effect = lambda **_: call_order.append('update_state')
+
+        def _update_state(**_: object) -> None:
+            call_order.append('update_state')
+
+        app_repo.update_state.side_effect = _update_state
 
         with (
             patch('careervp.handlers.gap_handler._get_trial_service', return_value=trial_service),
@@ -59,14 +72,16 @@ class TestCreditChargedBeforeLLM:
             dal = MagicMock()
             dal.save_gap_questions.return_value = Result(success=True, data=None, code=ResultCode.GAP_QUESTIONS_GENERATED)
             mock_get_dal.return_value = dal
-            mock_generate.side_effect = lambda **_: (
+
+            def _generate_gap_questions(**_: object) -> Result[list[dict[str, object]]]:
                 call_order.append('generate_gap_questions')
-                or Result(
+                return Result(
                     success=True,
                     data=[{'question_id': 'q-1', 'question': 'Describe impact', 'tags': ['[CV IMPACT]']}],
                     code=ResultCode.GAP_QUESTIONS_GENERATED,
                 )
-            )
+
+            mock_generate.side_effect = _generate_gap_questions
             response = lambda_handler(_event(), MagicMock())
 
         assert response['statusCode'] in [200, 201]
@@ -167,14 +182,13 @@ class TestTrialServiceImplementation:
             service.check_trial_status('user-1')
 
     def test_trial_service_check_app_count(self) -> None:
-        # Use today's date so trial is NOT expired (days_elapsed=0 < 14)
-        # but application_count=3 >= TRIAL_LIMIT_APPLICATIONS=3 → TrialExhaustedException
+        created_at = datetime.now(timezone.utc).isoformat()
         table = MagicMock()
         table.get_item.return_value = {
             'Item': {
                 'pk': 'USER#user-1',
                 'sk': 'TRIAL',
-                'created_at': '2026-03-06T00:00:00+00:00',
+                'created_at': created_at,
                 'application_count': 3,
                 'trial_active': True,
             }

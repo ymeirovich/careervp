@@ -52,7 +52,7 @@ def _vpr() -> MagicMock:
 
 def _strong_anti_ai_score() -> MagicMock:
     score = MagicMock()
-    score.score = 10.0
+    score.score = 100.0
     score.issues = []
     return score
 

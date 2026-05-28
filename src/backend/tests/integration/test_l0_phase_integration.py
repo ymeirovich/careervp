@@ -107,7 +107,7 @@ def _run_cover_letter(run_number: int) -> str:
         patch('careervp.logic.cover_letter.LLMClient') as mock_llm_cls,
         patch(
             'careervp.logic.cover_letter.check_anti_ai_patterns',
-            return_value=SimpleNamespace(score=9.6, issues=[]),
+            return_value=SimpleNamespace(score=96, issues=[]),
         ),
     ):
         mock_llm = MagicMock()
@@ -122,6 +122,7 @@ def _run_cover_letter(run_number: int) -> str:
 
     assert result.success is True
     assert result.data is not None
+    assert result.data.cover_letter is not None
     mock_llm.generate.assert_called_once()
     return result.data.cover_letter.full_text
 
@@ -172,6 +173,7 @@ def _run_interview_prep(run_number: int) -> str:
 
     assert result.success is True
     assert result.data is not None
+    assert result.data.interview_prep is not None
     mock_llm.generate.assert_called_once()
     question_text = result.data.interview_prep.questions[0].question
     return question_text
@@ -210,25 +212,23 @@ def _run_gap_analysis(run_number: int) -> str:
 def _run_cv_tailoring(run_number: int) -> str:
     mock_llm = MagicMock()
     mock_llm.generate.return_value = {
-        'professional_summary': (f'Platform-focused engineer delivering measurable reliability outcomes in run {run_number}.'),
-        'work_experience': [
+        'summary': f'Platform-focused engineer delivering measurable reliability outcomes in run {run_number} across cloud systems and platform engineering.',
+        'experience': [
             {
                 'company': 'Nimbus Labs',
-                'role': 'Senior Software Engineer',
-                'dates': '2021 - Present',
-                'achievements': [
-                    'Led | In platform engineering at Nimbus Labs | Applied AWS automation to deployment safety | Increased release reliability by 35%'
-                ],
-                'technologies': ['Python', 'AWS', 'Kubernetes'],
+                'title': 'Senior Software Engineer',
+                'start_date': '01/2021',
+                'end_date': 'Present',
+                'bullets': ['Led platform engineering improvements that increased release reliability by 35% across cloud services.'],
             }
         ],
-        'skills': ['Python', 'AWS', 'Kubernetes', 'Leadership'],
+        'skills': {'technical': ['Python', 'AWS', 'Kubernetes', 'Leadership'], 'soft': ['Communication']},
         'job_description': 'Required: python aws kubernetes leadership reliability architecture security',
     }
 
     with patch(
         'careervp.logic.cv_tailoring.check_anti_ai_patterns',
-        return_value=SimpleNamespace(score=9.5, issues=[]),
+        return_value=SimpleNamespace(score=95, issues=[]),
     ):
         result = tailor_cv(
             master_cv=_sample_user_cv(),
@@ -240,9 +240,12 @@ def _run_cv_tailoring(run_number: int) -> str:
     assert result.success is True
     assert result.data is not None
     mock_llm.generate.assert_called_once()
-    tailored = result.data.tailored_cv
-    assert tailored is not None
-    return f'{tailored.professional_summary} {" ".join(str(skill) for skill in tailored.skills)}'
+    from careervp.models.cv_tailoring_models import TailoredCVResponse
+
+    assert isinstance(result.data, TailoredCVResponse)
+    cv_sections = result.data.cv_sections
+    assert cv_sections is not None
+    return f'{cv_sections.summary} {" ".join(cv_sections.skills.technical)}'
 
 
 def _stage_3_payload() -> str:
@@ -290,8 +293,15 @@ def _run_vpr(run_number: int) -> str:
     with (
         patch('careervp.logic.vpr_generator.LLMClient') as mock_llm_cls,
         patch(
-            'careervp.logic.vpr_generator.check_anti_ai_patterns',
-            return_value=SimpleNamespace(score=9.4, issues=[]),
+            'careervp.logic.vpr_generator.run_vpr_quality_gate',
+            return_value=SimpleNamespace(
+                anti_ai_score=94,
+                grammar_score=95,
+                tone_score=90,
+                structural_score=90,
+                issues=[],
+                passed_gate=True,
+            ),
         ),
     ):
         mock_llm_instance = MagicMock()
@@ -326,8 +336,8 @@ def _run_vpr(run_number: int) -> str:
     assert result.data is not None
     assert result.data.vpr is not None
     mock_dal.save_vpr.assert_called_once()
-    assert mock_llm_instance.invoke.call_count == 2
-    return f'{result.data.vpr.executive_summary} {" ".join(result.data.vpr.differentiators)}'
+    assert mock_llm_instance.invoke.call_count == 1
+    return json.dumps(result.data.vpr.model_dump(mode='json'))
 
 
 def _find_template_match(text: str) -> str | None:

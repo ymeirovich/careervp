@@ -29,6 +29,7 @@ PUBLIC_ROUTES = {
     ('POST', '/auth/register'),
     ('POST', '/auth/login'),
     ('POST', '/auth/refresh'),
+    ('POST', '/billing/webhook'),
 }
 
 
@@ -36,8 +37,8 @@ def _template() -> Template:
     if INFRA_SRC not in sys.path:
         sys.path.insert(0, INFRA_SRC)
 
-    from careervp.naming_utils import NamingUtils
-    from careervp.service_stack import ServiceStack
+    from careervp.naming_utils import NamingUtils  # type: ignore[import-not-found]
+    from careervp.service_stack import ServiceStack  # type: ignore[import-not-found]
 
     app = App()
     naming = NamingUtils(environment='test', region='us-east-1', account_id='123456789012')

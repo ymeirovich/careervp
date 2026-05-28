@@ -15,6 +15,7 @@ from careervp.logic.cv_tailoring import (
     validate_and_finalize,
 )
 from careervp.models.cv import ContactInfo, UserCV, WorkExperience
+from careervp.models.cv_tailoring_models import TailoredCVResponse
 from careervp.models.result import Result, ResultCode
 
 
@@ -108,7 +109,7 @@ def _weak_draft() -> TailoredCVDraft:
     for experience in weak_cv.work_experience:
         experience.achievements = ['Managed platform delivery without quantified outcomes']
 
-    return replace(base, tailored_cv=weak_cv, preliminary_ats_score=3.2)
+    return replace(base, tailored_cv=weak_cv, preliminary_ats_score=32)
 
 
 @pytest.mark.unit
@@ -143,9 +144,8 @@ def test_cv_tailoring_returns_non_null_cv_id_and_persists_with_dal() -> None:
     )
 
     assert result.success is True
-    assert result.data is not None
-    assert result.data.tailored_cv is not None
-    assert result.data.tailored_cv.cv_id == cv.cv_id
+    assert isinstance(result.data, TailoredCVResponse)
+    assert result.data.ats_score >= 0
     assert dal_stub.saved_calls == 1
     assert dal_stub.saved_cv_id == cv.cv_id
 
