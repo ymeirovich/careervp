@@ -10,11 +10,12 @@ applications:
             - npm run typecheck
             - npm run build
       artifacts:
-        # baseDirectory is relative to appRoot (src/frontend)
-        baseDirectory: out
+        # .next is the SSR build output directory (Web Compute platform)
+        baseDirectory: .next
         files:
           - "**/*"
       cache:
         paths:
+          - .next/cache/**/*
           - node_modules/**/*
     appRoot: src/frontend
