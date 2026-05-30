@@ -1,24 +1,23 @@
 /**
  * Playwright configuration for CareerVP UI upgrade e2e tests.
  *
- * Config lives in src/frontend/ — that's where @playwright/test is installed.
- * Tests live at repo root: tests/e2e/
- * Auth state:              tests/e2e/.auth/user.json  (gitignored)
+ * Config and tests both live in src/frontend/ so @playwright/test resolves.
+ * Tests:      src/frontend/tests/e2e/
+ * Auth state: src/frontend/tests/e2e/.auth/user.json  (gitignored)
  *
  * Run from src/frontend/:
  *   BASE_URL=https://ui-upgrade.<app-id>.amplifyapp.com npx playwright test
  */
 
 import { defineConfig, devices } from "@playwright/test";
-import path from "path";
 
-// Paths are relative to this config file (src/frontend/)
-const REPO_ROOT = path.resolve(__dirname, "../..");
-const E2E_DIR = path.join(REPO_ROOT, "tests/e2e");
-const AUTH_FILE = path.join(REPO_ROOT, "tests/e2e/.auth/user.json");
+// Tests live co-located at src/frontend/tests/e2e/ so @playwright/test resolves
+const AUTH_FILE = "./tests/e2e/.auth/user.json";
 
 export default defineConfig({
-  testDir: E2E_DIR,
+  testDir: "./tests/e2e",
+  // *.test.ts files belong to Jest — only Playwright spec/setup files here
+  testIgnore: ["**/*.test.ts"],
 
   // Run test files sequentially — auth state is shared across workers
   fullyParallel: false,
