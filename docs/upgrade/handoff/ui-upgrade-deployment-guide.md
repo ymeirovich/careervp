@@ -485,15 +485,25 @@ Every spec follows this exact loop. Do not deviate.
 | Actual assertion failure (`expected X to equal Y`) | Real bug in your implementation | Fix |
 
 **If your own spec's tests show `ERR_MODULE_NOT_FOUND`:**
-The test file may have been created at `tests/ui/unit/` (repo root) but Vitest resolves from `src/frontend/`. Move the file to `src/frontend/tests/ui/unit/` and fix the relative import paths (remove the `src/frontend/` prefix since you're already inside it):
+The test file was created at `tests/ui/unit/` (repo root) but CI Vitest only picks up
+`src/frontend/tests/ui/`. Move the file and fix three things:
 
 ```bash
-# Example for FE-UI-006
-mv tests/ui/unit/ErrorBoundary.test.tsx        src/frontend/tests/ui/unit/
-mv tests/ui/integration/ErrorBoundary.test.tsx src/frontend/tests/ui/integration/
+# 1. Move the file to the canonical location
+mv tests/ui/unit/MyComponent.test.tsx        src/frontend/tests/ui/unit/
+mv tests/ui/integration/MyComponent.test.tsx src/frontend/tests/ui/integration/
 
-# Fix imports: ../../../src/frontend/components/ → ../../../components/
-# Fix setup imports: ../../../src/frontend/tests/vitest-setup → ../vitest-setup
+# 2. Fix component imports (remove the src/frontend/ prefix):
+#    ../../../src/frontend/components/ui/Foo  →  ../../../components/ui/Foo
+
+# 3. Add setup imports at the top of each test file:
+#    import '../../vitest-setup';
+#    import '../setup';
+
+# 4. Replace any Jest globals with Vitest:
+#    import { jest } from '@jest/globals'  →  import { vi } from 'vitest'
+#    jest.fn()             →  vi.fn()
+#    jest.clearAllMocks()  →  vi.clearAllMocks()
 ```
 
 **This is why `verify-spec.sh` runs targeted, not the full suite.** The full suite will always show noise until all 26 specs are implemented.
@@ -519,8 +529,26 @@ Rules:
    Do NOT run npx vitest run without a file filter — it will show ERR_MODULE_NOT_FOUND
    for all unimplemented future specs. That is expected noise, not your failure.
 5. Write or update the unit test file referenced in the spec's Traceability Matrix.
-   Place the test file at src/frontend/tests/ui/unit/<ComponentName>.test.tsx.
-   Use relative imports that start from src/frontend/ (e.g. ../../../components/...).
+   CRITICAL — get these three things right or the CI run will fail:
+
+   a) FILE LOCATION — place test files at:
+        src/frontend/tests/ui/unit/<ComponentName>.test.tsx       ← unit
+        src/frontend/tests/ui/integration/<ComponentName>.test.tsx ← integration
+      NOT at tests/ui/unit/ (that is the repo-root stub directory, invisible to CI).
+
+   b) IMPORT PATHS — all imports inside the test file must be relative to src/frontend/:
+        import { Foo } from '../../../components/ui/Foo';   ✓
+        import { Foo } from '../../../src/frontend/...'     ✗ (double-prefix)
+      Also add these two setup lines at the top of every test file:
+        import '../../vitest-setup';
+        import '../setup';
+      (required for toBeInTheDocument(), toBeVisible(), toHaveAttribute(), etc.)
+
+   c) TEST FRAMEWORK — use Vitest, not Jest:
+        import { describe, it, expect, vi, beforeEach } from 'vitest';   ✓
+        import { jest } from '@jest/globals';                             ✗
+      Replace jest.fn() → vi.fn(), jest.clearAllMocks() → vi.clearAllMocks(), etc.
+
    Tests must cover every AC listed. Do not use placeholder/TODO test bodies.
 6. Update the spec file status from `draft` to `implemented` and fill in the
    code_reference column (file:line) in the Traceability Matrix.
@@ -681,7 +709,7 @@ Rules (standard — see section 3.1 of the deployment guide).
 
 Additional context:
 - Spinner has ZERO existing test coverage.
-- Test file: tests/ui/unit/Spinner.test.tsx. Create from scratch.
+- Test file: src/frontend/tests/ui/unit/Spinner.test.tsx. Create from scratch.
 - Spinner is a pure presentational component. No API calls, no state.
 ```
 
@@ -698,7 +726,7 @@ Additional context:
 - ProgressBar is consumed by GapAnalysisContent (FE-UI-018, Batch 5). The label row
   and rounded ends must be backward-compatible — existing usages without a label prop
   must render identically to today.
-- Test file: tests/ui/unit/ProgressBar.test.tsx.
+- Test file: src/frontend/tests/ui/unit/ProgressBar.test.tsx.
 ```
 
 #### FE-UI-001 — Badge
@@ -717,7 +745,7 @@ Additional context:
   those are separate specs (Batches 2 and 3).
 - The soft prop must be optional (boolean | undefined) and default to false.
   Existing usages with no soft prop must render identically (AC-008, AC-009 enforce this).
-- Test file: tests/ui/unit/Badge.test.tsx. All 12 ACs must be covered.
+- Test file: src/frontend/tests/ui/unit/Badge.test.tsx. All 12 ACs must be covered.
 ```
 
 ### Batch 1 completion checklist
@@ -765,7 +793,7 @@ Additional context:
   (they are created in Batch 4). The nav links must be present and functional even though
   the destination pages 404 until Batch 4 is deployed. This is expected and acceptable.
 - Verify the existing 5 nav items still render with correct routes and icons after the change.
-- Test file: tests/ui/unit/AppSidebar.test.tsx.
+- Test file: src/frontend/tests/ui/unit/AppSidebar.test.tsx.
 ```
 
 #### FE-UI-004 — AppHeader
@@ -781,7 +809,7 @@ Rules (standard — see section 3.1 of the deployment guide).
 Additional context:
 - The account dropdown requires the user to be authenticated. Unit tests must mock
   the auth context — do not require a live Cognito session in Vitest.
-- Test file: tests/ui/unit/AppHeader.test.tsx.
+- Test file: src/frontend/tests/ui/unit/AppHeader.test.tsx.
 ```
 
 #### FE-UI-005 — HubLayout
@@ -799,7 +827,7 @@ Additional context:
   Run a visual diff mentally against the screenshots for: top, middle, bottom hub sections.
 - The JobDetailHeader slot is additive (new prop). The layout must still render correctly
   when the slot is not provided (backward-compatible with current usage until Batch 3 wires it up).
-- Test file: tests/ui/unit/HubLayout.test.tsx.
+- Test file: src/frontend/tests/ui/unit/HubLayout.test.tsx.
 ```
 
 ### Batch 2 e2e smoke tests
@@ -861,7 +889,7 @@ Rules (standard — see section 3.1 of the deployment guide).
 Additional context:
 - StatsRow is on /dashboard only. No cascade risk to application pages.
 - Loading skeleton uses animate-pulse — test in Vitest by mocking the data-loading state.
-- Test file: tests/ui/unit/StatsRow.test.tsx.
+- Test file: src/frontend/tests/ui/unit/StatsRow.test.tsx.
 ```
 
 #### FE-UI-008 — JobsTable
@@ -881,7 +909,7 @@ Additional context:
   soft={false} for the dashboard and soft={true} for the applications list if the spec
   calls for it.
 - The existing dashboard tests must still pass — the widget mode is backward-compatible.
-- Test file: tests/ui/unit/JobsTable.test.tsx.
+- Test file: src/frontend/tests/ui/unit/JobsTable.test.tsx.
 ```
 
 #### FE-UI-011 — ChooseBaseCVModal
@@ -900,7 +928,7 @@ Additional context:
 - It operates in two modes: choice mode (used by NewApplicationPage) and upload-only
   mode (used by CVCenterContent, Batch 4). Both modes must be implemented now.
 - The API call for fetching existing CVs uses GET /users/me/cv — mock this in Vitest.
-- Test file: tests/ui/unit/ChooseBaseCVModal.test.tsx.
+- Test file: src/frontend/tests/ui/unit/ChooseBaseCVModal.test.tsx.
 ```
 
 #### FE-UI-010 — NewApplicationPage
@@ -921,7 +949,7 @@ Additional context:
   still exists in JobsTable or dashboard/page.tsx, update those references to navigate to
   /applications/new instead. This is within scope because it is required for the spec to work.
 - API calls used: GET /users/me/cv, POST /jobs — mock both in Vitest.
-- Test file: tests/ui/unit/NewApplicationPage.test.tsx.
+- Test file: src/frontend/tests/ui/unit/NewApplicationPage.test.tsx.
 ```
 
 ### Batch 3 completion checklist
@@ -977,7 +1005,7 @@ Additional context:
 - NEW component. Create at src/frontend/components/CoverLettersListTable/CoverLettersListTable.tsx.
 - API: GET /cover-letters — mock in Vitest.
 - Badge (soft variant, Batch 1) is available. Use it for status display per the spec.
-- Test file: tests/ui/unit/CoverLettersListTable.test.tsx.
+- Test file: src/frontend/tests/ui/unit/CoverLettersListTable.test.tsx.
 ```
 
 #### FE-UI-012 — CoverLettersPage
@@ -994,7 +1022,7 @@ Additional context:
 - CoverLettersListTable (FE-UI-013) is already implemented — import it.
 - The AppSidebar nav item for /cover-letters is already live (Batch 2). This page
   resolves the 404 that has existed since Batch 2.
-- Test file: tests/ui/unit/CoverLettersPage.test.tsx.
+- Test file: src/frontend/tests/ui/unit/CoverLettersPage.test.tsx.
 ```
 
 #### FE-UI-015 — TailoredCVsListTable
@@ -1009,7 +1037,7 @@ Rules (standard — see section 3.1 of the deployment guide).
 Additional context:
 - NEW component. Create at src/frontend/components/TailoredCVsListTable/TailoredCVsListTable.tsx.
 - API: GET /cv-tailorings — mock in Vitest.
-- Test file: tests/ui/unit/TailoredCVsListTable.test.tsx.
+- Test file: src/frontend/tests/ui/unit/TailoredCVsListTable.test.tsx.
 ```
 
 #### FE-UI-014 — TailoredCVsPage
@@ -1025,7 +1053,7 @@ Additional context:
 - NEW page. Create at src/frontend/app/tailored-cvs/page.tsx.
 - TailoredCVsListTable (FE-UI-015) is already implemented — import it.
 - Resolves the /tailored-cvs 404 that has existed since Batch 2.
-- Test file: tests/ui/unit/TailoredCVsPage.test.tsx.
+- Test file: src/frontend/tests/ui/unit/TailoredCVsPage.test.tsx.
 ```
 
 #### FE-UI-017 — BaseCVsTable
@@ -1041,7 +1069,7 @@ Additional context:
 - NEW component. Create at src/frontend/components/BaseCVsTable/BaseCVsTable.tsx.
 - API: GET /users/me/cv — mock in Vitest.
 - Badge with soft variant is available. Status display should use soft badges per the spec.
-- Test file: tests/ui/unit/BaseCVsTable.test.tsx.
+- Test file: src/frontend/tests/ui/unit/BaseCVsTable.test.tsx.
 ```
 
 #### FE-UI-016 — CVCenterContent
@@ -1059,7 +1087,7 @@ Additional context:
 - The old CVCenterContent code is being replaced, not extended. Delete the old single-CV
   form implementation. The spec is authoritative on what the new page renders.
 - API: GET /users/me/cv, POST /users/me/cv — both used; mock in Vitest.
-- Test file: tests/ui/unit/CVCenterContent.test.tsx.
+- Test file: src/frontend/tests/ui/unit/CVCenterContent.test.tsx.
 ```
 
 ### Batch 4 completion checklist
@@ -1110,7 +1138,7 @@ Additional context:
   Use the @tiptap/extension-markdown package if available, or implement a Markdown
   serializer. Check the spec for the authoritative approach.
 - This component has no API calls. It is fully controlled (value + onChange pattern).
-- Test file: tests/ui/unit/RichTextEditor.test.tsx. Test the toolbar actions and
+- Test file: src/frontend/tests/ui/unit/RichTextEditor.test.tsx. Test the toolbar actions and
   controlled value behavior.
 ```
 
@@ -1129,7 +1157,7 @@ Additional context:
 - RichTextEditor (FE-UI-020) is already implemented — import it for the answer input.
 - The edit lifecycle states (read → editing → saving → saved/error) must be managed
   internally in the card. No parent state required for the lifecycle.
-- Test file: tests/ui/unit/GapQuestionCard.test.tsx. Cover all lifecycle state transitions.
+- Test file: src/frontend/tests/ui/unit/GapQuestionCard.test.tsx. Cover all lifecycle state transitions.
 ```
 
 #### FE-UI-018 — GapAnalysisContent
@@ -1148,7 +1176,7 @@ Additional context:
 - The module pages use direct api.* calls in useEffect (not React Query) — preserve this pattern.
 - API calls: GET /jobs/{jobId}/gap-questions, POST /jobs/{jobId}/gap-responses,
   GET /applications/{application_id}, GET /users/me/cv — mock all in Vitest.
-- Test file: tests/ui/unit/GapAnalysisContent.test.tsx. Cover the progress bar update
+- Test file: src/frontend/tests/ui/unit/GapAnalysisContent.test.tsx. Cover the progress bar update
   as questions are answered.
 ```
 
@@ -1214,7 +1242,7 @@ Additional context:
 - Three visual states: current (user's active plan), recommended (highlighted), selectable.
   The state is prop-driven (data in, no internal state for selection).
 - API: none directly. PlanCard is purely presentational.
-- Test file: tests/ui/unit/PlanCard.test.tsx. Cover all three states.
+- Test file: src/frontend/tests/ui/unit/PlanCard.test.tsx. Cover all three states.
 ```
 
 #### FE-UI-025 — PlansSection
@@ -1231,7 +1259,7 @@ Additional context:
 - NEW component. Create at src/frontend/components/billing/PlansSection.tsx.
 - PlanCard (FE-UI-026) is already implemented — import it.
 - The scroll anchor (#plans) must be a real HTML id attribute on the section wrapper.
-- Test file: tests/ui/unit/PlansSection.test.tsx.
+- Test file: src/frontend/tests/ui/unit/PlansSection.test.tsx.
 ```
 
 #### FE-UI-022 — SubscriptionCard
@@ -1248,7 +1276,7 @@ Additional context:
 - NEW component. Create at src/frontend/components/billing/SubscriptionCard.tsx.
 - Badge (soft variant, Batch 1) is available for subscription status display.
 - API: GET /users/me/subscription — mock in Vitest.
-- Test file: tests/ui/unit/SubscriptionCard.test.tsx. Cover trial, active, and cancelled states.
+- Test file: src/frontend/tests/ui/unit/SubscriptionCard.test.tsx. Cover trial, active, and cancelled states.
 ```
 
 #### FE-UI-023 — UsageCard
@@ -1265,7 +1293,7 @@ Additional context:
 - API: GET /users/me/usage — mock in Vitest.
 - ProgressBar (FE-UI-002, Batch 1) may be used for the credits bar if the spec calls for it.
   Check the spec before assuming.
-- Test file: tests/ui/unit/UsageCard.test.tsx.
+- Test file: src/frontend/tests/ui/unit/UsageCard.test.tsx.
 ```
 
 #### FE-UI-024 — BillingInfoCard
@@ -1280,7 +1308,7 @@ Rules (standard — see section 3.1 of the deployment guide).
 Additional context:
 - NEW component. Create at src/frontend/components/billing/BillingInfoCard.tsx.
 - The Manage Billing CTA calls POST /billing/portal — mock in Vitest.
-- Test file: tests/ui/unit/BillingInfoCard.test.tsx.
+- Test file: src/frontend/tests/ui/unit/BillingInfoCard.test.tsx.
 ```
 
 #### FE-UI-021 — BillingContent
@@ -1299,7 +1327,7 @@ Additional context:
 - API calls: POST /billing/checkout, POST /billing/portal, GET /users/me/subscription,
   GET /users/me/usage — mock all in Vitest.
 - The Plans section must be reachable via the #plans scroll anchor.
-- Test file: tests/ui/unit/BillingContent.test.tsx. Cover card assembly and CTA wiring.
+- Test file: src/frontend/tests/ui/unit/BillingContent.test.tsx. Cover card assembly and CTA wiring.
 ```
 
 ### Batch 6 completion checklist
