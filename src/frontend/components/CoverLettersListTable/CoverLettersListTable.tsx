@@ -3,18 +3,10 @@
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Badge } from '../ui/Badge';
+import type { CoverLetterListItem, CoverLetterListStatus } from '../../lib/types';
 
-type CoverLetterStatus = 'ready' | 'processing' | 'failed';
 type SortDirection = 'ascending' | 'descending';
 type SortKey = 'company_name' | 'job_title' | 'created_at' | 'status' | 'action';
-
-export interface CoverLetterListItem {
-  applicationId: string;
-  company_name: string;
-  job_title: string;
-  status: CoverLetterStatus;
-  created_at: string;
-}
 
 export interface CoverLettersListTableProps {
   coverLetters: CoverLetterListItem[];
@@ -23,19 +15,19 @@ export interface CoverLettersListTableProps {
   onRetry?: () => void;
 }
 
-const STATUS_BADGE: Record<CoverLetterStatus, { variant: 'success' | 'info' | 'destructive' }> = {
+const STATUS_BADGE: Record<CoverLetterListStatus, { variant: 'success' | 'info' | 'destructive' }> = {
   ready: { variant: 'success' },
   processing: { variant: 'info' },
   failed: { variant: 'destructive' },
 };
 
-const STATUS_LABEL_EN: Record<CoverLetterStatus, string> = {
+const STATUS_LABEL_EN: Record<CoverLetterListStatus, string> = {
   ready: 'Ready',
   processing: 'Processing',
   failed: 'Failed',
 };
 
-const STATUS_LABEL_HE: Record<CoverLetterStatus, string> = {
+const STATUS_LABEL_HE: Record<CoverLetterListStatus, string> = {
   ready: 'מוכן',
   processing: 'בעיבוד',
   failed: 'נכשל',
@@ -188,7 +180,7 @@ export function CoverLettersListTable({
     </tr>
   );
 
-  const renderStatusBadge = (status: CoverLetterStatus) => (
+  const renderStatusBadge = (status: CoverLetterListStatus) => (
     <Badge variant={STATUS_BADGE[status].variant} soft>
       {statusLabels[status]}
     </Badge>
@@ -301,4 +293,3 @@ export function CoverLettersListTable({
     </section>
   );
 }
-

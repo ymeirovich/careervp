@@ -19,6 +19,7 @@ import type {
   VPRStatusResponse,
   CoverLetterRequest,
   CoverLetterStatusResponse,
+  CoverLetterListItem,
   InterviewPrepRequest,
   InterviewPrepStatusResponse,
   CVTailoringRequest,
@@ -154,6 +155,11 @@ export const api = {
     apiClient
       .get<CoverLetterStatusResponse>(`/cover-letter/${artifactId}/status`)
       .then((r) => r.data),
+
+  getCoverLettersList: async (): Promise<CoverLetterListItem[]> => {
+    const r = await apiClient.get<CoverLetterListItem[] | { cover_letters?: CoverLetterListItem[] }>('/cover-letters');
+    return Array.isArray(r.data) ? r.data : (r.data.cover_letters ?? []);
+  },
 
   // ── Interview Prep ──
   generateInterviewPrep: (data: InterviewPrepRequest): Promise<AsyncTaskResponse> =>

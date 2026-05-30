@@ -369,6 +369,16 @@ export interface CoverLetterStatusResponse {
   error?: string;
 }
 
+export type CoverLetterListStatus = 'ready' | 'processing' | 'failed';
+
+export interface CoverLetterListItem {
+  applicationId: string;
+  company_name: string;
+  job_title: string;
+  status: CoverLetterListStatus;
+  created_at: string;
+}
+
 // ── Interview Prep ──
 export interface STARAnswer {
   situation: string;
