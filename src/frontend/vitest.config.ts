@@ -6,15 +6,9 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
-    setupFiles: [
-      './tests/vitest-setup.ts',
-      './tests/ui/setup.ts',
-    ],
+    setupFiles: ['./tests/vitest-setup.ts', './tests/ui/setup.ts'],
     include: [
       // Canvas App UI tests (spec-v4)
-      // All paths are relative to src/frontend (this config's directory).
-      // Spec tests live at src/frontend/tests/ui/ — matched by tests/ui/**
-      // Repo-root tests/ui/ stubs are intentionally excluded (outside this root).
       'tests/ui/**/*.test.tsx',
       'tests/ui/**/*.test.ts',
       'tests/**/*.vitest.ts',
