@@ -115,46 +115,22 @@ def extract_text_from_pdf(pdf_content: bytes) -> str:
         raise ValueError(f'Failed to extract text from PDF: {e}') from e
 
 
-def _extract_table_texts(doc: Any) -> list[str]:
-    texts: list[str] = []
-    for table in doc.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                for para in cell.paragraphs:
-                    if para.text.strip():
-                        texts.append(para.text)
-    return texts
-
-
-def _extract_textbox_texts(doc: Any) -> list[str]:
-    from docx.oxml.ns import qn
-
-    texts: list[str] = []
-    for txbx in doc.element.body.iter(qn('w:txbx')):
-        for p_elem in txbx.iter(qn('w:p')):
-            text = ''.join(t.text for t in p_elem.iter(qn('w:t')) if t.text)
-            if text.strip():
-                texts.append(text)
-    return texts
-
-
-def _iter_docx_paragraphs(doc: Any) -> list[str]:
-    """Collect text from paragraphs, tables, and text boxes in a DOCX document."""
-    texts = [para.text for para in doc.paragraphs if para.text.strip()]
-    texts += _extract_table_texts(doc)
-    texts += _extract_textbox_texts(doc)
-    return texts
-
-
 def extract_text_from_docx(docx_content: bytes) -> str:
-    """Extract text from DOCX using python-docx (paragraphs, tables, text boxes)."""
+    """Extract text from DOCX by walking every w:t run in the document body.
+
+    Handles all layout structures (paragraphs, tables, text boxes, VML frames,
+    content controls) by iterating the raw XML instead of python-docx's
+    higher-level objects.
+    """
     try:
         from io import BytesIO
 
         from docx import Document
+        from docx.oxml.ns import qn
 
         doc = Document(BytesIO(docx_content))
-        return '\n'.join(_iter_docx_paragraphs(doc))
+        tokens = [elem.text for elem in doc.element.body.iter(qn('w:t')) if elem.text]
+        return ' '.join(tokens)
     except Exception as e:
         logger.error('DOCX extraction failed', error=str(e))
         raise ValueError(f'Failed to extract text from DOCX: {e}') from e
