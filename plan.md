@@ -128,6 +128,7 @@ CREATED → COMPANY_RESEARCH → GAP_ANALYSIS → GENERATING_ARTIFACTS → INTER
 - ✅ FE-UI-015 TailoredCVsListTable new list table (sort/search/states/i18n)
 - ✅ FE-UI-017 BaseCVsTable multi-CV list table (sorting/status badges/actions/states/i18n)
 - ✅ FE-UI-016 `/cv-center` CVCenterContent replaced with Base CVs table listing, upload-only ChooseBaseCVModal flow, GET/POST `/users/me/cv`, and unit coverage
+- ✅ FE-UI-020 RichTextEditor TipTap rich text input with toolbar, Markdown storage, paste sanitization, controlled value updates, read-only mode, and unit coverage
 
 ### VPR Async Architecture - DEPLOYED & TESTING
 
@@ -3000,6 +3001,7 @@ Implementation order follows the application workflow:
 - VPR Async Architecture (Documentation + Tests + Implementation Complete)
 - FE-UI-002 ProgressBar label row and rounded-end regression coverage
 - FE-UI-011 ChooseBaseCVModal shared CV picker with choice and upload-only modes
+- FE-UI-020 RichTextEditor TipTap rich text input with Markdown storage and toolbar coverage
 
 ### Priority Tasks
 

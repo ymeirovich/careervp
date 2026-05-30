@@ -25,6 +25,7 @@
 - [x] FE-UI-015 TailoredCVsListTable new list table (`src/frontend/components/TailoredCVsListTable/TailoredCVsListTable.tsx`)
 - [x] FE-UI-017 BaseCVsTable multi-CV list table (`src/frontend/components/BaseCVsTable/BaseCVsTable.tsx`)
 - [x] FE-UI-016 CVCenterContent table listing replacement (`src/frontend/app/cv-center/page.tsx`)
+- [x] FE-UI-020 RichTextEditor TipTap Markdown editor (`src/frontend/components/RichTextEditor/RichTextEditor.tsx`)
 
 ## Upcoming Phases (From Context Manifest)
 
@@ -74,3 +75,6 @@
 | `src/frontend/tests/ui/unit/BaseCVsTable.test.tsx`   | FE-UI-017 unit coverage for BaseCVsTable |
 | `src/frontend/app/cv-center/page.tsx`                 | FE-UI-016 Base CVs page listing with React Query GET `/users/me/cv`, upload-only modal, POST `/users/me/cv`, retry, and Hebrew copy |
 | `src/frontend/tests/ui/unit/CVCenterContent.test.tsx` | FE-UI-016 unit coverage for page structure, data states, upload/refetch flow, removed old single-CV UI, ErrorBoundary, and Hebrew copy |
+| `src/frontend/components/RichTextEditor/RichTextEditor.tsx` | FE-UI-020 TipTap rich text editor with toolbar, controlled Markdown output, read-only state, ARIA attributes, paste sanitization, and focus styling |
+| `src/frontend/components/RichTextEditor/markdownSerializer.ts` | FE-UI-020 Markdown-to-HTML and HTML-to-Markdown serializer with underline and sanitized paste support |
+| `src/frontend/tests/ui/unit/RichTextEditor.test.tsx` | FE-UI-020 unit coverage for initialization, toolbar actions, Markdown output, controlled value updates, read-only mode, paste sanitization, and accessibility |
