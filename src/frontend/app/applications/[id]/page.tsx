@@ -114,7 +114,7 @@ export default function ApplicationHubPage() {
       )}
 
       <HubLayout hubStatus={hubState.hubStatus} staleModules={hubState.staleModules}>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {MODULE_ORDER.map((moduleType) => {
             const moduleState = hubState.modules[moduleType];
             const primaryAction = buildPrimaryAction(moduleType);

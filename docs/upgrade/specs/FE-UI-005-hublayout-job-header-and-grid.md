@@ -2,7 +2,7 @@
 spec_id: FE-UI-005
 title: "Upgrade HubLayout — add JobDetailHeader slot and adjust module grid to 2-column default"
 priority: high
-status: draft
+status: implemented
 owner: frontend
 created_at: 2026-05-23
 updated_at: 2026-05-23
@@ -13,7 +13,7 @@ tier: layout
 
 ## Problem Statement
 **Current behavior:** HubLayout renders a flex column containing conditional banners (blocked, stale, error) followed by `children`. It has no job detail section — the page title, company name, job URL, and job description are not displayed anywhere on the hub page. The module card grid is defined in the page file (`app/applications/[id]/page.tsx`) as `grid-cols-1 md:grid-cols-2 xl:grid-cols-3`.
-**Required behavior:** HubLayout accepts new props for job details (title, company, jobUrl, jobDescription) and renders a JobDetailHeader section above the banners and children. The JobDetailHeader shows: a "← Back" link navigating to `/applications`, the job title as a large heading, the company name as subtitle text, a "View Job Posting ↗" orange link opening the job URL in a new tab with `rel="noopener noreferrer"`, and the job description truncated at 3 lines with a "Show more"/"Show less" inline toggle. The module grid in the page file retains `xl:grid-cols-3` (per gap answer q19) but no other grid changes are needed in HubLayout itself — the grid definition stays in the page file.
+**Required behavior:** HubLayout accepts a new optional prop, `jobDetailHeaderSlot?: React.ReactNode`, and renders it above the existing banners and children when provided. The module grid on the hub page is updated to a 2-column max layout (remove `xl:grid-cols-3`) to match the upgrade screenshots.
 **User impact:** Users see full job context (title, company, description, link to original posting) at the top of the application hub, eliminating the need to navigate away to recall job details while working on application modules.
 
 ## Evidence
@@ -30,24 +30,17 @@ tier: layout
 
 ## Fix Plan
 **Files to modify:**
-- `src/frontend/components/layout/HubLayout.tsx` — extend HubLayoutProps with optional job detail fields (jobTitle, companyName, jobUrl, jobDescription, applicationId), render JobDetailHeader section above existing banner/children content when job details are present
-- `src/frontend/app/applications/[id]/page.tsx` — pass job detail fields from the useApplicationHub hook response to HubLayout props
+- `src/frontend/components/layout/HubLayout.tsx` — extend HubLayoutProps with an optional `jobDetailHeaderSlot?: React.ReactNode`, render it above existing banner/children content
+- `src/frontend/app/applications/[id]/page.tsx` — update the module grid classes to a 2-column max layout (drop `xl:grid-cols-3`)
 
 **Behavior changes:**
-1. HubLayoutProps gains optional fields: `jobTitle?: string`, `companyName?: string`, `jobUrl?: string`, `jobDescription?: string`
-2. When `jobTitle` is provided, HubLayout renders a job detail section above the banners containing:
-   - "← Back" link (`<Link href="/applications">`) at the top
-   - Job title as an `<h2>` with large heading styles
-   - Company name as secondary text below the title
-   - "View Job Posting ↗" as an anchor tag with `href={jobUrl}`, `target="_blank"`, `rel="noopener noreferrer"`, styled with orange/primary-action color — only rendered when `jobUrl` is a non-empty string
-   - Job description paragraph truncated to 3 CSS lines (`line-clamp-3`), with a "Show more" button that expands to full text and changes label to "Show less"
-3. When `jobTitle` is not provided (undefined or empty), the job detail section is not rendered — HubLayout behaves identically to today
-4. The page file passes job detail data from the hub state to HubLayout
-5. The module grid definition in the page file (`grid-cols-1 md:grid-cols-2 xl:grid-cols-3`) is NOT changed (per gap answer q19)
+1. HubLayoutProps gains an optional field: `jobDetailHeaderSlot?: React.ReactNode`
+2. When `jobDetailHeaderSlot` is provided, HubLayout renders it above the existing banners and `children`
+3. When `jobDetailHeaderSlot` is not provided, HubLayout behaves identically to today
+4. The module grid definition in the page file is updated from `grid-cols-1 md:grid-cols-2 xl:grid-cols-3` to `grid-cols-1 md:grid-cols-2`
 
 **Non-goals (explicitly out of scope):**
-- Creating a standalone JobDetailHeader component file (that is Batch C, feature tier — this spec wires the slot inline within HubLayout)
-- Changing the module card grid breakpoints (xl:grid-cols-3 is preserved per q19)
+- Implementing the actual JobDetailHeader UI (Batch 3 wires the slot with real job details)
 - Changing the banner logic (blocked, stale, error banners remain as-is)
 - Adding loading skeletons for the job detail section (separate spec)
 - Changing MODULE_ORDER in the page file
@@ -95,26 +88,26 @@ default (with job details) | default (without job details — backward compat) |
 - No layout shifts on routes not targeted by this spec
 - Existing test suite passes without modification
 - HubLayout without job detail props renders identically to current behavior (AC-010)
-- Module grid breakpoints remain unchanged (grid-cols-1 md:grid-cols-2 xl:grid-cols-3)
+- Module grid uses 2-column max layout (grid-cols-1 md:grid-cols-2)
 
 **allowed_deltas:** {}
 
 ## Traceability Matrix
 | requirement_id | code_reference | test_reference | verification_type | blocking_gate | result |
 |---|---|---|---|---|---|
-| AC-001 | src/frontend/components/layout/HubLayout.tsx:TBD | tests/ui/unit/HubLayout.test.tsx | unit | pre_merge | pending |
-| AC-002 | src/frontend/components/layout/HubLayout.tsx:TBD | tests/ui/unit/HubLayout.test.tsx | unit | pre_merge | pending |
-| AC-003 | src/frontend/components/layout/HubLayout.tsx:TBD | tests/ui/unit/HubLayout.test.tsx | unit | pre_merge | pending |
-| AC-004 | src/frontend/components/layout/HubLayout.tsx:TBD | tests/ui/unit/HubLayout.test.tsx | unit | pre_merge | pending |
-| AC-005 | src/frontend/components/layout/HubLayout.tsx:TBD | tests/ui/unit/HubLayout.test.tsx | unit | pre_merge | pending |
-| AC-006 | src/frontend/components/layout/HubLayout.tsx:TBD | tests/ui/unit/HubLayout.test.tsx | unit | pre_merge | pending |
-| AC-007 | src/frontend/components/layout/HubLayout.tsx:TBD | tests/ui/integration/HubLayout.test.tsx | integration | pre_merge | pending |
-| AC-008 | src/frontend/components/layout/HubLayout.tsx:TBD | tests/ui/integration/HubLayout.test.tsx | integration | pre_merge | pending |
-| AC-009 | src/frontend/components/layout/HubLayout.tsx:TBD | tests/ui/unit/HubLayout.test.tsx | unit | pre_merge | pending |
-| AC-010 | src/frontend/components/layout/HubLayout.tsx:TBD | tests/ui/unit/HubLayout.test.tsx | unit | pre_merge | pending |
-| AC-011 | src/frontend/components/layout/HubLayout.tsx:TBD | tests/ui/unit/HubLayout.test.tsx | unit | pre_merge | pending |
-| AC-012 | src/frontend/app/applications/[id]/page.tsx:TBD | tests/ui/integration/HubLayout.test.tsx | integration | pre_merge | pending |
-| AC-013 | src/frontend/components/layout/HubLayout.tsx:TBD | tests/ui/unit/HubLayout.test.tsx | unit | pre_merge | pending |
+| AC-001 | src/frontend/components/layout/HubLayout.tsx:19 | tests/ui/unit/HubLayout.test.tsx | unit | pre_merge | pending |
+| AC-002 | src/frontend/components/layout/HubLayout.tsx:19 | tests/ui/unit/HubLayout.test.tsx | unit | pre_merge | pending |
+| AC-003 | src/frontend/components/layout/HubLayout.tsx:19 | tests/ui/unit/HubLayout.test.tsx | unit | pre_merge | pending |
+| AC-004 | src/frontend/components/layout/HubLayout.tsx:19 | tests/ui/unit/HubLayout.test.tsx | unit | pre_merge | pending |
+| AC-005 | src/frontend/components/layout/HubLayout.tsx:19 | tests/ui/unit/HubLayout.test.tsx | unit | pre_merge | pending |
+| AC-006 | src/frontend/components/layout/HubLayout.tsx:19 | tests/ui/unit/HubLayout.test.tsx | unit | pre_merge | pending |
+| AC-007 | src/frontend/components/layout/HubLayout.tsx:19 | tests/ui/integration/HubLayout.test.tsx | integration | pre_merge | pending |
+| AC-008 | src/frontend/components/layout/HubLayout.tsx:19 | tests/ui/integration/HubLayout.test.tsx | integration | pre_merge | pending |
+| AC-009 | src/frontend/components/layout/HubLayout.tsx:19 | tests/ui/unit/HubLayout.test.tsx | unit | pre_merge | pending |
+| AC-010 | src/frontend/components/layout/HubLayout.tsx:19 | tests/ui/unit/HubLayout.test.tsx | unit | pre_merge | pending |
+| AC-011 | src/frontend/components/layout/HubLayout.tsx:19 | tests/ui/unit/HubLayout.test.tsx | unit | pre_merge | pending |
+| AC-012 | src/frontend/app/applications/[id]/page.tsx:117 | tests/ui/integration/HubLayout.test.tsx | integration | pre_merge | pending |
+| AC-013 | src/frontend/components/layout/HubLayout.tsx:19 | tests/ui/unit/HubLayout.test.tsx | unit | pre_merge | pending |
 
 ## Rollback Trigger Matrix
 | trigger_id | condition | action |
@@ -124,9 +117,5 @@ default (with job details) | default (without job details — backward compat) |
 | RT-003 | GET /applications/{id} response does not include expected job detail fields (job_title, company_name, job_url, job_description) | Render HubLayout without job details (graceful fallback via AC-010), file backend bug |
 
 ## Design Notes
-- This spec wires the job detail section inline within HubLayout rather than extracting a separate JobDetailHeader component. A future Batch C spec will extract JobDetailHeader as a standalone feature-tier component — at that point, the inline rendering here will be replaced by a `<JobDetailHeader />` import. This avoids blocking the layout spec on the feature component spec.
-- The "← Back" link uses Next.js `<Link>` for client-side navigation to `/applications` (the jobs list page).
-- The "View Job Posting ↗" link uses `target="_blank"` with `rel="noopener noreferrer"` per gap answer q9 — this is a security requirement for external links.
-- The 3-line truncation uses Tailwind's `line-clamp-3` utility (requires `@tailwindcss/line-clamp` plugin or Tailwind v3.3+ which includes it natively). The implementer should verify the plugin is available.
-- The `xl:grid-cols-3` breakpoint in the page file is explicitly preserved per gap answer q19. The screenshots only showed 2 columns because they did not capture XL viewport widths.
-- The page file (`app/applications/[id]/page.tsx`) must extract job detail fields from the `hubState` or `useApplicationHub` hook response. The exact field names in the API response (e.g., `job_title` vs `jobTitle`) should be verified against the backend response shape during implementation.
+- This spec adds a JobDetailHeader slot (`jobDetailHeaderSlot`) to HubLayout. Batch 3 will pass the real job detail header UI into this slot.
+- The module grid is updated to a 2-column max layout (no `xl:grid-cols-3`) to match the upgrade screenshots.

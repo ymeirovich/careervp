@@ -6,16 +6,19 @@ import { WarningBanner } from '../ui/WarningBanner';
 export interface HubLayoutProps {
   hubStatus: HubStatus;
   staleModules?: ModuleType[];
+  jobDetailHeaderSlot?: React.ReactNode;
   children: React.ReactNode;
 }
 
-export function HubLayout({ hubStatus, staleModules, children }: HubLayoutProps) {
+export function HubLayout({ hubStatus, staleModules, jobDetailHeaderSlot, children }: HubLayoutProps) {
   const showStaleBanner = hubStatus === 'STALE_DEPENDENCIES';
   const showErrorBanner = hubStatus === 'ERROR_RECOVERABLE';
   const showBlockedBanner = hubStatus === 'PROCESSING_BLOCKED';
 
   return (
     <div className="flex flex-col gap-4">
+      {jobDetailHeaderSlot}
+
       {showBlockedBanner && (
         <div
           data-testid="hub-blocked-banner"
