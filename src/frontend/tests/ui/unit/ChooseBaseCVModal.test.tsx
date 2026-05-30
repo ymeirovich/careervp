@@ -134,7 +134,10 @@ describe('FE-UI-011 — choice mode', () => {
     const onSelectCV = vi.fn();
     renderModal({ showChoices: true, onSelectCV });
 
-    fireEvent.click(await screen.findByRole('button', { name: /select generated cv/i }));
+    const generatedButton = screen.getByRole('button', { name: /select generated cv/i });
+    await waitFor(() => expect(generatedButton).toBeEnabled());
+
+    fireEvent.click(generatedButton);
     const generatedRow = await screen.findByTestId('choose-base-cv-row-generated');
 
     fireEvent.click(within(generatedRow).getByRole('button', { name: 'Select' }));
