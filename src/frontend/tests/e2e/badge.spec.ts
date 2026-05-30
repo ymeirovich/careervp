@@ -5,7 +5,7 @@
 // in a real browser via a known application route.
 import { test, expect } from '@playwright/test';
 
-test.describe('Application Detail — Badge soft variant', () => {
+test.describe('Application Detail — Badge soft variant @batch1', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: authenticate — call shared auth helper (e.g. loginAs(page, 'test-user'))

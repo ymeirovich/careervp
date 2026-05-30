@@ -23,7 +23,7 @@ async function authenticateAndNavigate(
 // ===========================================================================
 // Billing Page — /billing — PlanCard
 // ===========================================================================
-test.describe('Billing Page — PlanCard', () => {
+test.describe('Billing Page — PlanCard @batch6', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: authenticate (set session cookie / localStorage token)

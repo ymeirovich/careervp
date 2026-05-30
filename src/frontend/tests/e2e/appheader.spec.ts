@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
 // Route: all authenticated routes (AppHeader appears via AppShell on every auth route)
 // Primary test route: /dashboard (representative authenticated page)
 
-test.describe('AppHeader — credits label and account dropdown', () => {
+test.describe('AppHeader — credits label and account dropdown @batch2', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: authenticate — e.g. set auth cookie / call login API / use storageState

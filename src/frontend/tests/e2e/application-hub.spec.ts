@@ -6,7 +6,7 @@
 
 import { test, expect } from '@playwright/test';
 
-test.describe('Job Application Hub — HubLayout job detail header', () => {
+test.describe('Job Application Hub — HubLayout job detail header @batch2', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: authenticate — set auth cookie / use Playwright storageState

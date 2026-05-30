@@ -20,7 +20,7 @@ async function authenticateAndNavigate(
 // ===========================================================================
 // Cover Letters Page — /cover-letters
 // ===========================================================================
-test.describe('Cover Letters Page — CoverLettersPage', () => {
+test.describe('Cover Letters Page — CoverLettersPage @batch4', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: authenticate (set session cookie / localStorage token)

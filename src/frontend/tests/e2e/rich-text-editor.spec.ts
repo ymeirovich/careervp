@@ -11,7 +11,7 @@ import { test, expect } from '@playwright/test';
 // its real page context and capture a visual regression baseline.
 // ---------------------------------------------------------------------------
 
-test.describe('Gap Analysis — RichTextEditor', () => {
+test.describe('Gap Analysis — RichTextEditor @batch5', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: authenticate user (set session cookie or call login endpoint)

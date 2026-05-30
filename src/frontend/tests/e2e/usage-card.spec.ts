@@ -19,7 +19,7 @@ async function authenticateAndNavigate(
 // ===========================================================================
 // Billing Page — /billing — UsageCard
 // ===========================================================================
-test.describe('Billing Page — UsageCard', () => {
+test.describe('Billing Page — UsageCard @batch6', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: authenticate and navigate to /billing

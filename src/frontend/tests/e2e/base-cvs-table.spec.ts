@@ -6,7 +6,7 @@
 
 import { test, expect } from '@playwright/test';
 
-test.describe('CV Center — BaseCVsTable', () => {
+test.describe('CV Center — BaseCVsTable @batch4', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: authenticate — call shared auth helper (e.g. loginAs(page, 'test-user'))

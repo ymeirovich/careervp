@@ -18,7 +18,7 @@ async function authenticateAndNavigate(
 // ===========================================================================
 // Billing Page — /billing — BillingContent
 // ===========================================================================
-test.describe('Billing Page — BillingContent', () => {
+test.describe('Billing Page — BillingContent @batch6', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: authenticate (set session cookie / localStorage token)

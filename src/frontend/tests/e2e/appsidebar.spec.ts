@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
 // Route slug used for snapshot filenames: appsidebar
 // All authenticated routes render AppSidebar via AppShell — use /dashboard as canonical host
 
-test.describe('Dashboard — AppSidebar', () => {
+test.describe('Dashboard — AppSidebar @batch2', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: authenticate (set session cookie or use storageState with a saved auth fixture)

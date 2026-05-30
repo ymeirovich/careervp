@@ -5,7 +5,7 @@
 // verify the boundary is present in the component tree on real routes.
 import { test, expect } from '@playwright/test';
 
-test.describe('ErrorBoundary — shared crash boundary (all routes)', () => {
+test.describe('ErrorBoundary — shared crash boundary (all routes) @batch1', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: authenticate — call shared auth helper (e.g. loginAs(page, 'test-user'))

@@ -14,7 +14,7 @@ import { test, expect } from '@playwright/test';
 // const TEST_APP_ID = process.env.E2E_TEST_APP_ID ?? 'test-app-id';
 // const GAP_ANALYSIS_URL = `/applications/${TEST_APP_ID}/gap-analysis`;
 
-test.describe('Gap Analysis — GapQuestionCard', () => {
+test.describe('Gap Analysis — GapQuestionCard @batch5', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: authenticate — set auth cookie or use Playwright storageState

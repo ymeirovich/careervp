@@ -7,7 +7,7 @@ import { test, expect } from '@playwright/test';
 // ---------------------------------------------------------------------------
 // Suite: Spinner inline loading — dashboard route (representative shared route)
 // ---------------------------------------------------------------------------
-test.describe('Dashboard — Spinner inline button loading (FE-UI-007)', () => {
+test.describe('Dashboard — Spinner inline button loading (FE-UI-007) @batch1', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: authenticate user (set auth cookie / local-storage token)
@@ -62,7 +62,7 @@ test.describe('Dashboard — Spinner inline button loading (FE-UI-007)', () => {
 // ---------------------------------------------------------------------------
 // Suite: Spinner absent on section loading — applications route
 // ---------------------------------------------------------------------------
-test.describe('Applications — Spinner contract on section loading (FE-UI-007)', () => {
+test.describe('Applications — Spinner contract on section loading (FE-UI-007) @batch1', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: authenticate user

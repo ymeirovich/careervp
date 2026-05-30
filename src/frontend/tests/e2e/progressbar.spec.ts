@@ -5,7 +5,7 @@
 // in a real browser via a known application route once ModuleCard is updated (parent spec).
 import { test, expect } from '@playwright/test';
 
-test.describe('Application Detail — ProgressBar label', () => {
+test.describe('Application Detail — ProgressBar label @batch1', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: authenticate — call shared auth helper (e.g. loginAs(page, 'test-user'))

@@ -5,7 +5,7 @@
 // loading skeleton in a real browser on the /dashboard route.
 import { test, expect } from '@playwright/test';
 
-test.describe('Dashboard — StatsRow', () => {
+test.describe('Dashboard — StatsRow @batch3', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: authenticate — call shared auth helper (e.g. loginAs(page, 'test-user'))

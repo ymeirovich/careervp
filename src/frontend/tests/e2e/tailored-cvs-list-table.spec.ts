@@ -23,7 +23,7 @@ async function authenticateAndNavigate(
 // ===========================================================================
 // Tailored CVs List Table — /tailored-cvs
 // ===========================================================================
-test.describe('Tailored CVs Page — TailoredCVsListTable', () => {
+test.describe('Tailored CVs Page — TailoredCVsListTable @batch4', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: authenticate (set session cookie / localStorage token)

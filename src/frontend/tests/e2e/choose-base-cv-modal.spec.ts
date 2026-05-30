@@ -22,7 +22,7 @@ async function authenticateAndNavigate(
 // Choice Mode — /applications/new
 // Triggered when showChoices=true (NewApplicationPage opens modal)
 // ===========================================================================
-test.describe('New Application Page — ChooseBaseCVModal (choice mode)', () => {
+test.describe('New Application Page — ChooseBaseCVModal (choice mode) @batch3', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: authenticate (set session cookie or localStorage token)
@@ -121,7 +121,7 @@ test.describe('New Application Page — ChooseBaseCVModal (choice mode)', () => 
 // Upload-Only Mode — /cv-center
 // Triggered when showChoices=false (BaseCVsTable "+ Upload New CV" button)
 // ===========================================================================
-test.describe('CV Center — ChooseBaseCVModal (upload-only mode)', () => {
+test.describe('CV Center — ChooseBaseCVModal (upload-only mode) @batch3', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: authenticate

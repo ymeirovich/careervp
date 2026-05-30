@@ -20,7 +20,7 @@ async function authenticateAndNavigate(
 // ===========================================================================
 // Base CVs Page — /cv-center
 // ===========================================================================
-test.describe('Base CVs Page — CVCenterContent', () => {
+test.describe('Base CVs Page — CVCenterContent @batch4', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: authenticate (set session cookie / localStorage token)

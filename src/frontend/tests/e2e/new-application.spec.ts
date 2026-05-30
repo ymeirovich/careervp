@@ -17,7 +17,7 @@ async function authenticateAndNavigate(page: Parameters<Parameters<typeof test>[
 // ===========================================================================
 // New Application Page — /applications/new
 // ===========================================================================
-test.describe('New Application Page — NewApplicationPage', () => {
+test.describe('New Application Page — NewApplicationPage @batch3', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: authenticate (set session cookie / localStorage token)

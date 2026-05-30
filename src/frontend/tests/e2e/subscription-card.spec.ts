@@ -18,7 +18,7 @@ async function authenticateAndNavigate(
 // ===========================================================================
 // Billing Page — /billing — SubscriptionCard
 // ===========================================================================
-test.describe('Billing Page — SubscriptionCard', () => {
+test.describe('Billing Page — SubscriptionCard @batch6', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: authenticate and navigate to /billing

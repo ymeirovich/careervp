@@ -72,7 +72,7 @@ async function interceptBillingPortal(
 // =============================================================================
 // Billing Page — /billing — BillingInfoCard
 // =============================================================================
-test.describe('Billing Page — BillingInfoCard', () => {
+test.describe('Billing Page — BillingInfoCard @batch6', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: authenticate (set session cookie / localStorage token)

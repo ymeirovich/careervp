@@ -36,10 +36,10 @@ const FIXTURE_COVER_LETTERS = [
 ];
 
 // ===========================================================================
-// Cover Letters page — CoverLettersListTable
+// Cover Letters page — CoverLettersListTable @batch4
 // ===========================================================================
 
-test.describe('Cover Letters page — CoverLettersListTable', () => {
+test.describe('Cover Letters page — CoverLettersListTable @batch4', () => {
 
   test.beforeEach(async ({ page }) => {
     // TODO: set auth cookie or localStorage token for a valid test user session
