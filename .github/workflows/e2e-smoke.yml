@@ -10,6 +10,10 @@ name: UI Upgrade — E2E Smoke Tests
 #     --field preview_url="https://ui-upgrade.<app-id>.amplifyapp.com"
 #
 # Or from GitHub UI: Actions → UI Upgrade — E2E Smoke Tests → Run workflow
+#
+# NOTE: @playwright/test is installed under src/frontend/node_modules/.
+# All playwright commands must run from src/frontend/ so the package resolves.
+# playwright.config.ts lives in src/frontend/ for the same reason.
 
 on:
   workflow_dispatch:
@@ -44,9 +48,9 @@ jobs:
       - name: Install frontend dependencies
         run: cd src/frontend && npm ci
 
-      # Install only Chromium to keep the job fast
+      # @playwright/test is in src/frontend/node_modules — install browsers from there
       - name: Install Playwright + Chromium
-        run: npx playwright install --with-deps chromium
+        run: cd src/frontend && npx playwright install --with-deps chromium
 
       - name: Resolve target URL
         id: resolve-url
@@ -61,8 +65,11 @@ jobs:
           echo "base_url=$FINAL" >> "$GITHUB_OUTPUT"
           echo "Target URL: $FINAL"
 
+      # Run from src/frontend/ so @playwright/test resolves correctly.
+      # playwright.config.ts is in src/frontend/ and uses absolute paths for testDir.
       - name: Run Playwright e2e tests
         run: |
+          cd src/frontend
           BATCH="${{ github.event.inputs.batch }}"
 
           if [ "$BATCH" = "all" ]; then
@@ -81,7 +88,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: "playwright-report-batch-${{ github.event.inputs.batch }}-${{ github.run_id }}"
-          path: playwright-report/
+          # Report is written relative to CWD (src/frontend/)
+          path: src/frontend/playwright-report/
           retention-days: 14
 
       - name: Upload failure screenshots
@@ -89,5 +97,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: "playwright-failures-batch-${{ github.event.inputs.batch }}-${{ github.run_id }}"
-          path: test-results/
+          path: src/frontend/test-results/
           retention-days: 7
