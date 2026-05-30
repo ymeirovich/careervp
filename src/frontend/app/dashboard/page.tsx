@@ -1,20 +1,18 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useRouter } from 'next/navigation';
 import { useJobs } from '../../hooks/useJobs';
 import { useDashboard } from '../../contexts/DashboardContext';
 import { StatsRow } from '../../components/dashboard/StatsRow';
 import { JobsTable } from '../../components/dashboard/JobsTable';
 import { UsageGate } from '../../components/UsageGate/UsageGate';
-import { NewApplicationModal } from '../../components/NewApplicationModal/NewApplicationModal';
 import { Button } from '../../components/ui/Button';
 
 export default function DashboardPage() {
   const router = useRouter();
   const { jobs, isLoading, error, refetch } = useJobs();
   const { usage, subscription, hasActiveAccess, isLoading: isDashboardLoading } = useDashboard();
-  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const planLabel =
     subscription?.subscription?.plan_type === 'monthly'
@@ -55,7 +53,7 @@ export default function DashboardPage() {
           <Button
             variant="primary"
             size="md"
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => router.push('/applications/new')}
             data-testid="new-application-btn"
           >
             + New Application
@@ -71,14 +69,9 @@ export default function DashboardPage() {
           error={error}
           onRetry={refetch}
           onViewJob={(id) => router.push(`/applications/${id}`)}
-          onNewApplication={() => setIsModalOpen(true)}
+          onNewApplication={() => router.push('/applications/new')}
         />
       </div>
-
-      <NewApplicationModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-      />
     </div>
   );
 }

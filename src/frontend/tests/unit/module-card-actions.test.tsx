@@ -114,11 +114,6 @@ async function getDashboardPage() {
   return mod.default;
 }
 
-async function getModal() {
-  const mod = await import('../../components/NewApplicationModal/NewApplicationModal');
-  return mod.NewApplicationModal;
-}
-
 // ── Tests ───────────────────────────────────────────────────────────────────
 describe('ApplicationHubPage — action handlers', () => {
   beforeEach(() => {
@@ -221,62 +216,13 @@ describe('DashboardPage — UsageGate', () => {
     expect(screen.getByTestId('new-application-btn')).toBeDefined();
     expect(screen.queryByTestId('usage-gate-no-subscription')).toBeNull();
   });
-});
 
-describe('NewApplicationModal — form submission', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+  it('New Application button navigates to the full-page form', async () => {
+    const DashPage = await getDashboardPage();
+    renderWithProviders(<DashPage />, makeDashboardCtx({ hasActiveAccess: true }));
 
-  it('submits correct fields and navigates to hub', async () => {
-    const mockCreateJob = vi.fn().mockResolvedValue({
-      job_id: 'new-job-123',
-      id: 'new-job-123',
-      title: 'Engineer',
-      company_name: 'Acme',
-      status: 'draft',
-      created_at: new Date().toISOString(),
-    });
-    mockJobs.mockReturnValue({
-      jobs: [],
-      isLoading: false,
-      createJob: mockCreateJob,
-      isCreating: false,
-      error: null,
-    });
+    fireEvent.click(screen.getByTestId('new-application-btn'));
 
-    const Modal = await getModal();
-    const onClose = vi.fn();
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-
-    render(
-      <QueryClientProvider client={qc}>
-        <Modal isOpen={true} onClose={onClose} />
-      </QueryClientProvider>,
-    );
-
-    fireEvent.change(screen.getByTestId('new-app-title-input'), {
-      target: { value: 'Software Engineer' },
-    });
-    fireEvent.change(screen.getByTestId('new-app-company-input'), {
-      target: { value: 'Acme Corp' },
-    });
-    fireEvent.change(screen.getByTestId('new-app-description-input'), {
-      target: { value: 'Great job description here' },
-    });
-
-    await act(async () => {
-      fireEvent.submit(screen.getByRole('dialog').querySelector('form')!);
-    });
-
-    await waitFor(() => {
-      expect(mockCreateJob).toHaveBeenCalledWith({
-        title: 'Software Engineer',
-        company_name: 'Acme Corp',
-        description: 'Great job description here',
-        url: undefined,
-      });
-      expect(mockPush).toHaveBeenCalledWith('/applications/new-job-123');
-    });
+    expect(mockPush).toHaveBeenCalledWith('/applications/new');
   });
 });

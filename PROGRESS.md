@@ -21,6 +21,7 @@
 - [x] VPR Lambda Handler (`handlers/vpr_handler.py`)
 - [x] VPR Unit & Integration Tests (`tests/unit/test_vpr_generator.py`, `tests/unit/test_vpr_handler.py`, `tests/unit/test_dynamo_dal_handler.py`)
 - [x] CV Parser helper unit tests (`tests/unit/test_cv_parser.py`)
+- [x] FE-UI-010 New Application full-page form replacement (`src/frontend/app/applications/new/page.tsx`)
 
 ## Upcoming Phases (From Context Manifest)
 
@@ -50,10 +51,15 @@
 | `src/backend/tests/unit/test_cv_parser.py`           | Unit tests for clean_text/detect_language/LLM parsing |
 | `src/frontend/canvas-app/App.jsx`                    | Change Base CV modal upload/choice behavior   |
 | `src/frontend/tests/ui/unit/ChangeBaseCVModal.test.tsx` | Modal spec verification                      |
-| `src/frontend/tests/ui/unit/NewApplicationForm.test.tsx` | Base CV modal consumer verification         |
 | `src/frontend/components/ui/ProgressBar.tsx`         | Added optional visible label row and preserved rounded ends |
 | `tests/ui/unit/ProgressBar.test.tsx`                 | Unit coverage for label row, clamping, ARIA, and backward compatibility |
 | `tests/ui/integration/ProgressBar.test.tsx`          | Integration coverage for provider-wrapped rendering |
 | `tests/regression/ProgressBar.regression.test.tsx`   | Regression coverage for no-label equivalence and existing behavior |
 | `src/frontend/components/ChooseBaseCVModal/ChooseBaseCVModal.tsx` | Shared base CV picker with choice and upload-only modes |
 | `src/frontend/tests/ui/unit/ChooseBaseCVModal.test.tsx` | FE-UI-011 unit coverage for selection, upload, accessibility, Hebrew copy, and empty state |
+| `src/frontend/app/applications/new/page.tsx`         | FE-UI-010 full-page New Application form with Base CV picker |
+| `src/frontend/app/dashboard/page.tsx`                | Routes New Application CTA to `/applications/new` |
+| `src/frontend/app/applications/page.tsx`             | Routes applications list CTA to `/applications/new` |
+| `src/frontend/tests/ui/unit/NewApplicationPage.test.tsx` | FE-UI-010 unit coverage for navigation, form states, CV picker, POST `/jobs`, errors, and Hebrew copy |
+| `frontend/app/applications/new/page.tsx`             | Legacy frontend route parity for `/applications/new` |
+| `frontend/app/dashboard/page.tsx`                    | Legacy dashboard CTA routes to `/applications/new` |

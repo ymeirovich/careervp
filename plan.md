@@ -115,6 +115,17 @@ CREATED → COMPANY_RESEARCH → GAP_ANALYSIS → GENERATING_ARTIFACTS → INTER
 
 ## Current Project Status (February 2026)
 
+### Frontend Upgrade Specs
+
+**Status:** 🟢 IN PROGRESS - FE-UI dashboard/application workflow upgrades landing behind tests
+
+**Completed:**
+- ✅ FE-UI-011 ChooseBaseCVModal shared picker
+- ✅ FE-UI-010 `/applications/new` full-page New Application form
+- ✅ Dashboard and applications-list New Application CTAs route to `/applications/new`
+- ✅ Legacy top-level frontend dashboard and `/applications/new` route kept in parity with the modal removal
+- ✅ FE-UI-010 Vitest coverage for navigation, form validation, Base CV selection, POST `/jobs`, loading/error states, and Hebrew RTL copy
+
 ### VPR Async Architecture - DEPLOYED & TESTING
 
 **Status:** 🟢 DEPLOYED - E2E test infrastructure operational
@@ -194,7 +205,7 @@ Result: VPR would have been valid but blocked by FVS
 | **Integration Tests** | Enhanced | Changeset handling + company-research test |
 | **CICD Pipeline** | Enhanced | GitHub Actions + branch testing workflows |
 | **VPR Async Architecture** | ✅ Documented | Event-driven SQS/SNS pattern |
-| **Frontend (SPA)** | Not Started | React SPA at app.careervp.com |
+| **Frontend (SPA)** | In Progress | Next.js frontend with dashboard/application workflow upgrades |
 
 ---
 

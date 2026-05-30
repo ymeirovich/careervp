@@ -106,6 +106,10 @@ export const api = {
     apiFetchOrNull<CompanyResearchResult>(`/company-research/${jobId}`),
 
   // CV
+  getCVs: async (): Promise<UserCV[]> => {
+    const data = await apiFetchOrNull<{ cvs: UserCV[] }>("/users/me/cv");
+    return data?.cvs ?? [];
+  },
   getCV: async (): Promise<UserCV | null> => {
     const data = await apiFetchOrNull<{ cvs: UserCV[] }>("/users/me/cv");
     return data?.cvs?.[0] ?? null;
