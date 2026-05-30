@@ -3002,6 +3002,7 @@ Implementation order follows the application workflow:
 - FE-UI-002 ProgressBar label row and rounded-end regression coverage
 - FE-UI-011 ChooseBaseCVModal shared CV picker with choice and upload-only modes
 - FE-UI-020 RichTextEditor TipTap rich text input with Markdown storage and toolbar coverage
+- FE-UI-021 BillingContent restructure with stacked cards, anchored Plans section, and CTA coverage
 
 ### Priority Tasks
 

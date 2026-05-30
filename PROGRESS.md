@@ -26,6 +26,7 @@
 - [x] FE-UI-017 BaseCVsTable multi-CV list table (`src/frontend/components/BaseCVsTable/BaseCVsTable.tsx`)
 - [x] FE-UI-016 CVCenterContent table listing replacement (`src/frontend/app/cv-center/page.tsx`)
 - [x] FE-UI-020 RichTextEditor TipTap Markdown editor (`src/frontend/components/RichTextEditor/RichTextEditor.tsx`)
+- [x] FE-UI-021 BillingContent page restructure (`src/frontend/app/billing/page.tsx`)
 
 ## Upcoming Phases (From Context Manifest)
 
@@ -78,3 +79,5 @@
 | `src/frontend/components/RichTextEditor/RichTextEditor.tsx` | FE-UI-020 TipTap rich text editor with toolbar, controlled Markdown output, read-only state, ARIA attributes, paste sanitization, and focus styling |
 | `src/frontend/components/RichTextEditor/markdownSerializer.ts` | FE-UI-020 Markdown-to-HTML and HTML-to-Markdown serializer with underline and sanitized paste support |
 | `src/frontend/tests/ui/unit/RichTextEditor.test.tsx` | FE-UI-020 unit coverage for initialization, toolbar actions, Markdown output, controlled value updates, read-only mode, paste sanitization, and accessibility |
+| `src/frontend/app/billing/page.tsx`                  | FE-UI-021 Billing page with stacked subscription, usage, billing-info cards and anchored Plans section |
+| `src/frontend/tests/ui/unit/BillingContent.test.tsx` | FE-UI-021 unit coverage for page assembly, loading state, CTA API wiring, anchor scroll, and Hebrew RTL copy |
