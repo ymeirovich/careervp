@@ -116,7 +116,7 @@ def extract_text_from_pdf(pdf_content: bytes) -> str:
 
 
 def extract_text_from_docx(docx_content: bytes) -> str:
-    """Extract text from DOCX using python-docx."""
+    """Extract text from DOCX using python-docx, including table cells."""
     try:
         from io import BytesIO
 
@@ -125,7 +125,14 @@ def extract_text_from_docx(docx_content: bytes) -> str:
         doc = Document(BytesIO(docx_content))
         text_parts = []
         for paragraph in doc.paragraphs:
-            text_parts.append(paragraph.text)
+            if paragraph.text.strip():
+                text_parts.append(paragraph.text)
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        if paragraph.text.strip():
+                            text_parts.append(paragraph.text)
         return '\n'.join(text_parts)
     except Exception as e:
         logger.error('DOCX extraction failed', error=str(e))
