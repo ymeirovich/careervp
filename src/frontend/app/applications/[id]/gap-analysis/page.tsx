@@ -1,275 +1,247 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { api } from '../../../../api/methods';
 import { ErrorBoundary } from '../../../../components/ErrorBoundary/ErrorBoundary';
-import { Spinner } from '../../../../components/ui/Spinner';
-import type { GapQuestion, GapResponse, UserCV } from '../../../../lib/types';
+import { GapQuestionCard } from '../../../../components/GapQuestionCard/GapQuestionCard';
+import { ProgressBar } from '../../../../components/ui/ProgressBar';
+import type { GapQuestion } from '../../../../lib/types';
 
-type FormMode = 'view' | 'edit' | 'saving';
+type Locale = 'en' | 'he';
+
+type Copy = {
+  title: string;
+  subtitle: string;
+  back: string;
+  progressLabel: (answered: number, total: number) => string;
+  emptyStateMsg: string;
+  backToHub: string;
+  errorBanner: string;
+  retry: string;
+  guardMsg: (questionNumber: number) => string;
+};
+
+const TEXT: Record<Locale, Copy> = {
+  en: {
+    title: 'Gap Analysis Questions',
+    subtitle: 'Answer some questions to fill in gaps between your CV and this role',
+    back: '← Back',
+    progressLabel: (answered, total) => `${answered} out of ${total} answered`,
+    emptyStateMsg: 'There was an error, contact site administrator.',
+    backToHub: 'Back to Hub',
+    errorBanner: 'Failed to load questions.',
+    retry: 'Retry',
+    guardMsg: (n) => `Save or discard changes to question ${n}?`,
+  },
+  he: {
+    title: 'שאלות ניתוח פערים',
+    subtitle: 'ענה על כמה שאלות כדי למלא את הפערים בין קורות החיים שלך לתפקיד זה',
+    back: '← חזרה',
+    progressLabel: (answered, total) => `${answered} מתוך ${total} נענו`,
+    emptyStateMsg: 'אירעה שגיאה, צור קשר עם מנהל האתר.',
+    backToHub: 'חזרה למרכז',
+    errorBanner: 'טעינת השאלות נכשלה.',
+    retry: 'נסה שוב',
+    guardMsg: (n) => `שמור או בטל שינויים לשאלה ${n}?`,
+  },
+};
+
+function detectLocale(): Locale {
+  if (typeof window !== 'undefined') {
+    const locale = new URLSearchParams(window.location.search).get('locale');
+    if (locale?.toLowerCase().startsWith('he')) return 'he';
+  }
+  if (typeof document !== 'undefined' && document.documentElement.lang.toLowerCase().startsWith('he')) {
+    return 'he';
+  }
+  return 'en';
+}
 
 type LocalResponse = {
-  answer: string;
+  response: string;
   destination: 'CV_IMPACT' | 'INTERVIEW_MVP_ONLY' | '';
 };
 
-function impactBadgeClass(v?: string): string {
-  if (v === 'HIGH') return 'bg-state-active/10 text-state-active';
-  if (v === 'MEDIUM') return 'bg-state-warning/10 text-state-warning';
-  return 'bg-surface-subtle text-text-muted';
+function SkeletonCard() {
+  return (
+    <div className="rounded-xl border border-border-default shadow-sm p-4 bg-card animate-pulse">
+      <div className="flex items-start gap-2">
+        <div className="flex-1 space-y-2">
+          <div className="h-4 bg-surface-subtle rounded w-3/4" />
+          <div className="h-3 bg-surface-subtle rounded w-1/2" />
+        </div>
+        <div className="h-8 w-16 bg-surface-subtle rounded-md shrink-0" />
+      </div>
+    </div>
+  );
 }
 
 function GapAnalysisContent({ jobId }: { jobId: string }) {
-  const router = useRouter();
+  const locale = detectLocale();
+  const copy = TEXT[locale];
 
   const [questions, setQuestions] = useState<GapQuestion[]>([]);
   const [responses, setResponses] = useState<Record<string, LocalResponse>>({});
-  const [savedResponses, setSavedResponses] = useState<Record<string, LocalResponse>>({});
-  const [mode, setMode] = useState<FormMode>('view');
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [savedToast, setSavedToast] = useState(false);
-  const [cv, setCv] = useState<UserCV | null>(null);
+  const [fetchError, setFetchError] = useState(false);
 
-  useEffect(() => {
-    const init = async () => {
-      setLoading(true);
-      const [questionsResult, hubResult, cvResult] = await Promise.allSettled([
-        api.getGapQuestions(jobId),
-        api.getApplication(jobId),
-        api.getCV(),
-      ]);
+  const fetchQuestions = useCallback(async () => {
+    setLoading(true);
+    setFetchError(false);
 
-      const qs = questionsResult.status === 'fulfilled' ? questionsResult.value : [];
-      const hub = hubResult.status === 'fulfilled' ? hubResult.value : null;
-      const cvData = cvResult.status === 'fulfilled' ? cvResult.value : null;
+    const [questionsResult, hubResult] = await Promise.allSettled([
+      api.getGapQuestions(jobId),
+      api.getApplication(jobId),
+    ]);
 
-      setCv(cvData);
-      setQuestions(qs);
-
-      const existingMap: Record<string, LocalResponse> = {};
-      for (const r of hub?.gap_analysis.responses ?? []) {
-        const entry = r as Record<string, unknown>;
-        existingMap[r.question_id] = {
-          answer: String(entry.response ?? entry.answer ?? ''),
-          destination: (entry.destination as 'CV_IMPACT' | 'INTERVIEW_MVP_ONLY') ?? '',
-        };
-      }
-      setResponses(existingMap);
-      setSavedResponses(existingMap);
-
-      if (qs.length > 0 && Object.keys(existingMap).length === 0) {
-        setMode('edit');
-      }
-
+    if (questionsResult.status === 'rejected') {
+      setFetchError(true);
       setLoading(false);
-    };
-    void init();
+      return;
+    }
+
+    const qs = questionsResult.value;
+    const hub = hubResult.status === 'fulfilled' ? hubResult.value : null;
+
+    setQuestions(qs);
+
+    const map: Record<string, LocalResponse> = {};
+    for (const r of hub?.gap_analysis.responses ?? []) {
+      const entry = r as Record<string, unknown>;
+      map[r.question_id] = {
+        response: String(entry.response ?? entry.answer ?? ''),
+        destination: (entry.destination as 'CV_IMPACT' | 'INTERVIEW_MVP_ONLY') ?? '',
+      };
+    }
+    setResponses(map);
+    setLoading(false);
   }, [jobId]);
 
-  const handleGenerate = async () => {
-    if (!cv?.cv_id) return;
-    setGenerating(true);
-    setError(null);
-    try {
-      const result = await api.generateGapQuestions({ job_id: jobId, cv_id: cv.cv_id });
-      setQuestions(result.questions);
-      setResponses({});
-      setSavedResponses({});
-      setMode('edit');
-    } catch (err) {
-      setError('Failed to generate questions. Please try again.');
-      console.error(err);
-    } finally {
-      setGenerating(false);
+  useEffect(() => {
+    void fetchQuestions();
+  }, [fetchQuestions]);
+
+  const handleRequestEdit = (questionId: string) => {
+    if (editingQuestionId !== null && editingQuestionId !== questionId) {
+      const idx = questions.findIndex((q) => q.question_id === editingQuestionId);
+      if (!window.confirm(copy.guardMsg(idx + 1))) return;
     }
+    setEditingQuestionId(questionId);
   };
 
-  const handleSave = async () => {
-    setMode('saving');
-    setError(null);
-    try {
-      const payload: GapResponse[] = questions.flatMap((q) => {
-        const r = responses[q.question_id];
-        if (!r?.answer.trim()) return [];
-        return [{ question_id: q.question_id, response: r.answer.trim() }];
-      });
-      await api.saveGapResponses(jobId, payload);
-      setSavedResponses({ ...responses });
-      setMode('view');
-      setSavedToast(true);
-      setTimeout(() => setSavedToast(false), 3000);
-    } catch (err) {
-      setError('Failed to save. Please try again.');
-      console.error(err);
-      setMode('edit');
-    }
-  };
-
-  const setResponse = (qid: string, patch: Partial<LocalResponse>) => {
+  const handleSave = async (data: {
+    questionId: string;
+    response: string;
+    destination: 'CV_IMPACT' | 'INTERVIEW_MVP_ONLY';
+  }) => {
+    await api.saveGapResponses(jobId, [{ question_id: data.questionId, response: data.response }]);
     setResponses((prev) => ({
       ...prev,
-      [qid]: { ...{ answer: '', destination: '' }, ...prev[qid], ...patch },
+      [data.questionId]: { response: data.response, destination: data.destination },
     }));
+    setEditingQuestionId(null);
   };
 
-  const answeredCount = questions.filter((q) => responses[q.question_id]?.answer.trim()).length;
-  const isEdit = mode === 'edit' || mode === 'saving';
-  const isSaving = mode === 'saving';
+  const handleCancel = () => {
+    setEditingQuestionId(null);
+  };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-12">
-        <Spinner size="lg" aria-label="Loading Gap Analysis…" />
-      </div>
-    );
-  }
+  const answeredCount = questions.filter((q) => responses[q.question_id]?.response?.trim()).length;
+  const progressValue = questions.length > 0 ? (answeredCount / questions.length) * 100 : 0;
+  const progressLabel = copy.progressLabel(answeredCount, questions.length);
 
   return (
     <div className="flex flex-col gap-6" data-testid="gap-analysis-page">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-xl font-bold text-text-primary">Gap Analysis</h1>
-          <p className="text-sm text-text-muted">
-            Answer questions to identify gaps between your CV and this role
-          </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {questions.length === 0 && (
-            <button
-              onClick={() => void handleGenerate()}
-              disabled={generating || !cv?.cv_id}
-              className="rounded-md bg-primary-action px-3 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
-              data-testid="generate-gap-questions"
-            >
-              {generating ? 'Generating…' : 'Generate Questions'}
-            </button>
-          )}
-          <button
-            onClick={() => router.push(`/applications/${jobId}`)}
-            className="rounded-md border border-border-default px-3 py-2 text-sm text-text-primary hover:bg-surface-subtle"
-          >
-            ← Back to Hub
-          </button>
-        </div>
+      <div className="flex flex-col gap-1">
+        <Link
+          href={`/applications/${jobId}`}
+          className="text-sm text-text-secondary hover:text-text-primary w-fit"
+          data-testid="back-link"
+        >
+          {copy.back}
+        </Link>
+        <h1 className="text-2xl font-bold text-text-primary" data-testid="page-title">
+          {copy.title}
+        </h1>
+        <p className="text-sm text-text-muted" data-testid="page-subtitle">
+          {copy.subtitle}
+        </p>
       </div>
 
-      {savedToast && (
-        <div className="rounded-md bg-state-active/10 border border-state-active px-4 py-3 text-sm font-medium text-state-active">
-          Saved successfully
+      {loading && (
+        <div className="flex flex-col gap-4" data-testid="skeleton-cards">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
         </div>
       )}
 
-      {error && (
-        <div className="rounded-md bg-state-error/10 border border-state-error px-4 py-3 text-sm text-state-error">
-          {error}
+      {!loading && fetchError && (
+        <div
+          className="rounded-md bg-state-error/10 border border-state-error px-4 py-3 flex items-center justify-between gap-4"
+          role="alert"
+          data-testid="error-banner"
+        >
+          <span className="text-sm text-state-error">{copy.errorBanner}</span>
+          <button
+            onClick={() => void fetchQuestions()}
+            className="text-sm font-medium text-state-error underline hover:no-underline shrink-0"
+            data-testid="retry-button"
+          >
+            {copy.retry}
+          </button>
         </div>
       )}
 
-      {questions.length === 0 && !generating && (
-        <div className="rounded-md border border-border-default bg-card px-6 py-12 text-center text-sm text-text-muted">
-          No questions generated yet. Click &ldquo;Generate Questions&rdquo; to start.
+      {!loading && !fetchError && questions.length === 0 && (
+        <div
+          className="rounded-xl border border-border-default bg-card px-6 py-12 text-center"
+          data-testid="empty-state"
+        >
+          <p className="text-sm text-text-muted mb-3" data-testid="empty-state-message">
+            {copy.emptyStateMsg}
+          </p>
+          <Link
+            href={`/applications/${jobId}`}
+            className="text-sm font-medium text-primary-action hover:underline"
+            data-testid="empty-back-link"
+          >
+            {copy.backToHub}
+          </Link>
         </div>
       )}
 
-      {questions.length > 0 && (
-        <div className="flex flex-col rounded-md border border-border-default bg-card overflow-hidden">
-          <div className="sticky top-0 z-10 flex items-center justify-between bg-card border-b border-border-default px-6 py-3">
-            <span className="text-sm text-text-muted">{answeredCount} of {questions.length} answered</span>
-            <div className="flex gap-2">
-              {isEdit ? (
-                <>
-                  <button
-                    onClick={() => { setResponses({ ...savedResponses }); setMode('view'); }}
-                    disabled={isSaving}
-                    className="px-4 py-2 text-sm border border-border-default rounded-md text-text-primary hover:bg-surface-subtle disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => void handleSave()}
-                    disabled={isSaving}
-                    className="px-4 py-2 text-sm bg-primary-action text-white rounded-md hover:opacity-90 disabled:opacity-50"
-                    data-testid="save-responses"
-                  >
-                    {isSaving ? 'Saving…' : 'Save'}
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => { setResponses({ ...savedResponses }); setMode('edit'); }}
-                  className="px-4 py-2 text-sm bg-primary-action text-white rounded-md hover:opacity-90"
-                >
-                  Edit
-                </button>
-              )}
-            </div>
+      {!loading && !fetchError && questions.length > 0 && (
+        <>
+          <div className="flex flex-col gap-1" data-testid="progress-section">
+            <span className="text-sm text-text-secondary" data-testid="progress-label">
+              {progressLabel}
+            </span>
+            <ProgressBar value={progressValue} label={progressLabel} color="primary" />
           </div>
 
-          <div className="flex flex-col gap-4 p-6">
+          <div className="flex flex-col gap-4" data-testid="questions-list">
             {questions.map((q, i) => {
-              const r = responses[q.question_id] ?? { answer: '', destination: '' };
+              const r = responses[q.question_id];
               return (
-                <div
-                  key={q.question_id || i}
-                  className="flex flex-col gap-3 rounded-md border border-border-default p-4"
-                  data-testid={`question-row-${i}`}
-                >
-                  <div className="flex items-start gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-text-primary flex-1 min-w-0">
-                      {i + 1}. {q.question}
-                    </span>
-                    <div className="flex gap-1 shrink-0">
-                      {q.impact && (
-                        <span className={`inline-flex px-2 py-0.5 rounded text-xs font-semibold ${impactBadgeClass(q.impact)}`}>
-                          Impact: {q.impact}
-                        </span>
-                      )}
-                      {q.probability && (
-                        <span className={`inline-flex px-2 py-0.5 rounded text-xs font-semibold ${impactBadgeClass(q.probability)}`}>
-                          Prob: {q.probability}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {isEdit ? (
-                    <>
-                      <div className="flex gap-4 pl-4">
-                        {(['CV_IMPACT', 'INTERVIEW_MVP_ONLY'] as const).map((dest) => (
-                          <label key={dest} className="flex items-center gap-1.5 text-sm text-text-primary cursor-pointer">
-                            <input
-                              type="radio"
-                              name={`dest-${q.question_id || i}`}
-                              value={dest}
-                              checked={r.destination === dest}
-                              onChange={() => setResponse(q.question_id, { destination: dest })}
-                              className="accent-primary-action"
-                            />
-                            {dest === 'CV_IMPACT' ? 'Include in CV' : 'Interview Only'}
-                          </label>
-                        ))}
-                      </div>
-                      <textarea
-                        rows={4}
-                        value={r.answer}
-                        onChange={(e) => setResponse(q.question_id, { answer: e.target.value })}
-                        placeholder="Your answer…"
-                        className="w-full rounded border border-border-default px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary-action focus:ring-1 focus:ring-primary-action resize-none bg-card"
-                      />
-                    </>
-                  ) : (
-                    <p className={`pl-4 text-sm leading-relaxed ${r.answer ? 'text-text-primary' : 'text-text-muted italic'}`}>
-                      {r.answer || 'No answer yet'}
-                    </p>
-                  )}
-                </div>
+                <GapQuestionCard
+                  key={q.question_id}
+                  question={q}
+                  questionIndex={i}
+                  response={r?.response ?? null}
+                  destination={r?.destination ?? ''}
+                  isEditing={editingQuestionId === q.question_id}
+                  onRequestEdit={() => handleRequestEdit(q.question_id)}
+                  onSave={handleSave}
+                  onCancel={handleCancel}
+                />
               );
             })}
           </div>
-        </div>
+        </>
       )}
     </div>
   );
