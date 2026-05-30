@@ -4,6 +4,7 @@ import React from 'react';
 import { ErrorBoundary } from '../../components/ErrorBoundary/ErrorBoundary';
 import { PlansSection } from '../../components/billing/PlansSection';
 import { SubscriptionCard } from '../../components/billing/SubscriptionCard';
+import { UsageCard } from '../../components/billing/UsageCard';
 
 function BillingContent() {
   return (
@@ -11,6 +12,8 @@ function BillingContent() {
       <h1 className="text-2xl font-bold text-text-primary">Billing & Plan</h1>
 
       <SubscriptionCard />
+
+      <UsageCard />
 
       <PlansSection />
     </div>
