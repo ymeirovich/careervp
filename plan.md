@@ -2985,6 +2985,7 @@ Implementation order follows the application workflow:
 - Phase 8: Company Research (COMPLETE - Feb 2026)
 - VPR Async Architecture (Documentation + Tests + Implementation Complete)
 - FE-UI-002 ProgressBar label row and rounded-end regression coverage
+- FE-UI-011 ChooseBaseCVModal shared CV picker with choice and upload-only modes
 
 ### Priority Tasks
 

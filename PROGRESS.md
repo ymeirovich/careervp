@@ -55,3 +55,5 @@
 | `tests/ui/unit/ProgressBar.test.tsx`                 | Unit coverage for label row, clamping, ARIA, and backward compatibility |
 | `tests/ui/integration/ProgressBar.test.tsx`          | Integration coverage for provider-wrapped rendering |
 | `tests/regression/ProgressBar.regression.test.tsx`   | Regression coverage for no-label equivalence and existing behavior |
+| `src/frontend/components/ChooseBaseCVModal/ChooseBaseCVModal.tsx` | Shared base CV picker with choice and upload-only modes |
+| `src/frontend/tests/ui/unit/ChooseBaseCVModal.test.tsx` | FE-UI-011 unit coverage for selection, upload, accessibility, Hebrew copy, and empty state |
