@@ -115,25 +115,46 @@ def extract_text_from_pdf(pdf_content: bytes) -> str:
         raise ValueError(f'Failed to extract text from PDF: {e}') from e
 
 
+def _extract_table_texts(doc: Any) -> list[str]:
+    texts: list[str] = []
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for para in cell.paragraphs:
+                    if para.text.strip():
+                        texts.append(para.text)
+    return texts
+
+
+def _extract_textbox_texts(doc: Any) -> list[str]:
+    from docx.oxml.ns import qn
+
+    texts: list[str] = []
+    for txbx in doc.element.body.iter(qn('w:txbx')):
+        for p_elem in txbx.iter(qn('w:p')):
+            text = ''.join(t.text for t in p_elem.iter(qn('w:t')) if t.text)
+            if text.strip():
+                texts.append(text)
+    return texts
+
+
+def _iter_docx_paragraphs(doc: Any) -> list[str]:
+    """Collect text from paragraphs, tables, and text boxes in a DOCX document."""
+    texts = [para.text for para in doc.paragraphs if para.text.strip()]
+    texts += _extract_table_texts(doc)
+    texts += _extract_textbox_texts(doc)
+    return texts
+
+
 def extract_text_from_docx(docx_content: bytes) -> str:
-    """Extract text from DOCX using python-docx, including table cells."""
+    """Extract text from DOCX using python-docx (paragraphs, tables, text boxes)."""
     try:
         from io import BytesIO
 
         from docx import Document
 
         doc = Document(BytesIO(docx_content))
-        text_parts = []
-        for paragraph in doc.paragraphs:
-            if paragraph.text.strip():
-                text_parts.append(paragraph.text)
-        for table in doc.tables:
-            for row in table.rows:
-                for cell in row.cells:
-                    for paragraph in cell.paragraphs:
-                        if paragraph.text.strip():
-                            text_parts.append(paragraph.text)
-        return '\n'.join(text_parts)
+        return '\n'.join(_iter_docx_paragraphs(doc))
     except Exception as e:
         logger.error('DOCX extraction failed', error=str(e))
         raise ValueError(f'Failed to extract text from DOCX: {e}') from e
