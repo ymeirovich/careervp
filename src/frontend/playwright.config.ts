@@ -38,9 +38,6 @@ export default defineConfig({
     // Target URL — Amplify preview in CI, localhost:3000 locally
     baseURL: process.env.BASE_URL || "http://localhost:3000",
 
-    // Reuse the authenticated session saved by global-setup.setup.ts
-    storageState: AUTH_FILE,
-
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
@@ -52,16 +49,20 @@ export default defineConfig({
 
   projects: [
     // ── 1. Authentication setup ────────────────────────────────────────────
+    // storageState is NOT set here — the file doesn't exist yet when setup runs.
+    // Setting storageState: undefined in a project does not override a global
+    // storageState, so we keep storageState out of the global use block entirely.
     {
       name: "setup",
       testMatch: /.*\.setup\.ts/,
-      use: { storageState: undefined },
     },
 
     // ── 2. Main test runner ────────────────────────────────────────────────
+    // storageState is set here so only the chromium project loads the auth file
+    // (which setup has already written at this point).
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: { ...devices["Desktop Chrome"], storageState: AUTH_FILE },
       dependencies: ["setup"],
     },
   ],
