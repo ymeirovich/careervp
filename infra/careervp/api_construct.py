@@ -1950,6 +1950,7 @@ class ApiConstruct(Construct):
                 "GAP_QUESTIONS_TABLE_NAME": self.api_db.db.table_name,
                 "USERS_TABLE_NAME": self.api_db.db.table_name,
                 "DYNAMODB_TABLE_NAME": self.api_db.db.table_name,
+                "JOBS_TABLE_NAME": self.api_db.jobs_table.table_name,
                 constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
             },
             timeout=Duration.seconds(30),

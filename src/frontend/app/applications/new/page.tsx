@@ -9,6 +9,7 @@ import {
 } from '../../../components/ChooseBaseCVModal';
 import { Button } from '../../../components/ui/Button';
 import { useJobs } from '../../../hooks/useJobs';
+import { api } from '../../../api/methods';
 
 type Locale = 'en' | 'he';
 
@@ -29,6 +30,7 @@ type Copy = {
   cancel: string;
   create: string;
   creating: string;
+  analyzing: string;
 };
 
 const TEXT: Record<Locale, Copy> = {
@@ -43,6 +45,7 @@ const TEXT: Record<Locale, Copy> = {
     companyLabel: 'Company Name',
     create: 'Create Application',
     creating: 'Creating...',
+    analyzing: 'Analyzing application...',
     descriptionLabel: 'Job Description',
     descriptionPlaceholder: 'Paste the full job posting here',
     errorFallback: 'Failed to create application',
@@ -61,6 +64,7 @@ const TEXT: Record<Locale, Copy> = {
     companyLabel: 'שם החברה',
     create: 'צור הגשה',
     creating: 'יוצר...',
+    analyzing: 'מנתח הגשה...',
     descriptionLabel: 'תיאור המשרה',
     descriptionPlaceholder: 'הדבק כאן את פרסום המשרה המלא',
     errorFallback: 'יצירת ההגשה נכשלה',
@@ -99,6 +103,7 @@ export default function NewApplicationPage() {
   const [description, setDescription] = useState('');
   const [url, setUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isCvModalOpen, setIsCvModalOpen] = useState(false);
   const [selectedCv, setSelectedCv] = useState<{ cv: ChooseBaseCVItem; kind: ChooseBaseCVKind } | null>(null);
 
@@ -109,6 +114,7 @@ export default function NewApplicationPage() {
   }, [locale]);
 
   const selectedCvName = getCvName(selectedCv?.cv ?? null);
+  const isBusy = isCreating || isAnalyzing;
   const isFormComplete = useMemo(
     () => title.trim().length > 0 && companyName.trim().length > 0 && description.trim().length > 0,
     [companyName, description, title],
@@ -124,7 +130,7 @@ export default function NewApplicationPage() {
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!isFormComplete || isCreating) return;
+    if (!isFormComplete || isBusy) return;
 
     setError(null);
 
@@ -135,7 +141,27 @@ export default function NewApplicationPage() {
         description: description.trim(),
         url: url.trim() || undefined,
       });
-      router.push(`/applications/${job.job_id || job.id}`);
+
+      const jobId = job.job_id || job.id;
+
+      // Attempt to trigger gap analysis immediately. Prefer the CV the user
+      // selected in this form; fall back to their account's default CV.
+      const cvId = selectedCv?.cv?.cv_id ?? (await api.getCV().catch(() => null))?.cv_id;
+
+      if (cvId && jobId) {
+        setIsAnalyzing(true);
+        try {
+          await api.generateGapQuestions({ job_id: jobId, cv_id: cvId });
+          router.push(`/applications/${jobId}/gap-analysis`);
+          return;
+        } catch {
+          // Non-fatal — questions can be generated later from the hub.
+        } finally {
+          setIsAnalyzing(false);
+        }
+      }
+
+      router.push(`/applications/${jobId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : copy.errorFallback);
     }
@@ -178,7 +204,7 @@ export default function NewApplicationPage() {
               type="text"
               required
               value={title}
-              disabled={isCreating}
+              disabled={isBusy}
               onChange={(event) => {
                 clearError();
                 setTitle(event.target.value);
@@ -197,7 +223,7 @@ export default function NewApplicationPage() {
               type="text"
               required
               value={companyName}
-              disabled={isCreating}
+              disabled={isBusy}
               onChange={(event) => {
                 clearError();
                 setCompanyName(event.target.value);
@@ -217,7 +243,7 @@ export default function NewApplicationPage() {
               rows={7}
               placeholder={copy.descriptionPlaceholder}
               value={description}
-              disabled={isCreating}
+              disabled={isBusy}
               onChange={(event) => {
                 clearError();
                 setDescription(event.target.value);
@@ -235,7 +261,7 @@ export default function NewApplicationPage() {
               data-testid="new-app-url-input"
               type="url"
               value={url}
-              disabled={isCreating}
+              disabled={isBusy}
               onChange={(event) => {
                 clearError();
                 setUrl(event.target.value);
@@ -263,7 +289,7 @@ export default function NewApplicationPage() {
                 type="button"
                 variant="secondary"
                 size="md"
-                disabled={isCreating}
+                disabled={isBusy}
                 onClick={() => setIsCvModalOpen(true)}
               >
                 {copy.change}
@@ -272,11 +298,11 @@ export default function NewApplicationPage() {
           </section>
 
           <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:justify-end">
-            <Button type="button" variant="secondary" size="md" onClick={goDashboard} disabled={isCreating}>
+            <Button type="button" variant="secondary" size="md" onClick={goDashboard} disabled={isBusy}>
               {copy.cancel}
             </Button>
-            <Button type="submit" variant="primary" size="md" disabled={!isFormComplete || isCreating}>
-              {isCreating ? copy.creating : copy.create}
+            <Button type="submit" variant="primary" size="md" disabled={!isFormComplete || isBusy}>
+              {isAnalyzing ? copy.analyzing : isCreating ? copy.creating : copy.create}
             </Button>
           </div>
         </form>

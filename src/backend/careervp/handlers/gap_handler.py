@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from careervp.dal.application_repository import ApplicationRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+from careervp.dal.jobs_repository import JobsRepository
 from careervp.dal.subscription_repository import SubscriptionRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.utils.observability import logger, metrics, tracer
@@ -23,14 +24,16 @@ from careervp.models.result import Result, ResultCode
 
 _trial_service: TrialService | None = None
 _application_repository: ApplicationRepository | None = None
+_jobs_repository: JobsRepository | None = None
 _current_request_origin: str | None = None
 
 
 def _reset_handler_caches() -> None:
     """Testing hook to reset module-level cached singletons between tests."""
-    global _trial_service, _application_repository
+    global _trial_service, _application_repository, _jobs_repository
     _trial_service = None
     _application_repository = None
+    _jobs_repository = None
 
 
 def _resolve_table_name(*env_keys: str) -> str:
@@ -461,6 +464,22 @@ def _build_user_cv_prompt_payload(cv_id: str, focus_areas: list[str]) -> dict[st
 
 
 def _build_job_prompt_payload(job_id: str, focus_areas: list[str]) -> dict[str, Any]:
+    try:
+        jobs_repo = _get_jobs_repository()
+        job_record = jobs_repo.get_job(job_id)
+        if job_record:
+            title = str(job_record.get('title', '')).strip()
+            company = str(job_record.get('company_name') or job_record.get('company') or '').strip()
+            description = str(job_record.get('description', '')).strip()
+            requirements = [str(r) for r in (job_record.get('requirements') or []) if str(r).strip()]
+            return {
+                'company_name': company or f'Company for {job_id}',
+                'role_title': title or f'Role for {job_id}',
+                'requirements': requirements or focus_areas or ['Core competency'],
+                'responsibilities': [description] if description else ['Deliver measurable business impact'],
+            }
+    except Exception as exc:
+        logger.warning('Could not fetch job data for gap prompt', job_id=job_id, error=str(exc))
     return {
         'company_name': f'Company for {job_id}',
         'role_title': f'Role for {job_id}',
@@ -739,6 +758,13 @@ def _get_application_repository() -> ApplicationRepository:
             raise RuntimeError('Application repository table name not configured')
         _application_repository = ApplicationRepository(dal=DynamoDalHandler(table_name=table_name))
     return _application_repository
+
+
+def _get_jobs_repository() -> JobsRepository:
+    global _jobs_repository
+    if _jobs_repository is None:
+        _jobs_repository = JobsRepository()
+    return _jobs_repository
 
 
 def _resolve_trial_consumption_endpoint(event: dict[str, Any]) -> str:

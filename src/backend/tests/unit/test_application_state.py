@@ -145,10 +145,16 @@ class TestApplicationRecovery:
     def test_recovery_returns_404_for_missing_application(self) -> None:
         from careervp.handlers.application_handler import lambda_handler
 
-        with patch('careervp.handlers.application_handler._get_application_repository') as mock_repo_factory:
+        with (
+            patch('careervp.handlers.application_handler._get_application_repository') as mock_repo_factory,
+            patch('careervp.handlers.application_handler._get_jobs_repository') as mock_jobs_factory,
+        ):
             mock_repo = MagicMock()
             mock_repo.get.return_value = None
             mock_repo_factory.return_value = mock_repo
+            mock_jobs = MagicMock()
+            mock_jobs.get_job.return_value = None
+            mock_jobs_factory.return_value = mock_jobs
             response = lambda_handler(_event('user-test-123'), MagicMock())
         assert response['statusCode'] == 404
 
