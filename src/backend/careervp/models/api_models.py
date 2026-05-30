@@ -85,6 +85,7 @@ class UpdateUserRequest(APIModel):
 class CVUploadRequest(APIModel):
     cv_content: str = Field(min_length=1)
     file_name: str = Field(min_length=1)
+    file_type: Literal['pdf', 'docx', 'txt'] | None = None
 
 
 class CVUploadResponse(APIModel):

@@ -257,6 +257,13 @@ def _normalize_request_payload(body: Any) -> dict[str, Any]:
         user_id = _extract_user_id()
         if not user_id:
             raise ValueError('Authenticated user_id is required for /users/me/cv')
+        if openapi_request.file_type:
+            return {
+                'user_id': user_id,
+                'file_content': openapi_request.cv_content,
+                'file_type': openapi_request.file_type,
+                '_file_name': openapi_request.file_name,
+            }
         return {
             'user_id': user_id,
             'text_content': openapi_request.cv_content,
