@@ -1,5 +1,5 @@
-import '../../vitest-setup';
-import '../setup';
+import '../vitest-setup';
+import '../ui/setup';
 
 // spec_id: FE-UI-002  component: ProgressBar
 // file: src/frontend/components/ui/ProgressBar.tsx
@@ -7,7 +7,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, it, expect, vi } from 'vitest';
-import { ProgressBar } from '../../../components/ui/ProgressBar';
+import { ProgressBar } from '../../components/ui/ProgressBar';
 
 const createWrapper = () => {
   const queryClient = new QueryClient({

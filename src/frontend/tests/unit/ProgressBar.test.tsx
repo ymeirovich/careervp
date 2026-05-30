@@ -1,12 +1,12 @@
-import '../../vitest-setup';
-import '../setup';
+import '../vitest-setup';
+import '../ui/setup';
 
 // spec_id: FE-UI-002  component: ProgressBar
 // file: src/frontend/components/ui/ProgressBar.tsx
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
-import { ProgressBar } from '../../../components/ui/ProgressBar';
+import { ProgressBar } from '../../components/ui/ProgressBar';
 
 function renderProgressBar(props: React.ComponentProps<typeof ProgressBar>) {
   return render(<ProgressBar {...props} />);

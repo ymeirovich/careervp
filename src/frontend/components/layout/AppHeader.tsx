@@ -6,7 +6,9 @@ import { usePathname } from 'next/navigation';
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
   '/applications': 'Applications',
-  '/cv-center': 'CV Center',
+  '/cv-center': 'Base CVs',
+  '/tailored-cvs': 'Tailored CVs',
+  '/cover-letters': 'Cover Letters',
   '/billing': 'Billing',
   '/settings': 'Settings',
 };
