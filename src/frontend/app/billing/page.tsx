@@ -4,6 +4,7 @@ import React from 'react';
 import { ErrorBoundary } from '../../components/ErrorBoundary/ErrorBoundary';
 import { useUserContext } from '../../hooks/useUserContext';
 import { Spinner } from '../../components/ui/Spinner';
+import { PlansSection } from '../../components/billing/PlansSection';
 
 function BillingContent() {
   const { usage, subscription, isLoading } = useUserContext();
@@ -71,53 +72,7 @@ function BillingContent() {
         )}
       </div>
 
-      {/* Plan cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="rounded-md border border-border-default bg-card p-6 flex flex-col gap-4">
-          <h3 className="text-base font-bold text-text-primary">Monthly</h3>
-          <div className="flex flex-col gap-1">
-            <p className="text-2xl font-bold text-text-primary">$20<span className="text-sm font-normal text-text-muted">/month</span></p>
-            <p className="text-xs text-text-muted">Billed monthly</p>
-          </div>
-          <ul className="flex flex-col gap-2 text-sm text-text-primary">
-            <li>✓ Unlimited applications</li>
-            <li>✓ All AI features</li>
-            <li>✓ Cancel anytime</li>
-          </ul>
-          <a
-            href="/billing/checkout?plan=monthly"
-            className="rounded-md bg-primary-action px-4 py-2 text-sm font-bold text-white text-center hover:opacity-90"
-          >
-            Get Monthly
-          </a>
-        </div>
-
-        <div className="rounded-md border-2 border-primary-action bg-card p-6 flex flex-col gap-4 relative">
-          <div className="absolute -top-3 left-4">
-            <span className="inline-flex px-2 py-0.5 rounded text-xs font-bold bg-primary-action text-white">Save 20%</span>
-          </div>
-          <h3 className="text-base font-bold text-text-primary">Annual</h3>
-          <div className="flex flex-col gap-1">
-            <p className="text-2xl font-bold text-text-primary">$16<span className="text-sm font-normal text-text-muted">/month</span></p>
-            <p className="text-xs text-text-muted">Billed $192/year</p>
-          </div>
-          <ul className="flex flex-col gap-2 text-sm text-text-primary">
-            <li>✓ Unlimited applications</li>
-            <li>✓ All AI features</li>
-            <li>✓ Best value</li>
-          </ul>
-          <a
-            href="/billing/checkout?plan=annual"
-            className="rounded-md bg-primary-action px-4 py-2 text-sm font-bold text-white text-center hover:opacity-90"
-          >
-            Get Annual
-          </a>
-        </div>
-      </div>
-
-      <p className="text-xs text-text-muted text-center">
-        Questions? <a href="mailto:support@careervp.com" className="underline">Contact us</a>
-      </p>
+      <PlansSection />
     </div>
   );
 }
