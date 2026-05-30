@@ -22,9 +22,12 @@ export interface Usage {
 }
 
 export interface SubscriptionDetails {
-  plan_type: "monthly" | "annual";
-  status: "active" | "expired" | "canceled";
+  plan_type: 'monthly' | 'annual' | 'quarterly' | '3month' | '6month';
+  status: 'trialing' | 'active' | 'past_due' | 'canceled' | 'expired';
   current_period_end?: string;
+  next_charge_amount?: number | null;
+  cancel_at_period_end?: boolean;
+  trial_days_remaining?: number | null;
 }
 
 export interface SubscriptionResponse {
