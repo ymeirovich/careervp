@@ -29,13 +29,15 @@ const STATUS_LABELS: Record<ModuleStatus, string> = {
 
 export interface StatusBadgeProps {
   status: ModuleStatus;
+  soft?: boolean;
   'data-testid'?: string;
 }
 
-export function StatusBadge({ status, 'data-testid': testId }: StatusBadgeProps) {
+export function StatusBadge({ status, soft = false, 'data-testid': testId }: StatusBadgeProps) {
   return (
     <Badge
       variant={STATUS_TO_BADGE[status]}
+      soft={soft}
       label={STATUS_LABELS[status]}
       data-testid={testId}
     />
