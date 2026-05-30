@@ -379,6 +379,17 @@ export interface CoverLetterListItem {
   created_at: string;
 }
 
+export type TailoredCvListStatus = 'ready' | 'processing' | 'failed' | 'edited';
+
+export interface TailoredCvListItem {
+  id: string;
+  applicationId: string;
+  title: string;
+  language: string;
+  status: TailoredCvListStatus;
+  updated_at: string;
+}
+
 // ── Interview Prep ──
 export interface STARAnswer {
   situation: string;

@@ -22,6 +22,7 @@
 - [x] VPR Unit & Integration Tests (`tests/unit/test_vpr_generator.py`, `tests/unit/test_vpr_handler.py`, `tests/unit/test_dynamo_dal_handler.py`)
 - [x] CV Parser helper unit tests (`tests/unit/test_cv_parser.py`)
 - [x] FE-UI-010 New Application full-page form replacement (`src/frontend/app/applications/new/page.tsx`)
+- [x] FE-UI-015 TailoredCVsListTable new list table (`src/frontend/components/TailoredCVsListTable/TailoredCVsListTable.tsx`)
 
 ## Upcoming Phases (From Context Manifest)
 
@@ -63,3 +64,6 @@
 | `src/frontend/tests/ui/unit/NewApplicationPage.test.tsx` | FE-UI-010 unit coverage for navigation, form states, CV picker, POST `/jobs`, errors, and Hebrew copy |
 | `frontend/app/applications/new/page.tsx`             | Legacy frontend route parity for `/applications/new` |
 | `frontend/app/dashboard/page.tsx`                    | Legacy dashboard CTA routes to `/applications/new` |
+| `src/frontend/components/TailoredCVsListTable/TailoredCVsListTable.tsx` | FE-UI-015 Tailored CVs list table (sort/search/states/i18n) |
+| `src/frontend/tests/ui/unit/TailoredCVsListTable.test.tsx` | FE-UI-015 unit coverage for TailoredCVsListTable |
+| `src/frontend/lib/types.ts`                          | Added Tailored CV list types |

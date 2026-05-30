@@ -125,6 +125,7 @@ CREATED → COMPANY_RESEARCH → GAP_ANALYSIS → GENERATING_ARTIFACTS → INTER
 - ✅ Dashboard and applications-list New Application CTAs route to `/applications/new`
 - ✅ Legacy top-level frontend dashboard and `/applications/new` route kept in parity with the modal removal
 - ✅ FE-UI-010 Vitest coverage for navigation, form validation, Base CV selection, POST `/jobs`, loading/error states, and Hebrew RTL copy
+- ✅ FE-UI-015 TailoredCVsListTable new list table (sort/search/states/i18n)
 
 ### VPR Async Architecture - DEPLOYED & TESTING
 
