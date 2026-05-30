@@ -20,6 +20,7 @@ import type {
   CoverLetterRequest,
   CoverLetterStatusResponse,
   CoverLetterListItem,
+  TailoredCvListItem,
   InterviewPrepRequest,
   InterviewPrepStatusResponse,
   CVTailoringRequest,
@@ -188,6 +189,11 @@ export const api = {
     apiClient
       .get<CVTailoredStatusResponse>(`/cv-tailoring/${cvTailoringId}/status`)
       .then((r) => r.data),
+
+  getTailoredCvsList: async (): Promise<TailoredCvListItem[]> => {
+    const r = await apiClient.get<TailoredCvListItem[] | { cv_tailorings?: TailoredCvListItem[] }>('/cv-tailorings');
+    return Array.isArray(r.data) ? r.data : (r.data.cv_tailorings ?? []);
+  },
 
   // ── Export ──
   exportArtifact: (jobId: string, moduleType: string, format: 'docx' | 'pdf'): Promise<ExportResponse> =>
