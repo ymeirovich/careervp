@@ -51,3 +51,7 @@
 | `src/frontend/canvas-app/App.jsx`                    | Change Base CV modal upload/choice behavior   |
 | `src/frontend/tests/ui/unit/ChangeBaseCVModal.test.tsx` | Modal spec verification                      |
 | `src/frontend/tests/ui/unit/NewApplicationForm.test.tsx` | Base CV modal consumer verification         |
+| `src/frontend/components/ui/ProgressBar.tsx`         | Added optional visible label row and preserved rounded ends |
+| `tests/ui/unit/ProgressBar.test.tsx`                 | Unit coverage for label row, clamping, ARIA, and backward compatibility |
+| `tests/ui/integration/ProgressBar.test.tsx`          | Integration coverage for provider-wrapped rendering |
+| `tests/regression/ProgressBar.regression.test.tsx`   | Regression coverage for no-label equivalence and existing behavior |

@@ -2984,6 +2984,7 @@ Implementation order follows the application workflow:
 ### Recently Completed ✅
 - Phase 8: Company Research (COMPLETE - Feb 2026)
 - VPR Async Architecture (Documentation + Tests + Implementation Complete)
+- FE-UI-002 ProgressBar label row and rounded-end regression coverage
 
 ### Priority Tasks
 
