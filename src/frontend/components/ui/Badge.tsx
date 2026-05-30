@@ -4,6 +4,7 @@ export type BadgeVariant =
   | 'success'
   | 'warning'
   | 'error'
+  | 'destructive'
   | 'info'
   | 'neutral'
   | 'final'
@@ -24,6 +25,7 @@ const variantStyles: Record<BadgeVariant, string> = {
   success: 'bg-state-active text-white',
   warning: 'bg-state-warning text-white',
   error:   'bg-state-error text-white',
+  destructive: 'bg-state-error text-white',
   info:    'bg-state-info text-white',
   neutral: 'bg-surface-subtle border border-border-default text-text-primary',
   final:   'bg-state-active text-white',
@@ -35,6 +37,7 @@ const softVariantStyles: Record<BadgeVariant, string> = {
   success: 'bg-green-50 text-green-700 border border-green-200',
   warning: 'bg-amber-50 text-amber-700 border border-amber-200',
   error:   'bg-state-error text-white',
+  destructive: 'bg-state-error text-white',
   info:    'bg-blue-50 text-blue-700 border border-blue-200',
   neutral: 'bg-gray-50 text-gray-700 border border-gray-200',
   final:   'bg-green-50 text-green-700 border border-green-200',
