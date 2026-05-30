@@ -23,6 +23,7 @@
 - [x] CV Parser helper unit tests (`tests/unit/test_cv_parser.py`)
 - [x] FE-UI-010 New Application full-page form replacement (`src/frontend/app/applications/new/page.tsx`)
 - [x] FE-UI-015 TailoredCVsListTable new list table (`src/frontend/components/TailoredCVsListTable/TailoredCVsListTable.tsx`)
+- [x] FE-UI-017 BaseCVsTable multi-CV list table (`src/frontend/components/BaseCVsTable/BaseCVsTable.tsx`)
 
 ## Upcoming Phases (From Context Manifest)
 
@@ -67,3 +68,6 @@
 | `src/frontend/components/TailoredCVsListTable/TailoredCVsListTable.tsx` | FE-UI-015 Tailored CVs list table (sort/search/states/i18n) |
 | `src/frontend/tests/ui/unit/TailoredCVsListTable.test.tsx` | FE-UI-015 unit coverage for TailoredCVsListTable |
 | `src/frontend/lib/types.ts`                          | Added Tailored CV list types |
+| `src/frontend/components/BaseCVsTable/BaseCVsTable.tsx` | FE-UI-017 Base CVs list table with sorting, soft status badges, actions, states, responsive layout, and Hebrew copy |
+| `src/frontend/components/BaseCVsTable/index.ts`      | Barrel export for BaseCVsTable |
+| `src/frontend/tests/ui/unit/BaseCVsTable.test.tsx`   | FE-UI-017 unit coverage for BaseCVsTable |
