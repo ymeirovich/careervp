@@ -23,7 +23,7 @@ on:
         required: false
         default: ""
       batch:
-        description: "Batch to test: 1 | 2 | 3 | 4 | 5 | 6 | all"
+        description: "Shard to test: 1 | 2 | 3 | 4 | 5 | 6 | all  (uses Playwright --shard=N/6)"
         required: false
         default: "all"
 
@@ -66,7 +66,7 @@ jobs:
           echo "Target URL: $FINAL"
 
       # Run from src/frontend/ so @playwright/test resolves correctly.
-      # playwright.config.ts is in src/frontend/ and uses absolute paths for testDir.
+      # playwright.config.ts and tests both live in src/frontend/.
       - name: Run Playwright e2e tests
         run: |
           cd src/frontend
@@ -76,7 +76,7 @@ jobs:
             npx playwright test --config playwright.config.ts
           else
             npx playwright test --config playwright.config.ts \
-              --grep "@batch$BATCH"
+              --shard="$BATCH/6"
           fi
         env:
           BASE_URL: ${{ steps.resolve-url.outputs.base_url }}
