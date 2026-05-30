@@ -8,12 +8,11 @@ import { StatsRow } from '../../components/dashboard/StatsRow';
 import { JobsTable } from '../../components/dashboard/JobsTable';
 import { UsageGate } from '../../components/UsageGate/UsageGate';
 import { NewApplicationModal } from '../../components/NewApplicationModal/NewApplicationModal';
-import { EmptyState } from '../../components/ui/EmptyState';
 import { Button } from '../../components/ui/Button';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { jobs, isLoading } = useJobs();
+  const { jobs, isLoading, error, refetch } = useJobs();
   const { usage, subscription, hasActiveAccess, isLoading: isDashboardLoading } = useDashboard();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -64,20 +63,17 @@ export default function DashboardPage() {
         </UsageGate>
       </div>
 
-      {jobs.length === 0 && !isLoading ? (
-        <EmptyState
-          title="No applications yet"
-          description="Create your first application to get started with CareerVP."
+      <div data-testid="jobs-table">
+        <JobsTable
+          mode="dashboard"
+          jobs={mappedJobs}
+          isLoading={isLoading}
+          error={error}
+          onRetry={refetch}
+          onViewJob={(id) => router.push(`/applications/${id}`)}
+          onNewApplication={() => setIsModalOpen(true)}
         />
-      ) : (
-        <div data-testid="jobs-table">
-          <JobsTable
-            jobs={mappedJobs}
-            onViewJob={(id) => router.push(`/applications/${id}`)}
-            onNewApplication={() => setIsModalOpen(true)}
-          />
-        </div>
-      )}
+      </div>
 
       <NewApplicationModal
         isOpen={isModalOpen}
