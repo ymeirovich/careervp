@@ -838,6 +838,11 @@ After all 3 specs are committed and Amplify reports success, trigger the smoke r
 gh workflow run e2e-smoke.yml \
   --ref ui-upgrade \
   --field batch=2
+
+  gh workflow run e2e-smoke.yml \
+  --ref ui-upgrade \
+  --field batch=2 \
+  --field update_snapshots=true
 ```
 
 **What to verify manually on the Amplify URL before running e2e:**

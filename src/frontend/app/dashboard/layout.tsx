@@ -50,6 +50,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         subscription: userCtx.subscription,
         hasActiveAccess: userCtx.hasActiveAccess,
         applicationsRemaining: userCtx.applicationsRemaining,
+        isLoading: userCtx.isLoading,
       }}
     >
       <AppShell

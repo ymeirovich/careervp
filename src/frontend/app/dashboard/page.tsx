@@ -14,7 +14,7 @@ import { Button } from '../../components/ui/Button';
 export default function DashboardPage() {
   const router = useRouter();
   const { jobs, isLoading } = useJobs();
-  const { usage, subscription, hasActiveAccess } = useDashboard();
+  const { usage, subscription, hasActiveAccess, isLoading: isDashboardLoading } = useDashboard();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const planLabel =
@@ -48,6 +48,7 @@ export default function DashboardPage() {
         creditsUsed={creditsUsed}
         creditsTotal={creditsTotal || 3}
         isActive={hasActiveAccess}
+        isLoading={Boolean(isDashboardLoading)}
       />
 
       <div className="flex justify-end">
