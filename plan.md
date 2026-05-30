@@ -127,6 +127,7 @@ CREATED → COMPANY_RESEARCH → GAP_ANALYSIS → GENERATING_ARTIFACTS → INTER
 - ✅ FE-UI-010 Vitest coverage for navigation, form validation, Base CV selection, POST `/jobs`, loading/error states, and Hebrew RTL copy
 - ✅ FE-UI-015 TailoredCVsListTable new list table (sort/search/states/i18n)
 - ✅ FE-UI-017 BaseCVsTable multi-CV list table (sorting/status badges/actions/states/i18n)
+- ✅ FE-UI-016 `/cv-center` CVCenterContent replaced with Base CVs table listing, upload-only ChooseBaseCVModal flow, GET/POST `/users/me/cv`, and unit coverage
 
 ### VPR Async Architecture - DEPLOYED & TESTING
 

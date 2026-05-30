@@ -24,6 +24,7 @@
 - [x] FE-UI-010 New Application full-page form replacement (`src/frontend/app/applications/new/page.tsx`)
 - [x] FE-UI-015 TailoredCVsListTable new list table (`src/frontend/components/TailoredCVsListTable/TailoredCVsListTable.tsx`)
 - [x] FE-UI-017 BaseCVsTable multi-CV list table (`src/frontend/components/BaseCVsTable/BaseCVsTable.tsx`)
+- [x] FE-UI-016 CVCenterContent table listing replacement (`src/frontend/app/cv-center/page.tsx`)
 
 ## Upcoming Phases (From Context Manifest)
 
@@ -71,3 +72,5 @@
 | `src/frontend/components/BaseCVsTable/BaseCVsTable.tsx` | FE-UI-017 Base CVs list table with sorting, soft status badges, actions, states, responsive layout, and Hebrew copy |
 | `src/frontend/components/BaseCVsTable/index.ts`      | Barrel export for BaseCVsTable |
 | `src/frontend/tests/ui/unit/BaseCVsTable.test.tsx`   | FE-UI-017 unit coverage for BaseCVsTable |
+| `src/frontend/app/cv-center/page.tsx`                 | FE-UI-016 Base CVs page listing with React Query GET `/users/me/cv`, upload-only modal, POST `/users/me/cv`, retry, and Hebrew copy |
+| `src/frontend/tests/ui/unit/CVCenterContent.test.tsx` | FE-UI-016 unit coverage for page structure, data states, upload/refetch flow, removed old single-CV UI, ErrorBoundary, and Hebrew copy |
