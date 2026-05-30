@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { ErrorBoundary } from '../../components/ErrorBoundary/ErrorBoundary';
+import { BillingInfoCard } from '../../components/billing/BillingInfoCard';
 import { PlansSection } from '../../components/billing/PlansSection';
 import { SubscriptionCard } from '../../components/billing/SubscriptionCard';
 import { UsageCard } from '../../components/billing/UsageCard';
@@ -12,6 +13,8 @@ function BillingContent() {
       <h1 className="text-2xl font-bold text-text-primary">Billing & Plan</h1>
 
       <SubscriptionCard />
+
+      <BillingInfoCard />
 
       <UsageCard />
 

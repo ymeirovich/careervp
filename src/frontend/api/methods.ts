@@ -61,6 +61,9 @@ export const api = {
   getSubscription: (): Promise<SubscriptionResponse> =>
     apiClient.get<SubscriptionResponse>('/users/me/subscription').then((r) => r.data),
 
+  createBillingPortal: (data?: { return_url?: string }): Promise<{ portal_url: string }> =>
+    apiClient.post<{ portal_url: string }>('/billing/portal', data ?? {}).then((r) => r.data),
+
   // ── Jobs ──
   getJobs: async (): Promise<Job[]> => {
     const r = await apiClient.get<{ jobs: Job[] }>('/jobs');

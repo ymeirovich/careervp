@@ -28,6 +28,10 @@ export interface SubscriptionDetails {
   next_charge_amount?: number | null;
   cancel_at_period_end?: boolean;
   trial_days_remaining?: number | null;
+  payment_method?: {
+    last4?: string | null;
+    brand?: string | null;
+  } | null;
 }
 
 export interface SubscriptionResponse {
