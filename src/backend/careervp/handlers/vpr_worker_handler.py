@@ -122,23 +122,48 @@ def _build_gap_responses_input(input_data: dict[str, Any]) -> list[dict[str, str
         if normalized:
             return normalized
 
-    raw_gap_response_ids = input_data.get('gap_response_ids')
-    if not isinstance(raw_gap_response_ids, list):
-        return []
+    return []
 
-    fallback: list[dict[str, str]] = []
-    for idx, response_id in enumerate(raw_gap_response_ids):
-        response_id_str = str(response_id).strip()
-        if not response_id_str:
-            continue
-        fallback.append(
-            {
-                'question_id': response_id_str,
-                'question': f'gap_response_{idx + 1}',
-                'answer': 'Provided via gap_response_ids in async submit payload.',
-            }
-        )
-    return fallback
+
+def _fetch_gap_responses_from_application(application_id: str, user_id: str) -> list[dict[str, str]]:
+    """Fetch saved gap responses from the application record in DynamoDB.
+
+    Gap responses are stored as {question_id, response} in the application record.
+    Gap questions (with text) are stored alongside as {question_id, question}.
+    We join them so the VPR generator receives full context.
+    """
+    app_table = os.environ.get('APPLICATIONS_TABLE_NAME') or ''
+    if not app_table:
+        logger.warning('APPLICATIONS_TABLE_NAME not set; skipping gap response lookup')
+        return []
+    try:
+        app_repo = ApplicationRepository(DynamoDalHandler(app_table))
+        application = app_repo.get(application_id=application_id, user_id=user_id)
+        if not application:
+            return []
+        stored_responses: list[dict[str, Any]] = application.get('gap_responses') or []
+        stored_questions: list[dict[str, Any]] = application.get('gap_questions') or []
+        question_text: dict[str, str] = {
+            str(q.get('question_id', '')).strip(): str(q.get('question', '')).strip() for q in stored_questions if isinstance(q, dict)
+        }
+        result: list[dict[str, str]] = []
+        for resp in stored_responses:
+            if not isinstance(resp, dict):
+                continue
+            qid = str(resp.get('question_id', '')).strip()
+            answer = str(resp.get('response') or resp.get('answer', '')).strip()
+            if qid and answer:
+                result.append(
+                    {
+                        'question_id': qid,
+                        'question': question_text.get(qid, qid),
+                        'answer': answer,
+                    }
+                )
+        return result
+    except Exception as exc:
+        logger.warning('Failed to fetch gap responses from application record', error=str(exc))
+        return []
 
 
 def _extract_job_id_from_record(record: dict[str, Any]) -> str | None:
@@ -153,6 +178,18 @@ def _extract_job_id_from_record(record: dict[str, Any]) -> str | None:
         return None
     message_body = json.loads(raw_body)
     return message_body.get('job_id') or None
+
+
+def _resolve_gap_responses(input_data: dict[str, Any], application_id: str, user_id: str) -> list[GapResponse]:
+    """Return real GapResponse objects for the VPR request.
+
+    Tries input_data first (legacy full-object path), then falls back to
+    fetching saved responses from the application record in DynamoDB.
+    """
+    items = _build_gap_responses_input(input_data)
+    if not items:
+        items = _fetch_gap_responses_from_application(application_id, user_id)
+    return [GapResponse.model_validate(item) for item in items]
 
 
 def _process_job_record(
@@ -236,7 +273,7 @@ def _execute_job(
     # Generate VPR
     try:
         job_posting = JobPosting.model_validate(_build_job_posting_input(jobs_repo, input_data))
-        gap_responses = [GapResponse.model_validate(item) for item in _build_gap_responses_input(input_data)]
+        gap_responses = _resolve_gap_responses(input_data, job.get('application_id', ''), user_id)
         vpr_request = VPRRequest(
             application_id=job.get('application_id', ''),
             user_id=user_id,

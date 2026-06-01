@@ -146,15 +146,8 @@ class VPRGenerateRequest(APIModel):
     cv_id: str = Field(min_length=1)
     job_id: str = Field(min_length=1)
     application_id: str | None = None
-    gap_response_ids: list[str]
+    gap_response_ids: list[str] = Field(default_factory=list)
     options: VPRGenerateOptions | None = None
-
-    @field_validator('gap_response_ids')
-    @classmethod
-    def _gap_ids_required(cls, value: list[str]) -> list[str]:
-        if not value:
-            raise ValueError('gap_response_ids must not be empty')
-        return value
 
 
 class VPRGenerateResponse(APIModel):

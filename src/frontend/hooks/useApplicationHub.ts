@@ -25,6 +25,10 @@ interface ApplicationResponse extends RawApplicationData {
     cv_tailored?: HubArtifact;
     gap_analysis?: HubArtifact;
   };
+  gap_analysis?: {
+    questions: Array<{ question_id: string; question: string }>;
+    responses: Array<{ question_id: string; response: string }>;
+  };
 }
 
 function resolveTaskId(
@@ -165,7 +169,7 @@ export function useApplicationHub(jobId: string): {
     );
   }
 
-  const gapResponseIds = gapQuery.data?.responses?.map((r) => r.question_id) ?? [];
+  const gapResponseIds = appData?.gap_analysis?.responses?.map((r) => r.question_id) ?? [];
 
   // VPR artifact ID — needed downstream by CV Tailoring and Cover Letter
   const vprId = artifacts?.vpr?.artifact_id ?? null;
