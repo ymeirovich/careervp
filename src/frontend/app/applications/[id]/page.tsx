@@ -27,7 +27,7 @@ export default function ApplicationHubPage() {
   const jobId = typeof params.id === 'string' ? params.id : '';
   const router = useRouter();
 
-  const { hubState, isLoading } = useApplicationHub(jobId);
+  const { hubState, isLoading, gapResponseIds } = useApplicationHub(jobId);
   const { cv } = useCV();
 
   // All generators instantiated unconditionally (Rules of Hooks)
@@ -59,7 +59,7 @@ export default function ApplicationHubPage() {
 
     const gen = genMap[moduleType as keyof typeof genMap];
     if (gen) {
-      await gen.generate({ cvId, vprId: vprArtifactId, gapResponseIds: [] });
+      await gen.generate({ cvId, vprId: vprArtifactId, gapResponseIds });
     }
   }
 

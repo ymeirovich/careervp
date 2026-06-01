@@ -413,7 +413,7 @@ def _build_error_response(
         payload['validation_errors'] = validation_errors
     return {
         'statusCode': int(status),
-        'headers': JSON_HEADERS,
+        'headers': _json_headers(),
         'body': json.dumps(payload),
     }
 

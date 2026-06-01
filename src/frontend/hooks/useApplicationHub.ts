@@ -64,6 +64,7 @@ export function useApplicationHub(jobId: string): {
   isLoading: boolean;
   error: Error | null;
   refetch: () => void;
+  gapResponseIds: string[];
 } {
   const enabled = jobId.length > 0;
 
@@ -148,11 +149,13 @@ export function useApplicationHub(jobId: string): {
     );
   }
 
+  const gapResponseIds = gapQuery.data?.responses?.map((r) => r.question_id) ?? [];
+
   function refetch() {
     void applicationQuery.refetch();
     void cvQuery.refetch();
     void gapQuery.refetch();
   }
 
-  return { hubState, isLoading, error, refetch };
+  return { hubState, isLoading, error, refetch, gapResponseIds };
 }
