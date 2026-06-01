@@ -349,8 +349,7 @@ describe('AC-010 — retry', () => {
 // ---------------------------------------------------------------------------
 
 describe('AC-011 — multi-editor guard', () => {
-  it('prompts confirm when a second card requests edit while one is already editing', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
+  it('shows guard modal and keeps current editor open when Continue Editing is clicked', async () => {
     await renderAndWait();
 
     // Open Q1 for editing
@@ -359,16 +358,18 @@ describe('AC-011 — multi-editor guard', () => {
       expect(screen.getByTestId('question-row-0')).toHaveAttribute('data-editing', 'true'),
     );
 
-    // Click Answer on Q2 while Q1 is open
+    // Click Answer on Q2 while Q1 is open → guard modal should appear
     fireEvent.click(screen.getByTestId('request-edit-1'));
+    expect(screen.getByTestId('guard-modal')).toBeDefined();
 
-    expect(window.confirm).toHaveBeenCalledWith('Save or discard changes to question 1?');
-    // User said cancel → Q2 should NOT enter edit mode
+    // Click "Continue Editing" → modal closes, Q2 stays in read, Q1 stays in edit
+    fireEvent.click(screen.getByTestId('guard-continue-btn'));
+    await waitFor(() => expect(screen.queryByTestId('guard-modal')).toBeNull());
+    expect(screen.getByTestId('question-row-0')).toHaveAttribute('data-editing', 'true');
     expect(screen.getByTestId('question-row-1')).toHaveAttribute('data-editing', 'false');
   });
 
-  it('opens the new card when user confirms the guard dialog', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+  it('cancels current editor without opening new question when OK is clicked', async () => {
     await renderAndWait();
 
     fireEvent.click(screen.getByTestId('request-edit-0'));
@@ -377,12 +378,13 @@ describe('AC-011 — multi-editor guard', () => {
     );
 
     fireEvent.click(screen.getByTestId('request-edit-2'));
+    expect(screen.getByTestId('guard-modal')).toBeDefined();
 
-    expect(window.confirm).toHaveBeenCalled();
-    await waitFor(() =>
-      expect(screen.getByTestId('question-row-2')).toHaveAttribute('data-editing', 'true'),
-    );
+    // Click "OK" → modal closes, Q1 is cancelled, Q2 does NOT open
+    fireEvent.click(screen.getByTestId('guard-ok-btn'));
+    await waitFor(() => expect(screen.queryByTestId('guard-modal')).toBeNull());
     expect(screen.getByTestId('question-row-0')).toHaveAttribute('data-editing', 'false');
+    expect(screen.getByTestId('question-row-2')).toHaveAttribute('data-editing', 'false');
   });
 });
 
