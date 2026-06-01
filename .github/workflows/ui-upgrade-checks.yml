@@ -1,17 +1,30 @@
 name: UI Upgrade — Pre-merge Checks
 
-# Runs on every push to ui-upgrade that touches frontend code.
-# Blocks the branch if typecheck, vitest, or jest unit tests fail.
+# Frontend jobs run on every push that touches src/frontend/.
 # Amplify deploys in parallel — this workflow does NOT wait for it.
+#
+# Backend deploy job runs on every push that touches src/backend/ or infra/,
+# deploying Lambda code to the shared dev stack so backend fixes are live
+# without waiting for a merge to main.
 
 on:
   push:
     branches: [ui-upgrade]
     paths:
       - "src/frontend/**"
+      - "src/backend/**"
+      - "infra/**"
 
 permissions:
   contents: read
+  id-token: write  # Required for OIDC AWS auth
+
+env:
+  PYTHON_VERSION: '3.13'
+  NODE_VERSION: '22'
+  AWS_REGION: 'us-east-1'
+  UV_VERSION: '0.5.21'
+  STACK_NAME: 'CareerVpCrudDev'
 
 jobs:
   # ── TypeScript ──────────────────────────────────────────────────────────────
@@ -74,3 +87,56 @@ jobs:
         run: cd src/frontend && npm run test:unit -- --passWithNoTests
         env:
           CI: true
+
+  # ── Backend deploy to dev ───────────────────────────────────────────────────
+  deploy-backend-dev:
+    name: Deploy backend → dev
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: '**/uv.lock'
+
+      - name: Install Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install backend dependencies
+        working-directory: src/backend
+        run: uv sync --group dev
+
+      - name: Build Lambda artifacts
+        working-directory: src/backend
+        run: make build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          role-session-name: ui-upgrade-backend-${{ github.sha }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: CDK deploy (Lambda code only)
+        working-directory: src/backend
+        env:
+          ENVIRONMENT: dev
+        run: |
+          set -o pipefail
+          make deploy 2>&1 | tee /tmp/deploy.log || {
+            if grep -Eq "(_IN_PROGRESS state and can not be updated|UPDATE_COMPLETE_CLEANUP_IN_PROGRESS)" /tmp/deploy.log; then
+              echo "::warning::Stack locked — waiting and retrying once..."
+              sleep 30
+              make deploy
+            else
+              exit 1
+            fi
+          }
