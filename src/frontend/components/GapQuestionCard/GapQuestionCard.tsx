@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useId, useState } from 'react';
+import { useId, useState } from 'react';
 import { Save as SaveIcon } from 'lucide-react';
 import { RichTextEditor } from '../RichTextEditor';
 import type { GapQuestion } from '../../lib/types';
@@ -18,6 +18,7 @@ export interface GapQuestionCardProps {
     destination: 'CV_IMPACT' | 'INTERVIEW_MVP_ONLY';
   }) => Promise<void>;
   onCancel: () => void;
+  onDraftChange?: (response: string) => void;
 }
 
 type SaveState = 'idle' | 'saving' | 'error';
@@ -37,6 +38,7 @@ export function GapQuestionCard({
   onRequestEdit,
   onSave,
   onCancel,
+  onDraftChange,
 }: GapQuestionCardProps) {
   const questionTextId = useId();
   const [editorContent, setEditorContent] = useState(response ?? '');
@@ -148,7 +150,7 @@ export function GapQuestionCard({
         <div className="mt-3 space-y-3">
           <RichTextEditor
             content={editorContent}
-            onChange={setEditorContent}
+            onChange={(val) => { setEditorContent(val); onDraftChange?.(val); }}
             readOnly={isSaving}
             ariaLabelledBy={questionTextId}
           />
