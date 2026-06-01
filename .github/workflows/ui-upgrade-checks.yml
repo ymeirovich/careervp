@@ -14,6 +14,7 @@ on:
       - "src/frontend/**"
       - "src/backend/**"
       - "infra/**"
+  workflow_dispatch:
 
 permissions:
   contents: read
