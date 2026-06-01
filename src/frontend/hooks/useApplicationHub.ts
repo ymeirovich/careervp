@@ -13,7 +13,7 @@ import type {
   RawModuleData,
   HubState,
 } from '../types/hub-state';
-import type { HubArtifact, ArtifactStatus } from '../lib/types';
+import type { HubArtifact, ArtifactStatus, CompanyResearchResult } from '../lib/types';
 import type { ModuleType } from '../types/enums';
 
 // The actual API response includes artifacts from spec-10
@@ -65,6 +65,8 @@ export function useApplicationHub(jobId: string): {
   error: Error | null;
   refetch: () => void;
   gapResponseIds: string[];
+  vprId: string | null;
+  companyResearchId: string | null;
 } {
   const enabled = jobId.length > 0;
 
@@ -93,6 +95,20 @@ export function useApplicationHub(jobId: string): {
     queryFn: async () => {
       const res = await apiClient.get<RawGapAnalysisData>(`/jobs/${jobId}/gap-questions`);
       return res.data;
+    },
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+
+  const companyResearchQuery = useQuery<CompanyResearchResult | null>({
+    queryKey: queryKeys.companyResearch.byJob(jobId),
+    queryFn: async () => {
+      try {
+        const res = await apiClient.get<CompanyResearchResult>(`/company-research/${jobId}`);
+        return res.data;
+      } catch {
+        return null;
+      }
     },
     enabled,
     placeholderData: keepPreviousData,
@@ -151,11 +167,17 @@ export function useApplicationHub(jobId: string): {
 
   const gapResponseIds = gapQuery.data?.responses?.map((r) => r.question_id) ?? [];
 
+  // VPR artifact ID — needed downstream by CV Tailoring and Cover Letter
+  const vprId = artifacts?.vpr?.artifact_id ?? null;
+
+  // Company research ID — needed by Cover Letter generation
+  const companyResearchId = companyResearchQuery.data?.id ?? null;
+
   function refetch() {
     void applicationQuery.refetch();
     void cvQuery.refetch();
     void gapQuery.refetch();
   }
 
-  return { hubState, isLoading, error, refetch, gapResponseIds };
+  return { hubState, isLoading, error, refetch, gapResponseIds, vprId, companyResearchId };
 }
