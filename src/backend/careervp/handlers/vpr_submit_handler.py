@@ -36,8 +36,6 @@ from careervp.models.api_models import VPRGenerateRequest
 from careervp.models.result import ResultCode
 from careervp.models.vpr import VPRRequest
 
-JSON_HEADERS = {'Content-Type': 'application/json'}
-
 
 def _json_headers() -> dict[str, str]:
     return {'Content-Type': 'application/json', **get_cors_headers(None)}
@@ -358,7 +356,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
     return {
         'statusCode': int(HTTPStatus.ACCEPTED),
-        'headers': JSON_HEADERS,
+        'headers': _json_headers(),
         'body': json.dumps(
             {
                 'request_id': job_id,
