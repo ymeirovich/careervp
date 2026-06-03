@@ -316,7 +316,21 @@ class JobsRepository:
 
         except (ClientError, ValueError) as e:
             if isinstance(e, ClientError):
+                error_code = e.response['Error']['Code']
                 error_msg = f'DynamoDB error: {e.response["Error"]["Message"]}'
+                if error_code == 'ConditionalCheckFailedException':
+                    # Expected when another worker already claimed this job (idempotency guard)
+                    logger.warning(
+                        'Job status condition check failed — likely claimed by another worker',
+                        job_id=job_id,
+                        status=status,
+                        expected_current_status=expected_current_status,
+                    )
+                    return Result(
+                        success=False,
+                        error=error_msg,
+                        code=ResultCode.DYNAMODB_CONDITION_CHECK_FAILED,
+                    )
             else:
                 error_msg = str(e)
             logger.error(
