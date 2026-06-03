@@ -138,6 +138,9 @@ export const api = {
   pollVPRStatus: (asyncTaskId: string): Promise<VPRStatusResponse> =>
     apiClient.get<VPRStatusResponse>(`/vpr/${asyncTaskId}/status`).then((r) => r.data),
 
+  cancelVpr: (vprId: string): Promise<{ status: string }> =>
+    apiClient.post<{ status: string }>(`/vpr/${vprId}/cancel`, {}).then((r) => r.data),
+
   getVPR: (artifactId: string): Promise<VPRStatusResponse> =>
     apiClient.get<VPRStatusResponse>(`/vpr/${artifactId}/status`).then((r) => r.data),
 
@@ -154,6 +157,9 @@ export const api = {
     apiClient
       .get<CoverLetterStatusResponse>(`/cover-letter/${asyncTaskId}/status`)
       .then((r) => r.data),
+
+  cancelCoverLetter: (coverLetterId: string): Promise<{ status: string }> =>
+    apiClient.post<{ status: string }>(`/cover-letter/${coverLetterId}/cancel`, {}).then((r) => r.data),
 
   getCoverLetter: (artifactId: string): Promise<CoverLetterStatusResponse> =>
     apiClient
@@ -174,6 +180,9 @@ export const api = {
       .get<InterviewPrepStatusResponse>(`/interview-prep/${asyncTaskId}/status`)
       .then((r) => r.data),
 
+  cancelInterviewPrep: (interviewPrepId: string): Promise<{ status: string }> =>
+    apiClient.post<{ status: string }>(`/interview-prep/${interviewPrepId}/cancel`, {}).then((r) => r.data),
+
   getInterviewPrep: (artifactId: string): Promise<InterviewPrepStatusResponse> =>
     apiClient
       .get<InterviewPrepStatusResponse>(`/interview-prep/${artifactId}/status`)
@@ -187,6 +196,9 @@ export const api = {
     apiClient
       .get<CVTailoredStatusResponse>(`/cv-tailoring/${cvTailoringId}/status`)
       .then((r) => r.data),
+
+  cancelCvTailoring: (cvTailoringId: string): Promise<{ status: string }> =>
+    apiClient.post<{ status: string }>(`/cv-tailoring/${cvTailoringId}/cancel`, {}).then((r) => r.data),
 
   getCVTailored: (cvTailoringId: string): Promise<CVTailoredStatusResponse> =>
     apiClient

@@ -112,6 +112,16 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
         )
         return delete_tailored_cv(event)
 
+    if method == 'POST' and path.endswith('/cancel'):
+        user_id = _get_user_id(event)
+        if not user_id:
+            return _response(
+                HTTPStatus.UNAUTHORIZED,
+                {'success': False, 'message': 'Missing or invalid authentication token'},
+                headers,
+            )
+        return _handle_cv_tailoring_cancel(event, user_id, headers)
+
     if method != 'POST':
         return _response(
             HTTPStatus.NOT_FOUND,
@@ -760,6 +770,65 @@ def _fetch_and_tailor_cv(request: TailorCVRequest) -> Result[Any]:
         dal=dal,
         llm_client=llm_client,
     )
+
+
+_CV_TAILORING_TERMINAL_STATUSES = {'COMPLETED', 'FAILED', 'CANCELLED'}
+
+
+def _handle_cv_tailoring_cancel(
+    event: dict[str, Any],
+    user_id: str,
+    headers: dict[str, str],
+) -> dict[str, Any]:
+    """Handle POST /cv-tailoring/{cvTailoringId}/cancel."""
+    import boto3 as _boto3
+
+    path_params = event.get('pathParameters') or {}
+    cv_tailoring_id = str(path_params.get('cvTailoringId') or '').strip()
+    if not cv_tailoring_id:
+        return _response(HTTPStatus.BAD_REQUEST, {'error': 'Missing cvTailoringId'}, headers)
+
+    table_name = os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')
+    table = _boto3.resource('dynamodb').Table(table_name)
+    sk = f'ARTIFACT#CV_TAILORED#{cv_tailoring_id}'
+
+    try:
+        get_resp = table.get_item(Key={'pk': user_id, 'sk': sk})
+        item = (get_resp or {}).get('Item')
+    except Exception as exc:
+        logger.error('DynamoDB error during cv tailoring cancel', error=str(exc))
+        return _response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Internal server error'}, headers)
+
+    if not item:
+        try:
+            query_resp = table.query(
+                KeyConditionExpression='pk = :uid AND begins_with(sk, :prefix)',
+                ExpressionAttributeValues={
+                    ':uid': user_id,
+                    ':prefix': f'ARTIFACT#CV_TAILORED#{cv_tailoring_id}',
+                },
+                Limit=1,
+            )
+            items = (query_resp or {}).get('Items', [])
+            item = items[0] if items else None
+        except Exception:
+            item = None
+        if not item:
+            return _response(HTTPStatus.NOT_FOUND, {'error': 'CV tailoring not found'}, headers)
+
+    status = str(item.get('status', '')).upper()
+    if status in _CV_TAILORING_TERMINAL_STATUSES:
+        return _response(HTTPStatus.CONFLICT, {'error': 'Cannot cancel terminal task'}, headers)
+
+    item_pk = str(item.get('pk', user_id))
+    item_sk = str(item.get('sk', sk))
+    table.update_item(
+        Key={'pk': item_pk, 'sk': item_sk},
+        UpdateExpression='SET #s = :status',
+        ExpressionAttributeNames={'#s': 'status'},
+        ExpressionAttributeValues={':status': 'CANCELLED'},
+    )
+    return _response(HTTPStatus.OK, {'status': 'cancelled'}, headers)
 
 
 def _get_user_id(event: dict[str, Any], request_data: dict[str, Any] | None = None) -> str | None:

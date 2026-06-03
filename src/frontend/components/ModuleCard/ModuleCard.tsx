@@ -24,6 +24,8 @@ export interface ModuleCardProps {
   badgeLabel?: string;
   primaryAction?: ModuleAction;
   secondaryActions?: ModuleAction[];
+  cancelAction?: ModuleAction;
+  errorMessage?: string;
   disabled?: boolean;
   // Convenience props for simple callers
   onPrimaryAction?: () => void;
@@ -88,6 +90,8 @@ export function ModuleCard({
   badgeLabel,
   primaryAction,
   secondaryActions,
+  cancelAction,
+  errorMessage,
   disabled = false,
   onPrimaryAction,
   onSecondaryAction,
@@ -145,7 +149,7 @@ export function ModuleCard({
       {description && <p className="text-text-muted text-sm">{description}</p>}
       {meta && <p className="text-text-subtle text-xs font-medium">{meta}</p>}
 
-      {isProcessing && (
+      {isProcessing && !cancelAction && (
         <div className="flex items-center gap-2 text-text-muted text-sm">
           <Spinner size="sm" aria-label={`Generating ${title || MODULE_LABELS[module]}…`} />
           <span>{progressText ?? 'Generating…'}</span>
@@ -162,7 +166,32 @@ export function ModuleCard({
         <p className="text-state-warning text-sm">{warningText}</p>
       )}
 
-      {(primaryLabel || defaultSecondary.length > 0 || secondaryActions) && (
+      {errorMessage && (
+        <p className="text-state-error text-sm">{errorMessage}</p>
+      )}
+
+      {/* Processing state with cancel: disabled "Processing..." button + Cancel */}
+      {isProcessing && cancelAction && (
+        <div className="flex flex-wrap items-center gap-2 mt-1">
+          <button
+            type="button"
+            disabled
+            className="inline-flex items-center gap-1 rounded-lg bg-primary-action px-3 py-1.5 text-sm font-medium text-white opacity-60 cursor-not-allowed"
+          >
+            Processing<span aria-hidden="true" className="animate-pulse">...</span>
+          </button>
+          <Button
+            variant={cancelAction.variant ?? 'secondary'}
+            size="sm"
+            onClick={cancelAction.onClick}
+          >
+            {cancelAction.label}
+          </Button>
+        </div>
+      )}
+
+      {/* Normal (non-processing) action buttons */}
+      {!isProcessing && (primaryLabel || defaultSecondary.length > 0 || secondaryActions) && (
         <div className="flex flex-wrap items-center gap-2 mt-1">
           {primaryLabel && (
             <Button

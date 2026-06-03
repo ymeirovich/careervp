@@ -67,7 +67,7 @@ export interface AsyncTaskResponse {
 }
 
 // ── Artifact status (hub artifacts) ──
-export type ArtifactStatus = "pending" | "processing" | "completed" | "failed";
+export type ArtifactStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";
 
 export interface HubArtifact {
   status: ArtifactStatus;

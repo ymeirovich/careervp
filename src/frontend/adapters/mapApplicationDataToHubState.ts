@@ -38,6 +38,7 @@ export function deriveModuleStatus(
   isFinalized: boolean
 ): ModuleStatus {
   if (rawStatus === null || rawStatus === undefined) return 'notStarted';
+  if (rawStatus === 'cancelled') return 'notStarted';
   if (rawStatus === 'pending' || rawStatus === 'processing') return 'processing';
   if (rawStatus === 'failed') return 'failed';
   // completed

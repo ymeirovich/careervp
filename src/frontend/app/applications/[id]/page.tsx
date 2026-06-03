@@ -11,6 +11,7 @@ import { ErrorBoundary } from '../../../components/ErrorBoundary/ErrorBoundary';
 import { Spinner } from '../../../components/ui/Spinner';
 import { ChooseBaseCVModal } from '../../../components/ChooseBaseCVModal/ChooseBaseCVModal';
 import type { ChooseBaseCVItem } from '../../../components/ChooseBaseCVModal/ChooseBaseCVModal';
+import { getArtifact } from '../../../lib/artifactStorage';
 import type { ModuleType } from '../../../types/enums';
 import type { ModuleAction } from '../../../types/hub-state';
 
@@ -24,16 +25,21 @@ const MODULE_ORDER: ModuleType[] = [
   'companyResearch',
 ];
 
+const GENERATABLE_MODULES = new Set<ModuleType>(['vpr', 'tailoredCV', 'coverLetter', 'interviewPrep']);
+
 export default function ApplicationHubPage() {
   const params = useParams();
   const jobId = typeof params.id === 'string' ? params.id : '';
   const router = useRouter();
 
-  const { hubState, isLoading, gapResponseIds, vprId, companyResearchId } = useApplicationHub(jobId);
+  const { hubState, isLoading, gapResponseIds, vprId, companyResearchId, refetch } = useApplicationHub(jobId);
   const { cv } = useCV();
   const [showChangeCVModal, setShowChangeCVModal] = useState(false);
   const [selectedCvItem, setSelectedCvItem] = useState<ChooseBaseCVItem | null>(null);
   const [regenConfirmModule, setRegenConfirmModule] = useState<ModuleType | null>(null);
+
+  // Per-module generation errors (set on cancel, cleared on new generate)
+  const [generationErrors, setGenerationErrors] = useState<Partial<Record<ModuleType, string>>>({});
 
   // Active CV: locally-selected override takes precedence over the user's default CV
   const activeCvId = (selectedCvItem?.cv_id ?? selectedCvItem?.id) ?? cv?.cv_id;
@@ -47,6 +53,13 @@ export default function ApplicationHubPage() {
   const interviewPrepGen = useGenerateModule('interviewPrep', jobId);
   const tailoredCVGen = useGenerateModule('tailoredCV', jobId);
 
+  const genMap = {
+    vpr: vprGen,
+    coverLetter: coverLetterGen,
+    interviewPrep: interviewPrepGen,
+    tailoredCV: tailoredCVGen,
+  } as const;
+
   if (isLoading) {
     return (
       <div className="flex justify-center py-12">
@@ -57,15 +70,17 @@ export default function ApplicationHubPage() {
 
   if (!hubState) return null;
 
-  async function handleGenerate(moduleType: ModuleType) {
-    const cvId = activeCvId;
+  function clearError(moduleType: ModuleType) {
+    setGenerationErrors((prev) => {
+      const next = { ...prev };
+      delete next[moduleType];
+      return next;
+    });
+  }
 
-    const genMap = {
-      vpr: vprGen,
-      coverLetter: coverLetterGen,
-      interviewPrep: interviewPrepGen,
-      tailoredCV: tailoredCVGen,
-    } as const;
+  async function handleGenerate(moduleType: ModuleType) {
+    clearError(moduleType);
+    const cvId = activeCvId;
 
     const gen = genMap[moduleType as keyof typeof genMap];
     if (gen) {
@@ -75,7 +90,22 @@ export default function ApplicationHubPage() {
         gapResponseIds,
         companyResearchId: companyResearchId ?? undefined,
       });
+      // Trigger refetch so hub status updates after generation completes
+      refetch();
     }
+  }
+
+  async function handleCancel(moduleType: ModuleType) {
+    const gen = genMap[moduleType as keyof typeof genMap];
+    if (!gen) return;
+    const cancelTaskId = gen.taskId ?? getArtifact(jobId, moduleType);
+    if (!cancelTaskId) return;
+    await gen.cancel(cancelTaskId);
+    setGenerationErrors((prev) => ({
+      ...prev,
+      [moduleType]: 'Generation was cancelled.',
+    }));
+    refetch();
   }
 
   function buildPrimaryAction(moduleType: ModuleType): ModuleAction | undefined {
@@ -230,7 +260,32 @@ export default function ApplicationHubPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {MODULE_ORDER.map((moduleType) => {
             const moduleState = hubState.modules[moduleType];
-            const primaryAction = buildPrimaryAction(moduleType);
+            const gen = GENERATABLE_MODULES.has(moduleType)
+              ? genMap[moduleType as keyof typeof genMap]
+              : null;
+
+            // Show processing UI optimistically while API call is in-flight
+            const isOptimisticallyProcessing = gen?.isGenerating ?? false;
+            const effectiveState =
+              isOptimisticallyProcessing ? 'processing' : moduleState.status;
+
+            const isActivelyProcessing =
+              isOptimisticallyProcessing || moduleState.status === 'processing';
+
+            // Only show cancel when actively processing and a taskId is known
+            const cancelTaskId = gen?.taskId ?? getArtifact(jobId, moduleType);
+            const cancelAction: ModuleAction | undefined =
+              isActivelyProcessing && cancelTaskId
+                ? {
+                    label: 'Cancel',
+                    onClick: () => void handleCancel(moduleType),
+                    variant: 'secondary' as const,
+                  }
+                : undefined;
+
+            const primaryAction = isActivelyProcessing
+              ? undefined
+              : buildPrimaryAction(moduleType);
 
             return (
               <ErrorBoundary
@@ -244,7 +299,7 @@ export default function ApplicationHubPage() {
               >
                 <ModuleCard
                   module={moduleType}
-                  state={moduleState.status}
+                  state={effectiveState}
                   title={moduleState.title}
                   subtitle={
                     moduleType === 'baseCV' && activeCvName
@@ -258,7 +313,9 @@ export default function ApplicationHubPage() {
                   progressText={moduleState.progressText}
                   badgeLabel={moduleState.badgeLabel}
                   primaryAction={primaryAction}
-                  secondaryActions={buildSecondaryActions(moduleType)}
+                  secondaryActions={isActivelyProcessing ? undefined : buildSecondaryActions(moduleType)}
+                  cancelAction={cancelAction}
+                  errorMessage={generationErrors[moduleType]}
                   disabled={moduleType === 'tailoredCV' && tailoredCVBlocked}
                 />
               </ErrorBoundary>

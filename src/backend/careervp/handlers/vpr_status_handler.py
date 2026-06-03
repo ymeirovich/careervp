@@ -106,7 +106,7 @@ def _get_or_cache_presigned_url(
 
 def _normalize_status(raw_status: Any) -> str:
     status_value = str(raw_status or 'PENDING').strip().lower()
-    if status_value in {'pending', 'processing', 'completed', 'failed'}:
+    if status_value in {'pending', 'processing', 'completed', 'failed', 'cancelled'}:
         return status_value
     return 'pending'
 
@@ -335,6 +335,48 @@ def _build_vpr_list_item(job: dict[str, Any], jobs_repo: JobsRepository | None =
     }
 
 
+_TERMINAL_STATUSES = {'COMPLETED', 'FAILED', 'CANCELLED'}
+
+
+def _handle_vpr_cancel(
+    event: dict[str, Any],
+    jobs_repo: Any,
+    user_id: str,
+) -> dict[str, Any]:
+    """Handle POST /vpr/{vprId}/cancel."""
+    vpr_id = _extract_vpr_id(event)
+    if not vpr_id:
+        return _build_error_response('Missing vprId', HTTPStatus.BAD_REQUEST)
+
+    try:
+        job = jobs_repo.get_job(vpr_id)
+    except Exception as exc:
+        logger.error('DynamoDB error during VPR cancel', job_id=vpr_id, error=str(exc))
+        return _build_error_response('Internal server error', HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    if job is None:
+        # Check S3 fallback — if present the artifact completed, treat as terminal
+        s3_fallback = _try_build_response_from_s3(vpr_id)
+        if s3_fallback is not None:
+            return _build_error_response('Cannot cancel terminal task', HTTPStatus.CONFLICT)
+        return _build_error_response('Job not found', HTTPStatus.NOT_FOUND)
+
+    job_owner = str(job.get('user_id', ''))
+    if job_owner and job_owner != user_id:
+        return _build_error_response('Forbidden', HTTPStatus.FORBIDDEN)
+
+    status = str(job.get('status', 'PENDING')).upper()
+    if status in _TERMINAL_STATUSES:
+        return _build_error_response('Cannot cancel terminal task', HTTPStatus.CONFLICT)
+
+    jobs_repo.update_job_status(vpr_id, 'CANCELLED')
+    return {
+        'statusCode': int(HTTPStatus.OK),
+        'headers': _json_headers(),
+        'body': json.dumps({'status': 'cancelled'}),
+    }
+
+
 @logger.inject_lambda_context(log_event=False)
 @tracer.capture_lambda_handler(capture_response=False)
 @metrics.log_metrics(capture_cold_start_metric=True)
@@ -355,6 +397,20 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     if not user_id:
         return _build_error_response('Authentication required', HTTPStatus.UNAUTHORIZED)
 
+    method = str(event.get('httpMethod', '')).upper()
+    path = str(event.get('path', '')).rstrip('/')
+
+    if method == 'POST' and path.endswith('/cancel'):
+        return _handle_vpr_cancel(event, jobs_repo, user_id)
+
+    return _handle_status_or_list(event, jobs_repo, user_id)
+
+
+def _handle_status_or_list(
+    event: dict[str, Any],
+    jobs_repo: JobsRepository,
+    user_id: str,
+) -> dict[str, Any]:
     if _is_list_user_vprs_request(event):
         limit = _parse_limit(event)
         jobs = jobs_repo.get_vpr_jobs_by_user(user_id=user_id, limit=limit)
@@ -372,10 +428,8 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
     logger.append_keys(job_id=vpr_id, user_id=user_id)
 
-    # Fetch job from DynamoDB
     job_result = jobs_repo.get_job(vpr_id)
 
-    # Repository returns dict or None
     if job_result is None:
         # DynamoDB record may have expired (24-hour TTL on pending jobs).
         # Fall back to S3 if the completed result is still present there.
@@ -395,7 +449,6 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     status = str(job.get('status', 'PENDING'))
     normalized_status = _normalize_status(status)
 
-    # Build response based on status
     if normalized_status == 'processing':
         response_data = _build_processing_response(job, vpr_id)
     elif normalized_status == 'completed':
@@ -405,7 +458,6 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     else:
         response_data = _build_pending_response(job, vpr_id)
 
-    # Emit metrics
     _emit_status_metrics(normalized_status)
 
     logger.info('Status query successful', job_id=vpr_id, status=normalized_status)

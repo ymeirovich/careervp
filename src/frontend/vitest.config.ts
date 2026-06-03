@@ -33,6 +33,7 @@ export default defineConfig({
       'tests/unit/vpr-page.test.tsx',
       'tests/unit/gap-analysis-page.test.tsx',
       'tests/unit/export-dropdown.test.tsx',
+      'tests/integration/hub-generate-ux.test.tsx',
     ],
   },
 });

@@ -319,6 +319,15 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         metrics.add_metric(name='CoverLetterRequests', unit=MetricUnit.Count, value=1)
         return _submit_cover_letter_request(event)
 
+    if method == 'POST' and path.endswith('/cancel'):
+        user_id = _extract_authenticated_user_id(event)
+        if not user_id:
+            return _build_response(
+                HTTPStatus.UNAUTHORIZED,
+                {'error': 'Missing or invalid authentication token', 'code': ResultCode.UNAUTHORIZED},
+            )
+        return _handle_cover_letter_cancel(event, user_id)
+
     return _build_response(
         HTTPStatus.NOT_FOUND,
         {
@@ -1105,6 +1114,61 @@ def _build_default_cover_letter_status_payload(cover_letter_id: str) -> dict[str
             ),
         },
     }
+
+
+_COVER_LETTER_TERMINAL_STATUSES = {'COMPLETED', 'FAILED', 'CANCELLED'}
+
+
+def _handle_cover_letter_cancel(event: dict[str, Any], user_id: str) -> dict[str, Any]:
+    """Handle POST /cover-letter/{coverLetterId}/cancel."""
+    import boto3 as _boto3
+
+    path_params = event.get('pathParameters') or {}
+    cover_letter_id = str(path_params.get('coverLetterId') or '').strip()
+    if not cover_letter_id:
+        return _build_response(HTTPStatus.BAD_REQUEST, {'error': 'Missing coverLetterId'})
+
+    table_name = os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME') or ''
+    table = _boto3.resource('dynamodb').Table(table_name)
+    artifact_id = f'ARTIFACT#COVER_LETTER#{cover_letter_id}'
+
+    try:
+        get_resp = table.get_item(Key={'applicationId': user_id, 'artifactId': artifact_id})
+        item = (get_resp or {}).get('Item')
+    except Exception as exc:
+        logger.error('DynamoDB error during cover letter cancel', error=str(exc))
+        return _build_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Internal server error'})
+
+    if not item:
+        try:
+            query_resp = table.query(
+                KeyConditionExpression='applicationId = :uid AND begins_with(artifactId, :prefix)',
+                ExpressionAttributeValues={
+                    ':uid': user_id,
+                    ':prefix': f'ARTIFACT#COVER_LETTER#{cover_letter_id}',
+                },
+                Limit=1,
+            )
+            items = (query_resp or {}).get('Items', [])
+            item = items[0] if items else None
+        except Exception:
+            item = None
+        if not item:
+            return _build_response(HTTPStatus.NOT_FOUND, {'error': 'Cover letter not found'})
+
+    status = str(item.get('status', '')).upper()
+    if status in _COVER_LETTER_TERMINAL_STATUSES:
+        return _build_response(HTTPStatus.CONFLICT, {'error': 'Cannot cancel terminal task'})
+
+    item_app_id = str(item.get('applicationId', user_id))
+    item_artifact_id = str(item.get('artifactId', artifact_id))
+    table.update_item(
+        Key={'applicationId': item_app_id, 'artifactId': item_artifact_id},
+        UpdateExpression='SET #s = :status',
+        ExpressionAttributeNames={'#s': 'status'},
+        ExpressionAttributeValues={':status': 'CANCELLED'},
+    )
+    return _build_response(HTTPStatus.OK, {'status': 'cancelled'})
 
 
 def _build_response(status_code: HTTPStatus, body: dict[str, Any]) -> dict[str, Any]:

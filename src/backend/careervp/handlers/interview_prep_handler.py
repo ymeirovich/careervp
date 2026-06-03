@@ -92,6 +92,15 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         metrics.add_metric(name='InterviewPrepRequests', unit=MetricUnit.Count, value=1)
         return _submit_interview_prep_request(event)
 
+    if method == 'POST' and path.endswith('/cancel'):
+        user_id = _extract_authenticated_user_id(event)
+        if not user_id:
+            return _build_response(
+                HTTPStatus.UNAUTHORIZED,
+                {'error': 'Missing or invalid authentication token', 'code': ResultCode.UNAUTHORIZED},
+            )
+        return _handle_interview_prep_cancel(event, user_id)
+
     return _build_response(
         HTTPStatus.NOT_FOUND,
         {'error': 'Endpoint not found', 'code': ResultCode.INVALID_INPUT},
@@ -1083,6 +1092,61 @@ def _build_interview_prep_status_payload(item: dict[str, Any], fallback_id: str)
             payload['error_details'] = item.get('error_details')
 
     return payload
+
+
+_INTERVIEW_PREP_TERMINAL_STATUSES = {'COMPLETED', 'FAILED', 'CANCELLED'}
+
+
+def _handle_interview_prep_cancel(event: dict[str, Any], user_id: str) -> dict[str, Any]:
+    """Handle POST /interview-prep/{interviewPrepId}/cancel."""
+    import boto3 as _boto3
+
+    path_params = event.get('pathParameters') or {}
+    interview_prep_id = str(path_params.get('interviewPrepId') or '').strip()
+    if not interview_prep_id:
+        return _build_response(HTTPStatus.BAD_REQUEST, {'error': 'Missing interviewPrepId'})
+
+    table_name = _get_artifacts_table_name()
+    table = _boto3.resource('dynamodb').Table(table_name)
+    artifact_id = f'ARTIFACT#INTERVIEW_PREP#{interview_prep_id}'
+
+    try:
+        get_resp = table.get_item(Key={'applicationId': user_id, 'artifactId': artifact_id})
+        item = (get_resp or {}).get('Item')
+    except Exception as exc:
+        logger.error('DynamoDB error during interview prep cancel', error=str(exc))
+        return _build_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Internal server error'})
+
+    if not item:
+        try:
+            query_resp = table.query(
+                KeyConditionExpression='applicationId = :uid AND begins_with(artifactId, :prefix)',
+                ExpressionAttributeValues={
+                    ':uid': user_id,
+                    ':prefix': f'ARTIFACT#INTERVIEW_PREP#{interview_prep_id}',
+                },
+                Limit=1,
+            )
+            items = (query_resp or {}).get('Items', [])
+            item = items[0] if items else None
+        except Exception:
+            item = None
+        if not item:
+            return _build_response(HTTPStatus.NOT_FOUND, {'error': 'Interview prep not found'})
+
+    status = str(item.get('status', '')).upper()
+    if status in _INTERVIEW_PREP_TERMINAL_STATUSES:
+        return _build_response(HTTPStatus.CONFLICT, {'error': 'Cannot cancel terminal task'})
+
+    item_app_id = str(item.get('applicationId', user_id))
+    item_artifact_id = str(item.get('artifactId', artifact_id))
+    table.update_item(
+        Key={'applicationId': item_app_id, 'artifactId': item_artifact_id},
+        UpdateExpression='SET #s = :status',
+        ExpressionAttributeNames={'#s': 'status'},
+        ExpressionAttributeValues={':status': 'CANCELLED'},
+    )
+    return _build_response(HTTPStatus.OK, {'status': 'cancelled'})
 
 
 def _build_response(status_code: HTTPStatus, body: dict[str, Any]) -> dict[str, Any]:
