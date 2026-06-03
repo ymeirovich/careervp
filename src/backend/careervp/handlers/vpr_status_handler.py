@@ -28,8 +28,6 @@ from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
 
-JSON_HEADERS = {'Content-Type': 'application/json'}
-
 
 def _json_headers() -> dict[str, str]:
     return {'Content-Type': 'application/json', **get_cors_headers(None)}
@@ -464,7 +462,7 @@ def _handle_status_or_list(
 
     return {
         'statusCode': int(HTTPStatus.OK),
-        'headers': JSON_HEADERS,
+        'headers': _json_headers(),
         'body': json.dumps(response_data),
     }
 
@@ -498,7 +496,7 @@ def _try_build_response_from_s3(vpr_id: str) -> dict[str, Any] | None:
     }
     return {
         'statusCode': int(HTTPStatus.OK),
-        'headers': JSON_HEADERS,
+        'headers': _json_headers(),
         'body': json.dumps(response_data),
     }
 
@@ -507,7 +505,7 @@ def _build_error_response(message: str, status: HTTPStatus) -> dict[str, Any]:
     """Construct a standardized error response."""
     return {
         'statusCode': int(status),
-        'headers': JSON_HEADERS,
+        'headers': _json_headers(),
         'body': json.dumps(
             {
                 'error': message,
