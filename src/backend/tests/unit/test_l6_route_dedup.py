@@ -17,8 +17,8 @@ import pytest
 
 INFRA_DIR = '/Users/yitzchak/Documents/dev/careervp/infra'
 API_CONSTRUCT_PATH = f'{INFRA_DIR}/careervp/api_construct.py'
-EXPECTED_CANONICAL_ROUTE_COUNT = 35
-EXPECTED_ROUTE_MAP_OPERATION_COUNT = 38
+EXPECTED_CANONICAL_ROUTE_COUNT = 39
+EXPECTED_ROUTE_MAP_OPERATION_COUNT = 42
 FROZEN_SPEC_PATH = '/Users/yitzchak/Documents/dev/careervp/docs/beta/evidence/I7_routes/frozen_spec.json'
 
 # Deprecated route prefixes that must not appear in CDK
@@ -99,10 +99,10 @@ class TestNoApiPrefixRoutes:
 
 @pytest.mark.unit
 class TestCanonicalRouteCount:
-    """Canonical route spec must define exactly 30 routes."""
+    """Canonical route spec must define exactly 39 routes."""
 
     def test_canonical_route_count_is_30(self):
-        """frozen_spec.json has exactly 30 canonical routes."""
+        """frozen_spec.json has exactly 39 canonical routes."""
         assert os.path.exists(FROZEN_SPEC_PATH), f'Missing: {FROZEN_SPEC_PATH}'
         with open(FROZEN_SPEC_PATH) as f:
             spec = json.load(f)
@@ -131,7 +131,7 @@ class TestCanonicalRouteCount:
 class TestCdkRouteMapMatchesFrozenSpec:
     """CDK route_map should exactly match frozen canonical operations."""
 
-    def test_route_map_operation_count_is_30(self):
+    def test_route_map_operation_count_is_42(self):
         route_map_ops = _extract_route_map_operations()
         assert len(route_map_ops) == EXPECTED_ROUTE_MAP_OPERATION_COUNT, (
             f'Expected {EXPECTED_ROUTE_MAP_OPERATION_COUNT} CDK route operations, got {len(route_map_ops)}'
