@@ -390,13 +390,21 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         404 Not Found: Job not found
     """
     set_request_origin(event)
+
+    method = str(event.get('httpMethod', '')).upper()
+    path = str(event.get('path', '')).rstrip('/')
+
+    if method == 'OPTIONS':
+        return {
+            'statusCode': int(HTTPStatus.OK),
+            'headers': _json_headers(),
+            'body': json.dumps({'status': 'ok'}),
+        }
+
     jobs_repo = JobsRepository()
     user_id = _extract_authenticated_user_id(event)
     if not user_id:
         return _build_error_response('Authentication required', HTTPStatus.UNAUTHORIZED)
-
-    method = str(event.get('httpMethod', '')).upper()
-    path = str(event.get('path', '')).rstrip('/')
 
     if method == 'POST' and path.endswith('/cancel'):
         return _handle_vpr_cancel(event, jobs_repo, user_id)
