@@ -1,0 +1,102 @@
+prompt_id: FE-UI-028-tests
+purpose: Generate test stubs for the Export/Download feature (FE-UI-028)
+model: sonnet
+depends_on: docs/upgrade/specs/FE-UI-028-export-download.yaml
+
+instructions: |
+  ROLE: Test engineer writing stubs for FE-UI-028.
+  OUTPUT: Test files with describe blocks, test names, imports, mock setup, TODO markers.
+  No implementation code. No prose.
+
+context:
+  feature: "GET /jobs/{jobId}/artifacts/{moduleType}/export?format=docx|pdf → { download_url, expires_at }"
+  modules: [vpr, cover_letter, interview_prep, cv_tailored]
+  formats: docx (implemented), pdf (501 stub)
+
+  files_under_test:
+    frontend:
+      - src/frontend/components/ExportDropdown/ExportDropdown.tsx
+    backend:
+      - src/backend/careervp/handlers/export_handler.py
+
+  existing_frontend_tests: src/frontend/tests/unit/export-dropdown.test.tsx  # extend, do not replace
+  backend_test_dir: src/backend/tests/unit/
+  backend_integration_test_dir: src/backend/tests/integration/
+
+  frontend_mock_pattern: |
+    vi.mock('../../api/methods', () => ({ api: apiMocks }));
+    const apiMocks = vi.hoisted(() => ({ exportArtifact: vi.fn() }));
+
+  backend_event_factory: |
+    def make_event(job_id, module_type, fmt, user_id='user-1'):
+        return {
+            'httpMethod': 'GET',
+            'pathParameters': {'jobId': job_id, 'moduleType': module_type},
+            'queryStringParameters': {'format': fmt},
+            'headers': {'origin': 'https://ui-upgrade.d3j2wnm8g5clnw.amplifyapp.com'},
+            'requestContext': {'authorizer': {'claims': {'sub': user_id}}},
+        }
+
+behaviors:
+  frontend_unit:
+    - renders export button and closed dropdown
+    - opens dropdown on button click revealing DOCX and PDF options
+    - closes dropdown when clicking outside
+    - closes dropdown after format selected
+    - calls api.exportArtifact(jobId, moduleType, 'docx') when DOCX clicked
+    - calls api.exportArtifact(jobId, moduleType, 'pdf') when PDF clicked
+    - triggers anchor download with download_url on success
+    - shows 'Export is coming soon!' on 501
+    - shows 'Download failed. Please try again.' on non-501 error
+    - button shows 'Exporting…' and is disabled while request in flight
+    - button re-enables after success
+    - button re-enables after error
+    - passes correct moduleType for each of 4 module types (parameterize)
+
+  backend_unit:
+    options_preflight:
+      - OPTIONS returns 200 with Access-Control-Allow-Origin header for allowed origin
+      - OPTIONS returns 200 with empty CORS headers for disallowed origin
+    input_validation:
+      - unknown format returns 400
+      - missing format param returns 400
+      - unsupported moduleType returns 400
+    per_module_docx:  # parameterize across [vpr, cover_letter, interview_prep, cv_tailored]
+      - happy path: reads data source, generates docx, uploads to S3, returns 200 with download_url
+      - artifact not found in data source returns 404
+      - data source read failure returns 500
+      - S3 upload failure returns 500
+    pdf_stub:
+      - ?format=pdf returns 501 for any module
+
+  backend_integration:
+    - full Lambda event for vpr docx: mock S3 get_object (VPR JSON) + put_object + presign → 200
+    - full Lambda event for cover_letter docx: mock DynamoDB get_item (artifacts table) + S3 put_object + presign → 200
+    - full Lambda event for interview_prep docx: mock DynamoDB get_item (artifacts table) + S3 put_object + presign → 200
+    - full Lambda event for cv_tailored docx: mock DynamoDB get_item (main db table, sk prefix ARTIFACT#CV_TAILORED#) + S3 put_object + presign → 200
+    - presigned URL in response contains artifacts bucket domain
+    - CORS headers present on 200 and error responses
+
+output_files:
+  - path: src/frontend/tests/unit/export-dropdown.test.tsx
+    action: extend existing file
+    note: preserve all currently passing tests; add missing behaviors from list above
+
+  - path: src/backend/tests/unit/test_export_handler.py
+    action: create
+    framework: pytest
+    fixtures: mock_s3 (moto or unittest.mock), mock_dynamodb
+
+  - path: src/backend/tests/integration/test_export_handler_integration.py
+    action: create
+    framework: pytest
+    fixtures: mock_s3_with_vpr_data, mock_dynamodb_with_cover_letter, mock_dynamodb_with_interview_prep, mock_dynamodb_with_cv_tailored
+
+rules:
+  - one assertion per test where practical
+  - backend unit tests mock boto3 at client level (not moto) for speed
+  - integration tests may use moto for realistic S3/DDB behavior
+  - use pytest.mark.parametrize for per-module repetition
+  - mark unimplemented backend behavior: # TODO(FE-UI-028): implement in export_handler.py
+  - no `any` types in TypeScript
+  - reset all mocks in beforeEach / pytest autouse fixtures

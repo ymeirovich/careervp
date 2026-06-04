@@ -84,11 +84,12 @@ export function useApplicationHub(jobId: string): {
     placeholderData: keepPreviousData,
   });
 
-  const cvQuery = useQuery<RawCVData>({
+  const cvQuery = useQuery<RawCVData | null>({
     queryKey: queryKeys.cv.detail(),
     queryFn: async () => {
-      const res = await apiClient.get<RawCVData>('/users/me/cv');
-      return res.data;
+      const res = await apiClient.get<{ cvs: Array<{ cv_id?: string }> }>('/users/me/cv');
+      const first = res.data?.cvs?.[0];
+      return first ? { cv_id: first.cv_id } : null;
     },
     enabled,
     placeholderData: keepPreviousData,
@@ -165,7 +166,6 @@ export function useApplicationHub(jobId: string): {
       moduleData,
       gapQuery.data ?? null,
       cvQuery.data ?? null,
-      null,
     );
   }
 

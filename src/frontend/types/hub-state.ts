@@ -38,10 +38,7 @@ export interface RawGapAnalysisData {
 }
 
 export interface RawCVData {
-  cv_id: string;
-  created_at: string;
-  updated_at: string;
-  version: number;
+  cv_id?: string;
 }
 
 export interface ModuleAction {
