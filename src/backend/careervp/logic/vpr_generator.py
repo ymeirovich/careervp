@@ -208,7 +208,7 @@ class VPRSixStagePipeline:
         self._input_tokens_total = 0
         self._output_tokens_total = 0
         self._cost_total = 0.0
-        self._model_name = 'claude-sonnet-4-5'
+        self._model_name = 'claude-sonnet-4-6'
         self._regeneration_count = 0
 
     @property

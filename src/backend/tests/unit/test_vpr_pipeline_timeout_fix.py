@@ -93,7 +93,7 @@ def _make_llm_client(*, fail: bool = False) -> MagicMock:
                 'input_tokens': 10,
                 'output_tokens': 10,
                 'cost': 0.001,
-                'model': 'claude-sonnet-4-5',
+                'model': 'claude-sonnet-4-6',
             },
             code=ResultCode.SUCCESS,
         )

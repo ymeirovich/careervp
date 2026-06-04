@@ -2,7 +2,7 @@
 LLM Router Utility - Hybrid Model Strategy.
 Per docs/specs/00-llm-router.md: Centralized model switching for 91% profit margins.
 
-STRATEGIC tasks (Sonnet 4.5): VPR Generation, Gap Analysis
+STRATEGIC tasks (Sonnet 4.6): VPR Generation, Gap Analysis
 TEMPLATE tasks (Haiku 4.5): CV Tailoring, Cover Letter, Interview Prep
 """
 
@@ -23,9 +23,9 @@ from careervp.models.result import Result, ResultCode
 P = ParamSpec('P')
 R = TypeVar('R')
 
-# Model IDs per Decision 1.2 in CLAUDE.md - Updated to current available versions
-SONNET_MODEL_ID = 'claude-sonnet-4-5-20250929'
-HAIKU_MODEL_ID = 'claude-haiku-4-5-20251001'
+# Model IDs — injected by CDK as env vars so swapping models needs only cdk deploy
+SONNET_MODEL_ID = os.environ.get('STRATEGIC_MODEL_ID', 'claude-sonnet-4-6')
+HAIKU_MODEL_ID = os.environ.get('TEMPLATE_MODEL_ID', 'claude-haiku-4-5-20251001')
 
 # Cost thresholds for alerting (per CLAUDE.md Emergency Contacts)
 # VPR Sonnet baseline ~$0.16/run; $0.25 gives headroom for one retry
@@ -35,7 +35,7 @@ MAX_COST_PER_APPLICATION = 0.25
 class TaskMode(str, Enum):
     """Task complexity modes for model routing."""
 
-    STRATEGIC = 'STRATEGIC'  # VPR, Gap Analysis -> Sonnet 4.5
+    STRATEGIC = 'STRATEGIC'  # VPR, Gap Analysis -> Sonnet 4.6
     TEMPLATE = 'TEMPLATE'  # CV, Cover Letter, Interview -> Haiku 4.5
 
 

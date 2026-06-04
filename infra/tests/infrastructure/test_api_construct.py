@@ -557,6 +557,14 @@ def test_vpr_worker_has_required_env_vars(
         "VPR worker missing DYNAMODB_TABLE_NAME — CV lookup falls back to "
         "'careervp-users-dev' which may be wrong and lacks IAM permissions."
     )
+    assert "STRATEGIC_MODEL_ID" in env_vars, (
+        "VPR worker missing STRATEGIC_MODEL_ID — llm_client falls back to hardcoded "
+        "model ID which may be retired."
+    )
+    assert "TEMPLATE_MODEL_ID" in env_vars, (
+        "VPR worker missing TEMPLATE_MODEL_ID — llm_client falls back to hardcoded "
+        "model ID which may be retired."
+    )
 
 
 def test_vpr_worker_has_no_dynamo_stream_event_source(

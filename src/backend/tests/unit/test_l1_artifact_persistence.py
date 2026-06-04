@@ -332,12 +332,12 @@ def test_vpr_generation_persists_via_save_vpr() -> None:
         mock_llm.invoke.side_effect = [
             Result(
                 success=True,
-                data={'text': _stage_3_payload(), 'input_tokens': 500, 'output_tokens': 350, 'cost': 0.01, 'model': 'claude-sonnet-4-5'},
+                data={'text': _stage_3_payload(), 'input_tokens': 500, 'output_tokens': 350, 'cost': 0.01, 'model': 'claude-sonnet-4-6'},
                 code=ResultCode.SUCCESS,
             ),
             Result(
                 success=True,
-                data={'text': _stage_4_payload(), 'input_tokens': 450, 'output_tokens': 300, 'cost': 0.009, 'model': 'claude-sonnet-4-5'},
+                data={'text': _stage_4_payload(), 'input_tokens': 450, 'output_tokens': 300, 'cost': 0.009, 'model': 'claude-sonnet-4-6'},
                 code=ResultCode.SUCCESS,
             ),
         ]

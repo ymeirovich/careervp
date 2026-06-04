@@ -161,6 +161,16 @@ BILLING_WEBHOOK_DLQ = "billing-webhook-dlq"
 ANTHROPIC_API_KEY_SSM_PARAM = f"/careervp/{ENVIRONMENT}/anthropic-api-key"
 ANTHROPIC_API_KEY_ENV_VAR = "ANTHROPIC_API_KEY_SSM_PARAM"
 
+# =============================================================================
+# LLM MODEL IDs  — update here + cdk deploy to swap models, no code change needed
+# =============================================================================
+STRATEGIC_MODEL_ID = "claude-sonnet-4-6"  # VPR, Gap Analysis
+TEMPLATE_MODEL_ID = (
+    "claude-haiku-4-5-20251001"  # CV Tailoring, Cover Letter, Interview Prep
+)
+STRATEGIC_MODEL_ID_ENV_VAR = "STRATEGIC_MODEL_ID"
+TEMPLATE_MODEL_ID_ENV_VAR = "TEMPLATE_MODEL_ID"
+
 # Payment provider — webhook secrets (primary + previous for zero-downtime rotation)
 WEBHOOK_SECRET_SSM_PARAM = f"/careervp/{ENVIRONMENT}/payment-provider-webhook-secret"
 WEBHOOK_SECRET_PREVIOUS_SSM_PARAM = (
