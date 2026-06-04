@@ -100,6 +100,11 @@ export const api = {
     ),
 
   // ── CV ──
+  getCVById: async (cvId: string): Promise<UserCV | null> =>
+    apiFetchOrNull(() =>
+      apiClient.get<UserCV>(`/users/me/cv/${cvId}`).then((r) => r.data),
+    ),
+
   getCV: async (): Promise<UserCV | null> => {
     const data = await apiFetchOrNull(() =>
       apiClient.get<{ cvs: UserCV[] }>('/users/me/cv').then((r) => r.data),
