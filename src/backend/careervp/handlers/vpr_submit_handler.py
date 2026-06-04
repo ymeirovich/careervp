@@ -238,9 +238,10 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         existing_job_id = str(existing_job.get('job_id', ''))
         existing_status = str(existing_job.get('status', 'PROCESSING')).lower()
 
-        # Failed jobs (or stuck processing jobs) should not block retries — fall through.
-        is_stuck = existing_status != 'failed' and _is_stuck_processing(existing_job)
-        if existing_status != 'failed' and not is_stuck:
+        # Failed/cancelled jobs (or stuck processing jobs) should not block retries — fall through.
+        retriable_statuses = {'failed', 'cancelled'}
+        is_stuck = existing_status not in retriable_statuses and _is_stuck_processing(existing_job)
+        if existing_status not in retriable_statuses and not is_stuck:
             logger.info(
                 'Idempotent duplicate request',
                 job_id=existing_job_id,
