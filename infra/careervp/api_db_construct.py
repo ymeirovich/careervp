@@ -523,7 +523,11 @@ class ApiDbConstruct(Construct):
                     allowed_methods=[
                         s3.HttpMethods.GET,
                     ],
-                    allowed_origins=["https://careervp.com", "http://localhost:3000"],
+                    allowed_origins=[
+                        "https://careervp.com",
+                        "http://localhost:3000",
+                        "https://*.amplifyapp.com",
+                    ],
                     allowed_headers=["*"],
                     max_age=3000,
                 )

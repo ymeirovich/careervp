@@ -327,10 +327,11 @@ function VPRContent({ jobId }: { jobId: string }) {
         const downloadUrl = vprData?.result?.download_url;
         if (downloadUrl) {
           const resp = await fetch(downloadUrl);
-          if (resp.ok) {
-            const data: VPRFullData = await resp.json();
-            setFullVpr(data);
+          if (!resp.ok) {
+            throw new Error(`Failed to fetch VPR result from S3: ${resp.status} ${resp.statusText}`);
           }
+          const data: VPRFullData = await resp.json();
+          setFullVpr(data);
         }
       } catch (err) {
         setError('Failed to load Value Proposition Report.');
