@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useApplicationHub } from '../../../hooks/useApplicationHub';
 import { useGenerateModule } from '../../../hooks/useGenerateModule';
-import { useCV } from '../../../hooks/useCV';
 import { ModuleCard } from '../../../components/ModuleCard/ModuleCard';
 import { HubLayout } from '../../../components/layout/HubLayout';
 import { ErrorBoundary } from '../../../components/ErrorBoundary/ErrorBoundary';
@@ -32,8 +31,7 @@ export default function ApplicationHubPage() {
   const jobId = typeof params.id === 'string' ? params.id : '';
   const router = useRouter();
 
-  const { hubState, isLoading, gapResponseIds, vprId, companyResearchId, refetch } = useApplicationHub(jobId);
-  const { cv } = useCV();
+  const { hubState, isLoading, gapResponseIds, vprId, companyResearchId, cvId, cvName, refetch } = useApplicationHub(jobId);
   const [showChangeCVModal, setShowChangeCVModal] = useState(false);
   const [selectedCvItem, setSelectedCvItem] = useState<ChooseBaseCVItem | null>(null);
   const [regenConfirmModule, setRegenConfirmModule] = useState<ModuleType | null>(null);
@@ -42,10 +40,10 @@ export default function ApplicationHubPage() {
   const [generationErrors, setGenerationErrors] = useState<Partial<Record<ModuleType, string>>>({});
 
   // Active CV: locally-selected override takes precedence over the user's default CV
-  const activeCvId = (selectedCvItem?.cv_id ?? selectedCvItem?.id) ?? cv?.cv_id;
+  const activeCvId = (selectedCvItem?.cv_id ?? selectedCvItem?.id) ?? cvId ?? undefined;
   const activeCvName = selectedCvItem
     ? (selectedCvItem.file_name ?? selectedCvItem.full_name ?? selectedCvItem.name ?? 'Selected CV')
-    : cv?.full_name;
+    : cvName ?? undefined;
 
   // All generators instantiated unconditionally (Rules of Hooks)
   const vprGen = useGenerateModule('vpr', jobId);

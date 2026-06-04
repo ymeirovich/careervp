@@ -123,7 +123,7 @@ describe('ApplicationHubPage — action handlers', () => {
 
   it('Generate CTA calls useGenerateModule.generate with correct moduleType', async () => {
     const hubState = makeHubState();
-    mockApplicationHub.mockReturnValue({ hubState, isLoading: false, error: null, refetch: vi.fn() });
+    mockApplicationHub.mockReturnValue({ hubState, isLoading: false, error: null, refetch: vi.fn(), gapResponseIds: [], vprId: null, companyResearchId: null, cvId: 'cv-1', cvName: null });
 
     const HubPage = await getHubPage();
     renderWithProviders(<HubPage />);
@@ -156,7 +156,7 @@ describe('ApplicationHubPage — action handlers', () => {
         },
       },
     });
-    mockApplicationHub.mockReturnValue({ hubState, isLoading: false, error: null, refetch: vi.fn() });
+    mockApplicationHub.mockReturnValue({ hubState, isLoading: false, error: null, refetch: vi.fn(), gapResponseIds: [], vprId: null, companyResearchId: null, cvId: 'cv-1', cvName: null });
 
     const HubPage = await getHubPage();
     renderWithProviders(<HubPage />);
@@ -184,7 +184,7 @@ describe('ApplicationHubPage — action handlers', () => {
         },
       },
     });
-    mockApplicationHub.mockReturnValue({ hubState, isLoading: false, error: null, refetch: vi.fn() });
+    mockApplicationHub.mockReturnValue({ hubState, isLoading: false, error: null, refetch: vi.fn(), gapResponseIds: [], vprId: null, companyResearchId: null, cvId: 'cv-1', cvName: null });
 
     const HubPage = await getHubPage();
     renderWithProviders(<HubPage />);

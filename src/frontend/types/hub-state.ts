@@ -39,6 +39,7 @@ export interface RawGapAnalysisData {
 
 export interface RawCVData {
   cv_id?: string;
+  full_name?: string;
 }
 
 export interface ModuleAction {

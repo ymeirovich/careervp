@@ -71,6 +71,8 @@ export function useApplicationHub(jobId: string): {
   gapResponseIds: string[];
   vprId: string | null;
   companyResearchId: string | null;
+  cvId: string | null;
+  cvName: string | null;
 } {
   const enabled = jobId.length > 0;
 
@@ -87,9 +89,9 @@ export function useApplicationHub(jobId: string): {
   const cvQuery = useQuery<RawCVData | null>({
     queryKey: queryKeys.cv.detail(),
     queryFn: async () => {
-      const res = await apiClient.get<{ cvs: Array<{ cv_id?: string }> }>('/users/me/cv');
+      const res = await apiClient.get<{ cvs: Array<{ cv_id?: string; full_name?: string }> }>('/users/me/cv');
       const first = res.data?.cvs?.[0];
-      return first ? { cv_id: first.cv_id } : null;
+      return first ? { cv_id: first.cv_id, full_name: first.full_name } : null;
     },
     enabled,
     placeholderData: keepPreviousData,
@@ -177,11 +179,15 @@ export function useApplicationHub(jobId: string): {
   // Company research ID — needed by Cover Letter generation
   const companyResearchId = companyResearchQuery.data?.id ?? null;
 
+  // CV identity — exposed to avoid a separate useCV() call on pages that already use this hook
+  const cvId = cvQuery.data?.cv_id ?? null;
+  const cvName = cvQuery.data?.full_name ?? null;
+
   function refetch() {
     void applicationQuery.refetch();
     void cvQuery.refetch();
     void gapQuery.refetch();
   }
 
-  return { hubState, isLoading, error, refetch, gapResponseIds, vprId, companyResearchId };
+  return { hubState, isLoading, error, refetch, gapResponseIds, vprId, companyResearchId, cvId, cvName };
 }

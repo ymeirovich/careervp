@@ -28,6 +28,11 @@ vi.mock('../../../hooks/useApplicationHub', () => ({
     isLoading: applicationHubMocks.isLoading,
     error: null,
     refetch: vi.fn(),
+    gapResponseIds: [],
+    vprId: null,
+    companyResearchId: null,
+    cvId: 'cv_123',
+    cvName: null,
   }),
 }));
 
