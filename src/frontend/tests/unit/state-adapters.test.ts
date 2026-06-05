@@ -177,6 +177,69 @@ describe("deriveHubStatus", () => {
   });
 });
 
+describe("deriveHubStatus — gap analysis / PROCESSING_BLOCKED", () => {
+  const base: Record<ModuleType, ModuleStatus> = {
+    vpr: 'notStarted',
+    tailoredCV: 'notStarted',
+    coverLetter: 'notStarted',
+    interviewPrep: 'notStarted',
+    gapAnalysis: 'notStarted',
+    companyResearch: 'notStarted',
+    baseCV: 'notStarted',
+  };
+
+  it("gapAnalysis notStarted + baseCV ready → PROCESSING_BLOCKED", () => {
+    const statuses = { ...base, baseCV: 'ready' as ModuleStatus };
+    expect(deriveHubStatus(statuses, new Set(), false)).toBe("PROCESSING_BLOCKED");
+  });
+
+  it("gapAnalysis ready + baseCV ready → NOT PROCESSING_BLOCKED", () => {
+    const statuses = { ...base, gapAnalysis: 'ready' as ModuleStatus, baseCV: 'ready' as ModuleStatus };
+    expect(deriveHubStatus(statuses, new Set(), false)).not.toBe("PROCESSING_BLOCKED");
+  });
+
+  it("gapAnalysis processing → LOADING (not PROCESSING_BLOCKED)", () => {
+    const statuses = { ...base, gapAnalysis: 'processing' as ModuleStatus, baseCV: 'ready' as ModuleStatus };
+    expect(deriveHubStatus(statuses, new Set(), false)).toBe("LOADING");
+    expect(deriveHubStatus(statuses, new Set(), false)).not.toBe("PROCESSING_BLOCKED");
+  });
+});
+
+describe("mapApplicationDataToHubState — gap analysis module status", () => {
+  it("gapAnalysis moduleData completed → module status ready, hubStatus not PROCESSING_BLOCKED", () => {
+    const result = mapApplicationDataToHubState(
+      makeApplication(),
+      { gapAnalysis: makeRawModule({ status: 'completed' }) },
+      null,
+      makeCVData(),
+    );
+    expect(result.modules.gapAnalysis.status).toBe("ready");
+    expect(result.hubStatus).not.toBe("PROCESSING_BLOCKED");
+  });
+
+  it("gapAnalysis absent + baseCV ready → PROCESSING_BLOCKED", () => {
+    const result = mapApplicationDataToHubState(
+      makeApplication(),
+      {},
+      null,
+      makeCVData(),
+    );
+    expect(result.modules.gapAnalysis.status).toBe("notStarted");
+    expect(result.hubStatus).toBe("PROCESSING_BLOCKED");
+  });
+
+  it("gapAnalysis moduleData processing → module status processing, hubStatus LOADING", () => {
+    const result = mapApplicationDataToHubState(
+      makeApplication(),
+      { gapAnalysis: makeRawModule({ status: 'processing' }) },
+      null,
+      makeCVData(),
+    );
+    expect(result.modules.gapAnalysis.status).toBe("processing");
+    expect(result.hubStatus).toBe("LOADING");
+  });
+});
+
 describe("mapApplicationDataToHubState integration", () => {
   it("returns HubState with all 7 module entries", () => {
     const application = makeApplication();

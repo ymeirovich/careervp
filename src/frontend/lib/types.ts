@@ -365,7 +365,7 @@ export interface CoverLetterRequest {
   cv_id: string;
   vpr_id: string;
   gap_response_ids: string[];
-  company_research_id: string;
+  company_research_id?: string;
   options?: Record<string, unknown>;
 }
 

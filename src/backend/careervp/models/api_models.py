@@ -331,7 +331,7 @@ class CoverLetterRequest(APIModel):
     application_id: str | None = None
     vpr_id: str = Field(min_length=1)
     gap_response_ids: list[str]
-    company_research_id: str = Field(min_length=1)
+    company_research_id: str | None = None
     options: CoverLetterOptions | None = None
 
     @field_validator('gap_response_ids')

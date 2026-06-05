@@ -29,6 +29,7 @@ const config: Config = {
         '<rootDir>/tests/unit/api-methods.test.ts',
         '<rootDir>/tests/unit/artifact-storage.test.ts',
         '<rootDir>/tests/unit/module-card-actions.test.tsx',
+        '<rootDir>/tests/unit/use-generate-module.test.ts',
       ],
       transform: { '^.+\\.ts$': 'ts-jest' },
       testEnvironment: 'node',

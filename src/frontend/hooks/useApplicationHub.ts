@@ -165,6 +165,16 @@ export function useApplicationHub(jobId: string): {
     const tailoredCVData = buildModuleData(jobId, artifacts?.cv_tailored, tailoredCVStatus.status);
     if (tailoredCVData) moduleData.tailoredCV = tailoredCVData;
 
+    // Gap analysis completion is signalled by responses present in the application payload,
+    // not by an artifact record — so we derive its module status here directly.
+    const gapResponses = appData.gap_analysis?.responses ?? [];
+    const gapQuestions = appData.gap_analysis?.questions ?? [];
+    if (gapResponses.length > 0) {
+      moduleData.gapAnalysis = { job_id: jobId, status: 'completed', created_at: '', updated_at: '' };
+    } else if (gapQuestions.length > 0) {
+      moduleData.gapAnalysis = { job_id: jobId, status: 'processing', created_at: '', updated_at: '' };
+    }
+
     hubState = mapApplicationDataToHubState(
       appData,
       moduleData,

@@ -34,6 +34,7 @@ export default defineConfig({
       'tests/unit/gap-analysis-page.test.tsx',
       'tests/unit/export-dropdown.test.tsx',
       'tests/integration/hub-generate-ux.test.tsx',
+      'tests/unit/use-generate-module.test.ts',
     ],
   },
 });

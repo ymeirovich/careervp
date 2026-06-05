@@ -54,7 +54,7 @@ export function useGenerateModule(
             cv_id: options.cvId!,
             vpr_id: options.vprId!,
             gap_response_ids: options.gapResponseIds ?? [],
-            company_research_id: options.companyResearchId ?? '',
+            company_research_id: options.companyResearchId,
           });
           break;
         case 'interviewPrep':
