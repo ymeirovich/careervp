@@ -211,6 +211,9 @@ class ApiConstruct(Construct):
         self._add_billing_eventbridge_rule()
         self.billing_error_alarm = self._add_billing_error_alarm()
 
+        # Export infrastructure (FE-UI-028)
+        self.export_lambda = self._add_export_lambda()
+
         self._add_openapi_contract_routes()
 
         self._build_swagger_endpoints(
@@ -2186,6 +2189,47 @@ class ApiConstruct(Construct):
         self.api_db.idempotency_db.grant_read_write_data(lambda_function)
         return lambda_function
 
+    def _add_export_lambda(self) -> _lambda.Function:
+        """Export handler Lambda — generates DOCX artifacts and returns presigned URLs (FE-UI-028)."""
+        function_name = self.naming.lambda_name(constants.EXPORT_FEATURE)
+        log_group = logs.LogGroup(
+            self,
+            "ExportLambdaLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
+        lambda_function = _lambda.Function(
+            self,
+            "ExportLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.export_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                "TABLE_NAME": self.api_db.db.table_name,
+                "ARTIFACTS_TABLE_NAME": self.api_db.artifacts_table.table_name,
+                "VPR_RESULTS_BUCKET_NAME": self.api_db.vpr_results_bucket.bucket_name,
+                "ARTIFACTS_BUCKET_NAME": self.api_db.artifacts_bucket.bucket_name,
+                "ALLOWED_ORIGINS": self.node.try_get_context("allowed_origins")
+                or "https://main.d3j2wnm8g5clnw.amplifyapp.com,https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com,https://ui-upgrade.d3j2wnm8g5clnw.amplifyapp.com,https://app.careervp.com,https://dev.careervp.com,https://stage.careervp.com,http://localhost:3000",
+            },
+            timeout=Duration.seconds(29),
+            memory_size=512,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+        self.api_db.vpr_results_bucket.grant_read(lambda_function)
+        self.api_db.artifacts_bucket.grant_read_write(lambda_function)
+        self.api_db.artifacts_table.grant(lambda_function, "dynamodb:GetItem")
+        self.api_db.db.grant(lambda_function, "dynamodb:GetItem")
+        return lambda_function
+
     def _add_billing_reconcile_lambda(self) -> _lambda.Function:
         """Billing reconciliation Lambda triggered nightly by EventBridge."""
         function_name = self.naming.lambda_name(constants.BILLING_RECONCILE_FEATURE)
@@ -2349,6 +2393,12 @@ class ApiConstruct(Construct):
             ("/billing/portal", "POST", self.billing_lambda),
             ("/billing/webhook", "POST", self.billing_lambda),
             ("/users/me/subscription", "GET", self.billing_lambda),
+            # Export route (FE-UI-028)
+            (
+                "/jobs/{jobId}/artifacts/{moduleType}/export",
+                "GET",
+                self.export_lambda,
+            ),
         ]
         for path, method, handler in route_map:
             self._add_route_method(path, method, handler)

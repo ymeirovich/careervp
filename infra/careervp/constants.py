@@ -149,6 +149,7 @@ CONFIGURATION_MAX_AGE_MINUTES = "5"
 # =============================================================================
 BILLING_LAMBDA = "billing"
 BILLING_FEATURE = "billing"
+EXPORT_FEATURE = "export"
 BILLING_RECONCILE_LAMBDA = "billing-reconcile"
 BILLING_RECONCILE_FEATURE = "billing-reconcile"
 
