@@ -51,9 +51,11 @@ function buildModuleData(
   jobId: string,
   hubArtifact: HubArtifact | undefined,
   pollingStatus: ArtifactStatus | null,
+  taskId?: string | null,
 ): RawModuleData | undefined {
-  // artifact_id from the hub is the stable identifier used to navigate to the artifact page
-  const artifactId = hubArtifact?.artifact_id ?? undefined;
+  // artifact_id from the hub is the stable identifier; fall back to taskId (localStorage)
+  // when the application record hasn't been updated yet with the artifact_id.
+  const artifactId = hubArtifact?.artifact_id ?? taskId ?? undefined;
   // Polling result takes priority over hub data for status, but use hub artifact_id for result_url
   if (pollingStatus) {
     return { job_id: jobId, status: pollingStatus, created_at: '', updated_at: '', result_url: artifactId };
@@ -153,16 +155,16 @@ export function useApplicationHub(jobId: string): {
     // Polling status overrides hub artifact status for live updates
     const moduleData: Partial<Record<ModuleType, RawModuleData>> = {};
 
-    const vprData = buildModuleData(jobId, artifacts?.vpr, vprStatus.status);
+    const vprData = buildModuleData(jobId, artifacts?.vpr, vprStatus.status, vprTaskId);
     if (vprData) moduleData.vpr = vprData;
 
-    const coverLetterData = buildModuleData(jobId, artifacts?.cover_letter, coverLetterStatus.status);
+    const coverLetterData = buildModuleData(jobId, artifacts?.cover_letter, coverLetterStatus.status, coverLetterTaskId);
     if (coverLetterData) moduleData.coverLetter = coverLetterData;
 
-    const interviewPrepData = buildModuleData(jobId, artifacts?.interview_prep, interviewPrepStatus.status);
+    const interviewPrepData = buildModuleData(jobId, artifacts?.interview_prep, interviewPrepStatus.status, interviewPrepTaskId);
     if (interviewPrepData) moduleData.interviewPrep = interviewPrepData;
 
-    const tailoredCVData = buildModuleData(jobId, artifacts?.cv_tailored, tailoredCVStatus.status);
+    const tailoredCVData = buildModuleData(jobId, artifacts?.cv_tailored, tailoredCVStatus.status, tailoredCVTaskId);
     if (tailoredCVData) moduleData.tailoredCV = tailoredCVData;
 
     // Gap analysis completion is signalled by responses present in the application payload,

@@ -215,7 +215,7 @@ export const api = {
       .then((r) => r.data),
 
   patchCVTailored: (artifactId: string, body: { cv_sections?: CVSections; tailored_cv?: string }): Promise<CVTailoredStatusResponse> =>
-    apiClient.patch<CVTailoredStatusResponse>(`/cv-tailored/${artifactId}`, body).then((r) => r.data),
+    apiClient.patch<CVTailoredStatusResponse>(`/cv-tailoring/${artifactId}`, body).then((r) => r.data),
 
   getTailoredCvsList: async (): Promise<TailoredCvListItem[]> => {
     const r = await apiClient.get<TailoredCvListItem[] | { cv_tailorings?: TailoredCvListItem[] }>('/cv-tailorings');

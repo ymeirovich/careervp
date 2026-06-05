@@ -101,6 +101,12 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
         )
         return list_tailored_cvs(event)
 
+    if method == 'PATCH' and _is_tailoring_patch_path(path):
+        user_id = _get_user_id(event)
+        if not user_id:
+            return _response(HTTPStatus.UNAUTHORIZED, {'success': False, 'message': 'Missing or invalid authentication token'}, headers)
+        return _patch_cv_tailored(event, user_id, headers)
+
     if method == 'DELETE' and _is_tailoring_delete_path(path):
         logger.info(
             'cv_tailoring route selected',
@@ -846,6 +852,72 @@ def _is_tailoring_delete_path(path: str) -> bool:
     return not path.endswith('/status')
 
 
+def _is_tailoring_patch_path(path: str) -> bool:
+    if not path.startswith('/cv-tailoring/') or path == '/cv-tailoring/generate':
+        return False
+    return not path.endswith('/status') and not path.endswith('/cancel')
+
+
+def _patch_cv_tailored(event: dict[str, Any], user_id: str, headers: dict[str, str]) -> dict[str, Any]:
+    """Handle PATCH /cv-tailoring/{cvTailoringId} — update cv_sections or tailored_cv text."""
+    cv_tailoring_id = _extract_cv_tailoring_id(event)
+    if not cv_tailoring_id:
+        return _response(HTTPStatus.BAD_REQUEST, {'success': False, 'message': 'Missing cvTailoringId'}, headers)
+
+    try:
+        body: dict[str, Any] = json.loads(event.get('body', '{}') or '{}')
+    except json.JSONDecodeError:
+        return _response(HTTPStatus.BAD_REQUEST, {'success': False, 'message': 'Invalid JSON'}, headers)
+
+    cv_sections = body.get('cv_sections')
+    tailored_cv = body.get('tailored_cv')
+    if cv_sections is None and tailored_cv is None:
+        return _response(HTTPStatus.BAD_REQUEST, {'success': False, 'message': 'cv_sections or tailored_cv required'}, headers)
+
+    item = _get_tailored_cv_item(user_id=user_id, cv_tailoring_id=cv_tailoring_id)
+    if item is None:
+        return _response(HTTPStatus.NOT_FOUND, {'success': False, 'message': 'Tailored CV not found'}, headers)
+
+    import datetime as _dt
+
+    import boto3 as _boto3
+
+    table_name = os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')
+    table = _boto3.resource('dynamodb').Table(table_name)
+    pk = str(item.get('pk', user_id))
+    sk = str(item.get('sk', f'ARTIFACT#CV_TAILORED#{cv_tailoring_id}'))
+    now = _dt.datetime.now(_dt.timezone.utc).isoformat()
+
+    update_parts: list[str] = ['updated_at = :now']
+    attr_values: dict[str, Any] = {':now': now}
+    if cv_sections is not None:
+        update_parts.append('cv_sections = :sections')
+        attr_values[':sections'] = cv_sections
+    if tailored_cv is not None:
+        update_parts.append('tailored_cv = :tv')
+        attr_values[':tv'] = tailored_cv
+
+    try:
+        table.update_item(
+            Key={'pk': pk, 'sk': sk},
+            UpdateExpression='SET ' + ', '.join(update_parts),
+            ExpressionAttributeValues=attr_values,
+        )
+    except Exception as exc:
+        logger.error('Failed to update cv_tailored', cv_tailoring_id=cv_tailoring_id, error=str(exc))
+        return _response(HTTPStatus.INTERNAL_SERVER_ERROR, {'success': False, 'message': 'Failed to update tailored CV'}, headers)
+
+    updated_item = dict(item)
+    updated_item['updated_at'] = now
+    if cv_sections is not None:
+        updated_item['cv_sections'] = cv_sections
+    if tailored_cv is not None:
+        updated_item['tailored_cv'] = tailored_cv
+
+    payload = _build_tailored_cv_status_payload(updated_item, cv_tailoring_id)
+    return _response(HTTPStatus.OK, payload, headers)
+
+
 def _extract_cv_tailoring_id(event: dict[str, Any]) -> str | None:
     path_parameters = event.get('pathParameters')
     if isinstance(path_parameters, dict):
@@ -1063,7 +1135,7 @@ def _build_success_data(data: Any) -> dict[str, Any]:
 
 def _cors_headers() -> dict[str, str]:
     headers = get_cors_headers(None)
-    headers.setdefault('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS')
+    headers.setdefault('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS')
     headers.setdefault('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     return headers
 

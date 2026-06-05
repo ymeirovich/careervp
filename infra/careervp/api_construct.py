@@ -2360,6 +2360,7 @@ class ApiConstruct(Construct):
             ("/cv-tailoring/{cvTailoringId}/status", "GET", self.cv_tailoring_func),
             ("/cv-tailoring/{cvTailoringId}/cancel", "POST", self.cv_tailoring_func),
             ("/cv-tailoring/{cvTailoringId}", "DELETE", self.cv_tailoring_func),
+            ("/cv-tailoring/{cvTailoringId}", "PATCH", self.cv_tailoring_func),
             ("/cv-tailorings", "GET", self.cv_tailoring_func),
             ("/cover-letter/generate", "POST", self.cover_letter_api_func),
             (
@@ -2372,6 +2373,7 @@ class ApiConstruct(Construct):
                 "POST",
                 self.cover_letter_status_func,
             ),
+            ("/cover-letter/{coverLetterId}", "PATCH", self.cover_letter_status_func),
             ("/cover-letters", "GET", self.cover_letter_status_func),
             ("/interview-prep/generate", "POST", self.interview_prep_api_func),
             (

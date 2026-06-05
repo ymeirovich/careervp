@@ -36,7 +36,7 @@ export function ExportDropdown({ jobId, moduleType, artifactId }: ExportDropdown
     setIsLoading(true);
     setError(null);
     try {
-      const response = await api.exportArtifact(jobId, moduleType, format);
+      const response = await api.exportArtifact(artifactId, moduleType, format);
       const a = document.createElement('a');
       a.href = response.download_url;
       a.download = `${moduleType}-${jobId}.${format}`;

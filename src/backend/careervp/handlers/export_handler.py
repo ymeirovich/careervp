@@ -133,7 +133,8 @@ def _read_vpr(job_id: str) -> dict[str, Any]:
 def _read_cover_letter(job_id: str, user_id: str) -> dict[str, Any]:
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(os.environ['ARTIFACTS_TABLE_NAME'])
-    response = table.get_item(Key={'applicationId': user_id, 'artifactId': job_id})
+    artifact_key = f'ARTIFACT#COVER_LETTER#{job_id}'
+    response = table.get_item(Key={'applicationId': user_id, 'artifactId': artifact_key})
     item = response.get('Item')
     if not item:
         raise ArtifactNotFoundError(f'Cover letter artifact not found: {job_id}')

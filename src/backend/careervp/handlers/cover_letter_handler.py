@@ -319,6 +319,9 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         metrics.add_metric(name='CoverLetterRequests', unit=MetricUnit.Count, value=1)
         return _submit_cover_letter_request(event)
 
+    if method == 'PATCH' and _is_cover_letter_patch_path(path):
+        return _patch_cover_letter(event)
+
     if method == 'POST' and path.endswith('/cancel'):
         user_id = _extract_authenticated_user_id(event)
         if not user_id:
@@ -1169,6 +1172,72 @@ def _handle_cover_letter_cancel(event: dict[str, Any], user_id: str) -> dict[str
         ExpressionAttributeValues={':status': 'CANCELLED'},
     )
     return _build_response(HTTPStatus.OK, {'status': 'cancelled'})
+
+
+def _is_cover_letter_patch_path(path: str) -> bool:
+    return path.startswith('/cover-letter/') and path != '/cover-letter/generate' and not path.endswith('/cancel')
+
+
+def _patch_cover_letter(event: dict[str, Any]) -> dict[str, Any]:
+    """Handle PATCH /cover-letter/{coverLetterId} — update cover letter text."""
+    user_id = _extract_authenticated_user_id(event)
+    if not user_id:
+        return _build_response(
+            HTTPStatus.UNAUTHORIZED,
+            {'error': 'Missing or invalid authentication token', 'code': ResultCode.UNAUTHORIZED},
+        )
+
+    cover_letter_id = _extract_cover_letter_id(event)
+    if not cover_letter_id:
+        return _build_response(HTTPStatus.BAD_REQUEST, {'error': 'Missing coverLetterId', 'code': ResultCode.MISSING_REQUIRED_FIELD})
+
+    try:
+        body = json.loads(event.get('body', '{}') or '{}')
+    except json.JSONDecodeError:
+        return _build_response(HTTPStatus.BAD_REQUEST, {'error': 'Invalid JSON', 'code': ResultCode.INVALID_INPUT})
+
+    new_text = str(body.get('cover_letter', '') or '').strip()
+    if not new_text:
+        return _build_response(HTTPStatus.BAD_REQUEST, {'error': 'cover_letter text is required', 'code': ResultCode.MISSING_REQUIRED_FIELD})
+
+    item = _find_cover_letter_item(user_id=user_id, cover_letter_id=cover_letter_id)
+    if item is None:
+        return _build_response(HTTPStatus.NOT_FOUND, {'error': 'Cover letter not found', 'code': ResultCode.COVER_LETTER_NOT_FOUND})
+
+    import datetime as _dt
+
+    import boto3 as _boto3
+
+    table_name = os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME') or ''
+    table = _boto3.resource('dynamodb').Table(table_name)
+    now = _dt.datetime.now(_dt.timezone.utc).isoformat()
+
+    if 'applicationId' in item:
+        key: dict[str, Any] = {'applicationId': item['applicationId'], 'artifactId': item['artifactId']}
+    else:
+        key = {'pk': item.get('pk', user_id), 'sk': item.get('sk', f'ARTIFACT#COVER_LETTER#{cover_letter_id}')}
+
+    existing_cl = item.get('cover_letter') or {}
+    updated_cl: dict[str, Any] = {**existing_cl, 'full_text': new_text} if isinstance(existing_cl, dict) else {'full_text': new_text}
+
+    try:
+        table.update_item(
+            Key=key,
+            UpdateExpression='SET cover_letter = :cl, updated_at = :now',
+            ExpressionAttributeValues={':cl': updated_cl, ':now': now},
+        )
+    except Exception as exc:
+        logger.error('Failed to update cover letter', cover_letter_id=cover_letter_id, error=str(exc))
+        return _build_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Failed to update cover letter', 'code': ResultCode.DYNAMODB_ERROR})
+
+    return _build_response(
+        HTTPStatus.OK,
+        {
+            'id': cover_letter_id,
+            'status': 'completed',
+            'result': {'cover_letter': new_text},
+        },
+    )
 
 
 def _build_response(status_code: HTTPStatus, body: dict[str, Any]) -> dict[str, Any]:
