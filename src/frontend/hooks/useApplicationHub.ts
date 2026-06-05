@@ -52,13 +52,15 @@ function buildModuleData(
   hubArtifact: HubArtifact | undefined,
   pollingStatus: ArtifactStatus | null,
 ): RawModuleData | undefined {
-  // Polling result takes priority over hub data
+  // artifact_id from the hub is the stable identifier used to navigate to the artifact page
+  const artifactId = hubArtifact?.artifact_id ?? undefined;
+  // Polling result takes priority over hub data for status, but use hub artifact_id for result_url
   if (pollingStatus) {
-    return { job_id: jobId, status: pollingStatus, created_at: '', updated_at: '' };
+    return { job_id: jobId, status: pollingStatus, created_at: '', updated_at: '', result_url: artifactId };
   }
   // Hub artifact status only when there's a real artifact ID (null = not started)
-  if (hubArtifact?.artifact_id && hubArtifact.status) {
-    return { job_id: jobId, status: hubArtifact.status, created_at: '', updated_at: '' };
+  if (artifactId && hubArtifact?.status) {
+    return { job_id: jobId, status: hubArtifact.status, created_at: '', updated_at: '', result_url: artifactId };
   }
   return undefined;
 }
