@@ -167,7 +167,8 @@ export default function ApplicationHubPage() {
         return { ...action, onClick: () => setRegenConfirmModule(moduleType) };
       }
       if ((action.label === 'View' || action.label === 'Edit') && routeFn) {
-        const dest = routeFn(moduleState.resultUrl);
+        const base = routeFn(moduleState.resultUrl);
+        const dest = action.label === 'Edit' ? `${base}&mode=edit` : base;
         return { ...action, onClick: () => router.push(dest) };
       }
       return action;

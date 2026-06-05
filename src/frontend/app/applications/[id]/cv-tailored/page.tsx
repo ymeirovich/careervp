@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, use, Suspense } from 'react';
+import React, { useState, useEffect, use, Suspense, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { api } from '../../../../api/methods';
 import { ErrorBoundary } from '../../../../components/ErrorBoundary/ErrorBoundary';
@@ -37,6 +37,8 @@ function buildCopyText(cv: CVSections): string {
   }
   return lines.join('\n').trim();
 }
+
+// ── Read-only document ──────────────────────────────────────────────────────
 
 function CVDocument({ cv }: { cv: CVSections }) {
   const c = cv.contact;
@@ -114,16 +116,183 @@ function CVDocument({ cv }: { cv: CVSections }) {
   );
 }
 
+// ── Edit-mode document ──────────────────────────────────────────────────────
+
+const editFieldClass =
+  'w-full rounded border border-border-default bg-surface-subtle px-2 py-1 text-sm text-text-primary leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary-action/50 resize-none';
+
+interface CVDocumentEditProps {
+  cv: CVSections;
+  onChange: (updated: CVSections) => void;
+}
+
+function CVDocumentEdit({ cv, onChange }: CVDocumentEditProps) {
+  const c = cv.contact;
+
+  const setContact = (field: keyof typeof c, value: string) =>
+    onChange({ ...cv, contact: { ...c, [field]: value } });
+
+  const setSummary = (value: string) => onChange({ ...cv, summary: value });
+
+  const setSkillsTechnical = (value: string) =>
+    onChange({ ...cv, skills: { ...cv.skills, technical: value.split(',').map((s) => s.trim()).filter(Boolean) } });
+
+  const setBullet = (expIdx: number, bulletIdx: number, value: string) => {
+    const experience = cv.experience.map((exp, i) => {
+      if (i !== expIdx) return exp;
+      return {
+        ...exp,
+        bullets: exp.bullets.map((b, j) =>
+          j === bulletIdx ? { ...b, text: value } : b
+        ),
+      };
+    });
+    onChange({ ...cv, experience });
+  };
+
+  return (
+    <div className="flex flex-col gap-6 font-sans">
+      {/* Contact header */}
+      <div className="border-b border-border-default pb-4 flex flex-col gap-2">
+        <input
+          type="text"
+          value={c.name}
+          onChange={(e) => setContact('name', e.target.value)}
+          className={`${editFieldClass} text-center text-xl font-bold uppercase tracking-wide`}
+          placeholder="Full Name"
+        />
+        <div className="grid grid-cols-2 gap-2">
+          {(['email', 'phone', 'linkedin', 'location'] as const).map((field) => (
+            <input
+              key={field}
+              type="text"
+              value={c[field] ?? ''}
+              onChange={(e) => setContact(field, e.target.value)}
+              placeholder={field.charAt(0).toUpperCase() + field.slice(1)}
+              className={editFieldClass}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Summary */}
+      <section>
+        <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider border-b border-text-primary pb-1 mb-2">Professional Summary</h2>
+        <textarea
+          value={cv.summary}
+          onChange={(e) => setSummary(e.target.value)}
+          rows={4}
+          className={editFieldClass}
+        />
+      </section>
+
+      {/* Skills */}
+      {cv.skills.technical.length > 0 && (
+        <section>
+          <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider border-b border-text-primary pb-1 mb-2">Core Competencies</h2>
+          <textarea
+            value={cv.skills.technical.join(', ')}
+            onChange={(e) => setSkillsTechnical(e.target.value)}
+            rows={2}
+            placeholder="Comma-separated skills"
+            className={editFieldClass}
+          />
+          <p className="mt-1 text-xs text-text-muted">Separate skills with commas</p>
+        </section>
+      )}
+
+      {/* Experience */}
+      {cv.experience.length > 0 && (
+        <section>
+          <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider border-b border-text-primary pb-1 mb-3">Professional Experience</h2>
+          <div className="flex flex-col gap-4">
+            {cv.experience.map((exp, i) => (
+              <div key={i}>
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <span className="text-sm font-semibold text-text-primary">{exp.title} | {exp.company}</span>
+                  <span className="text-xs text-text-muted shrink-0">{formatDateRange(exp.start_date, exp.end_date, exp.is_current)}</span>
+                </div>
+                <ul className="flex flex-col gap-1">
+                  {exp.bullets.map((b, j) => (
+                    <li key={j} className="flex gap-2">
+                      <span className="shrink-0 mt-2 text-sm text-text-secondary">•</span>
+                      <textarea
+                        value={b.text}
+                        onChange={(e) => setBullet(i, j, e.target.value)}
+                        rows={2}
+                        className={`${editFieldClass} flex-1`}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Education (read-only in edit mode per spec) */}
+      {cv.education.length > 0 && (
+        <section>
+          <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider border-b border-text-primary pb-1 mb-2">Education</h2>
+          <div className="flex flex-col gap-1">
+            {cv.education.map((edu, i) => (
+              <div key={i} className="flex items-start justify-between gap-2">
+                <span className="text-sm text-text-secondary">
+                  <span className="font-medium">{edu.degree}</span> in {edu.field} | {edu.institution}
+                </span>
+                {edu.graduation_date && <span className="text-xs text-text-muted shrink-0">{edu.graduation_date}</span>}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Certifications (read-only per spec) */}
+      {cv.certifications.length > 0 && (
+        <section>
+          <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider border-b border-text-primary pb-1 mb-2">Certifications</h2>
+          <ul className="flex flex-col gap-1">
+            {cv.certifications.map((cert, i) => (
+              <li key={i} className="flex gap-2 text-sm text-text-secondary">
+                <span className="shrink-0 mt-0.5">•</span>
+                <span>{cert.name}{cert.issuer && <span className="text-text-muted"> | {cert.issuer}</span>}{cert.date && <span className="text-text-muted"> | {cert.date}</span>}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </div>
+  );
+}
+
+// ── Page ────────────────────────────────────────────────────────────────────
+
 function CVTailoredContent({ jobId }: { jobId: string }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const queryId = searchParams.get('id');
+  const isEditMode = searchParams.get('mode') === 'edit';
 
   const [data, setData] = useState<CVTailoredStatusResponse | null>(null);
   const [artifactId, setArtifactId] = useState<string | null>(null);
   const [job, setJob] = useState<JobDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+
+  // Edit state
+  const [editSections, setEditSections] = useState<CVSections | null>(null);
+  const [originalSections, setOriginalSections] = useState<CVSections | null>(null);
+  const [editRawText, setEditRawText] = useState('');
+  const [originalRawText, setOriginalRawText] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const isDirty = isEditMode && (
+    editSections !== null
+      ? JSON.stringify(editSections) !== JSON.stringify(originalSections)
+      : editRawText !== originalRawText
+  );
 
   useEffect(() => {
     const init = async () => {
@@ -148,10 +317,63 @@ function CVTailoredContent({ jobId }: { jobId: string }) {
       }
       setArtifactId(resolvedArtifactId);
       setData(cvData);
+
+      const sections = cvData.result?.cv_sections ?? null;
+      if (sections) {
+        setEditSections(JSON.parse(JSON.stringify(sections)) as CVSections);
+        setOriginalSections(JSON.parse(JSON.stringify(sections)) as CVSections);
+      } else {
+        const raw = cvData.result?.tailored_cv ?? '';
+        setEditRawText(raw);
+        setOriginalRawText(raw);
+      }
+
       setLoading(false);
     };
     void init();
   }, [jobId, queryId, router]);
+
+  const exitEditMode = useCallback(() => {
+    const base = `/applications/${jobId}/cv-tailored${queryId ? `?id=${queryId}` : ''}`;
+    router.replace(base);
+  }, [jobId, queryId, router]);
+
+  const handleSave = async () => {
+    if (!artifactId) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const body = editSections
+        ? { cv_sections: editSections }
+        : { tailored_cv: editRawText };
+      const updated = await api.patchCVTailored(artifactId, body);
+      setData(updated);
+      const sections = updated.result?.cv_sections ?? null;
+      if (sections) {
+        setEditSections(JSON.parse(JSON.stringify(sections)) as CVSections);
+        setOriginalSections(JSON.parse(JSON.stringify(sections)) as CVSections);
+      } else {
+        const raw = updated.result?.tailored_cv ?? editRawText;
+        setEditRawText(raw);
+        setOriginalRawText(raw);
+      }
+      exitEditMode();
+    } catch {
+      setSaveError('Failed to save. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    if (originalSections) {
+      setEditSections(JSON.parse(JSON.stringify(originalSections)) as CVSections);
+    } else {
+      setEditRawText(originalRawText);
+    }
+    setSaveError(null);
+    exitEditMode();
+  };
 
   const result = data?.result;
   const cvSections = result?.cv_sections;
@@ -180,14 +402,42 @@ function CVTailoredContent({ jobId }: { jobId: string }) {
 
   return (
     <div className="flex flex-col gap-6 max-w-3xl" data-testid="cv-tailored-page">
+      {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex flex-col gap-1">
-          <h1 className="text-xl font-bold text-text-primary">Tailored CV</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-bold text-text-primary">Tailored CV</h1>
+            {isDirty && (
+              <span className="rounded-full bg-state-warning/15 px-2.5 py-0.5 text-xs font-medium text-state-warning">
+                Unsaved changes
+              </span>
+            )}
+          </div>
           {job && <p className="text-sm text-text-muted">{job.title} · {job.company_name}</p>}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {artifactId && (
-            <ExportDropdown jobId={jobId} moduleType="cv_tailored" artifactId={artifactId} />
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {isEditMode ? (
+            <>
+              <button
+                onClick={() => void handleSave()}
+                disabled={saving}
+                className="rounded-md bg-primary-action px-3 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60 flex items-center gap-2"
+              >
+                {saving && <Spinner size="sm" aria-label="" />}
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+              <button
+                onClick={handleCancel}
+                disabled={saving}
+                className="rounded-md border border-border-default px-3 py-2 text-sm text-text-primary hover:bg-surface-subtle disabled:opacity-60"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            artifactId && (
+              <ExportDropdown jobId={jobId} moduleType="cv_tailored" artifactId={artifactId} />
+            )
           )}
           <button
             onClick={() => router.push(`/applications/${jobId}`)}
@@ -198,6 +448,13 @@ function CVTailoredContent({ jobId }: { jobId: string }) {
         </div>
       </div>
 
+      {saveError && (
+        <div className="rounded-md bg-state-error/10 border border-state-error px-4 py-3 text-sm text-state-error">
+          {saveError}
+        </div>
+      )}
+
+      {/* ATS score — always read-only, even in edit mode */}
       {atsScore !== undefined && (
         <div className="rounded-md border border-border-default bg-card p-6 flex items-start gap-8" data-testid="ats-score">
           <div className="flex flex-col items-center gap-1 shrink-0">
@@ -223,28 +480,46 @@ function CVTailoredContent({ jobId }: { jobId: string }) {
         </div>
       )}
 
+      {/* CV content */}
       {cvSections ? (
         <div className="rounded-md border border-border-default bg-card p-8 flex flex-col gap-2">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-base font-bold text-text-primary">Tailored CV</h2>
-            <button
-              onClick={() => void handleCopy()}
-              className="text-xs font-medium text-text-muted hover:text-text-primary transition-colors"
-            >
-              {copied ? 'Copied ✓' : 'Copy to clipboard'}
-            </button>
+            {!isEditMode && (
+              <button
+                onClick={() => void handleCopy()}
+                className="text-xs font-medium text-text-muted hover:text-text-primary transition-colors"
+              >
+                {copied ? 'Copied ✓' : 'Copy to clipboard'}
+              </button>
+            )}
           </div>
-          <CVDocument cv={cvSections} />
+          {isEditMode && editSections ? (
+            <CVDocumentEdit cv={editSections} onChange={setEditSections} />
+          ) : (
+            <CVDocument cv={cvSections} />
+          )}
         </div>
       ) : result?.tailored_cv ? (
         <div className="rounded-md border border-border-default bg-card p-6 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-text-primary">Tailored CV</h2>
-            <button onClick={() => void handleCopy()} className="text-xs font-medium text-text-muted hover:text-text-primary transition-colors">
-              {copied ? 'Copied ✓' : 'Copy to clipboard'}
-            </button>
+            {!isEditMode && (
+              <button onClick={() => void handleCopy()} className="text-xs font-medium text-text-muted hover:text-text-primary transition-colors">
+                {copied ? 'Copied ✓' : 'Copy to clipboard'}
+              </button>
+            )}
           </div>
-          <pre className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap font-sans">{result.tailored_cv}</pre>
+          {isEditMode ? (
+            <textarea
+              value={editRawText}
+              onChange={(e) => setEditRawText(e.target.value)}
+              className="w-full min-h-[32rem] resize-y rounded border border-border-default bg-surface-subtle px-3 py-2 text-sm text-text-primary leading-relaxed font-sans focus:outline-none focus:ring-2 focus:ring-primary-action/50"
+              data-testid="cv-tailored-raw-textarea"
+            />
+          ) : (
+            <pre className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap font-sans">{result.tailored_cv}</pre>
+          )}
         </div>
       ) : null}
     </div>

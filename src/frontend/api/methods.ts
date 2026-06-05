@@ -25,6 +25,7 @@ import type {
   InterviewPrepStatusResponse,
   CVTailoringRequest,
   CVTailoredStatusResponse,
+  CVSections,
   ExportResponse,
 } from '../lib/types';
 
@@ -171,6 +172,9 @@ export const api = {
       .get<CoverLetterStatusResponse>(`/cover-letter/${artifactId}/status`)
       .then((r) => r.data),
 
+  patchCoverLetter: (artifactId: string, body: { cover_letter: string }): Promise<CoverLetterStatusResponse> =>
+    apiClient.patch<CoverLetterStatusResponse>(`/cover-letter/${artifactId}`, body).then((r) => r.data),
+
   getCoverLettersList: async (): Promise<CoverLetterListItem[]> => {
     const r = await apiClient.get<CoverLetterListItem[] | { cover_letters?: CoverLetterListItem[] }>('/cover-letters');
     return Array.isArray(r.data) ? r.data : (r.data.cover_letters ?? []);
@@ -209,6 +213,9 @@ export const api = {
     apiClient
       .get<CVTailoredStatusResponse>(`/cv-tailoring/${cvTailoringId}/status`)
       .then((r) => r.data),
+
+  patchCVTailored: (artifactId: string, body: { cv_sections?: CVSections; tailored_cv?: string }): Promise<CVTailoredStatusResponse> =>
+    apiClient.patch<CVTailoredStatusResponse>(`/cv-tailored/${artifactId}`, body).then((r) => r.data),
 
   getTailoredCvsList: async (): Promise<TailoredCvListItem[]> => {
     const r = await apiClient.get<TailoredCvListItem[] | { cv_tailorings?: TailoredCvListItem[] }>('/cv-tailorings');
