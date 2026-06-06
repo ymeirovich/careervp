@@ -1,13 +1,10 @@
 'use client';
 
-import React from 'react';
 import { useRouter } from 'next/navigation';
 import { useJobs } from '../../hooks/useJobs';
 import { useDashboard } from '../../contexts/DashboardContext';
 import { StatsRow } from '../../components/dashboard/StatsRow';
 import { JobsTable } from '../../components/dashboard/JobsTable';
-import { UsageGate } from '../../components/UsageGate/UsageGate';
-import { Button } from '../../components/ui/Button';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -48,25 +45,13 @@ export default function DashboardPage() {
         isLoading={Boolean(isDashboardLoading)}
       />
 
-      <div className="flex justify-end">
-        <UsageGate action="new_application">
-          <Button
-            variant="primary"
-            size="md"
-            onClick={() => router.push('/applications/new')}
-            data-testid="new-application-btn"
-          >
-            + New Application
-          </Button>
-        </UsageGate>
-      </div>
-
       <div data-testid="jobs-table">
         <JobsTable
           mode="dashboard"
           jobs={mappedJobs}
           isLoading={isLoading}
           error={error}
+          hasActiveAccess={hasActiveAccess}
           onRetry={refetch}
           onViewJob={(id) => router.push(`/applications/${id}`)}
           onNewApplication={() => router.push('/applications/new')}

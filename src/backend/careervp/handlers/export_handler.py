@@ -153,14 +153,24 @@ def _read_interview_prep(job_id: str, user_id: str) -> dict[str, Any]:
 
 
 def _read_cv_tailored(job_id: str, user_id: str) -> dict[str, Any]:
+    from boto3.dynamodb.conditions import Attr
+    from boto3.dynamodb.conditions import Key as DynamoKey
+
     dynamodb = boto3.resource('dynamodb')
-    table = dynamodb.Table(os.environ['TABLE_NAME'])
-    sk = f'ARTIFACT#CV_TAILORED#{job_id}'
-    response = table.get_item(Key={'pk': user_id, 'sk': sk})
-    item = response.get('Item')
-    if not item:
-        raise ArtifactNotFoundError(f'CV tailored artifact not found: {job_id}')
-    return dict(item)
+    table_name = os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')
+    table = dynamodb.Table(table_name)
+    # Artifacts are stored with sk=ARTIFACT#CV_TAILORED#{request_id} and job_id as a field.
+    # Query all cv_tailored artifacts for this user and filter by job_id to find the right one.
+    response = table.query(
+        KeyConditionExpression=DynamoKey('pk').eq(user_id) & DynamoKey('sk').begins_with('ARTIFACT#CV_TAILORED#'),
+        FilterExpression=Attr('job_id').eq(job_id),
+    )
+    items: list[dict[str, Any]] = response.get('Items') or []
+    if not items:
+        raise ArtifactNotFoundError(f'CV tailored artifact not found for job: {job_id}')
+    # Return the most recently created artifact for this job
+    items.sort(key=lambda x: str(x.get('created_at') or ''), reverse=True)
+    return dict(items[0])
 
 
 def _build_docx(module_type: str, data: Any) -> DocxDocument:

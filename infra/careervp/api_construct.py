@@ -2227,7 +2227,7 @@ class ApiConstruct(Construct):
         self.api_db.vpr_results_bucket.grant_read(lambda_function)
         self.api_db.artifacts_bucket.grant_read_write(lambda_function)
         self.api_db.artifacts_table.grant(lambda_function, "dynamodb:GetItem")
-        self.api_db.db.grant(lambda_function, "dynamodb:GetItem")
+        self.api_db.db.grant(lambda_function, "dynamodb:GetItem", "dynamodb:Query")
         return lambda_function
 
     def _add_billing_reconcile_lambda(self) -> _lambda.Function:

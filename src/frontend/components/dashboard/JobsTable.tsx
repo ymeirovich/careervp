@@ -20,6 +20,7 @@ interface JobsTableProps {
   mode?: JobsTableMode;
   isLoading?: boolean;
   error?: string | null;
+  hasActiveAccess?: boolean;
   onViewJob?: (jobId: string) => void;
   onNewApplication?: () => void;
   onRetry?: () => void;
@@ -101,6 +102,7 @@ export function JobsTable({
   mode = 'dashboard',
   isLoading = false,
   error = null,
+  hasActiveAccess = true,
   onViewJob,
   onNewApplication,
   onRetry,
@@ -225,9 +227,22 @@ export function JobsTable({
             </button>
           )}
         </div>
-        <Button variant="primary" size="md" onClick={onNewApplication}>
-          {copy.newApplication}
-        </Button>
+        {mode === 'dashboard' && !hasActiveAccess ? (
+          <div data-testid="usage-gate-no-subscription" className="flex flex-col items-center gap-3 py-4">
+            <p className="text-text-muted text-sm text-center">
+              Your free trial has ended. Upgrade to continue building your applications.
+            </p>
+          </div>
+        ) : (
+          <Button
+            variant="primary"
+            size="md"
+            onClick={onNewApplication}
+            data-testid={mode === 'dashboard' ? 'new-application-btn' : undefined}
+          >
+            {copy.newApplication}
+          </Button>
+        )}
       </div>
 
       {isFullList && (

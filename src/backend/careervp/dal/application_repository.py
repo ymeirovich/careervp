@@ -198,7 +198,27 @@ class ApplicationRepository:
                 ExpressionAttributeValues={':empty': {}},
             )
         except Exception:
-            return  # Application record absent — non-fatal, frontend has local fallback
+            # Application record absent — create a minimal stub so artifact_id persists
+            # across page reloads (jobs are created before applications in the v1 flow).
+            try:
+                now = self._now_iso()
+                self._table().put_item(
+                    Item={
+                        'userId': user_id,
+                        'applicationId': application_id,
+                        'application_id': application_id,
+                        'user_id': user_id,
+                        'artifact_statuses': {},
+                        'state': 'created',
+                        'status': 'created',
+                        'created_at': now,
+                        'updated_at': now,
+                        'entity_type': 'APPLICATION',
+                    },
+                    ConditionExpression='attribute_not_exists(userId)',
+                )
+            except Exception:
+                return  # Concurrent write or permanent error — localStorage fallback handles it
         try:
             # Step 2: set the nested artifact keys now that the map is guaranteed to exist.
             self._table().update_item(
