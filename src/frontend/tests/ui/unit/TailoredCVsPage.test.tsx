@@ -16,8 +16,8 @@ const server = setupServer();
 const FIXTURE_TAILORED_CVS = [
   {
     id: 'tcv-1',
-    applicationId: 'app-1',
-    title: 'Senior Engineer — Tailored CV',
+    job_id: 'app-1',
+    job_title: 'Senior Engineer — Tailored CV',
     language: 'en',
     status: 'ready',
     updated_at: '2026-05-20T10:00:00Z',
@@ -31,6 +31,7 @@ beforeEach(() => {
   window.history.pushState({}, '', '/tailored-cvs');
   server.use(
     http.get(`${BASE_URL}/cv-tailorings`, () => HttpResponse.json(FIXTURE_TAILORED_CVS)),
+    http.get(`${BASE_URL}/jobs`, () => HttpResponse.json({ jobs: [] })),
   );
 });
 
