@@ -190,7 +190,7 @@ export const api = {
     const jobsData = jobsRes.status === 'fulfilled' ? jobsRes.value.data : null;
     const jobMap = new Map<string, Job>((jobsData?.jobs ?? []).map((j) => [j.job_id, j]));
     return rawItems.map((item) => {
-      const appId = item.applicationId ?? item.job_id ?? item.id;
+      const appId = item.applicationId ?? item.job_id ?? '';
       const job = jobMap.get(appId);
       const s = item.status;
       const status: CoverLetterListItem['status'] =
@@ -199,6 +199,7 @@ export const api = {
         item.company_name ? (s as CoverLetterListItem['status']) : 'failed';
       return {
         applicationId: appId,
+        artifact_id: item.id,
         company_name: item.company_name ?? job?.company_name ?? '—',
         job_title: item.job_title ?? job?.title ?? '—',
         status,

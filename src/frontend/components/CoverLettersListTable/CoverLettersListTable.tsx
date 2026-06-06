@@ -186,14 +186,19 @@ export function CoverLettersListTable({
     </Badge>
   );
 
-  const renderViewLink = (applicationId: string) => (
-    <Link
-      href={`/applications/${applicationId}/cover-letter`}
-      className="text-text-primary text-base font-bold hover:underline group-hover:underline focus:outline-none focus:ring-2 focus:ring-primary-action focus:ring-offset-2"
-    >
-      {copy.view}
-    </Link>
-  );
+  const renderViewLink = (letter: CoverLetterListItem) => {
+    const href = letter.artifact_id
+      ? `/applications/${letter.applicationId}/cover-letter?id=${letter.artifact_id}`
+      : `/applications/${letter.applicationId}/cover-letter`;
+    return (
+      <Link
+        href={href}
+        className="text-text-primary text-base font-bold hover:underline group-hover:underline focus:outline-none focus:ring-2 focus:ring-primary-action focus:ring-offset-2"
+      >
+        {copy.view}
+      </Link>
+    );
+  };
 
   return (
     <section className="bg-card border border-border-default rounded-xl overflow-hidden">
@@ -283,7 +288,7 @@ export function CoverLettersListTable({
                 </td>
                 <td className="grid grid-cols-[7rem_1fr] gap-3 px-0 py-2 md:table-cell md:px-4 md:py-4">
                   <span className="text-sm font-medium text-text-muted md:hidden">{copy.action}</span>
-                  <span>{renderViewLink(letter.applicationId)}</span>
+                  <span>{renderViewLink(letter)}</span>
                 </td>
               </tr>
             ))}

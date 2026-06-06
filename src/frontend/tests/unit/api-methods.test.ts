@@ -104,6 +104,51 @@ describe('api.generateVPR', () => {
   });
 });
 
+describe('api.getCoverLettersList', () => {
+  it('uses job_id as applicationId and preserves artifact id (regression: item.id was used as appId causing 404)', async () => {
+    const rawItem = {
+      id: 'cl-artifact-abc',
+      status: 'completed',
+      job_id: 'job-123',
+      company_name: 'Acme',
+      job_title: 'Engineer',
+      created_at: '2026-05-01T00:00:00Z',
+    };
+
+    server.use(
+      http.get(`${BASE_URL}/cover-letters`, () => HttpResponse.json([rawItem])),
+      http.get(`${BASE_URL}/jobs`, () => HttpResponse.json({ jobs: [] })),
+    );
+
+    const result = await api.getCoverLettersList();
+
+    expect(result).toHaveLength(1);
+    expect(result[0].applicationId).toBe('job-123');
+    expect(result[0].artifact_id).toBe('cl-artifact-abc');
+    expect(result[0].status).toBe('ready');
+  });
+
+  it('does not fall back to item.id as applicationId when job_id is absent', async () => {
+    const rawItem = {
+      id: 'cl-artifact-xyz',
+      status: 'completed',
+      company_name: 'Beta',
+      job_title: 'Designer',
+      created_at: '2026-05-02T00:00:00Z',
+    };
+
+    server.use(
+      http.get(`${BASE_URL}/cover-letters`, () => HttpResponse.json([rawItem])),
+      http.get(`${BASE_URL}/jobs`, () => HttpResponse.json({ jobs: [] })),
+    );
+
+    const result = await api.getCoverLettersList();
+
+    expect(result[0].applicationId).toBe('');
+    expect(result[0].artifact_id).toBe('cl-artifact-xyz');
+  });
+});
+
 describe('ApiError', () => {
   it('thrown with status and message on 4xx', async () => {
     server.use(

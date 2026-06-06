@@ -67,7 +67,7 @@ describe('TailoredCVsListTable', () => {
     const viewLink = within(screen.getByTestId('tailored-cv-row-tc-1')).getByRole('link', { name: 'View' });
     expect(viewLink.className).toContain('font-bold');
     expect(viewLink.className).toContain('hover:underline');
-    expect(viewLink).toHaveAttribute('href', '/applications/app-1/cv-tailored');
+    expect(viewLink).toHaveAttribute('href', '/applications/app-1/cv-tailored?id=tc-1');
   });
 
   it('maps status to soft badges for ready/processing/edited and destructive for failed', () => {
@@ -173,6 +173,15 @@ describe('TailoredCVsListTable', () => {
 
     rerender(<TailoredCVsListTable tailoredCvs={[]} />);
     expect(within(table()).getByRole('link', { name: 'הגשה' })).toHaveAttribute('href', '/applications');
+  });
+
+  it('includes the cv artifact id as ?id= in the View link href (regression: id was absent)', () => {
+    render(<TailoredCVsListTable tailoredCvs={tailoredCvs} />);
+
+    for (const cv of tailoredCvs) {
+      const link = within(screen.getByTestId(`tailored-cv-row-${cv.id}`)).getByRole('link', { name: /View|צפייה/ });
+      expect(link).toHaveAttribute('href', `/applications/${cv.applicationId}/cv-tailored?id=${cv.id}`);
+    }
   });
 
   it('does not call GET /cv-tailorings directly from the table component', () => {

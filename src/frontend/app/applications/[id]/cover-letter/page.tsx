@@ -166,6 +166,18 @@ function CoverLetterContent({ jobId }: { jobId: string }) {
             </>
           ) : (
             <>
+              {artifactId && (
+                <button
+                  onClick={() => {
+                    const base = `/applications/${jobId}/cover-letter${queryId ? `?id=${queryId}` : ''}`;
+                    router.replace(`${base}${queryId ? '&' : '?'}mode=edit`);
+                  }}
+                  className="rounded-md border border-border-default px-3 py-2 text-sm text-text-primary hover:bg-surface-subtle"
+                  data-testid="cover-letter-edit-button"
+                >
+                  Edit
+                </button>
+              )}
               <button
                 onClick={() => void handleCopy()}
                 className="rounded-md bg-primary-action px-3 py-2 text-sm font-bold text-white hover:opacity-90"

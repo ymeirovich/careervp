@@ -209,9 +209,9 @@ export function TailoredCVsListTable({
     </Badge>
   );
 
-  const renderViewLink = (applicationId: string) => (
+  const renderViewLink = (cv: TailoredCvListItem) => (
     <Link
-      href={`/applications/${applicationId}/cv-tailored`}
+      href={`/applications/${cv.applicationId}/cv-tailored?id=${cv.id}`}
       className="text-text-primary text-base font-bold hover:underline group-hover:underline focus:outline-none focus:ring-2 focus:ring-primary-action focus:ring-offset-2"
     >
       {copy.view}
@@ -306,7 +306,7 @@ export function TailoredCVsListTable({
                 </td>
                 <td className="grid grid-cols-[7rem_1fr] gap-3 px-0 py-2 md:table-cell md:px-4 md:py-4">
                   <span className="text-sm font-medium text-text-muted md:hidden">{copy.action}</span>
-                  <span>{renderViewLink(cv.applicationId)}</span>
+                  <span>{renderViewLink(cv)}</span>
                 </td>
               </tr>
             ))}

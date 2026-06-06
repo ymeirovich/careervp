@@ -380,6 +380,7 @@ export type CoverLetterListStatus = 'ready' | 'processing' | 'failed';
 
 export interface CoverLetterListItem {
   applicationId: string;
+  artifact_id?: string;
   company_name: string;
   job_title: string;
   status: CoverLetterListStatus;

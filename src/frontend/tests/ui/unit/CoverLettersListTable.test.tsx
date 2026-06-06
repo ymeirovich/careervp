@@ -6,6 +6,7 @@ import { CoverLettersListTable } from '../../../components/CoverLettersListTable
 const coverLetters = [
   {
     applicationId: 'app-1',
+    artifact_id: 'cl-artifact-1',
     company_name: 'Gamma Inc',
     job_title: 'Senior Engineer',
     status: 'ready' as const,
@@ -13,6 +14,7 @@ const coverLetters = [
   },
   {
     applicationId: 'app-2',
+    artifact_id: 'cl-artifact-2',
     company_name: 'Acme Corp',
     job_title: 'Product Manager',
     status: 'processing' as const,
@@ -20,6 +22,7 @@ const coverLetters = [
   },
   {
     applicationId: 'app-3',
+    artifact_id: 'cl-artifact-3',
     company_name: 'Beta Ltd',
     job_title: 'Data Analyst',
     status: 'failed' as const,
@@ -55,7 +58,7 @@ describe('CoverLettersListTable', () => {
     const viewLink = within(screen.getByTestId('cover-letter-row-app-1')).getByRole('link', { name: 'View' });
     expect(viewLink.className).toContain('font-bold');
     expect(viewLink.className).toContain('hover:underline');
-    expect(viewLink).toHaveAttribute('href', '/applications/app-1/cover-letter');
+    expect(viewLink).toHaveAttribute('href', '/applications/app-1/cover-letter?id=cl-artifact-1');
   });
 
   it('maps status to soft badges for ready/processing and destructive for failed', () => {
@@ -138,6 +141,23 @@ describe('CoverLettersListTable', () => {
     expect(within(row).getByText('Date')).toBeInTheDocument();
     expect(within(row).getByText('Status')).toBeInTheDocument();
     expect(within(row).getByText('Action')).toBeInTheDocument();
+  });
+
+  it('includes artifact_id as ?id= in View link href (regression: id was absent causing 404)', () => {
+    render(<CoverLettersListTable coverLetters={coverLetters} />);
+
+    for (const letter of coverLetters) {
+      const link = within(screen.getByTestId(`cover-letter-row-${letter.applicationId}`)).getByRole('link', { name: /View|צפייה/ });
+      expect(link).toHaveAttribute('href', `/applications/${letter.applicationId}/cover-letter?id=${letter.artifact_id}`);
+    }
+  });
+
+  it('omits ?id= from View link when artifact_id is absent', () => {
+    const withoutArtifact = [{ ...coverLetters[0], artifact_id: undefined }];
+    render(<CoverLettersListTable coverLetters={withoutArtifact} />);
+
+    const link = within(screen.getByTestId('cover-letter-row-app-1')).getByRole('link', { name: 'View' });
+    expect(link).toHaveAttribute('href', '/applications/app-1/cover-letter');
   });
 
   it('renders Hebrew labels from the document locale', () => {

@@ -449,9 +449,23 @@ function CVTailoredContent({ jobId }: { jobId: string }) {
               </button>
             </>
           ) : (
-            artifactId && (
-              <ExportDropdown jobId={jobId} moduleType="cv_tailored" artifactId={artifactId} />
-            )
+            <>
+              {artifactId && (
+                <button
+                  onClick={() => {
+                    const base = `/applications/${jobId}/cv-tailored${queryId ? `?id=${queryId}` : ''}`;
+                    router.replace(`${base}${queryId ? '&' : '?'}mode=edit`);
+                  }}
+                  className="rounded-md border border-border-default px-3 py-2 text-sm text-text-primary hover:bg-surface-subtle"
+                  data-testid="cv-tailored-edit-button"
+                >
+                  Edit
+                </button>
+              )}
+              {artifactId && (
+                <ExportDropdown jobId={jobId} moduleType="cv_tailored" artifactId={artifactId} />
+              )}
+            </>
           )}
           <button
             onClick={() => router.push(`/applications/${jobId}`)}
