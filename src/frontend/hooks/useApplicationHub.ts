@@ -213,6 +213,7 @@ export function useApplicationHub(jobId: string): {
     void applicationQuery.refetch();
     void cvQuery.refetch();
     void gapQuery.refetch();
+    void companyResearchQuery.refetch();
   }
 
   return { hubState, isLoading, error, refetch, gapResponseIds, vprId, companyResearchId, cvId, cvName };

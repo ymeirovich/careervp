@@ -21,6 +21,7 @@ import type {
   CoverLetterStatusResponse,
   CoverLetterListItem,
   TailoredCvListItem,
+  TailoredCvListStatus,
   InterviewPrepRequest,
   InterviewPrepStatusResponse,
   CVTailoringRequest,
@@ -246,8 +247,42 @@ export const api = {
     apiClient.patch<CVTailoredStatusResponse>(`/cv-tailoring/${artifactId}`, body).then((r) => r.data),
 
   getTailoredCvsList: async (): Promise<TailoredCvListItem[]> => {
-    const r = await apiClient.get<TailoredCvListItem[] | { cv_tailorings?: TailoredCvListItem[] }>('/cv-tailorings');
-    return Array.isArray(r.data) ? r.data : (r.data.cv_tailorings ?? []);
+    type RawTCv = { id?: string; status?: string; cv_id?: string; job_id?: string; language?: string; job_title?: string; created_at?: string; updated_at?: string };
+    const [cvRes, jobsRes] = await Promise.allSettled([
+      apiClient.get<RawTCv[] | { tailored_cvs?: RawTCv[]; cv_tailorings?: RawTCv[] }>('/cv-tailorings'),
+      apiClient.get<{ jobs: Job[] }>('/jobs'),
+    ]);
+    if (cvRes.status === 'rejected') throw cvRes.reason as Error;
+    const cvData = cvRes.value.data;
+    const rawItems: RawTCv[] = Array.isArray(cvData)
+      ? cvData
+      : ((cvData as { tailored_cvs?: RawTCv[] }).tailored_cvs
+          ?? (cvData as { cv_tailorings?: RawTCv[] }).cv_tailorings
+          ?? []);
+    const jobsData = jobsRes.status === 'fulfilled' ? jobsRes.value.data : null;
+    const jobMap = new Map<string, Job>((jobsData?.jobs ?? []).map((j) => [j.job_id, j]));
+    return rawItems.map((item) => {
+      const appId = item.job_id ?? '';
+      const job = jobMap.get(appId);
+      const s = item.status ?? '';
+      const status: TailoredCvListStatus =
+        s === 'completed' || s === 'ready' ? 'ready' :
+        s === 'processing' || s === 'pending' ? 'processing' :
+        s === 'edited' ? 'edited' : 'failed';
+      const jobTitle = item.job_title ?? job?.title ?? '';
+      const companyName = job?.company_name ?? '';
+      const title = jobTitle && companyName
+        ? `${jobTitle} — ${companyName}`
+        : jobTitle || companyName || item.id || 'Tailored CV';
+      return {
+        id: item.id ?? '',
+        applicationId: appId,
+        title,
+        language: item.language ?? 'en',
+        status,
+        updated_at: item.updated_at ?? item.created_at ?? '',
+      };
+    });
   },
 
   // ── Export ──

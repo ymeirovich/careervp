@@ -416,11 +416,13 @@ def _generate_and_persist_from_sqs(
         # Persist the result
         current_stage = 'persistence'
         cover_letter_payload = cover_letter_model.model_dump(mode='json')
+        # Use the actual application/job ID (not the cache-busting random UUID sent as job_id)
+        storage_job_id = api_request.application_id or api_request.job_id
         dal.save_cover_letter(
             cover_letter=cover_letter_payload,
             user_id=user_id,
             cv_id=api_request.cv_id,
-            job_id=api_request.job_id,
+            job_id=storage_job_id,
         )
 
     except Exception as exc:
@@ -448,8 +450,10 @@ def _generate_and_persist_from_sqs(
 
     # Propagate completion to the application record so the hub reflects the
     # artifact status and artifact_id across page reloads.
+    # Use application_id (the stable job UUID) not job_id (the cache-busting random UUID).
+    sqs_application_id = str(request_data.get('application_id', '') or request_data.get('job_id', '') or '')
     _update_application_artifact(
-        application_id=str(request_data.get('job_id', '') or ''),
+        application_id=sqs_application_id,
         user_id=user_id,
         artifact_type='cover_letter',
         artifact_id=job_id,
@@ -619,12 +623,14 @@ def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:
         )
 
     cover_letter_payload = cover_letter_model.model_dump(mode='json')
+    # Use the actual application/job ID (not the cache-busting random UUID sent as job_id)
+    storage_job_id = api_request.application_id or api_request.job_id
     try:
         save_result = dal.save_cover_letter(
             cover_letter=cover_letter_payload,
             user_id=user_id,
             cv_id=api_request.cv_id,
-            job_id=api_request.job_id,
+            job_id=storage_job_id,
         )
     except Exception as exc:
         logger.error('Cover letter persistence failed', user_id=user_id, error=str(exc), exc_info=True)
@@ -641,6 +647,14 @@ def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:
         )
 
     artifact_id = str(cover_letter_payload.get('cover_letter_id', '')).strip()
+    # Propagate artifact_id to the application record so the hub reflects cover letter status
+    _update_application_artifact(
+        application_id=api_request.application_id or '',
+        user_id=user_id,
+        artifact_type='cover_letter',
+        artifact_id=artifact_id,
+    )
+
     metrics.add_metric(name='CoverLetterGenerated', unit=MetricUnit.Count, value=1)
     return _build_response(
         HTTPStatus.OK,

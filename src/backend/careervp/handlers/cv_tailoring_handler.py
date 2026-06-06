@@ -1071,10 +1071,17 @@ def _build_tailored_cv_list_item(item: dict[str, Any]) -> dict[str, Any]:
         item_id = sk.removeprefix('ARTIFACT#CV_TAILORED#')
     else:
         item_id = sk
+    # Try to extract language and job_title from the nested tailored_cv model
+    nested = item.get('tailored_cv') or {}
+    language = item.get('language') or (nested.get('language') if isinstance(nested, dict) else None)
+    job_title = item.get('job_title') or (nested.get('job_title') if isinstance(nested, dict) else None)
     return {
         'id': item_id,
         'status': _normalize_tailoring_status(item.get('status')),
         'cv_id': item.get('cv_id'),
+        'job_id': item.get('job_id'),
+        'language': language,
+        'job_title': job_title,
         'created_at': item.get('created_at'),
         'updated_at': item.get('updated_at'),
     }

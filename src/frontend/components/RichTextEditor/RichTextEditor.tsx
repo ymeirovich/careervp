@@ -14,6 +14,8 @@ export interface RichTextEditorProps {
   readOnly?: boolean;
   ariaLabelledBy?: string;
   placeholder?: string;
+  onFocus?: () => void;
+  onBlur?: () => void;
 }
 
 type ToolbarState = {
@@ -110,6 +112,8 @@ export function RichTextEditor({
   readOnly = false,
   ariaLabelledBy,
   placeholder = DEFAULT_PLACEHOLDER,
+  onFocus,
+  onBlur,
 }: RichTextEditorProps) {
   const onChangeRef = useRef(onChange);
   const editorRef = useRef<Editor | null>(null);
@@ -154,8 +158,8 @@ export function RichTextEditor({
         return true;
       },
     },
-    onBlur: () => setIsFocused(false),
-    onFocus: () => setIsFocused(true),
+    onBlur: () => { setIsFocused(false); onBlur?.(); },
+    onFocus: () => { setIsFocused(true); onFocus?.(); },
     onSelectionUpdate: ({ editor: currentEditor }) => refreshState(currentEditor),
     onUpdate: ({ editor: currentEditor }) => {
       refreshState(currentEditor);
