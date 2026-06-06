@@ -1,15 +1,45 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { ErrorBoundary } from '../../components/ErrorBoundary/ErrorBoundary';
 import { useUserContext } from '../../hooks/useUserContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { api } from '../../api/methods';
 
 function SettingsContent() {
   const { user } = useUserContext();
   const { changePassword } = useAuth();
+  const queryClient = useQueryClient();
 
   const [displayName, setDisplayName] = useState(user?.name ?? '');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSuccess, setProfileSuccess] = useState(false);
+
+  // Sync displayName when user data loads/refreshes
+  useEffect(() => {
+    setDisplayName(user?.name ?? '');
+  }, [user?.name]);
+
+  const isProfileDirty = displayName.trim() !== (user?.name ?? '').trim();
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfileError(null);
+    setProfileSuccess(false);
+    setSavingProfile(true);
+    try {
+      await api.updateMe({ name: displayName.trim() });
+      await queryClient.invalidateQueries({ queryKey: ['user', 'me'] });
+      setProfileSuccess(true);
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : 'Failed to save profile.');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -28,6 +58,10 @@ function SettingsContent() {
     }
     if (newPassword.length < 8) {
       setPwError('Password must be at least 8 characters.');
+      return;
+    }
+    if (newPassword === oldPassword) {
+      setPwError('New password must be different from current password.');
       return;
     }
 
@@ -52,13 +86,13 @@ function SettingsContent() {
       {/* Profile section */}
       <div className="rounded-md border border-border-default bg-card p-6 flex flex-col gap-4">
         <h2 className="text-base font-bold text-text-primary">Profile</h2>
-        <div className="flex flex-col gap-3">
+        <form onSubmit={(e) => void handleSaveProfile(e)} className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-xs font-semibold text-text-muted uppercase tracking-wide">Display Name</label>
             <input
               type="text"
               value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
+              onChange={(e) => { setDisplayName(e.target.value); setProfileSuccess(false); }}
               className="rounded border border-border-default px-3 py-2 text-sm text-text-primary bg-card focus:outline-none focus:border-primary-action focus:ring-1 focus:ring-primary-action"
             />
           </div>
@@ -72,16 +106,22 @@ function SettingsContent() {
             />
             <p className="text-xs text-text-muted">Email cannot be changed.</p>
           </div>
+          {profileError && (
+            <div className="rounded-md bg-state-error/10 border border-state-error px-3 py-2 text-sm text-state-error">{profileError}</div>
+          )}
+          {profileSuccess && (
+            <div className="rounded-md bg-state-active/10 border border-state-active px-3 py-2 text-sm text-state-active">Profile saved.</div>
+          )}
           <div className="flex justify-end">
             <button
-              disabled
-              className="rounded-md bg-primary-action px-3 py-2 text-sm font-bold text-white opacity-50 cursor-not-allowed"
-              title="Save profile — coming soon"
+              type="submit"
+              disabled={!isProfileDirty || savingProfile}
+              className="rounded-md bg-primary-action px-3 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Save Profile
+              {savingProfile ? 'Saving…' : 'Save Profile'}
             </button>
           </div>
-        </div>
+        </form>
       </div>
 
       {/* Security section */}

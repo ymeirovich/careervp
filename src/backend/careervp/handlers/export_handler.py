@@ -175,16 +175,88 @@ def _build_docx(module_type: str, data: Any) -> DocxDocument:
     return doc
 
 
+def _render_value_as_text(value: Any, depth: int = 0) -> str:
+    """Recursively convert any value to human-readable text."""
+    if value is None:
+        return ''
+    if isinstance(value, bool):
+        return 'Yes' if value else 'No'
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, list):
+        parts = [_render_value_as_text(item, depth + 1) for item in value]
+        return '\n'.join(p for p in parts if p)
+    if isinstance(value, dict):
+        parts = []
+        for k, v in value.items():
+            t = _render_value_as_text(v, depth + 1)
+            if t:
+                label = str(k).replace('_', ' ').replace('-', ' ').title()
+                parts.append(f'{label}: {t}')
+        return '\n'.join(parts)
+    return str(value)
+
+
+_VPR_SKIP_KEYS = frozenset(
+    {
+        'applicationId',
+        'application_id',
+        'pk',
+        'sk',
+        'status',
+        'user_id',
+        'userId',
+        'created_at',
+        'updated_at',
+    }
+)
+
+
+def _add_bold_kv(doc: DocxDocument, key: str, value: str) -> None:
+    p = doc.add_paragraph()
+    p.add_run(f'{str(key).replace("_", " ").title()}: ').bold = True
+    p.add_run(value)
+
+
+def _add_vpr_list(doc: DocxDocument, items: list[Any]) -> None:
+    for item in items:
+        if isinstance(item, str) and item.strip():
+            doc.add_paragraph(f'• {item.strip()}')
+        elif isinstance(item, dict):
+            for k, v in item.items():
+                text = _render_value_as_text(v)
+                if text:
+                    _add_bold_kv(doc, k, text)
+        elif item is not None:
+            doc.add_paragraph(f'• {_render_value_as_text(item)}')
+
+
+def _add_vpr_dict(doc: DocxDocument, mapping: dict[str, Any]) -> None:
+    for k, v in mapping.items():
+        text = _render_value_as_text(v)
+        if text:
+            _add_bold_kv(doc, k, text)
+
+
 def _fill_vpr(doc: DocxDocument, data: Any) -> None:
     doc.add_heading('Value Proposition Report', 0)
     if not isinstance(data, dict):
         return
     for section_key, section_value in data.items():
-        doc.add_heading(str(section_key).replace('_', ' ').title(), level=1)
-        if isinstance(section_value, (dict, list)):
-            doc.add_paragraph(json.dumps(section_value, indent=2, ensure_ascii=False))
-        else:
+        if section_key in _VPR_SKIP_KEYS:
+            continue
+        section_title = str(section_key).replace('_', ' ').replace('-', ' ').title()
+        doc.add_heading(section_title, level=1)
+        if isinstance(section_value, str) and section_value.strip():
+            doc.add_paragraph(section_value.strip())
+        elif isinstance(section_value, (int, float, bool)):
             doc.add_paragraph(str(section_value))
+        elif isinstance(section_value, list):
+            _add_vpr_list(doc, section_value)
+        elif isinstance(section_value, dict):
+            _add_vpr_dict(doc, section_value)
 
 
 def _fill_cover_letter(doc: DocxDocument, data: Any) -> None:
@@ -206,24 +278,121 @@ def _fill_interview_prep(doc: DocxDocument, data: Any) -> None:
             doc.add_paragraph(f'{i}. {qa}')
 
 
+def _cv_add_contact(doc: DocxDocument, cv: dict[str, Any]) -> None:
+    contact = cv.get('contact') or {}
+    if not isinstance(contact, dict):
+        return
+    name = contact.get('name') or ''
+    if name:
+        doc.add_heading(str(name), level=1)
+    parts = [contact.get(f) or '' for f in ('email', 'phone', 'linkedin', 'location')]
+    line = ' | '.join(p for p in parts if p)
+    if line:
+        doc.add_paragraph(line)
+
+
+def _cv_add_experience(doc: DocxDocument, experience: list[Any]) -> None:
+    doc.add_heading('Professional Experience', level=2)
+    for exp in experience:
+        if not isinstance(exp, dict):
+            continue
+        title = exp.get('title') or ''
+        company = exp.get('company') or ''
+        start = exp.get('start_date') or ''
+        end = 'Present' if exp.get('is_current') else (exp.get('end_date') or '')
+        header = f'{title} | {company}' if title and company else (title or company)
+        date_range = f'{start} – {end}' if start else end
+        p = doc.add_paragraph()
+        p.add_run(header).bold = True
+        if date_range:
+            p.add_run(f'  {date_range}')
+        for bullet in exp.get('bullets') or []:
+            text = bullet.get('text') or '' if isinstance(bullet, dict) else str(bullet)
+            if text:
+                doc.add_paragraph(f'• {text}')
+
+
+def _cv_add_education(doc: DocxDocument, education: list[Any]) -> None:
+    doc.add_heading('Education', level=2)
+    for edu in education:
+        if not isinstance(edu, dict):
+            continue
+        degree = edu.get('degree') or ''
+        field = edu.get('field') or ''
+        institution = edu.get('institution') or ''
+        grad = edu.get('graduation_date') or ''
+        line = f'{degree} in {field} | {institution}' if degree and field else institution
+        if grad:
+            line += f' | {grad}'
+        doc.add_paragraph(line)
+
+
+def _cv_add_certifications(doc: DocxDocument, certs: list[Any]) -> None:
+    doc.add_heading('Certifications', level=2)
+    for cert in certs:
+        if not isinstance(cert, dict):
+            continue
+        parts = [cert.get(f) or '' for f in ('name', 'issuer', 'date')]
+        line = ' | '.join(p for p in parts if p)
+        if line:
+            doc.add_paragraph(f'• {line}')
+
+
+def _cv_add_sections_dict(doc: DocxDocument, cv: dict[str, Any]) -> None:
+    _cv_add_contact(doc, cv)
+    summary = cv.get('summary') or ''
+    if summary:
+        doc.add_heading('Professional Summary', level=2)
+        doc.add_paragraph(str(summary))
+    skills = cv.get('skills') or {}
+    if isinstance(skills, dict):
+        technical = skills.get('technical') or []
+        if technical:
+            doc.add_heading('Core Competencies', level=2)
+            doc.add_paragraph(' | '.join(str(s) for s in technical))
+    experience = cv.get('experience') or []
+    if experience:
+        _cv_add_experience(doc, experience)
+    education = cv.get('education') or []
+    if education:
+        _cv_add_education(doc, education)
+    certs = cv.get('certifications') or []
+    if certs:
+        _cv_add_certifications(doc, certs)
+
+
+def _cv_add_sections_list(doc: DocxDocument, sections: list[Any]) -> None:
+    for section in sections:
+        if not isinstance(section, dict):
+            continue
+        title = section.get('title') or section.get('name') or ''
+        content = section.get('content') or section.get('text') or ''
+        if title:
+            doc.add_heading(str(title), level=2)
+        if content:
+            doc.add_paragraph(str(content))
+
+
 def _fill_cv_tailored(doc: DocxDocument, data: Any) -> None:
     doc.add_heading('Tailored CV', 0)
-    cv_sections = data.get('cv_sections') or {} if isinstance(data, dict) else {}
-    if isinstance(cv_sections, dict):
-        for section_key, section_value in cv_sections.items():
-            doc.add_heading(str(section_key).replace('_', ' ').title(), level=1)
-            doc.add_paragraph('\n'.join(str(v) for v in section_value) if isinstance(section_value, list) else str(section_value))
+    if not isinstance(data, dict):
+        return
+
+    # Result may be nested under 'result' key (DynamoDB artifact format)
+    raw_payload = data.get('result') or data
+    payload: dict[str, Any] = raw_payload if isinstance(raw_payload, dict) else data
+
+    cv_sections = payload.get('cv_sections')
+    tailored_cv = payload.get('tailored_cv') or ''
+
+    if isinstance(cv_sections, dict) and cv_sections:
+        _cv_add_sections_dict(doc, cv_sections)
     elif isinstance(cv_sections, list):
-        for section in cv_sections:
-            if isinstance(section, dict):
-                title = section.get('title') or section.get('name') or ''
-                content = section.get('content') or section.get('text') or ''
-                if title:
-                    doc.add_heading(str(title), level=1)
-                doc.add_paragraph(str(content))
-    tailored_cv = data.get('tailored_cv') or '' if isinstance(data, dict) else ''
+        _cv_add_sections_list(doc, cv_sections)
+
     if tailored_cv:
-        doc.add_heading('Summary', level=1)
+        if cv_sections:
+            doc.add_heading('Raw Text', level=2)
         doc.add_paragraph(str(tailored_cv))
 
 

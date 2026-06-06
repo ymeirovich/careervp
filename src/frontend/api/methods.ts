@@ -56,6 +56,9 @@ export const api = {
   getMe: (): Promise<User> =>
     apiClient.get<User>('/users/me').then((r) => r.data),
 
+  updateMe: (data: { name?: string }): Promise<User> =>
+    apiClient.put<User>('/users/me', data).then((r) => r.data),
+
   getUsage: (): Promise<Usage> =>
     apiClient.get<Usage>('/users/me/usage').then((r) => r.data),
 
@@ -176,8 +179,31 @@ export const api = {
     apiClient.patch<CoverLetterStatusResponse>(`/cover-letter/${artifactId}`, body).then((r) => r.data),
 
   getCoverLettersList: async (): Promise<CoverLetterListItem[]> => {
-    const r = await apiClient.get<CoverLetterListItem[] | { cover_letters?: CoverLetterListItem[] }>('/cover-letters');
-    return Array.isArray(r.data) ? r.data : (r.data.cover_letters ?? []);
+    type RawCL = { id: string; status: string; cv_id?: string; job_id?: string; applicationId?: string; company_name?: string; job_title?: string; created_at: string };
+    const [clRes, jobsRes] = await Promise.allSettled([
+      apiClient.get<RawCL[] | { cover_letters?: RawCL[] }>('/cover-letters'),
+      apiClient.get<{ jobs: Job[] }>('/jobs'),
+    ]);
+    const clData = clRes.status === 'fulfilled' ? clRes.value.data : null;
+    const rawItems: RawCL[] = Array.isArray(clData) ? clData : ((clData as { cover_letters?: RawCL[] } | null)?.cover_letters ?? []);
+    const jobsData = jobsRes.status === 'fulfilled' ? jobsRes.value.data : null;
+    const jobMap = new Map<string, Job>((jobsData?.jobs ?? []).map((j) => [j.job_id, j]));
+    return rawItems.map((item) => {
+      const appId = item.applicationId ?? item.job_id ?? item.id;
+      const job = jobMap.get(appId);
+      const s = item.status;
+      const status: CoverLetterListItem['status'] =
+        s === 'completed' || s === 'done' || s === 'ready' ? 'ready' :
+        s === 'processing' || s === 'pending' ? 'processing' :
+        item.company_name ? (s as CoverLetterListItem['status']) : 'failed';
+      return {
+        applicationId: appId,
+        company_name: item.company_name ?? job?.company_name ?? '—',
+        job_title: item.job_title ?? job?.title ?? '—',
+        status,
+        created_at: item.created_at,
+      };
+    });
   },
 
   // ── Interview Prep ──

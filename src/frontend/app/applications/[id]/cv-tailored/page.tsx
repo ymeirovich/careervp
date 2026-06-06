@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { api } from '../../../../api/methods';
 import { ErrorBoundary } from '../../../../components/ErrorBoundary/ErrorBoundary';
 import { ExportDropdown } from '../../../../components/ExportDropdown/ExportDropdown';
+import { RichTextEditor } from '../../../../components/RichTextEditor/RichTextEditor';
 import { Spinner } from '../../../../components/ui/Spinner';
 import type { CVTailoredStatusResponse, CVSections, JobDetail } from '../../../../lib/types';
 
@@ -296,22 +297,35 @@ function CVTailoredContent({ jobId }: { jobId: string }) {
 
   useEffect(() => {
     const init = async () => {
-      const resolvedArtifactId = queryId;
-      if (!resolvedArtifactId) {
-        router.replace(`/applications/${jobId}`);
-        return;
-      }
       setLoading(true);
-      const [cvResult, jobResult] = await Promise.allSettled([
-        api.getCVTailored(resolvedArtifactId),
+      const [hubResult, jobResult] = await Promise.allSettled([
+        api.getApplication(jobId),
         api.getJob(jobId),
       ]);
 
-      const cvData = cvResult.status === 'fulfilled' ? cvResult.value : null;
+      const hub = hubResult.status === 'fulfilled' ? hubResult.value : null;
       const jobData = jobResult.status === 'fulfilled' ? jobResult.value : null;
       setJob(jobData);
 
-      if (!cvData || cvData.status !== 'completed') {
+      // Prefer the hub's authoritative artifact_id; fall back to ?id= query param
+      const resolvedArtifactId = hub?.artifacts.cv_tailored?.artifact_id ?? queryId;
+      const hubArtifactStatus = hub?.artifacts.cv_tailored?.status;
+
+      if (!resolvedArtifactId || (hubArtifactStatus && hubArtifactStatus === 'failed' && !queryId)) {
+        router.replace(`/applications/${jobId}`);
+        return;
+      }
+
+      const [cvResult] = await Promise.allSettled([
+        api.getCVTailored(resolvedArtifactId),
+      ]);
+
+      const cvData = cvResult.status === 'fulfilled' ? cvResult.value : null;
+
+      // Redirect only when there's clearly no usable content
+      const hasContent = !!(cvData?.result?.cv_sections || cvData?.result?.tailored_cv);
+      const isTerminalFailure = cvData?.status === 'failed' || cvData?.status === 'cancelled';
+      if (!cvData || (isTerminalFailure && !hasContent) || (!hasContent && cvData.status === 'processing')) {
         router.replace(`/applications/${jobId}`);
         return;
       }
@@ -511,11 +525,11 @@ function CVTailoredContent({ jobId }: { jobId: string }) {
             )}
           </div>
           {isEditMode ? (
-            <textarea
-              value={editRawText}
-              onChange={(e) => setEditRawText(e.target.value)}
-              className="w-full min-h-[32rem] resize-y rounded border border-border-default bg-surface-subtle px-3 py-2 text-sm text-text-primary leading-relaxed font-sans focus:outline-none focus:ring-2 focus:ring-primary-action/50"
-              data-testid="cv-tailored-raw-textarea"
+            <RichTextEditor
+              content={editRawText}
+              onChange={setEditRawText}
+              readOnly={saving}
+              placeholder="Edit your tailored CV…"
             />
           ) : (
             <pre className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap font-sans">{result.tailored_cv}</pre>

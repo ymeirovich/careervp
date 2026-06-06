@@ -124,6 +124,9 @@ export default function ApplicationHubPage() {
       onClick = () => router.push(`/applications/${jobId}/gap-analysis`);
     } else if (moduleType === 'companyResearch') {
       onClick = () => router.push(`/applications/${jobId}/company-research`);
+      if (companyResearchId) {
+        return { ...primaryAction, label: 'View', variant: 'secondary' as const, onClick };
+      }
     } else if (status === 'ready' || status === 'complete' || status === 'final') {
       const moduleRoutes: Partial<Record<ModuleType, string>> = {
         vpr: `/applications/${jobId}/vpr${resultUrl ? `?id=${resultUrl}` : ''}`,

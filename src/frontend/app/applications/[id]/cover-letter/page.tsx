@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { api } from '../../../../api/methods';
 import { ErrorBoundary } from '../../../../components/ErrorBoundary/ErrorBoundary';
 import { ExportDropdown } from '../../../../components/ExportDropdown/ExportDropdown';
+import { RichTextEditor } from '../../../../components/RichTextEditor/RichTextEditor';
 import { Spinner } from '../../../../components/ui/Spinner';
 import type { JobDetail } from '../../../../lib/types';
 
@@ -201,11 +202,11 @@ function CoverLetterContent({ jobId }: { jobId: string }) {
       <div className="rounded-md border border-border-default bg-card p-6 flex flex-col gap-4">
         <h2 className="text-base font-bold text-text-primary">Cover Letter</h2>
         {isEditMode ? (
-          <textarea
-            value={editText}
-            onChange={(e) => setEditText(e.target.value)}
-            className="w-full min-h-[32rem] resize-y rounded-md border border-border-default bg-surface-subtle px-3 py-2 text-sm text-text-primary leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary-action/50"
-            data-testid="cover-letter-edit-textarea"
+          <RichTextEditor
+            content={editText}
+            onChange={setEditText}
+            readOnly={saving}
+            placeholder="Write your cover letter…"
           />
         ) : (
           fullText && (
