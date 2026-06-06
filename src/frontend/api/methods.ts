@@ -184,7 +184,8 @@ export const api = {
       apiClient.get<RawCL[] | { cover_letters?: RawCL[] }>('/cover-letters'),
       apiClient.get<{ jobs: Job[] }>('/jobs'),
     ]);
-    const clData = clRes.status === 'fulfilled' ? clRes.value.data : null;
+    if (clRes.status === 'rejected') throw clRes.reason as Error;
+    const clData = clRes.value.data;
     const rawItems: RawCL[] = Array.isArray(clData) ? clData : ((clData as { cover_letters?: RawCL[] } | null)?.cover_letters ?? []);
     const jobsData = jobsRes.status === 'fulfilled' ? jobsRes.value.data : null;
     const jobMap = new Map<string, Job>((jobsData?.jobs ?? []).map((j) => [j.job_id, j]));

@@ -6,6 +6,8 @@ import { useJobs } from '../../hooks/useJobs';
 import { useDashboard } from '../../contexts/DashboardContext';
 import { StatsRow } from '../../components/dashboard/StatsRow';
 import { JobsTable } from '../../components/dashboard/JobsTable';
+import { UsageGate } from '../../components/UsageGate/UsageGate';
+import { Button } from '../../components/ui/Button';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -45,6 +47,19 @@ export default function DashboardPage() {
         isActive={hasActiveAccess}
         isLoading={Boolean(isDashboardLoading)}
       />
+
+      <div className="flex justify-end">
+        <UsageGate action="new_application">
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => router.push('/applications/new')}
+            data-testid="new-application-btn"
+          >
+            + New Application
+          </Button>
+        </UsageGate>
+      </div>
 
       <div data-testid="jobs-table">
         <JobsTable
