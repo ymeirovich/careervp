@@ -1,0 +1,244 @@
+spec_id: FE-UI-034
+title: "Frontend Chain UX — CR Failure State, Retry Toast, Tailored CV Versioning Modal"
+priority: high
+status: draft
+owner: frontend
+created_at: 2026-06-08
+updated_at: 2026-06-08
+route: /applications/[id]
+component_files:
+  - src/frontend/app/applications/[id]/page.tsx
+  - src/frontend/hooks/useApplicationHub.ts
+tier: feature
+
+human_approval_gate:
+  required: false
+  note: >
+    Frontend UX changes only. No DynamoDB schema, API contract, or prompt content changes.
+    Depends on FE-UI-029 (recovery endpoint extension) for new fields.
+
+recommended_model: sonnet
+reason_for_model: >
+  React/TypeScript UI changes using established patterns (modal, toast, state rendering).
+  No novel architecture — extends existing module-card and hub patterns.
+
+depends_on:
+  - FE-UI-029  # company_research_error + cr_pending/cr_failed in recovery response
+  - FE-UI-031  # feature flag env var exists
+blocks: []
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    (1) CR failure is not surfaced to the user — the hub shows company_research
+        as 'failed' but provides no contextual message and other artifact buttons
+        remain fully clickable.
+    (2) On page reload after CR failure, the error state is not recovered — user
+        sees no indication of what went wrong.
+    (3) The Tailored CV regenerate modal says "overwrite the existing" — this is
+        incorrect now that versioning is required (each regenerate creates a new
+        record; old versions stay). The modal must be updated to reflect this.
+    (4) The feature flag (ARTIFACT_CHAIN_ENABLED) has no frontend representation —
+        the hub must render differently when the auto-chain is active vs. manual.
+  required_behavior: >
+    (1) When company_research_error=true (from recovery endpoint):
+        - Show a PERSISTENT warning toast: "Company research failed. Retry to unlock your documents."
+        - Disable VPR, Tailored CV, Cover Letter, and Interview Prep generate/regenerate
+          buttons (show them as disabled with a tooltip "Requires company research")
+        - Company Research card shows a "Retry" primary action instead of "Generate"
+    (2) Page reload: useApplicationHub reads company_research_error from the recovery
+        endpoint response and sets a companyResearchError boolean in hub state.
+        This is the single source of truth — no localStorage required.
+    (3) Tailored CV regenerate modal copy: change to
+        "A new tailored CV will be generated. Your previous CV stays available in the Tailored CVs list."
+        with CTA "Generate New Version".
+    (4) When auto-chain is active (application state=cr_pending or artifacts_generating
+        with auto-chain source), show a pipeline progress indicator across the top of
+        the artifact grid: CR → VPR → Tailored CV with animated step indicators.
+  user_impact: >
+    Users know when CR failed and have a clear recovery path (Retry button).
+    Artifact buttons are not misleadingly enabled when CR hasn't succeeded.
+    Tailored CV versioning is communicated clearly before regeneration.
+
+# =============================================================================
+# EVIDENCE
+# =============================================================================
+evidence:
+  hub_page: src/frontend/app/applications/[id]/page.tsx
+  hub_hook: src/frontend/hooks/useApplicationHub.ts
+  existing_regen_modal_lines: "220-260 (current modal copy says 'overwrite')"
+  existing_confirm_logic_lines: "130-146 (needsConfirmation check)"
+  module_status_enum: src/frontend/types/enums.ts
+  recovery_endpoint_new_fields: "FE-UI-029 — company_research_error (boolean), artifact_statuses.company_research"
+  frontend_spec: docs/best_practices/yaml/frontend_spec.yaml
+
+# =============================================================================
+# ARCHITECTURE
+# =============================================================================
+architecture:
+  change_1_hub_state_extension:
+    file: src/frontend/hooks/useApplicationHub.ts
+    changes:
+      new_field_on_return: "companyResearchError: boolean"
+      read_from: "recovery endpoint response.application.company_research_error"
+      default: false
+      note: >
+        Old recovery responses without this field must default to false
+        (backward-compat with pre-FE-UI-029 backend).
+
+  change_2_cr_failure_ux:
+    file: src/frontend/app/applications/[id]/page.tsx
+    changes:
+      persistent_toast:
+        condition: "companyResearchError === true"
+        content: "Company research failed. Retry to unlock your documents."
+        style: "warning (amber) — persistent, not auto-dismissing"
+        component: "Reuse existing Toast/Alert component pattern"
+        placement: "Above the artifact grid, below the page header"
+      disable_artifact_buttons:
+        when: "companyResearchError === true"
+        disabled_modules: [vpr, tailoredCV, coverLetter, interviewPrep]
+        disabled_state: "button opacity-50 cursor-not-allowed"
+        tooltip: "Requires company research"
+        company_research_card:
+          primary_action_label: "Retry"
+          primary_action_handler: >
+            Call POST /company-research/fetch (existing endpoint) with
+            {job_id, retry: true} → on success, refetch hub state.
+            CR retry is MANUAL — does NOT re-trigger the auto-chain.
+            After successful CR retry, companyResearchError clears and
+            buttons are re-enabled. User manually triggers VPR and CV.
+
+  change_3_tailored_cv_modal:
+    file: src/frontend/app/applications/[id]/page.tsx
+    change: >
+      Update the existing regenerate confirmation modal for moduleType==='tailoredCV'.
+      When regenConfirmModule === 'tailoredCV', show different copy:
+      Title: "Generate New Tailored CV?"
+      Body: "A new tailored CV will be generated. Your previous CV stays available in the Tailored CVs list."
+      CTA: "Generate New Version" (instead of "OK")
+      For all other modules, existing copy is unchanged.
+    note: >
+      The modal already exists (lines 220-260); add a conditional branch on regenConfirmModule.
+      No new modal component needed.
+
+  change_4_chain_progress_indicator:
+    file: src/frontend/app/applications/[id]/page.tsx
+    condition: >
+      application.state === 'cr_pending' OR
+      (application.state === 'artifacts_generating' AND chain was started by auto-chain)
+    component: "ChainProgressBar — inline simple component, no new file needed"
+    display: "CR (spinner/check) → VPR (spinner/check) → Tailored CV (spinner/check)"
+    state_mapping:
+      cr_pending: "CR = processing, VPR = waiting, CV = waiting"
+      artifacts_generating:
+        company_research=completed: "CR = done"
+        vpr=processing: "VPR = processing"
+        vpr=completed: "VPR = done"
+        cv_tailored=processing: "CV = processing"
+    placement: "Between page header and artifact card grid, only visible when chain is active"
+    note: >
+      This is a SIMPLE inline progress indicator, not a full step-by-step wizard.
+      Do NOT over-engineer — three text labels with icons is sufficient.
+      If state is cr_failed, show the error toast instead (change_2 takes precedence).
+
+  state_recovery_mapping:
+    description: "Frontend must render correctly on reload for new chain states"
+    cr_pending:
+      show: "ChainProgressBar (CR processing)"
+      disable_manual_generate: true
+      reason: "Auto-chain is in progress — manual trigger would duplicate work"
+    cr_failed:
+      show: "Persistent error toast + Retry button on CR card"
+      disable_artifact_generate_buttons: true
+    artifacts_generating:
+      show: "ChainProgressBar (VPR or CV step processing)"
+      disable_manual_generate: false  # other modules can still be manually triggered
+
+  feature_flag_note: >
+    The frontend does not need a feature flag env var. The behavior is driven entirely
+    by the application state returned from the recovery endpoint:
+    - cr_pending / cr_failed → chain-specific UX
+    - gap_responses_submitted / artifacts_generating (no cr_pending) → existing UX
+    No frontend feature flag check is required.
+
+# =============================================================================
+# IMPLEMENTATION STEPS
+# =============================================================================
+implementation:
+  step_1:
+    name: "Extend useApplicationHub return type with companyResearchError"
+    file: src/frontend/hooks/useApplicationHub.ts
+
+  step_2:
+    name: "Read company_research_error from recovery endpoint in useApplicationHub"
+    note: "Add to the existing API response parsing — backward-compat with ?? false"
+
+  step_3:
+    name: "Add persistent error toast to hub page"
+    file: src/frontend/app/applications/[id]/page.tsx
+    note: "Conditional render above artifact grid when companyResearchError is true"
+
+  step_4:
+    name: "Disable artifact generate buttons when companyResearchError"
+    file: src/frontend/app/applications/[id]/page.tsx
+    note: "In buildPrimaryAction / button render logic — add companyResearchError guard"
+
+  step_5:
+    name: "Update Tailored CV regenerate modal copy"
+    file: src/frontend/app/applications/[id]/page.tsx
+    note: "Add conditional branch on regenConfirmModule === 'tailoredCV'"
+
+  step_6:
+    name: "Add ChainProgressBar inline component"
+    file: src/frontend/app/applications/[id]/page.tsx
+    note: "Inline sub-component or extracted to app/applications/[id]/ChainProgressBar.tsx — implementer chooses"
+
+  step_7:
+    name: "Run frontend checks"
+    commands:
+      - "cd src/frontend && npm run typecheck"
+      - "cd src/frontend && npm run test:unit"
+      - "cd src/frontend && npm run test:integration"
+
+# =============================================================================
+# CONSTRAINTS
+# =============================================================================
+constraints:
+  - "companyResearchError defaults to false when field absent (old backend compatibility)"
+  - "Error toast is PERSISTENT — do not auto-dismiss"
+  - "CR Retry is MANUAL — it does NOT re-trigger the auto-chain (user manually triggers VPR/CV after)"
+  - "ChainProgressBar renders ONLY for cr_pending or auto-chain artifacts_generating — not for manual-trigger artifacts_generating"
+  - "Tailored CV modal copy change is scoped to tailoredCV module only — other module modals unchanged"
+  - "Do not add a frontend feature flag env var — derive UX from application.state"
+  - "typecheck must pass with no new errors"
+
+# =============================================================================
+# VALIDATION
+# =============================================================================
+validation:
+  commands:
+    - "cd src/frontend && npm run typecheck"
+    - "cd src/frontend && npm run test:unit"
+    - "cd src/frontend && npm run test:integration"
+  acceptance_criteria:
+    - "When companyResearchError=true: warning toast visible, VPR/CV/CL/IP buttons disabled"
+    - "When companyResearchError=true: Company Research card shows 'Retry' CTA"
+    - "On page reload with cr_failed state: error toast appears immediately (no flicker)"
+    - "Tailored CV regenerate modal shows 'Generate New Version' CTA and new copy"
+    - "Other module regenerate modals unchanged"
+    - "cr_pending state shows ChainProgressBar with CR step active"
+    - "typecheck passes"
+    - "Existing hub integration tests pass"
+
+# =============================================================================
+# TEST HOOKS
+# =============================================================================
+test_hooks:
+  - "TEST-CHAIN-001 § e2e-cr-failure-ux: CR fails → toast + disabled buttons"
+  - "TEST-CHAIN-001 § e2e-reload-recovery: page reload with cr_failed → error state recovered"
+  - "TEST-CHAIN-001 § e2e-cv-versioning-modal: tailoredCV regenerate shows new copy"
+  - "TEST-CHAIN-001 § unit-fe-hub: companyResearchError defaults to false when absent"
+  - "TEST-CHAIN-001 § regression-manual-endpoints: manual VPR/CV/CR generate still works when flag off"

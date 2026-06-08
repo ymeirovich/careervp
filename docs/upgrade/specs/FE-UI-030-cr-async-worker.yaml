@@ -1,0 +1,235 @@
+spec_id: FE-UI-030
+title: "Artifact Chain — Company Research Async Worker Lambda"
+priority: critical
+status: draft
+owner: backend
+created_at: 2026-06-08
+updated_at: 2026-06-08
+tier: feature
+
+human_approval_gate:
+  required: false
+  note: >
+    This spec covers Lambda handler code only. The SQS queue + DLQ it consumes
+    are provisioned by FE-UI-031 (GATE 2). This spec may be authored and reviewed
+    before gate 2 but MUST NOT be deployed until FE-UI-031 is approved and the
+    queue ARN/URL environment variables are available.
+
+recommended_model: sonnet
+reason_for_model: >
+  Standard Lambda handler following established codebase patterns (Powertools, Pydantic,
+  direct SQS routing). No novel architectural decisions — mirrors gap_analysis_worker pattern.
+
+depends_on:
+  - FE-UI-029  # state machine + DAL methods must exist
+  - FE-UI-031  # SQS queue must be provisioned (infra gate)
+blocks:
+  - FE-UI-031  # Step Functions needs to know worker function name/ARN
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    Company Research is sync-only (POST /company-research/fetch blocks until done).
+    There is no async CR worker, no company_research_queue, and CR is never triggered
+    from gap submit. VPR therefore starts with company_context=None, missing all
+    company signals.
+  required_behavior: >
+    A new Lambda company_research_worker_handler.py consumes messages from
+    company_research_queue (SQS). It calls the existing research_company() logic,
+    applies the 0.85 confidence gate (CR_CONFIDENCE_THRESHOLD), retries up to 3×
+    with exponential back-off on sub-threshold results, then either:
+    (a) persists the CR result + sets artifact_statuses.company_research=completed
+        + enqueues a VPR job on vpr_jobs_queue (when the Step Functions chain is
+        active, the chain handles VPR enqueueing — see note below), or
+    (b) sets artifact_statuses.company_research=failed and company_research_error=true
+        on hard-fail.
+    Idempotency key: user_id:job_id (via Lambda Powertools idempotency).
+  user_impact: >
+    VPR will receive structured company context for every auto-chain run.
+    CR failure is surfaced to the frontend via the recovery endpoint, unblocking the
+    retry UX (FE-UI-034).
+
+note_on_vpr_enqueueing: >
+  When ARTIFACT_CHAIN_ENABLED=true the Step Functions state machine (FE-UI-031)
+  orchestrates the CR → VPR transition via a task-token callback: the CR worker
+  sends a success/fail callback to Step Functions, and Step Functions enqueues
+  VPR. The worker DOES NOT directly write to vpr_jobs_queue in chain mode.
+  In standalone mode (flag OFF or direct CR re-trigger from UI), the worker
+  writes directly to vpr_jobs_queue as a fallback if company_context is missing.
+
+# =============================================================================
+# EVIDENCE
+# =============================================================================
+evidence:
+  existing_similar_handler: src/backend/careervp/handlers/vpr_worker_handler.py
+  research_logic: src/backend/careervp/logic/company_research.py
+  confidence_function: "_calculate_confidence (company_research.py:332)"
+  confidence_range_analysis: >
+    WEBSITE_SCRAPE: 0.8–0.9 (gate passes almost always)
+    WEB_SEARCH: 0.3–0.7 (may fail gate — retry helps if fields populate on re-fetch)
+    LLM_FALLBACK: 0.4–0.5 (always below gate — retries will not help; hard-fail immediately)
+  new_env_vars:
+    - COMPANY_RESEARCH_QUEUE_URL
+    - COMPANY_RESEARCH_DLQ_URL
+    - CR_CONFIDENCE_THRESHOLD        # default 0.85
+    - ARTIFACT_CHAIN_ENABLED         # feature flag, default "false"
+    - STEP_FUNCTIONS_CHAIN_ARN       # ARN of Step Functions SM (used for task-token callback)
+
+# =============================================================================
+# ARCHITECTURE
+# =============================================================================
+architecture:
+  new_files:
+    - path: src/backend/careervp/handlers/company_research_worker_handler.py
+      description: "SQS worker Lambda — consumes company_research_queue"
+
+  handler_structure:
+    pattern: "Direct SQS routing (not APIGatewayRestResolver) — same as vpr_worker_handler.py"
+    powertools_decorators:
+      - "@logger.inject_lambda_context(log_event=False)"
+      - "@tracer.capture_lambda_handler(capture_response=False)"
+      - "@metrics.log_metrics(capture_cold_start_metric=True)"
+    idempotency:
+      library: aws_lambda_powertools.utilities.idempotency
+      key_field: "user_id:job_id"
+      persistence_store: DynamoDBPersistenceLayer (reuse existing idempotency table)
+
+  sqs_message_schema:
+    description: "Message published to company_research_queue by gap_handler.submit_response (when flag ON)"
+    fields:
+      user_id: str
+      job_id: str
+      company_name: str
+      job_posting_url: str | null
+      domain: str | null
+      task_token: str | null  # Step Functions task token; null when called standalone
+
+  worker_logic_flow:
+    step_1: "Parse SQS record body → validate via Pydantic model CRWorkerInput"
+    step_2: "Check idempotency (skip if already processed)"
+    step_3: >
+      Call research_company(CompanyResearchRequest(...)) — reuse existing logic, no rewrite.
+      research_company is async; worker uses asyncio.run() wrapper (same as vpr_worker_handler).
+    step_4: >
+      Apply confidence gate:
+        result.confidence_score >= CR_CONFIDENCE_THRESHOLD (0.85)?
+          YES → proceed to step 5
+          NO  → retry_count < 3?
+                  YES → raise RetryableError (SQS visibility timeout handles backoff)
+                  NO  → goto hard_fail
+    step_5: >
+      Persist CR:
+        company_research_repo.save(user_id, job_id, result)
+        application_repo.update_artifact_status(job_id, user_id, 'company_research', 'completed')
+        application_repo.transition_state(job_id, user_id, 'cr_pending', 'artifacts_generating')
+    step_6: >
+      Signal chain / enqueue VPR:
+        IF task_token IS NOT NULL (Step Functions chain mode):
+          sfn_client.send_task_success(taskToken=task_token, output=json.dumps({'job_id': job_id}))
+        ELSE (standalone / retry mode):
+          vpr_queue.send_message(Body=json.dumps({user_id, job_id, company_context: result}))
+    hard_fail: >
+      application_repo.set_company_research_error(job_id, user_id, error=True)
+      application_repo.update_artifact_status(job_id, user_id, 'company_research', 'failed')
+      application_repo.transition_state(job_id, user_id, 'cr_pending', 'cr_failed')
+      IF task_token IS NOT NULL:
+        sfn_client.send_task_failure(taskToken=task_token, error='CRHardFail', cause='...')
+      logger.error('CR hard-fail after max retries', ...)
+      # Do NOT raise — message should NOT go to DLQ on intentional hard-fail
+
+  retry_strategy:
+    sqs_visibility_timeout_seconds: 120  # same as gap_analysis_queue convention
+    max_receive_count: 3                 # DLQ after 3 delivery attempts
+    exponential_backoff_note: >
+      SQS visibility timeout provides natural backoff. On RetryableError the worker
+      re-raises, SQS re-delivers after visibility_timeout (120s), doubling the effective
+      gap between attempts. Do NOT implement custom sleep() — relies on SQS mechanism.
+
+  iam_grants_needed:
+    - "sqs:ReceiveMessage, sqs:DeleteMessage, sqs:GetQueueAttributes on company_research_queue"
+    - "sqs:SendMessage on vpr_jobs_queue (standalone mode only)"
+    - "states:SendTaskSuccess, states:SendTaskFailure on STEP_FUNCTIONS_CHAIN_ARN"
+    - "dynamodb:UpdateItem on applications table (artifact_statuses + state)"
+    - "dynamodb:GetItem on applications table (ownership read)"
+    - "dynamodb:PutItem on idempotency table"
+    - "dynamodb:GetItem on company_research_cache_table (read cache)"
+    - "dynamodb:PutItem on company_research_cache_table (write cache)"
+
+  lambda_config:
+    memory_mb: 1024
+    timeout_seconds: 60
+    runtime: python3.12
+    handler: "company_research_worker_handler.lambda_handler"
+
+# =============================================================================
+# IMPLEMENTATION STEPS
+# =============================================================================
+implementation:
+  step_1:
+    name: "Create CRWorkerInput Pydantic model"
+    location: src/backend/careervp/handlers/company_research_worker_handler.py
+    note: "Validate SQS message body; task_token is Optional[str] defaulting to None"
+
+  step_2:
+    name: "Implement lambda_handler with Powertools decorators"
+    pattern: "Mirror vpr_worker_handler.lambda_handler structure"
+    note: >
+      Iterate SQS records, call _process_record() per record.
+      Partial batch failure: collect failed record IDs and return
+      {'batchItemFailures': [...]} to SQS for selective retry.
+
+  step_3:
+    name: "Implement _process_record() with confidence gate"
+    note: >
+      Use asyncio.run(_async_process_record(record)) wrapper.
+      Import research_company from careervp.logic.company_research.
+      Do NOT rewrite research_company logic.
+
+  step_4:
+    name: "Implement _send_chain_signal()"
+    note: >
+      Thin wrapper around boto3 StepFunctions client.
+      Reads STEP_FUNCTIONS_CHAIN_ARN from env. Graceful no-op if env not set
+      (supports local testing without Step Functions).
+
+  step_5:
+    name: "Inject worker env vars into Lambda construct (FE-UI-031)"
+    note: "This step is owned by FE-UI-031 — listed here for cross-reference only"
+
+# =============================================================================
+# CONSTRAINTS
+# =============================================================================
+constraints:
+  - "DO NOT rewrite research_company() — call it unchanged"
+  - "Idempotency MUST use user_id:job_id as key (not just job_id — job_ids can collide across users in theory)"
+  - "Hard-fail must NOT raise an exception after recording failure (avoids DLQ for intentional failures)"
+  - "LLM_FALLBACK source always hard-fails (confidence ≤ 0.5 < 0.85) — do not retry, fail immediately"
+  - "task_token is optional; worker must function in standalone mode without Step Functions"
+  - "Partial batch failure response format is required (SQS batchItemFailures pattern)"
+  - "CR_CONFIDENCE_THRESHOLD env var defaults to 0.85 if not set"
+
+# =============================================================================
+# VALIDATION
+# =============================================================================
+validation:
+  commands:
+    - "cd src/backend && uv run mypy careervp --strict"
+    - "cd src/backend && uv run pytest tests/unit/test_company_research_worker* -v --tb=short"
+  acceptance_criteria:
+    - "Worker processes a WEBSITE_SCRAPE result (confidence 0.9) → persists CR + transitions state to artifacts_generating"
+    - "Worker processes a WEB_SEARCH result (confidence 0.6) → retries up to 3× via batchItemFailures"
+    - "Worker hard-fails LLM_FALLBACK (confidence 0.45) → sets company_research_error=true, state=cr_failed, no DLQ entry"
+    - "Worker sends task_success to Step Functions when task_token is present"
+    - "Idempotent: second call with same user_id:job_id is a no-op"
+    - "mypy strict passes"
+
+# =============================================================================
+# TEST HOOKS
+# =============================================================================
+test_hooks:
+  - "TEST-CHAIN-001 § unit-cr-worker: confidence gate pass/retry/hard-fail"
+  - "TEST-CHAIN-001 § unit-cr-worker: idempotency key uniqueness"
+  - "TEST-CHAIN-001 § unit-cr-worker: task_token signal (mock sfn client)"
+  - "TEST-CHAIN-001 § integration-cr-worker: full SQS → persist → state-transition flow"

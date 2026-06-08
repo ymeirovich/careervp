@@ -1,0 +1,259 @@
+spec_id: FE-UI-033
+title: "Token Optimization — VPR Cached Schema, VPR Digest, CV/Cover Digest"
+priority: high
+status: draft
+owner: backend
+created_at: 2026-06-08
+updated_at: 2026-06-08
+tier: feature
+
+human_approval_gate:
+  required: true
+  gate_number: 4
+  reason: "ALL prompt-content edits require explicit approval per project non-negotiables"
+  approval_before: "Any changes to vpr_prompt.py content, cv_tailoring_prompt.py content, or cover_letter_prompt.py content"
+
+recommended_model: sonnet
+reason_for_model: >
+  Mechanical prompt restructuring following explicit rules. No novel reasoning required.
+  Golden tests provide the safety net for correctness.
+
+depends_on:
+  - FE-UI-032  # Golden test for company_research_prompt must pass first (establishes baseline)
+blocks: []
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    VPR build_phase2_prompt embeds the full output schema (~1,500 tokens) in every
+    user-turn message. Retries re-bill the entire schema on every attempt.
+    cv_tailoring_prompt includes vpr.model_dump() (~4,000 tokens) — the full VPR JSON.
+    cover_letter_prompt includes both cv.model_dump() and vpr.model_dump() (~6,000 tokens
+    combined). No Anthropic prompt caching is applied to any repeatable content.
+  required_behavior: >
+    (1) VPR: move the static output schema block to a separate cached system prompt
+        returned by build_phase2_system_prompt(). Add cache_control marker.
+        Terse field list remains in user prompt (field names only, no example values).
+        No output field name changes — UI reads exact schema.
+    (2) CV Tailoring: replace vpr.model_dump() (~4K tok) with a VPR Digest
+        (positioning_statement + top_differentiators + ats_keywords.primary only, ~300 tok).
+    (3) Cover Letter: replace cv.model_dump() with a CV digest (name, summary,
+        top 3 roles, key skills — ~200 tok) and vpr.model_dump() with VPR Digest (~300 tok).
+    (4) CV Tailoring: move repeated system rules to a cached system prompt block.
+    Target: ≥18% cost reduction per application (VPR output tokens dominate at ~80% of cost;
+    savings from input-token reduction are real but bounded).
+  user_impact: >
+    Lower API cost per application (closer to $0.226 vs $0.276 baseline).
+    On VPR retry, only delta tokens (user turn) are re-billed — system cache hit saves
+    ~$0.003 per retry. No user-visible behavior change (output schemas unchanged).
+
+# =============================================================================
+# EVIDENCE
+# =============================================================================
+evidence:
+  vpr_prompt_file: "src/backend/careervp/logic/prompts/vpr_prompt.py"
+  vpr_output_schema_location: "vpr_prompt.py:~335–595 (embedded in build_phase2_prompt user string)"
+  cv_tailoring_vpr_injection: "cv_tailoring_prompt.py:104 — json.dumps(vpr.model_dump(), indent=2)"
+  cover_letter_cv_injection: "cover_letter_prompt.py:47 — json.dumps(cv.model_dump(), indent=2)"
+  cover_letter_vpr_injection: "cover_letter_prompt.py:49 — json.dumps(vpr.model_dump(), indent=2)"
+  ui_reads_these_fields:
+    - overallFitScore              # executive_summary.overall_fit_score (camelCase in API response)
+    - topThreeStrengths            # executive_summary.top_three_strengths
+    - atsKeywords.primary          # application_strategy.ats_keywords.primary
+    - coreResponsibilities         # to be verified — not found in prompt spec; may be frontend-derived
+    - relevantExperiences          # to be verified — may be frontend-derived from evidence_matrix
+    - positioningStatement         # differentiators.positioning_statement
+  critical_invariant: "Zero field name changes in VPR output JSON — any rename breaks the UI"
+  cost_estimate_note: >
+    VPR output tokens (~16,000 max_tokens) dominate cost at ~80%.
+    Input-token savings (system cache hit + digest replacements) reduce ~20% of spend.
+    Net ~18% reduction is the realistic target — do not over-promise 30%.
+
+# =============================================================================
+# ARCHITECTURE
+# =============================================================================
+architecture:
+  change_1_vpr_cached_system_prompt:
+    file: src/backend/careervp/logic/prompts/vpr_prompt.py
+    new_function: build_phase2_system_prompt
+    description: >
+      Extract the static output schema block (everything after "OUTPUT SCHEMA:" in
+      build_phase2_prompt) into build_phase2_system_prompt() which returns it as a
+      standalone string. Add Anthropic cache_control ephemeral marker.
+    cache_control_pattern: |
+      # In the Anthropic API call (vpr_generator.py or llm_client.py):
+      system = [
+          {"type": "text", "text": build_phase2_system_prompt(),
+           "cache_control": {"type": "ephemeral"}},
+          {"type": "text", "text": build_phase2_dynamic_system_prefix(request)},
+      ]
+    build_phase2_prompt_change: >
+      Remove the output schema block from build_phase2_prompt (user turn).
+      Replace with a short reference line:
+      "Return JSON matching the schema in the system prompt."
+    banned_words_stay: >
+      The BANNED_WORDS list and anti-AI instruction block remain in build_phase2_prompt
+      (user turn) — they are job-specific and must NOT be cached.
+    output_field_names_invariant: >
+      Every field in the schema block must be preserved exactly:
+      metadata, executive_summary, overall_fit_score, top_three_strengths,
+      top_three_concerns, recommended_approach, differentiators, top_differentiators,
+      unique_strengths, competitive_advantages, positioning_statement,
+      concerns_and_mitigations, likely_objections, mitigation, value_proposition,
+      primary_value, secondary_values, quantified_impact, elevator_pitch,
+      application_strategy, ats_keywords (primary, secondary), cv_lead_differentiator,
+      sections_to_compress, company_insights, evidence_gaps, verification_summary
+    callers_to_update:
+      - "vpr_generator.py or whichever file calls the Anthropic API for Phase 2 — pass system list with cache_control"
+
+  change_2_vpr_digest:
+    description: "Replace full vpr.model_dump() in CV Tailoring and Cover Letter with VPR Digest"
+    new_helper: build_vpr_digest
+    location: src/backend/careervp/logic/prompts/vpr_prompt.py
+    signature: "(vpr: VPR) -> dict[str, Any]"
+    content: |
+      {
+        "positioning_statement": vpr.differentiators.positioning_statement,
+        "top_differentiators": [d.strength for d in (vpr.differentiators.unique_strengths or [])[:3]],
+        "ats_keywords_primary": vpr.application_strategy.ats_keywords.primary if vpr.application_strategy else [],
+        "overall_fit_score": vpr.executive_summary.overall_fit_score if vpr.executive_summary else None,
+        "recommended_approach": vpr.executive_summary.recommended_approach if vpr.executive_summary else None,
+      }
+    estimated_token_reduction: "~3,700 tokens per call (from ~4,000 to ~300)"
+    note: >
+      The cv_tailoring_prompt currently includes vpr.model_dump() with
+      "Surface ats_keywords.primary into tailored bullet points naturally."
+      The digest preserves ats_keywords_primary and positioning_statement,
+      which are the two fields the tailoring guidance actually references.
+
+  change_3_cv_digest_for_cover_letter:
+    description: "Replace cv.model_dump() in Cover Letter with a CV Digest"
+    new_helper: build_cv_digest
+    location: src/backend/careervp/logic/prompts/cover_letter_prompt.py
+    signature: "(cv: UserCV) -> dict[str, Any]"
+    content: |
+      {
+        "name": cv.full_name,
+        "summary": cv.professional_summary,
+        "top_roles": [
+          {"title": exp.title, "company": exp.company, "duration": exp.duration}
+          for exp in (cv.experiences or [])[:3]
+        ],
+        "key_skills": (cv.skills or [])[:10],
+      }
+    estimated_token_reduction: "~1,500–2,500 tokens per call (CV size-dependent)"
+    note: >
+      Cover Letter generation does not need the full CV JSON — it needs name,
+      summary, and top experience to write a compelling narrative. Full CV
+      structure (all bullets, all roles) is already captured in the tailored CV.
+
+  change_4_cv_tailoring_cached_system:
+    description: "Move static CV tailoring rules to a cached system block"
+    file: src/backend/careervp/logic/cv_tailoring_prompt.py
+    new_function: build_tailoring_system_prompt
+    content: >
+      The invariant rules section (e.g., "Do not invent new experiences",
+      formatting rules, output schema for the tailored CV) extracted from
+      build_user_prompt into a standalone function with cache_control marker.
+    estimated_token_reduction: "~400–600 tokens per call"
+    note: "Identify the static rule block in the existing system prompt first; extract verbatim"
+
+# =============================================================================
+# GOLDEN TESTS (MANDATORY BEFORE IMPLEMENTATION)
+# =============================================================================
+golden_tests:
+  requirement: >
+    Before any token-optimization prompt edits, capture the current output of
+    build_phase2_prompt, build_user_prompt (cv_tailoring), and build_user_prompt
+    (cover_letter) with fixed inputs as golden snapshots. After changes, the
+    SEMANTIC content of the user prompts must be equivalent (same information
+    passed to the model), but exact byte-identity is NOT required (digest
+    reduces token count by design). Assertions should check:
+    1. VPR system prompt contains every field name listed in output_field_names_invariant
+    2. VPR user prompt no longer contains the OUTPUT SCHEMA block
+    3. CV Tailoring user prompt contains 'positioning_statement' and 'ats_keywords_primary'
+       (from digest) but NOT the full VPR JSON structure
+    4. Cover Letter user prompt contains cv.full_name and top 3 experience titles (from digest)
+    5. BANNED_WORDS list is still present in VPR user prompt (not moved to cached system)
+
+# =============================================================================
+# IMPLEMENTATION STEPS
+# =============================================================================
+implementation:
+  step_1:
+    name: "Capture golden snapshots (BEFORE any changes)"
+    command: >
+      cd src/backend && uv run pytest tests/unit/test_vpr_prompt_golden.py --tb=short
+    note: "Write these tests FIRST, then lock snapshots"
+
+  step_2:
+    name: "Implement build_phase2_system_prompt() in vpr_prompt.py"
+    file: src/backend/careervp/logic/prompts/vpr_prompt.py
+    note: "Extract static output schema; leave dynamic content in user prompt"
+
+  step_3:
+    name: "Update VPR Anthropic API caller to use system list with cache_control"
+    note: "Find the _synthesize or equivalent function that calls anthropic client for Phase 2"
+
+  step_4:
+    name: "Implement build_vpr_digest() in vpr_prompt.py"
+
+  step_5:
+    name: "Update cv_tailoring_prompt to use build_vpr_digest() instead of vpr.model_dump()"
+    file: src/backend/careervp/logic/cv_tailoring_prompt.py
+
+  step_6:
+    name: "Implement build_cv_digest() in cover_letter_prompt.py"
+
+  step_7:
+    name: "Update cover_letter_prompt to use both digests"
+    file: src/backend/careervp/logic/prompts/cover_letter_prompt.py
+
+  step_8:
+    name: "Implement build_tailoring_system_prompt() and update caller"
+    file: src/backend/careervp/logic/cv_tailoring_prompt.py
+
+  step_9:
+    name: "Run golden tests and full unit suite"
+    command: "cd src/backend && uv run pytest tests/unit/ -v --tb=short"
+
+# =============================================================================
+# CONSTRAINTS
+# =============================================================================
+constraints:
+  - "ZERO field name changes in VPR output schema — UI regression is the primary risk"
+  - "BANNED_WORDS anti-AI list stays in VPR user prompt (never cached)"
+  - "build_vpr_digest must include ats_keywords_primary (CV tailoring uses it for keyword injection)"
+  - "Golden tests must be committed and passing BEFORE prompt edits begin"
+  - "If VPR output quality degrades after schema move (quality gate failures increase), revert"
+  - "Anthropic prompt caching only applies to the system block — user turn is always fresh"
+  - "Cache control ephemeral type only; do not use persistent cache tier"
+  - "Do not cache BANNED_WORDS or company-specific context — must remain per-request"
+
+# =============================================================================
+# VALIDATION
+# =============================================================================
+validation:
+  commands:
+    - "cd src/backend && uv run mypy careervp --strict"
+    - "cd src/backend && uv run pytest tests/unit/ -v --tb=short"
+  acceptance_criteria:
+    - "All VPR output field names are present in build_phase2_system_prompt() output"
+    - "build_phase2_prompt() (user turn) no longer contains 'OUTPUT SCHEMA:' block"
+    - "build_vpr_digest() output contains positioning_statement and ats_keywords_primary"
+    - "cv_tailoring build_user_prompt with digest ≈ 300 tokens for VPR section (vs ~4,000 before)"
+    - "cover_letter build_user_prompt with digests ≈ 500 tokens for CV+VPR sections (vs ~6,000 before)"
+    - "Golden snapshot tests pass (correct fields, digest present, schema absent from user turn)"
+    - "mypy strict passes"
+
+# =============================================================================
+# TEST HOOKS
+# =============================================================================
+test_hooks:
+  - "TEST-CHAIN-001 § regression-vpr-output-schema: all field names present in system prompt"
+  - "TEST-CHAIN-001 § regression-vpr-output-schema: BANNED_WORDS in user prompt"
+  - "TEST-CHAIN-001 § unit-vpr-digest: required fields in digest"
+  - "TEST-CHAIN-001 § unit-cv-digest: name, summary, top 3 roles present"
+  - "TEST-CHAIN-001 § regression-output-contracts: Cover Letter + CV Tailoring output format unchanged"

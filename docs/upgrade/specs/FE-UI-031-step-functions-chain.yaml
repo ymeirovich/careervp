@@ -1,0 +1,317 @@
+spec_id: FE-UI-031
+title: "Artifact Chain — Step Functions Standard Construct + Company Research SQS Queue"
+priority: critical
+status: draft
+owner: backend
+created_at: 2026-06-08
+updated_at: 2026-06-08
+tier: feature
+
+human_approval_gate:
+  required: true
+  gate_number: 2
+  reason: "New Step Functions Standard Workflow (prod infra), new SQS company_research_queue + DLQ, new IAM policies, new Lambda invocation wiring"
+  approval_before: "Any CDK construct additions, cdk synth that introduces new AWS resources, or deployment to dev/staging"
+
+recommended_model: opus
+reason_for_model: >
+  Step Functions state machine definition, task-token callback pattern, error-catch/retry
+  logic, and IAM scoping are architecture-sensitive per project guidelines. Incorrect
+  IAM or retry config can cause silent failures or runaway costs.
+
+depends_on:
+  - FE-UI-029  # state machine states + transitions must be defined
+  - FE-UI-030  # CR worker Lambda must exist (for resource reference)
+blocks:
+  - FE-UI-034  # frontend can't render chain status without infra
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    CR → VPR → CV coordination does not exist. Existing SQS paths for VPR and
+    CV Tailoring are independent fire-and-forget. No Step Functions state machine exists.
+    Company Research runs synchronously on a REST endpoint only.
+  required_behavior: >
+    A new Step Functions Standard Workflow orchestrates the sequential chain:
+    Company Research (async via SQS + task-token) → VPR (async via SQS + task-token)
+    → Tailored CV (async via SQS + task-token). The workflow is triggered by
+    gap_handler.submit_response when ARTIFACT_CHAIN_ENABLED=true. Existing SQS
+    paths for VPR, CV Tailoring, Cover Letter, and Interview Prep remain UNCHANGED.
+    The Step Functions machine is ADDITIVE — it wraps existing workers via task tokens
+    without rewriting them.
+  user_impact: >
+    The auto-chain from Gap submit to complete artifact set runs reliably with
+    built-in retry, error propagation, and per-step timeouts. Manual endpoints
+    for VPR, CR, and CV Tailoring remain functional as fallbacks.
+
+# =============================================================================
+# EVIDENCE
+# =============================================================================
+evidence:
+  existing_sqs_pattern: infra/careervp/api_db_construct.py
+  gap_analysis_queue_lines: "467–491 (DLQ then Queue pattern to follow)"
+  vpr_jobs_queue: "infra/careervp/api_db_construct.py:998"
+  existing_api_construct: infra/careervp/api_construct.py
+  service_stack: infra/careervp/service_stack.py
+  naming_convention: infra/careervp/naming_utils.py
+  cdk_spec: docs/best_practices/yaml/prompt_optimization_cdk_spec.yaml
+
+# =============================================================================
+# ARCHITECTURE
+# =============================================================================
+architecture:
+  new_infra_resources:
+    sqs_queues:
+      - id: CompanyResearchDlq
+        pattern: "Mirror GapAnalysisDlq (retention=14d, KMS_MANAGED)"
+        attribute: self.company_research_dlq
+      - id: CompanyResearchQueue
+        pattern: "Mirror GapAnalysisQueue (visibility=120s, KMS_MANAGED, DLQ max_receive_count=3)"
+        attribute: self.company_research_queue
+
+    step_functions:
+      - id: ArtifactChainStateMachine
+        type: "Standard Workflow (NOT Express — durable execution required for up-to-2hr chain)"
+        tracing: true
+        logs:
+          level: ERROR
+          include_execution_data: false  # cost control — avoid logging full state
+
+  construct_location:
+    recommendation: >
+      Add company_research_queue + DLQ to api_db_construct.py alongside existing queues.
+      Create a new file infra/careervp/artifact_chain_construct.py for the
+      Step Functions state machine definition, imported into service_stack.py.
+    new_file: infra/careervp/artifact_chain_construct.py
+
+  step_functions_state_machine:
+    definition:
+      states:
+        StartCompanyResearch:
+          type: Task
+          resource: "arn:aws:states:::sqs:sendMessage.waitForTaskToken"
+          parameters:
+            QueueUrl: "${CompanyResearchQueueUrl}"
+            MessageBody:
+              user_id.$: "$.user_id"
+              job_id.$: "$.job_id"
+              company_name.$: "$.company_name"
+              job_posting_url.$: "$.job_posting_url"
+              task_token.$: "$$.Task.Token"
+          retry:
+            - ErrorEquals: ["CRRetryableError"]
+              interval_seconds: 120
+              max_attempts: 3
+              backoff_rate: 2.0
+          catch:
+            - ErrorEquals: ["CRHardFail", "States.TaskFailed"]
+              next: HandleCRFailure
+          heartbeat_seconds: 180
+          next: StartVPR
+
+        HandleCRFailure:
+          type: Task
+          resource: "arn:aws:states:::lambda:invoke"
+          parameters:
+            FunctionName: "${CRFailureHandlerArn}"
+            Payload.$: "$"
+          comment: "Thin Lambda that sets company_research_error=true and state=cr_failed"
+          end: true
+
+        StartVPR:
+          type: Task
+          resource: "arn:aws:states:::sqs:sendMessage.waitForTaskToken"
+          parameters:
+            QueueUrl: "${VprJobsQueueUrl}"
+            MessageBody:
+              user_id.$: "$.user_id"
+              job_id.$: "$.job_id"
+              company_context.$: "$.company_context"
+              task_token.$: "$$.Task.Token"
+          retry:
+            - ErrorEquals: ["States.TaskFailed"]
+              interval_seconds: 30
+              max_attempts: 2
+              backoff_rate: 2.0
+          catch:
+            - ErrorEquals: ["States.ALL"]
+              next: HandleVPRFailure
+          heartbeat_seconds: 300
+          next: StartCVTailoring
+
+        HandleVPRFailure:
+          type: Task
+          resource: "arn:aws:states:::lambda:invoke"
+          parameters:
+            FunctionName: "${ArtifactFailureHandlerArn}"
+            Payload:
+              artifact_type: "vpr"
+              context.$: "$"
+          end: true
+
+        StartCVTailoring:
+          type: Task
+          resource: "arn:aws:states:::sqs:sendMessage.waitForTaskToken"
+          parameters:
+            QueueUrl: "${CvTailoringQueueUrl}"
+            MessageBody:
+              user_id.$: "$.user_id"
+              job_id.$: "$.job_id"
+              vpr_id.$: "$.vpr_id"
+              task_token.$: "$$.Task.Token"
+          retry:
+            - ErrorEquals: ["States.TaskFailed"]
+              interval_seconds: 30
+              max_attempts: 2
+              backoff_rate: 2.0
+          catch:
+            - ErrorEquals: ["States.ALL"]
+              next: HandleCVFailure
+          heartbeat_seconds: 300
+          end: true
+
+        HandleCVFailure:
+          type: Task
+          resource: "arn:aws:states:::lambda:invoke"
+          parameters:
+            FunctionName: "${ArtifactFailureHandlerArn}"
+            Payload:
+              artifact_type: "cv_tailored"
+              context.$: "$"
+          end: true
+
+    execution_input_schema: |
+      {
+        "user_id": "u_abc123",
+        "job_id": "job_xyz456",
+        "company_name": "Acme Corp",
+        "job_posting_url": "https://...",  // optional
+        "application_id": "job_xyz456"
+      }
+    note_on_task_token: >
+      Task tokens are injected by Step Functions via $$.Task.Token.
+      Existing vpr_worker_handler.py already reads input_data.get('task_token').
+      No changes to vpr_worker_handler are required for the chain to work —
+      it will call sfn.send_task_success when task_token is present (already
+      supported per FE-UI-030 cross-reference). Verify this is already in place;
+      if not, add it as a minimal patch (covered by FE-UI-030 step 4).
+
+  feature_flag_trigger:
+    location: src/backend/careervp/handlers/gap_handler.py
+    function: submit_response
+    change: >
+      After successful response persist, check env var ARTIFACT_CHAIN_ENABLED.
+      IF "true":
+        sfn_client.start_execution(
+          stateMachineArn=STEP_FUNCTIONS_CHAIN_ARN,
+          name=f"chain-{job_id}-{uuid4().hex[:8]}",  // unique execution name
+          input=json.dumps({user_id, job_id, company_name, job_posting_url, application_id})
+        )
+        application_repo.transition_state(job_id, user_id, 'gap_responses_submitted', 'cr_pending')
+      ELSE:
+        # existing behavior: trigger VPR directly via SQS
+        (no change to existing code path)
+    note: "This change to gap_handler is the ONLY modification to existing handler files."
+
+  iam_grants:
+    step_functions_execution_role:
+      - "sqs:SendMessage on company_research_queue"
+      - "sqs:SendMessage on vpr_jobs_queue"
+      - "sqs:SendMessage on cv_tailoring_queue (if it exists as SQS)"
+      - "lambda:InvokeFunction on HandleCRFailure and ArtifactFailureHandler Lambdas"
+    gap_handler_lambda:
+      - "states:StartExecution on ArtifactChainStateMachine"
+    company_research_worker:
+      - "states:SendTaskSuccess, states:SendTaskFailure on ArtifactChainStateMachine"
+    vpr_worker:
+      - "states:SendTaskSuccess, states:SendTaskFailure on ArtifactChainStateMachine"
+    cv_tailoring_worker:
+      - "states:SendTaskSuccess, states:SendTaskFailure on ArtifactChainStateMachine"
+
+  naming_convention:
+    note: >
+      Follow infra/careervp/naming_utils.py conventions.
+      Run python src/backend/scripts/validate_naming.py --path infra --strict after changes.
+
+# =============================================================================
+# IMPLEMENTATION STEPS
+# =============================================================================
+implementation:
+  step_1:
+    name: "Add company_research_queue + DLQ to api_db_construct.py"
+    file: infra/careervp/api_db_construct.py
+    pattern: "Copy _build_gap_analysis_dlq / _build_gap_analysis_queue pattern exactly"
+
+  step_2:
+    name: "Create artifact_chain_construct.py"
+    file: infra/careervp/artifact_chain_construct.py
+    content: >
+      CDK construct class ArtifactChainConstruct that:
+      - Accepts queue references (company_research_queue, vpr_jobs_queue, cv_tailoring_queue)
+      - Accepts Lambda function references (cr_failure_handler, artifact_failure_handler)
+      - Defines StateMachine with the ASL above using CDK sfn + sfn_tasks constructs
+      - Exposes self.state_machine for IAM grant wiring
+
+  step_3:
+    name: "Wire ArtifactChainConstruct into service_stack.py"
+    file: infra/careervp/service_stack.py
+    note: "Pass queue ARNs/URLs and function ARNs; output state_machine.state_machine_arn as CfnOutput"
+
+  step_4:
+    name: "Add ARTIFACT_CHAIN_ENABLED + STEP_FUNCTIONS_CHAIN_ARN env vars to gap_handler Lambda"
+    file: infra/careervp/api_construct.py
+
+  step_5:
+    name: "Patch gap_handler.submit_response for Step Functions trigger"
+    file: src/backend/careervp/handlers/gap_handler.py
+    note: "Minimal additive change — see feature_flag_trigger above"
+
+  step_6:
+    name: "Validate infra naming"
+    command: "python src/backend/scripts/validate_naming.py --path infra --strict"
+
+  step_7:
+    name: "Synth and diff"
+    command: "cd infra && uv sync && cdk synth && cdk diff"
+
+# =============================================================================
+# CONSTRAINTS
+# =============================================================================
+constraints:
+  - "Standard Workflow only — NOT Express. Chain can take up to 2 hours (VPR is slow); Express has 5-min limit"
+  - "Existing SQS paths (vpr_jobs_queue, cv_upload_queue, gap_analysis_queue) must remain UNCHANGED"
+  - "Cover Letter and Interview Prep are NOT in the chain — they remain manual-trigger only"
+  - "Step Functions execution name must be unique per attempt: chain-{job_id}-{random_suffix}"
+  - "Execution input must NOT include PII beyond user_id and job_id (no CV content, no responses)"
+  - "Heartbeat timeouts on task states: CR=180s, VPR=300s, CV=300s — align with Lambda timeouts"
+  - "Logs level=ERROR to control CloudWatch costs (execution data off)"
+  - "IAM scoping: Step Functions role has ONLY the queue/lambda permissions listed above"
+  - "ARTIFACT_CHAIN_ENABLED defaults to 'false' — feature is opt-in at environment level"
+
+# =============================================================================
+# VALIDATION
+# =============================================================================
+validation:
+  commands:
+    - "cd infra && uv sync && cdk synth"
+    - "python src/backend/scripts/validate_naming.py --path infra --strict"
+    - "cd src/backend && uv run mypy careervp --strict"
+    - "cd src/backend && uv run pytest tests/unit/ -v --tb=short"
+  acceptance_criteria:
+    - "cdk synth produces no errors"
+    - "naming validate passes"
+    - "company_research_queue and its DLQ appear in synthesized template"
+    - "ArtifactChainStateMachine appears in synthesized template"
+    - "ARTIFACT_CHAIN_ENABLED=false → gap submit behaves exactly as before (no Step Functions call)"
+    - "ARTIFACT_CHAIN_ENABLED=true → gap submit calls sfn.start_execution and transitions state to cr_pending"
+    - "All existing unit tests pass (no regressions)"
+
+# =============================================================================
+# TEST HOOKS
+# =============================================================================
+test_hooks:
+  - "TEST-CHAIN-001 § unit-flag-gate: flag OFF → existing SQS path; flag ON → sfn.start_execution"
+  - "TEST-CHAIN-001 § integration-step-functions: full chain execution mock (localstack or CDK assertions)"
+  - "TEST-CHAIN-001 § integration-manual-endpoints: VPR/CR/CV manual endpoints still work with flag ON"

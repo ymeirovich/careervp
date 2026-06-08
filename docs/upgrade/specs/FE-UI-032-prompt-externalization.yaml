@@ -1,0 +1,213 @@
+spec_id: FE-UI-032
+title: "Prompt Externalization — CR Prompt Module + Company Research Variable Insertion"
+priority: high
+status: draft
+owner: backend
+created_at: 2026-06-08
+updated_at: 2026-06-08
+tier: feature
+
+human_approval_gate:
+  required: true
+  gate_number: 3
+  reason: "ALL prompt-content edits require explicit approval per project non-negotiables"
+  approval_before: "Any changes to company_research.py prompt strings, cover_letter_prompt.py, or cv_tailoring_prompt.py"
+
+recommended_model: sonnet
+reason_for_model: >
+  Pure mechanical extraction (byte-identical move) plus additive optional parameter insertion.
+  No architectural decisions; straightforward Python refactoring well within Sonnet capability.
+
+depends_on: []
+blocks:
+  - FE-UI-033  # token optimization builds on the externalized module
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    Company Research structuring prompts are inline in company_research.py:
+    STRUCTURE_SYSTEM_PROMPT (line 23) and _build_structure_prompt() (line 244).
+    Cover Letter and CV Tailoring prompts have no slot for Company Research context —
+    those prompts are generated without company values/mission/priorities.
+  required_behavior: >
+    Part A — Pure extraction (zero content change):
+      Move STRUCTURE_SYSTEM_PROMPT and _build_structure_prompt to a new module
+      src/backend/careervp/logic/prompts/company_research_prompt.py as
+      build_structure_system_prompt() and build_structure_user_prompt().
+      company_research.py imports from there. Byte-identical output guaranteed.
+    Part B — Additive variable insertion (optional, default None → zero regression):
+      cover_letter_prompt.build_user_prompt: add optional company_research param.
+      cv_tailoring_prompt.build_user_prompt: add optional company_research param.
+      When None, output is byte-identical to current. When provided, a compact
+      Company Research section is appended at the specified insertion point.
+  user_impact: >
+    Cover letters and tailored CVs receive structured company context
+    (values, mission, strategic_priorities) when available via auto-chain.
+    Cover Letter and Interview Prep continue receiving CR input even though they
+    are not in the auto-chain (they can consume it from the persisted CR record
+    when manually triggered).
+
+# =============================================================================
+# EVIDENCE
+# =============================================================================
+evidence:
+  cr_inline_prompt_system: "company_research.py:23 — STRUCTURE_SYSTEM_PROMPT"
+  cr_inline_prompt_user: "company_research.py:244 — _build_structure_prompt()"
+  cover_letter_prompt: "src/backend/careervp/logic/prompts/cover_letter_prompt.py:29 — build_user_prompt()"
+  cover_letter_insertion_point: "After '# Company' section, before '# Role'"
+  cv_tailoring_prompt: "src/backend/careervp/logic/cv_tailoring_prompt.py:64 — build_user_prompt()"
+  cv_tailoring_insertion_point: "After '# Target Keywords' block, before '# VPR Strategic Guide'"
+  existing_prompt_modules: "src/backend/careervp/logic/prompts/ (cover_letter, gap_analysis, interview_prep, vpr)"
+
+# =============================================================================
+# ARCHITECTURE
+# =============================================================================
+architecture:
+  part_a_extraction:
+    new_file: src/backend/careervp/logic/prompts/company_research_prompt.py
+    exports:
+      build_structure_system_prompt:
+        signature: "() -> str"
+        returns: "Byte-identical string to current STRUCTURE_SYSTEM_PROMPT"
+        content_frozen: true
+        content: >
+          'You are CareerVP company research analyst. Extract structured insights faithfully.'
+
+      build_structure_user_prompt:
+        signature: "(company_name: str, raw_text: str, context_hint: ContextHint) -> str"
+        returns: "Byte-identical string to current _build_structure_prompt()"
+        content_frozen: true
+        note: >
+          The ContextHint type must be imported from careervp.logic.company_research
+          (or a shared models file — implementer to decide cleanest import path).
+
+    changes_to_company_research_py:
+      - "Remove STRUCTURE_SYSTEM_PROMPT constant"
+      - "Remove _build_structure_prompt() function"
+      - "Add: from careervp.logic.prompts.company_research_prompt import build_structure_system_prompt, build_structure_user_prompt"
+      - "Replace usages: STRUCTURE_SYSTEM_PROMPT → build_structure_system_prompt(), _build_structure_prompt(...) → build_structure_user_prompt(...)"
+      - "No other changes"
+
+    golden_test_requirement: >
+      A golden test must assert that build_structure_user_prompt() output is byte-identical
+      to the old _build_structure_prompt() for the same inputs. This test must pass
+      BEFORE any token-optimized rewrite (FE-UI-033) is attempted.
+
+  part_b_cover_letter:
+    file: src/backend/careervp/logic/prompts/cover_letter_prompt.py
+    function: build_user_prompt
+    new_signature_delta: >
+      Add: company_research: CompanyResearchResult | None = None
+      as a keyword-only argument at the end of the parameter list.
+    insertion_point: "After '# Company\\n{company_name}', before '# Role'"
+    section_format: |
+      # Company Research
+      Overview: {company_research.overview}
+      Mission: {company_research.mission}
+      Values: {', '.join(company_research.values[:5])}
+      Strategic Priorities: {', '.join(str(p) for p in (company_research.strategic_priorities or [])[:3])}
+    guard: "Only appended when company_research is not None"
+    callers_to_update:
+      - "src/backend/careervp/logic/cover_letter.py — pass company_research from persisted CR record when available"
+      - "All existing callers remain valid (company_research=None is default — no regression)"
+    required_import: "from careervp.models.company_research import CompanyResearchResult"
+
+  part_b_cv_tailoring:
+    file: src/backend/careervp/logic/cv_tailoring_prompt.py
+    function: build_user_prompt
+    new_signature_delta: >
+      Add: company_research: CompanyResearchResult | None = None
+      as a keyword-only argument at the end of the parameter list.
+    insertion_point: "After '# Target Keywords' block, before '# VPR Strategic Guide' (or at end if VPR is None)"
+    section_format: |
+      # Company Signals
+      Values: {', '.join(company_research.values[:5])}
+      Strategic Priorities: {', '.join(str(p) for p in (company_research.strategic_priorities or [])[:3])}
+    guard: "Only appended when company_research is not None"
+    callers_to_update:
+      - "src/backend/careervp/logic/cv_tailoring_pipeline.py — pass company_research when available"
+      - "All existing callers remain valid (company_research=None is default — no regression)"
+    required_import: "from careervp.models.company_research import CompanyResearchResult"
+
+  companyresearchresult_fields_used:
+    note: >
+      Only these fields from CompanyResearchResult are referenced in Part B sections.
+      They must be non-None or empty-list safe (use 'or []' guards):
+      - overview (str)
+      - mission (str | None)
+      - values (list[str])
+      - strategic_priorities (list[Any] | None)
+    do_not_include:
+      - recent_news  # may be stale or irrelevant to CV/CL context
+      - financial_summary  # not relevant to cover letter or CV tailoring
+
+# =============================================================================
+# IMPLEMENTATION STEPS
+# =============================================================================
+implementation:
+  step_1:
+    name: "Create company_research_prompt.py with byte-identical functions"
+    file: src/backend/careervp/logic/prompts/company_research_prompt.py
+    validation: "Golden test: assert output == old output for same inputs"
+
+  step_2:
+    name: "Update company_research.py to import from new module"
+    file: src/backend/careervp/logic/company_research.py
+    change: "Remove inline strings, import from company_research_prompt, no logic change"
+
+  step_3:
+    name: "Add company_research param to cover_letter_prompt.build_user_prompt"
+    file: src/backend/careervp/logic/prompts/cover_letter_prompt.py
+    validation: "Existing tests must pass unchanged (None default path)"
+
+  step_4:
+    name: "Add company_research param to cv_tailoring_prompt.build_user_prompt"
+    file: src/backend/careervp/logic/cv_tailoring_prompt.py
+    validation: "Existing tests must pass unchanged (None default path)"
+
+  step_5:
+    name: "Update cover_letter.py and cv_tailoring_pipeline.py callers"
+    note: "Pass company_research from persisted CR record when available; None otherwise"
+
+  step_6:
+    name: "Run full test suite"
+    command: "cd src/backend && uv run pytest tests/unit/ -v --tb=short"
+
+# =============================================================================
+# CONSTRAINTS
+# =============================================================================
+constraints:
+  - "Part A is a PURE MOVE — zero content change. The token-optimized rewrite is a SEPARATE flagged change (FE-UI-033)"
+  - "Golden test for Part A must be written and passing BEFORE FE-UI-033 touches the prompt content"
+  - "Part B insertions are additive optional-param changes — no existing caller breaks"
+  - "Do NOT add company_research to Interview Prep prompt in this spec — leave for a follow-up"
+  - "CompanyResearchResult fields used in prompts must be guarded against None/empty (use 'or' defaults)"
+  - "No output JSON contract changes — only input sections added"
+  - "mypy strict must pass after changes"
+
+# =============================================================================
+# VALIDATION
+# =============================================================================
+validation:
+  commands:
+    - "cd src/backend && uv run mypy careervp --strict"
+    - "cd src/backend && uv run pytest tests/unit/ -v --tb=short"
+  acceptance_criteria:
+    - "build_structure_user_prompt() output == _build_structure_prompt() output for identical inputs (golden test)"
+    - "cover_letter build_user_prompt(... company_research=None) output is byte-identical to current"
+    - "cover_letter build_user_prompt(... company_research=<result>) includes '# Company Research' section"
+    - "cv_tailoring build_user_prompt(... company_research=None) output is byte-identical to current"
+    - "cv_tailoring build_user_prompt(... company_research=<result>) includes '# Company Signals' section"
+    - "All existing unit tests pass"
+    - "mypy strict passes"
+
+# =============================================================================
+# TEST HOOKS
+# =============================================================================
+test_hooks:
+  - "TEST-CHAIN-001 § unit-prompt-externalization: golden test Part A"
+  - "TEST-CHAIN-001 § unit-prompt-insertion: None-default regression (Part B)"
+  - "TEST-CHAIN-001 § unit-prompt-insertion: CR data present → correct section content"
+  - "TEST-CHAIN-001 § regression-output-contracts: VPR/Cover/CV output schemas unchanged"
