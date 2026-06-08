@@ -60,6 +60,9 @@ COVER_LETTER_JOBS_QUEUE = "cover-letter-jobs"
 COVER_LETTER_JOBS_DLQ = "cover-letter-jobs-dlq"
 INTERVIEW_PREP_JOBS_QUEUE = "interview-prep-jobs"
 INTERVIEW_PREP_JOBS_DLQ = "interview-prep-jobs-dlq"
+# Artifact Chain async queues (FE-UI-031)
+COMPANY_RESEARCH_QUEUE = "company-research"
+CV_TAILORING_QUEUE = "cv-tailoring"
 
 # =============================================================================
 # S3 BUCKETS
@@ -121,6 +124,13 @@ COVER_LETTER_LAMBDA = "CoverLetter"
 COMPANY_RESEARCH_LAMBDA = "CompanyResearch"
 COMPANY_RESEARCH_FEATURE = "company-research"
 LAMBDA_SERVICE_NAME = "lambda"
+
+# Artifact Chain Lambdas + state machine (FE-UI-031)
+COMPANY_RESEARCH_WORKER_FEATURE = "company-research-worker"
+CR_FAILURE_HANDLER_FEATURE = "cr-failure-handler"
+ARTIFACT_FAILURE_HANDLER_FEATURE = "artifact-failure-handler"
+ARTIFACT_CHAIN_STATE_MACHINE_FEATURE = "artifact-chain"
+ARTIFACT_CHAIN_ARN_OUTPUT = "ArtifactChainStateMachineArn"
 
 LAMBDA_LAYER_NAME = "common"
 API_HANDLER_LAMBDA_MEMORY_SIZE = 512  # MB - increased for CV parsing

@@ -69,6 +69,16 @@ class ApiDbConstruct(Construct):
             id_, self.gap_analysis_dlq
         )
 
+        # Artifact Chain async queues (FE-UI-031). DLQ first, then primary queue.
+        self.company_research_dlq: sqs.Queue = self._build_company_research_dlq(id_)
+        self.company_research_queue: sqs.Queue = self._build_company_research_queue(
+            id_, self.company_research_dlq
+        )
+        self.cv_tailoring_dlq: sqs.Queue = self._build_cv_tailoring_dlq(id_)
+        self.cv_tailoring_queue: sqs.Queue = self._build_cv_tailoring_queue(
+            id_, self.cv_tailoring_dlq
+        )
+
         # Backwards compatibility alias
         self.db = self.users_table
 
@@ -492,6 +502,74 @@ class ApiDbConstruct(Construct):
             dead_letter_queue=sqs.DeadLetterQueue(
                 queue=dlq,
                 max_receive_count=5,
+            ),
+        )
+
+    def _build_company_research_dlq(self, id_prefix: str) -> sqs.Queue:
+        """Dead-letter queue for failed company research jobs (FE-UI-031)."""
+        return sqs.Queue(
+            self,
+            f"{id_prefix}CompanyResearchDlq",
+            queue_name=self.naming.dlq_name(constants.COMPANY_RESEARCH_QUEUE),
+            # SQS_001: retain failed messages for 14 days.
+            retention_period=Duration.days(14),
+            # SQS_002: encrypt queue contents with AWS-managed KMS.
+            encryption=sqs.QueueEncryption.KMS_MANAGED,
+        )
+
+    def _build_company_research_queue(
+        self, id_prefix: str, dlq: sqs.Queue
+    ) -> sqs.Queue:
+        """Primary queue for async company research (Step Functions chain, FE-UI-031)."""
+        return sqs.Queue(
+            self,
+            f"{id_prefix}CompanyResearchQueue",
+            queue_name=self.naming.queue_name(constants.COMPANY_RESEARCH_QUEUE),
+            # SQS_003: visibility aligned to the chain task heartbeat (180s) + buffer.
+            visibility_timeout=Duration.seconds(120),
+            receive_message_wait_time=Duration.seconds(20),
+            # SQS_002: encrypt queue contents with AWS-managed KMS.
+            encryption=sqs.QueueEncryption.KMS_MANAGED,
+            # SQS_004: ordering is not required for independent research jobs.
+            fifo=False,
+            dead_letter_queue=sqs.DeadLetterQueue(
+                queue=dlq,
+                max_receive_count=3,
+            ),
+        )
+
+    def _build_cv_tailoring_dlq(self, id_prefix: str) -> sqs.Queue:
+        """Dead-letter queue for failed CV tailoring chain jobs (FE-UI-031)."""
+        return sqs.Queue(
+            self,
+            f"{id_prefix}CvTailoringDlq",
+            queue_name=self.naming.dlq_name(constants.CV_TAILORING_QUEUE),
+            # SQS_001: retain failed messages for 14 days.
+            retention_period=Duration.days(14),
+            # SQS_002: encrypt queue contents with AWS-managed KMS.
+            encryption=sqs.QueueEncryption.KMS_MANAGED,
+        )
+
+    def _build_cv_tailoring_queue(self, id_prefix: str, dlq: sqs.Queue) -> sqs.Queue:
+        """Primary queue for async CV tailoring (Step Functions chain, FE-UI-031).
+
+        Created additively for the artifact chain task-token target. It remains
+        unconsumed until a follow-up ticket wires a worker for task tokens.
+        """
+        return sqs.Queue(
+            self,
+            f"{id_prefix}CvTailoringQueue",
+            queue_name=self.naming.queue_name(constants.CV_TAILORING_QUEUE),
+            # SQS_003: visibility aligned to the chain task heartbeat (300s) + buffer.
+            visibility_timeout=Duration.seconds(120),
+            receive_message_wait_time=Duration.seconds(20),
+            # SQS_002: encrypt queue contents with AWS-managed KMS.
+            encryption=sqs.QueueEncryption.KMS_MANAGED,
+            # SQS_004: ordering is not required for independent tailoring jobs.
+            fifo=False,
+            dead_letter_queue=sqs.DeadLetterQueue(
+                queue=dlq,
+                max_receive_count=3,
             ),
         )
 

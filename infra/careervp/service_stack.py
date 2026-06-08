@@ -121,5 +121,9 @@ class ServiceStack(Stack):
                     "id": "AwsSolutions-SQS3",
                     "reason": "Worker DLQs are terminal destinations and should not chain DLQs",
                 },
+                {
+                    "id": "AwsSolutions-SF1",
+                    "reason": "Artifact chain logs at ERROR level by design (FE-UI-031) to control CloudWatch costs; execution data logging is intentionally disabled.",
+                },
             ],
         )

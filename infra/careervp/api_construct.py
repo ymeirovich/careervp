@@ -1,4 +1,5 @@
 import json
+import os
 from typing import cast
 
 from aws_cdk import CfnOutput, Duration, RemovalPolicy, aws_apigateway, aws_sqs
@@ -19,6 +20,7 @@ from constructs import Construct
 
 from . import constants
 from .api_db_construct import ApiDbConstruct
+from .artifact_chain_construct import ArtifactChainConstruct
 from .monitoring import CrudMonitoring
 from .naming_utils import NamingUtils
 from .waf_construct import WafToApiGatewayConstruct
@@ -203,6 +205,9 @@ class ApiConstruct(Construct):
             jobs_table=self.api_db.jobs_table,
             dlq=self.interview_prep_worker_dlq,
         )
+
+        # Artifact Chain (FE-UI-031): CR worker + failure handlers + Step Functions.
+        self._wire_artifact_chain(appconfig_app_name)
 
         # Billing infrastructure (S-006)
         self.billing_webhook_dlq = self._build_billing_webhook_dlq()
@@ -1978,6 +1983,185 @@ class ApiConstruct(Construct):
             system_log_level_v2=_lambda.SystemLogLevel.INFO,
             architecture=_lambda.Architecture.X86_64,
         )
+
+    def _wire_artifact_chain(self, appconfig_app_name: str) -> None:
+        """Create the artifact-chain workers, failure handlers, and state machine.
+
+        Additive (FE-UI-031): gated behind ARTIFACT_CHAIN_ENABLED (default "false").
+        The CR worker is wired to consume company_research_queue; VPR/CV workers'
+        task-token handling is deferred to their own tickets.
+        """
+        self.cr_failure_handler_func = self._add_cr_failure_handler_lambda()
+        self.artifact_failure_handler_func = self._add_artifact_failure_handler_lambda()
+        self.company_research_worker_func = self._add_company_research_worker_lambda(
+            appconfig_app_name
+        )
+
+        self.artifact_chain = ArtifactChainConstruct(
+            self,
+            "ArtifactChain",
+            naming=self.naming,
+            company_research_queue=self.api_db.company_research_queue,
+            vpr_jobs_queue=self.vpr_jobs_queue,
+            cv_tailoring_queue=self.api_db.cv_tailoring_queue,
+            cr_failure_handler=self.cr_failure_handler_func,
+            artifact_failure_handler=self.artifact_failure_handler_func,
+            logs_kms_key=self.logs_kms_key,
+        )
+        chain_arn = self.artifact_chain.state_machine.state_machine_arn
+
+        # gap_handler starts the chain when the flag is on.
+        self.artifact_chain.state_machine.grant_start_execution(self.gap_api_func)
+        self.gap_api_func.add_environment("STEP_FUNCTIONS_CHAIN_ARN", chain_arn)
+        self.gap_api_func.add_environment(
+            "ARTIFACT_CHAIN_ENABLED", self._artifact_chain_enabled()
+        )
+
+        # CR worker signals task success/failure back to the chain.
+        self.company_research_worker_func.add_environment(
+            "STEP_FUNCTIONS_CHAIN_ARN", chain_arn
+        )
+        self.artifact_chain.state_machine.grant_task_response(
+            self.company_research_worker_func
+        )
+
+        CfnOutput(
+            self,
+            constants.ARTIFACT_CHAIN_ARN_OUTPUT,
+            value=chain_arn,
+        ).override_logical_id(constants.ARTIFACT_CHAIN_ARN_OUTPUT)
+
+    @staticmethod
+    def _artifact_chain_enabled() -> str:
+        """Resolve the ARTIFACT_CHAIN_ENABLED flag at synth time (default off)."""
+        return os.environ.get("ARTIFACT_CHAIN_ENABLED", "false")
+
+    def _add_cr_failure_handler_lambda(self) -> _lambda.Function:
+        """Thin Lambda invoked by the chain when Company Research hard-fails."""
+        function_name = self.naming.lambda_name(constants.CR_FAILURE_HANDLER_FEATURE)
+        log_group = logs.LogGroup(
+            self,
+            "CrFailureHandlerLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
+        return _lambda.Function(
+            self,
+            "CrFailureHandlerLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.cr_failure_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-cr-failure-handler",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+            },
+            timeout=Duration.seconds(30),
+            memory_size=128,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            role=self.lambda_role,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+    def _add_artifact_failure_handler_lambda(self) -> _lambda.Function:
+        """Thin Lambda invoked by the chain when VPR or CV Tailoring fails."""
+        function_name = self.naming.lambda_name(
+            constants.ARTIFACT_FAILURE_HANDLER_FEATURE
+        )
+        log_group = logs.LogGroup(
+            self,
+            "ArtifactFailureHandlerLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
+        return _lambda.Function(
+            self,
+            "ArtifactFailureHandlerLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.artifact_failure_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-artifact-failure-handler",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+            },
+            timeout=Duration.seconds(30),
+            memory_size=128,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            role=self.lambda_role,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+    def _add_company_research_worker_lambda(
+        self, appconfig_app_name: str
+    ) -> _lambda.Function:
+        """SQS worker that consumes company_research_queue (FE-UI-030/031).
+
+        Signals the Step Functions chain via task tokens when running in the
+        chain, or enqueues VPR directly in standalone mode.
+        """
+        function_name = self.naming.lambda_name(
+            constants.COMPANY_RESEARCH_WORKER_FEATURE
+        )
+        log_group = logs.LogGroup(
+            self,
+            "CompanyResearchWorkerLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
+        lambda_function = _lambda.Function(
+            self,
+            "CompanyResearchWorkerLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.company_research_worker_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-company-research-worker",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+                "CONFIGURATION_APP": appconfig_app_name,
+                "CONFIGURATION_ENV": constants.ENVIRONMENT,
+                "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,
+                # Standalone fallback target when the chain flag is off.
+                "VPR_JOBS_QUEUE_URL": self.vpr_jobs_queue.queue_url,
+                "ARTIFACT_CHAIN_ENABLED": self._artifact_chain_enabled(),
+                constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
+                **self._build_llm_env(),
+            },
+            # Aligned with the chain CR heartbeat (180s).
+            timeout=Duration.seconds(120),
+            memory_size=512,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            role=self.lambda_role,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+        lambda_function.add_event_source(
+            eventsources.SqsEventSource(
+                self.api_db.company_research_queue, batch_size=1
+            )
+        )
+        return lambda_function
 
     def _add_cover_letter_lambda(self) -> _lambda.Function:
         function_name = self.naming.lambda_name("cover-letter-api")

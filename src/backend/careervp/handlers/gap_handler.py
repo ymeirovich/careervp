@@ -7,7 +7,9 @@ import json
 import os
 from http import HTTPStatus
 from typing import Any
+from uuid import uuid4
 
+import boto3
 from pydantic import ValidationError
 
 from careervp.dal.application_repository import ApplicationRepository
@@ -393,6 +395,10 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
     except Exception as exc:
         logger.warning('Could not update application with gap responses', job_id=job_id, error=str(exc))
 
+    # FE-UI-031: opt-in artifact chain. No-op when the flag is off; never breaks
+    # the existing success path.
+    _maybe_start_artifact_chain(user_id, job_id)
+
     return _json_response(
         HTTPStatus.OK,
         {
@@ -401,6 +407,56 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
             'responses_saved': len(normalized_responses),
         },
     )
+
+
+def _maybe_start_artifact_chain(user_id: str, job_id: str) -> None:
+    """Start the Step Functions artifact chain when ARTIFACT_CHAIN_ENABLED is true.
+
+    Additive (FE-UI-031). When the flag is off this is a no-op and gap submit
+    behaves exactly as before. Defensive: any failure here is logged and
+    swallowed so the existing 200 response is preserved.
+    """
+    if os.environ.get('ARTIFACT_CHAIN_ENABLED', 'false').lower() != 'true':
+        return
+
+    chain_arn = os.environ.get('STEP_FUNCTIONS_CHAIN_ARN', '')
+    if not chain_arn:
+        logger.warning('Artifact chain enabled but STEP_FUNCTIONS_CHAIN_ARN is unset', job_id=job_id)
+        return
+
+    try:
+        company_name = ''
+        job_posting_url = ''
+        try:
+            job = _get_jobs_repository().get_job(job_id)
+            if job:
+                company_name = str(job.get('company_name') or job.get('company') or '')
+                job_posting_url = str(job.get('job_posting_url') or job.get('url') or '')
+        except Exception as exc:
+            logger.warning('Could not load job for artifact chain input', job_id=job_id, error=str(exc))
+
+        boto3.client('stepfunctions').start_execution(
+            stateMachineArn=chain_arn,
+            name=f'chain-{job_id}-{uuid4().hex[:8]}',
+            input=json.dumps(
+                {
+                    'user_id': user_id,
+                    'job_id': job_id,
+                    'company_name': company_name,
+                    'job_posting_url': job_posting_url,
+                    'application_id': job_id,
+                }
+            ),
+        )
+        _get_application_repository().update_state(
+            application_id=job_id,
+            user_id=user_id,
+            new_state='cr_pending',
+            expected_state='gap_responses_submitted',
+        )
+        logger.info('Artifact chain started', job_id=job_id)
+    except Exception as exc:
+        logger.error('Failed to start artifact chain', job_id=job_id, error=str(exc))
 
 
 def get_responses(event: dict[str, Any]) -> dict[str, Any]:
