@@ -64,6 +64,7 @@ def _make_application_record(state: str = 'created', user_id: str = OWNER_USER_I
             'cover_letter': 'completed' if state == 'artifacts_completed' else 'pending',
             'interview_prep': 'completed' if state == 'artifacts_completed' else 'pending',
             'gap_analysis': 'completed' if state == 'artifacts_completed' else 'pending',
+            'company_research': 'completed' if state == 'artifacts_completed' else 'pending',
         },
     }
 

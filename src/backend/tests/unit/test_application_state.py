@@ -75,15 +75,20 @@ def repository() -> ApplicationRepository:
 
 @pytest.mark.unit
 class TestApplicationStateModel:
-    def test_all_7_states_are_canonical(self) -> None:
+    def test_all_states_are_canonical(self) -> None:
+        # Core 7-state machine remains unchanged; FE-UI-029 adds the additive
+        # Company Research gate states (cr_pending, cr_failed) and artifacts_failed.
         expected = (
             'created',
             'cv_selected',
             'gap_questions_pending',
             'gap_questions_ready',
             'gap_responses_submitted',
+            'cr_pending',
+            'cr_failed',
             'artifacts_generating',
             'artifacts_completed',
+            'artifacts_failed',
         )
         assert APPLICATION_STATES == expected
 
@@ -109,6 +114,115 @@ class TestApplicationStateModel:
         table = repository._test_table  # type: ignore[attr-defined]
         kwargs = table.update_item.call_args.kwargs
         assert '#state = :expected_state' in kwargs['ConditionExpression']
+
+
+@pytest.mark.unit
+class TestCompanyResearchGate:
+    def test_cr_gate_transitions_are_valid(self) -> None:
+        assert 'cr_pending' in VALID_TRANSITIONS['gap_responses_submitted']
+        assert set(VALID_TRANSITIONS['cr_pending']) == {'artifacts_generating', 'cr_failed'}
+        assert VALID_TRANSITIONS['cr_failed'] == ('cr_pending',)
+
+    def test_legacy_direct_path_still_allowed(self) -> None:
+        # Feature-flag OFF path: gap_responses_submitted → artifacts_generating directly.
+        assert 'artifacts_generating' in VALID_TRANSITIONS['gap_responses_submitted']
+
+    def test_invalid_transition_raises_typed_error(self, repository: ApplicationRepository) -> None:
+        from careervp.models.exceptions import InvalidStateTransitionError
+
+        with pytest.raises(InvalidStateTransitionError):
+            repository.update_state(
+                application_id='app-xyz789',
+                user_id='user-test-123',
+                expected_state='cr_failed',
+                new_state='artifacts_completed',
+            )
+
+    def test_cr_transition_uses_conditional_write(self, repository: ApplicationRepository) -> None:
+        repository.update_state(
+            application_id='app-xyz789',
+            user_id='user-test-123',
+            expected_state='cr_pending',
+            new_state='cr_failed',
+        )
+        kwargs = repository._test_table.update_item.call_args.kwargs  # type: ignore[attr-defined]
+        assert '#state = :expected_state' in kwargs['ConditionExpression']
+
+    def test_set_company_research_error_marks_artifact_failed(self, repository: ApplicationRepository) -> None:
+        repository.set_company_research_error(
+            application_id='app-xyz789',
+            user_id='user-test-123',
+            error=True,
+        )
+        table = repository._test_table  # type: ignore[attr-defined]
+        first_call = table.update_item.call_args_list[0].kwargs
+        second_call = table.update_item.call_args_list[1].kwargs
+        assert first_call['ExpressionAttributeValues'][':error'] is True
+        assert second_call['ExpressionAttributeNames']['#cr'] == 'company_research'
+        assert second_call['ExpressionAttributeValues'][':cr_status'] == 'failed'
+
+    def test_set_company_research_error_is_idempotent(self, repository: ApplicationRepository) -> None:
+        repository.set_company_research_error('app-xyz789', 'user-test-123', True)
+        repository.set_company_research_error('app-xyz789', 'user-test-123', True)
+        # No conditional-state write: double-call writes the same flag without raising.
+        for call in repository._test_table.update_item.call_args_list:  # type: ignore[attr-defined]
+            assert ':expected_state' not in call.kwargs.get('ExpressionAttributeValues', {})
+
+    def test_set_company_research_error_clears_to_pending(self, repository: ApplicationRepository) -> None:
+        repository.set_company_research_error('app-xyz789', 'user-test-123', False)
+        second_call = repository._test_table.update_item.call_args_list[1].kwargs  # type: ignore[attr-defined]
+        assert second_call['ExpressionAttributeValues'][':cr_status'] == 'pending'
+
+
+@pytest.mark.unit
+class TestRecoveryCompanyResearch:
+    def test_recovery_includes_company_research_artifact(self) -> None:
+        from careervp.handlers.application_handler import lambda_handler
+
+        record = _application_record(state='cr_pending', user_id='user-test-123')
+        record['artifact_statuses']['company_research'] = 'processing'  # type: ignore[index]
+        with (
+            patch('careervp.handlers.application_handler._get_application_repository') as mock_repo_factory,
+            patch('careervp.handlers.application_handler._get_jobs_repository') as mock_jobs_factory,
+        ):
+            mock_repo = MagicMock()
+            mock_repo.get.return_value = record
+            mock_repo_factory.return_value = mock_repo
+            mock_jobs = MagicMock()
+            mock_jobs.get_job.return_value = {'job_id': 'job-abc456'}
+            mock_jobs_factory.return_value = mock_jobs
+            response = lambda_handler(_event('user-test-123'), MagicMock())
+
+        payload = json.loads(response['body'])
+        assert payload['artifacts']['company_research']['status'] == 'processing'
+        assert payload['reload_route'] == '/artifacts'
+
+    def test_recovery_includes_company_research_error_flag(self) -> None:
+        from careervp.handlers.application_handler import lambda_handler
+
+        record = _application_record(state='cr_failed', user_id='user-test-123')
+        record['company_research_error'] = True
+        with patch('careervp.handlers.application_handler._get_application_repository') as mock_repo_factory:
+            mock_repo = MagicMock()
+            mock_repo.get.return_value = record
+            mock_repo_factory.return_value = mock_repo
+            response = lambda_handler(_event('user-test-123'), MagicMock())
+
+        payload = json.loads(response['body'])
+        assert payload['application']['company_research_error'] is True
+
+    def test_recovery_defaults_company_research_error_false(self) -> None:
+        from careervp.handlers.application_handler import lambda_handler
+
+        with patch('careervp.handlers.application_handler._get_application_repository') as mock_repo_factory:
+            mock_repo = MagicMock()
+            mock_repo.get.return_value = _application_record(state='created')
+            mock_repo_factory.return_value = mock_repo
+            response = lambda_handler(_event('user-test-123'), MagicMock())
+
+        payload = json.loads(response['body'])
+        assert payload['application']['company_research_error'] is False
+        assert payload['artifacts']['company_research']['status'] == 'pending'
 
 
 @pytest.mark.unit

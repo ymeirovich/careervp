@@ -161,8 +161,10 @@ class TestApplicationStateModel:
     def test_state_enum_contains_state(self, state: str) -> None:
         assert state in APPLICATION_STATES
 
-    def test_state_enum_has_exactly_7_states(self) -> None:
-        assert len(APPLICATION_STATES) == 7
+    def test_state_enum_has_expected_states(self) -> None:
+        # Core 7 states + FE-UI-029 additive Company Research gate states
+        # (cr_pending, cr_failed) and artifacts_failed.
+        assert len(APPLICATION_STATES) == 10
 
 
 @pytest.mark.unit

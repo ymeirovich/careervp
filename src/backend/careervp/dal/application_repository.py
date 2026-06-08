@@ -7,6 +7,7 @@ from typing import Any
 from uuid import uuid4
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+from careervp.models.exceptions import InvalidStateTransitionError
 
 APPLICATION_STATES: tuple[str, ...] = (
     'created',
@@ -14,18 +15,28 @@ APPLICATION_STATES: tuple[str, ...] = (
     'gap_questions_pending',
     'gap_questions_ready',
     'gap_responses_submitted',
+    'cr_pending',
+    'cr_failed',
     'artifacts_generating',
     'artifacts_completed',
+    'artifacts_failed',
 )
 
+# Company Research confidence gate (FE-UI-029): cr_pending / cr_failed are
+# intermediate states reached only when the auto-chain feature flag is ON. When
+# the flag is OFF, gap_responses_submitted advances directly to
+# artifacts_generating and the additive states are never entered.
 VALID_TRANSITIONS: dict[str, tuple[str, ...]] = {
     'created': ('cv_selected',),
     'cv_selected': ('gap_questions_pending',),
     'gap_questions_pending': ('gap_questions_ready',),
     'gap_questions_ready': ('gap_responses_submitted',),
-    'gap_responses_submitted': ('artifacts_generating',),
-    'artifacts_generating': ('artifacts_completed',),
+    'gap_responses_submitted': ('cr_pending', 'artifacts_generating'),
+    'cr_pending': ('artifacts_generating', 'cr_failed'),
+    'cr_failed': ('cr_pending',),
+    'artifacts_generating': ('artifacts_completed', 'artifacts_failed'),
     'artifacts_completed': (),
+    'artifacts_failed': ('artifacts_generating',),
 }
 
 
@@ -237,12 +248,56 @@ class ApplicationRepository:
         except Exception:
             pass  # Non-fatal — frontend localStorage fallback handles missing artifact_id
 
+    def set_company_research_error(self, application_id: str, user_id: str, error: bool) -> None:
+        """Persist the company_research_error flag on the application record.
+
+        Set when Company Research hard-fails (3 retries exhausted) so the frontend
+        can recover the error state across reloads. Also marks
+        artifact_statuses.company_research as 'failed' (or 'pending' when cleared)
+        so the recovery payload reflects the CR artifact state.
+
+        Idempotent: uses a plain UpdateExpression with no conditional write, so a
+        double-call is safe. The artifact_statuses map is initialised via
+        if_not_exists to support legacy records that pre-date the field.
+        """
+        cr_status = 'failed' if error else 'pending'
+        self._table().update_item(
+            Key={
+                'userId': user_id,
+                'applicationId': application_id,
+            },
+            UpdateExpression=(
+                'SET company_research_error = :error, artifact_statuses = if_not_exists(artifact_statuses, :empty_map), updated_at = :updated_at'
+            ),
+            ConditionExpression='attribute_exists(userId) AND attribute_exists(applicationId)',
+            ExpressionAttributeValues={
+                ':error': error,
+                ':empty_map': {},
+                ':updated_at': self._now_iso(),
+            },
+        )
+        # Second step sets the nested artifact key once the map is guaranteed to exist
+        # (DynamoDB rejects nested-path writes when the parent map is absent).
+        self._table().update_item(
+            Key={
+                'userId': user_id,
+                'applicationId': application_id,
+            },
+            UpdateExpression='SET artifact_statuses.#cr = :cr_status, updated_at = :updated_at',
+            ConditionExpression='attribute_exists(userId) AND attribute_exists(applicationId)',
+            ExpressionAttributeNames={'#cr': 'company_research'},
+            ExpressionAttributeValues={
+                ':cr_status': cr_status,
+                ':updated_at': self._now_iso(),
+            },
+        )
+
     def _ensure_valid_transition(self, expected_state: str, new_state: str) -> None:
         if expected_state not in VALID_TRANSITIONS:
-            raise ValueError(f'Invalid state transition: unknown from_state={expected_state}')
+            raise InvalidStateTransitionError(f'Invalid state transition: unknown from_state={expected_state}')
         allowed_states = VALID_TRANSITIONS[expected_state]
         if new_state not in allowed_states:
-            raise ValueError(f'Invalid state transition: {expected_state} -> {new_state}')
+            raise InvalidStateTransitionError(f'Invalid state transition: {expected_state} -> {new_state}')
 
     def _table(self) -> Any:
         return self._dal._get_db_handler(self._dal.table_name)
@@ -252,4 +307,4 @@ class ApplicationRepository:
         return datetime.now(timezone.utc).isoformat()
 
 
-__all__ = ['ApplicationRepository', 'APPLICATION_STATES', 'VALID_TRANSITIONS']
+__all__ = ['ApplicationRepository', 'APPLICATION_STATES', 'VALID_TRANSITIONS', 'InvalidStateTransitionError']

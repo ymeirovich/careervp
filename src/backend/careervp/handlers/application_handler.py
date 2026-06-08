@@ -26,6 +26,7 @@ _ARTIFACT_TYPES: tuple[str, ...] = (
     'cover_letter',
     'interview_prep',
     'gap_analysis',
+    'company_research',
 )
 
 _RELOAD_ROUTE_BY_STATE: dict[str, str] = {
@@ -34,6 +35,8 @@ _RELOAD_ROUTE_BY_STATE: dict[str, str] = {
     'gap_questions_pending': '/gap-questions',
     'gap_questions_ready': '/gap-questions',
     'gap_responses_submitted': '/gap-questions',
+    'cr_pending': '/artifacts',
+    'cr_failed': '/artifacts',
     'artifacts_generating': '/artifacts',
     'artifacts_completed': '/artifacts',
 }
@@ -111,6 +114,8 @@ def _build_recovery_payload(application: dict[str, Any], job_record: dict[str, A
     has_gap_payload = state in {
         'gap_questions_ready',
         'gap_responses_submitted',
+        'cr_pending',
+        'cr_failed',
         'artifacts_generating',
         'artifacts_completed',
     }
@@ -122,6 +127,7 @@ def _build_recovery_payload(application: dict[str, Any], job_record: dict[str, A
             'state': state,
             'created_at': application.get('created_at'),
             'trial_credit_consumed': bool(application.get('trial_credit_consumed', False)),
+            'company_research_error': bool(application.get('company_research_error', False)),
         },
         'job': job_record
         or {
