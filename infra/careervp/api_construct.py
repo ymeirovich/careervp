@@ -1991,6 +1991,9 @@ class ApiConstruct(Construct):
         The CR worker is wired to consume company_research_queue; VPR/CV workers'
         task-token handling is deferred to their own tickets.
         """
+        # FE-UI-035: build the dedicated failure-handler role once, before the
+        # handlers, so neither reuses the shared role that holds states:* grants.
+        self.failure_handler_role = self._build_failure_handler_role()
         self.cr_failure_handler_func = self._add_cr_failure_handler_lambda()
         self.artifact_failure_handler_func = self._add_artifact_failure_handler_lambda()
         self.company_research_worker_func = self._add_company_research_worker_lambda(
@@ -2036,6 +2039,37 @@ class ApiConstruct(Construct):
         """Resolve the ARTIFACT_CHAIN_ENABLED flag at synth time (default off)."""
         return os.environ.get("ARTIFACT_CHAIN_ENABLED", "false")
 
+    def _build_failure_handler_role(self) -> iam.Role:
+        """Dedicated least-privilege role for the artifact-chain failure handlers.
+
+        FE-UI-035: the CR/artifact failure handlers previously reused the shared
+        service role, which holds states:* grants (StartExecution / SendTaskResponse).
+        Because the state machine must invoke these handlers, that shared edge closed
+        a CloudFormation dependency cycle. This role grants ONLY what the handlers
+        need: CloudWatch Logs (basic execution) and read/write on the applications
+        table. X-Ray write perms are auto-added by CDK because tracing=ACTIVE; log
+        KMS encryption is covered by the logs key's resource policy. It carries NO
+        states:* permission, so it cannot re-form the cycle.
+        """
+        role = iam.Role(
+            self,
+            constants.FAILURE_HANDLER_ROLE,
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            role_name=self.naming.role_name(
+                constants.LAMBDA_SERVICE_NAME, constants.FAILURE_HANDLER_FEATURE
+            ),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    managed_policy_name=(
+                        f"service-role/{constants.LAMBDA_BASIC_EXECUTION_ROLE}"
+                    )
+                )
+            ],
+        )
+        # Both handlers only UpdateItem/GetItem on the applications table.
+        self.api_db.applications_table.grant_read_write_data(role)
+        return role
+
     def _add_cr_failure_handler_lambda(self) -> _lambda.Function:
         """Thin Lambda invoked by the chain when Company Research hard-fails."""
         function_name = self.naming.lambda_name(constants.CR_FAILURE_HANDLER_FEATURE)
@@ -2063,7 +2097,8 @@ class ApiConstruct(Construct):
             memory_size=128,
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=0,
-            role=self.lambda_role,
+            # FE-UI-035: dedicated role (no states:*) breaks the dependency cycle.
+            role=self.failure_handler_role,
             log_group=log_group,
             logging_format=_lambda.LoggingFormat.JSON,
             system_log_level_v2=_lambda.SystemLogLevel.INFO,
@@ -2099,7 +2134,8 @@ class ApiConstruct(Construct):
             memory_size=128,
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=0,
-            role=self.lambda_role,
+            # FE-UI-035: dedicated role (no states:*) breaks the dependency cycle.
+            role=self.failure_handler_role,
             log_group=log_group,
             logging_format=_lambda.LoggingFormat.JSON,
             system_log_level_v2=_lambda.SystemLogLevel.INFO,

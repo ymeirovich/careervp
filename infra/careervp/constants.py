@@ -131,6 +131,10 @@ CR_FAILURE_HANDLER_FEATURE = "cr-failure-handler"
 ARTIFACT_FAILURE_HANDLER_FEATURE = "artifact-failure-handler"
 ARTIFACT_CHAIN_STATE_MACHINE_FEATURE = "artifact-chain"
 ARTIFACT_CHAIN_ARN_OUTPUT = "ArtifactChainStateMachineArn"
+# FE-UI-035: dedicated least-privilege role for the chain failure handlers
+# (breaks the CloudFormation dependency cycle caused by reusing the shared role).
+FAILURE_HANDLER_FEATURE = "failure-handler"
+FAILURE_HANDLER_ROLE = "FailureHandlerRole"
 
 LAMBDA_LAYER_NAME = "common"
 API_HANDLER_LAMBDA_MEMORY_SIZE = 512  # MB - increased for CV parsing

@@ -1,0 +1,195 @@
+spec_id: FE-UI-036
+title: "Infra — Split CareerVpCrudDev into Nested Stacks (escape the 500-resource limit)"
+priority: high
+status: draft
+owner: backend
+created_at: 2026-06-12
+updated_at: 2026-06-12
+tier: infra
+
+human_approval_gate:
+  required: true
+  gate_number: 1
+  reason: >
+    Restructuring a live CloudFormation stack. Moving a resource between (nested) stacks
+    can trigger replacement — must confirm logical-id / resource-retention strategy before deploy.
+  approval_before: "Any cdk deploy; and before moving any stateful resource (DynamoDB/S3/KMS) across a stack boundary"
+
+recommended_model: opus
+reason_for_model: >
+  CloudFormation cross-stack reference graphs, nested-stack cyclic-dependency avoidance,
+  and resource-replacement risk on a live stack are architecture-critical.
+
+depends_on:
+  - FE-UI-035   # the template must be cycle-free and deployable before it is restructured
+blocks: []
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    `cdk synth` emits: "[Info at /CareerVpCrudDev] Number of resources: 495 is approaching
+    allowed maximum of 500". CareerVpCrudDev is a single CloudFormation template at 495/500
+    resources. CloudFormation's hard limit is 500 resources per template; the next infra
+    addition (a queue + DLQ + alarm, or one more route) will fail to deploy outright.
+  required_behavior: >
+    The deployment is split so that no single CloudFormation template approaches 500 resources.
+    The parent stack stays well under ~400; extracted subtrees live in nested stacks, each its
+    own template with its own 500-resource budget. Deploy remains a single `make deploy`.
+  user_impact: >
+    Infra can keep growing (more workers, alarms, routes) without hitting the wall.
+    Deploys stay atomic and reversible.
+
+# =============================================================================
+# EVIDENCE
+# =============================================================================
+evidence:
+  resource_count_warning: "infra synth stderr — 'Number of resources: 495 is approaching allowed maximum of 500'"
+  stack_entry: infra/app.py   # instantiates ServiceStack + FrontendStack
+  service_stack: infra/careervp/service_stack.py
+  api_construct: infra/careervp/api_construct.py
+  monitoring: infra/careervp/monitoring.py
+  waf: infra/careervp/waf_construct.py
+  artifact_chain: infra/careervp/artifact_chain_construct.py
+
+# =============================================================================
+# ARCHITECTURE / APPROACH
+# =============================================================================
+architecture:
+  chosen_pattern: "aws_cdk.NestedStack"
+  why_nested_not_separate_top_level: >
+    NestedStack keeps a single deploy unit (`make deploy` still deploys everything) and lets
+    CDK auto-wire cross-references as CfnParameters/Outputs — no manual Fn::ImportValue / export
+    coupling. The 500-resource limit is PER TEMPLATE; each NestedStack is its own template, while
+    the parent only counts one AWS::CloudFormation::Stack resource per nested stack. Separate
+    top-level stacks would force brittle exports and make atomic rollback harder.
+
+  cardinal_rule_acyclic: >
+    Nested-stack references must form a DAG. Keep all SHARED, widely-referenced resources in the
+    PARENT (the shared lambda_role, DynamoDB tables, S3 buckets, SQS queues, KMS keys, API Gateway,
+    Cognito). Move only OUTBOUND-ONLY or LEAF subtrees into nested stacks (a nested stack may
+    reference parent resources downward via props, but parent must not depend back on the nested
+    stack's internals). This is the same failure mode as FE-UI-035's cycle — do not recreate it
+    across a stack boundary.
+
+  parent_keeps:
+    - API Gateway (RestApi, methods, authorizer, deployment, stage)
+    - Cognito user pool + client + domain
+    - Shared lambda_role (CrudServiceRoleArn) and the failure-handler role from FE-UI-035
+    - All DynamoDB tables, S3 buckets, SQS queues + DLQs, KMS keys
+    - Core CRUD/API Lambdas wired directly to API Gateway
+
+  extraction_phases:
+    phase_1_monitoring:
+      nested_stack: "MonitoringNestedStack (from monitoring.py)"
+      contents: "CloudWatch Dashboards, Alarms, SNS topic(s) + subscriptions"
+      why_first: >
+        Highest-count, lowest-risk: monitoring is OUTBOUND-ONLY (it observes Lambdas/queues/tables;
+        nothing depends on it). Pass the observed resource ARNs/names in as props -> CDK auto-creates
+        CfnParameters. Zero replacement risk (alarms/dashboards are stateless).
+      est_resources_moved: "~80-150 (dashboards + per-resource alarms)"
+    phase_2_artifact_chain:
+      nested_stack: "ArtifactChainNestedStack (state machine + failure handlers + their log groups + CR worker)"
+      precondition: "FE-UI-035 merged (cycle fixed) — otherwise the cycle moves across the boundary and fails"
+      props_in: "company_research_queue, vpr_jobs_queue, cv_tailoring_queue, failure_handler_role, logs_kms_key, applications_table"
+      props_out: "state_machine_arn (CfnOutput) -> parent passes to gap_api_func env + grants"
+      risk: "state machine + failure-handler Lambdas are stateless -> safe to move; verify logical-id changes don't orphan the live state machine"
+      est_resources_moved: "~25-40"
+    phase_3_async_workers_optional:
+      nested_stack: "AsyncWorkersNestedStack (cover-letter / interview-prep / gap-remediation / cv-tailoring worker Lambdas + EventSourceMappings)"
+      note: "Defer unless parent is still near the limit after phases 1-2. Workers use the shared role+tables (downward refs only) so they are movable, but higher churn."
+      est_resources_moved: "~60-100"
+    phase_4_waf_optional:
+      nested_stack: "WafNestedStack (from waf_construct.py)"
+      note: "Small, leaf, easy — bundle with phase 1 if convenient."
+
+  stateful_resource_policy:
+    rule: >
+      Do NOT move stateful resources (DynamoDB tables, S3 buckets, KMS keys) across a boundary in
+      this effort — moving them changes logical IDs and risks REPLACE (data loss). They stay in the
+      parent. Only stateless resources (alarms, dashboards, state machine, Lambdas, log groups,
+      SNS) are relocated. If any move is unavoidable, use removal_policy=RETAIN + a documented
+      import/retain migration, behind the human approval gate.
+
+  cross_ref_mechanics: >
+    Construct each NestedStack as `class XNestedStack(NestedStack)` and pass parent resources via
+    __init__ kwargs (props). CDK resolves parent->nested as CfnParameters and nested->parent
+    outputs as CfnOutputs automatically. Never reach across stacks with raw ARN strings;
+    always pass the L2/L1 object so CDK builds the reference + ordering.
+
+# =============================================================================
+# IMPLEMENTATION STEPS
+# =============================================================================
+implementation:
+  step_1:
+    name: "Baseline the resource count per logical group"
+    change: >
+      From infra/cdk.out/CareerVpCrudDev.template.json, count resources by prefix
+      (Monitoring/Dashboard/Alarm, ArtifactChain, *Worker*, Waf) to confirm which extraction
+      yields the biggest drop. Record the baseline so post-split counts can be compared.
+  step_2:
+    name: "Extract MonitoringNestedStack (phase 1)"
+    files:
+      - infra/careervp/monitoring.py
+      - infra/careervp/service_stack.py
+    change: >
+      Convert the monitoring construct to a NestedStack (or wrap it). Pass observed Lambdas/queues/
+      tables in as props. Instantiate from service_stack. Synth and confirm parent count drops and
+      a new AWS::CloudFormation::Stack appears.
+  step_3:
+    name: "Extract ArtifactChainNestedStack (phase 2, after FE-UI-035)"
+    files:
+      - infra/careervp/artifact_chain_construct.py
+      - infra/careervp/api_construct.py
+    change: >
+      Move the state machine + failure handlers + CR worker into a NestedStack. Pass queues, the
+      dedicated failure-handler role, KMS key, applications_table as props. Expose state_machine_arn
+      as a NestedStack output; in the parent, keep grant_start_execution(gap_api_func) and the env
+      var wiring using the passed-through machine reference.
+  step_4:
+    name: "Re-validate the whole graph"
+    change: "Synth, run infra tests, checkov, naming. Confirm no cross-stack cycle and no resource replacement on a stateful resource (cdk diff)."
+  step_5_optional:
+    name: "Phases 3-4 only if parent still > ~400 resources"
+    change: "Extract AsyncWorkers and/or WAF as above."
+
+# =============================================================================
+# CONSTRAINTS
+# =============================================================================
+constraints:
+  - "Parent stack must end well under 400 resources; no template may approach 500"
+  - "Cross-stack references must form a DAG — never let the parent depend on a nested stack's internals"
+  - "Do NOT move stateful resources (DynamoDB/S3/KMS) — stateless only"
+  - "cdk diff must show NO replacement of any stateful resource before deploy"
+  - "Single `make deploy` must still deploy the entire app (nested stacks deploy with the parent)"
+  - "All names pass validate_naming.py --strict"
+  - "Each phase is independently deployable and reversible (land + verify before the next phase)"
+
+# =============================================================================
+# VALIDATION
+# =============================================================================
+validation:
+  commands:
+    - "mkdir -p src/backend/.build/lambdas && touch src/backend/.build/lambdas/.placeholder"
+    - "cd infra && uv sync && npx cdk synth >/tmp/synth.log 2>&1   # must exit 0"
+    - "grep -i 'Number of resources' /tmp/synth.log   # parent count must be well below 500"
+    - "cd infra && npx cdk diff CareerVpCrudDev   # confirm NO stateful-resource replacement"
+    - "cd infra && uv run pytest tests/infrastructure -v --tb=short"
+    - "python src/backend/scripts/validate_naming.py --path infra --strict"
+    - "uvx checkov -d infra/cdk.out --framework cloudformation --quiet --check CKV_AWS_7 --check CKV_AWS_19 --check CKV_AWS_20 --check CKV_AWS_33 --check CKV_AWS_53 --check CKV_AWS_54 --check CKV_AWS_55 --check CKV_AWS_56 --check CKV_AWS_364"
+  acceptance_criteria:
+    - "No CloudFormation template reports a resource count approaching 500"
+    - "Parent CareerVpCrudDev template < ~400 resources"
+    - "One AWS::CloudFormation::Stack resource appears per nested stack"
+    - "cdk synth exits 0; no cross-stack dependency-cycle error"
+    - "cdk diff shows no replacement of DynamoDB tables, S3 buckets, or KMS keys"
+    - "Infra pytest, checkov, and naming validation all pass"
+
+# =============================================================================
+# TEST HOOKS
+# =============================================================================
+test_hooks:
+  - "TEST-INFRA-001 § nested_split_assertions: nested-stack presence + parent resource-count ceiling"
+  - "TEST-INFRA-001 § nested_split_no_replacement: cdk diff stateful-resource guard"
+  - "TEST-INFRA-001 § nested_split_regression: full infra suite + checkov green"

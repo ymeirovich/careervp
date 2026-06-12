@@ -508,6 +508,12 @@ def test_protected_routes_require_authorizer(synthesized_template: Template) -> 
         if path in ["swagger", "swagger.css", "swagger.js"] or path in [""]:
             continue
 
+        # CORS preflight (OPTIONS) requests are unauthenticated by design:
+        # browsers send them without credentials, so API Gateway must not require
+        # an authorizer on OPTIONS methods.
+        if http_method == "OPTIONS":
+            continue
+
         # Check if this is a public route
         if path in public_paths:
             continue
