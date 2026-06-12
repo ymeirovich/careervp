@@ -12,7 +12,10 @@ ARTIFACT_FAILURE_HANDLER = "careervp.handlers.artifact_failure_handler.lambda_ha
 
 
 def _artifact_chain_template(service_stack: ServiceStack) -> Template:
-    return Template.from_stack(service_stack.api.artifact_chain_stack)
+    # The artifact-chain failure handlers, their dedicated role, and the state
+    # machine live in the PARENT stack (the FE-UI-036 nested-stack split was
+    # reverted because the resources are already deployed under explicit names).
+    return Template.from_stack(service_stack)
 
 
 def _resources(
@@ -93,7 +96,11 @@ def test_failure_handlers_use_dedicated_role_not_shared_service_role(
     artifact_role = _lambda_role_logical_id(artifact_function)
 
     assert cr_role == artifact_role
-    assert cr_role.startswith("FailureHandlerRole")
+    # In the parent stack the logical id carries the construct-path prefix
+    # (CareerVpCrudDevCrud...), so match the dedicated role by substring rather
+    # than prefix. Both handlers must use FailureHandlerRole, not the shared
+    # CrudServiceRole.
+    assert "FailureHandlerRole" in cr_role
     assert "ServiceRoleArn" not in cr_role
 
 

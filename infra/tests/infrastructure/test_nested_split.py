@@ -1,10 +1,21 @@
-"""TEST-INFRA-001 — nested-stack split guards (FE-UI-036).
+"""TEST-INFRA-001 — flat-stack deploy-safety guards (FE-UI-036 reverted).
 
-These tests lock in the CloudFormation nested-stack split that keeps every
-template comfortably below the 500-resource hard limit, and guard against the
-two failure modes the split must avoid: a single template creeping back toward
-500, and a stateful resource (DynamoDB/S3/KMS) drifting across a stack boundary
-(which would change its logical id and risk REPLACE / data loss).
+The FE-UI-036 nested-stack split was reverted: every resource it relocated
+(worker Lambdas, log groups, the Step Functions state machine, all alarms and
+dashboards) carries an explicit physical name and is already deployed in the
+parent ``CareerVpCrudDev`` stack. CloudFormation cannot move a named resource to
+a different stack in a single deploy — it creates the new one before deleting
+the old, which fails with "resource already exists" (the cdk-deploy failure on
+ui-upgrade@8926a90).
+
+These tests lock in the deploy-safe topology and guard against re-introducing
+the split without a CloudFormation resource-import migration:
+  * no nested stacks may exist in the synthesized parent template;
+  * the explicitly-named resources must stay in the parent;
+  * stateful resources (DynamoDB/S3/KMS) must never drift across a boundary.
+
+Re-doing FE-UI-036 for headroom requires `cdk import` / a CFN stack-refactor
+migration first, then this guard should be updated alongside it.
 """
 
 from __future__ import annotations
@@ -30,81 +41,50 @@ def _resource_types(template: Template) -> dict[str, dict[str, Any]]:
     return cast(dict[str, dict[str, Any]], template.to_json().get("Resources", {}))
 
 
-# § nested_split_assertions ---------------------------------------------------
-def test_parent_declares_two_nested_stacks(synthesized_template: Template) -> None:
-    """The parent must contain the deploy-safe FE-UI-036 nested stacks."""
-    nested = synthesized_template.find_resources("AWS::CloudFormation::Stack")
-    assert len(nested) == 2, (
-        f"Expected 2 nested stacks (Monitoring, ArtifactChain), "
-        f"found {len(nested)}: {list(nested)}"
-    )
+# § flat_topology_guard -------------------------------------------------------
+def test_parent_declares_no_nested_stacks(synthesized_template: Template) -> None:
+    """Deploy-safety: the split is reverted, so no nested stacks may be emitted.
 
-
-def test_parent_resource_count_below_info_threshold(
-    synthesized_template: Template,
-) -> None:
-    """Parent must stay well under 500 — below the configured 480 info threshold."""
-    count = len(_resource_types(synthesized_template))
-    assert count < 480, (
-        f"Parent template has {count} resources; the split must keep it under the "
-        f"480 'approaching maximum' info threshold (hard CloudFormation limit 500)."
-    )
-
-
-def test_every_template_below_cfn_hard_limit(
-    synthesized_template: Template,
-    monitoring_template: Template,
-    artifact_chain_template: Template,
-) -> None:
-    """No template — parent or nested — may approach the 500-resource hard limit."""
-    for name, template in (
-        ("parent", synthesized_template),
-        ("monitoring", monitoring_template),
-        ("artifact_chain", artifact_chain_template),
-    ):
-        count = len(_resource_types(template))
-        assert count < CFN_MAX_RESOURCES, (
-            f"{name} template has {count} resources, at/over the {CFN_MAX_RESOURCES} "
-            f"hard limit"
-        )
-
-
-def test_state_machine_lives_in_artifact_chain_nested_stack(
-    artifact_chain_template: Template,
-    synthesized_template: Template,
-) -> None:
-    """The Step Functions state machine moved into the ArtifactChain nested stack."""
-    artifact_chain_template.resource_count_is("AWS::StepFunctions::StateMachine", 1)
-    synthesized_template.resource_count_is("AWS::StepFunctions::StateMachine", 0)
-
-
-# § nested_split_no_replacement ----------------------------------------------
-def test_stateful_resources_stay_in_parent(
-    monitoring_template: Template,
-    artifact_chain_template: Template,
-) -> None:
-    """No DynamoDB table, S3 bucket, or KMS key may be created in a nested stack.
-
-    Moving a stateful resource across the boundary changes its logical id and
-    risks a CloudFormation REPLACE. This is the static guard behind the
-    ``cdk diff`` no-replacement acceptance criterion.
+    Re-introducing a nested stack would relocate already-deployed, explicitly
+    named resources and reproduce the "already exists" cdk-deploy failure.
     """
-    for name, template in (
-        ("monitoring", monitoring_template),
-        ("artifact_chain", artifact_chain_template),
-    ):
-        resources = _resource_types(template)
-        offenders = {
-            logical_id: res["Type"]
-            for logical_id, res in resources.items()
-            if res["Type"] in STATEFUL_RESOURCE_TYPES
-        }
-        assert not offenders, (
-            f"{name} nested stack contains stateful resources that must stay in the "
-            f"parent (replacement risk): {offenders}"
-        )
+    nested = synthesized_template.find_resources("AWS::CloudFormation::Stack")
+    assert not nested, (
+        f"Expected a flat parent stack with no nested stacks, found {list(nested)}. "
+        f"Relocating deployed named resources needs a CFN resource-import migration."
+    )
 
 
+def test_parent_resource_count_below_cfn_hard_limit(
+    synthesized_template: Template,
+) -> None:
+    """Parent must stay below the 500-resource hard limit.
+
+    NOTE: the flat revert sits near the ceiling (~497). The FE-UI-036 headroom
+    work should be redone as an import-based migration before adding many more
+    resources.
+    """
+    count = len(_resource_types(synthesized_template))
+    assert count < CFN_MAX_RESOURCES, (
+        f"Parent template has {count} resources, at/over the {CFN_MAX_RESOURCES} "
+        f"hard limit — headroom must be reclaimed via a nested-stack import migration."
+    )
+
+
+def test_state_machine_lives_in_parent(synthesized_template: Template) -> None:
+    """The Step Functions state machine stays in the parent (already deployed)."""
+    synthesized_template.resource_count_is("AWS::StepFunctions::StateMachine", 1)
+
+
+def test_monitoring_dashboards_and_alarms_stay_in_parent(
+    synthesized_template: Template,
+) -> None:
+    """Explicitly-named dashboards/alarms stay in the parent (already deployed)."""
+    assert synthesized_template.find_resources("AWS::CloudWatch::Dashboard")
+    assert synthesized_template.find_resources("AWS::CloudWatch::Alarm")
+
+
+# § no_stateful_drift ---------------------------------------------------------
 def test_parent_retains_stateful_resources(synthesized_template: Template) -> None:
     """The parent keeps the DynamoDB tables, S3 buckets, and KMS keys."""
     resources = _resource_types(synthesized_template)
@@ -122,7 +102,7 @@ def test_company_research_worker_stays_in_parent(
 ) -> None:
     """The CR worker uses the shared role + grant_task_response, so it stays in the
     parent — relocating it would give the shared role a back-edge into the
-    ArtifactChain nested stack (the FE-UI-035 cycle, across the boundary)."""
+    artifact chain (the FE-UI-035 cycle)."""
     functions = synthesized_template.find_resources("AWS::Lambda::Function")
     handlers = {props["Properties"].get("Handler") for props in functions.values()}
     assert (
