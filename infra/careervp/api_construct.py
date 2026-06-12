@@ -21,7 +21,12 @@ from constructs import Construct
 from . import constants
 from .api_db_construct import ApiDbConstruct
 from .artifact_chain_construct import ArtifactChainConstruct
-from .monitoring import CrudMonitoring
+from .monitoring import CrudMonitoring, build_monitoring_topic
+from .nested_stacks import (
+    ArtifactChainNestedStack,
+    AsyncWorkersNestedStack,
+    apply_nag_suppressions,
+)
 from .naming_utils import NamingUtils
 from .waf_construct import WafToApiGatewayConstruct
 
@@ -83,6 +88,15 @@ class ApiConstruct(Construct):
             self.api_db.logs_bucket,
             self.api_db.artifacts_bucket,
         )
+        # FE-UI-036 phase 3: queue/stream-driven async workers move into their own
+        # nested-stack template. Each worker's EventSourceMapping is a child of
+        # the (nested) Lambda and references parent queues/streams downward; their
+        # DLQs and the shared lambda_role stay in the parent. The S3-triggered
+        # cv-upload worker is deliberately excluded (an S3 notification would make
+        # the parent bucket depend on a nested Lambda — a cycle).
+        self.async_workers_stack = AsyncWorkersNestedStack(self, "AsyncWorkers")
+        apply_nag_suppressions(self.async_workers_stack)
+
         self.api_authorizer = self._build_api_authorizer(user_pool)
 
         api_resource: aws_apigateway.Resource = self.rest_api.root.add_resource(
@@ -128,6 +142,7 @@ class ApiConstruct(Construct):
 
         # Keep the original SQS worker for existing queue-based VPR flow.
         self.vpr_sqs_worker_func = self._add_vpr_sqs_worker_lambda_integration(
+            self.async_workers_stack,
             self.lambda_role,
             self.api_db.jobs_table,
             self.api_db.vpr_results_bucket,
@@ -136,7 +151,7 @@ class ApiConstruct(Construct):
             appconfig_app_name,
         )
         self.vpr_dlq_handler_func = self._add_vpr_dlq_handler_lambda(
-            self.vpr_jobs_dlq, self.api_db.jobs_table
+            self.async_workers_stack, self.vpr_jobs_dlq, self.api_db.jobs_table
         )
         self.company_research_func = self._add_company_research_lambda_integration(
             company_research_resource,
@@ -181,6 +196,7 @@ class ApiConstruct(Construct):
             dlq=self.cv_upload_worker_dlq,
         )
         self.vpr_worker_func = self._add_vpr_worker_lambda(
+            self.async_workers_stack,
             jobs_table=self.api_db.jobs_table,
             artifacts_table=self.api_db.artifacts_table,
             applications_table=self.api_db.applications_table,
@@ -188,11 +204,13 @@ class ApiConstruct(Construct):
             results_bucket=self.api_db.vpr_results_bucket,
         )
         self.cv_tailor_worker_func = self._add_cv_tailor_worker_lambda(
+            self.async_workers_stack,
             artifacts_table=self.api_db.artifacts_table,
             cvs_table=self.api_db.cvs_table,
             dlq=self.cv_tailor_worker_dlq,
         )
         self.cover_letter_worker_func = self._add_cover_letter_worker_lambda(
+            self.async_workers_stack,
             artifacts_table=self.api_db.artifacts_table,
             cvs_table=self.api_db.cvs_table,
             users_table=self.api_db.users_table,
@@ -200,6 +218,7 @@ class ApiConstruct(Construct):
             dlq=self.cover_letter_worker_dlq,
         )
         self.interview_prep_worker_func = self._add_interview_prep_worker_lambda(
+            self.async_workers_stack,
             artifacts_table=self.api_db.artifacts_table,
             applications_table=self.api_db.applications_table,
             jobs_table=self.api_db.jobs_table,
@@ -224,13 +243,17 @@ class ApiConstruct(Construct):
         self._build_swagger_endpoints(
             rest_api=self.rest_api, dest_func=self.cv_upload_func
         )
+        # FE-UI-036 phase 1: topic + KMS key stay in the parent; dashboards and
+        # alarms move into the MonitoringNestedStack (outbound-only, stateless).
+        self.monitoring_topic = build_monitoring_topic(self, id_, naming)
         self.monitoring = CrudMonitoring(
             self,
-            id_,
-            self.rest_api,
-            self.api_db.db,
-            self.api_db.idempotency_db,
-            [
+            "Monitoring",
+            monitoring_id=id_,
+            crud_api=self.rest_api,
+            db=self.api_db.db,
+            idempotency_table=self.api_db.idempotency_db,
+            functions=[
                 self.cv_upload_func,
                 self.vpr_submit_func,
                 self.company_research_func,
@@ -240,7 +263,9 @@ class ApiConstruct(Construct):
                 self.interview_prep_api_func,
             ],
             naming=naming,
+            topic=self.monitoring_topic,
         )
+        apply_nag_suppressions(self.monitoring)
 
         if is_production_env:
             # add WAF
@@ -1217,6 +1242,7 @@ class ApiConstruct(Construct):
 
     def _add_vpr_sqs_worker_lambda_integration(
         self,
+        scope: Construct,
         role: iam.Role,
         jobs_table: dynamodb.TableV2,
         results_bucket: s3.Bucket,
@@ -1227,7 +1253,7 @@ class ApiConstruct(Construct):
         """Add legacy VPR SQS worker Lambda integration."""
         function_name = self.naming.lambda_name("vpr-sqs-worker")
         log_group = logs.LogGroup(
-            self,
+            scope,
             "VprSqsWorkerLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -1236,7 +1262,7 @@ class ApiConstruct(Construct):
         )
 
         lambda_function = _lambda.Function(
-            self,
+            scope,
             "VprSqsWorkerLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -1278,13 +1304,14 @@ class ApiConstruct(Construct):
 
     def _add_vpr_dlq_handler_lambda(
         self,
+        scope: Construct,
         dlq: aws_sqs.Queue,
         jobs_table: dynamodb.TableV2,
     ) -> _lambda.Function:
         """Add Lambda triggered by VPR jobs DLQ to mark orphaned jobs FAILED."""
         function_name = self.naming.lambda_name("vpr-dlq-handler")
         log_group = logs.LogGroup(
-            self,
+            scope,
             "VprDlqHandlerLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -1293,7 +1320,7 @@ class ApiConstruct(Construct):
         )
 
         lambda_function = _lambda.Function(
-            self,
+            scope,
             "VprDlqHandlerLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -1387,6 +1414,7 @@ class ApiConstruct(Construct):
 
     def _add_vpr_worker_lambda(
         self,
+        scope: Construct,
         jobs_table: dynamodb.TableV2,
         artifacts_table: dynamodb.TableV2,
         applications_table: dynamodb.TableV2,
@@ -1397,7 +1425,7 @@ class ApiConstruct(Construct):
         path; the authoritative trigger is vpr-sqs-worker via the VPR jobs SQS queue."""
         function_name = self.naming.lambda_name("vpr-worker")
         log_group = logs.LogGroup(
-            self,
+            scope,
             "vpr-workerLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -1405,7 +1433,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         lambda_function = _lambda.Function(
-            self,
+            scope,
             "vpr-worker",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -1453,6 +1481,7 @@ class ApiConstruct(Construct):
 
     def _add_cv_tailor_worker_lambda(
         self,
+        scope: Construct,
         artifacts_table: dynamodb.TableV2,
         cvs_table: dynamodb.TableV2,
         dlq: aws_sqs.Queue,
@@ -1460,7 +1489,7 @@ class ApiConstruct(Construct):
         """Create cv_tailor_worker on artifacts table stream updates."""
         function_name = self.naming.lambda_name("cv-tailor-worker")
         log_group = logs.LogGroup(
-            self,
+            scope,
             "CvTailorWorkerLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -1468,7 +1497,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         lambda_function = _lambda.Function(
-            self,
+            scope,
             "CvTailorWorkerLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -1510,6 +1539,7 @@ class ApiConstruct(Construct):
 
     def _add_cover_letter_worker_lambda(
         self,
+        scope: Construct,
         artifacts_table: dynamodb.TableV2,
         cvs_table: dynamodb.TableV2,
         users_table: dynamodb.TableV2,
@@ -1519,7 +1549,7 @@ class ApiConstruct(Construct):
         """Create cover_letter_worker triggered by SQS queue."""
         function_name = self.naming.lambda_name("cover-letter-worker")
         log_group = logs.LogGroup(
-            self,
+            scope,
             "CoverLetterWorkerLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -1527,7 +1557,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         lambda_function = _lambda.Function(
-            self,
+            scope,
             "CoverLetterWorkerLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -1583,6 +1613,7 @@ class ApiConstruct(Construct):
 
     def _add_interview_prep_worker_lambda(
         self,
+        scope: Construct,
         artifacts_table: dynamodb.TableV2,
         applications_table: dynamodb.TableV2,
         jobs_table: dynamodb.TableV2,
@@ -1591,7 +1622,7 @@ class ApiConstruct(Construct):
         """Create interview_prep_worker triggered by SQS queue."""
         function_name = self.naming.lambda_name("interview-prep-worker")
         log_group = logs.LogGroup(
-            self,
+            scope,
             "InterviewPrepWorkerLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -1599,7 +1630,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         lambda_function = _lambda.Function(
-            self,
+            scope,
             "InterviewPrepWorkerLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -1991,17 +2022,34 @@ class ApiConstruct(Construct):
         The CR worker is wired to consume company_research_queue; VPR/CV workers'
         task-token handling is deferred to their own tickets.
         """
+        # FE-UI-036 phase 2: failure handlers, their dedicated role, and the
+        # Step Functions state machine move into a nested stack. They are
+        # stateless and outbound-only (the SM references parent queues downward;
+        # the failure-handler role references the applications table downward).
+        # The company-research worker stays in the PARENT: it uses the shared
+        # lambda_role and needs grant_task_response on the SM, so relocating it
+        # would give the shared role a back-edge into this nested stack — the
+        # FE-UI-035 cycle, recreated across the boundary.
+        self.artifact_chain_stack = ArtifactChainNestedStack(self, "ArtifactChain")
+        apply_nag_suppressions(self.artifact_chain_stack)
+
         # FE-UI-035: build the dedicated failure-handler role once, before the
         # handlers, so neither reuses the shared role that holds states:* grants.
-        self.failure_handler_role = self._build_failure_handler_role()
-        self.cr_failure_handler_func = self._add_cr_failure_handler_lambda()
-        self.artifact_failure_handler_func = self._add_artifact_failure_handler_lambda()
+        self.failure_handler_role = self._build_failure_handler_role(
+            self.artifact_chain_stack
+        )
+        self.cr_failure_handler_func = self._add_cr_failure_handler_lambda(
+            self.artifact_chain_stack
+        )
+        self.artifact_failure_handler_func = self._add_artifact_failure_handler_lambda(
+            self.artifact_chain_stack
+        )
         self.company_research_worker_func = self._add_company_research_worker_lambda(
             appconfig_app_name
         )
 
         self.artifact_chain = ArtifactChainConstruct(
-            self,
+            self.artifact_chain_stack,
             "ArtifactChain",
             naming=self.naming,
             company_research_queue=self.api_db.company_research_queue,
@@ -2039,7 +2087,7 @@ class ApiConstruct(Construct):
         """Resolve the ARTIFACT_CHAIN_ENABLED flag at synth time (default off)."""
         return os.environ.get("ARTIFACT_CHAIN_ENABLED", "false")
 
-    def _build_failure_handler_role(self) -> iam.Role:
+    def _build_failure_handler_role(self, scope: Construct) -> iam.Role:
         """Dedicated least-privilege role for the artifact-chain failure handlers.
 
         FE-UI-035: the CR/artifact failure handlers previously reused the shared
@@ -2052,7 +2100,7 @@ class ApiConstruct(Construct):
         states:* permission, so it cannot re-form the cycle.
         """
         role = iam.Role(
-            self,
+            scope,
             constants.FAILURE_HANDLER_ROLE,
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             role_name=self.naming.role_name(
@@ -2070,11 +2118,11 @@ class ApiConstruct(Construct):
         self.api_db.applications_table.grant_read_write_data(role)
         return role
 
-    def _add_cr_failure_handler_lambda(self) -> _lambda.Function:
+    def _add_cr_failure_handler_lambda(self, scope: Construct) -> _lambda.Function:
         """Thin Lambda invoked by the chain when Company Research hard-fails."""
         function_name = self.naming.lambda_name(constants.CR_FAILURE_HANDLER_FEATURE)
         log_group = logs.LogGroup(
-            self,
+            scope,
             "CrFailureHandlerLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -2082,7 +2130,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         return _lambda.Function(
-            self,
+            scope,
             "CrFailureHandlerLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -2105,13 +2153,15 @@ class ApiConstruct(Construct):
             architecture=_lambda.Architecture.X86_64,
         )
 
-    def _add_artifact_failure_handler_lambda(self) -> _lambda.Function:
+    def _add_artifact_failure_handler_lambda(
+        self, scope: Construct
+    ) -> _lambda.Function:
         """Thin Lambda invoked by the chain when VPR or CV Tailoring fails."""
         function_name = self.naming.lambda_name(
             constants.ARTIFACT_FAILURE_HANDLER_FEATURE
         )
         log_group = logs.LogGroup(
-            self,
+            scope,
             "ArtifactFailureHandlerLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -2119,7 +2169,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         return _lambda.Function(
-            self,
+            scope,
             "ArtifactFailureHandlerLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),

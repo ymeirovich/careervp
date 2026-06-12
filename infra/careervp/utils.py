@@ -1,6 +1,5 @@
 import getpass
 import os
-from typing import cast
 
 from . import constants
 from .naming_utils import NamingUtils
@@ -19,7 +18,7 @@ def get_stack_name() -> str:
     account_id = os.getenv("CDK_DEFAULT_ACCOUNT")
     feature = os.getenv("CAREERVP_STACK_FEATURE", constants.STACK_FEATURE)
     naming = NamingUtils(environment=environment, region=region, account_id=account_id)
-    return cast(str, naming.stack_id(feature))
+    return naming.stack_id(feature)
 
 
 def get_construct_name(stack_prefix: str, construct_name: str) -> str:

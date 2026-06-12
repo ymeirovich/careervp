@@ -9,13 +9,13 @@ from careervp.service_stack import ServiceStack
 
 
 @pytest.fixture(scope="module")
-def synthesized_template() -> Template:
-    """Synthesize the ServiceStack once for infra assertions."""
+def service_stack() -> ServiceStack:
+    """Build the ServiceStack once for infra assertions."""
     app = App()
     naming = NamingUtils(
         environment="dev", region="us-east-1", account_id="123456789012"
     )
-    stack = ServiceStack(
+    return ServiceStack(
         scope=app,
         id=naming.stack_id("crud"),
         env=Environment(account="123456789012", region="us-east-1"),
@@ -23,4 +23,27 @@ def synthesized_template() -> Template:
         naming=naming,
         stack_feature="crud",
     )
-    return Template.from_stack(stack)
+
+
+@pytest.fixture(scope="module")
+def synthesized_template(service_stack: ServiceStack) -> Template:
+    """The parent CareerVpCrudDev template (API Gateway, tables, buckets, core Lambdas)."""
+    return Template.from_stack(service_stack)
+
+
+@pytest.fixture(scope="module")
+def monitoring_template(service_stack: ServiceStack) -> Template:
+    """The MonitoringNestedStack template (dashboards, alarms, metric filters)."""
+    return Template.from_stack(service_stack.api.monitoring)
+
+
+@pytest.fixture(scope="module")
+def artifact_chain_template(service_stack: ServiceStack) -> Template:
+    """The ArtifactChainNestedStack template (failure handlers + state machine)."""
+    return Template.from_stack(service_stack.api.artifact_chain_stack)
+
+
+@pytest.fixture(scope="module")
+def async_workers_template(service_stack: ServiceStack) -> Template:
+    """The AsyncWorkersNestedStack template (queue/stream-driven worker Lambdas)."""
+    return Template.from_stack(service_stack.api.async_workers_stack)
