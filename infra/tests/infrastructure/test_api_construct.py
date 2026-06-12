@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, cast
 
 from aws_cdk.assertions import Template
 
@@ -25,7 +26,7 @@ def _lambda_resource_by_handler(
                 filtered.append(resource)
         matches = filtered
     assert matches, f"Lambda handler not synthesized: {handler}"
-    return matches[0]
+    return cast(dict[str, Any], matches[0])
 
 
 def _lambda_role_logical_id(lambda_resource: dict[str, Any]) -> str:
@@ -157,11 +158,11 @@ def test_lambda_role_has_llm_cache_permissions(synthesized_template: Template) -
 
 
 def test_interview_prep_worker_has_vpr_jobs_table_env(
-    async_workers_template: Template,
+    synthesized_template: Template,
 ) -> None:
     """Interview prep worker must receive VPR jobs table env for cross-service context lookup."""
     lambda_resource = _lambda_resource_by_handler(
-        async_workers_template,
+        synthesized_template,
         "careervp.handlers.interview_prep_handler.lambda_handler",
         function_name_contains="interview-prep-worker",
     )
@@ -172,17 +173,17 @@ def test_interview_prep_worker_has_vpr_jobs_table_env(
 
 
 def test_interview_prep_worker_role_can_read_anthropic_ssm_parameter(
-    async_workers_template: Template,
+    synthesized_template: Template,
 ) -> None:
     """Interview prep worker role should include explicit ssm:GetParameter on anthropic key."""
     lambda_resource = _lambda_resource_by_handler(
-        async_workers_template,
+        synthesized_template,
         "careervp.handlers.interview_prep_handler.lambda_handler",
         function_name_contains="interview-prep-worker",
     )
     role_logical_id = _lambda_role_logical_id(lambda_resource)
 
-    policies = async_workers_template.find_resources("AWS::IAM::Policy")
+    policies = synthesized_template.find_resources("AWS::IAM::Policy")
     ssm_statement_found = False
     for policy in policies.values():
         roles = policy["Properties"].get("Roles", [])
@@ -392,13 +393,14 @@ def test_openapi_route_matrix_matches_payload_contracts(
 
 
 def _get_method_paths(
-    methods: dict[str, Any], resources: dict[str, Any]
-) -> list[tuple[str, str, dict[str, Any]]]:
+    methods: Mapping[str, Mapping[str, Any]],
+    resources: Mapping[str, Mapping[str, Any]],
+) -> list[tuple[str, str, Mapping[str, Any]]]:
     """Helper to get method paths with their properties.
 
     Returns list of (http_method, path_part, method_props).
     """
-    results = []
+    results: list[tuple[str, str, Mapping[str, Any]]] = []
 
     # Build path part lookup from resource Ref
     resource_to_path = {}
@@ -426,7 +428,7 @@ def _get_method_paths(
 
     # Now map methods to their full paths
     for method_props in methods.values():
-        http_method = method_props["Properties"].get("HttpMethod", "")
+        http_method = str(method_props["Properties"].get("HttpMethod", ""))
         resource_id = method_props["Properties"].get("ResourceId", {})
         path_ref = resource_id.get("Ref", "")
 
@@ -539,7 +541,7 @@ def test_protected_routes_require_authorizer(synthesized_template: Template) -> 
 
 
 def test_vpr_worker_has_required_env_vars(
-    async_workers_template: Template,
+    synthesized_template: Template,
 ) -> None:
     """
     Regression guard: the VPR worker Lambdas must carry the critical env vars needed
@@ -547,11 +549,11 @@ def test_vpr_worker_has_required_env_vars(
     DYNAMODB_TABLE_NAME causes the worker to fail mid-job.
     """
     vpr_worker = _lambda_resource_by_handler(
-        async_workers_template,
+        synthesized_template,
         "careervp.handlers.vpr_worker_handler.lambda_handler",
         function_name_contains="vpr-worker",
     )
-    env_vars: dict = (
+    env_vars: dict[str, Any] = (
         vpr_worker["Properties"].get("Environment", {}).get("Variables", {})
     )
 
@@ -574,7 +576,7 @@ def test_vpr_worker_has_required_env_vars(
 
 
 def test_vpr_worker_has_no_dynamo_stream_event_source(
-    async_workers_template: Template,
+    synthesized_template: Template,
 ) -> None:
     """
     Regression guard: the vpr-worker Lambda must NOT have a DynamoDB Stream event
@@ -583,7 +585,7 @@ def test_vpr_worker_has_no_dynamo_stream_event_source(
     and, when the stream worker wins but lacks permissions, jobs stuck in PROCESSING.
     """
     # Collect the logical ID of the vpr-worker Lambda by matching handler + name
-    all_functions = async_workers_template.find_resources("AWS::Lambda::Function")
+    all_functions = synthesized_template.find_resources("AWS::Lambda::Function")
     vpr_worker_logical_id = next(
         logical_id
         for logical_id, props in all_functions.items()
@@ -594,7 +596,7 @@ def test_vpr_worker_has_no_dynamo_stream_event_source(
         )
     )
 
-    event_source_mappings = async_workers_template.find_resources(
+    event_source_mappings = synthesized_template.find_resources(
         "AWS::Lambda::EventSourceMapping"
     )
     dynamo_stream_mappings = [

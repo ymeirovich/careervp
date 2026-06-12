@@ -9,6 +9,8 @@ two failure modes the split must avoid: a single template creeping back toward
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 from aws_cdk.assertions import Template
 
 # Stateful resource types that must never live in a nested stack: relocating one
@@ -24,16 +26,16 @@ STATEFUL_RESOURCE_TYPES = (
 CFN_MAX_RESOURCES = 500
 
 
-def _resource_types(template: Template) -> dict[str, dict]:
-    return template.to_json().get("Resources", {})
+def _resource_types(template: Template) -> dict[str, dict[str, Any]]:
+    return cast(dict[str, dict[str, Any]], template.to_json().get("Resources", {}))
 
 
 # § nested_split_assertions ---------------------------------------------------
-def test_parent_declares_three_nested_stacks(synthesized_template: Template) -> None:
-    """The parent must contain exactly the three FE-UI-036 nested stacks."""
+def test_parent_declares_two_nested_stacks(synthesized_template: Template) -> None:
+    """The parent must contain the deploy-safe FE-UI-036 nested stacks."""
     nested = synthesized_template.find_resources("AWS::CloudFormation::Stack")
-    assert len(nested) == 3, (
-        f"Expected 3 nested stacks (Monitoring, ArtifactChain, AsyncWorkers), "
+    assert len(nested) == 2, (
+        f"Expected 2 nested stacks (Monitoring, ArtifactChain), "
         f"found {len(nested)}: {list(nested)}"
     )
 
@@ -53,14 +55,12 @@ def test_every_template_below_cfn_hard_limit(
     synthesized_template: Template,
     monitoring_template: Template,
     artifact_chain_template: Template,
-    async_workers_template: Template,
 ) -> None:
     """No template — parent or nested — may approach the 500-resource hard limit."""
     for name, template in (
         ("parent", synthesized_template),
         ("monitoring", monitoring_template),
         ("artifact_chain", artifact_chain_template),
-        ("async_workers", async_workers_template),
     ):
         count = len(_resource_types(template))
         assert count < CFN_MAX_RESOURCES, (
@@ -78,22 +78,10 @@ def test_state_machine_lives_in_artifact_chain_nested_stack(
     synthesized_template.resource_count_is("AWS::StepFunctions::StateMachine", 0)
 
 
-def test_async_workers_present_in_nested_stack(
-    async_workers_template: Template,
-) -> None:
-    """The relocated workers and their event-source mappings live in the nested stack."""
-    functions = async_workers_template.find_resources("AWS::Lambda::Function")
-    handlers = {props["Properties"].get("Handler") for props in functions.values()}
-    assert "careervp.handlers.cv_tailoring_handler.handler" in handlers
-    assert "careervp.handlers.cover_letter_handler.lambda_handler" in handlers
-    assert "careervp.handlers.interview_prep_handler.lambda_handler" in handlers
-
-
 # § nested_split_no_replacement ----------------------------------------------
 def test_stateful_resources_stay_in_parent(
     monitoring_template: Template,
     artifact_chain_template: Template,
-    async_workers_template: Template,
 ) -> None:
     """No DynamoDB table, S3 bucket, or KMS key may be created in a nested stack.
 
@@ -104,7 +92,6 @@ def test_stateful_resources_stay_in_parent(
     for name, template in (
         ("monitoring", monitoring_template),
         ("artifact_chain", artifact_chain_template),
-        ("async_workers", async_workers_template),
     ):
         resources = _resource_types(template)
         offenders = {
@@ -141,3 +128,14 @@ def test_company_research_worker_stays_in_parent(
     assert (
         "careervp.handlers.company_research_worker_handler.lambda_handler" in handlers
     ), "Company-research worker must remain in the parent stack"
+
+
+def test_async_workers_stay_in_parent(
+    synthesized_template: Template,
+) -> None:
+    """Previously deployed async workers stay in the parent until a migration path exists."""
+    functions = synthesized_template.find_resources("AWS::Lambda::Function")
+    handlers = {props["Properties"].get("Handler") for props in functions.values()}
+    assert "careervp.handlers.cv_tailoring_handler.handler" in handlers
+    assert "careervp.handlers.cover_letter_handler.lambda_handler" in handlers
+    assert "careervp.handlers.interview_prep_handler.lambda_handler" in handlers

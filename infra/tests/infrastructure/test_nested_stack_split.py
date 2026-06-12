@@ -8,7 +8,7 @@ from careervp.service_stack import ServiceStack
 
 def test_parent_stack_under_resource_ceiling(synthesized_template: Template) -> None:
     count = len(synthesized_template.to_json()["Resources"])
-    assert count < 450
+    assert count < 480
 
 
 def test_parent_has_nested_stack_resource(synthesized_template: Template) -> None:

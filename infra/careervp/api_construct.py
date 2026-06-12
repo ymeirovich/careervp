@@ -21,12 +21,7 @@ from constructs import Construct
 from . import constants
 from .api_db_construct import ApiDbConstruct
 from .artifact_chain_construct import ArtifactChainConstruct
-from .monitoring import CrudMonitoring, build_monitoring_topic
-from .nested_stacks import (
-    ArtifactChainNestedStack,
-    AsyncWorkersNestedStack,
-    apply_nag_suppressions,
-)
+from .monitoring import CrudMonitoring
 from .naming_utils import NamingUtils
 from .waf_construct import WafToApiGatewayConstruct
 
@@ -88,15 +83,6 @@ class ApiConstruct(Construct):
             self.api_db.logs_bucket,
             self.api_db.artifacts_bucket,
         )
-        # FE-UI-036 phase 3: queue/stream-driven async workers move into their own
-        # nested-stack template. Each worker's EventSourceMapping is a child of
-        # the (nested) Lambda and references parent queues/streams downward; their
-        # DLQs and the shared lambda_role stay in the parent. The S3-triggered
-        # cv-upload worker is deliberately excluded (an S3 notification would make
-        # the parent bucket depend on a nested Lambda — a cycle).
-        self.async_workers_stack = AsyncWorkersNestedStack(self, "AsyncWorkers")
-        apply_nag_suppressions(self.async_workers_stack)
-
         self.api_authorizer = self._build_api_authorizer(user_pool)
 
         api_resource: aws_apigateway.Resource = self.rest_api.root.add_resource(
@@ -142,7 +128,7 @@ class ApiConstruct(Construct):
 
         # Keep the original SQS worker for existing queue-based VPR flow.
         self.vpr_sqs_worker_func = self._add_vpr_sqs_worker_lambda_integration(
-            self.async_workers_stack,
+            self,
             self.lambda_role,
             self.api_db.jobs_table,
             self.api_db.vpr_results_bucket,
@@ -151,7 +137,7 @@ class ApiConstruct(Construct):
             appconfig_app_name,
         )
         self.vpr_dlq_handler_func = self._add_vpr_dlq_handler_lambda(
-            self.async_workers_stack, self.vpr_jobs_dlq, self.api_db.jobs_table
+            self, self.vpr_jobs_dlq, self.api_db.jobs_table
         )
         self.company_research_func = self._add_company_research_lambda_integration(
             company_research_resource,
@@ -196,7 +182,7 @@ class ApiConstruct(Construct):
             dlq=self.cv_upload_worker_dlq,
         )
         self.vpr_worker_func = self._add_vpr_worker_lambda(
-            self.async_workers_stack,
+            self,
             jobs_table=self.api_db.jobs_table,
             artifacts_table=self.api_db.artifacts_table,
             applications_table=self.api_db.applications_table,
@@ -204,13 +190,13 @@ class ApiConstruct(Construct):
             results_bucket=self.api_db.vpr_results_bucket,
         )
         self.cv_tailor_worker_func = self._add_cv_tailor_worker_lambda(
-            self.async_workers_stack,
+            self,
             artifacts_table=self.api_db.artifacts_table,
             cvs_table=self.api_db.cvs_table,
             dlq=self.cv_tailor_worker_dlq,
         )
         self.cover_letter_worker_func = self._add_cover_letter_worker_lambda(
-            self.async_workers_stack,
+            self,
             artifacts_table=self.api_db.artifacts_table,
             cvs_table=self.api_db.cvs_table,
             users_table=self.api_db.users_table,
@@ -218,7 +204,7 @@ class ApiConstruct(Construct):
             dlq=self.cover_letter_worker_dlq,
         )
         self.interview_prep_worker_func = self._add_interview_prep_worker_lambda(
-            self.async_workers_stack,
+            self,
             artifacts_table=self.api_db.artifacts_table,
             applications_table=self.api_db.applications_table,
             jobs_table=self.api_db.jobs_table,
@@ -243,17 +229,13 @@ class ApiConstruct(Construct):
         self._build_swagger_endpoints(
             rest_api=self.rest_api, dest_func=self.cv_upload_func
         )
-        # FE-UI-036 phase 1: topic + KMS key stay in the parent; dashboards and
-        # alarms move into the MonitoringNestedStack (outbound-only, stateless).
-        self.monitoring_topic = build_monitoring_topic(self, id_, naming)
         self.monitoring = CrudMonitoring(
             self,
-            "Monitoring",
-            monitoring_id=id_,
-            crud_api=self.rest_api,
-            db=self.api_db.db,
-            idempotency_table=self.api_db.idempotency_db,
-            functions=[
+            id_,
+            self.rest_api,
+            self.api_db.db,
+            self.api_db.idempotency_db,
+            [
                 self.cv_upload_func,
                 self.vpr_submit_func,
                 self.company_research_func,
@@ -263,9 +245,7 @@ class ApiConstruct(Construct):
                 self.interview_prep_api_func,
             ],
             naming=naming,
-            topic=self.monitoring_topic,
         )
-        apply_nag_suppressions(self.monitoring)
 
         if is_production_env:
             # add WAF
@@ -2022,34 +2002,30 @@ class ApiConstruct(Construct):
         The CR worker is wired to consume company_research_queue; VPR/CV workers'
         task-token handling is deferred to their own tickets.
         """
-        # FE-UI-036 phase 2: failure handlers, their dedicated role, and the
-        # Step Functions state machine move into a nested stack. They are
-        # stateless and outbound-only (the SM references parent queues downward;
-        # the failure-handler role references the applications table downward).
-        # The company-research worker stays in the PARENT: it uses the shared
-        # lambda_role and needs grant_task_response on the SM, so relocating it
-        # would give the shared role a back-edge into this nested stack — the
-        # FE-UI-035 cycle, recreated across the boundary.
-        self.artifact_chain_stack = ArtifactChainNestedStack(self, "ArtifactChain")
-        apply_nag_suppressions(self.artifact_chain_stack)
+        # The artifact-chain failure handlers, their dedicated role, and the
+        # Step Functions state machine are created in the PARENT stack. These
+        # resources carry explicit physical names (the two failure-handler
+        # Lambdas, their log groups, and careervp-artifact-chain-statemachine-dev)
+        # and are already deployed in CareerVpCrudDev, so relocating them into a
+        # nested stack makes CloudFormation try to CREATE new resources under the
+        # same physical names — a "resource already exists" failure. Only the
+        # Monitoring nested stack (auto-named alarms/dashboards) is split out for
+        # the 500-resource ceiling; explicitly-named resources must stay put
+        # absent a CloudFormation resource-import migration.
 
         # FE-UI-035: build the dedicated failure-handler role once, before the
         # handlers, so neither reuses the shared role that holds states:* grants.
-        self.failure_handler_role = self._build_failure_handler_role(
-            self.artifact_chain_stack
-        )
-        self.cr_failure_handler_func = self._add_cr_failure_handler_lambda(
-            self.artifact_chain_stack
-        )
+        self.failure_handler_role = self._build_failure_handler_role(self)
+        self.cr_failure_handler_func = self._add_cr_failure_handler_lambda(self)
         self.artifact_failure_handler_func = self._add_artifact_failure_handler_lambda(
-            self.artifact_chain_stack
+            self
         )
         self.company_research_worker_func = self._add_company_research_worker_lambda(
             appconfig_app_name
         )
 
         self.artifact_chain = ArtifactChainConstruct(
-            self.artifact_chain_stack,
+            self,
             "ArtifactChain",
             naming=self.naming,
             company_research_queue=self.api_db.company_research_queue,

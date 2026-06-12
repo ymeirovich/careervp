@@ -41,9 +41,3 @@ def monitoring_template(service_stack: ServiceStack) -> Template:
 def artifact_chain_template(service_stack: ServiceStack) -> Template:
     """The ArtifactChainNestedStack template (failure handlers + state machine)."""
     return Template.from_stack(service_stack.api.artifact_chain_stack)
-
-
-@pytest.fixture(scope="module")
-def async_workers_template(service_stack: ServiceStack) -> Template:
-    """The AsyncWorkersNestedStack template (queue/stream-driven worker Lambdas)."""
-    return Template.from_stack(service_stack.api.async_workers_stack)

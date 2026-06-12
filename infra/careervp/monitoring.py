@@ -1,7 +1,5 @@
-from typing import Any
-
 import aws_cdk.aws_sns as sns
-from aws_cdk import CfnOutput, Duration, NestedStack, RemovalPolicy, aws_apigateway
+from aws_cdk import CfnOutput, Duration, RemovalPolicy, aws_apigateway
 from aws_cdk import aws_cloudwatch as cloudwatch
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
@@ -23,77 +21,55 @@ from . import constants
 from .naming_utils import NamingUtils
 
 
-def build_monitoring_topic(
-    scope: Construct, id_: str, naming: NamingUtils
-) -> sns.Topic:
-    """Create the alarm SNS topic and its encryption key in the PARENT stack.
-
-    FE-UI-036: the KMS key is a stateful resource and must NOT move across a
-    nested-stack boundary (a logical-id change would REPLACE it). The topic and
-    key therefore stay in the parent; the (nested) dashboards/alarms reference
-    the topic downward as an alarm action.
-    """
-    key = kms.Key(
-        scope,
-        "MonitoringKey",
-        description="KMS Key for SNS Topic Encryption",
-        enable_key_rotation=True,  # Enables automatic key rotation
-        removal_policy=RemovalPolicy.DESTROY,
-        pending_window=Duration.days(7),
-    )
-    topic = sns.Topic(
-        scope,
-        f"{id_}alarms",
-        display_name=f"{id_}alarms",
-        master_key=key,
-        topic_name=naming.topic_name(constants.MONITORING_FEATURE),
-    )
-    # Grant CloudWatch permissions to publish to the SNS topic
-    topic.add_to_resource_policy(
-        statement=iam.PolicyStatement(
-            actions=["sns:Publish"],
-            effect=iam.Effect.ALLOW,
-            principals=[iam.ServicePrincipal("cloudwatch.amazonaws.com")],
-            resources=[topic.topic_arn],
-        )
-    )
-    CfnOutput(
-        scope, id=constants.MONITORING_TOPIC, value=topic.topic_name
-    ).override_logical_id(constants.MONITORING_TOPIC)
-    return topic
-
-
-class CrudMonitoring(NestedStack):
-    """Dashboards, alarms, and metric filters extracted into their own template.
-
-    FE-UI-036 phase 1: monitoring is OUTBOUND-ONLY (it observes parent
-    Lambdas/queues/tables; nothing depends on it), so it is the lowest-risk
-    subtree to relocate. The SNS topic + KMS key are built in the parent (see
-    ``build_monitoring_topic``) and passed in; only stateless dashboards/alarms
-    live here. ``monitoring_id`` preserves the original alarm/widget name prefix
-    so alarm names are unchanged.
-    """
-
+class CrudMonitoring(Construct):
     def __init__(
         self,
         scope: Construct,
-        construct_id: str,
-        *,
-        monitoring_id: str,
+        id_: str,
         crud_api: aws_apigateway.RestApi,
         db: dynamodb.TableV2,
         idempotency_table: dynamodb.TableV2,
         functions: list[_lambda.Function],
         naming: NamingUtils,
-        topic: sns.Topic,
-        **kwargs: Any,
     ) -> None:
-        super().__init__(scope, construct_id, **kwargs)
-        self.id_ = monitoring_id
+        super().__init__(scope, id_)
+        self.id_ = id_
         self.naming = naming
-        self.notification_topic = topic
-        self._build_high_level_dashboard(crud_api, topic)
-        self._build_low_level_dashboard(db, idempotency_table, functions, topic)
+        self.notification_topic = self._build_topic()
+        self._build_high_level_dashboard(crud_api, self.notification_topic)
+        self._build_low_level_dashboard(
+            db, idempotency_table, functions, self.notification_topic
+        )
+
+    def _build_topic(self) -> sns.Topic:
+        key = kms.Key(
+            self,
+            "MonitoringKey",
+            description="KMS Key for SNS Topic Encryption",
+            enable_key_rotation=True,  # Enables automatic key rotation
+            removal_policy=RemovalPolicy.DESTROY,
+            pending_window=Duration.days(7),
+        )
+        topic = sns.Topic(
+            self,
+            f"{self.id_}alarms",
+            display_name=f"{self.id_}alarms",
+            master_key=key,
+            topic_name=self.naming.topic_name(constants.MONITORING_FEATURE),
+        )
+        # Grant CloudWatch permissions to publish to the SNS topic
+        topic.add_to_resource_policy(
+            statement=iam.PolicyStatement(
+                actions=["sns:Publish"],
+                effect=iam.Effect.ALLOW,
+                principals=[iam.ServicePrincipal("cloudwatch.amazonaws.com")],
+                resources=[topic.topic_arn],
+            )
+        )
+        CfnOutput(
+            self, id=constants.MONITORING_TOPIC, value=topic.topic_name
+        ).override_logical_id(constants.MONITORING_TOPIC)
+        return topic
 
     def _build_high_level_dashboard(
         self, crud_api: aws_apigateway.RestApi, topic: sns.Topic
