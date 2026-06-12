@@ -15,6 +15,7 @@ from .constants import (
     SERVICE_NAME_TAG,
     STACK_FEATURE,
 )
+from .monitoring import MonitoringNestedStack
 from .naming_utils import NamingUtils
 from .utils import get_construct_name, get_username
 
@@ -57,6 +58,25 @@ class ServiceStack(Stack):
             naming=self.naming,
             user_pool=self.cognito.user_pool,
             cognito_client_id=self.cognito.client_id,
+        )
+        self.monitoring_nested_stack = MonitoringNestedStack(
+            self,
+            "MonitoringNestedStack",
+            monitoring_id=self.api.id_,
+            crud_api=self.api.rest_api,
+            db=self.api.api_db.db,
+            idempotency_table=self.api.api_db.idempotency_db,
+            functions=[
+                self.api.cv_upload_func,
+                self.api.vpr_submit_func,
+                self.api.company_research_func,
+                self.api.cv_tailoring_func,
+                self.api.gap_api_func,
+                self.api.cover_letter_api_func,
+                self.api.interview_prep_api_func,
+            ],
+            notification_topic=self.api.monitoring.notification_topic,
+            naming=self.naming,
         )
 
         CfnOutput(self, "UserPoolId", value=self.cognito.user_pool_id)

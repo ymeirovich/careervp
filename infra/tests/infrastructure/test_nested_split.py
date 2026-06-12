@@ -1,21 +1,9 @@
-"""TEST-INFRA-001 — flat-stack deploy-safety guards (FE-UI-036 reverted).
+"""TEST-INFRA-001 — approved phase-1 nested-stack topology guards.
 
-The FE-UI-036 nested-stack split was reverted: every resource it relocated
-(worker Lambdas, log groups, the Step Functions state machine, all alarms and
-dashboards) carries an explicit physical name and is already deployed in the
-parent ``CareerVpCrudDev`` stack. CloudFormation cannot move a named resource to
-a different stack in a single deploy — it creates the new one before deleting
-the old, which fails with "resource already exists" (the cdk-deploy failure on
-ui-upgrade@8926a90).
-
-These tests lock in the deploy-safe topology and guard against re-introducing
-the split without a CloudFormation resource-import migration:
-  * no nested stacks may exist in the synthesized parent template;
-  * the explicitly-named resources must stay in the parent;
-  * stateful resources (DynamoDB/S3/KMS) must never drift across a boundary.
-
-Re-doing FE-UI-036 for headroom requires `cdk import` / a CFN stack-refactor
-migration first, then this guard should be updated alongside it.
+Phase 1 moves only CrudMonitoring alarms and metric filters into
+``MonitoringNestedStack`` for a CloudFormation Stack Refactoring migration. The
+parent keeps stateful resources, dashboards with known drift, the monitoring
+SNS topic/KMS key, API Gateway, Lambdas, queues, Step Functions, and IAM.
 """
 
 from __future__ import annotations
@@ -41,17 +29,17 @@ def _resource_types(template: Template) -> dict[str, dict[str, Any]]:
     return cast(dict[str, dict[str, Any]], template.to_json().get("Resources", {}))
 
 
-# § flat_topology_guard -------------------------------------------------------
-def test_parent_declares_no_nested_stacks(synthesized_template: Template) -> None:
-    """Deploy-safety: the split is reverted, so no nested stacks may be emitted.
-
-    Re-introducing a nested stack would relocate already-deployed, explicitly
-    named resources and reproduce the "already exists" cdk-deploy failure.
-    """
+# § approved_nested_topology --------------------------------------------------
+def test_parent_declares_only_monitoring_nested_stack(
+    synthesized_template: Template,
+) -> None:
+    """Phase 1 allows exactly one nested stack: MonitoringNestedStack."""
     nested = synthesized_template.find_resources("AWS::CloudFormation::Stack")
-    assert not nested, (
-        f"Expected a flat parent stack with no nested stacks, found {list(nested)}. "
-        f"Relocating deployed named resources needs a CFN resource-import migration."
+    assert list(nested) == [
+        "MonitoringNestedStackNestedStackMonitoringNestedStackNestedStackResourceB5E63BB6"
+    ], (
+        "Expected only the approved MonitoringNestedStack nested-stack resource, "
+        f"found {list(nested)}."
     )
 
 
@@ -60,9 +48,8 @@ def test_parent_resource_count_below_cfn_hard_limit(
 ) -> None:
     """Parent must stay below the 500-resource hard limit.
 
-    NOTE: the flat revert sits near the ceiling (~497). The FE-UI-036 headroom
-    work should be redone as an import-based migration before adding many more
-    resources.
+    The approved monitoring-only nested stack should keep the parent below the
+    pre-refactor 497-resource baseline while avoiding stateful moves.
     """
     count = len(_resource_types(synthesized_template))
     assert count < CFN_MAX_RESOURCES, (
@@ -76,12 +63,32 @@ def test_state_machine_lives_in_parent(synthesized_template: Template) -> None:
     synthesized_template.resource_count_is("AWS::StepFunctions::StateMachine", 1)
 
 
-def test_monitoring_dashboards_and_alarms_stay_in_parent(
+def test_monitoring_dashboards_topic_and_key_stay_in_parent(
     synthesized_template: Template,
 ) -> None:
-    """Explicitly-named dashboards/alarms stay in the parent (already deployed)."""
+    """Drifted dashboards and the notification topic/key stay in the parent."""
     assert synthesized_template.find_resources("AWS::CloudWatch::Dashboard")
-    assert synthesized_template.find_resources("AWS::CloudWatch::Alarm")
+    assert synthesized_template.find_resources("AWS::SNS::Topic")
+    kms_keys = synthesized_template.find_resources("AWS::KMS::Key")
+    assert any(
+        props["Properties"].get("Description") == "KMS Key for SNS Topic Encryption"
+        for props in kms_keys.values()
+    )
+
+
+def test_monitoring_alarms_and_metric_filters_move_to_nested_stack(
+    synthesized_template: Template,
+    monitoring_template: Template,
+) -> None:
+    """Only monitoring alarms and metric filters move to MonitoringNestedStack."""
+    parent_alarms = synthesized_template.find_resources("AWS::CloudWatch::Alarm")
+    assert list(parent_alarms) == ["CareerVpCrudDevCrudBillingLambdaErrorAlarmBF87B315"]
+    assert not synthesized_template.find_resources("AWS::Logs::MetricFilter")
+
+    monitoring_template.resource_count_is("AWS::CloudWatch::Alarm", 15)
+    monitoring_template.resource_count_is("AWS::Logs::MetricFilter", 7)
+    assert not monitoring_template.find_resources("AWS::CloudWatch::Dashboard")
+    assert not monitoring_template.find_resources("AWS::SNS::Topic")
 
 
 # § no_stateful_drift ---------------------------------------------------------
@@ -95,6 +102,14 @@ def test_parent_retains_stateful_resources(synthesized_template: Template) -> No
     assert counts["AWS::DynamoDB::GlobalTable"] > 0, "DynamoDB tables left the parent"
     assert counts["AWS::S3::Bucket"] > 0, "S3 buckets left the parent"
     assert counts["AWS::KMS::Key"] > 0, "KMS keys left the parent"
+
+
+def test_monitoring_nested_stack_has_no_stateful_resources(
+    monitoring_template: Template,
+) -> None:
+    """The monitoring nested stack must not contain DynamoDB, S3, or KMS."""
+    for resource_type in STATEFUL_RESOURCE_TYPES:
+        monitoring_template.resource_count_is(resource_type, 0)
 
 
 def test_company_research_worker_stays_in_parent(

@@ -32,12 +32,6 @@ def synthesized_template(service_stack: ServiceStack) -> Template:
 
 
 @pytest.fixture(scope="module")
-def monitoring_template(synthesized_template: Template) -> Template:
-    """Monitoring (dashboards, alarms, metric filters) lives in the parent stack.
-
-    The FE-UI-036 nested-stack split was reverted: every relocated resource
-    carries an explicit physical name and is already deployed in the parent, so
-    CloudFormation cannot move it to a nested stack without a resource-import
-    migration. Monitoring therefore resolves to the parent template.
-    """
-    return synthesized_template
+def monitoring_template(service_stack: ServiceStack) -> Template:
+    """The approved phase-1 monitoring nested stack template."""
+    return Template.from_stack(service_stack.monitoring_nested_stack)

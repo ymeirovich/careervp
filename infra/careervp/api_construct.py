@@ -245,6 +245,7 @@ class ApiConstruct(Construct):
                 self.interview_prep_api_func,
             ],
             naming=naming,
+            mode="dashboards",
         )
 
         if is_production_env:
