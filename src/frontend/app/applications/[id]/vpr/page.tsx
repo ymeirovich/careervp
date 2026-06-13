@@ -297,6 +297,7 @@ function VPRContent({ jobId }: { jobId: string }) {
   const [artifactId, setArtifactId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expired, setExpired] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -323,6 +324,11 @@ function VPRContent({ jobId }: { jobId: string }) {
       try {
         const vprData = await api.getVPR(resolvedArtifactId);
         setVpr(vprData);
+
+        if (vprData?.status === 'expired') {
+          setExpired(true);
+          return;
+        }
 
         const downloadUrl = vprData?.result?.download_url;
         if (downloadUrl) {
@@ -366,6 +372,27 @@ function VPRContent({ jobId }: { jobId: string }) {
     return (
       <div className="flex justify-center py-12">
         <Spinner size="lg" aria-label="Loading Value Proposition Report…" />
+      </div>
+    );
+  }
+
+  if (expired) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="text-xl font-bold text-text-primary">Value Proposition Report</h1>
+          {backButton}
+        </div>
+        <div className="rounded-md bg-state-warning/10 border border-state-warning px-4 py-4 flex flex-col gap-3">
+          <p className="text-sm font-semibold text-state-warning">This report has expired</p>
+          <p className="text-sm text-text-muted">VPR results are stored for 1 year, but this one was generated before that policy was in place. Go back to the application hub to regenerate it.</p>
+          <button
+            onClick={() => router.push(`/applications/${jobId}`)}
+            className="self-start rounded-md bg-primary-action px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+          >
+            Back to Hub to Regenerate
+          </button>
+        </div>
       </div>
     );
   }

@@ -552,8 +552,8 @@ class ApiDbConstruct(Construct):
             versioned=True,
             lifecycle_rules=[
                 s3.LifecycleRule(
-                    id="delete-after-7-days",
-                    expiration=Duration.days(7),
+                    id="delete-after-365-days",
+                    expiration=Duration.days(365),
                     enabled=True,
                 ),
             ],

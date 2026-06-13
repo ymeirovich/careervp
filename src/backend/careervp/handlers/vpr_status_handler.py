@@ -123,9 +123,30 @@ def _build_processing_response(job: dict[str, Any], job_id: str) -> dict[str, An
     }
 
 
+def _s3_object_exists(key: str) -> bool:
+    """Return True if the S3 object exists (head_object succeeds)."""
+    try:
+        s3.head_object(Bucket=_get_results_bucket(), Key=key)
+        return True
+    except Exception:
+        return False
+
+
 def _build_completed_response(job: dict[str, Any], job_id: str, jobs_repo: Any = None) -> dict[str, Any]:
     """Build response for COMPLETED status."""
     result_key = job.get('result_key')
+
+    # Detect S3-expired files: job says completed but the object is gone.
+    if result_key and not _s3_object_exists(str(result_key)):
+        logger.warning('VPR result missing from S3 — marking expired', job_id=job_id, result_key=result_key)
+        return {
+            'id': job_id,
+            'job_id': job_id,
+            'status': 'expired',
+            'created_at': job.get('created_at'),
+            'completed_at': job.get('completed_at'),
+        }
+
     if result_key:
         result_url = _get_or_cache_presigned_url(job, str(result_key), jobs_repo, job_id)
     else:
