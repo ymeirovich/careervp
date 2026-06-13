@@ -235,6 +235,85 @@ describe("useApplicationHub — gap analysis status from application payload", (
   });
 });
 
+describe('useApplicationHub — company research recovery state', () => {
+  const cvWithWrapper = { cvs: [{ cv_id: 'cv-001', full_name: 'Test User' }] };
+
+  it('reads company_research_error from the recovery payload application block', async () => {
+    server.use(
+      http.get(`${BASE_URL}/applications/${JOB_ID}`, () =>
+        HttpResponse.json({
+          application: {
+            application_id: 'app-001',
+            job_id: JOB_ID,
+            user_id: 'user-001',
+            created_at: '2024-01-01T10:00:00Z',
+            updated_at: '2024-01-01T10:00:00Z',
+            is_finalized: false,
+            state: 'cr_failed',
+            company_research_error: true,
+          },
+          artifacts: {
+            company_research: { artifact_id: null, status: 'failed' },
+            vpr: { artifact_id: null, status: 'pending' },
+            cover_letter: { artifact_id: null, status: 'pending' },
+            interview_prep: { artifact_id: null, status: 'pending' },
+            cv_tailored: { artifact_id: null, status: 'pending' },
+            gap_analysis: { artifact_id: null, status: 'pending' },
+          },
+          gap_analysis: { questions: [], responses: [] },
+        }),
+      ),
+      http.get(`${BASE_URL}/users/me/cv`, () => HttpResponse.json(cvWithWrapper)),
+      http.get(`${BASE_URL}/jobs/${JOB_ID}/gap-questions`, () => HttpResponse.json(defaultGapAnalysis)),
+      http.get(`${BASE_URL}/company-research/${JOB_ID}`, () => HttpResponse.json(null, { status: 404 })),
+    );
+
+    const { result } = renderHook(() => useApplicationHub(JOB_ID), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.companyResearchError).toBe(true);
+    expect(result.current.applicationState).toBe('cr_failed');
+    expect(result.current.hubState?.modules.companyResearch.status).toBe('failed');
+  });
+
+  it('defaults companyResearchError to false when the field is absent', async () => {
+    server.use(
+      http.get(`${BASE_URL}/applications/${JOB_ID}`, () =>
+        HttpResponse.json({
+          application: {
+            application_id: 'app-001',
+            job_id: JOB_ID,
+            user_id: 'user-001',
+            created_at: '2024-01-01T10:00:00Z',
+            updated_at: '2024-01-01T10:00:00Z',
+            is_finalized: false,
+            state: 'cr_pending',
+          },
+          artifacts: {
+            company_research: { artifact_id: null, status: 'processing' },
+            vpr: { artifact_id: null, status: 'pending' },
+            cover_letter: { artifact_id: null, status: 'pending' },
+            interview_prep: { artifact_id: null, status: 'pending' },
+            cv_tailored: { artifact_id: null, status: 'pending' },
+            gap_analysis: { artifact_id: null, status: 'pending' },
+          },
+          gap_analysis: { questions: [], responses: [] },
+        }),
+      ),
+      http.get(`${BASE_URL}/users/me/cv`, () => HttpResponse.json(cvWithWrapper)),
+      http.get(`${BASE_URL}/jobs/${JOB_ID}/gap-questions`, () => HttpResponse.json(defaultGapAnalysis)),
+      http.get(`${BASE_URL}/company-research/${JOB_ID}`, () => HttpResponse.json(null, { status: 404 })),
+    );
+
+    const { result } = renderHook(() => useApplicationHub(JOB_ID), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.companyResearchError).toBe(false);
+    expect(result.current.applicationState).toBe('cr_pending');
+    expect(result.current.hubState?.modules.companyResearch.status).toBe('processing');
+  });
+});
+
 describe("useApplicationHub — finalized state", () => {
   it("returns FINALIZED when application is finalized", async () => {
     const finalizedApp = {

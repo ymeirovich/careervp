@@ -33,6 +33,8 @@ vi.mock('../../../hooks/useApplicationHub', () => ({
     companyResearchId: null,
     cvId: 'cv_123',
     cvName: null,
+    companyResearchError: false,
+    applicationState: null,
   }),
 }));
 

@@ -7,11 +7,19 @@ import type { DashboardContextValue } from '../../contexts/DashboardContext';
 import type { HubState } from '../../types/hub-state';
 import type { ModuleType } from '../../types/enums';
 
+const apiMocks = vi.hoisted(() => ({
+  fetchCompanyResearch: vi.fn().mockResolvedValue({ request_id: 'cr-retry-1', status: 'processing' }),
+}));
+
 // ── next/navigation mocks ──────────────────────────────────────────────────
 const mockPush = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, replace: vi.fn() }),
   useParams: () => ({ id: 'job1' }),
+}));
+
+vi.mock('../../api/methods', () => ({
+  api: apiMocks,
 }));
 
 // ── Hook mocks ──────────────────────────────────────────────────────────────
@@ -123,7 +131,7 @@ describe('ApplicationHubPage — action handlers', () => {
 
   it('Generate CTA calls useGenerateModule.generate with correct moduleType', async () => {
     const hubState = makeHubState();
-    mockApplicationHub.mockReturnValue({ hubState, isLoading: false, error: null, refetch: vi.fn(), gapResponseIds: [], vprId: null, companyResearchId: null, cvId: 'cv-1', cvName: null });
+    mockApplicationHub.mockReturnValue({ hubState, isLoading: false, error: null, refetch: vi.fn(), gapResponseIds: [], vprId: null, companyResearchId: null, cvId: 'cv-1', cvName: null, companyResearchError: false, applicationState: null });
 
     const HubPage = await getHubPage();
     renderWithProviders(<HubPage />);
@@ -156,7 +164,7 @@ describe('ApplicationHubPage — action handlers', () => {
         },
       },
     });
-    mockApplicationHub.mockReturnValue({ hubState, isLoading: false, error: null, refetch: vi.fn(), gapResponseIds: [], vprId: null, companyResearchId: null, cvId: 'cv-1', cvName: null });
+    mockApplicationHub.mockReturnValue({ hubState, isLoading: false, error: null, refetch: vi.fn(), gapResponseIds: [], vprId: null, companyResearchId: null, cvId: 'cv-1', cvName: null, companyResearchError: false, applicationState: null });
 
     const HubPage = await getHubPage();
     renderWithProviders(<HubPage />);
@@ -184,7 +192,7 @@ describe('ApplicationHubPage — action handlers', () => {
         },
       },
     });
-    mockApplicationHub.mockReturnValue({ hubState, isLoading: false, error: null, refetch: vi.fn(), gapResponseIds: [], vprId: null, companyResearchId: null, cvId: 'cv-1', cvName: null });
+    mockApplicationHub.mockReturnValue({ hubState, isLoading: false, error: null, refetch: vi.fn(), gapResponseIds: [], vprId: null, companyResearchId: null, cvId: 'cv-1', cvName: null, companyResearchError: false, applicationState: null });
 
     const HubPage = await getHubPage();
     renderWithProviders(<HubPage />);
@@ -192,6 +200,124 @@ describe('ApplicationHubPage — action handlers', () => {
     const vprCard = screen.getByTestId('module-card-vpr');
     expect(vprCard.querySelector('[data-testid="spinner"]')).toBeTruthy();
     expect(vprCard.querySelector('[data-testid="primary-cta"]')).toBeNull();
+  });
+
+  it('shows CR failure warning, disables downstream generation, and retries company research in place', async () => {
+    const refetch = vi.fn();
+    const hubState = makeHubState({
+      modules: {
+        ...makeHubState().modules,
+        companyResearch: {
+          type: 'companyResearch',
+          status: 'failed',
+          title: 'Company Research',
+          isStale: false,
+          primaryAction: { label: 'Retry', onClick: vi.fn(), variant: 'primary' as const },
+          secondaryActions: [],
+        },
+      },
+    });
+    mockApplicationHub.mockReturnValue({
+      hubState,
+      isLoading: false,
+      error: null,
+      refetch,
+      gapResponseIds: [],
+      vprId: null,
+      companyResearchId: null,
+      cvId: 'cv-1',
+      cvName: null,
+      companyResearchError: true,
+      applicationState: 'cr_failed',
+    });
+
+    const HubPage = await getHubPage();
+    renderWithProviders(<HubPage />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Company research failed. Retry to unlock your documents.');
+    expect(screen.getByTestId('module-card-vpr').querySelector('[data-testid="primary-cta"]')).toBeDisabled();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('module-card-companyResearch').querySelector('[data-testid="primary-cta"]') as HTMLButtonElement);
+    });
+
+    expect(apiMocks.fetchCompanyResearch).toHaveBeenCalledWith({ job_id: 'job1', retry: true });
+    expect(refetch).toHaveBeenCalled();
+  });
+
+  it('shows chain progress and disables manual generation while cr_pending is active', async () => {
+    const hubState = makeHubState({
+      modules: {
+        ...makeHubState().modules,
+        companyResearch: {
+          type: 'companyResearch',
+          status: 'processing',
+          title: 'Company Research',
+          isStale: false,
+          primaryAction: undefined,
+          secondaryActions: [],
+        },
+      },
+    });
+    mockApplicationHub.mockReturnValue({
+      hubState,
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+      gapResponseIds: [],
+      vprId: null,
+      companyResearchId: null,
+      cvId: 'cv-1',
+      cvName: null,
+      companyResearchError: false,
+      applicationState: 'cr_pending',
+    });
+
+    const HubPage = await getHubPage();
+    renderWithProviders(<HubPage />);
+
+    expect(screen.getByTestId('chain-progress-bar')).toBeInTheDocument();
+    expect(screen.getByText('CR')).toBeInTheDocument();
+    expect(screen.getByText('Tailored CV')).toBeInTheDocument();
+    expect(screen.getByTestId('module-card-vpr').querySelector('[data-testid="primary-cta"]')).toBeDisabled();
+  });
+
+  it('uses the tailored CV versioning copy in the regenerate modal', async () => {
+    const hubState = makeHubState({
+      modules: {
+        ...makeHubState().modules,
+        tailoredCV: {
+          type: 'tailoredCV',
+          status: 'edited',
+          title: 'Tailored CV',
+          isStale: false,
+          primaryAction: { label: 'Regenerate', onClick: vi.fn(), variant: 'primary' as const },
+          secondaryActions: [],
+        },
+      },
+    });
+    mockApplicationHub.mockReturnValue({
+      hubState,
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+      gapResponseIds: [],
+      vprId: 'vpr-1',
+      companyResearchId: 'cr-1',
+      cvId: 'cv-1',
+      cvName: 'Base CV',
+      companyResearchError: false,
+      applicationState: null,
+    });
+
+    const HubPage = await getHubPage();
+    renderWithProviders(<HubPage />);
+
+    fireEvent.click(screen.getByTestId('module-card-tailoredCV').querySelector('[data-testid="primary-cta"]') as HTMLButtonElement);
+
+    expect(screen.getByRole('dialog')).toHaveTextContent('Generate New Tailored CV?');
+    expect(screen.getByRole('dialog')).toHaveTextContent('Your previous CV stays available in the Tailored CVs list.');
+    expect(screen.getByRole('button', { name: 'Generate New Version' })).toBeInTheDocument();
   });
 });
 

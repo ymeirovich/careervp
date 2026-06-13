@@ -8,6 +8,9 @@ export interface RawApplicationData {
   updated_at: string;
   is_finalized: boolean;
   finalized_at?: string;
+  state?: string;
+  trial_credit_consumed?: boolean;
+  company_research_error?: boolean;
 }
 
 export interface RawModuleData {
@@ -47,6 +50,8 @@ export interface ModuleAction {
   onClick: () => void;
   variant: 'primary' | 'secondary' | 'ghost' | 'destructive';
   isLoading?: boolean;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 export interface HubModuleState {

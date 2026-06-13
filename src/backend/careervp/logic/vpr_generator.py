@@ -178,6 +178,7 @@ class LLMClient:
         max_tokens: int,
         temperature: float,
         system_prompt: str = DEFAULT_SYSTEM_PROMPT,
+        use_system_cache: bool = False,
     ) -> Result[dict[str, Any]]:
         """Delegate to centralized router."""
         result = self._router.invoke(
@@ -186,6 +187,7 @@ class LLMClient:
             user_prompt=prompt,
             max_tokens=max_tokens,
             temperature=temperature,
+            use_system_cache=use_system_cache,
         )
         return cast(Result[dict[str, Any]], result)
 
@@ -344,6 +346,7 @@ class VPRSixStagePipeline:
             system_prompt=build_phase2_system_prompt(),
             max_tokens=16000,
             temperature=0.65,
+            use_system_cache=True,
         )
         return Phase2Draft(raw_payload=payload, evidence_context=evidence)
 
@@ -380,6 +383,7 @@ class VPRSixStagePipeline:
         system_prompt: str,
         max_tokens: int,
         temperature: float,
+        use_system_cache: bool = False,
     ) -> dict[str, Any]:
         """Invoke LLM for a stage and parse strict JSON response."""
         llm_result = self._llm_client.invoke(
@@ -388,6 +392,7 @@ class VPRSixStagePipeline:
             max_tokens=max_tokens,
             temperature=temperature,
             system_prompt=system_prompt,
+            use_system_cache=use_system_cache,
         )
 
         if not llm_result.success or llm_result.data is None:

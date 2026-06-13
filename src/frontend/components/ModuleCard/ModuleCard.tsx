@@ -4,12 +4,15 @@ import type { ButtonVariant } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Spinner } from '../ui/Spinner';
+import { Tooltip } from '../ui/Tooltip';
 
 export interface ModuleAction {
   label: string;
   onClick: () => void;
   variant?: ButtonVariant;
   isLoading?: boolean;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 export interface ModuleCardProps {
@@ -117,6 +120,36 @@ export function ModuleCard({
     Final: 'final',
   } as const;
 
+  function renderActionButton(
+    action: ModuleAction,
+    key: string,
+    isPrimary = false,
+  ): React.ReactNode {
+    const button = (
+      <Button
+        key={key}
+        data-testid={isPrimary ? 'primary-cta' : undefined}
+        variant={action.variant ?? (isPrimary ? 'primary' : 'secondary')}
+        size="sm"
+        isLoading={action.isLoading}
+        onClick={action.onClick}
+        disabled={disabled || action.disabled}
+      >
+        {action.label}
+      </Button>
+    );
+
+    if (!action.disabledReason) {
+      return button;
+    }
+
+    return (
+      <Tooltip key={key} content={action.disabledReason}>
+        <span className="inline-flex cursor-not-allowed">{button}</span>
+      </Tooltip>
+    );
+  }
+
   return (
     <div
       data-testid={`module-card-${module}`}
@@ -124,7 +157,7 @@ export function ModuleCard({
       aria-busy={isProcessing || undefined}
       className={`
         bg-card border border-border-default rounded-xl p-4 flex flex-col gap-3
-        ${disabled ? 'opacity-50 pointer-events-none' : ''}
+        ${disabled ? 'opacity-50' : ''}
       `.trim()}
     >
       {/* Screen-reader live region for state transitions */}
@@ -193,31 +226,23 @@ export function ModuleCard({
       {/* Normal (non-processing) action buttons */}
       {!isProcessing && (primaryLabel || defaultSecondary.length > 0 || secondaryActions) && (
         <div className="flex flex-wrap items-center gap-2 mt-1">
-          {primaryLabel && (
-            <Button
-              data-testid="primary-cta"
-              variant={primaryAction?.variant ?? 'primary'}
-              size="sm"
-              isLoading={primaryAction?.isLoading}
-              onClick={primaryAction?.onClick ?? onPrimaryAction}
-              disabled={disabled}
-            >
-              {primaryLabel}
-            </Button>
-          )}
+          {primaryLabel &&
+            renderActionButton(
+              {
+                label: primaryLabel,
+                onClick: primaryAction?.onClick ?? onPrimaryAction ?? (() => {}),
+                variant: primaryAction?.variant ?? 'primary',
+                isLoading: primaryAction?.isLoading,
+                disabled: primaryAction?.disabled,
+                disabledReason: primaryAction?.disabledReason,
+              },
+              'primary',
+              true,
+            )}
 
-          {(secondaryActions ?? defaultSecondary.map((label): ModuleAction => ({ label, onClick: onSecondaryAction ?? (() => {}), variant: 'secondary' }))).map((action) => (
-            <Button
-              key={action.label}
-              variant={action.variant ?? 'secondary'}
-              size="sm"
-              isLoading={action.isLoading}
-              onClick={action.onClick}
-              disabled={disabled}
-            >
-              {action.label}
-            </Button>
-          ))}
+          {(secondaryActions ?? defaultSecondary.map((label): ModuleAction => ({ label, onClick: onSecondaryAction ?? (() => {}), variant: 'secondary' }))).map((action) =>
+            renderActionButton(action, action.label),
+          )}
         </div>
       )}
     </div>

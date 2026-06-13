@@ -14,6 +14,7 @@ from typing import Any, Callable, ParamSpec, TypeVar, cast
 
 import boto3
 from anthropic import Anthropic, APIError, RateLimitError
+from anthropic.types import TextBlockParam
 from aws_lambda_powertools.metrics import MetricUnit
 from botocore.exceptions import BotoCoreError, ClientError
 
@@ -200,6 +201,7 @@ class LLMRouter:
         user_prompt: str,
         max_tokens: int = 4096,
         temperature: float = 0.3,
+        use_system_cache: bool = False,
     ) -> Result[dict[str, Any]]:
         """
         Invoke the LLM with automatic model routing.
@@ -210,6 +212,8 @@ class LLMRouter:
             user_prompt: User message/input
             max_tokens: Maximum output tokens
             temperature: Creativity parameter (lower = more consistent)
+            use_system_cache: When True, wraps system_prompt with Anthropic prompt
+                caching (cache_control ephemeral). Reduces cost on repeated calls.
 
         Returns:
             Result with response text, token usage, and cost
@@ -218,12 +222,16 @@ class LLMRouter:
 
         logger.info('Invoking LLM', mode=mode.value, model=model_id, max_tokens=max_tokens)
 
+        system: str | list[TextBlockParam] = system_prompt
+        if use_system_cache:
+            system = [TextBlockParam(type='text', text=system_prompt, cache_control={'type': 'ephemeral'})]
+
         try:
             response = self._client.messages.create(
                 model=model_id,
                 max_tokens=max_tokens,
                 temperature=temperature,
-                system=system_prompt,
+                system=system,
                 messages=[{'role': 'user', 'content': user_prompt}],
             )
 

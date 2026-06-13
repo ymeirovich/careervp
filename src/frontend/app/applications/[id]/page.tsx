@@ -2,12 +2,14 @@
 
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { api } from '../../../api/methods';
 import { useApplicationHub } from '../../../hooks/useApplicationHub';
 import { useGenerateModule } from '../../../hooks/useGenerateModule';
 import { ModuleCard } from '../../../components/ModuleCard/ModuleCard';
 import { HubLayout } from '../../../components/layout/HubLayout';
 import { ErrorBoundary } from '../../../components/ErrorBoundary/ErrorBoundary';
 import { Spinner } from '../../../components/ui/Spinner';
+import { WarningBanner } from '../../../components/ui/WarningBanner';
 import { ChooseBaseCVModal } from '../../../components/ChooseBaseCVModal/ChooseBaseCVModal';
 import type { ChooseBaseCVItem } from '../../../components/ChooseBaseCVModal/ChooseBaseCVModal';
 import { getArtifact } from '../../../lib/artifactStorage';
@@ -25,16 +27,89 @@ const MODULE_ORDER: ModuleType[] = [
 ];
 
 const GENERATABLE_MODULES = new Set<ModuleType>(['vpr', 'tailoredCV', 'coverLetter', 'interviewPrep']);
+const CHAIN_MODULES: ModuleType[] = ['vpr', 'tailoredCV', 'coverLetter', 'interviewPrep'];
+
+function isReadyLikeStatus(status: string): boolean {
+  return ['ready', 'complete', 'edited', 'stale', 'final'].includes(status);
+}
+
+function ChainProgressBar({
+  companyResearchStatus,
+  vprStatus,
+  tailoredCvStatus,
+}: {
+  companyResearchStatus: string;
+  vprStatus: string;
+  tailoredCvStatus: string;
+}) {
+  const steps = [
+    { key: 'cr', label: 'CR', status: companyResearchStatus },
+    { key: 'vpr', label: 'VPR', status: vprStatus },
+    { key: 'cv', label: 'Tailored CV', status: tailoredCvStatus },
+  ];
+
+  return (
+    <div
+      data-testid="chain-progress-bar"
+      className="rounded-2xl border border-border-default bg-card/90 px-4 py-4"
+    >
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
+        {steps.map((step, index) => {
+          const isDone = isReadyLikeStatus(step.status);
+          const isProcessing = step.status === 'processing';
+          const badgeClass = isDone
+            ? 'border-state-active bg-state-active text-white'
+            : isProcessing
+              ? 'border-state-warning bg-state-warning/10 text-state-warning'
+              : 'border-border-default bg-surface-subtle text-text-muted';
+
+          return (
+            <React.Fragment key={step.key}>
+              <div className="flex items-center gap-3">
+                <span
+                  className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold ${badgeClass}`}
+                >
+                  {isDone ? '✓' : isProcessing ? '...' : `${index + 1}`}
+                </span>
+                <div className="flex flex-col">
+                  <span className="text-sm font-semibold text-text-primary">{step.label}</span>
+                  <span className="text-xs text-text-muted">
+                    {isDone ? 'Done' : isProcessing ? 'Processing' : 'Waiting'}
+                  </span>
+                </div>
+              </div>
+              {index < steps.length - 1 && (
+                <div className="hidden h-px flex-1 bg-border-default md:block" aria-hidden="true" />
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function ApplicationHubPage() {
   const params = useParams();
   const jobId = typeof params.id === 'string' ? params.id : '';
   const router = useRouter();
 
-  const { hubState, isLoading, gapResponseIds, vprId, companyResearchId, cvId, cvName, refetch } = useApplicationHub(jobId);
+  const {
+    hubState,
+    isLoading,
+    gapResponseIds,
+    vprId,
+    companyResearchId,
+    cvId,
+    cvName,
+    refetch,
+    companyResearchError,
+    applicationState,
+  } = useApplicationHub(jobId);
   const [showChangeCVModal, setShowChangeCVModal] = useState(false);
   const [selectedCvItem, setSelectedCvItem] = useState<ChooseBaseCVItem | null>(null);
   const [regenConfirmModule, setRegenConfirmModule] = useState<ModuleType | null>(null);
+  const [isRetryingCompanyResearch, setIsRetryingCompanyResearch] = useState(false);
 
   // Per-module generation errors (set on cancel, cleared on new generate)
   const [generationErrors, setGenerationErrors] = useState<Partial<Record<ModuleType, string>>>({});
@@ -106,6 +181,37 @@ export default function ApplicationHubPage() {
     refetch();
   }
 
+  async function handleCompanyResearchRetry() {
+    setIsRetryingCompanyResearch(true);
+    try {
+      await api.fetchCompanyResearch({ job_id: jobId, retry: true });
+      refetch();
+    } finally {
+      setIsRetryingCompanyResearch(false);
+    }
+  }
+
+  function getGenerationBlockReason(moduleType: ModuleType, actionLabel: string): string | undefined {
+    if (!CHAIN_MODULES.includes(moduleType)) {
+      return undefined;
+    }
+
+    const isGenerationAction = ['Generate', 'Regenerate', 'Retry'].includes(actionLabel);
+    if (!isGenerationAction) {
+      return undefined;
+    }
+
+    if (companyResearchError) {
+      return 'Requires company research';
+    }
+
+    if (applicationState === 'cr_pending') {
+      return 'Company research is in progress';
+    }
+
+    return undefined;
+  }
+
   function buildPrimaryAction(moduleType: ModuleType): ModuleAction | undefined {
     const moduleState = hubState!.modules[moduleType];
     const { status, primaryAction, resultUrl } = moduleState;
@@ -123,6 +229,15 @@ export default function ApplicationHubPage() {
     } else if (moduleType === 'gapAnalysis') {
       onClick = () => router.push(`/applications/${jobId}/gap-analysis`);
     } else if (moduleType === 'companyResearch') {
+      if (companyResearchError) {
+        return {
+          ...primaryAction,
+          label: 'Retry',
+          variant: 'primary' as const,
+          onClick: () => void handleCompanyResearchRetry(),
+          isLoading: isRetryingCompanyResearch,
+        };
+      }
       onClick = () => router.push(`/applications/${jobId}/company-research`);
       if (companyResearchId) {
         return { ...primaryAction, label: 'View', variant: 'secondary' as const, onClick };
@@ -145,7 +260,8 @@ export default function ApplicationHubPage() {
         : () => void handleGenerate(moduleType);
     }
 
-    return { ...primaryAction, onClick };
+    const disabledReason = getGenerationBlockReason(moduleType, primaryAction.label);
+    return { ...primaryAction, onClick, disabled: Boolean(disabledReason), disabledReason };
   }
 
   const ARTIFACT_ROUTES: Partial<Record<ModuleType, (resultUrl?: string) => string>> = {
@@ -167,7 +283,13 @@ export default function ApplicationHubPage() {
 
     return (moduleState.secondaryActions ?? []).map((action) => {
       if (action.label === 'Regenerate') {
-        return { ...action, onClick: () => setRegenConfirmModule(moduleType) };
+        const disabledReason = getGenerationBlockReason(moduleType, action.label);
+        return {
+          ...action,
+          onClick: () => setRegenConfirmModule(moduleType),
+          disabled: Boolean(disabledReason),
+          disabledReason,
+        };
       }
       if ((action.label === 'View' || action.label === 'Edit') && routeFn) {
         const base = routeFn(moduleState.resultUrl);
@@ -188,6 +310,12 @@ export default function ApplicationHubPage() {
   const hasNoCV = !activeCvId;
   // Tailored CV requires a completed VPR to provide the vpr_id
   const tailoredCVBlocked = !vprId && hubState.modules.tailoredCV.status === 'notStarted';
+  const companyResearchStatus = companyResearchError ? 'failed' : hubState.modules.companyResearch.status;
+  const showChainProgress =
+    !companyResearchError &&
+    (applicationState === 'cr_pending' ||
+      (applicationState === 'artifacts_generating' &&
+        companyResearchStatus !== 'notStarted'));
 
   return (
     <ErrorBoundary cloudwatchKey="application-hub">
@@ -228,11 +356,19 @@ export default function ApplicationHubPage() {
             className="w-full max-w-md rounded-xl border border-border-default bg-card p-6 shadow-lg"
           >
             <h2 id="regen-confirm-title" className="text-lg font-bold text-text-primary">
-              Regenerate {MODULE_DISPLAY_NAMES[regenConfirmModule]}?
+              {regenConfirmModule === 'tailoredCV'
+                ? 'Generate New Tailored CV?'
+                : `Regenerate ${MODULE_DISPLAY_NAMES[regenConfirmModule]}?`}
             </h2>
             <p className="mt-2 text-sm text-text-muted">
-              This action will regenerate and overwrite the existing{' '}
-              {MODULE_DISPLAY_NAMES[regenConfirmModule]}. Do you want to proceed?
+              {regenConfirmModule === 'tailoredCV'
+                ? 'A new tailored CV will be generated. Your previous CV stays available in the Tailored CVs list.'
+                : (
+                  <>
+                    This action will regenerate and overwrite the existing{' '}
+                    {MODULE_DISPLAY_NAMES[regenConfirmModule]}. Do you want to proceed?
+                  </>
+                )}
             </p>
             <div className="mt-6 flex justify-end gap-3">
               <button
@@ -247,11 +383,13 @@ export default function ApplicationHubPage() {
                 onClick={() => {
                   const mod = regenConfirmModule;
                   setRegenConfirmModule(null);
-                  void handleGenerate(mod);
+                  if (mod) {
+                    void handleGenerate(mod);
+                  }
                 }}
                 className="rounded-lg bg-primary-action px-4 py-2 text-sm font-medium text-white hover:opacity-90"
               >
-                OK
+                {regenConfirmModule === 'tailoredCV' ? 'Generate New Version' : 'OK'}
               </button>
             </div>
           </div>
@@ -259,6 +397,20 @@ export default function ApplicationHubPage() {
       )}
 
       <HubLayout hubStatus={hubState.hubStatus} staleModules={hubState.staleModules}>
+        {companyResearchError && (
+          <WarningBanner
+            message="Company research failed. Retry to unlock your documents."
+          />
+        )}
+
+        {showChainProgress && (
+          <ChainProgressBar
+            companyResearchStatus={applicationState === 'cr_pending' ? 'processing' : companyResearchStatus}
+            vprStatus={hubState.modules.vpr.status}
+            tailoredCvStatus={hubState.modules.tailoredCV.status}
+          />
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {MODULE_ORDER.map((moduleType) => {
             const moduleState = hubState.modules[moduleType];

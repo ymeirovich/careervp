@@ -18,12 +18,14 @@ import type { ModuleType } from '../types/enums';
 
 // The actual API response includes artifacts from spec-10
 interface ApplicationResponse extends RawApplicationData {
+  application?: Partial<RawApplicationData>;
   artifacts?: {
     vpr?: HubArtifact;
     cover_letter?: HubArtifact;
     interview_prep?: HubArtifact;
     cv_tailored?: HubArtifact;
     gap_analysis?: HubArtifact;
+    company_research?: HubArtifact;
   };
   gap_analysis?: {
     questions: Array<{ question_id: string; question: string }>;
@@ -60,8 +62,8 @@ function buildModuleData(
   if (pollingStatus) {
     return { job_id: jobId, status: pollingStatus, created_at: '', updated_at: '', result_url: artifactId };
   }
-  // Hub artifact status only when there's a real artifact ID (null = not started)
-  if (artifactId && hubArtifact?.status) {
+  // Some recovery states, notably company research failures, do not have an artifact ID yet.
+  if (hubArtifact?.status && (artifactId || hubArtifact.status !== 'pending')) {
     return { job_id: jobId, status: hubArtifact.status, created_at: '', updated_at: '', result_url: artifactId };
   }
   return undefined;
@@ -77,6 +79,8 @@ export function useApplicationHub(jobId: string): {
   companyResearchId: string | null;
   cvId: string | null;
   cvName: string | null;
+  companyResearchError: boolean;
+  applicationState: string | null;
 } {
   const enabled = jobId.length > 0;
 
@@ -126,6 +130,7 @@ export function useApplicationHub(jobId: string): {
   });
 
   const appData = applicationQuery.data;
+  const applicationRecord = appData?.application ?? appData;
   const artifacts = appData?.artifacts;
 
   // Two-source reconciliation: hub artifact_id → localStorage → null
@@ -169,6 +174,18 @@ export function useApplicationHub(jobId: string): {
     if (tailoredCVData) moduleData.tailoredCV = tailoredCVData;
 
     const companyResearchResult = companyResearchQuery.data;
+    const companyResearchData = buildModuleData(
+      jobId,
+      artifacts?.company_research,
+      null,
+      artifacts?.company_research?.artifact_id ?? null,
+    );
+    if (companyResearchData) {
+      moduleData.companyResearch = {
+        ...companyResearchData,
+        result_url: companyResearchResult?.id ?? companyResearchData.result_url,
+      };
+    }
     if (companyResearchResult?.id) {
       moduleData.companyResearch = {
         job_id: jobId,
@@ -190,7 +207,20 @@ export function useApplicationHub(jobId: string): {
     }
 
     hubState = mapApplicationDataToHubState(
-      appData,
+      {
+        application_id: applicationRecord?.application_id ?? appData.application_id,
+        job_id: applicationRecord?.job_id ?? appData.job_id ?? jobId,
+        user_id: applicationRecord?.user_id ?? appData.user_id ?? '',
+        created_at: applicationRecord?.created_at ?? appData.created_at ?? '',
+        updated_at: applicationRecord?.updated_at ?? appData.updated_at ?? '',
+        is_finalized: applicationRecord?.is_finalized ?? appData.is_finalized ?? false,
+        finalized_at: applicationRecord?.finalized_at ?? appData.finalized_at,
+        state: applicationRecord?.state ?? appData.state,
+        trial_credit_consumed:
+          applicationRecord?.trial_credit_consumed ?? appData.trial_credit_consumed,
+        company_research_error:
+          applicationRecord?.company_research_error ?? appData.company_research_error,
+      },
       moduleData,
       gapQuery.data ?? null,
       cvQuery.data ?? null,
@@ -204,6 +234,10 @@ export function useApplicationHub(jobId: string): {
 
   // Company research ID — needed by Cover Letter generation
   const companyResearchId = companyResearchQuery.data?.id ?? null;
+  const companyResearchError = Boolean(
+    applicationRecord?.company_research_error ?? appData?.company_research_error ?? false,
+  );
+  const applicationState = applicationRecord?.state ?? appData?.state ?? null;
 
   // CV identity — exposed to avoid a separate useCV() call on pages that already use this hook
   const cvId = cvQuery.data?.cv_id ?? null;
@@ -216,5 +250,17 @@ export function useApplicationHub(jobId: string): {
     void companyResearchQuery.refetch();
   }
 
-  return { hubState, isLoading, error, refetch, gapResponseIds, vprId, companyResearchId, cvId, cvName };
+  return {
+    hubState,
+    isLoading,
+    error,
+    refetch,
+    gapResponseIds,
+    vprId,
+    companyResearchId,
+    cvId,
+    cvName,
+    companyResearchError,
+    applicationState,
+  };
 }

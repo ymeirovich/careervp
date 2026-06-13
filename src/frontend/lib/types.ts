@@ -475,6 +475,7 @@ export interface CompanyResearchRequest {
   job_id: string;
   url?: string;
   company_name?: string;
+  retry?: boolean;
 }
 
 export interface CompanyResearchResult {
