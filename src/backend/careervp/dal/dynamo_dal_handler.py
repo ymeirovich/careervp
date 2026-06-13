@@ -28,6 +28,8 @@ TAILORED_CV_SORT_KEY_PREFIX = 'ARTIFACT#CV_TAILORED#'
 COVER_LETTER_SORT_KEY_PREFIX = 'ARTIFACT#COVER_LETTER#'
 GAP_ANALYSIS_SORT_KEY_PREFIX = 'ARTIFACT#GAP_ANALYSIS#'
 GAP_RESPONSES_SORT_KEY_PREFIX = 'ARTIFACT#GAP_RESPONSES#'
+COMPANY_RESEARCH_ARTIFACT_PREFIX = 'ARTIFACT#COMPANY_RESEARCH#'
+COMPANY_RESEARCH_KB_PREFIX = 'COMPANY_RESEARCH#'
 
 
 class DynamoDalHandler(DalHandler):
@@ -1060,4 +1062,67 @@ class DynamoDalHandler(DalHandler):
                 operation='get_gap_responses',
                 exc=exc,
                 key_names=['userId', 'questionId'],
+            )
+
+    @tracer.capture_method(capture_response=False)
+    def get_company_research(self, user_id: str, job_id: str) -> Result[dict[str, Any] | None]:
+        logger.append_keys(user_id=user_id, job_id=job_id)
+        logger.info('fetching company research from DynamoDB')
+        try:
+            table = self._get_db_handler(self.table_name)
+            candidate_keys = [
+                {'pk': user_id, 'sk': f'{COMPANY_RESEARCH_ARTIFACT_PREFIX}{job_id}'},
+                {'pk': user_id, 'sk': f'{COMPANY_RESEARCH_KB_PREFIX}{job_id}'},
+                {'pk': f'USER#{user_id}', 'sk': f'{COMPANY_RESEARCH_KB_PREFIX}{job_id}'},
+            ]
+
+            for key in candidate_keys:
+                try:
+                    response = table.get_item(Key=key)
+                except ClientError as exc:
+                    error_code, _ = self._client_error_details(exc)
+                    if error_code == 'ValidationException':
+                        continue
+                    return self._dal_failure_result(
+                        operation='get_company_research',
+                        exc=exc,
+                        key_names=list(key.keys()),
+                    )
+
+                item = response.get('Item') if isinstance(response, dict) else None
+                if isinstance(item, dict):
+                    return Result(success=True, data=item, code=ResultCode.SUCCESS)
+
+            query_candidates = [
+                (user_id, COMPANY_RESEARCH_ARTIFACT_PREFIX),
+                (user_id, COMPANY_RESEARCH_KB_PREFIX),
+                (f'USER#{user_id}', COMPANY_RESEARCH_KB_PREFIX),
+            ]
+            for partition_key, prefix in query_candidates:
+                try:
+                    response = table.query(
+                        KeyConditionExpression=Key('pk').eq(partition_key) & Key('sk').begins_with(prefix),
+                        FilterExpression=Attr('sk').contains(job_id),
+                        Limit=1,
+                    )
+                except ClientError as exc:
+                    error_code, _ = self._client_error_details(exc)
+                    if error_code == 'ValidationException':
+                        continue
+                    return self._dal_failure_result(
+                        operation='get_company_research',
+                        exc=exc,
+                        key_names=['pk', 'sk'],
+                    )
+
+                items = response.get('Items') if isinstance(response, dict) else None
+                if isinstance(items, list) and items and isinstance(items[0], dict):
+                    return Result(success=True, data=items[0], code=ResultCode.SUCCESS)
+
+            return Result(success=True, data=None, code=ResultCode.SUCCESS)
+        except (ClientError, ValidationError) as exc:
+            return self._dal_failure_result(
+                operation='get_company_research',
+                exc=exc,
+                key_names=['pk', 'sk'],
             )

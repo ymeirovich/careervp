@@ -81,3 +81,4 @@
 | `src/frontend/tests/ui/unit/RichTextEditor.test.tsx` | FE-UI-020 unit coverage for initialization, toolbar actions, Markdown output, controlled value updates, read-only mode, paste sanitization, and accessibility |
 | `src/frontend/app/billing/page.tsx`                  | FE-UI-021 Billing page with stacked subscription, usage, billing-info cards and anchored Plans section |
 | `src/frontend/tests/ui/unit/BillingContent.test.tsx` | FE-UI-021 unit coverage for page assembly, loading state, CTA API wiring, anchor scroll, and Hebrew RTL copy |
+| `src/backend/careervp/logic/prompts/company_research_prompt.py`, `src/backend/careervp/handlers/cover_letter_handler.py` | FE-UI-032 prompt externalization parity locked with golden tests and persisted company research now flows into cover-letter prompt generation |

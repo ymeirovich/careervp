@@ -1269,7 +1269,7 @@ cd src/backend && uv run mypy careervp/models/cover_letter.py --strict
 - [ ] Extract cover letter prompt from Prompt Library
 - [ ] Implement `build_cover_letter_prompt(vpr: VPR, tailored_cv: TailoredCV, job: JobPosting) -> str`
 - [ ] Include anti-AI detection patterns
-- [ ] Include company research context
+- [x] Include company research context
 
 **Minimax Implementation Guidelines:**
 ```

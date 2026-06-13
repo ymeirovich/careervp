@@ -13,11 +13,15 @@ def test_user_prompt_golden_website_scrape() -> None:
     raw_text = 'Acme is a leader in cloud operations and platform engineering delivery.'
     prompt = build_structure_user_prompt('Acme Corp', raw_text, 'official website About page text')
 
-    assert 'Company Name: Acme Corp' in prompt
-    assert 'Source Context:' in prompt
-    assert 'Return ONLY valid JSON' in prompt
-    assert 'overview' in prompt
-    assert 'strategic_priorities' in prompt
+    assert prompt == (
+        'Company Name: Acme Corp\n'
+        'Source Context: official website About page text\n\n'
+        'Extract structured company research from the following text. '
+        'Return JSON with keys overview (100-200 words), values (list), mission, strategic_priorities, recent_news, financial_summary.\n'
+        'Text:\n'
+        'Acme is a leader in cloud operations and platform engineering delivery.\n'
+        'Return ONLY valid JSON.'
+    )
 
 
 def test_company_research_py_still_works_after_extraction() -> None:

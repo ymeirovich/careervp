@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+from datetime import datetime, timezone
 from decimal import Decimal
 from http import HTTPStatus
 from typing import Any, cast
@@ -20,6 +21,7 @@ from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.cover_letter import generate_cover_letter
 from careervp.models.api_models import CoverLetterRequest
+from careervp.models.company import CompanyResearchResult, ResearchSource
 from careervp.models.cover_letter import (
     CoverLetterOptions as LogicCoverLetterOptions,
 )
@@ -99,6 +101,93 @@ def _unique_non_empty(values: list[str]) -> list[str]:
         output.append(stripped)
         seen.add(stripped)
     return output
+
+
+def _coerce_list_of_strings(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    coerced: list[str] = []
+    for item in value:
+        text = str(item).strip()
+        if text:
+            coerced.append(text)
+    return coerced
+
+
+def _coerce_optional_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace('Z', '+00:00'))
+        except ValueError:
+            return None
+    return None
+
+
+def _coerce_research_source(value: Any) -> ResearchSource:
+    try:
+        return ResearchSource(str(value).strip())
+    except ValueError:
+        return ResearchSource.WEBSITE_SCRAPE
+
+
+def _coerce_float(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _materialize_company_research(raw_item: dict[str, Any], fallback_company_name: str) -> CompanyResearchResult | None:
+    nested_payload = raw_item.get('research_data') if isinstance(raw_item.get('research_data'), dict) else raw_item.get('company_research')
+    nested = nested_payload if isinstance(nested_payload, dict) else {}
+
+    company_name = _coerce_text(raw_item.get('company_name')) or _coerce_text(nested.get('company_name')) or fallback_company_name
+    overview = _coerce_text(raw_item.get('overview')) or _coerce_text(nested.get('overview')) or _coerce_text(raw_item.get('culture'))
+    mission = _coerce_text(raw_item.get('mission')) or _coerce_text(nested.get('mission'))
+    values = _coerce_list_of_strings(raw_item.get('values')) or _coerce_list_of_strings(nested.get('values'))
+    strategic_priorities = _coerce_list_of_strings(raw_item.get('strategic_priorities')) or _coerce_list_of_strings(
+        nested.get('strategic_priorities')
+    )
+
+    if not any((overview, mission, values, strategic_priorities)):
+        return None
+
+    return CompanyResearchResult(
+        company_name=company_name,
+        overview=overview or f'{company_name} company context.',
+        values=values,
+        mission=mission or None,
+        strategic_priorities=strategic_priorities,
+        recent_news=_coerce_list_of_strings(raw_item.get('recent_news')) or _coerce_list_of_strings(nested.get('recent_news')),
+        financial_summary=_coerce_text(raw_item.get('financial_summary')) or _coerce_text(nested.get('financial_summary')) or None,
+        source=_coerce_research_source(raw_item.get('source') or nested.get('source')),
+        source_urls=_coerce_list_of_strings(raw_item.get('source_urls')) or _coerce_list_of_strings(nested.get('source_urls')),
+        confidence_score=_coerce_float(raw_item.get('confidence_score') or nested.get('confidence_score')),
+        research_timestamp=_coerce_optional_datetime(raw_item.get('research_timestamp') or nested.get('research_timestamp'))
+        or datetime.now(timezone.utc),
+    )
+
+
+def _resolve_company_research(
+    dal: DynamoDalHandler,
+    *,
+    user_id: str,
+    job_id: str,
+    company_name: str,
+    company_research_id: str | None,
+) -> CompanyResearchResult | None:
+    candidate_ids = _unique_non_empty([job_id, company_research_id or ''])
+    for candidate_id in candidate_ids:
+        result = dal.get_company_research(user_id=user_id, job_id=candidate_id)
+        if not result.success or not isinstance(result.data, dict):
+            continue
+
+        materialized = _materialize_company_research(result.data, company_name)
+        if materialized is not None:
+            return materialized
+    return None
 
 
 def _jobs_table_candidates() -> list[str]:
@@ -275,6 +364,13 @@ def _resolve_cover_letter_context(
             vpr_id=api_request.vpr_id,
             job_id=api_request.job_id,
         ),
+        'company_research': _resolve_company_research(
+            dal=dal,
+            user_id=user_id,
+            job_id=posting_id,
+            company_name=str(job_context['company_name']),
+            company_research_id=api_request.company_research_id,
+        ),
     }
     logger.info(
         'Cover letter context resolved',
@@ -282,6 +378,7 @@ def _resolve_cover_letter_context(
         job_id=api_request.job_id,
         vpr_id=api_request.vpr_id,
         has_gap_responses=bool(context['gap_responses']),
+        has_company_research=context['company_research'] is not None,
     )
     return context
 
@@ -827,6 +924,7 @@ def _generate_cover_letter_result(
         user_cv=user_cv,
         vpr=cast(Any, context['vpr']),
         gap_responses=cast(Any, context['gap_responses']),
+        company_research=cast(Any, context.get('company_research')),
     )
     if asyncio.iscoroutine(maybe_async_result):
         return asyncio.run(maybe_async_result)
