@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Iterable
 
+from careervp.logic.prompts.vpr_prompt import build_vpr_digest
+from careervp.models.company import CompanyResearchResult
 from careervp.models.cv import UserCV as CVUserCV
 from careervp.models.cv_models import UserCV
 from careervp.models.cv_tailoring_models import TailoringPreferences
@@ -69,6 +71,8 @@ def build_user_prompt(
     target_keywords: Iterable[str] | None = None,
     preferences: TailoringPreferences | None = None,
     vpr: 'VPR | None' = None,
+    *,
+    company_research: CompanyResearchResult | None = None,
 ) -> str:
     """Build the user prompt with CV, job description, and constraints."""
     sections = [
@@ -94,14 +98,18 @@ def build_user_prompt(
         sections.append('# Preferences')
         sections.append(format_preferences(preferences))
 
+    if company_research is not None:
+        sections.append('# Company Signals')
+        sections.append(_format_company_signals(company_research))
+
     # VPR strategic guide injection
     if vpr is not None:
         sections.append('# VPR Strategic Guide')
         sections.append(
-            'Use this VPR to prioritize CV content. Expand bullet points for roles and '
-            'skills that map to unique_strengths and evidence_matrix. Align the '
-            'professional_summary with differentiators.positioning_statement. '
-            'Surface ats_keywords.primary into tailored bullet points naturally.\n\n' + json.dumps(vpr.model_dump(mode='json'), indent=2)
+            'Use this VPR digest to prioritize CV content. Expand bullet points for roles and '
+            'skills that support the top_differentiators. Align the professional_summary '
+            'with positioning_statement. Surface ats_keywords_primary into tailored bullet '
+            'points naturally.\n\n' + json.dumps(build_vpr_digest(vpr), indent=2)
         )
 
     return '\n\n'.join(sections)
@@ -177,6 +185,17 @@ def format_preferences(preferences: TailoringPreferences) -> str:
     if preferences.emphasize_skills:
         lines.append('Emphasize Skills: ' + ', '.join(preferences.emphasize_skills))
     return '\n'.join(lines)
+
+
+def _format_company_signals(company_research: CompanyResearchResult) -> str:
+    values = ', '.join(company_research.values[:5]) or 'None'
+    priorities = ', '.join(company_research.strategic_priorities[:3]) or 'None'
+    return '\n'.join(
+        [
+            f'Values: {values}',
+            f'Strategic Priorities: {priorities}',
+        ]
+    )
 
 
 # P2: Stage 1 system prompt (verbatim from spec)

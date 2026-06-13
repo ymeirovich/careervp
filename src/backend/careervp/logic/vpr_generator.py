@@ -28,8 +28,8 @@ from careervp.logic.fvs_validator import (
     run_vpr_quality_gate,
 )
 from careervp.logic.prompts.vpr_prompt import (
-    PHASE2_SYSTEM_PROMPT,
     build_phase2_prompt,
+    build_phase2_system_prompt,
 )
 
 if TYPE_CHECKING:
@@ -341,7 +341,7 @@ class VPRSixStagePipeline:
         prompt = build_phase2_prompt(evidence_payload, self._user_cv, self._request, feedback)
         payload = self._invoke_stage_json(
             prompt=prompt,
-            system_prompt=PHASE2_SYSTEM_PROMPT,
+            system_prompt=build_phase2_system_prompt(),
             max_tokens=16000,
             temperature=0.65,
         )

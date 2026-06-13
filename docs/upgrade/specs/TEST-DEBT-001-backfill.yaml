@@ -1,0 +1,119 @@
+spec_id: TEST-DEBT-001
+title: "Test-Debt Backfill — author the un-written TEST-CHAIN-001 suites for SHIPPED tickets (029/030/031)"
+priority: medium
+status: draft
+owner: backend+frontend
+created_at: 2026-06-13
+updated_at: 2026-06-13
+type: test_prompts
+note: >
+  FE-UI-029/030/031 are IMPLEMENTED, but the TEST-CHAIN-001 suites for them were never authored
+  under their prescribed names (Categories A, B, F, G, L). Partial ad-hoc coverage exists under
+  other filenames. These prompts backfill the named suites in CHARACTERIZE-EXISTING mode (tests
+  describe the code as it IS, not TDD-before-impl). Non-blocking: features work; this closes the
+  spec's test gaps and locks behavior against regressions.
+
+context_required: >
+  Working directory: /Users/yitzchak/Documents/dev/careervp
+  Backend: src/backend/careervp/ ; tests in src/backend/tests/
+  Infra: infra/careervp/ ; tests in infra/tests/infrastructure/
+  Reference TEST-CHAIN-001 for the full case lists; this spec maps them to existing code.
+
+recommended_model_for_test_authoring: sonnet
+recommended_model_for_complex_test_cases: opus   # Category F race conditions; Category L SFN assertions
+
+# =============================================================================
+# EXISTING (ad-hoc) COVERAGE — read before authoring to avoid duplication
+# =============================================================================
+existing_partial_coverage:
+  category_A_state_machine: "src/backend/tests/unit/test_application_state.py (transition coverage; not the prescribed file)"
+  category_B_cr_worker: "src/backend/tests/unit/test_company_research_worker_handler.py"
+  category_F_cr_gate: "test_l3_application_recovery.py, test_l3_state_recovery.py, integration/test_company_research_vpr.py"
+  category_G_manual_endpoints: "various integration/test_*_async_flow_integration.py"
+  category_L_sfn_construct: "infra/tests/infrastructure/test_artifact_chain_cycle_fix.py (touches the SM but not its definition shape)"
+
+# =============================================================================
+# BACKFILL ORDER (low-risk, parallelizable; opus for F and L)
+# =============================================================================
+backfill_order:
+  1: "Category L — SFN construct assertions (infra; fast, isolates the state-machine shape)"
+  2: "Category A — application state machine transitions"
+  3: "Category B — CR worker confidence gate + task-token + idempotency"
+  4: "Category G — manual-endpoint regression (flag on/off)"
+  5: "Category F — CR-gate integration (moto; includes the conditional-write race — opus)"
+
+# =============================================================================
+# CATEGORY L — SFN CONSTRUCT (FE-UI-031)
+# =============================================================================
+category_L_sfn_construct:
+  prompt: |
+    File: infra/tests/infrastructure/test_artifact_chain_construct.py
+    Use aws_cdk.assertions.Template against the synthesized service stack (reuse the existing
+    conftest fixtures). Author (describe the construct AS BUILT):
+    1. test_company_research_queue_created — SQS queue present (VisibilityTimeout, retention)
+    2. test_company_research_dlq_created — DLQ present (14-day retention)
+    3. test_state_machine_is_standard — AWS::StepFunctions::StateMachine StateMachineType=STANDARD
+    4. test_state_machine_has_expected_states — definition contains StartCompanyResearch, StartVPR,
+       StartCVTailoring, HandleCRFailure, HandleVPRFailure, HandleCVFailure
+       NOTE: after WORKER-LEGS-001, StartCVTailoring becomes a Lambda invoke (not SqsSendMessage) —
+       assert on the state NAME, not the integration type, so this survives that change.
+    5. test_feature_flag_env_on_gap_handler — gap_handler Lambda has ARTIFACT_CHAIN_ENABLED env var
+    Run: cd infra && uv run pytest tests/infrastructure/test_artifact_chain_construct.py -v --tb=short
+
+# =============================================================================
+# CATEGORY A — APPLICATION STATE MACHINE (FE-UI-029)
+# =============================================================================
+category_A_state_machine:
+  prompt: |
+    File: src/backend/tests/unit/test_application_state_machine.py
+    First read test_application_state.py and the VALID_TRANSITIONS source to match the real API.
+    Cover (per TEST-CHAIN-001 Category A): gap_responses_submitted->cr_pending,
+    cr_pending->artifacts_generating, cr_pending->cr_failed, cr_failed->cr_pending (retry),
+    illegal cr_failed->artifacts_generating (raises), artifacts_completed terminal (raises),
+    and the backward-compat gap_responses_submitted->artifacts_generating (flag-off) still valid.
+    Run: cd src/backend && uv run pytest tests/unit/test_application_state_machine.py -v --tb=short
+
+# =============================================================================
+# CATEGORY B — CR ASYNC WORKER (FE-UI-030)
+# =============================================================================
+category_B_cr_worker:
+  prompt: |
+    File: src/backend/tests/unit/test_company_research_worker.py
+    Read company_research_worker_handler.py + the existing _handler test first. Cover
+    (TEST-CHAIN-001 Category B): confidence pass persists+signals; below-threshold returns
+    batchItemFailures (retries available); hard-fail after max retries sets company_research_error
+    + cr_failed; LLM_FALLBACK hard-fails immediately; send_task_success when task_token present;
+    send_task_failure(Error='CRHardFail') on hard-fail with token; idempotent second call is a no-op.
+    Run: cd src/backend && uv run pytest tests/unit/test_company_research_worker.py -v --tb=short
+
+# =============================================================================
+# CATEGORY G — MANUAL ENDPOINTS REGRESSION (FE-UI-031)
+# =============================================================================
+category_G_manual_endpoints:
+  prompt: |
+    File: src/backend/tests/integration/test_manual_endpoints_regression.py
+    Cover (TEST-CHAIN-001 Category G): flag OFF -> gap submit uses existing SQS path (no
+    sfn.start_execution); flag ON -> gap submit calls sfn.start_execution + state->cr_pending;
+    manual VPR trigger works with flag on (no SFN started); manual CR retry works (no SFN, clears
+    company_research_error); manual CV tailoring still works.
+    Run: cd src/backend && uv run pytest tests/integration/test_manual_endpoints_regression.py -v --tb=short
+
+# =============================================================================
+# CATEGORY F — CR GATE INTEGRATION (FE-UI-029 + 030) — OPUS
+# =============================================================================
+category_F_cr_gate:
+  prompt: |
+    File: src/backend/tests/integration/test_cr_gate_integration.py  (moto mock_dynamodb)
+    Cover (TEST-CHAIN-001 Category F): gate pass full flow; gate fail full flow (3 attempts);
+    CONDITIONAL-WRITE RACE (two concurrent workers cr_pending->artifacts_generating: exactly one
+    wins, other gets ConditionalCheckFailedException, no duplicate VPR enqueue); recovery endpoint
+    returns cr_error state; recovery endpoint backward-compat when company_research_error absent.
+    Run: cd src/backend && uv run pytest tests/integration/test_cr_gate_integration.py -v --tb=short
+
+# =============================================================================
+# DONE-CHECK
+# =============================================================================
+done_check:
+  - "All five named suites exist and pass"
+  - "No duplication: where ad-hoc coverage already asserts a case, consolidate rather than duplicate"
+  - "Full regression sweep (TEST-CHAIN-001 Category K) still green"

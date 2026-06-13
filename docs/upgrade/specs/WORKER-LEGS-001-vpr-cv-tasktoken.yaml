@@ -1,0 +1,162 @@
+spec_id: WORKER-LEGS-001
+title: "Artifact Chain — Wire VPR + CV legs (task-token signaling, heartbeat fix, CV direct-invoke)"
+priority: high
+status: draft
+owner: backend
+created_at: 2026-06-13
+updated_at: 2026-06-13
+tier: feature
+
+human_approval_gate:
+  required: true
+  gate_number: 2
+  reason: "CV leg deletes live SQS queue+DLQ and edits the state-machine definition + an IAM grant. Infra/deploy-affecting."
+  approval_before: "Deleting cv_tailoring_queue/DLQ, editing the artifact-chain state machine, or adding the VPR worker IAM grant"
+
+recommended_model: sonnet
+reason_for_model: >
+  Handler edits follow the existing CR-worker pattern (sonnet). Escalate to opus for the
+  heartbeat/IAM/state-machine reasoning and the cycle-fix recheck (see escalation notes).
+
+depends_on:
+  - FE-UI-037   # parent must deploy cleanly before these changes land
+  - FE-UI-035   # dependency cycle must stay fixed when adding the VPR grant
+blocks: []
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    The artifact-chain state machine (artifact_chain_construct.py) runs CR -> VPR -> CV, all via
+    SqsSendMessage + WAIT_FOR_TASK_TOKEN. Only the CR worker
+    (company_research_worker_handler.py) reads the task_token and calls send_task_success/failure.
+    - StartVPR enqueues a token but vpr_worker_handler.py never reads it from the SQS body nor
+      signals back -> the state hangs until the 300s heartbeat timeout -> States.TaskFailed.
+    - StartCVTailoring enqueues into cv_tailoring_queue, which HAS NO CONSUMER -> hangs -> fails.
+      cv_tailoring_handler.py is the synchronous API Lambda (httpMethod/path routing), not a worker.
+  required_behavior: >
+    VPR leg: the VPR worker reads task_token from the SQS message body, calls send_task_success on
+    completion and send_task_failure on every failure branch, with a heartbeat strategy that does
+    not trip on slow VPR runs. CV leg: StartCVTailoring uses a synchronous lambda:invoke against the
+    CV worker (no token, no queue); cv_tailoring_queue + DLQ are deleted (-2 resources).
+  user_impact: "The full CR -> VPR -> CV auto-chain runs end-to-end behind ARTIFACT_CHAIN_ENABLED."
+
+# =============================================================================
+# DECISIONS (locked 2026-06-13)
+# =============================================================================
+decisions:
+  cv_leg_pattern: "Synchronous states:::lambda:invoke (request/response), NO task token, NO heartbeat — CV tailoring is the fast Haiku path."
+  cv_queue: "Delete cv_tailoring_queue + cv_tailoring_dlq (unconsumed, additive) -> parent ~474 resources."
+  cv_worker: "Reuse cv_tailoring_func with an SFN-invoke branch (0 new resources) rather than a dedicated worker."
+
+# =============================================================================
+# PART A — VPR LEG (code + 1 IAM grant; 0 new CFn resources)
+# =============================================================================
+vpr_leg:
+  files:
+    - src/backend/careervp/handlers/vpr_worker_handler.py
+    - infra/careervp/api_construct.py   # IAM grant only
+  step_1_parse_token:
+    change: >
+      The SM message body carries user_id/job_id/company_context/task_token, but the worker today
+      reads input_data from a DynamoDB job record fetched by job_id (vpr_worker_handler.py:257).
+      Parse task_token from the SQS message body; thread it through. If the SM-enqueued message has
+      no pre-existing job record, ensure one is created/looked up so the existing flow holds.
+  step_2_signal_success:
+    location: "after the COMPLETED path (~vpr_worker_handler.py:329, post-S3-upload + job status update)"
+    change: "if task_token: sfn.send_task_success(taskToken=task_token, output=json.dumps({'job_id': job_id, 'vpr_id': vpr_id}))"
+  step_3_signal_failure:
+    locations: "every `update_job_status(status='FAILED'); return` branch (CV-not-found, invalid payload, generation failure, S3 failure)"
+    change: "if task_token: sfn.send_task_failure(taskToken=task_token, error='VPRFailed', cause=<error_msg>)"
+  step_4_heartbeat_fix:    # ESCALATE TO OPUS
+    problem: "StartVPR sets heartbeat_timeout=300s (artifact_chain_construct.py:129) but VPR can run minutes-to-hours and only signals at the end -> heartbeat trips before success."
+    options:
+      - "Preferred: REMOVE heartbeat_timeout on StartVPR; rely on the 2h state-machine timeout."
+      - "Alt: emit periodic sfn.send_task_heartbeat(taskToken=...) during generate_vpr."
+  step_5_iam_grant:        # ESCALATE TO OPUS
+    problem: "The VPR worker role lacks states:SendTaskResponse; only the CR worker has it (FE-UI-035 evidence: grant_task_response on the CR worker at api_construct.py:2024)."
+    change: "Add state_machine.grant_task_response(self.vpr_worker_func) — a policy statement on an existing role (0 new CFn resources)."
+    guard: "Re-run test_artifact_chain_cycle_fix.py — the grant MUST NOT reopen the dependency cycle."
+  backward_compat: "When task_token is absent (manual/direct-SQS path), neither signal fires; existing behavior is unchanged."
+
+# =============================================================================
+# PART B — CV LEG (Option A: synchronous lambda:invoke)
+# =============================================================================
+cv_leg:
+  files:
+    - infra/careervp/artifact_chain_construct.py   # SM task: SqsSendMessage -> LambdaInvoke
+    - infra/careervp/api_db_construct.py            # delete cv_tailoring_queue + cv_tailoring_dlq
+    - infra/careervp/api_construct.py               # pass cv worker func into the chain; grant invoke
+    - src/backend/careervp/handlers/cv_tailoring_handler.py  # SFN-invoke entrypoint branch
+  step_1_state_machine:
+    change: >
+      Replace the StartCVTailoring SqsSendMessage(WAIT_FOR_TASK_TOKEN) with
+      sfn_tasks.LambdaInvoke(lambda_function=cv_tailoring_func, payload=<user_id/job_id/vpr_id>,
+      payload_response_only=True). Keep the add_retry + add_catch(handle_cv_failure). No task token.
+  step_2_worker_entrypoint:
+    change: >
+      cv_tailoring_handler.py currently routes on httpMethod/path. Add a branch that detects the
+      SFN invoke shape (no httpMethod; presence of job_id/vpr_id) and runs the tailoring pipeline,
+      returning the result (or raising -> States.TaskFailed -> handle_cv_failure).
+  step_3_delete_queue:
+    change: >
+      Remove _build_cv_tailoring_queue + _build_cv_tailoring_dlq and their wiring in
+      api_db_construct.py (lines ~77-79, 541-561). Confirm no other consumer references them first.
+    impact: "-2 CFn resources (parent ~474)."
+  step_4_grant_invoke:
+    change: "Grant the state machine permission to invoke cv_tailoring_func (LambdaInvoke wires this automatically via grant_invoke)."
+
+# =============================================================================
+# TEST PROMPTS
+# =============================================================================
+test_prompts:
+  vpr_worker_unit:
+    file: src/backend/tests/unit/test_vpr_worker_task_token.py
+    cases:
+      - "test_success_path_sends_task_success: token in body, COMPLETED path -> send_task_success called once with correct token+output"
+      - "test_each_failure_path_sends_task_failure: parametrize CV-not-found / invalid-payload / generation-failure / S3-failure -> send_task_failure called with error+cause"
+      - "test_no_token_is_backward_compatible: no task_token in body -> neither signal fires; existing behavior unchanged (REGRESSION GUARD)"
+      - "test_lost_processing_race_does_not_double_signal: failed PENDING->PROCESSING transition early-return -> exactly one (or zero) signal, never two for one token"
+    run: "cd src/backend && uv run pytest tests/unit/test_vpr_worker_task_token.py -v --tb=short"
+  vpr_heartbeat_infra:
+    file: infra/tests/infrastructure/test_vpr_leg_wiring.py
+    cases:
+      - "test_start_vpr_has_no_short_heartbeat: StartVPR definition has no 300s heartbeat (or heartbeat strategy documented)"
+      - "test_vpr_worker_role_has_send_task_response: vpr_worker role policy includes states:SendTaskSuccess + states:SendTaskFailure"
+      - "test_no_dependency_cycle_after_grant: Template.from_stack succeeds (cycle still fixed)"
+    run: "cd infra && uv run pytest tests/infrastructure/test_vpr_leg_wiring.py -v --tb=short"
+  cv_leg_infra:
+    file: infra/tests/infrastructure/test_cv_leg_wiring.py
+    cases:
+      - "test_cv_tailoring_queue_removed: no SQS queue/DLQ named for cv-tailoring in the template"
+      - "test_start_cv_tailoring_is_lambda_invoke: StateMachine definition StartCVTailoring uses a Lambda invoke, not SqsSendMessage"
+      - "test_state_machine_can_invoke_cv_worker: SM role grants lambda:InvokeFunction on cv_tailoring_func"
+    run: "cd infra && uv run pytest tests/infrastructure/test_cv_leg_wiring.py -v --tb=short"
+  cv_worker_unit:
+    file: src/backend/tests/unit/test_cv_tailoring_sfn_entrypoint.py
+    cases:
+      - "test_sfn_invoke_shape_runs_pipeline: payload with job_id/vpr_id (no httpMethod) -> tailoring pipeline runs, returns result"
+      - "test_api_shape_still_routes: httpMethod event still routes to the existing API path (REGRESSION GUARD)"
+      - "test_pipeline_exception_propagates: worker raises -> propagates so SFN sees States.TaskFailed"
+    run: "cd src/backend && uv run pytest tests/unit/test_cv_tailoring_sfn_entrypoint.py -v --tb=short"
+
+# =============================================================================
+# CONSTRAINTS / VALIDATION
+# =============================================================================
+constraints:
+  - "Additive to handler logic; manual/direct-SQS VPR path must keep working (token absent)"
+  - "VPR IAM grant must NOT reopen the FE-UI-035 dependency cycle"
+  - "CV queue deletion only after confirming zero other consumers"
+  - "mypy --strict passes for changed backend handlers"
+
+validation:
+  commands:
+    - "cd src/backend && uv run pytest tests/unit/ -v --tb=short"
+    - "cd src/backend && uv run mypy careervp --strict"
+    - "cd infra && uv run pytest tests/infrastructure -v --tb=short"
+    - "cd infra && npx cdk synth   # exit 0; parent ~474"
+  acceptance_criteria:
+    - "StartVPR completes (running -> succeeded) on a slow VPR without heartbeat timeout"
+    - "StartCVTailoring is a Lambda invoke; cv_tailoring_queue+DLQ gone; parent resource count drops by 2"
+    - "End-to-end CR -> VPR -> CV chain succeeds in dev with ARTIFACT_CHAIN_ENABLED=true"

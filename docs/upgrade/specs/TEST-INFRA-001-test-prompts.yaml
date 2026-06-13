@@ -113,13 +113,16 @@ nested_split_assertions:
        Assert: parent_template.resource_count_is('AWS::CloudFormation::Stack', Match.any_value())
                is >= 1 (at least the monitoring nested stack after phase 1)
 
-    3. test_monitoring_moved_out_of_parent
-       Assert: the parent template has NO 'AWS::CloudWatch::Dashboard' resource
-               (dashboards now live in the monitoring nested stack)
+    3. test_monitoring_alarms_moved_out_of_parent
+       CORRECTED 2026-06-13: dashboards STAY in the parent (api_construct builds CrudMonitoring
+       with mode="dashboards"); only alarms + metric filters were moved to the nested stack.
+       Assert: the parent template has the dashboards (2) + at most 1 alarm, and the BULK of
+               alarms (>=15) and the metric filters are NOT in the parent.
 
-    4. test_monitoring_nested_stack_contains_dashboards_and_alarms
+    4. test_monitoring_nested_stack_contains_alarms_and_metric_filters
        Action: Template.from_stack(monitoring_nested_stack)
-       Assert: has at least one AWS::CloudWatch::Dashboard and AWS::CloudWatch::Alarm
+       Assert: has >= 15 AWS::CloudWatch::Alarm and >= 1 AWS::Logs::MetricFilter,
+               and NO AWS::CloudWatch::Dashboard (dashboards remain in the parent)
 
     5. test_artifact_chain_nested_stack_present_after_phase_2  (mark xfail until phase 2 lands)
        Assert: a nested stack exposes the state machine; parent passes state_machine_arn via

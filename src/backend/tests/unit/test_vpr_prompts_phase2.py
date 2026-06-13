@@ -11,6 +11,7 @@ from careervp.logic.prompts.vpr_prompt import (
     BANNED_WORDS,
     PHASE2_SYSTEM_PROMPT,
     build_phase2_prompt,
+    build_phase2_system_prompt,
     # Existing builders — must still exist
     build_stage_3_prompt,
     build_stage_4_prompt,
@@ -20,11 +21,13 @@ from careervp.logic.prompts.vpr_prompt import (
 @pytest.mark.unit
 class TestPhase2SystemPrompts:
     def test_phase2_system_prompt_is_non_empty_string(self) -> None:
-        assert isinstance(PHASE2_SYSTEM_PROMPT, str)
-        assert len(PHASE2_SYSTEM_PROMPT.strip()) > 50
+        prompt = build_phase2_system_prompt()
+        assert isinstance(prompt, str)
+        assert len(prompt.strip()) > 50
 
     def test_phase2_system_prompt_mentions_json(self) -> None:
         assert 'JSON' in PHASE2_SYSTEM_PROMPT
+        assert 'OUTPUT SCHEMA' in build_phase2_system_prompt()
 
 
 @pytest.mark.unit
@@ -49,7 +52,7 @@ class TestBuildPhase2Prompt:
         assert isinstance(prompt, str)
         assert len(prompt) > 200
 
-    def test_contains_10_section_skeleton_keys(
+    def test_references_required_sections_without_embedding_schema(
         self,
         minimal_vpr_request: Any,
         minimal_user_cv: Any,
@@ -73,7 +76,8 @@ class TestBuildPhase2Prompt:
             'application_strategy',
         ]
         for section in required_sections:
-            assert section in prompt, f"Section '{section}' missing from prompt skeleton"
+            assert section in prompt, f"Section '{section}' missing from prompt requirements"
+        assert 'OUTPUT SCHEMA' not in prompt
 
     def test_contains_banned_words_list(
         self,

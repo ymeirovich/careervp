@@ -6,10 +6,13 @@ Provides the canonical template and helpers for VPR generation.
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from careervp.models.cv import UserCV
 from careervp.models.vpr import VPRRequest
+
+if TYPE_CHECKING:
+    from careervp.models.vpr import VPR
 
 # VPR_GENERATION_PROMPT removed per spec 09 (superseded by PHASE2_PROMPT_2_1_TEMPLATE)
 # build_vpr_prompt, PHASE2_VALIDATION_SYSTEM_PROMPT, and build_phase2_validation_prompt also removed.
@@ -278,6 +281,205 @@ PHASE2_SYSTEM_PROMPT = (
     '   in the schema. Replace any free-text variants with the nearest valid enum.\n'
 )
 
+PHASE2_OUTPUT_SCHEMA = """{
+  "metadata": {
+    "report_date": "YYYY-MM-DD",
+    "candidate_name": "...",
+    "target_role": "...",
+    "target_company": "...",
+    "report_version": "1.0",
+    "analysis_scope": "full"
+  },
+  "executive_summary": {
+    "overall_fit_score": 0,
+    "fit_rationale": "2-3 sentence explanation (100-500 chars)",
+    "top_three_strengths": [
+      {"strength": "10-15 words", "evidence": "quantified proof", "relevance_to_role": "direct connection"}
+    ],
+    "top_three_concerns": [
+      {"concern": "10-15 words", "severity": "high|medium|low", "mitigation": "strategy"}
+    ],
+    "recommended_approach": "aggressive_apply|apply_with_customization|apply_after_preparation|do_not_apply"
+  },
+  "differentiators": {
+    "top_differentiators": [
+      {
+        "differentiator": "15-25 words describing unique value",
+        "evidence": "specific metric or named outcome",
+        "rarity": "top_1%|top_5%|top_10%|common",
+        "relevance_to_target_role": "direct connection"
+      }
+    ],
+    "competitive_advantages": [
+      {
+        "advantage": "...",
+        "evidence": "...",
+        "impact": "..."
+      }
+    ]
+  },
+  "value_proposition": {
+    "primary_value_statement": "forward-looking promise: impact you will reduce, scale, build, or drive",
+    "secondary_value_points": [
+      {
+        "value_point": "...",
+        "supporting_evidence": "..."
+      }
+    ],
+    "target_company_fit": "why this role specifically"
+  },
+  "role_alignment": {
+    "core_responsibilities": [
+      {
+        "responsibility": "...",
+        "alignment_score": 0,
+        "candidate_evidence": ["..."],
+        "evidence_quality": "direct|analogous|transferable|weak"
+      }
+    ],
+    "requirement_breakdown": {
+      "must_have": [
+        {
+          "requirement": "...",
+          "candidate_meets_requirement": true,
+          "evidence": "...",
+          "strength_of_evidence": "strong|moderate|weak|none"
+        }
+      ],
+      "nice_to_have": [
+        {"preference": "...", "candidate_has_this": true, "evidence": "..."}
+      ],
+      "assumed_prerequisites": [
+        {"assumption": "...", "candidate_meets_this": true, "reasoning": "..."}
+      ]
+    }
+  },
+  "experience_mapping": {
+    "relevant_experiences": [
+      {
+        "role": "...",
+        "organization": "...",
+        "duration": "N years",
+        "key_achievements": [
+          {"achievement": "...", "metric": "...", "impact": "..."}
+        ],
+        "relevance_to_target_role": "...",
+        "relevance_score": 0
+      }
+    ],
+    "experience_gaps": [
+      {
+        "missing_experience": "...",
+        "impact_on_candidacy": "critical|significant|moderate|minimal",
+        "compensating_factors": ["..."],
+        "mitigation_strategy": "..."
+      }
+    ]
+  },
+  "skills_analysis": {
+    "technical_skills": [
+      {
+        "skill": "...",
+        "required_level": "expert|advanced|intermediate|basic",
+        "candidate_level": "expert|advanced|intermediate|basic|none",
+        "evidence": "...",
+        "gap": false
+      }
+    ],
+    "soft_skills": [
+      {
+        "skill": "...",
+        "candidate_demonstrates": true,
+        "evidence": "...",
+        "strength_level": "exceptional|strong|adequate|developing"
+      }
+    ],
+    "tool_proficiency": [
+      {
+        "tool": "...",
+        "required_for_role": true,
+        "candidate_proficiency": "expert|proficient|familiar|none",
+        "evidence": "...",
+        "needs_upskilling": false
+      }
+    ]
+  },
+  "evidence_gaps": {
+    "identified_gaps": [
+      {
+        "requirement": "...",
+        "current_evidence": "...",
+        "gap_severity": "critical|high|medium|low",
+        "suggested_evidence": ["..."],
+        "can_be_created_quickly": false
+      }
+    ],
+    "priority_gaps_to_address": [
+      {
+        "gap": "...",
+        "priority": 1,
+        "action_item": "...",
+        "deadline": "before_application|before_interview|nice_to_have"
+      }
+    ]
+  },
+  "differentiators": {
+    "unique_strengths": [
+      {
+        "strength": "...",
+        "rarity": "very_rare|uncommon|somewhat_rare",
+        "relevance": "...",
+        "proof": "..."
+      }
+    ],
+    "competitive_advantages": [
+      {"advantage": "...", "vs_typical_candidate": "..."}
+    ],
+    "positioning_statement": "100-300 char paragraph"
+  },
+  "concerns_and_mitigations": {
+    "likely_objections": [
+      {
+        "objection": "...",
+        "likelihood": "very_likely|likely|possible|unlikely",
+        "mitigation": {
+          "strategy": "reframe|acknowledge_and_address|provide_evidence|show_analogous_experience",
+          "messaging": "..."
+        },
+        "where_to_address": ["cover_letter|cv|portfolio|interview"]
+      }
+    ],
+    "preemptive_responses": [
+      {"concern": "...", "preemptive_action": "..."}
+    ]
+  },
+  "value_proposition": {
+    "primary_value": {"statement": "...", "evidence": "...", "outcome_for_company": "..."},
+    "secondary_values": [{"value": "...", "proof": "..."}],
+    "quantified_impact": [
+      {"metric": "...", "expected_range": "...", "basis_for_projection": "..."}
+    ],
+    "elevator_pitch": "100-200 char 30-second pitch"
+  },
+  "application_strategy": {
+    "messaging_approach": "narrative of recommended communication approach",
+    "ats_keywords": {"primary": ["keyword"], "secondary": ["keyword"]},
+    "cv_lead_differentiator": "what to open CV with",
+    "sections_to_compress": ["which CV sections to minimize"]
+  },
+  "company_insights": {
+    "mission_and_position": "...",
+    "recent_initiatives": ["..."],
+    "current_challenges": ["..."]
+  },
+  "verification_summary": {
+    "entries": [
+      {"category": "...", "confidence": "high|medium|growth_area", "basis": "..."}
+    ],
+    "key_evidence_sources": ["Master CV", "Gap Analysis Responses", "Company Research"]
+  }
+}"""
+
 # PHASE2_VALIDATION_SYSTEM_PROMPT removed per spec 09 (Stage 4 LLM call removed in spec 07)
 
 # ── Phase 2 Prompt 2.1 — full VPR generation (replaces Stage 3 as primary) ───
@@ -311,208 +513,11 @@ GAP ANALYSIS RESPONSES:
 
 === OUTPUT REQUIREMENTS ===
 
-Return only valid JSON matching the exact schema below — no markdown, no code fences.
+Return only valid JSON matching the schema in the system prompt — no markdown, no code fences.
 Every field must be populated from the provided inputs.
-
-OUTPUT SCHEMA:
-{{
-  "metadata": {{
-    "report_date": "YYYY-MM-DD",
-    "candidate_name": "...",
-    "target_role": "...",
-    "target_company": "...",
-    "report_version": "1.0",
-    "analysis_scope": "full"
-  }},
-  "executive_summary": {{
-    "overall_fit_score": 0,
-    "fit_rationale": "2-3 sentence explanation (100-500 chars)",
-    "top_three_strengths": [
-      {{"strength": "10-15 words", "evidence": "quantified proof", "relevance_to_role": "direct connection"}}
-    ],
-    "top_three_concerns": [
-      {{"concern": "10-15 words", "severity": "high|medium|low", "mitigation": "strategy"}}
-    ],
-    "recommended_approach": "aggressive_apply|apply_with_customization|apply_after_preparation|do_not_apply"
-  }},
-  "differentiators": {{
-    "top_differentiators": [
-      {{
-        "differentiator": "15-25 words describing unique value",
-        "evidence": "specific metric or named outcome",
-        "rarity": "top_1%|top_5%|top_10%|common",
-        "relevance_to_target_role": "direct connection"
-      }}
-    ],
-    "competitive_advantages": [
-      {{
-        "advantage": "...",
-        "evidence": "...",
-        "impact": "..."
-      }}
-    ]
-  }},
-  "value_proposition": {{
-    "primary_value_statement": "forward-looking promise: impact you will reduce, scale, build, or drive",
-    "secondary_value_points": [
-      {{
-        "value_point": "...",
-        "supporting_evidence": "..."
-      }}
-    ],
-    "target_company_fit": "why this role specifically"
-  }},
-  "role_alignment": {{
-    "core_responsibilities": [
-      {{
-        "responsibility": "...",
-        "alignment_score": 0,
-        "candidate_evidence": ["..."],
-        "evidence_quality": "direct|analogous|transferable|weak"
-      }}
-    ],
-    "requirement_breakdown": {{
-      "must_have": [
-        {{
-          "requirement": "...",
-          "candidate_meets_requirement": true,
-          "evidence": "...",
-          "strength_of_evidence": "strong|moderate|weak|none"
-        }}
-      ],
-      "nice_to_have": [
-        {{"preference": "...", "candidate_has_this": true, "evidence": "..."}}
-      ],
-      "assumed_prerequisites": [
-        {{"assumption": "...", "candidate_meets_this": true, "reasoning": "..."}}
-      ]
-    }}
-  }},
-  "experience_mapping": {{
-    "relevant_experiences": [
-      {{
-        "role": "...",
-        "organization": "...",
-        "duration": "N years",
-        "key_achievements": [
-          {{"achievement": "...", "metric": "...", "impact": "..."}}
-        ],
-        "relevance_to_target_role": "...",
-        "relevance_score": 0
-      }}
-    ],
-    "experience_gaps": [
-      {{
-        "missing_experience": "...",
-        "impact_on_candidacy": "critical|significant|moderate|minimal",
-        "compensating_factors": ["..."],
-        "mitigation_strategy": "..."
-      }}
-    ]
-  }},
-  "skills_analysis": {{
-    "technical_skills": [
-      {{
-        "skill": "...",
-        "required_level": "expert|advanced|intermediate|basic",
-        "candidate_level": "expert|advanced|intermediate|basic|none",
-        "evidence": "...",
-        "gap": false
-      }}
-    ],
-    "soft_skills": [
-      {{
-        "skill": "...",
-        "candidate_demonstrates": true,
-        "evidence": "...",
-        "strength_level": "exceptional|strong|adequate|developing"
-      }}
-    ],
-    "tool_proficiency": [
-      {{
-        "tool": "...",
-        "required_for_role": true,
-        "candidate_proficiency": "expert|proficient|familiar|none",
-        "evidence": "...",
-        "needs_upskilling": false
-      }}
-    ]
-  }},
-  "evidence_gaps": {{
-    "identified_gaps": [
-      {{
-        "requirement": "...",
-        "current_evidence": "...",
-        "gap_severity": "critical|high|medium|low",
-        "suggested_evidence": ["..."],
-        "can_be_created_quickly": false
-      }}
-    ],
-    "priority_gaps_to_address": [
-      {{
-        "gap": "...",
-        "priority": 1,
-        "action_item": "...",
-        "deadline": "before_application|before_interview|nice_to_have"
-      }}
-    ]
-  }},
-  "differentiators": {{
-    "unique_strengths": [
-      {{
-        "strength": "...",
-        "rarity": "very_rare|uncommon|somewhat_rare",
-        "relevance": "...",
-        "proof": "..."
-      }}
-    ],
-    "competitive_advantages": [
-      {{"advantage": "...", "vs_typical_candidate": "..."}}
-    ],
-    "positioning_statement": "100-300 char paragraph"
-  }},
-  "concerns_and_mitigations": {{
-    "likely_objections": [
-      {{
-        "objection": "...",
-        "likelihood": "very_likely|likely|possible|unlikely",
-        "mitigation": {{
-          "strategy": "reframe|acknowledge_and_address|provide_evidence|show_analogous_experience",
-          "messaging": "..."
-        }},
-        "where_to_address": ["cover_letter|cv|portfolio|interview"]
-      }}
-    ],
-    "preemptive_responses": [
-      {{"concern": "...", "preemptive_action": "..."}}
-    ]
-  }},
-  "value_proposition": {{
-    "primary_value": {{"statement": "...", "evidence": "...", "outcome_for_company": "..."}},
-    "secondary_values": [{{"value": "...", "proof": "..."}}],
-    "quantified_impact": [
-      {{"metric": "...", "expected_range": "...", "basis_for_projection": "..."}}
-    ],
-    "elevator_pitch": "100-200 char 30-second pitch"
-  }},
-  "application_strategy": {{
-    "messaging_approach": "narrative of recommended communication approach",
-    "ats_keywords": {{"primary": ["keyword"], "secondary": ["keyword"]}},
-    "cv_lead_differentiator": "what to open CV with",
-    "sections_to_compress": ["which CV sections to minimize"]
-  }},
-  "company_insights": {{
-    "mission_and_position": "...",
-    "recent_initiatives": ["..."],
-    "current_challenges": ["..."]
-  }},
-  "verification_summary": {{
-    "entries": [
-      {{"category": "...", "confidence": "high|medium|growth_area", "basis": "..."}}
-    ],
-    "key_evidence_sources": ["Master CV", "Gap Analysis Responses", "Company Research"]
-  }}
-}}
+Required top-level sections: metadata, executive_summary, role_alignment, experience_mapping,
+skills_analysis, evidence_gaps, differentiators, concerns_and_mitigations, value_proposition,
+application_strategy, company_insights, verification_summary.
 
 === ANTI-AI WRITING RULES ===
 
@@ -613,6 +618,26 @@ def build_phase2_prompt(
         gap_responses_json=json.dumps(gap_responses, indent=2),
         feedback_block=feedback_block,
     )
+
+
+def build_phase2_system_prompt() -> str:
+    """Build the cached Phase 2 system prompt including the output schema."""
+    return f'{PHASE2_SYSTEM_PROMPT}\n\n=== OUTPUT SCHEMA ===\n{PHASE2_OUTPUT_SCHEMA}'
+
+
+def build_vpr_digest(vpr: 'VPR') -> dict[str, Any]:
+    """Build a compact VPR digest for downstream prompt consumers."""
+    executive_summary = vpr.executive_summary
+    differentiators = vpr.differentiators
+    application_strategy = vpr.application_strategy
+
+    return {
+        'positioning_statement': differentiators.positioning_statement if differentiators else None,
+        'top_differentiators': [item.strength for item in differentiators.unique_strengths[:3]] if differentiators else [],
+        'ats_keywords_primary': application_strategy.ats_keywords.primary if application_strategy else [],
+        'overall_fit_score': executive_summary.overall_fit_score if executive_summary else None,
+        'recommended_approach': executive_summary.recommended_approach if executive_summary else None,
+    }
 
 
 # build_phase2_validation_prompt removed per spec 09 (Stage 4 LLM call removed in spec 07)

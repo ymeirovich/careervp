@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 
 from careervp.handlers.utils.observability import logger
 from careervp.logic.llm_cache import DEFAULT_CACHE_TTL_SECONDS, LLMResponseCache
+from careervp.logic.prompts.company_research_prompt import build_structure_system_prompt, build_structure_user_prompt
 from careervp.logic.utils.llm_client import TaskMode, get_llm_router
 from careervp.logic.utils.web_scraper import MIN_CONTENT_WORDS, count_words, scrape_company_about_page
 from careervp.logic.utils.web_search import aggregate_search_content, search_company_info
@@ -20,7 +21,6 @@ from careervp.models.company import CompanyResearchRequest, CompanyResearchResul
 from careervp.models.result import Result, ResultCode
 
 RESEARCH_TIMEOUT = 60.0
-STRUCTURE_SYSTEM_PROMPT = 'You are CareerVP company research analyst. Extract structured insights faithfully.'
 MAX_PROMPT_WORDS = 800
 
 ContextHint = str
@@ -192,7 +192,7 @@ async def _structure_raw_content(
             return Result(success=True, data=cached_result, code=ResultCode.RESEARCH_COMPLETE)
 
     trimmed_text = _truncate_text(raw_text, max_words=MAX_PROMPT_WORDS)
-    user_prompt = _build_structure_prompt(company_name, trimmed_text, context_hint)
+    user_prompt = build_structure_user_prompt(company_name, trimmed_text, context_hint)
     router = get_llm_router()
 
     loop = asyncio.get_running_loop()
@@ -200,7 +200,7 @@ async def _structure_raw_content(
         None,
         lambda: router.invoke(
             mode=TaskMode.TEMPLATE,
-            system_prompt=STRUCTURE_SYSTEM_PROMPT,
+            system_prompt=build_structure_system_prompt(),
             user_prompt=user_prompt,
             max_tokens=900,
             temperature=0.2,
@@ -239,17 +239,6 @@ async def _structure_raw_content(
     )
 
     return Result(success=True, data=result_model, code=ResultCode.RESEARCH_COMPLETE)
-
-
-def _build_structure_prompt(company_name: str, raw_text: str, context_hint: ContextHint) -> str:
-    return (
-        f'Company Name: {company_name}\n'
-        f'Source Context: {context_hint}\n\n'
-        f'Extract structured company research from the following text. '
-        f'Return JSON with keys overview (100-200 words), values (list), mission, strategic_priorities, recent_news, financial_summary.\n'
-        f'Text:\n{raw_text}\n'
-        'Return ONLY valid JSON.'
-    )
 
 
 def _parse_llm_payload(raw_output: str) -> dict[str, Any] | None:

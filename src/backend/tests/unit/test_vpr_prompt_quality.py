@@ -1,14 +1,10 @@
-"""Unit tests for spec 08: VPR prompt quality reordering and generation guidance.
-
-All tests are pure string assertions on PHASE2_PROMPT_2_1_TEMPLATE.
-No fixtures, no LLM calls. Expected state: RED until spec 08 is implemented.
-"""
+"""Unit tests for spec 08 VPR guidance and schema ordering."""
 
 from __future__ import annotations
 
 import pytest
 
-from careervp.logic.prompts.vpr_prompt import PHASE2_PROMPT_2_1_TEMPLATE
+from careervp.logic.prompts.vpr_prompt import PHASE2_OUTPUT_SCHEMA, PHASE2_PROMPT_2_1_TEMPLATE, build_phase2_system_prompt
 
 
 def _first_schema_position(template: str, section_key: str) -> int:
@@ -28,28 +24,28 @@ class TestSectionOrdering:
     """differentiators and value_proposition must appear before role_alignment in the schema."""
 
     def test_differentiators_before_role_alignment(self) -> None:
-        diff_pos = _first_schema_position(PHASE2_PROMPT_2_1_TEMPLATE, 'differentiators')
-        role_pos = _first_schema_position(PHASE2_PROMPT_2_1_TEMPLATE, 'role_alignment')
+        diff_pos = _first_schema_position(PHASE2_OUTPUT_SCHEMA, 'differentiators')
+        role_pos = _first_schema_position(PHASE2_OUTPUT_SCHEMA, 'role_alignment')
         assert diff_pos < role_pos, f'"differentiators" (pos {diff_pos}) must appear before "role_alignment" (pos {role_pos}) in the OUTPUT SCHEMA'
 
     def test_value_proposition_before_role_alignment(self) -> None:
-        vp_pos = _first_schema_position(PHASE2_PROMPT_2_1_TEMPLATE, 'value_proposition')
-        role_pos = _first_schema_position(PHASE2_PROMPT_2_1_TEMPLATE, 'role_alignment')
+        vp_pos = _first_schema_position(PHASE2_OUTPUT_SCHEMA, 'value_proposition')
+        role_pos = _first_schema_position(PHASE2_OUTPUT_SCHEMA, 'role_alignment')
         assert vp_pos < role_pos, f'"value_proposition" (pos {vp_pos}) must appear before "role_alignment" (pos {role_pos}) in the OUTPUT SCHEMA'
 
     def test_differentiators_before_value_proposition(self) -> None:
-        diff_pos = _first_schema_position(PHASE2_PROMPT_2_1_TEMPLATE, 'differentiators')
-        vp_pos = _first_schema_position(PHASE2_PROMPT_2_1_TEMPLATE, 'value_proposition')
+        diff_pos = _first_schema_position(PHASE2_OUTPUT_SCHEMA, 'differentiators')
+        vp_pos = _first_schema_position(PHASE2_OUTPUT_SCHEMA, 'value_proposition')
         assert diff_pos < vp_pos, f'"differentiators" (pos {diff_pos}) must appear before "value_proposition" (pos {vp_pos})'
 
     def test_executive_summary_before_differentiators(self) -> None:
-        exec_pos = _first_schema_position(PHASE2_PROMPT_2_1_TEMPLATE, 'executive_summary')
-        diff_pos = _first_schema_position(PHASE2_PROMPT_2_1_TEMPLATE, 'differentiators')
+        exec_pos = _first_schema_position(PHASE2_OUTPUT_SCHEMA, 'executive_summary')
+        diff_pos = _first_schema_position(PHASE2_OUTPUT_SCHEMA, 'differentiators')
         assert exec_pos < diff_pos
 
     def test_metadata_before_executive_summary(self) -> None:
-        meta_pos = _first_schema_position(PHASE2_PROMPT_2_1_TEMPLATE, 'metadata')
-        exec_pos = _first_schema_position(PHASE2_PROMPT_2_1_TEMPLATE, 'executive_summary')
+        meta_pos = _first_schema_position(PHASE2_OUTPUT_SCHEMA, 'metadata')
+        exec_pos = _first_schema_position(PHASE2_OUTPUT_SCHEMA, 'executive_summary')
         assert meta_pos < exec_pos
 
     def test_all_10_required_sections_present(self) -> None:
@@ -66,7 +62,7 @@ class TestSectionOrdering:
             'application_strategy',
         ]
         for section in required:
-            assert f'"{section}"' in PHASE2_PROMPT_2_1_TEMPLATE, f'Required section "{section}" missing from PHASE2_PROMPT_2_1_TEMPLATE'
+            assert f'"{section}"' in PHASE2_OUTPUT_SCHEMA, f'Required section "{section}" missing from PHASE2_OUTPUT_SCHEMA'
 
 
 @pytest.mark.unit
@@ -76,17 +72,17 @@ class TestGenerationGuidanceBlock:
     def _guidance_block(self) -> str:
         """Extract the text between the guidance header and the OUTPUT SCHEMA header."""
         guidance_start = PHASE2_PROMPT_2_1_TEMPLATE.find('GENERATION GUIDANCE')
-        schema_start = PHASE2_PROMPT_2_1_TEMPLATE.find('OUTPUT SCHEMA')
+        schema_start = build_phase2_system_prompt().find('OUTPUT SCHEMA')
         assert guidance_start != -1, "'GENERATION GUIDANCE' header not found in PHASE2_PROMPT_2_1_TEMPLATE"
-        assert schema_start != -1, "'OUTPUT SCHEMA' header not found in PHASE2_PROMPT_2_1_TEMPLATE"
-        assert guidance_start < schema_start, f'GENERATION GUIDANCE (pos {guidance_start}) must appear before OUTPUT SCHEMA (pos {schema_start})'
-        return PHASE2_PROMPT_2_1_TEMPLATE[guidance_start:schema_start]
+        assert schema_start != -1, "'OUTPUT SCHEMA' header not found in build_phase2_system_prompt()"
+        return PHASE2_PROMPT_2_1_TEMPLATE[guidance_start:]
 
     def test_guidance_header_present(self) -> None:
         assert 'GENERATION GUIDANCE' in PHASE2_PROMPT_2_1_TEMPLATE
 
-    def test_guidance_appears_before_schema(self) -> None:
-        self._guidance_block()  # assertion inside helper
+    def test_schema_moved_to_system_prompt(self) -> None:
+        assert 'OUTPUT SCHEMA' not in PHASE2_PROMPT_2_1_TEMPLATE
+        assert 'OUTPUT SCHEMA' in build_phase2_system_prompt()
 
     def test_five_percent_rarity_test_present(self) -> None:
         block = self._guidance_block()
