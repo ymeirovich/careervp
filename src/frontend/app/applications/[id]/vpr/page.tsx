@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter, useParams } from 'next/navigation';
 import { api } from '../../../../api/methods';
 import { ErrorBoundary } from '../../../../components/ErrorBoundary/ErrorBoundary';
@@ -327,14 +327,24 @@ function VPRContent({ jobId }: { jobId: string }) {
         const downloadUrl = vprData?.result?.download_url;
         if (downloadUrl) {
           const resp = await fetch(downloadUrl);
+          if (resp.status === 403 || resp.status === 401) {
+            throw new Error('expired_token');
+          }
           if (!resp.ok) {
-            throw new Error(`Failed to fetch VPR result from S3: ${resp.status} ${resp.statusText}`);
+            throw new Error(`s3_fetch_${resp.status}`);
           }
           const data: VPRFullData = await resp.json();
           setFullVpr(data);
         }
       } catch (err) {
-        setError('Failed to load Value Proposition Report.');
+        const msg = err instanceof Error ? err.message : '';
+        if (msg === 'expired_token') {
+          setError('Your session link expired. Please refresh the page to reload the report.');
+        } else if (msg.startsWith('s3_fetch_')) {
+          setError('The report file could not be found. It may still be processing — please try again in a moment.');
+        } else {
+          setError('Failed to load Value Proposition Report.');
+        }
         console.error(err);
       } finally {
         setLoading(false);

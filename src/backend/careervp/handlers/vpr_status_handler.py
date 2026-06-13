@@ -51,8 +51,11 @@ def _get_results_bucket() -> str:
     return f'careervp-{env}-vpr-results-us-east-1'
 
 
-_URL_TTL_SECONDS = 604800  # 7 days
-_URL_MIN_REMAINING_SECONDS = 3600  # regenerate if less than 1 hour left
+# STS temporary credentials (Lambda execution role) expire in ~6h, so pre-signed
+# URLs signed with them silently expire at min(STS_expiry, ExpiresIn). Keep TTL
+# well under the STS session duration so cached URLs stay usable.
+_URL_TTL_SECONDS = 3600  # 1 hour
+_URL_MIN_REMAINING_SECONDS = 600  # regenerate if less than 10 minutes left
 
 
 def _generate_presigned_url(result_key: str) -> str:
