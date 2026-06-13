@@ -2,7 +2,7 @@ import json
 import os
 from typing import cast
 
-from aws_cdk import CfnOutput, Duration, RemovalPolicy, aws_apigateway, aws_sqs
+from aws_cdk import Aws, CfnOutput, Duration, RemovalPolicy, aws_apigateway, aws_sqs
 from aws_cdk import aws_cloudwatch as cw
 from aws_cdk import aws_cognito as cognito
 from aws_cdk import aws_dynamodb as dynamodb
@@ -2025,13 +2025,19 @@ class ApiConstruct(Construct):
             appconfig_app_name
         )
 
+        cv_tailoring_chain_target = _lambda.Function.from_function_arn(
+            self,
+            "ArtifactChainCvTailoringTarget",
+            f"arn:{Aws.PARTITION}:lambda:{Aws.REGION}:{Aws.ACCOUNT_ID}:function:{self.naming.lambda_name('cvtailor')}",
+        )
+
         self.artifact_chain = ArtifactChainConstruct(
             self,
             "ArtifactChain",
             naming=self.naming,
             company_research_queue=self.api_db.company_research_queue,
             vpr_jobs_queue=self.vpr_jobs_queue,
-            cv_tailoring_queue=self.api_db.cv_tailoring_queue,
+            cv_tailoring_func=cv_tailoring_chain_target,
             cr_failure_handler=self.cr_failure_handler_func,
             artifact_failure_handler=self.artifact_failure_handler_func,
             logs_kms_key=self.logs_kms_key,
@@ -2052,6 +2058,7 @@ class ApiConstruct(Construct):
         self.artifact_chain.state_machine.grant_task_response(
             self.company_research_worker_func
         )
+        self.artifact_chain.state_machine.grant_task_response(self.vpr_sqs_worker_func)
 
         CfnOutput(
             self,

@@ -35,6 +35,7 @@ from careervp.models.vpr import VPR, VPRRequest
 
 # Module-level S3 client for testing/mocking
 s3 = boto3.client('s3')
+sfn = boto3.client('stepfunctions')
 
 
 def _get_results_bucket() -> str:
@@ -166,18 +167,54 @@ def _fetch_gap_responses_from_application(application_id: str, user_id: str) -> 
         return []
 
 
-def _extract_job_id_from_record(record: dict[str, Any]) -> str | None:
-    """Extract job_id from an SQS record body.
+def _extract_message_body_from_record(record: dict[str, Any]) -> dict[str, Any] | None:
+    """Extract the JSON message body from an SQS record.
 
-    Returns None (and logs a warning) instead of raising if 'body' is absent,
-    so a malformed record never crashes the entire batch.
+    Returns None (and logs a warning) instead of raising if 'body' is absent or
+    malformed, so a bad record never crashes the entire batch.
     """
     raw_body = record.get('body')
     if not raw_body:
         logger.warning('SQS record missing body field', record_keys=list(record.keys()))
         return None
-    message_body = json.loads(raw_body)
+    try:
+        message_body = json.loads(raw_body)
+    except json.JSONDecodeError:
+        logger.warning('SQS record body is not valid JSON')
+        return None
+    if not isinstance(message_body, dict):
+        logger.warning('SQS record body is not a JSON object')
+        return None
+    return message_body
+
+
+def _extract_job_id_from_record(record: dict[str, Any]) -> str | None:
+    """Extract job_id from an SQS record body."""
+    message_body = _extract_message_body_from_record(record)
+    if message_body is None:
+        return None
     return message_body.get('job_id') or None
+
+
+def _send_task_success(task_token: str | None, *, job_id: str, vpr_id: str) -> None:
+    """Signal Step Functions success when this SQS record came from WAIT_FOR_TASK_TOKEN."""
+    if not task_token:
+        return
+    sfn.send_task_success(
+        taskToken=task_token,
+        output=json.dumps({'job_id': job_id, 'vpr_id': vpr_id}),
+    )
+
+
+def _send_task_failure(task_token: str | None, *, cause: str) -> None:
+    """Signal Step Functions failure when this SQS record came from WAIT_FOR_TASK_TOKEN."""
+    if not task_token:
+        return
+    sfn.send_task_failure(
+        taskToken=task_token,
+        error='VPRFailed',
+        cause=cause,
+    )
 
 
 def _resolve_gap_responses(input_data: dict[str, Any], application_id: str, user_id: str) -> list[GapResponse]:
@@ -198,7 +235,13 @@ def _process_job_record(
     bucket: str,
 ) -> None:
     """Process a single SQS record."""
-    job_id = _extract_job_id_from_record(record)
+    message_body = _extract_message_body_from_record(record)
+    if message_body is None:
+        logger.warning('Skipping record: no message body extracted')
+        return
+
+    job_id = message_body.get('job_id') or None
+    task_token = str(message_body.get('task_token') or '').strip() or None
 
     if not job_id:
         logger.warning('Skipping record: no job_id extracted')
@@ -212,8 +255,13 @@ def _process_job_record(
 
     # Repository returns dict or None
     if job_result is None:
-        logger.error('Job not found', job_id=job_id)
-        return
+        create_result = jobs_repo.create_job(_build_job_record_from_message(message_body))
+        if not create_result.success or not create_result.data:
+            error_msg = create_result.error or 'Job not found'
+            logger.error('Job not found and could not be created', job_id=job_id, error=error_msg)
+            _send_task_failure(task_token, cause=error_msg)
+            return
+        job_result = create_result.data
 
     job = job_result
     status = job.get('status')
@@ -226,7 +274,37 @@ def _process_job_record(
         logger.info('Job previously failed, skipping', job_id=job_id)
         return
 
-    _execute_job(jobs_repo, job, job_id, bucket)
+    job = _merge_message_context_into_job(job, message_body)
+    _execute_job(jobs_repo, job, job_id, bucket, task_token)
+
+
+def _build_job_record_from_message(message_body: dict[str, Any]) -> dict[str, Any]:
+    """Build a minimal VPR job record for artifact-chain messages."""
+    job_id = str(message_body.get('job_id') or '').strip()
+    user_id = str(message_body.get('user_id') or '').strip()
+    application_id = str(message_body.get('application_id') or job_id).strip()
+    input_data = {key: value for key, value in message_body.items() if key not in {'task_token'}}
+    return {
+        'job_id': job_id,
+        'user_id': user_id,
+        'application_id': application_id,
+        'input_data': input_data,
+        'status': 'PENDING',
+    }
+
+
+def _merge_message_context_into_job(job: dict[str, Any], message_body: dict[str, Any]) -> dict[str, Any]:
+    """Return a job record with artifact-chain message fields available as input_data."""
+    merged_job = dict(job)
+    existing_input = merged_job.get('input_data')
+    input_data = dict(existing_input) if isinstance(existing_input, dict) else {}
+    for key, value in message_body.items():
+        if key != 'task_token':
+            input_data.setdefault(key, value)
+    merged_job['input_data'] = input_data
+    merged_job.setdefault('user_id', str(message_body.get('user_id') or ''))
+    merged_job.setdefault('application_id', str(message_body.get('application_id') or message_body.get('job_id') or ''))
+    return merged_job
 
 
 def _execute_job(
@@ -234,21 +312,23 @@ def _execute_job(
     job: dict[str, Any],
     job_id: str,
     bucket: str,
+    task_token: str | None = None,
 ) -> None:
     """Execute the VPR generation job."""
     # Update status to PROCESSING
     now = datetime.now(timezone.utc).isoformat()
+    expected_current_status = str(job.get('status') or 'PENDING')
     processing_update = jobs_repo.update_job_status(
         job_id=job_id,
         status='PROCESSING',
-        expected_current_status='PENDING',
+        expected_current_status=expected_current_status,
         started_at=now,
     )
     if not processing_update.success:
         logger.info(
             'Skipping job: failed atomic transition to PROCESSING',
             job_id=job_id,
-            expected_current_status='PENDING',
+            expected_current_status=expected_current_status,
         )
         return
 
@@ -262,12 +342,14 @@ def _execute_job(
     user_cv = cv_dal.get_cv(user_id)
 
     if not user_cv:
+        error_msg = 'User CV not found'
         jobs_repo.update_job_status(
             job_id=job_id,
             status='FAILED',
-            error='User CV not found',
+            error=error_msg,
         )
         logger.error('User CV not found', user_id=user_id)
+        _send_task_failure(task_token, cause=error_msg)
         return
 
     # Generate VPR
@@ -282,12 +364,14 @@ def _execute_job(
             company_context=input_data.get('company_context'),
         )
     except Exception as e:
+        error_msg = f'Invalid VPR request payload: {str(e)}'
         jobs_repo.update_job_status(
             job_id=job_id,
             status='FAILED',
-            error=f'Invalid VPR request payload: {str(e)}',
+            error=error_msg,
         )
         logger.exception('Failed to build VPR request', job_id=job_id, error=str(e))
+        _send_task_failure(task_token, cause=error_msg)
         return
 
     next_version = cv_dal.get_next_vpr_version(vpr_request.application_id)
@@ -295,12 +379,14 @@ def _execute_job(
     result = generate_vpr(vpr_request, user_cv, cv_dal)
 
     if not result.success or not result.data:
+        error_msg = result.error or 'VPR generation failed'
         jobs_repo.update_job_status(
             job_id=job_id,
             status='FAILED',
-            error=result.error or 'VPR generation failed',
+            error=error_msg,
         )
         logger.error('VPR generation failed', job_id=job_id, error=result.error)
+        _send_task_failure(task_token, cause=error_msg)
         return
 
     vpr_response = result.data
@@ -318,12 +404,14 @@ def _execute_job(
         logger.info('Uploaded VPR to S3', job_id=job_id, bucket=bucket, key=result_key)
 
     except BotoClientError as e:
+        error_msg = f'S3 upload failed: {str(e)}'
         jobs_repo.update_job_status(
             job_id=job_id,
             status='FAILED',
-            error=f'S3 upload failed: {str(e)}',
+            error=error_msg,
         )
         logger.error('S3 upload failed', job_id=job_id, error=str(e))
+        _send_task_failure(task_token, cause=error_msg)
         return
 
     # Update job to COMPLETED
@@ -387,6 +475,7 @@ def _execute_job(
         version=vpr.version,
         word_count=vpr.word_count,
     )
+    _send_task_success(task_token, job_id=job_id, vpr_id=job_id)
 
 
 @logger.inject_lambda_context(log_event=False)

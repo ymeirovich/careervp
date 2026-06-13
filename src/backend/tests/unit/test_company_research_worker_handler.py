@@ -235,7 +235,7 @@ class TestTaskTokenSignal:
 
         mock_sfn.send_task_success.assert_called_once_with(
             taskToken='sfn-token-abc',
-            output=json.dumps({'job_id': 'job-1'}),
+            output=json.dumps({'job_id': 'job-1', 'company_context': cr_result.model_dump(mode='json')}),
         )
 
     @pytest.mark.asyncio

@@ -27,6 +27,7 @@
 - [x] FE-UI-016 CVCenterContent table listing replacement (`src/frontend/app/cv-center/page.tsx`)
 - [x] FE-UI-020 RichTextEditor TipTap Markdown editor (`src/frontend/components/RichTextEditor/RichTextEditor.tsx`)
 - [x] FE-UI-021 BillingContent page restructure (`src/frontend/app/billing/page.tsx`)
+- [x] WORKER-LEGS-001 artifact chain VPR task-token signaling and CV direct Lambda invoke (`infra/careervp/artifact_chain_construct.py`, `src/backend/careervp/handlers/vpr_worker_handler.py`, `src/backend/careervp/handlers/cv_tailoring_handler.py`)
 
 ## Upcoming Phases (From Context Manifest)
 
@@ -82,3 +83,6 @@
 | `src/frontend/app/billing/page.tsx`                  | FE-UI-021 Billing page with stacked subscription, usage, billing-info cards and anchored Plans section |
 | `src/frontend/tests/ui/unit/BillingContent.test.tsx` | FE-UI-021 unit coverage for page assembly, loading state, CTA API wiring, anchor scroll, and Hebrew RTL copy |
 | `src/backend/careervp/logic/prompts/company_research_prompt.py`, `src/backend/careervp/handlers/cover_letter_handler.py` | FE-UI-032 prompt externalization parity locked with golden tests and persisted company research now flows into cover-letter prompt generation |
+| `infra/careervp/artifact_chain_construct.py`, `infra/careervp/api_construct.py`, `infra/careervp/api_db_construct.py` | WORKER-LEGS-001 chain wiring: VPR task token without short heartbeat, CV direct Lambda invoke, and removal of unused CV tailoring queue/DLQ |
+| `src/backend/careervp/handlers/vpr_worker_handler.py`, `src/backend/careervp/handlers/cv_tailoring_handler.py`, `src/backend/careervp/handlers/company_research_worker_handler.py`, `src/backend/careervp/handlers/gap_handler.py` | WORKER-LEGS-001 handler support for VPR task-token callbacks, CV SFN invoke entrypoint, CR output threading, and chain `cv_id` input |
+| `src/backend/tests/unit/test_vpr_worker_task_token.py`, `src/backend/tests/unit/test_cv_tailoring_sfn_entrypoint.py`, `infra/tests/infrastructure/test_vpr_leg_wiring.py`, `infra/tests/infrastructure/test_cv_leg_wiring.py` | WORKER-LEGS-001 unit and infrastructure regression coverage |

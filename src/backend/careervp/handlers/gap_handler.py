@@ -397,7 +397,7 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
 
     # FE-UI-031: opt-in artifact chain. No-op when the flag is off; never breaks
     # the existing success path.
-    _maybe_start_artifact_chain(user_id, job_id)
+    _maybe_start_artifact_chain(user_id, job_id, _coerce_str(payload.get('cv_id')))
 
     return _json_response(
         HTTPStatus.OK,
@@ -409,7 +409,7 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _maybe_start_artifact_chain(user_id: str, job_id: str) -> None:
+def _maybe_start_artifact_chain(user_id: str, job_id: str, cv_id: str | None = None) -> None:
     """Start the Step Functions artifact chain when ARTIFACT_CHAIN_ENABLED is true.
 
     Additive (FE-UI-031). When the flag is off this is a no-op and gap submit
@@ -432,6 +432,10 @@ def _maybe_start_artifact_chain(user_id: str, job_id: str) -> None:
             if job:
                 company_name = str(job.get('company_name') or job.get('company') or '')
                 job_posting_url = str(job.get('job_posting_url') or job.get('url') or '')
+                cv_id = cv_id or _coerce_str(job.get('cv_id'))
+                input_data = job.get('input_data')
+                if not cv_id and isinstance(input_data, dict):
+                    cv_id = _coerce_str(input_data.get('cv_id'))
         except Exception as exc:
             logger.warning('Could not load job for artifact chain input', job_id=job_id, error=str(exc))
 
@@ -441,6 +445,7 @@ def _maybe_start_artifact_chain(user_id: str, job_id: str) -> None:
             input=json.dumps(
                 {
                     'user_id': user_id,
+                    'cv_id': cv_id or '',
                     'job_id': job_id,
                     'company_name': company_name,
                     'job_posting_url': job_posting_url,

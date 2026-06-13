@@ -6,12 +6,12 @@ sequential artifact chain:
 
     Company Research -> VPR -> Tailored CV
 
-Each step uses the ``sqs:sendMessage.waitForTaskToken`` integration pattern: the
-state machine enqueues a message containing ``task_token`` and pauses until the
-downstream worker calls ``SendTaskSuccess`` / ``SendTaskFailure``. The machine is
-purely additive — it wraps existing SQS workers via task tokens without
-rewriting them. Failure branches invoke thin Lambda handlers that mark the
-application record.
+Company Research and VPR use the ``sqs:sendMessage.waitForTaskToken``
+integration pattern: the state machine enqueues a message containing
+``task_token`` and pauses until the downstream worker calls ``SendTaskSuccess`` /
+``SendTaskFailure``. CV tailoring is invoked synchronously because it reuses the
+fast existing CV Lambda path. Failure branches invoke thin Lambda handlers that
+mark the application record.
 
 Standard (not Express) is required: the chain can take up to ~2 hours (VPR is
 slow), exceeding the 5-minute Express limit.
@@ -49,7 +49,7 @@ class ArtifactChainConstruct(Construct):
         naming: NamingUtils,
         company_research_queue: sqs.IQueue,
         vpr_jobs_queue: sqs.IQueue,
-        cv_tailoring_queue: sqs.IQueue,
+        cv_tailoring_func: _lambda.IFunction,
         cr_failure_handler: _lambda.IFunction,
         artifact_failure_handler: _lambda.IFunction,
         logs_kms_key: kms.IKey | None = None,
@@ -95,21 +95,18 @@ class ArtifactChainConstruct(Construct):
         )
 
         # --- Task-token SQS steps ----------------------------------------------
-        # result_path=DISCARD keeps the original execution input available to the
-        # next state (the SendTaskSuccess output would otherwise overwrite it).
-        start_cv_tailoring = sfn_tasks.SqsSendMessage(
+        start_cv_tailoring = sfn_tasks.LambdaInvoke(
             self,
             "StartCVTailoring",
-            queue=cv_tailoring_queue,
-            integration_pattern=sfn.IntegrationPattern.WAIT_FOR_TASK_TOKEN,
-            heartbeat_timeout=sfn.Timeout.duration(Duration.seconds(300)),
-            result_path=sfn.JsonPath.DISCARD,
-            message_body=sfn.TaskInput.from_object(
+            lambda_function=cv_tailoring_func,
+            payload_response_only=True,
+            result_path="$.cv_tailoring_result",
+            payload=sfn.TaskInput.from_object(
                 {
                     "user_id": sfn.JsonPath.string_at("$.user_id"),
+                    "cv_id": sfn.JsonPath.string_at("$.cv_id"),
                     "job_id": sfn.JsonPath.string_at("$.job_id"),
-                    "vpr_id": sfn.JsonPath.string_at("$.vpr_id"),
-                    "task_token": sfn.JsonPath.task_token,
+                    "vpr_id": sfn.JsonPath.string_at("$.vpr_result.vpr_id"),
                 }
             ),
         )
@@ -126,13 +123,16 @@ class ArtifactChainConstruct(Construct):
             "StartVPR",
             queue=vpr_jobs_queue,
             integration_pattern=sfn.IntegrationPattern.WAIT_FOR_TASK_TOKEN,
-            heartbeat_timeout=sfn.Timeout.duration(Duration.seconds(300)),
-            result_path=sfn.JsonPath.DISCARD,
+            result_path="$.vpr_result",
             message_body=sfn.TaskInput.from_object(
                 {
                     "user_id": sfn.JsonPath.string_at("$.user_id"),
+                    "cv_id": sfn.JsonPath.string_at("$.cv_id"),
                     "job_id": sfn.JsonPath.string_at("$.job_id"),
-                    "company_context": sfn.JsonPath.string_at("$.company_context"),
+                    "application_id": sfn.JsonPath.string_at("$.application_id"),
+                    "company_context": sfn.JsonPath.object_at(
+                        "$.company_research_result.company_context"
+                    ),
                     "task_token": sfn.JsonPath.task_token,
                 }
             ),
@@ -152,7 +152,7 @@ class ArtifactChainConstruct(Construct):
             queue=company_research_queue,
             integration_pattern=sfn.IntegrationPattern.WAIT_FOR_TASK_TOKEN,
             heartbeat_timeout=sfn.Timeout.duration(Duration.seconds(180)),
-            result_path=sfn.JsonPath.DISCARD,
+            result_path="$.company_research_result",
             message_body=sfn.TaskInput.from_object(
                 {
                     "user_id": sfn.JsonPath.string_at("$.user_id"),

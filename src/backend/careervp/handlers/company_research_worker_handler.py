@@ -80,7 +80,13 @@ def _persist_cr_result(user_id: str, job_id: str, result: CompanyResearchResult)
     table.put_item(Item=item)
 
 
-def _send_chain_signal(task_token: str | None, job_id: str, success: bool, cause: str = '') -> None:
+def _send_chain_signal(
+    task_token: str | None,
+    job_id: str,
+    success: bool,
+    cause: str = '',
+    company_context: dict[str, Any] | None = None,
+) -> None:
     """Send task success/failure callback to Step Functions.
 
     No-op when STEP_FUNCTIONS_CHAIN_ARN is unset (supports local testing).
@@ -92,7 +98,7 @@ def _send_chain_signal(task_token: str | None, job_id: str, success: bool, cause
     if success:
         sfn.send_task_success(
             taskToken=task_token,
-            output=json.dumps({'job_id': job_id}),
+            output=json.dumps({'job_id': job_id, 'company_context': company_context or {}}),
         )
     else:
         sfn.send_task_failure(
@@ -213,7 +219,12 @@ async def _async_process_record(input_data: CRWorkerInput, receive_count: int) -
 
     chain_enabled = os.environ.get('ARTIFACT_CHAIN_ENABLED', 'false').lower() == 'true'
     if input_data.task_token and chain_enabled:
-        _send_chain_signal(task_token=input_data.task_token, job_id=input_data.job_id, success=True)
+        _send_chain_signal(
+            task_token=input_data.task_token,
+            job_id=input_data.job_id,
+            success=True,
+            company_context=cr_result.model_dump(mode='json'),
+        )
     else:
         _enqueue_vpr_standalone(input_data.user_id, input_data.job_id, cr_result)
 

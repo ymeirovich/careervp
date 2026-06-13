@@ -55,6 +55,9 @@ except Exception:  # pragma: no cover - fallback for tests
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C901
     """Handle CV tailoring request."""
+    if _is_sfn_invoke(event):
+        return _handle_sfn_invoke(event)
+
     set_request_origin(event)
     headers = _cors_headers()
     method = str(event.get('httpMethod', '')).upper()
@@ -283,6 +286,32 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Alias for standard Lambda entrypoint naming."""
     return handler(event, context)
+
+
+def _is_sfn_invoke(event: dict[str, Any]) -> bool:
+    """Return True for the artifact-chain direct Lambda invoke payload."""
+    return not event.get('httpMethod') and {'user_id', 'cv_id', 'job_id', 'vpr_id'}.issubset(event)
+
+
+def _handle_sfn_invoke(event: dict[str, Any]) -> dict[str, Any]:
+    """Run CV tailoring for Step Functions LambdaInvoke and return raw payload."""
+    headers: dict[str, str] = {}
+    request_data = {
+        'cv_id': str(event.get('cv_id') or '').strip(),
+        'job_id': str(event.get('job_id') or '').strip(),
+        'vpr_id': str(event.get('vpr_id') or '').strip(),
+    }
+    user_id = str(event.get('user_id') or '').strip()
+    if not user_id or not request_data['cv_id'] or not request_data['job_id'] or not request_data['vpr_id']:
+        raise ValueError('user_id, cv_id, job_id, and vpr_id are required for Step Functions CV tailoring')
+
+    response = _handle_openapi_async_generate(event, request_data, headers, user_id)
+    status_code = int(response.get('statusCode', HTTPStatus.INTERNAL_SERVER_ERROR))
+    body = response.get('body')
+    payload = json.loads(body) if isinstance(body, str) and body else {}
+    if status_code >= HTTPStatus.BAD_REQUEST:
+        raise RuntimeError(str(payload.get('message') or payload.get('error') or 'CV tailoring failed'))
+    return payload
 
 
 def _handle_openapi_async_generate(  # noqa: C901

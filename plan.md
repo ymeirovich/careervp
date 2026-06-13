@@ -129,6 +129,7 @@ CREATED → COMPANY_RESEARCH → GAP_ANALYSIS → GENERATING_ARTIFACTS → INTER
 - ✅ FE-UI-017 BaseCVsTable multi-CV list table (sorting/status badges/actions/states/i18n)
 - ✅ FE-UI-016 `/cv-center` CVCenterContent replaced with Base CVs table listing, upload-only ChooseBaseCVModal flow, GET/POST `/users/me/cv`, and unit coverage
 - ✅ FE-UI-020 RichTextEditor TipTap rich text input with toolbar, Markdown storage, paste sanitization, controlled value updates, read-only mode, and unit coverage
+- ✅ WORKER-LEGS-001 artifact-chain VPR/CV legs: VPR worker now sends Step Functions task-token success/failure, StartVPR no longer uses a 300s heartbeat, CV tailoring is invoked directly by Lambda, and the unused CV tailoring SQS queue/DLQ are removed.
 
 ### VPR Async Architecture - DEPLOYED & TESTING
 
