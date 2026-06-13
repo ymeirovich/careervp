@@ -1,11 +1,25 @@
 spec_id: TEST-INFRA-001
 title: "Test Prompts — Infra Cycle Fix (FE-UI-035) + Nested-Stack Split (FE-UI-036)"
 priority: critical
-status: draft
+status: implemented
 owner: backend
 created_at: 2026-06-12
-updated_at: 2026-06-12
+updated_at: 2026-06-13
 type: test_prompts
+implementation_note: >
+  Implemented and green as of 2026-06-13 (parent CareerVpCrudDev synthesizes at 474
+  resources, synth exit 0, naming --strict exit 0).
+  Category A is authored verbatim in infra/tests/infrastructure/test_artifact_chain_cycle_fix.py
+  (all 6 tests pass — the FE-UI-035 cycle fix gives the failure handlers a dedicated
+  least-privilege role).
+  Category C was ADAPTED: the originally-planned multi-nested-stack split (parent < 450,
+  inline state machine moved to an artifact-chain nested stack) was intentionally reverted
+  (see git ee7ec48). The realized topology is a monitoring-only phase-1 nested stack with
+  alarms + metric filters moved out and dashboards/SNS/KMS/state-machine kept in the parent.
+  Coverage lives in infra/tests/infrastructure/test_nested_split.py (9 tests pass), which
+  encodes the same intent (resource-ceiling headroom, nested-stack present, no stateful
+  drift) against the actual topology. The literal Category C assertions below (< 450,
+  artifact-chain nested stack xfail) describe the superseded plan and are kept for history.
 note: >
   Runnable prompts for fresh Claude sessions (or a test-runner agent). Each section is
   self-contained: context, files, what to write/run, what to assert. Reference FE-UI-035
