@@ -2074,10 +2074,76 @@ class ApiConstruct(Construct):
             value=chain_arn,
         ).override_logical_id(constants.ARTIFACT_CHAIN_ARN_OUTPUT)
 
+        # FE-UI-043: cancel handlers need states:StopExecution + DescribeExecution
+        # scoped to the chain ARN (no states:* wildcard — FE-UI-035 invariant).
+        cancel_sfn_statement = iam.PolicyStatement(
+            actions=["states:StopExecution", "states:DescribeExecution"],
+            resources=[chain_arn],
+        )
+        for cancel_func in (
+            self.vpr_status_func,
+            self.cover_letter_status_func,
+            self.interview_prep_status_func,
+            self.cv_tailoring_func,
+            self.company_research_func,
+        ):
+            cancel_func.add_to_role_policy(cancel_sfn_statement)
+            cancel_func.add_environment("STEP_FUNCTIONS_CHAIN_ARN", chain_arn)
+
+        # FE-UI-043: orphan-cleanup reaper Lambda + hourly EventBridge schedule.
+        self.artifact_cleanup_func = self._add_artifact_cleanup_lambda()
+        self.api_db.applications_table.grant_read_write_data(self.artifact_cleanup_func)
+        self.artifact_cleanup_func.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["s3:DeleteObject"],
+                resources=[self.api_db.vpr_results_bucket.arn_for_objects("results/*")],
+            )
+        )
+        cleanup_rule = events.Rule(
+            self,
+            "ArtifactCleanupSchedule",
+            schedule=events.Schedule.rate(Duration.hours(1)),
+        )
+        cleanup_rule.add_target(targets.LambdaFunction(self.artifact_cleanup_func))
+
     @staticmethod
     def _artifact_chain_enabled() -> str:
         """Resolve the ARTIFACT_CHAIN_ENABLED flag at synth time (default off)."""
         return os.environ.get("ARTIFACT_CHAIN_ENABLED", "false")
+
+    def _add_artifact_cleanup_lambda(self) -> _lambda.Function:
+        """Orphan-cleanup reaper triggered hourly by EventBridge (FE-UI-043)."""
+        function_name = self.naming.lambda_name(constants.ARTIFACT_CLEANUP_FEATURE)
+        log_group = logs.LogGroup(
+            self,
+            "ArtifactCleanupLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
+        return _lambda.Function(
+            self,
+            constants.ARTIFACT_CLEANUP_LAMBDA,
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.artifact_cleanup_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-artifact-cleanup",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+                "VPR_RESULTS_BUCKET_NAME": self.api_db.vpr_results_bucket.bucket_name,
+            },
+            timeout=Duration.minutes(5),
+            memory_size=256,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
 
     def _build_failure_handler_role(self, scope: Construct) -> iam.Role:
         """Dedicated least-privilege role for the artifact-chain failure handlers.
@@ -2650,6 +2716,7 @@ class ApiConstruct(Construct):
             ),
             ("/interview-preps", "GET", self.interview_prep_status_func),
             ("/company-research/{jobId}", "GET", self.company_research_func),
+            ("/company-research/{jobId}/cancel", "POST", self.company_research_func),
             ("/company-research/fetch", "POST", self.company_research_func),
             ("/knowledge-base", "GET", self.company_research_func),
             # Billing routes (S-006)

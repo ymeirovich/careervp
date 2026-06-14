@@ -413,11 +413,70 @@ def _handle_vpr_cancel(
         return _build_error_response('Cannot cancel terminal task', HTTPStatus.CONFLICT)
 
     jobs_repo.update_job_status(vpr_id, 'CANCELLED')
+
+    # Chain-stop (FE-UI-043): if the application has a RUNNING chain, stop it.
+    _try_stop_chain_for_job(job, user_id)
+
     return {
         'statusCode': int(HTTPStatus.OK),
         'headers': _json_headers(),
         'body': json.dumps({'status': 'cancelled'}),
     }
+
+
+def _do_stop_chain(
+    sfn_client: Any,
+    app_repo: Any,
+    arn: str,
+    application_id: str,
+    user_id: str,
+    artifact_statuses: dict[str, Any],
+) -> None:
+    try:
+        sfn_client.stop_execution(executionArn=arn, cause='user_cancel')
+    except Exception:
+        pass
+    try:
+        app_repo.update_chain_execution_status(application_id, user_id, 'STOPPED')
+    except Exception:
+        pass
+    for atype, astatus in artifact_statuses.items():
+        if str(astatus).lower() in {'pending', 'processing'}:
+            try:
+                app_repo.update_artifact_status(application_id, user_id, atype, 'cancelled')
+            except Exception:
+                pass
+
+
+def _try_stop_chain_for_job(job: dict[str, Any], user_id: str) -> None:
+    """Best-effort chain stop on VPR cancel — never raises."""
+    import boto3 as _boto3
+
+    from careervp.dal.application_repository import ApplicationRepository
+    from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+
+    try:
+        apps_table = os.environ.get('APPLICATIONS_TABLE_NAME', '')
+        chain_arn_env = os.environ.get('STEP_FUNCTIONS_CHAIN_ARN', '')
+        if not apps_table or not chain_arn_env:
+            return
+
+        app_repo = ApplicationRepository(DynamoDalHandler(apps_table))
+        application_id = str(job.get('application_id', ''))
+        if not application_id:
+            return
+
+        app = app_repo.get(application_id, user_id)
+        if not isinstance(app, dict) or app.get('chain_execution_status') != 'RUNNING':
+            return
+
+        sfn_client = _boto3.client('stepfunctions')
+        arn = app.get('chain_execution_arn')
+        if arn:
+            artifact_statuses: dict[str, Any] = app.get('artifact_statuses') or {}
+            _do_stop_chain(sfn_client, app_repo, arn, application_id, user_id, artifact_statuses)
+    except Exception as exc:
+        logger.warning('Chain stop after VPR cancel failed (non-fatal)', error=str(exc))
 
 
 @logger.inject_lambda_context(log_event=False)

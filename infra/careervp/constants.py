@@ -135,6 +135,9 @@ ARTIFACT_CHAIN_ARN_OUTPUT = "ArtifactChainStateMachineArn"
 # (breaks the CloudFormation dependency cycle caused by reusing the shared role).
 FAILURE_HANDLER_FEATURE = "failure-handler"
 FAILURE_HANDLER_ROLE = "FailureHandlerRole"
+# FE-UI-043: orphan-cleanup reaper Lambda + schedule
+ARTIFACT_CLEANUP_FEATURE = "artifact-cleanup"
+ARTIFACT_CLEANUP_LAMBDA = "ArtifactCleanupLambda"
 
 LAMBDA_LAYER_NAME = "common"
 API_HANDLER_LAMBDA_MEMORY_SIZE = 512  # MB - increased for CV parsing

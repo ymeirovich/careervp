@@ -203,13 +203,37 @@ async def _async_process_record(input_data: CRWorkerInput, receive_count: int) -
     # Confidence gate passed — persist and signal.
     _persist_cr_result(input_data.user_id, input_data.job_id, cr_result)
 
+    # CANCELLED guard (FE-UI-043 § worker_cancelled_guard): the update_artifact_status
+    # write uses a conditional DynamoDB expression so that if a concurrent cancel
+    # already set the artifact status to 'cancelled', this write raises
+    # ConditionalCheckFailedException.  On CCF we signal failure back to the chain
+    # (so Step Functions can mark the branch) and return cleanly — no DLQ.
     app_repo = _get_app_repo()
-    app_repo.update_artifact_status(
-        application_id=input_data.job_id,
-        user_id=input_data.user_id,
-        artifact_type='company_research',
-        status='completed',
-    )
+    try:
+        app_repo.update_artifact_status(
+            application_id=input_data.job_id,
+            user_id=input_data.user_id,
+            artifact_type='company_research',
+            status='completed',
+        )
+    except Exception as exc:
+        from botocore.exceptions import ClientError as _ClientError
+
+        if isinstance(exc, _ClientError) and exc.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            logger.info(
+                'CR job cancelled before COMPLETED write — aborting cleanly',
+                job_id=input_data.job_id,
+                cancelled_before_persist=True,
+            )
+            _send_chain_signal(
+                task_token=input_data.task_token,
+                job_id=input_data.job_id,
+                success=False,
+                cause='cancelled_before_persist',
+            )
+            return
+        raise
+
     app_repo.update_state(
         application_id=input_data.job_id,
         user_id=input_data.user_id,

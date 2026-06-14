@@ -32,6 +32,11 @@
     },
     {
       "method": "POST",
+      "path": "/company-research/{job_id}/cancel",
+      "auth": "COGNITO"
+    },
+    {
+      "method": "POST",
       "path": "/cover-letter/generate",
       "auth": "COGNITO"
     },

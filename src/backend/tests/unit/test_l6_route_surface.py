@@ -105,12 +105,12 @@ class TestRouteSurfaceDiffEmpty:
         assert os.path.exists(FROZEN_SPEC_PATH), f'frozen_spec.json missing at {FROZEN_SPEC_PATH}'
 
     def test_frozen_spec_has_31_routes(self):
-        """frozen_spec.json contains exactly 35 routes (31 original + 4 billing)."""
+        """frozen_spec.json contains exactly 40 routes (31 original + 4 billing + 5 new endpoints)."""
         assert os.path.exists(FROZEN_SPEC_PATH), f'Missing: {FROZEN_SPEC_PATH}'
         with open(FROZEN_SPEC_PATH) as f:
             spec = json.load(f)
         routes = spec.get('routes', [])
-        assert len(routes) == 35, f'Expected 35 routes in frozen spec, got {len(routes)}'
+        assert len(routes) == 40, f'Expected 40 routes in frozen spec, got {len(routes)}'
 
 
 @pytest.mark.unit

@@ -480,24 +480,43 @@ def _execute_job(  # noqa: C901
         _send_task_failure(task_token, cause=error_msg)
         return
 
-    # Update job to COMPLETED
+    # Update job to COMPLETED — CANCELLED guard (FE-UI-043 § worker_cancelled_guard).
+    # A concurrent cancel may have set status=CANCELLED while generation was running.
+    # update_job raises ConditionalCheckFailedException if that happened; we catch it,
+    # delete the partial S3 result we just uploaded, signal task_failure, and return
+    # cleanly (no DLQ).
     completed_at = datetime.now(timezone.utc).isoformat()
     result_url = _generate_presigned_url(result_key)
     one_year_ttl = int(datetime.now(timezone.utc).timestamp() + 365 * 24 * 3600)
 
-    jobs_repo.update_job(
-        job_id=job_id,
-        updates={
-            'status': 'COMPLETED',
-            'completed_at': completed_at,
-            'result_key': result_key,
-            'result_url': result_url,
-            'vpr_version': vpr.version,
-            'word_count': vpr.word_count,
-            'ttl': one_year_ttl,
-            **provenance,
-        },
-    )
+    try:
+        jobs_repo.update_job(
+            job_id=job_id,
+            updates={
+                'status': 'COMPLETED',
+                'completed_at': completed_at,
+                'result_key': result_key,
+                'result_url': result_url,
+                'vpr_version': vpr.version,
+                'word_count': vpr.word_count,
+                'ttl': one_year_ttl,
+                **provenance,
+            },
+        )
+    except BotoClientError as e:
+        if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            logger.info(
+                'VPR job cancelled before COMPLETED write — aborting cleanly',
+                job_id=job_id,
+                cancelled_before_persist=True,
+            )
+            try:
+                s3.delete_object(Bucket=bucket, Key=result_key)
+            except Exception:
+                pass
+            _send_task_failure(task_token, cause='Job was cancelled before COMPLETED write')
+            return
+        raise
 
     # Propagate completion to the application record so the hub reflects the
     # artifact status and artifact_id across page reloads.

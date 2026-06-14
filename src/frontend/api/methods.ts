@@ -104,6 +104,9 @@ export const api = {
       apiClient.get<CompanyResearchResult>(`/company-research/${jobId}`).then((r) => r.data),
     ),
 
+  cancelCompanyResearch: (jobId: string): Promise<{ status: string }> =>
+    apiClient.post<{ status: string }>(`/company-research/${jobId}/cancel`, {}).then((r) => r.data),
+
   // ── CV ──
   getCVById: async (cvId: string): Promise<UserCV | null> =>
     apiFetchOrNull(() =>

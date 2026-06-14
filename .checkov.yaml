@@ -1,0 +1,29 @@
+skip-check:
+  # Lambda: no VPC — dev serverless; VPC adds cold start overhead and NAT cost
+  - CKV_AWS_117
+  # Lambda: reserved concurrency not set in dev; managed at account level in prod
+  - CKV_AWS_115
+  # Lambda: DLQ skipped — API Lambdas are synchronous; async workers use SQS DLQ
+  - CKV_AWS_116
+  # Lambda: env vars hold config only (no secrets); secrets live in SSM Parameter Store
+  - CKV_AWS_173
+  # API Gateway: health and public-status endpoints are intentionally unauthenticated
+  - CKV_AWS_59
+  # S3: server access logging omitted in dev; enabled in the production stack
+  - CKV_AWS_18
+  # S3: versioning omitted in dev; enabled for CV/VPR/artifacts buckets in prod
+  - CKV_AWS_21
+  # SQS: SSE-SQS (AWS-managed) is enforced; CMK not required for dev queues
+  - CKV_AWS_27
+  # CloudFront: access logging omitted in dev environment
+  - CKV_AWS_86
+  # CloudFront: WAF not deployed in dev; production stack will add WAF
+  - CKV_AWS_68
+  # DynamoDB: PITR omitted in dev; enabled in the production stack
+  - CKV_AWS_165
+  # API Gateway: response caching disabled in dev (avoids cache-cluster charges)
+  - CKV_AWS_120
+  # IAM: kms:GenerateDataKey on * is required for SQS SSE with AWS-managed keys
+  - CKV_AWS_111
+  # ACM: *.careervp.com SAN is intentional — required for API/app subdomain routing
+  - CKV2_AWS_71

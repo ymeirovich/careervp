@@ -22,6 +22,7 @@ from pydantic import ValidationError
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.logic.cancellation import CancelStatus, cancel_artifact
 from careervp.logic.company_research import research_company
 from careervp.models.company import CompanyResearchRequest
 from careervp.models.result import Result, ResultCode
@@ -54,6 +55,9 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         metrics.add_metric(name='KnowledgeBaseGetRequests', unit=MetricUnit.Count, value=1)
         return get_knowledge_base(event)
 
+    if method == 'POST' and path.endswith('/cancel'):
+        return _handle_company_research_cancel(event)
+
     if method == 'POST':
         metrics.add_metric(name='CompanyResearchRequests', unit=MetricUnit.Count, value=1)
         return _fetch_company_research(event)
@@ -65,6 +69,85 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             'code': ResultCode.INVALID_INPUT,
         },
     )
+
+
+_CR_TERMINAL_STATUSES = {'COMPLETED', 'FAILED', 'CANCELLED'}
+
+
+def _handle_company_research_cancel(event: dict[str, Any]) -> dict[str, Any]:
+    """Handle POST /company-research/{jobId}/cancel.
+
+    Mirrors _handle_vpr_cancel: ownership check, CONFLICT on terminal status,
+    then delegates to cancel_artifact() for chain-stop orchestration.
+    """
+    user_id = _extract_authenticated_user_id(event)
+    if not user_id:
+        return _build_response(HTTPStatus.UNAUTHORIZED, {'error': 'Authentication required'})
+
+    path_parameters = event.get('pathParameters') or {}
+    job_id = str(path_parameters.get('jobId') or '').strip()
+    if not job_id:
+        return _build_response(HTTPStatus.BAD_REQUEST, {'error': 'Missing jobId'})
+
+    item = _get_company_research_item(user_id, job_id)
+    if item is None:
+        return _build_response(HTTPStatus.NOT_FOUND, {'error': 'Job not found'})
+
+    item_owner = str(item.get('user_id', ''))
+    if item_owner and item_owner != user_id:
+        return _build_response(HTTPStatus.FORBIDDEN, {'error': 'Forbidden'})
+
+    item_status = str(item.get('status', '')).upper()
+    if item_status in _CR_TERMINAL_STATUSES:
+        return _build_response(
+            HTTPStatus.CONFLICT,
+            {'error': f'Cannot cancel terminal task (status={item_status.lower()})'},
+        )
+
+    from types import SimpleNamespace
+
+    from careervp.dal.application_repository import ApplicationRepository
+    from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+    from careervp.dal.jobs_repository import JobsRepository
+
+    apps_table = os.environ.get('APPLICATIONS_TABLE_NAME', '')
+    jobs_table = os.environ.get('DYNAMODB_TABLE_NAME', '')
+
+    app_repo = ApplicationRepository(DynamoDalHandler(apps_table)) if apps_table else None
+    jobs_repo = JobsRepository(jobs_table) if jobs_table else None
+
+    if app_repo is None or jobs_repo is None:
+        return _build_response(
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+            {'error': 'Configuration error'},
+        )
+
+    import boto3 as _boto3
+
+    sfn_client = _boto3.client('stepfunctions')
+
+    repos = SimpleNamespace(jobs_repo=jobs_repo, app_repo=app_repo)
+
+    application_id = str(item.get('application_id', '') or job_id)
+
+    result = cancel_artifact(
+        artifact_type='company_research',
+        artifact_id=job_id,
+        application_id=application_id,
+        user_id=user_id,
+        repos=repos,
+        sfn=sfn_client,
+    )
+
+    if result.status == CancelStatus.FORBIDDEN:
+        return _build_response(HTTPStatus.FORBIDDEN, {'error': 'Forbidden'})
+    if result.status == CancelStatus.CONFLICT:
+        return _build_response(
+            HTTPStatus.CONFLICT,
+            {'error': 'Cannot cancel terminal task'},
+        )
+
+    return _build_response(HTTPStatus.OK, {'status': 'cancelled'})
 
 
 def _fetch_company_research(event: dict[str, Any]) -> dict[str, Any]:
