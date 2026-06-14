@@ -439,7 +439,7 @@ def _maybe_start_artifact_chain(user_id: str, job_id: str, cv_id: str | None = N
         except Exception as exc:
             logger.warning('Could not load job for artifact chain input', job_id=job_id, error=str(exc))
 
-        boto3.client('stepfunctions').start_execution(
+        execution = boto3.client('stepfunctions').start_execution(
             stateMachineArn=chain_arn,
             name=f'chain-{job_id}-{uuid4().hex[:8]}',
             input=json.dumps(
@@ -453,7 +453,16 @@ def _maybe_start_artifact_chain(user_id: str, job_id: str, cv_id: str | None = N
                 }
             ),
         )
-        _get_application_repository().update_state(
+        application_repo = _get_application_repository()
+        execution_arn = _coerce_str(execution.get('executionArn'))
+        if execution_arn:
+            application_repo.set_chain_execution(
+                application_id=job_id,
+                user_id=user_id,
+                execution_arn=execution_arn,
+                status='RUNNING',
+            )
+        application_repo.update_state(
             application_id=job_id,
             user_id=user_id,
             new_state='cr_pending',

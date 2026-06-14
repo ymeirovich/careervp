@@ -57,6 +57,11 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             artifact_type=artifact_type,
             status='failed',
         )
+        app_repo.update_chain_execution_status(
+            application_id=job_id,
+            user_id=user_id,
+            status='FAILED',
+        )
     except Exception as exc:  # noqa: BLE001 - defensive: never raise from a failure handler
         logger.error('Failed to mark artifact failed', job_id=job_id, artifact_type=artifact_type, error=str(exc))
 

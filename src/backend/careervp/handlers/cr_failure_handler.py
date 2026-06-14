@@ -51,6 +51,11 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     app_repo = _get_app_repo()
     try:
         app_repo.set_company_research_error(application_id=job_id, user_id=user_id, error=True)
+        app_repo.update_chain_execution_status(
+            application_id=job_id,
+            user_id=user_id,
+            status='FAILED',
+        )
     except Exception as exc:  # noqa: BLE001 - defensive: never raise from a failure handler
         logger.error('Failed to set company_research_error', job_id=job_id, error=str(exc))
 

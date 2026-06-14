@@ -514,6 +514,11 @@ def _execute_job(  # noqa: C901
                     status='completed',
                     artifact_id=job_id,
                 )
+                app_repo.update_chain_execution_status(
+                    application_id=application_id_str,
+                    user_id=user_id,
+                    status='SUCCEEDED',
+                )
             except Exception as e:
                 logger.warning(
                     'Could not update application artifact_statuses for VPR',

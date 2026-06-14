@@ -175,6 +175,41 @@ class ApplicationRepository:
             },
         )
 
+    def set_chain_execution(
+        self,
+        application_id: str,
+        user_id: str,
+        execution_arn: str,
+        status: str,
+    ) -> None:
+        self._table().update_item(
+            Key={
+                'userId': user_id,
+                'applicationId': application_id,
+            },
+            UpdateExpression='SET chain_execution_arn = :execution_arn, chain_execution_status = :status, updated_at = :updated_at',
+            ConditionExpression='attribute_exists(userId) AND attribute_exists(applicationId)',
+            ExpressionAttributeValues={
+                ':execution_arn': execution_arn,
+                ':status': status,
+                ':updated_at': self._now_iso(),
+            },
+        )
+
+    def update_chain_execution_status(self, application_id: str, user_id: str, status: str) -> None:
+        self._table().update_item(
+            Key={
+                'userId': user_id,
+                'applicationId': application_id,
+            },
+            UpdateExpression='SET chain_execution_status = :status, updated_at = :updated_at',
+            ConditionExpression='attribute_exists(userId) AND attribute_exists(applicationId)',
+            ExpressionAttributeValues={
+                ':status': status,
+                ':updated_at': self._now_iso(),
+            },
+        )
+
     def update_artifact_with_id(
         self,
         application_id: str,
