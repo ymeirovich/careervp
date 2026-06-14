@@ -110,7 +110,9 @@ def _fetch_company_research(event: dict[str, Any]) -> dict[str, Any]:
         research_result = Result(success=False, error=str(exc), code=ResultCode.ALL_SOURCES_FAILED)
 
     company_research_id = f'comp-res-{uuid.uuid4()}'
-    if research_result.success and research_result.data:
+    threshold = _get_cr_confidence_threshold()
+    is_confident = research_result.success and research_result.data is not None and research_result.data.confidence_score >= threshold
+    if is_confident and research_result.data is not None:
         persisted_payload = _build_persisted_company_research_payload(
             company_research_id=company_research_id,
             company_name=request_result.data.company_name,
@@ -124,8 +126,16 @@ def _fetch_company_research(event: dict[str, Any]) -> dict[str, Any]:
         )
         _persist_company_research_item(user_id=user_id, job_id=job_id, payload=persisted_payload)
     else:
-        # FE-UI-041: never persist fabricated company content on failure. A failed run leaves
-        # no artifact; the confidence gate / retry path owns the failure outcome.
+        # FE-UI-041: never persist sub-threshold or failed research. A sub-threshold result is
+        # treated the same as a failed run — no artifact is written.
+        if research_result.success and research_result.data is not None:
+            logger.warning(
+                'CR below confidence threshold, not persisted',
+                confidence=research_result.data.confidence_score,
+                threshold=threshold,
+                source=research_result.data.source.value,
+                job_id=job_id,
+            )
         metrics.add_metric(name='CompanyResearchFailures', unit=MetricUnit.Count, value=1)
 
     return _build_response(
@@ -163,6 +173,17 @@ def get_company_research(event: dict[str, Any]) -> dict[str, Any]:
         item = _get_company_research_item(user_id=user_id, job_id=job_id)
     except Exception:
         item = None
+
+    # Defense-in-depth ownership check: the DynamoDB key already scopes to user_id, but we
+    # verify explicitly after retrieval so future key-scheme changes can't leak another user's CR.
+    if item is not None:
+        item_pk = str(item.get('pk', ''))
+        if item_pk not in (user_id, f'USER#{user_id}'):
+            logger.error(
+                'CR ownership mismatch — item pk does not match authenticated user',
+                job_id=job_id,
+            )
+            item = None
 
     # FE-UI-041: a missing CR is explicit, never fabricated.
     if item is None:
@@ -447,7 +468,7 @@ def _build_persisted_company_research_payload(company_research_id: str, company_
     values = _coerce_list_of_strings(result_data.get('values'))
     products = _coerce_list_of_strings(result_data.get('strategic_priorities'))
     recent_news = _normalize_recent_news(result_data.get('recent_news'))
-    return {
+    payload: dict[str, Any] = {
         'company_research_id': company_research_id,
         'company_name': company_name,
         'mission': _coerce_str(result_data.get('mission')) or _coerce_str(result_data.get('overview')) or '',
@@ -459,6 +480,13 @@ def _build_persisted_company_research_payload(company_research_id: str, company_
         'size_range': 'Unknown',
         'industry': 'Unknown',
     }
+    # Persist confidence_score so _is_confident_cr can gate on it without relying solely on
+    # the fabricated-name heuristic (the only other signal available at serve time).
+    raw_confidence = result_data.get('confidence_score')
+    coerced = _coerce_confidence(raw_confidence)
+    if coerced is not None:
+        payload['confidence_score'] = coerced
+    return payload
 
 
 def _get_cr_confidence_threshold() -> float:
