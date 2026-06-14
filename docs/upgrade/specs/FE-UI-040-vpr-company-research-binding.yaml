@@ -1,0 +1,181 @@
+spec_id: FE-UI-040
+title: "VPR <-> Company Research data binding (manual + chain paths) — VPR must actually consume CR"
+priority: critical
+status: draft
+owner: backend
+created_at: 2026-06-14
+updated_at: 2026-06-14
+tier: feature
+
+human_approval_gate:
+  required: false
+  note: >
+    Backend handler/worker + DAL-read change only, no schema migration and no new AWS
+    resources. Adds a CR read to the VPR submit path and worker. Authored under the
+    GATE 3 umbrella of FE-UI-038 (resolver) since the resolver depends on this binding.
+
+recommended_model: opus
+reason_for_model: >
+  Correctly threading company_context through both the manual submit path and the chain
+  path, with ownership checks and without breaking idempotency, is architecture-sensitive.
+  This is the exact bug the user reported: "how do I know the VPR includes the CR?".
+
+depends_on:
+  - FE-UI-030   # CR worker / CR persistence shape
+  - FE-UI-041   # CR quality gate — VPR must only consume confident CR, never the fabricated payload
+blocks:
+  - FE-UI-038   # resolver relies on VPR-can-consume-CR being true
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    The VPR never includes Company Research on the manual/standalone path:
+      - vpr_submit_handler.py NEVER sets company_context (grep: zero matches). The SQS
+        message input_data is the raw POST body (vpr_submit_handler.py:329-341), and the
+        frontend VPR call sends only {application_id, cv_id, gap_response_ids, force}
+        (useGenerateModule.ts:46-51) — no company_research_id, no company_context.
+      - vpr_worker_handler.py:364 reads company_context=input_data.get('company_context'),
+        which is therefore None.
+      - The VPR worker NEVER loads CR from DynamoDB.
+      - Result: vpr_generator company_insights stays None (vpr_generator.py:518-521);
+        the rendered VPR has no company section (vpr_generator.py:874-876).
+    company_context is only ever populated by the Step Functions chain (FE-UI-031 StartVPR
+    passes company_context.$). Manual regeneration from the hub (force:true) always loses it.
+    There is no way to tell from the VPR whether CR was included or whether CR predated it.
+  required_behavior: >
+    On BOTH paths the VPR is generated with the application's Company Research injected as
+    company_context, and the VPR result records provenance so inclusion is observable:
+      1. Manual/standalone: vpr_submit_handler resolves the application's latest CONFIDENT CR
+         (FE-UI-041) and injects it into the SQS message company_context. If CR is absent/
+         low-confidence, defer to the resolver (FE-UI-038) — do NOT generate a CR-less VPR.
+      2. Chain: unchanged (company_context already flows from StartCompanyResearch -> StartVPR).
+      3. The worker, as a defense-in-depth fallback, loads CR from the repo by application_id
+         if company_context is missing from the message (covers direct/legacy callers).
+      4. The VPR result persists provenance: company_research_id used + company_research_at
+         timestamp, so "was CR included / before the VPR?" is answerable from the artifact.
+  user_impact: >
+    Every VPR reflects real company research. The user can verify inclusion by reading
+    company_insights (now populated) and the new provenance fields, instead of guessing.
+
+# =============================================================================
+# EVIDENCE
+# =============================================================================
+evidence:
+  no_company_context_set:
+    - { file: src/backend/careervp/handlers/vpr_submit_handler.py, note: "grep company_context|company_research => 0 matches" }
+  worker_reads_none:
+    - { file: src/backend/careervp/handlers/vpr_worker_handler.py, line: 364, code: "company_context=input_data.get('company_context')" }
+  generator_company_insights:
+    - { file: src/backend/careervp/logic/vpr_generator.py, line: "518-521", note: "company_insights only built if 'company_insights' in payload" }
+    - { file: src/backend/careervp/logic/vpr_generator.py, line: "874-876", note: "render uses company_insights.mission_and_position" }
+  vpr_request_model:
+    - { file: src/backend/careervp/models/vpr.py, line: 614, code: "company_context: CompanyContext | None = None" }
+  frontend_payload:
+    - { file: src/frontend/hooks/useGenerateModule.ts, line: "46-51", note: "VPR generate body omits company_research_id" }
+
+# =============================================================================
+# ARCHITECTURE
+# =============================================================================
+architecture:
+  cr_resolution_helper:
+    location: src/backend/careervp/logic/company_research.py  # or a small dal helper — implementer's call
+    function: "load_confident_company_research(application_id, user_id) -> CompanyContext | None"
+    rules:
+      - "Returns the latest CR artifact for the application that PASSED the confidence gate (FE-UI-041)."
+      - "Ownership-checked: artifact.user_id == user_id, else None."
+      - "NEVER returns the fabricated 'Company for {uuid}' payload (that path is deleted by FE-UI-041)."
+      - "Maps the persisted CR record into the CompanyContext model consumed by VPRRequest."
+
+  submit_path_change:
+    file: src/backend/careervp/handlers/vpr_submit_handler.py
+    change: >
+      Before enqueueing, call load_confident_company_research(application_id, user_id).
+        - Found -> set input_data['company_context'] = serialized CompanyContext, and
+          input_data['company_research_id'] = cr.id.
+        - Not found -> hand off to FE-UI-038 resolver (return dependency_generating / 409).
+      Idempotency key format (vpr#{user_id}#{application_id}) is unchanged; company_context
+      is part of input_data, not the key.
+
+  worker_defense_in_depth:
+    file: src/backend/careervp/handlers/vpr_worker_handler.py
+    change: >
+      At line ~364, if input_data.get('company_context') is None, attempt
+      load_confident_company_research(application_id, user_id) before building VPRRequest.
+      This protects legacy/direct callers. If still None, proceed only when explicitly allowed
+      (chain off / legacy) and log a structured warning company_context_missing=true.
+
+  provenance_fields:
+    location: VPR result payload + jobs record
+    add:
+      - { field: company_research_id, type: "str | null", desc: "CR artifact id injected, null if none" }
+      - { field: company_research_at, type: "ISO8601 | null", desc: "CR.created_at — lets callers confirm CR predates the VPR" }
+      - { field: company_context_included, type: bool, desc: "true iff company_insights was generated from real CR" }
+    note: "Surface company_context_included in GET /vpr/{job_id}/status so the hub/UI can badge it."
+
+  generator_assertion:
+    file: src/backend/careervp/logic/vpr_generator.py
+    change: >
+      When company_context is provided, the prompt MUST request company_insights and the
+      result MUST populate company_insights (or log a hard warning). Add a post-generation
+      check: company_context provided but company_insights empty => log warning, set
+      company_context_included=false so the discrepancy is observable (do not silently claim inclusion).
+
+# =============================================================================
+# IMPLEMENTATION STEPS
+# =============================================================================
+implementation:
+  step_1:
+    name: "Add load_confident_company_research helper"
+    change: "Reads latest confident CR for application, ownership-checked, maps to CompanyContext."
+  step_2:
+    name: "Inject company_context in vpr_submit_handler"
+    change: "Populate input_data.company_context + company_research_id before SQS send; defer to resolver when absent."
+  step_3:
+    name: "Worker fallback load"
+    change: "vpr_worker_handler loads CR if message lacks company_context; structured logging."
+  step_4:
+    name: "Add provenance fields to VPR result + jobs record + status endpoint"
+    files:
+      - src/backend/careervp/handlers/vpr_worker_handler.py
+      - src/backend/careervp/handlers/vpr_status_handler.py
+  step_5:
+    name: "Generator inclusion check"
+    change: "Post-generation assertion sets company_context_included accurately."
+
+# =============================================================================
+# CONSTRAINTS
+# =============================================================================
+constraints:
+  - "VPR must consume ONLY confidence-gated CR (FE-UI-041) — never the fabricated payload"
+  - "Ownership check on the CR load is mandatory"
+  - "Idempotency key format unchanged; company_context lives in input_data only"
+  - "Chain path behavior unchanged (company_context already provided)"
+  - "company_context_included must reflect reality — no false 'included' claims"
+  - "mypy --strict passes; anti-AI-detection rules still apply to generated VPR company section"
+
+# =============================================================================
+# VALIDATION
+# =============================================================================
+validation:
+  commands:
+    - "cd src/backend && uv run mypy careervp --strict"
+    - "cd src/backend && uv run pytest tests/unit/ -v --tb=short -k 'vpr and (company or context or provenance)'"
+  acceptance_criteria:
+    - "Manual VPR submit injects company_context when confident CR exists"
+    - "VPR generated with company_context populates company_insights (mission_and_position non-empty)"
+    - "GET /vpr/{job_id}/status returns company_context_included + company_research_id + company_research_at"
+    - "Worker loads CR when message omits company_context (defense-in-depth test)"
+    - "VPR never built from the fabricated 'Company for {uuid}' payload"
+    - "company_context_included=false logged when context provided but insights empty"
+    - "mypy strict passes"
+
+# =============================================================================
+# TEST HOOKS
+# =============================================================================
+test_hooks:
+  - "TEST-CHAIN-002 § unit-cr-load: confident CR resolution + ownership"
+  - "TEST-CHAIN-002 § unit-vpr-inject: submit injects company_context"
+  - "TEST-CHAIN-002 § integration-vpr-includes-cr: company_insights populated end-to-end"
+  - "TEST-CHAIN-002 § unit-vpr-provenance: status endpoint exposes inclusion + timestamps"

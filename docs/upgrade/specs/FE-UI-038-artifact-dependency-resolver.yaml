@@ -1,0 +1,251 @@
+spec_id: FE-UI-038
+title: "Artifact Dependency Resolver — server-side fetch-or-generate for ALL downstream artifacts"
+priority: critical
+status: draft
+owner: backend
+created_at: 2026-06-14
+updated_at: 2026-06-14
+tier: feature
+
+human_approval_gate:
+  required: true
+  gate_number: 3
+  reason: >
+    Changes the public generation contract for VPR, CV Tailoring, Cover Letter, and
+    Interview Prep handlers (new 202 "dependency_generating" response shape) and adds
+    server-side enforcement of the artifact dependency graph. Touches multiple handlers
+    and introduces a shared resolver that can trigger Step Functions executions.
+  approval_before: "Any handler change that alters generate-endpoint response schema, or any new Step Functions start_execution call from a generate handler"
+
+recommended_model: opus
+reason_for_model: >
+  Cross-cutting dependency-graph enforcement, auth-ownership on every resolved upstream
+  artifact, and orchestration (fetch vs. auto-generate vs. block) are architecture- and
+  security-sensitive per project guidelines. Silent-fallback removal must not regress
+  existing manual flows.
+
+depends_on:
+  - FE-UI-029   # state machine, artifact_statuses, recovery endpoint
+  - FE-UI-031   # Step Functions chain (the auto-generate mechanism for upstream)
+  - FE-UI-040   # VPR<->CR binding (resolver injects CR into VPR via this)
+  - FE-UI-043   # persists chain_execution_arn/status — the resolver's running-chain guard reads it
+blocks:
+  - FE-UI-039   # CL/IP legs build on the resolver's contract
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    Downstream artifact generation resolves upstream dependencies inconsistently and
+    silently degrades:
+      - Cover Letter: missing VPR -> _FallbackVPR placeholder (cover_letter_handler.py:61-76,
+        _resolve_vpr_payload:320-340); missing CR/gap -> optional, ignored.
+      - Interview Prep: missing VPR -> minimal {'vpr_id': vpr_id} placeholder
+        (interview_prep_submit_handler.py ~233-254).
+      - CV Tailoring: missing vpr_id -> raises ValueError (cv_tailoring_handler.py:62) with
+        no recovery path.
+      - VPR: never fetches Company Research on the manual/standalone path; company_context
+        only arrives via the Step Functions chain (see FE-UI-040).
+    The dependency graph is enforced ONLY by frontend button-gating
+    (page.tsx getGenerationBlockReason:198-217). A direct API call bypasses it entirely.
+  required_behavior: >
+    A single server-side resolver enforces the artifact dependency graph for every
+    generation request (manual OR chain). For each required upstream artifact the resolver:
+      1. RESOLVES it (loads the real artifact, ownership-checked) if present and not stale.
+      2. AUTO-GENERATES it if missing/stale: starts the Step Functions chain (FE-UI-031/039)
+         from the correct upstream node, marks the requested artifact pending, and returns
+         HTTP 202 with status="dependency_generating" + the upstream artifact_ids being built.
+      3. NEVER substitutes a fabricated placeholder. _FallbackVPR and the interview-prep
+         {'vpr_id'} placeholder are removed.
+    The frontend gating remains as a UX hint, but is no longer the source of truth.
+  user_impact: >
+    Every generated artifact is built on real upstream data. Clicking "Generate Cover Letter"
+    with no VPR yet transparently generates the VPR (and CR) first, then the cover letter,
+    instead of silently producing a placeholder-based document. The user always knows when
+    upstream work is happening (202 + dependency_generating surfaced by FE-UI-042).
+
+# =============================================================================
+# DEPENDENCY GRAPH (source of truth)
+# =============================================================================
+dependency_graph:
+  description: "Directed acyclic graph the resolver enforces. Edge A -> B means B requires A."
+  edges:
+    - { upstream: gap_analysis,     downstream: company_research, required: true }
+    - { upstream: company_research, downstream: vpr,              required: true }
+    - { upstream: vpr,              downstream: cv_tailored,      required: true }
+    - { upstream: vpr,              downstream: cover_letter,     required: true }
+    - { upstream: company_research, downstream: cover_letter,     required: true }
+    - { upstream: vpr,              downstream: interview_prep,   required: true }
+  staleness_rule: >
+    An upstream artifact is "stale" (treated as needing regeneration) if its source inputs
+    changed after it was produced (e.g. gap_responses updated_at > vpr.created_at). Reuse the
+    existing staleModules logic from the hub adapter as the canonical staleness definition;
+    do not invent a second one.
+
+# =============================================================================
+# EVIDENCE / ROOT CAUSE FILES
+# =============================================================================
+evidence:
+  silent_fallbacks:
+    - { file: src/backend/careervp/handlers/cover_letter_handler.py, symbol: _FallbackVPR, line: "61-76" }
+    - { file: src/backend/careervp/handlers/cover_letter_handler.py, symbol: _resolve_vpr_payload, line: "320-340" }
+    - { file: src/backend/careervp/handlers/interview_prep_submit_handler.py, symbol: "vpr placeholder", line: "233-254" }
+    - { file: src/backend/careervp/handlers/cv_tailoring_handler.py, symbol: "_handle_sfn_invoke raises on missing vpr_id", line: "62" }
+  frontend_only_gating:
+    - { file: src/frontend/app/applications/[id]/page.tsx, symbol: getGenerationBlockReason, line: "198-217" }
+  chain_entrypoint:
+    - { file: src/backend/careervp/handlers/gap_handler.py, symbol: "Step Functions start_execution", line: "412-449" }
+  application_state_spec: docs/best_practices/yaml/application_state_spec.yaml
+  dynamodb_spec: docs/best_practices/yaml/dynamodb_modeling_spec.yaml
+
+# =============================================================================
+# ARCHITECTURE
+# =============================================================================
+architecture:
+  new_files:
+    - path: src/backend/careervp/logic/artifact_dependency_resolver.py
+      description: >
+        Pure-logic resolver. No I/O of its own beyond injected repositories. Exposes
+        resolve_dependencies(artifact_type, application_id, user_id, repos) -> DependencyResolution.
+
+  resolution_model:
+    name: DependencyResolution
+    fields:
+      status: "enum: ready | dependency_generating"
+      resolved_upstream: "dict[str, ArtifactRef]  # e.g. {'vpr': ref, 'company_research': ref}"
+      generating: "list[str]  # upstream artifact types being auto-generated, empty when ready"
+      chain_execution_arn: "str | None  # set when a Step Functions execution was started"
+    contract: >
+      - status=ready: all required upstream artifacts present, fresh, ownership-verified.
+        The handler proceeds to enqueue/generate the requested artifact normally.
+      - status=dependency_generating: at least one upstream is missing/stale. The resolver
+        has started (or confirmed already-running) the chain. The handler MUST NOT generate
+        the requested artifact now; it marks artifact_statuses[type]=pending and returns 202.
+
+  handler_response_contract:
+    http_202_dependency_generating:
+      body: |
+        {
+          "status": "dependency_generating",
+          "generating": ["company_research", "vpr"],   // upstream types being built
+          "chain_execution_arn": "arn:aws:states:...", // null if chain already running
+          "requested_artifact": "cover_letter"
+        }
+    note: >
+      Existing 200/202 success shapes for the already-resolvable case are unchanged.
+      This is an ADDITIVE response variant keyed by the new "status" field.
+
+  enforcement_points:
+    description: "Each generate handler calls the resolver BEFORE doing work."
+    handlers:
+      - { file: src/backend/careervp/handlers/cover_letter_submit_handler.py, requires: [vpr, company_research] }
+      - { file: src/backend/careervp/handlers/interview_prep_submit_handler.py, requires: [vpr] }
+      - { file: src/backend/careervp/handlers/cv_tailoring_handler.py, requires: [vpr] }
+      - { file: src/backend/careervp/handlers/vpr_submit_handler.py, requires: [company_research] }
+    rule: >
+      Remove the silent fallbacks listed in evidence. Replace each with:
+        resolution = resolve_dependencies(...)
+        if resolution.status == "dependency_generating":
+            mark_pending(); return 202(dependency_generating payload)
+        else:
+            proceed using resolution.resolved_upstream (real data only)
+
+  auto_generate_mechanism:
+    description: >
+      The resolver does NOT generate artifacts inline (latency/timeout risk). It starts the
+      existing Step Functions chain (FE-UI-031, extended by FE-UI-039) at the earliest missing
+      upstream node, so the chain produces the full upstream path and then the requested
+      downstream artifact. If a chain execution for this application is already RUNNING, the
+      resolver returns dependency_generating with chain_execution_arn=null (do NOT start a
+      duplicate execution).
+    idempotency: >
+      The running-chain guard reads application.chain_execution_arn + chain_execution_status
+      (persisted by FE-UI-043). If chain_execution_status == 'RUNNING', treat as already running
+      and do NOT start a second execution. Only start (and persist a new ARN via FE-UI-043's
+      set_chain_execution) when no RUNNING chain exists for the application. The current
+      random-suffix execution name (gap_handler.py:444) is NOT a dedupe mechanism — rely on the
+      persisted status flag, not the name.
+
+  ownership_enforcement:
+    rule: >
+      Every upstream artifact load MUST verify artifact.user_id == authenticated user_id.
+      A resolved upstream artifact owned by another user is treated as MISSING (never leaked,
+      never reused). This is CRITICAL and must be covered by a security test.
+
+# =============================================================================
+# IMPLEMENTATION STEPS
+# =============================================================================
+implementation:
+  step_1:
+    name: "Create artifact_dependency_resolver.py"
+    change: >
+      Pure function resolve_dependencies(artifact_type, application_id, user_id, repos).
+      Encodes dependency_graph.edges. Returns DependencyResolution. No boto3 imports here;
+      Step Functions trigger is passed in as a callable dependency (testability).
+  step_2:
+    name: "Add running-chain guard helper"
+    change: >
+      Helper is_chain_running(application_id) + start_chain_from(node, application_id, user_id)
+      wrapping sfn start_execution with the existing name/ownership guard. Reuse FE-UI-031
+      execution-name convention.
+  step_3:
+    name: "Wire resolver into cover_letter_submit_handler"
+    change: "Remove _FallbackVPR (lines 61-76) and placeholder resolution in _resolve_vpr_payload. Call resolver; branch on status."
+  step_4:
+    name: "Wire resolver into interview_prep_submit_handler"
+    change: "Remove {'vpr_id'} placeholder (233-254). Call resolver; branch on status."
+  step_5:
+    name: "Wire resolver into cv_tailoring_handler"
+    change: "Replace the raise-on-missing-vpr (line 62) with resolver call; missing vpr -> 202 dependency_generating, not 500."
+  step_6:
+    name: "Wire resolver into vpr_submit_handler"
+    change: "Require company_research; missing/stale -> start chain at CR node, 202. (CR injection itself is FE-UI-040.)"
+  step_7:
+    name: "Mark-pending helper"
+    change: >
+      On dependency_generating, set artifact_statuses[requested]='pending' via the existing
+      application repo so the recovery endpoint + hub reflect that the artifact is queued
+      behind its upstream.
+
+# =============================================================================
+# CONSTRAINTS
+# =============================================================================
+constraints:
+  - "NO fabricated placeholders anywhere in the downstream path — real upstream data or 202"
+  - "Resolver must be pure logic; all I/O (repos, sfn trigger) injected for unit-testability"
+  - "Ownership check on every upstream load is mandatory; cross-user artifact => treated as missing"
+  - "Never start a second chain execution for an application already running one"
+  - "Additive response variant only — existing 200/202 success shapes unchanged"
+  - "Feature-flag aware: when ARTIFACT_CHAIN_ENABLED=false, auto-generate is unavailable; resolver returns a 409 'upstream_required' with the missing list instead of starting a chain (manual mode preserved, but still NO placeholder)"
+  - "mypy --strict must pass"
+
+# =============================================================================
+# VALIDATION
+# =============================================================================
+validation:
+  commands:
+    - "cd src/backend && uv run ruff format . && uv run ruff check --fix ."
+    - "cd src/backend && uv run mypy careervp --strict"
+    - "cd src/backend && uv run pytest tests/unit/ -v --tb=short -k 'resolver or cover_letter or interview_prep or cv_tailoring or vpr'"
+  acceptance_criteria:
+    - "resolve_dependencies returns ready when all upstream present+fresh+owned"
+    - "resolve_dependencies returns dependency_generating + starts chain when VPR missing"
+    - "Cover Letter with no VPR returns HTTP 202 dependency_generating (NOT a placeholder document)"
+    - "Interview Prep with no VPR returns HTTP 202 (NOT {'vpr_id'} placeholder)"
+    - "CV Tailoring with no VPR returns HTTP 202 (NOT a 500/ValueError)"
+    - "Cross-user upstream artifact is treated as missing (security test passes)"
+    - "Second generate call while chain RUNNING does not start a duplicate execution"
+    - "ARTIFACT_CHAIN_ENABLED=false + missing upstream => 409 upstream_required, no placeholder"
+    - "grep shows _FallbackVPR removed from cover_letter_handler.py"
+    - "mypy strict passes"
+
+# =============================================================================
+# TEST HOOKS
+# =============================================================================
+test_hooks:
+  - "TEST-CHAIN-002 § unit-resolver: graph resolution ready/generating/stale"
+  - "TEST-CHAIN-002 § unit-resolver-ownership: cross-user upstream => missing"
+  - "TEST-CHAIN-002 § integration-downstream-202: CL/IP/CV return dependency_generating"
+  - "TEST-CHAIN-002 § integration-no-duplicate-chain: running-chain guard"
+  - "TEST-CHAIN-002 § regression-no-placeholders: _FallbackVPR / placeholder removed"

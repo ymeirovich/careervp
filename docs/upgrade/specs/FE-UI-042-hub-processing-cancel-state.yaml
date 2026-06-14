@@ -1,0 +1,196 @@
+spec_id: FE-UI-042
+title: "Hub Processing/Cancel button state — ALL artifacts, animated dots, failure recovery"
+priority: high
+status: draft
+owner: frontend
+created_at: 2026-06-14
+updated_at: 2026-06-14
+tier: bugfix
+
+human_approval_gate:
+  required: false
+  note: "Frontend-only UI/UX change to ModuleCard + hub page + generate hook. No API or schema change."
+
+recommended_model: sonnet
+reason_for_model: >
+  Component state-machine + hook error propagation in established React/Next codebase with
+  existing vitest/testing-library coverage. Pattern-following work, not novel architecture.
+
+depends_on:
+  - FE-UI-027   # hub generate UX (existing Processing/Cancel scaffolding)
+  - FE-UI-041   # CR 'not_generated' status mapping (so CR card participates uniformly)
+  - FE-UI-043   # backend CR cancel endpoint + real chain-stopping cancellation (FE Cancel must actually cancel)
+blocks: []
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    The Processing/Cancel UI exists but is partial and fragile:
+      1. Animation is wrong: ModuleCard.tsx:214 renders "Processing<span class='animate-pulse'>...</span>"
+         — animate-pulse fades the whole ellipsis; it is NOT three sequentially-animated dots.
+      2. Company Research is NOT covered: CR regeneration uses a separate isRetryingCompanyResearch
+         flag (page.tsx:188-196, 236-243) that does NOT flip the card to Processing/Cancel. So
+         "ANY artifact" is not uniformly handled — only the 4 genMap modules
+         (vpr, coverLetter, interviewPrep, tailoredCV) get the optimistic processing swap
+         (page.tsx:425-446).
+      3. Failures are swallowed: useGenerateModule.generate() captures errors into local `error`
+         state (useGenerateModule.ts:84-88) but handleGenerate (page.tsx:154-173) never reads it.
+         No error is surfaced, and the button is restored only incidentally by polling. The
+         requirement ("throw an error on failure and return the button to original state in any
+         case") is unmet.
+      4. Cancel can be missing during the optimistic window: cancelAction requires a known
+         taskId (page.tsx:434-442); before the POST returns, taskId is null so Cancel may not
+         render while "Processing..." shows with no way to cancel.
+  required_behavior: >
+    For EVERY artifact card (VPR, Company Research, CV Tailoring, Cover Letter, Interview Prep,
+    Gap Analysis where applicable) — whenever it is generating OR regenerating:
+      - The View / Edit / Regenerate (and Generate/Retry) actions are REPLACED by a single
+        disabled "Processing" indicator with THREE sequentially-animated dots, plus a Cancel button.
+      - The three dots animate in sequence (".", "..", "...") — not a whole-ellipsis fade.
+      - On failure (generate POST rejects, or polling returns failed): surface a visible error
+        on the card AND restore the original buttons (exit processing) in ALL cases.
+      - Cancel is always available while processing; if taskId is not yet known, Cancel aborts
+        the in-flight request / clears optimistic processing rather than being hidden.
+  user_impact: >
+    Consistent, legible feedback while any artifact is being (re)generated; users can always
+    cancel; failures are never silent and never leave a card stuck in "Processing...".
+
+# =============================================================================
+# EVIDENCE
+# =============================================================================
+evidence:
+  wrong_animation:
+    - { file: src/frontend/components/ModuleCard/ModuleCard.tsx, line: "207-224", note: "animate-pulse on whole '...'" }
+  cr_not_covered:
+    - { file: src/frontend/app/applications/[id]/page.tsx, line: "188-196", symbol: handleCompanyResearchRetry }
+    - { file: src/frontend/app/applications/[id]/page.tsx, line: "236-243", note: "CR uses isRetryingCompanyResearch, not processing state" }
+  optimistic_only_4_modules:
+    - { file: src/frontend/app/applications/[id]/page.tsx, line: "421-446", symbol: "genMap / GENERATABLE_MODULES" }
+  swallowed_error:
+    - { file: src/frontend/hooks/useGenerateModule.ts, line: "84-88", note: "error stored, never surfaced by caller" }
+    - { file: src/frontend/app/applications/[id]/page.tsx, line: "154-173", symbol: handleGenerate, note: "does not read gen.error" }
+  cancel_needs_taskid:
+    - { file: src/frontend/app/applications/[id]/page.tsx, line: "434-442", symbol: cancelAction }
+  existing_tests:
+    - src/frontend/tests/unit/module-card.test.tsx
+    - src/frontend/tests/integration/hub-generate-ux.test.tsx
+
+# =============================================================================
+# ARCHITECTURE
+# =============================================================================
+architecture:
+  animated_dots_component:
+    new_file: src/frontend/components/ui/ProcessingDots.tsx
+    behavior: >
+      Renders "Processing" + three <span> dots animated in sequence via CSS keyframes
+      (staggered animation-delay 0ms/200ms/400ms on opacity), respecting
+      prefers-reduced-motion (static "Processing..." when reduced motion is set).
+      aria-hidden on the dots; the accessible label remains "Processing {artifact}…" via
+      the existing sr-only live region.
+    tailwind_note: "Add a keyframes utility (e.g. animate-dot) in the tailwind config or a scoped CSS module; do NOT reuse animate-pulse."
+
+  unify_processing_across_all_cards:
+    change: >
+      Replace the genMap-only optimistic processing with a per-card processing model that
+      ALSO covers Company Research. Either:
+        (a) add companyResearch (and gapAnalysis if it has an async generate) to genMap with a
+            useGenerateModule-compatible generate/cancel, OR
+        (b) generalize the card's isActivelyProcessing to include CR's in-flight flag.
+      Preferred: (a) — one uniform mechanism. CR's generate => api.fetchCompanyResearch,
+      cancel => api.cancelCompanyResearch (add if missing) so the same Processing/Cancel UI
+      applies. Retire the bespoke isRetryingCompanyResearch path.
+    file: src/frontend/app/applications/[id]/page.tsx
+
+  failure_handling:
+    file: src/frontend/hooks/useGenerateModule.ts + page.tsx
+    rules:
+      - "generate() must reject (throw) on failure OR expose a definitive error; handleGenerate must read it."
+      - "handleGenerate: wrap in try/catch; on error setGenerationErrors[module] = message AND ensure isGenerating resets (finally) so buttons restore."
+      - "Polling failed result (useModuleStatus status==='failed') must also set the card error and exit processing."
+      - "In ALL cases (success/fail/cancel) the card must leave processing and show either result actions or the original Generate/Retry."
+
+  cancel_always_available:
+    rule: >
+      While isActivelyProcessing, Cancel renders unconditionally. If taskId is unknown
+      (pre-response window), Cancel aborts the in-flight request (AbortController) and clears
+      optimistic processing; if taskId known, it calls the existing cancel mutation.
+    note: "Add AbortController support to useGenerateModule.generate so a pre-taskId cancel is possible."
+
+  button_replacement_contract:
+    states_that_show_processing: ["processing (status)", "optimistic in-flight (generate or regenerate)"]
+    while_processing_hide: ["primaryAction (View/Generate/Regenerate/Retry/Export)", "secondaryActions (Edit/Regenerate/History)"]
+    while_processing_show: ["disabled ProcessingDots indicator", "Cancel button"]
+    note: "This already exists structurally in ModuleCard (lines 207-247); the fix makes it apply to ALL cards + correct animation + failure exit."
+
+# =============================================================================
+# IMPLEMENTATION STEPS
+# =============================================================================
+implementation:
+  step_1:
+    name: "Create ProcessingDots component + keyframes"
+    file: src/frontend/components/ui/ProcessingDots.tsx
+  step_2:
+    name: "Use ProcessingDots in ModuleCard processing block"
+    file: src/frontend/components/ModuleCard/ModuleCard.tsx
+    change: "Replace the animate-pulse span (line 214) with <ProcessingDots />; keep disabled button + Cancel layout."
+  step_3:
+    name: "Bring Company Research into the uniform processing/cancel model"
+    file: src/frontend/app/applications/[id]/page.tsx
+    change: "Add CR to genMap (generate=fetchCompanyResearch, cancel=cancelCompanyResearch); remove isRetryingCompanyResearch bespoke path."
+  step_4:
+    name: "Surface failures + always restore buttons"
+    files:
+      - src/frontend/hooks/useGenerateModule.ts
+      - src/frontend/app/applications/[id]/page.tsx
+    change: "Propagate error to handleGenerate (try/catch/finally); poll-failed sets error + exits processing."
+  step_5:
+    name: "AbortController + always-available Cancel"
+    file: src/frontend/hooks/useGenerateModule.ts
+  step_6:
+    name: "Wire api.cancelCompanyResearch (backend endpoint provided by FE-UI-043)"
+    file: src/frontend/api/methods.ts
+    change: "Add cancelCompanyResearch(jobId) -> POST /company-research/{jobId}/cancel. NOTE: Cancel must reflect REAL backend cancellation (chain stop + orphan cleanup per FE-UI-043), not just a local UI reset."
+
+# =============================================================================
+# CONSTRAINTS
+# =============================================================================
+constraints:
+  - "Applies to ALL artifact cards, not just the 4 genMap modules"
+  - "Three dots animate in sequence (not animate-pulse); honor prefers-reduced-motion"
+  - "On failure: show error AND restore original buttons — in EVERY case (no stuck Processing)"
+  - "Cancel always available while processing, even before taskId is known"
+  - "Preserve exact CTA labels enforced by cta-label-consistency.test.ts (View/Edit/Regenerate/Generate/Retry/Export)"
+  - "Accessibility: aria-busy on card, sr-only live region announces processing + result/error"
+  - "No backend/API contract change beyond adding a CR cancel call (already a backend concern)"
+
+# =============================================================================
+# VALIDATION
+# =============================================================================
+validation:
+  commands:
+    - "cd src/frontend && npm run typecheck"
+    - "cd src/frontend && npm run test:unit"
+    - "cd src/frontend && npm run test:integration"
+  acceptance_criteria:
+    - "While generating OR regenerating, every card hides View/Edit/Regenerate and shows ProcessingDots + Cancel"
+    - "ProcessingDots animates three dots sequentially; static under prefers-reduced-motion"
+    - "Company Research card shows Processing/Cancel during fetch/regenerate (not the old retry spinner)"
+    - "On load, an existing CR renders as 'complete' (View); only an absent CR shows 'notStarted' (per FE-UI-041)"
+    - "Cancel triggers a real backend cancel (FE-UI-043), not just a local UI state reset"
+    - "On generate failure, card shows an error message AND restores original buttons"
+    - "On poll status='failed', card shows error AND restores original buttons"
+    - "Cancel renders during the optimistic pre-taskId window and aborts the request"
+    - "cta-label-consistency.test.ts still passes (labels unchanged)"
+    - "typecheck + unit + integration tests pass"
+
+# =============================================================================
+# TEST HOOKS
+# =============================================================================
+test_hooks:
+  - "TEST-FE-042 § unit-processing-dots: sequential animation + reduced-motion"
+  - "TEST-FE-042 § unit-module-card-processing: buttons replaced for all states/modules"
+  - "TEST-FE-042 § integration-failure-recovery: failure surfaces error + restores buttons"
+  - "TEST-FE-042 § integration-cr-processing: CR card uses unified processing/cancel"
+  - "TEST-FE-042 § integration-cancel-pretaskid: cancel before taskId aborts request"

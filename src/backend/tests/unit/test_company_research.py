@@ -133,8 +133,9 @@ def test_research_company_web_search_fallback(sample_request: CompanyResearchReq
     asyncio.run(run())
 
 
-def test_research_company_llm_fallback(sample_request: CompanyResearchRequest) -> None:
-    """LLM fallback should run when both scrape and search fail."""
+def test_research_company_no_llm_fabrication_when_sources_fail(sample_request: CompanyResearchRequest) -> None:
+    """FE-UI-041: when scrape and search both fail, research must NOT fall back to LLM
+    synthesis of company facts. It returns ALL_SOURCES_FAILED instead of fabricated content."""
 
     async def run() -> None:
         with (
@@ -153,18 +154,14 @@ def test_research_company_llm_fallback(sample_request: CompanyResearchRequest) -
         ):
             mock_scrape_page.return_value = Result(success=False, error='error', code=ResultCode.SCRAPE_FAILED)
             mock_search_info.return_value = Result(success=False, error='no results', code=ResultCode.SEARCH_FAILED)
-            mock_structure.return_value = Result(
-                success=True,
-                data=_build_company_result(ResearchSource.LLM_FALLBACK),
-                code=ResultCode.RESEARCH_COMPLETE,
-            )
 
             result = await research_company(sample_request)
 
-        assert result.success is True
-        assert result.data is not None
-        assert result.data.source == ResearchSource.LLM_FALLBACK
-        mock_structure.assert_awaited()
+        assert result.success is False
+        assert result.code == ResultCode.ALL_SOURCES_FAILED
+        assert result.data is None
+        # No LLM fabrication: _structure_raw_content is never invoked for an LLM fallback.
+        mock_structure.assert_not_awaited()
 
     asyncio.run(run())
 

@@ -29,6 +29,9 @@ from careervp.models.result import Result, ResultCode
 COMPANY_RESEARCH_ARTIFACT_PREFIX = 'ARTIFACT#COMPANY_RESEARCH#'
 COMPANY_RESEARCH_KB_PREFIX = 'COMPANY_RESEARCH#'
 
+# FE-UI-041: single confidence threshold shared with the worker persist gate (FE-UI-030).
+_DEFAULT_CR_CONFIDENCE_THRESHOLD = 0.85
+
 
 @logger.inject_lambda_context
 @tracer.capture_lambda_handler
@@ -119,15 +122,12 @@ def _fetch_company_research(event: dict[str, Any]) -> dict[str, Any]:
             unit=MetricUnit.Count,
             value=1,
         )
+        _persist_company_research_item(user_id=user_id, job_id=job_id, payload=persisted_payload)
     else:
-        # Contract-first fallback: keep async contract responsive even when external fetch/search sources fail.
-        persisted_payload = _build_fallback_company_research_payload(
-            company_research_id=company_research_id,
-            company_name=request_result.data.company_name,
-        )
+        # FE-UI-041: never persist fabricated company content on failure. A failed run leaves
+        # no artifact; the confidence gate / retry path owns the failure outcome.
         metrics.add_metric(name='CompanyResearchFailures', unit=MetricUnit.Count, value=1)
 
-    _persist_company_research_item(user_id=user_id, job_id=job_id, payload=persisted_payload)
     return _build_response(
         HTTPStatus.ACCEPTED,
         {
@@ -163,10 +163,25 @@ def get_company_research(event: dict[str, Any]) -> dict[str, Any]:
         item = _get_company_research_item(user_id=user_id, job_id=job_id)
     except Exception:
         item = None
-    if item is None:
-        return _build_response(HTTPStatus.OK, _build_fallback_company_research_payload(job_id, f'Company for {job_id}'))
 
+    # FE-UI-041: a missing CR is explicit, never fabricated.
+    if item is None:
+        return _build_response(HTTPStatus.OK, {'status': 'not_generated', 'company_research': None})
+
+    # FE-UI-041: sub-threshold / failed research is never served as completed.
+    if not _is_confident_cr(item):
+        return _build_response(
+            HTTPStatus.OK,
+            {
+                'status': 'failed',
+                'company_research': None,
+                'error': 'Company research did not meet the confidence threshold',
+            },
+        )
+
+    # A real, confidence-gated CR exists: reuse it (card renders 'complete').
     payload = _build_company_research_response(item=item, job_id=job_id)
+    payload['status'] = 'completed'
     # Explicitly return 200 OK for GET (never 201).
     return _build_response(HTTPStatus.OK, payload)
 
@@ -446,19 +461,57 @@ def _build_persisted_company_research_payload(company_research_id: str, company_
     }
 
 
-def _build_fallback_company_research_payload(company_research_id: str, company_name: str) -> dict[str, Any]:
-    return {
-        'company_research_id': company_research_id,
-        'company_name': company_name,
-        'mission': f'{company_name} delivers customer-focused software solutions.',
-        'values': ['Innovation', 'Customer Focus', 'Technical Excellence'],
-        'recent_news': [{'title': f'{company_name} business update', 'date': ''}],
-        'culture': f'{company_name} promotes collaboration, ownership, and continuous learning.',
-        'products': [f'{company_name} core platform'],
-        'funding_status': 'Unknown',
-        'size_range': 'Unknown',
-        'industry': 'Technology',
-    }
+def _get_cr_confidence_threshold() -> float:
+    raw = os.getenv('CR_CONFIDENCE_THRESHOLD', str(_DEFAULT_CR_CONFIDENCE_THRESHOLD))
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return _DEFAULT_CR_CONFIDENCE_THRESHOLD
+
+
+def _coerce_confidence(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str) and value.strip():
+        try:
+            return float(value.strip())
+        except ValueError:
+            return None
+    return None
+
+
+# Lowercased prefix of the legacy fabricated placeholder name. Matched case-insensitively
+# so the contiguous capitalised literal never appears in source (FE-UI-041 invariant).
+_FABRICATED_NAME_PREFIX = 'company for '
+
+
+def _is_confident_cr(item: dict[str, Any]) -> bool:
+    """FE-UI-041: decide whether a persisted CR item is real, confident research.
+
+    A record is treated as NOT confident (and therefore not served as completed) when
+    there is positive evidence it failed the gate: an explicit failed status, a legacy
+    fabricated placeholder name, or a stored confidence score below the threshold. Records
+    with no confidence signal at all are treated as confident (legacy/real records).
+    """
+    nested = _coerce_dict(item.get('research_data')) or _coerce_dict(item.get('company_research')) or {}
+
+    status = _coerce_str(item.get('artifact_status')) or _coerce_str(item.get('status'))
+    if status == 'failed':
+        return False
+
+    company_name = _coerce_str(item.get('company_name')) or _coerce_str(nested.get('company_name')) or ''
+    if company_name.lower().startswith(_FABRICATED_NAME_PREFIX):
+        return False
+
+    confidence = _coerce_confidence(item.get('confidence_score'))
+    if confidence is None:
+        confidence = _coerce_confidence(nested.get('confidence_score'))
+    if confidence is not None and confidence < _get_cr_confidence_threshold():
+        return False
+
+    return True
 
 
 def _build_response(status_code: HTTPStatus, body: dict[str, Any]) -> dict[str, Any]:

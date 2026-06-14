@@ -534,7 +534,9 @@ def _build_job_prompt_payload(job_id: str, focus_areas: list[str]) -> dict[str, 
             description = str(job_record.get('description', '')).strip()
             requirements = [str(r) for r in (job_record.get('requirements') or []) if str(r).strip()]
             return {
-                'company_name': company or f'Company for {job_id}',
+                # FE-UI-041: never fabricate a placeholder company name; use the real
+                # company_name from the job posting or leave it empty for CR to resolve.
+                'company_name': company,
                 'role_title': title or f'Role for {job_id}',
                 'requirements': requirements or focus_areas or ['Core competency'],
                 'responsibilities': [description] if description else ['Deliver measurable business impact'],
@@ -542,7 +544,8 @@ def _build_job_prompt_payload(job_id: str, focus_areas: list[str]) -> dict[str, 
     except Exception as exc:
         logger.warning('Could not fetch job data for gap prompt', job_id=job_id, error=str(exc))
     return {
-        'company_name': f'Company for {job_id}',
+        # FE-UI-041: no fabricated placeholder company name.
+        'company_name': '',
         'role_title': f'Role for {job_id}',
         'requirements': focus_areas or ['Core competency'],
         'responsibilities': ['Deliver measurable business impact'],

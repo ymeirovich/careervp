@@ -1,0 +1,199 @@
+spec_id: FE-UI-041
+title: "Company Research quality gate — remove fabricated payload, enforce confidence, surface 'not generated'"
+priority: critical
+status: draft
+owner: backend
+created_at: 2026-06-14
+updated_at: 2026-06-14
+tier: feature
+
+human_approval_gate:
+  required: true
+  gate_number: 3
+  reason: >
+    Changes the GET /company-research/{jobId} response contract (stops returning a fabricated
+    200 payload; introduces a not_generated status / 404) and changes what CR results are
+    eligible to persist. Public-API behavior change consumed by the frontend.
+  approval_before: "Any change to get_company_research response shape or removal of _build_fallback_company_research_payload"
+
+recommended_model: opus
+reason_for_model: >
+  The fabricated-payload removal is a correctness + trust issue and the confidence gate must
+  not break the chain (FE-UI-030 already gates at 0.85). Aligning serve-time and persist-time
+  gating across handler + worker + chain requires careful cross-file reasoning.
+
+depends_on:
+  - FE-UI-029   # company_research artifact_status + company_research_error flag
+  - FE-UI-030   # CR worker + confidence gate (_calculate_confidence, 0.85 threshold)
+blocks:
+  - FE-UI-040   # VPR consumes only confident CR; needs this gate as the definition of "confident"
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    Company Research fabricates content and masks "not generated" as "completed":
+      - GET /company-research/{jobId} returns HTTP 200 with a synthetic payload built from the
+        UUID when no item exists:
+        company_research_handler.py:167
+          -> _build_fallback_company_research_payload(job_id, f'Company for {job_id}')
+        Output literally: company_name="Company for <uuid>",
+          mission="<uuid> delivers customer-focused software solutions.",
+          values=["Innovation","Customer Focus","Technical Excellence"],
+          products=["<uuid> core platform"], funding_status="Unknown", size_range="Unknown".
+      - gap_handler.py:537,545 also seeds company_name="Company for {job_id}" placeholders.
+      - The LLM-fallback research path (company_research.py _try_llm_fallback / _fallback_overview)
+        can produce generic low-confidence content that still gets persisted/served.
+    Net effect: downstream artifacts (and the user) receive plausible-looking garbage that is
+    indistinguishable from real research. This is the payload the user flagged as unacceptable.
+  required_behavior: >
+    Company Research is either REAL (confidence-gated) or explicitly ABSENT — never fabricated:
+      1. Delete _build_fallback_company_research_payload and its call site. GET on a missing CR
+         returns a 200 with {status:"not_generated", company_research:null} (or 404 — choose one
+         and make the frontend consume it; see decision). NEVER a fabricated company.
+      2. Apply the confidence gate (FE-UI-030, CR_CONFIDENCE_THRESHOLD=0.85) at PERSIST time:
+         sub-threshold results are NOT persisted as 'completed'; they set
+         artifact_statuses.company_research=failed + company_research_error (already specced in
+         FE-UI-030) so retry/auto-gen kicks in instead of serving weak data.
+      3. Remove the "Company for {job_id}" name seeding in gap_handler; use the real company_name
+         from the job posting, or leave null and let CR derive it.
+      4. Optionally raise CR quality: prefer scrape > search > (no LLM-fabrication). LLM may
+         STRUCTURE scraped/searched facts but must not invent company facts from only the UUID.
+  user_impact: >
+    Users never see "Company for <uuid>" garbage. A missing CR is shown as "not generated yet"
+    with a real Generate/Retry action; a present CR is trustworthy real research.
+
+# =============================================================================
+# EVIDENCE
+# =============================================================================
+evidence:
+  fabricated_serve:
+    - { file: src/backend/careervp/handlers/company_research_handler.py, line: 167, code: "_build_fallback_company_research_payload(job_id, f'Company for {job_id}')" }
+    - { file: src/backend/careervp/handlers/company_research_handler.py, line: "449-461", symbol: _build_fallback_company_research_payload }
+  placeholder_name_seed:
+    - { file: src/backend/careervp/handlers/gap_handler.py, line: 537, code: "'company_name': company or f'Company for {job_id}'" }
+    - { file: src/backend/careervp/handlers/gap_handler.py, line: 545, code: "'company_name': f'Company for {job_id}'" }
+  llm_fallback:
+    - { file: src/backend/careervp/logic/company_research.py, symbol: _try_llm_fallback, line: "159-171" }
+    - { file: src/backend/careervp/logic/company_research.py, symbol: _fallback_overview, line: 287 }
+    - { file: src/backend/careervp/logic/company_research.py, symbol: _calculate_confidence, line: 332 }
+  confidence_threshold_precedent: "FE-UI-030: WEBSITE_SCRAPE 0.8-0.9 pass; WEB_SEARCH 0.3-0.7 retry; LLM_FALLBACK 0.4-0.5 hard-fail"
+
+# =============================================================================
+# ARCHITECTURE
+# =============================================================================
+architecture:
+  decision_missing_cr_response:
+    decided: "200 with {status:'not_generated', company_research:null}"   # ACCEPTED by owner 2026-06-14
+    rationale: >
+      The hub already polls these endpoints; a 200 + explicit status is less disruptive to
+      existing polling than a 404, and lets the recovery endpoint (FE-UI-029) stay the single
+      source for state. The frontend treats status='not_generated' as ModuleStatus 'notStarted'.
+    rejected_alternative: "404 (strict REST) — not chosen; would force FE error-handling changes."
+
+  on_page_load_reuse_existing_cr:
+    requirement: >
+      On application/hub load, if a real (confidence-gated) CR already exists it MUST be reused,
+      not refetched or regenerated, and not masked by a fabricated payload:
+        - GET /company-research returns the persisted real record (status 'completed').
+        - The hub renders the CR card as 'complete' (View), not 'notStarted'/'processing'.
+        - VPR generation (FE-UI-040) and the resolver (FE-UI-038) consume this existing CR
+          instead of triggering a new CR run.
+        - Only a truly absent CR yields status 'not_generated' -> card 'notStarted' with Generate.
+
+  serve_path_change:
+    file: src/backend/careervp/handlers/company_research_handler.py
+    changes:
+      - "DELETE _build_fallback_company_research_payload (449-461)."
+      - "get_company_research: when item is None -> return {status:'not_generated', company_research:null} (no fabrication)."
+      - "When item present but stored with status=failed/low-confidence -> return {status:'failed', company_research:null, error:...}."
+
+  persist_gate:
+    file: src/backend/careervp/handlers/company_research_worker_handler.py  # FE-UI-030
+    rule: >
+      Reuse FE-UI-030 confidence gate as the SINGLE definition of 'confident'. Only persist
+      status='completed' when confidence >= CR_CONFIDENCE_THRESHOLD. Sub-threshold -> failed +
+      company_research_error per FE-UI-030 hard_fail. No separate threshold here.
+    note: "If a sync persist path still exists in company_research_handler, it must apply the same gate."
+
+  gap_handler_cleanup:
+    file: src/backend/careervp/handlers/gap_handler.py
+    change: >
+      Replace 'Company for {job_id}' seeds (lines 537,545) with the real company_name from the
+      job posting record; if unavailable, pass null and let CR resolve the name from scrape/search.
+
+  quality_rules:
+    file: src/backend/careervp/logic/company_research.py
+    rules:
+      - "LLM may synthesize/structure facts obtained from scrape/search; it MUST NOT invent facts from only an id/url with no source content."
+      - "If no source content was obtained (scrape+search both empty), return Result(success=False, ALL_SOURCES_FAILED) — do NOT emit _fallback_overview generic text as a 'result'."
+      - "confidence must reflect real source coverage; a result with zero real sources => confidence below threshold => not persisted as completed."
+
+  data_quality_definition:
+    confident_cr_must_have:
+      - "company_name not matching /^Company for /"
+      - "at least one of {mission, culture, products[], recent_news[]} sourced from scrape/search (not generic template)"
+      - "confidence_score >= CR_CONFIDENCE_THRESHOLD"
+
+# =============================================================================
+# IMPLEMENTATION STEPS
+# =============================================================================
+implementation:
+  step_1:
+    name: "Remove fabricated serve payload"
+    file: src/backend/careervp/handlers/company_research_handler.py
+    change: "Delete _build_fallback_company_research_payload + call site; return not_generated/failed status objects."
+  step_2:
+    name: "Enforce confidence at persist (single source of truth)"
+    change: "Confirm worker (FE-UI-030) gates persist; remove any non-gated persist in the sync handler."
+  step_3:
+    name: "Clean gap_handler placeholder names"
+    file: src/backend/careervp/handlers/gap_handler.py
+  step_4:
+    name: "Harden CR logic against fact-invention"
+    file: src/backend/careervp/logic/company_research.py
+    change: "No-source => ALL_SOURCES_FAILED; remove/neutralize _fallback_overview as a result source."
+  step_5:
+    name: "Frontend consume not_generated"
+    file: src/frontend/adapters/mapApplicationDataToHubState.ts
+    change: "Map CR status 'not_generated' -> 'notStarted', 'failed' -> 'failed'. (Coordinated with FE-UI-042.)"
+
+# =============================================================================
+# CONSTRAINTS
+# =============================================================================
+constraints:
+  - "NO fabricated company content anywhere — missing CR is explicit, not synthetic"
+  - "Single confidence threshold (CR_CONFIDENCE_THRESHOLD) shared by serve + persist + chain"
+  - "Removing the fallback must not 500 the GET endpoint — return a clean not_generated object"
+  - "company_name must never be 'Company for <uuid>'"
+  - "Anti-AI-detection rules apply to any real CR text synthesis"
+  - "mypy --strict passes; no regression to FE-UI-030 worker tests"
+
+# =============================================================================
+# VALIDATION
+# =============================================================================
+validation:
+  commands:
+    - "cd src/backend && uv run mypy careervp --strict"
+    - "cd src/backend && uv run pytest tests/unit/ -v --tb=short -k 'company_research or gap'"
+    - "cd src/frontend && npm run typecheck && npm run test:unit"
+  acceptance_criteria:
+    - "GET /company-research on missing CR returns {status:'not_generated', company_research:null} (no fabricated company)"
+    - "grep: _build_fallback_company_research_payload removed from codebase"
+    - "grep: no 'Company for ' literal remains in gap_handler.py or company_research_handler.py"
+    - "Sub-threshold CR is NOT served as completed (returns failed/not_generated)"
+    - "No-source research returns ALL_SOURCES_FAILED, not generic template text"
+    - "Frontend maps not_generated -> notStarted card state"
+    - "On load, an existing confidence-gated CR is reused (card 'complete', no re-fetch/regenerate)"
+    - "VPR + resolver consume the existing CR on load instead of triggering a new CR run"
+    - "mypy strict + FE typecheck pass"
+
+# =============================================================================
+# TEST HOOKS
+# =============================================================================
+test_hooks:
+  - "TEST-CHAIN-002 § unit-cr-serve: missing CR => not_generated, never fabricated"
+  - "TEST-CHAIN-002 § unit-cr-quality: no-source => ALL_SOURCES_FAILED"
+  - "TEST-CHAIN-002 § unit-cr-confidence: sub-threshold not served as completed"
+  - "TEST-CHAIN-002 § regression-no-company-for: literal removed everywhere"

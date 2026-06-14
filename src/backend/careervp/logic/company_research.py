@@ -86,17 +86,20 @@ async def _research_company_inner(request: CompanyResearchRequest) -> Result[Com
             logger.info('[RESEARCH_SUCCESS] Source: WEB_SEARCH', company_name=request.company_name)
         return structured
 
-    # Fallback 2: LLM synthesis from job posting
+    # No real source content was obtained from scrape or search. Per FE-UI-041 we do NOT
+    # synthesise company facts from the job posting alone — that produced fabricated,
+    # low-confidence content indistinguishable from real research. Report an explicit
+    # failure so the confidence gate / retry path owns the outcome.
     logger.warning(
-        '[LLM_FALLBACK] All sources failed, using LLM synthesis',
+        '[ALL_SOURCES_FAILED] Scrape and search both returned no usable content',
         company_name=request.company_name,
         reason=search_result.error,
     )
-    fallback_result = await _try_llm_fallback(request)
-    if fallback_result.success:
-        logger.info('[RESEARCH_SUCCESS] Source: LLM_FALLBACK', company_name=request.company_name)
-        return fallback_result
-    return fallback_result
+    return Result(
+        success=False,
+        error='No company research sources returned usable content',
+        code=ResultCode.ALL_SOURCES_FAILED,
+    )
 
 
 async def _try_website_scrape(

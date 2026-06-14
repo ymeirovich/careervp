@@ -39,6 +39,8 @@ export function deriveModuleStatus(
 ): ModuleStatus {
   if (rawStatus === null || rawStatus === undefined) return 'notStarted';
   if (rawStatus === 'cancelled') return 'notStarted';
+  // FE-UI-041: a CR that was never generated maps to the 'notStarted' card state (Generate action).
+  if (rawStatus === 'not_generated') return 'notStarted';
   if (rawStatus === 'pending' || rawStatus === 'processing') return 'processing';
   if (rawStatus === 'failed') return 'failed';
   // completed

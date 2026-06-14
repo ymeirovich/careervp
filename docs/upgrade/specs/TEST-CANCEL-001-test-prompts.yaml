@@ -1,0 +1,261 @@
+spec_id: TEST-CANCEL-001
+title: "Test Prompts — Cancellation lifecycle, chain stop, CR cancel, worker guard, orphan cleanup"
+priority: critical
+status: draft
+owner: backend
+created_at: 2026-06-14
+updated_at: 2026-06-14
+type: test_prompts
+note: >
+  Runnable prompts for a fresh Claude session / test-runner. Covers FE-UI-043. Backend + infra.
+  Author tests BEFORE implementation (gate 3). moto for DynamoDB/S3; mock the Step Functions
+  client. Frontend cancel-UX tests live in TEST-FE-042.
+
+context_required: >
+  Working directory: /Users/yitzchak/Documents/dev/careervp
+  Backend: src/backend/careervp/
+  Infra:   infra/careervp/
+  Spec:    docs/upgrade/specs/FE-UI-043-cancellation-and-orphan-cleanup.yaml
+
+recommended_model_for_test_authoring: sonnet
+recommended_model_for_complex_test_cases: opus  # race guard, reaper safety, stop-chain fan-out
+
+# =============================================================================
+# CATEGORY A: UNIT — cancel_artifact ORCHESTRATION
+# =============================================================================
+unit_cancellation:
+  prompt: |
+    Context: FE-UI-043 adds logic/cancellation.py cancel_artifact(artifact_type, artifact_id,
+    application_id, user_id, repos, sfn). Chained cancel stops the whole execution; standalone
+    cancel stops one job.
+
+    Files: src/backend/tests/unit/test_cancellation.py
+
+    1. test_chained_cancel_stops_execution_and_marks_pending
+       Setup: application.chain_execution_status='RUNNING', chain_execution_arn set;
+              artifact_statuses {vpr:'processing', cv_tailored:'pending', cover_letter:'pending'}.
+       Action: cancel_artifact('vpr', ...).
+       Assert: sfn.stop_execution called with the chain ARN; chain_execution_status set 'STOPPED';
+               vpr/cv_tailored/cover_letter statuses set 'cancelled'.
+
+    2. test_standalone_cancel_does_not_stop_chain
+       Setup: no running chain (chain_execution_status None).
+       Action: cancel_artifact('cover_letter', ...).
+       Assert: sfn.stop_execution NOT called; only the cover_letter job set CANCELLED.
+
+    3. test_cancel_terminal_job_returns_conflict
+       Setup: job status COMPLETED.
+       Assert: returns CONFLICT; no stop_execution; no status change.
+
+    4. test_cancel_non_owner_forbidden
+       Setup: job.user_id != user_id.
+       Assert: FORBIDDEN; no mutation.
+
+    5. test_cancel_idempotent_double_call
+       Action: cancel twice.
+       Assert: second call is a safe no-op / consistent CONFLICT; no duplicate stop_execution.
+
+    6. test_stop_execution_failure_still_marks_cancelled
+       Setup: sfn.stop_execution raises.
+       Assert: artifact still marked CANCELLED; error logged; no exception propagated as 500.
+
+    Run: cd src/backend && uv run pytest tests/unit/test_cancellation.py -v --tb=short
+    All 6 tests must pass.
+
+# =============================================================================
+# CATEGORY B: UNIT — WORKER CANCELLED GUARD (race)
+# =============================================================================
+unit_worker_guard:
+  prompt: |
+    Context: FE-UI-043 — every worker re-reads status before the COMPLETED persist and aborts
+    if CANCELLED, using a conditional UpdateItem (ConditionExpression status<>'CANCELLED').
+
+    Files: src/backend/tests/unit/test_worker_cancelled_guard.py
+    Parametrize across vpr / cover_letter / interview_prep / cv_tailoring / company_research workers.
+
+    1. test_worker_skips_completed_write_when_cancelled
+       Setup: job status flips to CANCELLED just before persist.
+       Action: run worker persist path.
+       Assert: COMPLETED write NOT applied (conditional write fails / is skipped);
+               status remains CANCELLED.
+
+    2. test_worker_deletes_partial_s3_on_cancel
+       Setup: worker already wrote the S3 result, then detects CANCELLED.
+       Assert: S3 result object deleted (or never finalized); no presigned URL persisted.
+
+    3. test_worker_sends_task_failure_when_cancelled_with_token
+       Setup: task_token present; CANCELLED detected.
+       Assert: sfn.send_task_failure(error='Cancelled') called; send_task_success NOT called.
+
+    4. test_worker_normal_completion_unaffected
+       Setup: not cancelled.
+       Assert: COMPLETED write applied; result persisted (no regression).
+
+    Run: cd src/backend && uv run pytest tests/unit/test_worker_cancelled_guard.py -v --tb=short
+    All 4 tests must pass.
+
+# =============================================================================
+# CATEGORY C: UNIT — COMPANY RESEARCH CANCEL ENDPOINT
+# =============================================================================
+unit_cr_cancel:
+  prompt: |
+    Context: FE-UI-043 adds POST /company-research/{jobId}/cancel symmetric with the others.
+
+    Files: src/backend/tests/unit/test_company_research_cancel.py
+
+    1. test_cr_cancel_sets_cancelled
+       Setup: CR job in-flight (pending/processing).
+       Assert: status set CANCELLED; returns {status:'cancelled'}.
+
+    2. test_cr_cancel_terminal_conflict
+       Setup: CR COMPLETED.
+       Assert: CONFLICT.
+
+    3. test_cr_cancel_non_owner_forbidden
+       Assert: FORBIDDEN.
+
+    4. test_cr_cancel_stops_chain_when_running
+       Setup: running chain.
+       Assert: cancel_artifact path invoked -> sfn.stop_execution called.
+
+    Run: cd src/backend && uv run pytest tests/unit/test_company_research_cancel.py -v --tb=short
+    All 4 tests must pass.
+
+# =============================================================================
+# CATEGORY D: INTEGRATION — STOP CHAIN END TO END
+# =============================================================================
+integration_stop_chain:
+  prompt: |
+    Context: FE-UI-043 + FE-UI-031. Cancelling during an active chain stops the execution and
+    no further downstream artifacts are produced.
+
+    Files: src/backend/tests/integration/test_stop_chain.py
+    moto DynamoDB + mocked sfn; gap_handler persists chain_execution_arn.
+
+    1. test_gap_submit_persists_execution_arn
+       Setup: ARTIFACT_CHAIN_ENABLED=true.
+       Action: POST gap-responses.
+       Assert: application.chain_execution_arn set; chain_execution_status='RUNNING'.
+
+    2. test_cancel_during_chain_stops_and_marks_pending_cancelled
+       Setup: chain running, VPR processing, CV/CL/IP pending.
+       Action: POST /vpr/{id}/cancel.
+       Assert: stop_execution called; chain_execution_status='STOPPED';
+               cv_tailored/cover_letter/interview_prep statuses = 'cancelled'.
+
+    3. test_no_downstream_artifacts_after_cancel
+       Assert: after cancel, no new VPR/CV/CL/IP job rows created; no new S3 result objects.
+
+    Run: cd src/backend && uv run pytest tests/integration/test_stop_chain.py -v --tb=short
+    All 3 tests must pass.
+
+# =============================================================================
+# CATEGORY E: INTEGRATION — ORPHAN CLEANUP REAPER
+# =============================================================================
+integration_reaper:
+  prompt: |
+    Context: FE-UI-043 reaper deletes partial artifacts for CANCELLED jobs and reconciles
+    late completions (worker finished AFTER cancel).
+
+    Files: src/backend/tests/integration/test_orphan_reaper.py
+    moto DynamoDB + S3.
+
+    1. test_reaper_deletes_cancelled_partial_s3_and_resets_status
+       Setup: CANCELLED job with result_key pointing to an existing S3 object.
+       Action: run reaper.
+       Assert: S3 object deleted; artifact_statuses[type]='cancelled'; idempotent on re-run.
+
+    2. test_reaper_reconciles_late_completion
+       Setup: job COMPLETED with completed_at AFTER the cancel, application chain_execution_status='STOPPED'.
+       Action: run reaper.
+       Assert: status rolled back to CANCELLED; S3 result deleted.
+
+    3. test_reaper_does_not_touch_live_completed_artifacts
+       Setup: COMPLETED artifact, chain_execution_status != STOPPED (legitimate completion).
+       Action: run reaper.
+       Assert: artifact untouched; S3 object retained.
+
+    4. test_reaper_dry_run_mode
+       Setup: CLEANUP_DRY_RUN=true.
+       Assert: logs intended deletions; performs NO deletes.
+
+    Run: cd src/backend && uv run pytest tests/integration/test_orphan_reaper.py -v --tb=short
+    All 4 tests must pass.
+
+# =============================================================================
+# CATEGORY F: SECURITY — REAPER + CANCEL SAFETY
+# =============================================================================
+security_reaper:
+  prompt: |
+    Context: FE-UI-043 cleanup and cancel must be ownership-scoped and status-guarded.
+
+    Files: src/backend/tests/security/test_cancel_cleanup_safety.py
+
+    1. test_reaper_never_deletes_other_users_artifacts
+       Setup: CANCELLED job owned by user A; an artifact owned by user B in same bucket/table.
+       Action: reaper for A's application.
+       Assert: B's artifact + S3 object untouched.
+
+    2. test_cancel_cannot_cancel_other_users_job
+       Assert: FORBIDDEN; no stop_execution; no status change.
+
+    3. test_stop_execution_scoped_to_owning_application_chain
+       Assert: stop_execution targets only the chain ARN of the caller's application.
+
+    Run: cd src/backend && uv run pytest tests/security/test_cancel_cleanup_safety.py -v --tb=short
+    All 3 tests must pass.
+
+# =============================================================================
+# CATEGORY G: INFRA — CANCEL ROUTE + STOPEXECUTION GRANT + REAPER SCHEDULE
+# =============================================================================
+infra_cancel_resources:
+  prompt: |
+    Context: FE-UI-043 adds the CR cancel route, states:StopExecution grant, and the reaper
+    Lambda + EventBridge schedule.
+
+    Files: infra/tests/test_cancellation_infra.py (aws_cdk.assertions.Template)
+
+    1. test_company_research_cancel_route_exists
+       Assert: API Gateway has POST /company-research/{jobId}/cancel -> company_research_func.
+
+    2. test_cancel_role_has_stopexecution_scoped
+       Assert: an IAM policy grants states:StopExecution + states:DescribeExecution on the chain
+               ARN ONLY; NO states:* wildcard.
+
+    3. test_reaper_lambda_and_schedule_present
+       Assert: reaper Lambda present; an EventBridge (Scheduler/Rule) target invokes it.
+
+    4. test_reaper_role_scoped_delete
+       Assert: reaper role grants s3:DeleteObject (prefix-scoped) + dynamodb delete/update on the
+               jobs+applications tables only; no broad wildcards.
+
+    5. test_template_no_cycle
+       Assert: Template.from_stack synthesizes with no dependency cycle (FE-UI-035 regression).
+
+    Run: cd infra && uv run pytest tests/test_cancellation_infra.py -v --tb=short
+    Then: python src/backend/scripts/validate_naming.py --path infra --strict
+    All 5 tests must pass + naming passes.
+
+# =============================================================================
+# CATEGORY H: REGRESSION
+# =============================================================================
+regression_cancel:
+  prompt: |
+    Context: FE-UI-043 must not regress existing cancel behavior or other endpoints.
+    Steps:
+    1. cd src/backend && uv run mypy careervp --strict
+    2. cd src/backend && uv run pytest tests/unit/ -v --tb=short
+    3. cd infra && uv sync && npx cdk synth && uv run pytest tests/infrastructure -v --tb=short
+    4. uvx checkov -d infra/cdk.out --framework cloudformation --quiet
+    Watch: existing vpr/cover-letter/interview-prep/cv cancel tests still pass (now routed through
+    cancel_artifact but same external contract: {status:'cancelled'}, CONFLICT on terminal).
+    Report failures with file:line + message.
+
+# =============================================================================
+# EXECUTION ORDER
+# =============================================================================
+execution_order:
+  gate_3_before_implementation:
+    run_first: [unit_cancellation, unit_worker_guard, unit_cr_cancel, security_reaper, infra_cancel_resources]
+  after_implementation:
+    run: [integration_stop_chain, integration_reaper, regression_cancel]

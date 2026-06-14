@@ -15,7 +15,7 @@ export interface RawApplicationData {
 
 export interface RawModuleData {
   job_id: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'expired';
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'expired' | 'not_generated';
   created_at: string;
   updated_at: string;
   result_url?: string;

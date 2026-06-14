@@ -1,0 +1,188 @@
+spec_id: TEST-FE-042
+title: "Test Prompts — Hub Processing/Cancel button state (all artifacts, animated dots, failure recovery)"
+priority: high
+status: draft
+owner: frontend
+created_at: 2026-06-14
+updated_at: 2026-06-14
+type: test_prompts
+note: >
+  Runnable prompts for a fresh Claude session / test-runner. Covers FE-UI-042. Frontend only.
+  Framework: Vitest + @testing-library/react (unit/integration), per existing conventions in
+  src/frontend/tests/unit/module-card.test.tsx and tests/integration/hub-generate-ux.test.tsx.
+
+context_required: >
+  Working directory: /Users/yitzchak/Documents/dev/careervp
+  Frontend: src/frontend/
+  Spec: docs/upgrade/specs/FE-UI-042-hub-processing-cancel-state.yaml
+
+recommended_model_for_test_authoring: sonnet
+
+# =============================================================================
+# CATEGORY A: UNIT — PROCESSING DOTS COMPONENT
+# =============================================================================
+unit_processing_dots:
+  prompt: |
+    Context: FE-UI-042 adds components/ui/ProcessingDots.tsx — "Processing" + three dots that
+    animate in sequence (NOT animate-pulse), honoring prefers-reduced-motion.
+
+    Files: src/frontend/tests/unit/processing-dots.test.tsx
+
+    1. test_renders_processing_label_and_three_dots
+       Render: <ProcessingDots />
+       Assert: text 'Processing' present; exactly 3 dot elements rendered.
+
+    2. test_dots_have_staggered_animation_delays
+       Assert: the 3 dot elements carry distinct animation-delay (e.g. 0ms/200ms/400ms),
+               and the class is NOT 'animate-pulse'.
+
+    3. test_reduced_motion_renders_static_ellipsis
+       Setup: mock matchMedia prefers-reduced-motion: reduce.
+       Assert: static 'Processing...' rendered; no animation classes applied.
+
+    4. test_dots_are_aria_hidden
+       Assert: the dot container is aria-hidden (accessible text comes from the card live region).
+
+    Run: cd src/frontend && npx vitest run --config vitest.config.ts tests/unit/processing-dots.test.tsx
+    All 4 tests must pass.
+
+# =============================================================================
+# CATEGORY B: UNIT — MODULE CARD PROCESSING REPLACES BUTTONS (ALL STATES)
+# =============================================================================
+unit_module_card_processing:
+  prompt: |
+    Context: FE-UI-042 — while processing (status OR optimistic in-flight), View/Edit/Regenerate/
+    Generate/Retry/Export are hidden and replaced by ProcessingDots + Cancel.
+
+    Files: extend src/frontend/tests/unit/module-card.test.tsx (or new module-card-processing.test.tsx)
+
+    For each module in [vpr, companyResearch, tailoredCV, coverLetter, interviewPrep]:
+
+    1. test_processing_hides_primary_and_secondary_actions
+       Render: <ModuleCard module=<m> state='processing' cancelAction={{label:'Cancel',onClick}} ... />
+       Assert: no 'View', 'Edit', 'Regenerate', 'Generate', 'Retry', 'Export' buttons;
+               ProcessingDots present; 'Cancel' button present.
+
+    2. test_processing_uses_processing_dots_not_pulse
+       Assert: ProcessingDots rendered; querySelector('.animate-pulse') is null.
+
+    3. test_non_processing_states_show_correct_ctas
+       Assert: existing CTA-label contract unchanged (View/Edit/Regenerate per state) —
+               cta-label-consistency.test.ts still passes.
+
+    4. test_card_has_aria_busy_while_processing
+       Assert: card root has aria-busy='true' while processing.
+
+    Run: cd src/frontend && npm run test:unit
+    All tests must pass; existing module-card tests must NOT regress.
+
+# =============================================================================
+# CATEGORY C: INTEGRATION — FAILURE SURFACES ERROR + RESTORES BUTTONS
+# =============================================================================
+integration_failure_recovery:
+  prompt: |
+    Context: FE-UI-042 — on failure (generate POST rejects OR poll status='failed'), the card
+    shows an error AND restores original buttons in ALL cases.
+
+    Files: src/frontend/tests/integration/hub-processing-failure.test.tsx
+    Mock api methods + useApplicationHub; use fake timers for polling.
+
+    For each generatable module:
+
+    1. test_generate_post_rejection_shows_error_and_restores_buttons
+       Setup: api.generate<Module> rejects with Error('boom').
+       Action: click Generate.
+       Assert: card shows error text (e.g. 'boom' or 'Generation failed');
+               card exits processing; original Generate/Retry button visible again
+               (NOT stuck on ProcessingDots).
+
+    2. test_poll_failed_status_shows_error_and_restores
+       Setup: generate resolves, polling returns status='failed'.
+       Assert: card shows failure message; processing cleared; Retry CTA shown.
+
+    3. test_success_leaves_processing_and_shows_result_actions
+       Setup: generate + poll -> 'completed'.
+       Assert: ProcessingDots gone; View/Edit actions present.
+
+    Run: cd src/frontend && npm run test:integration
+    All tests must pass.
+
+# =============================================================================
+# CATEGORY D: INTEGRATION — COMPANY RESEARCH USES UNIFIED PROCESSING
+# =============================================================================
+integration_cr_processing:
+  prompt: |
+    Context: FE-UI-042 brings Company Research into the same Processing/Cancel model
+    (retires the bespoke isRetryingCompanyResearch path).
+
+    Files: src/frontend/tests/integration/hub-cr-processing.test.tsx
+
+    1. test_cr_generate_shows_processing_and_cancel
+       Action: trigger Company Research generate/regenerate.
+       Assert: CR card shows ProcessingDots + Cancel (NOT the old standalone spinner);
+               View/Retry hidden during processing.
+
+    2. test_cr_failure_surfaces_error_and_restores
+       Setup: fetchCompanyResearch rejects.
+       Assert: CR card shows error + restores Generate/Retry.
+
+    3. test_cr_not_generated_maps_to_notstarted
+       Setup: GET CR returns {status:'not_generated'} (FE-UI-041).
+       Assert: CR card renders 'notStarted' with a Generate CTA (no fabricated content shown).
+
+    Run: cd src/frontend && npm run test:integration
+    All tests must pass.
+
+# =============================================================================
+# CATEGORY E: INTEGRATION — CANCEL BEFORE TASKID (ABORT)
+# =============================================================================
+integration_cancel_pretaskid:
+  prompt: |
+    Context: FE-UI-042 — Cancel must render during the optimistic pre-taskId window and abort
+    the in-flight request (AbortController).
+
+    Files: src/frontend/tests/integration/hub-cancel-pretaskid.test.tsx
+
+    1. test_cancel_visible_before_taskid_known
+       Setup: generate POST pending (not yet resolved), taskId still null.
+       Assert: ProcessingDots + Cancel both visible.
+
+    2. test_cancel_pretaskid_aborts_request_and_clears_processing
+       Action: click Cancel while POST in-flight.
+       Assert: AbortController.abort called (or request aborted); card exits processing;
+               original buttons restored; no error toast claiming failure (treated as user cancel).
+
+    3. test_cancel_with_known_taskid_calls_cancel_mutation
+       Setup: taskId known.
+       Action: click Cancel.
+       Assert: api.cancel<Module>(taskId) called; processing cleared.
+
+    Run: cd src/frontend && npm run test:integration
+    All tests must pass.
+
+# =============================================================================
+# CATEGORY F: REGRESSION + TYPECHECK
+# =============================================================================
+regression_frontend:
+  prompt: |
+    Context: FE-UI-042 must not regress existing hub/card tests or CTA labels.
+
+    Steps:
+    1. cd src/frontend && npm run typecheck            # zero new errors
+    2. cd src/frontend && npm run test:unit            # all pass (incl. cta-label-consistency)
+    3. cd src/frontend && npm run test:integration     # all pass (incl. hub-generate-ux)
+    Watch: cta-label-consistency.test.ts (labels unchanged), module-card.test.tsx (no regressions).
+    Report any failure with file:line + message.
+
+# =============================================================================
+# EXECUTION ORDER
+# =============================================================================
+execution_order:
+  before_implementation:
+    run_first: [unit_processing_dots, unit_module_card_processing]
+  after_implementation:
+    run:
+      - integration_failure_recovery
+      - integration_cr_processing
+      - integration_cancel_pretaskid
+      - regression_frontend
