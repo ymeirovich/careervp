@@ -43,6 +43,37 @@ def _json_headers() -> dict[str, str]:
 
 # Module-level SQS client for testing/mocking
 sqs = boto3.client('sqs')
+# Module-level S3 client used to detect completed jobs whose result file has been
+# deleted by the S3 lifecycle policy (the "expired" state the user cannot escape).
+s3 = boto3.client('s3')
+
+
+def _get_results_bucket() -> str:
+    """Resolve the VPR results S3 bucket (mirrors vpr_status_handler)."""
+    bucket_name = os.environ.get('VPR_RESULTS_BUCKET_NAME')
+    if bucket_name:
+        return bucket_name
+    env = os.environ.get('ENVIRONMENT', 'dev')
+    return f'careervp-{env}-vpr-results-us-east-1'
+
+
+def _completed_result_missing(job: dict[str, Any]) -> bool:
+    """Return True when a completed job's S3 result object no longer exists.
+
+    The S3 lifecycle policy deletes result files after their retention window, which
+    leaves DynamoDB reporting ``completed`` while the status endpoint reports
+    ``expired``. Such a job MUST be regenerable, so the idempotency check has to fall
+    through and create a fresh job. A missing ``result_key`` (older records) is also
+    treated as missing so the user is never stuck.
+    """
+    result_key = str(job.get('result_key') or '').strip()
+    if not result_key:
+        return True
+    try:
+        s3.head_object(Bucket=_get_results_bucket(), Key=result_key)
+        return False
+    except Exception:
+        return True
 
 
 def _extract_authenticated_user_id(event: dict[str, Any]) -> str | None:
@@ -83,6 +114,7 @@ def _normalize_submit_request(request_data: dict[str, Any], user_id: str) -> dic
         return {
             'application_id': application_id,
             'user_id': user_id,
+            'force': openapi_request.force,
             'input_data': {
                 'cv_id': openapi_request.cv_id,
                 'job_id': openapi_request.job_id,
@@ -98,6 +130,7 @@ def _normalize_submit_request(request_data: dict[str, Any], user_id: str) -> dic
     return {
         'application_id': legacy_request.application_id,
         'user_id': legacy_request.user_id,
+        'force': bool(request_data.get('force', False)),
         'input_data': request_data,
     }
 
@@ -233,6 +266,8 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     )
     existing_job = jobs_repo.get_job_by_idempotency_key(idempotency_key)
 
+    force_regenerate = bool(normalized_request.get('force', False))
+
     if existing_job:
         # Duplicate request - return existing job_id
         existing_job_id = str(existing_job.get('job_id', ''))
@@ -241,7 +276,12 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         # Failed/cancelled jobs (or stuck processing jobs) should not block retries — fall through.
         retriable_statuses = {'failed', 'cancelled'}
         is_stuck = existing_status not in retriable_statuses and _is_stuck_processing(existing_job)
-        if existing_status not in retriable_statuses and not is_stuck:
+        # A completed VPR is regenerable when the caller explicitly forces it (the
+        # "Regenerate" action) or when its S3 result has expired/disappeared. Without
+        # this, every completed job — including ones whose result file the lifecycle
+        # policy deleted — short-circuits forever and the worker is never invoked.
+        completed_regenerable = existing_status == 'completed' and (force_regenerate or _completed_result_missing(existing_job))
+        if existing_status not in retriable_statuses and not is_stuck and not completed_regenerable:
             logger.info(
                 'Idempotent duplicate request',
                 job_id=existing_job_id,
@@ -273,9 +313,11 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             }
 
         logger.info(
-            'Previous job failed or stuck — creating new job for retry',
+            'Previous job failed, stuck, or regenerated — creating new job',
             previous_job_id=existing_job_id,
             previous_status=existing_status,
+            force_regenerate=force_regenerate,
+            completed_regenerable=completed_regenerable,
             idempotency_key=idempotency_key,
         )
 

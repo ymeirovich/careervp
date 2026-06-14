@@ -157,11 +157,15 @@ export default function ApplicationHubPage() {
 
     const gen = genMap[moduleType as keyof typeof genMap];
     if (gen) {
+      // An explicit (re)generate from the hub must bypass the backend idempotency
+      // short-circuit, otherwise a previously completed VPR (including one whose S3
+      // result expired) is returned unchanged and the worker is never re-invoked.
       await gen.generate({
         cvId,
         vprId: vprId ?? undefined,
         gapResponseIds,
         companyResearchId: companyResearchId ?? undefined,
+        force: true,
       });
       // Trigger refetch so hub status updates after generation completes
       refetch();

@@ -197,6 +197,7 @@ export interface VPRGenerateRequest {
   cv_id: string;
   gap_response_ids: string[];
   options?: Record<string, unknown>;
+  force?: boolean; // bypass idempotency for an existing completed VPR (explicit regenerate)
 }
 
 export interface VPRDifferentiator {

@@ -10,6 +10,7 @@ export interface GenerateOptions {
   vprId?: string;
   gapResponseIds?: string[];
   companyResearchId?: string;
+  force?: boolean;
 }
 
 const CANCEL_FN_MAP: Partial<Record<ModuleType, (id: string) => Promise<unknown>>> = {
@@ -46,6 +47,7 @@ export function useGenerateModule(
             application_id: jobId,
             cv_id: options.cvId!,
             gap_response_ids: options.gapResponseIds ?? [],
+            force: options.force ?? false,
           });
           break;
         case 'coverLetter':

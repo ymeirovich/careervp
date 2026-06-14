@@ -148,6 +148,9 @@ class VPRGenerateRequest(APIModel):
     application_id: str | None = None
     gap_response_ids: list[str] = Field(default_factory=list)
     options: VPRGenerateOptions | None = None
+    # When True, an explicit regeneration is requested: bypass the idempotency
+    # short-circuit for an already-completed job and create a fresh job.
+    force: bool = False
 
 
 class VPRGenerateResponse(APIModel):

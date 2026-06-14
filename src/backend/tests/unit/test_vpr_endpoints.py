@@ -129,6 +129,144 @@ def test_post_vpr_generate_returns_202() -> None:
     assert payload['estimated_time_seconds'] == 120
 
 
+def _vpr_generate_event(access_token: str, *, force: bool = False) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        'cv_id': 'cv-1',
+        'job_id': 'job-abc',
+        'application_id': 'app-xyz',
+        'gap_response_ids': ['gap-1'],
+    }
+    if force:
+        body['force'] = True
+    return {
+        'httpMethod': 'POST',
+        'path': '/vpr/generate',
+        'headers': {'Content-Type': 'application/json', 'Authorization': f'Bearer {access_token}'},
+        'requestContext': _request_context('user-123', 'user@example.com'),
+        'body': json.dumps(body),
+    }
+
+
+def test_post_vpr_generate_idempotent_when_completed_result_present() -> None:
+    """A completed VPR with a live S3 result short-circuits (no new job) without force."""
+    from careervp.handlers.vpr_submit_handler import lambda_handler
+
+    access_token = _create_access_token(user_id='user-123', email='user@example.com')
+    event = _vpr_generate_event(access_token)
+
+    with (
+        patch('careervp.handlers.vpr_submit_handler.JobsRepository') as repo_cls,
+        patch('careervp.handlers.vpr_submit_handler.s3.head_object') as head_object_mock,
+        patch('careervp.handlers.vpr_submit_handler.sqs.send_message') as send_message_mock,
+    ):
+        repo = repo_cls.return_value
+        repo.get_job_by_idempotency_key.return_value = {
+            'job_id': 'old-completed-job',
+            'status': 'completed',
+            'result_key': 'results/old-completed-job.json',
+        }
+        head_object_mock.return_value = {'ContentLength': 123}  # S3 object exists
+
+        response = lambda_handler(event, _lambda_context())
+
+    payload = json.loads(response['body'])
+    assert payload['job_id'] == 'old-completed-job'
+    assert payload['status'] == 'completed'
+    repo.create_job.assert_not_called()
+    send_message_mock.assert_not_called()
+
+
+def test_post_vpr_generate_regenerates_when_completed_result_expired() -> None:
+    """A completed VPR whose S3 result was deleted (expired) must regenerate."""
+    from careervp.handlers.vpr_submit_handler import lambda_handler
+
+    access_token = _create_access_token(user_id='user-123', email='user@example.com')
+    event = _vpr_generate_event(access_token)
+
+    with (
+        patch('careervp.handlers.vpr_submit_handler.JobsRepository') as repo_cls,
+        patch('careervp.handlers.vpr_submit_handler.uuid.uuid4', return_value='fresh-job-1'),
+        patch('careervp.handlers.vpr_submit_handler.s3.head_object', side_effect=Exception('NoSuchKey')),
+        patch('careervp.handlers.vpr_submit_handler.sqs.send_message') as send_message_mock,
+    ):
+        repo = repo_cls.return_value
+        repo.get_job_by_idempotency_key.return_value = {
+            'job_id': 'old-completed-job',
+            'status': 'completed',
+            'result_key': 'results/old-completed-job.json',
+        }
+        repo.create_job.return_value = Result(success=True, data={'job_id': 'fresh-job-1'}, code=ResultCode.SUCCESS)
+        send_message_mock.return_value = {'MessageId': 'msg-1'}
+
+        response = lambda_handler(event, _lambda_context())
+
+    assert response['statusCode'] == 202
+    payload = json.loads(response['body'])
+    assert payload['job_id'] == 'fresh-job-1'
+    assert payload['status'] == 'processing'
+    repo.create_job.assert_called_once()
+    send_message_mock.assert_called_once()
+
+
+def test_post_vpr_generate_force_regenerates_completed_job() -> None:
+    """force=True must regenerate even when the existing completed result is present."""
+    from careervp.handlers.vpr_submit_handler import lambda_handler
+
+    access_token = _create_access_token(user_id='user-123', email='user@example.com')
+    event = _vpr_generate_event(access_token, force=True)
+
+    with (
+        patch('careervp.handlers.vpr_submit_handler.JobsRepository') as repo_cls,
+        patch('careervp.handlers.vpr_submit_handler.uuid.uuid4', return_value='fresh-job-2'),
+        patch('careervp.handlers.vpr_submit_handler.s3.head_object') as head_object_mock,
+        patch('careervp.handlers.vpr_submit_handler.sqs.send_message') as send_message_mock,
+    ):
+        repo = repo_cls.return_value
+        repo.get_job_by_idempotency_key.return_value = {
+            'job_id': 'old-completed-job',
+            'status': 'completed',
+            'result_key': 'results/old-completed-job.json',
+        }
+        repo.create_job.return_value = Result(success=True, data={'job_id': 'fresh-job-2'}, code=ResultCode.SUCCESS)
+        send_message_mock.return_value = {'MessageId': 'msg-1'}
+
+        response = lambda_handler(event, _lambda_context())
+
+    assert response['statusCode'] == 202
+    payload = json.loads(response['body'])
+    assert payload['job_id'] == 'fresh-job-2'
+    # force should not need an S3 lookup to decide regeneration
+    head_object_mock.assert_not_called()
+    repo.create_job.assert_called_once()
+    send_message_mock.assert_called_once()
+
+
+def test_post_vpr_generate_dedupes_inflight_processing_even_with_force() -> None:
+    """An in-flight (processing) job is still deduped — force only bypasses completed."""
+    from careervp.handlers.vpr_submit_handler import lambda_handler
+
+    access_token = _create_access_token(user_id='user-123', email='user@example.com')
+    event = _vpr_generate_event(access_token, force=True)
+
+    with (
+        patch('careervp.handlers.vpr_submit_handler.JobsRepository') as repo_cls,
+        patch('careervp.handlers.vpr_submit_handler.sqs.send_message') as send_message_mock,
+    ):
+        repo = repo_cls.return_value
+        repo.get_job_by_idempotency_key.return_value = {
+            'job_id': 'inflight-job',
+            'status': 'processing',
+            'created_at': datetime.now(timezone.utc).isoformat(),
+        }
+
+        response = lambda_handler(event, _lambda_context())
+
+    payload = json.loads(response['body'])
+    assert payload['job_id'] == 'inflight-job'
+    repo.create_job.assert_not_called()
+    send_message_mock.assert_not_called()
+
+
 def test_get_vpr_id_returns_job_status() -> None:
     """GET /vpr/{vprId} should return VPR status payload."""
     from careervp.handlers.vpr_status_handler import lambda_handler
