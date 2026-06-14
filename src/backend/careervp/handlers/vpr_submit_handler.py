@@ -31,6 +31,7 @@ from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.logic.company_research import ConfidentCompanyResearch, load_confident_company_research_artifact
 from careervp.logic.utils.constants import VPR_JOBS_QUEUE_NAME
 from careervp.models.api_models import VPRGenerateRequest
 from careervp.models.result import ResultCode
@@ -97,6 +98,32 @@ def _get_sqs_queue_url() -> str:
 def _build_idempotency_key(user_id: str, application_id: str) -> str:
     """Build idempotency key from request."""
     return f'vpr#{user_id}#{application_id}'
+
+
+def _inject_company_research_context(input_data: dict[str, Any], artifact: ConfidentCompanyResearch) -> None:
+    """Add confidence-gated Company Research context and provenance to VPR input."""
+    input_data['company_context'] = artifact.company_context.model_dump(mode='json')
+    input_data['company_research_id'] = artifact.company_research_id
+    input_data['company_research_at'] = artifact.company_research_at
+
+
+def _build_dependency_generating_response(job_id: str, application_id: str) -> dict[str, Any]:
+    """Return the resolver-compatible 202 stub when CR is not ready."""
+    return {
+        'statusCode': int(HTTPStatus.ACCEPTED),
+        'headers': _json_headers(),
+        'body': json.dumps(
+            {
+                'request_id': job_id,
+                'job_id': job_id,
+                'status': 'dependency_generating',
+                'dependency': 'company_research',
+                'application_id': application_id,
+                'company_context_included': False,
+                'estimated_time_seconds': 120,
+            }
+        ),
+    }
 
 
 def _normalize_submit_request(request_data: dict[str, Any], user_id: str) -> dict[str, Any]:
@@ -198,7 +225,7 @@ def _backfill_application_artifact(application_id: str, user_id: str, job_id: st
 @logger.inject_lambda_context(log_event=False)
 @tracer.capture_lambda_handler(capture_response=False)
 @metrics.log_metrics(capture_cold_start_metric=True)
-def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
+def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:  # noqa: C901
     """
     Handle POST /vpr/generate requests for async VPR generation.
 
@@ -325,8 +352,21 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     job_id = str(uuid.uuid4())
     tracer.put_annotation(key='job_id', value=job_id)
 
-    # Use the original request body as input_data for exact match with test expectations
-    input_data = request_data  # Store original request body for test compatibility
+    # Use the original request body shape as input_data, enriched with CR context.
+    input_data = dict(request_data)
+    cr_artifact = load_confident_company_research_artifact(
+        application_id=str(normalized_request['application_id']),
+        user_id=str(normalized_request['user_id']),
+    )
+    if cr_artifact is None:
+        logger.info(
+            'VPR submit deferred until Company Research is available',
+            job_id=job_id,
+            application_id=normalized_request['application_id'],
+        )
+        return _build_dependency_generating_response(job_id=job_id, application_id=str(normalized_request['application_id']))
+
+    _inject_company_research_context(input_data, cr_artifact)
 
     # Create job record - pass as single dict for test compatibility
     # Calculate TTL timestamp (24 hours from now)
@@ -339,6 +379,9 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         'user_id': normalized_request['user_id'],
         'application_id': normalized_request['application_id'],
         'input_data': input_data if isinstance(input_data, dict) else {},
+        'company_research_id': cr_artifact.company_research_id,
+        'company_research_at': cr_artifact.company_research_at,
+        'company_context_included': False,
         'idempotency_key': idempotency_key,
         'status': 'PENDING',  # Included for test compatibility
         'ttl': ttl_timestamp,  # Included for test compatibility
@@ -364,6 +407,9 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
                     'job_id': job_id,
                     'user_id': normalized_request['user_id'],
                     'application_id': normalized_request['application_id'],
+                    'company_context': input_data.get('company_context'),
+                    'company_research_id': input_data.get('company_research_id'),
+                    'company_research_at': input_data.get('company_research_at'),
                 }
             ),
             MessageAttributes={

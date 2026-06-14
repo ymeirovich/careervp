@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 from pydantic import ValidationError
 
+from careervp.handlers.utils.observability import logger
 from careervp.logic.fvs_validator import (
     GRAMMAR_MIN_SCORE,
     STRUCTURAL_MIN_SCORE,
@@ -521,6 +522,12 @@ def _parse_full_vpr_model(  # noqa: C901 - complex but well-structured
             company_insights = VPRCompanyInsight.model_validate(payload['company_insights'])
         except ValidationError:
             pass
+    if request.company_context is not None and company_insights is None:
+        logger.warning(
+            'VPR payload missing company_insights despite company_context',
+            application_id=request.application_id,
+            company_context_included=False,
+        )
 
     verification_summary: VPRVerificationSummary | None = None
     if 'verification_summary' in payload:

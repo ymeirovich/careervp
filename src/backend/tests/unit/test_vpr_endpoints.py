@@ -12,6 +12,7 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
+from careervp.models.job import CompanyContext
 from careervp.models.result import Result, ResultCode
 
 
@@ -89,6 +90,20 @@ def _request_context(user_id: str, email: str) -> dict[str, Any]:
     }
 
 
+def _confident_cr_artifact() -> MagicMock:
+    return MagicMock(
+        company_context=CompanyContext(
+            company_name='Acme',
+            mission='Make enterprise work easier to operate.',
+            values=['Reliability'],
+            strategic_priorities=['Enterprise AI'],
+            recent_news=['Launched an AI operations suite'],
+        ),
+        company_research_id='cr-endpoint-1',
+        company_research_at='2026-06-14T09:05:00+00:00',
+    )
+
+
 def test_post_vpr_generate_returns_202() -> None:
     """POST /vpr/generate should return 202 with request_id/job_id."""
     from careervp.handlers.vpr_submit_handler import lambda_handler
@@ -112,6 +127,7 @@ def test_post_vpr_generate_returns_202() -> None:
     with (
         patch('careervp.handlers.vpr_submit_handler.JobsRepository') as repo_cls,
         patch('careervp.handlers.vpr_submit_handler.uuid.uuid4', return_value='vpr-job-123'),
+        patch('careervp.handlers.vpr_submit_handler.load_confident_company_research_artifact', return_value=_confident_cr_artifact()),
         patch('careervp.handlers.vpr_submit_handler.sqs.send_message') as send_message_mock,
     ):
         repo = repo_cls.return_value
@@ -186,6 +202,7 @@ def test_post_vpr_generate_regenerates_when_completed_result_expired() -> None:
     with (
         patch('careervp.handlers.vpr_submit_handler.JobsRepository') as repo_cls,
         patch('careervp.handlers.vpr_submit_handler.uuid.uuid4', return_value='fresh-job-1'),
+        patch('careervp.handlers.vpr_submit_handler.load_confident_company_research_artifact', return_value=_confident_cr_artifact()),
         patch('careervp.handlers.vpr_submit_handler.s3.head_object', side_effect=Exception('NoSuchKey')),
         patch('careervp.handlers.vpr_submit_handler.sqs.send_message') as send_message_mock,
     ):
@@ -218,6 +235,7 @@ def test_post_vpr_generate_force_regenerates_completed_job() -> None:
     with (
         patch('careervp.handlers.vpr_submit_handler.JobsRepository') as repo_cls,
         patch('careervp.handlers.vpr_submit_handler.uuid.uuid4', return_value='fresh-job-2'),
+        patch('careervp.handlers.vpr_submit_handler.load_confident_company_research_artifact', return_value=_confident_cr_artifact()),
         patch('careervp.handlers.vpr_submit_handler.s3.head_object') as head_object_mock,
         patch('careervp.handlers.vpr_submit_handler.sqs.send_message') as send_message_mock,
     ):

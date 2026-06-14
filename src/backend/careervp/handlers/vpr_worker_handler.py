@@ -29,8 +29,9 @@ from careervp.dal.application_repository import ApplicationRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.logic.company_research import load_confident_company_research_artifact
 from careervp.logic.vpr_generator import generate_vpr
-from careervp.models.job import GapResponse, JobPosting
+from careervp.models.job import CompanyContext, GapResponse, JobPosting
 from careervp.models.vpr import VPR, VPRRequest
 
 # Module-level S3 client for testing/mocking
@@ -229,6 +230,54 @@ def _resolve_gap_responses(input_data: dict[str, Any], application_id: str, user
     return [GapResponse.model_validate(item) for item in items]
 
 
+def _coerce_optional_str(value: Any) -> str | None:
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped or None
+    return None
+
+
+def _resolve_company_context(
+    input_data: dict[str, Any],
+    application_id: str,
+    user_id: str,
+) -> tuple[CompanyContext | None, str | None, str | None]:
+    """Resolve CompanyContext from message/job input, with a CR DAL fallback."""
+    company_research_id = _coerce_optional_str(input_data.get('company_research_id'))
+    company_research_at = _coerce_optional_str(input_data.get('company_research_at'))
+    raw_context = input_data.get('company_context')
+
+    if raw_context is None:
+        artifact = load_confident_company_research_artifact(application_id=application_id, user_id=user_id)
+        if artifact is not None:
+            raw_context = artifact.company_context.model_dump(mode='json')
+            input_data['company_context'] = raw_context
+            company_research_id = artifact.company_research_id
+            company_research_at = artifact.company_research_at
+            input_data['company_research_id'] = company_research_id
+            input_data['company_research_at'] = company_research_at
+        else:
+            logger.warning(
+                'VPR company_context missing after fallback load',
+                application_id=application_id,
+                user_id=user_id,
+                company_context_missing=True,
+            )
+
+    if raw_context is None:
+        return None, company_research_id, company_research_at
+    return CompanyContext.model_validate(raw_context), company_research_id, company_research_at
+
+
+def _build_vpr_result_json(vpr: VPR, provenance: dict[str, Any]) -> str:
+    """Serialize the VPR result with observable CR provenance fields."""
+    payload = json.loads(vpr.model_dump_json(by_alias=True))
+    if not isinstance(payload, dict):
+        payload = {}
+    payload.update(provenance)
+    return json.dumps(payload, default=str)
+
+
 def _process_job_record(
     jobs_repo: JobsRepository,
     record: dict[str, Any],
@@ -307,7 +356,7 @@ def _merge_message_context_into_job(job: dict[str, Any], message_body: dict[str,
     return merged_job
 
 
-def _execute_job(
+def _execute_job(  # noqa: C901
     jobs_repo: JobsRepository,
     job: dict[str, Any],
     job_id: str,
@@ -333,8 +382,10 @@ def _execute_job(
         return
 
     # Get CV for this user
-    user_id: str = job.get('user_id', '')
-    input_data = job.get('input_data', {})
+    user_id = str(job.get('user_id', ''))
+    input_data_raw = job.get('input_data', {})
+    input_data: dict[str, Any] = input_data_raw if isinstance(input_data_raw, dict) else {}
+    application_id = str(job.get('application_id', ''))
 
     # Fetch CV from DynamoDB
     cv_table = os.environ.get('DYNAMODB_TABLE_NAME', 'careervp-users-dev')
@@ -355,13 +406,14 @@ def _execute_job(
     # Generate VPR
     try:
         job_posting = JobPosting.model_validate(_build_job_posting_input(jobs_repo, input_data))
-        gap_responses = _resolve_gap_responses(input_data, job.get('application_id', ''), user_id)
+        gap_responses = _resolve_gap_responses(input_data, application_id, user_id)
+        company_context, company_research_id, company_research_at = _resolve_company_context(input_data, application_id, user_id)
         vpr_request = VPRRequest(
-            application_id=job.get('application_id', ''),
+            application_id=application_id,
             user_id=user_id,
             job_posting=job_posting,
             gap_responses=gap_responses,
-            company_context=input_data.get('company_context'),
+            company_context=company_context,
         )
     except Exception as e:
         error_msg = f'Invalid VPR request payload: {str(e)}'
@@ -391,6 +443,20 @@ def _execute_job(
 
     vpr_response = result.data
     vpr: VPR = vpr_response.vpr  # type: ignore[assignment]
+    company_context_included = vpr_request.company_context is not None and vpr.company_insights is not None
+    if vpr_request.company_context is not None and vpr.company_insights is None:
+        logger.warning(
+            'VPR generated without company_insights despite company_context',
+            job_id=job_id,
+            application_id=application_id,
+            company_research_id=company_research_id,
+            company_context_included=False,
+        )
+    provenance: dict[str, Any] = {
+        'company_research_id': company_research_id,
+        'company_research_at': company_research_at,
+        'company_context_included': company_context_included,
+    }
 
     # Upload result to S3
     result_key = f'results/{job_id}.json'
@@ -398,7 +464,7 @@ def _execute_job(
         s3.put_object(
             Bucket=bucket,
             Key=result_key,
-            Body=vpr.model_dump_json(by_alias=True),
+            Body=_build_vpr_result_json(vpr, provenance),
             ContentType='application/json',
         )
         logger.info('Uploaded VPR to S3', job_id=job_id, bucket=bucket, key=result_key)
@@ -429,6 +495,7 @@ def _execute_job(
             'vpr_version': vpr.version,
             'word_count': vpr.word_count,
             'ttl': one_year_ttl,
+            **provenance,
         },
     )
 

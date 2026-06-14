@@ -7,9 +7,16 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any
 from urllib.parse import urlparse
+
+import boto3
+from boto3.dynamodb.conditions import Attr, Key
+from botocore.exceptions import ClientError
 
 from careervp.handlers.utils.observability import logger
 from careervp.logic.llm_cache import DEFAULT_CACHE_TTL_SECONDS, LLMResponseCache
@@ -18,12 +25,23 @@ from careervp.logic.utils.llm_client import TaskMode, get_llm_router
 from careervp.logic.utils.web_scraper import MIN_CONTENT_WORDS, count_words, scrape_company_about_page
 from careervp.logic.utils.web_search import aggregate_search_content, search_company_info
 from careervp.models.company import CompanyResearchRequest, CompanyResearchResult, ResearchSource
+from careervp.models.job import CompanyContext
 from careervp.models.result import Result, ResultCode
 
 RESEARCH_TIMEOUT = 60.0
 MAX_PROMPT_WORDS = 800
+DEFAULT_CONFIDENCE_THRESHOLD = 0.85
 
 ContextHint = str
+
+
+@dataclass(frozen=True)
+class ConfidentCompanyResearch:
+    """Confidence-gated Company Research artifact used by VPR generation."""
+
+    company_context: CompanyContext
+    company_research_id: str
+    company_research_at: str | None
 
 
 async def research_company(request: CompanyResearchRequest) -> Result[CompanyResearchResult]:
@@ -35,6 +53,184 @@ async def research_company(request: CompanyResearchRequest) -> Result[CompanyRes
     except asyncio.TimeoutError:
         logger.error('Company research timed out', company_name=request.company_name)
         return Result(success=False, error='Company research timed out', code=ResultCode.TIMEOUT)
+
+
+def load_confident_company_research(application_id: str, user_id: str) -> CompanyContext | None:
+    """Return the VPR-ready CompanyContext for the latest confident CR artifact."""
+    artifact = load_confident_company_research_artifact(application_id=application_id, user_id=user_id)
+    return artifact.company_context if artifact is not None else None
+
+
+def load_confident_company_research_artifact(application_id: str, user_id: str) -> ConfidentCompanyResearch | None:
+    """Load the latest ownership-checked, confidence-gated Company Research artifact.
+
+    This never synthesizes missing data. If the persisted record is absent, belongs to
+    another user, is below threshold, or matches the deleted fabricated payload pattern,
+    the function returns None.
+    """
+    clean_application_id = application_id.strip()
+    clean_user_id = user_id.strip()
+    if not clean_application_id or not clean_user_id:
+        return None
+
+    item = _load_company_research_item(application_id=clean_application_id, user_id=clean_user_id)
+    if item is None:
+        return None
+    if str(item.get('user_id') or '').strip() != clean_user_id:
+        logger.warning('Company Research ownership check failed', application_id=clean_application_id)
+        return None
+
+    payload = _company_research_payload(item)
+    company_name = _coerce_text(item.get('company_name')) or _coerce_text(payload.get('company_name')) or ''
+    if not company_name or company_name.startswith('Company for '):
+        return None
+
+    confidence = _coerce_float(item.get('confidence_score'))
+    if confidence is None:
+        confidence = _coerce_float(payload.get('confidence_score'))
+    if confidence is None or confidence < _confidence_threshold():
+        return None
+
+    context = CompanyContext(
+        company_name=company_name,
+        mission=_coerce_text(item.get('mission')) or _coerce_text(payload.get('mission')),
+        values=_coerce_text_list(item.get('values')) or _coerce_text_list(payload.get('values')),
+        strategic_priorities=_coerce_text_list(item.get('strategic_priorities')) or _coerce_text_list(payload.get('strategic_priorities')),
+        recent_news=_coerce_recent_news(item.get('recent_news')) or _coerce_recent_news(payload.get('recent_news')),
+        industry=_coerce_text(item.get('industry')) or _coerce_text(payload.get('industry')),
+    )
+    research_id = (
+        _coerce_text(item.get('company_research_id'))
+        or _coerce_text(payload.get('company_research_id'))
+        or _coerce_text(item.get('job_id'))
+        or clean_application_id
+    )
+    research_at = _coerce_text(item.get('created_at')) or _coerce_text(item.get('updated_at')) or _coerce_text(payload.get('research_timestamp'))
+    return ConfidentCompanyResearch(
+        company_context=context,
+        company_research_id=research_id,
+        company_research_at=research_at,
+    )
+
+
+def _load_company_research_item(application_id: str, user_id: str) -> dict[str, Any] | None:
+    candidates: list[dict[str, Any]] = []
+    for table_name in _company_research_table_names():
+        table_candidates = _load_company_research_candidates_from_table(table_name=table_name, application_id=application_id, user_id=user_id)
+        candidates.extend(table_candidates)
+    if not candidates:
+        return None
+    return max(candidates, key=_company_research_sort_key)
+
+
+def _company_research_table_names() -> list[str]:
+    names: list[str] = []
+    for env_key in ('KNOWLEDGE_TABLE_NAME', 'TABLE_NAME', 'DYNAMODB_TABLE_NAME'):
+        value = os.environ.get(env_key)
+        if value and value.strip() and value.strip() not in names:
+            names.append(value.strip())
+    return names
+
+
+def _load_company_research_candidates_from_table(table_name: str, application_id: str, user_id: str) -> list[dict[str, Any]]:
+    table = boto3.resource('dynamodb').Table(table_name)
+    candidates: list[dict[str, Any]] = []
+    direct_keys = [
+        {'pk': user_id, 'sk': f'ARTIFACT#COMPANY_RESEARCH#{application_id}'},
+        {'pk': user_id, 'sk': f'COMPANY_RESEARCH#{application_id}'},
+        {'pk': f'USER#{user_id}', 'sk': f'COMPANY_RESEARCH#{application_id}'},
+    ]
+    for key in direct_keys:
+        try:
+            response = table.get_item(Key=key)
+        except ClientError as exc:
+            if exc.response.get('Error', {}).get('Code') == 'ResourceNotFoundException':
+                return []
+            logger.warning('Failed to read Company Research candidate', table_name=table_name, error=str(exc))
+            continue
+        item = response.get('Item') if isinstance(response, dict) else None
+        if isinstance(item, dict):
+            candidates.append(item)
+
+    query_prefixes = [
+        (user_id, 'ARTIFACT#COMPANY_RESEARCH#'),
+        (user_id, 'COMPANY_RESEARCH#'),
+        (f'USER#{user_id}', 'COMPANY_RESEARCH#'),
+    ]
+    for partition_key, prefix in query_prefixes:
+        try:
+            response = table.query(
+                KeyConditionExpression=Key('pk').eq(partition_key) & Key('sk').begins_with(prefix),
+                FilterExpression=Attr('sk').contains(application_id),
+            )
+        except ClientError as exc:
+            if exc.response.get('Error', {}).get('Code') == 'ResourceNotFoundException':
+                return candidates
+            logger.warning('Failed to query Company Research candidates', table_name=table_name, error=str(exc))
+            continue
+        items = response.get('Items') if isinstance(response, dict) else None
+        if isinstance(items, list):
+            candidates.extend(item for item in items if isinstance(item, dict))
+    return candidates
+
+
+def _company_research_sort_key(item: dict[str, Any]) -> str:
+    payload = _company_research_payload(item)
+    return _coerce_text(item.get('created_at')) or _coerce_text(item.get('updated_at')) or _coerce_text(payload.get('research_timestamp')) or ''
+
+
+def _company_research_payload(item: dict[str, Any]) -> dict[str, Any]:
+    research_data = item.get('research_data')
+    if isinstance(research_data, dict):
+        return research_data
+    company_research = item.get('company_research')
+    if isinstance(company_research, dict):
+        return company_research
+    return item
+
+
+def _confidence_threshold() -> float:
+    return _coerce_float(os.environ.get('CR_CONFIDENCE_THRESHOLD')) or DEFAULT_CONFIDENCE_THRESHOLD
+
+
+def _coerce_float(value: Any) -> float | None:
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, int | float):
+        return float(value)
+    if isinstance(value, str) and value.strip():
+        try:
+            return float(value.strip())
+        except ValueError:
+            return None
+    return None
+
+
+def _coerce_text(value: Any) -> str | None:
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped or None
+    return None
+
+
+def _coerce_text_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _coerce_recent_news(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    result: list[str] = []
+    for item in value:
+        if isinstance(item, dict):
+            title = _coerce_text(item.get('title')) or _coerce_text(item.get('headline'))
+            if title:
+                result.append(title)
+        elif str(item).strip():
+            result.append(str(item).strip())
+    return result
 
 
 async def _research_company_inner(request: CompanyResearchRequest) -> Result[CompanyResearchResult]:
@@ -349,4 +545,4 @@ def _resolve_domain(request: CompanyResearchRequest) -> str | None:
     return None
 
 
-__all__ = ['research_company']
+__all__ = ['ConfidentCompanyResearch', 'load_confident_company_research', 'load_confident_company_research_artifact', 'research_company']

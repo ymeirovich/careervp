@@ -484,6 +484,9 @@ class JobsRepository:
         }
         if job_data.get('idempotency_key'):
             record['idempotency_key'] = job_data['idempotency_key']
+        for key in ('company_research_id', 'company_research_at', 'company_context_included'):
+            if key in job_data:
+                record[key] = job_data[key]
         return record
 
     def _build_api_job_record(self, job_data: dict[str, Any], resolved_job_id: str, user_id: str) -> dict[str, Any]:

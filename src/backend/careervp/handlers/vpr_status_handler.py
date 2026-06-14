@@ -163,6 +163,8 @@ def _build_completed_response(job: dict[str, Any], job_id: str, jobs_repo: Any =
         result_payload.setdefault('download_url', result_url)
 
     _ensure_vpr_contract_shape(result_payload)
+    provenance = _extract_vpr_provenance(job, result_payload)
+    _apply_vpr_provenance(result_payload, provenance)
 
     response = {
         'id': job_id,
@@ -171,8 +173,24 @@ def _build_completed_response(job: dict[str, Any], job_id: str, jobs_repo: Any =
         'result': result_payload,
         'created_at': job.get('created_at'),
         'completed_at': job.get('completed_at'),
+        **provenance,
     }
     return response
+
+
+def _extract_vpr_provenance(job: dict[str, Any], result_payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = result_payload or {}
+    return {
+        'company_research_id': job.get('company_research_id') or payload.get('company_research_id'),
+        'company_research_at': job.get('company_research_at') or payload.get('company_research_at'),
+        'company_context_included': bool(job.get('company_context_included', payload.get('company_context_included', False))),
+    }
+
+
+def _apply_vpr_provenance(result_payload: dict[str, Any], provenance: dict[str, Any]) -> None:
+    result_payload['company_research_id'] = provenance.get('company_research_id')
+    result_payload['company_research_at'] = provenance.get('company_research_at')
+    result_payload['company_context_included'] = bool(provenance.get('company_context_included', False))
 
 
 def _ensure_vpr_contract_shape(result_payload: dict[str, Any]) -> None:
@@ -232,6 +250,9 @@ def _enrich_vpr_result_from_s3(result_payload: dict[str, Any], result_key: str, 
             'meta_evaluation',
             {'persuasion_score': 8.0, 'completeness_score': 8.0},
         )
+        for key in ('company_research_id', 'company_research_at', 'company_context_included'):
+            if key in stored_vpr:
+                result_payload.setdefault(key, stored_vpr.get(key))
     except Exception as e:
         logger.warning('Unable to enrich completed VPR payload from S3', job_id=job_id, error=str(e))
 
@@ -520,11 +541,14 @@ def _try_build_response_from_s3(vpr_id: str) -> dict[str, Any] | None:
     result_payload: dict[str, Any] = {'download_url': result_url}
     _enrich_vpr_result_from_s3(result_payload, result_key, vpr_id)
     _ensure_vpr_contract_shape(result_payload)
+    provenance = _extract_vpr_provenance({}, result_payload)
+    _apply_vpr_provenance(result_payload, provenance)
     response_data = {
         'id': vpr_id,
         'job_id': vpr_id,
         'status': 'completed',
         'result': result_payload,
+        **provenance,
     }
     return {
         'statusCode': int(HTTPStatus.OK),
