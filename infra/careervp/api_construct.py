@@ -2037,6 +2037,8 @@ class ApiConstruct(Construct):
             naming=self.naming,
             company_research_queue=self.api_db.company_research_queue,
             vpr_jobs_queue=self.vpr_jobs_queue,
+            cover_letter_queue=self.cover_letter_jobs_queue,
+            interview_prep_queue=self.interview_prep_jobs_queue,
             cv_tailoring_func=cv_tailoring_chain_target,
             cr_failure_handler=self.cr_failure_handler_func,
             artifact_failure_handler=self.artifact_failure_handler_func,
@@ -2059,6 +2061,12 @@ class ApiConstruct(Construct):
             self.company_research_worker_func
         )
         self.artifact_chain.state_machine.grant_task_response(self.vpr_sqs_worker_func)
+        self.artifact_chain.state_machine.grant_task_response(
+            self.cover_letter_worker_func
+        )
+        self.artifact_chain.state_machine.grant_task_response(
+            self.interview_prep_worker_func
+        )
 
         CfnOutput(
             self,

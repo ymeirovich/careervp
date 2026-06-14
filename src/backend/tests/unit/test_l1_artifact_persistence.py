@@ -204,6 +204,13 @@ def test_interview_prep_persisted_item_contains_prefix_and_ttl() -> None:
         dal.get_cv.return_value = _user_cv()
         dal._get_db_handler.return_value = table
         dal.table_name = 'table'
+        # VPR mock must carry user_id so the ownership check in _resolve_interview_prep_context passes.
+        mock_vpr = MagicMock()
+        mock_vpr.user_id = 'user-123'
+        mock_vpr_result = MagicMock()
+        mock_vpr_result.success = True
+        mock_vpr_result.data = mock_vpr
+        dal.get_vpr.return_value = mock_vpr_result
         mock_get_dal.return_value = dal
 
         with patch('careervp.handlers.interview_prep_handler.generate_interview_prep') as mock_generate:

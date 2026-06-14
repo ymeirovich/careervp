@@ -23,6 +23,12 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 from botocore.exceptions import ClientError as BotoClientError
 from pydantic import ValidationError
 
+from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+from careervp.handlers.artifact_dependency_utils import (
+    dependency_response_body,
+    mark_requested_artifact_pending,
+    resolve_handler_dependencies,
+)
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
@@ -129,15 +135,6 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             validation_errors=[{'code': ResultCode.INVALID_JSON, 'field': 'body', 'message': str(exc)}],
         )
 
-    job_id = str(uuid.uuid4())
-    artifact_id = f'ARTIFACT#INTERVIEW_PREP#{job_id}'
-    now = datetime.datetime.now(datetime.timezone.utc)
-    created_at = now.isoformat()
-
-    logger.append_keys(user_id=authenticated_user_id, job_id=job_id)
-    tracer.put_annotation(key='job_id', value=job_id)
-
-    # Write PENDING artifact record to DynamoDB
     try:
         table_name = _get_artifacts_table_name()
     except RuntimeError:
@@ -147,6 +144,31 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             'Internal server error', HTTPStatus.INTERNAL_SERVER_ERROR, code=ResultCode.MISSING_ENV, request_id=_get_request_id(event, context)
         )
 
+    application_id = api_request.application_id or api_request.job_id or api_request.vpr_id
+    dependency_resolution = resolve_handler_dependencies(
+        artifact_type='interview_prep',
+        application_id=application_id,
+        user_id=authenticated_user_id,
+        dal=DynamoDalHandler(table_name),
+    )
+    if dependency_resolution.status != 'ready':
+        if dependency_resolution.status == 'dependency_generating':
+            mark_requested_artifact_pending(application_id=application_id, user_id=authenticated_user_id, artifact_type='interview_prep')
+        return {
+            'statusCode': dependency_resolution.http_status,
+            'headers': _json_headers(),
+            'body': json.dumps(dependency_response_body(dependency_resolution, requested_artifact='interview_prep')),
+        }
+
+    job_id = str(uuid.uuid4())
+    artifact_id = f'ARTIFACT#INTERVIEW_PREP#{job_id}'
+    now = datetime.datetime.now(datetime.timezone.utc)
+    created_at = now.isoformat()
+
+    logger.append_keys(user_id=authenticated_user_id, job_id=job_id)
+    tracer.put_annotation(key='job_id', value=job_id)
+
+    # Write PENDING artifact record to DynamoDB
     try:
         table = dynamodb_resource.Table(table_name)
         artifact_item = {

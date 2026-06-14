@@ -49,6 +49,8 @@ class ArtifactChainConstruct(Construct):
         naming: NamingUtils,
         company_research_queue: sqs.IQueue,
         vpr_jobs_queue: sqs.IQueue,
+        cover_letter_queue: sqs.IQueue,
+        interview_prep_queue: sqs.IQueue,
         cv_tailoring_func: _lambda.IFunction,
         cr_failure_handler: _lambda.IFunction,
         artifact_failure_handler: _lambda.IFunction,
@@ -94,7 +96,119 @@ class ArtifactChainConstruct(Construct):
             payload_response_only=True,
         )
 
+        handle_cover_letter_failure = sfn_tasks.LambdaInvoke(
+            self,
+            "HandleCoverLetterFailure",
+            lambda_function=artifact_failure_handler,
+            payload=sfn.TaskInput.from_object(
+                {
+                    "artifact_type": "cover_letter",
+                    "context": sfn.JsonPath.object_at("$"),
+                }
+            ),
+            payload_response_only=True,
+        )
+
+        handle_interview_prep_failure = sfn_tasks.LambdaInvoke(
+            self,
+            "HandleInterviewPrepFailure",
+            lambda_function=artifact_failure_handler,
+            payload=sfn.TaskInput.from_object(
+                {
+                    "artifact_type": "interview_prep",
+                    "context": sfn.JsonPath.object_at("$"),
+                }
+            ),
+            payload_response_only=True,
+        )
+
+        handle_final_artifacts_failure = sfn_tasks.LambdaInvoke(
+            self,
+            "HandleFinalArtifactsFailure",
+            lambda_function=artifact_failure_handler,
+            payload=sfn.TaskInput.from_object(
+                {
+                    "artifact_type": "final_artifacts",
+                    "context": sfn.JsonPath.object_at("$"),
+                }
+            ),
+            payload_response_only=True,
+        )
+
         # --- Task-token SQS steps ----------------------------------------------
+        start_cover_letter = sfn_tasks.SqsSendMessage(
+            self,
+            "StartCoverLetter",
+            queue=cover_letter_queue,
+            integration_pattern=sfn.IntegrationPattern.WAIT_FOR_TASK_TOKEN,
+            heartbeat_timeout=sfn.Timeout.duration(Duration.seconds(300)),
+            result_path="$.cover_letter_result",
+            message_body=sfn.TaskInput.from_object(
+                {
+                    "user_id": sfn.JsonPath.string_at("$.user_id"),
+                    "job_id": sfn.JsonPath.string_at("$.job_id"),
+                    "vpr_id": sfn.JsonPath.string_at("$.vpr_result.vpr_id"),
+                    "company_context": sfn.JsonPath.object_at(
+                        "$.company_research_result.company_context"
+                    ),
+                    "task_token": sfn.JsonPath.task_token,
+                }
+            ),
+        )
+        start_cover_letter.add_retry(
+            errors=["States.TaskFailed"],
+            interval=Duration.seconds(30),
+            max_attempts=2,
+            backoff_rate=2.0,
+        )
+        start_cover_letter.add_catch(
+            handle_cover_letter_failure,
+            errors=["States.ALL"],
+            result_path="$.cover_letter_error",
+        )
+
+        start_interview_prep = sfn_tasks.SqsSendMessage(
+            self,
+            "StartInterviewPrep",
+            queue=interview_prep_queue,
+            integration_pattern=sfn.IntegrationPattern.WAIT_FOR_TASK_TOKEN,
+            heartbeat_timeout=sfn.Timeout.duration(Duration.seconds(300)),
+            result_path="$.interview_prep_result",
+            message_body=sfn.TaskInput.from_object(
+                {
+                    "user_id": sfn.JsonPath.string_at("$.user_id"),
+                    "job_id": sfn.JsonPath.string_at("$.job_id"),
+                    "vpr_id": sfn.JsonPath.string_at("$.vpr_result.vpr_id"),
+                    "task_token": sfn.JsonPath.task_token,
+                }
+            ),
+        )
+        start_interview_prep.add_retry(
+            errors=["States.TaskFailed"],
+            interval=Duration.seconds(30),
+            max_attempts=2,
+            backoff_rate=2.0,
+        )
+        start_interview_prep.add_catch(
+            handle_interview_prep_failure,
+            errors=["States.ALL"],
+            result_path="$.interview_prep_error",
+        )
+
+        generate_final_artifacts = sfn.Parallel(
+            self,
+            "GenerateFinalArtifacts",
+            comment="Generate cover letter and interview prep concurrently",
+            result_path="$.final_artifacts_result",
+        )
+        generate_final_artifacts.branch(start_cover_letter)
+        generate_final_artifacts.branch(start_interview_prep)
+        generate_final_artifacts.add_catch(
+            handle_final_artifacts_failure,
+            errors=["States.ALL"],
+            result_path="$.final_artifacts_error",
+        )
+
         start_cv_tailoring = sfn_tasks.LambdaInvoke(
             self,
             "StartCVTailoring",
@@ -117,6 +231,7 @@ class ArtifactChainConstruct(Construct):
             backoff_rate=2.0,
         )
         start_cv_tailoring.add_catch(handle_cv_failure, errors=["States.ALL"])
+        start_cv_tailoring.next(generate_final_artifacts)
 
         start_vpr = sfn_tasks.SqsSendMessage(
             self,

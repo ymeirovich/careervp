@@ -77,7 +77,7 @@ def repository() -> ApplicationRepository:
 class TestApplicationStateModel:
     def test_all_states_are_canonical(self) -> None:
         # Core 7-state machine remains unchanged; FE-UI-029 adds the additive
-        # Company Research gate states (cr_pending, cr_failed) and artifacts_failed.
+        # Company Research gate states; FE-UI-039 adds artifacts_partial.
         expected = (
             'created',
             'cv_selected',
@@ -87,6 +87,7 @@ class TestApplicationStateModel:
             'cr_pending',
             'cr_failed',
             'artifacts_generating',
+            'artifacts_partial',
             'artifacts_completed',
             'artifacts_failed',
         )
@@ -310,6 +311,7 @@ class TestReloadRecovery:
             ('gap_questions_ready', '/gap-questions'),
             ('gap_responses_submitted', '/gap-questions'),
             ('artifacts_generating', '/artifacts'),
+            ('artifacts_partial', '/artifacts'),
             ('artifacts_completed', '/artifacts'),
         ],
     )

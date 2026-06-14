@@ -305,12 +305,22 @@ class TestInterviewPrepNoTemplate:
 class TestInterviewPrepHandlerFlow:
     """Validates handler behavior required by L0.2."""
 
+    def _mock_vpr_result(self) -> MagicMock:
+        """Return a VPR DAL result with user_id set to pass ownership check."""
+        vpr = MagicMock()
+        vpr.user_id = USER_ID
+        result = MagicMock()
+        result.success = True
+        result.data = vpr
+        return result
+
     def test_returns_artifact_id_in_handler_response(self) -> None:
         from careervp.handlers.interview_prep_handler import lambda_handler
 
         with patch('careervp.handlers.interview_prep_handler._get_dal') as mock_get_dal:
             mock_dal = MagicMock()
             mock_dal.get_cv.return_value = _user_cv()
+            mock_dal.get_vpr.return_value = self._mock_vpr_result()
             mock_get_dal.return_value = mock_dal
 
             with patch('careervp.handlers.interview_prep_handler.generate_interview_prep') as mock_generate:
@@ -334,6 +344,7 @@ class TestInterviewPrepHandlerFlow:
         with patch('careervp.handlers.interview_prep_handler._get_dal') as mock_get_dal:
             mock_dal = MagicMock()
             mock_dal.get_cv.return_value = _user_cv()
+            mock_dal.get_vpr.return_value = self._mock_vpr_result()
             mock_get_dal.return_value = mock_dal
 
             with patch('careervp.handlers.interview_prep_handler.generate_interview_prep') as mock_generate:
@@ -357,7 +368,7 @@ class TestInterviewPrepHandlerFlow:
         ):
             mock_dal = MagicMock()
             mock_dal.get_cv.return_value = None
-            mock_dal.get_vpr.return_value = MagicMock(success=True, data=None)
+            mock_dal.get_vpr.return_value = self._mock_vpr_result()
             mock_dal.get_gap_responses.return_value = MagicMock(success=True, data=None)
             mock_get_dal.return_value = mock_dal
             mock_gen.return_value = _mock_llm_result()
@@ -376,7 +387,7 @@ class TestInterviewPrepHandlerFlow:
         ):
             mock_dal = MagicMock()
             mock_dal.get_cv.return_value = _user_cv(user_id=OTHER_USER_ID)
-            mock_dal.get_vpr.return_value = MagicMock(success=True, data=None)
+            mock_dal.get_vpr.return_value = self._mock_vpr_result()
             mock_dal.get_gap_responses.return_value = MagicMock(success=True, data=None)
             mock_get_dal.return_value = mock_dal
             mock_gen.return_value = _mock_llm_result()

@@ -27,7 +27,13 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 from botocore.exceptions import ClientError as BotoClientError
 from pydantic import ValidationError
 
+from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
+from careervp.handlers.artifact_dependency_utils import (
+    dependency_response_body,
+    mark_requested_artifact_pending,
+    resolve_handler_dependencies,
+)
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
@@ -105,25 +111,6 @@ def _inject_company_research_context(input_data: dict[str, Any], artifact: Confi
     input_data['company_context'] = artifact.company_context.model_dump(mode='json')
     input_data['company_research_id'] = artifact.company_research_id
     input_data['company_research_at'] = artifact.company_research_at
-
-
-def _build_dependency_generating_response(job_id: str, application_id: str) -> dict[str, Any]:
-    """Return the resolver-compatible 202 stub when CR is not ready."""
-    return {
-        'statusCode': int(HTTPStatus.ACCEPTED),
-        'headers': _json_headers(),
-        'body': json.dumps(
-            {
-                'request_id': job_id,
-                'job_id': job_id,
-                'status': 'dependency_generating',
-                'dependency': 'company_research',
-                'application_id': application_id,
-                'company_context_included': False,
-                'estimated_time_seconds': 120,
-            }
-        ),
-    }
 
 
 def _normalize_submit_request(request_data: dict[str, Any], user_id: str) -> dict[str, Any]:
@@ -359,12 +346,28 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         user_id=str(normalized_request['user_id']),
     )
     if cr_artifact is None:
+        application_id = str(normalized_request['application_id'])
+        dependency_resolution = resolve_handler_dependencies(
+            artifact_type='vpr',
+            application_id=application_id,
+            user_id=str(normalized_request['user_id']),
+            dal=DynamoDalHandler(os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')),
+        )
+        if dependency_resolution.status != 'ready':
+            if dependency_resolution.status == 'dependency_generating':
+                mark_requested_artifact_pending(application_id=application_id, user_id=str(normalized_request['user_id']), artifact_type='vpr')
+            return {
+                'statusCode': dependency_resolution.http_status,
+                'headers': _json_headers(),
+                'body': json.dumps(dependency_response_body(dependency_resolution, requested_artifact='vpr')),
+            }
+
         logger.info(
-            'VPR submit deferred until Company Research is available',
+            'VPR submit could not load Company Research after dependency resolution',
             job_id=job_id,
             application_id=normalized_request['application_id'],
         )
-        return _build_dependency_generating_response(job_id=job_id, application_id=str(normalized_request['application_id']))
+        return _build_error_response('Company Research is required before VPR generation', HTTPStatus.CONFLICT)
 
     _inject_company_research_context(input_data, cr_artifact)
 

@@ -18,6 +18,7 @@ APPLICATION_STATES: tuple[str, ...] = (
     'cr_pending',
     'cr_failed',
     'artifacts_generating',
+    'artifacts_partial',
     'artifacts_completed',
     'artifacts_failed',
 )
@@ -34,7 +35,8 @@ VALID_TRANSITIONS: dict[str, tuple[str, ...]] = {
     'gap_responses_submitted': ('cr_pending', 'artifacts_generating'),
     'cr_pending': ('artifacts_generating', 'cr_failed'),
     'cr_failed': ('cr_pending',),
-    'artifacts_generating': ('artifacts_completed', 'artifacts_failed'),
+    'artifacts_generating': ('artifacts_completed', 'artifacts_partial', 'artifacts_failed'),
+    'artifacts_partial': (),
     'artifacts_completed': (),
     'artifacts_failed': ('artifacts_generating',),
 }
@@ -171,6 +173,29 @@ class ApplicationRepository:
             ExpressionAttributeNames={'#artifact_type': artifact_type},
             ExpressionAttributeValues={
                 ':status': status,
+                ':updated_at': self._now_iso(),
+            },
+        )
+
+    def claim_chain_execution(self, application_id: str, user_id: str) -> None:
+        """Atomically set chain_execution_status=RUNNING only if not already RUNNING.
+
+        Raises botocore ClientError with Code=ConditionalCheckFailedException when
+        a concurrent request already holds the RUNNING lock.
+        """
+        self._table().update_item(
+            Key={
+                'userId': user_id,
+                'applicationId': application_id,
+            },
+            UpdateExpression='SET chain_execution_arn = :placeholder, chain_execution_status = :status, updated_at = :updated_at',
+            ConditionExpression=(
+                'attribute_exists(userId) AND attribute_exists(applicationId) '
+                'AND (attribute_not_exists(chain_execution_status) OR chain_execution_status <> :status)'
+            ),
+            ExpressionAttributeValues={
+                ':placeholder': 'PENDING',
+                ':status': 'RUNNING',
                 ':updated_at': self._now_iso(),
             },
         )

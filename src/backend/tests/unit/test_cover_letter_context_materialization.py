@@ -27,7 +27,10 @@ def _request(gap_response_ids: list[str] | None = None) -> CoverLetterRequest:
 
 def _dal() -> MagicMock:
     dal = MagicMock()
-    dal.get_vpr.return_value = Result(success=False, data=None, code=ResultCode.SUCCESS)
+    # Provide a VPR owned by 'user-1' so the ownership check in _resolve_vpr_payload passes.
+    mock_vpr = MagicMock()
+    mock_vpr.user_id = 'user-1'
+    dal.get_vpr.return_value = Result(success=True, data=mock_vpr, code=ResultCode.SUCCESS)
     dal.get_gap_responses.return_value = Result(
         success=True,
         data=[

@@ -10,12 +10,18 @@ from decimal import Decimal
 from http import HTTPStatus
 from typing import Any, cast
 
+import boto3
 from aws_lambda_powertools.metrics import MetricUnit
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from pydantic import ValidationError
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
+from careervp.handlers.artifact_dependency_utils import (
+    dependency_response_body,
+    mark_requested_artifact_pending,
+    resolve_handler_dependencies,
+)
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
@@ -30,6 +36,8 @@ from careervp.models.cover_letter import (
 )
 from careervp.models.cv import UserCV
 from careervp.models.result import Result, ResultCode
+
+sfn = boto3.client('stepfunctions')
 
 
 def _convert_decimal_to_float(obj: Any) -> Any:
@@ -58,22 +66,15 @@ def _get_dal() -> DynamoDalHandler:
     return DynamoDalHandler(table_name)
 
 
-class _FallbackVPR:
-    """Minimal VPR shim used by cover-letter logic prompt construction."""
+class _ResolvedVPRPayload:
+    """Adapter for real VPR dict payloads returned by legacy storage paths."""
 
-    def __init__(self, vpr_id: str, job_id: str, payload: dict[str, Any] | None = None) -> None:
-        self._vpr_id = vpr_id
-        self._job_id = job_id
+    def __init__(self, payload: dict[str, Any]) -> None:
         self._payload = payload
 
     def model_dump(self, mode: str = 'json') -> dict[str, Any]:
         _ = mode
-        if self._payload is not None:
-            return self._payload
-        return {
-            'vpr_id': self._vpr_id,
-            'job_id': self._job_id,
-        }
+        return self._payload
 
 
 def _coerce_text(value: Any) -> str:
@@ -321,23 +322,28 @@ def _resolve_vpr_payload(
     dal: DynamoDalHandler,
     vpr_id: str,
     job_id: str,
+    user_id: str,
 ) -> Any:
-    fallback = _FallbackVPR(vpr_id=vpr_id, job_id=job_id)
     try:
         vpr_result = dal.get_vpr(vpr_id)
     except Exception as exc:  # noqa: BLE001
         logger.warning('VPR lookup failed for cover letter context', vpr_id=vpr_id, error=str(exc))
-        return cast(Any, fallback)
+        raise ValueError(f'Required VPR not found for cover letter: {vpr_id}') from exc
 
     if not hasattr(vpr_result, 'success') or not vpr_result.success or vpr_result.data is None:
-        return cast(Any, fallback)
+        raise ValueError(f'Required VPR not found for cover letter: {vpr_id}')
 
     resolved_vpr = vpr_result.data
+    # Ownership: ensure the VPR belongs to the requesting user, not a different user's record.
+    vpr_owner = getattr(resolved_vpr, 'user_id', None) if not isinstance(resolved_vpr, dict) else resolved_vpr.get('user_id')
+    if str(vpr_owner or '').strip() != user_id:
+        raise ValueError(f'VPR ownership mismatch for cover letter: {vpr_id}')
+
     if hasattr(resolved_vpr, 'model_dump'):
         return cast(Any, resolved_vpr)
     if isinstance(resolved_vpr, dict):
-        return cast(Any, _FallbackVPR(vpr_id=vpr_id, job_id=job_id, payload=resolved_vpr))
-    return cast(Any, fallback)
+        return cast(Any, _ResolvedVPRPayload(resolved_vpr))
+    raise ValueError(f'Required VPR payload has unsupported shape for cover letter: {job_id}')
 
 
 def _resolve_cover_letter_context(
@@ -363,6 +369,7 @@ def _resolve_cover_letter_context(
             dal=dal,
             vpr_id=api_request.vpr_id,
             job_id=api_request.job_id,
+            user_id=user_id,
         ),
         'company_research': _resolve_company_research(
             dal=dal,
@@ -443,7 +450,8 @@ def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
         body = json.loads(record.get('body', '{}'))
         job_id = body.get('job_id', '')
         user_id = body.get('user_id', '')
-        request_data = body.get('request_data', {})
+        task_token = str(body.get('task_token') or '').strip() or None
+        request_data = _request_data_from_sqs_body(body)
 
         if not job_id or not user_id:
             logger.error('SQS message missing job_id or user_id', body=body)
@@ -454,13 +462,53 @@ def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
 
         try:
             _generate_and_persist_from_sqs(job_id=job_id, user_id=user_id, request_data=request_data)
+            _send_task_success(task_token, job_id=job_id, cover_letter_id=job_id)
         except Exception as exc:
             # _generate_and_persist_from_sqs marks the artifact FAILED internally with
             # stage context before re-raising. Re-raise here so SQS routes to DLQ.
             logger.error('Cover letter SQS job failed', job_id=job_id, error=str(exc), exc_info=True)
+            _send_task_failure(task_token, cause=str(exc))
+            if task_token:
+                continue
             raise
 
     return {'statusCode': 200, 'body': 'OK'}
+
+
+def _request_data_from_sqs_body(body: dict[str, Any]) -> dict[str, Any]:
+    request_data = body.get('request_data')
+    if isinstance(request_data, dict) and request_data:
+        return request_data
+
+    job_id = str(body.get('job_id') or '').strip()
+    user_id = str(body.get('user_id') or '').strip()
+    return {
+        'cv_id': str(body.get('cv_id') or user_id).strip(),
+        'job_id': job_id,
+        'application_id': str(body.get('application_id') or job_id).strip(),
+        'vpr_id': str(body.get('vpr_id') or '').strip(),
+        'gap_response_ids': body.get('gap_response_ids') if isinstance(body.get('gap_response_ids'), list) else ['artifact-chain'],
+        'company_research_id': body.get('company_research_id'),
+    }
+
+
+def _send_task_success(task_token: str | None, *, job_id: str, cover_letter_id: str) -> None:
+    if not task_token:
+        return
+    sfn.send_task_success(
+        taskToken=task_token,
+        output=json.dumps({'job_id': job_id, 'cover_letter_id': cover_letter_id}),
+    )
+
+
+def _send_task_failure(task_token: str | None, *, cause: str) -> None:
+    if not task_token:
+        return
+    sfn.send_task_failure(
+        taskToken=task_token,
+        error='CoverLetterFailed',
+        cause=cause,
+    )
 
 
 def _generate_and_persist_from_sqs(
@@ -658,7 +706,7 @@ def _update_application_artifact(
         )
 
 
-def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:
+def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
     """Handle POST /cover-letter/generate requests."""
     user_id = _extract_authenticated_user_id(event)
     if not user_id:
@@ -684,6 +732,10 @@ def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:
     api_request = request_result.data
 
     dal = _get_dal()
+    dependency_response = _resolve_cover_letter_dependency_response(api_request=api_request, user_id=user_id, dal=dal)
+    if dependency_response is not None:
+        return dependency_response
+
     try:
         user_cv = _load_user_cv(dal=dal, user_id=user_id)
     except Exception as e:
@@ -759,6 +811,29 @@ def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:
             'artifact_id': artifact_id,
             'status': 'completed',
         },
+    )
+
+
+def _resolve_cover_letter_dependency_response(
+    *,
+    api_request: CoverLetterRequest,
+    user_id: str,
+    dal: DynamoDalHandler,
+) -> dict[str, Any] | None:
+    application_id = api_request.application_id or api_request.job_id
+    dependency_resolution = resolve_handler_dependencies(
+        artifact_type='cover_letter',
+        application_id=application_id,
+        user_id=user_id,
+        dal=dal,
+    )
+    if dependency_resolution.status == 'ready':
+        return None
+    if dependency_resolution.status == 'dependency_generating':
+        mark_requested_artifact_pending(application_id=application_id, user_id=user_id, artifact_type='cover_letter')
+    return _build_response(
+        HTTPStatus(dependency_resolution.http_status),
+        dependency_response_body(dependency_resolution, requested_artifact='cover_letter'),
     )
 
 

@@ -10,6 +10,7 @@ from decimal import Decimal
 from http import HTTPStatus
 from typing import Any
 
+import boto3
 from aws_lambda_powertools.metrics import MetricUnit
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from boto3.dynamodb.conditions import Attr, Key
@@ -24,6 +25,8 @@ from careervp.logic.interview_prep import generate_interview_prep
 from careervp.models.api_models import InterviewPrepRequest
 from careervp.models.interview_prep import InterviewPrepRequest as LogicInterviewPrepRequest
 from careervp.models.result import Result, ResultCode
+
+sfn = boto3.client('stepfunctions')
 
 INTERVIEW_PREP_SORT_KEY_PREFIX = 'ARTIFACT#INTERVIEW_PREP#'
 PRIMARY_KEY_MODE = 'applicationId/artifactId'
@@ -115,7 +118,8 @@ def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
         logger.info('Interview prep worker parsed SQS body', sqs_body=body)
         job_id = body.get('job_id', '')
         user_id = body.get('user_id', '')
-        request_data = body.get('request_data', {})
+        task_token = str(body.get('task_token') or '').strip() or None
+        request_data = _request_data_from_sqs_body(body)
 
         if not job_id or not user_id:
             logger.error('SQS message missing job_id or user_id', body=body)
@@ -126,11 +130,49 @@ def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
 
         try:
             _generate_and_persist_from_sqs(job_id=job_id, user_id=user_id, request_data=request_data)
+            _send_task_success(task_token, job_id=job_id, interview_prep_id=job_id)
         except Exception as exc:
             logger.error('Interview prep SQS job failed', job_id=job_id, error=str(exc), exc_info=True)
+            _send_task_failure(task_token, cause=str(exc))
+            if task_token:
+                continue
             raise
 
     return {'statusCode': 200, 'body': 'OK'}
+
+
+def _request_data_from_sqs_body(body: dict[str, Any]) -> dict[str, Any]:
+    request_data = body.get('request_data')
+    if isinstance(request_data, dict) and request_data:
+        return request_data
+
+    job_id = str(body.get('job_id') or '').strip()
+    return {
+        'vpr_id': str(body.get('vpr_id') or '').strip(),
+        'gap_response_ids': body.get('gap_response_ids') if isinstance(body.get('gap_response_ids'), list) else ['artifact-chain'],
+        'application_id': str(body.get('application_id') or job_id).strip(),
+        'job_id': job_id,
+        'focus_areas': body.get('focus_areas') if isinstance(body.get('focus_areas'), list) else [],
+    }
+
+
+def _send_task_success(task_token: str | None, *, job_id: str, interview_prep_id: str) -> None:
+    if not task_token:
+        return
+    sfn.send_task_success(
+        taskToken=task_token,
+        output=json.dumps({'job_id': job_id, 'interview_prep_id': interview_prep_id}),
+    )
+
+
+def _send_task_failure(task_token: str | None, *, cause: str) -> None:
+    if not task_token:
+        return
+    sfn.send_task_failure(
+        taskToken=task_token,
+        error='InterviewPrepFailed',
+        cause=cause,
+    )
 
 
 def _generate_and_persist_from_sqs(
@@ -618,7 +660,7 @@ def _extract_vpr_differentiators(vpr_payload: dict[str, Any]) -> list[str] | Non
     return differentiators or None
 
 
-def _resolve_vpr_from_jobs_table(vpr_id: str) -> dict[str, Any] | None:
+def _resolve_vpr_from_jobs_table(vpr_id: str, user_id: str) -> dict[str, Any] | None:
     table_name = _coerce_text(os.environ.get('VPR_JOBS_TABLE_NAME') or os.environ.get('JOBS_TABLE_NAME'))
     if not table_name:
         return None
@@ -633,6 +675,12 @@ def _resolve_vpr_from_jobs_table(vpr_id: str) -> dict[str, Any] | None:
 
     if not isinstance(job_record, dict):
         logger.info('Interview prep context VPR jobs lookup empty', vpr_id=vpr_id, jobs_table_name=table_name)
+        return None
+
+    # Ownership check: the job record must belong to the requesting user.
+    record_owner = str(job_record.get('user_id') or '').strip()
+    if record_owner != user_id:
+        logger.warning('VPR job ownership mismatch for interview prep', vpr_id=vpr_id, expected=user_id, actual=record_owner)
         return None
 
     logger.info('Interview prep context VPR jobs lookup payload', vpr_id=vpr_id, jobs_table_name=table_name, job_record=job_record)
@@ -669,11 +717,12 @@ def _resolve_interview_prep_context(  # noqa: C901
 
     Returns dict with: cv_facts, vpr_data, vpr_differentiators,
     gap_responses, company_research, language, job_title, job_id.
-    Failures are non-fatal — caller proceeds with reduced context.
+    A missing VPR is fatal; downstream interview prep must not use fabricated
+    upstream context.
     """
     context: dict[str, Any] = {
         'cv_facts': None,
-        'vpr_data': {'vpr_id': api_request.vpr_id},
+        'vpr_data': None,
         'vpr_differentiators': None,
         'gap_responses': None,
         'company_research': None,
@@ -716,7 +765,7 @@ def _resolve_interview_prep_context(  # noqa: C901
 
     # Resolve VPR data (prefer VPR jobs table entry by vpr job id)
     try:
-        vpr_payload = _resolve_vpr_from_jobs_table(api_request.vpr_id)
+        vpr_payload = _resolve_vpr_from_jobs_table(api_request.vpr_id, user_id=user_id)
         if isinstance(vpr_payload, dict):
             logger.info('Interview prep context VPR payload from jobs table', vpr_id=api_request.vpr_id, vpr_payload=vpr_payload)
             context['vpr_data'] = vpr_payload
@@ -727,23 +776,32 @@ def _resolve_interview_prep_context(  # noqa: C901
             vpr_result = dal.get_vpr(api_request.vpr_id)
             if hasattr(vpr_result, 'success') and vpr_result.success and vpr_result.data is not None:
                 vpr = vpr_result.data
-                vpr_dict = vpr.model_dump(mode='json') if hasattr(vpr, 'model_dump') else dict(vpr)
-                logger.info(
-                    'Interview prep context VPR payload from DAL fallback',
-                    vpr_id=api_request.vpr_id,
-                    table_name=getattr(dal, 'table_name', ''),
-                    vpr_payload=vpr_dict,
-                )
-                context['vpr_data'] = vpr_dict
-                context['vpr_differentiators'] = _extract_vpr_differentiators(vpr_dict) or []
-                context['language'] = _coerce_text(vpr_dict.get('language')) or context['language']
-                metrics.add_metric(name='InterviewPrepVPRResolved', unit=MetricUnit.Count, value=1)
+                # Ownership: reject VPRs that belong to a different user.
+                vpr_owner = getattr(vpr, 'user_id', None) or (vpr.get('user_id') if isinstance(vpr, dict) else None)
+                if str(vpr_owner or '').strip() != user_id:
+                    logger.warning('VPR ownership mismatch in DAL fallback for interview prep', vpr_id=api_request.vpr_id, expected=user_id)
+                    metrics.add_metric(name='InterviewPrepVPROwnershipMismatch', unit=MetricUnit.Count, value=1)
+                else:
+                    vpr_dict = vpr.model_dump(mode='json') if hasattr(vpr, 'model_dump') else dict(vpr)
+                    logger.info(
+                        'Interview prep context VPR payload from DAL fallback',
+                        vpr_id=api_request.vpr_id,
+                        table_name=getattr(dal, 'table_name', ''),
+                        vpr_payload=vpr_dict,
+                    )
+                    context['vpr_data'] = vpr_dict
+                    context['vpr_differentiators'] = _extract_vpr_differentiators(vpr_dict) or []
+                    context['language'] = _coerce_text(vpr_dict.get('language')) or context['language']
+                    metrics.add_metric(name='InterviewPrepVPRResolved', unit=MetricUnit.Count, value=1)
             else:
                 metrics.add_metric(name='InterviewPrepVPRMissing', unit=MetricUnit.Count, value=1)
                 logger.warning('VPR not found for context resolution', vpr_id=api_request.vpr_id)
     except Exception as exc:
         metrics.add_metric(name='InterviewPrepVPRResolutionError', unit=MetricUnit.Count, value=1)
         logger.warning('VPR resolution failed', vpr_id=api_request.vpr_id, error=str(exc))
+
+    if context['vpr_data'] is None:
+        raise ValueError(f'Required VPR not found for interview prep: {api_request.vpr_id}')
 
     # Resolve gap responses filtered by requested gap_response_ids
     gap_candidates = _build_context_dal_candidates(
@@ -818,7 +876,7 @@ def _resolve_interview_prep_context(  # noqa: C901
         vpr_id=api_request.vpr_id,
         job_id=job_id,
         cv_resolved=context['cv_facts'] is not None,
-        vpr_resolved=context['vpr_data'] != {'vpr_id': api_request.vpr_id},
+        vpr_resolved=context['vpr_data'] is not None,
         gap_resolved=bool(context['gap_responses']),
         company_research_resolved=context['company_research'] is not None,
         language=context['language'],

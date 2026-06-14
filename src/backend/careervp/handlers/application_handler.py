@@ -38,6 +38,7 @@ _RELOAD_ROUTE_BY_STATE: dict[str, str] = {
     'cr_pending': '/artifacts',
     'cr_failed': '/artifacts',
     'artifacts_generating': '/artifacts',
+    'artifacts_partial': '/artifacts',
     'artifacts_completed': '/artifacts',
 }
 
@@ -117,6 +118,7 @@ def _build_recovery_payload(application: dict[str, Any], job_record: dict[str, A
         'cr_pending',
         'cr_failed',
         'artifacts_generating',
+        'artifacts_partial',
         'artifacts_completed',
     }
     gap_questions = application.get('gap_questions')

@@ -15,6 +15,11 @@ from pydantic import ValidationError
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
+from careervp.handlers.artifact_dependency_utils import (
+    dependency_response_body,
+    mark_requested_artifact_pending,
+    resolve_handler_dependencies,
+)
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.logic.cv_tailoring import tailor_cv
@@ -192,7 +197,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C90
         )
 
     # Detect which API flow is being used
-    using_new_api = {'cv_id', 'job_id', 'vpr_id'}.issubset(request_data)
+    using_new_api = {'cv_id', 'job_id'}.issubset(request_data)
     if using_new_api:
         return _handle_openapi_async_generate(event, request_data, headers, user_id)
 
@@ -290,7 +295,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
 def _is_sfn_invoke(event: dict[str, Any]) -> bool:
     """Return True for the artifact-chain direct Lambda invoke payload."""
-    return not event.get('httpMethod') and {'user_id', 'cv_id', 'job_id', 'vpr_id'}.issubset(event)
+    return not event.get('httpMethod') and {'user_id', 'cv_id', 'job_id'}.issubset(event)
 
 
 def _handle_sfn_invoke(event: dict[str, Any]) -> dict[str, Any]:
@@ -302,8 +307,8 @@ def _handle_sfn_invoke(event: dict[str, Any]) -> dict[str, Any]:
         'vpr_id': str(event.get('vpr_id') or '').strip(),
     }
     user_id = str(event.get('user_id') or '').strip()
-    if not user_id or not request_data['cv_id'] or not request_data['job_id'] or not request_data['vpr_id']:
-        raise ValueError('user_id, cv_id, job_id, and vpr_id are required for Step Functions CV tailoring')
+    if not user_id or not request_data['cv_id'] or not request_data['job_id']:
+        raise ValueError('user_id, cv_id, and job_id are required for Step Functions CV tailoring')
 
     response = _handle_openapi_async_generate(event, request_data, headers, user_id)
     status_code = int(response.get('statusCode', HTTPStatus.INTERNAL_SERVER_ERROR))
@@ -339,6 +344,25 @@ def _handle_openapi_async_generate(  # noqa: C901
 
     table_name = os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')
     dal = DynamoDalHandler(table_name)
+    dependency_resolution = resolve_handler_dependencies(
+        artifact_type='cv_tailored',
+        application_id=job_id,
+        user_id=user_id,
+        dal=dal,
+    )
+    if dependency_resolution.status != 'ready':
+        if dependency_resolution.status == 'dependency_generating':
+            mark_requested_artifact_pending(application_id=job_id, user_id=user_id, artifact_type='cv_tailored')
+        return _response(
+            HTTPStatus(dependency_resolution.http_status),
+            dependency_response_body(dependency_resolution, requested_artifact='cv_tailored'),
+            headers,
+        )
+
+    resolved_vpr_ref = dependency_resolution.resolved_upstream.get('vpr')
+    resolved_vpr = resolved_vpr_ref.artifact if resolved_vpr_ref is not None else None
+    if vpr_id is None and resolved_vpr_ref is not None and resolved_vpr_ref.artifact_id is not None:
+        vpr_id = resolved_vpr_ref.artifact_id
 
     # ── 1. Fetch master CV ────────────────────────────────────────────────────
     master_cv = dal.get_cv(user_id=user_id)
@@ -375,8 +399,8 @@ def _handle_openapi_async_generate(  # noqa: C901
         job_description = f'Job posting for {job_title or job_id}'
 
     # ── 3. Fetch VPR (optional, enriches Stage 1 keyword mapping) ───────────────
-    vpr = None
-    if vpr_id:
+    vpr = resolved_vpr
+    if vpr is None and vpr_id:
         try:
             vpr_result = dal.get_vpr(application_id=vpr_id)
             if vpr_result.success and vpr_result.data is not None:
@@ -416,8 +440,16 @@ def _handle_openapi_async_generate(  # noqa: C901
             logger.warning('Failed to fetch job record from JobsRepository', job_id=job_id, error=str(exc))
 
     if not job_description:
-        logger.warning('job_description unavailable — using placeholder; set vpr_id or ensure job record exists', job_id=job_id)
-        job_description = f'Job posting for {job_title or job_id}'
+        logger.error('job_description unavailable — refusing to generate from placeholder', job_id=job_id)
+        return _response(
+            HTTPStatus.UNPROCESSABLE_ENTITY,
+            {
+                'success': False,
+                'code': ResultCode.VALIDATION_ERROR,
+                'message': 'Job description could not be resolved. Ensure the job record exists or provide a vpr_id.',
+            },
+            headers,
+        )
 
     # ── 4. Run 3-stage pipeline ───────────────────────────────────────────────
     llm_client = LLMClient()
