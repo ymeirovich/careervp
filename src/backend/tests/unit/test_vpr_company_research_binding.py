@@ -226,7 +226,12 @@ def test_worker_loads_cr_when_message_lacks_context(monkeypatch: pytest.MonkeyPa
     request = vpr_worker_handler.generate_vpr.call_args.args[0]
     assert request.company_context is not None
     assert request.company_context.company_name == 'Acme'
-    update_payload = repo.update_job.call_args.kwargs['updates']
+    # The COMPLETED write is the atomic, guarded update_job_status (FE-UI-043);
+    # provenance fields are passed as flat kwargs alongside status='COMPLETED'.
+    completed_calls = [c for c in repo.update_job_status.call_args_list if c.kwargs.get('status') == 'COMPLETED']
+    assert completed_calls, 'VPR worker did not perform the COMPLETED write'
+    update_payload = completed_calls[0].kwargs
+    assert update_payload['expected_current_status'] == 'PROCESSING'
     assert update_payload['company_research_id'] == 'cr-worker-1'
     assert update_payload['company_research_at'] == '2026-06-14T09:05:00+00:00'
     assert update_payload['company_context_included'] is True

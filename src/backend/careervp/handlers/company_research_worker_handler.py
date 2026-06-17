@@ -215,6 +215,7 @@ async def _async_process_record(input_data: CRWorkerInput, receive_count: int) -
             user_id=input_data.user_id,
             artifact_type='company_research',
             status='completed',
+            fail_if_status='cancelled',
         )
     except Exception as exc:
         from botocore.exceptions import ClientError as _ClientError
@@ -285,8 +286,12 @@ def _process_record(record: dict[str, Any]) -> None:
         application = app_repo.get(application_id=input_data.job_id, user_id=input_data.user_id)
         if isinstance(application, dict):
             artifact_statuses = application.get('artifact_statuses') or {}
-            if isinstance(artifact_statuses, dict) and artifact_statuses.get('company_research') == 'completed':
-                logger.info('CR already completed — idempotency skip', idempotency_key=idempotency_key)
+            cr_status = artifact_statuses.get('company_research') if isinstance(artifact_statuses, dict) else None
+            # 'completed' = idempotency; 'cancelled' = a cancel landed before this
+            # (re)delivery. Skip both so we don't redo research only to have the
+            # confidence-gated persist rejected by the fail_if_status='cancelled' guard.
+            if cr_status in ('completed', 'cancelled'):
+                logger.info('CR already terminal — skipping', idempotency_key=idempotency_key, cr_status=cr_status)
                 return
     except Exception as exc:
         logger.warning('Idempotency check failed; proceeding with processing', error=str(exc))

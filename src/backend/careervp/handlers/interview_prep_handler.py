@@ -21,6 +21,7 @@ from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.logic.cancellation import CancelledBeforePersist
 from careervp.logic.interview_prep import generate_interview_prep
 from careervp.models.api_models import InterviewPrepRequest
 from careervp.models.interview_prep import InterviewPrepRequest as LogicInterviewPrepRequest
@@ -131,6 +132,12 @@ def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
         try:
             _generate_and_persist_from_sqs(job_id=job_id, user_id=user_id, request_data=request_data)
             _send_task_success(task_token, job_id=job_id, interview_prep_id=job_id)
+        except CancelledBeforePersist:
+            # Cancelled before/while persisting — skip cleanly: signal the chain
+            # branch but do NOT route to the DLQ and do NOT send task_success.
+            logger.info('Interview prep cancelled before persist — skipping', job_id=job_id, cancelled_before_persist=True)
+            _send_task_failure(task_token, cause='Job was cancelled')
+            continue
         except Exception as exc:
             logger.error('Interview prep SQS job failed', job_id=job_id, error=str(exc), exc_info=True)
             _send_task_failure(task_token, cause=str(exc))
@@ -184,8 +191,9 @@ def _generate_and_persist_from_sqs(
     dal = _get_dal()
     logger.info('Interview prep worker generation starting', job_id=job_id, user_id=user_id, request_data=request_data)
 
-    # Update status to PROCESSING
-    _update_artifact_status(user_id=user_id, job_id=job_id, status='PROCESSING')
+    # Update status to PROCESSING — refuse to resurrect a job cancelled before
+    # this (re)delivery (raises CancelledBeforePersist, handled by the SQS loop).
+    _update_artifact_status(user_id=user_id, job_id=job_id, status='PROCESSING', fail_if_cancelled=True)
 
     # Validate the request data
     try:
@@ -297,12 +305,14 @@ def _generate_and_persist_from_sqs(
         )
         raise RuntimeError(f'Persistence failed for interview prep job {job_id}: {persist_exc}') from persist_exc
 
-    # Update the artifact record to COMPLETED only after successful persistence
+    # Update the artifact record to COMPLETED only after successful persistence —
+    # a cancel during generation must not be overwritten back to COMPLETED.
     _update_artifact_status(
         user_id=user_id,
         job_id=job_id,
         status='COMPLETED',
         result_data=_convert_decimal_to_float(prep_payload),
+        fail_if_cancelled=True,
     )
 
     # Propagate completion to the application record so the hub reflects the
@@ -318,7 +328,7 @@ def _generate_and_persist_from_sqs(
     logger.info('Interview prep SQS job completed', job_id=job_id)
 
 
-def _update_artifact_status(
+def _update_artifact_status(  # noqa: C901
     user_id: str,
     job_id: str,
     status: str,
@@ -328,8 +338,15 @@ def _update_artifact_status(
     failure_stage: str | None = None,
     failure_timestamp: str | None = None,
     error_details: dict[str, Any] | None = None,
+    fail_if_cancelled: bool = False,
 ) -> None:
-    """Update interview prep artifact status in DynamoDB."""
+    """Update interview prep artifact status in DynamoDB.
+
+    When ``fail_if_cancelled`` is True the write is conditional and is rejected
+    if the artifact is already CANCELLED; that rejection is surfaced as
+    ``CancelledBeforePersist`` so the worker skips cleanly instead of resurrecting
+    a cancelled artifact (FE-UI-043 worker_cancelled_guard).
+    """
     import datetime as _dt
 
     import boto3 as _boto3
@@ -363,32 +380,28 @@ def _update_artifact_status(
         update_expr += ', error_details = :error_details'
         attr_values[':error_details'] = error_details
 
+    condition: str | None = None
+    if fail_if_cancelled:
+        condition = 'attribute_not_exists(#s) OR #s <> :cancelled'
+        attr_values[':cancelled'] = 'CANCELLED'
+
     artifact_id = _normalize_interview_prep_artifact_id(job_id)
+    update_kwargs: dict[str, Any] = {
+        'Key': {'applicationId': user_id, 'artifactId': artifact_id},
+        'UpdateExpression': update_expr,
+        'ExpressionAttributeNames': attr_names,
+        'ExpressionAttributeValues': attr_values,
+    }
+    if condition is not None:
+        update_kwargs['ConditionExpression'] = condition
     try:
-        logger.info(
-            'Interview prep worker updating DynamoDB artifact status',
-            user_id=user_id,
-            request_id=job_id,
-            key_schema_mode=PRIMARY_KEY_MODE,
-            status=status,
-            update_expression=update_expr,
-            expression_attribute_names=attr_names,
-            expression_attribute_values=attr_values,
-        )
-        table.update_item(
-            Key={'applicationId': user_id, 'artifactId': artifact_id},
-            UpdateExpression=update_expr,
-            ExpressionAttributeNames=attr_names,
-            ExpressionAttributeValues=attr_values,
-        )
-        logger.info(
-            'Updated interview prep artifact status',
-            user_id=user_id,
-            request_id=job_id,
-            key_schema_mode=PRIMARY_KEY_MODE,
-            status=status,
-        )
+        table.update_item(**update_kwargs)
     except Exception as exc:
+        error_response = getattr(exc, 'response', {}) if hasattr(exc, 'response') else {}
+        error_code = ((error_response.get('Error') or {}).get('Code')) if isinstance(error_response, dict) else None
+        if fail_if_cancelled and error_code == 'ConditionalCheckFailedException':
+            logger.info('Interview prep cancelled before write — skipping', request_id=job_id, attempted_status=status)
+            raise CancelledBeforePersist(job_id) from exc
         logger.error(
             'Failed to update artifact status',
             user_id=user_id,

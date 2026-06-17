@@ -23,6 +23,16 @@ _TERMINAL_STATUSES = {'COMPLETED', 'FAILED', 'CANCELLED'}
 _CANCELLABLE_ARTIFACT_STATUSES = {'pending', 'processing'}
 
 
+class CancelledBeforePersist(Exception):
+    """Raised by an artifact worker when a status write is rejected because the
+    artifact was cancelled concurrently (conditional-write CCF).
+
+    The SQS handler treats this as a clean skip: send task_failure (so a chain
+    branch is marked) and return WITHOUT re-raising, so the message is not sent
+    to the DLQ and the cancelled artifact is never resurrected (FE-UI-043).
+    """
+
+
 class CancelStatus(str, Enum):
     CANCELLED = 'cancelled'
     CONFLICT = 'conflict'
@@ -116,7 +126,9 @@ def cancel_artifact(
         return CancelResult(status=CancelStatus.CONFLICT)
 
     job_owner = str(job.get('user_id', ''))
-    if job_owner and job_owner != user_id:
+    if not job_owner or job_owner != user_id:
+        # Deny by default: a record with no owner must not be cancellable by an
+        # arbitrary authenticated caller (positive ownership assertion).
         return CancelResult(status=CancelStatus.FORBIDDEN)
 
     job_status = str(job.get('status', '')).upper()

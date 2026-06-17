@@ -25,6 +25,7 @@ from careervp.handlers.artifact_dependency_utils import (
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.logic.cancellation import CancelledBeforePersist
 from careervp.logic.cover_letter import generate_cover_letter
 from careervp.models.api_models import CoverLetterRequest
 from careervp.models.company import CompanyResearchResult, ResearchSource
@@ -242,7 +243,7 @@ def _resolve_job_record(user_id: str, job_id: str) -> dict[str, Any]:
         if not isinstance(record, dict):
             continue
         record_user_id = _coerce_text(record.get('user_id'))
-        if record_user_id and record_user_id != user_id:
+        if not record_user_id or record_user_id != user_id:
             logger.warning(
                 'Resolved job record belongs to another user',
                 user_id=user_id,
@@ -463,6 +464,12 @@ def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
         try:
             _generate_and_persist_from_sqs(job_id=job_id, user_id=user_id, request_data=request_data)
             _send_task_success(task_token, job_id=job_id, cover_letter_id=job_id)
+        except CancelledBeforePersist:
+            # Cancelled before/while persisting — skip cleanly: signal the chain
+            # branch but do NOT route to the DLQ and do NOT send task_success.
+            logger.info('Cover letter cancelled before persist — skipping', job_id=job_id, cancelled_before_persist=True)
+            _send_task_failure(task_token, cause='Job was cancelled')
+            continue
         except Exception as exc:
             # _generate_and_persist_from_sqs marks the artifact FAILED internally with
             # stage context before re-raising. Re-raise here so SQS routes to DLQ.
@@ -528,8 +535,9 @@ def _generate_and_persist_from_sqs(
     try:
         dal = _get_dal()
 
-        # Update status to PROCESSING
-        _update_artifact_status(user_id=user_id, job_id=job_id, status='PROCESSING')
+        # Update status to PROCESSING — refuse to resurrect a job cancelled before
+        # this (re)delivery (raises CancelledBeforePersist, handled by the SQS loop).
+        _update_artifact_status(user_id=user_id, job_id=job_id, status='PROCESSING', fail_if_cancelled=True)
 
         # Validate the request data
         current_stage = 'request_validation'
@@ -570,6 +578,10 @@ def _generate_and_persist_from_sqs(
             job_id=storage_job_id,
         )
 
+    except CancelledBeforePersist:
+        # The PROCESSING claim was rejected because the job is already cancelled.
+        # Do NOT mark it FAILED — propagate so the SQS loop skips it cleanly.
+        raise
     except Exception as exc:
         error_details = _extract_failure_details(exc)
         error_details['stage'] = current_stage
@@ -584,13 +596,15 @@ def _generate_and_persist_from_sqs(
         _update_artifact_status(user_id=user_id, job_id=job_id, status='FAILED', error_details=error_details)
         raise
 
-    # Update the artifact record to COMPLETED only after successful persistence
+    # Update the artifact record to COMPLETED only after successful persistence —
+    # a cancel during generation must not be overwritten back to COMPLETED.
     assert cover_letter_payload is not None  # guaranteed: set before 'persistence' stage completes
     _update_artifact_status(
         user_id=user_id,
         job_id=job_id,
         status='COMPLETED',
         result_data=_convert_decimal_to_float(cover_letter_payload),
+        fail_if_cancelled=True,
     )
 
     # Propagate completion to the application record so the hub reflects the
@@ -608,14 +622,21 @@ def _generate_and_persist_from_sqs(
     logger.info('Cover letter SQS job completed', job_id=job_id)
 
 
-def _update_artifact_status(
+def _update_artifact_status(  # noqa: C901
     user_id: str,
     job_id: str,
     status: str,
     result_data: dict[str, Any] | None = None,
     error_details: dict[str, str] | None = None,
+    fail_if_cancelled: bool = False,
 ) -> None:
-    """Update cover letter artifact status in DynamoDB."""
+    """Update cover letter artifact status in DynamoDB.
+
+    When ``fail_if_cancelled`` is True the write is conditional and is rejected
+    if the artifact is already CANCELLED; that rejection is surfaced as
+    ``CancelledBeforePersist`` so the worker skips cleanly instead of resurrecting
+    a cancelled artifact (FE-UI-043 worker_cancelled_guard).
+    """
     import datetime as _dt
 
     import boto3 as _boto3
@@ -647,24 +668,46 @@ def _update_artifact_status(
             update_expr += ', stage = :stage'
             attr_values[':stage'] = error_details['stage']
 
+    condition: str | None = None
+    if fail_if_cancelled:
+        condition = 'attribute_not_exists(#s) OR #s <> :cancelled'
+        attr_values[':cancelled'] = 'CANCELLED'
+
     artifact_id = f'ARTIFACT#COVER_LETTER#{job_id}'
+    primary_kwargs: dict[str, Any] = {
+        'Key': {'applicationId': user_id, 'artifactId': artifact_id},
+        'UpdateExpression': update_expr,
+        'ExpressionAttributeNames': attr_names,
+        'ExpressionAttributeValues': attr_values,
+    }
+    if condition is not None:
+        primary_kwargs['ConditionExpression'] = condition
     try:
-        table.update_item(
-            Key={'applicationId': user_id, 'artifactId': artifact_id},
-            UpdateExpression=update_expr,
-            ExpressionAttributeNames=attr_names,
-            ExpressionAttributeValues=attr_values,
-        )
+        table.update_item(**primary_kwargs)
     except Exception as exc:
         error_response = getattr(exc, 'response', {}) if hasattr(exc, 'response') else {}
         error_code = ((error_response.get('Error') or {}).get('Code')) if isinstance(error_response, dict) else None
+        if fail_if_cancelled and error_code == 'ConditionalCheckFailedException':
+            logger.info('Cover letter cancelled before write — skipping', job_id=job_id, attempted_status=status)
+            raise CancelledBeforePersist(job_id) from exc
         if error_code == 'ValidationException':
-            table.update_item(
-                Key={'pk': user_id, 'sk': artifact_id},
-                UpdateExpression=update_expr,
-                ExpressionAttributeNames=attr_names,
-                ExpressionAttributeValues=attr_values,
-            )
+            fallback_kwargs: dict[str, Any] = {
+                'Key': {'pk': user_id, 'sk': artifact_id},
+                'UpdateExpression': update_expr,
+                'ExpressionAttributeNames': attr_names,
+                'ExpressionAttributeValues': attr_values,
+            }
+            if condition is not None:
+                fallback_kwargs['ConditionExpression'] = condition
+            try:
+                table.update_item(**fallback_kwargs)
+            except Exception as fallback_exc:
+                fb_response = getattr(fallback_exc, 'response', {}) if hasattr(fallback_exc, 'response') else {}
+                fb_code = ((fb_response.get('Error') or {}).get('Code')) if isinstance(fb_response, dict) else None
+                if fail_if_cancelled and fb_code == 'ConditionalCheckFailedException':
+                    logger.info('Cover letter cancelled before write — skipping', job_id=job_id, attempted_status=status)
+                    raise CancelledBeforePersist(job_id) from fallback_exc
+                raise
             return
         logger.error('Failed to update artifact status', job_id=job_id, error=str(exc))
         raise

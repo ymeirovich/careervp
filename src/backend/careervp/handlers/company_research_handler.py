@@ -94,7 +94,7 @@ def _handle_company_research_cancel(event: dict[str, Any]) -> dict[str, Any]:
         return _build_response(HTTPStatus.NOT_FOUND, {'error': 'Job not found'})
 
     item_owner = str(item.get('user_id', ''))
-    if item_owner and item_owner != user_id:
+    if not item_owner or item_owner != user_id:
         return _build_response(HTTPStatus.FORBIDDEN, {'error': 'Forbidden'})
 
     item_status = str(item.get('status', '')).upper()

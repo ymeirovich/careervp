@@ -19,6 +19,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from botocore.exceptions import ClientError
 
+from careervp.models.result import ResultCode
+
 # ---------------------------------------------------------------------------
 # Constants / shared fixtures
 # ---------------------------------------------------------------------------
@@ -87,11 +89,17 @@ def _invoke_vpr(*, make_completed_raise: bool = False, task_token: str | None = 
 
     mock_jobs_repo = MagicMock()
     mock_jobs_repo.get_job.return_value = _PROCESSING_JOB
-    mock_jobs_repo.update_job_status.return_value = MagicMock(success=True)
-    if make_completed_raise:
-        mock_jobs_repo.update_job.side_effect = _CCF
-    else:
-        mock_jobs_repo.update_job.return_value = {}
+
+    # The worker now writes COMPLETED via the atomic update_job_status(status='COMPLETED',
+    # expected_current_status='PROCESSING'). A concurrent cancel makes that conditional
+    # write fail — surfaced as a Result(success=False, code=DYNAMODB_CONDITION_CHECK_FAILED),
+    # NOT a raised exception. The PROCESSING claim write still succeeds.
+    def _job_status_side_effect(*_args: object, **kwargs: object) -> MagicMock:
+        if kwargs.get('status') == 'COMPLETED' and make_completed_raise:
+            return MagicMock(success=False, code=ResultCode.DYNAMODB_CONDITION_CHECK_FAILED, error='cancelled')
+        return MagicMock(success=True, code=ResultCode.SUCCESS)
+
+    mock_jobs_repo.update_job_status.side_effect = _job_status_side_effect
     _last['vpr_jobs_repo'] = mock_jobs_repo
 
     mock_dal = MagicMock()
@@ -259,7 +267,12 @@ def test_worker_skips_completed_write_when_cancelled(worker_id: str) -> None:
     persist.  The guard must catch the exception and abort cleanly."""
     if worker_id == 'vpr':
         _invoke_vpr(make_completed_raise=True)
-        _last['vpr_jobs_repo'].update_job.assert_called()
+        # The COMPLETED write was attempted via the atomic conditional update_job_status.
+        completed_calls = [c for c in _last['vpr_jobs_repo'].update_job_status.call_args_list if c.kwargs.get('status') == 'COMPLETED']
+        assert completed_calls, 'VPR worker did not attempt the conditional COMPLETED write'
+        assert completed_calls[0].kwargs.get('expected_current_status') == 'PROCESSING', (
+            'COMPLETED write must be guarded by expected_current_status=PROCESSING'
+        )
 
     elif worker_id == 'cover_letter':
         pytest.skip('Full cover_letter pipeline mock verified in integration suite')
@@ -341,9 +354,8 @@ def test_not_cancelled_allows_completed_write(worker_id: str) -> None:
     must NOT block the COMPLETED write."""
     if worker_id == 'vpr':
         _invoke_vpr(make_completed_raise=False)
-        _last['vpr_jobs_repo'].update_job.assert_called()
-        call_str = str(_last['vpr_jobs_repo'].update_job.call_args_list)
-        assert 'COMPLETED' in call_str, 'VPR worker did not write COMPLETED on normal path'
+        completed_calls = [c for c in _last['vpr_jobs_repo'].update_job_status.call_args_list if c.kwargs.get('status') == 'COMPLETED']
+        assert completed_calls, 'VPR worker did not write COMPLETED on normal path'
 
     elif worker_id == 'cover_letter':
         pytest.skip('Normal-path COMPLETED for cover_letter verified in integration suite')

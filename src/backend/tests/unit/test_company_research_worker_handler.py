@@ -132,6 +132,7 @@ class TestConfidenceGate:
             user_id='user-1',
             artifact_type='company_research',
             status='completed',
+            fail_if_status='cancelled',
         )
         mock_app_repo.update_state.assert_called_once_with(
             application_id='job-1',

@@ -160,21 +160,40 @@ class ApplicationRepository:
         except Exception:
             pass
 
-    def update_artifact_status(self, application_id: str, user_id: str, artifact_type: str, status: str) -> None:
+    def update_artifact_status(
+        self,
+        application_id: str,
+        user_id: str,
+        artifact_type: str,
+        status: str,
+        fail_if_status: str | None = None,
+    ) -> None:
+        """Set a single artifact's status.
+
+        When ``fail_if_status`` is provided the write is conditional: it raises
+        ``ConditionalCheckFailedException`` if the artifact is already at that status.
+        Workers pass ``fail_if_status='cancelled'`` so a concurrent cancel cannot be
+        silently overwritten back to 'completed' (FE-UI-043 § worker_cancelled_guard).
+        """
         if not artifact_type:
             raise ValueError('artifact_type is required')
+        condition = 'attribute_exists(userId) AND attribute_exists(applicationId)'
+        values: dict[str, str] = {
+            ':status': status,
+            ':updated_at': self._now_iso(),
+        }
+        if fail_if_status is not None:
+            condition += ' AND (attribute_not_exists(artifact_statuses.#artifact_type) OR artifact_statuses.#artifact_type <> :fail_status)'
+            values[':fail_status'] = fail_if_status
         self._table().update_item(
             Key={
                 'userId': user_id,
                 'applicationId': application_id,
             },
             UpdateExpression='SET artifact_statuses.#artifact_type = :status, updated_at = :updated_at',
-            ConditionExpression='attribute_exists(userId) AND attribute_exists(applicationId)',
+            ConditionExpression=condition,
             ExpressionAttributeNames={'#artifact_type': artifact_type},
-            ExpressionAttributeValues={
-                ':status': status,
-                ':updated_at': self._now_iso(),
-            },
+            ExpressionAttributeValues=values,
         )
 
     def claim_chain_execution(self, application_id: str, user_id: str) -> None:

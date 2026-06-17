@@ -209,7 +209,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         return _response(HTTPStatus.NOT_FOUND, {'error': 'Application not found'})
 
     owner_user_id = application.get('user_id')
-    if isinstance(owner_user_id, str) and owner_user_id != user_id:
+    if not (isinstance(owner_user_id, str) and owner_user_id and owner_user_id == user_id):
         return _response(HTTPStatus.FORBIDDEN, {'error': 'User can only access own applications'})
 
     if job_record is None:

@@ -32,6 +32,7 @@ from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.company_research import load_confident_company_research_artifact
 from careervp.logic.vpr_generator import generate_vpr
 from careervp.models.job import CompanyContext, GapResponse, JobPosting
+from careervp.models.result import ResultCode
 from careervp.models.vpr import VPR, VPRRequest
 
 # Module-level S3 client for testing/mocking
@@ -323,6 +324,14 @@ def _process_job_record(
         logger.info('Job previously failed, skipping', job_id=job_id)
         return
 
+    # A job cancelled before this (re)delivery must NOT be resurrected. Without this
+    # skip the claim write below uses expected_current_status='CANCELLED' (echoing the
+    # value just read), so the conditional write would succeed and flip CANCELLED ->
+    # PROCESSING, then complete the artifact the user already cancelled (FE-UI-043).
+    if status == 'CANCELLED':
+        logger.info('Job was cancelled, skipping', job_id=job_id)
+        return
+
     job = _merge_message_context_into_job(job, message_body)
     _execute_job(jobs_repo, job, job_id, bucket, task_token)
 
@@ -482,29 +491,28 @@ def _execute_job(  # noqa: C901
 
     # Update job to COMPLETED — CANCELLED guard (FE-UI-043 § worker_cancelled_guard).
     # A concurrent cancel may have set status=CANCELLED while generation was running.
-    # update_job raises ConditionalCheckFailedException if that happened; we catch it,
-    # delete the partial S3 result we just uploaded, signal task_failure, and return
-    # cleanly (no DLQ).
+    # update_job_status applies an atomic ConditionExpression (status == PROCESSING);
+    # if a cancel moved the job off PROCESSING the conditional write fails. On that
+    # failure we delete the partial S3 result we just uploaded, signal task_failure,
+    # and return cleanly (no DLQ).
     completed_at = datetime.now(timezone.utc).isoformat()
     result_url = _generate_presigned_url(result_key)
     one_year_ttl = int(datetime.now(timezone.utc).timestamp() + 365 * 24 * 3600)
 
-    try:
-        jobs_repo.update_job(
-            job_id=job_id,
-            updates={
-                'status': 'COMPLETED',
-                'completed_at': completed_at,
-                'result_key': result_key,
-                'result_url': result_url,
-                'vpr_version': vpr.version,
-                'word_count': vpr.word_count,
-                'ttl': one_year_ttl,
-                **provenance,
-            },
-        )
-    except BotoClientError as e:
-        if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
+    completed_result = jobs_repo.update_job_status(
+        job_id=job_id,
+        status='COMPLETED',
+        expected_current_status='PROCESSING',
+        completed_at=completed_at,
+        result_key=result_key,
+        result_url=result_url,
+        vpr_version=vpr.version,
+        word_count=vpr.word_count,
+        ttl=one_year_ttl,
+        **provenance,
+    )
+    if not completed_result.success:
+        if completed_result.code == ResultCode.DYNAMODB_CONDITION_CHECK_FAILED:
             logger.info(
                 'VPR job cancelled before COMPLETED write — aborting cleanly',
                 job_id=job_id,
@@ -516,7 +524,11 @@ def _execute_job(  # noqa: C901
                 pass
             _send_task_failure(task_token, cause='Job was cancelled before COMPLETED write')
             return
-        raise
+        # Genuine DynamoDB failure — surface it so the message retries / DLQs.
+        error_msg = completed_result.error or 'Failed to persist COMPLETED status'
+        logger.error('Failed to write VPR COMPLETED status', job_id=job_id, error=error_msg)
+        _send_task_failure(task_token, cause=error_msg)
+        raise RuntimeError(error_msg)
 
     # Propagate completion to the application record so the hub reflects the
     # artifact status and artifact_id across page reloads.

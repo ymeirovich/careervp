@@ -405,7 +405,7 @@ def _handle_vpr_cancel(
         return _build_error_response('Job not found', HTTPStatus.NOT_FOUND)
 
     job_owner = str(job.get('user_id', ''))
-    if job_owner and job_owner != user_id:
+    if not job_owner or job_owner != user_id:
         return _build_error_response('Forbidden', HTTPStatus.FORBIDDEN)
 
     status = str(job.get('status', 'PENDING')).upper()
@@ -552,7 +552,7 @@ def _handle_status_or_list(
 
     job = job_result
     job_owner = str(job.get('user_id', ''))
-    if job_owner and job_owner != user_id:
+    if not job_owner or job_owner != user_id:
         logger.warning('Forbidden VPR access attempt', requested_by=user_id, owner=job_owner, job_id=vpr_id)
         return _build_error_response('User can only access own VPRs', HTTPStatus.FORBIDDEN)
 
