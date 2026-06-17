@@ -24,7 +24,8 @@ from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.cancellation import CancelStatus, cancel_artifact
 from careervp.logic.company_research import research_company
-from careervp.models.company import CompanyResearchRequest
+from careervp.logic.company_research_store import write_cr_artifact
+from careervp.models.company import CompanyResearchRequest, CompanyResearchResult
 from careervp.models.result import Result, ResultCode
 
 COMPANY_RESEARCH_ARTIFACT_PREFIX = 'ARTIFACT#COMPANY_RESEARCH#'
@@ -196,18 +197,13 @@ def _fetch_company_research(event: dict[str, Any]) -> dict[str, Any]:
     threshold = _get_cr_confidence_threshold()
     is_confident = research_result.success and research_result.data is not None and research_result.data.confidence_score >= threshold
     if is_confident and research_result.data is not None:
-        persisted_payload = _build_persisted_company_research_payload(
-            company_research_id=company_research_id,
-            company_name=request_result.data.company_name,
-            result_data=research_result.data.model_dump(mode='json'),
-        )
         metrics.add_metric(name='CompanyResearchSuccess', unit=MetricUnit.Count, value=1)
         metrics.add_metric(
             name=f'ResearchSource_{research_result.data.source.value.upper()}',
             unit=MetricUnit.Count,
             value=1,
         )
-        _persist_company_research_item(user_id=user_id, job_id=job_id, payload=persisted_payload)
+        _persist_company_research_item(user_id=user_id, job_id=job_id, result=research_result.data)
     else:
         # FE-UI-041: never persist sub-threshold or failed research. A sub-threshold result is
         # treated the same as a failed run — no artifact is written.
@@ -529,47 +525,8 @@ def _map_result_code_to_status(code: str | None) -> HTTPStatus:
     return HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-def _persist_company_research_item(user_id: str, job_id: str, payload: dict[str, Any]) -> None:
-    table_name = os.getenv('TABLE_NAME') or os.getenv('DYNAMODB_TABLE_NAME') or os.getenv('KNOWLEDGE_TABLE_NAME')
-    if not table_name:
-        logger.warning('Company research persistence skipped: no table configured')
-        return
-
-    table = boto3.resource('dynamodb').Table(table_name)
-    item = {
-        'pk': user_id,
-        'sk': f'{COMPANY_RESEARCH_ARTIFACT_PREFIX}{job_id}',
-        **payload,
-    }
-    try:
-        table.put_item(Item=item)
-    except Exception as exc:  # pragma: no cover - defensive fallback
-        logger.warning('Company research persistence failed', error=str(exc), table_name=table_name, job_id=job_id)
-
-
-def _build_persisted_company_research_payload(company_research_id: str, company_name: str, result_data: dict[str, Any]) -> dict[str, Any]:
-    values = _coerce_list_of_strings(result_data.get('values'))
-    products = _coerce_list_of_strings(result_data.get('strategic_priorities'))
-    recent_news = _normalize_recent_news(result_data.get('recent_news'))
-    payload: dict[str, Any] = {
-        'company_research_id': company_research_id,
-        'company_name': company_name,
-        'mission': _coerce_str(result_data.get('mission')) or _coerce_str(result_data.get('overview')) or '',
-        'values': values,
-        'recent_news': recent_news,
-        'culture': _coerce_str(result_data.get('overview')) or '',
-        'products': products,
-        'funding_status': _coerce_str(result_data.get('financial_summary')) or 'Unknown',
-        'size_range': 'Unknown',
-        'industry': 'Unknown',
-    }
-    # Persist confidence_score so _is_confident_cr can gate on it without relying solely on
-    # the fabricated-name heuristic (the only other signal available at serve time).
-    raw_confidence = result_data.get('confidence_score')
-    coerced = _coerce_confidence(raw_confidence)
-    if coerced is not None:
-        payload['confidence_score'] = coerced
-    return payload
+def _persist_company_research_item(user_id: str, job_id: str, result: CompanyResearchResult) -> None:
+    write_cr_artifact(application_id=job_id, user_id=user_id, result=result)
 
 
 def _get_cr_confidence_threshold() -> float:

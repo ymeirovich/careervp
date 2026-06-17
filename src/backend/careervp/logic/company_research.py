@@ -14,11 +14,8 @@ from decimal import Decimal
 from typing import Any
 from urllib.parse import urlparse
 
-import boto3
-from boto3.dynamodb.conditions import Attr, Key
-from botocore.exceptions import ClientError
-
 from careervp.handlers.utils.observability import logger
+from careervp.logic.company_research_store import read_cr_artifact
 from careervp.logic.llm_cache import DEFAULT_CACHE_TTL_SECONDS, LLMResponseCache
 from careervp.logic.prompts.company_research_prompt import build_structure_system_prompt, build_structure_user_prompt
 from careervp.logic.utils.llm_client import TaskMode, get_llm_router
@@ -73,7 +70,7 @@ def load_confident_company_research_artifact(application_id: str, user_id: str) 
     if not clean_application_id or not clean_user_id:
         return None
 
-    item = _load_company_research_item(application_id=clean_application_id, user_id=clean_user_id)
+    item = read_cr_artifact(application_id=clean_application_id, user_id=clean_user_id)
     if item is None:
         return None
     if str(item.get('user_id') or '').strip() != clean_user_id:
@@ -111,72 +108,6 @@ def load_confident_company_research_artifact(application_id: str, user_id: str) 
         company_research_id=research_id,
         company_research_at=research_at,
     )
-
-
-def _load_company_research_item(application_id: str, user_id: str) -> dict[str, Any] | None:
-    candidates: list[dict[str, Any]] = []
-    for table_name in _company_research_table_names():
-        table_candidates = _load_company_research_candidates_from_table(table_name=table_name, application_id=application_id, user_id=user_id)
-        candidates.extend(table_candidates)
-    if not candidates:
-        return None
-    return max(candidates, key=_company_research_sort_key)
-
-
-def _company_research_table_names() -> list[str]:
-    names: list[str] = []
-    for env_key in ('KNOWLEDGE_TABLE_NAME', 'TABLE_NAME', 'DYNAMODB_TABLE_NAME'):
-        value = os.environ.get(env_key)
-        if value and value.strip() and value.strip() not in names:
-            names.append(value.strip())
-    return names
-
-
-def _load_company_research_candidates_from_table(table_name: str, application_id: str, user_id: str) -> list[dict[str, Any]]:
-    table = boto3.resource('dynamodb').Table(table_name)
-    candidates: list[dict[str, Any]] = []
-    direct_keys = [
-        {'pk': user_id, 'sk': f'ARTIFACT#COMPANY_RESEARCH#{application_id}'},
-        {'pk': user_id, 'sk': f'COMPANY_RESEARCH#{application_id}'},
-        {'pk': f'USER#{user_id}', 'sk': f'COMPANY_RESEARCH#{application_id}'},
-    ]
-    for key in direct_keys:
-        try:
-            response = table.get_item(Key=key)
-        except ClientError as exc:
-            if exc.response.get('Error', {}).get('Code') == 'ResourceNotFoundException':
-                return []
-            logger.warning('Failed to read Company Research candidate', table_name=table_name, error=str(exc))
-            continue
-        item = response.get('Item') if isinstance(response, dict) else None
-        if isinstance(item, dict):
-            candidates.append(item)
-
-    query_prefixes = [
-        (user_id, 'ARTIFACT#COMPANY_RESEARCH#'),
-        (user_id, 'COMPANY_RESEARCH#'),
-        (f'USER#{user_id}', 'COMPANY_RESEARCH#'),
-    ]
-    for partition_key, prefix in query_prefixes:
-        try:
-            response = table.query(
-                KeyConditionExpression=Key('pk').eq(partition_key) & Key('sk').begins_with(prefix),
-                FilterExpression=Attr('sk').contains(application_id),
-            )
-        except ClientError as exc:
-            if exc.response.get('Error', {}).get('Code') == 'ResourceNotFoundException':
-                return candidates
-            logger.warning('Failed to query Company Research candidates', table_name=table_name, error=str(exc))
-            continue
-        items = response.get('Items') if isinstance(response, dict) else None
-        if isinstance(items, list):
-            candidates.extend(item for item in items if isinstance(item, dict))
-    return candidates
-
-
-def _company_research_sort_key(item: dict[str, Any]) -> str:
-    payload = _company_research_payload(item)
-    return _coerce_text(item.get('created_at')) or _coerce_text(item.get('updated_at')) or _coerce_text(payload.get('research_timestamp')) or ''
 
 
 def _company_research_payload(item: dict[str, Any]) -> dict[str, Any]:

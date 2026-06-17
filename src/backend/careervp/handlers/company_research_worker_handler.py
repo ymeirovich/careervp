@@ -24,6 +24,7 @@ from careervp.dal.application_repository import ApplicationRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.company_research import research_company
+from careervp.logic.company_research_store import write_cr_artifact
 from careervp.models.company import CompanyResearchRequest, CompanyResearchResult, ResearchSource
 
 _DEFAULT_CR_CONFIDENCE_THRESHOLD = 0.85
@@ -62,22 +63,8 @@ def _get_app_repo() -> ApplicationRepository:
 
 
 def _persist_cr_result(user_id: str, job_id: str, result: CompanyResearchResult) -> None:
-    """Write CR data to the knowledge table using the same key scheme as the sync handler."""
-    table_name = os.environ.get('KNOWLEDGE_TABLE_NAME') or os.environ.get('TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or ''
-    if not table_name:
-        logger.warning('CR persistence skipped: no knowledge table configured')
-        return
-    table = boto3.resource('dynamodb').Table(table_name)
-    item: dict[str, Any] = {
-        'pk': user_id,
-        'sk': f'COMPANY_RESEARCH#{job_id}',
-        'user_id': user_id,
-        'job_id': job_id,
-        'company_name': result.company_name,
-        'research_data': result.model_dump(mode='json'),
-        'entity_type': 'COMPANY_RESEARCH',
-    }
-    table.put_item(Item=item)
+    """Write CR data to the canonical artifacts table."""
+    write_cr_artifact(application_id=job_id, user_id=user_id, result=result)
 
 
 def _send_chain_signal(
