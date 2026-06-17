@@ -35,6 +35,8 @@ export default defineConfig({
       'tests/unit/export-dropdown.test.tsx',
       'tests/integration/hub-generate-ux.test.tsx',
       'tests/unit/use-generate-module.test.ts',
+      'tests/unit/processing-dots.test.tsx',
+      'tests/unit/module-card-processing.test.tsx',
     ],
   },
 });

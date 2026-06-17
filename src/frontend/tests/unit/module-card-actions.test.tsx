@@ -241,7 +241,8 @@ describe('ApplicationHubPage — action handlers', () => {
       fireEvent.click(screen.getByTestId('module-card-companyResearch').querySelector('[data-testid="primary-cta"]') as HTMLButtonElement);
     });
 
-    expect(apiMocks.fetchCompanyResearch).toHaveBeenCalledWith({ job_id: 'job1', retry: true });
+    // CR retry now goes through the unified generate path (useGenerateModule) with force:true
+    expect(mockGenerate).toHaveBeenCalledWith(expect.objectContaining({ force: true }));
     expect(refetch).toHaveBeenCalled();
   });
 

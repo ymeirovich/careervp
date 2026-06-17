@@ -5,6 +5,7 @@ import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Spinner } from '../ui/Spinner';
 import { Tooltip } from '../ui/Tooltip';
+import { ProcessingDots } from '../ui/ProcessingDots';
 
 export interface ModuleAction {
   label: string;
@@ -211,7 +212,7 @@ export function ModuleCard({
             disabled
             className="inline-flex items-center gap-1 rounded-lg bg-primary-action px-3 py-1.5 text-sm font-medium text-white opacity-60 cursor-not-allowed"
           >
-            Processing<span aria-hidden="true" className="animate-pulse">...</span>
+            <ProcessingDots />
           </button>
           <Button
             variant={cancelAction.variant ?? 'secondary'}

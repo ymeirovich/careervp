@@ -46,6 +46,17 @@ const config: Config = {
       fontFamily: {
         sans: ['Inter', 'sans-serif'],
       },
+      keyframes: {
+        dotBlink: {
+          '0%, 80%, 100%': { opacity: '0' },
+          '40%': { opacity: '1' },
+        },
+      },
+      animation: {
+        'dot-1': 'dotBlink 1.2s infinite 0ms',
+        'dot-2': 'dotBlink 1.2s infinite 200ms',
+        'dot-3': 'dotBlink 1.2s infinite 400ms',
+      },
     },
   },
   plugins: [],

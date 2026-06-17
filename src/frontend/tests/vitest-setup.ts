@@ -1,3 +1,22 @@
+// matchMedia is not implemented in jsdom — provide a default stub so components
+// that use window.matchMedia don't throw. Individual tests can override via vi.stubGlobal.
+if (typeof window !== 'undefined' && typeof window.matchMedia === 'undefined') {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    configurable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+}
+
 // Provide required env vars so api/client.ts initialises without throwing
 process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID = 'us-east-1_testpool';
 process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID = 'testclientid';

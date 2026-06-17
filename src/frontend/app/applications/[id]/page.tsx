@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { api } from '../../../api/methods';
 import { useApplicationHub } from '../../../hooks/useApplicationHub';
 import { useGenerateModule } from '../../../hooks/useGenerateModule';
 import { ModuleCard } from '../../../components/ModuleCard/ModuleCard';
@@ -26,7 +25,7 @@ const MODULE_ORDER: ModuleType[] = [
   'companyResearch',
 ];
 
-const GENERATABLE_MODULES = new Set<ModuleType>(['vpr', 'tailoredCV', 'coverLetter', 'interviewPrep']);
+const GENERATABLE_MODULES = new Set<ModuleType>(['vpr', 'tailoredCV', 'coverLetter', 'interviewPrep', 'companyResearch']);
 const CHAIN_MODULES: ModuleType[] = ['vpr', 'tailoredCV', 'coverLetter', 'interviewPrep'];
 
 function isReadyLikeStatus(status: string): boolean {
@@ -109,7 +108,6 @@ export default function ApplicationHubPage() {
   const [showChangeCVModal, setShowChangeCVModal] = useState(false);
   const [selectedCvItem, setSelectedCvItem] = useState<ChooseBaseCVItem | null>(null);
   const [regenConfirmModule, setRegenConfirmModule] = useState<ModuleType | null>(null);
-  const [isRetryingCompanyResearch, setIsRetryingCompanyResearch] = useState(false);
 
   // Per-module generation errors (set on cancel, cleared on new generate)
   const [generationErrors, setGenerationErrors] = useState<Partial<Record<ModuleType, string>>>({});
@@ -125,12 +123,14 @@ export default function ApplicationHubPage() {
   const coverLetterGen = useGenerateModule('coverLetter', jobId);
   const interviewPrepGen = useGenerateModule('interviewPrep', jobId);
   const tailoredCVGen = useGenerateModule('tailoredCV', jobId);
+  const companyResearchGen = useGenerateModule('companyResearch', jobId);
 
   const genMap = {
     vpr: vprGen,
     coverLetter: coverLetterGen,
     interviewPrep: interviewPrepGen,
     tailoredCV: tailoredCVGen,
+    companyResearch: companyResearchGen,
   } as const;
 
   if (isLoading) {
@@ -157,18 +157,23 @@ export default function ApplicationHubPage() {
 
     const gen = genMap[moduleType as keyof typeof genMap];
     if (gen) {
-      // An explicit (re)generate from the hub must bypass the backend idempotency
-      // short-circuit, otherwise a previously completed VPR (including one whose S3
-      // result expired) is returned unchanged and the worker is never re-invoked.
-      await gen.generate({
-        cvId,
-        vprId: vprId ?? undefined,
-        gapResponseIds,
-        companyResearchId: companyResearchId ?? undefined,
-        force: true,
-      });
-      // Trigger refetch so hub status updates after generation completes
-      refetch();
+      try {
+        // An explicit (re)generate from the hub must bypass the backend idempotency
+        // short-circuit, otherwise a previously completed VPR (including one whose S3
+        // result expired) is returned unchanged and the worker is never re-invoked.
+        await gen.generate({
+          cvId,
+          vprId: vprId ?? undefined,
+          gapResponseIds,
+          companyResearchId: companyResearchId ?? undefined,
+          force: true,
+        });
+        // Trigger refetch so hub status updates after generation completes
+        refetch();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Generation failed';
+        setGenerationErrors((prev) => ({ ...prev, [moduleType]: message }));
+      }
     }
   }
 
@@ -176,23 +181,13 @@ export default function ApplicationHubPage() {
     const gen = genMap[moduleType as keyof typeof genMap];
     if (!gen) return;
     const cancelTaskId = gen.taskId ?? getArtifact(jobId, moduleType);
-    if (!cancelTaskId) return;
-    await gen.cancel(cancelTaskId);
+    // Pass empty string when taskId not yet known — AbortController in hook handles abort
+    await gen.cancel(cancelTaskId ?? '');
     setGenerationErrors((prev) => ({
       ...prev,
       [moduleType]: 'Generation was cancelled.',
     }));
     refetch();
-  }
-
-  async function handleCompanyResearchRetry() {
-    setIsRetryingCompanyResearch(true);
-    try {
-      await api.fetchCompanyResearch({ job_id: jobId, retry: true });
-      refetch();
-    } finally {
-      setIsRetryingCompanyResearch(false);
-    }
   }
 
   function getGenerationBlockReason(moduleType: ModuleType, actionLabel: string): string | undefined {
@@ -238,8 +233,7 @@ export default function ApplicationHubPage() {
           ...primaryAction,
           label: 'Retry',
           variant: 'primary' as const,
-          onClick: () => void handleCompanyResearchRetry(),
-          isLoading: isRetryingCompanyResearch,
+          onClick: () => void handleGenerate('companyResearch'),
         };
       }
       onClick = () => router.push(`/applications/${jobId}/company-research`);
@@ -430,10 +424,12 @@ export default function ApplicationHubPage() {
             const isActivelyProcessing =
               isOptimisticallyProcessing || moduleState.status === 'processing';
 
-            // Only show cancel when actively processing and a taskId is known
             const cancelTaskId = gen?.taskId ?? getArtifact(jobId, moduleType);
+            // Cancel renders while actively processing when either:
+            //   (a) gen.isGenerating — optimistic window; AbortController handles abort before taskId
+            //   (b) a taskId is known — we can call the backend cancel endpoint
             const cancelAction: ModuleAction | undefined =
-              isActivelyProcessing && cancelTaskId
+              isActivelyProcessing && (gen?.isGenerating || cancelTaskId)
                 ? {
                     label: 'Cancel',
                     onClick: () => void handleCancel(moduleType),

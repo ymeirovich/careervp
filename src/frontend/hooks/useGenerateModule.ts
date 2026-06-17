@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { api } from '../api/methods';
 import { persistArtifact, clearArtifact } from '../lib/artifactStorage';
 import type { ModuleType } from '../types/enums';
@@ -18,6 +18,7 @@ const CANCEL_FN_MAP: Partial<Record<ModuleType, (id: string) => Promise<unknown>
   coverLetter: (id) => api.cancelCoverLetter(id),
   interviewPrep: (id) => api.cancelInterviewPrep(id),
   tailoredCV: (id) => api.cancelCvTailoring(id),
+  companyResearch: (id) => api.cancelCompanyResearch(id),
 };
 
 export function useGenerateModule(
@@ -35,8 +36,11 @@ export function useGenerateModule(
   const [isCancelling, setIsCancelling] = useState(false);
   const [taskId, setTaskId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   async function generate(options: GenerateOptions = {}): Promise<void> {
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     setIsGenerating(true);
     setError(null);
     try {
@@ -73,26 +77,47 @@ export function useGenerateModule(
             vpr_id: options.vprId ?? null,
           });
           break;
+        case 'companyResearch':
+          response = await api.fetchCompanyResearch({
+            job_id: jobId,
+            retry: options.force ?? false,
+          });
+          break;
         default:
           throw new Error(`Unsupported module type: ${moduleType}`);
       }
+
+      // Check if cancelled before taskId was resolved
+      if (controller.signal.aborted) return;
+
       const resolvedTaskId = response.request_id ?? response.job_id ?? null;
       setTaskId(resolvedTaskId);
       if (resolvedTaskId) {
         persistArtifact(jobId, moduleType, resolvedTaskId);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Generation failed');
+      if (err instanceof Error && err.name === 'AbortError') {
+        return;
+      }
+      const message = err instanceof Error ? err.message : 'Generation failed';
+      setError(message);
+      throw err;
     } finally {
+      abortControllerRef.current = null;
       setIsGenerating(false);
     }
   }
 
   async function cancel(cancelTaskId: string): Promise<void> {
+    // Abort any in-flight request (pre-taskId window)
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
     setIsCancelling(true);
     try {
       const cancelFn = CANCEL_FN_MAP[moduleType];
-      if (cancelFn) {
+      if (cancelFn && cancelTaskId) {
         // TODO FE-UI-027 / AC-018: SQS workers do not check CANCELLED status before writing
         // results. A worker that started before this cancel arrived may overwrite CANCELLED →
         // COMPLETED on the next hub load. Worker-side guard is deferred to V2.
