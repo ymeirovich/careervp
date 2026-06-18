@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from careervp.dal.application_repository import ApplicationRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.company_research import research_company
 from careervp.logic.company_research_store import write_cr_artifact
@@ -35,7 +36,8 @@ class CRWorkerInput(BaseModel):
 
     user_id: str
     job_id: str
-    company_name: str
+    application_id: str | None = Field(default=None)
+    company_name: str | None = Field(default=None)
     job_posting_url: str | None = Field(default=None)
     domain: str | None = Field(default=None)
     task_token: str | None = Field(default=None)
@@ -60,6 +62,53 @@ def _get_confidence_threshold() -> float:
 def _get_app_repo() -> ApplicationRepository:
     table_name = os.environ.get('APPLICATIONS_TABLE_NAME', '')
     return ApplicationRepository(DynamoDalHandler(table_name))
+
+
+def _get_jobs_repository() -> JobsRepository:
+    table_name = os.environ.get('JOBS_TABLE_NAME') or os.environ.get('VPR_JOBS_TABLE_NAME') or None
+    return JobsRepository(table_name=table_name)
+
+
+def _coerce_str(value: Any) -> str:
+    return str(value or '').strip()
+
+
+def _hydrate_company_fields(input_data: CRWorkerInput) -> CRWorkerInput:
+    """Fill CR fields omitted by resolver-started chains from the jobs table."""
+    if _coerce_str(input_data.company_name):
+        return input_data
+
+    candidate_job_ids = [
+        _coerce_str(input_data.job_id),
+        _coerce_str(input_data.application_id),
+    ]
+    try:
+        application = _get_app_repo().get(application_id=_coerce_str(input_data.application_id) or input_data.job_id, user_id=input_data.user_id)
+        if isinstance(application, dict):
+            candidate_job_ids.append(_coerce_str(application.get('job_id')))
+    except Exception as exc:
+        logger.warning('Could not load application for CR field hydration', job_id=input_data.job_id, error=str(exc))
+
+    try:
+        jobs_repo = _get_jobs_repository()
+        for candidate_job_id in dict.fromkeys(job_id for job_id in candidate_job_ids if job_id):
+            job = jobs_repo.get_job(candidate_job_id)
+            if not isinstance(job, dict):
+                continue
+            company_name = _coerce_str(job.get('company_name') or job.get('company'))
+            if not company_name:
+                continue
+            return input_data.model_copy(
+                update={
+                    'company_name': company_name,
+                    'job_posting_url': input_data.job_posting_url or _coerce_str(job.get('job_posting_url') or job.get('url')) or None,
+                    'domain': input_data.domain or _coerce_str(job.get('domain')) or None,
+                }
+            )
+    except Exception as exc:
+        logger.warning('Could not hydrate CR fields from jobs table', job_id=input_data.job_id, error=str(exc))
+
+    return input_data
 
 
 def _persist_cr_result(user_id: str, job_id: str, result: CompanyResearchResult) -> None:
@@ -154,9 +203,13 @@ def _hard_fail(input_data: CRWorkerInput, cause: str) -> None:
 
 async def _async_process_record(input_data: CRWorkerInput, receive_count: int) -> None:
     threshold = _get_confidence_threshold()
+    company_name = _coerce_str(input_data.company_name)
+    if not company_name:
+        _hard_fail(input_data, 'company_name unavailable for company research')
+        return
 
     cr_request = CompanyResearchRequest(
-        company_name=input_data.company_name,
+        company_name=company_name,
         domain=input_data.domain,
         job_posting_url=input_data.job_posting_url,  # type: ignore[arg-type]
     )
@@ -222,12 +275,15 @@ async def _async_process_record(input_data: CRWorkerInput, receive_count: int) -
             return
         raise
 
-    app_repo.update_state(
-        application_id=input_data.job_id,
-        user_id=input_data.user_id,
-        new_state='artifacts_generating',
-        expected_state='cr_pending',
-    )
+    try:
+        app_repo.update_state(
+            application_id=input_data.job_id,
+            user_id=input_data.user_id,
+            new_state='artifacts_generating',
+            expected_state='cr_pending',
+        )
+    except Exception as exc:
+        logger.warning('CR worker state transition skipped', job_id=input_data.job_id, error=str(exc))
 
     chain_enabled = os.environ.get('ARTIFACT_CHAIN_ENABLED', 'false').lower() == 'true'
     if input_data.task_token and chain_enabled:
@@ -263,7 +319,7 @@ def _process_record(record: dict[str, Any]) -> None:
         return
 
     body = json.loads(raw_body)
-    input_data = CRWorkerInput.model_validate(body)
+    input_data = _hydrate_company_fields(CRWorkerInput.model_validate(body))
     idempotency_key = f'{input_data.user_id}:{input_data.job_id}'
     logger.append_keys(idempotency_key=idempotency_key)
 

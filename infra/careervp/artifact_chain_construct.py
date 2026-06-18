@@ -19,8 +19,8 @@ slow), exceeding the 5-minute Express limit.
 NOTE on data threading: the ASL references input paths such as ``$.company_context``
 and ``$.vpr_id`` that are produced by upstream workers. Wiring those workers to
 emit task-token output is handled by separate tickets; this construct defines the
-orchestration shell. With ``ARTIFACT_CHAIN_ENABLED`` defaulting to "false", the
-machine is opt-in at the environment level.
+orchestration shell. ``ARTIFACT_CHAIN_ENABLED`` is resolved by the API construct
+at synth time so non-dev environments remain opt-in.
 """
 
 from __future__ import annotations
@@ -242,12 +242,8 @@ class ArtifactChainConstruct(Construct):
             message_body=sfn.TaskInput.from_object(
                 {
                     "user_id": sfn.JsonPath.string_at("$.user_id"),
-                    "cv_id": sfn.JsonPath.string_at("$.cv_id"),
                     "job_id": sfn.JsonPath.string_at("$.job_id"),
                     "application_id": sfn.JsonPath.string_at("$.application_id"),
-                    "company_context": sfn.JsonPath.object_at(
-                        "$.company_research_result.company_context"
-                    ),
                     "task_token": sfn.JsonPath.task_token,
                 }
             ),
@@ -259,7 +255,17 @@ class ArtifactChainConstruct(Construct):
             backoff_rate=2.0,
         )
         start_vpr.add_catch(handle_vpr_failure, errors=["States.ALL"])
-        start_vpr.next(start_cv_tailoring)
+        after_vpr = sfn.Choice(
+            self,
+            "AfterVPRRequestedArtifact",
+            comment="Stop after VPR when a submit handler requested only VPR.",
+        )
+        after_vpr.when(
+            sfn.Condition.string_equals("$.requested_artifact", "vpr"),
+            sfn.Succeed(self, "VPRRequestedArtifactComplete"),
+        )
+        after_vpr.otherwise(start_cv_tailoring)
+        start_vpr.next(after_vpr)
 
         start_company_research = sfn_tasks.SqsSendMessage(
             self,
@@ -272,8 +278,7 @@ class ArtifactChainConstruct(Construct):
                 {
                     "user_id": sfn.JsonPath.string_at("$.user_id"),
                     "job_id": sfn.JsonPath.string_at("$.job_id"),
-                    "company_name": sfn.JsonPath.string_at("$.company_name"),
-                    "job_posting_url": sfn.JsonPath.string_at("$.job_posting_url"),
+                    "application_id": sfn.JsonPath.string_at("$.application_id"),
                     "task_token": sfn.JsonPath.task_token,
                 }
             ),
@@ -299,6 +304,21 @@ class ArtifactChainConstruct(Construct):
             encryption_key=logs_kms_key,
         )
 
+        route_start = sfn.Choice(
+            self,
+            "RouteStartAt",
+            comment="Route resolver-triggered chains to the first missing artifact.",
+        )
+        route_start.when(
+            sfn.Condition.string_equals("$.start_at", "vpr"),
+            start_vpr,
+        )
+        route_start.when(
+            sfn.Condition.string_equals("$.start_at", "company_research"),
+            start_company_research,
+        )
+        route_start.otherwise(start_company_research)
+
         self.state_machine = sfn.StateMachine(
             self,
             "ArtifactChainStateMachine",
@@ -306,7 +326,7 @@ class ArtifactChainConstruct(Construct):
                 constants.ARTIFACT_CHAIN_STATE_MACHINE_FEATURE
             ),
             state_machine_type=sfn.StateMachineType.STANDARD,
-            definition_body=sfn.DefinitionBody.from_chainable(start_company_research),
+            definition_body=sfn.DefinitionBody.from_chainable(route_start),
             tracing_enabled=True,
             timeout=Duration.hours(2),
             logs=sfn.LogOptions(

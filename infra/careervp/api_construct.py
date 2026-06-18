@@ -2046,6 +2046,20 @@ class ApiConstruct(Construct):
         )
         chain_arn = self.artifact_chain.state_machine.state_machine_arn
 
+        # Submit handlers start the artifact chain when dependency resolution
+        # finds a genuinely absent upstream artifact.
+        for submit_func in (
+            self.vpr_submit_func,
+            self.cover_letter_api_func,
+            self.interview_prep_api_func,
+            self.cv_tailoring_func,
+        ):
+            self.artifact_chain.state_machine.grant_start_execution(submit_func)
+            submit_func.add_environment("STEP_FUNCTIONS_CHAIN_ARN", chain_arn)
+            submit_func.add_environment(
+                "ARTIFACT_CHAIN_ENABLED", self._artifact_chain_enabled()
+            )
+
         # gap_handler starts the chain when the flag is on.
         self.artifact_chain.state_machine.grant_start_execution(self.gap_api_func)
         self.gap_api_func.add_environment("STEP_FUNCTIONS_CHAIN_ARN", chain_arn)
@@ -2109,7 +2123,8 @@ class ApiConstruct(Construct):
     @staticmethod
     def _artifact_chain_enabled() -> str:
         """Resolve the ARTIFACT_CHAIN_ENABLED flag at synth time (default off)."""
-        return os.environ.get("ARTIFACT_CHAIN_ENABLED", "false")
+        default = "true" if constants.ENVIRONMENT == "dev" else "false"
+        return os.environ.get("ARTIFACT_CHAIN_ENABLED", default)
 
     def _add_artifact_cleanup_lambda(self) -> _lambda.Function:
         """Orphan-cleanup reaper triggered hourly by EventBridge (FE-UI-043)."""
@@ -2285,6 +2300,7 @@ class ApiConstruct(Construct):
                 "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,
                 # Standalone fallback target when the chain flag is off.
                 "VPR_JOBS_QUEUE_URL": self.vpr_jobs_queue.queue_url,
+                "VPR_JOBS_TABLE_NAME": self.api_db.jobs_table.table_name,
                 "ARTIFACT_CHAIN_ENABLED": self._artifact_chain_enabled(),
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
                 **self._build_llm_env(),

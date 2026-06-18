@@ -314,6 +314,48 @@ class TestIdempotency:
 
         mock_asyncio.run.assert_called_once()
 
+    def test_process_record_hydrates_company_fields_for_chain_payload(self) -> None:
+        """Resolver-started chains send only IDs; CR worker hydrates company fields."""
+        captured: dict[str, object] = {}
+
+        async def _capture(input_data: CRWorkerInput, receive_count: int) -> None:
+            captured['input_data'] = input_data
+            captured['receive_count'] = receive_count
+
+        record = {
+            'body': json.dumps(
+                {
+                    'user_id': 'user-1',
+                    'job_id': 'job-1',
+                    'application_id': 'app-1',
+                    'task_token': 'token-1',
+                }
+            ),
+            'attributes': {'ApproximateReceiveCount': '2'},
+        }
+        mock_app_repo = MagicMock()
+        mock_app_repo.get.return_value = {'artifact_statuses': {'company_research': 'pending'}, 'job_id': 'job-1'}
+        mock_jobs_repo = MagicMock()
+        mock_jobs_repo.get_job.return_value = {
+            'company_name': 'Acme Corp',
+            'url': 'https://example.com/jobs/1',
+            'domain': 'example.com',
+        }
+
+        with (
+            patch('careervp.handlers.company_research_worker_handler._get_app_repo', return_value=mock_app_repo),
+            patch('careervp.handlers.company_research_worker_handler._get_jobs_repository', return_value=mock_jobs_repo),
+            patch('careervp.handlers.company_research_worker_handler._async_process_record', side_effect=_capture),
+        ):
+            _process_record(record)
+
+        input_data = captured['input_data']
+        assert isinstance(input_data, CRWorkerInput)
+        assert input_data.company_name == 'Acme Corp'
+        assert input_data.job_posting_url == 'https://example.com/jobs/1'
+        assert input_data.domain == 'example.com'
+        assert captured['receive_count'] == 2
+
 
 # ---------------------------------------------------------------------------
 # lambda_handler — batch item failures

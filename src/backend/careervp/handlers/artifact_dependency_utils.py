@@ -108,6 +108,17 @@ def build_start_chain(application_repo: ApplicationRepository | None) -> Callabl
         if application_repo is not None:
             try:
                 application_repo.claim_chain_execution(application_id=application_id, user_id=user_id)
+                if node == 'company_research':
+                    try:
+                        application_repo.update_state(
+                            application_id=application_id,
+                            user_id=user_id,
+                            new_state='cr_pending',
+                            expected_state='gap_responses_submitted',
+                        )
+                    except BotoClientError as exc:
+                        if exc.response.get('Error', {}).get('Code') != 'ConditionalCheckFailedException':
+                            raise
             except BotoClientError as exc:
                 if exc.response.get('Error', {}).get('Code') == 'ConditionalCheckFailedException':
                     return None  # Another request already holds the RUNNING lock
