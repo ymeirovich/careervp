@@ -27,7 +27,7 @@ export default function DashboardPage() {
     id: job.job_id,
     title: job.title,
     company: job.company_name,
-    status: (job.status as 'active' | 'draft' | 'archived') ?? 'draft',
+    status: job.status,
     updatedAt: new Date(job.created_at).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',

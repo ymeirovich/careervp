@@ -60,6 +60,27 @@ describe('JobsTable', () => {
     expect(archivedBadge.className).toContain('text-[#374151]');
   });
 
+  it('normalizes backend job status values before rendering badges', () => {
+    render(
+      <JobsTable
+        jobs={[
+          {
+            id: 'job-completed',
+            title: 'Learning Experience Specialist',
+            company: 'SysAid2',
+            status: 'COMPLETED',
+            updatedAt: 'May 30, 2026',
+          },
+        ]}
+        mode="full-list"
+      />,
+    );
+
+    const row = screen.getByTestId('job-row-job-completed');
+    expect(within(row).getByText('Active')).toBeInTheDocument();
+    expect(within(row).getByText('Active').className).toContain('bg-green-50');
+  });
+
   it('uses alternating row backgrounds and bold text-link View actions', () => {
     const onViewJob = vi.fn();
     render(<JobsTable jobs={jobs} mode="dashboard" onViewJob={onViewJob} />);

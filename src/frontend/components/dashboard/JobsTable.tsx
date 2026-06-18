@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 
-type JobStatus = 'active' | 'draft' | 'archived';
+export type JobStatus = 'active' | 'draft' | 'archived';
 type JobsTableMode = 'dashboard' | 'full-list';
 type SortDirection = 'ascending' | 'descending';
 type SortKey = 'title' | 'company' | 'status' | 'updatedAt' | 'action';
@@ -11,7 +11,7 @@ interface Job {
   id: string;
   title: string;
   company: string;
-  status: JobStatus;
+  status: string | null | undefined;
   updatedAt: string;
 }
 
@@ -89,6 +89,20 @@ const TEXT = {
 
 const DASHBOARD_ROW_LIMIT = 3;
 
+export function normalizeJobStatus(status: string | null | undefined): JobStatus {
+  const normalized = status?.trim().toLowerCase();
+
+  if (normalized === 'active' || normalized === 'completed' || normalized === 'complete' || normalized === 'ready') {
+    return 'active';
+  }
+
+  if (normalized === 'archived' || normalized === 'inactive' || normalized === 'deleted') {
+    return 'archived';
+  }
+
+  return 'draft';
+}
+
 function isHebrewLocale() {
   return typeof document !== 'undefined' && document.documentElement.lang.toLowerCase().startsWith('he');
 }
@@ -134,8 +148,8 @@ export function JobsTable({
     }
 
     return [...filteredJobs].sort((first, second) => {
-      const firstValue = sort.key === 'action' ? first.id : first[sort.key];
-      const secondValue = sort.key === 'action' ? second.id : second[sort.key];
+      const firstValue = sort.key === 'action' ? first.id : sort.key === 'status' ? normalizeJobStatus(first.status) : first[sort.key];
+      const secondValue = sort.key === 'action' ? second.id : sort.key === 'status' ? normalizeJobStatus(second.status) : second[sort.key];
       const result = compareValues(firstValue, secondValue);
       return sort.direction === 'ascending' ? result : -result;
     });
@@ -154,10 +168,11 @@ export function JobsTable({
   };
 
   const renderBadge = (job: Job) => {
-    const badge = STATUS_BADGE[job.status];
+    const status = normalizeJobStatus(job.status);
+    const badge = STATUS_BADGE[status];
     return (
       <Badge variant={badge.variant} soft={isFullList} className={badge.className}>
-        {statusLabels[job.status]}
+        {statusLabels[status]}
       </Badge>
     );
   };
