@@ -24,7 +24,7 @@ from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.cancellation import CancelStatus, cancel_artifact
 from careervp.logic.company_research import research_company
-from careervp.logic.company_research_store import write_cr_artifact
+from careervp.logic.company_research_store import read_cr_artifact, write_cr_artifact
 from careervp.models.company import CompanyResearchRequest, CompanyResearchResult
 from careervp.models.result import Result, ResultCode
 
@@ -253,13 +253,14 @@ def get_company_research(event: dict[str, Any]) -> dict[str, Any]:
     except Exception:
         item = None
 
-    # Defense-in-depth ownership check: the DynamoDB key already scopes to user_id, but we
-    # verify explicitly after retrieval so future key-scheme changes can't leak another user's CR.
+    # Defense-in-depth ownership check: verify the retrieved item belongs to the authenticated user.
+    # Canonical items (ARTIFACTS_TABLE) use the 'user_id' field; legacy items use 'pk'.
     if item is not None:
         item_pk = str(item.get('pk', ''))
-        if item_pk not in (user_id, f'USER#{user_id}'):
+        item_uid = str(item.get('user_id', ''))
+        if item_pk not in (user_id, f'USER#{user_id}') and item_uid != user_id:
             logger.error(
-                'CR ownership mismatch — item pk does not match authenticated user',
+                'CR ownership mismatch — item does not match authenticated user',
                 job_id=job_id,
             )
             item = None
@@ -372,8 +373,13 @@ def _extract_job_id(event: dict[str, Any]) -> str | None:
 
 
 def _get_company_research_item(user_id: str, job_id: str) -> dict[str, Any] | None:
-    table_candidates = _resolve_table_candidates()
+    # Canonical store first: ARTIFACTS_TABLE with applicationId/artifactId key schema.
+    canonical = read_cr_artifact(application_id=job_id, user_id=user_id)
+    if canonical is not None:
+        return canonical
 
+    # Legacy fallback: DYNAMODB_TABLE_NAME / TABLE_NAME / KNOWLEDGE_TABLE_NAME with pk/sk schema.
+    table_candidates = _resolve_table_candidates()
     for table_name in table_candidates:
         item = _get_item_from_table(table_name=table_name, user_id=user_id, job_id=job_id)
         if item is not None:
