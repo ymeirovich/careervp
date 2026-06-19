@@ -53,10 +53,17 @@ export function ExportDropdown({ jobId, moduleType, artifactId, companyName, job
       const filename = company && title
         ? `${company}-${title}-${artifactLabel}.${format}`
         : `${moduleType}-${jobId}.${format}`;
+      // a.download is ignored for cross-origin URLs (S3 presigned). Fetch the
+      // bytes and create a same-origin blob URL so the browser honors the filename.
+      const fileResp = await fetch(response.download_url);
+      if (!fileResp.ok) throw new Error(`fetch_${fileResp.status}`);
+      const blob = await fileResp.blob();
+      const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = response.download_url;
+      a.href = blobUrl;
       a.download = filename;
       a.click();
+      URL.revokeObjectURL(blobUrl);
     } catch (err) {
       if (err instanceof ApiError && err.status === 501) {
         setError('Export is coming soon!');
