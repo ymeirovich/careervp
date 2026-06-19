@@ -9,6 +9,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from typing import Any
@@ -185,6 +186,13 @@ def _build_docx(module_type: str, data: Any) -> DocxDocument:
     return doc
 
 
+def _humanize_key(key: str) -> str:
+    """Convert snake_case or camelCase key to Title Case with spaces."""
+    s = re.sub(r'([a-z])([A-Z])', r'\1 \2', str(key))
+    s = s.replace('_', ' ').replace('-', ' ')
+    return s.title()
+
+
 def _render_value_as_text(value: Any, depth: int = 0) -> str:
     """Recursively convert any value to human-readable text."""
     if value is None:
@@ -203,7 +211,7 @@ def _render_value_as_text(value: Any, depth: int = 0) -> str:
         for k, v in value.items():
             t = _render_value_as_text(v, depth + 1)
             if t:
-                label = str(k).replace('_', ' ').replace('-', ' ').title()
+                label = _humanize_key(k)
                 parts.append(f'{label}: {t}')
         return '\n'.join(parts)
     return str(value)
@@ -226,7 +234,7 @@ _VPR_SKIP_KEYS = frozenset(
 
 def _add_bold_kv(doc: DocxDocument, key: str, value: str) -> None:
     p = doc.add_paragraph()
-    p.add_run(f'{str(key).replace("_", " ").title()}: ').bold = True
+    p.add_run(f'{_humanize_key(key)}: ').bold = True
     p.add_run(value)
 
 
@@ -257,7 +265,7 @@ def _fill_vpr(doc: DocxDocument, data: Any) -> None:
     for section_key, section_value in data.items():
         if section_key in _VPR_SKIP_KEYS:
             continue
-        section_title = str(section_key).replace('_', ' ').replace('-', ' ').title()
+        section_title = _humanize_key(section_key)
         doc.add_heading(section_title, level=1)
         if isinstance(section_value, str) and section_value.strip():
             doc.add_paragraph(section_value.strip())

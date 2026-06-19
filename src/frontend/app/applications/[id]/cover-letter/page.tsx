@@ -186,7 +186,7 @@ function CoverLetterContent({ jobId }: { jobId: string }) {
                 {copied ? 'Copied!' : 'Copy to Clipboard'}
               </button>
               {artifactId && (
-                <ExportDropdown jobId={jobId} moduleType="cover_letter" artifactId={artifactId} />
+                <ExportDropdown jobId={jobId} moduleType="cover_letter" artifactId={artifactId} companyName={job?.company_name ?? ''} jobTitle={job?.title ?? ''} />
               )}
             </>
           )}

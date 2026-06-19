@@ -156,7 +156,7 @@ function InterviewPrepContent({ jobId }: { jobId: string }) {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {artifactId && (
-            <ExportDropdown jobId={jobId} moduleType="interview_prep" artifactId={artifactId} />
+            <ExportDropdown jobId={jobId} moduleType="interview_prep" artifactId={artifactId} companyName={job?.company_name ?? ''} jobTitle={job?.title ?? ''} />
           )}
           <button
             onClick={() => router.push(`/applications/${jobId}`)}

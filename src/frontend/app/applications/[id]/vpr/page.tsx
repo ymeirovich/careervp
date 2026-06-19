@@ -262,6 +262,44 @@ function GapsSection({ data }: { data: VPRFullData['evidenceGaps'] }) {
   );
 }
 
+function CompanyInsightsSection({ data }: { data: NonNullable<VPRFullData['companyInsights']> }) {
+  return (
+    <div className={CARD}>
+      <h2 className={TITLE}>Company Insights</h2>
+      <div className="flex flex-col gap-1">
+        <p className={LABEL}>Mission & Market Position</p>
+        <p className={BODY}>{data.missionAndPosition}</p>
+      </div>
+      {data.recentInitiatives.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p className={LABEL}>Recent Initiatives</p>
+          <ul className="flex flex-col gap-1.5 pl-1">
+            {data.recentInitiatives.map((item, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-text-primary">
+                <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-primary-action" />
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {data.currentChallenges.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p className={LABEL}>Current Challenges</p>
+          <ul className="flex flex-col gap-1.5 pl-1">
+            {data.currentChallenges.map((item, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-text-primary">
+                <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-state-warning" />
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SkillsSection({ data }: { data: VPRFullData['skillsAnalysis'] }) {
   return (
     <div className={CARD}>
@@ -430,7 +468,7 @@ function VPRContent({ jobId }: { jobId: string }) {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {artifactId && (
-            <ExportDropdown jobId={jobId} moduleType="vpr" artifactId={artifactId} />
+            <ExportDropdown jobId={jobId} moduleType="vpr" artifactId={artifactId} companyName={job?.company_name ?? ''} jobTitle={job?.title ?? ''} />
           )}
           {backButton}
         </div>
@@ -445,6 +483,7 @@ function VPRContent({ jobId }: { jobId: string }) {
           <ObjectionsSection data={fullVpr.concernsAndMitigations} />
           <GapsSection data={fullVpr.evidenceGaps} />
           <SkillsSection data={fullVpr.skillsAnalysis} />
+          {fullVpr.companyInsights && <CompanyInsightsSection data={fullVpr.companyInsights} />}
         </>
       ) : (
         <>

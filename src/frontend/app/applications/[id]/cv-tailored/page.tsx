@@ -463,7 +463,7 @@ function CVTailoredContent({ jobId }: { jobId: string }) {
                 </button>
               )}
               {artifactId && (
-                <ExportDropdown jobId={jobId} moduleType="cv_tailored" artifactId={artifactId} />
+                <ExportDropdown jobId={jobId} moduleType="cv_tailored" artifactId={artifactId} companyName={job?.company_name ?? ''} jobTitle={job?.title ?? ''} />
               )}
             </>
           )}

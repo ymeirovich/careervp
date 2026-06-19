@@ -49,6 +49,25 @@ def build_system_prompt() -> str:
     )
 
 
+def _format_company_research(cr: dict[str, Any]) -> str:
+    """Format raw company research dict as human-readable text for the LLM prompt."""
+    parts: list[str] = []
+    for label, key in (('Overview', 'overview'), ('Mission', 'mission'), ('Industry', 'industry')):
+        val = cr.get(key) or ''
+        if val:
+            parts.append(f'{label}: {val}')
+    values = cr.get('values') or []
+    if isinstance(values, list) and values:
+        parts.append('Values: ' + ', '.join(str(v) for v in values[:5]))
+    priorities = cr.get('strategic_priorities') or []
+    if isinstance(priorities, list) and priorities:
+        parts.append('Strategic Priorities: ' + ', '.join(str(p) for p in priorities[:3]))
+    news = cr.get('recent_news') or []
+    if isinstance(news, list) and news:
+        parts.append('Recent News: ' + ' | '.join(str(n) for n in news[:3]))
+    return '\n'.join(parts) if parts else str(cr)
+
+
 def build_user_prompt(  # noqa: C901
     vpr_data: dict[str, Any],
     gap_responses: list[dict[str, Any]] | None = None,
@@ -102,7 +121,7 @@ def build_user_prompt(  # noqa: C901
 
     # Company Research — architecture-required input (section 3.7)
     if company_research:
-        sections.append('# Company Research\n' + json.dumps(company_research, indent=2, default=str))
+        sections.append('# Company Research\n' + _format_company_research(company_research))
 
     if focus_areas:
         sections.append('# Focus Areas\n' + ', '.join(focus_areas))
