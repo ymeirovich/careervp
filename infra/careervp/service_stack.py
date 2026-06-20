@@ -5,6 +5,7 @@ from cdk_nag import AwsSolutionsChecks, NagSuppressions
 from constructs import Construct
 
 from .api_construct import ApiConstruct
+from .ai_assist_nested_stack import AiAssistNestedStack
 from .cognito_construct import CognitoConstruct
 from .configuration.configuration_construct import ConfigurationStore
 from .constants import (
@@ -78,6 +79,21 @@ class ServiceStack(Stack):
             notification_topic=self.api.monitoring.notification_topic,
             naming=self.naming,
         )
+        self.ai_assist_nested_stack = AiAssistNestedStack(
+            self,
+            "AiAssistNestedStack",
+            naming=self.naming,
+            logs_kms_key=self.api.logs_kms_key,
+            artifacts_table=self.api.api_db.artifacts_table,
+            cvs_table=self.api.api_db.cvs_table,
+            applications_table=self.api.api_db.applications_table,
+            gap_responses_table=self.api.api_db.gap_responses_table,
+            users_table=self.api.api_db.users_table,
+            llm_cache_table=self.api.llm_cache_table,
+            allowed_origins=self.api.node.try_get_context("allowed_origins")
+            or "https://main.d3j2wnm8g5clnw.amplifyapp.com,https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com,https://ui-upgrade.d3j2wnm8g5clnw.amplifyapp.com,https://app.careervp.com,https://dev.careervp.com,https://stage.careervp.com,http://localhost:3000",
+        )
+        self.api.register_ai_assist_routes(self.ai_assist_nested_stack.ai_assist_lambda)
 
         CfnOutput(self, "UserPoolId", value=self.cognito.user_pool_id)
         CfnOutput(self, "ClientId", value=self.cognito.client_id)

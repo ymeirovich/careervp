@@ -60,27 +60,42 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     # VPR
     ('POST', '/vpr/generate'),
     ('GET', '/vpr/{vprId}/status'),
+    ('POST', '/vpr/{vprId}/cancel'),
     ('GET', '/vprs'),
     # CV Tailoring
     ('POST', '/cv-tailoring/generate'),
     ('GET', '/cv-tailoring/{cvTailoringId}/status'),
+    ('POST', '/cv-tailoring/{cvTailoringId}/cancel'),
+    ('PATCH', '/cv-tailoring/{cvTailoringId}'),
     ('GET', '/cv-tailorings'),
     ('DELETE', '/cv-tailoring/{cvTailoringId}'),
     # Cover Letter
     ('POST', '/cover-letter/generate'),
     ('GET', '/cover-letter/{coverLetterId}/status'),
+    ('POST', '/cover-letter/{coverLetterId}/cancel'),
+    ('PATCH', '/cover-letter/{coverLetterId}'),
     ('GET', '/cover-letters'),
     # Interview Prep
     ('POST', '/interview-prep/generate'),
+    ('PATCH', '/interview-prep/{interviewPrepId}'),
     ('GET', '/interview-prep/{interviewPrepId}/status'),
+    ('POST', '/interview-prep/{interviewPrepId}/cancel'),
     ('GET', '/interview-preps'),
+    # AI Assist
+    ('POST', '/ai/assist'),
     # Company Research
     ('POST', '/company-research/fetch'),
     ('GET', '/company-research/{jobId}'),
+    ('POST', '/company-research/{jobId}/cancel'),
     # Additional API surface currently exposed by infra
     ('GET', '/applications/{application_id}'),
+    ('GET', '/jobs/{jobId}/artifacts/{moduleType}/export'),
     ('GET', '/knowledge-base'),
+    ('GET', '/users/me/subscription'),
     ('POST', '/gap-analysis/questions'),
+    ('POST', '/billing/checkout'),
+    ('POST', '/billing/portal'),
+    ('POST', '/billing/webhook'),
 }
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from typing import Any, cast
 
@@ -38,6 +39,36 @@ def _lambda_role_logical_id(lambda_resource: dict[str, Any]) -> str:
     raise AssertionError("Lambda role reference could not be resolved from template")
 
 
+def _policy_statements_for_role(
+    synthesized_template: Template,
+    role_logical_id: str,
+) -> list[dict[str, Any]]:
+    policies = synthesized_template.find_resources("AWS::IAM::Policy")
+    statements: list[dict[str, Any]] = []
+    for policy in policies.values():
+        roles = policy["Properties"].get("Roles", [])
+        if not isinstance(roles, list):
+            continue
+        attached = any(
+            isinstance(role_entry, dict) and role_entry.get("Ref") == role_logical_id
+            for role_entry in roles
+        )
+        if not attached:
+            continue
+        policy_statements = (
+            policy["Properties"].get("PolicyDocument", {}).get("Statement", [])
+        )
+        if isinstance(policy_statements, dict):
+            statements.append(cast(dict[str, Any], policy_statements))
+        elif isinstance(policy_statements, list):
+            statements.extend(
+                cast(dict[str, Any], statement)
+                for statement in policy_statements
+                if isinstance(statement, dict)
+            )
+    return statements
+
+
 def test_company_research_lambda_configuration(synthesized_template: Template) -> None:
     """Ensure the new Lambda uses the required handler, timeout, and memory settings."""
     all_functions = synthesized_template.find_resources("AWS::Lambda::Function")
@@ -57,6 +88,85 @@ def test_company_research_lambda_configuration(synthesized_template: Template) -
     )
     assert lambda_props["Properties"]["Timeout"] == 60
     assert lambda_props["Properties"]["MemorySize"] == 512
+
+
+def test_ai_assist_lambda_configuration(ai_assist_template: Template) -> None:
+    """AI-assist Lambda should synthesize in the nested template with the FE-UI-047 config."""
+    lambda_resource = _lambda_resource_by_handler(
+        ai_assist_template,
+        "careervp.handlers.ai_assist_handler.lambda_handler",
+    )
+    props = lambda_resource["Properties"]
+    assert props["FunctionName"] == "careervp-ai-assist-lambda-dev"
+    assert props["Timeout"] == 25
+    assert props["MemorySize"] == 512
+    env_vars = props.get("Environment", {}).get("Variables", {})
+    assert env_vars["ARTIFACTS_TABLE_NAME"]
+    assert env_vars["GAP_RESPONSES_TABLE_NAME"]
+    assert env_vars["APPLICATIONS_TABLE_NAME"]
+    assert env_vars["USERS_TABLE_NAME"]
+    assert env_vars["LLM_CACHE_TABLE_NAME"]
+    assert env_vars["ANTHROPIC_API_KEY_SSM_PARAM"] == "/careervp/dev/anthropic-api-key"
+    assert env_vars["AI_ASSIST_MODEL"] == "claude-haiku-4-5-20251001"
+
+
+def test_ai_assist_lambda_policy_is_least_privilege(
+    ai_assist_template: Template,
+) -> None:
+    """AI-assist role should read its source tables, use the LLM cache, and avoid artifact writes."""
+    lambda_resource = _lambda_resource_by_handler(
+        ai_assist_template,
+        "careervp.handlers.ai_assist_handler.lambda_handler",
+    )
+    role_logical_id = _lambda_role_logical_id(lambda_resource)
+    statements = _policy_statements_for_role(ai_assist_template, role_logical_id)
+    assert statements, "No IAM policy statements attached to the AI-assist role"
+
+    flattened_actions = {
+        action
+        for statement in statements
+        for action in (
+            statement.get("Action", [])
+            if isinstance(statement.get("Action", []), list)
+            else [statement.get("Action")]
+        )
+        if isinstance(action, str)
+    }
+    assert "ssm:GetParameter" in flattened_actions
+    assert "dynamodb:GetItem" in flattened_actions
+    assert "dynamodb:Query" in flattened_actions
+    assert "dynamodb:PutItem" in flattened_actions
+    assert "dynamodb:DeleteItem" in flattened_actions
+
+    primary_write_actions = {"dynamodb:UpdateItem", "dynamodb:BatchWriteItem"}
+    assert not (flattened_actions & primary_write_actions), (
+        "AI-assist role should not have broad write actions on source tables"
+    )
+
+    policy_blob = json.dumps(statements)
+    # SSM ARN is a literal string in the nested template — check it's scoped to the right key.
+    assert "anthropic-api-key" in policy_blob
+
+    # DynamoDB table ARNs are cross-stack CloudFormation parameter refs in the nested template
+    # (e.g. {"Ref": "referencetoParentArtifactsTable..."}), not literal ARN strings.  Check
+    # coverage by counting distinct DynamoDB policy statements instead of string-matching names.
+    # Implementation defines 5 statements: artifacts, cvs, gap-responses, applications+users, llm-cache.
+    ddb_statements = [
+        statement
+        for statement in statements
+        if any(
+            str(action).startswith("dynamodb:")
+            for action in (
+                statement.get("Action", [])
+                if isinstance(statement.get("Action", []), list)
+                else [statement.get("Action", "")]
+            )
+        )
+    ]
+    assert len(ddb_statements) >= 4, (
+        f"Expected at least 4 DynamoDB policy statements covering artifacts/cvs, "
+        f"gap-responses, applications+users, and llm-cache tables; found {len(ddb_statements)}"
+    )
 
 
 def test_company_research_api_route_exists(synthesized_template: Template) -> None:
@@ -402,29 +512,14 @@ def _get_method_paths(
     """
     results: list[tuple[str, str, Mapping[str, Any]]] = []
 
-    # Build path part lookup from resource Ref
-    resource_to_path = {}
-    for logical_id, props in resources.items():
-        path_part = props["Properties"].get("PathPart", "")
-        if path_part:
-            resource_to_path[logical_id] = path_part
-
-    # For nested paths, we need to trace the parent resources
-    # This is complex for deep paths, so we'll use a simpler approach:
-    # Build parent-child relationships
-    resource_hierarchy = {}
-    for logical_id, props in resources.items():
-        parent_id = props["Properties"].get("ParentId", {}).get("Ref")
-        if parent_id:
-            parent_path = resource_to_path.get(parent_id, "")
-            current_path = props["Properties"].get("PathPart", "")
-            if parent_path and current_path:
-                resource_hierarchy[logical_id] = f"{parent_path}/{current_path}"
-            elif current_path:
-                resource_hierarchy[logical_id] = current_path
-        else:
-            # Root or top-level resource
-            resource_hierarchy[logical_id] = props["Properties"].get("PathPart", "")
+    def _resource_path(logical_id: str) -> str:
+        props = resources.get(logical_id, {})
+        path_part = str(props.get("Properties", {}).get("PathPart", ""))
+        parent_id = props.get("Properties", {}).get("ParentId", {}).get("Ref")
+        if not parent_id or not isinstance(parent_id, str):
+            return path_part
+        parent_path = _resource_path(parent_id)
+        return "/".join(part for part in [parent_path, path_part] if part)
 
     # Now map methods to their full paths
     for method_props in methods.values():
@@ -433,7 +528,7 @@ def _get_method_paths(
         path_ref = resource_id.get("Ref", "")
 
         # Get path from hierarchy
-        full_path = resource_hierarchy.get(path_ref, "")
+        full_path = _resource_path(path_ref) if isinstance(path_ref, str) else ""
 
         results.append((http_method, full_path, method_props))
 
@@ -476,6 +571,39 @@ def test_public_routes_have_no_authorizer(synthesized_template: Template) -> Non
     assert len(public_methods_found) >= 3, (
         f"Expected at least 3 public routes, found {len(public_methods_found)}: "
         f"{public_methods_found}"
+    )
+
+
+def test_ai_assist_and_interview_prep_patch_routes_exist(
+    synthesized_template: Template,
+) -> None:
+    """The parent RestApi should expose POST /ai/assist and PATCH /interview-prep/{interviewPrepId}."""
+    methods = synthesized_template.find_resources("AWS::ApiGateway::Method")
+    resources = synthesized_template.find_resources("AWS::ApiGateway::Resource")
+    method_paths = _get_method_paths(methods, resources)
+
+    route_map = {
+        (http_method, path): method_props
+        for http_method, path, method_props in method_paths
+    }
+    assert ("POST", "ai/assist") in route_map
+    assert ("PATCH", "interview-prep/{interviewPrepId}") in route_map
+
+    ai_assist_method = route_map[("POST", "ai/assist")]
+    assert (
+        ai_assist_method["Properties"].get("AuthorizationType") == "COGNITO_USER_POOLS"
+    )
+    assert "AiAssistLambda" in json.dumps(
+        ai_assist_method["Properties"].get("Integration", {})
+    )
+
+    interview_patch_method = route_map[("PATCH", "interview-prep/{interviewPrepId}")]
+    assert (
+        interview_patch_method["Properties"].get("AuthorizationType")
+        == "COGNITO_USER_POOLS"
+    )
+    assert "InterviewPrepStatusLambda" in json.dumps(
+        interview_patch_method["Properties"].get("Integration", {})
     )
 
 

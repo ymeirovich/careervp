@@ -123,6 +123,8 @@ CV_TAILOR_LAMBDA = "CVTailor"
 COVER_LETTER_LAMBDA = "CoverLetter"
 COMPANY_RESEARCH_LAMBDA = "CompanyResearch"
 COMPANY_RESEARCH_FEATURE = "company-research"
+AI_ASSIST_LAMBDA = "AiAssistLambda"
+AI_ASSIST_FEATURE = "ai-assist"
 LAMBDA_SERVICE_NAME = "lambda"
 
 # Artifact Chain Lambdas + state machine (FE-UI-031)
@@ -188,6 +190,8 @@ TEMPLATE_MODEL_ID = (
 )
 STRATEGIC_MODEL_ID_ENV_VAR = "STRATEGIC_MODEL_ID"
 TEMPLATE_MODEL_ID_ENV_VAR = "TEMPLATE_MODEL_ID"
+AI_ASSIST_MODEL_ENV_VAR = "AI_ASSIST_MODEL"
+AI_ASSIST_TIMEOUT_ENV_VAR = "AI_ASSIST_TIMEOUT_SECONDS"
 
 # Payment provider — webhook secrets (primary + previous for zero-downtime rotation)
 WEBHOOK_SECRET_SSM_PARAM = f"/careervp/{ENVIRONMENT}/payment-provider-webhook-secret"

@@ -33,14 +33,15 @@ def _resource_types(template: Template) -> dict[str, dict[str, Any]]:
 def test_parent_declares_only_monitoring_nested_stack(
     synthesized_template: Template,
 ) -> None:
-    """Phase 1 allows exactly one nested stack: MonitoringNestedStack."""
+    """The parent should now own the monitoring and AI-assist nested stacks."""
     nested = synthesized_template.find_resources("AWS::CloudFormation::Stack")
-    assert list(nested) == [
-        "MonitoringNestedStackNestedStackMonitoringNestedStackNestedStackResourceB5E63BB6"
-    ], (
-        "Expected only the approved MonitoringNestedStack nested-stack resource, "
-        f"found {list(nested)}."
+    nested_ids = list(nested)
+    assert len(nested_ids) == 2, (
+        "Expected exactly two nested-stack resources in the parent "
+        f"(monitoring + ai-assist), found {nested_ids}."
     )
+    assert any("MonitoringNestedStack" in logical_id for logical_id in nested_ids)
+    assert any("AiAssistNestedStack" in logical_id for logical_id in nested_ids)
 
 
 def test_parent_resource_count_below_cfn_hard_limit(
@@ -110,6 +111,14 @@ def test_monitoring_nested_stack_has_no_stateful_resources(
     """The monitoring nested stack must not contain DynamoDB, S3, or KMS."""
     for resource_type in STATEFUL_RESOURCE_TYPES:
         monitoring_template.resource_count_is(resource_type, 0)
+
+
+def test_ai_assist_nested_stack_has_no_stateful_resources(
+    ai_assist_template: Template,
+) -> None:
+    """The AI-assist nested stack must not contain DynamoDB, S3, or KMS."""
+    for resource_type in STATEFUL_RESOURCE_TYPES:
+        ai_assist_template.resource_count_is(resource_type, 0)
 
 
 def test_company_research_worker_stays_in_parent(

@@ -35,3 +35,9 @@ def synthesized_template(service_stack: ServiceStack) -> Template:
 def monitoring_template(service_stack: ServiceStack) -> Template:
     """The approved phase-1 monitoring nested stack template."""
     return Template.from_stack(service_stack.monitoring_nested_stack)
+
+
+@pytest.fixture(scope="module")
+def ai_assist_template(service_stack: ServiceStack) -> Template:
+    """The AI-assist nested stack template."""
+    return Template.from_stack(service_stack.ai_assist_nested_stack)

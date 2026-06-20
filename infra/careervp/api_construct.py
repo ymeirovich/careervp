@@ -258,6 +258,29 @@ class ApiConstruct(Construct):
                 feature=constants.API_FEATURE,
             )
 
+    def register_ai_assist_routes(self, ai_assist_lambda: _lambda.IFunction) -> None:
+        self.ai_assist_lambda = ai_assist_lambda
+        self.interview_prep_status_func.add_permission(
+            "AllowInterviewPrepPatchInvoke",
+            principal=iam.ServicePrincipal("apigateway.amazonaws.com"),
+            action="lambda:InvokeFunction",
+            source_arn=self.rest_api.arn_for_execute_api(
+                method="PATCH",
+                path="/interview-prep/*",
+                stage="*",
+            ),
+        )
+        self._add_route_method_with_integration(
+            "/ai/assist",
+            "POST",
+            self._build_lambda_proxy_integration(ai_assist_lambda),
+        )
+        self._add_route_method_with_integration(
+            "/interview-prep/{interviewPrepId}",
+            "PATCH",
+            self._build_lambda_proxy_integration(self.interview_prep_status_func),
+        )
+
     def _build_swagger_endpoints(
         self, rest_api: aws_apigateway.RestApi, dest_func: _lambda.Function
     ) -> None:
@@ -2651,6 +2674,18 @@ class ApiConstruct(Construct):
         method: str,
         handler: _lambda.Function,
     ) -> None:
+        self._add_route_method_with_integration(
+            path,
+            method,
+            aws_apigateway.LambdaIntegration(handler=handler),
+        )
+
+    def _add_route_method_with_integration(
+        self,
+        path: str,
+        method: str,
+        integration: aws_apigateway.Integration,
+    ) -> None:
         resource = self._get_or_create_path_resource(path)
         # Per auth_and_authorizer_spec.yaml:
         # - Public (unprotected): /health, /auth/register, /auth/login
@@ -2666,13 +2701,24 @@ class ApiConstruct(Construct):
         is_public_route = path in public_paths
         resource.add_method(
             http_method=method,
-            integration=aws_apigateway.LambdaIntegration(handler=handler),
+            integration=integration,
             authorizer=None if is_public_route else self.api_authorizer,
             authorization_type=(
                 aws_apigateway.AuthorizationType.NONE
                 if is_public_route
                 else aws_apigateway.AuthorizationType.COGNITO
             ),
+        )
+
+    @staticmethod
+    def _build_lambda_proxy_integration(
+        handler: _lambda.IFunction,
+    ) -> aws_apigateway.AwsIntegration:
+        return aws_apigateway.AwsIntegration(
+            service="lambda",
+            proxy=True,
+            integration_http_method="POST",
+            path=f"2015-03-31/functions/{handler.function_arn}/invocations",
         )
 
     def _add_openapi_contract_routes(self) -> None:
