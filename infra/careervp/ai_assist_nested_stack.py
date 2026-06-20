@@ -6,6 +6,7 @@ from aws_cdk import aws_iam as iam
 from aws_cdk import aws_kms as kms
 from aws_cdk import aws_lambda as _lambda
 from aws_cdk import aws_logs as logs
+from cdk_nag import NagSuppressions
 from constructs import Construct
 
 from . import constants
@@ -143,4 +144,32 @@ class AiAssistNestedStack(NestedStack):
                 f"arn:{Aws.PARTITION}:execute-api:{Aws.REGION}:{Aws.ACCOUNT_ID}:"
                 "*/POST/ai/assist"
             ),
+        )
+
+        NagSuppressions.add_resource_suppressions(
+            self.role,
+            [
+                {
+                    "id": "AwsSolutions-IAM5",
+                    "reason": (
+                        "XRay PutTraceSegments/PutTelemetryRecords and CloudWatch Logs "
+                        "require Resource::* — no resource-level ARN is supported by these services."
+                    ),
+                    "appliesTo": [
+                        "Action::xray:PutTraceSegments",
+                        "Action::xray:PutTelemetryRecords",
+                        "Resource::*",
+                    ],
+                }
+            ],
+            apply_to_children=True,
+        )
+        NagSuppressions.add_resource_suppressions(
+            self.ai_assist_lambda,
+            [
+                {
+                    "id": "AwsSolutions-L1",
+                    "reason": "PYTHON_3_13 is the latest supported runtime; cdk-nag false positive.",
+                }
+            ],
         )
