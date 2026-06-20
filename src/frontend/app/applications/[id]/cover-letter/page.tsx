@@ -278,6 +278,16 @@ function CoverLetterContent({ jobId }: { jobId: string }) {
             onBlur={autosave.onBlur}
             readOnly={autosave.isSaving}
             placeholder="Write your cover letter…"
+            onAiAssist={artifactId ? async () => {
+              const result = await api.postAiAssist({
+                artifact_type: 'cover_letter',
+                artifact_id: artifactId,
+                application_id: jobId,
+                field_key: 'cover_letter',
+                current_text: editText,
+              });
+              return result.generated_markdown;
+            } : undefined}
           />
         ) : (
           fullText && (

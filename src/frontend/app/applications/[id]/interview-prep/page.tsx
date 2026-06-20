@@ -59,6 +59,7 @@ function updateQuestion(result: PrepResult, questionId: string, updater: (questi
 
 interface QuestionCardProps {
   artifactId: string | null;
+  jobId: string;
   question: PrepQuestion;
   baselineQuestion: PrepQuestion;
   index: number;
@@ -69,6 +70,7 @@ interface QuestionCardProps {
 
 function QuestionCard({
   artifactId,
+  jobId,
   question,
   baselineQuestion,
   index,
@@ -112,13 +114,27 @@ function QuestionCard({
             <p className="text-xs font-semibold text-text-muted uppercase tracking-wide">
               {question.answer?.trim() ? 'STAR Answer' : 'Suggested STAR Answer'}
             </p>
-            <button
-              type="button"
-              onClick={() => setIsEditing((current) => !current)}
-              className="rounded-md border border-border-default px-3 py-1.5 text-sm text-text-primary hover:bg-card"
-            >
-              {isEditing ? 'Done' : 'Edit'}
-            </button>
+            <div className="flex items-center gap-2">
+              {isEditing && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onQuestionChange(questionId, baselineAnswer);
+                    setIsEditing(false);
+                  }}
+                  className="text-sm text-text-muted hover:text-text-primary"
+                >
+                  Cancel
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setIsEditing((current) => !current)}
+                className="rounded-md border border-border-default px-3 py-1.5 text-sm text-text-primary hover:bg-card"
+              >
+                {isEditing ? 'Save' : 'Edit'}
+              </button>
+            </div>
           </div>
 
           <ArtifactAutosaveField
@@ -168,34 +184,23 @@ function QuestionCard({
             onRequestEdit={() => setIsEditing(true)}
             renderField={({ isSaving, onBlur }) => (
               isEditing ? (
-                <div className="flex flex-col gap-3">
-                  <RichTextEditor
-                    content={answer}
-                    onChange={(value) => onQuestionChange(questionId, value)}
-                    onBlur={onBlur}
-                    readOnly={isSaving}
-                    placeholder="Write your STAR answer…"
-                  />
-                  <div className="flex items-center justify-between gap-3">
-                    <button
-                      type="button"
-                      onClick={() => undefined}
-                      className="rounded-md border border-border-default px-3 py-1.5 text-sm text-text-primary hover:bg-card"
-                    >
-                      AI Assist
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onQuestionChange(questionId, baselineAnswer);
-                        setIsEditing(false);
-                      }}
-                      className="text-sm text-text-muted hover:text-text-primary"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
+                <RichTextEditor
+                  content={answer}
+                  onChange={(value) => onQuestionChange(questionId, value)}
+                  onBlur={onBlur}
+                  readOnly={isSaving}
+                  placeholder="Write your STAR answer…"
+                  onAiAssist={artifactId ? async () => {
+                    const result = await api.postAiAssist({
+                      artifact_type: 'interview_prep',
+                      artifact_id: artifactId,
+                      application_id: jobId,
+                      field_key: `question.${questionId}.answer`,
+                      current_text: answer,
+                    });
+                    return result.generated_markdown;
+                  } : undefined}
+                />
               ) : answer ? (
                 <RichTextEditor content={answer} onChange={() => undefined} readOnly />
               ) : (
@@ -361,6 +366,7 @@ function InterviewPrepContent({ jobId }: { jobId: string }) {
               <QuestionCard
                 key={getQuestionId(question)}
                 artifactId={artifactId}
+                jobId={jobId}
                 baselineQuestion={baselineQuestions[index] ?? question}
                 fetchLatestQuestion={fetchLatestQuestion}
                 index={index}

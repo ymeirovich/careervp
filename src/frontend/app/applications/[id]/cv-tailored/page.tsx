@@ -9,7 +9,7 @@ import { ExportDropdown } from '../../../../components/ExportDropdown/ExportDrop
 import { RichTextEditor } from '../../../../components/RichTextEditor/RichTextEditor';
 import { Spinner } from '../../../../components/ui/Spinner';
 import type { ArtifactAutosaveResult, ArtifactBaseVersion } from '../../../../hooks/useArtifactAutosave';
-import type { CVSections, CVTailoredStatusResponse, JobDetail } from '../../../../lib/types';
+import type { CVBullet, CVSections, CVTailoredStatusResponse, JobDetail } from '../../../../lib/types';
 
 function formatDateRange(start: string, end?: string | null, isCurrent?: boolean): string {
   const endLabel = isCurrent || !end || end === 'Present' ? 'Present' : end;
@@ -85,7 +85,15 @@ function CVRichTextField({
   serverUpdatedAt,
   value,
   placeholder,
-}: CVFieldProps & { placeholder: string }) {
+  jobId,
+}: CVFieldProps & { placeholder: string; jobId: string }) {
+  const [saveToastKey, setSaveToastKey] = useState(0);
+
+  const wrappedOnSaved = useCallback((result: ArtifactAutosaveResult) => {
+    persistence.onSaved(result);
+    setSaveToastKey((k) => k + 1);
+  }, [persistence]);
+
   return (
     <ArtifactAutosaveField
       artifactType="cv_tailored"
@@ -97,7 +105,7 @@ function CVRichTextField({
       serverUpdatedAt={serverUpdatedAt}
       baseVersion={baseVersion}
       save={persistence.save}
-      onSaved={persistence.onSaved}
+      onSaved={wrappedOnSaved}
       fetchLatest={persistence.fetchLatest}
       onReloaded={persistence.onReloaded}
       onRequestEdit={onRequestEdit}
@@ -109,6 +117,18 @@ function CVRichTextField({
           readOnly={isSaving}
           placeholder={placeholder}
           ariaLabelledBy={fieldKey}
+          showToolbarOnFocusOnly
+          saveToastKey={saveToastKey}
+          onAiAssist={artifactId ? async () => {
+            const result = await api.postAiAssist({
+              artifact_type: 'cv_tailored',
+              artifact_id: artifactId,
+              application_id: jobId,
+              field_key: fieldKey,
+              current_text: value,
+            });
+            return result.generated_markdown;
+          } : undefined}
         />
       )}
     />
@@ -175,9 +195,11 @@ interface CVDocumentProps {
   artifactId: string | null;
   baseVersion: ArtifactBaseVersion;
   baselineSections: CVSections;
+  jobId: string;
   onRequestEdit: () => void;
   onSectionsChange: (nextSections: CVSections) => void;
   persistenceFor: (_fieldKey: string, getValue: (sections: CVSections) => string, applyValue: (sections: CVSections, value: string) => void) => CVFieldPersistence;
+  persistSectionsDirectly: (updater: (sections: CVSections) => void) => Promise<void>;
   sections: CVSections;
   serverUpdatedAt: string | null;
 }
@@ -186,9 +208,11 @@ function CVDocumentEdit({
   artifactId,
   baseVersion,
   baselineSections,
+  jobId,
   onRequestEdit,
   onSectionsChange,
   persistenceFor,
+  persistSectionsDirectly,
   sections,
   serverUpdatedAt,
 }: CVDocumentProps) {
@@ -196,6 +220,29 @@ function CVDocumentEdit({
     const nextSections = cloneSections(sections);
     applyValue(nextSections);
     onSectionsChange(nextSections);
+  };
+
+  const handleAddExperience = async () => {
+    const newExp = {
+      company: '',
+      title: '',
+      start_date: '',
+      end_date: null,
+      is_current: false,
+      location: null,
+      bullets: [{ text: '' } as CVBullet],
+    };
+    await persistSectionsDirectly((s) => { s.experience.push(newExp); });
+  };
+
+  const handleAddEducation = async () => {
+    const newEdu = { degree: '', field: '', institution: '', graduation_date: '' };
+    await persistSectionsDirectly((s) => { s.education.push(newEdu); });
+  };
+
+  const handleAddCertification = async () => {
+    const newCert = { name: '', issuer: '', date: '' };
+    await persistSectionsDirectly((s) => { s.certifications.push(newCert); });
   };
 
   return (
@@ -261,6 +308,7 @@ function CVDocumentEdit({
           baseVersion={baseVersion}
           baseline={baselineSections.summary}
           fieldKey="summary"
+          jobId={jobId}
           onRequestEdit={onRequestEdit}
           onValueChange={(value) => {
             updateSections((nextSections) => {
@@ -311,284 +359,404 @@ function CVDocumentEdit({
         <p className="mt-1 text-xs text-text-muted">Separate skills with commas</p>
       </section>
 
-      {sections.experience.length > 0 && (
-        <section>
-          <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider border-b border-text-primary pb-1 mb-3">
+      <section>
+        <div className="flex items-center justify-between border-b border-text-primary pb-1 mb-3">
+          <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider">
             Professional Experience
           </h2>
-          <div className="flex flex-col gap-4">
-            {sections.experience.map((experience, experienceIndex) => (
-              <div key={`${experience.company}-${experience.title}-${experienceIndex}`}>
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <span className="text-sm font-semibold text-text-primary">{experience.title} | {experience.company}</span>
-                  <span className="text-xs text-text-muted shrink-0">{formatDateRange(experience.start_date, experience.end_date, experience.is_current)}</span>
-                </div>
-                <div className="flex flex-col gap-3">
-                  {experience.bullets.map((bullet, bulletIndex) => (
-                    <div key={`${experience.company}-bullet-${bulletIndex}`} className="flex gap-2">
-                      <span className="mt-2 text-sm text-text-secondary">•</span>
-                      <div className="flex-1">
-                        <CVRichTextField
-                          artifactId={artifactId}
-                          baseVersion={baseVersion}
-                          baseline={baselineSections.experience[experienceIndex]?.bullets[bulletIndex]?.text ?? ''}
-                          fieldKey={`experience.${experienceIndex}.bullet.${bulletIndex}`}
-                          onRequestEdit={onRequestEdit}
-                          onValueChange={(value) => {
-                            updateSections((nextSections) => {
-                              const currentBullet = nextSections.experience[experienceIndex]?.bullets[bulletIndex];
-                              if (currentBullet) {
-                                currentBullet.text = value;
-                              }
-                            });
-                          }}
-                          persistence={persistenceFor(
-                            `experience.${experienceIndex}.bullet.${bulletIndex}`,
-                            (cv) => cv.experience[experienceIndex]?.bullets[bulletIndex]?.text ?? '',
-                            (cv, value) => {
-                              const currentBullet = cv.experience[experienceIndex]?.bullets[bulletIndex];
-                              if (currentBullet) {
-                                currentBullet.text = value;
-                              }
-                            },
-                          )}
-                          placeholder="Edit this bullet…"
-                          serverUpdatedAt={serverUpdatedAt}
-                          value={bullet.text}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+          <button
+            type="button"
+            onClick={() => void handleAddExperience()}
+            className="inline-flex items-center gap-1 rounded border border-border-default px-2 py-0.5 text-xs text-text-muted hover:text-text-primary hover:bg-surface-subtle transition-colors"
+            title="Add experience entry"
+          >
+            + Add
+          </button>
+        </div>
+        <div className="flex flex-col gap-4">
+          {sections.experience.map((experience, experienceIndex) => (
+            <div key={`${experience.company}-${experience.title}-${experienceIndex}`}>
+              {/* Editable header row: title, company, dates */}
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 mb-2">
+                <CVPlainTextField
+                  artifactId={artifactId}
+                  baseVersion={baseVersion}
+                  baseline={baselineSections.experience[experienceIndex]?.title ?? ''}
+                  fieldKey={`experience.${experienceIndex}.title`}
+                  onRequestEdit={onRequestEdit}
+                  onValueChange={(value) => {
+                    updateSections((nextSections) => {
+                      const exp = nextSections.experience[experienceIndex];
+                      if (exp) exp.title = value;
+                    });
+                  }}
+                  persistence={persistenceFor(
+                    `experience.${experienceIndex}.title`,
+                    (cv) => cv.experience[experienceIndex]?.title ?? '',
+                    (cv, value) => {
+                      const exp = cv.experience[experienceIndex];
+                      if (exp) exp.title = value;
+                    },
+                  )}
+                  placeholder="Job Title"
+                  serverUpdatedAt={serverUpdatedAt}
+                  value={experience.title}
+                />
+                <CVPlainTextField
+                  artifactId={artifactId}
+                  baseVersion={baseVersion}
+                  baseline={baselineSections.experience[experienceIndex]?.company ?? ''}
+                  fieldKey={`experience.${experienceIndex}.company`}
+                  onRequestEdit={onRequestEdit}
+                  onValueChange={(value) => {
+                    updateSections((nextSections) => {
+                      const exp = nextSections.experience[experienceIndex];
+                      if (exp) exp.company = value;
+                    });
+                  }}
+                  persistence={persistenceFor(
+                    `experience.${experienceIndex}.company`,
+                    (cv) => cv.experience[experienceIndex]?.company ?? '',
+                    (cv, value) => {
+                      const exp = cv.experience[experienceIndex];
+                      if (exp) exp.company = value;
+                    },
+                  )}
+                  placeholder="Company"
+                  serverUpdatedAt={serverUpdatedAt}
+                  value={experience.company}
+                />
+                <CVPlainTextField
+                  artifactId={artifactId}
+                  baseVersion={baseVersion}
+                  baseline={baselineSections.experience[experienceIndex]?.start_date ?? ''}
+                  fieldKey={`experience.${experienceIndex}.start_date`}
+                  onRequestEdit={onRequestEdit}
+                  onValueChange={(value) => {
+                    updateSections((nextSections) => {
+                      const exp = nextSections.experience[experienceIndex];
+                      if (exp) exp.start_date = value;
+                    });
+                  }}
+                  persistence={persistenceFor(
+                    `experience.${experienceIndex}.start_date`,
+                    (cv) => cv.experience[experienceIndex]?.start_date ?? '',
+                    (cv, value) => {
+                      const exp = cv.experience[experienceIndex];
+                      if (exp) exp.start_date = value;
+                    },
+                  )}
+                  placeholder="Start date (e.g. 05/2021)"
+                  serverUpdatedAt={serverUpdatedAt}
+                  value={experience.start_date}
+                />
+                <CVPlainTextField
+                  artifactId={artifactId}
+                  baseVersion={baseVersion}
+                  baseline={baselineSections.experience[experienceIndex]?.end_date ?? ''}
+                  fieldKey={`experience.${experienceIndex}.end_date`}
+                  onRequestEdit={onRequestEdit}
+                  onValueChange={(value) => {
+                    updateSections((nextSections) => {
+                      const exp = nextSections.experience[experienceIndex];
+                      if (exp) exp.end_date = value || null;
+                    });
+                  }}
+                  persistence={persistenceFor(
+                    `experience.${experienceIndex}.end_date`,
+                    (cv) => cv.experience[experienceIndex]?.end_date ?? '',
+                    (cv, value) => {
+                      const exp = cv.experience[experienceIndex];
+                      if (exp) exp.end_date = value || null;
+                    },
+                  )}
+                  placeholder="End date or Present"
+                  serverUpdatedAt={serverUpdatedAt}
+                  value={experience.end_date ?? ''}
+                />
               </div>
-            ))}
-          </div>
-        </section>
-      )}
+              <div className="flex flex-col gap-3">
+                {experience.bullets.map((bullet, bulletIndex) => (
+                  <div key={`${experience.company}-bullet-${bulletIndex}`} className="flex gap-2">
+                    <span className="mt-2 text-sm text-text-secondary">•</span>
+                    <div className="flex-1">
+                      <CVRichTextField
+                        artifactId={artifactId}
+                        baseVersion={baseVersion}
+                        baseline={baselineSections.experience[experienceIndex]?.bullets[bulletIndex]?.text ?? ''}
+                        fieldKey={`experience.${experienceIndex}.bullet.${bulletIndex}`}
+                        jobId={jobId}
+                        onRequestEdit={onRequestEdit}
+                        onValueChange={(value) => {
+                          updateSections((nextSections) => {
+                            const currentBullet = nextSections.experience[experienceIndex]?.bullets[bulletIndex];
+                            if (currentBullet) {
+                              currentBullet.text = value;
+                            }
+                          });
+                        }}
+                        persistence={persistenceFor(
+                          `experience.${experienceIndex}.bullet.${bulletIndex}`,
+                          (cv) => cv.experience[experienceIndex]?.bullets[bulletIndex]?.text ?? '',
+                          (cv, value) => {
+                            const currentBullet = cv.experience[experienceIndex]?.bullets[bulletIndex];
+                            if (currentBullet) {
+                              currentBullet.text = value;
+                            }
+                          },
+                        )}
+                        placeholder="Edit this bullet…"
+                        serverUpdatedAt={serverUpdatedAt}
+                        value={bullet.text}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
-      {sections.education.length > 0 && (
-        <section>
-          <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider border-b border-text-primary pb-1 mb-2">
+      <section>
+        <div className="flex items-center justify-between border-b border-text-primary pb-1 mb-2">
+          <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider">
             Education
           </h2>
-          <div className="flex flex-col gap-4">
-            {sections.education.map((education, educationIndex) => (
-              <div key={`${education.institution}-${education.degree}-${educationIndex}`} className="grid gap-2 md:grid-cols-2">
-                <CVPlainTextField
-                  artifactId={artifactId}
-                  baseVersion={baseVersion}
-                  baseline={baselineSections.education[educationIndex]?.degree ?? ''}
-                  fieldKey={`education.${educationIndex}.degree`}
-                  onRequestEdit={onRequestEdit}
-                  onValueChange={(value) => {
-                    updateSections((nextSections) => {
-                      const current = nextSections.education[educationIndex];
-                      if (current) {
-                        current.degree = value;
-                      }
-                    });
-                  }}
-                  persistence={persistenceFor(
-                    `education.${educationIndex}.degree`,
-                    (cv) => cv.education[educationIndex]?.degree ?? '',
-                    (cv, value) => {
-                      const current = cv.education[educationIndex];
-                      if (current) {
-                        current.degree = value;
-                      }
-                    },
-                  )}
-                  placeholder="Degree"
-                  serverUpdatedAt={serverUpdatedAt}
-                  value={education.degree}
-                />
-                <CVPlainTextField
-                  artifactId={artifactId}
-                  baseVersion={baseVersion}
-                  baseline={baselineSections.education[educationIndex]?.field ?? ''}
-                  fieldKey={`education.${educationIndex}.field`}
-                  onRequestEdit={onRequestEdit}
-                  onValueChange={(value) => {
-                    updateSections((nextSections) => {
-                      const current = nextSections.education[educationIndex];
-                      if (current) {
-                        current.field = value;
-                      }
-                    });
-                  }}
-                  persistence={persistenceFor(
-                    `education.${educationIndex}.field`,
-                    (cv) => cv.education[educationIndex]?.field ?? '',
-                    (cv, value) => {
-                      const current = cv.education[educationIndex];
-                      if (current) {
-                        current.field = value;
-                      }
-                    },
-                  )}
-                  placeholder="Field of study"
-                  serverUpdatedAt={serverUpdatedAt}
-                  value={education.field}
-                />
-                <CVPlainTextField
-                  artifactId={artifactId}
-                  baseVersion={baseVersion}
-                  baseline={baselineSections.education[educationIndex]?.institution ?? ''}
-                  fieldKey={`education.${educationIndex}.institution`}
-                  onRequestEdit={onRequestEdit}
-                  onValueChange={(value) => {
-                    updateSections((nextSections) => {
-                      const current = nextSections.education[educationIndex];
-                      if (current) {
-                        current.institution = value;
-                      }
-                    });
-                  }}
-                  persistence={persistenceFor(
-                    `education.${educationIndex}.institution`,
-                    (cv) => cv.education[educationIndex]?.institution ?? '',
-                    (cv, value) => {
-                      const current = cv.education[educationIndex];
-                      if (current) {
-                        current.institution = value;
-                      }
-                    },
-                  )}
-                  placeholder="Institution"
-                  serverUpdatedAt={serverUpdatedAt}
-                  value={education.institution}
-                />
-                <CVPlainTextField
-                  artifactId={artifactId}
-                  baseVersion={baseVersion}
-                  baseline={baselineSections.education[educationIndex]?.graduation_date ?? ''}
-                  fieldKey={`education.${educationIndex}.graduation_date`}
-                  onRequestEdit={onRequestEdit}
-                  onValueChange={(value) => {
-                    updateSections((nextSections) => {
-                      const current = nextSections.education[educationIndex];
-                      if (current) {
-                        current.graduation_date = value;
-                      }
-                    });
-                  }}
-                  persistence={persistenceFor(
-                    `education.${educationIndex}.graduation_date`,
-                    (cv) => cv.education[educationIndex]?.graduation_date ?? '',
-                    (cv, value) => {
-                      const current = cv.education[educationIndex];
-                      if (current) {
-                        current.graduation_date = value;
-                      }
-                    },
-                  )}
-                  placeholder="Graduation date"
-                  serverUpdatedAt={serverUpdatedAt}
-                  value={education.graduation_date}
-                />
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+          <button
+            type="button"
+            onClick={() => void handleAddEducation()}
+            className="inline-flex items-center gap-1 rounded border border-border-default px-2 py-0.5 text-xs text-text-muted hover:text-text-primary hover:bg-surface-subtle transition-colors"
+            title="Add education entry"
+          >
+            + Add
+          </button>
+        </div>
+        <div className="flex flex-col gap-4">
+          {sections.education.map((education, educationIndex) => (
+            <div key={`${education.institution}-${education.degree}-${educationIndex}`} className="grid gap-2 md:grid-cols-2">
+              <CVPlainTextField
+                artifactId={artifactId}
+                baseVersion={baseVersion}
+                baseline={baselineSections.education[educationIndex]?.degree ?? ''}
+                fieldKey={`education.${educationIndex}.degree`}
+                onRequestEdit={onRequestEdit}
+                onValueChange={(value) => {
+                  updateSections((nextSections) => {
+                    const current = nextSections.education[educationIndex];
+                    if (current) {
+                      current.degree = value;
+                    }
+                  });
+                }}
+                persistence={persistenceFor(
+                  `education.${educationIndex}.degree`,
+                  (cv) => cv.education[educationIndex]?.degree ?? '',
+                  (cv, value) => {
+                    const current = cv.education[educationIndex];
+                    if (current) {
+                      current.degree = value;
+                    }
+                  },
+                )}
+                placeholder="Degree"
+                serverUpdatedAt={serverUpdatedAt}
+                value={education.degree}
+              />
+              <CVPlainTextField
+                artifactId={artifactId}
+                baseVersion={baseVersion}
+                baseline={baselineSections.education[educationIndex]?.field ?? ''}
+                fieldKey={`education.${educationIndex}.field`}
+                onRequestEdit={onRequestEdit}
+                onValueChange={(value) => {
+                  updateSections((nextSections) => {
+                    const current = nextSections.education[educationIndex];
+                    if (current) {
+                      current.field = value;
+                    }
+                  });
+                }}
+                persistence={persistenceFor(
+                  `education.${educationIndex}.field`,
+                  (cv) => cv.education[educationIndex]?.field ?? '',
+                  (cv, value) => {
+                    const current = cv.education[educationIndex];
+                    if (current) {
+                      current.field = value;
+                    }
+                  },
+                )}
+                placeholder="Field of study"
+                serverUpdatedAt={serverUpdatedAt}
+                value={education.field}
+              />
+              <CVPlainTextField
+                artifactId={artifactId}
+                baseVersion={baseVersion}
+                baseline={baselineSections.education[educationIndex]?.institution ?? ''}
+                fieldKey={`education.${educationIndex}.institution`}
+                onRequestEdit={onRequestEdit}
+                onValueChange={(value) => {
+                  updateSections((nextSections) => {
+                    const current = nextSections.education[educationIndex];
+                    if (current) {
+                      current.institution = value;
+                    }
+                  });
+                }}
+                persistence={persistenceFor(
+                  `education.${educationIndex}.institution`,
+                  (cv) => cv.education[educationIndex]?.institution ?? '',
+                  (cv, value) => {
+                    const current = cv.education[educationIndex];
+                    if (current) {
+                      current.institution = value;
+                    }
+                  },
+                )}
+                placeholder="Institution"
+                serverUpdatedAt={serverUpdatedAt}
+                value={education.institution}
+              />
+              <CVPlainTextField
+                artifactId={artifactId}
+                baseVersion={baseVersion}
+                baseline={baselineSections.education[educationIndex]?.graduation_date ?? ''}
+                fieldKey={`education.${educationIndex}.graduation_date`}
+                onRequestEdit={onRequestEdit}
+                onValueChange={(value) => {
+                  updateSections((nextSections) => {
+                    const current = nextSections.education[educationIndex];
+                    if (current) {
+                      current.graduation_date = value;
+                    }
+                  });
+                }}
+                persistence={persistenceFor(
+                  `education.${educationIndex}.graduation_date`,
+                  (cv) => cv.education[educationIndex]?.graduation_date ?? '',
+                  (cv, value) => {
+                    const current = cv.education[educationIndex];
+                    if (current) {
+                      current.graduation_date = value;
+                    }
+                  },
+                )}
+                placeholder="Graduation date"
+                serverUpdatedAt={serverUpdatedAt}
+                value={education.graduation_date}
+              />
+            </div>
+          ))}
+        </div>
+      </section>
 
-      {sections.certifications.length > 0 && (
-        <section>
-          <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider border-b border-text-primary pb-1 mb-2">
+      <section>
+        <div className="flex items-center justify-between border-b border-text-primary pb-1 mb-2">
+          <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider">
             Certifications
           </h2>
-          <div className="flex flex-col gap-4">
-            {sections.certifications.map((certification, certificationIndex) => (
-              <div key={`${certification.name}-${certificationIndex}`} className="grid gap-2 md:grid-cols-3">
-                <CVPlainTextField
-                  artifactId={artifactId}
-                  baseVersion={baseVersion}
-                  baseline={baselineSections.certifications[certificationIndex]?.name ?? ''}
-                  fieldKey={`certifications.${certificationIndex}.name`}
-                  onRequestEdit={onRequestEdit}
-                  onValueChange={(value) => {
-                    updateSections((nextSections) => {
-                      const current = nextSections.certifications[certificationIndex];
-                      if (current) {
-                        current.name = value;
-                      }
-                    });
-                  }}
-                  persistence={persistenceFor(
-                    `certifications.${certificationIndex}.name`,
-                    (cv) => cv.certifications[certificationIndex]?.name ?? '',
-                    (cv, value) => {
-                      const current = cv.certifications[certificationIndex];
-                      if (current) {
-                        current.name = value;
-                      }
-                    },
-                  )}
-                  placeholder="Certification"
-                  serverUpdatedAt={serverUpdatedAt}
-                  value={certification.name}
-                />
-                <CVPlainTextField
-                  artifactId={artifactId}
-                  baseVersion={baseVersion}
-                  baseline={baselineSections.certifications[certificationIndex]?.issuer ?? ''}
-                  fieldKey={`certifications.${certificationIndex}.issuer`}
-                  onRequestEdit={onRequestEdit}
-                  onValueChange={(value) => {
-                    updateSections((nextSections) => {
-                      const current = nextSections.certifications[certificationIndex];
-                      if (current) {
-                        current.issuer = value;
-                      }
-                    });
-                  }}
-                  persistence={persistenceFor(
-                    `certifications.${certificationIndex}.issuer`,
-                    (cv) => cv.certifications[certificationIndex]?.issuer ?? '',
-                    (cv, value) => {
-                      const current = cv.certifications[certificationIndex];
-                      if (current) {
-                        current.issuer = value;
-                      }
-                    },
-                  )}
-                  placeholder="Issuer"
-                  serverUpdatedAt={serverUpdatedAt}
-                  value={certification.issuer}
-                />
-                <CVPlainTextField
-                  artifactId={artifactId}
-                  baseVersion={baseVersion}
-                  baseline={baselineSections.certifications[certificationIndex]?.date ?? ''}
-                  fieldKey={`certifications.${certificationIndex}.date`}
-                  onRequestEdit={onRequestEdit}
-                  onValueChange={(value) => {
-                    updateSections((nextSections) => {
-                      const current = nextSections.certifications[certificationIndex];
-                      if (current) {
-                        current.date = value;
-                      }
-                    });
-                  }}
-                  persistence={persistenceFor(
-                    `certifications.${certificationIndex}.date`,
-                    (cv) => cv.certifications[certificationIndex]?.date ?? '',
-                    (cv, value) => {
-                      const current = cv.certifications[certificationIndex];
-                      if (current) {
-                        current.date = value;
-                      }
-                    },
-                  )}
-                  placeholder="Date"
-                  serverUpdatedAt={serverUpdatedAt}
-                  value={certification.date}
-                />
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+          <button
+            type="button"
+            onClick={() => void handleAddCertification()}
+            className="inline-flex items-center gap-1 rounded border border-border-default px-2 py-0.5 text-xs text-text-muted hover:text-text-primary hover:bg-surface-subtle transition-colors"
+            title="Add certification"
+          >
+            + Add
+          </button>
+        </div>
+        <div className="flex flex-col gap-4">
+          {sections.certifications.map((certification, certificationIndex) => (
+            <div key={`${certification.name}-${certificationIndex}`} className="grid gap-2 md:grid-cols-3">
+              <CVPlainTextField
+                artifactId={artifactId}
+                baseVersion={baseVersion}
+                baseline={baselineSections.certifications[certificationIndex]?.name ?? ''}
+                fieldKey={`certifications.${certificationIndex}.name`}
+                onRequestEdit={onRequestEdit}
+                onValueChange={(value) => {
+                  updateSections((nextSections) => {
+                    const current = nextSections.certifications[certificationIndex];
+                    if (current) {
+                      current.name = value;
+                    }
+                  });
+                }}
+                persistence={persistenceFor(
+                  `certifications.${certificationIndex}.name`,
+                  (cv) => cv.certifications[certificationIndex]?.name ?? '',
+                  (cv, value) => {
+                    const current = cv.certifications[certificationIndex];
+                    if (current) {
+                      current.name = value;
+                    }
+                  },
+                )}
+                placeholder="Certification"
+                serverUpdatedAt={serverUpdatedAt}
+                value={certification.name}
+              />
+              <CVPlainTextField
+                artifactId={artifactId}
+                baseVersion={baseVersion}
+                baseline={baselineSections.certifications[certificationIndex]?.issuer ?? ''}
+                fieldKey={`certifications.${certificationIndex}.issuer`}
+                onRequestEdit={onRequestEdit}
+                onValueChange={(value) => {
+                  updateSections((nextSections) => {
+                    const current = nextSections.certifications[certificationIndex];
+                    if (current) {
+                      current.issuer = value;
+                    }
+                  });
+                }}
+                persistence={persistenceFor(
+                  `certifications.${certificationIndex}.issuer`,
+                  (cv) => cv.certifications[certificationIndex]?.issuer ?? '',
+                  (cv, value) => {
+                    const current = cv.certifications[certificationIndex];
+                    if (current) {
+                      current.issuer = value;
+                    }
+                  },
+                )}
+                placeholder="Issuer"
+                serverUpdatedAt={serverUpdatedAt}
+                value={certification.issuer}
+              />
+              <CVPlainTextField
+                artifactId={artifactId}
+                baseVersion={baseVersion}
+                baseline={baselineSections.certifications[certificationIndex]?.date ?? ''}
+                fieldKey={`certifications.${certificationIndex}.date`}
+                onRequestEdit={onRequestEdit}
+                onValueChange={(value) => {
+                  updateSections((nextSections) => {
+                    const current = nextSections.certifications[certificationIndex];
+                    if (current) {
+                      current.date = value;
+                    }
+                  });
+                }}
+                persistence={persistenceFor(
+                  `certifications.${certificationIndex}.date`,
+                  (cv) => cv.certifications[certificationIndex]?.date ?? '',
+                  (cv, value) => {
+                    const current = cv.certifications[certificationIndex];
+                    if (current) {
+                      current.date = value;
+                    }
+                  },
+                )}
+                placeholder="Date"
+                serverUpdatedAt={serverUpdatedAt}
+                value={certification.date}
+              />
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
@@ -869,6 +1037,23 @@ function CVTailoredContent({ jobId }: { jobId: string }) {
     },
   }), [applySectionsFromResponse, buildUpdatedSections, fetchLatestSections, persistSections, serverUpdatedAt]);
 
+  // Used by + buttons to immediately persist a new empty entry
+  const persistSectionsDirectly = useCallback(async (updater: (sections: CVSections) => void) => {
+    const current = editSectionsRef.current;
+    if (!current) return;
+    const nextSections = cloneSections(current);
+    updater(nextSections);
+    setEditSections(nextSections);
+    if (!artifactId) return;
+    try {
+      const persisted = await persistSections(nextSections, baseVersion);
+      applySectionsFromResponse(persisted.response, persisted.sections);
+    } catch {
+      // Revert on error
+      setEditSections(current);
+    }
+  }, [applySectionsFromResponse, artifactId, baseVersion, persistSections]);
+
   const handleSave = async () => {
     if (!editSections) return;
     setPageSaving(true);
@@ -1023,9 +1208,11 @@ function CVTailoredContent({ jobId }: { jobId: string }) {
               artifactId={artifactId}
               baseVersion={baseVersion}
               baselineSections={originalSections}
+              jobId={jobId}
               onRequestEdit={enterEditMode}
               onSectionsChange={setEditSections}
               persistenceFor={persistenceFor}
+              persistSectionsDirectly={persistSectionsDirectly}
               sections={cvSections}
               serverUpdatedAt={serverUpdatedAt}
             />

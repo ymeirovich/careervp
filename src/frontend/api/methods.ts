@@ -306,4 +306,17 @@ export const api = {
     apiClient
       .get<ExportResponse>(`/jobs/${jobId}/artifacts/${moduleType}/export?format=${format}`)
       .then((r) => r.data),
+
+  // ── AI Assist ──
+  postAiAssist: (request: {
+    artifact_type: 'gap_analysis' | 'cv_tailored' | 'cover_letter' | 'interview_prep';
+    artifact_id: string;
+    application_id: string;
+    field_key: string;
+    current_text: string;
+    locale?: string;
+  }): Promise<{ generated_markdown: string; model: string; tokens: number }> =>
+    apiClient
+      .post<{ generated_markdown: string; model: string; tokens: number }>('/ai/assist', request)
+      .then((r) => r.data),
 };

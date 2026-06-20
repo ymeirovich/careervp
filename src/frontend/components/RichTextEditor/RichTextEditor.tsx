@@ -5,7 +5,7 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import UnderlineExtension from '@tiptap/extension-underline';
 import type { Editor } from '@tiptap/core';
-import { Bold, Italic, List, ListOrdered, Underline as UnderlineIcon } from 'lucide-react';
+import { Bold, Italic, List, ListOrdered, Sparkles, Underline as UnderlineIcon } from 'lucide-react';
 import { htmlToMarkdown, markdownToHtml, normalizeMarkdown, sanitizeEditorHtml } from './markdownSerializer';
 
 export interface RichTextEditorProps {
@@ -16,6 +16,12 @@ export interface RichTextEditorProps {
   placeholder?: string;
   onFocus?: () => void;
   onBlur?: () => void;
+  /** When true, the toolbar is only visible while the editor is focused */
+  showToolbarOnFocusOnly?: boolean;
+  /** Async function that returns generated markdown to insert into the editor */
+  onAiAssist?: () => Promise<string>;
+  /** Increment this counter to flash a 2s "Saved ✓" toast in the toolbar */
+  saveToastKey?: number;
 }
 
 type ToolbarState = {
@@ -114,6 +120,9 @@ export function RichTextEditor({
   placeholder = DEFAULT_PLACEHOLDER,
   onFocus,
   onBlur,
+  showToolbarOnFocusOnly = false,
+  onAiAssist,
+  saveToastKey,
 }: RichTextEditorProps) {
   const onChangeRef = useRef(onChange);
   const editorRef = useRef<Editor | null>(null);
@@ -121,6 +130,9 @@ export function RichTextEditor({
   const [isFocused, setIsFocused] = useState(false);
   const [isEmpty, setIsEmpty] = useState(content.trim().length === 0);
   const [toolbarState, setToolbarState] = useState<ToolbarState>(EMPTY_TOOLBAR_STATE);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [showSaveToast, setShowSaveToast] = useState(false);
+  const prevSaveToastKeyRef = useRef<number | undefined>(undefined);
 
   const refreshState = useCallback((currentEditor: Editor | null) => {
     setToolbarState(buildToolbarState(currentEditor));
@@ -204,11 +216,41 @@ export function RichTextEditor({
     refreshState(editor);
   }, [content, editor, refreshState]);
 
+  // Flash "Saved ✓" toast when saveToastKey increments
+  useEffect(() => {
+    if (saveToastKey === undefined || saveToastKey === 0) {
+      prevSaveToastKeyRef.current = saveToastKey;
+      return;
+    }
+    if (prevSaveToastKeyRef.current === saveToastKey) return;
+    prevSaveToastKeyRef.current = saveToastKey;
+    setShowSaveToast(true);
+    const timer = setTimeout(() => setShowSaveToast(false), 2000);
+    return () => clearTimeout(timer);
+  }, [saveToastKey]);
+
+  const handleAiAssist = async () => {
+    if (!onAiAssist || !editor) return;
+    setIsAiLoading(true);
+    try {
+      const generated = await onAiAssist();
+      applyingExternalContentRef.current = true;
+      editor.commands.setContent(markdownToHtml(generated), { emitUpdate: false });
+      applyingExternalContentRef.current = false;
+      onChangeRef.current(generated);
+      refreshState(editor);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
   const focusEditor = () => {
     if (!readOnly) {
       editor?.chain().focus().run();
     }
   };
+
+  const showToolbar = !readOnly && (!showToolbarOnFocusOnly || isFocused);
 
   const containerClassName = [
     'overflow-hidden rounded-lg border bg-card transition-colors',
@@ -233,8 +275,14 @@ export function RichTextEditor({
 
   return (
     <div className={containerClassName} data-testid="rich-text-editor">
-      {!readOnly && (
-        <div className="flex items-center gap-1 border-b border-border-default bg-card px-2 py-1.5" role="toolbar" aria-label="Text formatting">
+      {showToolbar && (
+        <div
+          className="flex items-center gap-1 border-b border-border-default bg-card px-2 py-1.5"
+          role="toolbar"
+          aria-label="Text formatting"
+          // Prevent blur when clicking toolbar buttons
+          onMouseDown={(e) => e.preventDefault()}
+        >
           {toolbarButtons.map(({ action, ariaLabel, Icon, onClick: handleClick }) => {
             const active = toolbarState[action];
             return (
@@ -261,6 +309,32 @@ export function RichTextEditor({
               </button>
             );
           })}
+
+          {onAiAssist && (
+            <>
+              <div className="mx-1 h-5 w-px bg-border-default" />
+              <button
+                type="button"
+                aria-label="AI Assist"
+                disabled={!editor || isAiLoading}
+                onClick={() => void handleAiAssist()}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-transparent bg-card px-2 text-xs font-medium text-primary-action transition-colors hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isAiLoading ? (
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-action border-t-transparent" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                )}
+                {isAiLoading ? 'Generating…' : 'AI Assist'}
+              </button>
+            </>
+          )}
+
+          {showSaveToast && (
+            <span className="ml-auto text-xs font-medium text-state-active">
+              Saved ✓
+            </span>
+          )}
         </div>
       )}
 

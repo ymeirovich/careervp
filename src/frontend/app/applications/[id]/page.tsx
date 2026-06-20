@@ -267,6 +267,7 @@ export default function ApplicationHubPage() {
     coverLetter: (r) => `/applications/${jobId}/cover-letter${r ? `?id=${r}` : ''}`,
     interviewPrep: (r) => `/applications/${jobId}/interview-prep${r ? `?id=${r}` : ''}`,
     tailoredCV: (r) => `/applications/${jobId}/cv-tailored${r ? `?id=${r}` : ''}`,
+    gapAnalysis: () => `/applications/${jobId}/gap-analysis`,
   };
 
   function buildSecondaryActions(moduleType: ModuleType): ModuleAction[] | undefined {
