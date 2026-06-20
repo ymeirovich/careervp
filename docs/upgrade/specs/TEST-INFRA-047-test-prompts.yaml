@@ -1,0 +1,240 @@
+spec_id: TEST-INFRA-047
+title: "Test Prompts — AiAssistNestedStack, shared route wiring, and parent-budget regression"
+priority: critical
+status: draft
+owner: backend
+created_at: 2026-06-20
+updated_at: 2026-06-20
+type: test_prompts
+note: >
+  Runnable prompts for a fresh test-authoring session. Covers FE-UI-047. This spec is
+  infrastructure-only: keep the parent/nested split, shared RestApi route registration,
+  least-privilege IAM, lambda configuration, and CloudFormation budget explicit. The
+  manual approval gate is part of the source spec but is not a code test. FE-UI-046
+  handler code must exist first; if the assist handler or interview-prep PATCH branch is
+  still absent, treat the spec as blocked rather than inventing a workaround.
+
+context_required: >
+  Working directory: /Users/yitzchak/Documents/dev/careervp
+  Backend: src/backend/
+  Infra: infra/
+  Source spec: docs/upgrade/specs/FE-UI-047-ai-assist-nested-stack.yaml
+  Existing reference tests:
+  - infra/tests/infrastructure/test_api_construct.py
+  - infra/tests/infrastructure/test_nested_split.py
+  - infra/tests/infrastructure/test_monitoring.py
+
+recommended_model_for_test_authoring: sonnet
+recommended_model_for_complex_test_cases: opus  # dependency-graph + IAM scoping assertions
+
+# =============================================================================
+# CATEGORY A: UNIT — NESTED STACK CONFIG, IAM LEAST PRIVILEGE, LAMBDA SHAPE
+# =============================================================================
+unit:
+  prompt: |
+    Context: FE-UI-047 isolates AI-assist compute into AiAssistNestedStack. The unit-level
+    infra checks should pin the nested stack’s Lambda configuration, environment variables,
+    IAM least-privilege policy, and the fact that the stack does not leak write privileges.
+
+    Files to author or extend:
+    - infra/tests/infrastructure/test_nested_split.py
+    - infra/tests/infrastructure/test_api_construct.py
+    - infra/tests/infrastructure/test_ai_assist_nested_stack.py
+
+    Setup / mocks:
+    - Use aws_cdk.assertions.Template from the synthesized stack.
+    - Assert against the synthesized nested template and any helper functions that shape the
+      AiAssistNestedStack.
+
+    Write tests with these exact names and assertions:
+
+    1. test_ai_assist_lambda_configuration_uses_25s_timeout_and_expected_env
+       Assert the assist Lambda has the expected handler, a 25-second timeout, and the
+       required environment variables for ARTIFACTS_TABLE_NAME, gap/VPR/company-research
+       context, ANTHROPIC_API_KEY, ALLOWED_ORIGINS, and the default model.
+       AC-006
+
+    2. test_assist_lambda_role_has_read_only_access_across_required_tables_and_ssm
+       Assert the IAM policy grants DynamoDB read on the artifact, gap, VPR, and
+       company-research tables, ssm:GetParameter on ANTHROPIC_API_KEY, and Logs write, but
+       no DynamoDB write actions.
+       AC-005
+
+    3. test_assist_nested_stack_contains_lambda_role_log_group_and_invoke_permission
+       Assert the nested template contains the Lambda, CloudWatch log group, execution role,
+       inline/managed policy, and Lambda invoke permission, while the parent only sees the
+       CloudFormation stack wrapper.
+       AC-001
+
+    4. test_assist_nested_stack_does_not_widen_existing_roles
+       Assert no pre-existing role in the parent stack picks up the new AI-assist read
+       permissions.
+       AC-005
+
+    Coverage note:
+    - Explicitly out of scope: real Anthropic latency/quality (mock it), multi-tab
+      concurrency beyond base_version, offline autosave queueing, jsdom clipboard
+      paste-rule fidelity (e2e only), and deep RTL correctness.
+
+    Run:
+    - cd infra && cdk synth
+    - cd infra && uv run pytest tests/infrastructure/test_nested_split.py -v --tb=short
+    - cd infra && uv run pytest tests/infrastructure/test_api_construct.py -v --tb=short
+    - python src/backend/scripts/validate_naming.py --path infra --strict
+    All tests in the edited files must pass.
+
+# =============================================================================
+# CATEGORY B: INTEGRATION — PARENT STACK BUDGET, NESTED STACK ISOLATION, ROUTE MAP
+# =============================================================================
+integration:
+  prompt: |
+    Context: FE-UI-047 must keep the parent CareerVpCrudDev stack under the 500-resource
+    ceiling while exposing POST /ai/assist and PATCH /interview-prep/{interviewPrepId} on
+    the shared RestApi. The integration tests should validate the parent/nested boundary
+    and the exact route wiring in the synthesized template.
+
+    Files to author or extend:
+    - infra/tests/infrastructure/test_nested_split.py
+    - infra/tests/infrastructure/test_api_construct.py
+
+    Setup / mocks:
+    - Use aws_cdk.assertions.Template and the synthesized parent stack.
+    - Inspect the nested stack child template only where necessary to prove the split.
+
+    Write tests with these exact names and assertions:
+
+    1. test_parent_stack_resource_count_stays_at_or_below_500
+       Assert the synthesized parent CareerVpCrudDev template remains at or below 500
+       resources after the nested stack is introduced.
+       AC-002
+
+    2. test_ai_assist_nested_stack_present_as_cloudformation_stack_in_parent
+       Assert the parent template contains an AWS::CloudFormation::Stack resource for
+       AiAssistNestedStack, and that the Lambda internals live in the nested template.
+       AC-001
+
+    3. test_route_map_includes_post_ai_assist_and_patch_interview_prep
+       Assert the api_construct route map includes POST /ai/assist and PATCH
+       /interview-prep/{interviewPrepId} on the shared RestApi.
+       AC-003
+       AC-004
+
+    4. test_interview_prep_cors_includes_patch_method
+       Assert the interview-prep resource CORS configuration includes PATCH in the allowed
+       methods.
+       AC-004
+
+    5. test_cfn_guard_compliance_remains_clean_after_nested_split
+       Assert the synthesized parent and nested templates remain cfn-guard compliant for
+       the new AI-assist resources.
+       AC-007
+
+    Coverage note:
+    - Explicitly out of scope: real Anthropic latency/quality (mock it), multi-tab
+      concurrency beyond base_version, offline autosave queueing, jsdom clipboard
+      paste-rule fidelity (e2e only), and deep RTL correctness.
+
+    Run:
+    - cd infra && cdk synth
+    - cd infra && uv run pytest tests/infrastructure/test_nested_split.py -v --tb=short
+    - cd infra && uv run pytest tests/infrastructure/test_api_construct.py -v --tb=short
+    All tests in the edited files must pass.
+
+# =============================================================================
+# CATEGORY C: E2E — SYNTH SMOKE FOR THE FULL PARENT/NESTED WIRING
+# =============================================================================
+e2e:
+  prompt: |
+    Context: FE-UI-047 has no browser surface, so the e2e layer is a synth smoke that
+    proves the end-to-end stack wiring from the parent stack through the nested stack and
+    into the shared RestApi route graph.
+
+    Files to author or extend:
+    - infra/tests/infrastructure/test_ai_assist_stack_synth_e2e.py
+
+    Setup / mocks:
+    - Use aws_cdk.assertions.Template on the synthesized parent stack and nested template.
+    - Treat this as a deployment-wire smoke test rather than a browser test.
+
+    Write tests with these exact names and assertions:
+
+    1. test_cdk_synth_surfaces_nested_stack_and_shared_routes_together
+       Assert that a single synth shows the nested stack wrapper in the parent, the Lambda
+       internals in the nested template, and both required routes in the parent route map.
+       AC-001
+       AC-002
+       AC-003
+       AC-004
+
+    2. test_cdk_synth_keeps_assist_lambda_and_route_mappings_in_sync
+       Assert that the assist Lambda logical id exported from the nested stack is the one
+       referenced by the POST /ai/assist method, and the interview-prep PATCH method still
+       points at the existing interview-prep Lambda.
+       AC-003
+       AC-004
+
+    Coverage note:
+    - Explicitly out of scope: real Anthropic latency/quality (mock it), multi-tab
+      concurrency beyond base_version, offline autosave queueing, jsdom clipboard
+      paste-rule fidelity (e2e only), and deep RTL correctness.
+
+    Run:
+    - cd infra && cdk synth
+    - cd infra && uv run pytest tests/infrastructure/test_ai_assist_stack_synth_e2e.py -v --tb=short
+    All tests in the edited files must pass.
+
+# =============================================================================
+# CATEGORY D: REGRESSION — LEGACY CONTRACTS, BUDGET, AND ROUTE SHAPE
+# =============================================================================
+regression:
+  prompt: |
+    Context: FE-UI-047 must preserve existing route contracts while introducing the new
+    nested AI-assist stack. The regression tests should guard the parent budget, legacy
+    payloads, and route-shape continuity.
+
+    Files to author or extend:
+    - infra/tests/infrastructure/test_nested_split.py
+    - infra/tests/infrastructure/test_api_construct.py
+
+    Setup / mocks:
+    - Use aws_cdk.assertions.Template from the synthesized stack.
+    - Assert against the parent stack and route map only; no live deployment is needed.
+
+    Write tests with these exact names and assertions:
+
+    1. test_parent_stack_resource_count_stays_at_or_below_500
+       Keep the parent stack at or below the 500-resource ceiling.
+       AC-002
+
+    2. test_legacy_plain_text_payloads_to_gap_responses_and_cover_letter_patch_still_return_2xx
+       Assert the legacy plain-text payloads used by POST /gap-responses and PATCH
+       /cover-letter still return 2xx and are not broken by the new route additions.
+       AC-003
+       AC-004
+
+    3. test_route_map_continues_to_include_interview_prep_patch_after_rebuild
+       Assert the shared RestApi still exposes PATCH /interview-prep/{interviewPrepId}
+       after route-map regeneration and that the path parameter shape remains stable.
+       AC-004
+
+    4. test_route_and_budget_regressions_do_not_change_parent_or_nested_resource_shape
+       Assert that the parent contains the nested-stack wrapper and the route methods, but
+       no unexpected new parent resources are introduced beyond the approved split.
+       AC-001
+       AC-002
+       AC-003
+       AC-004
+
+    Coverage note:
+    - Explicitly out of scope: real Anthropic latency/quality (mock it), multi-tab
+      concurrency beyond base_version, offline autosave queueing, jsdom clipboard
+      paste-rule fidelity (e2e only), and deep RTL correctness.
+    - AC-008 is the manual human approval gate from the source spec and is intentionally
+      not represented as a code test.
+
+    Run:
+    - cd infra && cdk synth
+    - cd infra && uv run pytest tests/infrastructure/test_nested_split.py -v --tb=short
+    - cd infra && uv run pytest tests/infrastructure/test_api_construct.py -v --tb=short
+    - python src/backend/scripts/validate_naming.py --path infra --strict
+    All tests in the edited files must pass.

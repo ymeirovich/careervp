@@ -1,0 +1,309 @@
+spec_id: FE-UI-047
+title: "AiAssistNestedStack — provision AI-assist Lambda/role off the parent budget + register POST /ai/assist and PATCH /interview-prep on the shared RestApi"
+priority: high
+status: draft
+owner: backend
+created_at: 2026-06-20
+updated_at: 2026-06-20
+tier: feature
+
+human_approval_gate:
+  required: true
+  gate_number: 1
+  reason: >
+    This spec creates a NEW IAM execution role that reads across the artifact, gap, VPR, and
+    company-research DynamoDB tables and accesses the SSM-stored ANTHROPIC_API_KEY, and exposes a
+    NEW PUBLIC route (POST /ai/assist) plus PATCH /interview-prep. A new cross-table read role,
+    secret access, and a new nested stack are security-sensitive and must be reviewed before synth/deploy.
+  approval_before: "Any IAM role/policy creation, SSM ANTHROPIC_API_KEY grant, nested-stack instantiation, or route registration being deployed to any environment (incl. dev)."
+
+recommended_model: opus
+reason_for_model: >
+  The parent stack CareerVpCrudDev synthesizes at 486/500 resources against a HARD 500 ceiling. The
+  AI-assist compute must be isolated into a new NestedStack so the parent gains ~1 resource, while the
+  route METHODS must still be added on the SHARED RestApi in the parent (methods bind to the shared
+  API, not the nested stack). Getting that parent/nested split right, sizing IAM least-privilege across
+  four tables + SSM, and keeping parent synth <=500 is architecture- and security-sensitive.
+
+depends_on:
+  - FE-UI-046   # the AI-assist handler + interview-prep PATCH handler this stack deploys
+prior_art:
+  - FE-UI-036   # nested-stack split pattern
+  - FE-UI-037   # nested-stack reconciliation
+  - FE-UI-020   # RichTextEditor (the edit surfaces these routes ultimately serve)
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    There is no compute or routing for AI-assist. The parent CDK stack CareerVpCrudDev already
+    synthesizes at 486/500 resources against a HARD CloudFormation limit of 500, so adding a Lambda
+    function + log group + execution role + role policy + APIGW invoke permission (~5 resources)
+    directly to the parent risks blowing the ceiling and is fragile. One nested stack already exists
+    and is wired (MonitoringNestedStack, infra/careervp/monitoring.py:227, attached in
+    infra/careervp/service_stack.py:62), establishing the pattern. API routes are registered as an
+    explicit list via _add_route_method in infra/careervp/api_construct.py:2695-2748; the new
+    POST /ai/assist and PATCH /interview-prep methods are not registered anywhere.
+  required_behavior: >
+    Split AI-assist compute into a NEW nested stack and register only the route methods in the parent:
+
+    1. AiAssistNestedStack(NestedStack): contains the AI-assist Lambda function, its CloudWatch log
+       group, its IAM execution role + role policy, and the APIGW invoke permission. In the parent,
+       this nested stack instantiation is ~1 resource (the AWS::CloudFormation::Stack), keeping parent
+       growth minimal.
+    2. The two new route METHODS (POST /ai/assist, PATCH /interview-prep/{interviewPrepId}) are added
+       on the SHARED RestApi construct in the PARENT via the api_construct.py route map
+       (_add_route_method, api_construct.py:2695-2748), because API Gateway methods bind to the shared
+       API — they cannot live in the nested stack. This is the deliberate parent/nested split.
+    3. The Lambda IAM role is least-privilege: DynamoDB read on the artifact, gap, VPR, and
+       company-research tables; SSM read of ANTHROPIC_API_KEY; CloudWatch Logs write. No write grants
+       to artifact tables from the assist role (assist is read+generate only; persistence is via the
+       existing PATCH handlers' own roles).
+    4. A regression budget: cdk synth of the parent must remain <= 500 resources after this change.
+  user_impact: >
+    AI-assist (FE-UI-046) and Interview Prep persistence (FE-UI-045/046) become reachable in the
+    deployed environment without breaching the 500-resource parent-stack ceiling.
+
+# =============================================================================
+# EVIDENCE (file:line)
+# =============================================================================
+evidence:
+  parent_at_ceiling:
+    - { note: "Parent stack CareerVpCrudDev synthesizes at 486/500 resources; HARD CloudFormation limit is 500." }
+  nested_stack_pattern_exists:
+    - { file: infra/careervp/monitoring.py, line: 227, note: "MonitoringNestedStack — existing NestedStack precedent" }
+    - { file: infra/careervp/service_stack.py, line: 62, note: "MonitoringNestedStack wired into the service stack — instantiation pattern to mirror" }
+  route_registration:
+    - { file: infra/careervp/api_construct.py, line: "2695-2748", note: "_add_route_method — explicit route list; new POST /ai/assist + PATCH /interview-prep methods are added here on the shared RestApi" }
+  shared_api_binding:
+    - { note: "APIGW methods bind to the shared RestApi construct owned by the parent; they cannot be created inside a NestedStack, hence the split." }
+
+# =============================================================================
+# ARCHITECTURE / OWNERSHIP MAP
+# =============================================================================
+architecture_ownership_map:
+  parent_stack_owns:
+    - "Instantiation of AiAssistNestedStack (1 AWS::CloudFormation::Stack resource in parent)."
+    - "Route method POST /ai/assist on the shared RestApi (+ its integration + invoke wiring)."
+    - "Route method PATCH /interview-prep/{interviewPrepId} on the shared RestApi (targets the EXISTING interview-prep Lambda, which gains the PATCH branch from FE-UI-046)."
+    - "Any new path-part Resource nodes required (/ai, /ai/assist, /interview-prep, {interviewPrepId}) if they do not already exist."
+  nested_stack_owns:
+    - "AI-assist Lambda function (the FE-UI-046 ai_assist_handler)."
+    - "AI-assist Lambda CloudWatch log group."
+    - "AI-assist Lambda IAM execution role + role policy (least-privilege)."
+    - "APIGW invoke permission (Lambda permission) for the assist Lambda."
+  iam_least_privilege:
+    dynamodb_read:
+      - "artifacts-table (ARTIFACTS_TABLE_NAME) — read cover_letter / interview_prep / company_research artifacts"
+      - "gap responses table — read gap_responses (dal.get_gap_responses)"
+      - "VPR store — read VPR (dal.get_vpr / VPR_RESULTS_BUCKET_NAME if S3-backed)"
+      - "company-research source table(s) — read company research digest"
+    ssm: "ssm:GetParameter on ANTHROPIC_API_KEY (decrypt via the existing KMS key if SecureString)"
+    logs: "CloudWatch Logs write to the assist Lambda log group only"
+    explicitly_denied: "No DynamoDB write/PutItem/UpdateItem from the assist role — assist is read+generate only."
+  route_method_split_rationale: >
+    Lambda + role + log group + permission are environment compute -> nested stack (off parent budget).
+    APIGW methods bind to the shared RestApi which lives in the parent -> must be registered in the
+    parent route map. This is why the two route methods are NOT in the nested stack.
+  primary_files:
+    - "infra/careervp/ai_assist_nested_stack.py (NEW — AiAssistNestedStack)"
+    - "infra/careervp/service_stack.py (instantiate AiAssistNestedStack, mirror monitoring.py:227 wiring at service_stack.py:62)"
+    - "infra/careervp/api_construct.py (register POST /ai/assist + PATCH /interview-prep via _add_route_method, ~2695-2748)"
+  cascade_risk: "high — touches the shared RestApi route map + new IAM across four tables + SSM secret; gated by human approval."
+
+# =============================================================================
+# FIX PLAN
+# =============================================================================
+fix_plan:
+  files_to_modify:
+    - file: infra/careervp/service_stack.py
+      change: >
+        Instantiate AiAssistNestedStack (mirror the MonitoringNestedStack wiring at service_stack.py:62),
+        passing references to the artifact/gap/VPR/company-research tables (+ VPR bucket if S3),
+        the ANTHROPIC_API_KEY SSM parameter, the shared RestApi, and the existing interview-prep Lambda.
+        Pass back the assist Lambda so the parent route map can wire POST /ai/assist to it.
+    - file: infra/careervp/api_construct.py
+      change: >
+        Register two new route methods via _add_route_method (2695-2748) on the shared RestApi:
+        POST /ai/assist -> assist Lambda (from the nested stack);
+        PATCH /interview-prep/{interviewPrepId} -> existing interview-prep Lambda (FE-UI-046 PATCH branch).
+        Use the same Cognito authorizer + camelCase path params as existing routes. Add path-part
+        Resources only if /ai, /ai/assist, /interview-prep, {interviewPrepId} do not already exist.
+  files_to_create:
+    - file: infra/careervp/ai_assist_nested_stack.py
+      purpose: >
+        AiAssistNestedStack(NestedStack): defines the AI-assist Lambda (handler =
+        ai_assist_handler from FE-UI-046, timeout 25 s, env: ARTIFACTS_TABLE_NAME, gap/VPR/CR table
+        envs, ANTHROPIC_API_KEY ref, ALLOWED_ORIGINS, default model claude-haiku-4-5-20251001),
+        its log group, its least-privilege IAM role + policy (DynamoDB read x4 tables, SSM
+        GetParameter on ANTHROPIC_API_KEY, Logs write), and the APIGW invoke permission for the
+        assist Lambda. Exposes the Lambda for the parent route map to wire POST /ai/assist.
+  dependencies:
+    upstream:
+      - "FE-UI-046 handler code (ai_assist_handler, interview_prep PATCH branch) must exist before this stack can reference them."
+      - "Existing shared RestApi construct + Cognito authorizer (api_construct.py)."
+      - "Existing interview-prep Lambda (gains the PATCH branch from FE-UI-046)."
+      - "ANTHROPIC_API_KEY SSM parameter + (if SecureString) its KMS key."
+    downstream:
+      - "FE-UI-045 frontend + FE-UI-046 endpoints are only reachable in a deployed env once this stack is applied."
+
+# =============================================================================
+# RESOURCE-COUNT MATH (parent budget)
+# =============================================================================
+resource_count_math:
+  parent_baseline: 486          # CareerVpCrudDev current synth (of 500 HARD limit)
+  parent_additions:
+    - { item: "AiAssistNestedStack instantiation (AWS::CloudFormation::Stack)", delta: 1 }
+    - { item: "POST /ai/assist METHOD on shared RestApi", delta: 1 }
+    - { item: "PATCH /interview-prep/{interviewPrepId} METHOD on shared RestApi", delta: 1 }
+  projected_parent_min: 489     # 486 + 1 + 1 + 1 (methods only; assumes path-part Resources already exist)
+  parent_additions_conditional:
+    - { item: "New APIGW Resource nodes if any of /ai, /ai/assist, /interview-prep, {interviewPrepId} do not already exist", delta_each: 1, max_extra: 4 }
+    - { item: "OPTIONS (CORS preflight) methods if not covered by default_cors_preflight_options", delta_each: 1, max_extra: 2 }
+  projected_parent_max: 495     # 489 + up to ~6 conditional path/CORS resources (conservative)
+  hard_limit: 500
+  headroom_at_max: 5            # 500 - 495
+  note: >
+    The Lambda function, its log group, IAM role, IAM policy, and invoke permission (~5 resources)
+    live INSIDE AiAssistNestedStack and do NOT count against the parent 486. Net parent growth is
+    ~3 (nested stack + 2 methods), ~489; conservative ceiling ~495 if new path-part Resources and
+    CORS OPTIONS methods are needed. Stays under the 500 hard limit either way.
+
+# =============================================================================
+# ACCEPTANCE CRITERIA
+# =============================================================================
+acceptance_criteria:
+  - id: AC-001
+    given: The AiAssistNestedStack is defined and wired into the service stack
+    when: cdk synth runs
+    then: A single AWS::CloudFormation::Stack resource for AiAssistNestedStack appears in the parent template; the Lambda, log group, role, policy, and invoke permission appear in the NESTED template, not the parent.
+
+  - id: AC-002
+    given: The change is synthesized
+    when: The parent CareerVpCrudDev template resource count is measured
+    then: The parent stack has <= 500 resources (projected ~489, conservative ceiling ~495).
+
+  - id: AC-003
+    given: The route map registers POST /ai/assist
+    when: cdk synth runs
+    then: A POST method on /ai/assist exists on the shared RestApi in the PARENT template, integrated to the assist Lambda, with the Cognito authorizer applied.
+
+  - id: AC-004
+    given: The route map registers PATCH /interview-prep/{interviewPrepId}
+    when: cdk synth runs
+    then: A PATCH method on /interview-prep/{interviewPrepId} exists on the shared RestApi in the PARENT, integrated to the EXISTING interview-prep Lambda, with the Cognito authorizer and camelCase path param.
+
+  - id: AC-005
+    given: The assist Lambda IAM role
+    when: The synthesized policy is inspected
+    then: It grants DynamoDB READ on the artifact, gap, VPR, and company-research tables, ssm:GetParameter on ANTHROPIC_API_KEY, and CloudWatch Logs write — and NO DynamoDB write actions.
+
+  - id: AC-006
+    given: The assist Lambda configuration
+    when: The synthesized function properties are inspected
+    then: Timeout is 25 s; env includes ARTIFACTS_TABLE_NAME, the gap/VPR/CR table envs, ANTHROPIC_API_KEY reference, ALLOWED_ORIGINS, and default model claude-haiku-4-5-20251001.
+
+  - id: AC-007
+    given: cfn-guard / cfn-lint compliance checks
+    when: They run against the synthesized parent + nested templates
+    then: No new critical security findings are introduced (least-privilege role, scoped SSM, no wildcard table ARNs beyond the four named tables' read).
+
+  - id: AC-008
+    given: The human_approval_gate
+    when: Any synth-to-deploy of this stack is attempted
+    then: Deployment is blocked until human approval is recorded (IAM + SSM secret + public route are security-sensitive).
+
+# =============================================================================
+# STATES TO HANDLE
+# =============================================================================
+states_to_handle:
+  - { state: synth_under_budget, trigger: "Parent synth <= 500", behavior: "Proceed (gated by approval)" }
+  - { state: synth_over_budget, trigger: "Parent synth > 500 after change", behavior: "STOP; move more compute into the nested stack or split routes; do not deploy" }
+  - { state: missing_handler, trigger: "FE-UI-046 handler not yet present", behavior: "Block synth; this stack references it — FE-UI-046 must land first" }
+  - { state: path_exists, trigger: "Path-part Resource already exists for /ai or /interview-prep", behavior: "Reuse the existing Resource; do not duplicate (avoids extra parent resources)" }
+  - { state: approval_pending, trigger: "human_approval_gate not satisfied", behavior: "Block deploy to ALL envs incl. dev" }
+
+# =============================================================================
+# VERIFICATION CONTRACT
+# =============================================================================
+verification_contract:
+  - { requirement_id: AC-001, verification_type: infrastructure, blocking_gate: pre_merge }
+  - { requirement_id: AC-002, verification_type: infrastructure, blocking_gate: pre_merge }
+  - { requirement_id: AC-003, verification_type: infrastructure, blocking_gate: pre_merge }
+  - { requirement_id: AC-004, verification_type: infrastructure, blocking_gate: pre_merge }
+  - { requirement_id: AC-005, verification_type: infrastructure, blocking_gate: pre_merge }
+  - { requirement_id: AC-006, verification_type: infrastructure, blocking_gate: pre_merge }
+  - { requirement_id: AC-007, verification_type: infrastructure, blocking_gate: pre_merge }
+  - { requirement_id: AC-008, verification_type: manual, blocking_gate: human_approval }
+
+# =============================================================================
+# BASELINE / REGRESSION BUDGET
+# =============================================================================
+baseline_regression_budget:
+  blocked_regressions:
+    - "Parent CareerVpCrudDev synth MUST stay <= 500 resources (the whole reason for the nested split)."
+    - "Existing MonitoringNestedStack wiring (monitoring.py:227 / service_stack.py:62) must not break."
+    - "Existing routes registered via _add_route_method must keep their methods/authorizers unchanged."
+    - "Existing interview-prep Lambda must keep its existing GET routes (PATCH is additive)."
+    - "No existing IAM role gains new permissions (assist gets its OWN role; do not widen others)."
+  allowed_deltas:
+    - "New AiAssistNestedStack (1 parent resource) + its internal Lambda/role/policy/log-group/permission."
+    - "Two new route methods on the shared RestApi (+ conditional path-part Resources / CORS OPTIONS)."
+    - "New least-privilege IAM role with read across four tables + SSM ANTHROPIC_API_KEY."
+
+# =============================================================================
+# TRACEABILITY MATRIX
+# =============================================================================
+traceability_matrix:
+  - { requirement_id: AC-001, code_reference: "infra/careervp/ai_assist_nested_stack.py:TBD", test_reference: "TEST-FE-UI-047.yaml#nested_stack_isolation", verification_type: infrastructure, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-002, code_reference: "infra/careervp/service_stack.py:TBD", test_reference: "TEST-FE-UI-047.yaml#parent_resource_count_le_500", verification_type: infrastructure, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-003, code_reference: "infra/careervp/api_construct.py:TBD", test_reference: "TEST-FE-UI-047.yaml#post_ai_assist_method", verification_type: infrastructure, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-004, code_reference: "infra/careervp/api_construct.py:TBD", test_reference: "TEST-FE-UI-047.yaml#patch_interview_prep_method", verification_type: infrastructure, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-005, code_reference: "infra/careervp/ai_assist_nested_stack.py:TBD", test_reference: "TEST-FE-UI-047.yaml#iam_least_privilege", verification_type: infrastructure, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-006, code_reference: "infra/careervp/ai_assist_nested_stack.py:TBD", test_reference: "TEST-FE-UI-047.yaml#lambda_config", verification_type: infrastructure, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-007, code_reference: "infra/careervp/ai_assist_nested_stack.py:TBD", test_reference: "TEST-FE-UI-047.yaml#cfn_guard_compliance", verification_type: infrastructure, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-008, code_reference: "docs/upgrade/specs/FE-UI-047-ai-assist-nested-stack.yaml#human_approval_gate", test_reference: "manual approval record", verification_type: manual, blocking_gate: human_approval, result: pending }
+
+# =============================================================================
+# ROLLBACK TRIGGER MATRIX
+# =============================================================================
+rollback_trigger_matrix:
+  - { trigger_id: RT-001, condition: "Parent synth exceeds 500 resources after the change", action: "Move any remaining parent-side compute into the nested stack; if methods themselves push over, defer PATCH /interview-prep to a follow-up; do not deploy until <=500" }
+  - { trigger_id: RT-002, condition: "cfn-guard flags the IAM role (over-broad / wildcard ARNs / write grants)", action: "Tighten policy to the four named table ARNs read-only + scoped SSM; remove any write actions; re-synth" }
+  - { trigger_id: RT-003, condition: "Nested-stack deploy fails (cross-stack reference / circular dependency on shared RestApi)", action: "Pass the RestApi + Lambda refs explicitly (as MonitoringNestedStack does); avoid creating methods inside the nested stack; re-deploy" }
+  - { trigger_id: RT-004, condition: "Human approval withheld", action: "Hold all deployment; keep FE-UI-045/046 code merged-but-dark behind flags until approval" }
+  - { trigger_id: RT-005, condition: "Post-deploy: /ai/assist or PATCH /interview-prep returns 403/AccessDenied from IAM", action: "Add the missing scoped read grant (table or SSM) to the assist role; redeploy the nested stack only" }
+
+# =============================================================================
+# DESIGN NOTES
+# =============================================================================
+design_notes:
+  - >
+    The parent/nested split is dictated by two hard facts: (1) the parent is at 486/500 so compute
+    must move off-budget, and (2) APIGW methods bind to the shared RestApi which lives in the parent,
+    so the route methods CANNOT be created inside the nested stack. Net: nested stack holds Lambda +
+    role + log group + permission (~5 resources, off-parent); parent holds the nested-stack node + the
+    2 methods (~3 resources). Projected parent ~489, conservative ceiling ~495, hard limit 500.
+  - >
+    Mirror MonitoringNestedStack (monitoring.py:227, wired at service_stack.py:62) for the
+    instantiation + cross-stack reference style. Pass the shared RestApi, the four table refs, the
+    SSM parameter, and the existing interview-prep Lambda IN; pass the assist Lambda OUT so the parent
+    route map can integrate POST /ai/assist. Do not let the nested stack reach back and mutate the
+    parent's RestApi directly — that invites circular dependencies.
+  - >
+    IAM is least-privilege by design: read-only across exactly the four named tables (artifact, gap,
+    VPR, company-research), scoped ssm:GetParameter on ANTHROPIC_API_KEY (+ KMS decrypt if
+    SecureString), and Logs write to its own group. No DynamoDB writes from the assist role — the
+    assist endpoint is read+generate only; the PATCH /interview-prep persistence uses the EXISTING
+    interview-prep Lambda's own role, not this one.
+  - >
+    The human approval gate is mandatory and blocks deploy to ALL environments including dev, because
+    this introduces a new cross-table read role, a secret grant, and a new public route at once. Record
+    approval before any synth-to-deploy. Verify staging/prod parent resource counts independently before
+    promoting beyond dev (dev was the only environment whose 486 baseline is verified).
+  - >
+    PATCH /interview-prep/{interviewPrepId} targets the EXISTING interview-prep Lambda (which gains its
+    handler branch in FE-UI-046); this spec only registers the route method. POST /ai/assist targets the
+    NEW assist Lambda in the nested stack. Keep the camelCase path-param convention ({interviewPrepId})
+    consistent with existing routes.

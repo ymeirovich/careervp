@@ -3,10 +3,13 @@
 import React, { useState, useEffect, use, Suspense, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { api } from '../../../../api/methods';
+import { ConflictModal } from '../../../../components/ConflictModal';
 import { ErrorBoundary } from '../../../../components/ErrorBoundary/ErrorBoundary';
 import { ExportDropdown } from '../../../../components/ExportDropdown/ExportDropdown';
 import { RichTextEditor } from '../../../../components/RichTextEditor/RichTextEditor';
+import { RestoreDraftBanner } from '../../../../components/RestoreDraftBanner';
 import { Spinner } from '../../../../components/ui/Spinner';
+import { useArtifactAutosave } from '../../../../hooks/useArtifactAutosave';
 import type { JobDetail } from '../../../../lib/types';
 
 function CoverLetterContent({ jobId }: { jobId: string }) {
@@ -24,10 +27,13 @@ function CoverLetterContent({ jobId }: { jobId: string }) {
 
   const [editText, setEditText] = useState('');
   const [originalText, setOriginalText] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [serverUpdatedAt, setServerUpdatedAt] = useState<string | null>(null);
+  const [baseVersion, setBaseVersion] = useState<string | number | null>(null);
 
-  const isDirty = isEditMode && editText !== originalText;
+  const enterEditMode = useCallback(() => {
+    const base = `/applications/${jobId}/cover-letter${queryId ? `?id=${queryId}` : ''}`;
+    router.replace(`${base}${queryId ? '&' : '?'}mode=edit`);
+  }, [jobId, queryId, router]);
 
   useEffect(() => {
     const init = async () => {
@@ -61,6 +67,8 @@ function CoverLetterContent({ jobId }: { jobId: string }) {
         }
         setEditText(text);
         setOriginalText(text);
+        setServerUpdatedAt(data.updated_at ?? null);
+        setBaseVersion(data.version ?? data.updated_at ?? null);
       } catch (err) {
         setError('Failed to load cover letter.');
         console.error(err);
@@ -77,27 +85,60 @@ function CoverLetterContent({ jobId }: { jobId: string }) {
     router.replace(base);
   }, [jobId, queryId, router]);
 
-  const handleSave = async () => {
-    if (!artifactId) return;
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const updated = await api.patchCoverLetter(artifactId, { cover_letter: editText });
-      const newText = updated.result?.cover_letter ?? editText;
-      setFullText(newText);
-      setEditText(newText);
-      setOriginalText(newText);
-      exitEditMode();
-    } catch {
-      setSaveError('Failed to save. Please try again.');
-    } finally {
-      setSaving(false);
-    }
-  };
+  const autosave = useArtifactAutosave({
+    artifactType: 'cover_letter',
+    artifactId,
+    fieldKey: 'cover_letter',
+    value: editText,
+    baseline: originalText,
+    onValueChange: setEditText,
+    serverUpdatedAt,
+    baseVersion,
+    save: async (nextValue, context) => {
+      if (!artifactId) {
+        return { value: nextValue, baseVersion: context.baseVersion, updatedAt: serverUpdatedAt };
+      }
+      const updated = await api.patchCoverLetter(artifactId, {
+        cover_letter: nextValue,
+        base_version: context.baseVersion,
+      });
+      return {
+        value: updated.result?.cover_letter ?? nextValue,
+        baseVersion: updated.version ?? updated.updated_at ?? context.baseVersion ?? null,
+        updatedAt: updated.updated_at ?? new Date().toISOString(),
+      };
+    },
+    onSaved: (result) => {
+      setFullText(result.value);
+      setEditText(result.value);
+      setOriginalText(result.value);
+      setServerUpdatedAt(result.updatedAt ?? serverUpdatedAt);
+      setBaseVersion(result.baseVersion ?? baseVersion);
+    },
+    fetchLatest: async () => {
+      if (!artifactId) {
+        return { value: originalText, baseVersion, updatedAt: serverUpdatedAt };
+      }
+      const latest = await api.getCoverLetter(artifactId);
+      return {
+        value: latest.result?.cover_letter ?? '',
+        baseVersion: latest.version ?? latest.updated_at ?? null,
+        updatedAt: latest.updated_at ?? null,
+      };
+    },
+    onReloaded: (result) => {
+      setFullText(result.value);
+      setEditText(result.value);
+      setOriginalText(result.value);
+      setServerUpdatedAt(result.updatedAt ?? null);
+      setBaseVersion(result.baseVersion ?? null);
+    },
+  });
 
   const handleCancel = () => {
     setEditText(originalText);
-    setSaveError(null);
+    autosave.discardDraft();
+    autosave.clearError();
     exitEditMode();
   };
 
@@ -135,7 +176,7 @@ function CoverLetterContent({ jobId }: { jobId: string }) {
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold text-text-primary">Cover Letter</h1>
-            {isDirty && (
+            {isEditMode && autosave.isDirty && (
               <span className="rounded-full bg-state-warning/15 px-2.5 py-0.5 text-xs font-medium text-state-warning">
                 Unsaved changes
               </span>
@@ -149,16 +190,23 @@ function CoverLetterContent({ jobId }: { jobId: string }) {
           {isEditMode ? (
             <>
               <button
-                onClick={() => void handleSave()}
-                disabled={saving}
+                onClick={() => {
+                  void (async () => {
+                    const didSave = await autosave.saveNow();
+                    if (didSave) {
+                      exitEditMode();
+                    }
+                  })();
+                }}
+                disabled={autosave.isSaving}
                 className="rounded-md bg-primary-action px-3 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60 flex items-center gap-2"
               >
-                {saving && <Spinner size="sm" aria-label="" />}
-                {saving ? 'Saving…' : 'Save'}
+                {autosave.isSaving && <Spinner size="sm" aria-label="" />}
+                {autosave.isSaving ? 'Saving…' : 'Save'}
               </button>
               <button
                 onClick={handleCancel}
-                disabled={saving}
+                disabled={autosave.isSaving}
                 className="rounded-md border border-border-default px-3 py-2 text-sm text-text-primary hover:bg-surface-subtle disabled:opacity-60"
               >
                 Cancel
@@ -168,10 +216,7 @@ function CoverLetterContent({ jobId }: { jobId: string }) {
             <>
               {artifactId && (
                 <button
-                  onClick={() => {
-                    const base = `/applications/${jobId}/cover-letter${queryId ? `?id=${queryId}` : ''}`;
-                    router.replace(`${base}${queryId ? '&' : '?'}mode=edit`);
-                  }}
+                  onClick={enterEditMode}
                   className="rounded-md border border-border-default px-3 py-2 text-sm text-text-primary hover:bg-surface-subtle"
                   data-testid="cover-letter-edit-button"
                 >
@@ -205,9 +250,22 @@ function CoverLetterContent({ jobId }: { jobId: string }) {
         </div>
       )}
 
-      {saveError && (
+      {autosave.draftBanner && (
+        <RestoreDraftBanner
+          updatedAt={autosave.draftBanner.updatedAt}
+          onRestore={() => {
+            autosave.draftBanner?.restore();
+            if (!isEditMode) {
+              enterEditMode();
+            }
+          }}
+          onDiscard={() => autosave.draftBanner?.discard()}
+        />
+      )}
+
+      {autosave.error && (
         <div className="rounded-md bg-state-error/10 border border-state-error px-4 py-3 text-sm text-state-error">
-          {saveError}
+          {autosave.error}
         </div>
       )}
 
@@ -217,20 +275,31 @@ function CoverLetterContent({ jobId }: { jobId: string }) {
           <RichTextEditor
             content={editText}
             onChange={setEditText}
-            readOnly={saving}
+            onBlur={autosave.onBlur}
+            readOnly={autosave.isSaving}
             placeholder="Write your cover letter…"
           />
         ) : (
           fullText && (
-            <p
-              className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap"
-              data-testid="cover-letter-text"
-            >
-              {fullText}
-            </p>
+            <div data-testid="cover-letter-text">
+              <RichTextEditor
+                content={fullText}
+                onChange={() => undefined}
+                readOnly
+              />
+            </div>
           )
         )}
       </div>
+
+      {autosave.conflict && (
+        <ConflictModal
+          message={autosave.conflict.message}
+          onDismiss={autosave.conflict.dismiss}
+          onReload={autosave.conflict.reload}
+          onOverwrite={autosave.conflict.overwrite}
+        />
+      )}
     </div>
   );
 }

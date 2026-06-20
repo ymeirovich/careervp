@@ -373,6 +373,8 @@ export interface CoverLetterRequest {
 export interface CoverLetterStatusResponse {
   id?: string;
   status: string;
+  updated_at?: string;
+  version?: number;
   result?: { cover_letter?: string };
   error?: string;
 }
@@ -449,18 +451,24 @@ export interface PrepQuestion {
   id: string;
   text: string;
   question_type: string;
+  answer?: string | null;
+  answer_version?: number;
+  answer_updated_at?: string | null;
   suggested_answer?: {
     format: string;
     situation?: string;
     task?: string;
     action?: string;
     result?: string;
+    full_text?: string;
   };
 }
 
 export interface InterviewPrepStatusResponse {
   id?: string;
   status: string;
+  updated_at?: string;
+  version?: number;
   result?: {
     questions?: PrepQuestion[];
     questions_to_ask?: Array<{ question: string; purpose: string }>;
@@ -469,6 +477,15 @@ export interface InterviewPrepStatusResponse {
     interview_report?: { readiness_summary: string };
   };
   error?: string;
+}
+
+export interface InterviewPrepPatchResponse {
+  status: string;
+  interview_prep_id?: string;
+  question_id: string;
+  answer: string;
+  answer_version?: number;
+  answer_updated_at?: string | null;
 }
 
 // ── Company Research ──
@@ -576,6 +593,7 @@ export interface CVTailoredStatusResponse {
   version?: number;
   language?: string;
   generated_at?: string;
+  updated_at?: string;
   result?: {
     tailored_cv?: string;
     cv_sections?: CVSections;

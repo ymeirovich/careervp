@@ -21,6 +21,14 @@ const DEFAULT_PROPS = {
 describe('ExportDropdown', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      blob: async () => new Blob(['file contents']),
+    });
+    vi.stubGlobal('URL', {
+      createObjectURL: vi.fn(() => 'blob:mock-url'),
+      revokeObjectURL: vi.fn(),
+    });
   });
 
   it('renders export button', () => {

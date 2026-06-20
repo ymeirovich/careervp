@@ -23,6 +23,7 @@ import type {
   TailoredCvListItem,
   TailoredCvListStatus,
   InterviewPrepRequest,
+  InterviewPrepPatchResponse,
   InterviewPrepStatusResponse,
   CVTailoringRequest,
   CVTailoredStatusResponse,
@@ -179,7 +180,10 @@ export const api = {
       .get<CoverLetterStatusResponse>(`/cover-letter/${artifactId}/status`)
       .then((r) => r.data),
 
-  patchCoverLetter: (artifactId: string, body: { cover_letter: string }): Promise<CoverLetterStatusResponse> =>
+  patchCoverLetter: (
+    artifactId: string,
+    body: { cover_letter: string; base_version?: string | number | null },
+  ): Promise<CoverLetterStatusResponse> =>
     apiClient.patch<CoverLetterStatusResponse>(`/cover-letter/${artifactId}`, body).then((r) => r.data),
 
   getCoverLettersList: async (): Promise<CoverLetterListItem[]> => {
@@ -229,6 +233,12 @@ export const api = {
       .get<InterviewPrepStatusResponse>(`/interview-prep/${artifactId}/status`)
       .then((r) => r.data),
 
+  patchInterviewPrep: (
+    artifactId: string,
+    body: { question_id: string; answer: string; base_version?: string | number | null },
+  ): Promise<InterviewPrepPatchResponse> =>
+    apiClient.patch<InterviewPrepPatchResponse>(`/interview-prep/${artifactId}`, body).then((r) => r.data),
+
   // ── CV Tailoring ──
   generateCV: (data: CVTailoringRequest): Promise<AsyncTaskResponse> =>
     apiClient.post<AsyncTaskResponse>('/cv-tailoring/generate', data).then((r) => r.data),
@@ -246,7 +256,10 @@ export const api = {
       .get<CVTailoredStatusResponse>(`/cv-tailoring/${cvTailoringId}/status`)
       .then((r) => r.data),
 
-  patchCVTailored: (artifactId: string, body: { cv_sections?: CVSections; tailored_cv?: string }): Promise<CVTailoredStatusResponse> =>
+  patchCVTailored: (
+    artifactId: string,
+    body: { cv_sections?: CVSections; tailored_cv?: string; base_version?: string | number | null },
+  ): Promise<CVTailoredStatusResponse> =>
     apiClient.patch<CVTailoredStatusResponse>(`/cv-tailoring/${artifactId}`, body).then((r) => r.data),
 
   getTailoredCvsList: async (): Promise<TailoredCvListItem[]> => {
