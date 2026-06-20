@@ -105,6 +105,9 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             )
         return _handle_interview_prep_cancel(event, user_id)
 
+    if method == 'PATCH' and _is_interview_prep_patch_path(path):
+        return _patch_interview_prep(event)
+
     return _build_response(
         HTTPStatus.NOT_FOUND,
         {'error': 'Endpoint not found', 'code': ResultCode.INVALID_INPUT},
@@ -1218,6 +1221,146 @@ def _handle_interview_prep_cancel(event: dict[str, Any], user_id: str) -> dict[s
         ExpressionAttributeValues={':status': 'CANCELLED'},
     )
     return _build_response(HTTPStatus.OK, {'status': 'cancelled'})
+
+
+def _is_interview_prep_patch_path(path: str) -> bool:
+    return path.startswith('/interview-prep/') and path != '/interview-prep/generate' and not path.endswith('/cancel')
+
+
+def _patch_interview_prep(event: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
+    """Handle PATCH /interview-prep/{interviewPrepId} — persist a user STAR answer.
+
+    Mirrors the cover-letter PATCH at-rest pattern but keyed per question_id
+    within the interview_prep item. Enforces base_version optimistic concurrency
+    (FE-UI-045 conflict UX) and keeps suggested_answer untouched.
+    """
+    user_id = _extract_authenticated_user_id(event)
+    if not user_id:
+        return _build_response(
+            HTTPStatus.UNAUTHORIZED,
+            {'error': 'Missing or invalid authentication token', 'code': ResultCode.UNAUTHORIZED},
+        )
+
+    interview_prep_id = _extract_interview_prep_id(event)
+    if not interview_prep_id:
+        return _build_response(
+            HTTPStatus.BAD_REQUEST,
+            {'error': 'Missing interviewPrepId', 'code': ResultCode.MISSING_REQUIRED_FIELD},
+        )
+
+    try:
+        body = json.loads(event.get('body', '{}') or '{}')
+    except json.JSONDecodeError:
+        return _build_response(HTTPStatus.BAD_REQUEST, {'error': 'Invalid JSON', 'code': ResultCode.INVALID_INPUT})
+
+    question_id = str(body.get('question_id', '') or '').strip()
+    answer = body.get('answer')
+    if not question_id or not isinstance(answer, str):
+        return _build_response(
+            HTTPStatus.BAD_REQUEST,
+            {'error': 'question_id and answer are required', 'code': ResultCode.MISSING_REQUIRED_FIELD},
+        )
+    base_version = body.get('base_version')
+
+    item = _get_interview_prep_item(user_id, interview_prep_id)
+    if not item:
+        return _build_response(
+            HTTPStatus.NOT_FOUND,
+            {'error': 'Interview prep not found', 'code': ResultCode.INTERVIEW_PREP_NOT_FOUND},
+        )
+
+    prep_payload = item.get('interview_prep')
+    if not isinstance(prep_payload, dict):
+        prep_payload = {}
+    questions = prep_payload.get('questions')
+    if not isinstance(questions, list):
+        questions = []
+
+    target = None
+    for question in questions:
+        if isinstance(question, dict) and str(question.get('question_id') or question.get('id') or '').strip() == question_id:
+            target = question
+            break
+    if target is None:
+        return _build_response(
+            HTTPStatus.NOT_FOUND,
+            {'error': 'Question not found', 'code': ResultCode.INTERVIEW_PREP_NOT_FOUND},
+        )
+
+    current_version = _coerce_answer_version(target.get('answer_version'))
+    if base_version is not None and _coerce_answer_version(base_version) != current_version:
+        return _build_response(
+            HTTPStatus.CONFLICT,
+            {
+                'error': 'Stale base_version; the answer was modified elsewhere',
+                'code': ResultCode.DYNAMODB_CONDITION_CHECK_FAILED,
+                'question_id': question_id,
+                'answer_version': current_version,
+            },
+        )
+
+    now = datetime.now(timezone.utc).isoformat()
+    new_version = current_version + 1
+    target['answer'] = answer
+    target['answer_version'] = new_version
+    target['answer_updated_at'] = now
+    prep_payload['questions'] = questions
+
+    if not _write_interview_prep_payload(user_id=user_id, interview_prep_id=interview_prep_id, item=item, prep_payload=prep_payload, now=now):
+        return _build_response(
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+            {'error': 'Failed to save interview prep answer', 'code': ResultCode.DYNAMODB_ERROR},
+        )
+
+    return _build_response(
+        HTTPStatus.OK,
+        {
+            'status': 'completed',
+            'interview_prep_id': interview_prep_id,
+            'question_id': question_id,
+            'answer': answer,
+            'answer_version': new_version,
+        },
+    )
+
+
+def _coerce_answer_version(value: Any) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _write_interview_prep_payload(
+    user_id: str,
+    interview_prep_id: str,
+    item: dict[str, Any],
+    prep_payload: dict[str, Any],
+    now: str,
+) -> bool:
+    import boto3 as _boto3
+
+    table_name = _get_artifacts_table_name()
+    table = _boto3.resource('dynamodb').Table(table_name)
+
+    if 'applicationId' in item:
+        key: dict[str, Any] = {'applicationId': item['applicationId'], 'artifactId': item['artifactId']}
+    else:
+        key = {
+            'pk': item.get('pk', user_id),
+            'sk': item.get('sk', _normalize_interview_prep_artifact_id(interview_prep_id)),
+        }
+
+    try:
+        table.update_item(
+            Key=key,
+            UpdateExpression='SET interview_prep = :prep, updated_at = :now',
+            ExpressionAttributeValues={':prep': prep_payload, ':now': now},
+        )
+        return True
+    except Exception as exc:
+        logger.error('Failed to update interview prep answer', interview_prep_id=interview_prep_id, error=str(exc))
+        return False
 
 
 def _build_response(status_code: HTTPStatus, body: dict[str, Any]) -> dict[str, Any]:

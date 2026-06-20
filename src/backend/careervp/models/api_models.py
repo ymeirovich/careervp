@@ -351,6 +351,32 @@ class CoverLetterResponse(APIModel):
     estimated_time_seconds: int | None = None
 
 
+# ==========================================================================
+# AI-ASSIST SCHEMAS (FE-UI-046)
+# ==========================================================================
+
+
+class AIAssistRequest(APIModel):
+    """Field-scoped AI-assist request.
+
+    The client supplies ONLY these fields. The server resolves all other
+    cross-artifact context from DynamoDB by (JWT user_id, application_id).
+    """
+
+    artifact_type: Literal['gap_analysis', 'cv_tailored', 'cover_letter', 'interview_prep']
+    artifact_id: str = Field(min_length=1)
+    application_id: str = Field(min_length=1)
+    field_key: str = Field(min_length=1)
+    current_text: str = ''
+    locale: str = 'en'
+
+
+class AIAssistResponse(APIModel):
+    generated_markdown: str
+    model: str
+    tokens: int = 0
+
+
 class CoverLetterHookParagraph(APIModel):
     word_count: int | None = None
     includes_uvp: bool | None = None

@@ -32,6 +32,11 @@ class InterviewQuestion(BaseModel):
     suggested_answer: Annotated[InterviewAnswer | None, Field(default=None)]
     why_asked: Annotated[str, Field(default='', description='Why interviewer asks this')]
     tips: Annotated[list[str], Field(default_factory=list)]
+    # User-edited STAR answer (FE-UI-046). Additive/optional for back-compat with
+    # pre-existing items that never carried a user answer.
+    answer: Annotated[str | None, Field(description='User-edited Markdown answer')] = None
+    answer_version: Annotated[int, Field(description='Optimistic-concurrency token for the user answer')] = 0
+    answer_updated_at: Annotated[datetime | None, Field(description='When the user answer was last edited')] = None
 
 
 class InterviewerQuestion(BaseModel):
