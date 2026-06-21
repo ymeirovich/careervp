@@ -29,6 +29,7 @@ function makeProps(overrides: Partial<React.ComponentProps<typeof GapQuestionCar
   return {
     question: baseQuestion,
     questionIndex: 0,
+    applicationId: 'test-app-id',
     response: null,
     destination: '' as const,
     isEditing: false,
@@ -157,24 +158,8 @@ describe('GapQuestionCard', () => {
     expect(screen.getByText('Prob: MEDIUM')).toBeInTheDocument();
   });
 
-  // AC-008: Advanced section shows radios when expanded
-  it('shows destination radios in Advanced section when expanded', () => {
-    render(<GapQuestionCard {...makeProps({ isEditing: true })} />);
-    fireEvent.click(screen.getByText('Advanced options'));
-    expect(screen.getByRole('radio', { name: 'Include in CV' })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Interview Only' })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Include in CV' })).toBeChecked();
-  });
-
-  // AC-008: CV_IMPACT selected by default when destination prop is empty
-  it('defaults destination to CV_IMPACT when destination is empty', () => {
-    render(<GapQuestionCard {...makeProps({ isEditing: true, destination: '' })} />);
-    fireEvent.click(screen.getByText('Advanced options'));
-    expect(screen.getByRole('radio', { name: 'Include in CV' })).toBeChecked();
-  });
-
-  // AC-009: saves with CV_IMPACT when Advanced section never opened
-  it('sends CV_IMPACT when user saves without opening Advanced section', async () => {
+  // AC-009: saves with CV_IMPACT by default
+  it('sends CV_IMPACT when user saves', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
 
     render(<GapQuestionCard {...makeProps({ isEditing: true, onSave, destination: '' })} />);

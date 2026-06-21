@@ -328,6 +328,7 @@ function GapAnalysisContent({ jobId }: { jobId: string }) {
                   key={q.question_id}
                   question={q}
                   questionIndex={i}
+                  applicationId={jobId}
                   response={r?.response ?? null}
                   destination={r?.destination ?? ''}
                   isEditing={editingQuestionId === q.question_id}

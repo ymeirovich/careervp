@@ -2,12 +2,14 @@
 
 import { useId, useState } from 'react';
 import { Save as SaveIcon } from 'lucide-react';
+import { api } from '../../api/methods';
 import { RichTextEditor } from '../RichTextEditor';
 import type { GapQuestion } from '../../lib/types';
 
 export interface GapQuestionCardProps {
   question: GapQuestion;
   questionIndex: number;
+  applicationId: string;
   response: string | null;
   destination: 'CV_IMPACT' | 'INTERVIEW_MVP_ONLY' | '';
   isEditing: boolean;
@@ -32,6 +34,7 @@ function impactBadgeClass(v?: string): string {
 export function GapQuestionCard({
   question,
   questionIndex,
+  applicationId,
   response,
   destination,
   isEditing,
@@ -42,7 +45,7 @@ export function GapQuestionCard({
 }: GapQuestionCardProps) {
   const questionTextId = useId();
   const [editorContent, setEditorContent] = useState(response ?? '');
-  const [localDestination, setLocalDestination] = useState<'CV_IMPACT' | 'INTERVIEW_MVP_ONLY'>(
+  const [localDestination] = useState<'CV_IMPACT' | 'INTERVIEW_MVP_ONLY'>(
     destination || 'CV_IMPACT',
   );
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -52,7 +55,6 @@ export function GapQuestionCard({
   const handleAnswerOrEdit = () => {
     if (!isEditing) {
       setEditorContent(response ?? '');
-      setLocalDestination(destination || 'CV_IMPACT');
       setSaveState('idle');
       onRequestEdit();
     }
@@ -74,7 +76,6 @@ export function GapQuestionCard({
 
   const handleCancel = () => {
     setEditorContent(response ?? '');
-    setLocalDestination(destination || 'CV_IMPACT');
     setSaveState('idle');
     onCancel();
   };
@@ -153,36 +154,17 @@ export function GapQuestionCard({
             onChange={(val) => { setEditorContent(val); onDraftChange?.(val); }}
             readOnly={isSaving}
             ariaLabelledBy={questionTextId}
+            onAiAssist={async () => {
+              const result = await api.postAiAssist({
+                artifact_type: 'gap_analysis',
+                artifact_id: question.question_id,
+                application_id: applicationId,
+                field_key: question.question_id,
+                current_text: editorContent,
+              });
+              return result.generated_markdown;
+            }}
           />
-
-          {/* Advanced options — collapsed */}
-          <details className="text-sm">
-            <summary className="cursor-pointer select-none font-medium text-text-secondary hover:text-text-primary">
-              Advanced options
-            </summary>
-            <div className="mt-2 space-y-1 pl-1">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name={`destination-${question.question_id}`}
-                  value="CV_IMPACT"
-                  checked={localDestination === 'CV_IMPACT'}
-                  onChange={() => setLocalDestination('CV_IMPACT')}
-                />
-                <span>Include in CV</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name={`destination-${question.question_id}`}
-                  value="INTERVIEW_MVP_ONLY"
-                  checked={localDestination === 'INTERVIEW_MVP_ONLY'}
-                  onChange={() => setLocalDestination('INTERVIEW_MVP_ONLY')}
-                />
-                <span>Interview Only</span>
-              </label>
-            </div>
-          </details>
 
           {/* Error message */}
           {saveState === 'error' && (
