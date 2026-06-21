@@ -364,6 +364,13 @@ def _load_gap_responses(dal: DynamoDalHandler, user_id: str) -> list[Any]:
 
 
 def _load_tailored_cv(dal: DynamoDalHandler, user_id: str, application_id: str) -> Any | None:
+    """Load the latest tailored-CV artifact for an application.
+
+    Mirrors the canonical read in export_handler._read_cv_tailored: the artifact
+    is stored with pk=user_id, sk=ARTIFACT#CV_TAILORED#{request_id} and the
+    application_id lives in the `job_id` ATTRIBUTE (not the sort key). We must
+    therefore filter on job_id, not on the sk.
+    """
     from boto3.dynamodb.conditions import Attr, Key
 
     from careervp.dal.dynamo_dal_handler import TAILORED_CV_SORT_KEY_PREFIX
@@ -372,12 +379,16 @@ def _load_tailored_cv(dal: DynamoDalHandler, user_id: str, application_id: str) 
         table = dal._get_db_handler(dal.table_name)
         response = table.query(
             KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with(TAILORED_CV_SORT_KEY_PREFIX),
-            FilterExpression=Attr('sk').contains(application_id),
-            Limit=1,
+            FilterExpression=Attr('job_id').eq(application_id),
         )
         items = response.get('Items', []) if isinstance(response, dict) else []
-        if items and isinstance(items[0], dict):
-            return items[0].get('tailored_cv') or items[0]
+        if not items:
+            return None
+        # Most recently created artifact wins (parity with export_handler).
+        items.sort(key=lambda item: str(item.get('created_at') or ''), reverse=True)
+        latest = items[0]
+        if isinstance(latest, dict):
+            return latest.get('cv_sections') or latest.get('tailored_cv') or latest
     except Exception as exc:  # noqa: BLE001
         logger.warning('AI-assist tailored CV lookup failed', application_id=application_id, error=str(exc))
     return None
