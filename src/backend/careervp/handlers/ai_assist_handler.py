@@ -366,16 +366,18 @@ def _load_gap_responses(dal: DynamoDalHandler, user_id: str) -> list[Any]:
 def _load_tailored_cv(dal: DynamoDalHandler, user_id: str, application_id: str) -> Any | None:
     from boto3.dynamodb.conditions import Attr, Key
 
+    from careervp.dal.dynamo_dal_handler import TAILORED_CV_SORT_KEY_PREFIX
+
     try:
         table = dal._get_db_handler(dal.table_name)
         response = table.query(
-            KeyConditionExpression=Key('applicationId').eq(user_id) & Key('artifactId').begins_with('ARTIFACT#CV_TAILORING#'),
-            FilterExpression=Attr('artifactId').contains(application_id),
+            KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with(TAILORED_CV_SORT_KEY_PREFIX),
+            FilterExpression=Attr('sk').contains(application_id),
             Limit=1,
         )
         items = response.get('Items', []) if isinstance(response, dict) else []
         if items and isinstance(items[0], dict):
-            return items[0].get('cv_tailoring') or items[0].get('tailored_cv') or items[0]
+            return items[0].get('tailored_cv') or items[0]
     except Exception as exc:  # noqa: BLE001
         logger.warning('AI-assist tailored CV lookup failed', application_id=application_id, error=str(exc))
     return None
