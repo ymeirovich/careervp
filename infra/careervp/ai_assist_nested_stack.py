@@ -70,13 +70,19 @@ class AiAssistNestedStack(NestedStack):
             environment={
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-ai-assist",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
-                "ARTIFACTS_TABLE_NAME": artifacts_table.table_name,
-                "CVS_TABLE_NAME": cvs_table.table_name,
+                # CV, VPR, gap responses and company research are all persisted in
+                # the single-table users_table (pk/sk design). The dedicated
+                # artifacts/cvs/gap_responses tables are unused by the write path,
+                # so AI-assist must read every cross-artifact context from
+                # users_table — otherwise upstream lookups resolve against empty
+                # tables and return spurious 409 "missing upstream artifact".
+                "ARTIFACTS_TABLE_NAME": users_table.table_name,
+                "CVS_TABLE_NAME": users_table.table_name,
                 "APPLICATIONS_TABLE_NAME": applications_table.table_name,
-                "GAP_RESPONSES_TABLE_NAME": gap_responses_table.table_name,
+                "GAP_RESPONSES_TABLE_NAME": users_table.table_name,
                 "USERS_TABLE_NAME": users_table.table_name,
-                "VPR_TABLE_NAME": artifacts_table.table_name,
-                "COMPANY_RESEARCH_TABLE_NAME": artifacts_table.table_name,
+                "VPR_TABLE_NAME": users_table.table_name,
+                "COMPANY_RESEARCH_TABLE_NAME": users_table.table_name,
                 "ALLOWED_ORIGINS": allowed_origins,
                 constants.LLM_CACHE_TABLE_NAME_ENV: llm_cache_table.table_name,
                 constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
@@ -94,28 +100,22 @@ class AiAssistNestedStack(NestedStack):
                 resources=["*"],
             )
         )
+        # All cross-artifact reads (CV, VPR, gap responses, company research)
+        # resolve against users_table, which uses both base-table (pk/sk) and
+        # GSI access patterns — so Query on the table and its indexes is required.
         self.role.add_to_policy(
             iam.PolicyStatement(
                 actions=["dynamodb:GetItem", "dynamodb:Query"],
-                resources=[artifacts_table.table_arn],
+                resources=[
+                    users_table.table_arn,
+                    f"{users_table.table_arn}/index/*",
+                ],
             )
         )
         self.role.add_to_policy(
             iam.PolicyStatement(
                 actions=["dynamodb:GetItem", "dynamodb:Query"],
-                resources=[cvs_table.table_arn],
-            )
-        )
-        self.role.add_to_policy(
-            iam.PolicyStatement(
-                actions=["dynamodb:GetItem", "dynamodb:Query"],
-                resources=[gap_responses_table.table_arn],
-            )
-        )
-        self.role.add_to_policy(
-            iam.PolicyStatement(
-                actions=["dynamodb:GetItem"],
-                resources=[applications_table.table_arn, users_table.table_arn],
+                resources=[applications_table.table_arn],
             )
         )
         self.role.add_to_policy(
@@ -160,7 +160,19 @@ class AiAssistNestedStack(NestedStack):
                         "Action::xray:PutTelemetryRecords",
                         "Resource::*",
                     ],
-                }
+                },
+                {
+                    "id": "AwsSolutions-IAM5",
+                    "reason": (
+                        "AI-assist queries users_table via its GSIs (CV/VPR lookups); "
+                        "DynamoDB index ARNs are dynamic so an index/* wildcard is required."
+                    ),
+                    "appliesTo": [
+                        {
+                            "regex": "/^Resource::.*\\/index\\/\\*$/g",
+                        },
+                    ],
+                },
             ],
             apply_to_children=True,
         )

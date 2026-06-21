@@ -148,9 +148,10 @@ def test_ai_assist_lambda_policy_is_least_privilege(
     assert "anthropic-api-key" in policy_blob
 
     # DynamoDB table ARNs are cross-stack CloudFormation parameter refs in the nested template
-    # (e.g. {"Ref": "referencetoParentArtifactsTable..."}), not literal ARN strings.  Check
+    # (e.g. {"Ref": "referencetoParentUsersTable..."}), not literal ARN strings.  Check
     # coverage by counting distinct DynamoDB policy statements instead of string-matching names.
-    # Implementation defines 5 statements: artifacts, cvs, gap-responses, applications+users, llm-cache.
+    # CV, VPR, gap responses and company research all live in users_table (single-table design),
+    # so source reads consolidate to 3 statements: users_table(+indexes), applications, llm-cache.
     ddb_statements = [
         statement
         for statement in statements
@@ -163,9 +164,9 @@ def test_ai_assist_lambda_policy_is_least_privilege(
             )
         )
     ]
-    assert len(ddb_statements) >= 4, (
-        f"Expected at least 4 DynamoDB policy statements covering artifacts/cvs, "
-        f"gap-responses, applications+users, and llm-cache tables; found {len(ddb_statements)}"
+    assert len(ddb_statements) >= 3, (
+        f"Expected at least 3 DynamoDB policy statements covering users_table, "
+        f"applications, and llm-cache tables; found {len(ddb_statements)}"
     )
 
 
