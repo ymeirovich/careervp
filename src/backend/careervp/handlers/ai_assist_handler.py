@@ -395,16 +395,41 @@ def _load_tailored_cv(dal: DynamoDalHandler, user_id: str, application_id: str) 
 
 
 def _load_company_research(dal: DynamoDalHandler, user_id: str, application_id: str) -> Any | None:
+    """Load Company Research for an application.
+
+    Company Research lives in its own canonical store keyed by
+    applicationId/artifactId (NOT the pk/sk schema used by dal.get_company_research),
+    with a legacy pk/sk fallback. We mirror the proven GET /company-research reader
+    (read_cr_artifact) first, then fall back to the DAL pk/sk lookup so every
+    storage layout that ever held a CR record is covered.
+    """
+    from careervp.handlers.cover_letter_handler import _materialize_company_research
+
+    raw_item = _read_company_research_item(dal, user_id=user_id, application_id=application_id)
+    if not isinstance(raw_item, dict):
+        return None
+    return _materialize_company_research(raw_item, fallback_company_name='')
+
+
+def _read_company_research_item(dal: DynamoDalHandler, user_id: str, application_id: str) -> dict[str, Any] | None:
+    from careervp.logic.company_research_store import read_cr_artifact
+
+    try:
+        canonical = read_cr_artifact(application_id=application_id, user_id=user_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning('AI-assist company research canonical lookup failed', application_id=application_id, error=str(exc))
+        canonical = None
+    if isinstance(canonical, dict):
+        return canonical
+
     try:
         result = dal.get_company_research(user_id=user_id, job_id=application_id)
     except Exception as exc:  # noqa: BLE001
         logger.warning('AI-assist company research lookup failed', application_id=application_id, error=str(exc))
         return None
-    if not getattr(result, 'success', False) or not isinstance(result.data, dict):
-        return None
-    from careervp.handlers.cover_letter_handler import _materialize_company_research
-
-    return _materialize_company_research(result.data, fallback_company_name='')
+    if getattr(result, 'success', False) and isinstance(result.data, dict):
+        return result.data
+    return None
 
 
 # ─── Cache helpers (AC-012) ───────────────────────────────────────────────────
