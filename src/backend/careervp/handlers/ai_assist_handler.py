@@ -24,7 +24,6 @@ from pydantic import ValidationError
 
 from careervp.dal.application_repository import ApplicationRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
-from careervp.dal.subscription_repository import SubscriptionRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
@@ -42,7 +41,6 @@ from careervp.logic.prompts.ai_assist_prompt import (
     build_system_preamble,
     build_user_message,
 )
-from careervp.logic.trial_service import TrialService
 from careervp.models.api_models import AIAssistRequest
 from careervp.models.result import ResultCode
 
@@ -66,14 +64,6 @@ class UpstreamMissingError(Exception):
 
 def _artifacts_table_name() -> str:
     for env_key in ('ARTIFACTS_TABLE_NAME', 'DYNAMODB_TABLE_NAME', 'TABLE_NAME'):
-        value = os.environ.get(env_key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return ''
-
-
-def _users_table_name() -> str:
-    for env_key in ('USERS_TABLE_NAME', 'TABLE_NAME', 'DYNAMODB_TABLE_NAME'):
         value = os.environ.get(env_key)
         if isinstance(value, str) and value.strip():
             return value.strip()
@@ -140,14 +130,6 @@ def _handle_assist(event: dict[str, Any]) -> dict[str, Any]:
         return _build_response(
             HTTPStatus.FORBIDDEN,
             {'error': 'Application not found for this user', 'code': ResultCode.FORBIDDEN},
-        )
-
-    # Entitlement: free with an active subscription/trial; consumes no credit.
-    if not _has_active_entitlement(user_id):
-        metrics.add_metric(name='AIAssistEntitlementBlocked', unit=MetricUnit.Count, value=1)
-        return _build_response(
-            HTTPStatus.PAYMENT_REQUIRED,
-            {'error': 'An active subscription or trial is required', 'code': ResultCode.FORBIDDEN},
         )
 
     try:
@@ -292,35 +274,6 @@ def _user_owns_application(user_id: str, application_id: str) -> bool:
         logger.warning('AI-assist ownership check failed', application_id=application_id, error=str(exc))
         return False
     return record is not None
-
-
-def _has_active_entitlement(user_id: str) -> bool:
-    """Allow when the user has an active subscription OR an active trial window.
-
-    AI-assist is free and consumes no application credit, so trial credit
-    exhaustion does NOT block assist — only an inactive subscription AND an
-    inactive trial do.
-    """
-    table_name = _users_table_name()
-    try:
-        sub_repo = SubscriptionRepository(table_name=table_name or None)
-        sub_result = sub_repo.get_subscription(user_id)
-        sub = sub_result.data if getattr(sub_result, 'success', False) else None
-        if isinstance(sub, dict) and str(sub.get('status', '')).strip() == 'active':
-            return True
-    except Exception as exc:  # noqa: BLE001
-        logger.warning('AI-assist subscription lookup failed', user_id=user_id, error=str(exc))
-
-    try:
-        trial = TrialService(dal=DynamoDalHandler(table_name))
-        usage = trial.get_usage(user_id)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning('AI-assist trial lookup failed', user_id=user_id, error=str(exc))
-        return False
-
-    if not isinstance(usage, dict):
-        return False
-    return bool(usage.get('trial_active', False))
 
 
 # ─── Context resolution (server-side only) ────────────────────────────────────

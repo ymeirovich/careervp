@@ -292,7 +292,7 @@ export default function ApplicationHubPage() {
       }
       if ((action.label === 'View' || action.label === 'Edit') && routeFn) {
         const base = routeFn(moduleState.resultUrl);
-        const dest = action.label === 'Edit' ? `${base}&mode=edit` : base;
+        const dest = action.label === 'Edit' ? `${base}${base.includes('?') ? '&' : '?'}mode=edit` : base;
         return { ...action, onClick: () => router.push(dest) };
       }
       return action;

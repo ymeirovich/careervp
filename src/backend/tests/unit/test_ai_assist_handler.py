@@ -76,16 +76,17 @@ def test_ownership_denied_returns_403() -> None:
     assert response['statusCode'] == 403
 
 
-def test_inactive_entitlement_returns_402_and_no_llm() -> None:
-    # AC-007
+def test_ai_assist_does_not_require_subscription() -> None:
+    # AI Assist is free — any authenticated user who owns the application can use it.
+    fake_cache = SimpleNamespace(get=lambda key: None, set=lambda key, value: True)
     with (
         patch.object(module, '_user_owns_application', return_value=True),
-        patch.object(module, '_has_active_entitlement', return_value=False),
-        patch.object(module, '_call_llm') as mock_llm,
+        patch.object(module, '_resolve_context', return_value=AssistContext()),
+        patch.object(module, '_get_cache', return_value=fake_cache),
+        patch.object(module, '_call_llm', return_value='Some content'),
     ):
         response = module.lambda_handler(_event(), _context())
-    assert response['statusCode'] == 402
-    mock_llm.assert_not_called()
+    assert response['statusCode'] == 200
 
 
 def test_success_returns_200_with_resolved_context() -> None:
@@ -93,7 +94,6 @@ def test_success_returns_200_with_resolved_context() -> None:
     fake_cache = SimpleNamespace(get=lambda key: None, set=lambda key, value: True)
     with (
         patch.object(module, '_user_owns_application', return_value=True),
-        patch.object(module, '_has_active_entitlement', return_value=True),
         patch.object(module, '_resolve_context', return_value=AssistContext()) as mock_ctx,
         patch.object(module, '_get_cache', return_value=fake_cache),
         patch.object(module, '_call_llm', return_value='Rewritten letter body'),
@@ -112,7 +112,6 @@ def test_timeout_returns_504() -> None:
     fake_cache = SimpleNamespace(get=lambda key: None, set=lambda key, value: True)
     with (
         patch.object(module, '_user_owns_application', return_value=True),
-        patch.object(module, '_has_active_entitlement', return_value=True),
         patch.object(module, '_resolve_context', return_value=AssistContext()),
         patch.object(module, '_get_cache', return_value=fake_cache),
         patch.object(module, '_call_llm', side_effect=concurrent.futures.TimeoutError()),
@@ -126,7 +125,6 @@ def test_circuit_open_returns_503_with_retry_after() -> None:
     fake_cache = SimpleNamespace(get=lambda key: None, set=lambda key, value: True)
     with (
         patch.object(module, '_user_owns_application', return_value=True),
-        patch.object(module, '_has_active_entitlement', return_value=True),
         patch.object(module, '_resolve_context', return_value=AssistContext()),
         patch.object(module, '_get_cache', return_value=fake_cache),
         patch.object(module, '_call_llm', side_effect=CircuitBreakerOpen(retry_after=7.5)),
@@ -140,7 +138,6 @@ def test_provider_error_returns_503() -> None:
     fake_cache = SimpleNamespace(get=lambda key: None, set=lambda key, value: True)
     with (
         patch.object(module, '_user_owns_application', return_value=True),
-        patch.object(module, '_has_active_entitlement', return_value=True),
         patch.object(module, '_resolve_context', return_value=AssistContext()),
         patch.object(module, '_get_cache', return_value=fake_cache),
         patch.object(module, '_call_llm', side_effect=BedrockInvocationError('overloaded')),
@@ -153,7 +150,6 @@ def test_bedrock_timeout_message_returns_504() -> None:
     fake_cache = SimpleNamespace(get=lambda key: None, set=lambda key, value: True)
     with (
         patch.object(module, '_user_owns_application', return_value=True),
-        patch.object(module, '_has_active_entitlement', return_value=True),
         patch.object(module, '_resolve_context', return_value=AssistContext()),
         patch.object(module, '_get_cache', return_value=fake_cache),
         patch.object(module, '_call_llm', side_effect=BedrockInvocationError('request timeout exceeded')),
@@ -166,7 +162,6 @@ def test_upstream_missing_returns_409_deep_link() -> None:
     # AC-010
     with (
         patch.object(module, '_user_owns_application', return_value=True),
-        patch.object(module, '_has_active_entitlement', return_value=True),
         patch.object(
             module,
             '_resolve_context',
@@ -185,7 +180,6 @@ def test_generic_exception_returns_500() -> None:
     fake_cache = SimpleNamespace(get=lambda key: None, set=lambda key, value: True)
     with (
         patch.object(module, '_user_owns_application', return_value=True),
-        patch.object(module, '_has_active_entitlement', return_value=True),
         patch.object(module, '_resolve_context', return_value=AssistContext()),
         patch.object(module, '_get_cache', return_value=fake_cache),
         patch.object(module, '_call_llm', side_effect=RuntimeError('boom')),
@@ -217,7 +211,6 @@ def test_cache_hit_short_circuits_llm() -> None:
     fake_cache = SimpleNamespace(get=lambda key: cached_payload, set=lambda key, value: True)
     with (
         patch.object(module, '_user_owns_application', return_value=True),
-        patch.object(module, '_has_active_entitlement', return_value=True),
         patch.object(module, '_resolve_context', return_value=AssistContext()),
         patch.object(module, '_get_cache', return_value=fake_cache),
         patch.object(module, '_call_llm') as mock_llm,
