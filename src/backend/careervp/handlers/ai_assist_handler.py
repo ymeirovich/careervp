@@ -411,11 +411,22 @@ def _load_company_research(dal: DynamoDalHandler, user_id: str, application_id: 
     return _materialize_company_research(raw_item, fallback_company_name='')
 
 
+def _company_research_table_name() -> str:
+    for env_key in ('COMPANY_RESEARCH_TABLE_NAME', 'ARTIFACTS_TABLE_NAME', 'DYNAMODB_TABLE_NAME', 'TABLE_NAME'):
+        value = os.environ.get(env_key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ''
+
+
 def _read_company_research_item(dal: DynamoDalHandler, user_id: str, application_id: str) -> dict[str, Any] | None:
     from careervp.logic.company_research_store import read_cr_artifact
 
+    # Company Research lives in the dedicated artifacts_table (applicationId/
+    # artifactId schema), which is NOT the table dal/get_company_research reads.
+    cr_table_name = _company_research_table_name()
     try:
-        canonical = read_cr_artifact(application_id=application_id, user_id=user_id)
+        canonical = read_cr_artifact(application_id=application_id, user_id=user_id, table_name=cr_table_name or None)
     except Exception as exc:  # noqa: BLE001
         logger.warning('AI-assist company research canonical lookup failed', application_id=application_id, error=str(exc))
         canonical = None

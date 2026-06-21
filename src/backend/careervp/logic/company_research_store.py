@@ -70,14 +70,24 @@ def write_cr_artifact(application_id: str, user_id: str, result: CompanyResearch
         )
 
 
-def read_cr_artifact(application_id: str, user_id: str) -> dict[str, Any] | None:
-    """Read a Company Research artifact from canonical storage, then legacy fallback."""
+def read_cr_artifact(application_id: str, user_id: str, table_name: str | None = None) -> dict[str, Any] | None:
+    """Read a Company Research artifact from canonical storage, then legacy fallback.
+
+    ``table_name`` overrides the canonical artifacts table. Callers whose
+    ARTIFACTS_TABLE_NAME points at a different table (e.g. the AI-assist Lambda,
+    which reads most artifacts from users_table but CR from the dedicated
+    artifacts_table) must pass the table that actually holds the CR row.
+    """
     clean_application_id = application_id.strip()
     clean_user_id = user_id.strip()
     if not clean_application_id or not clean_user_id:
         return None
 
-    canonical = _read_canonical_artifact(application_id=clean_application_id, user_id=clean_user_id)
+    canonical = _read_canonical_artifact(
+        application_id=clean_application_id,
+        user_id=clean_user_id,
+        table_name=table_name,
+    )
     if canonical is not None:
         return canonical
 
@@ -86,10 +96,11 @@ def read_cr_artifact(application_id: str, user_id: str) -> dict[str, Any] | None
     return _read_legacy_artifact(application_id=clean_application_id, user_id=clean_user_id)
 
 
-def _read_canonical_artifact(application_id: str, user_id: str) -> dict[str, Any] | None:
-    table_name = _artifacts_table_name()
-    if table_name is None:
+def _read_canonical_artifact(application_id: str, user_id: str, table_name: str | None = None) -> dict[str, Any] | None:
+    resolved_table_name = (table_name or '').strip() or _artifacts_table_name()
+    if not resolved_table_name:
         return None
+    table_name = resolved_table_name
 
     try:
         response = _table(table_name).get_item(Key=cr_artifact_key(application_id))

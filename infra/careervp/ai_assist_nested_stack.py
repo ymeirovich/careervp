@@ -70,19 +70,30 @@ class AiAssistNestedStack(NestedStack):
             environment={
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-ai-assist",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
-                # CV, VPR, gap responses and company research are all persisted in
-                # the single-table users_table (pk/sk design). The dedicated
-                # artifacts/cvs/gap_responses tables are unused by the write path,
-                # so AI-assist must read every cross-artifact context from
-                # users_table — otherwise upstream lookups resolve against empty
-                # tables and return spurious 409 "missing upstream artifact".
+                # CV, VPR, tailored CV and gap responses are persisted in the
+                # single-table users_table (pk/sk design). The dedicated
+                # cvs/gap_responses tables are unused by the write path, so
+                # AI-assist reads those cross-artifact contexts from users_table —
+                # otherwise upstream lookups resolve against empty tables and
+                # return spurious 409 "missing upstream artifact".
                 "ARTIFACTS_TABLE_NAME": users_table.table_name,
                 "CVS_TABLE_NAME": users_table.table_name,
                 "APPLICATIONS_TABLE_NAME": applications_table.table_name,
-                "GAP_RESPONSES_TABLE_NAME": users_table.table_name,
+                # Gap responses are written by gap_handler to the dedicated
+                # gap_responses_table (userId/questionId key schema), which is what
+                # get_gap_responses queries. Pointing this at users_table makes the
+                # query fail with "missed key schema element: pk" and silently drops
+                # gap-response context from every AI-assist prompt.
+                "GAP_RESPONSES_TABLE_NAME": gap_responses_table.table_name,
                 "USERS_TABLE_NAME": users_table.table_name,
                 "VPR_TABLE_NAME": users_table.table_name,
-                "COMPANY_RESEARCH_TABLE_NAME": users_table.table_name,
+                # Company Research is the ONE artifact NOT in users_table: the CR
+                # worker writes it to the dedicated artifacts_table with an
+                # applicationId/artifactId key schema (see company_research_store).
+                # AI-assist must therefore read CR from artifacts_table, not
+                # users_table, or the canonical GetItem fails with a schema
+                # ValidationException and the read 409s as "missing company_research".
+                "COMPANY_RESEARCH_TABLE_NAME": artifacts_table.table_name,
                 "ALLOWED_ORIGINS": allowed_origins,
                 constants.LLM_CACHE_TABLE_NAME_ENV: llm_cache_table.table_name,
                 constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
@@ -116,6 +127,25 @@ class AiAssistNestedStack(NestedStack):
             iam.PolicyStatement(
                 actions=["dynamodb:GetItem", "dynamodb:Query"],
                 resources=[applications_table.table_arn],
+            )
+        )
+        # Company Research lives in artifacts_table (applicationId/artifactId
+        # schema), read via canonical GetItem and the type-index GSI.
+        self.role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["dynamodb:GetItem", "dynamodb:Query"],
+                resources=[
+                    artifacts_table.table_arn,
+                    f"{artifacts_table.table_arn}/index/*",
+                ],
+            )
+        )
+        # Gap responses live in the dedicated gap_responses_table
+        # (userId/questionId schema), queried by get_gap_responses.
+        self.role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["dynamodb:GetItem", "dynamodb:Query"],
+                resources=[gap_responses_table.table_arn],
             )
         )
         self.role.add_to_policy(
