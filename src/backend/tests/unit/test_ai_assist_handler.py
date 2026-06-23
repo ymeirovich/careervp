@@ -267,3 +267,59 @@ def test_ownership_skips_job_fallback_when_app_row_present() -> None:
         mock_app_repo.return_value.get.return_value = {'user_id': 'user-1'}
         assert module._user_owns_application(user_id='user-1', application_id='app-1') is True
         mock_jobs_repo.return_value.get_job.assert_not_called()
+
+
+# ─── Gap sub-question resolution (server-side question text) ──────────────────
+
+
+class _FakeResult:
+    def __init__(self, success: bool, data: Any) -> None:
+        self.success = success
+        self.data = data
+
+
+def test_load_gap_sub_question_matches_field_key() -> None:
+    dal = SimpleNamespace(
+        list_gap_questions_by_prefix=lambda user_id, job_id: _FakeResult(
+            True,
+            [
+                {
+                    'questions': [
+                        {'question_id': 'Q1', 'question': 'Describe a leadership challenge.'},
+                        {'question_id': 'Q2', 'question': 'Tell us about a failure.'},
+                    ]
+                }
+            ],
+        )
+    )
+    text = module._load_gap_sub_question(dal, user_id='u1', application_id='app-1', field_key='Q2')
+    assert text == 'Tell us about a failure.'
+
+
+def test_load_gap_sub_question_returns_none_when_absent() -> None:
+    dal = SimpleNamespace(
+        list_gap_questions_by_prefix=lambda user_id, job_id: _FakeResult(True, [{'questions': [{'question_id': 'Q1', 'question': 'A?'}]}])
+    )
+    assert module._load_gap_sub_question(dal, user_id='u1', application_id='app-1', field_key='Q9') is None
+
+
+def test_load_gap_sub_question_handles_no_questions() -> None:
+    dal = SimpleNamespace(list_gap_questions_by_prefix=lambda user_id, job_id: _FakeResult(True, None))
+    assert module._load_gap_sub_question(dal, user_id='u1', application_id='app-1', field_key='Q1') is None
+
+
+def test_gap_analysis_context_includes_sub_question() -> None:
+    """End-to-end through _resolve_context: the gap question text lands on the context."""
+    body = {**_valid_body(), 'artifact_type': 'gap_analysis', 'field_key': 'Q1', 'current_text': ''}
+    request = module._parse_request(_event(body))
+    fake_dal = SimpleNamespace(
+        list_gap_questions_by_prefix=lambda user_id, job_id: _FakeResult(
+            True, [{'questions': [{'question_id': 'Q1', 'question': 'What is your biggest gap?'}]}]
+        )
+    )
+    with (
+        patch.object(module, '_get_dal', return_value=fake_dal),
+        patch.object(module, '_load_cv', return_value={'name': 'Yitzchak'}),
+    ):
+        context = module._resolve_context(user_id='user-1', api_request=request)
+    assert context.sub_question == 'What is your biggest gap?'

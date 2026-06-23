@@ -311,14 +311,35 @@ def _resolve_context(user_id: str, api_request: AIAssistRequest) -> AssistContex
         if 'cv' in required and context.cv is None:
             raise UpstreamMissingError(artifact_type, 'cv', application_id)
 
-    if 'vpr' in required:
-        context.vpr = _load_vpr(dal, application_id=application_id, user_id=user_id)
-        if context.vpr is None:
-            raise UpstreamMissingError(artifact_type, 'vpr', application_id)
+    # The gap-analysis field under edit is identified by question_id (field_key);
+    # the question TEXT lives in the stored gap_questions artifact, never sent by
+    # the client. Resolve it server-side so the model knows what it is rewriting an
+    # answer to — otherwise it replies "the field is empty" / asks for the question.
+    if artifact_type == 'gap_analysis':
+        context.sub_question = _load_gap_sub_question(dal, user_id=user_id, application_id=application_id, field_key=api_request.field_key)
 
     # Gap responses feed cv_tailored, cover_letter, interview_prep (best-effort).
     if artifact_type in {'cv_tailored', 'cover_letter', 'interview_prep'}:
         context.gap_responses = _load_gap_responses(dal, user_id)
+
+    _resolve_required_upstreams(dal, context, artifact_type=artifact_type, required=required, user_id=user_id, application_id=application_id)
+    return context
+
+
+def _resolve_required_upstreams(
+    dal: DynamoDalHandler,
+    context: AssistContext,
+    *,
+    artifact_type: str,
+    required: tuple[str, ...],
+    user_id: str,
+    application_id: str,
+) -> None:
+    """Load each required upstream artifact, raising UpstreamMissingError (→409) if absent."""
+    if 'vpr' in required:
+        context.vpr = _load_vpr(dal, application_id=application_id, user_id=user_id)
+        if context.vpr is None:
+            raise UpstreamMissingError(artifact_type, 'vpr', application_id)
 
     if 'tailored_cv' in required:
         context.tailored_cv = _load_tailored_cv(dal, user_id=user_id, application_id=application_id)
@@ -329,8 +350,6 @@ def _resolve_context(user_id: str, api_request: AIAssistRequest) -> AssistContex
         context.company_research = _load_company_research(dal, user_id=user_id, application_id=application_id)
         if context.company_research is None:
             raise UpstreamMissingError(artifact_type, 'company_research', application_id)
-
-    return context
 
 
 def _load_cv(dal: DynamoDalHandler, user_id: str) -> Any | None:
@@ -364,6 +383,46 @@ def _load_vpr(dal: DynamoDalHandler, application_id: str, user_id: str) -> Any |
         logger.warning('AI-assist VPR ownership mismatch', application_id=application_id)
         return None
     return vpr
+
+
+def _load_gap_sub_question(
+    dal: DynamoDalHandler,
+    user_id: str,
+    application_id: str,
+    field_key: str,
+) -> str | None:
+    """Resolve the gap question TEXT for the field_key (== question_id) under edit.
+
+    Gap questions are stored at pk=user_id, sk=GAP_ANALYSIS#{cv_id}#{job_id} with
+    job_id == application_id (see dynamo_dal_handler.save_gap_questions). The client
+    sends only the question_id, so the server looks up the matching question text.
+    Best-effort: a missing question degrades the rewrite quality but is not fatal.
+    """
+    target = str(field_key).strip()
+    if not target:
+        return None
+    try:
+        result = dal.list_gap_questions_by_prefix(user_id=user_id, job_id=application_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning('AI-assist gap question lookup failed', application_id=application_id, error=str(exc))
+        return None
+    items = result.data if getattr(result, 'success', False) and result.data else []
+    for item in items:
+        questions = item.get('questions') if isinstance(item, dict) else None
+        if not isinstance(questions, list):
+            continue
+        for question in questions:
+            if not isinstance(question, dict):
+                continue
+            if str(question.get('question_id', '')).strip() == target:
+                text = str(question.get('question', '')).strip()
+                return text or None
+    logger.warning(
+        'AI-assist gap question not found for field_key',
+        application_id=application_id,
+        field_key=target,
+    )
+    return None
 
 
 def _load_gap_responses(dal: DynamoDalHandler, user_id: str) -> list[Any]:
