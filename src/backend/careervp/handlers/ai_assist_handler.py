@@ -24,6 +24,7 @@ from pydantic import ValidationError
 
 from careervp.dal.application_repository import ApplicationRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
@@ -273,7 +274,26 @@ def _user_owns_application(user_id: str, application_id: str) -> bool:
     except Exception as exc:  # noqa: BLE001
         logger.warning('AI-assist ownership check failed', application_id=application_id, error=str(exc))
         return False
-    return record is not None
+    if record is not None:
+        return True
+    # The application record is created lazily (on gap-response submit / artifact
+    # generation), so early in the flow only the JOB record exists. Mirror the
+    # canonical fallback in application_handler._load_application_and_job: when the
+    # application row is absent, validate ownership against the job record. Without
+    # this, AI-assist falsely 403s ("Application not found for this user") for a
+    # freshly-created application whose row has not yet materialised.
+    return _user_owns_job(user_id=user_id, application_id=application_id)
+
+
+def _user_owns_job(user_id: str, application_id: str) -> bool:
+    try:
+        job_record = JobsRepository().get_job(application_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning('AI-assist job-ownership fallback failed', application_id=application_id, error=str(exc))
+        return False
+    if not isinstance(job_record, dict):
+        return False
+    return str(job_record.get('user_id', '')) == user_id
 
 
 # ─── Context resolution (server-side only) ────────────────────────────────────

@@ -219,3 +219,51 @@ def test_cache_hit_short_circuits_llm() -> None:
     assert response['statusCode'] == 200
     assert json.loads(response['body'])['generated_markdown'] == 'cached'
     mock_llm.assert_not_called()
+
+
+# ─── Ownership fallback (lazily-created application row) ──────────────────────
+
+
+def test_ownership_falls_back_to_job_record_when_app_row_absent() -> None:
+    """The application row is created lazily; ownership must accept a matching JOB."""
+    with (
+        patch.object(module, '_applications_table_name', return_value='apps-table'),
+        patch.object(module, 'ApplicationRepository') as mock_app_repo,
+        patch.object(module, 'JobsRepository') as mock_jobs_repo,
+    ):
+        mock_app_repo.return_value.get.return_value = None
+        mock_jobs_repo.return_value.get_job.return_value = {'user_id': 'user-1'}
+        assert module._user_owns_application(user_id='user-1', application_id='app-1') is True
+
+
+def test_ownership_fallback_rejects_job_owned_by_another_user() -> None:
+    with (
+        patch.object(module, '_applications_table_name', return_value='apps-table'),
+        patch.object(module, 'ApplicationRepository') as mock_app_repo,
+        patch.object(module, 'JobsRepository') as mock_jobs_repo,
+    ):
+        mock_app_repo.return_value.get.return_value = None
+        mock_jobs_repo.return_value.get_job.return_value = {'user_id': 'someone-else'}
+        assert module._user_owns_application(user_id='user-1', application_id='app-1') is False
+
+
+def test_ownership_fallback_rejects_when_no_job_record() -> None:
+    with (
+        patch.object(module, '_applications_table_name', return_value='apps-table'),
+        patch.object(module, 'ApplicationRepository') as mock_app_repo,
+        patch.object(module, 'JobsRepository') as mock_jobs_repo,
+    ):
+        mock_app_repo.return_value.get.return_value = None
+        mock_jobs_repo.return_value.get_job.return_value = None
+        assert module._user_owns_application(user_id='user-1', application_id='app-1') is False
+
+
+def test_ownership_skips_job_fallback_when_app_row_present() -> None:
+    with (
+        patch.object(module, '_applications_table_name', return_value='apps-table'),
+        patch.object(module, 'ApplicationRepository') as mock_app_repo,
+        patch.object(module, 'JobsRepository') as mock_jobs_repo,
+    ):
+        mock_app_repo.return_value.get.return_value = {'user_id': 'user-1'}
+        assert module._user_owns_application(user_id='user-1', application_id='app-1') is True
+        mock_jobs_repo.return_value.get_job.assert_not_called()

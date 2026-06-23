@@ -181,15 +181,15 @@ class LLMRouter:
     def _calculate_cost(self, model_id: str, input_tokens: int, output_tokens: int) -> float:
         """
         Calculate cost based on model and token usage.
-        Sonnet 4.5: $3/1M input, $15/1M output
-        Haiku 4.5: $0.25/1M input, $1.25/1M output
+        Sonnet 4.6: $3/1M input, $15/1M output
+        Haiku 4.5: $1.00/1M input, $5.00/1M output
         """
         if model_id == SONNET_MODEL_ID:
             input_cost = (input_tokens / 1_000_000) * 3.0
             output_cost = (output_tokens / 1_000_000) * 15.0
-        else:  # Haiku
-            input_cost = (input_tokens / 1_000_000) * 0.25
-            output_cost = (output_tokens / 1_000_000) * 1.25
+        else:  # Haiku 4.5
+            input_cost = (input_tokens / 1_000_000) * 1.0
+            output_cost = (output_tokens / 1_000_000) * 5.0
         return input_cost + output_cost
 
     @_capture_method_typed(capture_response=False)

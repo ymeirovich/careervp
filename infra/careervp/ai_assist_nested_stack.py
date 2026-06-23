@@ -24,6 +24,7 @@ class AiAssistNestedStack(NestedStack):
         artifacts_table: dynamodb.TableV2,
         cvs_table: dynamodb.TableV2,
         applications_table: dynamodb.TableV2,
+        jobs_table: dynamodb.TableV2,
         gap_responses_table: dynamodb.TableV2,
         users_table: dynamodb.TableV2,
         llm_cache_table: dynamodb.TableV2,
@@ -79,6 +80,13 @@ class AiAssistNestedStack(NestedStack):
                 "ARTIFACTS_TABLE_NAME": users_table.table_name,
                 "CVS_TABLE_NAME": users_table.table_name,
                 "APPLICATIONS_TABLE_NAME": applications_table.table_name,
+                # The application row is created lazily, so early in the flow the
+                # ownership check must fall back to the JOB record (matching
+                # application_handler). JobsRepository reads JOBS_TABLE_NAME, so it
+                # must point at the same dedicated vpr-jobs table the API writes to —
+                # otherwise the fallback queries a non-existent table and AI-assist
+                # 403s ("Application not found for this user") on new applications.
+                "JOBS_TABLE_NAME": jobs_table.table_name,
                 # Gap responses are written by gap_handler to the dedicated
                 # gap_responses_table (userId/questionId key schema), which is what
                 # get_gap_responses queries. Pointing this at users_table makes the
@@ -127,6 +135,14 @@ class AiAssistNestedStack(NestedStack):
             iam.PolicyStatement(
                 actions=["dynamodb:GetItem", "dynamodb:Query"],
                 resources=[applications_table.table_arn],
+            )
+        )
+        # Ownership fallback: when the application row is absent, validate against
+        # the JOB record (GetItem by job_id == application_id) in the jobs table.
+        self.role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["dynamodb:GetItem"],
+                resources=[jobs_table.table_arn],
             )
         )
         # Company Research lives in artifacts_table (applicationId/artifactId

@@ -87,6 +87,7 @@ class ServiceStack(Stack):
             artifacts_table=self.api.api_db.artifacts_table,
             cvs_table=self.api.api_db.cvs_table,
             applications_table=self.api.api_db.applications_table,
+            jobs_table=self.api.api_db.jobs_table,
             gap_responses_table=self.api.api_db.gap_responses_table,
             users_table=self.api.api_db.users_table,
             llm_cache_table=self.api.llm_cache_table,
