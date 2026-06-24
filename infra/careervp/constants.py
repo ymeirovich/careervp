@@ -125,6 +125,8 @@ COMPANY_RESEARCH_LAMBDA = "CompanyResearch"
 COMPANY_RESEARCH_FEATURE = "company-research"
 AI_ASSIST_LAMBDA = "AiAssistLambda"
 AI_ASSIST_FEATURE = "ai-assist"
+ERROR_REPORT_LAMBDA = "ErrorReportLambda"
+ERROR_REPORT_FEATURE = "error-report"
 LAMBDA_SERVICE_NAME = "lambda"
 
 # Artifact Chain Lambdas + state machine (FE-UI-031)

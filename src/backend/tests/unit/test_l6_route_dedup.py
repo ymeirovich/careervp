@@ -18,7 +18,10 @@ import pytest
 INFRA_DIR = '/Users/yitzchak/Documents/dev/careervp/infra'
 API_CONSTRUCT_PATH = f'{INFRA_DIR}/careervp/api_construct.py'
 EXPECTED_CANONICAL_ROUTE_COUNT = 40
-EXPECTED_ROUTE_MAP_OPERATION_COUNT = 46
+# Canonical routes + additive routes (AI-assist, interview-prep PATCH, exports,
+# PATCH editors) + the POST /errors telemetry sink. Counts every (method, path)
+# tuple the regex extracts from api_construct.py, including register_*_routes.
+EXPECTED_ROUTE_MAP_OPERATION_COUNT = 49
 FROZEN_SPEC_PATH = '/Users/yitzchak/Documents/dev/careervp/docs/beta/evidence/I7_routes/frozen_spec.json'
 
 # Deprecated route prefixes that must not appear in CDK
@@ -154,6 +157,11 @@ class TestCdkRouteMapMatchesFrozenSpec:
             ('PATCH', '/cv-tailoring/{job_id}'),
             # FE-UI-043: CR cancel endpoint
             ('POST', '/company-research/{job_id}/cancel'),
+            # Registered via register_ai_assist_routes (nested-stack Lambdas).
+            ('POST', '/ai/assist'),
+            ('PATCH', '/interview-prep/{job_id}'),
+            # Client error-report telemetry sink (forwarded by Next.js SSR route).
+            ('POST', '/errors'),
         }
         unexpected_extra = sorted(set(extra) - allowed_additive_routes)
         assert unexpected_extra == [], f'CDK route map has non-canonical operations: {unexpected_extra}'

@@ -629,6 +629,8 @@ def test_protected_routes_require_authorizer(synthesized_template: Template) -> 
         "auth/login",
         "auth/refresh",
         "billing/webhook",
+        # Client error reports: forwarded by the Next.js SSR route with no token.
+        "errors",
     }
 
     protected_methods = []
@@ -740,4 +742,80 @@ def test_vpr_worker_has_no_dynamo_stream_event_source(
     assert not dynamo_stream_mappings, (
         f"vpr-worker has an unexpected DynamoDB Stream event source mapping: "
         f"{dynamo_stream_mappings}.  Remove it — SQS is the sole trigger."
+    )
+
+
+def test_error_report_route_exists_and_is_public(
+    synthesized_template: Template,
+) -> None:
+    """POST /errors must exist on the parent RestApi with no Cognito authorizer.
+
+    The Next.js SSR forwarder carries no user token, so the backend route is
+    public (errors fire on pre-auth pages); abuse is bounded by stage throttle.
+    """
+    methods = synthesized_template.find_resources("AWS::ApiGateway::Method")
+    resources = synthesized_template.find_resources("AWS::ApiGateway::Resource")
+    method_paths = _get_method_paths(methods, resources)
+
+    route_map = {
+        (http_method, path): method_props
+        for http_method, path, method_props in method_paths
+    }
+    assert ("POST", "errors") in route_map, "POST /errors route not synthesized"
+
+    post_errors = route_map[("POST", "errors")]
+    assert post_errors["Properties"].get("AuthorizationType") == "NONE", (
+        "POST /errors must be public (AuthorizationType=NONE)"
+    )
+    assert post_errors["Properties"].get("AuthorizerId") is None, (
+        "POST /errors must not reference a Cognito authorizer"
+    )
+    # Wired via AwsIntegration proxy to the nested-stack Lambda.
+    assert "ErrorReport" in json.dumps(post_errors["Properties"].get("Integration", {}))
+
+
+def test_error_report_lambda_configuration(
+    error_report_template: Template,
+) -> None:
+    """The error-report Lambda synthesizes in its nested stack with the logging config."""
+    lambda_resource = _lambda_resource_by_handler(
+        error_report_template,
+        "careervp.handlers.error_report_handler.lambda_handler",
+    )
+    props = lambda_resource["Properties"]
+    assert props["FunctionName"] == "careervp-error-report-lambda-dev"
+    assert props["Timeout"] == 10
+    assert props["MemorySize"] == 128
+    env_vars = props.get("Environment", {}).get("Variables", {})
+    assert env_vars["POWERTOOLS_SERVICE_NAME"] == "careervp-client-errors"
+    assert env_vars["ALLOWED_ORIGINS"]
+
+
+def test_error_report_role_is_logs_only(
+    error_report_template: Template,
+) -> None:
+    """The error-report role logs and traces only — never touches DynamoDB or SSM."""
+    lambda_resource = _lambda_resource_by_handler(
+        error_report_template,
+        "careervp.handlers.error_report_handler.lambda_handler",
+    )
+    role_logical_id = _lambda_role_logical_id(lambda_resource)
+    statements = _policy_statements_for_role(error_report_template, role_logical_id)
+
+    flattened_actions = {
+        action
+        for statement in statements
+        for action in (
+            statement.get("Action", [])
+            if isinstance(statement.get("Action", []), list)
+            else [statement.get("Action")]
+        )
+        if isinstance(action, str)
+    }
+    assert "xray:PutTraceSegments" in flattened_actions
+    assert not any(action.startswith("dynamodb:") for action in flattened_actions), (
+        "error-report role must not have any DynamoDB permissions"
+    )
+    assert "ssm:GetParameter" not in flattened_actions, (
+        "error-report role must not read SSM parameters"
     )

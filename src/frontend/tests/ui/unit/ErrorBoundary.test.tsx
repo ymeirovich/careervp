@@ -262,7 +262,7 @@ describe('ErrorBoundary - AC-001 contract and CloudWatch logging', () => {
     expect(screen.getByRole('alert')).toBeInTheDocument();
   });
 
-  it('posts non-API errors to /api/errors with the cloudwatch key', () => {
+  it('posts non-API errors to /api/errors/ with the cloudwatch key', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 200 }));
 
     render(
@@ -273,7 +273,7 @@ describe('ErrorBoundary - AC-001 contract and CloudWatch logging', () => {
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(fetchSpy).toHaveBeenCalledWith(
-      '/api/errors',
+      '/api/errors/',
       expect.objectContaining({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

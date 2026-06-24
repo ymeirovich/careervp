@@ -41,3 +41,9 @@ def monitoring_template(service_stack: ServiceStack) -> Template:
 def ai_assist_template(service_stack: ServiceStack) -> Template:
     """The AI-assist nested stack template."""
     return Template.from_stack(service_stack.ai_assist_nested_stack)
+
+
+@pytest.fixture(scope="module")
+def error_report_template(service_stack: ServiceStack) -> Template:
+    """The client error-report nested stack template."""
+    return Template.from_stack(service_stack.error_report_nested_stack)

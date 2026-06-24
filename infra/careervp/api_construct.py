@@ -281,6 +281,22 @@ class ApiConstruct(Construct):
             self._build_lambda_proxy_integration(self.interview_prep_status_func),
         )
 
+    def register_error_report_route(
+        self, error_report_lambda: _lambda.IFunction
+    ) -> None:
+        """Wire POST /errors to the nested-stack error-report Lambda.
+
+        Uses an AwsIntegration proxy (not LambdaIntegration) so the invoke
+        permission lives in the nested stack and the parent only gains the
+        unavoidable API Gateway Resource + POST/OPTIONS methods — keeping the
+        near-limit parent stack as lean as possible.
+        """
+        self._add_route_method_with_integration(
+            "/errors",
+            "POST",
+            self._build_lambda_proxy_integration(error_report_lambda),
+        )
+
     def _build_swagger_endpoints(
         self, rest_api: aws_apigateway.RestApi, dest_func: _lambda.Function
     ) -> None:
@@ -2697,6 +2713,9 @@ class ApiConstruct(Construct):
             "/auth/login",
             "/auth/refresh",
             "/billing/webhook",
+            # Client error reports are forwarded by the Next.js SSR route with no
+            # user token (errors fire on pre-auth pages); bounded by stage throttle.
+            "/errors",
         }
         is_public_route = path in public_paths
         resource.add_method(

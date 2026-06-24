@@ -48,7 +48,9 @@ export class ErrorBoundary extends Component<Props, State> {
     const shouldLog = (status && status >= 500) || !isApiError;
     if (!shouldLog) return;
 
-    void fetch('/api/errors', {
+    // Trailing slash matches next.config `trailingSlash: true`; posting to the
+    // canonical path avoids a 308 redirect that can drop the POST body in transit.
+    void fetch('/api/errors/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
