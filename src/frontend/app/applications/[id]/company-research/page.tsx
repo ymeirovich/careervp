@@ -57,6 +57,14 @@ function CompanyResearchContent({ jobId }: { jobId: string }) {
   const LABEL = 'text-xs font-semibold uppercase tracking-wide text-text-muted';
   const BODY = 'text-sm text-text-primary leading-relaxed';
 
+  // Backend response shape varies across canonical/legacy stores; these arrays
+  // may be missing or null. Normalize so rendering never crashes on `.length`.
+  const values = research?.values ?? [];
+  const products = research?.products ?? [];
+  const recentNews = (research?.recent_news ?? []).map((item) =>
+    typeof item === 'string' ? { title: item } : item,
+  );
+
   return (
     <div className="flex flex-col gap-6" data-testid="company-research-page">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -113,11 +121,11 @@ function CompanyResearchContent({ jobId }: { jobId: string }) {
             )}
           </div>
 
-          {research.values.length > 0 && (
+          {values.length > 0 && (
             <div className={CARD}>
               <h2 className={TITLE}>Values</h2>
               <ul className="flex flex-col gap-1">
-                {research.values.map((v, i) => (
+                {values.map((v, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-text-primary">
                     <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-primary-action" />
                     {v}
@@ -134,11 +142,11 @@ function CompanyResearchContent({ jobId }: { jobId: string }) {
             </div>
           )}
 
-          {research.products.length > 0 && (
+          {products.length > 0 && (
             <div className={CARD}>
               <h2 className={TITLE}>Products & Services</h2>
               <ul className="flex flex-col gap-1">
-                {research.products.map((p, i) => (
+                {products.map((p, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-text-primary">
                     <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-primary-action" />
                     {p}
@@ -148,11 +156,11 @@ function CompanyResearchContent({ jobId }: { jobId: string }) {
             </div>
           )}
 
-          {research.recent_news.length > 0 && (
+          {recentNews.length > 0 && (
             <div className={CARD}>
               <h2 className={TITLE}>Recent News</h2>
               <div className="flex flex-col gap-3">
-                {research.recent_news.map((item, i) => (
+                {recentNews.map((item, i) => (
                   <div key={i} className="flex items-start justify-between gap-3">
                     <p className="text-sm text-text-primary">{item.title}</p>
                     {item.date && <span className="text-xs text-text-muted shrink-0">{item.date}</span>}

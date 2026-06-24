@@ -500,10 +500,11 @@ export interface CompanyResearchResult {
   id: string;
   company_name?: string | null;
   mission?: string | null;
-  values: string[];
+  values?: string[] | null;
   culture?: string | null;
-  recent_news: Array<{ title?: string; date?: string }>;
-  products: string[];
+  // Canonical store returns string[]; newer handler returns objects. Accept both.
+  recent_news?: Array<{ title?: string; date?: string } | string> | null;
+  products?: string[] | null;
   funding_status?: string | null;
   size_range?: string | null;
   industry?: string | null;
