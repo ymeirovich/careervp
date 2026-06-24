@@ -100,9 +100,14 @@ export const api = {
   fetchCompanyResearch: (data: CompanyResearchRequest): Promise<AsyncTaskResponse> =>
     apiClient.post<AsyncTaskResponse>('/company-research/fetch', data).then((r) => r.data),
 
+  // Backend returns an envelope: `{ status: 'not_generated' | 'failed', company_research: null }`
+  // when absent, or the flat CompanyResearchResult fields plus `status: 'completed'` when present.
+  // Only a completed result is a real artifact; anything else unwraps to null.
   getCompanyResearch: (jobId: string): Promise<CompanyResearchResult | null> =>
     apiFetchOrNull(() =>
-      apiClient.get<CompanyResearchResult>(`/company-research/${jobId}`).then((r) => r.data),
+      apiClient
+        .get<CompanyResearchResult & { status?: string }>(`/company-research/${jobId}`)
+        .then((r) => (r.data?.status === 'completed' ? r.data : null)),
     ),
 
   cancelCompanyResearch: (jobId: string): Promise<{ status: string }> =>
