@@ -13,13 +13,18 @@ function CompanyResearchContent({ jobId }: { jobId: string }) {
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState<string>('');
 
   useEffect(() => {
     const init = async () => {
       setLoading(true);
       try {
-        const data = await api.getCompanyResearch(jobId);
+        const [data, appData] = await Promise.all([
+          api.getCompanyResearch(jobId),
+          api.getApplication(jobId),
+        ]);
         setResearch(data);
+        setCompanyName(appData?.job?.company_name ?? '');
       } catch (err) {
         console.error(err);
       } finally {
@@ -33,7 +38,7 @@ function CompanyResearchContent({ jobId }: { jobId: string }) {
     setTriggering(true);
     setError(null);
     try {
-      await api.fetchCompanyResearch({ job_id: jobId });
+      await api.fetchCompanyResearch({ job_id: jobId, company_name: companyName });
       const data = await api.getCompanyResearch(jobId);
       setResearch(data);
     } catch (err) {

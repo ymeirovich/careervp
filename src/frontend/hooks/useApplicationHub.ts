@@ -19,6 +19,8 @@ import type { ModuleType } from '../types/enums';
 // The actual API response includes artifacts from spec-10
 interface ApplicationResponse extends RawApplicationData {
   application?: Partial<RawApplicationData>;
+  job?: { company_name?: string; [key: string]: unknown };
+  company_name?: string;
   artifacts?: {
     vpr?: HubArtifact;
     cover_letter?: HubArtifact;
@@ -81,6 +83,7 @@ export function useApplicationHub(jobId: string): {
   cvName: string | null;
   companyResearchError: boolean;
   applicationState: string | null;
+  companyName: string | null;
 } {
   const enabled = jobId.length > 0;
 
@@ -238,6 +241,7 @@ export function useApplicationHub(jobId: string): {
     applicationRecord?.company_research_error ?? appData?.company_research_error ?? false,
   );
   const applicationState = applicationRecord?.state ?? appData?.state ?? null;
+  const companyName = appData?.job?.company_name ?? appData?.company_name ?? null;
 
   // CV identity — exposed to avoid a separate useCV() call on pages that already use this hook
   const cvId = cvQuery.data?.cv_id ?? null;
@@ -262,5 +266,6 @@ export function useApplicationHub(jobId: string): {
     cvName,
     companyResearchError,
     applicationState,
+    companyName,
   };
 }

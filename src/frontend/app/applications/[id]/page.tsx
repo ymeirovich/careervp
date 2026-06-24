@@ -104,6 +104,7 @@ export default function ApplicationHubPage() {
     refetch,
     companyResearchError,
     applicationState,
+    companyName,
   } = useApplicationHub(jobId);
   const [showChangeCVModal, setShowChangeCVModal] = useState(false);
   const [selectedCvItem, setSelectedCvItem] = useState<ChooseBaseCVItem | null>(null);
@@ -167,6 +168,7 @@ export default function ApplicationHubPage() {
           gapResponseIds,
           companyResearchId: companyResearchId ?? undefined,
           force: true,
+          companyName: companyName ?? undefined,
         });
         // Trigger refetch so hub status updates after generation completes
         refetch();

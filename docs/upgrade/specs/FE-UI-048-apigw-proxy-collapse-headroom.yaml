@@ -1,0 +1,424 @@
+spec_id: FE-UI-048
+title: "Infra — Reclaim CareerVpCrudDev resource-budget headroom by collapsing the API Gateway route surface to {proxy+} integrations (escape the 500-resource wall durably)"
+priority: critical
+status: draft
+owner: backend
+created_at: 2026-06-24
+updated_at: 2026-06-24
+tier: infra
+
+human_approval_gate:
+  required: true
+  gate_number: 1
+  reason: >
+    This changes the LIVE API Gateway integration model for CareerVpCrudDev (careervp-core-api-dev):
+    explicit per-path methods are replaced by per-feature {proxy+} ANY integrations. It mutates the
+    deployed RestApi route graph and triggers a new AWS::ApiGateway::Deployment. No stateful resource
+    and no IAM secret is touched, but the production request path changes, so it must be reviewed and
+    deployed in a controlled window per environment.
+  approval_before: "Any cdk deploy to dev/stage/prod; and before any cdk refactor or create-stack-refactor on a live stack."
+
+recommended_model: opus
+reason_for_model: >
+  Live CloudFormation route-surface restructuring with a hard 500-resource ceiling, authorizer parity
+  across public/protected routes, CORS preflight correctness, and a documented rebuttal of the
+  Stack-Refactoring path (because AWS::ApiGateway::Method is refactor-ineligible). Architecture- and
+  blast-radius-sensitive.
+
+depends_on:
+  - FE-UI-047   # AiAssist nested stack + /ai/assist route must be reconciled before route-surface refactor
+prior_art:
+  - FE-UI-036   # original nested-stack split (synthesized to ~434, then reverted — see ee7ec48)
+  - FE-UI-037   # nested-stack reconciliation
+  - FE-UI-047   # AiAssistNestedStack (route methods stay in parent because methods bind to shared RestApi)
+  - "docs/upgrade/stack-refactor-inventory-careervpcruddev-dev-us-east-1.md"
+  - "docs/upgrade/topology-decision-record-careervpcruddev-nested-stack-refactor.md"
+  - "docs/upgrade/stack-refactor-runbook-monitoring-phase1-dev-us-east-1.md"
+blocks: []
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    CareerVpCrudDev is at the wall. VERIFIED against live AWS (account 788159322332, us-east-1,
+    2026-06-24): deployed parent = 494 resources; deployed nested children = AiAssistNestedStack (7)
+    + MonitoringNestedStack (23). Current synth parent = 498 (it also carries an undeployed
+    ErrorReportNestedStack). The next cdk deploy lands the parent at 498 — TWO resources below the
+    HARD 500 ceiling (a non-adjustable CloudFormation limit). The parent is dominated by the API
+    Gateway: 122 AWS::ApiGateway::Method (70 of them CORS OPTIONS mocks), 99 apigateway-principal
+    AWS::Lambda::Permission spread over only 20 distinct Lambdas (CDK emits one permission PER
+    method-route; CVTailor alone has 12), and 69 AWS::ApiGateway::Resource — ~290 of 498 resources.
+  required_behavior: >
+    Collapse the redundant per-path API surface into per-feature {proxy+} ANY integrations. Every
+    feature handler already routes internally with AWS Lambda Powertools APIGatewayRestResolver
+    (@app.get('/users/me/cv/<cv_id>') ... app.resolve(event, context)), so API-Gateway-level
+    per-path methods are redundant granularity. Replacing N explicit methods + N CORS OPTIONS + N
+    per-method permissions per feature with ~1 {proxy+} ANY method (+ base ANY) + 2 CORS OPTIONS +
+    ~2 invoke permissions is behavior-preserving and frees ~170-190 parent resources. Target parent
+    <= ~350 (aim ~310), durably, with the RestApi physical id / invoke URL unchanged.
+  user_impact: >
+    Infra can keep adding routes, workers, and alarms for many releases without hitting the wall.
+    No API URL change, no data-store risk, deploys stay atomic. The deployed API behaves identically
+    because the Powertools resolver inside each Lambda performs the same path matching it does today.
+
+# =============================================================================
+# WHY NOT "JUST SPLIT INTO MORE NESTED STACKS" (documented rebuttal)
+# =============================================================================
+alternatives_considered:
+  pure_nested_stack_split:
+    verdict: "INSUFFICIENT and unsafe as the primary lever — this is the path that previously caused ownership failures."
+    evidence:
+      - "Every resource has a deterministic fixed physical name (infra/careervp/naming_utils.py). Moving a fixed-name resource to a nested stack via plain `cdk deploy` changes its logical id and forces CREATE of a same-named resource while the old one still exists => 'already exists' collision (the prior ownership failure) or REPLACE/data-loss for stateful resources."
+      - "The only SAFE move mechanism is CloudFormation Stack Refactoring (proven here for Monitoring). But the dominant consumers are refactor-INELIGIBLE per the official unsupported list: AWS::ApiGateway::Method (122, unsupported), AWS::Lambda::EventInvokeConfig (28, unsupported), AWS::Lambda::Permission (99, IMMUTABLE), AWS::IAM::Policy (13, NON_PROVISIONABLE), AWS::DynamoDB::GlobalTable (10, unsupported + stateful)."
+      - "The historical 3-slice split (FE-UI-036, commit 8926a90) only reached parent ~428 and was reverted (ee7ec48); the worker/artifact slices are now blocked by EventInvokeConfig + IAM::Policy. Refactor alone cannot reach durable headroom."
+    conclusion: "Nested-stack refactoring is retained ONLY as an OPTIONAL secondary lever (Phase 3) for clean leaf slices; it is NOT the solution to the count."
+  raise_the_limit:
+    verdict: "IMPOSSIBLE."
+    evidence: "500 resources/stack is a hard CloudFormation limit, not increasable via Service Quotas (docs/cloudformation-limits)."
+  multi_restapi_behind_custom_domain:
+    verdict: "VALID long-term, deferred."
+    evidence: "Splitting into several RestApis (each its own 500 budget) behind the existing dev.careervp.com custom domain via base-path mappings is the durable scaling story, but it is a larger change and is unnecessary once the proxy-collapse frees ~190 resources. Captured as Phase 4 (optional)."
+
+# =============================================================================
+# EVIDENCE (file:line + live AWS)
+# =============================================================================
+evidence:
+  live_aws_state:
+    - { note: "DEPLOYED CareerVpCrudDev parent = 494 resources (aws cloudformation list-stack-resources, 2026-06-24)" }
+    - { note: "DEPLOYED nested children: AiAssistNestedStack=7, MonitoringNestedStack=23; ErrorReportNestedStack NOT deployed" }
+    - { note: "SYNTH parent = 498 (infra/cdk.out/CareerVpCrudDev.template.json)" }
+    - { note: "Parent drift currently NOT_CHECKED; last known drift = Cognito UserPoolClient callback URLs (stale, 2026-06-12)" }
+  api_surface_breakdown:
+    - { note: "AWS::ApiGateway::Method = 122 (OPTIONS/CORS = 70, real = 52)" }
+    - { note: "AWS::Lambda::Permission (apigateway principal) = 99 across only 20 distinct functions (per-method fan-out)" }
+    - { note: "AWS::ApiGateway::Resource = 69; AWS::Lambda::EventInvokeConfig = 28 (all non-default, refactor-ineligible)" }
+  handlers_self_route:
+    - { file: src/backend/careervp/handlers/user_handler.py, line: "156,170,212,231,251,355", note: "Powertools @app.get/put/delete + app.resolve(event, context) — Lambda does internal path routing" }
+    - { file: src/backend/careervp/handlers/utils/rest_api_resolver.py, line: "1", note: "shared APIGatewayRestResolver factory used by feature handlers" }
+  api_construct_anchors:
+    - { file: infra/careervp/api_construct.py, line: "333-394", note: "_build_api_gw — RestApi created with fixed rest_api_name (api_name) at 344 and default_cors_preflight_options at 346" }
+    - { file: infra/careervp/api_construct.py, line: "344", note: "rest_api_name=self.naming.api_name(API_FEATURE) => careervp-core-api-dev — MUST stay stable to preserve API id/URL" }
+    - { file: infra/careervp/api_construct.py, line: "2681-2738", note: "route helper builds Resource path segments and adds LambdaIntegration; proxy=True already used at 2738 (pattern to generalize)" }
+    - { file: infra/careervp/service_stack.py, line: "54-62", note: "ApiConstruct instantiated as 'Crud' in the parent ServiceStack" }
+  naming:
+    - { file: infra/careervp/naming_utils.py, line: "88-133", note: "deterministic fixed physical names for every resource (root cause of cross-stack ownership collisions)" }
+
+# =============================================================================
+# ARCHITECTURE / OWNERSHIP MAP
+# =============================================================================
+architecture_ownership_map:
+  chosen_pattern: "Per-feature greedy {proxy+} ANY LambdaIntegration on the existing shared RestApi (in-parent; NO stack move)."
+  why_in_parent_not_a_move: >
+    Doing this entirely inside the parent stack means NO resource crosses a stack boundary, so the
+    fixed-physical-name collision that caused prior 'ownership' failures categorically cannot occur.
+    The RestApi keeps its logical id and fixed name (careervp-core-api-dev), so the API id / invoke
+    URL never changes. CloudFormation simply deletes the surplus stateless methods/permissions and
+    creates the few new ones during one in-place UPDATE.
+  per_feature_transformation:
+    before: "feature Lambda fronted by ~3-12 explicit methods (GET/POST/PUT/PATCH/DELETE per sub-path) + ~3-7 CORS OPTIONS mocks + ~3-12 per-method Lambda permissions + N path Resources."
+    after: >
+      feature root Resource (e.g. /users — usually already present) + one greedy child Resource
+      ({proxy+}) + ANY method on the root + ANY method on {proxy+} (LambdaIntegration proxy=True) +
+      CORS preflight OPTIONS on those 2 resources + ~2 invoke permissions (CDK emits one per ANY
+      method). Net ~6 resources/feature vs ~10-25 today.
+  correctness_invariants:
+    authorizer_parity: >
+      The {proxy+} ANY method(s) for a feature MUST carry the SAME authorization as the explicit
+      routes they replace. Protected features (users, jobs, applications, vpr, cv, gap, cover-letter,
+      interview-prep, company-research, billing-app, export) => Cognito authorizer on ANY. Public
+      features (auth, health, swagger) => NO authorizer on ANY (preserve AwsSolutions-COG4 intent).
+    mixed_auth_features: >
+      Where a single feature mixes public and protected paths under one prefix (e.g. POST
+      /billing/webhook is public/signature-verified while other /billing/* are protected), KEEP the
+      explicit method(s) for the exception path and proxy only the uniform remainder. Do not weaken
+      auth to fit the pattern.
+    path_matching: >
+      Powertools matches the FULL path; API Gateway {proxy+} forwards the full greedy path in
+      event.path, so @app.get('/users/me/cv/<cv_id>') resolves unchanged. No handler change required.
+    restapi_identity: "RestApi logical id and rest_api_name=careervp-core-api-dev MUST NOT change."
+    cors: "Keep default_cors_preflight_options; allowed origins/methods/headers unchanged. Fewer resources => fewer OPTIONS, same behavior."
+    integration_type: "Already LAMBDA_PROXY (handlers consume the proxy event); integration type is unchanged."
+  parent_keeps_unchanged:
+    - "All DynamoDB GlobalTables, S3 buckets, KMS keys, Cognito user pool/client/domain, SQS queues + DLQs (NEVER moved/replaced)."
+    - "All feature + worker Lambda functions, their roles, log groups (function identity unchanged)."
+    - "AiAssistNestedStack, MonitoringNestedStack (already extracted)."
+    - "AppConfig, WAF, AppConfig deployment (refactor-unsupported anyway)."
+  exceptions_keep_explicit_methods:
+    - "Routes with method-level request validators, API keys/usage plans, per-method throttling, or non-Lambda integrations (e.g. swagger AwsIntegration at api_construct.py:289)."
+    - "Mixed-auth feature exception paths (e.g. /billing/webhook)."
+  cascade_risk: "high — live API request path; mitigated by being in-parent, behavior-preserving, phased, and route-parity tested."
+  primary_files:
+    - "infra/careervp/api_construct.py (introduce a _register_feature_proxy(feature_root, handler, authorized: bool) helper; convert features feature-by-feature)"
+    - "infra/tests/infrastructure/test_api_construct.py (route-shape + parity + budget assertions)"
+    - "infra/tests/infrastructure/test_nested_split.py (parent budget ceiling assertions)"
+    - "infra/tests/infrastructure/conftest.py (fixtures if new synth slices are needed)"
+    - "docs/architecture/api_spec.openapi.yml (keep the canonical route contract as the parity oracle)"
+
+# =============================================================================
+# FIX PLAN (phased; each phase independently deployable + reversible)
+# =============================================================================
+fix_plan:
+  phase_0_reconcile_baseline:
+    name: "Pin a clean deployed==code baseline (the step prior attempts skipped)"
+    actions:
+      - "Run aws cloudformation detect-stack-drift on parent + the 2 nested stacks; resolve or explicitly accept the known Cognito UserPoolClient callback-URL drift and record the decision."
+      - "Decide ErrorReportNestedStack: land+deploy it OR shelve it, so synth matches deployed. Reach parent UPDATE_COMPLETE with `cdk diff CareerVpCrudDev` clean."
+      - "Snapshot current parent + nested templates into docs/upgrade/ for rollback comparison (mirror the monitoring runbook)."
+    gate: "parent UPDATE_COMPLETE, drift reconciled/accepted, cdk diff clean."
+  phase_1_immediate_relief:
+    name: "Proxy-collapse the 3 highest-fan-out features"
+    targets: ["CVTailor (12 perms)", "User API (10 perms)", "CV Parser (8 perms)"]
+    change: >
+      Convert these features to {proxy+} ANY via the new _register_feature_proxy helper, preserving
+      the Cognito authorizer. Remove their explicit per-path methods, surplus CORS OPTIONS, and
+      per-method permissions. Pure in-parent cdk deploy.
+    expected_drop: ">= 30 parent resources"
+    gate: "parent synth drops >= 30; route-parity tests green; smoke test each converted feature."
+  phase_2_durable:
+    name: "Proxy-collapse the remaining API-fronted features"
+    change: "Apply the same pattern to all remaining feature Lambdas, keeping explicit methods only for documented exceptions."
+    expected_result: "parent synth <= ~350 (aim ~310)"
+    gate: "parent <= 400 hard, target <= 350; full infra suite + checkov + naming green; per-feature smoke."
+  phase_3_optional_leaf_refactor:
+    name: "OPTIONAL — Stack-Refactor clean leaf slices for isolation"
+    change: >
+      If additional isolation is desired AFTER the count is solved, extract refactor-eligible leaf
+      slices (monitoring already done) via the proven create-stack-refactor runbook. Exclude all
+      unsupported types (Method, EventInvokeConfig, IAM::Policy, GlobalTable, custom resources).
+    note: "Not required to solve the limit; do not block Phases 1-2 on it."
+  phase_4_optional_multi_restapi:
+    name: "OPTIONAL (deferred) — split into multiple RestApis behind dev.careervp.com base-path mappings"
+    note: "Long-term per-domain 500 budgets; only if the app outgrows a single proxy-collapsed API."
+
+# =============================================================================
+# RESOURCE-COUNT MATH (parent budget)
+# =============================================================================
+resource_count_math:
+  hard_limit: 500
+  deployed_parent_baseline: 494
+  synth_parent_baseline: 498
+  api_surface_today:
+    methods_total: 122
+    methods_cors_options: 70
+    methods_real: 52
+    apigw_lambda_permissions: 99
+    distinct_functions_behind_permissions: 20
+    apigw_resources: 69
+    approx_api_subtotal: 290
+  projected_after_proxy_collapse:
+    methods: "~30-40 (≈2 ANY per API-fronted feature + retained exceptions)"
+    cors_options: "~30-40 (preflight only on the ~2 resources per feature)"
+    permissions: "~30-40 (≈2 per feature ANY method)"
+    resources: "~40 (root + {proxy+} per feature)"
+    approx_api_subtotal: "~120"
+  estimated_parent_freed: "~170 (290 -> ~120)"
+  projected_parent_after_phase_2: "~310-350"
+  phase_1_projection: "498 -> ~460-468 (>= 30 freed; comfortably re-deployable with ErrorReport pending)"
+  note: >
+    Function code, IAM roles, log groups, EventInvokeConfig, DynamoDB, S3, KMS, SQS, Cognito are all
+    UNCHANGED — only redundant API-Gateway methods/permissions/resources are removed. No stack move,
+    so no AWS::CloudFormation::Stack churn and no fixed-name collision.
+
+# =============================================================================
+# ACCEPTANCE CRITERIA
+# =============================================================================
+acceptance_criteria:
+  - id: AC-001
+    given: A feature is converted to {proxy+} ANY
+    when: cdk synth runs
+    then: The feature's prior explicit per-path methods are gone and replaced by ANY methods on the feature root and a {proxy+} child resource, integrated (proxy=True) to the SAME Lambda.
+
+  - id: AC-002
+    given: A PROTECTED feature is proxy-collapsed
+    when: The synthesized ANY method is inspected
+    then: It carries the Cognito authorizer (AuthorizationType COGNITO_USER_POOLS) exactly as the explicit routes did; a PUBLIC feature's ANY method carries no authorizer.
+
+  - id: AC-003
+    given: The full proxy-collapse is synthesized (Phase 2)
+    when: The parent CareerVpCrudDev template resource count is measured
+    then: The parent has <= 400 resources (target <= 350), and at least ~150 fewer resources than the 498 baseline.
+
+  - id: AC-004
+    given: Phase 1 only is synthesized
+    when: The parent template resource count is measured
+    then: The parent dropped by at least 30 resources versus its pre-Phase-1 synth.
+
+  - id: AC-005
+    given: The route surface is collapsed
+    when: The synthesized RestApi is inspected
+    then: The RestApi logical id and rest_api_name=careervp-core-api-dev are UNCHANGED (no API id / invoke URL change).
+
+  - id: AC-006
+    given: The canonical route contract docs/architecture/api_spec.openapi.yml
+    when: Each path+method in the contract is exercised against the proxy-collapsed API (resolver-level or deployed smoke)
+    then: Every documented path+method still resolves to the same handler behavior (no route lost, no 404/405 regression), because Powertools matches the full forwarded path.
+
+  - id: AC-007
+    given: A proxy-collapsed feature
+    when: The Lambda invoke permissions are counted
+    then: There are ~2 apigateway-principal permissions for that feature (one per ANY method), not one-per-old-method; total apigw permissions drop from 99 toward ~30-40.
+
+  - id: AC-008
+    given: CORS preflight
+    when: An OPTIONS request to a collapsed path is simulated
+    then: It returns the same Access-Control-Allow-Origin/-Methods/-Headers contract as before (allowed origins from ALLOWED_ORIGINS unchanged).
+
+  - id: AC-009
+    given: cfn-guard / cfn-lint / checkov + validate_naming
+    when: They run against the synthesized templates
+    then: No new findings are introduced and all names still pass --strict.
+
+  - id: AC-010
+    given: Mixed-auth and special-config exception routes (e.g. /billing/webhook, swagger AwsIntegration, any method-level validator/usage-plan)
+    when: cdk synth runs
+    then: Those exception methods remain explicit (not collapsed) and retain their original auth/integration/validation.
+
+  - id: AC-011
+    given: cdk diff against the live stack before deploy
+    when: The diff is reviewed
+    then: It shows NO replacement of any DynamoDB table, S3 bucket, KMS key, Cognito resource, SQS queue, or Lambda function — only add/remove of ApiGateway Method/Resource and Lambda Permission resources, plus an ApiGateway Deployment update.
+
+  - id: AC-012
+    given: The human_approval_gate
+    when: Any deploy/refactor against a live stack is attempted
+    then: It is blocked until approval is recorded for that environment.
+
+# =============================================================================
+# STATES TO HANDLE
+# =============================================================================
+states_to_handle:
+  - { state: synth_under_budget, trigger: "parent synth <= target after a phase", behavior: "proceed (gated by approval)" }
+  - { state: synth_over_budget, trigger: "parent synth still > 400 after Phase 2", behavior: "convert remaining explicit methods / pull more features into proxy; do not stop until <= 400" }
+  - { state: handler_not_self_routing, trigger: "a feature handler does NOT use Powertools full-path routing", behavior: "KEEP explicit methods for that feature; do not proxy-collapse it" }
+  - { state: method_level_config_present, trigger: "a method has a request validator / API key / usage plan / non-Lambda integration", behavior: "keep that method explicit (AC-010)" }
+  - { state: mixed_auth_feature, trigger: "feature mixes public + protected paths", behavior: "proxy the uniform remainder, keep explicit exception methods with correct auth" }
+  - { state: path_prefix_collision, trigger: "two feature Lambdas share a path prefix", behavior: "do NOT place a greedy {proxy+} at the shared parent; scope proxies to non-overlapping prefixes" }
+  - { state: drift_present, trigger: "Phase 0 finds unaccepted drift", behavior: "reconcile/accept and record before any deploy or refactor" }
+  - { state: approval_pending, trigger: "human_approval_gate unmet for the target env", behavior: "block deploy to that env (incl. dev)" }
+
+# =============================================================================
+# VERIFICATION CONTRACT
+# =============================================================================
+verification_contract:
+  - { requirement_id: AC-001, verification_type: infrastructure, blocking_gate: pre_merge }
+  - { requirement_id: AC-002, verification_type: infrastructure, blocking_gate: pre_merge }
+  - { requirement_id: AC-003, verification_type: infrastructure, blocking_gate: pre_merge }
+  - { requirement_id: AC-004, verification_type: infrastructure, blocking_gate: pre_merge }
+  - { requirement_id: AC-005, verification_type: infrastructure, blocking_gate: pre_merge }
+  - { requirement_id: AC-006, verification_type: integration, blocking_gate: pre_merge }
+  - { requirement_id: AC-007, verification_type: infrastructure, blocking_gate: pre_merge }
+  - { requirement_id: AC-008, verification_type: integration, blocking_gate: pre_merge }
+  - { requirement_id: AC-009, verification_type: infrastructure, blocking_gate: pre_merge }
+  - { requirement_id: AC-010, verification_type: infrastructure, blocking_gate: pre_merge }
+  - { requirement_id: AC-011, verification_type: manual, blocking_gate: pre_deploy }
+  - { requirement_id: AC-012, verification_type: manual, blocking_gate: human_approval }
+
+# =============================================================================
+# VALIDATION COMMANDS
+# =============================================================================
+validation:
+  commands:
+    - "mkdir -p src/backend/.build/lambdas && touch src/backend/.build/lambdas/.placeholder"
+    - "cd infra && uv sync && npx cdk synth >/tmp/synth.log 2>&1   # must exit 0"
+    - "python3 -c \"import json; print('parent resources:', len(json.load(open('infra/cdk.out/CareerVpCrudDev.template.json'))['Resources']))\""
+    - "cd infra && uv run pytest tests/infrastructure -v --tb=short"
+    - "python src/backend/scripts/validate_naming.py --path infra --strict"
+    - "cd src/backend && uv run pytest tests/unit/ -k 'resolver or route or handler' -q   # resolver-level route parity"
+    - "cd infra && npx cdk diff CareerVpCrudDev   # AC-011: no stateful replacement; review before deploy"
+    - "uvx checkov -d infra/cdk.out --framework cloudformation --quiet"
+  acceptance_criteria:
+    - "Parent CareerVpCrudDev synth <= 400 resources after Phase 2 (target <= 350)"
+    - "RestApi id / rest_api_name unchanged; no API URL change"
+    - "Every route in docs/architecture/api_spec.openapi.yml still resolves to its handler"
+    - "cdk diff shows no replacement of DynamoDB/S3/KMS/Cognito/SQS/Lambda; only API method/permission/resource churn + a Deployment update"
+    - "infra pytest, checkov, naming --strict all green"
+
+# =============================================================================
+# CONSTRAINTS
+# =============================================================================
+constraints:
+  - "ENTIRELY in-parent: no resource crosses a stack boundary in this spec (that is what makes it ownership-safe)."
+  - "NEVER touch stateful resources (DynamoDB/S3/KMS/Cognito/SQS) — cdk diff must prove no replacement."
+  - "RestApi logical id + rest_api_name=careervp-core-api-dev MUST stay constant."
+  - "Authorizer parity is mandatory: no protected route may become public, no public route may gain an authorizer."
+  - "Keep explicit methods for any route with method-level validator/API-key/usage-plan/non-Lambda integration or mixed-auth exception."
+  - "Each phase is independently deployable, smoke-tested, and reversible (git revert + redeploy; no data resource ever in the change set)."
+  - "Single `make deploy` still deploys the whole app."
+
+# =============================================================================
+# BASELINE / REGRESSION BUDGET
+# =============================================================================
+baseline_regression_budget:
+  blocked_regressions:
+    - "No documented route in api_spec.openapi.yml may be lost or change handler/auth."
+    - "Parent must end <= 400 (the whole point) AND the RestApi id/URL must not change."
+    - "AiAssistNestedStack + MonitoringNestedStack wiring must remain intact."
+    - "Cognito-protected routes stay protected; public routes (auth/health/swagger) stay public."
+    - "No stateful resource replacement; no new IAM grants; no secret access added."
+  allowed_deltas:
+    - "Removal of redundant explicit ApiGateway Methods/Resources and per-method Lambda Permissions."
+    - "Addition of per-feature {proxy+} Resource + ANY methods + ~2 invoke permissions + reduced CORS OPTIONS."
+    - "One new AWS::ApiGateway::Deployment revision per deploy."
+
+# =============================================================================
+# TRACEABILITY MATRIX
+# =============================================================================
+traceability_matrix:
+  - { requirement_id: AC-001, code_reference: "infra/careervp/api_construct.py:_register_feature_proxy (NEW)", test_reference: "TEST-INFRA-048.yaml#unit#proxy_any_replaces_explicit_methods", verification_type: infrastructure, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-002, code_reference: "infra/careervp/api_construct.py:_register_feature_proxy", test_reference: "TEST-INFRA-048.yaml#unit#authorizer_parity", verification_type: infrastructure, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-003, code_reference: "infra/careervp/api_construct.py", test_reference: "TEST-INFRA-048.yaml#integration#parent_count_le_400", verification_type: infrastructure, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-004, code_reference: "infra/careervp/api_construct.py", test_reference: "TEST-INFRA-048.yaml#integration#phase1_drop_ge_30", verification_type: infrastructure, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-005, code_reference: "infra/careervp/api_construct.py:344", test_reference: "TEST-INFRA-048.yaml#integration#restapi_identity_stable", verification_type: infrastructure, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-006, code_reference: "src/backend/careervp/handlers/*; docs/architecture/api_spec.openapi.yml", test_reference: "TEST-INFRA-048.yaml#integration#route_parity_resolver", verification_type: integration, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-007, code_reference: "infra/careervp/api_construct.py:_register_feature_proxy", test_reference: "TEST-INFRA-048.yaml#unit#permission_fanout_collapsed", verification_type: infrastructure, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-008, code_reference: "infra/careervp/api_construct.py:346", test_reference: "TEST-INFRA-048.yaml#integration#cors_preflight_contract", verification_type: integration, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-009, code_reference: "infra/cdk.out/*", test_reference: "TEST-INFRA-048.yaml#regression#cfn_guard_naming_clean", verification_type: infrastructure, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-010, code_reference: "infra/careervp/api_construct.py:289 + billing routes", test_reference: "TEST-INFRA-048.yaml#unit#exceptions_stay_explicit", verification_type: infrastructure, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-011, code_reference: "cdk diff CareerVpCrudDev", test_reference: "manual pre-deploy diff review", verification_type: manual, blocking_gate: pre_deploy, result: pending }
+  - { requirement_id: AC-012, code_reference: "docs/upgrade/specs/FE-UI-048-apigw-proxy-collapse-headroom.yaml#human_approval_gate", test_reference: "manual approval record", verification_type: manual, blocking_gate: human_approval, result: pending }
+
+# =============================================================================
+# ROLLBACK TRIGGER MATRIX
+# =============================================================================
+rollback_trigger_matrix:
+  - { trigger_id: RT-001, condition: "A documented route 404/405s after a phase (parity break)", action: "Revert that feature's proxy conversion (git revert), redeploy; re-add the explicit methods for that feature; investigate Powertools path mismatch before retrying" }
+  - { trigger_id: RT-002, condition: "cdk diff shows replacement of any stateful resource or the RestApi", action: "STOP; do not deploy. The RestApi logical id or a fixed name was changed — restore it and re-synth" }
+  - { trigger_id: RT-003, condition: "A protected route became public (authorizer dropped) in the diff/tests", action: "Block deploy; restore Cognito authorizer on the ANY method; add a parity test for that feature" }
+  - { trigger_id: RT-004, condition: "Parent still > 400 after Phase 2", action: "Continue converting remaining explicit methods; if any feature can't be proxied, account for its cost and consider Phase 4 multi-RestApi" }
+  - { trigger_id: RT-005, condition: "CORS preflight regression (browser blocked)", action: "Restore default_cors_preflight_options coverage on the new resources; verify ALLOWED_ORIGINS; redeploy" }
+  - { trigger_id: RT-006, condition: "Post-deploy API errors on a converted feature", action: "Roll the single feature back (independent, in-parent); the RestApi id/URL is unchanged so rollback is a normal cdk deploy" }
+  - { trigger_id: RT-007, condition: "Human approval withheld for an environment", action: "Hold deploy for that env; keep the change merged-but-undeployed" }
+
+# =============================================================================
+# DESIGN NOTES
+# =============================================================================
+design_notes:
+  - >
+    Root cause reframed: the parent is bottlenecked by API-Gateway resource BLOAT, not by stack
+    topology. 290 of 498 parent resources are API methods/permissions/resources, and they are mostly
+    redundant because each feature Lambda already self-routes via Powertools. Removing the redundancy
+    is both the biggest and the safest lever — it is in-parent, behavior-preserving, and touches no
+    stateful resource, so the fixed-physical-name collision that caused prior 'ownership' failures
+    cannot occur.
+  - >
+    Why not Stack Refactoring for the API: AWS::ApiGateway::Method is on the official refactor-unsupported
+    list, so the 122 methods cannot be MOVED to a nested stack without REPLACE. Refactor stays an
+    OPTIONAL secondary tool (Phase 3) for clean leaf slices only. This rebuttal is documented so the
+    team does not re-attempt the reverted FE-UI-036 path expecting it to reach durable headroom.
+  - >
+    The {proxy+} ANY pattern also auto-collapses the Lambda::Permission fan-out: CDK emits one
+    permission per method, so going from ~10 methods/feature to ~2 ANY methods/feature drops the 99
+    apigw permissions toward ~30-40 for free — no awkward suppression of LambdaIntegration auto-grants.
+  - >
+    Keep explicit methods where API Gateway is actually doing work the Lambda is not: swagger uses a
+    non-Lambda AwsIntegration (api_construct.py:289); /billing/webhook is public while the rest of
+    /billing is protected; any route with a method-level validator or usage plan. These are a small
+    minority and are explicitly excluded from collapse (AC-010, states_to_handle).
+  - >
+    Phase 0 is mandatory and is the step prior attempts skipped: reconcile drift and get deployed==code
+    before mutating the live stack. The Cognito UserPoolClient callback drift is pre-existing and out of
+    scope to fix here, but must be explicitly accepted/recorded so cdk diff is interpretable.
+  - >
+    Verify staging/prod parent counts independently before promoting beyond dev; only dev's 494/498
+    baseline is verified here. CareerVpCrudStaging exists and must be measured before any prod work.

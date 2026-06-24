@@ -11,6 +11,7 @@ export interface GenerateOptions {
   gapResponseIds?: string[];
   companyResearchId?: string;
   force?: boolean;
+  companyName?: string;
 }
 
 const CANCEL_FN_MAP: Partial<Record<ModuleType, (id: string) => Promise<unknown>>> = {
@@ -80,6 +81,7 @@ export function useGenerateModule(
         case 'companyResearch':
           response = await api.fetchCompanyResearch({
             job_id: jobId,
+            company_name: options.companyName ?? '',
             retry: options.force ?? false,
           });
           break;

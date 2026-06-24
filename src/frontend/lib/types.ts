@@ -492,7 +492,7 @@ export interface InterviewPrepPatchResponse {
 export interface CompanyResearchRequest {
   job_id: string;
   url?: string;
-  company_name?: string;
+  company_name: string;
   retry?: boolean;
 }
 
