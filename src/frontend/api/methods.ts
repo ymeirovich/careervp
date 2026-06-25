@@ -110,6 +110,14 @@ export const api = {
         .then((r) => (r.data?.status === 'completed' ? r.data : null)),
     ),
 
+  getCompanyResearchStatus: (jobId: string): Promise<{ status: string; data: CompanyResearchResult | null }> =>
+    apiClient
+      .get<CompanyResearchResult & { status?: string }>(`/company-research/${jobId}`)
+      .then((r) => ({
+        status: r.data?.status ?? 'unknown',
+        data: r.data?.status === 'completed' ? r.data : null,
+      })),
+
   cancelCompanyResearch: (jobId: string): Promise<{ status: string }> =>
     apiClient.post<{ status: string }>(`/company-research/${jobId}/cancel`, {}).then((r) => r.data),
 

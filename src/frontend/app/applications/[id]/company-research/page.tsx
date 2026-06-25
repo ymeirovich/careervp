@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, use } from 'react';
+import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '../../../../api/methods';
 import { ErrorBoundary } from '../../../../components/ErrorBoundary/ErrorBoundary';
@@ -12,6 +12,7 @@ function CompanyResearchContent({ jobId }: { jobId: string }) {
   const [research, setResearch] = useState<CompanyResearchResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
+  const [pollMessage, setPollMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState<string>('');
 
@@ -37,15 +38,37 @@ function CompanyResearchContent({ jobId }: { jobId: string }) {
   const handleTrigger = async () => {
     setTriggering(true);
     setError(null);
+    setPollMessage(null);
     try {
       await api.fetchCompanyResearch({ job_id: jobId, company_name: companyName });
-      const data = await api.getCompanyResearch(jobId);
-      setResearch(data);
+
+      const POLL_INTERVAL_MS = 10_000;
+      const MAX_ATTEMPTS = 30; // 30 × 10 s = 5 minutes
+
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        setPollMessage(`Researching… checking for results (attempt ${attempt} of ${MAX_ATTEMPTS})`);
+        await new Promise<void>((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+
+        const { status, data } = await api.getCompanyResearchStatus(jobId);
+
+        if (status === 'completed' && data) {
+          setResearch(data);
+          return;
+        }
+
+        if (status === 'failed') {
+          setError('Company research failed on the server. Please try again.');
+          return;
+        }
+      }
+
+      setError('Research is taking longer than expected. Please refresh the page in a few minutes.');
     } catch (err) {
       setError('Failed to research company. Please try again.');
       console.error(err);
     } finally {
       setTriggering(false);
+      setPollMessage(null);
     }
   };
 
@@ -104,6 +127,9 @@ function CompanyResearchContent({ jobId }: { jobId: string }) {
           >
             {triggering ? 'Researching…' : 'Research this company'}
           </button>
+          {pollMessage && (
+            <p className="text-xs text-text-muted" data-testid="poll-message">{pollMessage}</p>
+          )}
         </div>
       ) : (
         <>
