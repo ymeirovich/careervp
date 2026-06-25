@@ -389,7 +389,7 @@ def _get_company_research_item(user_id: str, job_id: str) -> dict[str, Any] | No
 
 def _resolve_table_candidates() -> list[str]:
     candidates: list[str] = []
-    for env_key in ('DYNAMODB_TABLE_NAME', 'TABLE_NAME', 'KNOWLEDGE_TABLE_NAME'):
+    for env_key in ('DYNAMODB_TABLE_NAME', 'TABLE_NAME'):
         value = os.getenv(env_key)
         if isinstance(value, str) and value.strip() and value.strip() not in candidates:
             candidates.append(value.strip())
