@@ -175,8 +175,11 @@ class TestCvTailoringDeleteRouteSurface:
     """CV tailoring route surface must include delete route."""
 
     def test_cv_tailoring_delete_route_present(self):
-        """The cv-tailoring proxy covers DELETE /cv-tailoring/{cvTailoringId}."""
+        """DELETE /cv-tailoring/{cvTailoringId} must be present: explicit (Phase 1) or proxy (Phase 2)."""
         with open(API_CONSTRUCT_PATH) as f:
             content = f.read()
 
-        assert '("/cv-tailoring", self.cv_tailoring_func, True)' in content
+        assert (
+            '("/cv-tailoring/{cvTailoringId}", "DELETE", self.cv_tailoring_func)' in content
+            or '("/cv-tailoring", self.cv_tailoring_func, True)' in content
+        )

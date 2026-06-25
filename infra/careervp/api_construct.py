@@ -254,6 +254,11 @@ class ApiConstruct(Construct):
             "POST",
             self._build_lambda_proxy_integration(ai_assist_lambda),
         )
+        self._add_route_method(
+            "/interview-prep/{interviewPrepId}",
+            "PATCH",
+            self.interview_prep_status_func,
+        )
 
     def register_error_report_route(
         self, error_report_lambda: _lambda.IFunction
@@ -2695,8 +2700,12 @@ class ApiConstruct(Construct):
 
     @staticmethod
     def _permission_id(path: str, method: str) -> str:
-        normalized_path = re.sub(r"[^A-Za-z0-9]+", " ", path).title().replace(" ", "")
-        return f"AllowApiGateway{method.title()}{normalized_path}Invoke"
+        # Preserve trailing wildcard as "All" so "/jobs" and "/jobs/*" get distinct IDs.
+        suffix = "All" if path.endswith("*") else ""
+        normalized_path = (
+            re.sub(r"[^A-Za-z0-9]+", " ", path.rstrip("*")).title().replace(" ", "")
+        )
+        return f"AllowApiGateway{method.title()}{normalized_path}{suffix}Invoke"
 
     @staticmethod
     def _permission_scope(path: str) -> str:
@@ -2792,49 +2801,97 @@ class ApiConstruct(Construct):
         )
 
     def _add_openapi_contract_routes(self) -> None:
-        # Uniform feature prefixes are handled inside their Lambda, so API
-        # Gateway only needs a root ANY plus a greedy {proxy+} ANY method.
+        # Phase 1: collapse only features whose live-stack sub-resources are all
+        # literal path segments (no variable {paramId} siblings that would conflict
+        # with {proxy+} during a CloudFormation UPDATE).
+        #
+        # Features with variable-path siblings in the deployed stack
+        # (vpr/{vprId}, cover-letter/{coverLetterId}, cv-tailoring/{cvTailoringId},
+        #  interview-prep/{interviewPrepId}, applications/{application_id},
+        #  company-research/{jobId}, jobs/{jobId}) require a two-phase deploy:
+        # Phase 2 (separate deploy): first let CloudFormation delete those resources,
+        # then add {proxy+}. See FE-UI-048 for the full phased plan.
+        #
+        # /jobs is permanently excluded: multiple Lambdas own sub-paths under it
+        # (job_api_func, gap_api_func, export_lambda), so {jobId} explicit routes
+        # must coexist with greedy routing — {proxy+} and {jobId} cannot be siblings.
         feature_proxies: list[tuple[str, _lambda.Function, bool]] = [
             ("/auth", self.auth_api_func, False),
             ("/users", self.user_api_func, True),
-            ("/jobs", self.job_api_func, True),
-            ("/applications", self.application_api_func, True),
             ("/gap-analysis", self.gap_api_func, True),
-            ("/vpr", self.vpr_status_func, True),
-            ("/cv-tailoring", self.cv_tailoring_func, True),
-            ("/cover-letter", self.cover_letter_status_func, True),
-            ("/interview-prep", self.interview_prep_status_func, True),
-            ("/company-research", self.company_research_func, True),
             ("/billing", self.billing_lambda, True),
         ]
         for path, handler, authorized in feature_proxies:
             self._register_feature_proxy(path, handler, authorized=authorized)
 
-        # Exact routes remain where a different Lambda owns a path below a
-        # collapsed prefix or where a one-off endpoint has no useful subtree.
+        # Explicit routes: cross-Lambda exceptions under collapsed prefixes, and
+        # features deferred to Phase 2 (still using per-path methods until their
+        # {paramId} siblings are removed from the live stack).
         route_map: list[tuple[str, str, _lambda.Function]] = [
             ("/health", "GET", self.health_api_func),
+            # users — cross-Lambda exceptions below the /users proxy
             ("/users/me", "GET", self.user_api_func),
             ("/users/me", "PUT", self.user_api_func),
             ("/users/me/usage", "GET", self.user_api_func),
             ("/users/me/trial/reset", "POST", self.user_api_func),
             ("/users/me/cv", "POST", self.cv_upload_func),
             ("/users/me/cv", "GET", self.user_api_func),
+            ("/users/me/subscription", "GET", self.billing_lambda),
+            # jobs — permanent explicit (multi-Lambda prefix)
+            ("/jobs", "POST", self.job_api_func),
+            ("/jobs", "GET", self.job_api_func),
             ("/jobs/{jobId}", "GET", self.job_api_func),
             ("/jobs/{jobId}/gap-questions", "POST", self.gap_api_func),
             ("/jobs/{jobId}/gap-questions", "GET", self.gap_api_func),
             ("/jobs/{jobId}/gap-responses", "POST", self.gap_api_func),
+            # applications — Phase 2 pending
+            ("/applications/{application_id}", "GET", self.application_api_func),
+            # vpr — Phase 2 pending
             ("/vpr/generate", "POST", self.vpr_submit_func),
+            ("/vpr/{vprId}/status", "GET", self.vpr_status_func),
+            ("/vpr/{vprId}/cancel", "POST", self.vpr_status_func),
             ("/vprs", "GET", self.vpr_status_func),
+            # cv-tailoring — Phase 2 pending
+            ("/cv-tailoring/generate", "POST", self.cv_tailoring_func),
+            ("/cv-tailoring/{cvTailoringId}/status", "GET", self.cv_tailoring_func),
+            ("/cv-tailoring/{cvTailoringId}/cancel", "POST", self.cv_tailoring_func),
+            ("/cv-tailoring/{cvTailoringId}", "DELETE", self.cv_tailoring_func),
+            ("/cv-tailoring/{cvTailoringId}", "PATCH", self.cv_tailoring_func),
             ("/cv-tailorings", "GET", self.cv_tailoring_func),
+            # cover-letter — Phase 2 pending
             ("/cover-letter/generate", "POST", self.cover_letter_api_func),
+            (
+                "/cover-letter/{coverLetterId}/status",
+                "GET",
+                self.cover_letter_status_func,
+            ),
+            (
+                "/cover-letter/{coverLetterId}/cancel",
+                "POST",
+                self.cover_letter_status_func,
+            ),
+            ("/cover-letter/{coverLetterId}", "PATCH", self.cover_letter_status_func),
             ("/cover-letters", "GET", self.cover_letter_status_func),
+            # interview-prep — Phase 2 pending (PATCH registered in register_ai_assist_routes)
             ("/interview-prep/generate", "POST", self.interview_prep_api_func),
+            (
+                "/interview-prep/{interviewPrepId}/status",
+                "GET",
+                self.interview_prep_status_func,
+            ),
+            (
+                "/interview-prep/{interviewPrepId}/cancel",
+                "POST",
+                self.interview_prep_status_func,
+            ),
             ("/interview-preps", "GET", self.interview_prep_status_func),
+            # company-research — Phase 2 pending
+            ("/company-research/{jobId}", "GET", self.company_research_func),
+            ("/company-research/{jobId}/cancel", "POST", self.company_research_func),
+            ("/company-research/fetch", "POST", self.company_research_func),
             ("/knowledge-base", "GET", self.company_research_func),
-            # Billing routes (S-006)
+            # Billing webhook (public exception under /billing proxy)
             ("/billing/webhook", "POST", self.billing_lambda),
-            ("/users/me/subscription", "GET", self.billing_lambda),
             # Export route (FE-UI-028)
             (
                 "/jobs/{jobId}/artifacts/{moduleType}/export",

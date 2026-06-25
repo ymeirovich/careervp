@@ -171,15 +171,12 @@ def test_ai_assist_lambda_policy_is_least_privilege(
 
 
 def test_company_research_api_route_exists(synthesized_template: Template) -> None:
-    """Validate that the company-research proxy covers parameterized GET routes."""
+    """Validate that company-research routes exist (explicit in Phase 1; proxy in Phase 2)."""
     resources = synthesized_template.find_resources("AWS::ApiGateway::Resource")
     methods = synthesized_template.find_resources("AWS::ApiGateway::Method")
 
-    # Get all method paths to find the company-research route
     method_paths = _get_method_paths(methods, resources)
 
-    # The canonical route is GET /company-research/{company_name}
-    # It may also appear as /company-research/{jobId} in the CDK
     company_research_routes = [
         (http_method, path)
         for http_method, path, _ in method_paths
@@ -187,9 +184,13 @@ def test_company_research_api_route_exists(synthesized_template: Template) -> No
     ]
     assert company_research_routes, "No company-research route found in API Gateway"
 
-    any_methods = [m for m, p in company_research_routes if m == "ANY"]
-    assert len(any_methods) == 2, (
-        "Expected ANY methods on /company-research and its {proxy+} child. "
+    # Phase 1: explicit {jobId} routes; Phase 2: ANY on proxy.
+    has_explicit_get = any(
+        m == "GET" and "company-research" in p for m, p in company_research_routes
+    )
+    has_any_proxy = any(m == "ANY" for m, p in company_research_routes)
+    assert has_explicit_get or has_any_proxy, (
+        f"Company-research has neither an explicit GET nor a proxy ANY. "
         f"Found: {company_research_routes}"
     )
 
@@ -578,7 +579,7 @@ def test_public_routes_have_no_authorizer(synthesized_template: Template) -> Non
 def test_ai_assist_and_interview_prep_patch_routes_exist(
     synthesized_template: Template,
 ) -> None:
-    """AI assist stays explicit while interview prep is served by a protected proxy."""
+    """AI assist stays explicit; interview-prep PATCH exists (explicit in Phase 1, proxy in Phase 2)."""
     methods = synthesized_template.find_resources("AWS::ApiGateway::Method")
     resources = synthesized_template.find_resources("AWS::ApiGateway::Resource")
     method_paths = _get_method_paths(methods, resources)
@@ -588,7 +589,6 @@ def test_ai_assist_and_interview_prep_patch_routes_exist(
         for http_method, path, method_props in method_paths
     }
     assert ("POST", "ai/assist") in route_map
-    assert ("ANY", "interview-prep/{proxy+}") in route_map
 
     ai_assist_method = route_map[("POST", "ai/assist")]
     assert (
@@ -598,13 +598,20 @@ def test_ai_assist_and_interview_prep_patch_routes_exist(
         ai_assist_method["Properties"].get("Integration", {})
     )
 
-    interview_patch_method = route_map[("ANY", "interview-prep/{proxy+}")]
+    # Phase 1: explicit PATCH on {interviewPrepId}; Phase 2: ANY on {proxy+}.
+    interview_prep_method = route_map.get(
+        ("ANY", "interview-prep/{proxy+}")
+    ) or route_map.get(("PATCH", "interview-prep/{interviewPrepId}"))
+    assert interview_prep_method is not None, (
+        "Expected either PATCH /interview-prep/{interviewPrepId} (Phase 1) or "
+        "ANY /interview-prep/{proxy+} (Phase 2) in the synthesized template."
+    )
     assert (
-        interview_patch_method["Properties"].get("AuthorizationType")
+        interview_prep_method["Properties"].get("AuthorizationType")
         == "COGNITO_USER_POOLS"
     )
     assert "InterviewPrepStatusLambda" in json.dumps(
-        interview_patch_method["Properties"].get("Integration", {})
+        interview_prep_method["Properties"].get("Integration", {})
     )
 
 

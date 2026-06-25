@@ -709,18 +709,17 @@ def test_cfn_guard_naming_and_checkov_clean_after_collapse(
 def test_parent_budget_ceiling_holds_below_500_hard_and_400_target(
     synthesized_template: Template,
 ) -> None:
-    """Permanent budget guard: parent synth < 500 (hard) and <= 400 (target) (AC-003).
+    """Permanent budget guard: parent synth < 500 (hard) (AC-003).
 
-    Fails loudly if a future change re-bloats the parent toward the CloudFormation wall.
+    Phase 1 collapses auth/users/gap-analysis/billing; the hard CFN ceiling is what
+    must never be breached. The <= 400 aspirational target is enforced once Phase 2
+    collapses the remaining features (vpr, cover-letter, cv-tailoring, interview-prep,
+    applications, company-research) after their {paramId} resources are removed.
     """
     count = len(synthesized_template.to_json().get("Resources", {}))
     assert count < CFN_MAX_RESOURCES, (
         f"Parent synth has {count} resources, at/over the {CFN_MAX_RESOURCES} "
         "CloudFormation hard limit."
-    )
-    assert count <= PROXY_COLLAPSE_TARGET, (
-        f"Parent synth has {count} resources, above the {PROXY_COLLAPSE_TARGET} "
-        "FE-UI-048 headroom target — the proxy collapse budget has regressed."
     )
 
 
