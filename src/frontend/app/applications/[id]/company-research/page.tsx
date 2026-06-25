@@ -56,7 +56,7 @@ function CompanyResearchContent({ jobId }: { jobId: string }) {
           return;
         }
 
-        if (status === 'failed') {
+        if (status === 'failed' || status === 'not_generated') {
           setError('Company research failed on the server. Please try again.');
           return;
         }
