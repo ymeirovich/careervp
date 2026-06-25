@@ -23,6 +23,13 @@ STATEFUL_RESOURCE_TYPES = (
 
 # CloudFormation's hard per-template ceiling.
 CFN_MAX_RESOURCES = 500
+PROXY_COLLAPSE_TARGET = 400
+
+# Documented parent resource count BEFORE the FE-UI-048 Phase-1 conversion (CVTailor,
+# User API, CV Parser) collapsed their per-path methods into {proxy+} ANY integrations.
+# Used as the pre-Phase-1 baseline for the >= 30 resource-drop guard (AC-004).
+PRE_PHASE1_PARENT_BASELINE = 498
+PHASE1_MIN_RESOURCE_DROP = 30
 
 
 def _resource_types(template: Template) -> dict[str, dict[str, Any]]:
@@ -30,18 +37,19 @@ def _resource_types(template: Template) -> dict[str, dict[str, Any]]:
 
 
 # § approved_nested_topology --------------------------------------------------
-def test_parent_declares_only_monitoring_nested_stack(
+def test_parent_declares_only_approved_nested_stacks(
     synthesized_template: Template,
 ) -> None:
-    """The parent should now own the monitoring and AI-assist nested stacks."""
+    """The parent keeps the three approved nested stacks and adds no new split."""
     nested = synthesized_template.find_resources("AWS::CloudFormation::Stack")
     nested_ids = list(nested)
-    assert len(nested_ids) == 2, (
-        "Expected exactly two nested-stack resources in the parent "
-        f"(monitoring + ai-assist), found {nested_ids}."
+    assert len(nested_ids) == 3, (
+        "Expected exactly three nested-stack resources in the parent "
+        f"(monitoring + ai-assist + error-report), found {nested_ids}."
     )
     assert any("MonitoringNestedStack" in logical_id for logical_id in nested_ids)
     assert any("AiAssistNestedStack" in logical_id for logical_id in nested_ids)
+    assert any("ErrorReportNestedStack" in logical_id for logical_id in nested_ids)
 
 
 def test_parent_resource_count_below_cfn_hard_limit(
@@ -56,6 +64,36 @@ def test_parent_resource_count_below_cfn_hard_limit(
     assert count < CFN_MAX_RESOURCES, (
         f"Parent template has {count} resources, at/over the {CFN_MAX_RESOURCES} "
         f"hard limit — headroom must be reclaimed via a nested-stack import migration."
+    )
+
+
+def test_parent_stack_resource_count_at_or_below_400_after_collapse(
+    synthesized_template: Template,
+) -> None:
+    """FE-UI-048 must leave durable headroom below the 500-resource wall."""
+    count = len(_resource_types(synthesized_template))
+    assert count <= PROXY_COLLAPSE_TARGET, (
+        f"Parent template has {count} resources; FE-UI-048 requires "
+        f"{PROXY_COLLAPSE_TARGET} or fewer."
+    )
+
+
+def test_phase1_conversion_drops_parent_by_at_least_30(
+    synthesized_template: Template,
+) -> None:
+    """The Phase-1 {proxy+} conversion must reclaim >= 30 parent resources (AC-004).
+
+    Phase 1 collapses the CVTailor, User API, and CV Parser feature surfaces from explicit
+    per-path methods into per-feature {proxy+} ANY integrations. Against the documented
+    pre-Phase-1 parent baseline, the synthesized parent must have shed at least 30 resources
+    — a loud regression guard if a later change re-expands those feature surfaces.
+    """
+    count = len(_resource_types(synthesized_template))
+    drop = PRE_PHASE1_PARENT_BASELINE - count
+    assert drop >= PHASE1_MIN_RESOURCE_DROP, (
+        f"Phase-1 proxy conversion dropped only {drop} parent resources "
+        f"(from {PRE_PHASE1_PARENT_BASELINE} baseline to {count}); "
+        f"expected a drop of at least {PHASE1_MIN_RESOURCE_DROP}."
     )
 
 

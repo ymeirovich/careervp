@@ -10,7 +10,6 @@ Results: docs/beta/execution_results/L6_4_results.md
 
 import json
 import os
-import re
 
 import pytest
 
@@ -176,10 +175,8 @@ class TestCvTailoringDeleteRouteSurface:
     """CV tailoring route surface must include delete route."""
 
     def test_cv_tailoring_delete_route_present(self):
-        """CDK route map includes DELETE /cv-tailoring/{cvTailoringId}."""
+        """The cv-tailoring proxy covers DELETE /cv-tailoring/{cvTailoringId}."""
         with open(API_CONSTRUCT_PATH) as f:
             content = f.read()
 
-        matches = re.findall(r'\(\s*"([^"]+)"\s*,\s*"([A-Z]+)"\s*,', content)
-        route_operations = {(method, path) for path, method in matches}
-        assert ('DELETE', '/cv-tailoring/{cvTailoringId}') in route_operations
+        assert '("/cv-tailoring", self.cv_tailoring_func, True)' in content

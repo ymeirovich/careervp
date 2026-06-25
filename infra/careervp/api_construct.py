@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from typing import cast
 
 from aws_cdk import Aws, CfnOutput, Duration, RemovalPolicy, aws_apigateway, aws_sqs
@@ -42,6 +43,7 @@ class ApiConstruct(Construct):
         self.naming = naming
         self.cognito_client_id = cognito_client_id
         self.cognito_user_pool = user_pool
+        self._api_permission_scopes: dict[str, set[str]] = {}
         self.api_db = ApiDbConstruct(self, f"{id_}db", naming=naming)
         self.llm_cache_table = self._build_llm_cache_table(is_production_env)
         self.logs_kms_key = self._build_logs_kms_key()
@@ -85,16 +87,9 @@ class ApiConstruct(Construct):
         )
         self.api_authorizer = self._build_api_authorizer(user_pool)
 
-        api_resource: aws_apigateway.Resource = self.rest_api.root.add_resource(
-            constants.API_ROOT_RESOURCE
-        )
-        cv_resource = api_resource.add_resource(constants.GW_RESOURCE)
-        vpr_resource = api_resource.add_resource(constants.GW_RESOURCE_VPR)
-        company_research_resource = api_resource.add_resource(
-            constants.GW_RESOURCE_COMPANY_RESEARCH
-        )
+        root_resource = cast(aws_apigateway.Resource, self.rest_api.root)
         self.cv_upload_func = self._add_post_lambda_integration(
-            cv_resource,
+            root_resource,
             self.lambda_role,
             self.api_db.db,
             appconfig_app_name,
@@ -106,7 +101,7 @@ class ApiConstruct(Construct):
 
         # VPR Submit Lambda - POST /api/vpr (async architecture)
         self.vpr_submit_func = self._add_vpr_submit_lambda_integration(
-            vpr_resource,
+            root_resource,
             self.lambda_role,
             self.api_db.jobs_table,
             self.api_db.vpr_results_bucket,
@@ -115,11 +110,8 @@ class ApiConstruct(Construct):
         )
 
         # VPR Status Lambda - GET /api/vpr/status/{job_id}
-        vpr_status_resource = vpr_resource.add_resource("status").add_resource(
-            "{job_id}"
-        )
         self.vpr_status_func = self._add_vpr_status_lambda_integration(
-            vpr_status_resource,
+            root_resource,
             self.lambda_role,
             self.api_db.jobs_table,
             self.api_db.vpr_results_bucket,
@@ -140,7 +132,7 @@ class ApiConstruct(Construct):
             self, self.vpr_jobs_dlq, self.api_db.jobs_table
         )
         self.company_research_func = self._add_company_research_lambda_integration(
-            company_research_resource,
+            root_resource,
             self.lambda_role,
             self.api_db.db,
             appconfig_app_name,
@@ -157,11 +149,8 @@ class ApiConstruct(Construct):
         self.interview_prep_status_func = self._add_interview_prep_status_lambda()
 
         # CV Tailoring - POST /api/cv-tailoring
-        cv_tailoring_resource = api_resource.add_resource(
-            constants.GW_RESOURCE_CV_TAILORING
-        )
         self.cv_tailoring_func = self._add_cv_tailoring_lambda_integration(
-            cv_tailoring_resource,
+            root_resource,
             self.lambda_role,
             self.api_db.db,
             appconfig_app_name,
@@ -260,25 +249,10 @@ class ApiConstruct(Construct):
 
     def register_ai_assist_routes(self, ai_assist_lambda: _lambda.IFunction) -> None:
         self.ai_assist_lambda = ai_assist_lambda
-        self.interview_prep_status_func.add_permission(
-            "AllowInterviewPrepPatchInvoke",
-            principal=iam.ServicePrincipal("apigateway.amazonaws.com"),
-            action="lambda:InvokeFunction",
-            source_arn=self.rest_api.arn_for_execute_api(
-                method="PATCH",
-                path="/interview-prep/*",
-                stage="*",
-            ),
-        )
         self._add_route_method_with_integration(
             "/ai/assist",
             "POST",
             self._build_lambda_proxy_integration(ai_assist_lambda),
-        )
-        self._add_route_method_with_integration(
-            "/interview-prep/{interviewPrepId}",
-            "PATCH",
-            self._build_lambda_proxy_integration(self.interview_prep_status_func),
         )
 
     def register_error_report_route(
@@ -2690,10 +2664,87 @@ class ApiConstruct(Construct):
         method: str,
         handler: _lambda.Function,
     ) -> None:
+        handler_key = handler.node.path
+        permission_scope = self._permission_scope(path)
+        handler_scopes = self._api_permission_scopes.setdefault(handler_key, set())
+        scope_is_covered = any(
+            permission_scope == existing_scope
+            or (
+                existing_scope.endswith("*")
+                and permission_scope.startswith(existing_scope[:-1])
+            )
+            for existing_scope in handler_scopes
+        )
+        if not scope_is_covered:
+            handler.add_permission(
+                self._permission_id(permission_scope, "Routes"),
+                principal=iam.ServicePrincipal("apigateway.amazonaws.com"),
+                action="lambda:InvokeFunction",
+                source_arn=self.rest_api.arn_for_execute_api(
+                    method="*",
+                    path=permission_scope,
+                    stage="*",
+                ),
+            )
+            handler_scopes.add(permission_scope)
         self._add_route_method_with_integration(
             path,
             method,
-            aws_apigateway.LambdaIntegration(handler=handler),
+            self._build_lambda_proxy_integration(handler),
+        )
+
+    @staticmethod
+    def _permission_id(path: str, method: str) -> str:
+        normalized_path = re.sub(r"[^A-Za-z0-9]+", " ", path).title().replace(" ", "")
+        return f"AllowApiGateway{method.title()}{normalized_path}Invoke"
+
+    @staticmethod
+    def _permission_scope(path: str) -> str:
+        segments = [segment for segment in path.split("/") if segment]
+        if len(segments) <= 1:
+            return path
+        return f"/{segments[0]}/*"
+
+    def _register_feature_proxy(
+        self,
+        path: str,
+        handler: _lambda.Function,
+        *,
+        authorized: bool,
+    ) -> None:
+        """Register root and greedy ANY Lambda-proxy methods for one feature."""
+        resource = self._get_or_create_path_resource(path)
+        proxy_resource = cast(
+            aws_apigateway.Resource,
+            resource.get_resource("{proxy+}") or resource.add_resource("{proxy+}"),
+        )
+        authorization_type = (
+            aws_apigateway.AuthorizationType.COGNITO
+            if authorized
+            else aws_apigateway.AuthorizationType.NONE
+        )
+        authorizer = self.api_authorizer if authorized else None
+
+        permission_scope = f"{path}*"
+        handler.add_permission(
+            self._permission_id(path, "ANY"),
+            principal=iam.ServicePrincipal("apigateway.amazonaws.com"),
+            action="lambda:InvokeFunction",
+            source_arn=self.rest_api.arn_for_execute_api(
+                method="*",
+                path=permission_scope,
+                stage="*",
+            ),
+        )
+        for target_resource in (resource, proxy_resource):
+            target_resource.add_method(
+                http_method="ANY",
+                integration=self._build_lambda_proxy_integration(handler),
+                authorizer=authorizer,
+                authorization_type=authorization_type,
+            )
+        self._api_permission_scopes.setdefault(handler.node.path, set()).add(
+            permission_scope
         )
 
     def _add_route_method_with_integration(
@@ -2741,68 +2792,47 @@ class ApiConstruct(Construct):
         )
 
     def _add_openapi_contract_routes(self) -> None:
-        # Canonical route surface (I7).
+        # Uniform feature prefixes are handled inside their Lambda, so API
+        # Gateway only needs a root ANY plus a greedy {proxy+} ANY method.
+        feature_proxies: list[tuple[str, _lambda.Function, bool]] = [
+            ("/auth", self.auth_api_func, False),
+            ("/users", self.user_api_func, True),
+            ("/jobs", self.job_api_func, True),
+            ("/applications", self.application_api_func, True),
+            ("/gap-analysis", self.gap_api_func, True),
+            ("/vpr", self.vpr_status_func, True),
+            ("/cv-tailoring", self.cv_tailoring_func, True),
+            ("/cover-letter", self.cover_letter_status_func, True),
+            ("/interview-prep", self.interview_prep_status_func, True),
+            ("/company-research", self.company_research_func, True),
+            ("/billing", self.billing_lambda, True),
+        ]
+        for path, handler, authorized in feature_proxies:
+            self._register_feature_proxy(path, handler, authorized=authorized)
+
+        # Exact routes remain where a different Lambda owns a path below a
+        # collapsed prefix or where a one-off endpoint has no useful subtree.
         route_map: list[tuple[str, str, _lambda.Function]] = [
             ("/health", "GET", self.health_api_func),
-            ("/auth/register", "POST", self.auth_api_func),
-            ("/auth/login", "POST", self.auth_api_func),
-            ("/auth/refresh", "POST", self.auth_api_func),
             ("/users/me", "GET", self.user_api_func),
             ("/users/me", "PUT", self.user_api_func),
             ("/users/me/usage", "GET", self.user_api_func),
             ("/users/me/trial/reset", "POST", self.user_api_func),
             ("/users/me/cv", "POST", self.cv_upload_func),
             ("/users/me/cv", "GET", self.user_api_func),
-            ("/jobs", "POST", self.job_api_func),
-            ("/jobs", "GET", self.job_api_func),
             ("/jobs/{jobId}", "GET", self.job_api_func),
-            ("/gap-analysis/questions", "POST", self.gap_api_func),
             ("/jobs/{jobId}/gap-questions", "POST", self.gap_api_func),
             ("/jobs/{jobId}/gap-questions", "GET", self.gap_api_func),
             ("/jobs/{jobId}/gap-responses", "POST", self.gap_api_func),
-            ("/applications/{application_id}", "GET", self.application_api_func),
             ("/vpr/generate", "POST", self.vpr_submit_func),
-            ("/vpr/{vprId}/status", "GET", self.vpr_status_func),
-            ("/vpr/{vprId}/cancel", "POST", self.vpr_status_func),
             ("/vprs", "GET", self.vpr_status_func),
-            ("/cv-tailoring/generate", "POST", self.cv_tailoring_func),
-            ("/cv-tailoring/{cvTailoringId}/status", "GET", self.cv_tailoring_func),
-            ("/cv-tailoring/{cvTailoringId}/cancel", "POST", self.cv_tailoring_func),
-            ("/cv-tailoring/{cvTailoringId}", "DELETE", self.cv_tailoring_func),
-            ("/cv-tailoring/{cvTailoringId}", "PATCH", self.cv_tailoring_func),
             ("/cv-tailorings", "GET", self.cv_tailoring_func),
             ("/cover-letter/generate", "POST", self.cover_letter_api_func),
-            (
-                "/cover-letter/{coverLetterId}/status",
-                "GET",
-                self.cover_letter_status_func,
-            ),
-            (
-                "/cover-letter/{coverLetterId}/cancel",
-                "POST",
-                self.cover_letter_status_func,
-            ),
-            ("/cover-letter/{coverLetterId}", "PATCH", self.cover_letter_status_func),
             ("/cover-letters", "GET", self.cover_letter_status_func),
             ("/interview-prep/generate", "POST", self.interview_prep_api_func),
-            (
-                "/interview-prep/{interviewPrepId}/status",
-                "GET",
-                self.interview_prep_status_func,
-            ),
-            (
-                "/interview-prep/{interviewPrepId}/cancel",
-                "POST",
-                self.interview_prep_status_func,
-            ),
             ("/interview-preps", "GET", self.interview_prep_status_func),
-            ("/company-research/{jobId}", "GET", self.company_research_func),
-            ("/company-research/{jobId}/cancel", "POST", self.company_research_func),
-            ("/company-research/fetch", "POST", self.company_research_func),
             ("/knowledge-base", "GET", self.company_research_func),
             # Billing routes (S-006)
-            ("/billing/checkout", "POST", self.billing_lambda),
-            ("/billing/portal", "POST", self.billing_lambda),
             ("/billing/webhook", "POST", self.billing_lambda),
             ("/users/me/subscription", "GET", self.billing_lambda),
             # Export route (FE-UI-028)

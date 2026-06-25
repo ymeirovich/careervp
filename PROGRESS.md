@@ -28,6 +28,7 @@
 - [x] FE-UI-020 RichTextEditor TipTap Markdown editor (`src/frontend/components/RichTextEditor/RichTextEditor.tsx`)
 - [x] FE-UI-021 BillingContent page restructure (`src/frontend/app/billing/page.tsx`)
 - [x] FE-UI-045 inline rich-text editing + autosave-on-blur for Cover Letter, Tailored CV, and Interview Prep (`src/frontend/hooks/useArtifactAutosave.ts`, `src/frontend/app/applications/[id]/cover-letter/page.tsx`, `src/frontend/app/applications/[id]/cv-tailored/page.tsx`, `src/frontend/app/applications/[id]/interview-prep/page.tsx`)
+- [x] FE-UI-048 API Gateway per-feature `{proxy+}` collapse with protected/public authorizer parity, explicit mixed-handler exceptions, and parent-stack resource headroom (`infra/careervp/api_construct.py`)
 - [x] WORKER-LEGS-001 artifact chain VPR task-token signaling and CV direct Lambda invoke (`infra/careervp/artifact_chain_construct.py`, `src/backend/careervp/handlers/vpr_worker_handler.py`, `src/backend/careervp/handlers/cv_tailoring_handler.py`)
 
 ## Upcoming Phases (From Context Manifest)
@@ -90,3 +91,4 @@
 | `infra/careervp/artifact_chain_construct.py`, `infra/careervp/api_construct.py`, `infra/careervp/api_db_construct.py` | WORKER-LEGS-001 chain wiring: VPR task token without short heartbeat, CV direct Lambda invoke, and removal of unused CV tailoring queue/DLQ |
 | `src/backend/careervp/handlers/vpr_worker_handler.py`, `src/backend/careervp/handlers/cv_tailoring_handler.py`, `src/backend/careervp/handlers/company_research_worker_handler.py`, `src/backend/careervp/handlers/gap_handler.py` | WORKER-LEGS-001 handler support for VPR task-token callbacks, CV SFN invoke entrypoint, CR output threading, and chain `cv_id` input |
 | `src/backend/tests/unit/test_vpr_worker_task_token.py`, `src/backend/tests/unit/test_cv_tailoring_sfn_entrypoint.py`, `infra/tests/infrastructure/test_vpr_leg_wiring.py`, `infra/tests/infrastructure/test_cv_leg_wiring.py` | WORKER-LEGS-001 unit and infrastructure regression coverage |
+| `infra/careervp/api_construct.py`, `infra/tests/infrastructure/test_apigw_proxy_collapse.py`, `infra/tests/infrastructure/test_api_construct.py`, `infra/tests/infrastructure/test_nested_split.py` | FE-UI-048 proxy-collapse implementation and regression coverage; parent synth reduced below the 400-resource gate while preserving the shared RestApi |

@@ -171,7 +171,7 @@ def test_ai_assist_lambda_policy_is_least_privilege(
 
 
 def test_company_research_api_route_exists(synthesized_template: Template) -> None:
-    """Validate that API Gateway defines the /company-research/{company_name} GET route."""
+    """Validate that the company-research proxy covers parameterized GET routes."""
     resources = synthesized_template.find_resources("AWS::ApiGateway::Resource")
     methods = synthesized_template.find_resources("AWS::ApiGateway::Method")
 
@@ -187,10 +187,10 @@ def test_company_research_api_route_exists(synthesized_template: Template) -> No
     ]
     assert company_research_routes, "No company-research route found in API Gateway"
 
-    # Confirm there is a GET method
-    get_methods = [m for m, p in company_research_routes if m == "GET"]
-    assert get_methods, (
-        f"No GET method found for company-research. Found: {company_research_routes}"
+    any_methods = [m for m, p in company_research_routes if m == "ANY"]
+    assert len(any_methods) == 2, (
+        "Expected ANY methods on /company-research and its {proxy+} child. "
+        f"Found: {company_research_routes}"
     )
 
 
@@ -548,8 +548,8 @@ def test_public_routes_have_no_authorizer(synthesized_template: Template) -> Non
     # Get all method paths
     method_paths = _get_method_paths(methods, resources)
 
-    # Define expected public route paths (without leading slashes)
-    public_paths = {"health", "auth/register", "auth/login"}
+    # Auth is served by public root/proxy ANY methods; health remains explicit.
+    public_paths = {"health", "auth", "auth/{proxy+}"}
 
     public_methods_found = []
     for http_method, path, method_props in method_paths:
@@ -578,7 +578,7 @@ def test_public_routes_have_no_authorizer(synthesized_template: Template) -> Non
 def test_ai_assist_and_interview_prep_patch_routes_exist(
     synthesized_template: Template,
 ) -> None:
-    """The parent RestApi should expose POST /ai/assist and PATCH /interview-prep/{interviewPrepId}."""
+    """AI assist stays explicit while interview prep is served by a protected proxy."""
     methods = synthesized_template.find_resources("AWS::ApiGateway::Method")
     resources = synthesized_template.find_resources("AWS::ApiGateway::Resource")
     method_paths = _get_method_paths(methods, resources)
@@ -588,7 +588,7 @@ def test_ai_assist_and_interview_prep_patch_routes_exist(
         for http_method, path, method_props in method_paths
     }
     assert ("POST", "ai/assist") in route_map
-    assert ("PATCH", "interview-prep/{interviewPrepId}") in route_map
+    assert ("ANY", "interview-prep/{proxy+}") in route_map
 
     ai_assist_method = route_map[("POST", "ai/assist")]
     assert (
@@ -598,7 +598,7 @@ def test_ai_assist_and_interview_prep_patch_routes_exist(
         ai_assist_method["Properties"].get("Integration", {})
     )
 
-    interview_patch_method = route_map[("PATCH", "interview-prep/{interviewPrepId}")]
+    interview_patch_method = route_map[("ANY", "interview-prep/{proxy+}")]
     assert (
         interview_patch_method["Properties"].get("AuthorizationType")
         == "COGNITO_USER_POOLS"
@@ -625,9 +625,8 @@ def test_protected_routes_require_authorizer(synthesized_template: Template) -> 
     # billing/webhook is also public - it verifies webhook signature itself
     public_paths = {
         "health",
-        "auth/register",
-        "auth/login",
-        "auth/refresh",
+        "auth",
+        "auth/{proxy+}",
         "billing/webhook",
         # Client error reports: forwarded by the Next.js SSR route with no token.
         "errors",

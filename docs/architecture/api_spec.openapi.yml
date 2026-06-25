@@ -3,7 +3,7 @@ info:
   title: CareerVP API
   version: 1.0.0
 paths:
-  /cv/parse:
+  /users/me/cv:
     post:
       summary: Upload and parse a CV
       responses:

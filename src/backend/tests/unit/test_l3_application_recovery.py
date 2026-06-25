@@ -251,11 +251,11 @@ class TestApplicationRecoveryReloadRouting:
 class TestApplicationRouteWiring:
     def test_route_uses_application_handler_lambda(self) -> None:
         source = CDK_PATH.read_text(encoding='utf-8')
-        assert '("/applications/{application_id}", "GET", self.application_api_func)' in source
+        assert '("/applications", self.application_api_func, True)' in source
 
     def test_route_no_longer_uses_job_handler_lambda(self) -> None:
         source = CDK_PATH.read_text(encoding='utf-8')
-        assert '("/applications/{application_id}", "GET", self.job_api_func)' not in source
+        assert '("/applications", self.job_api_func, True)' not in source
 
     def test_job_handler_has_no_compatibility_alias(self) -> None:
         source = JOB_HANDLER_PATH.read_text(encoding='utf-8')

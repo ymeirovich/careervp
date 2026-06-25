@@ -21,7 +21,8 @@ EXPECTED_CANONICAL_ROUTE_COUNT = 40
 # Canonical routes + additive routes (AI-assist, interview-prep PATCH, exports,
 # PATCH editors) + the POST /errors telemetry sink. Counts every (method, path)
 # tuple the regex extracts from api_construct.py, including register_*_routes.
-EXPECTED_ROUTE_MAP_OPERATION_COUNT = 49
+EXPECTED_EXPLICIT_ROUTE_COUNT = 24
+EXPECTED_PROXY_PREFIX_COUNT = 11
 FROZEN_SPEC_PATH = '/Users/yitzchak/Documents/dev/careervp/docs/beta/evidence/I7_routes/frozen_spec.json'
 
 # Deprecated route prefixes that must not appear in CDK
@@ -61,6 +62,15 @@ def _extract_route_map_operations() -> set[tuple[str, str]]:
         content,
     )
     return {(method, _normalize_route_path(path)) for path, method in matches}
+
+
+def _extract_proxy_prefixes() -> set[str]:
+    content = _read_api_construct()
+    matches = re.findall(
+        r'\(\s*"([^"]+)"\s*,\s*self\.[A-Za-z0-9_]+\s*,\s*(?:True|False)\s*\)',
+        content,
+    )
+    return {_normalize_route_path(path) for path in matches}
 
 
 def _load_frozen_operations() -> set[tuple[str, str]]:
@@ -132,18 +142,28 @@ class TestCanonicalRouteCount:
 
 @pytest.mark.unit
 class TestCdkRouteMapMatchesFrozenSpec:
-    """CDK route_map should exactly match frozen canonical operations."""
+    """Explicit routes plus feature proxies must cover the frozen operations."""
 
     def test_route_map_operation_count_is_42(self):
         route_map_ops = _extract_route_map_operations()
-        assert len(route_map_ops) == EXPECTED_ROUTE_MAP_OPERATION_COUNT, (
-            f'Expected {EXPECTED_ROUTE_MAP_OPERATION_COUNT} CDK route operations, got {len(route_map_ops)}'
+        proxy_prefixes = _extract_proxy_prefixes()
+        assert len(route_map_ops) == EXPECTED_EXPLICIT_ROUTE_COUNT, (
+            f'Expected {EXPECTED_EXPLICIT_ROUTE_COUNT} explicit CDK route operations, got {len(route_map_ops)}'
+        )
+        assert len(proxy_prefixes) == EXPECTED_PROXY_PREFIX_COUNT, (
+            f'Expected {EXPECTED_PROXY_PREFIX_COUNT} feature proxies, got {len(proxy_prefixes)}'
         )
 
     def test_route_map_equals_frozen_spec(self):
         route_map_ops = _extract_route_map_operations()
+        proxy_prefixes = _extract_proxy_prefixes()
         frozen_ops = _load_frozen_operations()
-        missing = sorted(frozen_ops - route_map_ops)
+        missing = sorted(
+            operation
+            for operation in frozen_ops
+            if operation not in route_map_ops
+            and not any(operation[1] == prefix or operation[1].startswith(f'{prefix}/') for prefix in proxy_prefixes)
+        )
         extra = sorted(route_map_ops - frozen_ops)
         assert missing == [], f'CDK route map missing canonical operations: {missing}'
         allowed_additive_routes = {
@@ -159,7 +179,6 @@ class TestCdkRouteMapMatchesFrozenSpec:
             ('POST', '/company-research/{job_id}/cancel'),
             # Registered via register_ai_assist_routes (nested-stack Lambdas).
             ('POST', '/ai/assist'),
-            ('PATCH', '/interview-prep/{job_id}'),
             # Client error-report telemetry sink (forwarded by Next.js SSR route).
             ('POST', '/errors'),
         }
