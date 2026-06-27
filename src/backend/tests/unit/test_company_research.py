@@ -19,15 +19,21 @@ from careervp.logic.company_research import (
     _ensure_list,
     _ensure_optional_text,
     _ensure_text,
+    _normalize_domain,
     _parse_llm_payload,
     _resolve_domain,
     _structure_raw_content,
+    _truncate_text,
     _try_llm_fallback,
     _try_web_search,
     _try_website_scrape,
+    _web_api_identity_verified,
+    load_confident_company_research,
     research_company,
 )
+from careervp.logic.prompts.company_research_prompt import build_structure_user_prompt
 from careervp.models.company import CompanyResearchRequest, CompanyResearchResult, ResearchSource, SearchResult
+from careervp.models.job import CompanyContext
 from careervp.models.result import Result, ResultCode
 
 
@@ -49,6 +55,11 @@ def _build_company_result(source: ResearchSource) -> CompanyResearchResult:
         strategic_priorities=['Scale'],
         recent_news=['Won award'],
         financial_summary=None,
+        key_products=['Workflow Cloud'],
+        company_size='201-500 employees',
+        key_executives=['Alex Rivera, CEO'],
+        competitive_positioning='Operational workflow software',
+        growth_signals=['Hiring'],
         source=source,
         source_urls=['https://www.sysaid.com/about'],
         confidence_score=0.9,
@@ -80,9 +91,9 @@ def test_research_company_tavily_site_scoped_success(sample_request: CompanyRese
         assert result.data is not None
         assert result.data.source == ResearchSource.WEB_API
         mock_try_search.assert_awaited_once()
-        assert mock_try_search.await_args.kwargs['domain'] == 'acme.com'
-        assert mock_structure.await_args.kwargs['source'] == ResearchSource.WEB_API
-        assert mock_structure.await_args.kwargs['job_domain'] == 'acme.com'
+        assert mock_try_search.await_args_list[0].kwargs['domain'] == 'acme.com'
+        assert mock_structure.await_args_list[0].kwargs['source'] == ResearchSource.WEB_API
+        assert mock_structure.await_args_list[0].kwargs['job_domain'] == 'acme.com'
 
     asyncio.run(run())
 
@@ -360,7 +371,7 @@ def test_research_company_without_domain(sample_request: CompanyResearchRequest)
             response = await research_company(request)
 
         assert response.success is True
-        assert mock_try_search.await_args.kwargs['domain'] == 'acme.com'
+        assert mock_try_search.await_args_list[0].kwargs['domain'] == 'acme.com'
 
     asyncio.run(run())
 
@@ -444,3 +455,215 @@ def test_helper_functions_cover_edge_cases() -> None:
     assert mismatched_web_api_confidence <= 0.7
     fallback_confidence = _calculate_confidence(ResearchSource.LLM_FALLBACK, 450, {})
     assert fallback_confidence <= 0.5
+
+
+def test_web_api_with_identity_match_passes_gate() -> None:
+    confidence = _calculate_confidence(
+        ResearchSource.WEB_API,
+        600,
+        {
+            'overview': 'Acme overview',
+            'mission': 'm',
+            'values': ['v'],
+            'recent_news': ['n'],
+            'strategic_priorities': ['p'],
+        },
+        company_name='Acme Corp',
+        content_text='Acme Corp builds workflow tools for IT teams.',
+        source_urls=['https://example.com/about'],
+    )
+
+    assert confidence >= 0.85
+
+
+def test_web_api_domain_match_satisfies_identity() -> None:
+    confidence = _calculate_confidence(
+        ResearchSource.WEB_API,
+        600,
+        {
+            'overview': 'Acme overview',
+            'mission': 'm',
+            'values': ['v'],
+            'recent_news': ['n'],
+            'strategic_priorities': ['p'],
+        },
+        company_name='Acme Corp',
+        content_text='This page describes a modern service desk platform.',
+        source_urls=['https://sysaid.com/about'],
+        job_domain='sysaid.com',
+    )
+
+    assert _web_api_identity_verified(
+        company_name='Acme Corp',
+        content_text='This page describes a modern service desk platform.',
+        source_urls=['https://sysaid.com/about'],
+        job_domain='sysaid.com',
+    )
+    assert confidence >= 0.85
+
+
+def test_web_api_no_identity_match_capped_below_gate() -> None:
+    confidence = _calculate_confidence(
+        ResearchSource.WEB_API,
+        600,
+        {
+            'overview': 'Other overview',
+            'mission': 'm',
+            'values': ['v'],
+            'recent_news': ['n'],
+            'strategic_priorities': ['p'],
+        },
+        company_name='Acme Corp',
+        content_text='Different company content.',
+        source_urls=['https://other.example/about'],
+        job_domain='acme.com',
+    )
+
+    assert confidence <= 0.70
+
+
+def test_missing_core_fields_apply_penalty() -> None:
+    confidence = _calculate_confidence(
+        ResearchSource.WEB_API,
+        600,
+        {
+            'overview': 'Acme overview',
+            'values': ['v'],
+            'recent_news': ['n'],
+        },
+        company_name='Acme Corp',
+        content_text='Acme Corp builds workflow tools.',
+        source_urls=['https://acme.com/about'],
+        job_domain='acme.com',
+    )
+
+    assert confidence == pytest.approx(0.68)
+
+
+def test_total_failure_returns_all_sources_failed(sample_request: CompanyResearchRequest) -> None:
+    async def run() -> None:
+        with (
+            patch('careervp.logic.company_research._try_web_search', new_callable=AsyncMock) as mock_try_search,
+            patch('careervp.logic.company_research._structure_raw_content', new_callable=AsyncMock) as mock_structure,
+        ):
+            mock_try_search.side_effect = [
+                Result(success=False, error='site failed', code=ResultCode.SEARCH_FAILED),
+                Result(success=False, error='general failed', code=ResultCode.NO_RESULTS),
+            ]
+
+            result = await research_company(sample_request)
+
+        assert result.success is False
+        assert result.code == ResultCode.ALL_SOURCES_FAILED
+        assert result.data is None
+        assert mock_try_search.await_count == 2
+        mock_structure.assert_not_awaited()
+
+    asyncio.run(run())
+
+
+def test_truncation_at_2500_words() -> None:
+    raw_text = ' '.join(f'word-{index}' for index in range(3000))
+    truncated = _truncate_text(raw_text, max_words=2500)
+
+    assert len(truncated.split()) == 2500
+    assert 'word-2499' in truncated
+    assert 'word-2500' not in truncated
+
+
+def test_result_model_has_new_fields() -> None:
+    result = CompanyResearchResult(
+        company_name='Acme Corp',
+        overview='Acme overview',
+        values=['Innovation'],
+        mission='Ship reliable workflows',
+        strategic_priorities=['Scale'],
+        recent_news=['Raised funding'],
+        financial_summary='Private',
+        key_products=['Workflow Cloud'],
+        company_size='201-500 employees',
+        key_executives=['Alex Rivera, CEO'],
+        competitive_positioning='Operational workflow software',
+        growth_signals=['Hiring'],
+        source=ResearchSource.WEB_API,
+        source_urls=['https://acme.com/about'],
+        confidence_score=0.88,
+        research_timestamp=datetime.now(timezone.utc),
+    )
+
+    assert result.key_products == ['Workflow Cloud']
+    assert result.company_size == '201-500 employees'
+    assert result.key_executives == ['Alex Rivera, CEO']
+    assert result.competitive_positioning == 'Operational workflow software'
+    assert result.growth_signals == ['Hiring']
+
+
+def test_context_surfaces_overview_and_financial_summary() -> None:
+    item = {
+        'user_id': 'user-1',
+        'company_research_id': 'cr-1',
+        'company_name': 'Acme Corp',
+        'overview': 'Acme overview',
+        'mission': 'Ship reliable workflows',
+        'values': ['Innovation'],
+        'strategic_priorities': ['Scale'],
+        'recent_news': ['Raised funding'],
+        'financial_summary': 'Private',
+        'key_products': ['Workflow Cloud'],
+        'company_size': '201-500 employees',
+        'key_executives': ['Alex Rivera, CEO'],
+        'competitive_positioning': 'Operational workflow software',
+        'growth_signals': ['Hiring'],
+        'confidence_score': '0.9',
+        'created_at': '2026-06-27T10:00:00+00:00',
+    }
+
+    with patch('careervp.logic.company_research.read_cr_artifact', return_value=item):
+        context = load_confident_company_research(application_id='app-1', user_id='user-1')
+
+    assert isinstance(context, CompanyContext)
+    assert context.overview == 'Acme overview'
+    assert context.financial_summary == 'Private'
+
+
+def test_context_carries_new_fields_for_vpr() -> None:
+    context = CompanyContext(
+        company_name='Acme Corp',
+        overview='Acme overview',
+        mission='Ship reliable workflows',
+        values=['Innovation'],
+        strategic_priorities=['Scale'],
+        recent_news=['Raised funding'],
+        financial_summary='Private',
+        key_products=['Workflow Cloud'],
+        company_size='201-500 employees',
+        key_executives=['Alex Rivera, CEO'],
+        competitive_positioning='Operational workflow software',
+        growth_signals=['Hiring'],
+        industry='SaaS',
+    )
+
+    dumped = context.model_dump()
+
+    assert dumped['overview'] == 'Acme overview'
+    assert dumped['financial_summary'] == 'Private'
+    assert dumped['key_products'] == ['Workflow Cloud']
+    assert dumped['company_size'] == '201-500 employees'
+    assert dumped['key_executives'] == ['Alex Rivera, CEO']
+    assert dumped['competitive_positioning'] == 'Operational workflow software'
+    assert dumped['growth_signals'] == ['Hiring']
+
+
+def test_structuring_prompt_requests_new_keys() -> None:
+    prompt = build_structure_user_prompt('Acme Corp', 'raw content', 'Tavily profile search')
+
+    assert 'key_products' in prompt
+    assert 'company_size' in prompt
+    assert 'key_executives' in prompt
+    assert 'competitive_positioning' in prompt
+    assert 'growth_signals' in prompt
+
+
+def test_domain_normalization_handles_urls_and_bare_domains() -> None:
+    assert _normalize_domain('https://www.acme.com/careers') == 'acme.com'
+    assert _normalize_domain('acme.com') == 'acme.com'

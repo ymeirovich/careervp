@@ -51,10 +51,15 @@ def aggregate_search_content(results: list[SearchResult]) -> str:
 
 
 async def _search_profile(tavily: TavilyClient, company_name: str, domain: str | None) -> Result[list[SearchResult]]:
+    if domain:
+        return await tavily.search(
+            f'{company_name} mission products business model',
+            max_results=PROFILE_RESULTS,
+            include_domains=[domain],
+        )
     return await tavily.search(
         f'{company_name} mission products business model',
         max_results=PROFILE_RESULTS,
-        include_domains=[domain] if domain else None,
     )
 
 
