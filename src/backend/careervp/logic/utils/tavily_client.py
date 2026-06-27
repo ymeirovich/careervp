@@ -5,9 +5,9 @@ from __future__ import annotations
 import os
 from typing import Any, Final, Literal, cast
 
-import boto3
+import boto3  # type: ignore[import-untyped]
 import httpx
-from botocore.exceptions import BotoCoreError, ClientError
+from botocore.exceptions import BotoCoreError, ClientError  # type: ignore[import-untyped]
 from pydantic import HttpUrl
 
 from careervp.handlers.utils.observability import logger

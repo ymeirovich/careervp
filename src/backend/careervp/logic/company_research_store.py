@@ -7,8 +7,8 @@ from datetime import timezone
 from decimal import Decimal
 from typing import Any
 
-import boto3
-from botocore.exceptions import ClientError
+import boto3  # type: ignore[import-untyped]
+from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 
 from careervp.handlers.utils.observability import logger
 from careervp.models.company import CompanyResearchResult

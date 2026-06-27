@@ -10,8 +10,8 @@ from decimal import Decimal
 from typing import Any, Literal, Mapping
 from urllib.parse import urlparse
 
-import boto3
-from botocore.exceptions import BotoCoreError, ClientError
+import boto3  # type: ignore[import-untyped]
+from botocore.exceptions import BotoCoreError, ClientError  # type: ignore[import-untyped]
 
 from careervp.handlers.utils.observability import logger
 from careervp.models.company import CompanyResearchResult
