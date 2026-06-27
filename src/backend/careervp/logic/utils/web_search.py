@@ -21,15 +21,8 @@ async def search_company_info(company_name: str, *, domain: str | None = None) -
 
     clean_domain = _normalize_domain(domain)
     tavily = TavilyClient()
-    profile_result = await tavily.search(
-        f'{clean_company_name} mission products business model',
-        max_results=PROFILE_RESULTS,
-        include_domains=[clean_domain] if clean_domain else None,
-    )
-    news_result = await tavily.search(
-        f'{clean_company_name} news funding leadership',
-        max_results=NEWS_RESULTS,
-    )
+    profile_result = await _search_profile(tavily, clean_company_name, clean_domain)
+    news_result = await _search_news(tavily, clean_company_name)
 
     results = _merge_results(profile_result.data or [], news_result.data or [])
     if results:
@@ -40,9 +33,36 @@ async def search_company_info(company_name: str, *, domain: str | None = None) -
     return Result(success=False, error=error, code=code)
 
 
+async def search_company_news(company_name: str) -> Result[list[SearchResult]]:
+    """Run only the volatile company news query."""
+    clean_company_name = company_name.strip()
+    if not clean_company_name:
+        return Result(success=False, error='Company name is required for search', code=ResultCode.INVALID_INPUT)
+
+    result = await _search_news(TavilyClient(), clean_company_name)
+    if result.data:
+        return Result(success=True, data=result.data[:NEWS_RESULTS], code=ResultCode.SUCCESS)
+    return Result(success=False, error=result.error or 'No Tavily news results found', code=result.code or ResultCode.NO_RESULTS)
+
+
 def aggregate_search_content(results: list[SearchResult]) -> str:
     """Combine SearchResult content into a single text blob for structuring."""
     return '\n\n'.join(_result_content(result) for result in results if _result_content(result))
+
+
+async def _search_profile(tavily: TavilyClient, company_name: str, domain: str | None) -> Result[list[SearchResult]]:
+    return await tavily.search(
+        f'{company_name} mission products business model',
+        max_results=PROFILE_RESULTS,
+        include_domains=[domain] if domain else None,
+    )
+
+
+async def _search_news(tavily: TavilyClient, company_name: str) -> Result[list[SearchResult]]:
+    return await tavily.search(
+        f'{company_name} news funding leadership',
+        max_results=NEWS_RESULTS,
+    )
 
 
 def _merge_results(*result_groups: list[SearchResult]) -> list[SearchResult]:
@@ -87,4 +107,5 @@ __all__ = [
     'MAX_RESULTS',
     'aggregate_search_content',
     'search_company_info',
+    'search_company_news',
 ]

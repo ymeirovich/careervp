@@ -133,6 +133,7 @@ CREATED → COMPANY_RESEARCH → GAP_ANALYSIS → GENERATING_ARTIFACTS → INTER
 - ✅ FE-UI-048 API Gateway route surface collapsed to per-feature root + `{proxy+}` ANY integrations, with Cognito/public auth parity, explicit collision exceptions, and parent-stack count below 400
 - ✅ WORKER-LEGS-001 artifact-chain VPR/CV legs: VPR worker now sends Step Functions task-token success/failure, StartVPR no longer uses a 300s heartbeat, CV tailoring is invoked directly by Lambda, and the unused CV tailoring SQS queue/DLQ are removed.
 - ✅ FE-UI-049 Tavily-backed company research now replaces DuckDuckGo retrieval, adds WEB_API identity-gated confidence scoring, expands prompt/context fields, and preserves no-fabrication failure behavior.
+- ✅ FE-UI-050 company research now checks the shared company-research-cache table first, stores split profile/news records with 6-month/120-day TTLs, refreshes stale news with a news-only query, and uses a short in-flight lock to prevent duplicate miss storms.
 
 ### VPR Async Architecture - DEPLOYED & TESTING
 

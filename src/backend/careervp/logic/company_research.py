@@ -15,12 +15,24 @@ from typing import Any
 from urllib.parse import urlparse
 
 from careervp.handlers.utils.observability import logger
+from careervp.logic.company_intel_cache import (
+    CachedNews,
+    CachedProfile,
+    acquire_lock,
+    company_cache_keys,
+    merge_cached_company_research,
+    read_news,
+    read_profile,
+    release_lock,
+    write_news,
+    write_profile,
+)
 from careervp.logic.company_research_store import read_cr_artifact
 from careervp.logic.llm_cache import DEFAULT_CACHE_TTL_SECONDS, LLMResponseCache
 from careervp.logic.prompts.company_research_prompt import build_structure_system_prompt, build_structure_user_prompt
 from careervp.logic.utils.llm_client import TaskMode, get_llm_router
 from careervp.logic.utils.web_scraper import MIN_CONTENT_WORDS, count_words, scrape_company_about_page
-from careervp.logic.utils.web_search import aggregate_search_content, search_company_info
+from careervp.logic.utils.web_search import aggregate_search_content, search_company_info, search_company_news
 from careervp.models.company import CompanyResearchRequest, CompanyResearchResult, ResearchSource
 from careervp.models.job import CompanyContext
 from careervp.models.result import Result, ResultCode
@@ -177,8 +189,44 @@ def _coerce_recent_news(value: Any) -> list[str]:
 
 async def _research_company_inner(request: CompanyResearchRequest) -> Result[CompanyResearchResult]:
     logger.info('Starting company research', company_name=request.company_name)
-
     domain = _resolve_domain(request)
+    keys = company_cache_keys(company_name=request.company_name, domain=domain)
+    if keys is None:
+        return await _run_full_company_research(request, domain=domain)
+
+    profile_key, news_key, lock_key = keys
+    cached_profile = read_profile(profile_key)
+    cached_news = read_news(news_key)
+    cached_result = _merge_cache_hit(cached_profile, cached_news, fallback_company_name=request.company_name)
+    if cached_result is not None:
+        logger.info('[RESEARCH_SUCCESS] Source: COMPANY_INTEL_CACHE', company_name=request.company_name)
+        return Result(success=True, data=cached_result, code=ResultCode.RESEARCH_COMPLETE)
+
+    if cached_profile is not None:
+        news_refresh = await _refresh_cached_news(request, domain=domain, profile=cached_profile, news_key=news_key)
+        if news_refresh.success:
+            return news_refresh
+
+    if acquire_lock(lock_key):
+        try:
+            direct_result = await _run_full_company_research(request, domain=domain)
+            if direct_result.success and direct_result.data is not None:
+                write_profile(profile_key, direct_result.data)
+                write_news(news_key, direct_result.data)
+            return direct_result
+        finally:
+            release_lock(lock_key)
+
+    waited_result = await _wait_for_company_intel_cache(profile_key, news_key, fallback_company_name=request.company_name)
+    if waited_result is not None:
+        logger.info('[RESEARCH_SUCCESS] Source: COMPANY_INTEL_CACHE_AFTER_WAIT', company_name=request.company_name)
+        return Result(success=True, data=waited_result, code=ResultCode.RESEARCH_COMPLETE)
+
+    return await _run_full_company_research(request, domain=domain)
+
+
+async def _run_full_company_research(request: CompanyResearchRequest, *, domain: str | None) -> Result[CompanyResearchResult]:
+    """Run the pre-cache full Tavily profile/news research flow."""
 
     # Primary path: Tavily site-scoped search when a company/job domain is available.
     if domain:
@@ -242,6 +290,78 @@ async def _research_company_inner(request: CompanyResearchRequest) -> Result[Com
     )
 
 
+async def _refresh_cached_news(
+    request: CompanyResearchRequest,
+    *,
+    domain: str | None,
+    profile: CachedProfile,
+    news_key: str,
+) -> Result[CompanyResearchResult]:
+    news_result = await _run_news_only_company_research(request, domain=domain)
+    if not news_result.success or news_result.data is None:
+        return news_result
+
+    write_news(news_key, news_result.data)
+    fresh_news = CachedNews(key=news_key, data=_news_cache_payload(news_result.data), expires_at=0)
+    merged_result = merge_cached_company_research(profile, fresh_news, fallback_company_name=request.company_name)
+    if merged_result is None:
+        return await _run_full_company_research(request, domain=domain)
+    logger.info('[RESEARCH_SUCCESS] Source: COMPANY_INTEL_CACHE_NEWS_REFRESH', company_name=request.company_name)
+    return Result(success=True, data=merged_result, code=ResultCode.RESEARCH_COMPLETE)
+
+
+async def _run_news_only_company_research(request: CompanyResearchRequest, *, domain: str | None) -> Result[CompanyResearchResult]:
+    source_urls: list[str] = []
+    search_result = await _try_news_search(request.company_name, source_urls=source_urls)
+    if not search_result.success or not search_result.data:
+        return Result(
+            success=False,
+            error=search_result.error or 'No company news sources returned usable content',
+            code=search_result.code or ResultCode.SEARCH_FAILED,
+        )
+    return await _structure_raw_content(
+        company_name=request.company_name,
+        raw_text=search_result.data,
+        source=ResearchSource.WEB_API,
+        source_urls=source_urls,
+        word_count=count_words(search_result.data),
+        context_hint='Tavily recent company news and growth signal results',
+        job_domain=domain,
+    )
+
+
+async def _wait_for_company_intel_cache(profile_key: str, news_key: str, *, fallback_company_name: str) -> CompanyResearchResult | None:
+    for delay_seconds in (0.2, 0.4, 0.8):
+        await asyncio.sleep(delay_seconds)
+        cached_result = _merge_cache_hit(read_profile(profile_key), read_news(news_key), fallback_company_name=fallback_company_name)
+        if cached_result is not None:
+            return cached_result
+    return None
+
+
+def _merge_cache_hit(
+    profile: CachedProfile | None,
+    news: CachedNews | None,
+    *,
+    fallback_company_name: str,
+) -> CompanyResearchResult | None:
+    if profile is None or news is None:
+        return None
+    return merge_cached_company_research(profile, news, fallback_company_name=fallback_company_name)
+
+
+def _news_cache_payload(result: CompanyResearchResult) -> dict[str, Any]:
+    payload = result.model_dump(mode='json')
+    return {
+        'recent_news': payload.get('recent_news'),
+        'growth_signals': payload.get('growth_signals'),
+        'source': payload.get('source'),
+        'source_urls': payload.get('source_urls'),
+        'confidence_score': payload.get('confidence_score'),
+        'research_timestamp': payload.get('research_timestamp'),
+    }
+
+
 async def _try_website_scrape(
     request: CompanyResearchRequest,
     *,
@@ -295,6 +415,26 @@ async def _try_web_search(company_name: str, *, domain: str | None = None, sourc
 
     if count_words(aggregated) < MIN_CONTENT_WORDS:
         return Result(success=False, error='Insufficient search snippets', code=ResultCode.SEARCH_FAILED)
+
+    return Result(success=True, data=aggregated, code=ResultCode.SUCCESS)
+
+
+async def _try_news_search(company_name: str, *, source_urls: list[str] | None = None) -> Result[str]:
+    search_result = await search_company_news(company_name)
+    if not search_result.success or not search_result.data:
+        return Result(
+            success=False,
+            error=search_result.error or 'News search failed',
+            code=search_result.code or ResultCode.SEARCH_FAILED,
+        )
+
+    results = search_result.data
+    aggregated = aggregate_search_content(results)
+    if source_urls is not None:
+        source_urls.extend(str(item.url) for item in results)
+
+    if count_words(aggregated) < MIN_CONTENT_WORDS:
+        return Result(success=False, error='Insufficient news snippets', code=ResultCode.SEARCH_FAILED)
 
     return Result(success=True, data=aggregated, code=ResultCode.SUCCESS)
 

@@ -31,6 +31,7 @@
 - [x] FE-UI-048 API Gateway per-feature `{proxy+}` collapse with protected/public authorizer parity, explicit mixed-handler exceptions, and parent-stack resource headroom (`infra/careervp/api_construct.py`)
 - [x] WORKER-LEGS-001 artifact chain VPR task-token signaling and CV direct Lambda invoke (`infra/careervp/artifact_chain_construct.py`, `src/backend/careervp/handlers/vpr_worker_handler.py`, `src/backend/careervp/handlers/cv_tailoring_handler.py`)
 - [x] FE-UI-049 Tavily company research retrieval, WEB_API identity-gated confidence, and enriched CompanyContext (`src/backend/careervp/logic/company_research.py`, `src/backend/careervp/logic/utils/tavily_client.py`)
+- [x] FE-UI-050 cross-user company-intel split-TTL cache with profile/news records, normalized keys, best-effort DynamoDB degradation, and in-flight miss locking (`src/backend/careervp/logic/company_intel_cache.py`)
 
 ## Upcoming Phases (From Context Manifest)
 
@@ -95,3 +96,5 @@
 | `infra/careervp/api_construct.py`, `infra/tests/infrastructure/test_apigw_proxy_collapse.py`, `infra/tests/infrastructure/test_api_construct.py`, `infra/tests/infrastructure/test_nested_split.py` | FE-UI-048 proxy-collapse implementation and regression coverage; parent synth reduced below the 400-resource gate while preserving the shared RestApi |
 | `src/backend/careervp/logic/company_research.py`, `src/backend/careervp/logic/utils/tavily_client.py`, `src/backend/careervp/logic/utils/web_search.py`, `src/backend/careervp/models/company.py`, `src/backend/careervp/models/job.py` | FE-UI-049 Tavily-backed company research, WEB_API confidence identity gate, 2500-word prompt budget, and enriched CompanyContext |
 | `src/backend/tests/unit/test_tavily_client.py`, `src/backend/tests/unit/test_web_search.py`, `src/backend/tests/unit/test_company_research.py`, `src/backend/tests/unit/test_vpr_company_research_binding.py` | FE-UI-049 regression coverage for Tavily key resolution, two-query retrieval, confidence gate, no-fabrication failure, and downstream context enrichment |
+| `src/backend/careervp/logic/company_intel_cache.py`, `src/backend/careervp/logic/company_research.py`, `src/backend/careervp/logic/utils/web_search.py` | FE-UI-050 shared company-intel cache: split profile/news TTL records, domain-first cache keys, news-only refresh, cache miss writes, and in-flight lock |
+| `src/backend/tests/unit/test_company_intel_cache.py` | FE-UI-050 unit coverage for key normalization, TTL read/write, cache-first flow, degradation, miss writes, and lock behavior |
