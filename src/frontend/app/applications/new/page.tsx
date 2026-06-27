@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { ApiError } from '../../../api/client';
 import {
   ChooseBaseCVModal,
   type ChooseBaseCVItem,
@@ -22,6 +23,7 @@ type Copy = {
   descriptionLabel: string;
   descriptionPlaceholder: string;
   urlLabel: string;
+  urlFormatError: string;
   baseCvHeading: string;
   baseCvPlaceholder: string;
   baseCvKindUploaded: string;
@@ -52,6 +54,7 @@ const TEXT: Record<Locale, Copy> = {
     title: 'New Application',
     titleLabel: 'Job Title',
     urlLabel: 'Job URL',
+    urlFormatError: 'Enter a valid job URL that starts with http:// or https://.',
   },
   he: {
     back: '← חזרה',
@@ -71,6 +74,7 @@ const TEXT: Record<Locale, Copy> = {
     title: 'הגשה חדשה',
     titleLabel: 'שם המשרה',
     urlLabel: 'קישור למשרה',
+    urlFormatError: 'יש להזין קישור משרה תקין שמתחיל ב-http:// או ב-https://.',
   },
 };
 
@@ -92,6 +96,15 @@ function getCvName(cv: ChooseBaseCVItem | null): string | null {
   return cv.file_name ?? cv.full_name ?? cv.name ?? cv.title ?? cv.cv_id ?? cv.id ?? null;
 }
 
+function isValidJobUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 export default function NewApplicationPage() {
   const router = useRouter();
   const { createJob, isCreating } = useJobs();
@@ -103,6 +116,7 @@ export default function NewApplicationPage() {
   const [description, setDescription] = useState('');
   const [url, setUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [urlError, setUrlError] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isCvModalOpen, setIsCvModalOpen] = useState(false);
   const [selectedCv, setSelectedCv] = useState<{ cv: ChooseBaseCVItem; kind: ChooseBaseCVKind } | null>(null);
@@ -116,12 +130,13 @@ export default function NewApplicationPage() {
   const selectedCvName = getCvName(selectedCv?.cv ?? null);
   const isBusy = isCreating || isAnalyzing;
   const isFormComplete = useMemo(
-    () => title.trim().length > 0 && companyName.trim().length > 0 && description.trim().length > 0,
-    [companyName, description, title],
+    () => title.trim().length > 0 && companyName.trim().length > 0 && description.trim().length > 0 && url.trim().length > 0,
+    [companyName, description, title, url],
   );
 
-  const clearError = () => {
+  const clearError = (options?: { clearUrl?: boolean }) => {
     if (error) setError(null);
+    if (options?.clearUrl && urlError) setUrlError(null);
   };
 
   const goDashboard = () => {
@@ -133,13 +148,20 @@ export default function NewApplicationPage() {
     if (!isFormComplete || isBusy) return;
 
     setError(null);
+    setUrlError(null);
+
+    const trimmedUrl = url.trim();
+    if (!isValidJobUrl(trimmedUrl)) {
+      setUrlError(copy.urlFormatError);
+      return;
+    }
 
     try {
       const job = await createJob({
         title: title.trim(),
         company_name: companyName.trim(),
         description: description.trim(),
-        url: url.trim() || undefined,
+        url: trimmedUrl,
       });
 
       const jobId = job.job_id || job.id;
@@ -163,6 +185,10 @@ export default function NewApplicationPage() {
 
       router.push(`/applications/${jobId}`);
     } catch (err) {
+      if (err instanceof ApiError && err.field === 'url') {
+        setUrlError(err.message);
+        return;
+      }
       setError(err instanceof Error ? err.message : copy.errorFallback);
     }
   };
@@ -254,20 +280,32 @@ export default function NewApplicationPage() {
 
           <div className="flex flex-col gap-1.5">
             <label htmlFor="new-app-url" className="text-sm font-medium text-text-primary">
-              {copy.urlLabel}
+              {copy.urlLabel} <span aria-hidden="true">*</span>
             </label>
             <input
               id="new-app-url"
               data-testid="new-app-url-input"
               type="url"
+              required
               value={url}
               disabled={isBusy}
+              aria-describedby={urlError ? 'new-app-url-error' : undefined}
+              aria-invalid={urlError ? 'true' : 'false'}
               onChange={(event) => {
-                clearError();
+                clearError({ clearUrl: true });
                 setUrl(event.target.value);
               }}
-              className="rounded-md border border-border-default bg-surface-subtle px-3 py-2 text-sm text-text-primary focus:border-primary-action focus:outline-none focus:ring-1 focus:ring-primary-action disabled:cursor-not-allowed disabled:opacity-60"
+              className={`rounded-md border bg-surface-subtle px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 disabled:cursor-not-allowed disabled:opacity-60 ${
+                urlError
+                  ? 'border-state-error focus:border-state-error focus:ring-state-error'
+                  : 'border-border-default focus:border-primary-action focus:ring-primary-action'
+              }`}
             />
+            {urlError && (
+              <p id="new-app-url-error" className="text-sm font-medium text-state-error" role="alert">
+                {urlError}
+              </p>
+            )}
           </div>
 
           <section className="rounded-md border border-border-default bg-surface-subtle p-4" aria-labelledby="base-cv-heading">

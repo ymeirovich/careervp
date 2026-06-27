@@ -519,6 +519,9 @@ class JobsRepository:
         url_value = job_data.get('url')
         if isinstance(url_value, str) and url_value.strip():
             record['url'] = url_value.strip()
+        domain_value = job_data.get('domain')
+        if isinstance(domain_value, str) and domain_value.strip():
+            record['domain'] = domain_value.strip().lower()
         if requirements:
             record['requirements'] = requirements
         return record

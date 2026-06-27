@@ -670,11 +670,9 @@ def _normalize_domain(raw_value: str | None) -> str | None:
 
 def _resolve_domain(request: CompanyResearchRequest) -> str | None:
     if request.domain:
-        return request.domain
+        return _normalize_domain(request.domain)
     if request.job_posting_url:
-        parsed = urlparse(str(request.job_posting_url))
-        if parsed.netloc:
-            return parsed.netloc
+        return _normalize_domain(str(request.job_posting_url))
     return None
 
 

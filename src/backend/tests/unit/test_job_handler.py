@@ -6,7 +6,7 @@ import json
 from collections.abc import Generator
 from datetime import datetime, timedelta, timezone
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import boto3
 import jwt
@@ -155,6 +155,52 @@ def _create_access_token(user_id: str, email: str) -> str:
 def test_create_job_returns_201(jobs_table: Any) -> None:
     """POST /jobs returns 201 and persists a job."""
     from careervp.handlers.job_handler import lambda_handler
+    from careervp.logic.utils.domain_validator import DomainValidation
+
+    access_token = _create_access_token(user_id='user-1', email='user1@example.com')
+    event = _generate_api_gw_event(
+        path='/jobs',
+        method='POST',
+        headers={'Authorization': f'Bearer {access_token}'},
+        body={
+            'title': 'Senior Backend Engineer',
+            'company_name': 'Acme Corp',
+            'description': 'Design and build backend services.',
+            'url': 'https://jobs.acme.example/backend-1',
+        },
+        user_id='user-1',
+    )
+
+    with patch(
+        'careervp.handlers.job_handler.validate_job_url',
+        return_value=MagicMock(
+            success=True,
+            data=DomainValidation(
+                classification='valid',
+                domain='jobs.acme.example',
+                normalized_url='https://jobs.acme.example/backend-1',
+            ),
+        ),
+    ):
+        response = lambda_handler(event, _generate_lambda_context())
+
+    assert response['statusCode'] == 201
+    payload = json.loads(response['body'])
+    assert payload['title'] == 'Senior Backend Engineer'
+    assert payload['company_name'] == 'Acme Corp'
+    assert payload['description'] == 'Design and build backend services.'
+    assert payload['user_id'] == 'user-1'
+    assert payload['url'] == 'https://jobs.acme.example/backend-1'
+
+    stored = jobs_table.get_item(Key={'job_id': payload['id']}).get('Item')
+    assert isinstance(stored, dict)
+    assert stored.get('user_id') == 'user-1'
+    assert stored.get('domain') == 'jobs.acme.example'
+
+
+def test_create_job_requires_url(jobs_table: Any) -> None:
+    """POST /jobs rejects missing URLs with a field-scoped error."""
+    from careervp.handlers.job_handler import lambda_handler
 
     access_token = _create_access_token(user_id='user-1', email='user1@example.com')
     event = _generate_api_gw_event(
@@ -171,16 +217,58 @@ def test_create_job_returns_201(jobs_table: Any) -> None:
 
     response = lambda_handler(event, _generate_lambda_context())
 
-    assert response['statusCode'] == 201
+    assert response['statusCode'] == 400
     payload = json.loads(response['body'])
-    assert payload['title'] == 'Senior Backend Engineer'
-    assert payload['company_name'] == 'Acme Corp'
-    assert payload['description'] == 'Design and build backend services.'
-    assert payload['user_id'] == 'user-1'
+    assert payload == {
+        'error': 'Job URL is required.',
+        'error_code': 'url_required',
+        'field': 'url',
+        'classification': 'invalid_format',
+    }
+    assert jobs_table.scan()['Items'] == []
 
-    stored = jobs_table.get_item(Key={'job_id': payload['id']}).get('Item')
-    assert isinstance(stored, dict)
-    assert stored.get('user_id') == 'user-1'
+
+def test_create_job_rejects_unreachable_url(jobs_table: Any) -> None:
+    """POST /jobs blocks creation when URL validation is not valid."""
+    from careervp.handlers.job_handler import lambda_handler
+    from careervp.logic.utils.domain_validator import DomainValidation
+
+    access_token = _create_access_token(user_id='user-1', email='user1@example.com')
+    event = _generate_api_gw_event(
+        path='/jobs',
+        method='POST',
+        headers={'Authorization': f'Bearer {access_token}'},
+        body={
+            'title': 'Senior Backend Engineer',
+            'company_name': 'Acme Corp',
+            'description': 'Design and build backend services.',
+            'url': 'https://example.invalid/jobs/1',
+        },
+        user_id='user-1',
+    )
+
+    with patch(
+        'careervp.handlers.job_handler.validate_job_url',
+        return_value=MagicMock(
+            success=True,
+            data=DomainValidation(
+                classification='unreachable',
+                domain='example.invalid',
+                normalized_url='https://example.invalid/jobs/1',
+            ),
+        ),
+    ):
+        response = lambda_handler(event, _generate_lambda_context())
+
+    assert response['statusCode'] == 400
+    payload = json.loads(response['body'])
+    assert payload == {
+        'error': "We couldn't reach that job URL. Check the domain and try again.",
+        'error_code': 'unreachable',
+        'field': 'url',
+        'classification': 'unreachable',
+    }
+    assert jobs_table.scan()['Items'] == []
 
 
 def test_list_jobs_returns_user_jobs(jobs_table: Any) -> None:

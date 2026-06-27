@@ -114,7 +114,7 @@ class JobCreateRequest(APIModel):
     title: str = Field(min_length=1)
     company_name: str = Field(min_length=1)
     description: str = Field(min_length=1)
-    url: AnyUrl | None = None
+    url: str | None = None
     requirements: list[str] = Field(default_factory=list)
 
 

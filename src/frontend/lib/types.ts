@@ -54,7 +54,7 @@ export interface CreateJobInput {
   title: string;
   company_name: string;
   description: string;
-  url?: string;
+  url: string;
   requirements?: string[];
 }
 

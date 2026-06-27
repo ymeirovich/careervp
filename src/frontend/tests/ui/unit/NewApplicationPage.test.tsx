@@ -99,6 +99,7 @@ function fillRequiredFields() {
   fireEvent.change(screen.getByLabelText(/job description/i), {
     target: { value: 'Build resilient customer-facing frontend systems.' },
   });
+  fireEvent.change(screen.getByLabelText(/job url/i), { target: { value: 'https://acme.example/jobs/1' } });
 }
 
 describe('FE-UI-010 — dashboard entry point', () => {
@@ -123,7 +124,7 @@ describe('FE-UI-010 — NewApplicationPage layout and fields', () => {
     expect(screen.getByLabelText(/job title/i)).toBeRequired();
     expect(screen.getByLabelText(/company name/i)).toBeRequired();
     expect(screen.getByLabelText(/job description/i)).toBeRequired();
-    expect(screen.getByLabelText(/job url/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/job url/i)).toBeRequired();
     expect(screen.getByRole('button', { name: 'Create Application' })).toBeDisabled();
   });
 
@@ -133,7 +134,15 @@ describe('FE-UI-010 — NewApplicationPage layout and fields', () => {
     const createButton = screen.getByRole('button', { name: 'Create Application' });
     expect(createButton).toBeDisabled();
 
-    fillRequiredFields();
+    fireEvent.change(screen.getByLabelText(/job title/i), { target: { value: 'Software Engineer' } });
+    fireEvent.change(screen.getByLabelText(/company name/i), { target: { value: 'Acme Corp' } });
+    fireEvent.change(screen.getByLabelText(/job description/i), {
+      target: { value: 'Build resilient customer-facing frontend systems.' },
+    });
+
+    expect(createButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/job url/i), { target: { value: 'https://acme.example/jobs/1' } });
 
     expect(createButton).toBeEnabled();
   });
@@ -186,7 +195,6 @@ describe('FE-UI-010 — submission states', () => {
 
     renderNewApplicationPage();
     fillRequiredFields();
-    fireEvent.change(screen.getByLabelText(/job url/i), { target: { value: 'https://acme.example/jobs/1' } });
 
     fireEvent.click(screen.getByRole('button', { name: 'Create Application' }));
 
@@ -224,6 +232,54 @@ describe('FE-UI-010 — submission states', () => {
     fireEvent.change(screen.getByLabelText(/job title/i), { target: { value: 'Senior Software Engineer' } });
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('shows a client-side inline error when the URL format is invalid and does not submit', async () => {
+    const postSpy = vi.fn();
+    server.use(
+      http.post(`${BASE_URL}/jobs`, async () => {
+        postSpy();
+        return HttpResponse.json({ job_id: 'job-123' });
+      }),
+    );
+
+    renderNewApplicationPage();
+    fireEvent.change(screen.getByLabelText(/job title/i), { target: { value: 'Software Engineer' } });
+    fireEvent.change(screen.getByLabelText(/company name/i), { target: { value: 'Acme Corp' } });
+    fireEvent.change(screen.getByLabelText(/job description/i), {
+      target: { value: 'Build resilient customer-facing frontend systems.' },
+    });
+    fireEvent.change(screen.getByLabelText(/job url/i), { target: { value: 'ftp://acme.example/jobs/1' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create Application' }));
+
+    expect(await screen.findByText('Enter a valid job URL that starts with http:// or https://.')).toBeInTheDocument();
+    expect(screen.getByLabelText(/job url/i)).toHaveAttribute('aria-invalid', 'true');
+    expect(postSpy).not.toHaveBeenCalled();
+  });
+
+  it('renders backend URL validation errors inline next to the URL input', async () => {
+    server.use(
+      http.post(`${BASE_URL}/jobs`, () =>
+        HttpResponse.json(
+          {
+            error: "We couldn't reach that job URL. Check the domain and try again.",
+            error_code: 'unreachable',
+            field: 'url',
+            classification: 'unreachable',
+          },
+          { status: 400 },
+        ),
+      ),
+    );
+
+    renderNewApplicationPage();
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole('button', { name: 'Create Application' }));
+
+    expect(await screen.findByText("We couldn't reach that job URL. Check the domain and try again.")).toBeInTheDocument();
+    expect(screen.getByLabelText(/job url/i)).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.queryByText('Failed to create application')).not.toBeInTheDocument();
   });
 });
 
