@@ -1,0 +1,139 @@
+spec_id: TEST-FE-050
+title: "Test Prompts — Cross-user company-intel dedup cache (split-TTL, key normalization, lock)"
+priority: high
+status: draft
+owner: backend
+created_at: 2026-06-27
+updated_at: 2026-06-27
+type: test_prompts
+note: >
+  Runnable prompts for a fresh Claude/Codex session or test-runner agent. Covers FE-UI-050.
+  Use moto mock_dynamodb (or a fake table client) seeded with the company-research-cache schema
+  (PK cacheKey, TTL expiresAt). Author BEFORE implementation.
+
+context_required: >
+  Working directory: /Users/yitzchak/Documents/dev/careervp
+  Backend: src/backend/careervp/
+  Spec:    docs/upgrade/specs/FE-UI-050-company-intel-cache.yaml
+  Table:   company-research-cache (PK cacheKey, TTL attr expiresAt) — infra/careervp/api_db_construct.py:415
+
+recommended_model_for_test_authoring_claude: sonnet
+recommended_model_for_test_authoring_codex: medium
+recommended_model_for_complex_test_cases_claude: opus    # concurrent-miss lock semantics
+recommended_model_for_complex_test_cases_codex: high
+
+# =============================================================================
+# CATEGORY A: UNIT — KEY NORMALIZATION
+# =============================================================================
+unit_cache_keys:
+  prompt: |
+    Context: FE-UI-050 cache_key() normalizes company identity to a stable cacheKey; domain wins
+    over name; suffixes (Inc/Ltd/Corp) are stripped from name fallback.
+
+    Files: src/backend/tests/unit/test_company_intel_cache.py
+
+    1. test_domain_takes_precedence_over_name
+       Assert: cache_key for ('Apple Inc', domain='apple.com') uses the domain, not the name.
+    2. test_www_and_case_normalized
+       Assert: 'www.SysAid.com' and 'sysaid.com' map to the same key.
+    3. test_name_fallback_strips_suffixes
+       Assert: 'Acme Corp' and 'Acme' (no domain) map to the same normalized name key.
+    4. test_profile_and_news_kinds_distinct
+       Assert: profile key ends '#profile', news key ends '#news', same base.
+
+    Run: cd src/backend && uv run pytest tests/unit/test_company_intel_cache.py -v --tb=short -k keys
+    All 4 tests must pass.
+
+# =============================================================================
+# CATEGORY B: UNIT — READ/WRITE + TTL
+# =============================================================================
+unit_cache_rw:
+  prompt: |
+    Context: write_profile uses 6-month TTL, write_news uses 120-day TTL; reads return None when
+    the item is absent or expired.
+
+    Files: src/backend/tests/unit/test_company_intel_cache.py (moto mock_dynamodb)
+
+    1. test_write_then_read_profile_roundtrips
+       Assert: written profile fields read back intact.
+    2. test_profile_ttl_is_six_months
+       Assert: stored expiresAt ~= now + 6 months (allow small delta).
+    3. test_news_ttl_is_120_days
+       Assert: stored expiresAt ~= now + 120 days.
+    4. test_expired_item_reads_as_none
+       Setup: item with expiresAt in the past. Assert: read returns None.
+    5. test_absent_item_reads_as_none
+       Assert: read of a never-written key returns None.
+
+    Run: cd src/backend && uv run pytest tests/unit/test_company_intel_cache.py -v --tb=short -k rw
+    All 5 tests must pass.
+
+# =============================================================================
+# CATEGORY C: UNIT — CACHE-FIRST CONTROL FLOW (research_company)
+# =============================================================================
+unit_cache_flow:
+  prompt: |
+    Context: research_company() is cache-first. Mock TavilyClient.search and the LLM; spy on them.
+
+    Files: src/backend/tests/unit/test_company_research_cache_flow.py
+
+    1. test_full_hit_skips_tavily_and_llm
+       Setup: fresh profile + fresh news in cache.
+       Assert: research_company returns merged data; TavilyClient.search NOT called; LLM NOT called.
+    2. test_profile_fresh_news_stale_fetches_news_only
+       Setup: fresh profile, expired/absent news.
+       Assert: exactly ONE search issued (the news query); profile not re-fetched; news record rewritten.
+    3. test_miss_runs_full_research_and_writes_both
+       Setup: empty cache.
+       Assert: full research runs; both profile (6mo) and news (120d) records written.
+    4. test_cache_result_preserves_source_and_confidence
+       Assert: merged-from-cache result carries a sensible source + confidence (passes gate as before).
+
+    Run: cd src/backend && uv run pytest tests/unit/test_company_research_cache_flow.py -v --tb=short
+    All 4 tests must pass.
+
+# =============================================================================
+# CATEGORY D: UNIT — GRACEFUL DEGRADATION
+# =============================================================================
+unit_cache_degrade:
+  prompt: |
+    Context: the cache is best-effort and must never fail the request.
+
+    Files: src/backend/tests/unit/test_company_intel_cache.py
+
+    1. test_missing_table_env_is_noop
+       Setup: COMPANY_RESEARCH_CACHE_TABLE_NAME unset.
+       Assert: cache reads return None, writes are no-ops, research proceeds directly (no exception).
+    2. test_dynamodb_error_degrades_to_direct_research
+       Setup: table client raises on get/put.
+       Assert: research_company still returns a normal result via direct research; error logged, not raised.
+
+    Run: cd src/backend && uv run pytest tests/unit/test_company_intel_cache.py -v --tb=short -k degrade
+    All 2 tests must pass.
+
+# =============================================================================
+# CATEGORY E: UNIT — IN-FLIGHT LOCK
+# =============================================================================
+unit_cache_lock:
+  prompt: |
+    Context: a simple conditional-write lock prevents duplicate full-research on concurrent misses.
+
+    Files: src/backend/tests/unit/test_company_intel_cache.py
+
+    1. test_acquire_lock_succeeds_when_free
+       Assert: acquire_lock returns True on a free key.
+    2. test_acquire_lock_fails_when_held
+       Setup: lock already present. Assert: acquire_lock returns False.
+    3. test_concurrent_miss_single_full_research
+       Setup: simulate two invocations on the same missing key; one holds the lock.
+       Assert: only one performs full research; the other waits/re-reads (no duplicate Tavily run).
+
+    Run: cd src/backend && uv run pytest tests/unit/test_company_intel_cache.py -v --tb=short -k lock
+    All 3 tests must pass.
+
+# =============================================================================
+# EXECUTION ORDER
+# =============================================================================
+execution_order:
+  before_implementation:
+    run_first: [unit_cache_keys, unit_cache_rw, unit_cache_flow, unit_cache_degrade, unit_cache_lock]

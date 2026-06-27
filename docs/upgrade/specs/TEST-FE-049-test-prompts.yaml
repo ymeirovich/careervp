@@ -1,0 +1,166 @@
+spec_id: TEST-FE-049
+title: "Test Prompts — Tavily company research: client, retrieval rewrite, confidence/identity gate, context enrichment"
+priority: critical
+status: draft
+owner: backend
+created_at: 2026-06-27
+updated_at: 2026-06-27
+type: test_prompts
+note: >
+  Runnable prompts for a fresh Claude/Codex session or test-runner agent. Self-contained:
+  context, files, cases, run command, assertions. Covers FE-UI-049. Author tests BEFORE
+  implementation (the confidence-gate cases must FAIL against current code, proving the bug,
+  then PASS after the swap).
+
+context_required: >
+  Working directory: /Users/yitzchak/Documents/dev/careervp
+  Backend: src/backend/careervp/
+  Spec:    docs/upgrade/specs/FE-UI-049-tavily-company-research.yaml
+  Key pattern to mirror: logic/utils/llm_client.py:132-167 (explicit>env>SSM)
+
+recommended_model_for_test_authoring_claude: sonnet
+recommended_model_for_test_authoring_codex: medium
+recommended_model_for_complex_test_cases_claude: opus    # identity-gate + degrade-not-fabricate semantics
+recommended_model_for_complex_test_cases_codex: high
+
+# =============================================================================
+# CATEGORY A: UNIT — TAVILY CLIENT
+# =============================================================================
+unit_tavily_client:
+  prompt: |
+    Context: FE-UI-049 adds logic/utils/tavily_client.py with SSM-keyed TavilyClient.search
+    returning Result[list[SearchResult]]. Key resolution: explicit arg > TAVILY_API_KEY env >
+    SSM via TAVILY_API_KEY_SSM_PARAM (mirror llm_client._fetch_from_ssm).
+
+    Files: src/backend/tests/unit/test_tavily_client.py
+    Mock the tavily SDK (or httpx) and boto3 ssm via unittest.mock.patch (follow test_web_search.py style).
+
+    1. test_key_from_explicit_arg_takes_priority
+       Assert: explicit api_key used; SSM never called.
+    2. test_key_from_env_when_no_arg
+       Setup: TAVILY_API_KEY in env. Assert: env used; SSM not called.
+    3. test_key_from_ssm_when_no_arg_or_env
+       Setup: no arg/env; TAVILY_API_KEY_SSM_PARAM set. Assert: ssm.get_parameter(WithDecryption=True) called.
+    4. test_missing_key_returns_clean_result_failure
+       Setup: no arg/env/SSM. Assert: search returns Result(success=False) (or construction error surfaced), never an unhandled crash.
+    5. test_search_success_normalizes_to_searchresult
+       Setup: mocked Tavily response. Assert: list[SearchResult] with url/title/snippet populated.
+    6. test_search_provider_error_wrapped_in_result
+       Setup: provider raises/timeouts. Assert: Result(success=False) with a SEARCH/timeout code.
+
+    Run: cd src/backend && uv run pytest tests/unit/test_tavily_client.py -v --tb=short
+    All 6 tests must pass.
+
+# =============================================================================
+# CATEGORY B: UNIT — RETRIEVAL REWRITE (web_search.py)
+# =============================================================================
+unit_web_search_tavily:
+  prompt: |
+    Context: FE-UI-049 rewrites search_company_info(company_name, *, domain=None) to call
+    TavilyClient with two queries (profile site-scoped + news) and removes DuckDuckGo.
+
+    Files: src/backend/tests/unit/test_web_search.py  (rewrite; drop DDG HTML tests)
+    Mock TavilyClient.search.
+
+    1. test_runs_profile_and_news_queries
+       Assert: two searches issued; profile query contains mission/products terms; news query contains news/funding terms.
+    2. test_domain_scopes_profile_query
+       Setup: domain='sysaid.com'. Assert: profile search called with include_domains=['sysaid.com'].
+    3. test_no_domain_falls_back_to_general_search
+       Setup: domain=None. Assert: searches issued without include_domains.
+    4. test_results_normalized_to_searchresult
+       Assert: aggregate_search_content produces non-empty text; SearchResult contract preserved.
+    5. test_empty_results_return_no_results
+       Setup: Tavily returns []. Assert: Result(success=False, code NO_RESULTS/SEARCH_FAILED).
+    6. test_duckduckgo_removed
+       Assert: grep of careervp/ for 'duckduckgo' (case-insensitive) returns 0 matches; _parse_duckduckgo_results no longer defined.
+
+    Run: cd src/backend && uv run pytest tests/unit/test_web_search.py -v --tb=short
+    All 6 tests must pass.
+
+# =============================================================================
+# CATEGORY C: UNIT — CONFIDENCE + IDENTITY GATE (the bug-fix regression)
+# =============================================================================
+unit_confidence_identity_gate:
+  prompt: |
+    Context: FE-UI-049 adds ResearchSource.WEB_API to _calculate_confidence with base 0.88,
+    minus 0.1 per missing core field, GATED on company-identity verification. Threshold 0.85.
+
+    Files: src/backend/tests/unit/test_company_research.py (extend) or _quality.py
+
+    1. test_web_api_with_identity_match_passes_gate
+       Setup: source=WEB_API; aggregated content mentions the company name; all core fields present.
+       Assert: confidence >= 0.85 (e.g. 0.88) -> result is served as completed. THIS is the regression
+               that fails against current code (web search capped 0.70) and passes after the swap.
+    2. test_web_api_domain_match_satisfies_identity
+       Setup: company name absent from text but a source_url domain == job domain.
+       Assert: identity satisfied; confidence >= 0.85.
+    3. test_web_api_no_identity_match_capped_below_gate
+       Setup: content about a different company; no domain match.
+       Assert: confidence <= 0.70; result NOT served as completed (degrades).
+    4. test_missing_core_fields_apply_penalty
+       Setup: identity matches but 2 core fields missing. Assert: 0.88 - 0.2 = ~0.68 -> fails gate.
+    5. test_total_failure_returns_all_sources_failed
+       Setup: Tavily primary + fallback both empty.
+       Assert: research_company returns Result(success=False, code=ALL_SOURCES_FAILED); no fabricated payload.
+    6. test_truncation_at_2500_words
+       Setup: 3000-word raw content. Assert: prompt input truncated to 2500 words, not 800.
+
+    Run: cd src/backend && uv run pytest tests/unit/ -v --tb=short -k 'confidence or identity or truncation or all_sources'
+    All 6 tests must pass (cases 1-2 prove the gate bug is fixed).
+
+# =============================================================================
+# CATEGORY D: UNIT — CONTEXT ENRICHMENT
+# =============================================================================
+unit_context_enrichment:
+  prompt: |
+    Context: FE-UI-049 adds key_products, company_size, key_executives, competitive_positioning,
+    growth_signals to CompanyResearchResult AND CompanyContext, and surfaces overview +
+    financial_summary into CompanyContext.
+
+    Files: src/backend/tests/unit/test_company_research.py (extend)
+
+    1. test_result_model_has_new_fields
+       Assert: CompanyResearchResult validates with all 5 new fields.
+    2. test_context_surfaces_overview_and_financial_summary
+       Setup: persisted CR with overview + financial_summary.
+       Assert: load_confident_company_research returns a CompanyContext where overview + financial_summary are non-null.
+    3. test_context_carries_new_fields_for_vpr
+       Assert: CompanyContext.model_dump() includes key_products/company_size/etc. (these flow into the VPR prompt).
+    4. test_structuring_prompt_requests_new_keys
+       Assert: build_structure_user_prompt text requests key_products, company_size, key_executives, competitive_positioning, growth_signals.
+
+    Run: cd src/backend && uv run pytest tests/unit/ -v --tb=short -k 'context or enrichment or new_fields'
+    All 4 tests must pass.
+
+# =============================================================================
+# CATEGORY E: INTEGRATION — RESEARCH PASSES THE GATE END-TO-END
+# =============================================================================
+integration_research_passes_gate:
+  prompt: |
+    Context: End-to-end, a Tavily-sourced research run for a real-named company with a domain
+    must pass the confidence gate and persist with WEB_API source.
+
+    Files: src/backend/tests/integration/test_tavily_research_e2e.py
+    Mock TavilyClient.search to return realistic content for the company; mock the LLM to echo
+    structured JSON including the new fields.
+
+    1. test_research_company_persists_completed_with_web_api
+       Action: research_company for company with domain.
+       Assert: success; source == WEB_API; confidence >= 0.85; new fields populated.
+    2. test_second_company_with_ambiguous_name_degrades
+       Setup: general-search fallback returns wrong-company content.
+       Assert: confidence <= 0.70; not served as completed; no fabrication.
+
+    Run: cd src/backend && uv run pytest tests/integration/test_tavily_research_e2e.py -v --tb=short
+    All 2 tests must pass.
+
+# =============================================================================
+# EXECUTION ORDER
+# =============================================================================
+execution_order:
+  before_implementation:
+    run_first: [unit_tavily_client, unit_web_search_tavily, unit_confidence_identity_gate, unit_context_enrichment]
+    note: "unit_confidence_identity_gate cases 1-2 must FAIL against current code (proving the bug), then PASS."
+  after_implementation:
+    run: [integration_research_passes_gate]

@@ -84,6 +84,7 @@ export function useApplicationHub(jobId: string): {
   companyResearchError: boolean;
   applicationState: string | null;
   companyName: string | null;
+  jobUrl: string | null;
 } {
   const enabled = jobId.length > 0;
 
@@ -242,6 +243,7 @@ export function useApplicationHub(jobId: string): {
   );
   const applicationState = applicationRecord?.state ?? appData?.state ?? null;
   const companyName = appData?.job?.company_name ?? appData?.company_name ?? null;
+  const jobUrl: string | null = (typeof appData?.job?.url === 'string' ? appData.job.url : null);
 
   // CV identity — exposed to avoid a separate useCV() call on pages that already use this hook
   const cvId = cvQuery.data?.cv_id ?? null;
@@ -267,5 +269,6 @@ export function useApplicationHub(jobId: string): {
     companyResearchError,
     applicationState,
     companyName,
+    jobUrl,
   };
 }

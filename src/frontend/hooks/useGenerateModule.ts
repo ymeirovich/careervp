@@ -12,6 +12,7 @@ export interface GenerateOptions {
   companyResearchId?: string;
   force?: boolean;
   companyName?: string;
+  jobUrl?: string;
 }
 
 const CANCEL_FN_MAP: Partial<Record<ModuleType, (id: string) => Promise<unknown>>> = {
@@ -82,6 +83,7 @@ export function useGenerateModule(
           response = await api.fetchCompanyResearch({
             job_id: jobId,
             company_name: options.companyName ?? '',
+            url: options.jobUrl ?? undefined,
             retry: options.force ?? false,
           });
           break;

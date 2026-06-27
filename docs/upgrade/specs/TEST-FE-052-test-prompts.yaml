@@ -1,0 +1,129 @@
+spec_id: TEST-FE-052
+title: "Test Prompts — Tavily infra nested stack, SSM wiring, alarms, CI/CD seeding"
+priority: high
+status: draft
+owner: infra
+created_at: 2026-06-27
+updated_at: 2026-06-27
+type: test_prompts
+note: >
+  Runnable prompts for a fresh Claude/Codex session or test-runner agent. Covers FE-UI-052.
+  Use aws_cdk.assertions.Template for synthesized-template assertions; grep/lint for CI/CD
+  workflow assertions. Author BEFORE implementation.
+
+context_required: >
+  Working directory: /Users/yitzchak/Documents/dev/careervp
+  Infra:  infra/careervp/
+  Spec:   docs/upgrade/specs/FE-UI-052-tavily-observability-alerting.yaml
+  Mirror: api_construct.py anthropic SSM pattern; ai_assist_nested_stack.py; test-anthropic-handshake.yml
+
+recommended_model_for_test_authoring_claude: sonnet
+recommended_model_for_test_authoring_codex: medium
+recommended_model_for_complex_test_cases_claude: opus    # IAM scoping + no-cycle synthesis assertions
+recommended_model_for_complex_test_cases_codex: high
+
+# =============================================================================
+# CATEGORY A: INFRA — TAVILY SSM WIRING
+# =============================================================================
+infra_tavily_wiring:
+  prompt: |
+    Context: FE-UI-052 adds company_research_nested_stack.py wiring the Tavily SSM param env +
+    scoped IAM onto the CR worker (+ CR handler).
+
+    Files: infra/tests/test_company_research_nested_stack.py
+    Use aws_cdk.assertions.Template.from_stack.
+
+    1. test_cr_worker_has_tavily_env_var
+       Assert: CR worker Lambda Environment has TAVILY_API_KEY_SSM_PARAM = /careervp/<env>/tavily-api-key.
+    2. test_ssm_get_parameter_scoped_to_tavily_arn
+       Assert: an ssm:GetParameter statement resource targets the Tavily param ARN; NO 'Resource': '*'.
+    3. test_no_wildcard_iam_added
+       Assert: no new statement grants ssm:* or Resource '*' (FE-UI-035 invariant).
+    4. test_template_synthesizes_without_cycle
+       Assert: Template.from_stack succeeds; no dependency-cycle error.
+
+    Run: cd infra && uv run pytest tests/test_company_research_nested_stack.py -v --tb=short
+    Then: cd infra && npx cdk synth
+    All 4 tests must pass + synth exit 0.
+
+# =============================================================================
+# CATEGORY B: INFRA — CACHE TABLE GRANT ON CR WORKER
+# =============================================================================
+infra_cache_grant:
+  prompt: |
+    Context: the company-research-cache table exists; FE-UI-050 needs the CR worker to read/write it.
+
+    Files: infra/tests/test_company_research_nested_stack.py (extend)
+
+    1. test_cr_worker_has_cache_table_env
+       Assert: CR worker Environment has COMPANY_RESEARCH_CACHE_TABLE_NAME.
+    2. test_cr_worker_can_read_write_cache_table
+       Assert: an IAM statement grants dynamodb GetItem/PutItem (and UpdateItem for the lock) on the cache table ARN.
+
+    Run: cd infra && uv run pytest tests/test_company_research_nested_stack.py -v --tb=short -k cache
+    All 2 tests must pass.
+
+# =============================================================================
+# CATEGORY C: INFRA — ALARMS + SNS
+# =============================================================================
+infra_alarms:
+  prompt: |
+    Context: FE-UI-052 adds CloudWatch alarms for Tavily/CR failures with an SNS action.
+
+    Files: infra/tests/test_company_research_nested_stack.py (extend)
+
+    1. test_tavily_failure_alarm_exists
+       Assert: an Alarm on metric TavilySearchFailure with an SNS alarm action.
+    2. test_all_sources_failed_alarm_exists
+       Assert: an Alarm on CompanyResearchAllSourcesFailed with an SNS action.
+    3. test_alarms_reference_a_topic
+       Assert: alarm actions reference an SNS topic ARN (reuse error-report topic if present).
+
+    Run: cd infra && uv run pytest tests/test_company_research_nested_stack.py -v --tb=short -k alarm
+    All 3 tests must pass.
+
+# =============================================================================
+# CATEGORY D: CI/CD — SECRET SEEDING + HANDSHAKE
+# =============================================================================
+cicd_seeding:
+  prompt: |
+    Context: FE-UI-052 seeds the Tavily secret in deploy workflows and adds a handshake workflow.
+    These are YAML/grep assertions (no AWS calls).
+
+    Files: infra/tests/test_cicd_tavily_seeding.py (or a scripts/ check)
+
+    1. test_deploy_seeds_tavily_ssm
+       Assert: deploy.yml AND deploy-staging.yml contain an 'aws ssm put-parameter' step for
+               /careervp/<env>/tavily-api-key sourced from secrets.TAVILY_API_KEY, --type SecureString --overwrite.
+    2. test_handshake_workflow_exists
+       Assert: .github/workflows/test-tavily-handshake.yml exists.
+    3. test_handshake_runs_on_change_and_schedule
+       Assert: handshake workflow triggers on changes to tavily_client.py/web_search.py AND has a 'schedule:' cron.
+    4. test_handshake_ensures_ssm_then_runs_client_tests
+       Assert: workflow has an 'Ensure SSM Parameter exists' step then runs tests/unit/test_tavily_client.py.
+
+    Run: cd infra && uv run pytest tests/test_cicd_tavily_seeding.py -v --tb=short
+    All 4 tests must pass.
+
+# =============================================================================
+# CATEGORY E: REGRESSION — INFRA NON-REGRESSION
+# =============================================================================
+regression_infra:
+  prompt: |
+    Context: FE-UI-052 must not break existing synthesis or naming.
+
+    Steps:
+    1. cd infra && uv sync && npx cdk synth                                   # exit 0, no cycle
+    2. cd infra && uv run pytest tests/ -v --tb=short                         # all pass
+    3. python src/backend/scripts/validate_naming.py --path infra --strict
+    4. uvx checkov -d infra/cdk.out --framework cloudformation --quiet        # still green
+    Report any failure with file:line + message.
+
+# =============================================================================
+# EXECUTION ORDER
+# =============================================================================
+execution_order:
+  before_implementation:
+    run_first: [infra_tavily_wiring, infra_cache_grant, infra_alarms, cicd_seeding]
+  after_implementation:
+    run: [regression_infra]

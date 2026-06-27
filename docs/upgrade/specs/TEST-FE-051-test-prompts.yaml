@@ -1,0 +1,110 @@
+spec_id: TEST-FE-051
+title: "Test Prompts — Required Job URL + front-door domain validation"
+priority: high
+status: draft
+owner: fullstack
+created_at: 2026-06-27
+updated_at: 2026-06-27
+type: test_prompts
+note: >
+  Runnable prompts for a fresh Claude/Codex session or test-runner agent. Covers FE-UI-051.
+  Backend uses unittest.mock for DNS/HTTP; integration uses moto mock_dynamodb. Frontend uses
+  the existing component test harness (data-testid selectors). Author BEFORE implementation.
+
+context_required: >
+  Working directory: /Users/yitzchak/Documents/dev/careervp
+  Backend:  src/backend/careervp/
+  Frontend: src/frontend/app/applications/new/page.tsx
+  Spec:     docs/upgrade/specs/FE-UI-051-application-url-domain-validation.yaml
+
+recommended_model_for_test_authoring_claude: sonnet
+recommended_model_for_test_authoring_codex: medium
+recommended_model_for_complex_test_cases_claude: opus    # timeout/retry false-negative avoidance
+recommended_model_for_complex_test_cases_codex: high
+
+# =============================================================================
+# CATEGORY A: UNIT — DOMAIN VALIDATOR
+# =============================================================================
+unit_domain_validator:
+  prompt: |
+    Context: FE-UI-051 adds logic/utils/domain_validator.py validate_job_url(url) ->
+    Result[DomainValidation] with classification valid|unreachable|parked|invalid_format.
+    Mock DNS resolution and the HTTP HEAD/GET client.
+
+    Files: src/backend/tests/unit/test_domain_validator.py
+
+    1. test_malformed_url_is_invalid_format
+       Inputs: '', 'not a url', 'ftp://x', 'http://'. Assert: classification invalid_format.
+    2. test_dns_failure_is_unreachable
+       Setup: DNS lookup raises. Assert: unreachable.
+    3. test_head_2xx_is_valid_and_returns_domain
+       Setup: HEAD -> 200. Assert: valid; normalized domain returned (lowercased, no www.).
+    4. test_head_405_falls_back_to_get
+       Setup: HEAD -> 405, GET -> 200. Assert: valid (GET fallback exercised).
+    5. test_single_transient_timeout_retried_not_failed
+       Setup: first request times out, retry succeeds. Assert: valid (NOT unreachable) — no false-negative.
+    6. test_persistent_timeout_is_unreachable
+       Setup: all attempts time out. Assert: unreachable.
+    7. test_parked_domain_classified (best-effort)
+       Setup: known parked-page signature. Assert: parked (or unreachable if heuristic disabled — document choice).
+
+    Run: cd src/backend && uv run pytest tests/unit/test_domain_validator.py -v --tb=short
+    All tests must pass.
+
+# =============================================================================
+# CATEGORY B: UNIT/INTEGRATION — CREATE REQUIRES VALID URL
+# =============================================================================
+unit_create_requires_valid_url:
+  prompt: |
+    Context: FE-UI-051 makes url required at create and blocks on non-valid domains.
+    Mock validate_job_url; moto mock_dynamodb for persistence.
+
+    Files: src/backend/tests/unit/test_application_handler.py (extend)
+
+    1. test_create_without_url_returns_400_url_required
+       Action: create with no url. Assert: 400 error_code 'url_required'; NO application/job persisted.
+    2. test_create_with_invalid_format_blocked
+       Setup: validate_job_url -> invalid_format. Assert: 400 field:'url'; nothing persisted.
+    3. test_create_with_unreachable_domain_blocked
+       Setup: validate_job_url -> unreachable. Assert: 400; nothing persisted.
+    4. test_create_with_valid_url_succeeds_and_stores_domain
+       Setup: validate_job_url -> valid (domain 'sysaid.com').
+       Assert: 201/200 created; the normalized domain is stored on the job/application record.
+    5. test_error_response_is_field_scoped
+       Assert: 400 body has {error_code, message, field:'url', classification} for the frontend to render.
+
+    Run: cd src/backend && uv run pytest tests/unit/test_application_handler.py -v --tb=short -k url
+    All 5 tests must pass.
+
+# =============================================================================
+# CATEGORY C: FRONTEND — REQUIRED URL + INLINE ERROR
+# =============================================================================
+fe_new_application_url_required:
+  prompt: |
+    Context: FE-UI-051 makes the URL required in new/page.tsx and surfaces the backend domain
+    error inline. Use the existing FE test harness; select via data-testid.
+
+    Files: src/frontend/app/applications/new/<test file per repo convention>
+
+    1. test_submit_disabled_until_url_entered
+       Setup: fill title/company/description, leave url empty.
+       Assert: submit button disabled (isFormComplete false).
+    2. test_client_side_format_precheck
+       Setup: enter 'abc' in url. Assert: inline format hint shown; submit blocked.
+    3. test_backend_domain_error_rendered_inline
+       Setup: mock create API -> 400 {field:'url', message:'Domain unreachable'}.
+       Assert: message rendered near data-testid='new-app-url-input'; no navigation away.
+    4. test_valid_url_submits
+       Setup: valid url + required fields; API 200. Assert: create called with url; success path.
+    5. test_i18n_required_label
+       Assert: url label shows required marker in both en and he locales.
+
+    Run: cd src/frontend && npm run typecheck && npm run test:unit
+    All 5 tests must pass.
+
+# =============================================================================
+# EXECUTION ORDER
+# =============================================================================
+execution_order:
+  before_implementation:
+    run_first: [unit_domain_validator, unit_create_requires_valid_url, fe_new_application_url_required]

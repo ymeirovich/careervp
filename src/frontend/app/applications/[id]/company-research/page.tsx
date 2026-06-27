@@ -15,6 +15,7 @@ function CompanyResearchContent({ jobId }: { jobId: string }) {
   const [pollMessage, setPollMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState<string>('');
+  const [jobPostingUrl, setJobPostingUrl] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     const init = async () => {
@@ -26,6 +27,7 @@ function CompanyResearchContent({ jobId }: { jobId: string }) {
         ]);
         setResearch(data);
         setCompanyName(appData?.job?.company_name ?? '');
+        setJobPostingUrl(appData?.job?.url ?? undefined);
       } catch (err) {
         console.error(err);
       } finally {
@@ -40,7 +42,7 @@ function CompanyResearchContent({ jobId }: { jobId: string }) {
     setError(null);
     setPollMessage(null);
     try {
-      await api.fetchCompanyResearch({ job_id: jobId, company_name: companyName });
+      await api.fetchCompanyResearch({ job_id: jobId, company_name: companyName, url: jobPostingUrl });
 
       const POLL_INTERVAL_MS = 10_000;
       const MAX_ATTEMPTS = 30; // 30 × 10 s = 5 minutes

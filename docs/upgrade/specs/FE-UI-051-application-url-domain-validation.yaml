@@ -1,0 +1,130 @@
+spec_id: FE-UI-051
+title: "Required Job URL + front-door domain validation at application creation"
+priority: high
+status: draft
+owner: fullstack
+created_at: 2026-06-27
+updated_at: 2026-06-27
+tier: feature
+
+human_approval_gate:
+  required: true
+  note: >
+    User-facing behavior change: the Job URL becomes REQUIRED and a bad/unreachable domain BLOCKS
+    application creation (4xx). This changes the +New Application UX contract. No new AWS resources.
+
+recommended_model_claude: sonnet           # +opus review for the user-facing failure path
+recommended_model_codex: medium            # +high review
+reason_for_model: >
+  Backend validator + handler gating + a frontend form contract change. Standard implementation;
+  the only sensitivity is failure-path UX and avoiding false-negatives on valid sites, so review
+  the gating logic at claude:opus / codex:high.
+
+depends_on: []
+blocks:
+  - FE-UI-049   # a verified domain at the front door makes the CR identity gate a backstop
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    In the +New Application modal the Job URL is optional: isFormComplete requires only title,
+    company, description (new/page.tsx:119-120) and the submit sends url: url.trim() || undefined
+    (line 142). The backend create flow (application_handler.py) accepts a missing/invalid URL.
+    Company research later derives the domain from job.url via _resolve_domain(); with no/garbage
+    URL, CR has no reliable domain and produces weak, possibly wrong-company results.
+  required_behavior: >
+    The Job URL is REQUIRED and its domain is validated at application creation:
+      - Missing/empty URL -> 4xx url_required; no application created.
+      - URL present -> validate format, DNS resolution, and reachability (HTTP HEAD with GET
+        fallback, tight timeout). Classify valid | unreachable | parked | invalid_format.
+      - Anything other than 'valid' -> 4xx with an actionable, field-scoped error; no application
+        created. Never block on a single transient timeout (one bounded retry).
+    The frontend requires the URL (submit disabled until entered), does a client-side format
+    precheck, and surfaces the backend domain error next to the URL input.
+  user_impact: >
+    Users cannot create an application that company research can't act on. Failures surface
+    immediately at the front door instead of as a degraded VPR later.
+
+# =============================================================================
+# EVIDENCE
+# =============================================================================
+evidence:
+  url_optional_frontend:
+    - { file: src/frontend/app/applications/new/page.tsx, line: "119-120", note: "isFormComplete omits url" }
+    - { file: src/frontend/app/applications/new/page.tsx, line: 142, code: "url: url.trim() || undefined" }
+    - { file: src/frontend/app/applications/new/page.tsx, line: 262, code: "input data-testid='new-app-url-input' type='url'" }
+  backend_accepts_missing_url:
+    - { file: src/backend/careervp/handlers/application_handler.py, note: "create flow does not require/validate url" }
+  domain_consumer:
+    - { file: src/backend/careervp/logic/company_research.py, line: "469-476", code: "_resolve_domain uses request.job_posting_url" }
+
+# =============================================================================
+# ARCHITECTURE
+# =============================================================================
+architecture:
+  domain_validator:
+    location: src/backend/careervp/logic/utils/domain_validator.py  # NEW
+    function: "validate_job_url(url: str) -> Result[DomainValidation]"
+    classification: [valid, unreachable, parked, invalid_format]
+    rules:
+      - "Parse with urlparse; require scheme http(s) + netloc, else invalid_format."
+      - "DNS resolution check on the host; failure -> unreachable."
+      - "HTTP HEAD with short timeout (~5s), GET fallback if HEAD unsupported; 2xx/3xx -> reachable."
+      - "Parked-domain heuristic optional (best-effort); never hard-fail on a single transient timeout — one bounded retry."
+      - "Return the normalized domain so CR can reuse it (and FE-UI-050 cache key)."
+  handler_gating:
+    file: src/backend/careervp/handlers/application_handler.py
+    change: >
+      In the create path: require url (missing/empty -> 400 url_required). When present, call
+      validate_job_url; non-'valid' -> 400 with {error_code, message, field:'url', classification}.
+      Only on 'valid' proceed to create the application/job record (store the normalized domain).
+  frontend:
+    file: src/frontend/app/applications/new/page.tsx
+    change: >
+      Add url to isFormComplete (required); mark the URL label required; client-side format
+      precheck (basic URL pattern) before submit; on a 400 from create, render the backend
+      message inline next to data-testid='new-app-url-input'. Keep i18n (en/he) labels.
+
+# =============================================================================
+# IMPLEMENTATION STEPS
+# =============================================================================
+implementation:
+  step_1: { name: "domain_validator util", change: "format + DNS + reachability classification" }
+  step_2: { name: "Handler gating", change: "require url; block create on non-valid domain" }
+  step_3: { name: "Frontend required URL + error surfacing", change: "isFormComplete + inline error + i18n" }
+
+# =============================================================================
+# CONSTRAINTS
+# =============================================================================
+constraints:
+  - "Job URL is REQUIRED; no application is created without a valid, reachable domain."
+  - "Validation timeout must keep the create path responsive (~5s budget, one bounded retry)."
+  - "Never block on a single transient timeout (avoid false-negatives on valid sites)."
+  - "Error response is field-scoped (field:'url') with a stable error_code for the frontend."
+  - "mypy --strict passes; frontend typecheck + unit tests pass; i18n preserved."
+
+# =============================================================================
+# VALIDATION
+# =============================================================================
+validation:
+  commands:
+    - "cd src/backend && uv run mypy careervp --strict"
+    - "cd src/backend && uv run pytest tests/unit/test_domain_validator.py tests/unit/test_application_handler.py -v --tb=short"
+    - "cd src/frontend && npm run typecheck && npm run test:unit"
+  acceptance_criteria:
+    - "Create with no URL -> 400 url_required; nothing persisted."
+    - "Create with malformed URL -> 400 invalid_format; nothing persisted."
+    - "Create with unreachable domain -> 400 unreachable; nothing persisted."
+    - "Create with a valid reachable URL -> application created; normalized domain stored."
+    - "A single transient timeout does not falsely reject a valid site (retry path covered)."
+    - "Frontend submit disabled until URL entered; backend domain error rendered inline."
+
+# =============================================================================
+# TEST HOOKS
+# =============================================================================
+test_hooks:
+  - "TEST-FE-051 § unit_domain_validator: classification + timeout/retry"
+  - "TEST-FE-051 § unit_create_requires_valid_url: handler gating"
+  - "TEST-FE-051 § fe_new_application_url_required: form + inline error"
