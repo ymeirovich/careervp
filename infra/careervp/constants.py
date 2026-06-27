@@ -182,6 +182,8 @@ BILLING_WEBHOOK_DLQ = "billing-webhook-dlq"
 # =============================================================================
 ANTHROPIC_API_KEY_SSM_PARAM = f"/careervp/{ENVIRONMENT}/anthropic-api-key"
 ANTHROPIC_API_KEY_ENV_VAR = "ANTHROPIC_API_KEY_SSM_PARAM"
+TAVILY_API_KEY_SSM_PARAM = f"/careervp/{ENVIRONMENT}/tavily-api-key"
+TAVILY_API_KEY_SSM_PARAM_ENV = "TAVILY_API_KEY_SSM_PARAM"
 
 # =============================================================================
 # LLM MODEL IDs  — update here + cdk deploy to swap models, no code change needed

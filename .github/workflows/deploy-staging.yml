@@ -73,6 +73,7 @@ jobs:
       - name: Ensure SSM Parameter exists
         env:
           ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TAVILY_KEY: ${{ secrets.TAVILY_API_KEY }}
         run: |
           if [ -n "$ANTHROPIC_KEY" ]; then
             aws ssm put-parameter \
@@ -82,6 +83,15 @@ jobs:
               --overwrite
           else
             echo "::warning::ANTHROPIC_API_KEY secret not set."
+          fi
+          if [ -n "$TAVILY_KEY" ]; then
+            aws ssm put-parameter \
+              --name "/careervp/staging/tavily-api-key" \
+              --value "$TAVILY_KEY" \
+              --type SecureString \
+              --overwrite
+          else
+            echo "::warning::TAVILY_API_KEY secret not set."
           fi
 
       - name: Ensure JWT SSM Parameters exist

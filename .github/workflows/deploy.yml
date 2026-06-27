@@ -87,6 +87,7 @@ jobs:
       - name: Ensure SSM Parameter exists
         env:
           ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TAVILY_KEY: ${{ secrets.TAVILY_API_KEY }}
         run: |
           if [ -n "$ANTHROPIC_KEY" ]; then
             aws ssm put-parameter \
@@ -98,6 +99,17 @@ jobs:
             echo "::warning::ANTHROPIC_API_KEY secret not set. Checking if SSM parameter exists..."
             aws ssm get-parameter --name "/careervp/dev/anthropic-api-key" --query "Parameter.Name" --output text || \
               echo "::warning::SSM parameter /careervp/dev/anthropic-api-key not found. Set ANTHROPIC_API_KEY secret or create manually."
+          fi
+          if [ -n "$TAVILY_KEY" ]; then
+            aws ssm put-parameter \
+              --name "/careervp/dev/tavily-api-key" \
+              --value "$TAVILY_KEY" \
+              --type SecureString \
+              --overwrite
+          else
+            echo "::warning::TAVILY_API_KEY secret not set. Checking if SSM parameter exists..."
+            aws ssm get-parameter --name "/careervp/dev/tavily-api-key" --query "Parameter.Name" --output text || \
+              echo "::warning::SSM parameter /careervp/dev/tavily-api-key not found. Set TAVILY_API_KEY secret or create manually."
           fi
       - name: Ensure JWT SSM Parameters exist
         env:
@@ -305,6 +317,7 @@ jobs:
       - name: Ensure SSM Parameter exists
         env:
           ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TAVILY_KEY: ${{ secrets.TAVILY_API_KEY }}
           TARGET_ENV: ${{ inputs.environment }}
         run: |
           if [ -n "$ANTHROPIC_KEY" ]; then
@@ -317,6 +330,17 @@ jobs:
             echo "::warning::ANTHROPIC_API_KEY secret not set. Checking if SSM parameter exists..."
             aws ssm get-parameter --name "/careervp/${TARGET_ENV}/anthropic-api-key" --query "Parameter.Name" --output text || \
               echo "::warning::SSM parameter /careervp/${TARGET_ENV}/anthropic-api-key not found. Set ANTHROPIC_API_KEY secret or create manually."
+          fi
+          if [ -n "$TAVILY_KEY" ]; then
+            aws ssm put-parameter \
+              --name "/careervp/${TARGET_ENV}/tavily-api-key" \
+              --value "$TAVILY_KEY" \
+              --type SecureString \
+              --overwrite
+          else
+            echo "::warning::TAVILY_API_KEY secret not set. Checking if SSM parameter exists..."
+            aws ssm get-parameter --name "/careervp/${TARGET_ENV}/tavily-api-key" --query "Parameter.Name" --output text || \
+              echo "::warning::SSM parameter /careervp/${TARGET_ENV}/tavily-api-key not found. Set TAVILY_API_KEY secret or create manually."
           fi
       - name: Ensure JWT SSM Parameters exist
         env:

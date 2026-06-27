@@ -33,6 +33,7 @@ EXPECTED_NESTED_STACK_MARKERS = (
     "MonitoringNestedStack",
     "AiAssistNestedStack",
     "ErrorReportNestedStack",
+    "CompanyResearchNestedStack",
 )
 
 

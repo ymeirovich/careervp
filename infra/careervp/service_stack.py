@@ -6,6 +6,7 @@ from constructs import Construct
 
 from .api_construct import ApiConstruct
 from .ai_assist_nested_stack import AiAssistNestedStack
+from .company_research_nested_stack import CompanyResearchNestedStack
 from .error_report_nested_stack import ErrorReportNestedStack
 from .cognito_construct import CognitoConstruct
 from .configuration.configuration_construct import ConfigurationStore
@@ -110,6 +111,17 @@ class ServiceStack(Stack):
         )
         self.api.register_error_report_route(
             self.error_report_nested_stack.error_report_lambda
+        )
+
+        self.company_research_nested_stack = CompanyResearchNestedStack(
+            self,
+            "CompanyResearchNestedStack",
+            naming=self.naming,
+            company_research_lambda=self.api.company_research_func,
+            company_research_worker_lambda=self.api.company_research_worker_func,
+            company_research_role=self.api.lambda_role,
+            company_research_cache_table=self.api.api_db.company_research_cache_table,
+            notification_topic=self.api.monitoring.notification_topic,
         )
 
         CfnOutput(self, "UserPoolId", value=self.cognito.user_pool_id)

@@ -40,16 +40,17 @@ def _resource_types(template: Template) -> dict[str, dict[str, Any]]:
 def test_parent_declares_only_approved_nested_stacks(
     synthesized_template: Template,
 ) -> None:
-    """The parent keeps the three approved nested stacks and adds no new split."""
+    """The parent keeps the four approved nested stacks and adds no unapproved split."""
     nested = synthesized_template.find_resources("AWS::CloudFormation::Stack")
     nested_ids = list(nested)
-    assert len(nested_ids) == 3, (
-        "Expected exactly three nested-stack resources in the parent "
-        f"(monitoring + ai-assist + error-report), found {nested_ids}."
+    assert len(nested_ids) == 4, (
+        "Expected exactly four nested-stack resources in the parent "
+        f"(monitoring + ai-assist + error-report + company-research), found {nested_ids}."
     )
     assert any("MonitoringNestedStack" in logical_id for logical_id in nested_ids)
     assert any("AiAssistNestedStack" in logical_id for logical_id in nested_ids)
     assert any("ErrorReportNestedStack" in logical_id for logical_id in nested_ids)
+    assert any("CompanyResearchNestedStack" in logical_id for logical_id in nested_ids)
 
 
 def test_parent_resource_count_below_cfn_hard_limit(
@@ -162,6 +163,14 @@ def test_ai_assist_nested_stack_has_no_stateful_resources(
     """The AI-assist nested stack must not contain DynamoDB, S3, or KMS."""
     for resource_type in STATEFUL_RESOURCE_TYPES:
         ai_assist_template.resource_count_is(resource_type, 0)
+
+
+def test_company_research_nested_stack_has_no_stateful_resources(
+    company_research_template: Template,
+) -> None:
+    """The company-research wiring nested stack must not contain stateful resources."""
+    for resource_type in STATEFUL_RESOURCE_TYPES:
+        company_research_template.resource_count_is(resource_type, 0)
 
 
 def test_company_research_worker_stays_in_parent(
