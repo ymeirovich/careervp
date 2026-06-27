@@ -94,3 +94,16 @@ def test_validate_job_url_marks_parked_domains() -> None:
     assert result.success is True
     assert result.data is not None
     assert result.data.classification == 'parked'
+
+
+def test_validate_job_url_rejects_non_success_http_statuses() -> None:
+    with (
+        patch('careervp.logic.utils.domain_validator._hostname_resolves', return_value=True),
+        patch('careervp.logic.utils.domain_validator._send_request', return_value=_FakeResponse(status_code=404, url='https://example.com/jobs/1')),
+    ):
+        result = validate_job_url('https://example.com/jobs/1')
+
+    assert result.success is True
+    assert result.data is not None
+    assert result.data.classification == 'unreachable'
+    assert result.data.http_status == 404

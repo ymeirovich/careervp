@@ -17,6 +17,7 @@ DomainValidationClassification = Literal['valid', 'unreachable', 'parked', 'inva
 REQUEST_TIMEOUT_SECONDS: Final[float] = 2.0
 REQUEST_RETRY_ATTEMPTS: Final[int] = 2
 HEAD_UNSUPPORTED_STATUSES: Final[set[int]] = {405, 501}
+REACHABLE_HTTP_STATUSES: Final[range] = range(200, 400)
 USER_AGENT: Final[str] = 'CareerVP/1.0 (+https://careervp.ai)'
 PARKING_HOST_MARKERS: Final[tuple[str, ...]] = (
     'afternic',
@@ -87,6 +88,18 @@ def validate_job_url(url: str) -> Result[DomainValidation]:
                 classification='unreachable',
                 domain=domain,
                 normalized_url=normalized_url,
+            ),
+            code=ResultCode.VALIDATION_SUCCESS,
+        )
+    if probe.status_code not in REACHABLE_HTTP_STATUSES:
+        return Result(
+            success=True,
+            data=DomainValidation(
+                classification='unreachable',
+                domain=domain,
+                normalized_url=normalized_url,
+                http_status=probe.status_code,
+                final_url=probe.final_url,
             ),
             code=ResultCode.VALIDATION_SUCCESS,
         )

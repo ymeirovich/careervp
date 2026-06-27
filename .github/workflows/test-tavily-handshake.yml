@@ -8,7 +8,7 @@ on:
       - 'src/backend/careervp/logic/utils/tavily_client.py'
       - 'src/backend/careervp/logic/utils/web_search.py'
       - 'src/backend/careervp/logic/company_research.py'
-      - 'src/backend/tests/unit/test_web_search.py'
+      - 'src/backend/tests/unit/test_tavily_client.py'
       - '.github/workflows/test-tavily-handshake.yml'
   schedule:
     - cron: '17 5 * * *'
@@ -58,11 +58,11 @@ jobs:
           else
             echo "::warning::TAVILY_API_KEY secret not set."
           fi
-      - name: Run web search unit tests
+      - name: Run Tavily client unit tests
         working-directory: src/backend
         run: |
           source .venv/bin/activate
-          uv run pytest tests/unit/test_web_search.py -v --tb=short
+          uv run pytest tests/unit/test_tavily_client.py -v --tb=short
         env:
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
       - name: Report results
@@ -70,4 +70,4 @@ jobs:
         run: |
           echo "## Tavily Integration Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- Web search tests: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Tavily client tests: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
