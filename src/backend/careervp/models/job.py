@@ -90,8 +90,15 @@ class CompanyContext(BaseModel):
     """
 
     company_name: Annotated[str, Field(description='Company name')]
+    overview: Annotated[str | None, Field(description='Company overview')] = None
     mission: Annotated[str | None, Field(description='Company mission statement')] = None
     values: Annotated[list[str], Field(default_factory=list, description='Core company values')]
     strategic_priorities: Annotated[list[str], Field(default_factory=list, description='Current strategic priorities')]
     recent_news: Annotated[list[str], Field(default_factory=list, description='Recent news/developments')]
+    financial_summary: Annotated[str | None, Field(description='Financial performance highlights')] = None
+    key_products: Annotated[list[str], Field(default_factory=list, description='Key products, services, or business lines')]
+    company_size: Annotated[str | None, Field(description='Company size or employee range')] = None
+    key_executives: Annotated[list[str], Field(default_factory=list, description='Named executives or senior leaders')]
+    competitive_positioning: Annotated[str | None, Field(description='Market positioning')] = None
+    growth_signals: Annotated[list[str], Field(default_factory=list, description='Signals of company growth')]
     industry: Annotated[str | None, Field(description='Industry/sector')] = None

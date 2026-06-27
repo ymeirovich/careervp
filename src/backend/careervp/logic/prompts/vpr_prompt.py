@@ -508,6 +508,7 @@ GAP ANALYSIS RESPONSES:
 - DIFFERENTIATORS & VALUE_POSITION: Prioritize claims that are rare — your differentiator should be in the top 5% of what candidates offer. If a strength is common among applicants, it is NOT a differentiator. Cite specific metrics or named outcomes.
 - PROOF CITATION: Every claim must cite a specific metric, quantified fact, or named outcome from the CV or gap analysis. Vague assertions fail.
 - POSITIONING_STATEMENT: Name the target company in your positioning_statement — "for CompanyName" rather than generic language.
+- COMPANY_INSIGHTS: Use company research fields such as overview, financial_summary, key_products, competitive_positioning, growth_signals, and key_executives when present. Do not invent missing company facts.
 - elevator_pitch: Summarize value in 1-2 sentences that a hiring manager would remember.
 - PRIMARY_VALUE.STATEMENT: Make forward-looking commitments — describe impact you will reduce, scale, build, or drive.
 

@@ -132,6 +132,7 @@ CREATED → COMPANY_RESEARCH → GAP_ANALYSIS → GENERATING_ARTIFACTS → INTER
 - ✅ FE-UI-045 inline rich-text editing + autosave-on-blur shipped for Cover Letter, Tailored CV, and Interview Prep, including draft restore and 409 conflict UI
 - ✅ FE-UI-048 API Gateway route surface collapsed to per-feature root + `{proxy+}` ANY integrations, with Cognito/public auth parity, explicit collision exceptions, and parent-stack count below 400
 - ✅ WORKER-LEGS-001 artifact-chain VPR/CV legs: VPR worker now sends Step Functions task-token success/failure, StartVPR no longer uses a 300s heartbeat, CV tailoring is invoked directly by Lambda, and the unused CV tailoring SQS queue/DLQ are removed.
+- ✅ FE-UI-049 Tavily-backed company research now replaces DuckDuckGo retrieval, adds WEB_API identity-gated confidence scoring, expands prompt/context fields, and preserves no-fabrication failure behavior.
 
 ### VPR Async Architecture - DEPLOYED & TESTING
 

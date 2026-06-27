@@ -15,6 +15,7 @@ class ResearchSource(str, Enum):
 
     WEBSITE_SCRAPE = 'website_scrape'
     WEB_SEARCH = 'web_search'
+    WEB_API = 'web_api'
     LLM_FALLBACK = 'llm_fallback'
 
 
@@ -37,6 +38,11 @@ class CompanyResearchResult(BaseModel):
     strategic_priorities: Annotated[list[str], Field(default_factory=list, description='Current strategic priorities or initiatives')]
     recent_news: Annotated[list[str], Field(default_factory=list, description='Recent news items or announcements (last 6 months)')]
     financial_summary: Annotated[str | None, Field(default=None, description='Financial performance highlights if the company is public')] = None
+    key_products: Annotated[list[str], Field(default_factory=list, description='Key products, services, or business lines')]
+    company_size: Annotated[str | None, Field(default=None, description='Company size or employee range when available')] = None
+    key_executives: Annotated[list[str], Field(default_factory=list, description='Named executives or senior leaders')]
+    competitive_positioning: Annotated[str | None, Field(default=None, description='How the company positions itself in the market')] = None
+    growth_signals: Annotated[list[str], Field(default_factory=list, description='Signals of growth such as funding, hiring, launches, or expansion')]
     source: Annotated[ResearchSource, Field(default=ResearchSource.WEBSITE_SCRAPE, description='Primary source for the research content')] = (
         ResearchSource.WEBSITE_SCRAPE
     )

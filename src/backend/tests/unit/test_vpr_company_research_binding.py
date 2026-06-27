@@ -61,6 +61,11 @@ def _cr_research_data(*, confidence: float = 0.9, company_name: str = 'Acme') ->
         'strategic_priorities': ['Workflow automation', 'Enterprise AI'],
         'recent_news': ['Launched an AI operations suite'],
         'financial_summary': 'Privately held',
+        'key_products': ['Workflow automation platform'],
+        'company_size': '201-500 employees',
+        'key_executives': ['Alex Rivera, CEO'],
+        'competitive_positioning': 'Enterprise workflow automation for regulated teams.',
+        'growth_signals': ['Launched an AI operations suite', 'Hiring for platform engineering'],
         'source': 'website_scrape',
         'source_urls': ['https://acme.example/about'],
         'confidence_score': Decimal(str(confidence)),
@@ -126,8 +131,15 @@ def test_load_confident_cr_returns_context_when_present(cr_table: Any) -> None:
 
     assert isinstance(context, CompanyContext)
     assert context.company_name == 'Acme'
+    assert context.overview == 'Acme builds reliable workflow automation for enterprise teams.'
     assert context.mission == 'Make enterprise work easier to operate.'
     assert context.strategic_priorities == ['Workflow automation', 'Enterprise AI']
+    assert context.financial_summary == 'Privately held'
+    assert context.key_products == ['Workflow automation platform']
+    assert context.company_size == '201-500 employees'
+    assert context.key_executives == ['Alex Rivera, CEO']
+    assert context.competitive_positioning == 'Enterprise workflow automation for regulated teams.'
+    assert context.growth_signals == ['Launched an AI operations suite', 'Hiring for platform engineering']
 
 
 def test_load_confident_cr_returns_none_for_low_confidence(cr_table: Any) -> None:
@@ -170,6 +182,7 @@ def test_vpr_submit_injects_company_context(cr_table: Any) -> None:
     assert input_data['company_research_at'] == '2026-06-14T09:05:00+00:00'
     assert input_data['company_context']['company_name'] == 'Acme'
     assert input_data['company_context']['mission'] == 'Make enterprise work easier to operate.'
+    assert input_data['company_context']['key_products'] == ['Workflow automation platform']
 
 
 def test_worker_loads_cr_when_message_lacks_context(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1,125 +1,90 @@
-"""
-Web search fallback utilities for company research.
-Leverages DuckDuckGo HTML endpoint per docs/specs/02-company-research.md.
-"""
+"""Managed web search utilities for company research."""
 
 from __future__ import annotations
 
-from typing import Final, cast
-from urllib.parse import parse_qs, unquote, urlparse
+from typing import Final
 
-import httpx
-from bs4 import BeautifulSoup
-from pydantic import HttpUrl
-
+from careervp.logic.utils.tavily_client import TavilyClient
 from careervp.models.company import SearchResult
 from careervp.models.result import Result, ResultCode
 
-DUCKDUCKGO_URL: Final[str] = 'https://html.duckduckgo.com/html/'
-SEARCH_TIMEOUT: Final[float] = 15.0
 MAX_RESULTS: Final[int] = 5
-USER_AGENT: Final[str] = 'Mozilla/5.0 (compatible; CareerVP/1.0; +https://careervp.ai)'
+PROFILE_RESULTS: Final[int] = 3
+NEWS_RESULTS: Final[int] = 3
 
 
-async def search_company_info(company_name: str) -> Result[list[SearchResult]]:
-    """
-    Perform a DuckDuckGo HTML search for the given company and return parsed results.
-    """
-    query = f'{company_name} about culture values mission'
+async def search_company_info(company_name: str, *, domain: str | None = None) -> Result[list[SearchResult]]:
+    """Run Tavily profile and news queries for a company."""
+    clean_company_name = company_name.strip()
+    if not clean_company_name:
+        return Result(success=False, error='Company name is required for search', code=ResultCode.INVALID_INPUT)
 
-    response = await _make_search_request(query)
-    if isinstance(response, Result):
-        return response  # type: ignore[return-value]
+    clean_domain = _normalize_domain(domain)
+    tavily = TavilyClient()
+    profile_result = await tavily.search(
+        f'{clean_company_name} mission products business model',
+        max_results=PROFILE_RESULTS,
+        include_domains=[clean_domain] if clean_domain else None,
+    )
+    news_result = await tavily.search(
+        f'{clean_company_name} news funding leadership',
+        max_results=NEWS_RESULTS,
+    )
 
-    results = _parse_duckduckgo_results(response.text)
-    if not results:
-        return Result(success=False, error='No search results found', code=ResultCode.NO_RESULTS)
+    results = _merge_results(profile_result.data or [], news_result.data or [])
+    if results:
+        return Result(success=True, data=results[:MAX_RESULTS], code=ResultCode.SUCCESS)
 
-    return Result(success=True, data=results[:MAX_RESULTS], code=ResultCode.SUCCESS)
-
-
-async def _make_search_request(query: str) -> Result[httpx.Response] | httpx.Response:
-    """Make HTTP request with error handling, returning Result on failure."""
-    try:
-        async with httpx.AsyncClient(timeout=SEARCH_TIMEOUT) as client:
-            return await client.post(
-                DUCKDUCKGO_URL,
-                data={'q': query},
-                headers={'User-Agent': USER_AGENT},
-            )
-    except httpx.TimeoutException:
-        return Result(success=False, error='Search timeout', code=ResultCode.TIMEOUT)
-    except httpx.HTTPStatusError as exc:
-        status_code = exc.response.status_code if exc.response else 'unknown'
-        return Result(success=False, error=f'Search HTTP {status_code}', code=ResultCode.SEARCH_FAILED)
-    except (httpx.RequestError, Exception) as exc:
-        return Result(success=False, error=f'Search request error: {exc}', code=ResultCode.SEARCH_FAILED)
-
-
-def _parse_duckduckgo_results(html: str) -> list[SearchResult]:
-    """
-    Parse DuckDuckGo HTML results into SearchResult structures.
-    """
-    soup = BeautifulSoup(html, 'html.parser')
-    parsed_results: list[SearchResult] = []
-
-    for result_block in soup.select('.result'):
-        link = result_block.select_one('.result__a')
-        if not link:
-            continue
-
-        title = link.get_text(strip=True)
-        if not title:
-            continue
-
-        href = link.get('href', '')
-        raw_url = _extract_redirect_target(str(href) if href else '')
-        if not raw_url:
-            continue
-
-        snippet_el = result_block.select_one('.result__snippet')
-        snippet_text = snippet_el.get_text(strip=True) if snippet_el else ''
-
-        parsed_results.append(
-            SearchResult(
-                title=title,
-                url=cast(HttpUrl, raw_url),
-                snippet=snippet_text,
-            )
-        )
-
-        if len(parsed_results) >= MAX_RESULTS:
-            break
-
-    return parsed_results
+    error = profile_result.error or news_result.error or 'No Tavily search results found'
+    code = _select_failure_code(profile_result, news_result)
+    return Result(success=False, error=error, code=code)
 
 
 def aggregate_search_content(results: list[SearchResult]) -> str:
-    """
-    Combine snippets from SearchResult items into a single text blob for structuring.
-    """
-    return ' '.join(result.snippet.strip() or result.title.strip() for result in results if result.snippet.strip() or result.title.strip())
+    """Combine SearchResult content into a single text blob for structuring."""
+    return '\n\n'.join(_result_content(result) for result in results if _result_content(result))
 
 
-def _extract_redirect_target(raw_url: str) -> str:
-    """DuckDuckGo HTML uses redirect links; extract the actual target if possible."""
-    if not raw_url:
-        return ''
+def _merge_results(*result_groups: list[SearchResult]) -> list[SearchResult]:
+    seen_urls: set[str] = set()
+    merged: list[SearchResult] = []
+    for group in result_groups:
+        for result in group:
+            url = str(result.url)
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
+            merged.append(result)
+    return merged
 
-    parsed = urlparse(raw_url)
-    if all([parsed.scheme, parsed.netloc, parsed.netloc != 'duckduckgo.com']):
-        return raw_url
 
-    uddg = parse_qs(parsed.query).get('uddg')
-    return unquote(uddg[0]) if uddg else raw_url
+def _result_content(result: SearchResult) -> str:
+    title = result.title.strip()
+    snippet = result.snippet.strip()
+    if title and snippet:
+        return f'{title}\n{snippet}'
+    return snippet or title
+
+
+def _normalize_domain(domain: str | None) -> str | None:
+    if not domain:
+        return None
+    clean_domain = domain.strip().removeprefix('https://').removeprefix('http://').split('/', 1)[0].lower()
+    return clean_domain.removeprefix('www.') or None
+
+
+def _select_failure_code(first: Result[list[SearchResult]], second: Result[list[SearchResult]]) -> str:
+    if first.code == ResultCode.MISSING_ENV or second.code == ResultCode.MISSING_ENV:
+        return ResultCode.MISSING_ENV
+    if first.code == ResultCode.TIMEOUT or second.code == ResultCode.TIMEOUT:
+        return ResultCode.TIMEOUT
+    if first.code == ResultCode.NO_RESULTS and second.code == ResultCode.NO_RESULTS:
+        return ResultCode.NO_RESULTS
+    return ResultCode.SEARCH_FAILED
 
 
 __all__ = [
-    'DUCKDUCKGO_URL',
     'MAX_RESULTS',
-    'SEARCH_TIMEOUT',
-    '_parse_duckduckgo_results',
-    '_extract_redirect_target',
     'aggregate_search_content',
     'search_company_info',
 ]

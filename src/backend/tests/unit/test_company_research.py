@@ -56,26 +56,21 @@ def _build_company_result(source: ResearchSource) -> CompanyResearchResult:
     )
 
 
-def test_research_company_scrape_success(sample_request: CompanyResearchRequest) -> None:
-    """research_company should return website source when scrape succeeds."""
+def test_research_company_tavily_site_scoped_success(sample_request: CompanyResearchRequest) -> None:
+    """research_company should use site-scoped Tavily retrieval when a domain is available."""
 
     async def run() -> None:
-        rich_content = ' '.join(['mission'] * 250)
-
         with (
             patch(
-                'careervp.logic.company_research.scrape_company_about_page',
+                'careervp.logic.company_research._try_web_search',
                 new_callable=AsyncMock,
-            ) as mock_scrape_page,
-            patch(
-                'careervp.logic.company_research._structure_raw_content',
-                new_callable=AsyncMock,
-            ) as mock_structure,
+            ) as mock_try_search,
+            patch('careervp.logic.company_research._structure_raw_content', new_callable=AsyncMock) as mock_structure,
         ):
-            mock_scrape_page.return_value = Result(success=True, data=rich_content, code=ResultCode.SUCCESS)
+            mock_try_search.return_value = Result(success=True, data=' '.join(['Acme Corp mission products'] * 90), code=ResultCode.SUCCESS)
             mock_structure.return_value = Result(
                 success=True,
-                data=_build_company_result(ResearchSource.WEBSITE_SCRAPE),
+                data=_build_company_result(ResearchSource.WEB_API),
                 code=ResultCode.RESEARCH_COMPLETE,
             )
 
@@ -83,43 +78,33 @@ def test_research_company_scrape_success(sample_request: CompanyResearchRequest)
 
         assert result.success is True
         assert result.data is not None
-        assert result.data.source == ResearchSource.WEBSITE_SCRAPE
-        mock_structure.assert_awaited_once()
+        assert result.data.source == ResearchSource.WEB_API
+        mock_try_search.assert_awaited_once()
+        assert mock_try_search.await_args.kwargs['domain'] == 'acme.com'
+        assert mock_structure.await_args.kwargs['source'] == ResearchSource.WEB_API
+        assert mock_structure.await_args.kwargs['job_domain'] == 'acme.com'
 
     asyncio.run(run())
 
 
-def test_research_company_web_search_fallback(sample_request: CompanyResearchRequest) -> None:
-    """When scrape fails, research_company should fall back to web search."""
+def test_research_company_tavily_general_fallback(sample_request: CompanyResearchRequest) -> None:
+    """When site-scoped Tavily retrieval fails, research_company should fall back to general Tavily search."""
 
     async def run() -> None:
-        search_results = [
-            SearchResult(
-                title='Acme values',
-                url=cast(HttpUrl, 'https://acme.com/about'),
-                snippet=' '.join(['culture'] * 220),
-            )
-        ]
-
         with (
             patch(
-                'careervp.logic.company_research.scrape_company_about_page',
+                'careervp.logic.company_research._try_web_search',
                 new_callable=AsyncMock,
-            ) as mock_scrape_page,
-            patch(
-                'careervp.logic.company_research.search_company_info',
-                new_callable=AsyncMock,
-            ) as mock_search_info,
-            patch(
-                'careervp.logic.company_research._structure_raw_content',
-                new_callable=AsyncMock,
-            ) as mock_structure,
+            ) as mock_try_search,
+            patch('careervp.logic.company_research._structure_raw_content', new_callable=AsyncMock) as mock_structure,
         ):
-            mock_scrape_page.return_value = Result(success=False, error='insufficient', code=ResultCode.SCRAPE_FAILED)
-            mock_search_info.return_value = Result(success=True, data=search_results, code=ResultCode.SUCCESS)
+            mock_try_search.side_effect = [
+                Result(success=False, error='domain miss', code=ResultCode.NO_RESULTS),
+                Result(success=True, data=' '.join(['Acme Corp culture'] * 90), code=ResultCode.SUCCESS),
+            ]
             mock_structure.return_value = Result(
                 success=True,
-                data=_build_company_result(ResearchSource.WEB_SEARCH),
+                data=_build_company_result(ResearchSource.WEB_API),
                 code=ResultCode.RESEARCH_COMPLETE,
             )
 
@@ -127,40 +112,35 @@ def test_research_company_web_search_fallback(sample_request: CompanyResearchReq
 
         assert result.success is True
         assert result.data is not None
-        assert result.data.source == ResearchSource.WEB_SEARCH
+        assert result.data.source == ResearchSource.WEB_API
+        assert mock_try_search.await_count == 2
+        assert mock_try_search.await_args_list[0].kwargs['domain'] == 'acme.com'
+        assert 'domain' not in mock_try_search.await_args_list[1].kwargs
         mock_structure.assert_awaited_once()
 
     asyncio.run(run())
 
 
 def test_research_company_no_llm_fabrication_when_sources_fail(sample_request: CompanyResearchRequest) -> None:
-    """FE-UI-041: when scrape and search both fail, research must NOT fall back to LLM
+    """FE-UI-041: when Tavily retrieval fails, research must NOT fall back to LLM
     synthesis of company facts. It returns ALL_SOURCES_FAILED instead of fabricated content."""
 
     async def run() -> None:
         with (
             patch(
-                'careervp.logic.company_research.scrape_company_about_page',
+                'careervp.logic.company_research._try_web_search',
                 new_callable=AsyncMock,
-            ) as mock_scrape_page,
-            patch(
-                'careervp.logic.company_research.search_company_info',
-                new_callable=AsyncMock,
-            ) as mock_search_info,
-            patch(
-                'careervp.logic.company_research._structure_raw_content',
-                new_callable=AsyncMock,
-            ) as mock_structure,
+            ) as mock_try_search,
+            patch('careervp.logic.company_research._structure_raw_content', new_callable=AsyncMock) as mock_structure,
         ):
-            mock_scrape_page.return_value = Result(success=False, error='error', code=ResultCode.SCRAPE_FAILED)
-            mock_search_info.return_value = Result(success=False, error='no results', code=ResultCode.SEARCH_FAILED)
+            mock_try_search.return_value = Result(success=False, error='no results', code=ResultCode.SEARCH_FAILED)
 
             result = await research_company(sample_request)
 
         assert result.success is False
         assert result.code == ResultCode.ALL_SOURCES_FAILED
         assert result.data is None
-        # No LLM fabrication: _structure_raw_content is never invoked for an LLM fallback.
+        assert mock_try_search.await_count == 2
         mock_structure.assert_not_awaited()
 
     asyncio.run(run())
@@ -172,21 +152,12 @@ def test_research_company_all_sources_fail(sample_request: CompanyResearchReques
     async def run() -> None:
         with (
             patch(
-                'careervp.logic.company_research.scrape_company_about_page',
+                'careervp.logic.company_research._try_web_search',
                 new_callable=AsyncMock,
-            ) as mock_scrape_page,
-            patch(
-                'careervp.logic.company_research.search_company_info',
-                new_callable=AsyncMock,
-            ) as mock_search_info,
-            patch(
-                'careervp.logic.company_research._structure_raw_content',
-                new_callable=AsyncMock,
-            ) as mock_structure,
+            ) as mock_try_search,
+            patch('careervp.logic.company_research._structure_raw_content', new_callable=AsyncMock),
         ):
-            mock_scrape_page.return_value = Result(success=False, error='error', code=ResultCode.SCRAPE_FAILED)
-            mock_search_info.return_value = Result(success=False, error='no results', code=ResultCode.SEARCH_FAILED)
-            mock_structure.return_value = Result(success=False, error='llm error', code=ResultCode.ALL_SOURCES_FAILED)
+            mock_try_search.return_value = Result(success=False, error='no results', code=ResultCode.SEARCH_FAILED)
 
             result = await research_company(sample_request)
 
@@ -280,6 +251,11 @@ def test_structure_raw_content_parses_llm_output() -> None:
         'strategic_priorities': ['Scale'],
         'recent_news': ['Raised Series B'],
         'financial_summary': 'Private',
+        'key_products': ['Platform'],
+        'company_size': '201-500 employees',
+        'key_executives': ['Alex CEO'],
+        'competitive_positioning': 'Enterprise workflow platform',
+        'growth_signals': ['Hiring globally'],
     }
 
     class DummyRouter:
@@ -291,17 +267,23 @@ def test_structure_raw_content_parses_llm_output() -> None:
             response = await _structure_raw_content(
                 company_name='Acme Corp',
                 raw_text=' '.join(['insight'] * 320),
-                source=ResearchSource.WEB_SEARCH,
-                source_urls=['https://source.one', 'https://source.one'],
+                source=ResearchSource.WEB_API,
+                source_urls=['https://acme.com/about', 'https://acme.com/about'],
                 word_count=320,
-                context_hint='web search snippets',
+                context_hint='web api results',
+                job_domain='acme.com',
             )
 
         assert response.success is True
         assert response.data is not None
         assert response.data.values == payload['values']
-        assert response.data.source_urls == ['https://source.one']
+        assert response.data.source_urls == ['https://acme.com/about']
         assert response.data.overview == payload['overview']
+        assert response.data.key_products == payload['key_products']
+        assert response.data.company_size == payload['company_size']
+        assert response.data.key_executives == payload['key_executives']
+        assert response.data.competitive_positioning == payload['competitive_positioning']
+        assert response.data.growth_signals == payload['growth_signals']
 
     asyncio.run(run())
 
@@ -355,7 +337,7 @@ def test_structure_raw_content_handles_invalid_json() -> None:
 
 
 def test_research_company_without_domain(sample_request: CompanyResearchRequest) -> None:
-    """If domain is missing, research_company should still proceed via job posting URL."""
+    """If explicit domain is missing, research_company should use the job posting URL domain."""
     request = sample_request.model_copy()
     request.domain = None
     request.job_posting_url = cast(HttpUrl, 'https://acme.com/jobs/123')
@@ -363,39 +345,22 @@ def test_research_company_without_domain(sample_request: CompanyResearchRequest)
     async def run() -> None:
         with (
             patch(
-                'careervp.logic.company_research.scrape_company_about_page',
+                'careervp.logic.company_research._try_web_search',
                 new_callable=AsyncMock,
-            ) as mock_scrape_page,
-            patch(
-                'careervp.logic.company_research.search_company_info',
-                new_callable=AsyncMock,
-            ) as mock_search_info,
-            patch(
-                'careervp.logic.company_research._structure_raw_content',
-                new_callable=AsyncMock,
-            ) as mock_structure,
+            ) as mock_try_search,
+            patch('careervp.logic.company_research._structure_raw_content', new_callable=AsyncMock) as mock_structure,
         ):
-            mock_scrape_page.return_value = Result(success=False, error='no domain', code=ResultCode.SCRAPE_FAILED)
-            mock_search_info.return_value = Result(
-                success=True,
-                data=[
-                    SearchResult(
-                        title='About',
-                        url=cast(HttpUrl, 'https://acme.com/about'),
-                        snippet=' '.join(['mission'] * 220),
-                    )
-                ],
-                code=ResultCode.SUCCESS,
-            )
+            mock_try_search.return_value = Result(success=True, data=' '.join(['Acme Corp mission'] * 90), code=ResultCode.SUCCESS)
             mock_structure.return_value = Result(
                 success=True,
-                data=_build_company_result(ResearchSource.WEB_SEARCH),
+                data=_build_company_result(ResearchSource.WEB_API),
                 code=ResultCode.RESEARCH_COMPLETE,
             )
 
             response = await research_company(request)
 
         assert response.success is True
+        assert mock_try_search.await_args.kwargs['domain'] == 'acme.com'
 
     asyncio.run(run())
 
@@ -446,5 +411,36 @@ def test_helper_functions_cover_edge_cases() -> None:
         ResearchSource.WEB_SEARCH, 400, {'mission': 'm', 'values': ['v'], 'recent_news': [], 'strategic_priorities': []}
     )
     assert search_confidence < 0.7
+    web_api_confidence = _calculate_confidence(
+        ResearchSource.WEB_API,
+        600,
+        {
+            'overview': 'Acme overview',
+            'mission': 'm',
+            'values': ['v'],
+            'recent_news': ['n'],
+            'strategic_priorities': ['p'],
+        },
+        company_name='Acme Corp',
+        content_text='Acme Corp builds workflow tools.',
+        source_urls=['https://example.com/about'],
+    )
+    assert web_api_confidence >= 0.85
+    mismatched_web_api_confidence = _calculate_confidence(
+        ResearchSource.WEB_API,
+        600,
+        {
+            'overview': 'Other overview',
+            'mission': 'm',
+            'values': ['v'],
+            'recent_news': ['n'],
+            'strategic_priorities': ['p'],
+        },
+        company_name='Acme Corp',
+        content_text='Different company content.',
+        source_urls=['https://other.example/about'],
+        job_domain='acme.com',
+    )
+    assert mismatched_web_api_confidence <= 0.7
     fallback_confidence = _calculate_confidence(ResearchSource.LLM_FALLBACK, 450, {})
     assert fallback_confidence <= 0.5

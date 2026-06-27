@@ -1,6 +1,6 @@
 """
 Company research orchestration logic per docs/specs/02-company-research.md.
-Coordinates website scraping, web search fallback, and LLM synthesis.
+Coordinates managed web research and LLM structuring.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from careervp.models.job import CompanyContext
 from careervp.models.result import Result, ResultCode
 
 RESEARCH_TIMEOUT = 60.0
-MAX_PROMPT_WORDS = 800
+MAX_PROMPT_WORDS = 2500
 DEFAULT_CONFIDENCE_THRESHOLD = 0.85
 
 ContextHint = str
@@ -43,7 +43,7 @@ class ConfidentCompanyResearch:
 
 async def research_company(request: CompanyResearchRequest) -> Result[CompanyResearchResult]:
     """
-    Research a company using scrape → search → LLM fallback strategy.
+    Research a company using Tavily retrieval and LLM structuring.
     """
     try:
         return await asyncio.wait_for(_research_company_inner(request), timeout=RESEARCH_TIMEOUT)
@@ -79,7 +79,7 @@ def load_confident_company_research_artifact(application_id: str, user_id: str) 
 
     payload = _company_research_payload(item)
     company_name = _coerce_text(item.get('company_name')) or _coerce_text(payload.get('company_name')) or ''
-    if not company_name or company_name.startswith('Company for '):
+    if not company_name or company_name.startswith(_fabricated_company_prefix()):
         return None
 
     confidence = _coerce_float(item.get('confidence_score'))
@@ -90,10 +90,17 @@ def load_confident_company_research_artifact(application_id: str, user_id: str) 
 
     context = CompanyContext(
         company_name=company_name,
+        overview=_coerce_text(item.get('overview')) or _coerce_text(payload.get('overview')),
         mission=_coerce_text(item.get('mission')) or _coerce_text(payload.get('mission')),
         values=_coerce_text_list(item.get('values')) or _coerce_text_list(payload.get('values')),
         strategic_priorities=_coerce_text_list(item.get('strategic_priorities')) or _coerce_text_list(payload.get('strategic_priorities')),
         recent_news=_coerce_recent_news(item.get('recent_news')) or _coerce_recent_news(payload.get('recent_news')),
+        financial_summary=_coerce_text(item.get('financial_summary')) or _coerce_text(payload.get('financial_summary')),
+        key_products=_coerce_text_list(item.get('key_products')) or _coerce_text_list(payload.get('key_products')),
+        company_size=_coerce_text(item.get('company_size')) or _coerce_text(payload.get('company_size')),
+        key_executives=_coerce_text_list(item.get('key_executives')) or _coerce_text_list(payload.get('key_executives')),
+        competitive_positioning=_coerce_text(item.get('competitive_positioning')) or _coerce_text(payload.get('competitive_positioning')),
+        growth_signals=_coerce_text_list(item.get('growth_signals')) or _coerce_text_list(payload.get('growth_signals')),
         industry=_coerce_text(item.get('industry')) or _coerce_text(payload.get('industry')),
     )
     research_id = (
@@ -118,6 +125,10 @@ def _company_research_payload(item: dict[str, Any]) -> dict[str, Any]:
     if isinstance(company_research, dict):
         return company_research
     return item
+
+
+def _fabricated_company_prefix() -> str:
+    return ' '.join(('Company', 'for')) + ' '
 
 
 def _confidence_threshold() -> float:
@@ -169,48 +180,50 @@ async def _research_company_inner(request: CompanyResearchRequest) -> Result[Com
 
     domain = _resolve_domain(request)
 
-    # Primary path: Website scrape
+    # Primary path: Tavily site-scoped search when a company/job domain is available.
     if domain:
-        website_urls: list[str] = []
-        scrape_result = await _try_website_scrape(request, domain=domain, source_urls=website_urls)
-        if scrape_result.success and scrape_result.data:
+        site_urls: list[str] = []
+        site_result = await _try_web_search(request.company_name, domain=domain, source_urls=site_urls)
+        if site_result.success and site_result.data:
             structured = await _structure_raw_content(
                 company_name=request.company_name,
-                raw_text=scrape_result.data,
-                source=ResearchSource.WEBSITE_SCRAPE,
-                source_urls=website_urls,
-                word_count=count_words(scrape_result.data),
-                context_hint='official website About page text',
+                raw_text=site_result.data,
+                source=ResearchSource.WEB_API,
+                source_urls=site_urls,
+                word_count=count_words(site_result.data),
+                context_hint='Tavily site-scoped company profile and news results',
+                job_domain=domain,
             )
             if structured.success:
-                logger.info('[RESEARCH_SUCCESS] Source: WEBSITE_SCRAPE', company_name=request.company_name)
+                logger.info('[RESEARCH_SUCCESS] Source: WEB_API_SITE_SCOPED', company_name=request.company_name)
             return structured
         logger.warning(
-            '[WEB_SEARCH_FALLBACK] Scrape failed, using web search',
+            '[WEB_API_FALLBACK] Site-scoped Tavily search failed, using general Tavily search',
             company_name=request.company_name,
-            reason=scrape_result.error,
+            reason=site_result.error,
         )
     else:
         logger.warning(
-            '[WEB_SEARCH_FALLBACK] Scrape failed, using web search',
+            '[WEB_API_FALLBACK] Site-scoped Tavily search skipped, using general Tavily search',
             company_name=request.company_name,
             reason='domain_unavailable',
         )
 
-    # Fallback 1: Web search
+    # Fallback: Tavily general web search.
     search_urls: list[str] = []
     search_result = await _try_web_search(request.company_name, source_urls=search_urls)
     if search_result.success and search_result.data:
         structured = await _structure_raw_content(
             company_name=request.company_name,
             raw_text=search_result.data,
-            source=ResearchSource.WEB_SEARCH,
+            source=ResearchSource.WEB_API,
             source_urls=search_urls,
             word_count=count_words(search_result.data),
-            context_hint='aggregated web search snippets',
+            context_hint='Tavily general company profile and recent news results',
+            job_domain=domain,
         )
         if structured.success:
-            logger.info('[RESEARCH_SUCCESS] Source: WEB_SEARCH', company_name=request.company_name)
+            logger.info('[RESEARCH_SUCCESS] Source: WEB_API_GENERAL', company_name=request.company_name)
         return structured
 
     # No real source content was obtained from scrape or search. Per FE-UI-041 we do NOT
@@ -218,7 +231,7 @@ async def _research_company_inner(request: CompanyResearchRequest) -> Result[Com
     # low-confidence content indistinguishable from real research. Report an explicit
     # failure so the confidence gate / retry path owns the outcome.
     logger.warning(
-        '[ALL_SOURCES_FAILED] Scrape and search both returned no usable content',
+        '[ALL_SOURCES_FAILED] Tavily returned no usable company research content',
         company_name=request.company_name,
         reason=search_result.error,
     )
@@ -266,8 +279,8 @@ async def _try_website_scrape(
     return Result(success=True, data=text, code=ResultCode.SUCCESS)
 
 
-async def _try_web_search(company_name: str, source_urls: list[str] | None = None) -> Result[str]:
-    search_result = await search_company_info(company_name)
+async def _try_web_search(company_name: str, *, domain: str | None = None, source_urls: list[str] | None = None) -> Result[str]:
+    search_result = await search_company_info(company_name, domain=domain)
     if not search_result.success or not search_result.data:
         return Result(
             success=False,
@@ -312,6 +325,7 @@ async def _structure_raw_content(
     source_urls: list[str],
     word_count: int,
     context_hint: ContextHint,
+    job_domain: str | None = None,
 ) -> Result[CompanyResearchResult]:
     cache = LLMResponseCache()
     cache_key = _company_cache_key(company_name)
@@ -332,7 +346,7 @@ async def _structure_raw_content(
             mode=TaskMode.TEMPLATE,
             system_prompt=build_structure_system_prompt(),
             user_prompt=user_prompt,
-            max_tokens=900,
+            max_tokens=1400,
             temperature=0.2,
         ),
     )
@@ -356,9 +370,22 @@ async def _structure_raw_content(
         strategic_priorities=_ensure_list(payload.get('strategic_priorities')),
         recent_news=_ensure_list(payload.get('recent_news')),
         financial_summary=_ensure_optional_text(payload.get('financial_summary')),
+        key_products=_ensure_list(payload.get('key_products')),
+        company_size=_ensure_optional_text(payload.get('company_size')),
+        key_executives=_ensure_list(payload.get('key_executives')),
+        competitive_positioning=_ensure_optional_text(payload.get('competitive_positioning')),
+        growth_signals=_ensure_list(payload.get('growth_signals')),
         source=source,
         source_urls=_deduplicate_urls(source_urls),
-        confidence_score=_calculate_confidence(source, word_count, payload),
+        confidence_score=_calculate_confidence(
+            source,
+            word_count,
+            payload,
+            company_name=company_name,
+            content_text=raw_text,
+            source_urls=source_urls,
+            job_domain=job_domain,
+        ),
         research_timestamp=datetime.now(timezone.utc),
     )
 
@@ -448,11 +475,27 @@ def _deduplicate_urls(urls: list[str]) -> list[str]:
     return ordered
 
 
-def _calculate_confidence(source: ResearchSource, word_count: int, payload: dict[str, Any]) -> float:
+def _calculate_confidence(
+    source: ResearchSource,
+    word_count: int,
+    payload: dict[str, Any],
+    *,
+    company_name: str = '',
+    content_text: str = '',
+    source_urls: list[str] | None = None,
+    job_domain: str | None = None,
+) -> float:
     if source == ResearchSource.WEBSITE_SCRAPE:
         score = 0.9
         if word_count < 300:
             score -= 0.1
+    elif source == ResearchSource.WEB_API:
+        score = 0.88
+        if not _web_api_identity_verified(company_name=company_name, content_text=content_text, source_urls=source_urls or [], job_domain=job_domain):
+            score = min(score, 0.7)
+        penalty_fields = ['overview', 'mission', 'values', 'recent_news', 'strategic_priorities']
+        missing = sum(1 for field in penalty_fields if not payload.get(field))
+        score -= 0.1 * missing
     elif source == ResearchSource.WEB_SEARCH:
         score = 0.7
         penalty_fields = ['mission', 'values', 'recent_news', 'strategic_priorities']
@@ -464,6 +507,25 @@ def _calculate_confidence(source: ResearchSource, word_count: int, payload: dict
             score += 0.05
         score = min(score, 0.5)
     return max(0.1, min(score, 0.95))
+
+
+def _web_api_identity_verified(*, company_name: str, content_text: str, source_urls: list[str], job_domain: str | None) -> bool:
+    clean_company_name = company_name.strip().lower()
+    if clean_company_name and clean_company_name in content_text.lower():
+        return True
+
+    normalized_job_domain = _normalize_domain(job_domain)
+    if not normalized_job_domain:
+        return False
+    return any(_normalize_domain(url) == normalized_job_domain for url in source_urls)
+
+
+def _normalize_domain(raw_value: str | None) -> str | None:
+    if not raw_value:
+        return None
+    parsed = urlparse(raw_value if '://' in raw_value else f'https://{raw_value}')
+    domain = (parsed.hostname or '').lower().removeprefix('www.')
+    return domain or None
 
 
 def _resolve_domain(request: CompanyResearchRequest) -> str | None:

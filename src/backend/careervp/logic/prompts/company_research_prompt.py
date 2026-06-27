@@ -14,7 +14,8 @@ def build_structure_user_prompt(company_name: str, raw_text: str, context_hint: 
         f'Company Name: {company_name}\n'
         f'Source Context: {context_hint}\n\n'
         f'Extract structured company research from the following text. '
-        f'Return JSON with keys overview (100-200 words), values (list), mission, strategic_priorities, recent_news, financial_summary.\n'
+        f'Return JSON with keys overview (100-200 words), values (list), mission, strategic_priorities, recent_news, '
+        f'financial_summary, key_products, company_size, key_executives, competitive_positioning, growth_signals.\n'
         f'Text:\n{raw_text}\n'
         'Return ONLY valid JSON.'
     )

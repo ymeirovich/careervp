@@ -465,6 +465,8 @@ def _build_company_research_response(item: dict[str, Any], job_id: str) -> dict[
         or '',
         'products': _coerce_list_of_strings(item.get('products'))
         or _coerce_list_of_strings(nested_payload.get('products'))
+        or _coerce_list_of_strings(item.get('key_products'))
+        or _coerce_list_of_strings(nested_payload.get('key_products'))
         or _coerce_list_of_strings(nested_payload.get('strategic_priorities')),
         'funding_status': _coerce_str(item.get('funding_status'))
         or _coerce_str(nested_payload.get('funding_status'))
