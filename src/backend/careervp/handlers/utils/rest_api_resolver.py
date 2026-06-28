@@ -11,7 +11,7 @@ app = APIGatewayRestResolver(enable_validation=True)
 app.enable_swagger(path='/swagger', title='CareerVP API')
 
 
-@app.exception_handler(DynamicConfigurationException)
+@app.exception_handler(DynamicConfigurationException)  # type: ignore[untyped-decorator]
 def handle_dynamic_config_error(ex: DynamicConfigurationException) -> Response[Any]:  # receives exception raised
     logger.exception('failed to load dynamic configuration from AppConfig')
     return Response(
@@ -19,7 +19,7 @@ def handle_dynamic_config_error(ex: DynamicConfigurationException) -> Response[A
     )
 
 
-@app.exception_handler(InternalServerException)
+@app.exception_handler(InternalServerException)  # type: ignore[untyped-decorator]
 def handle_internal_server_error(ex: InternalServerException) -> Response[Any]:  # receives exception raised
     logger.exception('finished handling request with internal error')
     return Response(

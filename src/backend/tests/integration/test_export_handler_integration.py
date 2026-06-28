@@ -138,7 +138,7 @@ def test_cover_letter_docx_full_event_returns_200(aws_resources: dict[str, Any])
     aws_resources['artifacts_table'].put_item(
         Item={
             'applicationId': USER_ID,
-            'artifactId': JOB_ID,
+            'artifactId': f'ARTIFACT#COVER_LETTER#{JOB_ID}',
             'cover_letter': {'full_text': 'Dear Hiring Manager, I am thrilled to apply...'},
         }
     )
@@ -191,6 +191,7 @@ def test_cv_tailored_docx_full_event_returns_200(aws_resources: dict[str, Any]) 
         Item={
             'pk': USER_ID,
             'sk': f'ARTIFACT#CV_TAILORED#{JOB_ID}',
+            'job_id': JOB_ID,
             'cv_sections': {'experience': 'Senior Engineer at Acme Corp.', 'skills': 'Python, Go'},
             'tailored_cv': 'Experienced backend engineer targeting cloud roles.',
         }

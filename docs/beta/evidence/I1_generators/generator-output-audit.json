@@ -4,7 +4,7 @@
     "run_id": "l0-phase-cover_letter-001",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 1, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 1, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -12,7 +12,7 @@
     "run_id": "l0-phase-cover_letter-002",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 2, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 2, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -20,7 +20,7 @@
     "run_id": "l0-phase-cover_letter-003",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 3, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 3, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -28,7 +28,7 @@
     "run_id": "l0-phase-cover_letter-004",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 4, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 4, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -36,7 +36,7 @@
     "run_id": "l0-phase-cover_letter-005",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 5, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 5, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -44,7 +44,7 @@
     "run_id": "l0-phase-cover_letter-006",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 6, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 6, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -52,7 +52,7 @@
     "run_id": "l0-phase-cover_letter-007",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 7, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 7, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -60,7 +60,7 @@
     "run_id": "l0-phase-cover_letter-008",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 8, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 8, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -68,7 +68,7 @@
     "run_id": "l0-phase-cover_letter-009",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 9, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 9, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -76,7 +76,7 @@
     "run_id": "l0-phase-cover_letter-010",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 10, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 10, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -84,7 +84,7 @@
     "run_id": "l0-phase-cover_letter-011",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 11, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 11, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -92,7 +92,7 @@
     "run_id": "l0-phase-cover_letter-012",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 12, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 12, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -100,7 +100,7 @@
     "run_id": "l0-phase-cover_letter-013",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 13, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 13, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -108,7 +108,7 @@
     "run_id": "l0-phase-cover_letter-014",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 14, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 14, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -116,7 +116,7 @@
     "run_id": "l0-phase-cover_letter-015",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 15, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 15, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -124,7 +124,7 @@
     "run_id": "l0-phase-cover_letter-016",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 16, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 16, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -132,7 +132,7 @@
     "run_id": "l0-phase-cover_letter-017",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 17, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 17, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -140,7 +140,7 @@
     "run_id": "l0-phase-cover_letter-018",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 18, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 18, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -148,7 +148,7 @@
     "run_id": "l0-phase-cover_letter-019",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 19, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 19, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -156,7 +156,7 @@
     "run_id": "l0-phase-cover_letter-020",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 20, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 20, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -164,7 +164,7 @@
     "run_id": "l0-phase-cover_letter-021",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 21, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 21, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -172,7 +172,7 @@
     "run_id": "l0-phase-cover_letter-022",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 22, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 22, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -180,7 +180,7 @@
     "run_id": "l0-phase-cover_letter-023",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 23, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 23, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -188,7 +188,7 @@
     "run_id": "l0-phase-cover_letter-024",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 24, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 24, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -196,7 +196,7 @@
     "run_id": "l0-phase-cover_letter-025",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 25, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 25, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -204,7 +204,7 @@
     "run_id": "l0-phase-cover_letter-026",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 26, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 26, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -212,7 +212,7 @@
     "run_id": "l0-phase-cover_letter-027",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 27, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 27, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -220,7 +220,7 @@
     "run_id": "l0-phase-cover_letter-028",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 28, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 28, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -228,7 +228,7 @@
     "run_id": "l0-phase-cover_letter-029",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 29, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 29, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -236,7 +236,7 @@
     "run_id": "l0-phase-cover_letter-030",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 30, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 30, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -244,7 +244,7 @@
     "run_id": "l0-phase-cover_letter-031",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 31, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 31, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -252,7 +252,7 @@
     "run_id": "l0-phase-cover_letter-032",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 32, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 32, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -260,7 +260,7 @@
     "run_id": "l0-phase-cover_letter-033",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 33, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 33, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -268,7 +268,7 @@
     "run_id": "l0-phase-cover_letter-034",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 34, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 34, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -276,7 +276,7 @@
     "run_id": "l0-phase-cover_letter-035",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 35, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 35, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -284,7 +284,7 @@
     "run_id": "l0-phase-cover_letter-036",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 36, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 36, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -292,7 +292,7 @@
     "run_id": "l0-phase-cover_letter-037",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 37, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 37, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -300,7 +300,7 @@
     "run_id": "l0-phase-cover_letter-038",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 38, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 38, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -308,7 +308,7 @@
     "run_id": "l0-phase-cover_letter-039",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 39, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 39, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -316,7 +316,7 @@
     "run_id": "l0-phase-cover_letter-040",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 40, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 40, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -324,7 +324,7 @@
     "run_id": "l0-phase-cover_letter-041",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 41, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 41, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -332,7 +332,7 @@
     "run_id": "l0-phase-cover_letter-042",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 42, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 42, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -340,7 +340,7 @@
     "run_id": "l0-phase-cover_letter-043",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 43, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 43, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -348,7 +348,7 @@
     "run_id": "l0-phase-cover_letter-044",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 44, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 44, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -356,7 +356,7 @@
     "run_id": "l0-phase-cover_letter-045",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 45, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 45, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -364,7 +364,7 @@
     "run_id": "l0-phase-cover_letter-046",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 46, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 46, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -372,7 +372,7 @@
     "run_id": "l0-phase-cover_letter-047",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 47, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 47, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -380,7 +380,7 @@
     "run_id": "l0-phase-cover_letter-048",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 48, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 48, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -388,7 +388,7 @@
     "run_id": "l0-phase-cover_letter-049",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 49, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 49, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -396,7 +396,7 @@
     "run_id": "l0-phase-cover_letter-050",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for run 50, improving release stability and service performance through measurable execution.",
+    "response_excerpt": "Dear Hiring Team, I led reliability work at scale for\n\nrun 50, improving release stability and service performance through measurable execution.",
     "environment": "local-integration-test"
   },
   {
@@ -1204,7 +1204,7 @@
     "run_id": "l0-phase-cv_tailoring-001",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 1. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 1 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1212,7 +1212,7 @@
     "run_id": "l0-phase-cv_tailoring-002",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 2. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 2 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1220,7 +1220,7 @@
     "run_id": "l0-phase-cv_tailoring-003",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 3. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 3 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1228,7 +1228,7 @@
     "run_id": "l0-phase-cv_tailoring-004",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 4. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 4 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1236,7 +1236,7 @@
     "run_id": "l0-phase-cv_tailoring-005",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 5. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 5 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1244,7 +1244,7 @@
     "run_id": "l0-phase-cv_tailoring-006",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 6. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 6 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1252,7 +1252,7 @@
     "run_id": "l0-phase-cv_tailoring-007",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 7. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 7 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1260,7 +1260,7 @@
     "run_id": "l0-phase-cv_tailoring-008",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 8. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 8 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1268,7 +1268,7 @@
     "run_id": "l0-phase-cv_tailoring-009",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 9. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 9 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1276,7 +1276,7 @@
     "run_id": "l0-phase-cv_tailoring-010",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 10. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 10 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1284,7 +1284,7 @@
     "run_id": "l0-phase-cv_tailoring-011",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 11. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 11 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1292,7 +1292,7 @@
     "run_id": "l0-phase-cv_tailoring-012",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 12. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 12 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1300,7 +1300,7 @@
     "run_id": "l0-phase-cv_tailoring-013",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 13. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 13 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1308,7 +1308,7 @@
     "run_id": "l0-phase-cv_tailoring-014",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 14. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 14 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1316,7 +1316,7 @@
     "run_id": "l0-phase-cv_tailoring-015",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 15. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 15 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1324,7 +1324,7 @@
     "run_id": "l0-phase-cv_tailoring-016",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 16. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 16 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1332,7 +1332,7 @@
     "run_id": "l0-phase-cv_tailoring-017",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 17. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 17 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1340,7 +1340,7 @@
     "run_id": "l0-phase-cv_tailoring-018",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 18. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 18 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1348,7 +1348,7 @@
     "run_id": "l0-phase-cv_tailoring-019",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 19. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 19 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1356,7 +1356,7 @@
     "run_id": "l0-phase-cv_tailoring-020",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 20. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 20 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1364,7 +1364,7 @@
     "run_id": "l0-phase-cv_tailoring-021",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 21. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 21 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1372,7 +1372,7 @@
     "run_id": "l0-phase-cv_tailoring-022",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 22. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 22 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1380,7 +1380,7 @@
     "run_id": "l0-phase-cv_tailoring-023",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 23. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 23 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1388,7 +1388,7 @@
     "run_id": "l0-phase-cv_tailoring-024",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 24. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 24 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1396,7 +1396,7 @@
     "run_id": "l0-phase-cv_tailoring-025",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 25. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 25 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1404,7 +1404,7 @@
     "run_id": "l0-phase-cv_tailoring-026",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 26. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 26 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1412,7 +1412,7 @@
     "run_id": "l0-phase-cv_tailoring-027",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 27. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 27 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1420,7 +1420,7 @@
     "run_id": "l0-phase-cv_tailoring-028",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 28. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 28 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1428,7 +1428,7 @@
     "run_id": "l0-phase-cv_tailoring-029",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 29. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 29 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1436,7 +1436,7 @@
     "run_id": "l0-phase-cv_tailoring-030",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 30. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 30 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1444,7 +1444,7 @@
     "run_id": "l0-phase-cv_tailoring-031",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 31. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 31 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1452,7 +1452,7 @@
     "run_id": "l0-phase-cv_tailoring-032",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 32. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 32 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1460,7 +1460,7 @@
     "run_id": "l0-phase-cv_tailoring-033",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 33. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 33 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1468,7 +1468,7 @@
     "run_id": "l0-phase-cv_tailoring-034",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 34. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 34 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1476,7 +1476,7 @@
     "run_id": "l0-phase-cv_tailoring-035",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 35. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 35 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1484,7 +1484,7 @@
     "run_id": "l0-phase-cv_tailoring-036",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 36. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 36 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1492,7 +1492,7 @@
     "run_id": "l0-phase-cv_tailoring-037",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 37. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 37 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1500,7 +1500,7 @@
     "run_id": "l0-phase-cv_tailoring-038",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 38. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 38 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1508,7 +1508,7 @@
     "run_id": "l0-phase-cv_tailoring-039",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 39. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 39 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1516,7 +1516,7 @@
     "run_id": "l0-phase-cv_tailoring-040",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 40. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 40 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1524,7 +1524,7 @@
     "run_id": "l0-phase-cv_tailoring-041",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 41. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 41 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1532,7 +1532,7 @@
     "run_id": "l0-phase-cv_tailoring-042",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 42. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 42 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1540,7 +1540,7 @@
     "run_id": "l0-phase-cv_tailoring-043",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 43. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 43 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1548,7 +1548,7 @@
     "run_id": "l0-phase-cv_tailoring-044",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 44. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 44 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1556,7 +1556,7 @@
     "run_id": "l0-phase-cv_tailoring-045",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 45. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 45 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1564,7 +1564,7 @@
     "run_id": "l0-phase-cv_tailoring-046",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 46. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 46 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1572,7 +1572,7 @@
     "run_id": "l0-phase-cv_tailoring-047",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 47. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 47 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1580,7 +1580,7 @@
     "run_id": "l0-phase-cv_tailoring-048",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 48. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 48 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1588,7 +1588,7 @@
     "run_id": "l0-phase-cv_tailoring-049",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 49. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 49 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1596,7 +1596,7 @@
     "run_id": "l0-phase-cv_tailoring-050",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 50. Python AWS Kubernetes Leadership",
+    "response_excerpt": "Platform-focused engineer delivering measurable reliability outcomes in run 50 across cloud systems and platform engineering. Python AWS Kubernetes Leadership",
     "environment": "local-integration-test"
   },
   {
@@ -1604,7 +1604,7 @@
     "run_id": "l0-phase-vpr-001",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-1\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
     "environment": "local-integration-test"
   },
   {
@@ -1612,7 +1612,7 @@
     "run_id": "l0-phase-vpr-002",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-2\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
     "environment": "local-integration-test"
   },
   {
@@ -1620,7 +1620,7 @@
     "run_id": "l0-phase-vpr-003",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-3\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
     "environment": "local-integration-test"
   },
   {
@@ -1628,7 +1628,7 @@
     "run_id": "l0-phase-vpr-004",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-4\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
     "environment": "local-integration-test"
   },
   {
@@ -1636,7 +1636,7 @@
     "run_id": "l0-phase-vpr-005",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-5\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
     "environment": "local-integration-test"
   },
   {
@@ -1644,7 +1644,7 @@
     "run_id": "l0-phase-vpr-006",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-6\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
     "environment": "local-integration-test"
   },
   {
@@ -1652,7 +1652,7 @@
     "run_id": "l0-phase-vpr-007",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-7\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
     "environment": "local-integration-test"
   },
   {
@@ -1660,7 +1660,7 @@
     "run_id": "l0-phase-vpr-008",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-8\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
     "environment": "local-integration-test"
   },
   {
@@ -1668,7 +1668,7 @@
     "run_id": "l0-phase-vpr-009",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-9\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
     "environment": "local-integration-test"
   },
   {
@@ -1676,7 +1676,7 @@
     "run_id": "l0-phase-vpr-010",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-10\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1684,7 +1684,7 @@
     "run_id": "l0-phase-vpr-011",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-11\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1692,7 +1692,7 @@
     "run_id": "l0-phase-vpr-012",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-12\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1700,7 +1700,7 @@
     "run_id": "l0-phase-vpr-013",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-13\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1708,7 +1708,7 @@
     "run_id": "l0-phase-vpr-014",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-14\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1716,7 +1716,7 @@
     "run_id": "l0-phase-vpr-015",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-15\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1724,7 +1724,7 @@
     "run_id": "l0-phase-vpr-016",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-16\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1732,7 +1732,7 @@
     "run_id": "l0-phase-vpr-017",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-17\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1740,7 +1740,7 @@
     "run_id": "l0-phase-vpr-018",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-18\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1748,7 +1748,7 @@
     "run_id": "l0-phase-vpr-019",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-19\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1756,7 +1756,7 @@
     "run_id": "l0-phase-vpr-020",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-20\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1764,7 +1764,7 @@
     "run_id": "l0-phase-vpr-021",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-21\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1772,7 +1772,7 @@
     "run_id": "l0-phase-vpr-022",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-22\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1780,7 +1780,7 @@
     "run_id": "l0-phase-vpr-023",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-23\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1788,7 +1788,7 @@
     "run_id": "l0-phase-vpr-024",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-24\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1796,7 +1796,7 @@
     "run_id": "l0-phase-vpr-025",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-25\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1804,7 +1804,7 @@
     "run_id": "l0-phase-vpr-026",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-26\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1812,7 +1812,7 @@
     "run_id": "l0-phase-vpr-027",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-27\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1820,7 +1820,7 @@
     "run_id": "l0-phase-vpr-028",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-28\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1828,7 +1828,7 @@
     "run_id": "l0-phase-vpr-029",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-29\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1836,7 +1836,7 @@
     "run_id": "l0-phase-vpr-030",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-30\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1844,7 +1844,7 @@
     "run_id": "l0-phase-vpr-031",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-31\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1852,7 +1852,7 @@
     "run_id": "l0-phase-vpr-032",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-32\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1860,7 +1860,7 @@
     "run_id": "l0-phase-vpr-033",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-33\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1868,7 +1868,7 @@
     "run_id": "l0-phase-vpr-034",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-34\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1876,7 +1876,7 @@
     "run_id": "l0-phase-vpr-035",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-35\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1884,7 +1884,7 @@
     "run_id": "l0-phase-vpr-036",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-36\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1892,7 +1892,7 @@
     "run_id": "l0-phase-vpr-037",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-37\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1900,7 +1900,7 @@
     "run_id": "l0-phase-vpr-038",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-38\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1908,7 +1908,7 @@
     "run_id": "l0-phase-vpr-039",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-39\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1916,7 +1916,7 @@
     "run_id": "l0-phase-vpr-040",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-40\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1924,7 +1924,7 @@
     "run_id": "l0-phase-vpr-041",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-41\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1932,7 +1932,7 @@
     "run_id": "l0-phase-vpr-042",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-42\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1940,7 +1940,7 @@
     "run_id": "l0-phase-vpr-043",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-43\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1948,7 +1948,7 @@
     "run_id": "l0-phase-vpr-044",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-44\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1956,7 +1956,7 @@
     "run_id": "l0-phase-vpr-045",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-45\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1964,7 +1964,7 @@
     "run_id": "l0-phase-vpr-046",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-46\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1972,7 +1972,7 @@
     "run_id": "l0-phase-vpr-047",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-47\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1980,7 +1980,7 @@
     "run_id": "l0-phase-vpr-048",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-48\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1988,7 +1988,7 @@
     "run_id": "l0-phase-vpr-049",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-49\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1996,7 +1996,7 @@
     "run_id": "l0-phase-vpr-050",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "Alex has led platform initiatives requiring high ownership and pragmatic execution. Combines strategy with hands-on delivery discipline.",
+    "response_excerpt": "{\"application_id\": \"app-50\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-06-28\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   }
 ]
