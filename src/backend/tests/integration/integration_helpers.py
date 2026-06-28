@@ -185,11 +185,13 @@ def create_job_and_get_id(client: IntegrationApiClient, token: str) -> str:
             'title': 'Senior Backend Engineer',
             'company': 'Integration Labs',
             'job_description': 'Build secure backend APIs, queues, and CI guardrails.',
+            'url': 'https://example.com/jobs/backend-1',
         },
         {
             'position': 'Senior Backend Engineer',
             'company': 'Integration Labs',
             'description': 'Build secure backend APIs, queues, and CI guardrails.',
+            'url': 'https://example.com/jobs/backend-1',
         },
     ]
     response = post_with_payload_fallback(

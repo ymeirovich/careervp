@@ -1,0 +1,124 @@
+spec_id: FE-UI-053
+title: "CR async enqueue — replace inline asyncio.run with SQS enqueue + processing row"
+priority: high
+status: draft
+owner: backend
+created_at: 2026-06-28
+updated_at: 2026-06-28
+tier: backend
+recommended_model: sonnet
+
+depends_on:
+  - FE-UI-029   # chain/DAL conventions
+  - FE-UI-030   # CR worker already deployed
+blocks:
+  - FE-UI-054   # frontend polling depends on processing row existing
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    _fetch_company_research (~L154) calls asyncio.run(research_company()) on the
+    request path, blocks the Lambda, returns a fake 202 with status:"processing",
+    but persists nothing to DynamoDB. GET /company-research returns not_generated
+    immediately. CR queue careervp-company-research-queue-dev stays empty; worker
+    never fires. Handler Lambda has no COMPANY_RESEARCH_QUEUE_URL env var and no
+    sqs:SendMessage IAM grant.
+  required_behavior: >
+    POST enqueues one SQS message (CRWorkerInput body), writes a processing row,
+    returns real 202. GET returns processing until the worker writes a terminal row.
+    No synchronous research on the request path.
+
+# =============================================================================
+# REQUIREMENTS
+# =============================================================================
+requirements:
+  R1:
+    title: "POST enqueues to SQS + writes processing row"
+    detail: >
+      _fetch_company_research: validate request → sqs.send_message to
+      COMPANY_RESEARCH_QUEUE_URL with MessageBody=CRWorkerInput JSON
+      (user_id, job_id, application_id?, company_name?, job_posting_url?, domain?) →
+      write_cr_processing() → return 202 {request_id, status:"processing"}.
+      DELETE the asyncio.run(research_company()) call.
+    files:
+      - src/backend/careervp/handlers/company_research_handler.py  # _fetch_company_research ~L154
+  R2:
+    title: "Idempotent write_cr_processing in store"
+    detail: >
+      Add write_cr_processing(application_id, user_id) to company_research_store.py.
+      Upsert status=processing only if no row exists OR existing row has status=not_generated.
+      NEVER overwrite a row with status=completed or status=failed.
+    files:
+      - src/backend/careervp/logic/company_research_store.py
+  R3:
+    title: "GET returns processing shape for processing rows"
+    detail: >
+      get_company_research (~L229): if stored row has status=processing return
+      {status:"processing", company_research:null}. Keep existing handling for
+      completed/failed/not_generated unchanged.
+    files:
+      - src/backend/careervp/handlers/company_research_handler.py  # get_company_research ~L229
+  R4:
+    title: "Infra: queue URL env + SendMessage grant on handler Lambda"
+    detail: >
+      infra/careervp/api_db_construct.py self.company_research_queue already exists.
+      In api_construct.py (or company_research_nested_stack.py) add:
+      queue.grant_send_messages(cr_handler_lambda) and
+      cr_handler_lambda.add_environment("COMPANY_RESEARCH_QUEUE_URL", queue.queue_url).
+    files:
+      - infra/careervp/api_construct.py   # or company_research_nested_stack.py
+  R5:
+    title: "Worker terminal row always wins"
+    detail: >
+      Worker success writes the data row via write_cr_artifact (already exists); its
+      full put_item replaces the processing placeholder. write_cr_processing never
+      overwrites a terminal row. Re-POST while the worker runs is safe.
+  R6:
+    title: "Worker hard-fail writes a terminal failed row to the artifacts table"
+    detail: >
+      CRITICAL reconciliation gap: the worker records failure only on the APPLICATION
+      record (artifact_statuses.company_research='failed'), never on the ARTIFACTS
+      table that GET reads. So a hard-failed job leaves the processing placeholder
+      orphaned and GET returns 'processing' forever.
+      Fix (single-source-of-truth = artifacts table):
+        - Add write_cr_failed(application_id, user_id) to company_research_store.py
+          that puts a minimal row {key, artifactType, user_id, status:'failed',
+          created_at}.
+        - Call it from company_research_worker_handler._hard_fail, alongside the
+          existing app-record update.
+      GET needs NO change: _is_confident_cr already maps status=='failed' → failed,
+      and the failed row overwrites the processing placeholder.
+    files:
+      - src/backend/careervp/logic/company_research_store.py
+      - src/backend/careervp/handlers/company_research_worker_handler.py  # _hard_fail
+
+# =============================================================================
+# SUCCESS CRITERIA
+# =============================================================================
+success_criteria:
+  SC1: "POST sends exactly one SQS message; body deserializes as valid CRWorkerInput."
+  SC2: "POST returns 202 in <2s; research_company() is NOT called on the request path."
+  SC3: "Processing row is present in DynamoDB immediately after POST."
+  SC4: "GET returns status:processing until worker writes terminal; then completed or failed."
+  SC5: "sub-0.85 confidence → worker writes status:failed (not silent not_generated)."
+  SC6: "CR handler Lambda has sqs:SendMessage scoped to CR queue ARN only; COMPANY_RESEARCH_QUEUE_URL env present."
+  SC7: "cdk synth clean; mypy --strict + ruff clean on changed modules."
+  SC8: "a hard-failed job's GET returns 'failed', never perpetual 'processing' (write_cr_failed clears the placeholder)."
+
+# =============================================================================
+# VALIDATION COMMANDS
+# =============================================================================
+validation:
+  - "cd src/backend && uv run ruff format . && uv run ruff check --fix ."
+  - "cd src/backend && uv run mypy careervp/handlers/company_research_handler.py careervp/handlers/company_research_worker_handler.py careervp/logic/company_research_store.py --strict"
+  - "cd src/backend && uv run pytest tests/unit/test_company_research_handler.py tests/unit/test_company_research_store.py tests/unit/test_company_research_worker_handler.py -v --tb=short"
+  - "cd infra && npx cdk synth"
+
+test_hooks:
+  - "TEST-FE-053 § post_enqueue: SC1, SC2, SC3"
+  - "TEST-FE-053 § get_status: SC4"
+  - "TEST-FE-053 § store_idempotency: SC5, SC8"
+  - "TEST-FE-053 § worker_failed_row: SC5, SC8"
+  - "TEST-FE-053 § infra_synth: SC6, SC7"

@@ -1,0 +1,98 @@
+spec_id: FE-UI-054
+title: "CR frontend — session-independent polling; fix terminal state map"
+priority: high
+status: draft
+owner: frontend
+created_at: 2026-06-28
+updated_at: 2026-06-28
+tier: frontend
+recommended_model: sonnet
+
+depends_on:
+  - FE-UI-053   # processing row must exist before polling can resume
+  - FE-UI-029   # chain/DAL
+  - FE-UI-030   # worker
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    Poll loop lives inside handleTrigger closure (~L40 in company-research/page.tsx);
+    lost on reload or navigation. Mount effect (~L20) does GET but does not restart
+    polling if status=processing. Terminal branch (~L61) treats not_generated as error
+    instead of idle CTA.
+  required_behavior: >
+    Mount always checks status; if processing → auto-resumes polling without user
+    action. Poll loop lives in a status-keyed effect, not inside handleTrigger.
+    not_generated → idle "Run research" CTA (no error). Polling survives reload and
+    navigate-away-return.
+
+# =============================================================================
+# REQUIREMENTS
+# =============================================================================
+requirements:
+  R1:
+    title: "Auto-resume polling on mount if status=processing"
+    detail: >
+      On component mount, read STATUS (not just the completed artifact). Use the
+      status-aware api.getCompanyResearchStatus(jobId) — NOT api.getCompanyResearch(),
+      which collapses every non-completed status to null and so cannot distinguish
+      processing from not_generated. If status=processing, immediately enter polling
+      mode (same loop as post-trigger). State of truth is the server row — no local
+      state needed to survive reload/navigation.
+    files:
+      - src/frontend/app/applications/[id]/company-research/page.tsx
+      - src/frontend/api/methods.ts   # no change expected; getCompanyResearchStatus already returns status verbatim — verify
+  R2:
+    title: "Move poll loop out of handleTrigger into a status-keyed effect"
+    detail: >
+      Polling must run whenever component-local status transitions to "processing"
+      (either from mount GET or from handleTrigger POST response). Effect dependency
+      is status; cleanup cancels the timer. handleTrigger only fires the POST and
+      sets status; it does not own the poll loop.
+    files:
+      - src/frontend/app/applications/[id]/company-research/page.tsx
+  R3:
+    title: "Correct terminal state map"
+    detail: >
+      - completed  → render company research card
+      - failed     → show error toast / error state
+      - processing → keep polling (poll effect handles this)
+      - not_generated → idle state: show "Run research" CTA, NO error
+    files:
+      - src/frontend/app/applications/[id]/company-research/page.tsx
+  R4:
+    title: "Poll cadence and cap"
+    detail: >
+      Poll every 10s. After 5 minutes without terminal, stop polling and show
+      "Still running — refresh later" message. Do NOT cancel the server-side job.
+      Worker continues independently.
+    files:
+      - src/frontend/app/applications/[id]/company-research/page.tsx
+
+# =============================================================================
+# SUCCESS CRITERIA
+# =============================================================================
+success_criteria:
+  SC1: "trigger → reload mid-run → component mounts → resumes polling → completed renders without re-triggering."
+  SC2: "navigate away mid-run → return → polling resumes from server status automatically."
+  SC3: "not_generated shows 'Run research' CTA; no error toast or error state rendered."
+  SC4: "failed → error state; completed → research card rendered."
+  SC5: "no poll state held only in closure or unmount-sensitive scope; effect cleanup cancels timer."
+  SC6: "npm run typecheck + test:unit + test:integration + test:e2e all green."
+
+# =============================================================================
+# VALIDATION COMMANDS
+# =============================================================================
+validation:
+  - "cd src/frontend && npm run typecheck"
+  - "cd src/frontend && npm run test:unit"
+  - "cd src/frontend && npm run test:integration"
+  - "cd src/frontend && npm run test:e2e"
+
+test_hooks:
+  - "TEST-FE-054 § mount_polling: SC1, SC5"
+  - "TEST-FE-054 § remount_resume: SC1, SC2"
+  - "TEST-FE-054 § not_generated_cta: SC3"
+  - "TEST-FE-054 § terminal_states: SC4"

@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useDashboard } from "@/app/dashboard/dashboard-context";
 import { Topbar } from "@/components/dashboard/Topbar";
 import { StatusStrip } from "@/components/dashboard/StatusStrip";
-import { NewApplicationModal } from "@/components/NewApplicationModal";
 import { cn } from "@/lib/utils";
 import type { Job } from "@/lib/types";
 
@@ -114,11 +114,11 @@ function JobsCard({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
+  const router = useRouter();
   const { usage, subscription } = useDashboard();
 
   const [jobs, setJobs] = useState<Job[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -135,11 +135,6 @@ export default function DashboardPage() {
     load();
   }, []);
 
-  const handleJobCreated = (newJob: Job) => {
-    setJobs((prev) => [newJob, ...prev]);
-    setShowModal(false);
-  };
-
   return (
     <>
       <Topbar title="Dashboard" />
@@ -148,16 +143,9 @@ export default function DashboardPage() {
         <JobsCard
           jobs={jobs}
           loading={dataLoading}
-          onNewApplication={() => setShowModal(true)}
+          onNewApplication={() => router.push("/applications/new")}
         />
       </main>
-
-      {showModal && (
-        <NewApplicationModal
-          onClose={() => setShowModal(false)}
-          onCreated={handleJobCreated}
-        />
-      )}
     </>
   );
 }

@@ -9,6 +9,7 @@ export interface DashboardContextValue {
   subscription: SubscriptionResponse | null;
   hasActiveAccess: boolean;
   applicationsRemaining: number | null;
+  isLoading?: boolean;
 }
 
 export const DashboardContext = createContext<DashboardContextValue | null>(null);

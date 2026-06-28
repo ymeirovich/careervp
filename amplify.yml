@@ -1,20 +1,21 @@
 version: 1
-frontend:
-  phases:
-    preBuild:
-      commands:
-        - cd src/frontend
-        - npm ci
-    build:
-      commands:
-        - cd src/frontend
-        - npm run typecheck
-        - npm run build
-  artifacts:
-    # Next.js static export output directory
-    baseDirectory: src/frontend/out
-    files:
-      - "**/*"
-  cache:
-    paths:
-      - src/frontend/node_modules/**/*
+applications:
+  - frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm ci
+        build:
+          commands:
+            - npm run typecheck
+            - npm run build
+      artifacts:
+        # .next is the SSR build output directory (Web Compute platform)
+        baseDirectory: .next
+        files:
+          - "**/*"
+      cache:
+        paths:
+          - .next/cache/**/*
+          - node_modules/**/*
+    appRoot: src/frontend

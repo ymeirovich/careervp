@@ -7,7 +7,7 @@
 - Environment: dev (AWS region: us-east-1)
 
 ## AI Model Strategy (Decision 1.2)
-- [cite_start]**Strategic (Sonnet 4.5):** VPR Generation, Gap Analysis[cite: 259, 266].
+- [cite_start]**Strategic (Sonnet 4.6):** VPR Generation, Gap Analysis[cite: 259, 266].
 - [cite_start]**Template (Haiku 4.5):** CV Tailoring, Cover Letter, Interview Prep[cite: 260, 267].
 
 ## Anti-AI Detection Rules (Decision 1.6)

@@ -27,6 +27,7 @@ from careervp.handlers.utils.observability import logger, tracer
 from careervp.handlers.utils.rest_api_resolver import app
 from careervp.logic.quota_service import QuotaError, QuotaService
 from careervp.logic.trial_service import TrialExhaustedException, TrialExpiredException, TrialService
+from careervp.logic.utils.domain_validator import DomainValidation, validate_job_url
 from careervp.models.api_models import JobCreateRequest
 from careervp.models.job import Job
 
@@ -55,6 +56,23 @@ def _json_response(status: HTTPStatus, body: dict[str, Any]) -> Response[str]:
         status_code=status.value,
         content_type=content_types.APPLICATION_JSON,
         body=json.dumps(body, default=str),
+    )
+
+
+def _job_url_error_response(
+    *,
+    error_code: str,
+    message: str,
+    classification: str,
+) -> Response[str]:
+    return _json_response(
+        HTTPStatus.BAD_REQUEST,
+        {
+            'error': message,
+            'error_code': error_code,
+            'field': 'url',
+            'classification': classification,
+        },
     )
 
 
@@ -141,14 +159,35 @@ def _coerce_datetime(value: Any) -> datetime:
     return datetime.now(timezone.utc)
 
 
-@app.post('/jobs')
-@tracer.capture_method(capture_response=False)
-def create_job() -> Response[str]:
-    """Create a job posting for the authenticated user."""
-    user_id = _get_authenticated_user_id()
-    if not user_id:
-        return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Authentication required'})
+def _classify_job_url(url: str) -> DomainValidation | Response[str]:
+    validation_result = validate_job_url(url)
+    if not validation_result.success or validation_result.data is None:
+        logger.error('Job URL validation failed unexpectedly', url=url, error=validation_result.error, code=validation_result.code)
+        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Failed to validate job URL'})
 
+    validation = validation_result.data
+    if validation.classification == 'valid':
+        return validation
+    if validation.classification == 'invalid_format':
+        return _job_url_error_response(
+            error_code='invalid_format',
+            message='Enter a valid job URL that starts with http:// or https://.',
+            classification=validation.classification,
+        )
+    if validation.classification == 'parked':
+        return _job_url_error_response(
+            error_code='parked',
+            message='That URL points to a parked domain. Use the company job posting URL instead.',
+            classification=validation.classification,
+        )
+    return _job_url_error_response(
+        error_code='unreachable',
+        message="We couldn't reach that job URL. Check the domain and try again.",
+        classification=validation.classification,
+    )
+
+
+def _check_create_job_access(user_id: str) -> Response[str] | None:
     quota_service = _get_quota_service()
     if quota_service is not None:
         try:
@@ -165,14 +204,47 @@ def create_job() -> Response[str]:
         except TrialExhaustedException:
             return _json_response(HTTPStatus.FORBIDDEN, {'error': 'trial_exhausted'})
 
+    return None
+
+
+def _parse_create_job_request() -> JobCreateRequest | Response[str]:
     try:
         raw_body = app.current_event.json_body
         if isinstance(raw_body, dict) and 'company_name' not in raw_body and 'company' in raw_body:
             raw_body = {**raw_body, 'company_name': raw_body.get('company')}
-        request = JobCreateRequest.model_validate(raw_body)
+        return JobCreateRequest.model_validate(raw_body)
     except (ValidationError, ValueError, TypeError) as exc:
         logger.warning('Invalid create job payload', error=str(exc))
         return _json_response(HTTPStatus.BAD_REQUEST, {'error': 'Invalid request payload'})
+
+
+@app.post('/jobs')
+@tracer.capture_method(capture_response=False)
+def create_job() -> Response[str]:
+    """Create a job posting for the authenticated user."""
+    user_id = _get_authenticated_user_id()
+    if not user_id:
+        return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Authentication required'})
+
+    access_error = _check_create_job_access(user_id)
+    if access_error is not None:
+        return access_error
+
+    request = _parse_create_job_request()
+    if isinstance(request, Response):
+        return request
+
+    raw_url = (request.url or '').strip()
+    if not raw_url:
+        return _job_url_error_response(
+            error_code='url_required',
+            message='Job URL is required.',
+            classification='invalid_format',
+        )
+
+    url_validation = _classify_job_url(raw_url)
+    if isinstance(url_validation, Response):
+        return url_validation
 
     create_result = _get_jobs_repository().create_job(
         {
@@ -180,7 +252,8 @@ def create_job() -> Response[str]:
             'title': request.title.strip(),
             'company_name': request.company_name.strip(),
             'description': request.description.strip(),
-            'url': str(request.url) if request.url else None,
+            'url': raw_url,
+            'domain': url_validation.domain,
             'requirements': request.requirements,
             'status': 'active',
         }

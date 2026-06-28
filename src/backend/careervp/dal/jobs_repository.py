@@ -316,7 +316,21 @@ class JobsRepository:
 
         except (ClientError, ValueError) as e:
             if isinstance(e, ClientError):
+                error_code = e.response['Error']['Code']
                 error_msg = f'DynamoDB error: {e.response["Error"]["Message"]}'
+                if error_code == 'ConditionalCheckFailedException':
+                    # Expected when another worker already claimed this job (idempotency guard)
+                    logger.warning(
+                        'Job status condition check failed — likely claimed by another worker',
+                        job_id=job_id,
+                        status=status,
+                        expected_current_status=expected_current_status,
+                    )
+                    return Result(
+                        success=False,
+                        error=error_msg,
+                        code=ResultCode.DYNAMODB_CONDITION_CHECK_FAILED,
+                    )
             else:
                 error_msg = str(e)
             logger.error(
@@ -470,6 +484,9 @@ class JobsRepository:
         }
         if job_data.get('idempotency_key'):
             record['idempotency_key'] = job_data['idempotency_key']
+        for key in ('company_research_id', 'company_research_at', 'company_context_included'):
+            if key in job_data:
+                record[key] = job_data[key]
         return record
 
     def _build_api_job_record(self, job_data: dict[str, Any], resolved_job_id: str, user_id: str) -> dict[str, Any]:
@@ -502,6 +519,9 @@ class JobsRepository:
         url_value = job_data.get('url')
         if isinstance(url_value, str) and url_value.strip():
             record['url'] = url_value.strip()
+        domain_value = job_data.get('domain')
+        if isinstance(domain_value, str) and domain_value.strip():
+            record['domain'] = domain_value.strip().lower()
         if requirements:
             record['requirements'] = requirements
         return record

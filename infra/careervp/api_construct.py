@@ -1,7 +1,9 @@
 import json
+import os
+import re
 from typing import cast
 
-from aws_cdk import CfnOutput, Duration, RemovalPolicy, aws_apigateway, aws_sqs
+from aws_cdk import Aws, CfnOutput, Duration, RemovalPolicy, aws_apigateway, aws_sqs
 from aws_cdk import aws_cloudwatch as cw
 from aws_cdk import aws_cognito as cognito
 from aws_cdk import aws_dynamodb as dynamodb
@@ -19,6 +21,7 @@ from constructs import Construct
 
 from . import constants
 from .api_db_construct import ApiDbConstruct
+from .artifact_chain_construct import ArtifactChainConstruct
 from .monitoring import CrudMonitoring
 from .naming_utils import NamingUtils
 from .waf_construct import WafToApiGatewayConstruct
@@ -40,6 +43,7 @@ class ApiConstruct(Construct):
         self.naming = naming
         self.cognito_client_id = cognito_client_id
         self.cognito_user_pool = user_pool
+        self._api_permission_scopes: dict[str, set[str]] = {}
         self.api_db = ApiDbConstruct(self, f"{id_}db", naming=naming)
         self.llm_cache_table = self._build_llm_cache_table(is_production_env)
         self.logs_kms_key = self._build_logs_kms_key()
@@ -83,16 +87,9 @@ class ApiConstruct(Construct):
         )
         self.api_authorizer = self._build_api_authorizer(user_pool)
 
-        api_resource: aws_apigateway.Resource = self.rest_api.root.add_resource(
-            constants.API_ROOT_RESOURCE
-        )
-        cv_resource = api_resource.add_resource(constants.GW_RESOURCE)
-        vpr_resource = api_resource.add_resource(constants.GW_RESOURCE_VPR)
-        company_research_resource = api_resource.add_resource(
-            constants.GW_RESOURCE_COMPANY_RESEARCH
-        )
+        root_resource = cast(aws_apigateway.Resource, self.rest_api.root)
         self.cv_upload_func = self._add_post_lambda_integration(
-            cv_resource,
+            root_resource,
             self.lambda_role,
             self.api_db.db,
             appconfig_app_name,
@@ -104,7 +101,7 @@ class ApiConstruct(Construct):
 
         # VPR Submit Lambda - POST /api/vpr (async architecture)
         self.vpr_submit_func = self._add_vpr_submit_lambda_integration(
-            vpr_resource,
+            root_resource,
             self.lambda_role,
             self.api_db.jobs_table,
             self.api_db.vpr_results_bucket,
@@ -113,11 +110,8 @@ class ApiConstruct(Construct):
         )
 
         # VPR Status Lambda - GET /api/vpr/status/{job_id}
-        vpr_status_resource = vpr_resource.add_resource("status").add_resource(
-            "{job_id}"
-        )
         self.vpr_status_func = self._add_vpr_status_lambda_integration(
-            vpr_status_resource,
+            root_resource,
             self.lambda_role,
             self.api_db.jobs_table,
             self.api_db.vpr_results_bucket,
@@ -126,6 +120,7 @@ class ApiConstruct(Construct):
 
         # Keep the original SQS worker for existing queue-based VPR flow.
         self.vpr_sqs_worker_func = self._add_vpr_sqs_worker_lambda_integration(
+            self,
             self.lambda_role,
             self.api_db.jobs_table,
             self.api_db.vpr_results_bucket,
@@ -134,10 +129,10 @@ class ApiConstruct(Construct):
             appconfig_app_name,
         )
         self.vpr_dlq_handler_func = self._add_vpr_dlq_handler_lambda(
-            self.vpr_jobs_dlq, self.api_db.jobs_table
+            self, self.vpr_jobs_dlq, self.api_db.jobs_table
         )
         self.company_research_func = self._add_company_research_lambda_integration(
-            company_research_resource,
+            root_resource,
             self.lambda_role,
             self.api_db.db,
             appconfig_app_name,
@@ -154,11 +149,8 @@ class ApiConstruct(Construct):
         self.interview_prep_status_func = self._add_interview_prep_status_lambda()
 
         # CV Tailoring - POST /api/cv-tailoring
-        cv_tailoring_resource = api_resource.add_resource(
-            constants.GW_RESOURCE_CV_TAILORING
-        )
         self.cv_tailoring_func = self._add_cv_tailoring_lambda_integration(
-            cv_tailoring_resource,
+            root_resource,
             self.lambda_role,
             self.api_db.db,
             appconfig_app_name,
@@ -179,6 +171,7 @@ class ApiConstruct(Construct):
             dlq=self.cv_upload_worker_dlq,
         )
         self.vpr_worker_func = self._add_vpr_worker_lambda(
+            self,
             jobs_table=self.api_db.jobs_table,
             artifacts_table=self.api_db.artifacts_table,
             applications_table=self.api_db.applications_table,
@@ -186,11 +179,13 @@ class ApiConstruct(Construct):
             results_bucket=self.api_db.vpr_results_bucket,
         )
         self.cv_tailor_worker_func = self._add_cv_tailor_worker_lambda(
+            self,
             artifacts_table=self.api_db.artifacts_table,
             cvs_table=self.api_db.cvs_table,
             dlq=self.cv_tailor_worker_dlq,
         )
         self.cover_letter_worker_func = self._add_cover_letter_worker_lambda(
+            self,
             artifacts_table=self.api_db.artifacts_table,
             cvs_table=self.api_db.cvs_table,
             users_table=self.api_db.users_table,
@@ -198,11 +193,15 @@ class ApiConstruct(Construct):
             dlq=self.cover_letter_worker_dlq,
         )
         self.interview_prep_worker_func = self._add_interview_prep_worker_lambda(
+            self,
             artifacts_table=self.api_db.artifacts_table,
             applications_table=self.api_db.applications_table,
             jobs_table=self.api_db.jobs_table,
             dlq=self.interview_prep_worker_dlq,
         )
+
+        # Artifact Chain (FE-UI-031): CR worker + failure handlers + Step Functions.
+        self._wire_artifact_chain(appconfig_app_name)
 
         # Billing infrastructure (S-006)
         self.billing_webhook_dlq = self._build_billing_webhook_dlq()
@@ -210,6 +209,9 @@ class ApiConstruct(Construct):
         self.billing_reconcile_lambda = self._add_billing_reconcile_lambda()
         self._add_billing_eventbridge_rule()
         self.billing_error_alarm = self._add_billing_error_alarm()
+
+        # Export infrastructure (FE-UI-028)
+        self.export_lambda = self._add_export_lambda()
 
         self._add_openapi_contract_routes()
 
@@ -232,6 +234,7 @@ class ApiConstruct(Construct):
                 self.interview_prep_api_func,
             ],
             naming=naming,
+            mode="dashboards",
         )
 
         if is_production_env:
@@ -243,6 +246,35 @@ class ApiConstruct(Construct):
                 naming=naming,
                 feature=constants.API_FEATURE,
             )
+
+    def register_ai_assist_routes(self, ai_assist_lambda: _lambda.IFunction) -> None:
+        self.ai_assist_lambda = ai_assist_lambda
+        self._add_route_method_with_integration(
+            "/ai/assist",
+            "POST",
+            self._build_lambda_proxy_integration(ai_assist_lambda),
+        )
+        self._add_route_method(
+            "/interview-prep/{interviewPrepId}",
+            "PATCH",
+            self.interview_prep_status_func,
+        )
+
+    def register_error_report_route(
+        self, error_report_lambda: _lambda.IFunction
+    ) -> None:
+        """Wire POST /errors to the nested-stack error-report Lambda.
+
+        Uses an AwsIntegration proxy (not LambdaIntegration) so the invoke
+        permission lives in the nested stack and the parent only gains the
+        unavoidable API Gateway Resource + POST/OPTIONS methods — keeping the
+        near-limit parent stack as lean as possible.
+        """
+        self._add_route_method_with_integration(
+            "/errors",
+            "POST",
+            self._build_lambda_proxy_integration(error_report_lambda),
+        )
 
     def _build_swagger_endpoints(
         self, rest_api: aws_apigateway.RestApi, dest_func: _lambda.Function
@@ -800,7 +832,19 @@ class ApiConstruct(Construct):
             ),
             "USERS_TABLE_NAME": self.api_db.users_table.table_name,
             "ALLOWED_ORIGINS": self.node.try_get_context("allowed_origins")
-            or "https://main.d3j2wnm8g5clnw.amplifyapp.com,https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com,https://app.careervp.com,https://dev.careervp.com,https://stage.careervp.com,http://localhost:3000",
+            or "https://main.d3j2wnm8g5clnw.amplifyapp.com,https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com,https://ui-upgrade.d3j2wnm8g5clnw.amplifyapp.com,https://app.careervp.com,https://dev.careervp.com,https://stage.careervp.com,http://localhost:3000",
+        }
+
+    def _build_llm_env(self) -> dict[str, str]:
+        """Build LLM-related environment variables (API key + model IDs).
+
+        Spread this into every Lambda that calls the LLM client so model IDs
+        can be changed with a cdk deploy rather than a code change.
+        """
+        return {
+            constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+            constants.STRATEGIC_MODEL_ID_ENV_VAR: constants.STRATEGIC_MODEL_ID,
+            constants.TEMPLATE_MODEL_ID_ENV_VAR: constants.TEMPLATE_MODEL_ID,
         }
 
     def _build_common_layer(self) -> PythonLayerVersion:
@@ -861,7 +905,7 @@ class ApiConstruct(Construct):
                 "IDEMPOTENCY_TABLE_NAME": idempotency_table.table_name,
                 "CV_BUCKET_NAME": cv_bucket.bucket_name,
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
-                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+                **self._build_llm_env(),
             },
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=0,
@@ -914,7 +958,7 @@ class ApiConstruct(Construct):
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": constants.ENVIRONMENT,
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
-                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+                **self._build_llm_env(),
             },
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=0,
@@ -963,7 +1007,7 @@ class ApiConstruct(Construct):
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": constants.ENVIRONMENT,
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
-                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+                **self._build_llm_env(),
             },
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=0,
@@ -1124,7 +1168,7 @@ class ApiConstruct(Construct):
                 "VPR_RESULTS_BUCKET_NAME": results_bucket.bucket_name,
                 "SQS_QUEUE_URL": queue.queue_url,
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
-                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+                **self._build_llm_env(),
             },
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=0,
@@ -1178,7 +1222,7 @@ class ApiConstruct(Construct):
                 "VPR_JOBS_TABLE_NAME": jobs_table.table_name,
                 "VPR_RESULTS_BUCKET_NAME": results_bucket.bucket_name,
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
-                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+                **self._build_llm_env(),
             },
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=0,
@@ -1197,6 +1241,7 @@ class ApiConstruct(Construct):
 
     def _add_vpr_sqs_worker_lambda_integration(
         self,
+        scope: Construct,
         role: iam.Role,
         jobs_table: dynamodb.TableV2,
         results_bucket: s3.Bucket,
@@ -1207,7 +1252,7 @@ class ApiConstruct(Construct):
         """Add legacy VPR SQS worker Lambda integration."""
         function_name = self.naming.lambda_name("vpr-sqs-worker")
         log_group = logs.LogGroup(
-            self,
+            scope,
             "VprSqsWorkerLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -1216,7 +1261,7 @@ class ApiConstruct(Construct):
         )
 
         lambda_function = _lambda.Function(
-            self,
+            scope,
             "VprSqsWorkerLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -1234,7 +1279,7 @@ class ApiConstruct(Construct):
                 "VPR_RESULTS_BUCKET_NAME": results_bucket.bucket_name,
                 "DYNAMODB_TABLE_NAME": users_table.table_name,
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
-                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+                **self._build_llm_env(),
             },
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=2,
@@ -1258,13 +1303,14 @@ class ApiConstruct(Construct):
 
     def _add_vpr_dlq_handler_lambda(
         self,
+        scope: Construct,
         dlq: aws_sqs.Queue,
         jobs_table: dynamodb.TableV2,
     ) -> _lambda.Function:
         """Add Lambda triggered by VPR jobs DLQ to mark orphaned jobs FAILED."""
         function_name = self.naming.lambda_name("vpr-dlq-handler")
         log_group = logs.LogGroup(
-            self,
+            scope,
             "VprDlqHandlerLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -1273,7 +1319,7 @@ class ApiConstruct(Construct):
         )
 
         lambda_function = _lambda.Function(
-            self,
+            scope,
             "VprDlqHandlerLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -1337,7 +1383,7 @@ class ApiConstruct(Construct):
                 "IDEMPOTENCY_TABLE_NAME": idempotency_table.table_name,
                 "CV_BUCKET_NAME": cv_bucket.bucket_name,
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
-                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+                **self._build_llm_env(),
             },
             timeout=Duration.seconds(300),
             memory_size=512,
@@ -1367,6 +1413,7 @@ class ApiConstruct(Construct):
 
     def _add_vpr_worker_lambda(
         self,
+        scope: Construct,
         jobs_table: dynamodb.TableV2,
         artifacts_table: dynamodb.TableV2,
         applications_table: dynamodb.TableV2,
@@ -1377,7 +1424,7 @@ class ApiConstruct(Construct):
         path; the authoritative trigger is vpr-sqs-worker via the VPR jobs SQS queue."""
         function_name = self.naming.lambda_name("vpr-worker")
         log_group = logs.LogGroup(
-            self,
+            scope,
             "vpr-workerLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -1385,7 +1432,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         lambda_function = _lambda.Function(
-            self,
+            scope,
             "vpr-worker",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -1399,7 +1446,7 @@ class ApiConstruct(Construct):
                 "VPR_RESULTS_BUCKET_NAME": results_bucket.bucket_name,
                 "DYNAMODB_TABLE_NAME": users_table.table_name,
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
-                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+                **self._build_llm_env(),
             },
             timeout=Duration.minutes(10),  # keep in sync with SQS worker — same handler
             memory_size=1024,
@@ -1433,6 +1480,7 @@ class ApiConstruct(Construct):
 
     def _add_cv_tailor_worker_lambda(
         self,
+        scope: Construct,
         artifacts_table: dynamodb.TableV2,
         cvs_table: dynamodb.TableV2,
         dlq: aws_sqs.Queue,
@@ -1440,7 +1488,7 @@ class ApiConstruct(Construct):
         """Create cv_tailor_worker on artifacts table stream updates."""
         function_name = self.naming.lambda_name("cv-tailor-worker")
         log_group = logs.LogGroup(
-            self,
+            scope,
             "CvTailorWorkerLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -1448,7 +1496,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         lambda_function = _lambda.Function(
-            self,
+            scope,
             "CvTailorWorkerLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -1460,7 +1508,7 @@ class ApiConstruct(Construct):
                 **self._build_shared_table_env(),
                 "TABLE_NAME": cvs_table.table_name,
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
-                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+                **self._build_llm_env(),
             },
             timeout=Duration.seconds(300),
             memory_size=512,
@@ -1490,6 +1538,7 @@ class ApiConstruct(Construct):
 
     def _add_cover_letter_worker_lambda(
         self,
+        scope: Construct,
         artifacts_table: dynamodb.TableV2,
         cvs_table: dynamodb.TableV2,
         users_table: dynamodb.TableV2,
@@ -1499,7 +1548,7 @@ class ApiConstruct(Construct):
         """Create cover_letter_worker triggered by SQS queue."""
         function_name = self.naming.lambda_name("cover-letter-worker")
         log_group = logs.LogGroup(
-            self,
+            scope,
             "CoverLetterWorkerLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -1507,7 +1556,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         lambda_function = _lambda.Function(
-            self,
+            scope,
             "CoverLetterWorkerLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -1521,7 +1570,7 @@ class ApiConstruct(Construct):
                 "JOBS_TABLE_NAME": self.api_db.jobs_table.table_name,
                 "COVER_LETTER_LEGACY_READ_ENABLED": "true",
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
-                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+                **self._build_llm_env(),
             },
             timeout=Duration.seconds(300),
             memory_size=512,
@@ -1563,6 +1612,7 @@ class ApiConstruct(Construct):
 
     def _add_interview_prep_worker_lambda(
         self,
+        scope: Construct,
         artifacts_table: dynamodb.TableV2,
         applications_table: dynamodb.TableV2,
         jobs_table: dynamodb.TableV2,
@@ -1571,7 +1621,7 @@ class ApiConstruct(Construct):
         """Create interview_prep_worker triggered by SQS queue."""
         function_name = self.naming.lambda_name("interview-prep-worker")
         log_group = logs.LogGroup(
-            self,
+            scope,
             "InterviewPrepWorkerLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -1579,7 +1629,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         lambda_function = _lambda.Function(
-            self,
+            scope,
             "InterviewPrepWorkerLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -1592,7 +1642,7 @@ class ApiConstruct(Construct):
                 "DYNAMODB_TABLE_NAME": artifacts_table.table_name,
                 "VPR_JOBS_TABLE_NAME": jobs_table.table_name,
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
-                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+                **self._build_llm_env(),
             },
             timeout=Duration.seconds(300),
             memory_size=512,
@@ -1671,7 +1721,7 @@ class ApiConstruct(Construct):
                 if constants.ENVIRONMENT != "prod"
                 else "false",
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
-                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+                **self._build_llm_env(),
             },
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=0,
@@ -1767,7 +1817,7 @@ class ApiConstruct(Construct):
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-health-api",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 "DYNAMODB_TABLE_NAME": self.api_db.users_table.table_name,
-                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+                **self._build_llm_env(),
             },
             timeout=Duration.seconds(10),
             memory_size=128,
@@ -1950,7 +2000,8 @@ class ApiConstruct(Construct):
                 "GAP_QUESTIONS_TABLE_NAME": self.api_db.db.table_name,
                 "USERS_TABLE_NAME": self.api_db.db.table_name,
                 "DYNAMODB_TABLE_NAME": self.api_db.db.table_name,
-                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+                "JOBS_TABLE_NAME": self.api_db.jobs_table.table_name,
+                **self._build_llm_env(),
             },
             timeout=Duration.seconds(30),
             memory_size=256,
@@ -1962,6 +2013,344 @@ class ApiConstruct(Construct):
             system_log_level_v2=_lambda.SystemLogLevel.INFO,
             architecture=_lambda.Architecture.X86_64,
         )
+
+    def _wire_artifact_chain(self, appconfig_app_name: str) -> None:
+        """Create the artifact-chain workers, failure handlers, and state machine.
+
+        Additive (FE-UI-031): gated behind ARTIFACT_CHAIN_ENABLED (default "false").
+        The CR worker is wired to consume company_research_queue; VPR/CV workers'
+        task-token handling is deferred to their own tickets.
+        """
+        # The artifact-chain failure handlers, their dedicated role, and the
+        # Step Functions state machine are created in the PARENT stack. These
+        # resources carry explicit physical names (the two failure-handler
+        # Lambdas, their log groups, and careervp-artifact-chain-statemachine-dev)
+        # and are already deployed in CareerVpCrudDev, so relocating them into a
+        # nested stack makes CloudFormation try to CREATE new resources under the
+        # same physical names — a "resource already exists" failure. Only the
+        # Monitoring nested stack (auto-named alarms/dashboards) is split out for
+        # the 500-resource ceiling; explicitly-named resources must stay put
+        # absent a CloudFormation resource-import migration.
+
+        # FE-UI-035: build the dedicated failure-handler role once, before the
+        # handlers, so neither reuses the shared role that holds states:* grants.
+        self.failure_handler_role = self._build_failure_handler_role(self)
+        self.cr_failure_handler_func = self._add_cr_failure_handler_lambda(self)
+        self.artifact_failure_handler_func = self._add_artifact_failure_handler_lambda(
+            self
+        )
+        self.company_research_worker_func = self._add_company_research_worker_lambda(
+            appconfig_app_name
+        )
+
+        cv_tailoring_chain_target = _lambda.Function.from_function_arn(
+            self,
+            "ArtifactChainCvTailoringTarget",
+            f"arn:{Aws.PARTITION}:lambda:{Aws.REGION}:{Aws.ACCOUNT_ID}:function:{self.naming.lambda_name('cvtailor')}",
+        )
+
+        self.artifact_chain = ArtifactChainConstruct(
+            self,
+            "ArtifactChain",
+            naming=self.naming,
+            company_research_queue=self.api_db.company_research_queue,
+            vpr_jobs_queue=self.vpr_jobs_queue,
+            cover_letter_queue=self.cover_letter_jobs_queue,
+            interview_prep_queue=self.interview_prep_jobs_queue,
+            cv_tailoring_func=cv_tailoring_chain_target,
+            cr_failure_handler=self.cr_failure_handler_func,
+            artifact_failure_handler=self.artifact_failure_handler_func,
+            logs_kms_key=self.logs_kms_key,
+        )
+        chain_arn = self.artifact_chain.state_machine.state_machine_arn
+
+        # Submit handlers start the artifact chain when dependency resolution
+        # finds a genuinely absent upstream artifact.
+        for submit_func in (
+            self.vpr_submit_func,
+            self.cover_letter_api_func,
+            self.interview_prep_api_func,
+            self.cv_tailoring_func,
+        ):
+            self.artifact_chain.state_machine.grant_start_execution(submit_func)
+            submit_func.add_environment("STEP_FUNCTIONS_CHAIN_ARN", chain_arn)
+            submit_func.add_environment(
+                "ARTIFACT_CHAIN_ENABLED", self._artifact_chain_enabled()
+            )
+
+        # gap_handler starts the chain when the flag is on.
+        self.artifact_chain.state_machine.grant_start_execution(self.gap_api_func)
+        self.gap_api_func.add_environment("STEP_FUNCTIONS_CHAIN_ARN", chain_arn)
+        self.gap_api_func.add_environment(
+            "ARTIFACT_CHAIN_ENABLED", self._artifact_chain_enabled()
+        )
+
+        # CR worker signals task success/failure back to the chain.
+        self.company_research_worker_func.add_environment(
+            "STEP_FUNCTIONS_CHAIN_ARN", chain_arn
+        )
+        self.artifact_chain.state_machine.grant_task_response(
+            self.company_research_worker_func
+        )
+
+        # FE-UI-053: the CR API handler enqueues research jobs onto the worker queue
+        # instead of running research synchronously on the request path. Grant only
+        # sqs:SendMessage scoped to the CR queue (no wildcard — FE-UI-035 invariant).
+        self.api_db.company_research_queue.grant_send_messages(
+            self.company_research_func
+        )
+        self.company_research_func.add_environment(
+            "COMPANY_RESEARCH_QUEUE_URL",
+            self.api_db.company_research_queue.queue_url,
+        )
+        self.artifact_chain.state_machine.grant_task_response(self.vpr_sqs_worker_func)
+        self.artifact_chain.state_machine.grant_task_response(
+            self.cover_letter_worker_func
+        )
+        self.artifact_chain.state_machine.grant_task_response(
+            self.interview_prep_worker_func
+        )
+
+        CfnOutput(
+            self,
+            constants.ARTIFACT_CHAIN_ARN_OUTPUT,
+            value=chain_arn,
+        ).override_logical_id(constants.ARTIFACT_CHAIN_ARN_OUTPUT)
+
+        # FE-UI-043: cancel handlers need states:StopExecution + DescribeExecution
+        # scoped to the chain ARN (no states:* wildcard — FE-UI-035 invariant).
+        cancel_sfn_statement = iam.PolicyStatement(
+            actions=["states:StopExecution", "states:DescribeExecution"],
+            resources=[chain_arn],
+        )
+        for cancel_func in (
+            self.vpr_status_func,
+            self.cover_letter_status_func,
+            self.interview_prep_status_func,
+            self.cv_tailoring_func,
+            self.company_research_func,
+        ):
+            cancel_func.add_to_role_policy(cancel_sfn_statement)
+            cancel_func.add_environment("STEP_FUNCTIONS_CHAIN_ARN", chain_arn)
+
+        # FE-UI-043: orphan-cleanup reaper Lambda + hourly EventBridge schedule.
+        self.artifact_cleanup_func = self._add_artifact_cleanup_lambda()
+        self.api_db.applications_table.grant_read_write_data(self.artifact_cleanup_func)
+        self.artifact_cleanup_func.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["s3:DeleteObject"],
+                resources=[self.api_db.vpr_results_bucket.arn_for_objects("results/*")],
+            )
+        )
+        cleanup_rule = events.Rule(
+            self,
+            "ArtifactCleanupSchedule",
+            schedule=events.Schedule.rate(Duration.hours(1)),
+        )
+        cleanup_rule.add_target(targets.LambdaFunction(self.artifact_cleanup_func))
+
+    @staticmethod
+    def _artifact_chain_enabled() -> str:
+        """Resolve the ARTIFACT_CHAIN_ENABLED flag at synth time (default off)."""
+        default = "true" if constants.ENVIRONMENT == "dev" else "false"
+        return os.environ.get("ARTIFACT_CHAIN_ENABLED", default)
+
+    def _add_artifact_cleanup_lambda(self) -> _lambda.Function:
+        """Orphan-cleanup reaper triggered hourly by EventBridge (FE-UI-043)."""
+        function_name = self.naming.lambda_name(constants.ARTIFACT_CLEANUP_FEATURE)
+        log_group = logs.LogGroup(
+            self,
+            "ArtifactCleanupLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
+        return _lambda.Function(
+            self,
+            constants.ARTIFACT_CLEANUP_LAMBDA,
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.artifact_cleanup_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-artifact-cleanup",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+                "VPR_RESULTS_BUCKET_NAME": self.api_db.vpr_results_bucket.bucket_name,
+            },
+            timeout=Duration.minutes(5),
+            memory_size=256,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+    def _build_failure_handler_role(self, scope: Construct) -> iam.Role:
+        """Dedicated least-privilege role for the artifact-chain failure handlers.
+
+        FE-UI-035: the CR/artifact failure handlers previously reused the shared
+        service role, which holds states:* grants (StartExecution / SendTaskResponse).
+        Because the state machine must invoke these handlers, that shared edge closed
+        a CloudFormation dependency cycle. This role grants ONLY what the handlers
+        need: CloudWatch Logs (basic execution) and read/write on the applications
+        table. X-Ray write perms are auto-added by CDK because tracing=ACTIVE; log
+        KMS encryption is covered by the logs key's resource policy. It carries NO
+        states:* permission, so it cannot re-form the cycle.
+        """
+        role = iam.Role(
+            scope,
+            constants.FAILURE_HANDLER_ROLE,
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            role_name=self.naming.role_name(
+                constants.LAMBDA_SERVICE_NAME, constants.FAILURE_HANDLER_FEATURE
+            ),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    managed_policy_name=(
+                        f"service-role/{constants.LAMBDA_BASIC_EXECUTION_ROLE}"
+                    )
+                )
+            ],
+        )
+        # Both handlers only UpdateItem/GetItem on the applications table.
+        self.api_db.applications_table.grant_read_write_data(role)
+        return role
+
+    def _add_cr_failure_handler_lambda(self, scope: Construct) -> _lambda.Function:
+        """Thin Lambda invoked by the chain when Company Research hard-fails."""
+        function_name = self.naming.lambda_name(constants.CR_FAILURE_HANDLER_FEATURE)
+        log_group = logs.LogGroup(
+            scope,
+            "CrFailureHandlerLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
+        return _lambda.Function(
+            scope,
+            "CrFailureHandlerLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.cr_failure_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-cr-failure-handler",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+            },
+            timeout=Duration.seconds(30),
+            memory_size=128,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            # FE-UI-035: dedicated role (no states:*) breaks the dependency cycle.
+            role=self.failure_handler_role,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+    def _add_artifact_failure_handler_lambda(
+        self, scope: Construct
+    ) -> _lambda.Function:
+        """Thin Lambda invoked by the chain when VPR or CV Tailoring fails."""
+        function_name = self.naming.lambda_name(
+            constants.ARTIFACT_FAILURE_HANDLER_FEATURE
+        )
+        log_group = logs.LogGroup(
+            scope,
+            "ArtifactFailureHandlerLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
+        return _lambda.Function(
+            scope,
+            "ArtifactFailureHandlerLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.artifact_failure_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-artifact-failure-handler",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+            },
+            timeout=Duration.seconds(30),
+            memory_size=128,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            # FE-UI-035: dedicated role (no states:*) breaks the dependency cycle.
+            role=self.failure_handler_role,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+
+    def _add_company_research_worker_lambda(
+        self, appconfig_app_name: str
+    ) -> _lambda.Function:
+        """SQS worker that consumes company_research_queue (FE-UI-030/031).
+
+        Signals the Step Functions chain via task tokens when running in the
+        chain, or enqueues VPR directly in standalone mode.
+        """
+        function_name = self.naming.lambda_name(
+            constants.COMPANY_RESEARCH_WORKER_FEATURE
+        )
+        log_group = logs.LogGroup(
+            self,
+            "CompanyResearchWorkerLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
+        lambda_function = _lambda.Function(
+            self,
+            "CompanyResearchWorkerLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.company_research_worker_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-company-research-worker",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+                "CONFIGURATION_APP": appconfig_app_name,
+                "CONFIGURATION_ENV": constants.ENVIRONMENT,
+                "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,
+                # Standalone fallback target when the chain flag is off.
+                "VPR_JOBS_QUEUE_URL": self.vpr_jobs_queue.queue_url,
+                "VPR_JOBS_TABLE_NAME": self.api_db.jobs_table.table_name,
+                "ARTIFACT_CHAIN_ENABLED": self._artifact_chain_enabled(),
+                constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
+                **self._build_llm_env(),
+            },
+            # Aligned with the chain CR heartbeat (180s).
+            timeout=Duration.seconds(120),
+            memory_size=512,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            role=self.lambda_role,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+        lambda_function.add_event_source(
+            eventsources.SqsEventSource(
+                self.api_db.company_research_queue, batch_size=1
+            )
+        )
+        return lambda_function
 
     def _add_cover_letter_lambda(self) -> _lambda.Function:
         function_name = self.naming.lambda_name("cover-letter-api")
@@ -1987,7 +2376,7 @@ class ApiConstruct(Construct):
                 "DYNAMODB_TABLE_NAME": self.api_db.artifacts_table.table_name,
                 "SQS_QUEUE_URL": self.cover_letter_jobs_queue.queue_url,
                 "COVER_LETTER_LEGACY_READ_ENABLED": "true",
-                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+                **self._build_llm_env(),
             },
             timeout=Duration.seconds(60),
             memory_size=256,
@@ -2025,7 +2414,7 @@ class ApiConstruct(Construct):
                 **self._build_shared_table_env(),
                 "DYNAMODB_TABLE_NAME": self.api_db.artifacts_table.table_name,
                 "SQS_QUEUE_URL": self.interview_prep_jobs_queue.queue_url,
-                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+                **self._build_llm_env(),
             },
             timeout=Duration.seconds(60),
             memory_size=256,
@@ -2064,7 +2453,7 @@ class ApiConstruct(Construct):
                 **self._build_shared_table_env(),
                 "DYNAMODB_TABLE_NAME": self.api_db.artifacts_table.table_name,
                 "COVER_LETTER_LEGACY_READ_ENABLED": "true",
-                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+                **self._build_llm_env(),
             },
             timeout=Duration.seconds(30),
             memory_size=256,
@@ -2100,7 +2489,7 @@ class ApiConstruct(Construct):
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
                 "DYNAMODB_TABLE_NAME": self.api_db.artifacts_table.table_name,
-                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+                **self._build_llm_env(),
             },
             timeout=Duration.seconds(30),
             memory_size=256,
@@ -2145,7 +2534,7 @@ class ApiConstruct(Construct):
                 "TABLE_NAME": self.api_db.db.table_name,
                 "IDEMPOTENCY_TABLE_NAME": self.api_db.idempotency_db.table_name,
                 "ALLOWED_ORIGINS": self.node.try_get_context("allowed_origins")
-                or "https://main.d3j2wnm8g5clnw.amplifyapp.com,https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com,https://app.careervp.com,https://dev.careervp.com,https://stage.careervp.com,http://localhost:3000",
+                or "https://main.d3j2wnm8g5clnw.amplifyapp.com,https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com,https://ui-upgrade.d3j2wnm8g5clnw.amplifyapp.com,https://app.careervp.com,https://dev.careervp.com,https://stage.careervp.com,http://localhost:3000",
                 constants.WEBHOOK_SECRET_ENV_VAR: ssm.StringParameter.value_for_string_parameter(
                     self, constants.WEBHOOK_SECRET_SSM_PARAM
                 ),
@@ -2171,6 +2560,47 @@ class ApiConstruct(Construct):
         )
         self.api_db.db.grant_read_write_data(lambda_function)
         self.api_db.idempotency_db.grant_read_write_data(lambda_function)
+        return lambda_function
+
+    def _add_export_lambda(self) -> _lambda.Function:
+        """Export handler Lambda — generates DOCX artifacts and returns presigned URLs (FE-UI-028)."""
+        function_name = self.naming.lambda_name(constants.EXPORT_FEATURE)
+        log_group = logs.LogGroup(
+            self,
+            "ExportLambdaLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
+        lambda_function = _lambda.Function(
+            self,
+            "ExportLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.export_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                "TABLE_NAME": self.api_db.db.table_name,
+                "ARTIFACTS_TABLE_NAME": self.api_db.artifacts_table.table_name,
+                "VPR_RESULTS_BUCKET_NAME": self.api_db.vpr_results_bucket.bucket_name,
+                "ARTIFACTS_BUCKET_NAME": self.api_db.artifacts_bucket.bucket_name,
+                "ALLOWED_ORIGINS": self.node.try_get_context("allowed_origins")
+                or "https://main.d3j2wnm8g5clnw.amplifyapp.com,https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com,https://ui-upgrade.d3j2wnm8g5clnw.amplifyapp.com,https://app.careervp.com,https://dev.careervp.com,https://stage.careervp.com,http://localhost:3000",
+            },
+            timeout=Duration.seconds(29),
+            memory_size=512,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+        self.api_db.vpr_results_bucket.grant_read(lambda_function)
+        self.api_db.artifacts_bucket.grant_read_write(lambda_function)
+        self.api_db.artifacts_table.grant(lambda_function, "dynamodb:GetItem")
+        self.api_db.db.grant(lambda_function, "dynamodb:GetItem", "dynamodb:Query")
         return lambda_function
 
     def _add_billing_reconcile_lambda(self) -> _lambda.Function:
@@ -2250,6 +2680,99 @@ class ApiConstruct(Construct):
         method: str,
         handler: _lambda.Function,
     ) -> None:
+        handler_key = handler.node.path
+        permission_scope = self._permission_scope(path)
+        handler_scopes = self._api_permission_scopes.setdefault(handler_key, set())
+        scope_is_covered = any(
+            permission_scope == existing_scope
+            or (
+                existing_scope.endswith("*")
+                and permission_scope.startswith(existing_scope[:-1])
+            )
+            for existing_scope in handler_scopes
+        )
+        if not scope_is_covered:
+            handler.add_permission(
+                self._permission_id(permission_scope, "Routes"),
+                principal=iam.ServicePrincipal("apigateway.amazonaws.com"),
+                action="lambda:InvokeFunction",
+                source_arn=self.rest_api.arn_for_execute_api(
+                    method="*",
+                    path=permission_scope,
+                    stage="*",
+                ),
+            )
+            handler_scopes.add(permission_scope)
+        self._add_route_method_with_integration(
+            path,
+            method,
+            self._build_lambda_proxy_integration(handler),
+        )
+
+    @staticmethod
+    def _permission_id(path: str, method: str) -> str:
+        # Preserve trailing wildcard as "All" so "/jobs" and "/jobs/*" get distinct IDs.
+        suffix = "All" if path.endswith("*") else ""
+        normalized_path = (
+            re.sub(r"[^A-Za-z0-9]+", " ", path.rstrip("*")).title().replace(" ", "")
+        )
+        return f"AllowApiGateway{method.title()}{normalized_path}{suffix}Invoke"
+
+    @staticmethod
+    def _permission_scope(path: str) -> str:
+        segments = [segment for segment in path.split("/") if segment]
+        if len(segments) <= 1:
+            return path
+        return f"/{segments[0]}/*"
+
+    def _register_feature_proxy(
+        self,
+        path: str,
+        handler: _lambda.Function,
+        *,
+        authorized: bool,
+    ) -> None:
+        """Register root and greedy ANY Lambda-proxy methods for one feature."""
+        resource = self._get_or_create_path_resource(path)
+        proxy_resource = cast(
+            aws_apigateway.Resource,
+            resource.get_resource("{proxy+}") or resource.add_resource("{proxy+}"),
+        )
+        authorization_type = (
+            aws_apigateway.AuthorizationType.COGNITO
+            if authorized
+            else aws_apigateway.AuthorizationType.NONE
+        )
+        authorizer = self.api_authorizer if authorized else None
+
+        permission_scope = f"{path}*"
+        handler.add_permission(
+            self._permission_id(path, "ANY"),
+            principal=iam.ServicePrincipal("apigateway.amazonaws.com"),
+            action="lambda:InvokeFunction",
+            source_arn=self.rest_api.arn_for_execute_api(
+                method="*",
+                path=permission_scope,
+                stage="*",
+            ),
+        )
+        for target_resource in (resource, proxy_resource):
+            target_resource.add_method(
+                http_method="ANY",
+                integration=self._build_lambda_proxy_integration(handler),
+                authorizer=authorizer,
+                authorization_type=authorization_type,
+            )
+        self._api_permission_scopes.setdefault(handler.node.path, set()).add(
+            permission_scope
+        )
+
+    def _add_route_method_with_integration(
+        self,
+        path: str,
+        method: str,
+        integration: aws_apigateway.Integration,
+    ) -> None:
         resource = self._get_or_create_path_resource(path)
         # Per auth_and_authorizer_spec.yaml:
         # - Public (unprotected): /health, /auth/register, /auth/login
@@ -2261,11 +2784,14 @@ class ApiConstruct(Construct):
             "/auth/login",
             "/auth/refresh",
             "/billing/webhook",
+            # Client error reports are forwarded by the Next.js SSR route with no
+            # user token (errors fire on pre-auth pages); bounded by stage throttle.
+            "/errors",
         }
         is_public_route = path in public_paths
         resource.add_method(
             http_method=method,
-            integration=aws_apigateway.LambdaIntegration(handler=handler),
+            integration=integration,
             authorizer=None if is_public_route else self.api_authorizer,
             authorization_type=(
                 aws_apigateway.AuthorizationType.NONE
@@ -2274,56 +2800,115 @@ class ApiConstruct(Construct):
             ),
         )
 
+    @staticmethod
+    def _build_lambda_proxy_integration(
+        handler: _lambda.IFunction,
+    ) -> aws_apigateway.AwsIntegration:
+        return aws_apigateway.AwsIntegration(
+            service="lambda",
+            proxy=True,
+            integration_http_method="POST",
+            path=f"2015-03-31/functions/{handler.function_arn}/invocations",
+        )
+
     def _add_openapi_contract_routes(self) -> None:
-        # Canonical route surface (I7).
+        # Phase 1: collapse only features whose live-stack sub-resources are all
+        # literal path segments (no variable {paramId} siblings that would conflict
+        # with {proxy+} during a CloudFormation UPDATE).
+        #
+        # Features with variable-path siblings in the deployed stack
+        # (vpr/{vprId}, cover-letter/{coverLetterId}, cv-tailoring/{cvTailoringId},
+        #  interview-prep/{interviewPrepId}, applications/{application_id},
+        #  company-research/{jobId}, jobs/{jobId}) require a two-phase deploy:
+        # Phase 2 (separate deploy): first let CloudFormation delete those resources,
+        # then add {proxy+}. See FE-UI-048 for the full phased plan.
+        #
+        # /jobs is permanently excluded: multiple Lambdas own sub-paths under it
+        # (job_api_func, gap_api_func, export_lambda), so {jobId} explicit routes
+        # must coexist with greedy routing — {proxy+} and {jobId} cannot be siblings.
+        feature_proxies: list[tuple[str, _lambda.Function, bool]] = [
+            ("/auth", self.auth_api_func, False),
+            ("/users", self.user_api_func, True),
+            ("/gap-analysis", self.gap_api_func, True),
+            ("/billing", self.billing_lambda, True),
+        ]
+        for path, handler, authorized in feature_proxies:
+            self._register_feature_proxy(path, handler, authorized=authorized)
+
+        # Explicit routes: cross-Lambda exceptions under collapsed prefixes, and
+        # features deferred to Phase 2 (still using per-path methods until their
+        # {paramId} siblings are removed from the live stack).
         route_map: list[tuple[str, str, _lambda.Function]] = [
             ("/health", "GET", self.health_api_func),
-            ("/auth/register", "POST", self.auth_api_func),
-            ("/auth/login", "POST", self.auth_api_func),
-            ("/auth/refresh", "POST", self.auth_api_func),
+            # users — cross-Lambda exceptions below the /users proxy
             ("/users/me", "GET", self.user_api_func),
             ("/users/me", "PUT", self.user_api_func),
             ("/users/me/usage", "GET", self.user_api_func),
             ("/users/me/trial/reset", "POST", self.user_api_func),
             ("/users/me/cv", "POST", self.cv_upload_func),
             ("/users/me/cv", "GET", self.user_api_func),
+            ("/users/me/subscription", "GET", self.billing_lambda),
+            # jobs — permanent explicit (multi-Lambda prefix)
             ("/jobs", "POST", self.job_api_func),
             ("/jobs", "GET", self.job_api_func),
             ("/jobs/{jobId}", "GET", self.job_api_func),
-            ("/gap-analysis/questions", "POST", self.gap_api_func),
             ("/jobs/{jobId}/gap-questions", "POST", self.gap_api_func),
             ("/jobs/{jobId}/gap-questions", "GET", self.gap_api_func),
             ("/jobs/{jobId}/gap-responses", "POST", self.gap_api_func),
+            # applications — Phase 2 pending
             ("/applications/{application_id}", "GET", self.application_api_func),
+            # vpr — Phase 2 pending
             ("/vpr/generate", "POST", self.vpr_submit_func),
             ("/vpr/{vprId}/status", "GET", self.vpr_status_func),
+            ("/vpr/{vprId}/cancel", "POST", self.vpr_status_func),
             ("/vprs", "GET", self.vpr_status_func),
+            # cv-tailoring — Phase 2 pending
             ("/cv-tailoring/generate", "POST", self.cv_tailoring_func),
             ("/cv-tailoring/{cvTailoringId}/status", "GET", self.cv_tailoring_func),
+            ("/cv-tailoring/{cvTailoringId}/cancel", "POST", self.cv_tailoring_func),
             ("/cv-tailoring/{cvTailoringId}", "DELETE", self.cv_tailoring_func),
+            ("/cv-tailoring/{cvTailoringId}", "PATCH", self.cv_tailoring_func),
             ("/cv-tailorings", "GET", self.cv_tailoring_func),
+            # cover-letter — Phase 2 pending
             ("/cover-letter/generate", "POST", self.cover_letter_api_func),
             (
                 "/cover-letter/{coverLetterId}/status",
                 "GET",
                 self.cover_letter_status_func,
             ),
+            (
+                "/cover-letter/{coverLetterId}/cancel",
+                "POST",
+                self.cover_letter_status_func,
+            ),
+            ("/cover-letter/{coverLetterId}", "PATCH", self.cover_letter_status_func),
             ("/cover-letters", "GET", self.cover_letter_status_func),
+            # interview-prep — Phase 2 pending (PATCH registered in register_ai_assist_routes)
             ("/interview-prep/generate", "POST", self.interview_prep_api_func),
             (
                 "/interview-prep/{interviewPrepId}/status",
                 "GET",
                 self.interview_prep_status_func,
             ),
+            (
+                "/interview-prep/{interviewPrepId}/cancel",
+                "POST",
+                self.interview_prep_status_func,
+            ),
             ("/interview-preps", "GET", self.interview_prep_status_func),
+            # company-research — Phase 2 pending
             ("/company-research/{jobId}", "GET", self.company_research_func),
+            ("/company-research/{jobId}/cancel", "POST", self.company_research_func),
             ("/company-research/fetch", "POST", self.company_research_func),
             ("/knowledge-base", "GET", self.company_research_func),
-            # Billing routes (S-006)
-            ("/billing/checkout", "POST", self.billing_lambda),
-            ("/billing/portal", "POST", self.billing_lambda),
+            # Billing webhook (public exception under /billing proxy)
             ("/billing/webhook", "POST", self.billing_lambda),
-            ("/users/me/subscription", "GET", self.billing_lambda),
+            # Export route (FE-UI-028)
+            (
+                "/jobs/{jobId}/artifacts/{moduleType}/export",
+                "GET",
+                self.export_lambda,
+            ),
         ]
         for path, method, handler in route_map:
             self._add_route_method(path, method, handler)

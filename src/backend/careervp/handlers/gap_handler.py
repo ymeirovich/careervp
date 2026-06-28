@@ -7,11 +7,14 @@ import json
 import os
 from http import HTTPStatus
 from typing import Any
+from uuid import uuid4
 
+import boto3
 from pydantic import ValidationError
 
 from careervp.dal.application_repository import ApplicationRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+from careervp.dal.jobs_repository import JobsRepository
 from careervp.dal.subscription_repository import SubscriptionRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.utils.observability import logger, metrics, tracer
@@ -23,14 +26,16 @@ from careervp.models.result import Result, ResultCode
 
 _trial_service: TrialService | None = None
 _application_repository: ApplicationRepository | None = None
+_jobs_repository: JobsRepository | None = None
 _current_request_origin: str | None = None
 
 
 def _reset_handler_caches() -> None:
     """Testing hook to reset module-level cached singletons between tests."""
-    global _trial_service, _application_repository
+    global _trial_service, _application_repository, _jobs_repository
     _trial_service = None
     _application_repository = None
+    _jobs_repository = None
 
 
 def _resolve_table_name(*env_keys: str) -> str:
@@ -390,6 +395,10 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
     except Exception as exc:
         logger.warning('Could not update application with gap responses', job_id=job_id, error=str(exc))
 
+    # FE-UI-031: opt-in artifact chain. No-op when the flag is off; never breaks
+    # the existing success path.
+    _maybe_start_artifact_chain(user_id, job_id, _coerce_str(payload.get('cv_id')))
+
     return _json_response(
         HTTPStatus.OK,
         {
@@ -398,6 +407,70 @@ def submit_response(event: dict[str, Any]) -> dict[str, Any]:
             'responses_saved': len(normalized_responses),
         },
     )
+
+
+def _maybe_start_artifact_chain(user_id: str, job_id: str, cv_id: str | None = None) -> None:
+    """Start the Step Functions artifact chain when ARTIFACT_CHAIN_ENABLED is true.
+
+    Additive (FE-UI-031). When the flag is off this is a no-op and gap submit
+    behaves exactly as before. Defensive: any failure here is logged and
+    swallowed so the existing 200 response is preserved.
+    """
+    if os.environ.get('ARTIFACT_CHAIN_ENABLED', 'false').lower() != 'true':
+        return
+
+    chain_arn = os.environ.get('STEP_FUNCTIONS_CHAIN_ARN', '')
+    if not chain_arn:
+        logger.warning('Artifact chain enabled but STEP_FUNCTIONS_CHAIN_ARN is unset', job_id=job_id)
+        return
+
+    try:
+        company_name = ''
+        job_posting_url = ''
+        try:
+            job = _get_jobs_repository().get_job(job_id)
+            if job:
+                company_name = str(job.get('company_name') or job.get('company') or '')
+                job_posting_url = str(job.get('job_posting_url') or job.get('url') or '')
+                cv_id = cv_id or _coerce_str(job.get('cv_id'))
+                input_data = job.get('input_data')
+                if not cv_id and isinstance(input_data, dict):
+                    cv_id = _coerce_str(input_data.get('cv_id'))
+        except Exception as exc:
+            logger.warning('Could not load job for artifact chain input', job_id=job_id, error=str(exc))
+
+        execution = boto3.client('stepfunctions').start_execution(
+            stateMachineArn=chain_arn,
+            name=f'chain-{job_id}-{uuid4().hex[:8]}',
+            input=json.dumps(
+                {
+                    'user_id': user_id,
+                    'cv_id': cv_id or '',
+                    'job_id': job_id,
+                    'company_name': company_name,
+                    'job_posting_url': job_posting_url,
+                    'application_id': job_id,
+                }
+            ),
+        )
+        application_repo = _get_application_repository()
+        execution_arn = _coerce_str(execution.get('executionArn'))
+        if execution_arn:
+            application_repo.set_chain_execution(
+                application_id=job_id,
+                user_id=user_id,
+                execution_arn=execution_arn,
+                status='RUNNING',
+            )
+        application_repo.update_state(
+            application_id=job_id,
+            user_id=user_id,
+            new_state='cr_pending',
+            expected_state='gap_responses_submitted',
+        )
+        logger.info('Artifact chain started', job_id=job_id)
+    except Exception as exc:
+        logger.error('Failed to start artifact chain', job_id=job_id, error=str(exc))
 
 
 def get_responses(event: dict[str, Any]) -> dict[str, Any]:
@@ -461,8 +534,27 @@ def _build_user_cv_prompt_payload(cv_id: str, focus_areas: list[str]) -> dict[st
 
 
 def _build_job_prompt_payload(job_id: str, focus_areas: list[str]) -> dict[str, Any]:
+    try:
+        jobs_repo = _get_jobs_repository()
+        job_record = jobs_repo.get_job(job_id)
+        if job_record:
+            title = str(job_record.get('title', '')).strip()
+            company = str(job_record.get('company_name') or job_record.get('company') or '').strip()
+            description = str(job_record.get('description', '')).strip()
+            requirements = [str(r) for r in (job_record.get('requirements') or []) if str(r).strip()]
+            return {
+                # FE-UI-041: never fabricate a placeholder company name; use the real
+                # company_name from the job posting or leave it empty for CR to resolve.
+                'company_name': company,
+                'role_title': title or f'Role for {job_id}',
+                'requirements': requirements or focus_areas or ['Core competency'],
+                'responsibilities': [description] if description else ['Deliver measurable business impact'],
+            }
+    except Exception as exc:
+        logger.warning('Could not fetch job data for gap prompt', job_id=job_id, error=str(exc))
     return {
-        'company_name': f'Company for {job_id}',
+        # FE-UI-041: no fabricated placeholder company name.
+        'company_name': '',
         'role_title': f'Role for {job_id}',
         'requirements': focus_areas or ['Core competency'],
         'responsibilities': ['Deliver measurable business impact'],
@@ -739,6 +831,13 @@ def _get_application_repository() -> ApplicationRepository:
             raise RuntimeError('Application repository table name not configured')
         _application_repository = ApplicationRepository(dal=DynamoDalHandler(table_name=table_name))
     return _application_repository
+
+
+def _get_jobs_repository() -> JobsRepository:
+    global _jobs_repository
+    if _jobs_repository is None:
+        _jobs_repository = JobsRepository()
+    return _jobs_repository
 
 
 def _resolve_trial_consumption_endpoint(event: dict[str, Any]) -> str:

@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Iterable
 
+from careervp.logic.prompts.vpr_prompt import build_vpr_digest
+from careervp.models.company import CompanyResearchResult
 from careervp.models.cv import UserCV as CVUserCV
 from careervp.models.cv_models import UserCV
 from careervp.models.cv_tailoring_models import TailoringPreferences
@@ -69,6 +71,8 @@ def build_user_prompt(
     target_keywords: Iterable[str] | None = None,
     preferences: TailoringPreferences | None = None,
     vpr: 'VPR | None' = None,
+    *,
+    company_research: CompanyResearchResult | None = None,
 ) -> str:
     """Build the user prompt with CV, job description, and constraints."""
     sections = [
@@ -94,14 +98,18 @@ def build_user_prompt(
         sections.append('# Preferences')
         sections.append(format_preferences(preferences))
 
+    if company_research is not None:
+        sections.append('# Company Signals')
+        sections.append(_format_company_signals(company_research))
+
     # VPR strategic guide injection
     if vpr is not None:
         sections.append('# VPR Strategic Guide')
         sections.append(
-            'Use this VPR to prioritize CV content. Expand bullet points for roles and '
-            'skills that map to unique_strengths and evidence_matrix. Align the '
-            'professional_summary with differentiators.positioning_statement. '
-            'Surface ats_keywords.primary into tailored bullet points naturally.\n\n' + json.dumps(vpr.model_dump(mode='json'), indent=2)
+            'Use this VPR digest to prioritize CV content. Expand bullet points for roles and '
+            'skills that support the top_differentiators. Align the professional_summary '
+            'with positioning_statement. Surface ats_keywords_primary into tailored bullet '
+            'points naturally.\n\n' + json.dumps(build_vpr_digest(vpr), indent=2)
         )
 
     return '\n\n'.join(sections)
@@ -177,6 +185,95 @@ def format_preferences(preferences: TailoringPreferences) -> str:
     if preferences.emphasize_skills:
         lines.append('Emphasize Skills: ' + ', '.join(preferences.emphasize_skills))
     return '\n'.join(lines)
+
+
+def _format_company_signals(company_research: CompanyResearchResult) -> str:
+    values = ', '.join(company_research.values[:5]) or 'None'
+    priorities = ', '.join(company_research.strategic_priorities[:3]) or 'None'
+    return '\n'.join(
+        [
+            f'Values: {values}',
+            f'Strategic Priorities: {priorities}',
+        ]
+    )
+
+
+def build_tailoring_system_prompt() -> str:
+    """Return the static CV tailoring Stage 2 system prompt for use with Anthropic cache_control.
+
+    This function is the canonical source for the Stage 2 system prompt.
+    Callers should pass it with cache_control ephemeral to avoid re-billing
+    the ~500-token rules block on every request.
+    """
+    return (
+        'You are an expert CV writer specializing in technical roles.\n'
+        'You create ATS-optimized CVs that pass automated screening AND\n'
+        'impress human reviewers.\n'
+        '\n'
+        'RULES (non-negotiable):\n'
+        '1. ZERO HALLUCINATIONS — every fact, date, metric, company name, and\n'
+        '   job title must appear in the provided parsed_facts. If unsure, omit.\n'
+        '2. CAR/STAR format for ALL experience bullets — Challenge/Action/Result\n'
+        '   with a quantifiable metric whenever one exists in the source data.\n'
+        '3. Keyword density — primary keywords must appear 2-3x naturally across\n'
+        '   summary, skills, and experience sections.\n'
+        '4. Length — 1 page (approximately 450-600 words of body content).\n'
+        '   Do not pad. Do not truncate relevant experience.\n'
+        '   Summary field specifically: 50-500 characters (2-3 sentences). Do not exceed 500 characters.\n'
+        '5. ATS formatting — no tables, no text boxes, no columns in the content\n'
+        '   structure. Simple flat sections only.\n'
+        '6. Anti-AI detection — vary sentence structure, use natural transitions,\n'
+        '   avoid "leverage", "delve", "robust", "streamline", "landscape",\n'
+        '   "spearhead" (overused). Use concrete verbs tied to actual work.\n'
+        '7. Self-correct before finalizing — explicitly check keyword match and\n'
+        '   summary alignment before producing output JSON.\n'
+        '\n'
+        'REQUIRED JSON STRUCTURE — you MUST use exactly these top-level keys:\n'
+        '{\n'
+        '  "cv_sections": {\n'
+        '    "contact": {\n'
+        '      "name": "Full Name",\n'
+        '      "email": "email@example.com",\n'
+        '      "phone": "+1-555-0123",\n'
+        '      "location": "City, Country",\n'
+        '      "linkedin": "linkedin.com/in/..."\n'
+        '    },\n'
+        '    "summary": "Professional summary of 50-500 characters (2-3 sentences max)",\n'
+        '    "skills": {\n'
+        '      "technical": ["Skill1", "Skill2"],\n'
+        '      "soft": ["Skill1", "Skill2"]\n'
+        '    },\n'
+        '    "experience": [\n'
+        '      {\n'
+        '        "company": "Company Name",\n'
+        '        "title": "Job Title",\n'
+        '        "start_date": "MM/YYYY",\n'
+        '        "end_date": "MM/YYYY",\n'
+        '        "bullets": ["Achievement with metric", "Achievement 2"]\n'
+        '      }\n'
+        '    ],\n'
+        '    "education": [\n'
+        '      {\n'
+        '        "institution": "University Name",\n'
+        '        "degree": "Degree Type",\n'
+        '        "field": "Field of Study",\n'
+        '        "graduation_date": "MM/YYYY"\n'
+        '      }\n'
+        '    ],\n'
+        '    "certifications": []\n'
+        '  },\n'
+        '  "verification": {\n'
+        '    "ats_keyword_score": 8,\n'
+        '    "keywords_added_in_review": ["keyword1"],\n'
+        '    "summary_rewritten": false,\n'
+        '    "fact_verification_passed": true,\n'
+        '    "hallucination_flags": []\n'
+        '  }\n'
+        '}\n'
+        '\n'
+        'Return ONLY valid JSON matching this exact structure. No preamble, no markdown, no explanation.\n'
+        'Do NOT use alternate key names such as cv_output, professional_summary, core_skills, or professional_experience.'
+    )
 
 
 # P2: Stage 1 system prompt (verbatim from spec)

@@ -204,6 +204,13 @@ def test_interview_prep_persisted_item_contains_prefix_and_ttl() -> None:
         dal.get_cv.return_value = _user_cv()
         dal._get_db_handler.return_value = table
         dal.table_name = 'table'
+        # VPR mock must carry user_id so the ownership check in _resolve_interview_prep_context passes.
+        mock_vpr = MagicMock()
+        mock_vpr.user_id = 'user-123'
+        mock_vpr_result = MagicMock()
+        mock_vpr_result.success = True
+        mock_vpr_result.data = mock_vpr
+        dal.get_vpr.return_value = mock_vpr_result
         mock_get_dal.return_value = dal
 
         with patch('careervp.handlers.interview_prep_handler.generate_interview_prep') as mock_generate:
@@ -332,12 +339,12 @@ def test_vpr_generation_persists_via_save_vpr() -> None:
         mock_llm.invoke.side_effect = [
             Result(
                 success=True,
-                data={'text': _stage_3_payload(), 'input_tokens': 500, 'output_tokens': 350, 'cost': 0.01, 'model': 'claude-sonnet-4-5'},
+                data={'text': _stage_3_payload(), 'input_tokens': 500, 'output_tokens': 350, 'cost': 0.01, 'model': 'claude-sonnet-4-6'},
                 code=ResultCode.SUCCESS,
             ),
             Result(
                 success=True,
-                data={'text': _stage_4_payload(), 'input_tokens': 450, 'output_tokens': 300, 'cost': 0.009, 'model': 'claude-sonnet-4-5'},
+                data={'text': _stage_4_payload(), 'input_tokens': 450, 'output_tokens': 300, 'cost': 0.009, 'model': 'claude-sonnet-4-6'},
                 code=ResultCode.SUCCESS,
             ),
         ]

@@ -8,14 +8,23 @@ interface ExportDropdownProps {
   jobId: string;
   moduleType: 'vpr' | 'cover_letter' | 'interview_prep' | 'cv_tailored';
   artifactId: string;
+  companyName?: string;
+  jobTitle?: string;
 }
+
+const ARTIFACT_TYPE_LABELS: Record<ExportDropdownProps['moduleType'], string> = {
+  vpr: 'VPR',
+  cover_letter: 'Cover_Letter',
+  interview_prep: 'Interview_Prep',
+  cv_tailored: 'Tailored_CV',
+};
 
 const FORMATS = [
   { label: 'Download as Word (.docx)', format: 'docx' as const },
   { label: 'Download as PDF', format: 'pdf' as const },
 ];
 
-export function ExportDropdown({ jobId, moduleType, artifactId }: ExportDropdownProps) {
+export function ExportDropdown({ jobId, moduleType, artifactId, companyName, jobTitle }: ExportDropdownProps) {
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,10 +46,24 @@ export function ExportDropdown({ jobId, moduleType, artifactId }: ExportDropdown
     setError(null);
     try {
       const response = await api.exportArtifact(jobId, moduleType, format);
+      const sanitize = (s: string) => s.trim().replace(/\s+/g, '_').replace(/[^\w-]/g, '');
+      const company = sanitize(companyName ?? '');
+      const title = sanitize(jobTitle ?? '');
+      const artifactLabel = ARTIFACT_TYPE_LABELS[moduleType];
+      const filename = company && title
+        ? `${company}-${title}-${artifactLabel}.${format}`
+        : `${moduleType}-${jobId}.${format}`;
+      // a.download is ignored for cross-origin URLs (S3 presigned). Fetch the
+      // bytes and create a same-origin blob URL so the browser honors the filename.
+      const fileResp = await fetch(response.download_url);
+      if (!fileResp.ok) throw new Error(`fetch_${fileResp.status}`);
+      const blob = await fileResp.blob();
+      const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = response.download_url;
-      a.download = `${moduleType}-${jobId}.${format}`;
+      a.href = blobUrl;
+      a.download = filename;
       a.click();
+      URL.revokeObjectURL(blobUrl);
     } catch (err) {
       if (err instanceof ApiError && err.status === 501) {
         setError('Export is coming soon!');

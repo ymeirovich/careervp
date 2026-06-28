@@ -1,0 +1,243 @@
+spec_id: FE-UI-039
+title: "Artifact Chain — add Cover Letter + Interview Prep legs (full downstream fan-out)"
+priority: critical
+status: draft
+owner: backend
+created_at: 2026-06-14
+updated_at: 2026-06-14
+tier: feature
+
+human_approval_gate:
+  required: true
+  gate_number: 2
+  reason: >
+    Extends the ArtifactChain Step Functions state machine (prod infra) with two new task
+    legs and adds states:SendTaskSuccess/Failure grants to the cover-letter and
+    interview-prep workers. State-machine + IAM changes are security-sensitive.
+  approval_before: "Any change to artifact_chain_construct.py state-machine definition or new IAM grants on the chain role / workers"
+
+recommended_model: opus
+reason_for_model: >
+  Step Functions branch topology (parallel vs. sequential), task-token wiring for two more
+  workers, and IAM scoping are architecture-sensitive. Getting the fan-out wrong risks
+  partial-failure states that strand the application in artifacts_generating.
+
+depends_on:
+  - FE-UI-031   # base chain (CR -> VPR -> CV) must exist
+  - FE-UI-038   # resolver contract; CL/IP workers consume real vpr_id + company_context
+  - FE-UI-035   # cycle fix must be merged (template must be deployable before adding legs)
+blocks: []
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    The ArtifactChain state machine (FE-UI-031) ends after CV Tailoring. Cover Letter and
+    Interview Prep are explicitly excluded (FE-UI-031 constraint line 285) and remain
+    manual-trigger only, consuming VPR via the silent fallbacks FE-UI-038 removes. With the
+    fallbacks gone, a manual CL/IP request with missing VPR returns 202 dependency_generating
+    (FE-UI-038) but there is no chain leg to actually produce CL/IP after VPR completes.
+  required_behavior: >
+    After Tailored CV completes, the chain fans out to Cover Letter and Interview Prep as a
+    Parallel state (both depend only on VPR + CR, not on each other or on the tailored CV).
+    Each leg uses sendMessage.waitForTaskToken against the existing cover-letter and
+    interview-prep SQS queues; each worker sends task success/failure. Both legs consume the
+    real vpr_id and company_context already flowing through the chain.
+  user_impact: >
+    A single gap submit (or any resolver-triggered chain) produces the COMPLETE artifact set
+    — CR, VPR, Tailored CV, Cover Letter, Interview Prep — each on real upstream data.
+
+# =============================================================================
+# EVIDENCE
+# =============================================================================
+evidence:
+  base_state_machine: infra/careervp/artifact_chain_construct.py   # created by FE-UI-031
+  cl_worker: src/backend/careervp/handlers/cover_letter_submit_handler.py
+  ip_worker: src/backend/careervp/handlers/interview_prep_submit_handler.py
+  cl_queue_lookup: "cover-letter SQS queue in infra/careervp/api_db_construct.py (confirm exact id at implementation)"
+  ip_queue_lookup: "interview-prep SQS queue in infra/careervp/api_db_construct.py (confirm exact id at implementation)"
+  task_token_precedent: src/backend/careervp/handlers/vpr_worker_handler.py  # send_task_success pattern
+
+# =============================================================================
+# ARCHITECTURE
+# =============================================================================
+architecture:
+  state_machine_extension:
+    insert_after: StartCVTailoring   # CV remains the third sequential leg
+    new_state:
+      GenerateFinalArtifacts:
+        type: Parallel
+        comment: "CL and IP are independent; run concurrently to cut chain latency"
+        branches:
+          - start_at: StartCoverLetter
+            states:
+              StartCoverLetter:
+                type: Task
+                resource: "arn:aws:states:::sqs:sendMessage.waitForTaskToken"
+                parameters:
+                  QueueUrl: "${CoverLetterQueueUrl}"
+                  MessageBody:
+                    user_id.$: "$.user_id"
+                    job_id.$: "$.job_id"
+                    vpr_id.$: "$.vpr_id"
+                    company_context.$: "$.company_context"
+                    task_token.$: "$$.Task.Token"
+                retry:
+                  - ErrorEquals: ["States.TaskFailed"]
+                    interval_seconds: 30
+                    max_attempts: 2
+                    backoff_rate: 2.0
+                catch:
+                  - ErrorEquals: ["States.ALL"]
+                    next: HandleCoverLetterFailure
+                heartbeat_seconds: 300
+                end: true
+              HandleCoverLetterFailure:
+                type: Task
+                resource: "arn:aws:states:::lambda:invoke"
+                parameters:
+                  FunctionName: "${ArtifactFailureHandlerArn}"
+                  Payload:
+                    artifact_type: "cover_letter"
+                    context.$: "$"
+                end: true
+          - start_at: StartInterviewPrep
+            states:
+              StartInterviewPrep:
+                type: Task
+                resource: "arn:aws:states:::sqs:sendMessage.waitForTaskToken"
+                parameters:
+                  QueueUrl: "${InterviewPrepQueueUrl}"
+                  MessageBody:
+                    user_id.$: "$.user_id"
+                    job_id.$: "$.job_id"
+                    vpr_id.$: "$.vpr_id"
+                    task_token.$: "$$.Task.Token"
+                retry:
+                  - ErrorEquals: ["States.TaskFailed"]
+                    interval_seconds: 30
+                    max_attempts: 2
+                    backoff_rate: 2.0
+                catch:
+                  - ErrorEquals: ["States.ALL"]
+                    next: HandleInterviewPrepFailure
+                heartbeat_seconds: 300
+                end: true
+              HandleInterviewPrepFailure:
+                type: Task
+                resource: "arn:aws:states:::lambda:invoke"
+                parameters:
+                  FunctionName: "${ArtifactFailureHandlerArn}"
+                  Payload:
+                    artifact_type: "interview_prep"
+                    context.$: "$"
+                end: true
+    note_partial_failure: >
+      Because CL and IP run in a Parallel state, one branch failing fails the Parallel state.
+      Use ResultPath + a Catch on the Parallel state to route to a terminal state that marks
+      ONLY the failed artifact(s) failed (via artifact_failure_handler) while leaving
+      successful ones completed. Do NOT mark the whole application artifacts_failed if at least
+      one artifact succeeded.
+    artifacts_partial_state:   # ACCEPTED by owner 2026-06-14 — add this state
+      requirement: >
+        Add an 'artifacts_partial' terminal state to the application state machine
+        (VALID_TRANSITIONS in application_handler.py + the FE-UI-029 transition dict + the
+        recovery endpoint _RELOAD_ROUTE_BY_STATE -> '/artifacts'). Final state rule:
+          - artifacts_completed: VPR + CV + CL + IP all completed.
+          - artifacts_partial:   VPR + CV completed AND at least one of CL/IP completed,
+                                 but not all (the failed one is artifact_status='failed').
+          - artifacts_failed:    VPR or CV failed (core chain broke).
+      transitions_added:
+        artifacts_generating: ["artifacts_completed", "artifacts_partial", "artifacts_failed"]
+        artifacts_partial: []   # terminal
+      note: "This amends FE-UI-029's VALID_TRANSITIONS; implement as part of this spec."
+
+  worker_task_token_support:
+    cover_letter:
+      file: src/backend/careervp/handlers/cover_letter_submit_handler.py
+      change: >
+        Worker must read task_token from the SQS message and call
+        sfn.send_task_success({'job_id', 'cover_letter_id'}) on success /
+        send_task_failure on error. Mirror vpr_worker_handler. task_token optional
+        (None in manual mode) — manual path unchanged.
+    interview_prep:
+      file: src/backend/careervp/handlers/interview_prep_submit_handler.py
+      change: "Same task-token handling as cover_letter."
+
+  iam_grants_added:
+    cover_letter_worker:
+      - "states:SendTaskSuccess, states:SendTaskFailure on ArtifactChainStateMachine"
+    interview_prep_worker:
+      - "states:SendTaskSuccess, states:SendTaskFailure on ArtifactChainStateMachine"
+    step_functions_role:
+      - "sqs:SendMessage on cover_letter_queue"
+      - "sqs:SendMessage on interview_prep_queue"
+    note: "Scope each grant to the specific resource ARN. No states:* wildcards."
+
+# =============================================================================
+# IMPLEMENTATION STEPS
+# =============================================================================
+implementation:
+  step_1:
+    name: "Confirm CL/IP SQS queue ids + URLs"
+    file: infra/careervp/api_db_construct.py
+    change: "Locate the existing cover-letter and interview-prep queues; capture their URL CfnOutputs/refs for the construct."
+  step_2:
+    name: "Add GenerateFinalArtifacts Parallel state"
+    file: infra/careervp/artifact_chain_construct.py
+    change: "Append the Parallel state after CV leg per architecture above, with the partial-failure Catch."
+  step_3:
+    name: "Add task-token handling to cover_letter + interview_prep workers"
+    files:
+      - src/backend/careervp/handlers/cover_letter_submit_handler.py
+      - src/backend/careervp/handlers/interview_prep_submit_handler.py
+  step_4:
+    name: "Add IAM grants"
+    file: infra/careervp/api_construct.py
+  step_5:
+    name: "Synth + naming + cycle check"
+    commands:
+      - "cd infra && uv sync && npx cdk synth"
+      - "python src/backend/scripts/validate_naming.py --path infra --strict"
+      - "cd infra && uv run pytest tests/infrastructure -v --tb=short"
+
+# =============================================================================
+# CONSTRAINTS
+# =============================================================================
+constraints:
+  - "Additive: do not alter the existing CR->VPR->CV legs"
+  - "CL and IP run in Parallel; one failing must NOT discard the other's result"
+  - "task_token optional — manual CL/IP generation path stays functional unchanged"
+  - "IAM grants scoped to exact ARNs; no states:* wildcard (respect FE-UI-035 invariant)"
+  - "No new dependency cycle (re-run infra pytest Template.from_stack check)"
+  - "Standard Workflow only (chain may exceed 5 min)"
+  - "validate_naming --strict must pass; checkov must stay green"
+
+# =============================================================================
+# VALIDATION
+# =============================================================================
+validation:
+  commands:
+    - "cd infra && uv sync && npx cdk synth"
+    - "cd infra && uv run pytest tests/infrastructure -v --tb=short"
+    - "python src/backend/scripts/validate_naming.py --path infra --strict"
+    - "cd src/backend && uv run mypy careervp --strict"
+    - "cd src/backend && uv run pytest tests/unit/ -v --tb=short -k 'cover_letter or interview_prep'"
+  acceptance_criteria:
+    - "ArtifactChainStateMachine template contains GenerateFinalArtifacts Parallel state with CL + IP branches"
+    - "CL branch passes vpr_id AND company_context in MessageBody"
+    - "cover_letter + interview_prep workers send task_success/failure when task_token present"
+    - "Manual CL/IP generation (no task_token) still works (no regression)"
+    - "Parallel one-branch failure marks only that artifact failed, not both"
+    - "infra pytest: zero dependency-cycle errors"
+    - "No states:* wildcard on any new role; checkov green; naming --strict passes"
+
+# =============================================================================
+# TEST HOOKS
+# =============================================================================
+test_hooks:
+  - "TEST-CHAIN-002 § infra-chain-legs: Parallel state + CL/IP task assertions"
+  - "TEST-CHAIN-002 § unit-cl-ip-tasktoken: workers send success/failure"
+  - "TEST-CHAIN-002 § integration-full-fanout: gap submit -> 5 artifacts produced"
+  - "TEST-CHAIN-002 § infra-no-cycle: Template.from_stack still deployable"

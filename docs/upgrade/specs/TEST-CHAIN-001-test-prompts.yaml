@@ -1,0 +1,702 @@
+spec_id: TEST-CHAIN-001
+title: "Test Prompts — Artifact Auto-Chain (Gap → CR → VPR → Tailored CV)"
+priority: critical
+status: draft
+owner: backend+frontend
+created_at: 2026-06-08
+updated_at: 2026-06-08
+type: test_prompts
+note: >
+  These are runnable prompts for fresh Claude sessions (or a test-runner agent).
+  Each section is self-contained: it describes context, setup, what to run, and
+  what to assert. Reference FE-UI-029 through FE-UI-034 for full spec context.
+  Tests are organized by category. Run backend tests before frontend tests.
+
+context_required: >
+  Working directory: /Users/yitzchak/Documents/dev/careervp
+  Backend: src/backend/careervp/
+  Frontend: src/frontend/
+  Specs: docs/upgrade/specs/
+
+recommended_model_for_test_authoring: sonnet
+recommended_model_for_complex_test_cases: opus  # CR gate, conditional-write races, Step Functions assertions
+
+# =============================================================================
+# CATEGORY A: UNIT TESTS — BACKEND STATE MACHINE
+# =============================================================================
+unit_state_machine:
+  prompt: |
+    Context: FE-UI-029 adds cr_pending and cr_failed states to the application state machine.
+    A VALID_TRANSITIONS dict guards all transitions.
+
+    Files to write tests in: src/backend/tests/unit/test_application_state_machine.py
+
+    Write unit tests covering:
+
+    1. test_transition_gap_responses_submitted_to_cr_pending
+       Setup: application with state='gap_responses_submitted'
+       Action: call transition_state(application, 'cr_pending')
+       Assert: no exception raised, application state becomes 'cr_pending'
+
+    2. test_transition_cr_pending_to_artifacts_generating
+       Setup: application with state='cr_pending'
+       Action: call transition_state(application, 'artifacts_generating')
+       Assert: no exception raised
+
+    3. test_transition_cr_pending_to_cr_failed
+       Setup: application with state='cr_pending'
+       Action: call transition_state(application, 'cr_failed')
+       Assert: no exception raised
+
+    4. test_transition_cr_failed_to_cr_pending (retry)
+       Setup: application with state='cr_failed'
+       Action: call transition_state(application, 'cr_pending')
+       Assert: no exception raised
+
+    5. test_illegal_transition_from_cr_failed_to_artifacts_generating
+       Setup: application with state='cr_failed'
+       Action: call transition_state(application, 'artifacts_generating')
+       Assert: raises InvalidStateTransitionError
+
+    6. test_illegal_transition_artifacts_completed_is_terminal
+       Setup: application with state='artifacts_completed'
+       Action: call transition_state(application, 'cr_pending')
+       Assert: raises InvalidStateTransitionError
+
+    7. test_transition_gap_responses_submitted_to_artifacts_generating_still_valid
+       Setup: application with state='gap_responses_submitted' (flag OFF path)
+       Action: call transition_state(application, 'artifacts_generating')
+       Assert: no exception raised (backward compat — existing path must not break)
+
+    Run: cd src/backend && uv run pytest tests/unit/test_application_state_machine.py -v --tb=short
+    All 7 tests must pass.
+
+# =============================================================================
+# CATEGORY B: UNIT TESTS — CR ASYNC WORKER
+# =============================================================================
+unit_cr_worker:
+  prompt: |
+    Context: FE-UI-030 specifies company_research_worker_handler.py.
+    The worker applies a confidence gate (CR_CONFIDENCE_THRESHOLD=0.85),
+    retries via SQS batchItemFailures, and hard-fails on exhausted retries.
+
+    Files to write tests in: src/backend/tests/unit/test_company_research_worker.py
+
+    Fixtures needed:
+      - make_sqs_event(user_id, job_id, company_name, task_token=None, retry_count=0)
+      - mock_research_company() — patch careervp.logic.company_research.research_company
+      - mock_application_repo() — patch DAL methods
+      - mock_sfn_client() — patch boto3 StepFunctions client
+
+    Write unit tests covering:
+
+    1. test_worker_confidence_pass_persists_and_signals
+       Setup: research_company returns confidence=0.9 (WEBSITE_SCRAPE)
+       Action: _process_record(sqs_record)
+       Assert:
+         - application_repo.update_artifact_status called with 'company_research', 'completed'
+         - application_repo.transition_state called with 'cr_pending' → 'artifacts_generating'
+         - No exception raised (not added to batchItemFailures)
+
+    2. test_worker_confidence_below_threshold_returns_batch_failure
+       Setup: research_company returns confidence=0.65 (WEB_SEARCH, below 0.85)
+              SQS receive_count=1 (first attempt, retries available)
+       Action: lambda_handler(sqs_event_with_1_record)
+       Assert:
+         - Response contains batchItemFailures with the message ID
+         - application_repo.set_company_research_error NOT called
+         - No transition to cr_failed
+
+    3. test_worker_hard_fail_after_max_retries
+       Setup: research_company always returns confidence=0.65
+              SQS receive_count=3 (max reached)
+       Action: lambda_handler(sqs_event)
+       Assert:
+         - application_repo.set_company_research_error called with error=True
+         - application_repo.transition_state called with 'cr_pending' → 'cr_failed'
+         - artifact_statuses.company_research = 'failed'
+         - Message NOT in batchItemFailures (intentional hard-fail, not DLQ)
+
+    4. test_worker_llm_fallback_hard_fails_immediately
+       Setup: research_company returns confidence=0.45, source=LLM_FALLBACK
+              SQS receive_count=1
+       Action: lambda_handler(sqs_event)
+       Assert:
+         - Hard-fail path taken immediately (no retry attempt)
+         - cr_failed state transition
+
+    5. test_worker_sends_task_success_when_task_token_present
+       Setup: confidence=0.9, SQS message includes task_token='token_abc'
+       Action: _process_record(sqs_record)
+       Assert:
+         - sfn_client.send_task_success called with TaskToken='token_abc'
+         - sfn_client.send_task_failure NOT called
+
+    6. test_worker_sends_task_failure_on_hard_fail_with_task_token
+       Setup: confidence=0.45 (LLM_FALLBACK), task_token='token_abc'
+       Action: _process_record(sqs_record)
+       Assert:
+         - sfn_client.send_task_failure called with TaskToken='token_abc', Error='CRHardFail'
+
+    7. test_worker_idempotent_second_call_is_noop
+       Setup: Idempotency store already has user_id:job_id as processed
+       Action: lambda_handler(sqs_event)
+       Assert:
+         - research_company NOT called
+         - No state transitions
+         - No batchItemFailures
+
+    Run: cd src/backend && uv run pytest tests/unit/test_company_research_worker.py -v --tb=short
+    All 7 tests must pass.
+
+# =============================================================================
+# CATEGORY C: UNIT TESTS — PROMPT EXTERNALIZATION (Part A golden test)
+# =============================================================================
+unit_prompt_externalization:
+  prompt: |
+    Context: FE-UI-032 Part A extracts STRUCTURE_SYSTEM_PROMPT and _build_structure_prompt
+    from company_research.py to a new module company_research_prompt.py.
+    The move must be byte-identical.
+
+    Files to write tests in: src/backend/tests/unit/test_company_research_prompt_golden.py
+
+    IMPORTANT: Run these golden tests BEFORE any implementation of FE-UI-032 or FE-UI-033
+    to capture the baseline. Tests must capture current output, then verify post-refactor
+    output matches.
+
+    Write tests covering:
+
+    1. test_system_prompt_golden_unchanged
+       Setup: Import build_structure_system_prompt from company_research_prompt
+       Assert: Output == 'You are CareerVP company research analyst. Extract structured insights faithfully.'
+       (byte-identical to original STRUCTURE_SYSTEM_PROMPT constant)
+
+    2. test_user_prompt_golden_website_scrape
+       Setup: company_name='Acme Corp', raw_text='Acme is a leader...(100 words)', context_hint=ContextHint.WEBSITE_SCRAPE
+       Action: build_structure_user_prompt(company_name, raw_text, context_hint)
+       Assert: Output contains 'Company Name: Acme Corp'
+               Output contains 'Source Context:'
+               Output contains 'Return ONLY valid JSON'
+               Output contains 'overview'
+               Output contains 'strategic_priorities'
+               Output is byte-identical to what the old _build_structure_prompt would return
+
+    3. test_company_research_py_still_works_after_extraction
+       Setup: Import _structure_raw_content from company_research (internal function)
+              Mock the Anthropic API call
+       Assert: Function calls build_structure_system_prompt() and build_structure_user_prompt()
+               (not the old inline strings)
+       Note: This verifies the import swap, not the content.
+
+    Run: cd src/backend && uv run pytest tests/unit/test_company_research_prompt_golden.py -v --tb=short
+    All 3 tests must pass before FE-UI-032 or FE-UI-033 implementation begins.
+
+# =============================================================================
+# CATEGORY D: UNIT TESTS — PROMPT INSERTION (Part B, FE-UI-032)
+# =============================================================================
+unit_prompt_insertion:
+  prompt: |
+    Context: FE-UI-032 Part B adds optional company_research param to
+    cover_letter_prompt.build_user_prompt and cv_tailoring_prompt.build_user_prompt.
+    When company_research=None, output must be byte-identical to current output.
+
+    Files to write tests in:
+      src/backend/tests/unit/test_cover_letter_prompt_cr_insertion.py
+      src/backend/tests/unit/test_cv_tailoring_prompt_cr_insertion.py
+
+    COVER LETTER TESTS:
+
+    1. test_cover_letter_no_cr_is_backward_compatible
+       Setup: Call build_user_prompt(cv=mock_cv, vpr=mock_vpr, company_name='Acme',
+                                     job_title='Eng', job_description='...')
+              (no company_research argument)
+       Assert: Output == current output (byte-identical)
+               '# Company Research' NOT in output
+
+    2. test_cover_letter_with_cr_inserts_company_research_section
+       Setup: company_research = CompanyResearchResult(overview='Acme is...', mission='Build',
+                values=['innovation'], strategic_priorities=['grow'], ...)
+              Call build_user_prompt(..., company_research=company_research)
+       Assert: '# Company Research' in output
+               'Overview:' in output
+               'Mission: Build' in output
+               'Values: innovation' in output
+               Section appears after '# Company' section
+
+    3. test_cover_letter_cr_with_none_fields_does_not_crash
+       Setup: company_research = CompanyResearchResult(overview='x', mission=None,
+                values=[], strategic_priorities=None)
+       Assert: No exception raised
+               '# Company Research' in output
+
+    CV TAILORING TESTS:
+
+    4. test_cv_tailoring_no_cr_is_backward_compatible
+       Setup: build_user_prompt(cv=mock_cv, job_description='...', vpr=mock_vpr)
+              (no company_research argument)
+       Assert: Output == current output (byte-identical)
+               '# Company Signals' NOT in output
+
+    5. test_cv_tailoring_with_cr_inserts_company_signals
+       Setup: company_research = CompanyResearchResult(values=['speed'], strategic_priorities=['AI first'])
+              Call build_user_prompt(..., company_research=company_research)
+       Assert: '# Company Signals' in output
+               'Values: speed' in output
+               'Strategic Priorities: AI first' in output
+
+    6. test_cv_tailoring_cr_signals_limit_to_5_values_3_priorities
+       Setup: company_research with values=['a','b','c','d','e','f'] (6 values) and
+              strategic_priorities=['1','2','3','4'] (4 priorities)
+       Assert: Output values section contains at most 5 items
+               Output priorities section contains at most 3 items
+
+    Run:
+      cd src/backend && uv run pytest tests/unit/test_cover_letter_prompt_cr_insertion.py tests/unit/test_cv_tailoring_prompt_cr_insertion.py -v --tb=short
+    All 6 tests must pass.
+
+# =============================================================================
+# CATEGORY E: UNIT TESTS — TOKEN OPTIMIZATION (FE-UI-033)
+# =============================================================================
+unit_token_optimization:
+  prompt: |
+    Context: FE-UI-033 moves VPR output schema to a cached system prompt,
+    replaces vpr.model_dump() with build_vpr_digest(), and cv.model_dump() with build_cv_digest().
+
+    Files to write tests in: src/backend/tests/unit/test_token_optimization.py
+
+    Write tests covering:
+
+    1. test_vpr_system_prompt_contains_all_required_fields
+       Required field names that must appear in build_phase2_system_prompt() output:
+       ['metadata', 'executive_summary', 'overall_fit_score', 'top_three_strengths',
+        'top_three_concerns', 'recommended_approach', 'differentiators', 'top_differentiators',
+        'unique_strengths', 'positioning_statement', 'concerns_and_mitigations',
+        'value_proposition', 'primary_value', 'elevator_pitch', 'application_strategy',
+        'ats_keywords', 'company_insights', 'evidence_gaps', 'verification_summary']
+       Assert: every field name in the list above is a substring of build_phase2_system_prompt()
+
+    2. test_vpr_user_prompt_does_not_contain_output_schema
+       Action: build_phase2_prompt(evidence_json='{}', cv_facts_json='{}',
+                job_requirements_json='{}', company_research_json='{}',
+                gap_responses_json='[]', feedback_block='')
+       Assert: 'OUTPUT SCHEMA' NOT in output (schema moved to system prompt)
+               'Return JSON matching the schema' in output (reference line present)
+
+    3. test_banned_words_still_in_user_prompt
+       Action: build_phase2_prompt(...)
+       Assert: Any known BANNED_WORD (e.g., 'leverage', 'synergy') is NOT in the output
+               (the BANNED_WORDS prohibition instruction IS in the output)
+       Note: Assert 'do not use' or 'BANNED' appears near the words list, NOT that the
+             banned words themselves appear as allowed text.
+
+    4. test_vpr_digest_contains_required_fields
+       Setup: mock_vpr = VPR(differentiators=..., application_strategy=..., executive_summary=...)
+       Action: digest = build_vpr_digest(mock_vpr)
+       Assert: 'positioning_statement' in digest
+               'ats_keywords_primary' in digest
+               'top_differentiators' in digest (list of ≤3 items)
+               'overall_fit_score' in digest
+               'recommended_approach' in digest
+
+    5. test_vpr_digest_does_not_include_full_schema
+       Setup: mock_vpr with evidence_gaps=[...20 items...], concerns_and_mitigations=[...10 items...]
+       Action: digest = build_vpr_digest(mock_vpr)
+       Assert: 'evidence_gaps' NOT in digest keys
+               'concerns_and_mitigations' NOT in digest keys
+               len(json.dumps(digest)) < 800  # enforce digest is compact
+
+    6. test_cv_digest_contains_name_summary_and_top_roles
+       Setup: mock_cv with full_name='Jane Doe', professional_summary='Senior Eng',
+              experiences=[5 experience objects]
+       Action: digest = build_cv_digest(mock_cv)
+       Assert: digest['name'] == 'Jane Doe'
+               digest['summary'] == 'Senior Eng'
+               len(digest['top_roles']) == 3  # capped at 3
+               len(digest['key_skills']) <= 10
+
+    7. test_cv_tailoring_prompt_vpr_section_uses_digest
+       Setup: mock_vpr with full model_dump() size >2000 chars
+       Action: output = build_user_prompt(cv=mock_cv, job_description='...', vpr=mock_vpr)
+               vpr_section = [s for s in output.split('\n\n') if '# VPR' in s][0]
+       Assert: len(vpr_section) < 1000  # digest is compact
+               'positioning_statement' in vpr_section
+               'ats_keywords' in vpr_section
+
+    Run: cd src/backend && uv run pytest tests/unit/test_token_optimization.py -v --tb=short
+    All 7 tests must pass.
+
+# =============================================================================
+# CATEGORY F: INTEGRATION TESTS — CR GATE + CONDITIONAL WRITES
+# =============================================================================
+integration_cr_gate:
+  prompt: |
+    Context: FE-UI-029 + FE-UI-030. The CR confidence gate (0.85) and DynamoDB
+    conditional writes must work together correctly under concurrent conditions.
+
+    Files to write tests in: src/backend/tests/integration/test_cr_gate_integration.py
+
+    NOTE: These tests require a DynamoDB local instance or moto mock.
+    Use moto's mock_dynamodb decorator.
+
+    Write integration tests covering:
+
+    1. test_cr_gate_pass_full_flow
+       Setup: Create application record with state='cr_pending' in mock DynamoDB
+       Action: Simulate CR worker processing with confidence=0.92
+       Assert:
+         - application.state == 'artifacts_generating'
+         - application.artifact_statuses.company_research == 'completed'
+         - company_research_error == False (or absent)
+         - Company research record persisted in company_research_cache_table
+
+    2. test_cr_gate_fail_full_flow
+       Setup: Application state='cr_pending'
+              Simulate 3 SQS delivery attempts, all with confidence=0.65
+       Action: Third attempt triggers hard-fail path
+       Assert:
+         - application.state == 'cr_failed'
+         - application.artifact_statuses.company_research == 'failed'
+         - application.company_research_error == True
+         - Company research record NOT persisted (below threshold)
+
+    3. test_conditional_write_race_condition
+       Description: Two concurrent workers try to transition cr_pending → artifacts_generating
+       Setup: Application state='cr_pending' in DynamoDB
+              Worker A and Worker B both call transition_state concurrently
+       Action: Both workers attempt DynamoDB UpdateItem with ConditionExpression state=cr_pending
+       Assert:
+         - Exactly one succeeds (state transitions to artifacts_generating)
+         - The other gets ConditionalCheckFailedException and logs a warning
+         - Final application state is 'artifacts_generating' (not corrupted)
+         - No duplicate VPR jobs enqueued (idempotency)
+
+    4. test_recovery_endpoint_returns_cr_error_state
+       Setup: Application with state='cr_failed', company_research_error=True
+              artifact_statuses={'company_research': 'failed'}
+       Action: GET /applications/{id} (call application_handler.get_application)
+       Assert:
+         - response.application.company_research_error == True
+         - response.artifacts.company_research.status == 'failed'
+         - response.application.state == 'cr_failed'
+
+    5. test_recovery_endpoint_backward_compat_no_cr_error_field
+       Setup: Old application record with NO company_research_error field
+       Action: GET /applications/{id}
+       Assert:
+         - response.application.company_research_error == False (defaulted)
+         - No KeyError or 500 error
+
+    Run: cd src/backend && uv run pytest tests/integration/test_cr_gate_integration.py -v --tb=short
+    All 5 tests must pass.
+
+# =============================================================================
+# CATEGORY G: INTEGRATION TESTS — MANUAL ENDPOINTS UNAFFECTED
+# =============================================================================
+integration_manual_endpoints:
+  prompt: |
+    Context: FE-UI-031 adds a feature flag (ARTIFACT_CHAIN_ENABLED). When the flag is
+    OFF (default), all existing manual endpoints must behave exactly as before.
+    When the flag is ON, manual endpoints must STILL work (chain is additive, not a replacement).
+
+    Files to write tests in: src/backend/tests/integration/test_manual_endpoints_regression.py
+
+    Write integration tests covering:
+
+    1. test_gap_submit_flag_off_uses_existing_sqs_path
+       Setup: ARTIFACT_CHAIN_ENABLED=false (env var)
+       Action: POST /jobs/{id}/gap-responses with valid payload
+       Assert:
+         - sfn.start_execution NOT called
+         - application state transitions to 'artifacts_generating' (existing path)
+         - VPR SQS message enqueued (existing behavior)
+
+    2. test_gap_submit_flag_on_uses_step_functions
+       Setup: ARTIFACT_CHAIN_ENABLED=true (env var), mock sfn client
+       Action: POST /jobs/{id}/gap-responses with valid payload
+       Assert:
+         - sfn.start_execution called once with correct state machine ARN
+         - application state transitions to 'cr_pending'
+         - VPR SQS message NOT directly enqueued by gap handler
+
+    3. test_manual_vpr_trigger_works_with_flag_on
+       Setup: ARTIFACT_CHAIN_ENABLED=true
+              Application already has CR completed (state=artifacts_generating)
+       Action: POST /vpr/generate (manual VPR trigger)
+       Assert:
+         - VPR job enqueued on vpr_jobs_queue
+         - No Step Functions execution started (manual trigger bypasses chain)
+
+    4. test_manual_cr_trigger_works_with_flag_on
+       Setup: ARTIFACT_CHAIN_ENABLED=true
+              Application state='cr_failed' (manual retry scenario)
+       Action: POST /company-research/fetch
+       Assert:
+         - Company research runs synchronously (existing behavior)
+         - Result persisted
+         - No Step Functions execution started
+         - company_research_error cleared on success
+
+    5. test_manual_cv_tailoring_still_works
+       Setup: ARTIFACT_CHAIN_ENABLED=true
+       Action: POST /cv-tailoring/generate (manual trigger)
+       Assert:
+         - CV tailoring job enqueued
+         - Returns accepted/processing status
+         - Existing behavior unchanged
+
+    Run: cd src/backend && uv run pytest tests/integration/test_manual_endpoints_regression.py -v --tb=short
+    All 5 tests must pass.
+
+# =============================================================================
+# CATEGORY H: E2E TESTS — PAGE RELOAD STATE RECOVERY
+# =============================================================================
+e2e_reload_recovery:
+  prompt: |
+    Context: FE-UI-034. After a CR failure or during an active chain, a page reload
+    must recover the correct UX state from GET /applications/{id}.
+
+    Files: src/frontend/tests/ui/integration/ChainStateRecovery.test.tsx
+    Framework: Vitest + Testing Library (consistent with existing HubLayout.test.tsx)
+
+    Mock the API (useApplicationHub internals) — do NOT use MSW or real network calls.
+
+    Write tests covering:
+
+    1. test_hub_renders_cr_error_state_on_reload
+       Setup: Mock useApplicationHub to return {
+         hubState: {...}, companyResearchError: true, ...
+       }
+       Render: <ApplicationHubPage jobId="job1" />
+       Assert:
+         - Warning toast visible with text "Company research failed"
+         - VPR generate button is disabled
+         - Tailored CV generate button is disabled
+         - Cover Letter generate button is disabled
+         - Company Research card shows "Retry" CTA
+
+    2. test_hub_renders_chain_progress_on_cr_pending
+       Setup: Mock application state='cr_pending', companyResearchError=false
+       Render: <ApplicationHubPage jobId="job1" />
+       Assert:
+         - ChainProgressBar visible
+         - CR step shows active/spinner indicator
+         - VPR and CV steps show waiting indicator
+
+    3. test_hub_no_error_state_when_company_research_error_false
+       Setup: Mock companyResearchError=false
+       Render: <ApplicationHubPage jobId="job1" />
+       Assert:
+         - Warning toast NOT visible
+         - VPR generate button NOT disabled (by CR error — may be disabled for other reasons)
+
+    4. test_hub_defaults_company_research_error_false_when_field_absent
+       Setup: Mock recovery endpoint response WITHOUT company_research_error field
+       Action: useApplicationHub processes the response
+       Assert: companyResearchError === false (no crash, correct default)
+
+    Run: cd src/frontend && npx vitest run --config vitest.config.ts tests/ui/integration/ChainStateRecovery.test.tsx
+    All 4 tests must pass.
+
+# =============================================================================
+# CATEGORY I: E2E TESTS — CV VERSIONING MODAL
+# =============================================================================
+e2e_cv_versioning_modal:
+  prompt: |
+    Context: FE-UI-034 — Tailored CV regenerate modal must show new copy:
+    "A new tailored CV will be generated. Your previous CV stays available in the Tailored CVs list."
+    with CTA "Generate New Version".
+
+    Files: src/frontend/tests/ui/integration/CVVersioningModal.test.tsx
+
+    Write tests covering:
+
+    1. test_tailored_cv_regen_modal_shows_new_copy
+       Setup: Hub state with tailoredCV status='stale' (triggers confirmation on Generate click)
+       Action: Click the Generate/Regenerate button on tailoredCV card
+       Assert:
+         - Modal visible
+         - Title contains "Generate New Tailored CV"
+         - Body contains "Your previous CV stays available in the Tailored CVs list"
+         - CTA button text is "Generate New Version"
+         - "overwrite" NOT in modal body
+
+    2. test_other_module_regen_modal_uses_original_copy
+       Setup: Hub state with vpr status='stale'
+       Action: Click Regenerate on VPR card
+       Assert:
+         - Modal body contains "overwrite" (original copy preserved)
+         - CTA text is "OK" (original)
+
+    3. test_tailored_cv_regen_modal_confirm_triggers_generate
+       Setup: tailoredCV status='stale'
+       Action: Click Generate → click "Generate New Version" in modal
+       Assert: handleGenerate called with 'tailoredCV'
+
+    Run: cd src/frontend && npx vitest run --config vitest.config.ts tests/ui/integration/CVVersioningModal.test.tsx
+    All 3 tests must pass.
+
+# =============================================================================
+# CATEGORY J: REGRESSION TESTS — VPR OUTPUT SCHEMA
+# =============================================================================
+regression_vpr_output_schema:
+  prompt: |
+    Context: FE-UI-033 moves the VPR output schema from the user prompt to the system prompt.
+    The UI reads specific field names from the VPR JSON response. These must not change.
+
+    Files: src/backend/tests/regression/test_vpr_output_schema_regression.py
+
+    CRITICAL: These tests protect against field name regressions that would silently break the UI.
+
+    Write regression tests covering:
+
+    1. test_all_ui_consumed_fields_in_system_prompt
+       Action: text = build_phase2_system_prompt()
+       Assert each of these field names appears in text:
+         - 'overall_fit_score'
+         - 'top_three_strengths'
+         - 'top_three_concerns'
+         - 'recommended_approach'
+         - 'positioning_statement'
+         - 'ats_keywords'
+         - 'primary'  (ats_keywords.primary subfield)
+         - 'elevator_pitch'
+         - 'metadata'
+
+    2. test_vpr_model_fields_match_prompt_schema
+       Description: Cross-check that VPR Pydantic model field names align with prompt schema
+       Action: Import VPR model; get field names via model.model_fields.keys()
+       Assert: The model has fields matching the critical schema names above
+       Note: Catches drift between model and prompt if fields get renamed
+
+    3. test_banned_words_list_not_empty
+       Action: from vpr_prompt import BANNED_WORDS
+       Assert: len(BANNED_WORDS) > 10  (anti-AI list must not be accidentally emptied)
+
+    4. test_user_prompt_references_system_schema
+       Action: output = build_phase2_prompt(...)
+       Assert: Any of these appear: 'system prompt', 'schema in the system', 'Return JSON matching'
+       (verifies the reference line replaced the inline schema)
+
+    Run: cd src/backend && uv run pytest tests/regression/test_vpr_output_schema_regression.py -v --tb=short
+    All 4 tests must pass.
+
+# =============================================================================
+# CATEGORY K: REGRESSION TESTS — CROSS-MODULE NON-REGRESSION
+# =============================================================================
+regression_cross_module:
+  prompt: |
+    Context: All prompt and handler changes in FE-UI-029 through FE-UI-034 must not
+    break existing endpoints or cross-module behavior. Run the full existing test suite
+    and verify no regressions.
+
+    Steps:
+    1. Run backend unit tests:
+       cd src/backend && uv run pytest tests/unit/ -v --tb=short
+       MUST: All tests pass. Zero failures.
+
+    2. Run backend type check:
+       cd src/backend && uv run mypy careervp --strict
+       MUST: No new errors introduced by chain changes.
+
+    3. Run frontend unit tests:
+       cd src/frontend && npm run test:unit
+       MUST: All tests pass.
+
+    4. Run frontend integration tests:
+       cd src/frontend && npm run test:integration
+       MUST: All tests pass.
+
+    5. Run frontend type check:
+       cd src/frontend && npm run typecheck
+       MUST: No new type errors.
+
+    Specific regressions to watch for:
+    - test_gap_submit_response_saves_responses: existing gap submit test must still pass
+      (flag-off path unchanged)
+    - cross-module-invalidation.test.ts: companyResearch must NOT be invalidated on gap responses
+      (existing test at src/frontend/tests/regression/cross-module-invalidation.test.ts:63)
+    - state-adapters.test.ts: all existing state adapter tests must pass unchanged
+
+    Report any failures with file:line and the error message.
+
+# =============================================================================
+# CATEGORY L: INFRA TESTS — STEP FUNCTIONS CONSTRUCT
+# =============================================================================
+integration_step_functions_construct:
+  prompt: |
+    Context: FE-UI-031 adds ArtifactChainStateMachine to the CDK stack.
+    CDK unit tests use aws_cdk.assertions.Template.
+
+    Files: infra/tests/test_artifact_chain_construct.py
+
+    Write CDK assertion tests covering:
+
+    1. test_company_research_queue_created
+       Action: Template.from_stack(stack)
+       Assert: template.has_resource_properties('AWS::SQS::Queue', {
+         'VisibilityTimeout': 120,
+         'MessageRetentionPeriod': Match.any_value(),
+       })
+       (company_research_queue present in synthesized template)
+
+    2. test_company_research_dlq_created
+       Assert: DLQ SQS queue present with MessageRetentionPeriod=1209600 (14 days)
+
+    3. test_state_machine_created_as_standard
+       Assert: template.has_resource('AWS::StepFunctions::StateMachine', {
+         'Properties': Match.object_like({'StateMachineType': 'STANDARD'})
+       })
+
+    4. test_state_machine_has_cr_and_vpr_states
+       Action: Parse StateMachine.DefinitionString from template
+       Assert: 'StartCompanyResearch' in definition
+               'StartVPR' in definition
+               'StartCVTailoring' in definition
+               'HandleCRFailure' in definition
+
+    5. test_feature_flag_env_var_on_gap_handler
+       Assert: The gap_handler Lambda function has environment variable ARTIFACT_CHAIN_ENABLED
+
+    Run: cd infra && uv run pytest tests/test_artifact_chain_construct.py -v --tb=short
+    All 5 tests must pass.
+
+# =============================================================================
+# EXECUTION ORDER + GATE MAPPING
+# =============================================================================
+execution_order:
+  note: >
+    Tests must be authored and runnable before implementation begins for their gate.
+    Golden tests (Category C) must pass before FE-UI-033 implementation starts.
+
+  gate_1_before_implementation:
+    applies_to: FE-UI-029
+    run_first:
+      - unit_state_machine (Category A)
+      - integration_cr_gate tests 4 and 5 (recovery endpoint regression)
+
+  gate_2_before_implementation:
+    applies_to: FE-UI-031
+    run_first:
+      - integration_manual_endpoints (Category G)
+      - integration_step_functions_construct (Category L)
+      - unit_cr_worker (Category B)
+
+  gate_3_before_implementation:
+    applies_to: FE-UI-032
+    run_first:
+      - unit_prompt_externalization / golden tests (Category C)
+
+  gate_4_before_implementation:
+    applies_to: FE-UI-033
+    prerequisite: "Golden tests (Category C) must be passing"
+    run_first:
+      - regression_vpr_output_schema (Category J)
+      - unit_token_optimization (Category E)
+
+  after_all_implementation:
+    run:
+      - regression_cross_module (Category K) — full regression sweep
+      - e2e_reload_recovery (Category H)
+      - e2e_cv_versioning_modal (Category I)
+      - unit_prompt_insertion (Category D)
+      - integration_cr_gate all 5 tests (Category F)

@@ -1,34 +1,61 @@
 """
 Company research orchestration logic per docs/specs/02-company-research.md.
-Coordinates website scraping, web search fallback, and LLM synthesis.
+Coordinates managed web research and LLM structuring.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import os
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any
 from urllib.parse import urlparse
 
 from careervp.handlers.utils.observability import logger
+from careervp.logic.company_intel_cache import (
+    CachedNews,
+    CachedProfile,
+    acquire_lock,
+    company_cache_keys,
+    merge_cached_company_research,
+    read_news,
+    read_profile,
+    release_lock,
+    write_news,
+    write_profile,
+)
+from careervp.logic.company_research_store import read_cr_artifact
 from careervp.logic.llm_cache import DEFAULT_CACHE_TTL_SECONDS, LLMResponseCache
+from careervp.logic.prompts.company_research_prompt import build_structure_system_prompt, build_structure_user_prompt
 from careervp.logic.utils.llm_client import TaskMode, get_llm_router
 from careervp.logic.utils.web_scraper import MIN_CONTENT_WORDS, count_words, scrape_company_about_page
-from careervp.logic.utils.web_search import aggregate_search_content, search_company_info
+from careervp.logic.utils.web_search import aggregate_search_content, search_company_info, search_company_news
 from careervp.models.company import CompanyResearchRequest, CompanyResearchResult, ResearchSource
+from careervp.models.job import CompanyContext
 from careervp.models.result import Result, ResultCode
 
 RESEARCH_TIMEOUT = 60.0
-STRUCTURE_SYSTEM_PROMPT = 'You are CareerVP company research analyst. Extract structured insights faithfully.'
-MAX_PROMPT_WORDS = 800
+MAX_PROMPT_WORDS = 2500
+DEFAULT_CONFIDENCE_THRESHOLD = 0.85
 
 ContextHint = str
 
 
+@dataclass(frozen=True)
+class ConfidentCompanyResearch:
+    """Confidence-gated Company Research artifact used by VPR generation."""
+
+    company_context: CompanyContext
+    company_research_id: str
+    company_research_at: str | None
+
+
 async def research_company(request: CompanyResearchRequest) -> Result[CompanyResearchResult]:
     """
-    Research a company using scrape → search → LLM fallback strategy.
+    Research a company using Tavily retrieval and LLM structuring.
     """
     try:
         return await asyncio.wait_for(_research_company_inner(request), timeout=RESEARCH_TIMEOUT)
@@ -37,66 +64,302 @@ async def research_company(request: CompanyResearchRequest) -> Result[CompanyRes
         return Result(success=False, error='Company research timed out', code=ResultCode.TIMEOUT)
 
 
+def load_confident_company_research(application_id: str, user_id: str) -> CompanyContext | None:
+    """Return the VPR-ready CompanyContext for the latest confident CR artifact."""
+    artifact = load_confident_company_research_artifact(application_id=application_id, user_id=user_id)
+    return artifact.company_context if artifact is not None else None
+
+
+def load_confident_company_research_artifact(application_id: str, user_id: str) -> ConfidentCompanyResearch | None:
+    """Load the latest ownership-checked, confidence-gated Company Research artifact.
+
+    This never synthesizes missing data. If the persisted record is absent, belongs to
+    another user, is below threshold, or matches the deleted fabricated payload pattern,
+    the function returns None.
+    """
+    clean_application_id = application_id.strip()
+    clean_user_id = user_id.strip()
+    if not clean_application_id or not clean_user_id:
+        return None
+
+    item = read_cr_artifact(application_id=clean_application_id, user_id=clean_user_id)
+    if item is None:
+        return None
+    if str(item.get('user_id') or '').strip() != clean_user_id:
+        logger.warning('Company Research ownership check failed', application_id=clean_application_id)
+        return None
+
+    payload = _company_research_payload(item)
+    company_name = _coerce_text(item.get('company_name')) or _coerce_text(payload.get('company_name')) or ''
+    if not company_name or company_name.startswith(_fabricated_company_prefix()):
+        return None
+
+    confidence = _coerce_float(item.get('confidence_score'))
+    if confidence is None:
+        confidence = _coerce_float(payload.get('confidence_score'))
+    if confidence is None or confidence < _confidence_threshold():
+        return None
+
+    context = CompanyContext(
+        company_name=company_name,
+        overview=_coerce_text(item.get('overview')) or _coerce_text(payload.get('overview')),
+        mission=_coerce_text(item.get('mission')) or _coerce_text(payload.get('mission')),
+        values=_coerce_text_list(item.get('values')) or _coerce_text_list(payload.get('values')),
+        strategic_priorities=_coerce_text_list(item.get('strategic_priorities')) or _coerce_text_list(payload.get('strategic_priorities')),
+        recent_news=_coerce_recent_news(item.get('recent_news')) or _coerce_recent_news(payload.get('recent_news')),
+        financial_summary=_coerce_text(item.get('financial_summary')) or _coerce_text(payload.get('financial_summary')),
+        key_products=_coerce_text_list(item.get('key_products')) or _coerce_text_list(payload.get('key_products')),
+        company_size=_coerce_text(item.get('company_size')) or _coerce_text(payload.get('company_size')),
+        key_executives=_coerce_text_list(item.get('key_executives')) or _coerce_text_list(payload.get('key_executives')),
+        competitive_positioning=_coerce_text(item.get('competitive_positioning')) or _coerce_text(payload.get('competitive_positioning')),
+        growth_signals=_coerce_text_list(item.get('growth_signals')) or _coerce_text_list(payload.get('growth_signals')),
+        industry=_coerce_text(item.get('industry')) or _coerce_text(payload.get('industry')),
+    )
+    research_id = (
+        _coerce_text(item.get('company_research_id'))
+        or _coerce_text(payload.get('company_research_id'))
+        or _coerce_text(item.get('job_id'))
+        or clean_application_id
+    )
+    research_at = _coerce_text(item.get('created_at')) or _coerce_text(item.get('updated_at')) or _coerce_text(payload.get('research_timestamp'))
+    return ConfidentCompanyResearch(
+        company_context=context,
+        company_research_id=research_id,
+        company_research_at=research_at,
+    )
+
+
+def _company_research_payload(item: dict[str, Any]) -> dict[str, Any]:
+    research_data = item.get('research_data')
+    if isinstance(research_data, dict):
+        return research_data
+    company_research = item.get('company_research')
+    if isinstance(company_research, dict):
+        return company_research
+    return item
+
+
+def _fabricated_company_prefix() -> str:
+    return ' '.join(('Company', 'for')) + ' '
+
+
+def _confidence_threshold() -> float:
+    return _coerce_float(os.environ.get('CR_CONFIDENCE_THRESHOLD')) or DEFAULT_CONFIDENCE_THRESHOLD
+
+
+def _coerce_float(value: Any) -> float | None:
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, int | float):
+        return float(value)
+    if isinstance(value, str) and value.strip():
+        try:
+            return float(value.strip())
+        except ValueError:
+            return None
+    return None
+
+
+def _coerce_text(value: Any) -> str | None:
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped or None
+    return None
+
+
+def _coerce_text_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _coerce_recent_news(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    result: list[str] = []
+    for item in value:
+        if isinstance(item, dict):
+            title = _coerce_text(item.get('title')) or _coerce_text(item.get('headline'))
+            if title:
+                result.append(title)
+        elif str(item).strip():
+            result.append(str(item).strip())
+    return result
+
+
 async def _research_company_inner(request: CompanyResearchRequest) -> Result[CompanyResearchResult]:
     logger.info('Starting company research', company_name=request.company_name)
-
     domain = _resolve_domain(request)
+    keys = company_cache_keys(company_name=request.company_name, domain=domain)
+    if keys is None:
+        return await _run_full_company_research(request, domain=domain)
 
-    # Primary path: Website scrape
+    profile_key, news_key, lock_key = keys
+    cached_profile = read_profile(profile_key)
+    cached_news = read_news(news_key)
+    cached_result = _merge_cache_hit(cached_profile, cached_news, fallback_company_name=request.company_name)
+    if cached_result is not None:
+        logger.info('[RESEARCH_SUCCESS] Source: COMPANY_INTEL_CACHE', company_name=request.company_name)
+        return Result(success=True, data=cached_result, code=ResultCode.RESEARCH_COMPLETE)
+
+    if cached_profile is not None:
+        news_refresh = await _refresh_cached_news(request, domain=domain, profile=cached_profile, news_key=news_key)
+        if news_refresh.success:
+            return news_refresh
+
+    if acquire_lock(lock_key):
+        try:
+            direct_result = await _run_full_company_research(request, domain=domain)
+            if direct_result.success and direct_result.data is not None:
+                write_profile(profile_key, direct_result.data)
+                write_news(news_key, direct_result.data)
+            return direct_result
+        finally:
+            release_lock(lock_key)
+
+    waited_result = await _wait_for_company_intel_cache(profile_key, news_key, fallback_company_name=request.company_name)
+    if waited_result is not None:
+        logger.info('[RESEARCH_SUCCESS] Source: COMPANY_INTEL_CACHE_AFTER_WAIT', company_name=request.company_name)
+        return Result(success=True, data=waited_result, code=ResultCode.RESEARCH_COMPLETE)
+
+    return await _run_full_company_research(request, domain=domain)
+
+
+async def _run_full_company_research(request: CompanyResearchRequest, *, domain: str | None) -> Result[CompanyResearchResult]:
+    """Run the pre-cache full Tavily profile/news research flow."""
+
+    # Primary path: Tavily site-scoped search when a company/job domain is available.
     if domain:
-        website_urls: list[str] = []
-        scrape_result = await _try_website_scrape(request, domain=domain, source_urls=website_urls)
-        if scrape_result.success and scrape_result.data:
+        site_urls: list[str] = []
+        site_result = await _try_web_search(request.company_name, domain=domain, source_urls=site_urls)
+        if site_result.success and site_result.data:
             structured = await _structure_raw_content(
                 company_name=request.company_name,
-                raw_text=scrape_result.data,
-                source=ResearchSource.WEBSITE_SCRAPE,
-                source_urls=website_urls,
-                word_count=count_words(scrape_result.data),
-                context_hint='official website About page text',
+                raw_text=site_result.data,
+                source=ResearchSource.WEB_API,
+                source_urls=site_urls,
+                word_count=count_words(site_result.data),
+                context_hint='Tavily site-scoped company profile and news results',
+                job_domain=domain,
             )
             if structured.success:
-                logger.info('[RESEARCH_SUCCESS] Source: WEBSITE_SCRAPE', company_name=request.company_name)
+                logger.info('[RESEARCH_SUCCESS] Source: WEB_API_SITE_SCOPED', company_name=request.company_name)
             return structured
         logger.warning(
-            '[WEB_SEARCH_FALLBACK] Scrape failed, using web search',
+            '[WEB_API_FALLBACK] Site-scoped Tavily search failed, using general Tavily search',
             company_name=request.company_name,
-            reason=scrape_result.error,
+            reason=site_result.error,
         )
     else:
         logger.warning(
-            '[WEB_SEARCH_FALLBACK] Scrape failed, using web search',
+            '[WEB_API_FALLBACK] Site-scoped Tavily search skipped, using general Tavily search',
             company_name=request.company_name,
             reason='domain_unavailable',
         )
 
-    # Fallback 1: Web search
+    # Fallback: Tavily general web search.
     search_urls: list[str] = []
     search_result = await _try_web_search(request.company_name, source_urls=search_urls)
     if search_result.success and search_result.data:
         structured = await _structure_raw_content(
             company_name=request.company_name,
             raw_text=search_result.data,
-            source=ResearchSource.WEB_SEARCH,
+            source=ResearchSource.WEB_API,
             source_urls=search_urls,
             word_count=count_words(search_result.data),
-            context_hint='aggregated web search snippets',
+            context_hint='Tavily general company profile and recent news results',
+            job_domain=domain,
         )
         if structured.success:
-            logger.info('[RESEARCH_SUCCESS] Source: WEB_SEARCH', company_name=request.company_name)
+            logger.info('[RESEARCH_SUCCESS] Source: WEB_API_GENERAL', company_name=request.company_name)
         return structured
 
-    # Fallback 2: LLM synthesis from job posting
+    # No real source content was obtained from scrape or search. Per FE-UI-041 we do NOT
+    # synthesise company facts from the job posting alone — that produced fabricated,
+    # low-confidence content indistinguishable from real research. Report an explicit
+    # failure so the confidence gate / retry path owns the outcome.
     logger.warning(
-        '[LLM_FALLBACK] All sources failed, using LLM synthesis',
+        '[ALL_SOURCES_FAILED] Tavily returned no usable company research content',
         company_name=request.company_name,
         reason=search_result.error,
     )
-    fallback_result = await _try_llm_fallback(request)
-    if fallback_result.success:
-        logger.info('[RESEARCH_SUCCESS] Source: LLM_FALLBACK', company_name=request.company_name)
-        return fallback_result
-    return fallback_result
+    return Result(
+        success=False,
+        error='No company research sources returned usable content',
+        code=ResultCode.ALL_SOURCES_FAILED,
+    )
+
+
+async def _refresh_cached_news(
+    request: CompanyResearchRequest,
+    *,
+    domain: str | None,
+    profile: CachedProfile,
+    news_key: str,
+) -> Result[CompanyResearchResult]:
+    news_result = await _run_news_only_company_research(request, domain=domain)
+    if not news_result.success or news_result.data is None:
+        return news_result
+
+    write_news(news_key, news_result.data)
+    fresh_news = CachedNews(key=news_key, data=_news_cache_payload(news_result.data), expires_at=0)
+    merged_result = merge_cached_company_research(profile, fresh_news, fallback_company_name=request.company_name)
+    if merged_result is None:
+        return await _run_full_company_research(request, domain=domain)
+    logger.info('[RESEARCH_SUCCESS] Source: COMPANY_INTEL_CACHE_NEWS_REFRESH', company_name=request.company_name)
+    return Result(success=True, data=merged_result, code=ResultCode.RESEARCH_COMPLETE)
+
+
+async def _run_news_only_company_research(request: CompanyResearchRequest, *, domain: str | None) -> Result[CompanyResearchResult]:
+    source_urls: list[str] = []
+    search_result = await _try_news_search(request.company_name, domain=domain, source_urls=source_urls)
+    if not search_result.success or not search_result.data:
+        return Result(
+            success=False,
+            error=search_result.error or 'No company news sources returned usable content',
+            code=search_result.code or ResultCode.SEARCH_FAILED,
+        )
+    return await _structure_raw_content(
+        company_name=request.company_name,
+        raw_text=search_result.data,
+        source=ResearchSource.WEB_API,
+        source_urls=source_urls,
+        word_count=count_words(search_result.data),
+        context_hint='Tavily recent company news and growth signal results',
+        job_domain=domain,
+    )
+
+
+async def _wait_for_company_intel_cache(profile_key: str, news_key: str, *, fallback_company_name: str) -> CompanyResearchResult | None:
+    for delay_seconds in (0.2, 0.4, 0.8):
+        await asyncio.sleep(delay_seconds)
+        cached_result = _merge_cache_hit(read_profile(profile_key), read_news(news_key), fallback_company_name=fallback_company_name)
+        if cached_result is not None:
+            return cached_result
+    return None
+
+
+def _merge_cache_hit(
+    profile: CachedProfile | None,
+    news: CachedNews | None,
+    *,
+    fallback_company_name: str,
+) -> CompanyResearchResult | None:
+    if profile is None or news is None:
+        return None
+    return merge_cached_company_research(profile, news, fallback_company_name=fallback_company_name)
+
+
+def _news_cache_payload(result: CompanyResearchResult) -> dict[str, Any]:
+    payload = result.model_dump(mode='json')
+    return {
+        'recent_news': payload.get('recent_news'),
+        'growth_signals': payload.get('growth_signals'),
+        'source': payload.get('source'),
+        'source_urls': payload.get('source_urls'),
+        'confidence_score': payload.get('confidence_score'),
+        'research_timestamp': payload.get('research_timestamp'),
+    }
 
 
 async def _try_website_scrape(
@@ -136,8 +399,8 @@ async def _try_website_scrape(
     return Result(success=True, data=text, code=ResultCode.SUCCESS)
 
 
-async def _try_web_search(company_name: str, source_urls: list[str] | None = None) -> Result[str]:
-    search_result = await search_company_info(company_name)
+async def _try_web_search(company_name: str, *, domain: str | None = None, source_urls: list[str] | None = None) -> Result[str]:
+    search_result = await search_company_info(company_name, domain=domain)
     if not search_result.success or not search_result.data:
         return Result(
             success=False,
@@ -152,6 +415,26 @@ async def _try_web_search(company_name: str, source_urls: list[str] | None = Non
 
     if count_words(aggregated) < MIN_CONTENT_WORDS:
         return Result(success=False, error='Insufficient search snippets', code=ResultCode.SEARCH_FAILED)
+
+    return Result(success=True, data=aggregated, code=ResultCode.SUCCESS)
+
+
+async def _try_news_search(company_name: str, *, domain: str | None = None, source_urls: list[str] | None = None) -> Result[str]:
+    search_result = await search_company_news(company_name, domain=domain)
+    if not search_result.success or not search_result.data:
+        return Result(
+            success=False,
+            error=search_result.error or 'News search failed',
+            code=search_result.code or ResultCode.SEARCH_FAILED,
+        )
+
+    results = search_result.data
+    aggregated = aggregate_search_content(results)
+    if source_urls is not None:
+        source_urls.extend(str(item.url) for item in results)
+
+    if count_words(aggregated) < MIN_CONTENT_WORDS:
+        return Result(success=False, error='Insufficient news snippets', code=ResultCode.SEARCH_FAILED)
 
     return Result(success=True, data=aggregated, code=ResultCode.SUCCESS)
 
@@ -182,6 +465,7 @@ async def _structure_raw_content(
     source_urls: list[str],
     word_count: int,
     context_hint: ContextHint,
+    job_domain: str | None = None,
 ) -> Result[CompanyResearchResult]:
     cache = LLMResponseCache()
     cache_key = _company_cache_key(company_name)
@@ -192,7 +476,7 @@ async def _structure_raw_content(
             return Result(success=True, data=cached_result, code=ResultCode.RESEARCH_COMPLETE)
 
     trimmed_text = _truncate_text(raw_text, max_words=MAX_PROMPT_WORDS)
-    user_prompt = _build_structure_prompt(company_name, trimmed_text, context_hint)
+    user_prompt = build_structure_user_prompt(company_name, trimmed_text, context_hint)
     router = get_llm_router()
 
     loop = asyncio.get_running_loop()
@@ -200,9 +484,9 @@ async def _structure_raw_content(
         None,
         lambda: router.invoke(
             mode=TaskMode.TEMPLATE,
-            system_prompt=STRUCTURE_SYSTEM_PROMPT,
+            system_prompt=build_structure_system_prompt(),
             user_prompt=user_prompt,
-            max_tokens=900,
+            max_tokens=1400,
             temperature=0.2,
         ),
     )
@@ -226,9 +510,22 @@ async def _structure_raw_content(
         strategic_priorities=_ensure_list(payload.get('strategic_priorities')),
         recent_news=_ensure_list(payload.get('recent_news')),
         financial_summary=_ensure_optional_text(payload.get('financial_summary')),
+        key_products=_ensure_list(payload.get('key_products')),
+        company_size=_ensure_optional_text(payload.get('company_size')),
+        key_executives=_ensure_list(payload.get('key_executives')),
+        competitive_positioning=_ensure_optional_text(payload.get('competitive_positioning')),
+        growth_signals=_ensure_list(payload.get('growth_signals')),
         source=source,
         source_urls=_deduplicate_urls(source_urls),
-        confidence_score=_calculate_confidence(source, word_count, payload),
+        confidence_score=_calculate_confidence(
+            source,
+            word_count,
+            payload,
+            company_name=company_name,
+            content_text=raw_text,
+            source_urls=source_urls,
+            job_domain=job_domain,
+        ),
         research_timestamp=datetime.now(timezone.utc),
     )
 
@@ -239,17 +536,6 @@ async def _structure_raw_content(
     )
 
     return Result(success=True, data=result_model, code=ResultCode.RESEARCH_COMPLETE)
-
-
-def _build_structure_prompt(company_name: str, raw_text: str, context_hint: ContextHint) -> str:
-    return (
-        f'Company Name: {company_name}\n'
-        f'Source Context: {context_hint}\n\n'
-        f'Extract structured company research from the following text. '
-        f'Return JSON with keys overview (100-200 words), values (list), mission, strategic_priorities, recent_news, financial_summary.\n'
-        f'Text:\n{raw_text}\n'
-        'Return ONLY valid JSON.'
-    )
 
 
 def _parse_llm_payload(raw_output: str) -> dict[str, Any] | None:
@@ -329,11 +615,27 @@ def _deduplicate_urls(urls: list[str]) -> list[str]:
     return ordered
 
 
-def _calculate_confidence(source: ResearchSource, word_count: int, payload: dict[str, Any]) -> float:
+def _calculate_confidence(
+    source: ResearchSource,
+    word_count: int,
+    payload: dict[str, Any],
+    *,
+    company_name: str = '',
+    content_text: str = '',
+    source_urls: list[str] | None = None,
+    job_domain: str | None = None,
+) -> float:
     if source == ResearchSource.WEBSITE_SCRAPE:
         score = 0.9
         if word_count < 300:
             score -= 0.1
+    elif source == ResearchSource.WEB_API:
+        score = 0.88
+        if not _web_api_identity_verified(company_name=company_name, content_text=content_text, source_urls=source_urls or [], job_domain=job_domain):
+            score = min(score, 0.7)
+        penalty_fields = ['overview', 'mission', 'values', 'recent_news', 'strategic_priorities']
+        missing = sum(1 for field in penalty_fields if not payload.get(field))
+        score -= 0.1 * missing
     elif source == ResearchSource.WEB_SEARCH:
         score = 0.7
         penalty_fields = ['mission', 'values', 'recent_news', 'strategic_priorities']
@@ -347,14 +649,31 @@ def _calculate_confidence(source: ResearchSource, word_count: int, payload: dict
     return max(0.1, min(score, 0.95))
 
 
+def _web_api_identity_verified(*, company_name: str, content_text: str, source_urls: list[str], job_domain: str | None) -> bool:
+    clean_company_name = company_name.strip().lower()
+    if clean_company_name and clean_company_name in content_text.lower():
+        return True
+
+    normalized_job_domain = _normalize_domain(job_domain)
+    if not normalized_job_domain:
+        return False
+    return any(_normalize_domain(url) == normalized_job_domain for url in source_urls)
+
+
+def _normalize_domain(raw_value: str | None) -> str | None:
+    if not raw_value:
+        return None
+    parsed = urlparse(raw_value if '://' in raw_value else f'https://{raw_value}')
+    domain = (parsed.hostname or '').lower().removeprefix('www.')
+    return domain or None
+
+
 def _resolve_domain(request: CompanyResearchRequest) -> str | None:
     if request.domain:
-        return request.domain
+        return _normalize_domain(request.domain)
     if request.job_posting_url:
-        parsed = urlparse(str(request.job_posting_url))
-        if parsed.netloc:
-            return parsed.netloc
+        return _normalize_domain(str(request.job_posting_url))
     return None
 
 
-__all__ = ['research_company']
+__all__ = ['ConfidentCompanyResearch', 'load_confident_company_research', 'load_confident_company_research_artifact', 'research_company']

@@ -28,8 +28,6 @@ from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
 
-JSON_HEADERS = {'Content-Type': 'application/json'}
-
 
 def _json_headers() -> dict[str, str]:
     return {'Content-Type': 'application/json', **get_cors_headers(None)}
@@ -53,8 +51,11 @@ def _get_results_bucket() -> str:
     return f'careervp-{env}-vpr-results-us-east-1'
 
 
-_URL_TTL_SECONDS = 604800  # 7 days
-_URL_MIN_REMAINING_SECONDS = 3600  # regenerate if less than 1 hour left
+# STS temporary credentials (Lambda execution role) expire in ~6h, so pre-signed
+# URLs signed with them silently expire at min(STS_expiry, ExpiresIn). Keep TTL
+# well under the STS session duration so cached URLs stay usable.
+_URL_TTL_SECONDS = 3600  # 1 hour
+_URL_MIN_REMAINING_SECONDS = 600  # regenerate if less than 10 minutes left
 
 
 def _generate_presigned_url(result_key: str) -> str:
@@ -106,7 +107,7 @@ def _get_or_cache_presigned_url(
 
 def _normalize_status(raw_status: Any) -> str:
     status_value = str(raw_status or 'PENDING').strip().lower()
-    if status_value in {'pending', 'processing', 'completed', 'failed'}:
+    if status_value in {'pending', 'processing', 'completed', 'failed', 'cancelled'}:
         return status_value
     return 'pending'
 
@@ -122,9 +123,30 @@ def _build_processing_response(job: dict[str, Any], job_id: str) -> dict[str, An
     }
 
 
+def _s3_object_exists(key: str) -> bool:
+    """Return True if the S3 object exists (head_object succeeds)."""
+    try:
+        s3.head_object(Bucket=_get_results_bucket(), Key=key)
+        return True
+    except Exception:
+        return False
+
+
 def _build_completed_response(job: dict[str, Any], job_id: str, jobs_repo: Any = None) -> dict[str, Any]:
     """Build response for COMPLETED status."""
     result_key = job.get('result_key')
+
+    # Detect S3-expired files: job says completed but the object is gone.
+    if result_key and not _s3_object_exists(str(result_key)):
+        logger.warning('VPR result missing from S3 — marking expired', job_id=job_id, result_key=result_key)
+        return {
+            'id': job_id,
+            'job_id': job_id,
+            'status': 'expired',
+            'created_at': job.get('created_at'),
+            'completed_at': job.get('completed_at'),
+        }
+
     if result_key:
         result_url = _get_or_cache_presigned_url(job, str(result_key), jobs_repo, job_id)
     else:
@@ -141,6 +163,8 @@ def _build_completed_response(job: dict[str, Any], job_id: str, jobs_repo: Any =
         result_payload.setdefault('download_url', result_url)
 
     _ensure_vpr_contract_shape(result_payload)
+    provenance = _extract_vpr_provenance(job, result_payload)
+    _apply_vpr_provenance(result_payload, provenance)
 
     response = {
         'id': job_id,
@@ -149,8 +173,24 @@ def _build_completed_response(job: dict[str, Any], job_id: str, jobs_repo: Any =
         'result': result_payload,
         'created_at': job.get('created_at'),
         'completed_at': job.get('completed_at'),
+        **provenance,
     }
     return response
+
+
+def _extract_vpr_provenance(job: dict[str, Any], result_payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = result_payload or {}
+    return {
+        'company_research_id': job.get('company_research_id') or payload.get('company_research_id'),
+        'company_research_at': job.get('company_research_at') or payload.get('company_research_at'),
+        'company_context_included': bool(job.get('company_context_included', payload.get('company_context_included', False))),
+    }
+
+
+def _apply_vpr_provenance(result_payload: dict[str, Any], provenance: dict[str, Any]) -> None:
+    result_payload['company_research_id'] = provenance.get('company_research_id')
+    result_payload['company_research_at'] = provenance.get('company_research_at')
+    result_payload['company_context_included'] = bool(provenance.get('company_context_included', False))
 
 
 def _ensure_vpr_contract_shape(result_payload: dict[str, Any]) -> None:
@@ -210,6 +250,9 @@ def _enrich_vpr_result_from_s3(result_payload: dict[str, Any], result_key: str, 
             'meta_evaluation',
             {'persuasion_score': 8.0, 'completeness_score': 8.0},
         )
+        for key in ('company_research_id', 'company_research_at', 'company_context_included'):
+            if key in stored_vpr:
+                result_payload.setdefault(key, stored_vpr.get(key))
     except Exception as e:
         logger.warning('Unable to enrich completed VPR payload from S3', job_id=job_id, error=str(e))
 
@@ -335,6 +378,107 @@ def _build_vpr_list_item(job: dict[str, Any], jobs_repo: JobsRepository | None =
     }
 
 
+_TERMINAL_STATUSES = {'COMPLETED', 'FAILED', 'CANCELLED'}
+
+
+def _handle_vpr_cancel(
+    event: dict[str, Any],
+    jobs_repo: Any,
+    user_id: str,
+) -> dict[str, Any]:
+    """Handle POST /vpr/{vprId}/cancel."""
+    vpr_id = _extract_vpr_id(event)
+    if not vpr_id:
+        return _build_error_response('Missing vprId', HTTPStatus.BAD_REQUEST)
+
+    try:
+        job = jobs_repo.get_job(vpr_id)
+    except Exception as exc:
+        logger.error('DynamoDB error during VPR cancel', job_id=vpr_id, error=str(exc))
+        return _build_error_response('Internal server error', HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    if job is None:
+        # Check S3 fallback — if present the artifact completed, treat as terminal
+        s3_fallback = _try_build_response_from_s3(vpr_id)
+        if s3_fallback is not None:
+            return _build_error_response('Cannot cancel terminal task', HTTPStatus.CONFLICT)
+        return _build_error_response('Job not found', HTTPStatus.NOT_FOUND)
+
+    job_owner = str(job.get('user_id', ''))
+    if not job_owner or job_owner != user_id:
+        return _build_error_response('Forbidden', HTTPStatus.FORBIDDEN)
+
+    status = str(job.get('status', 'PENDING')).upper()
+    if status in _TERMINAL_STATUSES:
+        return _build_error_response('Cannot cancel terminal task', HTTPStatus.CONFLICT)
+
+    jobs_repo.update_job_status(vpr_id, 'CANCELLED')
+
+    # Chain-stop (FE-UI-043): if the application has a RUNNING chain, stop it.
+    _try_stop_chain_for_job(job, user_id)
+
+    return {
+        'statusCode': int(HTTPStatus.OK),
+        'headers': _json_headers(),
+        'body': json.dumps({'status': 'cancelled'}),
+    }
+
+
+def _do_stop_chain(
+    sfn_client: Any,
+    app_repo: Any,
+    arn: str,
+    application_id: str,
+    user_id: str,
+    artifact_statuses: dict[str, Any],
+) -> None:
+    try:
+        sfn_client.stop_execution(executionArn=arn, cause='user_cancel')
+    except Exception:
+        pass
+    try:
+        app_repo.update_chain_execution_status(application_id, user_id, 'STOPPED')
+    except Exception:
+        pass
+    for atype, astatus in artifact_statuses.items():
+        if str(astatus).lower() in {'pending', 'processing'}:
+            try:
+                app_repo.update_artifact_status(application_id, user_id, atype, 'cancelled')
+            except Exception:
+                pass
+
+
+def _try_stop_chain_for_job(job: dict[str, Any], user_id: str) -> None:
+    """Best-effort chain stop on VPR cancel — never raises."""
+    import boto3 as _boto3
+
+    from careervp.dal.application_repository import ApplicationRepository
+    from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+
+    try:
+        apps_table = os.environ.get('APPLICATIONS_TABLE_NAME', '')
+        chain_arn_env = os.environ.get('STEP_FUNCTIONS_CHAIN_ARN', '')
+        if not apps_table or not chain_arn_env:
+            return
+
+        app_repo = ApplicationRepository(DynamoDalHandler(apps_table))
+        application_id = str(job.get('application_id', ''))
+        if not application_id:
+            return
+
+        app = app_repo.get(application_id, user_id)
+        if not isinstance(app, dict) or app.get('chain_execution_status') != 'RUNNING':
+            return
+
+        sfn_client = _boto3.client('stepfunctions')
+        arn = app.get('chain_execution_arn')
+        if arn:
+            artifact_statuses: dict[str, Any] = app.get('artifact_statuses') or {}
+            _do_stop_chain(sfn_client, app_repo, arn, application_id, user_id, artifact_statuses)
+    except Exception as exc:
+        logger.warning('Chain stop after VPR cancel failed (non-fatal)', error=str(exc))
+
+
 @logger.inject_lambda_context(log_event=False)
 @tracer.capture_lambda_handler(capture_response=False)
 @metrics.log_metrics(capture_cold_start_metric=True)
@@ -350,11 +494,33 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         404 Not Found: Job not found
     """
     set_request_origin(event)
+
+    method = str(event.get('httpMethod', '')).upper()
+    path = str(event.get('path', '')).rstrip('/')
+
+    if method == 'OPTIONS':
+        return {
+            'statusCode': int(HTTPStatus.OK),
+            'headers': _json_headers(),
+            'body': json.dumps({'status': 'ok'}),
+        }
+
     jobs_repo = JobsRepository()
     user_id = _extract_authenticated_user_id(event)
     if not user_id:
         return _build_error_response('Authentication required', HTTPStatus.UNAUTHORIZED)
 
+    if method == 'POST' and path.endswith('/cancel'):
+        return _handle_vpr_cancel(event, jobs_repo, user_id)
+
+    return _handle_status_or_list(event, jobs_repo, user_id)
+
+
+def _handle_status_or_list(
+    event: dict[str, Any],
+    jobs_repo: JobsRepository,
+    user_id: str,
+) -> dict[str, Any]:
     if _is_list_user_vprs_request(event):
         limit = _parse_limit(event)
         jobs = jobs_repo.get_vpr_jobs_by_user(user_id=user_id, limit=limit)
@@ -372,10 +538,8 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
     logger.append_keys(job_id=vpr_id, user_id=user_id)
 
-    # Fetch job from DynamoDB
     job_result = jobs_repo.get_job(vpr_id)
 
-    # Repository returns dict or None
     if job_result is None:
         # DynamoDB record may have expired (24-hour TTL on pending jobs).
         # Fall back to S3 if the completed result is still present there.
@@ -388,14 +552,13 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
     job = job_result
     job_owner = str(job.get('user_id', ''))
-    if job_owner and job_owner != user_id:
+    if not job_owner or job_owner != user_id:
         logger.warning('Forbidden VPR access attempt', requested_by=user_id, owner=job_owner, job_id=vpr_id)
         return _build_error_response('User can only access own VPRs', HTTPStatus.FORBIDDEN)
 
     status = str(job.get('status', 'PENDING'))
     normalized_status = _normalize_status(status)
 
-    # Build response based on status
     if normalized_status == 'processing':
         response_data = _build_processing_response(job, vpr_id)
     elif normalized_status == 'completed':
@@ -405,14 +568,13 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     else:
         response_data = _build_pending_response(job, vpr_id)
 
-    # Emit metrics
     _emit_status_metrics(normalized_status)
 
     logger.info('Status query successful', job_id=vpr_id, status=normalized_status)
 
     return {
         'statusCode': int(HTTPStatus.OK),
-        'headers': JSON_HEADERS,
+        'headers': _json_headers(),
         'body': json.dumps(response_data),
     }
 
@@ -438,15 +600,18 @@ def _try_build_response_from_s3(vpr_id: str) -> dict[str, Any] | None:
     result_payload: dict[str, Any] = {'download_url': result_url}
     _enrich_vpr_result_from_s3(result_payload, result_key, vpr_id)
     _ensure_vpr_contract_shape(result_payload)
+    provenance = _extract_vpr_provenance({}, result_payload)
+    _apply_vpr_provenance(result_payload, provenance)
     response_data = {
         'id': vpr_id,
         'job_id': vpr_id,
         'status': 'completed',
         'result': result_payload,
+        **provenance,
     }
     return {
         'statusCode': int(HTTPStatus.OK),
-        'headers': JSON_HEADERS,
+        'headers': _json_headers(),
         'body': json.dumps(response_data),
     }
 
@@ -455,7 +620,7 @@ def _build_error_response(message: str, status: HTTPStatus) -> dict[str, Any]:
     """Construct a standardized error response."""
     return {
         'statusCode': int(status),
-        'headers': JSON_HEADERS,
+        'headers': _json_headers(),
         'body': json.dumps(
             {
                 'error': message,

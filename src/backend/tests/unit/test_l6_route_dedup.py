@@ -17,8 +17,12 @@ import pytest
 
 INFRA_DIR = '/Users/yitzchak/Documents/dev/careervp/infra'
 API_CONSTRUCT_PATH = f'{INFRA_DIR}/careervp/api_construct.py'
-EXPECTED_CANONICAL_ROUTE_COUNT = 35
-EXPECTED_ROUTE_MAP_OPERATION_COUNT = 38
+EXPECTED_CANONICAL_ROUTE_COUNT = 40
+# Phase 1 of FE-UI-048: auth/users/gap-analysis/billing are proxy-collapsed; all
+# other features remain as explicit routes pending Phase 2 (two-step deploy to
+# remove {paramId} siblings before adding {proxy+}).
+EXPECTED_EXPLICIT_ROUTE_COUNT = 43
+EXPECTED_PROXY_PREFIX_COUNT = 4
 FROZEN_SPEC_PATH = '/Users/yitzchak/Documents/dev/careervp/docs/beta/evidence/I7_routes/frozen_spec.json'
 
 # Deprecated route prefixes that must not appear in CDK
@@ -60,6 +64,15 @@ def _extract_route_map_operations() -> set[tuple[str, str]]:
     return {(method, _normalize_route_path(path)) for path, method in matches}
 
 
+def _extract_proxy_prefixes() -> set[str]:
+    content = _read_api_construct()
+    matches = re.findall(
+        r'\(\s*"([^"]+)"\s*,\s*self\.[A-Za-z0-9_]+\s*,\s*(?:True|False)\s*\)',
+        content,
+    )
+    return {_normalize_route_path(path) for path in matches}
+
+
 def _load_frozen_operations() -> set[tuple[str, str]]:
     spec = json.loads(Path(FROZEN_SPEC_PATH).read_text())
     return {(str(route['method']), str(route['path'])) for route in spec.get('routes', [])}
@@ -99,10 +112,10 @@ class TestNoApiPrefixRoutes:
 
 @pytest.mark.unit
 class TestCanonicalRouteCount:
-    """Canonical route spec must define exactly 30 routes."""
+    """Canonical route spec must define exactly 39 routes."""
 
     def test_canonical_route_count_is_30(self):
-        """frozen_spec.json has exactly 30 canonical routes."""
+        """frozen_spec.json has exactly 39 canonical routes."""
         assert os.path.exists(FROZEN_SPEC_PATH), f'Missing: {FROZEN_SPEC_PATH}'
         with open(FROZEN_SPEC_PATH) as f:
             spec = json.load(f)
@@ -129,24 +142,46 @@ class TestCanonicalRouteCount:
 
 @pytest.mark.unit
 class TestCdkRouteMapMatchesFrozenSpec:
-    """CDK route_map should exactly match frozen canonical operations."""
+    """Explicit routes plus feature proxies must cover the frozen operations."""
 
-    def test_route_map_operation_count_is_30(self):
+    def test_route_map_operation_count_is_42(self):
         route_map_ops = _extract_route_map_operations()
-        assert len(route_map_ops) == EXPECTED_ROUTE_MAP_OPERATION_COUNT, (
-            f'Expected {EXPECTED_ROUTE_MAP_OPERATION_COUNT} CDK route operations, got {len(route_map_ops)}'
+        proxy_prefixes = _extract_proxy_prefixes()
+        assert len(route_map_ops) == EXPECTED_EXPLICIT_ROUTE_COUNT, (
+            f'Expected {EXPECTED_EXPLICIT_ROUTE_COUNT} explicit CDK route operations, got {len(route_map_ops)}'
+        )
+        assert len(proxy_prefixes) == EXPECTED_PROXY_PREFIX_COUNT, (
+            f'Expected {EXPECTED_PROXY_PREFIX_COUNT} feature proxies, got {len(proxy_prefixes)}'
         )
 
     def test_route_map_equals_frozen_spec(self):
         route_map_ops = _extract_route_map_operations()
+        proxy_prefixes = _extract_proxy_prefixes()
         frozen_ops = _load_frozen_operations()
-        missing = sorted(frozen_ops - route_map_ops)
+        missing = sorted(
+            operation
+            for operation in frozen_ops
+            if operation not in route_map_ops
+            and not any(operation[1] == prefix or operation[1].startswith(f'{prefix}/') for prefix in proxy_prefixes)
+        )
         extra = sorted(route_map_ops - frozen_ops)
         assert missing == [], f'CDK route map missing canonical operations: {missing}'
         allowed_additive_routes = {
             ('DELETE', '/cv-tailoring/{job_id}'),
             ('POST', '/gap-analysis/questions'),
             ('POST', '/users/me/trial/reset'),
+            # FE-UI-028: export endpoint added after baseline
+            ('GET', '/jobs/{job_id}/artifacts/{moduleType}/export'),
+            # UI-upgrade: PATCH endpoints for cover-letter and cv-tailoring
+            ('PATCH', '/cover-letter/{job_id}'),
+            ('PATCH', '/cv-tailoring/{job_id}'),
+            # FE-UI-043: CR cancel endpoint
+            ('POST', '/company-research/{job_id}/cancel'),
+            # Registered via register_ai_assist_routes (nested-stack Lambdas).
+            ('POST', '/ai/assist'),
+            ('PATCH', '/interview-prep/{job_id}'),
+            # Client error-report telemetry sink (forwarded by Next.js SSR route).
+            ('POST', '/errors'),
         }
         unexpected_extra = sorted(set(extra) - allowed_additive_routes)
         assert unexpected_extra == [], f'CDK route map has non-canonical operations: {unexpected_extra}'

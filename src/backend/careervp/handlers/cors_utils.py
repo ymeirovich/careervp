@@ -22,7 +22,7 @@ def get_cors_headers(origin: str | None) -> dict[str, str]:
     if resolved in _ALLOWED_ORIGINS:
         return {
             'Access-Control-Allow-Origin': resolved,
-            'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
+            'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type,Authorization',
         }
 

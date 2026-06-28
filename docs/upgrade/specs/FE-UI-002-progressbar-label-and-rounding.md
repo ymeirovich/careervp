@@ -2,10 +2,10 @@
 spec_id: FE-UI-002
 title: "Upgrade ProgressBar — add visible label row and rounded ends"
 priority: high
-status: draft
+status: implemented
 owner: frontend
 created_at: 2026-05-23
-updated_at: 2026-05-23
+updated_at: 2026-05-29
 route: /applications/[id] (change applies to all routes)
 component_file: src/frontend/components/ui/ProgressBar.tsx
 tier: ui-primitive
@@ -51,18 +51,18 @@ tier: ui-primitive
 **Rollback plan:** Revert component file to prior version — no database or API changes
 
 ## Acceptance Criteria
-- [ ] AC-001: Given ProgressBar with `value={85}` and `showLabel={true}`, when rendered, then a visible text element containing "Progress" appears left-aligned above the bar
-- [ ] AC-002: Given ProgressBar with `value={85}` and `showLabel={true}`, when rendered, then a visible text element containing "85%" appears right-aligned above the bar
-- [ ] AC-003: Given ProgressBar with `value={65}` and `showLabel={true}`, when rendered, then the percentage text reads "65%"
-- [ ] AC-004: Given ProgressBar with `value={0}` and `showLabel={true}`, when rendered, then the percentage text reads "0%"
-- [ ] AC-005: Given ProgressBar with `value={100}` and `showLabel={true}`, when rendered, then the percentage text reads "100%"
-- [ ] AC-006: Given ProgressBar with `showLabel` omitted, when rendered, then no visible "Progress" or percentage text elements are present — backward compatibility
-- [ ] AC-007: Given ProgressBar with `showLabel={false}`, when rendered, then no visible "Progress" or percentage text elements are present
-- [ ] AC-008: Given ProgressBar with `showLabel={true}` and `label="Generating CV"`, when rendered, then the `aria-label` attribute still reads "Generating CV" and the sr-only span still contains "Generating CV: {value}%"
-- [ ] AC-009: Given ProgressBar with `value={100}` and `color="error"`, when rendered, then the bar fill uses the `bg-state-error` class (existing behavior — regression guard for failed-state rendering per q18)
-- [ ] AC-010: Given ProgressBar with `value={50}` and `showLabel={true}`, when the `role="progressbar"` element is inspected, then `aria-valuenow` equals 50 (existing ARIA preserved alongside visible label per q8)
-- [ ] AC-011: Given ProgressBar with `value={150}` and `showLabel={true}`, when rendered, then the percentage text reads "100%" and `aria-valuenow` equals 100 (clamping applied to visible label)
-- [ ] AC-012: Given ProgressBar with `value={-5}` and `showLabel={true}`, when rendered, then the percentage text reads "0%" and `aria-valuenow` equals 0 (clamping applied to visible label)
+- [x] AC-001: Given ProgressBar with `value={85}` and `showLabel={true}`, when rendered, then a visible text element containing "Progress" appears left-aligned above the bar
+- [x] AC-002: Given ProgressBar with `value={85}` and `showLabel={true}`, when rendered, then a visible text element containing "85%" appears right-aligned above the bar
+- [x] AC-003: Given ProgressBar with `value={65}` and `showLabel={true}`, when rendered, then the percentage text reads "65%"
+- [x] AC-004: Given ProgressBar with `value={0}` and `showLabel={true}`, when rendered, then the percentage text reads "0%"
+- [x] AC-005: Given ProgressBar with `value={100}` and `showLabel={true}`, when rendered, then the percentage text reads "100%"
+- [x] AC-006: Given ProgressBar with `showLabel` omitted, when rendered, then no visible "Progress" or percentage text elements are present — backward compatibility
+- [x] AC-007: Given ProgressBar with `showLabel={false}`, when rendered, then no visible "Progress" or percentage text elements are present
+- [x] AC-008: Given ProgressBar with `showLabel={true}` and `label="Generating CV"`, when rendered, then the `aria-label` attribute still reads "Generating CV" and the sr-only span still contains "Generating CV: {value}%"
+- [x] AC-009: Given ProgressBar with `value={100}` and `color="error"`, when rendered, then the bar fill uses the `bg-state-error` class (existing behavior — regression guard for failed-state rendering per q18)
+- [x] AC-010: Given ProgressBar with `value={50}` and `showLabel={true}`, when the `role="progressbar"` element is inspected, then `aria-valuenow` equals 50 (existing ARIA preserved alongside visible label per q8)
+- [x] AC-011: Given ProgressBar with `value={150}` and `showLabel={true}`, when rendered, then the percentage text reads "100%" and `aria-valuenow` equals 100 (clamping applied to visible label)
+- [x] AC-012: Given ProgressBar with `value={-5}` and `showLabel={true}`, when rendered, then the percentage text reads "0%" and `aria-valuenow` equals 0 (clamping applied to visible label)
 
 ## States to Handle
 default (no label) | with-label | zero-value | full-value | over-100-clamped | negative-clamped | error-color | warning-color | primary-color
@@ -95,18 +95,18 @@ default (no label) | with-label | zero-value | full-value | over-100-clamped | n
 ## Traceability Matrix
 | requirement_id | code_reference | test_reference | verification_type | blocking_gate | result |
 |---|---|---|---|---|---|
-| AC-001 | src/frontend/components/ui/ProgressBar.tsx:TBD | tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
-| AC-002 | src/frontend/components/ui/ProgressBar.tsx:TBD | tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
-| AC-003 | src/frontend/components/ui/ProgressBar.tsx:TBD | tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
-| AC-004 | src/frontend/components/ui/ProgressBar.tsx:TBD | tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
-| AC-005 | src/frontend/components/ui/ProgressBar.tsx:TBD | tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
-| AC-006 | src/frontend/components/ui/ProgressBar.tsx:TBD | tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
-| AC-007 | src/frontend/components/ui/ProgressBar.tsx:TBD | tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
-| AC-008 | src/frontend/components/ui/ProgressBar.tsx:TBD | tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
-| AC-009 | src/frontend/components/ui/ProgressBar.tsx:TBD | tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
-| AC-010 | src/frontend/components/ui/ProgressBar.tsx:TBD | tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
-| AC-011 | src/frontend/components/ui/ProgressBar.tsx:TBD | tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
-| AC-012 | src/frontend/components/ui/ProgressBar.tsx:TBD | tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
+| AC-001 | src/frontend/components/ui/ProgressBar.tsx:TBD | src/frontend/tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
+| AC-002 | src/frontend/components/ui/ProgressBar.tsx:TBD | src/frontend/tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
+| AC-003 | src/frontend/components/ui/ProgressBar.tsx:TBD | src/frontend/tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
+| AC-004 | src/frontend/components/ui/ProgressBar.tsx:TBD | src/frontend/tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
+| AC-005 | src/frontend/components/ui/ProgressBar.tsx:TBD | src/frontend/tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
+| AC-006 | src/frontend/components/ui/ProgressBar.tsx:TBD | src/frontend/tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
+| AC-007 | src/frontend/components/ui/ProgressBar.tsx:TBD | src/frontend/tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
+| AC-008 | src/frontend/components/ui/ProgressBar.tsx:TBD | src/frontend/tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
+| AC-009 | src/frontend/components/ui/ProgressBar.tsx:TBD | src/frontend/tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
+| AC-010 | src/frontend/components/ui/ProgressBar.tsx:TBD | src/frontend/tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
+| AC-011 | src/frontend/components/ui/ProgressBar.tsx:TBD | src/frontend/tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
+| AC-012 | src/frontend/components/ui/ProgressBar.tsx:TBD | src/frontend/tests/ui/unit/ProgressBar.test.tsx | unit | pre_merge | pending |
 
 ## Rollback Trigger Matrix
 | trigger_id | condition | action |

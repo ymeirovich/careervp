@@ -116,17 +116,21 @@ def extract_text_from_pdf(pdf_content: bytes) -> str:
 
 
 def extract_text_from_docx(docx_content: bytes) -> str:
-    """Extract text from DOCX using python-docx."""
+    """Extract text from DOCX by walking every w:t run in the document body.
+
+    Handles all layout structures (paragraphs, tables, text boxes, VML frames,
+    content controls) by iterating the raw XML instead of python-docx's
+    higher-level objects.
+    """
     try:
         from io import BytesIO
 
         from docx import Document
+        from docx.oxml.ns import qn
 
         doc = Document(BytesIO(docx_content))
-        text_parts = []
-        for paragraph in doc.paragraphs:
-            text_parts.append(paragraph.text)
-        return '\n'.join(text_parts)
+        tokens = [elem.text for elem in doc.element.body.iter(qn('w:t')) if elem.text]
+        return ' '.join(tokens)
     except Exception as e:
         logger.error('DOCX extraction failed', error=str(e))
         raise ValueError(f'Failed to extract text from DOCX: {e}') from e

@@ -23,6 +23,12 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 from botocore.exceptions import ClientError as BotoClientError
 from pydantic import ValidationError
 
+from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+from careervp.handlers.artifact_dependency_utils import (
+    dependency_response_body,
+    mark_requested_artifact_pending,
+    resolve_handler_dependencies,
+)
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
@@ -73,7 +79,7 @@ def _get_artifacts_table_name() -> str:
 @logger.inject_lambda_context(log_event=False)
 @tracer.capture_lambda_handler(capture_response=False)
 @metrics.log_metrics(capture_cold_start_metric=True)
-def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
+def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:  # noqa: C901
     """
     Handle POST /cover-letter/generate requests for async cover letter generation.
 
@@ -121,14 +127,6 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             validation_errors=[{'code': ResultCode.INVALID_JSON, 'field': 'body', 'message': str(exc)}],
         )
 
-    job_id = str(uuid.uuid4())
-    now = datetime.datetime.now(datetime.timezone.utc)
-    created_at = now.isoformat()
-
-    logger.append_keys(user_id=authenticated_user_id, job_id=job_id)
-    tracer.put_annotation(key='job_id', value=job_id)
-
-    # Write PENDING artifact record to DynamoDB
     try:
         table_name = _get_artifacts_table_name()
     except RuntimeError:
@@ -138,6 +136,22 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             'Internal server error', HTTPStatus.INTERNAL_SERVER_ERROR, code=ResultCode.MISSING_ENV, request_id=_get_request_id(event, context)
         )
 
+    dependency_response = _resolve_cover_letter_dependency_response(
+        api_request=api_request,
+        user_id=authenticated_user_id,
+        table_name=table_name,
+    )
+    if dependency_response is not None:
+        return dependency_response
+
+    job_id = str(uuid.uuid4())
+    now = datetime.datetime.now(datetime.timezone.utc)
+    created_at = now.isoformat()
+
+    logger.append_keys(user_id=authenticated_user_id, job_id=job_id)
+    tracer.put_annotation(key='job_id', value=job_id)
+
+    # Write PENDING artifact record to DynamoDB
     try:
         table = dynamodb_resource.Table(table_name)
         table.put_item(
@@ -236,6 +250,30 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
                 'estimated_time_seconds': 60,
             }
         ),
+    }
+
+
+def _resolve_cover_letter_dependency_response(
+    *,
+    api_request: CoverLetterRequest,
+    user_id: str,
+    table_name: str,
+) -> dict[str, Any] | None:
+    application_id = api_request.application_id or api_request.job_id
+    dependency_resolution = resolve_handler_dependencies(
+        artifact_type='cover_letter',
+        application_id=application_id,
+        user_id=user_id,
+        dal=DynamoDalHandler(table_name),
+    )
+    if dependency_resolution.status == 'ready':
+        return None
+    if dependency_resolution.status == 'dependency_generating':
+        mark_requested_artifact_pending(application_id=application_id, user_id=user_id, artifact_type='cover_letter')
+    return {
+        'statusCode': dependency_resolution.http_status,
+        'headers': _json_headers(),
+        'body': json.dumps(dependency_response_body(dependency_resolution, requested_artifact='cover_letter')),
     }
 
 

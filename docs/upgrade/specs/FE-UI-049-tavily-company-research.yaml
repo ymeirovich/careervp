@@ -1,0 +1,174 @@
+spec_id: FE-UI-049
+title: "Tavily company research — replace scrape+DDG with managed search, fix the confidence gate, enrich CompanyContext"
+priority: critical
+status: draft
+owner: backend
+created_at: 2026-06-27
+updated_at: 2026-06-27
+tier: feature
+
+human_approval_gate:
+  required: true
+  note: >
+    Introduces a new paid third-party dependency (Tavily) and a new SSM secret. Key must be
+    seeded via CI/CD (see FE-UI-052) before deploy. No DynamoDB schema migration. The
+    cross-user cache (FE-UI-050) and required-URL front door (FE-UI-051) are separate specs.
+
+recommended_model_claude: opus            # pipeline orchestration: gate + identity verification
+recommended_model_codex: high             # GPT-5-Codex high reasoning effort
+reason_for_model: >
+  The confidence-gate rewrite, identity-gated scoring, and primary/fallback retrieval swap are
+  correctness-critical and architecture-sensitive. Sub-tasks (client wrapper, model fields,
+  prompt keys) can drop to claude:sonnet / codex:medium, and trivial enum/field edits to
+  claude:haiku / codex:low — see FE-UI plan model matrix.
+
+depends_on:
+  - FE-UI-041   # CR quality gate — confidence gating + no fabrication (preserved)
+  - FE-UI-040   # VPR<->CR binding — VPR consumes CompanyContext (extended here with new fields)
+  - FE-UI-052   # Tavily SSM secret wiring + observability must exist for this to run in AWS
+blocks:
+  - FE-UI-050   # cache reads/writes the enriched CompanyResearchResult produced here
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    Company research scrapes the site (httpx+BeautifulSoup) and falls back to DuckDuckGo HTML
+    search. _calculate_confidence() (company_research.py:451-466) scores WEBSITE_SCRAPE=0.90 and
+    WEB_SEARCH=0.70 base, while DEFAULT_CONFIDENCE_THRESHOLD=0.85 — so ANY search-sourced result
+    is mathematically incapable of passing the gate and is silently discarded as not_generated.
+    DDG snippets are thin and low quality. The LLM structures content into CompanyResearchResult,
+    which already extracts overview + financial_summary, but CompanyContext (models/job.py:86)
+    drops them, so the VPR receives only 6 thin fields. MAX_PROMPT_WORDS=800 was sized for
+    snippets. Confidence is decided purely by source type and NEVER verifies the content is about
+    the requested company.
+  required_behavior: >
+    1. Tavily is the primary retrieval path (site-scoped via the job domain) AND the fallback
+       (general web search). DuckDuckGo is removed entirely. No fabrication on total failure.
+    2. New ResearchSource.WEB_API scored base 0.88, minus 0.1 per missing core field, GATED on
+       company-identity verification (company name present in content OR result domain == job
+       domain). If neither holds, cap at 0.70 so it fails the 0.85 gate and degrades gracefully.
+    3. CompanyResearchResult and CompanyContext gain: key_products, company_size, key_executives,
+       competitive_positioning, growth_signals; and CompanyContext surfaces the existing overview
+       + financial_summary so the VPR can consume them.
+    4. MAX_PROMPT_WORDS raised 800 -> 2500 to use Tavily's clean multi-page content.
+    5. Retrieval runs two queries: a stable profile query (site-scoped) and a recent-news query.
+  user_impact: >
+    Company research actually passes the confidence gate, so the VPR company_insights section is
+    populated with concrete products, financials, and positioning instead of being empty.
+
+# =============================================================================
+# EVIDENCE
+# =============================================================================
+evidence:
+  unwinnable_gate:
+    - { file: src/backend/careervp/logic/company_research.py, line: "451-466", code: "WEB_SEARCH score=0.70; threshold 0.85" }
+    - { file: src/backend/careervp/logic/company_research.py, line: 30, code: "DEFAULT_CONFIDENCE_THRESHOLD = 0.85" }
+  truncation:
+    - { file: src/backend/careervp/logic/company_research.py, line: 29, code: "MAX_PROMPT_WORDS = 800" }
+  dropped_fields:
+    - { file: src/backend/careervp/models/company.py, line: "30-43", note: "CompanyResearchResult has overview + financial_summary" }
+    - { file: src/backend/careervp/models/job.py, line: "86-97", note: "CompanyContext drops overview/financial_summary; only 6 fields" }
+  current_retrieval:
+    - { file: src/backend/careervp/logic/utils/web_search.py, line: "24-38", code: "search_company_info -> DuckDuckGo HTML" }
+    - { file: src/backend/careervp/logic/company_research.py, line: "167-229", note: "_research_company_inner scrape->search flow" }
+  llm_key_pattern_to_mirror:
+    - { file: src/backend/careervp/logic/utils/llm_client.py, line: "132-167", note: "explicit>env>SSM key resolution + _fetch_from_ssm" }
+
+# =============================================================================
+# ARCHITECTURE
+# =============================================================================
+architecture:
+  tavily_client:
+    location: src/backend/careervp/logic/utils/tavily_client.py  # NEW
+    function: "TavilyClient.search(query, *, search_depth='advanced', include_raw_content=True, max_results, include_domains=None) -> Result[list[SearchResult]]"
+    rules:
+      - "Key resolution mirrors llm_client: explicit arg > TAVILY_API_KEY env > SSM via TAVILY_API_KEY_SSM_PARAM."
+      - "Reuse the _fetch_from_ssm shape (boto3 ssm.get_parameter WithDecryption=True)."
+      - "Add tavily-python to src/backend/pyproject.toml (or call the REST API via existing httpx)."
+      - "All outcomes wrapped in the repo Result[...] type; never raise to callers."
+  retrieval_rewrite:
+    file: src/backend/careervp/logic/utils/web_search.py
+    change: >
+      Rewrite search_company_info(company_name, *, domain=None) to call TavilyClient. Run two
+      queries: profile ('{company} mission products business model', include_domains=[domain]
+      when present) and news ('{company} news funding leadership', recent). Preserve the
+      SearchResult contract and aggregate_search_content so callers are unchanged. Remove all
+      DuckDuckGo HTML parsing (_parse_duckduckgo_results, _extract_redirect_target).
+  pipeline:
+    file: src/backend/careervp/logic/company_research.py
+    change: >
+      Primary path becomes Tavily site-scoped (replacing _try_website_scrape); fallback is Tavily
+      general search; web_scraper.py retired from the primary flow. Add WEB_API to
+      _calculate_confidence with base 0.88 and the identity gate below. Raise MAX_PROMPT_WORDS to
+      2500. Preserve the ALL_SOURCES_FAILED no-fabrication behavior (FE-UI-041).
+  identity_gate:
+    location: src/backend/careervp/logic/company_research.py  # within _calculate_confidence or a helper
+    rules:
+      - "Before awarding the 0.88 WEB_API base, verify identity: company_name appears (case-insensitive) in aggregated content, OR a source_url domain equals the job domain."
+      - "If neither holds, cap the score at 0.70 so it fails the 0.85 gate (degrade, do not fabricate)."
+      - "Cheap string/domain check only — NO additional API call."
+  model_fields:
+    file: src/backend/careervp/models/company.py
+    add_enum: "ResearchSource.WEB_API = 'web_api'"
+    add_result_fields:
+      - { field: key_products, type: "list[str]" }
+      - { field: company_size, type: "str | null" }
+      - { field: key_executives, type: "list[str]" }
+      - { field: competitive_positioning, type: "str | null" }
+      - { field: growth_signals, type: "list[str]" }
+  context_enrichment:
+    file: src/backend/careervp/models/job.py
+    change: "CompanyContext gains the 5 new fields + overview + financial_summary; load_confident_company_research (company_research.py:91-98) populates them."
+  prompt:
+    file: src/backend/careervp/logic/prompts/company_research_prompt.py
+    change: "build_structure_user_prompt requests the new JSON keys; bump _structure_raw_content max_tokens 900 -> ~1400."
+
+# =============================================================================
+# IMPLEMENTATION STEPS
+# =============================================================================
+implementation:
+  step_1: { name: "TavilyClient wrapper", change: "SSM-keyed client + tavily-python dep" }
+  step_2: { name: "Source enum + result/context fields", change: "WEB_API + 5 new fields + surface overview/financial_summary" }
+  step_3: { name: "Retrieval rewrite", change: "web_search.py -> Tavily multi-query; drop DDG" }
+  step_4: { name: "Pipeline swap + gate", change: "Tavily primary/fallback; WEB_API 0.88 identity-gated; truncation 2500" }
+  step_5: { name: "Structuring prompt", change: "new keys + max_tokens bump" }
+  step_6: { name: "VPR binding", change: "load_confident_company_research populates new fields; vpr_prompt guidance" }
+
+# =============================================================================
+# CONSTRAINTS
+# =============================================================================
+constraints:
+  - "No fabrication: total retrieval failure returns ALL_SOURCES_FAILED (FE-UI-041 preserved)."
+  - "DuckDuckGo removed entirely; no Brave/SerpAPI added (see FE-UI-052 backup-trigger criteria)."
+  - "WEB_API 0.88 only when identity verification passes; otherwise <=0.70."
+  - "Tavily key only from SSM (prod) / TAVILY_API_KEY env (local); never in code or committed .env."
+  - "SearchResult public contract unchanged so callers/tests stay stable."
+  - "mypy --strict passes; anti-AI-detection rules still apply to any generated text."
+
+# =============================================================================
+# VALIDATION
+# =============================================================================
+validation:
+  commands:
+    - "cd src/backend && uv run ruff check . && uv run mypy careervp --strict"
+    - "cd src/backend && uv run pytest tests/unit/ -v --tb=short -k 'company_research or web_search or tavily'"
+  acceptance_criteria:
+    - "WEB_API result with identity match scores >= 0.85 and PASSES the gate (the regression proving the bug fix)."
+    - "WEB_API result with NO identity match scores <= 0.70 and fails the gate."
+    - "No DuckDuckGo code paths remain (grep duckduckgo => 0 matches in careervp/)."
+    - "CompanyContext exposes key_products, company_size, key_executives, competitive_positioning, growth_signals, overview, financial_summary."
+    - "Truncation occurs at 2500 words, not 800."
+    - "Total retrieval failure => ALL_SOURCES_FAILED, never a fabricated payload."
+    - "Tavily key resolves explicit>env>SSM; missing key surfaces a clean Result failure, not a crash."
+
+# =============================================================================
+# TEST HOOKS
+# =============================================================================
+test_hooks:
+  - "TEST-FE-049 § unit_tavily_client: key resolution + Result wrapping"
+  - "TEST-FE-049 § unit_web_search_tavily: multi-query, domain scoping, DDG removed"
+  - "TEST-FE-049 § unit_confidence_identity_gate: 0.88 pass vs <=0.70 cap"
+  - "TEST-FE-049 § unit_context_enrichment: new fields + overview/financial_summary surfaced"
+  - "TEST-FE-049 § integration_research_passes_gate: end-to-end WEB_API >= 0.85"

@@ -142,6 +142,7 @@ class TestArtifactsCompletedRecovery:
                     'cv_tailored': 'completed',
                     'interview_prep': 'completed',
                     'gap_analysis': 'completed',
+                    'company_research': 'completed',
                 },
             )
             mock_repo_factory.return_value = mock_repo

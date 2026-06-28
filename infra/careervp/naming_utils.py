@@ -110,6 +110,10 @@ class NamingUtils:
         """Generate dead letter queue name."""
         return self.resource_name(feature, "dlq")
 
+    def state_machine_name(self, feature: str) -> str:
+        """Generate Step Functions state machine name."""
+        return self.resource_name(feature, "statemachine")
+
     def results_bucket_name(
         self, purpose: str, hash_override: str | None = None
     ) -> str:

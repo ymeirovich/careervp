@@ -12,6 +12,8 @@ import os
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 os.environ.setdefault('AWS_DEFAULT_REGION', 'us-east-1')
 os.environ.setdefault('POWERTOOLS_SERVICE_NAME', 'test')
 os.environ.setdefault('LOG_LEVEL', 'INFO')
@@ -50,8 +52,10 @@ def _mock_cv() -> Any:
 
 def _mock_vpr(differentiators: list[str] | None = None, language: str = 'en') -> Any:
     vpr = MagicMock()
+    vpr.user_id = 'user-1'
     vpr.model_dump.return_value = {
         'application_id': 'vpr-001',
+        'user_id': 'user-1',
         'differentiators': differentiators or ['Unique distributed systems expertise'],
         'executive_summary': 'Strong candidate.',
         'language': language,
@@ -110,7 +114,7 @@ def test_resolves_cv_facts_from_cv_record() -> None:
     """Context resolver extracts cv_facts from CV record."""
     from careervp.handlers.interview_prep_handler import _resolve_interview_prep_context
 
-    dal = _make_dal(cv=_mock_cv())
+    dal = _make_dal(cv=_mock_cv(), vpr=_mock_vpr())
     ctx = _resolve_interview_prep_context(dal, 'user-1', _api_request())
 
     assert ctx['cv_facts'] is not None
@@ -147,7 +151,7 @@ def test_resolves_gap_responses_filtered_by_ids() -> None:
 
     r1 = _mock_gap_response('gap-001')
     r2 = _mock_gap_response('gap-002')
-    dal = _make_dal(gap_responses=[r1, r2])
+    dal = _make_dal(gap_responses=[r1, r2], vpr=_mock_vpr())
 
     ctx = _resolve_interview_prep_context(dal, 'user-1', _api_request(gap_response_ids=['gap-001']))
 
@@ -157,41 +161,39 @@ def test_resolves_gap_responses_filtered_by_ids() -> None:
 
 
 def test_cv_missing_produces_none_cv_facts() -> None:
-    """When CV not found, cv_facts is None and resolution proceeds without failure."""
+    """When CV not found, cv_facts is None and resolution proceeds (VPR still required)."""
     from careervp.handlers.interview_prep_handler import _resolve_interview_prep_context
 
-    dal = _make_dal(cv=None)
+    dal = _make_dal(cv=None, vpr=_mock_vpr())
     ctx = _resolve_interview_prep_context(dal, 'user-1', _api_request())
 
     assert ctx['cv_facts'] is None
 
 
-def test_vpr_missing_produces_fallback_vpr_data() -> None:
-    """When VPR not found, vpr_data falls back to {vpr_id: ...} stub."""
+def test_vpr_missing_raises_value_error() -> None:
+    """When VPR is not found, context resolution raises ValueError — no placeholder generation."""
     from careervp.handlers.interview_prep_handler import _resolve_interview_prep_context
 
     dal = _make_dal(vpr=None, vpr_success=False)
-    ctx = _resolve_interview_prep_context(dal, 'user-1', _api_request(vpr_id='vpr-fallback'))
-
-    assert ctx['vpr_data'] == {'vpr_id': 'vpr-fallback'}
-    assert ctx['vpr_differentiators'] is None
+    with pytest.raises(ValueError, match='Required VPR not found for interview prep'):
+        _resolve_interview_prep_context(dal, 'user-1', _api_request(vpr_id='vpr-fallback'))
 
 
 def test_gap_responses_missing_produces_none() -> None:
     """When no gap responses found, gap_responses is None and resolution proceeds."""
     from careervp.handlers.interview_prep_handler import _resolve_interview_prep_context
 
-    dal = _make_dal(gap_responses=None, gap_success=False)
+    dal = _make_dal(gap_responses=None, gap_success=False, vpr=_mock_vpr())
     ctx = _resolve_interview_prep_context(dal, 'user-1', _api_request())
 
     assert ctx['gap_responses'] is None
 
 
 def test_cv_exception_does_not_raise() -> None:
-    """CV resolution exception is caught; context proceeds without cv_facts."""
+    """CV resolution exception is caught; context proceeds without cv_facts (VPR still required)."""
     from careervp.handlers.interview_prep_handler import _resolve_interview_prep_context
 
-    dal = _make_dal()
+    dal = _make_dal(vpr=_mock_vpr())
     dal.get_cv.side_effect = RuntimeError('DynamoDB timeout')
 
     ctx = _resolve_interview_prep_context(dal, 'user-1', _api_request())
@@ -199,33 +201,32 @@ def test_cv_exception_does_not_raise() -> None:
     assert ctx['cv_facts'] is None
 
 
-def test_vpr_exception_does_not_raise() -> None:
-    """VPR resolution exception is caught; context proceeds with fallback vpr_data."""
+def test_vpr_exception_raises_value_error() -> None:
+    """VPR resolution exception is fatal — context raises rather than continuing with missing VPR."""
     from careervp.handlers.interview_prep_handler import _resolve_interview_prep_context
 
     dal = _make_dal()
     dal.get_vpr.side_effect = RuntimeError('DynamoDB timeout')
 
-    ctx = _resolve_interview_prep_context(dal, 'user-1', _api_request(vpr_id='vpr-exc'))
-
-    assert ctx['vpr_data'] == {'vpr_id': 'vpr-exc'}
+    with pytest.raises(ValueError, match='Required VPR not found for interview prep'):
+        _resolve_interview_prep_context(dal, 'user-1', _api_request(vpr_id='vpr-exc'))
 
 
 def test_job_id_passed_through_context() -> None:
     """Optional job_id from API request is propagated into context."""
     from careervp.handlers.interview_prep_handler import _resolve_interview_prep_context
 
-    dal = _make_dal()
+    dal = _make_dal(vpr=_mock_vpr())
     ctx = _resolve_interview_prep_context(dal, 'user-1', _api_request(job_id='job-xyz'))
 
     assert ctx['job_id'] == 'job-xyz'
 
 
 def test_default_language_is_en() -> None:
-    """Default language is 'en' when request and VPR both omit it."""
+    """Default language is 'en' when request language is 'en' and VPR has no override."""
     from careervp.handlers.interview_prep_handler import _resolve_interview_prep_context
 
-    dal = _make_dal(vpr=None, vpr_success=False)
+    dal = _make_dal(vpr=_mock_vpr(language='en'))
     ctx = _resolve_interview_prep_context(dal, 'user-1', _api_request(language='en'))
 
     assert ctx['language'] == 'en'
@@ -240,7 +241,7 @@ def test_context_prefers_cvs_table_for_cv_lookup(monkeypatch: Any) -> None:
     cv_dal.table_name = 'test-cvs-table'
     cv_dal.get_cv.return_value = _mock_cv()
 
-    fallback_dal = _make_dal(cv=None)
+    fallback_dal = _make_dal(cv=None, vpr=_mock_vpr())
     fallback_dal.get_cv.side_effect = RuntimeError('fallback artifacts table should not be used for CV')
 
     with patch.object(module, 'DynamoDalHandler', return_value=cv_dal):
@@ -260,7 +261,7 @@ def test_context_prefers_gap_responses_table_for_gap_lookup(monkeypatch: Any) ->
     gap_dal.table_name = 'test-gap-responses-table'
     gap_dal.get_gap_responses.return_value = _make_dal(gap_responses=[_mock_gap_response('gap-001')]).get_gap_responses.return_value
 
-    fallback_dal = _make_dal(gap_responses=None, gap_success=False)
+    fallback_dal = _make_dal(gap_responses=None, gap_success=False, vpr=_mock_vpr())
     fallback_dal.get_gap_responses.side_effect = RuntimeError('fallback artifacts table should not be used for gap responses')
 
     with patch.object(module, 'DynamoDalHandler', return_value=gap_dal):
@@ -280,6 +281,7 @@ def test_context_prefers_vpr_jobs_table_payload(monkeypatch: Any) -> None:
     jobs_repo = MagicMock()
     jobs_repo.get_job.return_value = {
         'job_id': 'vpr-001',
+        'user_id': 'user-1',
         'application_id': 'job-123',
         'status': 'COMPLETED',
         'result': {

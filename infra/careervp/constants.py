@@ -60,6 +60,9 @@ COVER_LETTER_JOBS_QUEUE = "cover-letter-jobs"
 COVER_LETTER_JOBS_DLQ = "cover-letter-jobs-dlq"
 INTERVIEW_PREP_JOBS_QUEUE = "interview-prep-jobs"
 INTERVIEW_PREP_JOBS_DLQ = "interview-prep-jobs-dlq"
+# Artifact Chain async queues (FE-UI-031)
+COMPANY_RESEARCH_QUEUE = "company-research"
+CV_TAILORING_QUEUE = "cv-tailoring"
 
 # =============================================================================
 # S3 BUCKETS
@@ -120,7 +123,25 @@ CV_TAILOR_LAMBDA = "CVTailor"
 COVER_LETTER_LAMBDA = "CoverLetter"
 COMPANY_RESEARCH_LAMBDA = "CompanyResearch"
 COMPANY_RESEARCH_FEATURE = "company-research"
+AI_ASSIST_LAMBDA = "AiAssistLambda"
+AI_ASSIST_FEATURE = "ai-assist"
+ERROR_REPORT_LAMBDA = "ErrorReportLambda"
+ERROR_REPORT_FEATURE = "error-report"
 LAMBDA_SERVICE_NAME = "lambda"
+
+# Artifact Chain Lambdas + state machine (FE-UI-031)
+COMPANY_RESEARCH_WORKER_FEATURE = "company-research-worker"
+CR_FAILURE_HANDLER_FEATURE = "cr-failure-handler"
+ARTIFACT_FAILURE_HANDLER_FEATURE = "artifact-failure-handler"
+ARTIFACT_CHAIN_STATE_MACHINE_FEATURE = "artifact-chain"
+ARTIFACT_CHAIN_ARN_OUTPUT = "ArtifactChainStateMachineArn"
+# FE-UI-035: dedicated least-privilege role for the chain failure handlers
+# (breaks the CloudFormation dependency cycle caused by reusing the shared role).
+FAILURE_HANDLER_FEATURE = "failure-handler"
+FAILURE_HANDLER_ROLE = "FailureHandlerRole"
+# FE-UI-043: orphan-cleanup reaper Lambda + schedule
+ARTIFACT_CLEANUP_FEATURE = "artifact-cleanup"
+ARTIFACT_CLEANUP_LAMBDA = "ArtifactCleanupLambda"
 
 LAMBDA_LAYER_NAME = "common"
 API_HANDLER_LAMBDA_MEMORY_SIZE = 512  # MB - increased for CV parsing
@@ -149,6 +170,7 @@ CONFIGURATION_MAX_AGE_MINUTES = "5"
 # =============================================================================
 BILLING_LAMBDA = "billing"
 BILLING_FEATURE = "billing"
+EXPORT_FEATURE = "export"
 BILLING_RECONCILE_LAMBDA = "billing-reconcile"
 BILLING_RECONCILE_FEATURE = "billing-reconcile"
 
@@ -160,6 +182,20 @@ BILLING_WEBHOOK_DLQ = "billing-webhook-dlq"
 # =============================================================================
 ANTHROPIC_API_KEY_SSM_PARAM = f"/careervp/{ENVIRONMENT}/anthropic-api-key"
 ANTHROPIC_API_KEY_ENV_VAR = "ANTHROPIC_API_KEY_SSM_PARAM"
+TAVILY_API_KEY_SSM_PARAM = f"/careervp/{ENVIRONMENT}/tavily-api-key"
+TAVILY_API_KEY_SSM_PARAM_ENV = "TAVILY_API_KEY_SSM_PARAM"
+
+# =============================================================================
+# LLM MODEL IDs  — update here + cdk deploy to swap models, no code change needed
+# =============================================================================
+STRATEGIC_MODEL_ID = "claude-sonnet-4-6"  # VPR, Gap Analysis
+TEMPLATE_MODEL_ID = (
+    "claude-haiku-4-5-20251001"  # CV Tailoring, Cover Letter, Interview Prep
+)
+STRATEGIC_MODEL_ID_ENV_VAR = "STRATEGIC_MODEL_ID"
+TEMPLATE_MODEL_ID_ENV_VAR = "TEMPLATE_MODEL_ID"
+AI_ASSIST_MODEL_ENV_VAR = "AI_ASSIST_MODEL"
+AI_ASSIST_TIMEOUT_ENV_VAR = "AI_ASSIST_TIMEOUT_SECONDS"
 
 # Payment provider — webhook secrets (primary + previous for zero-downtime rotation)
 WEBHOOK_SECRET_SSM_PARAM = f"/careervp/{ENVIRONMENT}/payment-provider-webhook-secret"

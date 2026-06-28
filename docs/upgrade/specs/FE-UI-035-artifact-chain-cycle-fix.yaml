@@ -1,0 +1,166 @@
+spec_id: FE-UI-035
+title: "Artifact Chain — Break CloudFormation Dependency Cycle (dedicated failure-handler roles)"
+priority: critical
+status: draft
+owner: backend
+created_at: 2026-06-12
+updated_at: 2026-06-12
+tier: infra
+
+human_approval_gate:
+  required: true
+  gate_number: 1
+  reason: "New IAM roles for the CR/artifact failure-handler Lambdas. IAM changes are security-sensitive per project guidelines."
+  approval_before: "Any change to api_construct.py role wiring or new iam.Role construction"
+
+recommended_model: opus
+reason_for_model: >
+  IAM least-privilege scoping and CloudFormation dependency-graph reasoning are
+  architecture- and security-sensitive. Getting the dedicated role's policy wrong
+  either re-introduces the cycle or over-grants permissions.
+
+depends_on: []
+blocks:
+  - FE-UI-036   # nested-stack split must not start until the template is deployable
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    `cd infra && uv run pytest tests/infrastructure` fails (exit 1, 19 errors).
+    Root error raised by aws_cdk.assertions.Template.from_stack:
+    "Template is undeployable, these resources have a dependency cycle:
+     CrudServiceRoleArnDefaultPolicy -> CrudArtifactChainStateMachine ->
+     CrudArtifactChainStateMachineRoleDefaultPolicy -> CrudArtifactFailureHandlerLambda ->
+     CrudServiceRoleArnDefaultPolicy".
+    Plain `cdk synth` exits 0 and does NOT surface the cycle — only the infra
+    pytest (Template.from_stack) catches it, so the synth-only security gate misses it.
+  required_behavior: >
+    The synthesized CareerVpCrudDev template has no dependency cycle and is deployable.
+    The full infra test suite passes. The CR-failure and artifact-failure Lambdas run
+    under their own minimal IAM roles instead of the shared service role.
+  user_impact: >
+    Backend/infra deploys to dev succeed cleanly. The artifact auto-chain failure
+    branches (CR hard-fail, VPR/CV fail) can actually be deployed and exercised.
+
+# =============================================================================
+# EVIDENCE / ROOT CAUSE
+# =============================================================================
+evidence:
+  shared_role:
+    file: infra/careervp/api_construct.py
+    builder: _build_lambda_role
+    logical_id_constant: constants.SERVICE_ROLE_ARN   # -> CrudServiceRoleArn
+    line: 477
+  failure_handlers_using_shared_role:
+    - { file: infra/careervp/api_construct.py, func: _add_cr_failure_handler_lambda, role_line: 2066 }
+    - { file: infra/careervp/api_construct.py, func: _add_artifact_failure_handler_lambda, role_line: 2102 }
+  cycle_closing_grants:
+    - { file: infra/careervp/api_construct.py, line: 2014, call: "grant_start_execution(self.gap_api_func)" }
+    - { file: infra/careervp/api_construct.py, line: 2024, call: "grant_task_response(self.company_research_worker_func)" }
+  cycle_chain: >
+    CrudServiceRoleArnDefaultPolicy --(states:* grant)--> ArtifactChainStateMachine
+    --(lambda:InvokeFunction grant)--> StateMachineRoleDefaultPolicy
+    --> ArtifactFailureHandlerLambda --(role=lambda_role)--> CrudServiceRoleArnDefaultPolicy
+  why_it_forms: >
+    The state machine MUST be able to invoke the failure handlers (LambdaInvoke tasks).
+    The shared role MUST hold states:StartExecution / SendTaskResponse (for gap_api_func and
+    the CR worker). The failure handlers reusing that SAME shared role is the only edge that
+    closes the loop. Remove it and the cycle is gone.
+
+# =============================================================================
+# ARCHITECTURE / FIX
+# =============================================================================
+architecture:
+  primary_files:
+    - infra/careervp/api_construct.py
+  approach: >
+    Build one (or two) dedicated, minimal iam.Role(s) for the failure-handler Lambdas and
+    assign `role=<dedicated_role>` in _add_cr_failure_handler_lambda and
+    _add_artifact_failure_handler_lambda instead of `role=self.lambda_role`.
+  dedicated_role_design:
+    name: "Add _build_failure_handler_role(self) -> iam.Role"
+    role_name: "use NamingUtils.role_name(...) — follow careervp-role-{service}-{feature}-{env} convention; validate with validate_naming.py"
+    assumed_by: "iam.ServicePrincipal('lambda.amazonaws.com')"
+    minimal_permissions:
+      - "AWSLambdaBasicExecutionRole-equivalent scoped to the handler's own LogGroup ARN (logs:CreateLogStream, logs:PutLogEvents)"
+      - "X-Ray write (xray:PutTraceSegments, xray:PutTelemetryRecords) — tracing=ACTIVE is set"
+      - "dynamodb:UpdateItem (+ GetItem if the handler reads before write) on the applications_table ARN ONLY"
+      - "kms:Decrypt / kms:GenerateDataKey on logs_kms_key ARN (log-group encryption)"
+    must_not_include:
+      - "states:* (these grants are what create the cycle; the failure handlers never call Step Functions)"
+      - "broad table/bucket access from the shared service role"
+    decision_one_vs_two_roles: >
+      Default: ONE shared dedicated failure-handler role for both handlers (they need the
+      same permissions). Use two only if artifact_failure_handler needs broader table access
+      than cr_failure_handler — confirm by reading the two handler bodies before deciding.
+  invariant_after_fix: >
+    No Lambda that is a target of an ArtifactChain LambdaInvoke task may use self.lambda_role.
+
+# =============================================================================
+# IMPLEMENTATION STEPS
+# =============================================================================
+implementation:
+  step_1:
+    name: "Confirm the failure handlers' real permission needs"
+    files:
+      - src/backend/careervp/handlers/cr_failure_handler.py
+      - src/backend/careervp/handlers/artifact_failure_handler.py
+    change: >
+      Read both handlers. Enumerate exactly which DynamoDB tables/attributes they touch
+      so the dedicated role grants only those. Confirm neither calls boto3 stepfunctions.
+  step_2:
+    name: "Add _build_failure_handler_role"
+    file: infra/careervp/api_construct.py
+    change: >
+      New private method returning a least-privilege iam.Role per dedicated_role_design.
+      Grant applications_table.grant_read_write_data(role) (or a scoped inline policy) and
+      logs_kms_key permissions. Reuse existing grant helpers where possible.
+  step_3:
+    name: "Assign the dedicated role to both failure handlers"
+    file: infra/careervp/api_construct.py
+    change: >
+      In _add_cr_failure_handler_lambda (line ~2066) and _add_artifact_failure_handler_lambda
+      (line ~2102), replace `role=self.lambda_role` with `role=self.failure_handler_role`.
+      Build the role once (e.g. in the same method that wires the chain) before the handlers.
+  step_4:
+    name: "Re-synth and prove the cycle is gone"
+    change: >
+      Run cdk synth and the infra test suite (see validation). Confirm 0 errors.
+
+# =============================================================================
+# CONSTRAINTS
+# =============================================================================
+constraints:
+  - "Additive only — do not change the state machine definition or the failure-handler code"
+  - "Least privilege: dedicated role grants ONLY what step_1 proves is needed"
+  - "Dedicated role MUST NOT carry any states:* permission"
+  - "Resource names must pass: python src/backend/scripts/validate_naming.py --path infra --strict"
+  - "No change to the shared lambda_role's existing grants (gap_api_func / CR worker keep states:*)"
+  - "mypy strict must pass for any backend handler change (none expected)"
+
+# =============================================================================
+# VALIDATION
+# =============================================================================
+validation:
+  commands:
+    - "mkdir -p src/backend/.build/lambdas && touch src/backend/.build/lambdas/.placeholder"
+    - "cd infra && uv sync && npx cdk synth >/tmp/synth.log 2>&1   # must exit 0"
+    - "cd infra && uv run pytest tests/infrastructure -v --tb=short   # must exit 0, 0 errors"
+    - "python src/backend/scripts/validate_naming.py --path infra --strict"
+    - "uvx checkov -d infra/cdk.out --framework cloudformation --quiet --check CKV_AWS_7 --check CKV_AWS_19 --check CKV_AWS_20 --check CKV_AWS_33 --check CKV_AWS_53 --check CKV_AWS_54 --check CKV_AWS_55 --check CKV_AWS_56 --check CKV_AWS_364"
+  acceptance_criteria:
+    - "infra pytest exits 0 with zero 'dependency cycle' errors (was 19 errors)"
+    - "cdk synth exits 0"
+    - "Template has two new dedicated failure-handler role(s); neither has states:* actions"
+    - "Both failure-handler Lambdas reference the dedicated role, NOT CrudServiceRoleArn"
+    - "Checkov still passes (259+ passed, 0 failed)"
+    - "Naming validation --strict passes"
+
+# =============================================================================
+# TEST HOOKS
+# =============================================================================
+test_hooks:
+  - "TEST-INFRA-001 § cycle_fix_assertions: no-cycle + dedicated-role + no-states-permission tests"
+  - "TEST-INFRA-001 § cycle_fix_regression: full infra suite green"

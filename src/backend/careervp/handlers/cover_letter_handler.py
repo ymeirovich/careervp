@@ -5,21 +5,30 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+from datetime import datetime, timezone
 from decimal import Decimal
 from http import HTTPStatus
 from typing import Any, cast
 
+import boto3
 from aws_lambda_powertools.metrics import MetricUnit
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from pydantic import ValidationError
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
+from careervp.handlers.artifact_dependency_utils import (
+    dependency_response_body,
+    mark_requested_artifact_pending,
+    resolve_handler_dependencies,
+)
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.logic.cancellation import CancelledBeforePersist
 from careervp.logic.cover_letter import generate_cover_letter
 from careervp.models.api_models import CoverLetterRequest
+from careervp.models.company import CompanyResearchResult, ResearchSource
 from careervp.models.cover_letter import (
     CoverLetterOptions as LogicCoverLetterOptions,
 )
@@ -28,6 +37,8 @@ from careervp.models.cover_letter import (
 )
 from careervp.models.cv import UserCV
 from careervp.models.result import Result, ResultCode
+
+sfn = boto3.client('stepfunctions')
 
 
 def _convert_decimal_to_float(obj: Any) -> Any:
@@ -56,22 +67,15 @@ def _get_dal() -> DynamoDalHandler:
     return DynamoDalHandler(table_name)
 
 
-class _FallbackVPR:
-    """Minimal VPR shim used by cover-letter logic prompt construction."""
+class _ResolvedVPRPayload:
+    """Adapter for real VPR dict payloads returned by legacy storage paths."""
 
-    def __init__(self, vpr_id: str, job_id: str, payload: dict[str, Any] | None = None) -> None:
-        self._vpr_id = vpr_id
-        self._job_id = job_id
+    def __init__(self, payload: dict[str, Any]) -> None:
         self._payload = payload
 
     def model_dump(self, mode: str = 'json') -> dict[str, Any]:
         _ = mode
-        if self._payload is not None:
-            return self._payload
-        return {
-            'vpr_id': self._vpr_id,
-            'job_id': self._job_id,
-        }
+        return self._payload
 
 
 def _coerce_text(value: Any) -> str:
@@ -99,6 +103,98 @@ def _unique_non_empty(values: list[str]) -> list[str]:
         output.append(stripped)
         seen.add(stripped)
     return output
+
+
+def _coerce_list_of_strings(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    coerced: list[str] = []
+    for item in value:
+        text = str(item).strip()
+        if text:
+            coerced.append(text)
+    return coerced
+
+
+def _coerce_optional_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace('Z', '+00:00'))
+        except ValueError:
+            return None
+    return None
+
+
+def _coerce_research_source(value: Any) -> ResearchSource:
+    try:
+        return ResearchSource(str(value).strip())
+    except ValueError:
+        return ResearchSource.WEBSITE_SCRAPE
+
+
+def _coerce_float(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _materialize_company_research(raw_item: dict[str, Any], fallback_company_name: str) -> CompanyResearchResult | None:
+    nested_payload = raw_item.get('research_data') if isinstance(raw_item.get('research_data'), dict) else raw_item.get('company_research')
+    nested = nested_payload if isinstance(nested_payload, dict) else {}
+
+    company_name = _coerce_text(raw_item.get('company_name')) or _coerce_text(nested.get('company_name')) or fallback_company_name
+    overview = _coerce_text(raw_item.get('overview')) or _coerce_text(nested.get('overview')) or _coerce_text(raw_item.get('culture'))
+    mission = _coerce_text(raw_item.get('mission')) or _coerce_text(nested.get('mission'))
+    values = _coerce_list_of_strings(raw_item.get('values')) or _coerce_list_of_strings(nested.get('values'))
+    strategic_priorities = _coerce_list_of_strings(raw_item.get('strategic_priorities')) or _coerce_list_of_strings(
+        nested.get('strategic_priorities')
+    )
+
+    if not any((overview, mission, values, strategic_priorities)):
+        return None
+
+    return CompanyResearchResult(
+        company_name=company_name,
+        overview=overview or f'{company_name} company context.',
+        values=values,
+        mission=mission or None,
+        strategic_priorities=strategic_priorities,
+        recent_news=_coerce_list_of_strings(raw_item.get('recent_news')) or _coerce_list_of_strings(nested.get('recent_news')),
+        financial_summary=_coerce_text(raw_item.get('financial_summary')) or _coerce_text(nested.get('financial_summary')) or None,
+        key_products=_coerce_list_of_strings(raw_item.get('key_products')) or _coerce_list_of_strings(nested.get('key_products')),
+        company_size=_coerce_text(raw_item.get('company_size')) or _coerce_text(nested.get('company_size')) or None,
+        key_executives=_coerce_list_of_strings(raw_item.get('key_executives')) or _coerce_list_of_strings(nested.get('key_executives')),
+        competitive_positioning=_coerce_text(raw_item.get('competitive_positioning')) or _coerce_text(nested.get('competitive_positioning')) or None,
+        growth_signals=_coerce_list_of_strings(raw_item.get('growth_signals')) or _coerce_list_of_strings(nested.get('growth_signals')),
+        source=_coerce_research_source(raw_item.get('source') or nested.get('source')),
+        source_urls=_coerce_list_of_strings(raw_item.get('source_urls')) or _coerce_list_of_strings(nested.get('source_urls')),
+        confidence_score=_coerce_float(raw_item.get('confidence_score') or nested.get('confidence_score')),
+        research_timestamp=_coerce_optional_datetime(raw_item.get('research_timestamp') or nested.get('research_timestamp'))
+        or datetime.now(timezone.utc),
+    )
+
+
+def _resolve_company_research(
+    dal: DynamoDalHandler,
+    *,
+    user_id: str,
+    job_id: str,
+    company_name: str,
+    company_research_id: str | None,
+) -> CompanyResearchResult | None:
+    candidate_ids = _unique_non_empty([job_id, company_research_id or ''])
+    for candidate_id in candidate_ids:
+        result = dal.get_company_research(user_id=user_id, job_id=candidate_id)
+        if not result.success or not isinstance(result.data, dict):
+            continue
+
+        materialized = _materialize_company_research(result.data, company_name)
+        if materialized is not None:
+            return materialized
+    return None
 
 
 def _jobs_table_candidates() -> list[str]:
@@ -152,7 +248,7 @@ def _resolve_job_record(user_id: str, job_id: str) -> dict[str, Any]:
         if not isinstance(record, dict):
             continue
         record_user_id = _coerce_text(record.get('user_id'))
-        if record_user_id and record_user_id != user_id:
+        if not record_user_id or record_user_id != user_id:
             logger.warning(
                 'Resolved job record belongs to another user',
                 user_id=user_id,
@@ -232,23 +328,28 @@ def _resolve_vpr_payload(
     dal: DynamoDalHandler,
     vpr_id: str,
     job_id: str,
+    user_id: str,
 ) -> Any:
-    fallback = _FallbackVPR(vpr_id=vpr_id, job_id=job_id)
     try:
         vpr_result = dal.get_vpr(vpr_id)
     except Exception as exc:  # noqa: BLE001
         logger.warning('VPR lookup failed for cover letter context', vpr_id=vpr_id, error=str(exc))
-        return cast(Any, fallback)
+        raise ValueError(f'Required VPR not found for cover letter: {vpr_id}') from exc
 
     if not hasattr(vpr_result, 'success') or not vpr_result.success or vpr_result.data is None:
-        return cast(Any, fallback)
+        raise ValueError(f'Required VPR not found for cover letter: {vpr_id}')
 
     resolved_vpr = vpr_result.data
+    # Ownership: ensure the VPR belongs to the requesting user, not a different user's record.
+    vpr_owner = getattr(resolved_vpr, 'user_id', None) if not isinstance(resolved_vpr, dict) else resolved_vpr.get('user_id')
+    if str(vpr_owner or '').strip() != user_id:
+        raise ValueError(f'VPR ownership mismatch for cover letter: {vpr_id}')
+
     if hasattr(resolved_vpr, 'model_dump'):
         return cast(Any, resolved_vpr)
     if isinstance(resolved_vpr, dict):
-        return cast(Any, _FallbackVPR(vpr_id=vpr_id, job_id=job_id, payload=resolved_vpr))
-    return cast(Any, fallback)
+        return cast(Any, _ResolvedVPRPayload(resolved_vpr))
+    raise ValueError(f'Required VPR payload has unsupported shape for cover letter: {job_id}')
 
 
 def _resolve_cover_letter_context(
@@ -274,6 +375,14 @@ def _resolve_cover_letter_context(
             dal=dal,
             vpr_id=api_request.vpr_id,
             job_id=api_request.job_id,
+            user_id=user_id,
+        ),
+        'company_research': _resolve_company_research(
+            dal=dal,
+            user_id=user_id,
+            job_id=posting_id,
+            company_name=str(job_context['company_name']),
+            company_research_id=api_request.company_research_id,
         ),
     }
     logger.info(
@@ -282,6 +391,7 @@ def _resolve_cover_letter_context(
         job_id=api_request.job_id,
         vpr_id=api_request.vpr_id,
         has_gap_responses=bool(context['gap_responses']),
+        has_company_research=context['company_research'] is not None,
     )
     return context
 
@@ -319,6 +429,18 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         metrics.add_metric(name='CoverLetterRequests', unit=MetricUnit.Count, value=1)
         return _submit_cover_letter_request(event)
 
+    if method == 'PATCH' and _is_cover_letter_patch_path(path):
+        return _patch_cover_letter(event)
+
+    if method == 'POST' and path.endswith('/cancel'):
+        user_id = _extract_authenticated_user_id(event)
+        if not user_id:
+            return _build_response(
+                HTTPStatus.UNAUTHORIZED,
+                {'error': 'Missing or invalid authentication token', 'code': ResultCode.UNAUTHORIZED},
+            )
+        return _handle_cover_letter_cancel(event, user_id)
+
     return _build_response(
         HTTPStatus.NOT_FOUND,
         {
@@ -334,7 +456,8 @@ def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
         body = json.loads(record.get('body', '{}'))
         job_id = body.get('job_id', '')
         user_id = body.get('user_id', '')
-        request_data = body.get('request_data', {})
+        task_token = str(body.get('task_token') or '').strip() or None
+        request_data = _request_data_from_sqs_body(body)
 
         if not job_id or not user_id:
             logger.error('SQS message missing job_id or user_id', body=body)
@@ -345,13 +468,59 @@ def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
 
         try:
             _generate_and_persist_from_sqs(job_id=job_id, user_id=user_id, request_data=request_data)
+            _send_task_success(task_token, job_id=job_id, cover_letter_id=job_id)
+        except CancelledBeforePersist:
+            # Cancelled before/while persisting — skip cleanly: signal the chain
+            # branch but do NOT route to the DLQ and do NOT send task_success.
+            logger.info('Cover letter cancelled before persist — skipping', job_id=job_id, cancelled_before_persist=True)
+            _send_task_failure(task_token, cause='Job was cancelled')
+            continue
         except Exception as exc:
             # _generate_and_persist_from_sqs marks the artifact FAILED internally with
             # stage context before re-raising. Re-raise here so SQS routes to DLQ.
             logger.error('Cover letter SQS job failed', job_id=job_id, error=str(exc), exc_info=True)
+            _send_task_failure(task_token, cause=str(exc))
+            if task_token:
+                continue
             raise
 
     return {'statusCode': 200, 'body': 'OK'}
+
+
+def _request_data_from_sqs_body(body: dict[str, Any]) -> dict[str, Any]:
+    request_data = body.get('request_data')
+    if isinstance(request_data, dict) and request_data:
+        return request_data
+
+    job_id = str(body.get('job_id') or '').strip()
+    user_id = str(body.get('user_id') or '').strip()
+    return {
+        'cv_id': str(body.get('cv_id') or user_id).strip(),
+        'job_id': job_id,
+        'application_id': str(body.get('application_id') or job_id).strip(),
+        'vpr_id': str(body.get('vpr_id') or '').strip(),
+        'gap_response_ids': body.get('gap_response_ids') if isinstance(body.get('gap_response_ids'), list) else ['artifact-chain'],
+        'company_research_id': body.get('company_research_id'),
+    }
+
+
+def _send_task_success(task_token: str | None, *, job_id: str, cover_letter_id: str) -> None:
+    if not task_token:
+        return
+    sfn.send_task_success(
+        taskToken=task_token,
+        output=json.dumps({'job_id': job_id, 'cover_letter_id': cover_letter_id}),
+    )
+
+
+def _send_task_failure(task_token: str | None, *, cause: str) -> None:
+    if not task_token:
+        return
+    sfn.send_task_failure(
+        taskToken=task_token,
+        error='CoverLetterFailed',
+        cause=cause,
+    )
 
 
 def _generate_and_persist_from_sqs(
@@ -371,8 +540,9 @@ def _generate_and_persist_from_sqs(
     try:
         dal = _get_dal()
 
-        # Update status to PROCESSING
-        _update_artifact_status(user_id=user_id, job_id=job_id, status='PROCESSING')
+        # Update status to PROCESSING — refuse to resurrect a job cancelled before
+        # this (re)delivery (raises CancelledBeforePersist, handled by the SQS loop).
+        _update_artifact_status(user_id=user_id, job_id=job_id, status='PROCESSING', fail_if_cancelled=True)
 
         # Validate the request data
         current_stage = 'request_validation'
@@ -404,13 +574,19 @@ def _generate_and_persist_from_sqs(
         # Persist the result
         current_stage = 'persistence'
         cover_letter_payload = cover_letter_model.model_dump(mode='json')
+        # Use the actual application/job ID (not the cache-busting random UUID sent as job_id)
+        storage_job_id = api_request.application_id or api_request.job_id
         dal.save_cover_letter(
             cover_letter=cover_letter_payload,
             user_id=user_id,
             cv_id=api_request.cv_id,
-            job_id=api_request.job_id,
+            job_id=storage_job_id,
         )
 
+    except CancelledBeforePersist:
+        # The PROCESSING claim was rejected because the job is already cancelled.
+        # Do NOT mark it FAILED — propagate so the SQS loop skips it cleanly.
+        raise
     except Exception as exc:
         error_details = _extract_failure_details(exc)
         error_details['stage'] = current_stage
@@ -425,19 +601,23 @@ def _generate_and_persist_from_sqs(
         _update_artifact_status(user_id=user_id, job_id=job_id, status='FAILED', error_details=error_details)
         raise
 
-    # Update the artifact record to COMPLETED only after successful persistence
+    # Update the artifact record to COMPLETED only after successful persistence —
+    # a cancel during generation must not be overwritten back to COMPLETED.
     assert cover_letter_payload is not None  # guaranteed: set before 'persistence' stage completes
     _update_artifact_status(
         user_id=user_id,
         job_id=job_id,
         status='COMPLETED',
         result_data=_convert_decimal_to_float(cover_letter_payload),
+        fail_if_cancelled=True,
     )
 
     # Propagate completion to the application record so the hub reflects the
     # artifact status and artifact_id across page reloads.
+    # Use application_id (the stable job UUID) not job_id (the cache-busting random UUID).
+    sqs_application_id = str(request_data.get('application_id', '') or request_data.get('job_id', '') or '')
     _update_application_artifact(
-        application_id=str(request_data.get('job_id', '') or ''),
+        application_id=sqs_application_id,
         user_id=user_id,
         artifact_type='cover_letter',
         artifact_id=job_id,
@@ -447,14 +627,21 @@ def _generate_and_persist_from_sqs(
     logger.info('Cover letter SQS job completed', job_id=job_id)
 
 
-def _update_artifact_status(
+def _update_artifact_status(  # noqa: C901
     user_id: str,
     job_id: str,
     status: str,
     result_data: dict[str, Any] | None = None,
     error_details: dict[str, str] | None = None,
+    fail_if_cancelled: bool = False,
 ) -> None:
-    """Update cover letter artifact status in DynamoDB."""
+    """Update cover letter artifact status in DynamoDB.
+
+    When ``fail_if_cancelled`` is True the write is conditional and is rejected
+    if the artifact is already CANCELLED; that rejection is surfaced as
+    ``CancelledBeforePersist`` so the worker skips cleanly instead of resurrecting
+    a cancelled artifact (FE-UI-043 worker_cancelled_guard).
+    """
     import datetime as _dt
 
     import boto3 as _boto3
@@ -486,24 +673,46 @@ def _update_artifact_status(
             update_expr += ', stage = :stage'
             attr_values[':stage'] = error_details['stage']
 
+    condition: str | None = None
+    if fail_if_cancelled:
+        condition = 'attribute_not_exists(#s) OR #s <> :cancelled'
+        attr_values[':cancelled'] = 'CANCELLED'
+
     artifact_id = f'ARTIFACT#COVER_LETTER#{job_id}'
+    primary_kwargs: dict[str, Any] = {
+        'Key': {'applicationId': user_id, 'artifactId': artifact_id},
+        'UpdateExpression': update_expr,
+        'ExpressionAttributeNames': attr_names,
+        'ExpressionAttributeValues': attr_values,
+    }
+    if condition is not None:
+        primary_kwargs['ConditionExpression'] = condition
     try:
-        table.update_item(
-            Key={'applicationId': user_id, 'artifactId': artifact_id},
-            UpdateExpression=update_expr,
-            ExpressionAttributeNames=attr_names,
-            ExpressionAttributeValues=attr_values,
-        )
+        table.update_item(**primary_kwargs)
     except Exception as exc:
         error_response = getattr(exc, 'response', {}) if hasattr(exc, 'response') else {}
         error_code = ((error_response.get('Error') or {}).get('Code')) if isinstance(error_response, dict) else None
+        if fail_if_cancelled and error_code == 'ConditionalCheckFailedException':
+            logger.info('Cover letter cancelled before write — skipping', job_id=job_id, attempted_status=status)
+            raise CancelledBeforePersist(job_id) from exc
         if error_code == 'ValidationException':
-            table.update_item(
-                Key={'pk': user_id, 'sk': artifact_id},
-                UpdateExpression=update_expr,
-                ExpressionAttributeNames=attr_names,
-                ExpressionAttributeValues=attr_values,
-            )
+            fallback_kwargs: dict[str, Any] = {
+                'Key': {'pk': user_id, 'sk': artifact_id},
+                'UpdateExpression': update_expr,
+                'ExpressionAttributeNames': attr_names,
+                'ExpressionAttributeValues': attr_values,
+            }
+            if condition is not None:
+                fallback_kwargs['ConditionExpression'] = condition
+            try:
+                table.update_item(**fallback_kwargs)
+            except Exception as fallback_exc:
+                fb_response = getattr(fallback_exc, 'response', {}) if hasattr(fallback_exc, 'response') else {}
+                fb_code = ((fb_response.get('Error') or {}).get('Code')) if isinstance(fb_response, dict) else None
+                if fail_if_cancelled and fb_code == 'ConditionalCheckFailedException':
+                    logger.info('Cover letter cancelled before write — skipping', job_id=job_id, attempted_status=status)
+                    raise CancelledBeforePersist(job_id) from fallback_exc
+                raise
             return
         logger.error('Failed to update artifact status', job_id=job_id, error=str(exc))
         raise
@@ -545,7 +754,7 @@ def _update_application_artifact(
         )
 
 
-def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:
+def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
     """Handle POST /cover-letter/generate requests."""
     user_id = _extract_authenticated_user_id(event)
     if not user_id:
@@ -571,6 +780,10 @@ def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:
     api_request = request_result.data
 
     dal = _get_dal()
+    dependency_response = _resolve_cover_letter_dependency_response(api_request=api_request, user_id=user_id, dal=dal)
+    if dependency_response is not None:
+        return dependency_response
+
     try:
         user_cv = _load_user_cv(dal=dal, user_id=user_id)
     except Exception as e:
@@ -607,12 +820,14 @@ def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:
         )
 
     cover_letter_payload = cover_letter_model.model_dump(mode='json')
+    # Use the actual application/job ID (not the cache-busting random UUID sent as job_id)
+    storage_job_id = api_request.application_id or api_request.job_id
     try:
         save_result = dal.save_cover_letter(
             cover_letter=cover_letter_payload,
             user_id=user_id,
             cv_id=api_request.cv_id,
-            job_id=api_request.job_id,
+            job_id=storage_job_id,
         )
     except Exception as exc:
         logger.error('Cover letter persistence failed', user_id=user_id, error=str(exc), exc_info=True)
@@ -629,6 +844,14 @@ def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:
         )
 
     artifact_id = str(cover_letter_payload.get('cover_letter_id', '')).strip()
+    # Propagate artifact_id to the application record so the hub reflects cover letter status
+    _update_application_artifact(
+        application_id=api_request.application_id or '',
+        user_id=user_id,
+        artifact_type='cover_letter',
+        artifact_id=artifact_id,
+    )
+
     metrics.add_metric(name='CoverLetterGenerated', unit=MetricUnit.Count, value=1)
     return _build_response(
         HTTPStatus.OK,
@@ -636,6 +859,29 @@ def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:
             'artifact_id': artifact_id,
             'status': 'completed',
         },
+    )
+
+
+def _resolve_cover_letter_dependency_response(
+    *,
+    api_request: CoverLetterRequest,
+    user_id: str,
+    dal: DynamoDalHandler,
+) -> dict[str, Any] | None:
+    application_id = api_request.application_id or api_request.job_id
+    dependency_resolution = resolve_handler_dependencies(
+        artifact_type='cover_letter',
+        application_id=application_id,
+        user_id=user_id,
+        dal=dal,
+    )
+    if dependency_resolution.status == 'ready':
+        return None
+    if dependency_resolution.status == 'dependency_generating':
+        mark_requested_artifact_pending(application_id=application_id, user_id=user_id, artifact_type='cover_letter')
+    return _build_response(
+        HTTPStatus(dependency_resolution.http_status),
+        dependency_response_body(dependency_resolution, requested_artifact='cover_letter'),
     )
 
 
@@ -801,6 +1047,7 @@ def _generate_cover_letter_result(
         user_cv=user_cv,
         vpr=cast(Any, context['vpr']),
         gap_responses=cast(Any, context['gap_responses']),
+        company_research=cast(Any, context.get('company_research')),
     )
     if asyncio.iscoroutine(maybe_async_result):
         return asyncio.run(maybe_async_result)
@@ -1105,6 +1352,127 @@ def _build_default_cover_letter_status_payload(cover_letter_id: str) -> dict[str
             ),
         },
     }
+
+
+_COVER_LETTER_TERMINAL_STATUSES = {'COMPLETED', 'FAILED', 'CANCELLED'}
+
+
+def _handle_cover_letter_cancel(event: dict[str, Any], user_id: str) -> dict[str, Any]:
+    """Handle POST /cover-letter/{coverLetterId}/cancel."""
+    import boto3 as _boto3
+
+    path_params = event.get('pathParameters') or {}
+    cover_letter_id = str(path_params.get('coverLetterId') or '').strip()
+    if not cover_letter_id:
+        return _build_response(HTTPStatus.BAD_REQUEST, {'error': 'Missing coverLetterId'})
+
+    table_name = os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME') or ''
+    table = _boto3.resource('dynamodb').Table(table_name)
+    artifact_id = f'ARTIFACT#COVER_LETTER#{cover_letter_id}'
+
+    try:
+        get_resp = table.get_item(Key={'applicationId': user_id, 'artifactId': artifact_id})
+        item = (get_resp or {}).get('Item')
+    except Exception as exc:
+        logger.error('DynamoDB error during cover letter cancel', error=str(exc))
+        return _build_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Internal server error'})
+
+    if not item:
+        try:
+            query_resp = table.query(
+                KeyConditionExpression='applicationId = :uid AND begins_with(artifactId, :prefix)',
+                ExpressionAttributeValues={
+                    ':uid': user_id,
+                    ':prefix': f'ARTIFACT#COVER_LETTER#{cover_letter_id}',
+                },
+                Limit=1,
+            )
+            items = (query_resp or {}).get('Items', [])
+            item = items[0] if items else None
+        except Exception:
+            item = None
+        if not item:
+            return _build_response(HTTPStatus.NOT_FOUND, {'error': 'Cover letter not found'})
+
+    status = str(item.get('status', '')).upper()
+    if status in _COVER_LETTER_TERMINAL_STATUSES:
+        return _build_response(HTTPStatus.CONFLICT, {'error': 'Cannot cancel terminal task'})
+
+    item_app_id = str(item.get('applicationId', user_id))
+    item_artifact_id = str(item.get('artifactId', artifact_id))
+    table.update_item(
+        Key={'applicationId': item_app_id, 'artifactId': item_artifact_id},
+        UpdateExpression='SET #s = :status',
+        ExpressionAttributeNames={'#s': 'status'},
+        ExpressionAttributeValues={':status': 'CANCELLED'},
+    )
+    return _build_response(HTTPStatus.OK, {'status': 'cancelled'})
+
+
+def _is_cover_letter_patch_path(path: str) -> bool:
+    return path.startswith('/cover-letter/') and path != '/cover-letter/generate' and not path.endswith('/cancel')
+
+
+def _patch_cover_letter(event: dict[str, Any]) -> dict[str, Any]:
+    """Handle PATCH /cover-letter/{coverLetterId} — update cover letter text."""
+    user_id = _extract_authenticated_user_id(event)
+    if not user_id:
+        return _build_response(
+            HTTPStatus.UNAUTHORIZED,
+            {'error': 'Missing or invalid authentication token', 'code': ResultCode.UNAUTHORIZED},
+        )
+
+    cover_letter_id = _extract_cover_letter_id(event)
+    if not cover_letter_id:
+        return _build_response(HTTPStatus.BAD_REQUEST, {'error': 'Missing coverLetterId', 'code': ResultCode.MISSING_REQUIRED_FIELD})
+
+    try:
+        body = json.loads(event.get('body', '{}') or '{}')
+    except json.JSONDecodeError:
+        return _build_response(HTTPStatus.BAD_REQUEST, {'error': 'Invalid JSON', 'code': ResultCode.INVALID_INPUT})
+
+    new_text = str(body.get('cover_letter', '') or '').strip()
+    if not new_text:
+        return _build_response(HTTPStatus.BAD_REQUEST, {'error': 'cover_letter text is required', 'code': ResultCode.MISSING_REQUIRED_FIELD})
+
+    item = _find_cover_letter_item(user_id=user_id, cover_letter_id=cover_letter_id)
+    if item is None:
+        return _build_response(HTTPStatus.NOT_FOUND, {'error': 'Cover letter not found', 'code': ResultCode.COVER_LETTER_NOT_FOUND})
+
+    import datetime as _dt
+
+    import boto3 as _boto3
+
+    table_name = os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME') or ''
+    table = _boto3.resource('dynamodb').Table(table_name)
+    now = _dt.datetime.now(_dt.timezone.utc).isoformat()
+
+    if 'applicationId' in item:
+        key: dict[str, Any] = {'applicationId': item['applicationId'], 'artifactId': item['artifactId']}
+    else:
+        key = {'pk': item.get('pk', user_id), 'sk': item.get('sk', f'ARTIFACT#COVER_LETTER#{cover_letter_id}')}
+
+    existing_cl = item.get('cover_letter') or {}
+    updated_cl: dict[str, Any] = {**existing_cl, 'full_text': new_text} if isinstance(existing_cl, dict) else {'full_text': new_text}
+
+    try:
+        table.update_item(
+            Key=key,
+            UpdateExpression='SET cover_letter = :cl, updated_at = :now',
+            ExpressionAttributeValues={':cl': updated_cl, ':now': now},
+        )
+    except Exception as exc:
+        logger.error('Failed to update cover letter', cover_letter_id=cover_letter_id, error=str(exc))
+        return _build_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Failed to update cover letter', 'code': ResultCode.DYNAMODB_ERROR})
+
+    return _build_response(
+        HTTPStatus.OK,
+        {
+            'id': cover_letter_id,
+            'status': 'completed',
+            'result': {'cover_letter': new_text},
+        },
+    )
 
 
 def _build_response(status_code: HTTPStatus, body: dict[str, Any]) -> dict[str, Any]:

@@ -20,6 +20,7 @@ export const queryKeys = {
   },
   companyResearch: {
     detail: (companyName: string) => ['companyResearch', companyName] as const,
+    byJob: (jobId: string) => ['companyResearch', 'job', jobId] as const,
   },
   cv: {
     detail: () => ['cv', 'me'] as const,

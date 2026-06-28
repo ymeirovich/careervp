@@ -1,0 +1,256 @@
+spec_id: FE-UI-043
+title: "Cancellation lifecycle — stop the chain, CR cancel endpoint, worker CANCELLED-guard, orphan cleanup"
+priority: critical
+status: draft
+owner: backend
+created_at: 2026-06-14
+updated_at: 2026-06-14
+tier: feature
+
+human_approval_gate:
+  required: true
+  gate_number: 3
+  reason: >
+    Adds states:StopExecution to a handler role, a new Company Research cancel endpoint
+    (public API + route), worker-side CANCELLED guards that change persist behavior, and a
+    destructive orphan-cleanup path (deletes partial artifacts in DynamoDB + S3). IAM and
+    data-deletion changes are security-sensitive.
+  approval_before: "Any states:StopExecution grant, any artifact-deletion logic, or the new /company-research/{jobId}/cancel route"
+
+recommended_model: opus
+reason_for_model: >
+  Cancellation correctness under the worker race (cancel vs. in-flight persist), Step Functions
+  execution stop semantics across a Parallel fan-out, and safe orphan deletion (must never
+  delete a sibling user's or a completed artifact) are architecture- and security-sensitive.
+
+depends_on:
+  - FE-UI-031   # the chain + execution that must be stoppable
+  - FE-UI-038   # resolver uses the persisted execution ARN for its running-chain guard
+  - FE-UI-039   # CL/IP legs exist; cancel must reason about the Parallel fan-out
+blocks:
+  - FE-UI-042   # FE Cancel UX needs a working CR cancel + real backend cancellation
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    Cancellation is cosmetic and leaks orphans:
+      - VPR / Cover Letter / Interview Prep / CV Tailoring each expose POST /.../cancel
+        (vpr_status_handler.py:363-399, cover_letter_handler.py:1237-1286,
+        interview_prep_handler.py:1100-1149, cv_tailoring_handler.py:813-866) but each ONLY
+        sets DynamoDB status=CANCELLED. None call Step Functions stop_execution. None delete
+        partial outputs.
+      - Company Research has NO cancel endpoint at all (no handler, no infra route, no FE method).
+      - SQS workers do not check CANCELLED before writing results (known TODO FE-UI-027/AC-018,
+        useGenerateModule.ts:96-98). A worker that started before the cancel overwrites
+        CANCELLED -> COMPLETED on next persist.
+      - The chain execution KEEPS RUNNING after a single-artifact cancel: gap_handler.py:442
+        starts the execution with a random name (chain-{job_id}-{uuid4hex}) and DISCARDS the
+        returned executionArn (never persisted), so nothing can find or stop it. The chain
+        proceeds to generate downstream artifacts the user already cancelled.
+    Net effect: clicking Cancel may leave the backend producing VPR/CV/CL/IP, writing S3
+    result files and DynamoDB job rows that no longer belong to any active request (orphans),
+    and the cancelled artifact may flip back to COMPLETED.
+  required_behavior: >
+    Cancellation actually stops backend work and leaves no orphans:
+      1. The chain execution ARN is persisted on the application record when the chain starts,
+         so it can be located, deduped (FE-UI-038), and stopped.
+      2. Company Research gets a cancel endpoint symmetric with the other four artifacts.
+      3. Cancelling an artifact that is part of a RUNNING chain stops the whole chain execution
+         (stop_execution) and marks all still-pending chained artifacts CANCELLED. Cancelling a
+         standalone (non-chain) job cancels only that job.
+      4. Every SQS worker checks CANCELLED (and chain-stopped) state BEFORE persisting; if
+         cancelled it aborts the write, sends task_failure (if task_token), and deletes any
+         partial output it already wrote.
+      5. An orphan-cleanup reaper removes partial artifacts (DynamoDB job rows + S3 result
+         objects) for CANCELLED jobs and reconciles the race where a worker completed AFTER a
+         cancel (late-completion is rolled back to CANCELLED + output deleted).
+  user_impact: >
+    Cancel is trustworthy: no surprise documents appear after cancelling, no charges for work
+    the user stopped, and the hub never shows a cancelled artifact silently completing.
+
+# =============================================================================
+# EVIDENCE
+# =============================================================================
+evidence:
+  cancel_endpoints_status_only:
+    - { file: src/backend/careervp/handlers/vpr_status_handler.py, symbol: _handle_vpr_cancel, line: "363-399" }
+    - { file: src/backend/careervp/handlers/cover_letter_handler.py, symbol: _handle_cover_letter_cancel, line: "1237-1286" }
+    - { file: src/backend/careervp/handlers/interview_prep_handler.py, symbol: _handle_interview_prep_cancel, line: "1100-1149" }
+    - { file: src/backend/careervp/handlers/cv_tailoring_handler.py, symbol: _handle_cv_tailoring_cancel, line: "813-866" }
+  cr_has_no_cancel:
+    - { note: "grep cancel in company_research_handler.py => 0 matches; no /company-research/{jobId}/cancel route in api_construct.py" }
+  execution_arn_discarded:
+    - { file: src/backend/careervp/handlers/gap_handler.py, line: "442-455", note: "start_execution return value (executionArn) is never captured/persisted" }
+  worker_no_cancelled_guard:
+    - { file: src/frontend/hooks/useGenerateModule.ts, line: "96-98", note: "TODO FE-UI-027/AC-018: workers don't check CANCELLED before writing" }
+  infra_routes:
+    - { file: infra/careervp/api_construct.py, line: "2611-2645", note: "cancel routes for vpr/cv/cover-letter/interview-prep; none for company-research" }
+
+# =============================================================================
+# ARCHITECTURE
+# =============================================================================
+architecture:
+  cancel_semantics_decision:
+    chosen: "Chained cancel stops the whole execution; standalone cancel stops one job."
+    rules:
+      - "If the artifact's application has a RUNNING chain execution (chain_execution_arn set + status RUNNING): cancel = stop_execution(that ARN) + mark every artifact still in {pending,processing} as CANCELLED + cleanup orphans for those."
+      - "If no running chain (manual single-artifact generation): cancel only that job's DynamoDB row + clean its partial output."
+    rationale: >
+      Downstream chain artifacts depend on upstream; cancelling VPR mid-chain makes CV/CL/IP
+      meaningless. Step Functions cannot cancel a single Parallel branch without stopping the
+      execution, so a unified 'cancel stops the chain' model is both correct and simplest. The
+      hub already shows chain progress (ChainProgressBar), so a single Cancel mapping to the
+      whole chain matches the user's mental model.
+
+  chain_execution_tracking:
+    change_in: src/backend/careervp/handlers/gap_handler.py
+    detail: >
+      Capture start_execution(...)['executionArn'] and persist it on the application record:
+        application_repo.set_chain_execution(application_id, user_id, execution_arn, status='RUNNING')
+      Clear/transition to 'STOPPED'/'SUCCEEDED'/'FAILED' when the chain ends (failure handlers
+      + a terminal success step update it).
+    new_application_fields:
+      - { name: chain_execution_arn, type: "str | null" }
+      - { name: chain_execution_status, type: "enum: RUNNING|STOPPED|SUCCEEDED|FAILED|null" }
+    consumed_by: "FE-UI-038 resolver running-chain guard (replaces the deterministic-name idea)."
+
+  cr_cancel_endpoint:
+    route: "POST /company-research/{jobId}/cancel"
+    handler: src/backend/careervp/handlers/company_research_handler.py
+    behavior: >
+      Mirror _handle_vpr_cancel: ownership check, terminal-status guard (CONFLICT if already
+      COMPLETED/FAILED/CANCELLED), set CANCELLED, then run the shared cancel-orchestration
+      (stop chain if running). Note: CR is currently sync; if a CR job is in-flight only via
+      the chain, the meaningful cancel is the chain stop.
+    infra: "Add the route to api_construct.py routes list (line ~2611 block) -> company_research_func."
+    frontend: "Add api.cancelCompanyResearch(jobId) in src/frontend/api/methods.ts (FE-UI-042 consumes it)."
+
+  shared_cancel_orchestration:
+    new_file: src/backend/careervp/logic/cancellation.py
+    function: "cancel_artifact(artifact_type, artifact_id, application_id, user_id, repos, sfn) -> CancelResult"
+    steps:
+      - "Ownership + terminal-status guard (return CONFLICT/FORBIDDEN as today)."
+      - "Set the target job status=CANCELLED (conditional write: only if not terminal)."
+      - "If application.chain_execution_status == RUNNING: sfn.stop_execution(chain_execution_arn, cause='user_cancel'); set chain_execution_status=STOPPED; mark all artifact_statuses in {pending,processing} -> 'cancelled'."
+      - "Enqueue orphan cleanup for the cancelled artifact(s) (see reaper)."
+    idempotent: "Double-cancel is a no-op (already CANCELLED/terminal returns CONFLICT or OK-noop consistently)."
+
+  worker_cancelled_guard:
+    applies_to:
+      - src/backend/careervp/handlers/vpr_worker_handler.py
+      - src/backend/careervp/handlers/cover_letter_submit_handler.py   # worker path
+      - src/backend/careervp/handlers/interview_prep_submit_handler.py # worker path
+      - src/backend/careervp/handlers/cv_tailoring_handler.py          # worker path
+      - src/backend/careervp/handlers/company_research_worker_handler.py
+    rule: >
+      Immediately BEFORE the final persist (S3 put + DynamoDB COMPLETED write), re-read the job
+      status. If status == CANCELLED (or chain_execution_status == STOPPED):
+        - Do NOT write COMPLETED, do NOT write the S3 result (or delete it if already written).
+        - If task_token present: sfn.send_task_failure(error='Cancelled').
+        - Log structured cancelled_before_persist=true and return cleanly (no DLQ).
+    note: "This closes the cancel-vs-persist race (FE-UI-027/AC-018). Use a conditional UpdateItem (ConditionExpression: status <> 'CANCELLED') as the atomic guard on the COMPLETED write."
+
+  orphan_cleanup_reaper:
+    description: >
+      Removes partial artifacts left by cancellation and reconciles late completions.
+    triggers:
+      - "Inline: cancel_artifact enqueues cleanup for the cancelled artifact ids."
+      - "Scheduled (defense-in-depth): an EventBridge-scheduled Lambda sweeps for jobs
+        status=CANCELLED with a result_key/S3 object still present, or COMPLETED jobs whose
+        application chain_execution_status=STOPPED and completed_at > cancel time (late completion)."
+    actions:
+      - "Delete the S3 result object (result_key) if present."
+      - "Delete or tombstone the DynamoDB job row / artifact record for the cancelled artifact."
+      - "Reset artifact_statuses[type] to 'cancelled' (not 'completed') on the application."
+      - "NEVER touch artifacts owned by another user or any artifact whose status is COMPLETED for a NON-stopped chain."
+    safety:
+      - "All deletes are ownership-scoped and status-guarded."
+      - "Cleanup is idempotent (missing object / already-deleted row is success)."
+      - "Dry-run/log mode toggle via env (CLEANUP_DRY_RUN) for first rollout."
+
+  iam_grants:
+    cancel_handlers_role:
+      - "states:StopExecution on ArtifactChainStateMachine (scoped to the chain ARN)"
+      - "states:DescribeExecution (to read execution status) on the chain ARN"
+    reaper_role:
+      - "s3:DeleteObject on the vpr/artifact results bucket (prefix-scoped)"
+      - "dynamodb:UpdateItem/DeleteItem on jobs + applications tables (scoped)"
+    note: "Respect FE-UI-035 invariant — no states:* wildcards; scope to the chain ARN."
+
+# =============================================================================
+# IMPLEMENTATION STEPS
+# =============================================================================
+implementation:
+  step_1:
+    name: "Persist chain execution ARN + status"
+    files: [src/backend/careervp/handlers/gap_handler.py, "src/backend/careervp/dal/<application_repository>.py"]
+    change: "Capture executionArn; add set_chain_execution + terminal updates from failure/success handlers."
+  step_2:
+    name: "Create logic/cancellation.py shared orchestration"
+    change: "cancel_artifact() per architecture; pure-ish with injected repos + sfn client."
+  step_3:
+    name: "Wire cancel_artifact into all 4 existing cancel handlers"
+    change: "Replace the status-only update with cancel_artifact()."
+  step_4:
+    name: "Add CR cancel endpoint + route + FE method"
+    files:
+      - src/backend/careervp/handlers/company_research_handler.py
+      - infra/careervp/api_construct.py
+      - src/frontend/api/methods.ts
+  step_5:
+    name: "Add CANCELLED guard to all workers"
+    change: "Conditional COMPLETED write (ConditionExpression status<>CANCELLED) + S3 cleanup on cancel."
+  step_6:
+    name: "Build orphan-cleanup reaper"
+    files:
+      - "src/backend/careervp/handlers/<artifact_cleanup_handler>.py"
+      - infra/careervp/  # EventBridge schedule + reaper Lambda + IAM (gate)
+  step_7:
+    name: "Add IAM grants (StopExecution, DescribeExecution, scoped delete)"
+    file: infra/careervp/api_construct.py
+
+# =============================================================================
+# CONSTRAINTS
+# =============================================================================
+constraints:
+  - "Cancel of a chained artifact stops the WHOLE chain execution; standalone cancel stops one job"
+  - "Workers MUST atomically guard the COMPLETED write against a concurrent CANCELLED (conditional write)"
+  - "Orphan cleanup is ownership-scoped, status-guarded, and idempotent — never deletes COMPLETED artifacts of a live chain or another user's data"
+  - "All Step Functions grants scoped to the chain ARN; no states:* wildcard (FE-UI-035 invariant)"
+  - "Cancel endpoints keep existing CONFLICT-on-terminal + FORBIDDEN-on-non-owner behavior"
+  - "Defensive: a failure to stop the chain must still mark the artifact CANCELLED and log (no 500 leak)"
+  - "mypy --strict; validate_naming --strict; checkov green"
+
+# =============================================================================
+# VALIDATION
+# =============================================================================
+validation:
+  commands:
+    - "cd src/backend && uv run mypy careervp --strict"
+    - "cd src/backend && uv run pytest tests/unit/ -v --tb=short -k 'cancel or cleanup or reaper'"
+    - "cd infra && uv sync && npx cdk synth && uv run pytest tests/infrastructure -v --tb=short"
+    - "python src/backend/scripts/validate_naming.py --path infra --strict"
+    - "cd src/frontend && npm run typecheck && npm run test:unit"
+  acceptance_criteria:
+    - "POST /company-research/{jobId}/cancel exists, ownership-checked, CONFLICT on terminal"
+    - "Cancelling a chained artifact calls sfn.stop_execution and marks pending artifacts cancelled"
+    - "Cancelling a standalone job does NOT call stop_execution"
+    - "Worker re-reads status and skips COMPLETED write when CANCELLED (race test passes)"
+    - "Worker deletes/omits the S3 result when cancelled before persist"
+    - "Reaper deletes orphan S3 result + resets artifact_status to cancelled; idempotent on re-run"
+    - "Reaper never deletes a COMPLETED artifact of a non-stopped chain or another user's data"
+    - "chain_execution_arn persisted on application record when chain starts"
+    - "No states:* wildcard; checkov + naming pass; mypy strict passes"
+
+# =============================================================================
+# TEST HOOKS
+# =============================================================================
+test_hooks:
+  - "TEST-CANCEL-001 § unit-cancellation: cancel_artifact chain vs standalone"
+  - "TEST-CANCEL-001 § unit-worker-guard: CANCELLED race guard"
+  - "TEST-CANCEL-001 § unit-cr-cancel: new CR cancel endpoint"
+  - "TEST-CANCEL-001 § integration-stop-chain: stop_execution + pending artifacts cancelled"
+  - "TEST-CANCEL-001 § integration-reaper: orphan cleanup + late-completion reconcile"
+  - "TEST-CANCEL-001 § security-reaper: ownership + completed-artifact safety"

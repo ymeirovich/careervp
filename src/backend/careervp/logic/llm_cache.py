@@ -9,8 +9,8 @@ from collections.abc import Callable, Mapping
 from decimal import Decimal
 from typing import Any, Protocol, cast
 
-import boto3
-from botocore.exceptions import BotoCoreError, ClientError
+import boto3  # type: ignore[import-untyped]
+from botocore.exceptions import BotoCoreError, ClientError  # type: ignore[import-untyped]
 
 DEFAULT_CACHE_TTL_SECONDS = 60 * 60 * 24 * 7
 

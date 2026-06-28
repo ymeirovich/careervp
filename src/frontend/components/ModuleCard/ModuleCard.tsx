@@ -4,12 +4,16 @@ import type { ButtonVariant } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Spinner } from '../ui/Spinner';
+import { Tooltip } from '../ui/Tooltip';
+import { ProcessingDots } from '../ui/ProcessingDots';
 
 export interface ModuleAction {
   label: string;
   onClick: () => void;
   variant?: ButtonVariant;
   isLoading?: boolean;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 export interface ModuleCardProps {
@@ -24,6 +28,8 @@ export interface ModuleCardProps {
   badgeLabel?: string;
   primaryAction?: ModuleAction;
   secondaryActions?: ModuleAction[];
+  cancelAction?: ModuleAction;
+  errorMessage?: string;
   disabled?: boolean;
   // Convenience props for simple callers
   onPrimaryAction?: () => void;
@@ -88,6 +94,8 @@ export function ModuleCard({
   badgeLabel,
   primaryAction,
   secondaryActions,
+  cancelAction,
+  errorMessage,
   disabled = false,
   onPrimaryAction,
   onSecondaryAction,
@@ -113,6 +121,36 @@ export function ModuleCard({
     Final: 'final',
   } as const;
 
+  function renderActionButton(
+    action: ModuleAction,
+    key: string,
+    isPrimary = false,
+  ): React.ReactNode {
+    const button = (
+      <Button
+        key={key}
+        data-testid={isPrimary ? 'primary-cta' : undefined}
+        variant={action.variant ?? (isPrimary ? 'primary' : 'secondary')}
+        size="sm"
+        isLoading={action.isLoading}
+        onClick={action.onClick}
+        disabled={disabled || action.disabled}
+      >
+        {action.label}
+      </Button>
+    );
+
+    if (!action.disabledReason) {
+      return button;
+    }
+
+    return (
+      <Tooltip key={key} content={action.disabledReason}>
+        <span className="inline-flex cursor-not-allowed">{button}</span>
+      </Tooltip>
+    );
+  }
+
   return (
     <div
       data-testid={`module-card-${module}`}
@@ -120,7 +158,7 @@ export function ModuleCard({
       aria-busy={isProcessing || undefined}
       className={`
         bg-card border border-border-default rounded-xl p-4 flex flex-col gap-3
-        ${disabled ? 'opacity-50 pointer-events-none' : ''}
+        ${disabled ? 'opacity-50' : ''}
       `.trim()}
     >
       {/* Screen-reader live region for state transitions */}
@@ -145,7 +183,7 @@ export function ModuleCard({
       {description && <p className="text-text-muted text-sm">{description}</p>}
       {meta && <p className="text-text-subtle text-xs font-medium">{meta}</p>}
 
-      {isProcessing && (
+      {isProcessing && !cancelAction && (
         <div className="flex items-center gap-2 text-text-muted text-sm">
           <Spinner size="sm" aria-label={`Generating ${title || MODULE_LABELS[module]}…`} />
           <span>{progressText ?? 'Generating…'}</span>
@@ -162,33 +200,50 @@ export function ModuleCard({
         <p className="text-state-warning text-sm">{warningText}</p>
       )}
 
-      {(primaryLabel || defaultSecondary.length > 0 || secondaryActions) && (
-        <div className="flex flex-wrap items-center gap-2 mt-1">
-          {primaryLabel && (
-            <Button
-              data-testid="primary-cta"
-              variant={primaryAction?.variant ?? 'primary'}
-              size="sm"
-              isLoading={primaryAction?.isLoading}
-              onClick={primaryAction?.onClick ?? onPrimaryAction}
-              disabled={disabled}
-            >
-              {primaryLabel}
-            </Button>
-          )}
+      {errorMessage && (
+        <p className="text-state-error text-sm">{errorMessage}</p>
+      )}
 
-          {(secondaryActions ?? defaultSecondary.map((label): ModuleAction => ({ label, onClick: onSecondaryAction ?? (() => {}), variant: 'secondary' }))).map((action) => (
-            <Button
-              key={action.label}
-              variant={action.variant ?? 'secondary'}
-              size="sm"
-              isLoading={action.isLoading}
-              onClick={action.onClick}
-              disabled={disabled}
-            >
-              {action.label}
-            </Button>
-          ))}
+      {/* Processing state with cancel: disabled "Processing..." button + Cancel */}
+      {isProcessing && cancelAction && (
+        <div className="flex flex-wrap items-center gap-2 mt-1">
+          <button
+            type="button"
+            disabled
+            className="inline-flex items-center gap-1 rounded-lg bg-primary-action px-3 py-1.5 text-sm font-medium text-white opacity-60 cursor-not-allowed"
+          >
+            <ProcessingDots />
+          </button>
+          <Button
+            variant={cancelAction.variant ?? 'secondary'}
+            size="sm"
+            onClick={cancelAction.onClick}
+          >
+            {cancelAction.label}
+          </Button>
+        </div>
+      )}
+
+      {/* Normal (non-processing) action buttons */}
+      {!isProcessing && (primaryLabel || defaultSecondary.length > 0 || secondaryActions) && (
+        <div className="flex flex-wrap items-center gap-2 mt-1">
+          {primaryLabel &&
+            renderActionButton(
+              {
+                label: primaryLabel,
+                onClick: primaryAction?.onClick ?? onPrimaryAction ?? (() => {}),
+                variant: primaryAction?.variant ?? 'primary',
+                isLoading: primaryAction?.isLoading,
+                disabled: primaryAction?.disabled,
+                disabledReason: primaryAction?.disabledReason,
+              },
+              'primary',
+              true,
+            )}
+
+          {(secondaryActions ?? defaultSecondary.map((label): ModuleAction => ({ label, onClick: onSecondaryAction ?? (() => {}), variant: 'secondary' }))).map((action) =>
+            renderActionButton(action, action.label),
+          )}
         </div>
       )}
     </div>

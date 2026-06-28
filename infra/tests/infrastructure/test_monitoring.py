@@ -4,10 +4,10 @@ from aws_cdk.assertions import Template
 
 
 def test_monitoring_includes_company_research_latency_alarm(
-    synthesized_template: Template,
+    monitoring_template: Template,
 ) -> None:
     """Ensure the CrudMonitoring dashboard adds latency alarms for the new Lambda."""
-    alarms = synthesized_template.find_resources("AWS::CloudWatch::Alarm")
+    alarms = monitoring_template.find_resources("AWS::CloudWatch::Alarm")
     matching = [
         props
         for props in alarms.values()
@@ -29,10 +29,10 @@ def test_monitoring_sns_topic_encrypted(synthesized_template: Template) -> None:
 
 
 def test_monitoring_includes_dynamodb_validation_exception_alarm(
-    synthesized_template: Template,
+    monitoring_template: Template,
 ) -> None:
     """Ensure monitoring captures DynamoDB ValidationException spikes from Lambda logs."""
-    metric_filters = synthesized_template.find_resources("AWS::Logs::MetricFilter")
+    metric_filters = monitoring_template.find_resources("AWS::Logs::MetricFilter")
     assert metric_filters, (
         "Expected CloudWatch metric filters for Lambda error patterns"
     )
@@ -46,7 +46,7 @@ def test_monitoring_includes_dynamodb_validation_exception_alarm(
         "No CloudWatch metric filter found for DynamoDB ValidationException"
     )
 
-    alarms = synthesized_template.find_resources("AWS::CloudWatch::Alarm")
+    alarms = monitoring_template.find_resources("AWS::CloudWatch::Alarm")
     assert any(
         "DynamoValidationException" in str(props["Properties"].get("AlarmName", ""))
         for props in alarms.values()

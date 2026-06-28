@@ -1,0 +1,136 @@
+spec_id: FE-UI-050
+title: "Cross-user company-intel dedup cache — split-TTL (profile 6mo / news 120d) on the existing company-research-cache table"
+priority: high
+status: draft
+owner: backend
+created_at: 2026-06-27
+updated_at: 2026-06-27
+tier: feature
+
+human_approval_gate:
+  required: false
+  note: >
+    No new AWS resources — the company-research-cache DynamoDB table already exists in infra
+    (api_db_construct.py:415, PK cacheKey, TTL expiresAt) and is unused by code. This spec only
+    adds application-layer read/write logic and wires it into research_company(). Verify the CR
+    worker role has the table env var + read/write grant (add in the FE-UI-052 nested stack if missing).
+
+recommended_model_claude: sonnet
+recommended_model_codex: medium
+reason_for_model: >
+  Standard DynamoDB read/write with TTL math and key normalization. The cache-first control flow
+  in research_company() (full hit vs profile-fresh/news-stale vs miss) plus the in-flight lock is
+  the only subtle part; if implemented together with the FE-UI-049 pipeline changes, bump that
+  combined task to claude:opus / codex:high.
+
+depends_on:
+  - FE-UI-049   # produces the enriched CompanyResearchResult that gets cached
+blocks: []
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    Two users applying to the same company trigger two independent Tavily+LLM runs. The only
+    cache is LLMResponseCache keyed by company_name.lower() (company_research.py:316-322,365-369),
+    in-Lambda and short-TTL, so it does not dedupe across users or survive cold starts. The
+    company-research-cache table exists in infra but no backend code references it.
+  required_behavior: >
+    research_company() becomes cache-first against the shared company-research-cache table, split
+    by volatility so stable facts are reused for months while news refreshes often:
+      - Profile record: COMPANY#<domain>#profile, expiresAt = now + 6 months (stable fields:
+        company_name, mission, values, strategic_priorities, industry, key_products, company_size,
+        key_executives, competitive_positioning, overview, financial_summary).
+      - News record: COMPANY#<domain>#news, expiresAt = now + 120 days (recent_news, growth_signals).
+    Control flow: full hit (both fresh) -> return merged without Tavily/LLM. Profile fresh, news
+    stale/absent -> fetch news only. Miss -> full research, then write both records. A simple
+    in-flight lock on the shared key avoids a cache-miss storm on a newly-popular employer.
+  user_impact: >
+    50-70% fewer Tavily+LLM calls and near-instant company research / regeneration when another
+    user already researched the same company.
+
+# =============================================================================
+# EVIDENCE
+# =============================================================================
+evidence:
+  table_exists_unused:
+    - { file: infra/careervp/api_db_construct.py, line: "415-440", note: "company-research-cache table: PK cacheKey, TTL expiresAt" }
+    - { file: infra/careervp/api_construct.py, line: 830, note: "COMPANY_RESEARCH_CACHE_TABLE_NAME env injected" }
+    - { note: "grep COMPANY_RESEARCH_CACHE in src/backend => 0 matches (unused by code)" }
+  weak_cache:
+    - { file: src/backend/careervp/logic/company_research.py, line: "316-322", code: "LLMResponseCache keyed by company_name.lower() (in-Lambda)" }
+
+# =============================================================================
+# ARCHITECTURE
+# =============================================================================
+architecture:
+  cache_module:
+    location: src/backend/careervp/logic/company_intel_cache.py  # NEW
+    functions:
+      - "cache_key(domain_or_name, kind) -> 'COMPANY#<normalized>#profile' | '...#news'"
+      - "read_profile(key) -> CachedProfile | None  (None if absent or expired)"
+      - "read_news(key) -> CachedNews | None"
+      - "write_profile(key, data, ttl=6 months); write_news(key, data, ttl=120 days)"
+      - "acquire_lock(key) / release_lock(key)  (conditional-write in-flight lock, short TTL)"
+    rules:
+      - "Table name from COMPANY_RESEARCH_CACHE_TABLE_NAME env; if unset, cache is a no-op (degrade to direct research, log once)."
+      - "expiresAt is a unix-epoch attribute matching the table TTL config."
+      - "Key normalization: prefer registered domain (lowercased, strip www.); fall back to company_name.lower() with Inc/Ltd/Corp suffix stripped."
+  key_normalization:
+    location: src/backend/careervp/logic/company_intel_cache.py
+    rules:
+      - "Deterministic: same company+domain always maps to the same cacheKey."
+      - "Domain beats name: if a domain is available it is authoritative (avoids 'Apple Inc' vs 'Apple')."
+  pipeline_integration:
+    file: src/backend/careervp/logic/company_research.py
+    change: >
+      In research_company(): compute the cacheKey, then:
+        full_hit -> merge profile+news, return without Tavily/LLM (source from cache, preserve confidence).
+        profile_fresh + news_stale -> run only the news query, refresh the news record, merge.
+        miss -> acquire_lock; on success run full research and write both records; on lock-held by
+                another invocation, do a short bounded wait/re-read before falling through to research.
+      The cache supersedes the per-Lambda LLMResponseCache as the dedup layer.
+
+# =============================================================================
+# IMPLEMENTATION STEPS
+# =============================================================================
+implementation:
+  step_1: { name: "company_intel_cache module", change: "key normalization, read/write profile+news, lock" }
+  step_2: { name: "Wire cache-first into research_company", change: "full hit / news-only refresh / miss flow" }
+  step_3: { name: "Verify worker IAM/env", change: "CR worker role has table grant + COMPANY_RESEARCH_CACHE_TABLE_NAME (FE-UI-052 nested stack)" }
+
+# =============================================================================
+# CONSTRAINTS
+# =============================================================================
+constraints:
+  - "No new AWS resources; reuse the existing table (PK cacheKey, TTL expiresAt)."
+  - "Profile TTL = 6 months; news TTL = 120 days (locked decision)."
+  - "Cache is best-effort: a cache/DynamoDB error must degrade to direct research, never fail the request."
+  - "Cross-user reuse only for non-PII company facts (no user_id in the shared record)."
+  - "mypy --strict passes."
+
+# =============================================================================
+# VALIDATION
+# =============================================================================
+validation:
+  commands:
+    - "cd src/backend && uv run mypy careervp --strict"
+    - "cd src/backend && uv run pytest tests/unit/test_company_intel_cache.py -v --tb=short"
+  acceptance_criteria:
+    - "Full hit returns without invoking Tavily or the LLM."
+    - "Profile-fresh + news-stale fetches ONLY the news query."
+    - "Miss writes both a profile (6mo TTL) and a news (120d TTL) record."
+    - "Domain and company_name map to a stable, normalized cacheKey; domain takes precedence."
+    - "Missing table env or a DynamoDB error degrades to direct research (no exception to caller)."
+    - "Concurrent miss on the same key does not produce duplicate full-research calls (lock honored)."
+
+# =============================================================================
+# TEST HOOKS
+# =============================================================================
+test_hooks:
+  - "TEST-FE-050 § unit_cache_keys: normalization + domain precedence"
+  - "TEST-FE-050 § unit_cache_rw: profile/news read-write + TTL values"
+  - "TEST-FE-050 § unit_cache_flow: full hit / news-only / miss"
+  - "TEST-FE-050 § unit_cache_degrade: missing env + DynamoDB error degrade gracefully"
+  - "TEST-FE-050 § unit_cache_lock: concurrent miss honors in-flight lock"

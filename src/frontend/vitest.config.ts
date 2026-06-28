@@ -6,10 +6,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
-    setupFiles: [
-      './tests/vitest-setup.ts',
-      './tests/ui/setup.ts',
-    ],
+    setupFiles: ['./tests/vitest-setup.ts', './tests/ui/setup.ts'],
     include: [
       // Canvas App UI tests (spec-v4)
       'tests/ui/**/*.test.tsx',
@@ -20,12 +17,14 @@ export default defineConfig({
       'tests/unit/state-adapters.test.ts',
       'tests/unit/hub-status-deriver.test.ts',
       'tests/unit/module-card.test.tsx',
+      'tests/unit/ProgressBar.test.tsx',
       'tests/regression/cross-module-invalidation.test.ts',
       'tests/regression/cta-label-consistency.test.tsx',
       'tests/regression/state-machine-transitions.test.ts',
       'tests/integration/api-polling.test.ts',
       'tests/integration/cognito-auth.test.ts',
       'tests/integration/hub-state-integration.test.ts',
+      'tests/integration/ProgressBar.test.tsx',
       'tests/unit/api-methods.test.ts',
       'tests/unit/artifact-storage.test.ts',
       'tests/integration/api-client.test.ts',
@@ -34,6 +33,10 @@ export default defineConfig({
       'tests/unit/vpr-page.test.tsx',
       'tests/unit/gap-analysis-page.test.tsx',
       'tests/unit/export-dropdown.test.tsx',
+      'tests/integration/hub-generate-ux.test.tsx',
+      'tests/unit/use-generate-module.test.ts',
+      'tests/unit/processing-dots.test.tsx',
+      'tests/unit/module-card-processing.test.tsx',
     ],
   },
 });

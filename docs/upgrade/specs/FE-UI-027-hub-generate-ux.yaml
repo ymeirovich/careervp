@@ -1,0 +1,503 @@
+spec_id: FE-UI-027
+title: "Hub Generate UX — processing state, cancel, error, and polling bug fix for all four modules"
+priority: high
+status: draft
+owner: frontend
+created_at: 2026-06-03
+updated_at: 2026-06-03
+route: /applications/[id]
+component_file: src/frontend/app/applications/[id]/page.tsx
+tier: feature
+
+problem_statement:
+  current_behavior: >
+    The Generate button on the Job Application Hub has no visual feedback after click.
+    useGenerateModule.generate() sets a taskId in state but never calls persistArtifact(),
+    so the taskId is never written to localStorage. Because polling reads from localStorage
+    to decide whether to start, polling never starts. The Cancel action does not exist.
+    If a poll returns 'failed' or 'cancelled', no error is surfaced to the user.
+  required_behavior: >
+    After Generate is clicked the button is immediately disabled, its label changes to
+    "Processing..." with animated dots, and a Cancel button appears alongside it.
+    persistArtifact() is called immediately after the generate API responds so that
+    polling starts without waiting for a hub refetch. Cancel calls the appropriate
+    POST /{module}/{taskId}/cancel endpoint, stops polling, clears localStorage, and
+    resets the UI. If polling returns 'failed' or 'cancelled', a friendly inline error
+    is shown below the card and the primary CTA reverts to "Generate". If polling
+    returns 'completed', the primary CTA becomes "Regenerate" and a secondary "View"
+    button navigates to /applications/{jobId}/{module}?id={artifactId}.
+  user_impact: >
+    Users currently have no confirmation that generation started and no way to cancel.
+    The polling bug means the hub never updates after generation completes without a
+    manual page refresh. This fix closes all three gaps.
+
+evidence:
+  root_cause_file: src/frontend/hooks/useGenerateModule.ts
+  root_cause_description: >
+    generate() calls setTaskId(data.taskId) but omits the subsequent
+    persistArtifact(jobId, moduleType, data.taskId) call. Polling reads localStorage;
+    without the persist step the key is absent and polling returns immediately.
+  backend_cancel_endpoints:
+    - POST /vpr/{vprId}/cancel
+    - POST /cover-letter/{coverLetterId}/cancel
+    - POST /interview-prep/{interviewPrepId}/cancel
+    - POST /cv-tailoring/{cvTailoringId}/cancel
+  cancel_response: '200 {"status":"cancelled"} or 409 if already terminal'
+
+architecture:
+  primary_files:
+    - src/frontend/app/applications/[id]/page.tsx
+    - src/frontend/hooks/useGenerateModule.ts
+    - src/frontend/hooks/useModuleStatus.ts
+    - src/frontend/components/ModuleCard/ModuleCard.tsx
+    - src/frontend/api/methods.ts
+    - src/frontend/adapters/mapApplicationDataToHubState.ts
+    - src/frontend/lib/types.ts
+  test_files:
+    - src/frontend/tests/unit/module-card.test.tsx
+    - src/frontend/tests/integration/hub-generate-ux.test.tsx
+    - src/frontend/tests/integration/api-polling.test.ts
+  api_dependencies:
+    - "POST /vpr (generate)"
+    - "POST /cover-letter (generate)"
+    - "POST /interview-prep (generate)"
+    - "POST /cv-tailoring (generate)"
+    - "GET /applications/{id} (hub refetch)"
+    - "POST /vpr/{vprId}/cancel"
+    - "POST /cover-letter/{coverLetterId}/cancel"
+    - "POST /interview-prep/{interviewPrepId}/cancel"
+    - "POST /cv-tailoring/{cvTailoringId}/cancel"
+  cascade_risk: medium — hub page; ModuleCard is used by all four modules
+
+fix_plan:
+  backend_changes:
+    summary: >
+      Four cancel endpoints added to existing Lambdas (no new Lambda functions).
+      Each endpoint returns 200 {"status":"cancelled"} on success or 409 if the
+      artifact is already in a terminal state.
+      _normalize_status in vpr_status_handler.py updated to pass through 'cancelled'
+      so the frontend poll receives it correctly.
+    files_changed:
+      - file: src/backend/careervp/handlers/vpr_handler.py
+        change: adds cancel route handler
+      - file: src/backend/careervp/handlers/cover_letter_handler.py
+        change: adds cancel route handler
+      - file: src/backend/careervp/handlers/interview_prep_handler.py
+        change: adds cancel route handler
+      - file: src/backend/careervp/handlers/cv_tailoring_handler.py
+        change: adds cancel route handler
+      - file: src/backend/careervp/handlers/vpr_status_handler.py
+        change: _normalize_status passes through 'cancelled'
+
+  frontend_changes:
+    - file: lib/types.ts
+      change: ArtifactStatus union type adds 'cancelled'
+    - file: api/methods.ts
+      change: cancelVpr(), cancelCoverLetter(), cancelInterviewPrep(), cancelCvTailoring() methods added
+    - file: adapters/mapApplicationDataToHubState.ts
+      change: 'cancelled' rawStatus maps to 'notStarted' so hub resets the card
+    - file: hooks/useGenerateModule.ts
+      change: >
+        persistArtifact(jobId, moduleType, taskId) called immediately after setTaskId();
+        cancel() function added — calls cancel endpoint, stops polling, clears localStorage
+    - file: hooks/useModuleStatus.ts
+      change: 'cancelled' added to terminal status check so polling stops
+    - file: components/ModuleCard/ModuleCard.tsx
+      change: >
+        cancelAction prop added; Processing state renders disabled "Processing..." button
+        with animated dots and a Cancel button; error slot renders inline error below card
+    - file: app/applications/[id]/page.tsx
+      change: >
+        handleCancel per module wired up; generationError state added per module;
+        refetch triggered on completion; error cleared on new generate attempt
+
+  non_goals:
+    - Worker-side CANCELLED check before writing results (V2 scope — see AC-018)
+    - Changes to the GET /applications/{id} response schema
+    - Overwrite confirmation dialog design changes (existing dialog retained)
+    - Any module page outside /applications/[id]
+
+  rollback_plan: >
+    Revert frontend files to prior versions. Backend cancel endpoints are additive and
+    can be left in place; no database schema changes were made.
+
+acceptance_criteria:
+  # Generate → Processing state
+  - id: AC-001
+    module: VPR
+    given: The user is on the hub and VPR has not been generated
+    when: The user clicks the VPR Generate button
+    then: The button is immediately disabled, label changes to "Processing..." with animated dots, and a Cancel button appears
+    verification: unit
+    blocking_gate: pre_merge
+
+  - id: AC-002
+    module: Cover Letter
+    given: The user is on the hub and Cover Letter has not been generated
+    when: The user clicks the Cover Letter Generate button
+    then: The button is immediately disabled, label changes to "Processing..." with animated dots, and a Cancel button appears
+    verification: unit
+    blocking_gate: pre_merge
+
+  - id: AC-003
+    module: Interview Prep
+    given: The user is on the hub and Interview Prep has not been generated
+    when: The user clicks the Interview Prep Generate button
+    then: The button is immediately disabled, label changes to "Processing..." with animated dots, and a Cancel button appears
+    verification: unit
+    blocking_gate: pre_merge
+
+  - id: AC-004
+    module: Tailored CV
+    given: The user is on the hub and Tailored CV has not been generated
+    when: The user clicks the Tailored CV Generate button
+    then: The button is immediately disabled, label changes to "Processing..." with animated dots, and a Cancel button appears
+    verification: unit
+    blocking_gate: pre_merge
+
+  # Cancel flow
+  - id: AC-005
+    module: VPR
+    given: VPR generation is in the Processing state
+    when: The user clicks Cancel
+    then: POST /vpr/{vprId}/cancel is called, polling stops, localStorage entry cleared, UI resets to "Generate" or "Regenerate"
+    verification: integration
+    blocking_gate: pre_merge
+
+  - id: AC-006
+    module: Cover Letter
+    given: Cover Letter generation is in the Processing state
+    when: The user clicks Cancel
+    then: POST /cover-letter/{coverLetterId}/cancel is called, polling stops, localStorage entry cleared, UI resets to "Generate" or "Regenerate"
+    verification: integration
+    blocking_gate: pre_merge
+
+  - id: AC-007
+    module: Interview Prep
+    given: Interview Prep generation is in the Processing state
+    when: The user clicks Cancel
+    then: POST /interview-prep/{interviewPrepId}/cancel is called, polling stops, localStorage entry cleared, UI resets to "Generate" or "Regenerate"
+    verification: integration
+    blocking_gate: pre_merge
+
+  - id: AC-008
+    module: Tailored CV
+    given: Tailored CV generation is in the Processing state
+    when: The user clicks Cancel
+    then: POST /cv-tailoring/{cvTailoringId}/cancel is called, polling stops, localStorage entry cleared, UI resets to "Generate" or "Regenerate"
+    verification: integration
+    blocking_gate: pre_merge
+
+  # Poll returns failed or cancelled → inline error
+  - id: AC-009
+    module: VPR
+    given: VPR is in the Processing state and polling is active
+    when: The poll response returns status 'failed' or 'cancelled'
+    then: A friendly inline error message is shown below the VPR card and the primary CTA reverts to "Generate"
+    verification: unit
+    blocking_gate: pre_merge
+
+  - id: AC-010
+    module: Cover Letter
+    given: Cover Letter is in the Processing state and polling is active
+    when: The poll response returns status 'failed' or 'cancelled'
+    then: A friendly inline error message is shown below the Cover Letter card and the primary CTA reverts to "Generate"
+    verification: unit
+    blocking_gate: pre_merge
+
+  - id: AC-011
+    module: Interview Prep
+    given: Interview Prep is in the Processing state and polling is active
+    when: The poll response returns status 'failed' or 'cancelled'
+    then: A friendly inline error message is shown below the Interview Prep card and the primary CTA reverts to "Generate"
+    verification: unit
+    blocking_gate: pre_merge
+
+  - id: AC-012
+    module: Tailored CV
+    given: Tailored CV is in the Processing state and polling is active
+    when: The poll response returns status 'failed' or 'cancelled'
+    then: A friendly inline error message is shown below the Tailored CV card and the primary CTA reverts to "Generate"
+    verification: unit
+    blocking_gate: pre_merge
+
+  # Poll returns completed → Regenerate + View
+  - id: AC-013
+    module: VPR
+    given: VPR polling is active
+    when: The poll response returns status 'completed'
+    then: The primary CTA becomes "Regenerate" (triggers overwrite confirmation dialog on click) and a secondary "View" button navigates to /applications/{jobId}/vpr?id={artifactId}
+    verification: integration
+    blocking_gate: pre_merge
+
+  - id: AC-014
+    module: Cover Letter
+    given: Cover Letter polling is active
+    when: The poll response returns status 'completed'
+    then: The primary CTA becomes "Regenerate" (triggers overwrite confirmation dialog on click) and a secondary "View" button navigates to /applications/{jobId}/cover-letter?id={artifactId}
+    verification: integration
+    blocking_gate: pre_merge
+
+  - id: AC-015
+    module: Interview Prep
+    given: Interview Prep polling is active
+    when: The poll response returns status 'completed'
+    then: The primary CTA becomes "Regenerate" (triggers overwrite confirmation dialog on click) and a secondary "View" button navigates to /applications/{jobId}/interview-prep?id={artifactId}
+    verification: integration
+    blocking_gate: pre_merge
+
+  - id: AC-016
+    module: Tailored CV
+    given: Tailored CV polling is active
+    when: The poll response returns status 'completed'
+    then: The primary CTA becomes "Regenerate" (triggers overwrite confirmation dialog on click) and a secondary "View" button navigates to /applications/{jobId}/cv-tailoring?id={artifactId}
+    verification: integration
+    blocking_gate: pre_merge
+
+  # Polling bug fix
+  - id: AC-017
+    module: all
+    given: The user clicks Generate on any module
+    when: The generate API call responds successfully with a taskId
+    then: persistArtifact(jobId, moduleType, taskId) is called immediately so that polling starts without waiting for a hub refetch; the Processing UI is visible before the next hub GET completes
+    verification: integration
+    blocking_gate: pre_merge
+
+  # Known limitation
+  - id: AC-018
+    module: all
+    category: known_limitation
+    description: >
+      SQS workers do not check CANCELLED status before writing results. A worker that
+      started before the cancel request arrived will overwrite CANCELLED → COMPLETED on
+      the next hub load. Worker-side guard is deferred to V2. This limitation must be
+      documented in the code via a TODO comment at the cancel handler callsite.
+    verification: none
+    blocking_gate: none
+
+states:
+  - state: idle
+    trigger: Page load, no taskId in localStorage
+    visual: "Generate" (or "Regenerate") button enabled; no Cancel visible
+  - state: processing
+    trigger: Generate clicked; taskId persisted to localStorage
+    visual: Disabled "Processing..." button with animated dots; Cancel button visible
+  - state: error
+    trigger: Poll returns 'failed' or 'cancelled'
+    visual: Inline error message below card; primary CTA reverts to "Generate"
+  - state: completed
+    trigger: Poll returns 'completed'
+    visual: Primary CTA "Regenerate"; secondary "View" button; no Cancel
+
+verification_contract:
+  - requirement_id: AC-001
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-002
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-003
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-004
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-005
+    verification_type: integration
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-006
+    verification_type: integration
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-007
+    verification_type: integration
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-008
+    verification_type: integration
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-009
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-010
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-011
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-012
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-013
+    verification_type: integration
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-014
+    verification_type: integration
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-015
+    verification_type: integration
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-016
+    verification_type: integration
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-017
+    verification_type: integration
+    blocking_gate: pre_merge
+    artifact_required: false
+
+baseline_and_regression:
+  blocked_regressions:
+    - Existing "Generate" → "Regenerate" flow for already-completed modules must not regress
+    - Overwrite confirmation dialog must still trigger on Regenerate click
+    - Hub page refetch on completion must continue to update all four module cards
+    - Navigation from hub to each module view page must continue to work
+    - No regression on GET /applications/{id} response handling
+    - localStorage keys for other modules must not be cleared when one module is cancelled
+  allowed_deltas: {}
+
+traceability_matrix:
+  - requirement_id: AC-001
+    code_reference: src/frontend/components/ModuleCard/ModuleCard.tsx:TBD
+    test_reference: tests/unit/module-card.test.tsx
+    verification_type: unit
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-002
+    code_reference: src/frontend/components/ModuleCard/ModuleCard.tsx:TBD
+    test_reference: tests/unit/module-card.test.tsx
+    verification_type: unit
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-003
+    code_reference: src/frontend/components/ModuleCard/ModuleCard.tsx:TBD
+    test_reference: tests/unit/module-card.test.tsx
+    verification_type: unit
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-004
+    code_reference: src/frontend/components/ModuleCard/ModuleCard.tsx:TBD
+    test_reference: tests/unit/module-card.test.tsx
+    verification_type: unit
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-005
+    code_reference: src/frontend/hooks/useGenerateModule.ts:TBD
+    test_reference: tests/integration/hub-generate-ux.test.tsx
+    verification_type: integration
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-006
+    code_reference: src/frontend/hooks/useGenerateModule.ts:TBD
+    test_reference: tests/integration/hub-generate-ux.test.tsx
+    verification_type: integration
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-007
+    code_reference: src/frontend/hooks/useGenerateModule.ts:TBD
+    test_reference: tests/integration/hub-generate-ux.test.tsx
+    verification_type: integration
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-008
+    code_reference: src/frontend/hooks/useGenerateModule.ts:TBD
+    test_reference: tests/integration/hub-generate-ux.test.tsx
+    verification_type: integration
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-009
+    code_reference: src/frontend/app/applications/[id]/page.tsx:TBD
+    test_reference: tests/unit/module-card.test.tsx
+    verification_type: unit
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-010
+    code_reference: src/frontend/app/applications/[id]/page.tsx:TBD
+    test_reference: tests/unit/module-card.test.tsx
+    verification_type: unit
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-011
+    code_reference: src/frontend/app/applications/[id]/page.tsx:TBD
+    test_reference: tests/unit/module-card.test.tsx
+    verification_type: unit
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-012
+    code_reference: src/frontend/app/applications/[id]/page.tsx:TBD
+    test_reference: tests/unit/module-card.test.tsx
+    verification_type: unit
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-013
+    code_reference: src/frontend/app/applications/[id]/page.tsx:TBD
+    test_reference: tests/integration/hub-generate-ux.test.tsx
+    verification_type: integration
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-014
+    code_reference: src/frontend/app/applications/[id]/page.tsx:TBD
+    test_reference: tests/integration/hub-generate-ux.test.tsx
+    verification_type: integration
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-015
+    code_reference: src/frontend/app/applications/[id]/page.tsx:TBD
+    test_reference: tests/integration/hub-generate-ux.test.tsx
+    verification_type: integration
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-016
+    code_reference: src/frontend/app/applications/[id]/page.tsx:TBD
+    test_reference: tests/integration/hub-generate-ux.test.tsx
+    verification_type: integration
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-017
+    code_reference: src/frontend/hooks/useGenerateModule.ts:TBD
+    test_reference: tests/integration/api-polling.test.ts
+    verification_type: integration
+    blocking_gate: pre_merge
+    result: pending
+
+rollback_trigger_matrix:
+  - trigger_id: RT-001
+    condition: Any blocking AC flips pass→fail post-deploy
+    action: Revert frontend files (page.tsx, useGenerateModule.ts, ModuleCard.tsx), re-open spec
+  - trigger_id: RT-002
+    condition: Cancel endpoint returns unexpected non-200/409 on prod traffic
+    action: Block deploy, investigate Lambda logs; cancel endpoints are additive so backend revert is low-risk
+  - trigger_id: RT-003
+    condition: Completed artifacts stop appearing after generation following this deploy
+    action: Check localStorage persistArtifact key; revert useGenerateModule.ts if polling regression confirmed
+
+design_notes:
+  - >
+    The animated dots on "Processing..." should use a CSS keyframe animation, not a
+    JS timer, to avoid interference with React re-renders during polling.
+  - >
+    Cancel button placement: render inline alongside the disabled Processing button,
+    not in a separate row. Confirm exact placement with design if a mockup is produced.
+  - >
+    generationError state is per-module (one error string per module type), not global.
+    Clearing one module's error on a new Generate click must not affect other modules.
+  - >
+    AC-018 known limitation: add a TODO comment at the cancel handler callsite referencing
+    this spec ID (FE-UI-027 / AC-018) so the V2 worker-side guard is traceable.
+  - >
+    The 'cancelled' → 'notStarted' mapping in mapApplicationDataToHubState.ts means the
+    hub will show "Generate" (not "Regenerate") after a cancel, even if a previous
+    completed artifact existed. Verify this is the intended UX before implementing.

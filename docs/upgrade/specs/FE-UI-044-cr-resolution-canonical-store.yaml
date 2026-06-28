@@ -1,0 +1,237 @@
+spec_id: FE-UI-044
+title: "Company Research canonical store + unified resolution — fix VPR/cover-letter 409 'upstream_required'"
+priority: critical
+status: draft
+owner: backend
+created_at: 2026-06-17
+updated_at: 2026-06-17
+tier: feature
+
+human_approval_gate:
+  required: true
+  gate_number: 4
+  reason: >
+    Slice 3 grants states:StartExecution to submit-handler roles and wires
+    STEP_FUNCTIONS_CHAIN_ARN + flips ARTIFACT_CHAIN_ENABLED=true (IAM + behavior change:
+    409 -> 202 auto-generation). Slice 2 runs a one-time data migration that READS 239
+    legacy CR items (PII: company research tied to a user) from users-table and WRITES them
+    to artifacts-table. IAM and cross-table data movement are security-sensitive.
+  approval_before: "Any states:StartExecution grant, the ARTIFACT_CHAIN_ENABLED flip, or running the migration against any non-dev environment"
+
+recommended_model: opus
+reason_for_model: >
+  Three divergent table-resolution code paths must converge onto one contract without
+  breaking the four downstream artifacts that already gate on the resolver, plus an
+  idempotent ownership-preserving migration and a Step Functions enablement. Correctness
+  under existing data and the resolver's running-chain lock is architecture-sensitive.
+
+depends_on:
+  - FE-UI-030   # CR async worker / CR persistence shape
+  - FE-UI-038   # artifact dependency resolver (the gate that returns the 409)
+  - FE-UI-040   # VPR<->CR binding — left CR storage "implementer's call" (the root ambiguity)
+  - FE-UI-041   # CR confidence gate — resolution MUST preserve confidence + ownership checks
+  - FE-UI-029   # artifact-chain state machine (Slice 3 enablement target)
+blocks: []
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    POST /vpr/generate (regenerate) returns 409 {status: upstream_required,
+    missing: [company_research], chain_execution_arn: null} even for applications where the
+    user expects CR to exist. Validated against live dev DynamoDB (2026-06-17):
+
+    1. THREE divergent table-resolution paths that never agree:
+       - CR loader (logic/company_research.py:128 _company_research_table_names) resolves
+         KNOWLEDGE_TABLE_NAME -> TABLE_NAME -> DYNAMODB_TABLE_NAME.
+       - Sync CR writer (handlers/company_research_handler.py:533 _persist_company_research_item)
+         resolves the INVERTED order TABLE_NAME -> DYNAMODB_TABLE_NAME -> KNOWLEDGE_TABLE_NAME.
+       - Async CR worker writer (handlers/company_research_worker_handler.py:66 _persist_cr_result)
+         resolves KNOWLEDGE_TABLE_NAME first (loader order).
+       On every deployed artifact lambda KNOWLEDGE_TABLE_NAME=careervp-knowledge-table-dev,
+       so the LOADER reads the knowledge-table while the SYNC WRITER (DYNAMODB_TABLE_NAME=
+       careervp-users-table-dev) writes to the users-table. Reader and writer point at
+       different tables even within a single lambda.
+    2. SCHEMA mismatch: loader + both writers assume pk/sk keys. Only users-table is pk/sk.
+       knowledge-table is userEmail/knowledgeType (and EMPTY, 0 items); company-research-cache
+       is cacheKey (EMPTY). get_item/put_item/query with pk/sk against those throws
+       ValidationException, which is caught and swallowed -> silent "not found".
+    3. KEY mismatch: CR is stored sk=ARTIFACT#COMPANY_RESEARCH#{cr_job_id} (job_id from the
+       CR submit payload, company_research_handler.py:188 = payload.job_id or uuid4()).
+       The loader looks up by application_id (direct keys + FilterExpression sk contains
+       application_id). When cr_job_id != application_id the lookup misses even in the right
+       table. The 239 live CR items in users-table use cr_job_ids that are not the app id.
+    4. ARTIFACT_CHAIN_ENABLED is unset (falsy) on all submit lambdas AND
+       STEP_FUNCTIONS_CHAIN_ARN is unset on vpr-submit, so the resolver cannot auto-generate
+       the missing CR; it returns 409 instead of 202 (resolver.py:103-111).
+    Net effect: load_confident_company_research_artifact returns None on EVERY lambda, so the
+    resolver treats company_research as permanently missing. This blocks VPR regeneration and
+    (because cover_letter -> (vpr, company_research)) cover-letter generation. cv_tailored and
+    interview_prep depend only on (vpr) and are NOT affected.
+
+    Why tests never caught it: tests/integration/test_company_research_vpr.py:54-76 creates a
+    moto table with a pk/sk schema shaped to fit the code and sets DYNAMODB_TABLE_NAME (never
+    KNOWLEDGE_TABLE_NAME). The fixture mirrors the code's assumptions, not the real CDK table
+    schemas or the real lambda env precedence -> false green.
+  required_behavior: >
+    ONE canonical Company Research artifact store with ONE resolution contract used by every
+    reader and writer, so a CR written by any path is found by every downstream gate:
+      1. Canonical store = artifacts-table (applicationId/artifactId) queried via its
+         type-index (applicationId + artifactType='company_research'), matching how
+         cover_letter and interview_prep already persist (the designed home, api_db_construct.py:375).
+      2. CR is keyed by the REAL applicationId (not an arbitrary cr_job_id) so lookup-by-
+         application_id is exact, not a scan/contains filter.
+      3. A single resolution helper is the only place that names the CR table + builds keys;
+         loader and both writers call it. Confidence gate (FE-UI-041) + ownership (user_id)
+         checks are preserved.
+      4. Transitional dual-read: if the artifacts-table lookup misses, fall back to the legacy
+         users-table pk/sk lookup, so the 239 existing items keep resolving until migrated.
+      5. Migration (Slice 2) backfills the 239 legacy items into artifacts-table, idempotently,
+         ownership-verified; then dual-read is retired.
+      6. Chain enablement (Slice 3): set ARTIFACT_CHAIN_ENABLED=true + wire
+         STEP_FUNCTIONS_CHAIN_ARN on submit lambdas + grant states:StartExecution, so a
+         genuinely-absent CR auto-generates (202) instead of 409.
+  user_impact: >
+    Regenerate VPR and generate cover letters succeed when CR exists; when CR is truly absent
+    the chain generates it automatically instead of dead-ending on a 409.
+
+# =============================================================================
+# EVIDENCE (file:line + live data)
+# =============================================================================
+evidence:
+  divergent_resolution:
+    - { file: src/backend/careervp/logic/company_research.py, line: 128, code: "KNOWLEDGE_TABLE_NAME, TABLE_NAME, DYNAMODB_TABLE_NAME (reader)" }
+    - { file: src/backend/careervp/handlers/company_research_handler.py, line: 533, code: "TABLE_NAME or DYNAMODB_TABLE_NAME or KNOWLEDGE_TABLE_NAME (sync writer, inverted)" }
+    - { file: src/backend/careervp/handlers/company_research_worker_handler.py, line: 66, code: "KNOWLEDGE_TABLE_NAME or TABLE_NAME or DYNAMODB_TABLE_NAME (worker writer)" }
+  schema_mismatch:
+    - { note: "live dev: only users-table is pk/sk; knowledge-table=userEmail/knowledgeType (0 items); company-research-cache=cacheKey (0 items); artifacts-table=applicationId/artifactId (209 items, cover_letter+interview_prep only)" }
+  key_mismatch:
+    - { file: src/backend/careervp/handlers/company_research_handler.py, line: 188, code: "job_id = payload.job_id or uuid4()" }
+    - { file: src/backend/careervp/logic/company_research.py, line: 164, code: "FilterExpression sk contains application_id" }
+  swallowed_errors:
+    - { file: src/backend/careervp/logic/company_research.py, line: "146-150", note: "ClientError caught, non-RNF logged + continue -> ValidationException silently ignored" }
+  gate_branches:
+    - { file: src/backend/careervp/logic/artifact_dependency_resolver.py, line: "103-111", note: "chain disabled -> 409 upstream_required" }
+  chain_unwired:
+    - { note: "live dev: vpr-submit lambda STEP_FUNCTIONS_CHAIN_ARN unset, ARTIFACT_CHAIN_ENABLED unset; state machine careervp-artifact-chain-statemachine-dev IS deployed" }
+    - { file: src/backend/careervp/handlers/artifact_dependency_utils.py, line: "101-103", note: "build_start_chain returns None when STEP_FUNCTIONS_CHAIN_ARN empty" }
+  canonical_home_intent:
+    - { file: infra/careervp/api_db_construct.py, line: "375-413", note: "artifacts-table with type-index (applicationId+artifactType) — designed artifact home" }
+    - { file: infra/careervp/api_db_construct.py, line: "415-440", note: "company-research-cache is a cacheKey/30d-TTL dedupe cache, NOT a per-application artifact store" }
+  test_reality_drift:
+    - { file: src/backend/tests/integration/test_company_research_vpr.py, line: "54-76", note: "moto fixture is pk/sk + sets DYNAMODB_TABLE_NAME only — mirrors code, not real CDK schema/env" }
+
+# =============================================================================
+# ARCHITECTURE
+# =============================================================================
+architecture:
+  canonical_store:
+    table: artifacts-table
+    env_var: ARTIFACTS_TABLE_NAME    # single source of truth for CR read+write
+    key: { partition: applicationId, sort: "ARTIFACT#COMPANY_RESEARCH#{applicationId}" }
+    index: type-index (applicationId + artifactType='company_research')
+    attributes_required: [user_id, applicationId, artifactType, company_research_id, company_name, confidence_score, created_at, research_data]
+  unified_resolution_helper:
+    location: src/backend/careervp/logic/company_research_store.py   # NEW — single owner of table + key
+    api:
+      - "cr_artifact_key(application_id) -> dict   # the one place keys are built"
+      - "write_cr_artifact(application_id, user_id, result) -> None"
+      - "read_cr_artifact(application_id, user_id) -> dict | None   # artifacts-table first, legacy users-table fallback (dual-read)"
+    rules:
+      - "Reads ARTIFACTS_TABLE_NAME only — no KNOWLEDGE/TABLE_NAME precedence games."
+      - "load_confident_company_research_artifact delegates its raw load to read_cr_artifact, keeps the FE-UI-041 confidence gate + ownership check unchanged."
+      - "Both sync handler and async worker writers delegate to write_cr_artifact (delete the two ad-hoc _persist_* table-resolution blocks)."
+      - "Dual-read fallback is feature-flagged (COMPANY_RESEARCH_LEGACY_READ_ENABLED, default true) so Slice 2 can retire it by flipping the flag."
+  slices:
+    slice_1_unify_resolution:
+      summary: "New company_research_store helper; loader + both writers delegate to it; dual-read legacy fallback. No infra resource change beyond confirming ARTIFACTS_TABLE_NAME is present on the CR + VPR + cover-letter lambdas."
+      shippable: true
+    slice_2_migration:
+      summary: "Idempotent, ownership-verified backfill of legacy users-table CR items into artifacts-table keyed by real applicationId; dry-run + report; then flip COMPANY_RESEARCH_LEGACY_READ_ENABLED=false."
+      shippable: true
+      risk: "Legacy items keyed by cr_job_id may lack a stored applicationId; migration must resolve application linkage or quarantine unmappable items (do NOT guess)."
+    slice_3_enable_chain:
+      summary: "Wire STEP_FUNCTIONS_CHAIN_ARN + ARTIFACT_CHAIN_ENABLED=true on submit lambdas; grant states:StartExecution; verify SM starts at company_research node and honors claim_chain_execution lock."
+      shippable: true
+      gate: "human approval (IAM + behavior change)"
+
+# =============================================================================
+# CROSS-DEPENDENCY IMPACT
+# =============================================================================
+cross_dependencies:
+  affected_positively:
+    - "vpr regenerate: gate finds CR -> 200/202 instead of 409"
+    - "cover_letter generate: gate finds CR (cover_letter -> vpr, company_research)"
+  unaffected:
+    - "cv_tailored, interview_prep: depend on (vpr) only; no CR gate"
+  regression_risk:
+    - id: VPR_STRICTER_GATE
+      note: >
+        Today CR is unreachable so the gate is effectively bypassed by pre-gating data;
+        many existing applications have VPR/CV/interview_prep generated WITHOUT CR
+        (e.g. app 96aefdb9 artifact_statuses has no company_research key). Once resolution
+        works AND VPR keeps CR required, regenerating those VPRs will 409 until CR exists.
+        MITIGATED by Slice 3 (auto-generate) per the product decision (2026-06-17).
+    - id: COVER_LETTER_KEY_QUIRK
+      note: "cover_letter DAL writes applicationId=user_id (dynamo_dal_handler.py:536). Do NOT copy this; CR must key by the real applicationId. Flag for separate cleanup."
+    - id: DAL_EMPTY_TABLE_NAME
+      note: "vpr_submit_handler.py:354 builds DynamoDalHandler(DYNAMODB_TABLE_NAME or TABLE_NAME or '') -> '' on vpr-submit lambda. Latent; out of scope but noted."
+
+# =============================================================================
+# TEST PLAN (write FIRST — red — then implement)
+# =============================================================================
+test_plan:
+  principles:
+    - "Fixtures MUST mirror real CDK schemas (artifacts-table=applicationId/artifactId+type-index; users-table=pk/sk; knowledge-table=userEmail/knowledgeType) AND real lambda env (KNOWLEDGE_TABLE_NAME set). This is the test-reality-drift fix; without it we recreate the blind spot."
+  tooling: "moto[dynamodb] (already a dep, pyproject.toml:58); pytest markers @pytest.mark.unit / @pytest.mark.integration per repo convention."
+  tests:
+    - id: T1_round_trip
+      type: integration
+      file: src/backend/tests/integration/test_cr_canonical_store_roundtrip.py
+      asserts: "CR written via write_cr_artifact is found by read_cr_artifact AND by load_confident_company_research_artifact, against a moto artifacts-table with the REAL applicationId/artifactId + type-index schema, with KNOWLEDGE_TABLE_NAME set to an empty wrong-schema table (proves precedence no longer breaks it)."
+      why: "The single test that would have caught the whole bug; pure mocks hide schema/key/table mismatch."
+    - id: T2_unified_resolution
+      type: unit
+      file: src/backend/tests/unit/test_cr_store_resolution.py
+      asserts: "cr_artifact_key + the table chosen by reader and both writers are identical under multiple env-var combinations (incl. KNOWLEDGE_TABLE_NAME set)."
+      why: "Pins the precedence-inversion bug deterministically; fails today."
+    - id: T3_gate_matrix
+      type: unit
+      file: src/backend/tests/unit/test_resolver_cr_gate_matrix.py
+      asserts: "resolve_dependencies for vpr & cover_letter: CR present->ready; missing+chain off->409; missing+chain on->202 (start_chain invoked)."
+      why: "Locks gate semantics + the chain decision without AWS."
+    - id: T4_dual_read
+      type: integration
+      file: src/backend/tests/integration/test_cr_dual_read_legacy.py
+      asserts: "A CR item present only in legacy users-table (pk/sk, ARTIFACT#COMPANY_RESEARCH#{job_id}) still resolves while COMPANY_RESEARCH_LEGACY_READ_ENABLED=true; does NOT resolve when false."
+      why: "Guards the migration grace window so the 239 items are not stranded."
+    - id: T5_migration_idempotent
+      type: integration
+      file: src/backend/tests/integration/test_cr_migration_backfill.py
+      asserts: "Backfill copies legacy items to artifacts-table keyed by real applicationId, preserves user_id ownership, is idempotent on re-run, and quarantines (does not guess) items with no resolvable applicationId."
+      why: "Slice 2 safety."
+    - id: T6_env_consistency
+      type: infrastructure
+      file: src/backend/tests/infrastructure/test_cr_table_env_consistency.py
+      asserts: "cdk synth: every CR/VPR/cover-letter lambda exposes ARTIFACTS_TABLE_NAME; Slice 3 adds STEP_FUNCTIONS_CHAIN_ARN + ARTIFACT_CHAIN_ENABLED + states:StartExecution to submit roles."
+      why: "Prevents regression of the per-lambda env drift that caused this."
+  explicitly_not:
+    - "No live-AWS end-to-end test as the primary guard — slow/flaky and worse at catching this structural class than T1/T4."
+
+# =============================================================================
+# RISKS
+# =============================================================================
+risks:
+  - "Only dev env was inspected (per 2026-06-17 decision). staging/prod env vars + schemas are UNVERIFIED — must be checked before any non-dev change. (Slice 3 / migration gate.)"
+  - "Swallowed ValidationExceptions mean misconfiguration degrades silently to 'CR not found'; add an explicit log/metric when the canonical read errors (not just misses)."
+  - "Migration touches user-owned research (PII); must be ownership-verified and dry-run first."
+  - "Enabling the chain changes 409->202 platform-wide; verify the state machine + claim_chain_execution lock under concurrent submits before flipping in non-dev."
+
+# =============================================================================
+# OUT OF SCOPE
+# =============================================================================
+out_of_scope:
+  - "cover_letter applicationId=user_id key quirk (separate cleanup)."
+  - "DynamoDalHandler('') empty-table-name latent bug on vpr-submit."
+  - "staging/prod rollout (dev only for now)."

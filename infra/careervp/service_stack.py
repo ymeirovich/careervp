@@ -5,6 +5,9 @@ from cdk_nag import AwsSolutionsChecks, NagSuppressions
 from constructs import Construct
 
 from .api_construct import ApiConstruct
+from .ai_assist_nested_stack import AiAssistNestedStack
+from .company_research_nested_stack import CompanyResearchNestedStack
+from .error_report_nested_stack import ErrorReportNestedStack
 from .cognito_construct import CognitoConstruct
 from .configuration.configuration_construct import ConfigurationStore
 from .constants import (
@@ -15,6 +18,7 @@ from .constants import (
     SERVICE_NAME_TAG,
     STACK_FEATURE,
 )
+from .monitoring import MonitoringNestedStack
 from .naming_utils import NamingUtils
 from .utils import get_construct_name, get_username
 
@@ -57,6 +61,67 @@ class ServiceStack(Stack):
             naming=self.naming,
             user_pool=self.cognito.user_pool,
             cognito_client_id=self.cognito.client_id,
+        )
+        self.monitoring_nested_stack = MonitoringNestedStack(
+            self,
+            "MonitoringNestedStack",
+            monitoring_id=self.api.id_,
+            crud_api=self.api.rest_api,
+            db=self.api.api_db.db,
+            idempotency_table=self.api.api_db.idempotency_db,
+            functions=[
+                self.api.cv_upload_func,
+                self.api.vpr_submit_func,
+                self.api.company_research_func,
+                self.api.cv_tailoring_func,
+                self.api.gap_api_func,
+                self.api.cover_letter_api_func,
+                self.api.interview_prep_api_func,
+            ],
+            notification_topic=self.api.monitoring.notification_topic,
+            naming=self.naming,
+        )
+        self.ai_assist_nested_stack = AiAssistNestedStack(
+            self,
+            "AiAssistNestedStack",
+            naming=self.naming,
+            logs_kms_key=self.api.logs_kms_key,
+            artifacts_table=self.api.api_db.artifacts_table,
+            cvs_table=self.api.api_db.cvs_table,
+            applications_table=self.api.api_db.applications_table,
+            jobs_table=self.api.api_db.jobs_table,
+            gap_responses_table=self.api.api_db.gap_responses_table,
+            users_table=self.api.api_db.users_table,
+            llm_cache_table=self.api.llm_cache_table,
+            allowed_origins=self.api.node.try_get_context("allowed_origins")
+            or "https://main.d3j2wnm8g5clnw.amplifyapp.com,https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com,https://ui-upgrade.d3j2wnm8g5clnw.amplifyapp.com,https://app.careervp.com,https://dev.careervp.com,https://stage.careervp.com,http://localhost:3000",
+        )
+        self.api.register_ai_assist_routes(self.ai_assist_nested_stack.ai_assist_lambda)
+
+        # Client error reports (forwarded from the Next.js SSR /api/errors route).
+        # Lambda lives in a nested stack to keep the near-limit parent stack lean;
+        # parent only gains the POST /errors route resources.
+        self.error_report_nested_stack = ErrorReportNestedStack(
+            self,
+            "ErrorReportNestedStack",
+            naming=self.naming,
+            logs_kms_key=self.api.logs_kms_key,
+            allowed_origins=self.api.node.try_get_context("allowed_origins")
+            or "https://main.d3j2wnm8g5clnw.amplifyapp.com,https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com,https://ui-upgrade.d3j2wnm8g5clnw.amplifyapp.com,https://app.careervp.com,https://dev.careervp.com,https://stage.careervp.com,http://localhost:3000",
+        )
+        self.api.register_error_report_route(
+            self.error_report_nested_stack.error_report_lambda
+        )
+
+        self.company_research_nested_stack = CompanyResearchNestedStack(
+            self,
+            "CompanyResearchNestedStack",
+            naming=self.naming,
+            company_research_lambda=self.api.company_research_func,
+            company_research_worker_lambda=self.api.company_research_worker_func,
+            company_research_role=self.api.lambda_role,
+            company_research_cache_table=self.api.api_db.company_research_cache_table,
+            notification_topic=self.api.monitoring.notification_topic,
         )
 
         CfnOutput(self, "UserPoolId", value=self.cognito.user_pool_id)
@@ -120,6 +185,10 @@ class ServiceStack(Stack):
                 {
                     "id": "AwsSolutions-SQS3",
                     "reason": "Worker DLQs are terminal destinations and should not chain DLQs",
+                },
+                {
+                    "id": "AwsSolutions-SF1",
+                    "reason": "Artifact chain logs at ERROR level by design (FE-UI-031) to control CloudWatch costs; execution data logging is intentionally disabled.",
                 },
             ],
         )

@@ -17,7 +17,7 @@ def mock_llm_result(payload: dict[str, Any]) -> Result[dict[str, Any]]:
             'input_tokens': 100,
             'output_tokens': 200,
             'cost': 0.003,
-            'model': 'claude-sonnet-4-5',
+            'model': 'claude-sonnet-4-6',
         },
         code=ResultCode.SUCCESS,
     )

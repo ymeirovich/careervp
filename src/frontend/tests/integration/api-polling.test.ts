@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { useModuleStatus } from '../../hooks/useModuleStatus';
 import { useGenerateModule } from '../../hooks/useGenerateModule';
-import { persistArtifact } from '../../lib/artifactStorage';
+import { persistArtifact, getArtifact, clearArtifact } from '../../lib/artifactStorage';
 import { api } from '../../api/methods';
 
 // Mock lib/auth so tests don't touch real Cognito
@@ -216,5 +216,208 @@ describe('useGenerateModule — cache-busting', () => {
     });
 
     expect(result.current.taskId).toBe('returned-task');
+  });
+});
+
+describe('useGenerateModule — localStorage persistence', () => {
+  it('after generate() resolves, getArtifact(jobId, "vpr") returns the taskId', async () => {
+    server.use(
+      http.post(`${BASE_URL}/vpr/generate`, () =>
+        HttpResponse.json({ request_id: 'task-persist-1', status: 'processing' }),
+      ),
+    );
+
+    const { result } = renderHook(
+      () => useGenerateModule('vpr', 'job-persist'),
+      { wrapper: makeWrapper() },
+    );
+
+    await act(async () => {
+      await result.current.generate({ cvId: 'cv-1', gapResponseIds: [] });
+    });
+
+    expect(getArtifact('job-persist', 'vpr')).toBe('task-persist-1');
+  });
+
+  it('useModuleStatus picks up taskId from localStorage without a hub refetch', async () => {
+    vi.useFakeTimers();
+
+    persistArtifact('job-ls', 'vpr', 'stored-from-ls');
+
+    const pollSpy = vi
+      .spyOn(api, 'pollVPRStatus')
+      .mockResolvedValue({ status: 'processing' });
+
+    const { result } = renderHook(
+      () => useModuleStatus('vpr', 'job-ls', null, true),
+      { wrapper: makeWrapper() },
+    );
+
+    // Hook should resolve taskId from localStorage immediately (no hub API call needed)
+    expect(result.current.taskId).toBe('stored-from-ls');
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+
+    expect(pollSpy).toHaveBeenCalledWith('stored-from-ls');
+  });
+});
+
+describe('useGenerateModule — cancel flow', () => {
+  it('cancel("task-1") POSTs to /vpr/task-1/cancel', async () => {
+    const cancelRequests: Request[] = [];
+    server.use(
+      http.post(`${BASE_URL}/vpr/generate`, () =>
+        HttpResponse.json({ request_id: 'task-1', status: 'processing' }),
+      ),
+      http.post(`${BASE_URL}/vpr/task-1/cancel`, ({ request }) => {
+        cancelRequests.push(request);
+        return HttpResponse.json({ cancelled: true });
+      }),
+    );
+
+    const { result } = renderHook(
+      () => useGenerateModule('vpr', 'job-cancel'),
+      { wrapper: makeWrapper() },
+    );
+
+    await act(async () => {
+      await result.current.generate({ cvId: 'cv-1', gapResponseIds: [] });
+    });
+
+    await act(async () => {
+      await result.current.cancel('task-1');
+    });
+
+    expect(cancelRequests).toHaveLength(1);
+  });
+
+  it('taskId is null after successful cancel', async () => {
+    server.use(
+      http.post(`${BASE_URL}/vpr/generate`, () =>
+        HttpResponse.json({ request_id: 'task-1', status: 'processing' }),
+      ),
+      http.post(`${BASE_URL}/vpr/task-1/cancel`, () =>
+        HttpResponse.json({ cancelled: true }),
+      ),
+    );
+
+    const { result } = renderHook(
+      () => useGenerateModule('vpr', 'job-cancel-null'),
+      { wrapper: makeWrapper() },
+    );
+
+    await act(async () => {
+      await result.current.generate({ cvId: 'cv-1', gapResponseIds: [] });
+    });
+
+    expect(result.current.taskId).toBe('task-1');
+
+    await act(async () => {
+      await result.current.cancel('task-1');
+    });
+
+    expect(result.current.taskId).toBeNull();
+  });
+
+  it('clearArtifact is called after successful cancel', async () => {
+    persistArtifact('job-cancel-clear', 'vpr', 'task-1');
+
+    server.use(
+      http.post(`${BASE_URL}/vpr/task-1/cancel`, () =>
+        HttpResponse.json({ cancelled: true }),
+      ),
+    );
+
+    const { result } = renderHook(
+      () => useGenerateModule('vpr', 'job-cancel-clear'),
+      { wrapper: makeWrapper() },
+    );
+
+    await act(async () => {
+      await result.current.cancel('task-1');
+    });
+
+    expect(getArtifact('job-cancel-clear', 'vpr')).toBeNull();
+  });
+
+  it('isCancelling is true during the cancel call and false after', async () => {
+    let resolveFn!: () => void;
+    server.use(
+      http.post(`${BASE_URL}/vpr/task-1/cancel`, () =>
+        new Promise<Response>((resolve) => {
+          resolveFn = () => resolve(HttpResponse.json({ cancelled: true }) as unknown as Response);
+        }),
+      ),
+    );
+
+    const { result } = renderHook(
+      () => useGenerateModule('vpr', 'job-cancel-flag'),
+      { wrapper: makeWrapper() },
+    );
+
+    let cancelPromise: Promise<void>;
+    act(() => {
+      cancelPromise = result.current.cancel('task-1');
+    });
+
+    // Flush microtasks so the cancel request reaches MSW and resolveFn is assigned
+    await act(async () => {});
+
+    expect(result.current.isCancelling).toBe(true);
+
+    await act(async () => {
+      resolveFn();
+      await cancelPromise;
+    });
+
+    expect(result.current.isCancelling).toBe(false);
+  });
+
+  it('409 response still clears state without throwing', async () => {
+    persistArtifact('job-cancel-409', 'vpr', 'task-1');
+
+    server.use(
+      http.post(`${BASE_URL}/vpr/task-1/cancel`, () =>
+        HttpResponse.json({ error: 'Cannot cancel terminal task' }, { status: 409 }),
+      ),
+    );
+
+    const { result } = renderHook(
+      () => useGenerateModule('vpr', 'job-cancel-409'),
+      { wrapper: makeWrapper() },
+    );
+
+    await expect(
+      act(async () => {
+        await result.current.cancel('task-1');
+      }),
+    ).resolves.not.toThrow();
+
+    expect(result.current.taskId).toBeNull();
+    expect(getArtifact('job-cancel-409', 'vpr')).toBeNull();
+  });
+
+  it('useModuleStatus stops polling when status is "cancelled"', async () => {
+    vi.useFakeTimers();
+
+    const pollSpy = vi
+      .spyOn(api, 'pollVPRStatus')
+      .mockResolvedValueOnce({ status: 'processing' })
+      .mockResolvedValueOnce({ status: 'cancelled' as never });
+
+    const { result } = renderHook(
+      () => useModuleStatus('vpr', 'job1', 'task-cancelled', true),
+      { wrapper: makeWrapper() },
+    );
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+
+    expect(result.current.status).toBe('cancelled');
+    expect(result.current.isPolling).toBe(false);
+
+    const callCountAfterCancel = pollSpy.mock.calls.length;
+    await act(async () => { await vi.advanceTimersByTimeAsync(9000); });
+    expect(pollSpy.mock.calls.length).toBe(callCountAfterCancel);
   });
 });

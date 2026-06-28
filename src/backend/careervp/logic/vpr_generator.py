@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 from pydantic import ValidationError
 
+from careervp.handlers.utils.observability import logger
 from careervp.logic.fvs_validator import (
     GRAMMAR_MIN_SCORE,
     STRUCTURAL_MIN_SCORE,
@@ -28,8 +29,8 @@ from careervp.logic.fvs_validator import (
     run_vpr_quality_gate,
 )
 from careervp.logic.prompts.vpr_prompt import (
-    PHASE2_SYSTEM_PROMPT,
     build_phase2_prompt,
+    build_phase2_system_prompt,
 )
 
 if TYPE_CHECKING:
@@ -178,6 +179,7 @@ class LLMClient:
         max_tokens: int,
         temperature: float,
         system_prompt: str = DEFAULT_SYSTEM_PROMPT,
+        use_system_cache: bool = False,
     ) -> Result[dict[str, Any]]:
         """Delegate to centralized router."""
         result = self._router.invoke(
@@ -186,6 +188,7 @@ class LLMClient:
             user_prompt=prompt,
             max_tokens=max_tokens,
             temperature=temperature,
+            use_system_cache=use_system_cache,
         )
         return cast(Result[dict[str, Any]], result)
 
@@ -208,7 +211,7 @@ class VPRSixStagePipeline:
         self._input_tokens_total = 0
         self._output_tokens_total = 0
         self._cost_total = 0.0
-        self._model_name = 'claude-sonnet-4-5'
+        self._model_name = 'claude-sonnet-4-6'
         self._regeneration_count = 0
 
     @property
@@ -341,9 +344,10 @@ class VPRSixStagePipeline:
         prompt = build_phase2_prompt(evidence_payload, self._user_cv, self._request, feedback)
         payload = self._invoke_stage_json(
             prompt=prompt,
-            system_prompt=PHASE2_SYSTEM_PROMPT,
+            system_prompt=build_phase2_system_prompt(),
             max_tokens=16000,
             temperature=0.65,
+            use_system_cache=True,
         )
         return Phase2Draft(raw_payload=payload, evidence_context=evidence)
 
@@ -380,6 +384,7 @@ class VPRSixStagePipeline:
         system_prompt: str,
         max_tokens: int,
         temperature: float,
+        use_system_cache: bool = False,
     ) -> dict[str, Any]:
         """Invoke LLM for a stage and parse strict JSON response."""
         llm_result = self._llm_client.invoke(
@@ -388,6 +393,7 @@ class VPRSixStagePipeline:
             max_tokens=max_tokens,
             temperature=temperature,
             system_prompt=system_prompt,
+            use_system_cache=use_system_cache,
         )
 
         if not llm_result.success or llm_result.data is None:
@@ -516,6 +522,12 @@ def _parse_full_vpr_model(  # noqa: C901 - complex but well-structured
             company_insights = VPRCompanyInsight.model_validate(payload['company_insights'])
         except ValidationError:
             pass
+    if request.company_context is not None and company_insights is None:
+        logger.warning(
+            'VPR payload missing company_insights despite company_context',
+            application_id=request.application_id,
+            company_context_included=False,
+        )
 
     verification_summary: VPRVerificationSummary | None = None
     if 'verification_summary' in payload:

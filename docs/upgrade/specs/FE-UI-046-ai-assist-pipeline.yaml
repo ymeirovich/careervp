@@ -1,0 +1,376 @@
+spec_id: FE-UI-046
+title: "Synchronous field-scoped AI-assist pipeline (POST /ai/assist) + Interview Prep STAR persistence (PATCH /interview-prep)"
+priority: high
+status: draft
+owner: backend
+created_at: 2026-06-20
+updated_at: 2026-06-20
+tier: feature
+
+recommended_model: opus
+reason_for_model: >
+  A new synchronous public AI endpoint must compose cross-artifact prompt context server-side
+  (never trusting the client), reuse the existing cached-system-prompt + DynamoDB response-cache
+  path correctly, enforce subscription/trial gating, and map seven distinct error classes to
+  precise HTTP codes within a 25 s budget under a 29 s APIGW hard ceiling. It also extends the
+  Interview Prep persistence model and adds a new PATCH. Prompt-context correctness, cache-key
+  determinism, and error-path completeness are architecture-sensitive.
+
+depends_on:
+  - FE-UI-045   # frontend field-scoped edit surfaces + autosave that consume this endpoint
+blocks:
+  - FE-UI-047   # nested-stack infra that provisions the AI-assist Lambda/role + registers both routes
+prior_art:
+  - FE-UI-020   # RichTextEditor — the field surfaces whose plain-string values are sent as current_text
+  - FE-UI-032   # prompt externalization
+  - FE-UI-033   # token optimization (system-prompt caching)
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    There is no AI-assist endpoint. Users can edit artifact fields (after FE-UI-045) but cannot
+    ask the model to rewrite/improve a single field with full awareness of the user's other
+    artifacts. Separately, Interview Prep has no persisted user answer: models/interview_prep.py
+    InterviewQuestion carries suggested_answer but no user-editable, versioned field, and there is
+    no PATCH /interview-prep route — the page is read-only. The pieces needed to build a good
+    field-scoped assist already exist but are unused for this purpose:
+      - LLMClient.complete(use_system_cache=True) sends the system prompt with cache_control
+        ephemeral (logic/llm_client.py:177).
+      - cv_tailoring_prompt.py:202 already structures a static, cacheable system prompt.
+      - LLMResponseCache (logic/llm_cache.py) is a DynamoDB 7-day deterministic cache keyed
+        SHA-256(prompt | cv | model | temp). Default model Haiku (claude-haiku-4-5-20251001).
+      - Cross-artifact digest helpers already exist: cover_letter_prompt.py
+        build_cv_digest / _build_vpr_summary / _format_company_research; vpr_prompt.build_vpr_digest;
+        server resolvers _resolve_cover_letter_context / dal.get_vpr / dal.get_gap_responses.
+  required_behavior: >
+    A SYNCHRONOUS, strictly FIELD-SCOPED endpoint POST /ai/assist that rewrites ONE field with
+    server-resolved cross-artifact context, plus a new Interview Prep persistence path:
+
+    1. POST /ai/assist. Request:
+       { artifact_type, artifact_id, application_id, field_key, current_text, locale }.
+       The server RESOLVES all other artifacts from DynamoDB (never trusts the client for context)
+       and does NOT re-fetch the artifact currently under edit (current_text is authoritative for it).
+       Response: { generated_markdown, model, tokens }. The call is free with an active
+       subscription/trial and does NOT consume an application credit.
+    2. Per-artifact prompt context (compose from EXISTING digest helpers):
+       - Gap Analysis -> base/uploaded CV digest + the focused sub-question.
+       - Tailored CV  -> base/uploaded CV digest + Gap responses + VPR digest
+                         (rewrite the focused field for impact, factual, ATS-keyword-aware).
+       - Cover Letter -> Gap + VPR + Tailored CV + Company Research.
+       - Interview Prep -> Gap + VPR + Tailored CV.
+       Invariant preamble (per-artifact system role + anti-AI 8-pattern rules from careervp/CLAUDE.md
+       + STAR template + output-format contract) goes in the CACHED system prompt
+       (use_system_cache=True). current_text + the resolved digests go in the USER message.
+    3. Lambda timeout 25 s (one safety margin below the APIGW 29 s hard limit).
+    4. Interview Prep persistence: extend InterviewQuestion with a user-edited answer field
+       (Markdown string) + version + updated_at; add PATCH /interview-prep/{interviewPrepId}
+       mirroring the cover-letter PATCH shape: req { answer:'<string>' } per question_id -> stored
+       on that question; resp echoes status + stored answer + version.
+  user_impact: >
+    Users get one-click, context-aware rewrites of a single field that respect their actual CV/VPR/
+    gap answers and the anti-AI style rules, without spending a credit, and Interview Prep STAR
+    answers become first-class editable, persisted content.
+
+# =============================================================================
+# EVIDENCE (file:line)
+# =============================================================================
+evidence:
+  caching_exists:
+    - { file: src/backend/careervp/logic/llm_client.py, line: 177, note: "LLMClient.complete(use_system_cache=True) -> system prompt with cache_control ephemeral" }
+    - { file: src/backend/careervp/logic/prompts/cv_tailoring_prompt.py, line: 202, note: "static cacheable system prompt already structured" }
+    - { file: src/backend/careervp/logic/llm_cache.py, note: "LLMResponseCache — DynamoDB 7-day cache keyed SHA-256(prompt|cv|model|temp); default Haiku claude-haiku-4-5-20251001" }
+  digest_helpers_exist:
+    - { file: src/backend/careervp/logic/prompts/cover_letter_prompt.py, note: "build_cv_digest / _build_vpr_summary / _format_company_research" }
+    - { file: src/backend/careervp/logic/prompts/vpr_prompt.py, note: "build_vpr_digest" }
+    - { file: src/backend/careervp/handlers/cover_letter_handler.py, note: "_resolve_cover_letter_context — server-side context resolution pattern to mirror" }
+    - { note: "dal.get_vpr / dal.get_gap_responses — existing server-side resolvers for VPR + gap responses" }
+  interview_prep_gap:
+    - { file: src/backend/careervp/models/interview_prep.py, note: "InterviewQuestion has suggested_answer but NO user-editable persisted field" }
+    - { file: "src/frontend/app/applications/[id]/interview-prep/page.tsx", note: "read-only; no PATCH route exists today" }
+  patch_shape_to_mirror:
+    - { file: src/backend/careervp/handlers/cover_letter_handler.py, line: 1411, note: "PATCH /cover-letter/{id}: req {cover_letter}; resp {id,status,result:{cover_letter}}; at-rest {...existing, full_text} + updated_at — mirror this for interview-prep answer" }
+  anti_ai_rules:
+    - { file: careervp/CLAUDE.md, note: "Decision 1.6 — 8-pattern anti-AI-detection framework; must be embedded in the cached system preamble" }
+
+# =============================================================================
+# ARCHITECTURE / OWNERSHIP MAP
+# =============================================================================
+architecture_ownership_map:
+  owns_backend:
+    - "POST /ai/assist handler: request validation, subscription/trial gate, server-side context resolution, prompt assembly, LLMClient call, error mapping, response shaping."
+    - "Per-artifact prompt builders that COMPOSE existing digest helpers (no re-implementation of digests)."
+    - "InterviewQuestion model extension (answer:str markdown, version:int, updated_at) + PATCH /interview-prep/{interviewPrepId} handler."
+  does_not_own:
+    - "Lambda function, IAM role/policy, log group, APIGW invoke permission, and route-method registration for BOTH POST /ai/assist and PATCH /interview-prep -> FE-UI-047 (infra)."
+    - "Frontend edit surfaces, AI button onClick, autosave/draft mirror, Undo UX -> FE-UI-045 (frontend)."
+    - "LLMClient / LLMResponseCache / digest-helper internals (consumed as-is)."
+  context_resolution_contract:
+    trust_boundary: "Server resolves all cross-artifact context from DynamoDB by (user_id from JWT, application_id). The client request supplies ONLY artifact_type, artifact_id, application_id, field_key, current_text, locale."
+    do_not_refetch: "The artifact under edit is NOT re-fetched; current_text is authoritative for it (avoids clobbering the user's in-progress, possibly-unsaved edit)."
+    ownership_check: "application_id must belong to the JWT user_id; otherwise 403/404 (do not leak other users' artifacts)."
+  cache_strategy:
+    cached_system_prompt: "Invariant preamble (artifact role + anti-AI 8-pattern + STAR template + output-format contract) -> use_system_cache=True (cache_control ephemeral). Stable per (artifact_type, locale)."
+    user_message: "current_text + resolved digests -> user message (varies per request; not cached at the prompt-prefix level)."
+    response_cache: "LLMResponseCache key includes prompt|cv|model|temp; field-scoped assist is naturally deterministic-cacheable but MUST include field_key + current_text in the cache key so distinct fields/edits don't collide."
+  primary_files:
+    - "src/backend/careervp/handlers/ai_assist_handler.py (NEW)"
+    - "src/backend/careervp/logic/prompts/ai_assist_prompt.py (NEW)"
+    - "src/backend/careervp/models/interview_prep.py (extend)"
+    - "src/backend/careervp/handlers/interview_prep_handler.py (add PATCH branch)"
+  cascade_risk: "medium — new public endpoint touching subscription gating + multi-artifact reads; Interview Prep model change is additive (new optional fields)."
+
+# =============================================================================
+# FIX PLAN
+# =============================================================================
+fix_plan:
+  files_to_modify:
+    - file: src/backend/careervp/models/interview_prep.py
+      change: >
+        Extend InterviewQuestion with user-edited answer fields: answer: str | None (Markdown),
+        answer_version: int (optimistic-concurrency token), answer_updated_at: datetime | None.
+        Keep suggested_answer untouched. New fields are optional/back-compatible with existing items.
+    - file: src/backend/careervp/handlers/interview_prep_handler.py
+      change: >
+        Add a PATCH /interview-prep/{interviewPrepId} branch mirroring cover_letter PATCH
+        (cover_letter_handler.py:1411): req { question_id, answer:'<string>' } (or a list of
+        {question_id, answer}); resolve user_id from JWT; write answer onto the matching question,
+        bump answer_version + answer_updated_at; enforce base_version optimistic-concurrency
+        (FE-UI-045 sends it) -> 409 on mismatch; resp { status:'completed', interview_prep_id,
+        question_id, answer, answer_version }.
+  files_to_create:
+    - file: src/backend/careervp/handlers/ai_assist_handler.py
+      purpose: >
+        POST /ai/assist Lambda handler. Steps: (1) parse + validate body; (2) resolve user_id from
+        JWT and verify application_id ownership; (3) subscription/trial gate -> 401|402 if inactive;
+        (4) resolve cross-artifact context per artifact_type via ai_assist_prompt builders using
+        existing digest helpers + dal resolvers (NOT re-fetching the artifact under edit);
+        (5) call LLMClient.complete(use_system_cache=True) with the cached preamble + user message;
+        (6) map errors to 504/503/409/400/500; (7) return { generated_markdown, model, tokens }.
+        Hard-cap work to the 25 s Lambda timeout.
+    - file: src/backend/careervp/logic/prompts/ai_assist_prompt.py
+      purpose: >
+        Per-artifact prompt assembly. build_system_preamble(artifact_type, locale) -> cached static
+        string (role + anti-AI 8-pattern from CLAUDE.md + STAR template for interview_prep +
+        output-format contract). build_user_message(artifact_type, field_key, current_text, context)
+        -> composes existing digests: gap=CV digest+sub-question; cv_tailored=CV digest+gap+VPR;
+        cover_letter=gap+VPR+cv_tailored+company_research; interview_prep=gap+VPR+cv_tailored.
+        Reuses cover_letter_prompt.build_cv_digest/_build_vpr_summary/_format_company_research and
+        vpr_prompt.build_vpr_digest — does NOT reimplement them.
+  dependencies:
+    upstream:
+      - "LLMClient.complete(use_system_cache=True) (llm_client.py:177); LLMResponseCache (llm_cache.py)."
+      - "Digest helpers (cover_letter_prompt, vpr_prompt) + dal.get_vpr / dal.get_gap_responses / _resolve_cover_letter_context."
+      - "Subscription/trial gate utility (existing billing/entitlement check used by other gated routes)."
+    downstream:
+      - "FE-UI-047 provisions the Lambda + role + registers POST /ai/assist and PATCH /interview-prep route methods. This handler code is dead until that infra lands."
+      - "FE-UI-045 supplies current_text and applies generated_markdown (200-only) through autosave."
+
+# =============================================================================
+# ACCEPTANCE CRITERIA
+# =============================================================================
+acceptance_criteria:
+  - id: AC-001
+    given: An authenticated user with an active subscription owns application_id, editing a cover_letter field
+    when: POST /ai/assist { artifact_type:'cover_letter', artifact_id, application_id, field_key, current_text, locale } is called
+    then: >
+      Response is 200 { generated_markdown, model, tokens }. The server resolved Gap + VPR +
+      Tailored CV + Company Research from DynamoDB; it did NOT re-fetch the cover_letter under edit;
+      no application credit was consumed.
+
+  - id: AC-002
+    given: An authenticated user editing a gap_analysis field
+    when: POST /ai/assist with artifact_type='gap_analysis' is called
+    then: The prompt context contains the base/uploaded CV digest + the focused sub-question only; response is 200 with generated_markdown.
+
+  - id: AC-003
+    given: An authenticated user editing a cv_tailored field
+    when: POST /ai/assist with artifact_type='cv_tailored' is called
+    then: The prompt context contains CV digest + Gap responses + VPR digest; the system preamble instructs impact/factual/ATS-keyword-aware rewriting; response is 200.
+
+  - id: AC-004
+    given: An authenticated user editing an interview_prep STAR answer
+    when: POST /ai/assist with artifact_type='interview_prep' is called
+    then: The prompt context contains Gap + VPR + Tailored CV and the cached preamble includes the STAR template; response is 200.
+
+  - id: AC-005
+    given: Any /ai/assist request
+    when: The system prompt is assembled
+    then: >
+      The invariant preamble (artifact role + anti-AI 8-pattern rules + STAR template where applicable
+      + output-format contract) is sent via use_system_cache=True (cache_control ephemeral); current_text
+      and digests are in the user message, not the cached prefix.
+
+  - id: AC-006
+    given: A request whose application_id does not belong to the JWT user_id
+    when: POST /ai/assist is called
+    then: Response is 403 (or 404) and no other user's artifacts are read or returned.
+
+  - id: AC-007
+    given: A user whose subscription and trial are both inactive
+    when: POST /ai/assist is called
+    then: Response is 401 or 402 (inactive subscription-or-trial); no LLM call is made; no credit logic runs.
+
+  - id: AC-008
+    given: The LLM call exceeds the 25 s Lambda budget
+    when: POST /ai/assist times out internally
+    then: Response is 504 timeout; the field is left unchanged on the client (FE-UI-045 contract).
+
+  - id: AC-009
+    given: The LLM provider circuit-breaker is open / provider unavailable
+    when: POST /ai/assist is called
+    then: Response is 503 with retry_after; field unchanged.
+
+  - id: AC-010
+    given: artifact_type requires an upstream artifact (e.g. cover_letter needs VPR/Company Research) that is missing
+    when: POST /ai/assist is called
+    then: Response is 409 indicating the missing upstream artifact (deep-link payload), enabling the client to route the user to generate it; field unchanged.
+
+  - id: AC-011
+    given: A malformed request (missing required field, unknown artifact_type) or an unexpected server error
+    when: POST /ai/assist is called
+    then: Response is 400 (validation) or 500 (generic, safe message); field unchanged in every case.
+
+  - id: AC-012
+    given: Two distinct fields (different field_key/current_text) on the same artifact
+    when: Both call /ai/assist
+    then: LLMResponseCache keys differ (key includes field_key + current_text + model + temp), so one field's result is never served for another.
+
+  - id: AC-013
+    given: An interview_prep artifact and an authenticated owner
+    when: PATCH /interview-prep/{interviewPrepId} { question_id, answer:'<markdown>' } is called
+    then: >
+      The answer is stored on the matching question; answer_version increments; answer_updated_at is set;
+      resp is { status:'completed', interview_prep_id, question_id, answer, answer_version }; suggested_answer
+      is untouched.
+
+  - id: AC-014
+    given: A PATCH /interview-prep with a stale base_version
+    when: The handler compares versions
+    then: Response is 409 (optimistic-concurrency conflict); the stored answer is unchanged.
+
+  - id: AC-015
+    given: Existing interview_prep items created before this change (no answer field)
+    when: They are read or PATCHed
+    then: They deserialize without error (new fields optional/back-compatible); first PATCH initializes answer_version.
+
+# =============================================================================
+# STATES TO HANDLE
+# =============================================================================
+states_to_handle:
+  - { state: assist_success, trigger: "Context resolved, LLM returned within budget", response: "200 { generated_markdown, model, tokens }" }
+  - { state: not_owner, trigger: "application_id not owned by JWT user", response: "403/404; no cross-user read" }
+  - { state: inactive_entitlement, trigger: "No active subscription or trial", response: "401|402; no LLM call" }
+  - { state: timeout, trigger: "LLM call exceeds 25 s budget", response: "504; field unchanged" }
+  - { state: circuit_open, trigger: "Provider unavailable / breaker open", response: "503 { retry_after }; field unchanged" }
+  - { state: upstream_missing, trigger: "Required upstream artifact absent", response: "409 deep-link payload; field unchanged" }
+  - { state: bad_request, trigger: "Missing/invalid field or unknown artifact_type", response: "400; field unchanged" }
+  - { state: server_error, trigger: "Unexpected exception", response: "500 safe message; field unchanged" }
+  - { state: ip_answer_saved, trigger: "PATCH /interview-prep success", response: "200 { status, interview_prep_id, question_id, answer, answer_version }" }
+  - { state: ip_conflict, trigger: "PATCH /interview-prep stale base_version", response: "409; stored answer unchanged" }
+
+# =============================================================================
+# VERIFICATION CONTRACT
+# =============================================================================
+verification_contract:
+  - { requirement_id: AC-001, verification_type: integration, blocking_gate: pre_merge }
+  - { requirement_id: AC-002, verification_type: unit, blocking_gate: pre_merge }
+  - { requirement_id: AC-003, verification_type: unit, blocking_gate: pre_merge }
+  - { requirement_id: AC-004, verification_type: unit, blocking_gate: pre_merge }
+  - { requirement_id: AC-005, verification_type: unit, blocking_gate: pre_merge }
+  - { requirement_id: AC-006, verification_type: integration, blocking_gate: pre_merge }
+  - { requirement_id: AC-007, verification_type: unit, blocking_gate: pre_merge }
+  - { requirement_id: AC-008, verification_type: unit, blocking_gate: pre_merge }
+  - { requirement_id: AC-009, verification_type: unit, blocking_gate: pre_merge }
+  - { requirement_id: AC-010, verification_type: unit, blocking_gate: pre_merge }
+  - { requirement_id: AC-011, verification_type: unit, blocking_gate: pre_merge }
+  - { requirement_id: AC-012, verification_type: unit, blocking_gate: pre_merge }
+  - { requirement_id: AC-013, verification_type: integration, blocking_gate: pre_merge }
+  - { requirement_id: AC-014, verification_type: unit, blocking_gate: pre_merge }
+  - { requirement_id: AC-015, verification_type: unit, blocking_gate: pre_merge }
+
+# =============================================================================
+# BASELINE / REGRESSION BUDGET
+# =============================================================================
+baseline_regression_budget:
+  blocked_regressions:
+    - "LLMClient / LLMResponseCache / digest helpers public behavior must not change (consumed as-is)."
+    - "Existing interview_prep read path + suggested_answer must keep working (new fields additive/optional)."
+    - "Existing PATCH /cover-letter, PATCH /cv-tailoring, POST /gap-responses unaffected."
+    - "AI-assist must NOT consume an application credit (entitlement-gated only)."
+    - "Cross-artifact reads must stay scoped to the JWT user (no cross-tenant leakage)."
+  allowed_deltas:
+    - "New optional fields on InterviewQuestion (answer, answer_version, answer_updated_at)."
+    - "New handlers/prompt module (ai_assist_handler.py, ai_assist_prompt.py)."
+    - "New PATCH branch in interview_prep_handler.py."
+    - "Net-new LLMResponseCache entries keyed with field_key + current_text (cache growth)."
+
+# =============================================================================
+# TRACEABILITY MATRIX
+# =============================================================================
+traceability_matrix:
+  - { requirement_id: AC-001, code_reference: "src/backend/careervp/handlers/ai_assist_handler.py:TBD", test_reference: "TEST-FE-UI-046.yaml#cover_letter_context_resolution", verification_type: integration, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-002, code_reference: "src/backend/careervp/logic/prompts/ai_assist_prompt.py:TBD", test_reference: "TEST-FE-UI-046.yaml#gap_context", verification_type: unit, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-003, code_reference: "src/backend/careervp/logic/prompts/ai_assist_prompt.py:TBD", test_reference: "TEST-FE-UI-046.yaml#cv_tailored_context", verification_type: unit, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-004, code_reference: "src/backend/careervp/logic/prompts/ai_assist_prompt.py:TBD", test_reference: "TEST-FE-UI-046.yaml#interview_prep_context", verification_type: unit, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-005, code_reference: "src/backend/careervp/logic/prompts/ai_assist_prompt.py:TBD", test_reference: "TEST-FE-UI-046.yaml#cached_preamble", verification_type: unit, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-006, code_reference: "src/backend/careervp/handlers/ai_assist_handler.py:TBD", test_reference: "TEST-FE-UI-046.yaml#ownership_enforced", verification_type: integration, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-007, code_reference: "src/backend/careervp/handlers/ai_assist_handler.py:TBD", test_reference: "TEST-FE-UI-046.yaml#entitlement_gate", verification_type: unit, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-008, code_reference: "src/backend/careervp/handlers/ai_assist_handler.py:TBD", test_reference: "TEST-FE-UI-046.yaml#timeout_504", verification_type: unit, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-009, code_reference: "src/backend/careervp/handlers/ai_assist_handler.py:TBD", test_reference: "TEST-FE-UI-046.yaml#circuit_503", verification_type: unit, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-010, code_reference: "src/backend/careervp/handlers/ai_assist_handler.py:TBD", test_reference: "TEST-FE-UI-046.yaml#upstream_missing_409", verification_type: unit, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-011, code_reference: "src/backend/careervp/handlers/ai_assist_handler.py:TBD", test_reference: "TEST-FE-UI-046.yaml#bad_request_and_500", verification_type: unit, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-012, code_reference: "src/backend/careervp/logic/llm_cache.py:TBD", test_reference: "TEST-FE-UI-046.yaml#cache_key_includes_field", verification_type: unit, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-013, code_reference: "src/backend/careervp/handlers/interview_prep_handler.py:TBD", test_reference: "TEST-FE-UI-046.yaml#interview_patch_persist", verification_type: integration, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-014, code_reference: "src/backend/careervp/handlers/interview_prep_handler.py:TBD", test_reference: "TEST-FE-UI-046.yaml#interview_patch_conflict", verification_type: unit, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-015, code_reference: "src/backend/careervp/models/interview_prep.py:TBD", test_reference: "TEST-FE-UI-046.yaml#interview_model_backcompat", verification_type: unit, blocking_gate: pre_merge, result: pending }
+
+# =============================================================================
+# ROLLBACK TRIGGER MATRIX
+# =============================================================================
+rollback_trigger_matrix:
+  - { trigger_id: RT-001, condition: "/ai/assist returns context from another user (ownership leak) in any test", action: "Block merge; this is a security stop — do not deploy until AC-006 passes" }
+  - { trigger_id: RT-002, condition: "/ai/assist consumes an application credit", action: "Block merge; entitlement gate must be free; fix before deploy" }
+  - { trigger_id: RT-003, condition: "Any error path mutates the field server-side (non-idempotent failure)", action: "Revert handler; assist must be pure read+generate; only the client applies on 200" }
+  - { trigger_id: RT-004, condition: "p95 latency exceeds the 25 s budget in dev", action: "Reduce digest sizes / cap tokens; if still over, return 504 fast and surface a friendlier client message; consider async in V2" }
+  - { trigger_id: RT-005, condition: "InterviewQuestion model change breaks deserialization of existing items", action: "Revert model change; make all new fields Optional with defaults; re-verify AC-015" }
+  - { trigger_id: RT-006, condition: "Cache collision serves wrong field's text", action: "Invalidate cache namespace; ensure field_key + current_text in cache key (AC-012); redeploy" }
+
+# =============================================================================
+# DESIGN NOTES
+# =============================================================================
+design_notes:
+  - >
+    The single most important invariant: the server NEVER trusts the client for cross-artifact
+    context. Only artifact_type/artifact_id/application_id/field_key/current_text/locale come from
+    the client. Everything else (CV digest, VPR, gap responses, company research, tailored CV) is
+    resolved server-side by (JWT user_id, application_id). current_text is the one exception — it is
+    the in-progress field value and is authoritative, so the artifact under edit is NOT re-fetched.
+  - >
+    Caching split: put the STABLE preamble (artifact role + anti-AI 8-pattern + STAR template +
+    output-format contract) in the cached system prompt (use_system_cache=True) so the cacheable
+    prefix is large and stable per (artifact_type, locale). The volatile current_text + digests go in
+    the user message. This maximizes prompt-cache hit rate while keeping per-request content correct.
+  - >
+    LLMResponseCache key MUST include field_key + current_text in addition to model + temp, or two
+    different fields (or two edits of the same field) could collide and serve stale/wrong text. This
+    is the one cache-key change required by field-scoping (AC-012).
+  - >
+    Error-path completeness is a hard requirement: EVERY non-200 path (504/503/409/401|402/400/500)
+    must leave both the server artifact and the client field unchanged. The client (FE-UI-045) applies
+    generated_markdown only on 200, then routes it through autosave + the localStorage draft mirror so
+    even a post-apply crash is recoverable, and offers single-level Undo to the pre-AI snapshot.
+  - >
+    Anti-AI 8-pattern rules (careervp/CLAUDE.md Decision 1.6) belong in the cached preamble so every
+    rewrite is style-compliant by construction (avoid AI cliches, vary sentence structure, natural
+    transitions, avoid perfect parallelism). For interview_prep also embed the STAR template
+    (Situation/Task/Action/Result) in the preamble.
+  - >
+    Lambda timeout is 25 s with the APIGW hard ceiling at 29 s. Default model is Haiku
+    (claude-haiku-4-5-20251001), which comfortably fits field-scoped rewrites in-budget; keep token
+    caps tight to preserve margin. Synchronous only — no polling — per the locked product decision.
+  - >
+    PATCH /interview-prep mirrors the cover_letter PATCH at-rest pattern ({...existing, answer} +
+    updated_at) but keyed per question_id within the interview_prep item. base_version optimistic
+    concurrency is shared with FE-UI-045's conflict UX.

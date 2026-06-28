@@ -10,10 +10,11 @@ export function useJobs(): {
   createJob: (input: CreateJobInput) => Promise<Job>;
   isCreating: boolean;
   error: string | null;
+  refetch: () => void;
 } {
   const queryClient = useQueryClient();
 
-  const { data, isLoading, error } = useQuery<Job[]>({
+  const { data, isLoading, error, refetch } = useQuery<Job[]>({
     queryKey: ['jobs'],
     queryFn: () => api.getJobs(),
   });
@@ -31,5 +32,8 @@ export function useJobs(): {
     createJob: mutateAsync,
     isCreating: isPending,
     error: error ? (error instanceof Error ? error.message : 'Failed to load jobs') : null,
+    refetch: () => {
+      void refetch();
+    },
   };
 }

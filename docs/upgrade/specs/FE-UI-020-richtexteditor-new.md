@@ -5,18 +5,27 @@ priority: high
 status: draft
 owner: frontend
 created_at: 2026-05-23
-updated_at: 2026-05-23
-route: /applications/[id]/gap-analysis
+updated_at: 2026-06-06
+routes:
+  - /applications/[id]/gap-analysis
+  - /applications/[id]/cv-tailored (edit mode)
+  - /applications/[id]/cover-letter (edit mode)
 component_file: src/frontend/components/RichTextEditor/RichTextEditor.tsx
 tier: feature
 ---
 
 ## Problem Statement
-**Current behavior:** Gap analysis answers are entered via a plain `<textarea>` element (page.tsx lines 255-261). No formatting is supported. Responses are stored and transmitted as plain text strings.
+**Current behavior:** Gap analysis answers are entered via a plain `<textarea>` element. No formatting is supported. On the Tailored CV and Cover Letter pages, the RichTextEditor component is wired in edit mode but edit mode is only reachable via the hub's secondary action (no direct Edit button on those pages), so the toolbar appears inaccessible in practice.
 
-**Required behavior:** A TipTap-based rich text editor replaces the textarea. The editor provides a toolbar with Bold, Italic, Underline, Bullet List, and Numbered List buttons. Content is authored as rich text (HTML internally in TipTap) but stored and transmitted as Markdown. On mount, existing Markdown (or plain text) content is converted to TipTap's internal format. On change/save, TipTap content is serialized back to Markdown. Paste events strip all formatting except bold, italic, and lists. The editor supports ARIA attributes for accessibility.
+**Required behavior:** A TipTap-based rich text editor with toolbar is used across three edit surfaces:
 
-**User impact:** Users can format their gap analysis answers with basic rich text, improving readability of responses used downstream by AI models for CV tailoring and interview prep.
+1. **Gap analysis answers** — replaces the plain `<textarea>`.
+2. **Tailored CV (raw-text path)** — the existing RichTextEditor in edit mode; an Edit button on the read-mode page header navigates to `?mode=edit`.
+3. **Cover Letter** — the existing RichTextEditor in edit mode; an Edit button on the read-mode page header navigates to `?mode=edit`.
+
+The editor provides a toolbar with Bold, Italic, Underline, Bullet List, and Numbered List buttons. Content is stored as Markdown. The toolbar is always visible in edit mode (when `readOnly` is false). Paste events strip all formatting except bold, italic, and lists. The editor supports ARIA attributes for accessibility.
+
+**User impact:** Users can format their gap analysis answers and directly edit Tailored CV / Cover Letter content with rich text, improving readability and control.
 
 ## Evidence
 **Mockup files:** gap analysis questionnaire form-rich textbox edit.png, gap analysis questionnaire form-rich textbox edit 2.png

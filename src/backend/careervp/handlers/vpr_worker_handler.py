@@ -29,12 +29,15 @@ from careervp.dal.application_repository import ApplicationRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.logic.company_research import load_confident_company_research_artifact
 from careervp.logic.vpr_generator import generate_vpr
-from careervp.models.job import GapResponse, JobPosting
+from careervp.models.job import CompanyContext, GapResponse, JobPosting
+from careervp.models.result import ResultCode
 from careervp.models.vpr import VPR, VPRRequest
 
 # Module-level S3 client for testing/mocking
 s3 = boto3.client('s3')
+sfn = boto3.client('stepfunctions')
 
 
 def _get_results_bucket() -> str:
@@ -122,37 +125,158 @@ def _build_gap_responses_input(input_data: dict[str, Any]) -> list[dict[str, str
         if normalized:
             return normalized
 
-    raw_gap_response_ids = input_data.get('gap_response_ids')
-    if not isinstance(raw_gap_response_ids, list):
+    return []
+
+
+def _fetch_gap_responses_from_application(application_id: str, user_id: str) -> list[dict[str, str]]:
+    """Fetch saved gap responses from the application record in DynamoDB.
+
+    Gap responses are stored as {question_id, response} in the application record.
+    Gap questions (with text) are stored alongside as {question_id, question}.
+    We join them so the VPR generator receives full context.
+    """
+    app_table = os.environ.get('APPLICATIONS_TABLE_NAME') or ''
+    if not app_table:
+        logger.warning('APPLICATIONS_TABLE_NAME not set; skipping gap response lookup')
+        return []
+    try:
+        app_repo = ApplicationRepository(DynamoDalHandler(app_table))
+        application = app_repo.get(application_id=application_id, user_id=user_id)
+        if not application:
+            return []
+        stored_responses: list[dict[str, Any]] = application.get('gap_responses') or []
+        stored_questions: list[dict[str, Any]] = application.get('gap_questions') or []
+        question_text: dict[str, str] = {
+            str(q.get('question_id', '')).strip(): str(q.get('question', '')).strip() for q in stored_questions if isinstance(q, dict)
+        }
+        result: list[dict[str, str]] = []
+        for resp in stored_responses:
+            if not isinstance(resp, dict):
+                continue
+            qid = str(resp.get('question_id', '')).strip()
+            answer = str(resp.get('response') or resp.get('answer', '')).strip()
+            if qid and answer:
+                result.append(
+                    {
+                        'question_id': qid,
+                        'question': question_text.get(qid, qid),
+                        'answer': answer,
+                    }
+                )
+        return result
+    except Exception as exc:
+        logger.warning('Failed to fetch gap responses from application record', error=str(exc))
         return []
 
-    fallback: list[dict[str, str]] = []
-    for idx, response_id in enumerate(raw_gap_response_ids):
-        response_id_str = str(response_id).strip()
-        if not response_id_str:
-            continue
-        fallback.append(
-            {
-                'question_id': response_id_str,
-                'question': f'gap_response_{idx + 1}',
-                'answer': 'Provided via gap_response_ids in async submit payload.',
-            }
-        )
-    return fallback
 
+def _extract_message_body_from_record(record: dict[str, Any]) -> dict[str, Any] | None:
+    """Extract the JSON message body from an SQS record.
 
-def _extract_job_id_from_record(record: dict[str, Any]) -> str | None:
-    """Extract job_id from an SQS record body.
-
-    Returns None (and logs a warning) instead of raising if 'body' is absent,
-    so a malformed record never crashes the entire batch.
+    Returns None (and logs a warning) instead of raising if 'body' is absent or
+    malformed, so a bad record never crashes the entire batch.
     """
     raw_body = record.get('body')
     if not raw_body:
         logger.warning('SQS record missing body field', record_keys=list(record.keys()))
         return None
-    message_body = json.loads(raw_body)
+    try:
+        message_body = json.loads(raw_body)
+    except json.JSONDecodeError:
+        logger.warning('SQS record body is not valid JSON')
+        return None
+    if not isinstance(message_body, dict):
+        logger.warning('SQS record body is not a JSON object')
+        return None
+    return message_body
+
+
+def _extract_job_id_from_record(record: dict[str, Any]) -> str | None:
+    """Extract job_id from an SQS record body."""
+    message_body = _extract_message_body_from_record(record)
+    if message_body is None:
+        return None
     return message_body.get('job_id') or None
+
+
+def _send_task_success(task_token: str | None, *, job_id: str, vpr_id: str) -> None:
+    """Signal Step Functions success when this SQS record came from WAIT_FOR_TASK_TOKEN."""
+    if not task_token:
+        return
+    sfn.send_task_success(
+        taskToken=task_token,
+        output=json.dumps({'job_id': job_id, 'vpr_id': vpr_id}),
+    )
+
+
+def _send_task_failure(task_token: str | None, *, cause: str) -> None:
+    """Signal Step Functions failure when this SQS record came from WAIT_FOR_TASK_TOKEN."""
+    if not task_token:
+        return
+    sfn.send_task_failure(
+        taskToken=task_token,
+        error='VPRFailed',
+        cause=cause,
+    )
+
+
+def _resolve_gap_responses(input_data: dict[str, Any], application_id: str, user_id: str) -> list[GapResponse]:
+    """Return real GapResponse objects for the VPR request.
+
+    Tries input_data first (legacy full-object path), then falls back to
+    fetching saved responses from the application record in DynamoDB.
+    """
+    items = _build_gap_responses_input(input_data)
+    if not items:
+        items = _fetch_gap_responses_from_application(application_id, user_id)
+    return [GapResponse.model_validate(item) for item in items]
+
+
+def _coerce_optional_str(value: Any) -> str | None:
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped or None
+    return None
+
+
+def _resolve_company_context(
+    input_data: dict[str, Any],
+    application_id: str,
+    user_id: str,
+) -> tuple[CompanyContext | None, str | None, str | None]:
+    """Resolve CompanyContext from message/job input, with a CR DAL fallback."""
+    company_research_id = _coerce_optional_str(input_data.get('company_research_id'))
+    company_research_at = _coerce_optional_str(input_data.get('company_research_at'))
+    raw_context = input_data.get('company_context')
+
+    if raw_context is None:
+        artifact = load_confident_company_research_artifact(application_id=application_id, user_id=user_id)
+        if artifact is not None:
+            raw_context = artifact.company_context.model_dump(mode='json')
+            input_data['company_context'] = raw_context
+            company_research_id = artifact.company_research_id
+            company_research_at = artifact.company_research_at
+            input_data['company_research_id'] = company_research_id
+            input_data['company_research_at'] = company_research_at
+        else:
+            logger.warning(
+                'VPR company_context missing after fallback load',
+                application_id=application_id,
+                user_id=user_id,
+                company_context_missing=True,
+            )
+
+    if raw_context is None:
+        return None, company_research_id, company_research_at
+    return CompanyContext.model_validate(raw_context), company_research_id, company_research_at
+
+
+def _build_vpr_result_json(vpr: VPR, provenance: dict[str, Any]) -> str:
+    """Serialize the VPR result with observable CR provenance fields."""
+    payload = json.loads(vpr.model_dump_json(by_alias=True))
+    if not isinstance(payload, dict):
+        payload = {}
+    payload.update(provenance)
+    return json.dumps(payload, default=str)
 
 
 def _process_job_record(
@@ -161,7 +285,13 @@ def _process_job_record(
     bucket: str,
 ) -> None:
     """Process a single SQS record."""
-    job_id = _extract_job_id_from_record(record)
+    message_body = _extract_message_body_from_record(record)
+    if message_body is None:
+        logger.warning('Skipping record: no message body extracted')
+        return
+
+    job_id = message_body.get('job_id') or None
+    task_token = str(message_body.get('task_token') or '').strip() or None
 
     if not job_id:
         logger.warning('Skipping record: no job_id extracted')
@@ -175,8 +305,13 @@ def _process_job_record(
 
     # Repository returns dict or None
     if job_result is None:
-        logger.error('Job not found', job_id=job_id)
-        return
+        create_result = jobs_repo.create_job(_build_job_record_from_message(message_body))
+        if not create_result.success or not create_result.data:
+            error_msg = create_result.error or 'Job not found'
+            logger.error('Job not found and could not be created', job_id=job_id, error=error_msg)
+            _send_task_failure(task_token, cause=error_msg)
+            return
+        job_result = create_result.data
 
     job = job_result
     status = job.get('status')
@@ -189,35 +324,77 @@ def _process_job_record(
         logger.info('Job previously failed, skipping', job_id=job_id)
         return
 
-    _execute_job(jobs_repo, job, job_id, bucket)
+    # A job cancelled before this (re)delivery must NOT be resurrected. Without this
+    # skip the claim write below uses expected_current_status='CANCELLED' (echoing the
+    # value just read), so the conditional write would succeed and flip CANCELLED ->
+    # PROCESSING, then complete the artifact the user already cancelled (FE-UI-043).
+    if status == 'CANCELLED':
+        logger.info('Job was cancelled, skipping', job_id=job_id)
+        return
+
+    job = _merge_message_context_into_job(job, message_body)
+    _execute_job(jobs_repo, job, job_id, bucket, task_token)
 
 
-def _execute_job(
+def _build_job_record_from_message(message_body: dict[str, Any]) -> dict[str, Any]:
+    """Build a minimal VPR job record for artifact-chain messages."""
+    job_id = str(message_body.get('job_id') or '').strip()
+    user_id = str(message_body.get('user_id') or '').strip()
+    application_id = str(message_body.get('application_id') or job_id).strip()
+    input_data = {key: value for key, value in message_body.items() if key not in {'task_token'}}
+    return {
+        'job_id': job_id,
+        'user_id': user_id,
+        'application_id': application_id,
+        'input_data': input_data,
+        'status': 'PENDING',
+    }
+
+
+def _merge_message_context_into_job(job: dict[str, Any], message_body: dict[str, Any]) -> dict[str, Any]:
+    """Return a job record with artifact-chain message fields available as input_data."""
+    merged_job = dict(job)
+    existing_input = merged_job.get('input_data')
+    input_data = dict(existing_input) if isinstance(existing_input, dict) else {}
+    for key, value in message_body.items():
+        if key != 'task_token':
+            input_data.setdefault(key, value)
+    merged_job['input_data'] = input_data
+    merged_job.setdefault('user_id', str(message_body.get('user_id') or ''))
+    merged_job.setdefault('application_id', str(message_body.get('application_id') or message_body.get('job_id') or ''))
+    return merged_job
+
+
+def _execute_job(  # noqa: C901
     jobs_repo: JobsRepository,
     job: dict[str, Any],
     job_id: str,
     bucket: str,
+    task_token: str | None = None,
 ) -> None:
     """Execute the VPR generation job."""
     # Update status to PROCESSING
     now = datetime.now(timezone.utc).isoformat()
+    expected_current_status = str(job.get('status') or 'PENDING')
     processing_update = jobs_repo.update_job_status(
         job_id=job_id,
         status='PROCESSING',
-        expected_current_status='PENDING',
+        expected_current_status=expected_current_status,
         started_at=now,
     )
     if not processing_update.success:
         logger.info(
             'Skipping job: failed atomic transition to PROCESSING',
             job_id=job_id,
-            expected_current_status='PENDING',
+            expected_current_status=expected_current_status,
         )
         return
 
     # Get CV for this user
-    user_id: str = job.get('user_id', '')
-    input_data = job.get('input_data', {})
+    user_id = str(job.get('user_id', ''))
+    input_data_raw = job.get('input_data', {})
+    input_data: dict[str, Any] = input_data_raw if isinstance(input_data_raw, dict) else {}
+    application_id = str(job.get('application_id', ''))
 
     # Fetch CV from DynamoDB
     cv_table = os.environ.get('DYNAMODB_TABLE_NAME', 'careervp-users-dev')
@@ -225,32 +402,37 @@ def _execute_job(
     user_cv = cv_dal.get_cv(user_id)
 
     if not user_cv:
+        error_msg = 'User CV not found'
         jobs_repo.update_job_status(
             job_id=job_id,
             status='FAILED',
-            error='User CV not found',
+            error=error_msg,
         )
         logger.error('User CV not found', user_id=user_id)
+        _send_task_failure(task_token, cause=error_msg)
         return
 
     # Generate VPR
     try:
         job_posting = JobPosting.model_validate(_build_job_posting_input(jobs_repo, input_data))
-        gap_responses = [GapResponse.model_validate(item) for item in _build_gap_responses_input(input_data)]
+        gap_responses = _resolve_gap_responses(input_data, application_id, user_id)
+        company_context, company_research_id, company_research_at = _resolve_company_context(input_data, application_id, user_id)
         vpr_request = VPRRequest(
-            application_id=job.get('application_id', ''),
+            application_id=application_id,
             user_id=user_id,
             job_posting=job_posting,
             gap_responses=gap_responses,
-            company_context=input_data.get('company_context'),
+            company_context=company_context,
         )
     except Exception as e:
+        error_msg = f'Invalid VPR request payload: {str(e)}'
         jobs_repo.update_job_status(
             job_id=job_id,
             status='FAILED',
-            error=f'Invalid VPR request payload: {str(e)}',
+            error=error_msg,
         )
         logger.exception('Failed to build VPR request', job_id=job_id, error=str(e))
+        _send_task_failure(task_token, cause=error_msg)
         return
 
     next_version = cv_dal.get_next_vpr_version(vpr_request.application_id)
@@ -258,16 +440,32 @@ def _execute_job(
     result = generate_vpr(vpr_request, user_cv, cv_dal)
 
     if not result.success or not result.data:
+        error_msg = result.error or 'VPR generation failed'
         jobs_repo.update_job_status(
             job_id=job_id,
             status='FAILED',
-            error=result.error or 'VPR generation failed',
+            error=error_msg,
         )
         logger.error('VPR generation failed', job_id=job_id, error=result.error)
+        _send_task_failure(task_token, cause=error_msg)
         return
 
     vpr_response = result.data
     vpr: VPR = vpr_response.vpr  # type: ignore[assignment]
+    company_context_included = vpr_request.company_context is not None and vpr.company_insights is not None
+    if vpr_request.company_context is not None and vpr.company_insights is None:
+        logger.warning(
+            'VPR generated without company_insights despite company_context',
+            job_id=job_id,
+            application_id=application_id,
+            company_research_id=company_research_id,
+            company_context_included=False,
+        )
+    provenance: dict[str, Any] = {
+        'company_research_id': company_research_id,
+        'company_research_at': company_research_at,
+        'company_context_included': company_context_included,
+    }
 
     # Upload result to S3
     result_key = f'results/{job_id}.json'
@@ -275,37 +473,62 @@ def _execute_job(
         s3.put_object(
             Bucket=bucket,
             Key=result_key,
-            Body=vpr.model_dump_json(by_alias=True),
+            Body=_build_vpr_result_json(vpr, provenance),
             ContentType='application/json',
         )
         logger.info('Uploaded VPR to S3', job_id=job_id, bucket=bucket, key=result_key)
 
     except BotoClientError as e:
+        error_msg = f'S3 upload failed: {str(e)}'
         jobs_repo.update_job_status(
             job_id=job_id,
             status='FAILED',
-            error=f'S3 upload failed: {str(e)}',
+            error=error_msg,
         )
         logger.error('S3 upload failed', job_id=job_id, error=str(e))
+        _send_task_failure(task_token, cause=error_msg)
         return
 
-    # Update job to COMPLETED
+    # Update job to COMPLETED — CANCELLED guard (FE-UI-043 § worker_cancelled_guard).
+    # A concurrent cancel may have set status=CANCELLED while generation was running.
+    # update_job_status applies an atomic ConditionExpression (status == PROCESSING);
+    # if a cancel moved the job off PROCESSING the conditional write fails. On that
+    # failure we delete the partial S3 result we just uploaded, signal task_failure,
+    # and return cleanly (no DLQ).
     completed_at = datetime.now(timezone.utc).isoformat()
     result_url = _generate_presigned_url(result_key)
     one_year_ttl = int(datetime.now(timezone.utc).timestamp() + 365 * 24 * 3600)
 
-    jobs_repo.update_job(
+    completed_result = jobs_repo.update_job_status(
         job_id=job_id,
-        updates={
-            'status': 'COMPLETED',
-            'completed_at': completed_at,
-            'result_key': result_key,
-            'result_url': result_url,
-            'vpr_version': vpr.version,
-            'word_count': vpr.word_count,
-            'ttl': one_year_ttl,
-        },
+        status='COMPLETED',
+        expected_current_status='PROCESSING',
+        completed_at=completed_at,
+        result_key=result_key,
+        result_url=result_url,
+        vpr_version=vpr.version,
+        word_count=vpr.word_count,
+        ttl=one_year_ttl,
+        **provenance,
     )
+    if not completed_result.success:
+        if completed_result.code == ResultCode.DYNAMODB_CONDITION_CHECK_FAILED:
+            logger.info(
+                'VPR job cancelled before COMPLETED write — aborting cleanly',
+                job_id=job_id,
+                cancelled_before_persist=True,
+            )
+            try:
+                s3.delete_object(Bucket=bucket, Key=result_key)
+            except Exception:
+                pass
+            _send_task_failure(task_token, cause='Job was cancelled before COMPLETED write')
+            return
+        # Genuine DynamoDB failure — surface it so the message retries / DLQs.
+        error_msg = completed_result.error or 'Failed to persist COMPLETED status'
+        logger.error('Failed to write VPR COMPLETED status', job_id=job_id, error=error_msg)
+        _send_task_failure(task_token, cause=error_msg)
+        raise RuntimeError(error_msg)
 
     # Propagate completion to the application record so the hub reflects the
     # artifact status and artifact_id across page reloads.
@@ -321,6 +544,11 @@ def _execute_job(
                     artifact_type='vpr',
                     status='completed',
                     artifact_id=job_id,
+                )
+                app_repo.update_chain_execution_status(
+                    application_id=application_id_str,
+                    user_id=user_id,
+                    status='SUCCEEDED',
                 )
             except Exception as e:
                 logger.warning(
@@ -350,6 +578,7 @@ def _execute_job(
         version=vpr.version,
         word_count=vpr.word_count,
     )
+    _send_task_success(task_token, job_id=job_id, vpr_id=job_id)
 
 
 @logger.inject_lambda_context(log_event=False)

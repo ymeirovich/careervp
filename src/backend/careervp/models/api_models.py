@@ -85,6 +85,7 @@ class UpdateUserRequest(APIModel):
 class CVUploadRequest(APIModel):
     cv_content: str = Field(min_length=1)
     file_name: str = Field(min_length=1)
+    file_type: Literal['pdf', 'docx', 'txt'] | None = None
 
 
 class CVUploadResponse(APIModel):
@@ -113,7 +114,7 @@ class JobCreateRequest(APIModel):
     title: str = Field(min_length=1)
     company_name: str = Field(min_length=1)
     description: str = Field(min_length=1)
-    url: AnyUrl | None = None
+    url: str | None = None
     requirements: list[str] = Field(default_factory=list)
 
 
@@ -145,15 +146,11 @@ class VPRGenerateRequest(APIModel):
     cv_id: str = Field(min_length=1)
     job_id: str = Field(min_length=1)
     application_id: str | None = None
-    gap_response_ids: list[str]
+    gap_response_ids: list[str] = Field(default_factory=list)
     options: VPRGenerateOptions | None = None
-
-    @field_validator('gap_response_ids')
-    @classmethod
-    def _gap_ids_required(cls, value: list[str]) -> list[str]:
-        if not value:
-            raise ValueError('gap_response_ids must not be empty')
-        return value
+    # When True, an explicit regeneration is requested: bypass the idempotency
+    # short-circuit for an already-completed job and create a fresh job.
+    force: bool = False
 
 
 class VPRGenerateResponse(APIModel):
@@ -337,7 +334,7 @@ class CoverLetterRequest(APIModel):
     application_id: str | None = None
     vpr_id: str = Field(min_length=1)
     gap_response_ids: list[str]
-    company_research_id: str = Field(min_length=1)
+    company_research_id: str | None = None
     options: CoverLetterOptions | None = None
 
     @field_validator('gap_response_ids')
@@ -352,6 +349,32 @@ class CoverLetterResponse(APIModel):
     request_id: str | None = None
     status: Literal['processing'] | None = None
     estimated_time_seconds: int | None = None
+
+
+# ==========================================================================
+# AI-ASSIST SCHEMAS (FE-UI-046)
+# ==========================================================================
+
+
+class AIAssistRequest(APIModel):
+    """Field-scoped AI-assist request.
+
+    The client supplies ONLY these fields. The server resolves all other
+    cross-artifact context from DynamoDB by (JWT user_id, application_id).
+    """
+
+    artifact_type: Literal['gap_analysis', 'cv_tailored', 'cover_letter', 'interview_prep']
+    artifact_id: str = Field(min_length=1)
+    application_id: str = Field(min_length=1)
+    field_key: str = Field(min_length=1)
+    current_text: str = ''
+    locale: str = 'en'
+
+
+class AIAssistResponse(APIModel):
+    generated_markdown: str
+    model: str
+    tokens: int = 0
 
 
 class CoverLetterHookParagraph(APIModel):

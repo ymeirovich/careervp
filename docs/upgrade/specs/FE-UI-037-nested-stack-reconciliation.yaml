@@ -1,0 +1,139 @@
+spec_id: FE-UI-037
+title: "Infra — Reconcile MonitoringNestedStack (peer root stack) into a true CDK child nested stack"
+priority: critical
+status: draft
+owner: backend
+created_at: 2026-06-13
+updated_at: 2026-06-13
+tier: infra
+
+human_approval_gate:
+  required: true
+  gate_number: 1
+  reason: >
+    Deletes live (stateless) monitoring resources and runs a parent `cdk deploy` that
+    reconciles drift on a live stack (Cognito callback URLs, dashboard tags). Destructive
+    + deploy-affecting on dev infra.
+  approval_before: "Any `aws cloudformation delete-stack` or `cdk deploy CareerVpCrudDev`"
+
+recommended_model: opus
+reason_for_model: >
+  CloudFormation ownership topology, drift reconciliation, and physical-name collision
+  reasoning on a live stack are architecture-critical.
+
+depends_on:
+  - FE-UI-036   # phase-1 monitoring extraction (the CDK source models the child nested stack already)
+blocks:
+  - WORKER-LEGS-001   # worker-leg deploys need a clean parent diff first
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    The CDK source models MonitoringNestedStack as a CHILD nested stack of CareerVpCrudDev
+    (parent synth emits one AWS::CloudFormation::Stack child + a nested template with 15
+    CloudWatch alarms + 7 Logs metric filters = 22 resources). But the June-12 CloudFormation
+    Stack Refactor created MonitoringNestedStack as a PEER ROOT STACK, because
+    `create-stack-refactor` cannot accept the CfnParameter values a CDK nested stack requires.
+    Result: `cdk diff` is dirty, and a naive `cdk deploy` would try to CREATE the 22 resources
+    while the peer stack still owns the same physical names -> CREATE_FAILED collision.
+  required_behavior: >
+    Deployed reality matches CDK source: MonitoringNestedStack is a child AWS::CloudFormation::Stack
+    of CareerVpCrudDev. `cdk diff` is clean, drift detection is clean, infra pytest is green.
+  user_impact: >
+    The infra can deploy cleanly again, unblocking the VPR/CV worker-leg changes and any
+    further nested-stack phases.
+
+# =============================================================================
+# DECISION (locked 2026-06-13)
+# =============================================================================
+decision:
+  topology: "Path A — delete the peer stack, then cdk deploy recreates the 22 resources as a child nested stack"
+  rationale: >
+    The 22 resources (alarms + metric filters) are STATELESS — nothing to preserve. Path A needs
+    ZERO CDK source changes (source is already correct), auto-heals the 15-alarm tag drift (fresh
+    resources get CDK tags), and sidesteps the refactor parameter limitation by using native
+    delete+create instead of a move. Rejected: Path C (import) adds per-resource mapping complexity
+    to save a minutes-long dev alarm gap; Path B (peer root stack) needs a large CDK rewrite,
+    22 logical-id overrides, Export coupling, and STILL requires a parent deploy.
+  cognito_drift: "Capture live callback/logout URLs into CDK source BEFORE the parent deploy (locked)"
+
+# =============================================================================
+# IMPLEMENTATION STEPS (RUN IN ORDER — each is a gate)
+# =============================================================================
+implementation:
+  step_0_cognito_capture:
+    name: "Capture live Cognito callback drift into CDK source (deploy-safety)"
+    why: "A parent `cdk deploy` reverts callback/logout URLs to source values -> can break live auth."
+    change: >
+      Read the live User Pool Client callback + logout URLs
+      (aws cognito-idp describe-user-pool-client ...). Update cognito_construct.py so the source
+      matches the live URLs. Re-synth and confirm `cdk diff` shows NO Cognito change.
+    files:
+      - infra/careervp/cognito_construct.py
+    gate: "cdk diff CareerVpCrudDev shows zero Cognito callback/logout URL changes"
+
+  step_1_delete_peer_stack:
+    name: "Delete the peer-root MonitoringNestedStack to free the 22 physical names"
+    command: "aws cloudformation delete-stack --stack-name MonitoringNestedStack && aws cloudformation wait stack-delete-complete --stack-name MonitoringNestedStack"
+    note: >
+      Stateless resources; ~minutes gap in dev alarm/metric-filter coverage is acceptable.
+      Nothing depends on these (monitoring is outbound-only; the SNS topic + KMS live in the
+      PARENT and are untouched).
+    gate: "Stack reaches DELETE_COMPLETE; the 15 named alarms + 7 metric filters no longer exist"
+
+  step_2_deploy_parent:
+    name: "Deploy the parent so CDK creates the child nested stack + recreates the 22 resources"
+    command: "cd infra && npx cdk deploy CareerVpCrudDev"
+    expect: >
+      Adds one AWS::CloudFormation::Stack child + the 22 nested resources (fresh, correctly tagged);
+      reconciles harmless dashboard tag drift; Cognito is a no-op thanks to step 0.
+    gate: "Deploy succeeds (no CREATE_FAILED / no collision)"
+
+  step_3_verify:
+    name: "Post-deploy verification (all must be green)"
+    commands:
+      - "aws cloudformation detect-stack-drift --stack-name CareerVpCrudDev  # then describe -> drift clean"
+      - "cd infra && npx cdk diff CareerVpCrudDev   # MUST be clean"
+      - "mkdir -p src/backend/.build/lambdas && touch src/backend/.build/lambdas/.placeholder"
+      - "cd infra && npx cdk synth >/tmp/synth.log 2>&1; echo exit=$?  # 0"
+      - "cd infra && uv run pytest tests/infrastructure -v --tb=short  # 43+ pass"
+      - "python src/backend/scripts/validate_naming.py --path infra --strict"
+
+  step_4_cleanup:
+    name: "Confirm no leftover/empty peer stack"
+    change: "Verify no separate root stack named MonitoringNestedStack lingers after the recreate."
+
+# =============================================================================
+# COLLISION MECHANICS (reference)
+# =============================================================================
+collision_mechanics: >
+  The 7 alarms named `{function_name}-DynamoValidationException` (monitoring.py ~L204) and the
+  CDK-generated metric-filter names match the peer stack's live copies. Creating them while the
+  peer stack still owns those names => CREATE_FAILED. Deleting the peer stack FIRST frees the names.
+  The parent's deployed template already LACKS the 22 resources (the refactor moved them out), so
+  the parent deploy only ADDS the nested wrapper + recreates inside it — no parent-side deletes.
+
+# =============================================================================
+# LEARNINGS (do not re-discover)
+# =============================================================================
+learnings:
+  - "CloudFormation `create-stack-refactor` cannot supply nested-stack CfnParameter values, so it can only produce a PEER root stack, never a CDK child nested stack. Use delete+recreate (stateless) or resource-import (stateful) to reach a true child nested stack."
+  - "CDK NestedStack auto-wires parent->nested as CfnParameters; the SNS topic + KMS stay in the parent and are passed down (api_construct builds them via mode='dashboards')."
+  - "Dashboards REMAIN in the parent (2 dashboards + 1 alarm); only the 15 alarms + 7 metric filters were moved to the nested stack. (TEST-INFRA-001 Category C prose was corrected to match.)"
+
+# =============================================================================
+# VALIDATION / ACCEPTANCE
+# =============================================================================
+validation:
+  acceptance_criteria:
+    - "Deployed CareerVpCrudDev contains one AWS::CloudFormation::Stack child for monitoring"
+    - "No peer root stack named MonitoringNestedStack remains"
+    - "cdk diff CareerVpCrudDev is clean (no Cognito, no monitoring, no tag drift)"
+    - "Drift detection on CareerVpCrudDev is clean"
+    - "infra pytest green; naming --strict passes; cdk synth exits 0"
+
+test_hooks:
+  - "TEST-INFRA-001 § nested_split_assertions (parent has child Stack; nested holds alarms+filters)"
+  - "TEST-INFRA-001 § nested_split_no_replacement (cdk diff stateful guard before deploy)"

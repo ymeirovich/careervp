@@ -21,6 +21,14 @@ const DEFAULT_PROPS = {
 describe('ExportDropdown', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      blob: async () => new Blob(['file contents']),
+    });
+    vi.stubGlobal('URL', {
+      createObjectURL: vi.fn(() => 'blob:mock-url'),
+      revokeObjectURL: vi.fn(),
+    });
   });
 
   it('renders export button', () => {
@@ -99,4 +107,147 @@ describe('ExportDropdown', () => {
       expect(screen.getByText('Download failed. Please try again.')).toBeDefined();
     });
   });
+
+  it('closes dropdown when clicking outside', async () => {
+    render(<ExportDropdown {...DEFAULT_PROPS} />);
+    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+    expect(await screen.findByText('Download as Word (.docx)')).toBeDefined();
+
+    fireEvent.mouseDown(document.body);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Download as Word (.docx)')).toBeNull();
+    });
+  });
+
+  it('closes dropdown after format selected', async () => {
+    apiMocks.exportArtifact.mockResolvedValue({
+      download_url: 'https://example.com/file.docx',
+      expires_at: '2030-01-01T00:00:00Z',
+    });
+
+    render(<ExportDropdown {...DEFAULT_PROPS} />);
+    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+
+    const docxBtn = await screen.findByText('Download as Word (.docx)');
+    fireEvent.click(docxBtn);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Download as Word (.docx)')).toBeNull();
+    });
+  });
+
+  it('calls api.exportArtifact with jobId, moduleType, and docx format when DOCX clicked', async () => {
+    apiMocks.exportArtifact.mockResolvedValue({
+      download_url: 'https://example.com/file.docx',
+      expires_at: '2030-01-01T00:00:00Z',
+    });
+
+    render(<ExportDropdown {...DEFAULT_PROPS} />);
+    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+
+    const docxBtn = await screen.findByText('Download as Word (.docx)');
+    fireEvent.click(docxBtn);
+
+    await waitFor(() => {
+      expect(apiMocks.exportArtifact).toHaveBeenCalledWith('job1', 'vpr', 'docx');
+    });
+  });
+
+  it('calls api.exportArtifact with jobId, moduleType, and pdf format when PDF clicked', async () => {
+    apiMocks.exportArtifact.mockResolvedValue({
+      download_url: 'https://example.com/file.pdf',
+      expires_at: '2030-01-01T00:00:00Z',
+    });
+
+    render(<ExportDropdown {...DEFAULT_PROPS} />);
+    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+
+    const pdfBtn = await screen.findByText('Download as PDF');
+    fireEvent.click(pdfBtn);
+
+    await waitFor(() => {
+      expect(apiMocks.exportArtifact).toHaveBeenCalledWith('job1', 'vpr', 'pdf');
+    });
+  });
+
+  it('shows Exporting… and disables button while request is in flight', async () => {
+    let resolveExport!: (v: { download_url: string; expires_at: string }) => void;
+    apiMocks.exportArtifact.mockImplementation(
+      () => new Promise<{ download_url: string; expires_at: string }>(resolve => {
+        resolveExport = resolve;
+      }),
+    );
+
+    render(<ExportDropdown {...DEFAULT_PROPS} />);
+    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+
+    const docxBtn = await screen.findByText('Download as Word (.docx)');
+    fireEvent.click(docxBtn);
+
+    await waitFor(() => {
+      const btn = screen.getByRole('button', { name: /exporting/i }) as HTMLButtonElement;
+      expect(btn).toBeDefined();
+      expect(btn.disabled).toBe(true);
+    });
+
+    resolveExport({ download_url: 'https://example.com/file.docx', expires_at: '2030-01-01T00:00:00Z' });
+  });
+
+  it('re-enables button after successful export', async () => {
+    apiMocks.exportArtifact.mockResolvedValue({
+      download_url: 'https://example.com/file.docx',
+      expires_at: '2030-01-01T00:00:00Z',
+    });
+
+    render(<ExportDropdown {...DEFAULT_PROPS} />);
+    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+
+    const docxBtn = await screen.findByText('Download as Word (.docx)');
+    fireEvent.click(docxBtn);
+
+    await waitFor(() => {
+      // dropdown is closed after selection; only the trigger button remains
+      const btn = screen.getByRole('button') as HTMLButtonElement;
+      expect(btn.textContent).toContain('Export');
+      expect(btn.textContent).not.toContain('Exporting');
+      expect(btn.disabled).toBe(false);
+    });
+  });
+
+  it('re-enables button after export error', async () => {
+    apiMocks.exportArtifact.mockRejectedValue(new ApiError(500, 'Server error'));
+
+    render(<ExportDropdown {...DEFAULT_PROPS} />);
+    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+
+    const docxBtn = await screen.findByText('Download as Word (.docx)');
+    fireEvent.click(docxBtn);
+
+    await waitFor(() => {
+      const btn = screen.getByRole('button') as HTMLButtonElement;
+      expect(btn.textContent).not.toContain('Exporting');
+      expect(btn.disabled).toBe(false);
+    });
+  });
+
+  it.each(['vpr', 'cover_letter', 'interview_prep', 'cv_tailored'] as const)(
+    'passes correct moduleType %s to exportArtifact',
+    async (moduleType) => {
+      apiMocks.exportArtifact.mockResolvedValue({
+        download_url: 'https://example.com/file.docx',
+        expires_at: '2030-01-01T00:00:00Z',
+      });
+
+      render(<ExportDropdown jobId="job1" moduleType={moduleType} artifactId="art1" />);
+      fireEvent.click(screen.getByRole('button', { name: /export/i }));
+
+      const docxBtn = await screen.findByText('Download as Word (.docx)');
+      fireEvent.click(docxBtn);
+
+      await waitFor(() => {
+        expect(apiMocks.exportArtifact).toHaveBeenCalledWith('job1', moduleType, 'docx');
+      });
+    },
+  );
 });

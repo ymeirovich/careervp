@@ -199,6 +199,18 @@ def upload_cv() -> Response[str]:  # noqa: C901
             body=response.model_dump_json(),
         )
 
+    # Also persist to the dedicated CVs table so AI Assist and other services
+    # that query CVS_TABLE_NAME can find the CV without depending on the async
+    # S3-triggered worker (which may not be reachable when text_content is used).
+    cvs_table_name = os.environ.get('CVS_TABLE_NAME', '').strip()
+    if cvs_table_name and cvs_table_name != env_vars.TABLE_NAME:
+        try:
+            cvs_dal = DynamoDalHandler(table_name=cvs_table_name)
+            cvs_dal.save_cv(user_cv)
+            logger.info('CV also saved to cvs_table', cvs_table=cvs_table_name)
+        except Exception as e:  # noqa: BLE001
+            logger.warning('Failed to save CV to cvs_table (non-fatal)', cvs_table=cvs_table_name, error=str(e))
+
     # Build success response
     parse_time_ms = int((time.time() - start_time) * 1000)
     response = create_cv_parse_response(parse_result)
@@ -257,6 +269,13 @@ def _normalize_request_payload(body: Any) -> dict[str, Any]:
         user_id = _extract_user_id()
         if not user_id:
             raise ValueError('Authenticated user_id is required for /users/me/cv')
+        if openapi_request.file_type:
+            return {
+                'user_id': user_id,
+                'file_content': openapi_request.cv_content,
+                'file_type': openapi_request.file_type,
+                '_file_name': openapi_request.file_name,
+            }
         return {
             'user_id': user_id,
             'text_content': openapi_request.cv_content,

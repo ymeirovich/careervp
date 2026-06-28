@@ -1,0 +1,153 @@
+spec_id: FE-UI-052
+title: "Tavily infra nested stack — SSM secret wiring, CI/CD seeding, metrics + alarms, backup-trigger criteria"
+priority: high
+status: draft
+owner: infra
+created_at: 2026-06-27
+updated_at: 2026-06-27
+tier: infra
+
+human_approval_gate:
+  required: true
+  note: >
+    Adds a new SSM SecureString secret, a new CloudFormation nested stack, IAM grants, CloudWatch
+    alarms + SNS, and CI/CD secret seeding. Must deploy BEFORE FE-UI-049 can run in AWS. Respect
+    the FE-UI-035 invariant (no wildcard IAM) and the nested-stack split conventions (FE-UI-036/037).
+
+recommended_model_claude: sonnet           # +opus review for IAM scoping
+recommended_model_codex: medium            # +high review
+reason_for_model: >
+  CDK nested-stack wiring with scoped IAM and alarms. Correctness matters (IAM blast radius,
+  no-cycle synthesis), so review at claude:opus / codex:high; the bulk is mechanical.
+
+depends_on:
+  - FE-UI-036   # nested-stack split conventions
+  - FE-UI-037   # nested-stack reconciliation
+blocks:
+  - FE-UI-049   # Tavily client cannot fetch the key in AWS without this wiring
+  - FE-UI-050   # CR worker needs the cache table env + grant verified here
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    There is no Tavily secret, no env var, and no IAM grant for it. The Anthropic key is wired via
+    SSM in deploy.yml (put-parameter) + a test-anthropic-handshake.yml, and is granted to Lambdas
+    in api_construct.py (ssm:GetParameter on the anthropic ARN). New infra is requested to live in
+    a CloudFormation nested stack, not bolted onto api_construct.py. The company-research-cache
+    table exists and is env-injected, but the CR worker role grant must be verified.
+  required_behavior: >
+    1. A new nested stack owns the Tavily SSM wiring: env var TAVILY_API_KEY_SSM_PARAM ->
+       /careervp/<env>/tavily-api-key injected into the CR worker (+ CR handler), and a SCOPED
+       ssm:GetParameter grant on that param ARN only.
+    2. Verify/add the company-research-cache table env var + read/write grant on the CR worker role.
+    3. CI/CD seeds the secret: GitHub secret TAVILY_API_KEY -> an 'Ensure SSM Parameter exists'
+       step in deploy.yml + deploy-staging.yml (put-parameter SecureString --overwrite), plus a
+       test-tavily-handshake.yml mirroring the Anthropic one, on code-change AND a daily cron.
+    4. Observability: CloudWatch custom metrics + alarms with SNS notification, and a documented
+       backup-trigger criterion for when to add a secondary search provider.
+  user_impact: >
+    The Tavily key is available to the right Lambdas with least privilege, failures are observable,
+    and a dead key / exhausted quota is caught proactively rather than as a wave of failed VPRs.
+
+# =============================================================================
+# EVIDENCE
+# =============================================================================
+evidence:
+  anthropic_ssm_pattern:
+    - { file: infra/careervp/constants.py, line: "183-184", code: "ANTHROPIC_API_KEY_SSM_PARAM / _ENV" }
+    - { file: infra/careervp/api_construct.py, line: "783-791", note: "scoped ssm:GetParameter PolicyDocument" }
+    - { file: infra/careervp/api_construct.py, line: 845, note: "env var injection" }
+    - { file: infra/careervp/api_construct.py, line: "1466-1473", note: "add_to_role_policy ssm:GetParameter" }
+  cicd_pattern:
+    - { file: .github/workflows/deploy.yml, line: "87-100", note: "Ensure SSM Parameter exists (anthropic)" }
+    - { file: .github/workflows/test-anthropic-handshake.yml, note: "handshake job to mirror" }
+  cache_table:
+    - { file: infra/careervp/api_construct.py, line: "640-650,830", note: "cache table IAM + env (verify on CR worker)" }
+  nested_stack_pattern:
+    - { file: infra/careervp/ai_assist_nested_stack.py, note: "nested stack pattern to mirror" }
+
+# =============================================================================
+# ARCHITECTURE
+# =============================================================================
+architecture:
+  constants:
+    file: infra/careervp/constants.py
+    add:
+      - "TAVILY_API_KEY_SSM_PARAM = f'/careervp/{ENVIRONMENT}/tavily-api-key'"
+      - "TAVILY_API_KEY_SSM_PARAM_ENV = 'TAVILY_API_KEY_SSM_PARAM'"
+  nested_stack:
+    location: infra/careervp/company_research_nested_stack.py  # NEW (mirror ai_assist_nested_stack.py)
+    owns:
+      - "Env injection TAVILY_API_KEY_SSM_PARAM on CR worker + CR handler Lambdas."
+      - "Scoped ssm:GetParameter on the Tavily param ARN ONLY (no wildcards)."
+      - "Verify/add company-research-cache table env + read/write grant on the CR worker role."
+      - "CloudWatch alarms + SNS topic (reuse the error-report notification path if present)."
+    instantiated_from: infra/careervp/service_stack.py (or api_construct.py)
+  observability:
+    metrics:  # Powertools metrics.add_metric in backend (FE-UI-049/050 emit these)
+      - TavilySearchSuccess
+      - TavilySearchFailure
+      - TavilyLatencyMs
+      - CompanyResearchAllSourcesFailed
+      - CompanyResearchConfidenceBelowThreshold
+    alarms:
+      - "TavilySearchFailure rate over threshold -> SNS notify."
+      - "CompanyResearchAllSourcesFailed count over threshold -> SNS notify."
+    handshake:
+      file: .github/workflows/test-tavily-handshake.yml  # NEW (mirror test-anthropic-handshake.yml)
+      triggers: ["on change to tavily_client.py / web_search.py", "daily cron schedule"]
+  cicd:
+    files: [.github/workflows/deploy.yml, .github/workflows/deploy-staging.yml]
+    change: "Add 'Ensure SSM Parameter exists' step for TAVILY_API_KEY -> /careervp/<env>/tavily-api-key (SecureString, --overwrite), mirroring the anthropic step."
+  backup_trigger:
+    criterion: >
+      Add a secondary search provider (e.g. Brave Search API) ONLY when sustained TavilySearchFailure
+      > ~5% over 1h OR repeated quota/credit errors. Until then a second provider is premature.
+
+# =============================================================================
+# IMPLEMENTATION STEPS
+# =============================================================================
+implementation:
+  step_1: { name: "Constants", change: "Tavily SSM param + env constant" }
+  step_2: { name: "Nested stack", change: "env + scoped IAM + cache grant verify + alarms/SNS" }
+  step_3: { name: "CI/CD seeding", change: "deploy.yml/deploy-staging.yml put-parameter step" }
+  step_4: { name: "Handshake workflow", change: "test-tavily-handshake.yml on change + daily cron" }
+
+# =============================================================================
+# CONSTRAINTS
+# =============================================================================
+constraints:
+  - "New infra lives in a CloudFormation nested stack, not api_construct.py."
+  - "ssm:GetParameter scoped to the Tavily param ARN only — NO wildcard (FE-UI-035 invariant)."
+  - "Secret is SecureString; never echoed in logs or stored in plaintext env."
+  - "cdk synth produces no dependency cycle; naming validator passes."
+  - "GitHub secret TAVILY_API_KEY is the source for CI seeding; manual put-parameter is the local fallback."
+
+# =============================================================================
+# VALIDATION
+# =============================================================================
+validation:
+  commands:
+    - "cd infra && uv sync && npx cdk synth"
+    - "cd infra && uv run pytest tests/ -v --tb=short -k 'tavily or company_research or nested'"
+    - "python src/backend/scripts/validate_naming.py --path infra --strict"
+    - "uvx checkov -d infra/cdk.out --framework cloudformation --quiet"
+  acceptance_criteria:
+    - "Synthesized template injects TAVILY_API_KEY_SSM_PARAM into the CR worker (+ CR handler)."
+    - "An ssm:GetParameter statement is scoped to the Tavily param ARN; no wildcard resource."
+    - "CR worker role has company-research-cache read/write + the table env var."
+    - "CloudWatch alarms for TavilySearchFailure + CompanyResearchAllSourcesFailed exist with an SNS action."
+    - "deploy.yml + deploy-staging.yml seed /careervp/<env>/tavily-api-key from secrets.TAVILY_API_KEY."
+    - "test-tavily-handshake.yml exists and runs on code change + a daily schedule."
+    - "cdk synth has no dependency cycle; naming + checkov pass."
+
+# =============================================================================
+# TEST HOOKS
+# =============================================================================
+test_hooks:
+  - "TEST-FE-052 § infra_tavily_wiring: env + scoped IAM + no cycle"
+  - "TEST-FE-052 § infra_cache_grant: CR worker cache env + grant"
+  - "TEST-FE-052 § infra_alarms: alarms + SNS action present"
+  - "TEST-FE-052 § cicd_seeding: deploy workflows + handshake (lint/grep assertions)"

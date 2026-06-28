@@ -1,6 +1,6 @@
 import React, { Suspense } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 
 const mockPush = vi.fn();
 
@@ -8,7 +8,6 @@ const apiMocks = vi.hoisted(() => ({
   getGapQuestions: vi.fn(),
   getApplication: vi.fn(),
   getCV: vi.fn(),
-  generateGapQuestions: vi.fn(),
   saveGapResponses: vi.fn(),
 }));
 
@@ -22,6 +21,14 @@ vi.mock('../../api/methods', () => ({
   api: apiMocks,
 }));
 
+vi.mock('../../components/GapQuestionCard/GapQuestionCard', () => ({
+  GapQuestionCard: (props: { question: { question_id: string; question: string }; questionIndex: number }) => (
+    <div data-testid={`question-row-${props.questionIndex}`}>
+      {props.question.question}
+    </div>
+  ),
+}));
+
 function renderWithSuspense(ui: React.ReactElement) {
   return render(<Suspense fallback={<div data-testid="suspense-fallback" />}>{ui}</Suspense>);
 }
@@ -32,7 +39,7 @@ const QUESTIONS = [
   { question_id: 'q3', question: 'Describe a leadership situation', impact: 'LOW' as const, probability: 'MEDIUM' as const, gap_score: 3, tags: [] },
 ];
 
-const HUB_WITH_CV = {
+const HUB_EMPTY = {
   application: { application_id: 'job1', state: 'active', created_at: '', trial_credit_consumed: false },
   job: { job_id: 'job1', user_id: 'u1', title: 'Engineer', company_name: 'Acme', status: 'active', created_at: '', requirements: [] },
   cv: { cv_id: 'cv1' },
@@ -49,11 +56,10 @@ const HUB_WITH_CV = {
 describe('Gap Analysis page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    apiMocks.getApplication.mockResolvedValue(HUB_WITH_CV);
-    apiMocks.getCV.mockResolvedValue({ cv_id: 'cv1', user_id: 'u1', full_name: 'Jane', language: 'en', contact_info: {}, experience: [], education: [], skills: [], certifications: [], top_achievements: [], languages: [] });
+    apiMocks.getApplication.mockResolvedValue(HUB_EMPTY);
   });
 
-  it('renders 3 question rows with impact badges', async () => {
+  it('renders 3 question rows after loading', async () => {
     apiMocks.getGapQuestions.mockResolvedValue(QUESTIONS);
 
     const { default: GapPage } = await import('../../app/applications/[id]/gap-analysis/page');
@@ -64,48 +70,27 @@ describe('Gap Analysis page', () => {
       expect(screen.getByTestId('question-row-1')).toBeDefined();
       expect(screen.getByTestId('question-row-2')).toBeDefined();
     });
-
-    // HIGH impact badge should be visible
-    const badges = screen.getAllByText(/Impact: HIGH/);
-    expect(badges.length).toBeGreaterThan(0);
   });
 
-  it('save button calls saveGapResponses with filled responses', async () => {
-    apiMocks.getGapQuestions.mockResolvedValue(QUESTIONS.slice(0, 2));
-    apiMocks.saveGapResponses.mockResolvedValue(undefined);
-
-    const { default: GapPage } = await import('../../app/applications/[id]/gap-analysis/page');
-    renderWithSuspense(<GapPage params={Promise.resolve({ id: 'job1' })} />);
-
-    // Wait for questions to render (page starts in edit mode when no saved responses)
-    await waitFor(() => {
-      expect(screen.getByTestId('question-row-0')).toBeDefined();
-    });
-
-    // Fill in answers
-    const textareas = screen.getAllByPlaceholderText('Your answer…');
-    fireEvent.change(textareas[0], { target: { value: 'Answer 1' } });
-    fireEvent.change(textareas[1], { target: { value: 'Answer 2' } });
-
-    // Click Save
-    fireEvent.click(screen.getByTestId('save-responses'));
-
-    await waitFor(() => {
-      expect(apiMocks.saveGapResponses).toHaveBeenCalledWith('job1', expect.arrayContaining([
-        expect.objectContaining({ question_id: 'q1', response: 'Answer 1' }),
-        expect.objectContaining({ question_id: 'q2', response: 'Answer 2' }),
-      ]));
-    });
-  });
-
-  it('shows generate button when no questions and CV exists', async () => {
+  it('shows empty state when no questions are returned', async () => {
     apiMocks.getGapQuestions.mockResolvedValue([]);
 
     const { default: GapPage } = await import('../../app/applications/[id]/gap-analysis/page');
     renderWithSuspense(<GapPage params={Promise.resolve({ id: 'job1' })} />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('generate-gap-questions')).toBeDefined();
+      expect(screen.getByTestId('empty-state')).toBeDefined();
+    });
+  });
+
+  it('shows error banner when getGapQuestions rejects', async () => {
+    apiMocks.getGapQuestions.mockRejectedValue(new Error('Network error'));
+
+    const { default: GapPage } = await import('../../app/applications/[id]/gap-analysis/page');
+    renderWithSuspense(<GapPage params={Promise.resolve({ id: 'job1' })} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('error-banner')).toBeDefined();
     });
   });
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter, useParams } from 'next/navigation';
 import { api } from '../../../../api/methods';
 import { ErrorBoundary } from '../../../../components/ErrorBoundary/ErrorBoundary';
@@ -262,6 +262,44 @@ function GapsSection({ data }: { data: VPRFullData['evidenceGaps'] }) {
   );
 }
 
+function CompanyInsightsSection({ data }: { data: NonNullable<VPRFullData['companyInsights']> }) {
+  return (
+    <div className={CARD}>
+      <h2 className={TITLE}>Company Insights</h2>
+      <div className="flex flex-col gap-1">
+        <p className={LABEL}>Mission & Market Position</p>
+        <p className={BODY}>{data.missionAndPosition}</p>
+      </div>
+      {data.recentInitiatives.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p className={LABEL}>Recent Initiatives</p>
+          <ul className="flex flex-col gap-1.5 pl-1">
+            {data.recentInitiatives.map((item, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-text-primary">
+                <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-primary-action" />
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {data.currentChallenges.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p className={LABEL}>Current Challenges</p>
+          <ul className="flex flex-col gap-1.5 pl-1">
+            {data.currentChallenges.map((item, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-text-primary">
+                <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-state-warning" />
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SkillsSection({ data }: { data: VPRFullData['skillsAnalysis'] }) {
   return (
     <div className={CARD}>
@@ -297,6 +335,7 @@ function VPRContent({ jobId }: { jobId: string }) {
   const [artifactId, setArtifactId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expired, setExpired] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -324,16 +363,32 @@ function VPRContent({ jobId }: { jobId: string }) {
         const vprData = await api.getVPR(resolvedArtifactId);
         setVpr(vprData);
 
+        if (vprData?.status === 'expired') {
+          setExpired(true);
+          return;
+        }
+
         const downloadUrl = vprData?.result?.download_url;
         if (downloadUrl) {
           const resp = await fetch(downloadUrl);
-          if (resp.ok) {
-            const data: VPRFullData = await resp.json();
-            setFullVpr(data);
+          if (resp.status === 403 || resp.status === 401) {
+            throw new Error('expired_token');
           }
+          if (!resp.ok) {
+            throw new Error(`s3_fetch_${resp.status}`);
+          }
+          const data: VPRFullData = await resp.json();
+          setFullVpr(data);
         }
       } catch (err) {
-        setError('Failed to load Value Proposition Report.');
+        const msg = err instanceof Error ? err.message : '';
+        if (msg === 'expired_token') {
+          setError('Your session link expired. Please refresh the page to reload the report.');
+        } else if (msg.startsWith('s3_fetch_')) {
+          setError('The report file could not be found. It may still be processing — please try again in a moment.');
+        } else {
+          setError('Failed to load Value Proposition Report.');
+        }
         console.error(err);
       } finally {
         setLoading(false);
@@ -355,6 +410,27 @@ function VPRContent({ jobId }: { jobId: string }) {
     return (
       <div className="flex justify-center py-12">
         <Spinner size="lg" aria-label="Loading Value Proposition Report…" />
+      </div>
+    );
+  }
+
+  if (expired) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="text-xl font-bold text-text-primary">Value Proposition Report</h1>
+          {backButton}
+        </div>
+        <div className="rounded-md bg-state-warning/10 border border-state-warning px-4 py-4 flex flex-col gap-3">
+          <p className="text-sm font-semibold text-state-warning">This report has expired</p>
+          <p className="text-sm text-text-muted">VPR results are stored for 1 year, but this one was generated before that policy was in place. Go back to the application hub to regenerate it.</p>
+          <button
+            onClick={() => router.push(`/applications/${jobId}`)}
+            className="self-start rounded-md bg-primary-action px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+          >
+            Back to Hub to Regenerate
+          </button>
+        </div>
       </div>
     );
   }
@@ -392,7 +468,7 @@ function VPRContent({ jobId }: { jobId: string }) {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {artifactId && (
-            <ExportDropdown jobId={jobId} moduleType="vpr" artifactId={artifactId} />
+            <ExportDropdown jobId={jobId} moduleType="vpr" artifactId={artifactId} companyName={job?.company_name ?? ''} jobTitle={job?.title ?? ''} />
           )}
           {backButton}
         </div>
@@ -407,6 +483,7 @@ function VPRContent({ jobId }: { jobId: string }) {
           <ObjectionsSection data={fullVpr.concernsAndMitigations} />
           <GapsSection data={fullVpr.evidenceGaps} />
           <SkillsSection data={fullVpr.skillsAnalysis} />
+          {fullVpr.companyInsights && <CompanyInsightsSection data={fullVpr.companyInsights} />}
         </>
       ) : (
         <>

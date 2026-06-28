@@ -26,6 +26,7 @@ _ARTIFACT_TYPES: tuple[str, ...] = (
     'cover_letter',
     'interview_prep',
     'gap_analysis',
+    'company_research',
 )
 
 _RELOAD_ROUTE_BY_STATE: dict[str, str] = {
@@ -34,7 +35,10 @@ _RELOAD_ROUTE_BY_STATE: dict[str, str] = {
     'gap_questions_pending': '/gap-questions',
     'gap_questions_ready': '/gap-questions',
     'gap_responses_submitted': '/gap-questions',
+    'cr_pending': '/artifacts',
+    'cr_failed': '/artifacts',
     'artifacts_generating': '/artifacts',
+    'artifacts_partial': '/artifacts',
     'artifacts_completed': '/artifacts',
 }
 
@@ -91,13 +95,30 @@ def _build_artifacts(application: dict[str, Any]) -> dict[str, dict[str, Any]]:
     }
 
 
+def _build_application_from_job(application_id: str, user_id: str, job_record: dict[str, Any]) -> dict[str, Any]:
+    created_at = job_record.get('created_at')
+    return {
+        'application_id': application_id,
+        'user_id': user_id,
+        'job_id': job_record.get('job_id') or application_id,
+        'state': 'created',
+        'created_at': created_at,
+        'updated_at': created_at,
+        'trial_credit_consumed': False,
+        'artifact_statuses': {},
+    }
+
+
 def _build_recovery_payload(application: dict[str, Any], job_record: dict[str, Any] | None) -> dict[str, Any]:
     state = str(application.get('state', 'created'))
     cv_id = application.get('cv_id')
     has_gap_payload = state in {
         'gap_questions_ready',
         'gap_responses_submitted',
+        'cr_pending',
+        'cr_failed',
         'artifacts_generating',
+        'artifacts_partial',
         'artifacts_completed',
     }
     gap_questions = application.get('gap_questions')
@@ -108,6 +129,7 @@ def _build_recovery_payload(application: dict[str, Any], job_record: dict[str, A
             'state': state,
             'created_at': application.get('created_at'),
             'trial_credit_consumed': bool(application.get('trial_credit_consumed', False)),
+            'company_research_error': bool(application.get('company_research_error', False)),
         },
         'job': job_record
         or {
@@ -121,6 +143,36 @@ def _build_recovery_payload(application: dict[str, Any], job_record: dict[str, A
         'artifacts': _build_artifacts(application),
         'reload_route': _RELOAD_ROUTE_BY_STATE.get(state, '/applications'),
     }
+
+
+def _load_application_and_job(
+    repository: ApplicationRepository,
+    application_id: str,
+    user_id: str,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, dict[str, Any] | None]:
+    application = repository.get(application_id=application_id, user_id=user_id)
+    job_record: dict[str, Any] | None = None
+    if application is None:
+        try:
+            jobs_repository = _get_jobs_repository()
+            job_record = jobs_repository.get_job(application_id)
+        except Exception:
+            job_record = None
+        if job_record is None:
+            return None, None, _response(HTTPStatus.NOT_FOUND, {'error': 'Application not found'})
+        if str(job_record.get('user_id', '')) != user_id:
+            return None, None, _response(HTTPStatus.FORBIDDEN, {'error': 'User can only access own applications'})
+        application = _build_application_from_job(application_id=application_id, user_id=user_id, job_record=job_record)
+    return application, job_record, None
+
+
+def _load_job_for_application(application: dict[str, Any]) -> dict[str, Any] | None:
+    try:
+        jobs_repository = _get_jobs_repository()
+        job_id = application.get('job_id')
+        return jobs_repository.get_job(str(job_id)) if isinstance(job_id, str) and job_id else None
+    except Exception:
+        return None
 
 
 @logger.inject_lambda_context(correlation_id_path=API_GATEWAY_REST)
@@ -143,24 +195,25 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
     repository = _get_application_repository()
     try:
-        application = repository.get(application_id=application_id, user_id=user_id)
+        application, job_record, error_response = _load_application_and_job(
+            repository=repository,
+            application_id=application_id,
+            user_id=user_id,
+        )
     except Exception as e:
         logger.exception('Failed to retrieve application', application_id=application_id, error=str(e), error_type=type(e).__name__)
         return _response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Failed to retrieve application', 'details': str(e)})
+    if error_response is not None:
+        return error_response
     if application is None:
         return _response(HTTPStatus.NOT_FOUND, {'error': 'Application not found'})
 
     owner_user_id = application.get('user_id')
-    if isinstance(owner_user_id, str) and owner_user_id != user_id:
+    if not (isinstance(owner_user_id, str) and owner_user_id and owner_user_id == user_id):
         return _response(HTTPStatus.FORBIDDEN, {'error': 'User can only access own applications'})
 
-    job_record: dict[str, Any] | None = None
-    try:
-        jobs_repository = _get_jobs_repository()
-        job_id = application.get('job_id')
-        job_record = jobs_repository.get_job(str(job_id)) if isinstance(job_id, str) and job_id else None
-    except Exception:
-        job_record = None
+    if job_record is None:
+        job_record = _load_job_for_application(application)
 
     payload = _build_recovery_payload(application=application, job_record=job_record)
     return _response(HTTPStatus.OK, payload)

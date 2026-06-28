@@ -136,6 +136,67 @@ def test_gap_response_request_requires_responses() -> None:
         GapResponseRequest.model_validate({'responses': []})
 
 
+def test_cover_letter_request_omitting_company_research_id_succeeds() -> None:
+    from careervp.models.api_models import CoverLetterRequest
+
+    req = CoverLetterRequest.model_validate(
+        {
+            'cv_id': 'cv-1',
+            'job_id': 'job-1',
+            'vpr_id': 'vpr-1',
+            'gap_response_ids': ['r1'],
+        }
+    )
+    assert req.company_research_id is None
+
+
+def test_cover_letter_request_with_company_research_id_string_succeeds() -> None:
+    from careervp.models.api_models import CoverLetterRequest
+
+    req = CoverLetterRequest.model_validate(
+        {
+            'cv_id': 'cv-1',
+            'job_id': 'job-1',
+            'vpr_id': 'vpr-1',
+            'gap_response_ids': ['r1'],
+            'company_research_id': 'cr-abc',
+        }
+    )
+    assert req.company_research_id == 'cr-abc'
+
+
+def test_cover_letter_request_company_research_id_null_succeeds() -> None:
+    from careervp.models.api_models import CoverLetterRequest
+
+    req = CoverLetterRequest.model_validate(
+        {
+            'cv_id': 'cv-1',
+            'job_id': 'job-1',
+            'vpr_id': 'vpr-1',
+            'gap_response_ids': ['r1'],
+            'company_research_id': None,
+        }
+    )
+    assert req.company_research_id is None
+
+
+def test_cover_letter_request_company_research_id_empty_string_is_now_allowed() -> None:
+    """Empty string was previously rejected (min_length=1). The field is now
+    `str | None = None` with no length constraint, so "" is accepted as-is."""
+    from careervp.models.api_models import CoverLetterRequest
+
+    req = CoverLetterRequest.model_validate(
+        {
+            'cv_id': 'cv-1',
+            'job_id': 'job-1',
+            'vpr_id': 'vpr-1',
+            'gap_response_ids': ['r1'],
+            'company_research_id': '',
+        }
+    )
+    assert req.company_research_id == ''
+
+
 def test_api_model_json_round_trip_for_health_response() -> None:
     health = HealthResponse(
         status='healthy',

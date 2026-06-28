@@ -38,6 +38,9 @@ export function deriveModuleStatus(
   isFinalized: boolean
 ): ModuleStatus {
   if (rawStatus === null || rawStatus === undefined) return 'notStarted';
+  if (rawStatus === 'cancelled') return 'notStarted';
+  // FE-UI-041: a CR that was never generated maps to the 'notStarted' card state (Generate action).
+  if (rawStatus === 'not_generated') return 'notStarted';
   if (rawStatus === 'pending' || rawStatus === 'processing') return 'processing';
   if (rawStatus === 'failed') return 'failed';
   // completed
@@ -48,19 +51,9 @@ export function deriveModuleStatus(
 
 export function detectStaleness(
   moduleData: Partial<Record<ModuleType, RawModuleData>>,
-  cvData: RawCVData | null,
-  previousCvUpdatedAt: string | null,
   gapAnalysis: RawGapAnalysisData | null
 ): Set<ModuleType> {
   const stale = new Set<ModuleType>();
-
-  if (cvData && previousCvUpdatedAt && cvData.updated_at > previousCvUpdatedAt) {
-    stale.add('gapAnalysis');
-    stale.add('vpr');
-    stale.add('tailoredCV');
-    stale.add('coverLetter');
-    stale.add('interviewPrep');
-  }
 
   const vprModule = moduleData.vpr;
   if (gapAnalysis?.responses_submitted_at && vprModule) {
@@ -183,15 +176,18 @@ export function mapApplicationDataToHubState(
   application: RawApplicationData,
   moduleData: Partial<Record<ModuleType, RawModuleData>>,
   gapAnalysis: RawGapAnalysisData | null,
-  cvData: RawCVData | null,
-  previousCvUpdatedAt: string | null
+  cvData: RawCVData | null
 ): HubState {
-  const staleSet = detectStaleness(moduleData, cvData, previousCvUpdatedAt, gapAnalysis);
+  const staleSet = detectStaleness(moduleData, gapAnalysis);
 
   const moduleStatuses = {} as Record<ModuleType, ModuleStatus>;
   for (const m of ALL_MODULE_TYPES) {
-    const raw = moduleData[m] ?? null;
-    moduleStatuses[m] = deriveModuleStatus(m, raw?.status ?? null, staleSet.has(m), application.is_finalized);
+    if (m === 'baseCV') {
+      moduleStatuses[m] = cvData?.cv_id ? 'ready' : 'notStarted';
+    } else {
+      const raw = moduleData[m] ?? null;
+      moduleStatuses[m] = deriveModuleStatus(m, raw?.status ?? null, staleSet.has(m), application.is_finalized);
+    }
   }
 
   const hubStatus = deriveHubStatus(moduleStatuses, staleSet, application.is_finalized);

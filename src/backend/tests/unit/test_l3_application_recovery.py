@@ -64,6 +64,7 @@ def _make_application_record(state: str = 'created', user_id: str = OWNER_USER_I
             'cover_letter': 'completed' if state == 'artifacts_completed' else 'pending',
             'interview_prep': 'completed' if state == 'artifacts_completed' else 'pending',
             'gap_analysis': 'completed' if state == 'artifacts_completed' else 'pending',
+            'company_research': 'completed' if state == 'artifacts_completed' else 'pending',
         },
     }
 
@@ -119,14 +120,43 @@ class TestApplicationRecoveryHTTPStatus:
         from careervp.handlers.application_handler import lambda_handler
 
         event = _make_event(user_id=OWNER_USER_ID)
-        with patch('careervp.handlers.application_handler._get_application_repository') as mock_repo_factory:
+        with (
+            patch('careervp.handlers.application_handler._get_application_repository') as mock_repo_factory,
+            patch('careervp.handlers.application_handler._get_jobs_repository') as mock_jobs_factory,
+        ):
             mock_repo = MagicMock()
             mock_repo.get.return_value = None
             mock_repo_factory.return_value = mock_repo
+            mock_jobs = MagicMock()
+            mock_jobs.get_job.return_value = None
+            mock_jobs_factory.return_value = mock_jobs
 
             response = lambda_handler(event, MagicMock())
 
         assert response['statusCode'] == 404
+
+    def test_recovery_synthesizes_created_application_for_owned_job_without_application_record(self) -> None:
+        from careervp.handlers.application_handler import lambda_handler
+
+        event = _make_event(user_id=OWNER_USER_ID, application_id='job-xyz789')
+        with (
+            patch('careervp.handlers.application_handler._get_application_repository') as mock_repo_factory,
+            patch('careervp.handlers.application_handler._get_jobs_repository') as mock_jobs_factory,
+        ):
+            mock_repo = MagicMock()
+            mock_repo.get.return_value = None
+            mock_repo_factory.return_value = mock_repo
+            mock_jobs = MagicMock()
+            mock_jobs.get_job.return_value = _make_job_record()
+            mock_jobs_factory.return_value = mock_jobs
+
+            response = lambda_handler(event, MagicMock())
+
+        assert response['statusCode'] == 200
+        payload = json.loads(response['body'])
+        assert payload['application']['application_id'] == 'job-xyz789'
+        assert payload['application']['state'] == 'created'
+        assert payload['job']['job_id'] == 'job-xyz789'
 
     def test_recovery_returns_401_without_auth(self) -> None:
         from careervp.handlers.application_handler import lambda_handler
@@ -221,10 +251,15 @@ class TestApplicationRecoveryReloadRouting:
 class TestApplicationRouteWiring:
     def test_route_uses_application_handler_lambda(self) -> None:
         source = CDK_PATH.read_text(encoding='utf-8')
-        assert '("/applications/{application_id}", "GET", self.application_api_func)' in source
+        # Phase 1: explicit route; Phase 2: proxy prefix. Either form is valid.
+        assert (
+            '("/applications/{application_id}", "GET", self.application_api_func)' in source
+            or '("/applications", self.application_api_func, True)' in source
+        )
 
     def test_route_no_longer_uses_job_handler_lambda(self) -> None:
         source = CDK_PATH.read_text(encoding='utf-8')
+        assert '("/applications", self.job_api_func, True)' not in source
         assert '("/applications/{application_id}", "GET", self.job_api_func)' not in source
 
     def test_job_handler_has_no_compatibility_alias(self) -> None:

@@ -1,0 +1,525 @@
+spec_id: FE-UI-028
+title: "Export Download — DOCX generation and presigned URL for all four modules"
+priority: high
+status: draft
+owner: backend
+created_at: 2026-06-05
+updated_at: 2026-06-05
+route: "GET /jobs/{jobId}/artifacts/{moduleType}/export?format=docx|pdf"
+component_file: src/backend/careervp/handlers/export_handler.py
+tier: feature
+
+problem_statement:
+  current_behavior: >
+    The export Lambda at src/backend/careervp/handlers/export_handler.py is a 501 stub.
+    No Lambda function or API Gateway route exists for export in api_construct.py.
+    The frontend ExportDropdown is complete and correctly handles 200/501/error responses,
+    but the endpoint it calls never returns a real download URL.
+  required_behavior: >
+    GET /jobs/{jobId}/artifacts/{moduleType}/export?format=docx returns
+    { download_url: string, expires_at: string } where download_url is a presigned S3 URL
+    valid for 3600 seconds. The handler reads the source artifact from the appropriate
+    data store (S3 for vpr; DynamoDB artifacts table for cover_letter and interview_prep;
+    DynamoDB main table for cv_tailored), generates a .docx file using python-docx,
+    writes it to ARTIFACTS_BUCKET_NAME under exports/{moduleType}/{jobId}/{jobId}.docx,
+    and presigns the object for download.
+    GET ?format=pdf returns 501 with a clear message — no PDF library is present.
+    The route is registered in API Gateway with a Cognito authorizer.
+    The Lambda has the minimum IAM grants required to read source artifacts and write
+    the generated file to the artifacts bucket.
+  user_impact: >
+    Users can currently see the Export dropdown and select a format but receive no download.
+    This change makes DOCX export functional end-to-end. PDF remains a planned future
+    feature and shows a "coming soon" message, consistent with current ExportDropdown behaviour.
+
+evidence:
+  frontend_status: >
+    ExportDropdown.tsx is complete. It calls
+    api.exportArtifact(jobId, moduleType, format) which maps to
+    GET /jobs/{jobId}/artifacts/{moduleType}/export?format={format}.
+    On 200 it opens download_url in a new tab. On 501 it shows
+    "Export is coming soon!". On any other error it shows
+    "Download failed. Please try again."
+  existing_tests: src/frontend/tests/unit/export-dropdown.test.tsx
+  backend_stub: src/backend/careervp/handlers/export_handler.py
+  lib_available: python-docx>=1.1.0 (already in pyproject.toml)
+  infra_gap: >
+    No Lambda function or API Gateway route exists for export.
+    api_construct.py must be extended following the billing Lambda pattern
+    (api_construct.py:2139). The constant EXPORT_FEATURE = "export" must be
+    added to infra/careervp/constants.py.
+
+architecture:
+  primary_files:
+    - src/backend/careervp/handlers/export_handler.py
+    - infra/careervp/api_construct.py
+    - infra/careervp/constants.py
+  test_files:
+    - src/backend/tests/unit/test_export_handler.py
+  api_dependencies:
+    - "GET /jobs/{jobId}/artifacts/{moduleType}/export (new route)"
+    - "S3 VPR_RESULTS_BUCKET_NAME s3:GetObject (read vpr source)"
+    - "S3 ARTIFACTS_BUCKET_NAME s3:PutObject + s3:GetObject (write docx + presign)"
+    - "DynamoDB ARTIFACTS_TABLE_NAME dynamodb:GetItem (cover_letter, interview_prep)"
+    - "DynamoDB TABLE_NAME dynamodb:GetItem (cv_tailored)"
+  cascade_risk: low — new Lambda and route; no existing Lambda is modified
+
+data_sources:
+  vpr:
+    store: S3
+    bucket_env: VPR_RESULTS_BUCKET_NAME
+    key_pattern: "results/{jobId}.json"
+    content_fields: full VPRFullData JSON (sections, summary, etc.)
+  cover_letter:
+    store: DynamoDB
+    table_env: ARTIFACTS_TABLE_NAME
+    pk: "applicationId = user_id (from Cognito claims.sub)"
+    sk: "artifactId = jobId"
+    content_field: "item['cover_letter']['full_text'] or item['cover_letter']['text']"
+  interview_prep:
+    store: DynamoDB
+    table_env: ARTIFACTS_TABLE_NAME
+    pk: "applicationId = user_id"
+    sk: "artifactId = normalized jobId (see _normalize_interview_prep_artifact_id in interview_prep_handler.py)"
+    content_field: "item['interview_prep']['questions'] (list of {question, answer})"
+  cv_tailored:
+    store: DynamoDB
+    table_env: TABLE_NAME
+    pk: "pk = user_id"
+    sk: "ARTIFACT#CV_TAILORED#{cvTailoringId}"
+    content_fields: "item['cv_sections'] (structured) + item['tailored_cv'] (summary text)"
+
+generated_file_storage:
+  bucket_env: ARTIFACTS_BUCKET_NAME
+  key_pattern: "exports/{moduleType}/{jobId}/{jobId}.docx"
+  presigned_url_ttl_seconds: 3600
+
+fix_plan:
+  backend_changes:
+    summary: >
+      export_handler.py stub is replaced with a full implementation. The handler
+      reads user_id from Cognito JWT claims, dispatches to a per-module reader,
+      builds a .docx document with python-docx, writes it to the artifacts bucket,
+      and returns a presigned URL with expires_at. ?format=pdf returns 501.
+      Unknown moduleType values return 400.
+    files_changed:
+      - file: src/backend/careervp/handlers/export_handler.py
+        change: >
+          Replace 501 stub with full DOCX generation.
+          Per-module readers: _read_vpr (S3), _read_cover_letter (DynamoDB artifacts table),
+          _read_interview_prep (DynamoDB artifacts table with normalized key),
+          _read_cv_tailored (DynamoDB main table).
+          _build_docx(module_type, data) creates a Document, adds a title paragraph,
+          and writes content sections appropriate to each module type.
+          _write_and_presign(bucket, key, doc) saves the docx to a BytesIO buffer,
+          puts the object, and calls generate_presigned_url with ExpiresIn=3600.
+          user_id extracted from event['requestContext']['authorizer']['claims']['sub'].
+          Returns { download_url, expires_at } on success.
+          Returns 400 for unknown moduleType, 404 when source artifact is missing,
+          501 for ?format=pdf, 500 with safe message on unexpected errors.
+
+  infra_changes:
+    summary: >
+      New Lambda function added to api_construct.py following the billing Lambda
+      pattern. Route registered in _add_openapi_contract_routes(). IAM grants
+      added for VPR S3 bucket (read), artifacts bucket (read/write), artifacts
+      table (GetItem), and main db table (GetItem).
+    files_changed:
+      - file: infra/careervp/constants.py
+        change: Add EXPORT_FEATURE = "export" to the feature constants block
+      - file: infra/careervp/api_construct.py
+        change: >
+          _add_export_lambda() method added (pattern: _add_billing_lambda, line ~2139).
+          Lambda env vars: VPR_RESULTS_BUCKET_NAME, ARTIFACTS_BUCKET_NAME,
+          ARTIFACTS_TABLE_NAME, TABLE_NAME, ALLOWED_ORIGINS (copy from billing_lambda env).
+          IAM grants: vpr_results_bucket.grant_read, artifacts_bucket.grant_read_write,
+          artifacts_table.grant dynamodb:GetItem, db.grant dynamodb:GetItem.
+          Route GET /jobs/{jobId}/artifacts/{moduleType}/export added in
+          _add_openapi_contract_routes() (~line 2352) with Cognito authorizer.
+          Path params: camelCase {jobId} and {moduleType} matching existing routes.
+
+  non_goals:
+    - PDF export (no PDF library; ?format=pdf always returns 501)
+    - Async generation or polling (synchronous only; Lambda timeout 29 s is sufficient)
+    - Frontend changes (ExportDropdown is complete)
+    - Progress indicator
+    - Export for module types not in [vpr, cover_letter, interview_prep, cv_tailored]
+    - Overwrite / cache-before-regenerate logic (always regenerates the file)
+
+  rollback_plan: >
+    Remove the export Lambda and route from api_construct.py, redeploy CDK stack.
+    The frontend ExportDropdown will revert to showing its 501 "coming soon" state.
+    No database schema changes are made; rollback has zero data impact.
+
+acceptance_criteria:
+  # Happy path — DOCX download
+  - id: AC-001
+    module: vpr
+    given: A VPR artifact exists in S3 for the given jobId and the user is authenticated
+    when: GET /jobs/{jobId}/artifacts/vpr/export?format=docx is called
+    then: >
+      Response is 200 with { download_url: string, expires_at: string }.
+      download_url is a presigned S3 URL to exports/vpr/{jobId}/{jobId}.docx.
+      expires_at is approximately now + 3600 s (ISO-8601).
+    verification: unit
+    blocking_gate: pre_merge
+
+  - id: AC-002
+    module: cover_letter
+    given: A cover letter artifact exists in DynamoDB artifacts table for the given jobId and the user is authenticated
+    when: GET /jobs/{jobId}/artifacts/cover_letter/export?format=docx is called
+    then: >
+      Response is 200 with { download_url: string, expires_at: string }.
+      download_url is a presigned S3 URL to exports/cover_letter/{jobId}/{jobId}.docx.
+    verification: unit
+    blocking_gate: pre_merge
+
+  - id: AC-003
+    module: interview_prep
+    given: An interview_prep artifact exists in DynamoDB artifacts table for the given jobId and the user is authenticated
+    when: GET /jobs/{jobId}/artifacts/interview_prep/export?format=docx is called
+    then: >
+      Response is 200 with { download_url: string, expires_at: string }.
+      The questions list is rendered as numbered Q&A pairs in the docx.
+    verification: unit
+    blocking_gate: pre_merge
+
+  - id: AC-004
+    module: cv_tailored
+    given: A cv_tailored artifact exists in the main DynamoDB table and the user is authenticated
+    when: GET /jobs/{jobId}/artifacts/cv_tailored/export?format=docx is called
+    then: >
+      Response is 200 with { download_url: string, expires_at: string }.
+      The docx contains both cv_sections content and the tailored_cv summary.
+    verification: unit
+    blocking_gate: pre_merge
+
+  # PDF — 501
+  - id: AC-005
+    module: all
+    given: The user is authenticated
+    when: GET /jobs/{jobId}/artifacts/{moduleType}/export?format=pdf is called for any valid moduleType
+    then: Response is 501 with a message indicating PDF export is not yet available
+    verification: unit
+    blocking_gate: pre_merge
+
+  # Unknown format
+  - id: AC-006
+    module: all
+    given: The user is authenticated
+    when: GET /jobs/{jobId}/artifacts/{moduleType}/export?format=xlsx is called
+    then: Response is 400 indicating the format is unsupported
+    verification: unit
+    blocking_gate: pre_merge
+
+  # Unknown moduleType
+  - id: AC-007
+    module: n/a
+    given: The user is authenticated
+    when: GET /jobs/{jobId}/artifacts/unknown_module/export?format=docx is called
+    then: Response is 400 indicating the module type is not supported
+    verification: unit
+    blocking_gate: pre_merge
+
+  # Missing artifact
+  - id: AC-008
+    module: vpr
+    given: No VPR artifact exists in S3 for the given jobId
+    when: GET /jobs/{jobId}/artifacts/vpr/export?format=docx is called
+    then: Response is 404 with a clear message that the artifact was not found
+    verification: unit
+    blocking_gate: pre_merge
+
+  - id: AC-009
+    module: cover_letter
+    given: No cover_letter artifact exists in DynamoDB for the given jobId
+    when: GET /jobs/{jobId}/artifacts/cover_letter/export?format=docx is called
+    then: Response is 404 with a clear message that the artifact was not found
+    verification: unit
+    blocking_gate: pre_merge
+
+  - id: AC-010
+    module: interview_prep
+    given: No interview_prep artifact exists in DynamoDB for the given jobId
+    when: GET /jobs/{jobId}/artifacts/interview_prep/export?format=docx is called
+    then: Response is 404 with a clear message that the artifact was not found
+    verification: unit
+    blocking_gate: pre_merge
+
+  - id: AC-011
+    module: cv_tailored
+    given: No cv_tailored artifact exists in the main table for the given jobId
+    when: GET /jobs/{jobId}/artifacts/cv_tailored/export?format=docx is called
+    then: Response is 404 with a clear message that the artifact was not found
+    verification: unit
+    blocking_gate: pre_merge
+
+  # Auth
+  - id: AC-012
+    module: all
+    given: The request carries no Authorization header
+    when: GET /jobs/{jobId}/artifacts/{moduleType}/export?format=docx is called
+    then: API Gateway returns 401 before the Lambda is invoked (Cognito authorizer)
+    verification: integration
+    blocking_gate: pre_merge
+
+  # Presigned URL TTL
+  - id: AC-013
+    module: all
+    given: The export call succeeds
+    when: The response expires_at value is parsed
+    then: expires_at is within 1 second of (request time + 3600 s)
+    verification: unit
+    blocking_gate: pre_merge
+
+  # Infra — Lambda registered
+  - id: AC-014
+    module: n/a
+    given: The CDK stack is deployed to dev
+    when: GET /jobs/{jobId}/artifacts/vpr/export?format=docx is called with a valid token
+    then: The Lambda is invoked (not a 404 from API Gateway)
+    verification: integration
+    blocking_gate: post_deploy
+
+  # DOCX file stored correctly
+  - id: AC-015
+    module: all
+    given: A successful DOCX export call is made
+    when: The artifacts bucket is inspected
+    then: >
+      An object exists at exports/{moduleType}/{jobId}/{jobId}.docx.
+      The object is a valid DOCX file (zip with word/document.xml).
+    verification: unit
+    blocking_gate: pre_merge
+
+states:
+  - state: pdf_unsupported
+    trigger: "?format=pdf query param"
+    response: "501 { message: 'PDF export is not yet available.' }"
+  - state: format_invalid
+    trigger: "?format= is missing or not docx/pdf"
+    response: "400 { message: 'Unsupported format. Use docx.' }"
+  - state: module_invalid
+    trigger: moduleType not in [vpr, cover_letter, interview_prep, cv_tailored]
+    response: "400 { message: 'Unsupported module type.' }"
+  - state: artifact_missing
+    trigger: Source data not found in S3 or DynamoDB
+    response: "404 { message: 'Artifact not found.' }"
+  - state: success
+    trigger: Artifact read, docx generated, written to S3, presigned URL created
+    response: "200 { download_url: string, expires_at: string }"
+
+verification_contract:
+  - requirement_id: AC-001
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-002
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-003
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-004
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-005
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-006
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-007
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-008
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-009
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-010
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-011
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-012
+    verification_type: integration
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-013
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+  - requirement_id: AC-014
+    verification_type: integration
+    blocking_gate: post_deploy
+    artifact_required: false
+  - requirement_id: AC-015
+    verification_type: unit
+    blocking_gate: pre_merge
+    artifact_required: false
+
+baseline_and_regression:
+  blocked_regressions:
+    - ExportDropdown 501 "coming soon" path must not regress (frontend unchanged)
+    - ExportDropdown error message path must not regress (frontend unchanged)
+    - Existing Lambda functions (billing, vpr, cover_letter, interview_prep, cv_tailoring) must not be modified
+    - VPR results S3 bucket CORS configuration must not be altered (already includes Amplify origins)
+    - API Gateway Cognito authorizer on existing routes must not be affected
+    - DynamoDB artifact reads in other handlers must continue to work (no table schema changes)
+  allowed_deltas:
+    - New IAM policy statements attached to the export Lambda role (additive)
+    - New CDK L2 construct for the export Lambda (additive)
+    - New API Gateway route for the export path (additive)
+
+traceability_matrix:
+  - requirement_id: AC-001
+    code_reference: src/backend/careervp/handlers/export_handler.py:TBD
+    test_reference: src/backend/tests/unit/test_export_handler.py
+    verification_type: unit
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-002
+    code_reference: src/backend/careervp/handlers/export_handler.py:TBD
+    test_reference: src/backend/tests/unit/test_export_handler.py
+    verification_type: unit
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-003
+    code_reference: src/backend/careervp/handlers/export_handler.py:TBD
+    test_reference: src/backend/tests/unit/test_export_handler.py
+    verification_type: unit
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-004
+    code_reference: src/backend/careervp/handlers/export_handler.py:TBD
+    test_reference: src/backend/tests/unit/test_export_handler.py
+    verification_type: unit
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-005
+    code_reference: src/backend/careervp/handlers/export_handler.py:TBD
+    test_reference: src/backend/tests/unit/test_export_handler.py
+    verification_type: unit
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-006
+    code_reference: src/backend/careervp/handlers/export_handler.py:TBD
+    test_reference: src/backend/tests/unit/test_export_handler.py
+    verification_type: unit
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-007
+    code_reference: src/backend/careervp/handlers/export_handler.py:TBD
+    test_reference: src/backend/tests/unit/test_export_handler.py
+    verification_type: unit
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-008
+    code_reference: src/backend/careervp/handlers/export_handler.py:TBD
+    test_reference: src/backend/tests/unit/test_export_handler.py
+    verification_type: unit
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-009
+    code_reference: src/backend/careervp/handlers/export_handler.py:TBD
+    test_reference: src/backend/tests/unit/test_export_handler.py
+    verification_type: unit
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-010
+    code_reference: src/backend/careervp/handlers/export_handler.py:TBD
+    test_reference: src/backend/tests/unit/test_export_handler.py
+    verification_type: unit
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-011
+    code_reference: src/backend/careervp/handlers/export_handler.py:TBD
+    test_reference: src/backend/tests/unit/test_export_handler.py
+    verification_type: unit
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-012
+    code_reference: infra/careervp/api_construct.py:TBD
+    test_reference: manual / post-deploy smoke test
+    verification_type: integration
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-013
+    code_reference: src/backend/careervp/handlers/export_handler.py:TBD
+    test_reference: src/backend/tests/unit/test_export_handler.py
+    verification_type: unit
+    blocking_gate: pre_merge
+    result: pending
+  - requirement_id: AC-014
+    code_reference: infra/careervp/api_construct.py:TBD
+    test_reference: manual / post-deploy smoke test
+    verification_type: integration
+    blocking_gate: post_deploy
+    result: pending
+  - requirement_id: AC-015
+    code_reference: src/backend/careervp/handlers/export_handler.py:TBD
+    test_reference: src/backend/tests/unit/test_export_handler.py
+    verification_type: unit
+    blocking_gate: pre_merge
+    result: pending
+
+rollback_trigger_matrix:
+  - trigger_id: RT-001
+    condition: Any pre_merge AC flips pass→fail post-deploy
+    action: Revert export_handler.py to 501 stub; remove CDK Lambda and route; redeploy
+  - trigger_id: RT-002
+    condition: Lambda timeout exceeded in prod (> 29 s for large artifacts)
+    action: >
+      Increase Lambda timeout in api_construct.py up to 30 s (API Gateway hard limit).
+      If still insufficient, defer large-artifact modules to async pattern in V2.
+  - trigger_id: RT-003
+    condition: IAM permission error (AccessDenied) on S3 or DynamoDB in prod
+    action: Verify grant calls in api_construct.py; add missing grants and redeploy CDK
+
+design_notes:
+  - >
+    The export Lambda is purely synchronous. Lambda timeout should be set to 29 s
+    (one second below API Gateway's 30 s hard limit). Artifacts are expected to be
+    small enough (< a few hundred KB of text) that DOCX generation completes well
+    within this window.
+  - >
+    The generated DOCX is always written to the artifacts bucket before presigning.
+    There is no in-memory streaming to the client. This allows future cache reuse
+    (re-presign instead of regenerate) but caching is explicitly out of scope for V1.
+  - >
+    user_id for DynamoDB lookups comes exclusively from the Cognito JWT
+    (event['requestContext']['authorizer']['claims']['sub']).
+    The Lambda must never trust a user_id from the query string or request body.
+  - >
+    For cv_tailored, the jobId in the route maps to cvTailoringId in the sk
+    (ARTIFACT#CV_TAILORED#{cvTailoringId}). The handler must use jobId as cvTailoringId
+    for the DynamoDB key — confirm this mapping is correct against existing cv_tailoring_handler.py
+    before implementing.
+  - >
+    DOCX content structure per module:
+    vpr → Title + one section per VPR section key (heading + paragraph).
+    cover_letter → Title + full_text as a single paragraph (or text fallback).
+    interview_prep → Title + numbered list of Question / Answer pairs.
+    cv_tailored → Title + cv_sections formatted + tailored_cv summary paragraph.
+  - >
+    CORS for the Lambda endpoint is handled by cors_utils.py via the ALLOWED_ORIGINS
+    env var (same pattern as billing_lambda). API Gateway default_cors_preflight_options
+    uses Cors.ALL_ORIGINS (api_construct.py:294), so no additional CORS configuration
+    is needed at the Gateway level.
+  - >
+    presigned_url_ttl_seconds is 3600 (1 hour). This is intentionally shorter than
+    VPR result presigned URLs because exports are considered ephemeral user-triggered
+    downloads, not persistent references.

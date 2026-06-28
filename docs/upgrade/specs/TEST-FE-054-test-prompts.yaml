@@ -1,0 +1,78 @@
+spec_id: TEST-FE-054
+title: "Test Prompts — CR frontend session-independent polling and terminal state map"
+priority: high
+status: draft
+owner: frontend
+created_at: 2026-06-28
+type: test_prompts
+note: >
+  Runnable prompts for FE-UI-054. Author BEFORE implementation.
+  Working dir: /Users/yitzchak/Documents/dev/careervp
+  Spec: docs/upgrade/specs/FE-UI-054-cr-polling-session-independent.yaml
+  Depends on FE-UI-053 (processing row must exist).
+  Key file (verify symbol; lines may have drifted):
+  - src/frontend/app/applications/[id]/company-research/page.tsx
+    init useEffect (~L20), handleTrigger (~L40), terminal branch (~L61)
+  Mock GET /company-research; use vitest fake timers.
+
+recommended_model_for_test_authoring: sonnet
+
+# =============================================================================
+# CATEGORY A: MOUNT AUTO-POLLS WHEN STATUS=PROCESSING
+# =============================================================================
+mount_polling:
+  prompt: |
+    Context: FE-UI-054 R1, R2 — mount reads server status; processing → polling starts without user action.
+    Files: src/frontend/tests/ui/unit/CompanyResearchPage.test.tsx
+    Use vitest + @testing-library/react + fake timers.
+    1. test_mount_processing_starts_polling — GET returns processing; advance 10s; assert second GET fired;
+       advance to completed; assert research card rendered. → SC1, SC5
+    2. test_poll_cleanup_on_unmount — unmount before complete; assert no GET after unmount. → SC5
+    Run: cd src/frontend && npx vitest run --config vitest.config.ts tests/ui/unit/CompanyResearchPage.test.tsx
+    Pass: both green.
+
+# =============================================================================
+# CATEGORY B: REMOUNT RESUMES (RELOAD / NAVIGATE-AWAY-RETURN)
+# =============================================================================
+remount_resume:
+  prompt: |
+    Context: FE-UI-054 R1 — no poll state in closure; unmount+remount resumes from server row.
+    Files: src/frontend/tests/ui/unit/CompanyResearchPage.test.tsx
+    1. test_remount_mid_run_resumes — render (GET=processing) → unmount → remount → GET=processing →
+       advance timers → GET=completed → assert card rendered, no re-POST. → SC1
+    2. test_navigate_away_and_return — unmount (navigate away) → remount (return) → polling resumes,
+       completes without trigger. → SC2
+    Run: cd src/frontend && npx vitest run --config vitest.config.ts tests/ui/unit/CompanyResearchPage.test.tsx
+    Pass: both green.
+
+# =============================================================================
+# CATEGORY C: NOT_GENERATED SHOWS CTA
+# =============================================================================
+not_generated_cta:
+  prompt: |
+    Context: FE-UI-054 R3 — not_generated must show "Run research" CTA, never error.
+    Files: src/frontend/tests/ui/unit/CompanyResearchPage.test.tsx
+    1. test_not_generated_renders_cta — GET returns {status:"not_generated"};
+       assert "Run research" CTA visible; assert NO error toast; assert NO error text in DOM. → SC3
+    Run: cd src/frontend && npx vitest run --config vitest.config.ts tests/ui/unit/CompanyResearchPage.test.tsx
+    Pass: green.
+
+# =============================================================================
+# CATEGORY D: TERMINAL STATES
+# =============================================================================
+terminal_states:
+  prompt: |
+    Context: FE-UI-054 R3 — failed → error state; completed → research card.
+    Files: src/frontend/tests/ui/unit/CompanyResearchPage.test.tsx
+    1. test_failed_renders_error — GET returns {status:"failed"}; assert error state rendered; no card. → SC4
+    2. test_completed_renders_card — GET returns {status:"completed",...data}; assert card rendered;
+       no error; no poll timer advances (completed is terminal). → SC4
+    Run: cd src/frontend && npx vitest run --config vitest.config.ts tests/ui/unit/CompanyResearchPage.test.tsx
+    Pass: both green.
+
+execution_order:
+  before_implementation: [mount_polling, remount_resume, not_generated_cta, terminal_states]
+  after_implementation:
+    - "cd src/frontend && npm run test:unit"
+    - "cd src/frontend && npm run test:integration"
+    - "cd src/frontend && npm run test:e2e"

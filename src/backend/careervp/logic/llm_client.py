@@ -126,11 +126,13 @@ class LLMClient:
         max_tokens: int = 2500,
         model_name: str = DEFAULT_MODEL,
         temperature: float = DEFAULT_TEMPERATURE,
+        use_system_cache: bool = False,
     ) -> _LLMTextResponse:
         """Invoke Anthropic API with a separate system prompt; used by the 3-stage pipeline.
 
         Unlike generate(), this returns a _LLMTextResponse with a .text attribute containing
         the raw model output so the caller can parse it as needed.
+        When use_system_cache=True, passes system prompt with cache_control ephemeral.
         """
         try:
             with self._circuit_breaker:
@@ -140,6 +142,7 @@ class LLMClient:
                     max_tokens=max_tokens,
                     model_name=model_name,
                     temperature=temperature,
+                    use_system_cache=use_system_cache,
                 )
         except CircuitBreakerBlockedError as exc:
             raise CircuitBreakerOpen(retry_after=exc.retry_after) from exc
@@ -156,6 +159,7 @@ class LLMClient:
         max_tokens: int,
         model_name: str,
         temperature: float,
+        use_system_cache: bool = False,
     ) -> Any:
         """Invoke Anthropic API with separate system and user messages, with retry logic."""
         attempts = self._retry_max_attempts()
@@ -169,7 +173,10 @@ class LLMClient:
             'messages': [{'role': 'user', 'content': prompt}],
         }
         if system_prompt:
-            kwargs['system'] = system_prompt
+            if use_system_cache:
+                kwargs['system'] = [{'type': 'text', 'text': system_prompt, 'cache_control': {'type': 'ephemeral'}}]
+            else:
+                kwargs['system'] = system_prompt
 
         for attempt in range(1, attempts + 1):
             try:

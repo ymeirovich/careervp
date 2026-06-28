@@ -32,9 +32,6 @@ const makeApplication = (
 
 const makeCVData = (overrides: Partial<RawCVData> = {}): RawCVData => ({
   cv_id: "cv-789",
-  created_at: "2024-01-01T08:00:00Z",
-  updated_at: "2024-01-01T08:00:00Z",
-  version: 1,
   ...overrides,
 });
 
@@ -93,30 +90,9 @@ describe("detectStaleness", () => {
   };
 
   it("returns empty set when nothing is stale", () => {
-    const cvData = makeCVData({ updated_at: "2024-01-01T08:00:00Z" });
     const gapAnalysis = makeGapAnalysis({ responses_submitted_at: "2024-01-01T09:00:00Z" });
-    const stale = detectStaleness(allModules, cvData, "2024-01-01T08:00:00Z", gapAnalysis);
+    const stale = detectStaleness(allModules, gapAnalysis);
     expect(stale.size).toBe(0);
-  });
-
-  it("cv updated after artifact creation invalidates 5 downstream modules", () => {
-    const cvData = makeCVData({ updated_at: "2024-01-02T08:00:00Z" });
-    const previousCvUpdatedAt = "2024-01-01T08:00:00Z";
-    const stale = detectStaleness(allModules, cvData, previousCvUpdatedAt, null);
-
-    expect(stale.has("gapAnalysis")).toBe(true);
-    expect(stale.has("vpr")).toBe(true);
-    expect(stale.has("tailoredCV")).toBe(true);
-    expect(stale.has("coverLetter")).toBe(true);
-    expect(stale.has("interviewPrep")).toBe(true);
-  });
-
-  it("cv change does NOT invalidate companyResearch or baseCV", () => {
-    const cvData = makeCVData({ updated_at: "2024-01-02T08:00:00Z" });
-    const stale = detectStaleness(allModules, cvData, "2024-01-01T08:00:00Z", null);
-
-    expect(stale.has("companyResearch")).toBe(false);
-    expect(stale.has("baseCV")).toBe(false);
   });
 
   it("gap responses edited after vpr creation invalidates 3 modules", () => {
@@ -127,7 +103,7 @@ describe("detectStaleness", () => {
       ...allModules,
       vpr: makeRawModule({ created_at: "2024-01-01T10:00:00Z" }),
     };
-    const stale = detectStaleness(modulesWithOlderVPR, null, null, gapAnalysis);
+    const stale = detectStaleness(modulesWithOlderVPR, gapAnalysis);
 
     expect(stale.has("vpr")).toBe(true);
     expect(stale.has("coverLetter")).toBe(true);
@@ -138,7 +114,7 @@ describe("detectStaleness", () => {
     const gapAnalysis = makeGapAnalysis({
       responses_submitted_at: "2024-01-01T11:00:00Z",
     });
-    const stale = detectStaleness(allModules, null, null, gapAnalysis);
+    const stale = detectStaleness(allModules, gapAnalysis);
 
     expect(stale.has("gapAnalysis")).toBe(false);
     expect(stale.has("tailoredCV")).toBe(false);
@@ -201,28 +177,106 @@ describe("deriveHubStatus", () => {
   });
 });
 
+describe("deriveHubStatus — gap analysis / PROCESSING_BLOCKED", () => {
+  const base: Record<ModuleType, ModuleStatus> = {
+    vpr: 'notStarted',
+    tailoredCV: 'notStarted',
+    coverLetter: 'notStarted',
+    interviewPrep: 'notStarted',
+    gapAnalysis: 'notStarted',
+    companyResearch: 'notStarted',
+    baseCV: 'notStarted',
+  };
+
+  it("gapAnalysis notStarted + baseCV ready → PROCESSING_BLOCKED", () => {
+    const statuses = { ...base, baseCV: 'ready' as ModuleStatus };
+    expect(deriveHubStatus(statuses, new Set(), false)).toBe("PROCESSING_BLOCKED");
+  });
+
+  it("gapAnalysis ready + baseCV ready → NOT PROCESSING_BLOCKED", () => {
+    const statuses = { ...base, gapAnalysis: 'ready' as ModuleStatus, baseCV: 'ready' as ModuleStatus };
+    expect(deriveHubStatus(statuses, new Set(), false)).not.toBe("PROCESSING_BLOCKED");
+  });
+
+  it("gapAnalysis processing → LOADING (not PROCESSING_BLOCKED)", () => {
+    const statuses = { ...base, gapAnalysis: 'processing' as ModuleStatus, baseCV: 'ready' as ModuleStatus };
+    expect(deriveHubStatus(statuses, new Set(), false)).toBe("LOADING");
+    expect(deriveHubStatus(statuses, new Set(), false)).not.toBe("PROCESSING_BLOCKED");
+  });
+});
+
+describe("mapApplicationDataToHubState — gap analysis module status", () => {
+  it("gapAnalysis moduleData completed → module status ready, hubStatus not PROCESSING_BLOCKED", () => {
+    const result = mapApplicationDataToHubState(
+      makeApplication(),
+      { gapAnalysis: makeRawModule({ status: 'completed' }) },
+      null,
+      makeCVData(),
+    );
+    expect(result.modules.gapAnalysis.status).toBe("ready");
+    expect(result.hubStatus).not.toBe("PROCESSING_BLOCKED");
+  });
+
+  it("gapAnalysis absent + baseCV ready → PROCESSING_BLOCKED", () => {
+    const result = mapApplicationDataToHubState(
+      makeApplication(),
+      {},
+      null,
+      makeCVData(),
+    );
+    expect(result.modules.gapAnalysis.status).toBe("notStarted");
+    expect(result.hubStatus).toBe("PROCESSING_BLOCKED");
+  });
+
+  it("gapAnalysis moduleData processing → module status processing, hubStatus LOADING", () => {
+    const result = mapApplicationDataToHubState(
+      makeApplication(),
+      { gapAnalysis: makeRawModule({ status: 'processing' }) },
+      null,
+      makeCVData(),
+    );
+    expect(result.modules.gapAnalysis.status).toBe("processing");
+    expect(result.hubStatus).toBe("LOADING");
+  });
+});
+
 describe("mapApplicationDataToHubState integration", () => {
   it("returns HubState with all 7 module entries", () => {
     const application = makeApplication();
     const cvData = makeCVData();
-    const result = mapApplicationDataToHubState(application, {}, null, cvData, null);
+    const result = mapApplicationDataToHubState(application, {}, null, cvData);
 
     expect(Object.keys(result.modules)).toHaveLength(7);
   });
 
   it("totalCount is always 7", () => {
-    const result = mapApplicationDataToHubState(makeApplication(), {}, null, null, null);
+    const result = mapApplicationDataToHubState(makeApplication(), {}, null, null);
     expect(result.totalCount).toBe(7);
   });
 
-  it("progressPercent is 0 when all modules are notStarted", () => {
-    const result = mapApplicationDataToHubState(makeApplication(), {}, null, null, null);
+  it("baseCV is ready when cvData has cv_id", () => {
+    const result = mapApplicationDataToHubState(makeApplication(), {}, null, makeCVData());
+    expect(result.modules.baseCV.status).toBe("ready");
+  });
+
+  it("baseCV is notStarted when cvData is null", () => {
+    const result = mapApplicationDataToHubState(makeApplication(), {}, null, null);
+    expect(result.modules.baseCV.status).toBe("notStarted");
+  });
+
+  it("progressPercent includes baseCV when cv exists", () => {
+    const result = mapApplicationDataToHubState(makeApplication(), {}, null, makeCVData());
+    expect(result.completedCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it("progressPercent is 0 when all modules are notStarted and no cv", () => {
+    const result = mapApplicationDataToHubState(makeApplication(), {}, null, null);
     expect(result.progressPercent).toBe(0);
   });
 
-  it("progressPercent is 100 when all modules are complete", () => {
+  it("progressPercent is 100 when all modules are complete and cv exists", () => {
     const allComplete = Object.fromEntries(
-      ["vpr", "tailoredCV", "coverLetter", "interviewPrep", "gapAnalysis", "companyResearch", "baseCV"].map(
+      ["vpr", "tailoredCV", "coverLetter", "interviewPrep", "gapAnalysis", "companyResearch"].map(
         (k) => [k, makeRawModule({ status: "completed" })]
       )
     ) as Record<ModuleType, RawModuleData>;
@@ -231,8 +285,7 @@ describe("mapApplicationDataToHubState integration", () => {
       makeApplication({ is_finalized: false }),
       allComplete,
       null,
-      null,
-      null
+      makeCVData(),
     );
     expect(result.progressPercent).toBe(100);
   });
@@ -243,7 +296,6 @@ describe("mapApplicationDataToHubState integration", () => {
       {},
       null,
       null,
-      null
     );
     expect(result.isFinalized).toBe(true);
   });

@@ -7,6 +7,7 @@ from typing import Any
 from uuid import uuid4
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+from careervp.models.exceptions import InvalidStateTransitionError
 
 APPLICATION_STATES: tuple[str, ...] = (
     'created',
@@ -14,18 +15,30 @@ APPLICATION_STATES: tuple[str, ...] = (
     'gap_questions_pending',
     'gap_questions_ready',
     'gap_responses_submitted',
+    'cr_pending',
+    'cr_failed',
     'artifacts_generating',
+    'artifacts_partial',
     'artifacts_completed',
+    'artifacts_failed',
 )
 
+# Company Research confidence gate (FE-UI-029): cr_pending / cr_failed are
+# intermediate states reached only when the auto-chain feature flag is ON. When
+# the flag is OFF, gap_responses_submitted advances directly to
+# artifacts_generating and the additive states are never entered.
 VALID_TRANSITIONS: dict[str, tuple[str, ...]] = {
     'created': ('cv_selected',),
     'cv_selected': ('gap_questions_pending',),
     'gap_questions_pending': ('gap_questions_ready',),
     'gap_questions_ready': ('gap_responses_submitted',),
-    'gap_responses_submitted': ('artifacts_generating',),
-    'artifacts_generating': ('artifacts_completed',),
+    'gap_responses_submitted': ('cr_pending', 'artifacts_generating'),
+    'cr_pending': ('artifacts_generating', 'cr_failed'),
+    'cr_failed': ('cr_pending',),
+    'artifacts_generating': ('artifacts_completed', 'artifacts_partial', 'artifacts_failed'),
+    'artifacts_partial': (),
     'artifacts_completed': (),
+    'artifacts_failed': ('artifacts_generating',),
 }
 
 
@@ -147,17 +160,94 @@ class ApplicationRepository:
         except Exception:
             pass
 
-    def update_artifact_status(self, application_id: str, user_id: str, artifact_type: str, status: str) -> None:
+    def update_artifact_status(
+        self,
+        application_id: str,
+        user_id: str,
+        artifact_type: str,
+        status: str,
+        fail_if_status: str | None = None,
+    ) -> None:
+        """Set a single artifact's status.
+
+        When ``fail_if_status`` is provided the write is conditional: it raises
+        ``ConditionalCheckFailedException`` if the artifact is already at that status.
+        Workers pass ``fail_if_status='cancelled'`` so a concurrent cancel cannot be
+        silently overwritten back to 'completed' (FE-UI-043 § worker_cancelled_guard).
+        """
         if not artifact_type:
             raise ValueError('artifact_type is required')
+        condition = 'attribute_exists(userId) AND attribute_exists(applicationId)'
+        values: dict[str, str] = {
+            ':status': status,
+            ':updated_at': self._now_iso(),
+        }
+        if fail_if_status is not None:
+            condition += ' AND (attribute_not_exists(artifact_statuses.#artifact_type) OR artifact_statuses.#artifact_type <> :fail_status)'
+            values[':fail_status'] = fail_if_status
         self._table().update_item(
             Key={
                 'userId': user_id,
                 'applicationId': application_id,
             },
             UpdateExpression='SET artifact_statuses.#artifact_type = :status, updated_at = :updated_at',
-            ConditionExpression='attribute_exists(userId) AND attribute_exists(applicationId)',
+            ConditionExpression=condition,
             ExpressionAttributeNames={'#artifact_type': artifact_type},
+            ExpressionAttributeValues=values,
+        )
+
+    def claim_chain_execution(self, application_id: str, user_id: str) -> None:
+        """Atomically set chain_execution_status=RUNNING only if not already RUNNING.
+
+        Raises botocore ClientError with Code=ConditionalCheckFailedException when
+        a concurrent request already holds the RUNNING lock.
+        """
+        self._table().update_item(
+            Key={
+                'userId': user_id,
+                'applicationId': application_id,
+            },
+            UpdateExpression='SET chain_execution_arn = :placeholder, chain_execution_status = :status, updated_at = :updated_at',
+            ConditionExpression=(
+                'attribute_exists(userId) AND attribute_exists(applicationId) '
+                'AND (attribute_not_exists(chain_execution_status) OR chain_execution_status <> :status)'
+            ),
+            ExpressionAttributeValues={
+                ':placeholder': 'PENDING',
+                ':status': 'RUNNING',
+                ':updated_at': self._now_iso(),
+            },
+        )
+
+    def set_chain_execution(
+        self,
+        application_id: str,
+        user_id: str,
+        execution_arn: str,
+        status: str,
+    ) -> None:
+        self._table().update_item(
+            Key={
+                'userId': user_id,
+                'applicationId': application_id,
+            },
+            UpdateExpression='SET chain_execution_arn = :execution_arn, chain_execution_status = :status, updated_at = :updated_at',
+            ConditionExpression='attribute_exists(userId) AND attribute_exists(applicationId)',
+            ExpressionAttributeValues={
+                ':execution_arn': execution_arn,
+                ':status': status,
+                ':updated_at': self._now_iso(),
+            },
+        )
+
+    def update_chain_execution_status(self, application_id: str, user_id: str, status: str) -> None:
+        self._table().update_item(
+            Key={
+                'userId': user_id,
+                'applicationId': application_id,
+            },
+            UpdateExpression='SET chain_execution_status = :status, updated_at = :updated_at',
+            ConditionExpression='attribute_exists(userId) AND attribute_exists(applicationId)',
             ExpressionAttributeValues={
                 ':status': status,
                 ':updated_at': self._now_iso(),
@@ -198,7 +288,27 @@ class ApplicationRepository:
                 ExpressionAttributeValues={':empty': {}},
             )
         except Exception:
-            return  # Application record absent — non-fatal, frontend has local fallback
+            # Application record absent — create a minimal stub so artifact_id persists
+            # across page reloads (jobs are created before applications in the v1 flow).
+            try:
+                now = self._now_iso()
+                self._table().put_item(
+                    Item={
+                        'userId': user_id,
+                        'applicationId': application_id,
+                        'application_id': application_id,
+                        'user_id': user_id,
+                        'artifact_statuses': {},
+                        'state': 'created',
+                        'status': 'created',
+                        'created_at': now,
+                        'updated_at': now,
+                        'entity_type': 'APPLICATION',
+                    },
+                    ConditionExpression='attribute_not_exists(userId)',
+                )
+            except Exception:
+                return  # Concurrent write or permanent error — localStorage fallback handles it
         try:
             # Step 2: set the nested artifact keys now that the map is guaranteed to exist.
             self._table().update_item(
@@ -217,12 +327,56 @@ class ApplicationRepository:
         except Exception:
             pass  # Non-fatal — frontend localStorage fallback handles missing artifact_id
 
+    def set_company_research_error(self, application_id: str, user_id: str, error: bool) -> None:
+        """Persist the company_research_error flag on the application record.
+
+        Set when Company Research hard-fails (3 retries exhausted) so the frontend
+        can recover the error state across reloads. Also marks
+        artifact_statuses.company_research as 'failed' (or 'pending' when cleared)
+        so the recovery payload reflects the CR artifact state.
+
+        Idempotent: uses a plain UpdateExpression with no conditional write, so a
+        double-call is safe. The artifact_statuses map is initialised via
+        if_not_exists to support legacy records that pre-date the field.
+        """
+        cr_status = 'failed' if error else 'pending'
+        self._table().update_item(
+            Key={
+                'userId': user_id,
+                'applicationId': application_id,
+            },
+            UpdateExpression=(
+                'SET company_research_error = :error, artifact_statuses = if_not_exists(artifact_statuses, :empty_map), updated_at = :updated_at'
+            ),
+            ConditionExpression='attribute_exists(userId) AND attribute_exists(applicationId)',
+            ExpressionAttributeValues={
+                ':error': error,
+                ':empty_map': {},
+                ':updated_at': self._now_iso(),
+            },
+        )
+        # Second step sets the nested artifact key once the map is guaranteed to exist
+        # (DynamoDB rejects nested-path writes when the parent map is absent).
+        self._table().update_item(
+            Key={
+                'userId': user_id,
+                'applicationId': application_id,
+            },
+            UpdateExpression='SET artifact_statuses.#cr = :cr_status, updated_at = :updated_at',
+            ConditionExpression='attribute_exists(userId) AND attribute_exists(applicationId)',
+            ExpressionAttributeNames={'#cr': 'company_research'},
+            ExpressionAttributeValues={
+                ':cr_status': cr_status,
+                ':updated_at': self._now_iso(),
+            },
+        )
+
     def _ensure_valid_transition(self, expected_state: str, new_state: str) -> None:
         if expected_state not in VALID_TRANSITIONS:
-            raise ValueError(f'Invalid state transition: unknown from_state={expected_state}')
+            raise InvalidStateTransitionError(f'Invalid state transition: unknown from_state={expected_state}')
         allowed_states = VALID_TRANSITIONS[expected_state]
         if new_state not in allowed_states:
-            raise ValueError(f'Invalid state transition: {expected_state} -> {new_state}')
+            raise InvalidStateTransitionError(f'Invalid state transition: {expected_state} -> {new_state}')
 
     def _table(self) -> Any:
         return self._dal._get_db_handler(self._dal.table_name)
@@ -232,4 +386,4 @@ class ApplicationRepository:
         return datetime.now(timezone.utc).isoformat()
 
 
-__all__ = ['ApplicationRepository', 'APPLICATION_STATES', 'VALID_TRANSITIONS']
+__all__ = ['ApplicationRepository', 'APPLICATION_STATES', 'VALID_TRANSITIONS', 'InvalidStateTransitionError']

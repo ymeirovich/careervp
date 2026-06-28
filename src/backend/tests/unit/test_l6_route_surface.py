@@ -10,7 +10,6 @@ Results: docs/beta/execution_results/L6_4_results.md
 
 import json
 import os
-import re
 
 import pytest
 
@@ -105,12 +104,12 @@ class TestRouteSurfaceDiffEmpty:
         assert os.path.exists(FROZEN_SPEC_PATH), f'frozen_spec.json missing at {FROZEN_SPEC_PATH}'
 
     def test_frozen_spec_has_31_routes(self):
-        """frozen_spec.json contains exactly 35 routes (31 original + 4 billing)."""
+        """frozen_spec.json contains exactly 40 routes (31 original + 4 billing + 5 new endpoints)."""
         assert os.path.exists(FROZEN_SPEC_PATH), f'Missing: {FROZEN_SPEC_PATH}'
         with open(FROZEN_SPEC_PATH) as f:
             spec = json.load(f)
         routes = spec.get('routes', [])
-        assert len(routes) == 35, f'Expected 35 routes in frozen spec, got {len(routes)}'
+        assert len(routes) == 40, f'Expected 40 routes in frozen spec, got {len(routes)}'
 
 
 @pytest.mark.unit
@@ -176,10 +175,11 @@ class TestCvTailoringDeleteRouteSurface:
     """CV tailoring route surface must include delete route."""
 
     def test_cv_tailoring_delete_route_present(self):
-        """CDK route map includes DELETE /cv-tailoring/{cvTailoringId}."""
+        """DELETE /cv-tailoring/{cvTailoringId} must be present: explicit (Phase 1) or proxy (Phase 2)."""
         with open(API_CONSTRUCT_PATH) as f:
             content = f.read()
 
-        matches = re.findall(r'\(\s*"([^"]+)"\s*,\s*"([A-Z]+)"\s*,', content)
-        route_operations = {(method, path) for path, method in matches}
-        assert ('DELETE', '/cv-tailoring/{cvTailoringId}') in route_operations
+        assert (
+            '("/cv-tailoring/{cvTailoringId}", "DELETE", self.cv_tailoring_func)' in content
+            or '("/cv-tailoring", self.cv_tailoring_func, True)' in content
+        )

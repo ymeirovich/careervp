@@ -2,7 +2,7 @@
 LLM Router Utility - Hybrid Model Strategy.
 Per docs/specs/00-llm-router.md: Centralized model switching for 91% profit margins.
 
-STRATEGIC tasks (Sonnet 4.5): VPR Generation, Gap Analysis
+STRATEGIC tasks (Sonnet 4.6): VPR Generation, Gap Analysis
 TEMPLATE tasks (Haiku 4.5): CV Tailoring, Cover Letter, Interview Prep
 """
 
@@ -12,10 +12,11 @@ from functools import wraps
 from time import sleep
 from typing import Any, Callable, ParamSpec, TypeVar, cast
 
-import boto3
+import boto3  # type: ignore[import-untyped]
 from anthropic import Anthropic, APIError, RateLimitError
+from anthropic.types import TextBlockParam
 from aws_lambda_powertools.metrics import MetricUnit
-from botocore.exceptions import BotoCoreError, ClientError
+from botocore.exceptions import BotoCoreError, ClientError  # type: ignore[import-untyped]
 
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.models.result import Result, ResultCode
@@ -23,9 +24,9 @@ from careervp.models.result import Result, ResultCode
 P = ParamSpec('P')
 R = TypeVar('R')
 
-# Model IDs per Decision 1.2 in CLAUDE.md - Updated to current available versions
-SONNET_MODEL_ID = 'claude-sonnet-4-5-20250929'
-HAIKU_MODEL_ID = 'claude-haiku-4-5-20251001'
+# Model IDs — injected by CDK as env vars so swapping models needs only cdk deploy
+SONNET_MODEL_ID = os.environ.get('STRATEGIC_MODEL_ID', 'claude-sonnet-4-6')
+HAIKU_MODEL_ID = os.environ.get('TEMPLATE_MODEL_ID', 'claude-haiku-4-5-20251001')
 
 # Cost thresholds for alerting (per CLAUDE.md Emergency Contacts)
 # VPR Sonnet baseline ~$0.16/run; $0.25 gives headroom for one retry
@@ -35,7 +36,7 @@ MAX_COST_PER_APPLICATION = 0.25
 class TaskMode(str, Enum):
     """Task complexity modes for model routing."""
 
-    STRATEGIC = 'STRATEGIC'  # VPR, Gap Analysis -> Sonnet 4.5
+    STRATEGIC = 'STRATEGIC'  # VPR, Gap Analysis -> Sonnet 4.6
     TEMPLATE = 'TEMPLATE'  # CV, Cover Letter, Interview -> Haiku 4.5
 
 
@@ -180,15 +181,15 @@ class LLMRouter:
     def _calculate_cost(self, model_id: str, input_tokens: int, output_tokens: int) -> float:
         """
         Calculate cost based on model and token usage.
-        Sonnet 4.5: $3/1M input, $15/1M output
-        Haiku 4.5: $0.25/1M input, $1.25/1M output
+        Sonnet 4.6: $3/1M input, $15/1M output
+        Haiku 4.5: $1.00/1M input, $5.00/1M output
         """
         if model_id == SONNET_MODEL_ID:
             input_cost = (input_tokens / 1_000_000) * 3.0
             output_cost = (output_tokens / 1_000_000) * 15.0
-        else:  # Haiku
-            input_cost = (input_tokens / 1_000_000) * 0.25
-            output_cost = (output_tokens / 1_000_000) * 1.25
+        else:  # Haiku 4.5
+            input_cost = (input_tokens / 1_000_000) * 1.0
+            output_cost = (output_tokens / 1_000_000) * 5.0
         return input_cost + output_cost
 
     @_capture_method_typed(capture_response=False)
@@ -200,6 +201,7 @@ class LLMRouter:
         user_prompt: str,
         max_tokens: int = 4096,
         temperature: float = 0.3,
+        use_system_cache: bool = False,
     ) -> Result[dict[str, Any]]:
         """
         Invoke the LLM with automatic model routing.
@@ -210,6 +212,8 @@ class LLMRouter:
             user_prompt: User message/input
             max_tokens: Maximum output tokens
             temperature: Creativity parameter (lower = more consistent)
+            use_system_cache: When True, wraps system_prompt with Anthropic prompt
+                caching (cache_control ephemeral). Reduces cost on repeated calls.
 
         Returns:
             Result with response text, token usage, and cost
@@ -218,12 +222,16 @@ class LLMRouter:
 
         logger.info('Invoking LLM', mode=mode.value, model=model_id, max_tokens=max_tokens)
 
+        system: str | list[TextBlockParam] = system_prompt
+        if use_system_cache:
+            system = [TextBlockParam(type='text', text=system_prompt, cache_control={'type': 'ephemeral'})]
+
         try:
             response = self._client.messages.create(
                 model=model_id,
                 max_tokens=max_tokens,
                 temperature=temperature,
-                system=system_prompt,
+                system=system,
                 messages=[{'role': 'user', 'content': user_prompt}],
             )
 

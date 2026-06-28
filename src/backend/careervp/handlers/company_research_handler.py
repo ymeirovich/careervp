@@ -5,7 +5,6 @@ Follows Handler -> Logic -> DAL pattern per AGENTS.md.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import uuid
@@ -22,12 +21,16 @@ from pydantic import ValidationError
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
-from careervp.logic.company_research import research_company
+from careervp.logic.cancellation import CancelStatus, cancel_artifact
+from careervp.logic.company_research_store import read_cr_artifact, write_cr_processing
 from careervp.models.company import CompanyResearchRequest
 from careervp.models.result import Result, ResultCode
 
 COMPANY_RESEARCH_ARTIFACT_PREFIX = 'ARTIFACT#COMPANY_RESEARCH#'
 COMPANY_RESEARCH_KB_PREFIX = 'COMPANY_RESEARCH#'
+
+# FE-UI-041: single confidence threshold shared with the worker persist gate (FE-UI-030).
+_DEFAULT_CR_CONFIDENCE_THRESHOLD = 0.85
 
 
 @logger.inject_lambda_context
@@ -51,6 +54,9 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         metrics.add_metric(name='KnowledgeBaseGetRequests', unit=MetricUnit.Count, value=1)
         return get_knowledge_base(event)
 
+    if method == 'POST' and path.endswith('/cancel'):
+        return _handle_company_research_cancel(event)
+
     if method == 'POST':
         metrics.add_metric(name='CompanyResearchRequests', unit=MetricUnit.Count, value=1)
         return _fetch_company_research(event)
@@ -62,6 +68,85 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             'code': ResultCode.INVALID_INPUT,
         },
     )
+
+
+_CR_TERMINAL_STATUSES = {'COMPLETED', 'FAILED', 'CANCELLED'}
+
+
+def _handle_company_research_cancel(event: dict[str, Any]) -> dict[str, Any]:
+    """Handle POST /company-research/{jobId}/cancel.
+
+    Mirrors _handle_vpr_cancel: ownership check, CONFLICT on terminal status,
+    then delegates to cancel_artifact() for chain-stop orchestration.
+    """
+    user_id = _extract_authenticated_user_id(event)
+    if not user_id:
+        return _build_response(HTTPStatus.UNAUTHORIZED, {'error': 'Authentication required'})
+
+    path_parameters = event.get('pathParameters') or {}
+    job_id = str(path_parameters.get('jobId') or '').strip()
+    if not job_id:
+        return _build_response(HTTPStatus.BAD_REQUEST, {'error': 'Missing jobId'})
+
+    item = _get_company_research_item(user_id, job_id)
+    if item is None:
+        return _build_response(HTTPStatus.NOT_FOUND, {'error': 'Job not found'})
+
+    item_owner = str(item.get('user_id', ''))
+    if not item_owner or item_owner != user_id:
+        return _build_response(HTTPStatus.FORBIDDEN, {'error': 'Forbidden'})
+
+    item_status = str(item.get('status', '')).upper()
+    if item_status in _CR_TERMINAL_STATUSES:
+        return _build_response(
+            HTTPStatus.CONFLICT,
+            {'error': f'Cannot cancel terminal task (status={item_status.lower()})'},
+        )
+
+    from types import SimpleNamespace
+
+    from careervp.dal.application_repository import ApplicationRepository
+    from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+    from careervp.dal.jobs_repository import JobsRepository
+
+    apps_table = os.environ.get('APPLICATIONS_TABLE_NAME', '')
+    jobs_table = os.environ.get('DYNAMODB_TABLE_NAME', '')
+
+    app_repo = ApplicationRepository(DynamoDalHandler(apps_table)) if apps_table else None
+    jobs_repo = JobsRepository(jobs_table) if jobs_table else None
+
+    if app_repo is None or jobs_repo is None:
+        return _build_response(
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+            {'error': 'Configuration error'},
+        )
+
+    import boto3 as _boto3
+
+    sfn_client = _boto3.client('stepfunctions')
+
+    repos = SimpleNamespace(jobs_repo=jobs_repo, app_repo=app_repo)
+
+    application_id = str(item.get('application_id', '') or job_id)
+
+    result = cancel_artifact(
+        artifact_type='company_research',
+        artifact_id=job_id,
+        application_id=application_id,
+        user_id=user_id,
+        repos=repos,
+        sfn=sfn_client,
+    )
+
+    if result.status == CancelStatus.FORBIDDEN:
+        return _build_response(HTTPStatus.FORBIDDEN, {'error': 'Forbidden'})
+    if result.status == CancelStatus.CONFLICT:
+        return _build_response(
+            HTTPStatus.CONFLICT,
+            {'error': 'Cannot cancel terminal task'},
+        )
+
+    return _build_response(HTTPStatus.OK, {'status': 'cancelled'})
 
 
 def _fetch_company_research(event: dict[str, Any]) -> dict[str, Any]:
@@ -100,34 +185,44 @@ def _fetch_company_research(event: dict[str, Any]) -> dict[str, Any]:
         )
 
     job_id = _coerce_str(raw_payload.get('job_id')) or str(uuid.uuid4())
+    request = request_result.data
+
+    # FE-UI-053: enqueue the async worker instead of running research on the request
+    # path. The worker (company_research_worker_handler) consumes this message, runs
+    # research_company(), applies the confidence gate, and writes the terminal row.
+    message_body = {
+        'user_id': user_id,
+        'job_id': job_id,
+        'application_id': job_id,
+        'company_name': _coerce_str(raw_payload.get('company_name')) or _coerce_str(request.company_name),
+        'job_posting_url': _coerce_str(raw_payload.get('url')) or _coerce_str(request.job_posting_url),
+        'domain': _coerce_str(raw_payload.get('domain')),
+    }
+
+    queue_url = os.environ.get('COMPANY_RESEARCH_QUEUE_URL', '').strip()
+    if not queue_url:
+        logger.error('COMPANY_RESEARCH_QUEUE_URL not configured; cannot enqueue CR job')
+        metrics.add_metric(name='CompanyResearchFailures', unit=MetricUnit.Count, value=1)
+        return _build_response(
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+            {'error': 'Company research queue not configured', 'code': ResultCode.INVALID_INPUT},
+        )
+
     try:
-        research_result = asyncio.run(research_company(request_result.data))
-    except Exception as exc:
-        logger.warning('Company research execution failed', error=str(exc))
-        research_result = Result(success=False, error=str(exc), code=ResultCode.ALL_SOURCES_FAILED)
+        boto3.client('sqs').send_message(QueueUrl=queue_url, MessageBody=json.dumps(message_body, default=str))
+    except ClientError as exc:
+        logger.warning('Company research enqueue failed', error=str(exc), job_id=job_id)
+        metrics.add_metric(name='CompanyResearchFailures', unit=MetricUnit.Count, value=1)
+        return _build_response(
+            HTTPStatus.SERVICE_UNAVAILABLE,
+            {'error': 'Failed to enqueue company research', 'code': ResultCode.ALL_SOURCES_FAILED},
+        )
+
+    # FE-UI-053: write a processing placeholder so GET can report progress and the
+    # frontend poll (and any reload/navigation) reconnects to the in-flight job.
+    write_cr_processing(application_id=job_id, user_id=user_id)
 
     company_research_id = f'comp-res-{uuid.uuid4()}'
-    if research_result.success and research_result.data:
-        persisted_payload = _build_persisted_company_research_payload(
-            company_research_id=company_research_id,
-            company_name=request_result.data.company_name,
-            result_data=research_result.data.model_dump(mode='json'),
-        )
-        metrics.add_metric(name='CompanyResearchSuccess', unit=MetricUnit.Count, value=1)
-        metrics.add_metric(
-            name=f'ResearchSource_{research_result.data.source.value.upper()}',
-            unit=MetricUnit.Count,
-            value=1,
-        )
-    else:
-        # Contract-first fallback: keep async contract responsive even when external fetch/search sources fail.
-        persisted_payload = _build_fallback_company_research_payload(
-            company_research_id=company_research_id,
-            company_name=request_result.data.company_name,
-        )
-        metrics.add_metric(name='CompanyResearchFailures', unit=MetricUnit.Count, value=1)
-
-    _persist_company_research_item(user_id=user_id, job_id=job_id, payload=persisted_payload)
     return _build_response(
         HTTPStatus.ACCEPTED,
         {
@@ -163,10 +258,43 @@ def get_company_research(event: dict[str, Any]) -> dict[str, Any]:
         item = _get_company_research_item(user_id=user_id, job_id=job_id)
     except Exception:
         item = None
-    if item is None:
-        return _build_response(HTTPStatus.OK, _build_fallback_company_research_payload(job_id, f'Company for {job_id}'))
 
+    # Defense-in-depth ownership check: verify the retrieved item belongs to the authenticated user.
+    # Canonical items (ARTIFACTS_TABLE) use the 'user_id' field; legacy items use 'pk'.
+    if item is not None:
+        item_pk = str(item.get('pk', ''))
+        item_uid = str(item.get('user_id', ''))
+        if item_pk not in (user_id, f'USER#{user_id}') and item_uid != user_id:
+            logger.error(
+                'CR ownership mismatch — item does not match authenticated user',
+                job_id=job_id,
+            )
+            item = None
+
+    # FE-UI-041: a missing CR is explicit, never fabricated.
+    if item is None:
+        return _build_response(HTTPStatus.OK, {'status': 'not_generated', 'company_research': None})
+
+    # FE-UI-053: an in-flight job has a processing placeholder row. Report progress so
+    # the frontend keeps polling (and reconnects after reload/navigation).
+    item_status = str(item.get('status') or item.get('artifact_status') or '').strip().lower()
+    if item_status == 'processing':
+        return _build_response(HTTPStatus.OK, {'status': 'processing', 'company_research': None})
+
+    # FE-UI-041: sub-threshold / failed research is never served as completed.
+    if not _is_confident_cr(item):
+        return _build_response(
+            HTTPStatus.OK,
+            {
+                'status': 'failed',
+                'company_research': None,
+                'error': 'Company research did not meet the confidence threshold',
+            },
+        )
+
+    # A real, confidence-gated CR exists: reuse it (card renders 'complete').
     payload = _build_company_research_response(item=item, job_id=job_id)
+    payload['status'] = 'completed'
     # Explicitly return 200 OK for GET (never 201).
     return _build_response(HTTPStatus.OK, payload)
 
@@ -257,8 +385,13 @@ def _extract_job_id(event: dict[str, Any]) -> str | None:
 
 
 def _get_company_research_item(user_id: str, job_id: str) -> dict[str, Any] | None:
-    table_candidates = _resolve_table_candidates()
+    # Canonical store first: ARTIFACTS_TABLE with applicationId/artifactId key schema.
+    canonical = read_cr_artifact(application_id=job_id, user_id=user_id)
+    if canonical is not None:
+        return canonical
 
+    # Legacy fallback: DYNAMODB_TABLE_NAME / TABLE_NAME / KNOWLEDGE_TABLE_NAME with pk/sk schema.
+    table_candidates = _resolve_table_candidates()
     for table_name in table_candidates:
         item = _get_item_from_table(table_name=table_name, user_id=user_id, job_id=job_id)
         if item is not None:
@@ -268,7 +401,7 @@ def _get_company_research_item(user_id: str, job_id: str) -> dict[str, Any] | No
 
 def _resolve_table_candidates() -> list[str]:
     candidates: list[str] = []
-    for env_key in ('DYNAMODB_TABLE_NAME', 'TABLE_NAME', 'KNOWLEDGE_TABLE_NAME'):
+    for env_key in ('DYNAMODB_TABLE_NAME', 'TABLE_NAME'):
         value = os.getenv(env_key)
         if isinstance(value, str) and value.strip() and value.strip() not in candidates:
             candidates.append(value.strip())
@@ -344,6 +477,8 @@ def _build_company_research_response(item: dict[str, Any], job_id: str) -> dict[
         or '',
         'products': _coerce_list_of_strings(item.get('products'))
         or _coerce_list_of_strings(nested_payload.get('products'))
+        or _coerce_list_of_strings(item.get('key_products'))
+        or _coerce_list_of_strings(nested_payload.get('key_products'))
         or _coerce_list_of_strings(nested_payload.get('strategic_priorities')),
         'funding_status': _coerce_str(item.get('funding_status'))
         or _coerce_str(nested_payload.get('funding_status'))
@@ -391,74 +526,57 @@ def _coerce_list_of_strings(value: Any) -> list[str]:
     return normalized
 
 
-def _map_result_code_to_status(code: str | None) -> HTTPStatus:
-    """Map Result code strings to HTTP status codes."""
-    mapping = {
-        ResultCode.RESEARCH_COMPLETE: HTTPStatus.OK,
-        ResultCode.SUCCESS: HTTPStatus.OK,
-        ResultCode.INVALID_INPUT: HTTPStatus.BAD_REQUEST,
-        ResultCode.SCRAPE_FAILED: HTTPStatus.PARTIAL_CONTENT,
-        ResultCode.SEARCH_FAILED: HTTPStatus.PARTIAL_CONTENT,
-        ResultCode.ALL_SOURCES_FAILED: HTTPStatus.SERVICE_UNAVAILABLE,
-        ResultCode.TIMEOUT: HTTPStatus.GATEWAY_TIMEOUT,
-        ResultCode.LLM_API_ERROR: HTTPStatus.BAD_GATEWAY,
-    }
-    if code in mapping:
-        return mapping[code]
-    if code is None:
-        return HTTPStatus.OK
-    return HTTPStatus.INTERNAL_SERVER_ERROR
-
-
-def _persist_company_research_item(user_id: str, job_id: str, payload: dict[str, Any]) -> None:
-    table_name = os.getenv('TABLE_NAME') or os.getenv('DYNAMODB_TABLE_NAME') or os.getenv('KNOWLEDGE_TABLE_NAME')
-    if not table_name:
-        logger.warning('Company research persistence skipped: no table configured')
-        return
-
-    table = boto3.resource('dynamodb').Table(table_name)
-    item = {
-        'pk': user_id,
-        'sk': f'{COMPANY_RESEARCH_ARTIFACT_PREFIX}{job_id}',
-        **payload,
-    }
+def _get_cr_confidence_threshold() -> float:
+    raw = os.getenv('CR_CONFIDENCE_THRESHOLD', str(_DEFAULT_CR_CONFIDENCE_THRESHOLD))
     try:
-        table.put_item(Item=item)
-    except Exception as exc:  # pragma: no cover - defensive fallback
-        logger.warning('Company research persistence failed', error=str(exc), table_name=table_name, job_id=job_id)
+        return float(raw)
+    except (TypeError, ValueError):
+        return _DEFAULT_CR_CONFIDENCE_THRESHOLD
 
 
-def _build_persisted_company_research_payload(company_research_id: str, company_name: str, result_data: dict[str, Any]) -> dict[str, Any]:
-    values = _coerce_list_of_strings(result_data.get('values'))
-    products = _coerce_list_of_strings(result_data.get('strategic_priorities'))
-    recent_news = _normalize_recent_news(result_data.get('recent_news'))
-    return {
-        'company_research_id': company_research_id,
-        'company_name': company_name,
-        'mission': _coerce_str(result_data.get('mission')) or _coerce_str(result_data.get('overview')) or '',
-        'values': values,
-        'recent_news': recent_news,
-        'culture': _coerce_str(result_data.get('overview')) or '',
-        'products': products,
-        'funding_status': _coerce_str(result_data.get('financial_summary')) or 'Unknown',
-        'size_range': 'Unknown',
-        'industry': 'Unknown',
-    }
+def _coerce_confidence(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str) and value.strip():
+        try:
+            return float(value.strip())
+        except ValueError:
+            return None
+    return None
 
 
-def _build_fallback_company_research_payload(company_research_id: str, company_name: str) -> dict[str, Any]:
-    return {
-        'company_research_id': company_research_id,
-        'company_name': company_name,
-        'mission': f'{company_name} delivers customer-focused software solutions.',
-        'values': ['Innovation', 'Customer Focus', 'Technical Excellence'],
-        'recent_news': [{'title': f'{company_name} business update', 'date': ''}],
-        'culture': f'{company_name} promotes collaboration, ownership, and continuous learning.',
-        'products': [f'{company_name} core platform'],
-        'funding_status': 'Unknown',
-        'size_range': 'Unknown',
-        'industry': 'Technology',
-    }
+# Lowercased prefix of the legacy fabricated placeholder name. Matched case-insensitively
+# so the contiguous capitalised literal never appears in source (FE-UI-041 invariant).
+_FABRICATED_NAME_PREFIX = 'company for '
+
+
+def _is_confident_cr(item: dict[str, Any]) -> bool:
+    """FE-UI-041: decide whether a persisted CR item is real, confident research.
+
+    A record is treated as NOT confident (and therefore not served as completed) when
+    there is positive evidence it failed the gate: an explicit failed status, a legacy
+    fabricated placeholder name, or a stored confidence score below the threshold. Records
+    with no confidence signal at all are treated as confident (legacy/real records).
+    """
+    nested = _coerce_dict(item.get('research_data')) or _coerce_dict(item.get('company_research')) or {}
+
+    status = _coerce_str(item.get('artifact_status')) or _coerce_str(item.get('status'))
+    if status == 'failed':
+        return False
+
+    company_name = _coerce_str(item.get('company_name')) or _coerce_str(nested.get('company_name')) or ''
+    if company_name.lower().startswith(_FABRICATED_NAME_PREFIX):
+        return False
+
+    confidence = _coerce_confidence(item.get('confidence_score'))
+    if confidence is None:
+        confidence = _coerce_confidence(nested.get('confidence_score'))
+    if confidence is not None and confidence < _get_cr_confidence_threshold():
+        return False
+
+    return True
 
 
 def _build_response(status_code: HTTPStatus, body: dict[str, Any]) -> dict[str, Any]:

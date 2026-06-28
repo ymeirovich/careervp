@@ -8,7 +8,7 @@ class FeatureFlagsConfiguration(BaseModel):
     features: Optional[dict[str, Any]]
 
     @field_validator("features", mode="before")
-    def validate_features(cls, value):
+    def validate_features(cls, value: Any) -> Any:
         validator = SchemaValidator(value)
         try:
             validator.validate()

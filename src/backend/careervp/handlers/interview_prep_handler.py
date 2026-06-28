@@ -10,6 +10,7 @@ from decimal import Decimal
 from http import HTTPStatus
 from typing import Any
 
+import boto3
 from aws_lambda_powertools.metrics import MetricUnit
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from boto3.dynamodb.conditions import Attr, Key
@@ -20,10 +21,13 @@ from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.logic.cancellation import CancelledBeforePersist
 from careervp.logic.interview_prep import generate_interview_prep
 from careervp.models.api_models import InterviewPrepRequest
 from careervp.models.interview_prep import InterviewPrepRequest as LogicInterviewPrepRequest
 from careervp.models.result import Result, ResultCode
+
+sfn = boto3.client('stepfunctions')
 
 INTERVIEW_PREP_SORT_KEY_PREFIX = 'ARTIFACT#INTERVIEW_PREP#'
 PRIMARY_KEY_MODE = 'applicationId/artifactId'
@@ -92,6 +96,18 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         metrics.add_metric(name='InterviewPrepRequests', unit=MetricUnit.Count, value=1)
         return _submit_interview_prep_request(event)
 
+    if method == 'POST' and path.endswith('/cancel'):
+        user_id = _extract_authenticated_user_id(event)
+        if not user_id:
+            return _build_response(
+                HTTPStatus.UNAUTHORIZED,
+                {'error': 'Missing or invalid authentication token', 'code': ResultCode.UNAUTHORIZED},
+            )
+        return _handle_interview_prep_cancel(event, user_id)
+
+    if method == 'PATCH' and _is_interview_prep_patch_path(path):
+        return _patch_interview_prep(event)
+
     return _build_response(
         HTTPStatus.NOT_FOUND,
         {'error': 'Endpoint not found', 'code': ResultCode.INVALID_INPUT},
@@ -106,7 +122,8 @@ def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
         logger.info('Interview prep worker parsed SQS body', sqs_body=body)
         job_id = body.get('job_id', '')
         user_id = body.get('user_id', '')
-        request_data = body.get('request_data', {})
+        task_token = str(body.get('task_token') or '').strip() or None
+        request_data = _request_data_from_sqs_body(body)
 
         if not job_id or not user_id:
             logger.error('SQS message missing job_id or user_id', body=body)
@@ -117,11 +134,55 @@ def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
 
         try:
             _generate_and_persist_from_sqs(job_id=job_id, user_id=user_id, request_data=request_data)
+            _send_task_success(task_token, job_id=job_id, interview_prep_id=job_id)
+        except CancelledBeforePersist:
+            # Cancelled before/while persisting — skip cleanly: signal the chain
+            # branch but do NOT route to the DLQ and do NOT send task_success.
+            logger.info('Interview prep cancelled before persist — skipping', job_id=job_id, cancelled_before_persist=True)
+            _send_task_failure(task_token, cause='Job was cancelled')
+            continue
         except Exception as exc:
             logger.error('Interview prep SQS job failed', job_id=job_id, error=str(exc), exc_info=True)
+            _send_task_failure(task_token, cause=str(exc))
+            if task_token:
+                continue
             raise
 
     return {'statusCode': 200, 'body': 'OK'}
+
+
+def _request_data_from_sqs_body(body: dict[str, Any]) -> dict[str, Any]:
+    request_data = body.get('request_data')
+    if isinstance(request_data, dict) and request_data:
+        return request_data
+
+    job_id = str(body.get('job_id') or '').strip()
+    return {
+        'vpr_id': str(body.get('vpr_id') or '').strip(),
+        'gap_response_ids': body.get('gap_response_ids') if isinstance(body.get('gap_response_ids'), list) else ['artifact-chain'],
+        'application_id': str(body.get('application_id') or job_id).strip(),
+        'job_id': job_id,
+        'focus_areas': body.get('focus_areas') if isinstance(body.get('focus_areas'), list) else [],
+    }
+
+
+def _send_task_success(task_token: str | None, *, job_id: str, interview_prep_id: str) -> None:
+    if not task_token:
+        return
+    sfn.send_task_success(
+        taskToken=task_token,
+        output=json.dumps({'job_id': job_id, 'interview_prep_id': interview_prep_id}),
+    )
+
+
+def _send_task_failure(task_token: str | None, *, cause: str) -> None:
+    if not task_token:
+        return
+    sfn.send_task_failure(
+        taskToken=task_token,
+        error='InterviewPrepFailed',
+        cause=cause,
+    )
 
 
 def _generate_and_persist_from_sqs(
@@ -133,8 +194,9 @@ def _generate_and_persist_from_sqs(
     dal = _get_dal()
     logger.info('Interview prep worker generation starting', job_id=job_id, user_id=user_id, request_data=request_data)
 
-    # Update status to PROCESSING
-    _update_artifact_status(user_id=user_id, job_id=job_id, status='PROCESSING')
+    # Update status to PROCESSING — refuse to resurrect a job cancelled before
+    # this (re)delivery (raises CancelledBeforePersist, handled by the SQS loop).
+    _update_artifact_status(user_id=user_id, job_id=job_id, status='PROCESSING', fail_if_cancelled=True)
 
     # Validate the request data
     try:
@@ -246,12 +308,14 @@ def _generate_and_persist_from_sqs(
         )
         raise RuntimeError(f'Persistence failed for interview prep job {job_id}: {persist_exc}') from persist_exc
 
-    # Update the artifact record to COMPLETED only after successful persistence
+    # Update the artifact record to COMPLETED only after successful persistence —
+    # a cancel during generation must not be overwritten back to COMPLETED.
     _update_artifact_status(
         user_id=user_id,
         job_id=job_id,
         status='COMPLETED',
         result_data=_convert_decimal_to_float(prep_payload),
+        fail_if_cancelled=True,
     )
 
     # Propagate completion to the application record so the hub reflects the
@@ -267,7 +331,7 @@ def _generate_and_persist_from_sqs(
     logger.info('Interview prep SQS job completed', job_id=job_id)
 
 
-def _update_artifact_status(
+def _update_artifact_status(  # noqa: C901
     user_id: str,
     job_id: str,
     status: str,
@@ -277,8 +341,15 @@ def _update_artifact_status(
     failure_stage: str | None = None,
     failure_timestamp: str | None = None,
     error_details: dict[str, Any] | None = None,
+    fail_if_cancelled: bool = False,
 ) -> None:
-    """Update interview prep artifact status in DynamoDB."""
+    """Update interview prep artifact status in DynamoDB.
+
+    When ``fail_if_cancelled`` is True the write is conditional and is rejected
+    if the artifact is already CANCELLED; that rejection is surfaced as
+    ``CancelledBeforePersist`` so the worker skips cleanly instead of resurrecting
+    a cancelled artifact (FE-UI-043 worker_cancelled_guard).
+    """
     import datetime as _dt
 
     import boto3 as _boto3
@@ -312,32 +383,28 @@ def _update_artifact_status(
         update_expr += ', error_details = :error_details'
         attr_values[':error_details'] = error_details
 
+    condition: str | None = None
+    if fail_if_cancelled:
+        condition = 'attribute_not_exists(#s) OR #s <> :cancelled'
+        attr_values[':cancelled'] = 'CANCELLED'
+
     artifact_id = _normalize_interview_prep_artifact_id(job_id)
+    update_kwargs: dict[str, Any] = {
+        'Key': {'applicationId': user_id, 'artifactId': artifact_id},
+        'UpdateExpression': update_expr,
+        'ExpressionAttributeNames': attr_names,
+        'ExpressionAttributeValues': attr_values,
+    }
+    if condition is not None:
+        update_kwargs['ConditionExpression'] = condition
     try:
-        logger.info(
-            'Interview prep worker updating DynamoDB artifact status',
-            user_id=user_id,
-            request_id=job_id,
-            key_schema_mode=PRIMARY_KEY_MODE,
-            status=status,
-            update_expression=update_expr,
-            expression_attribute_names=attr_names,
-            expression_attribute_values=attr_values,
-        )
-        table.update_item(
-            Key={'applicationId': user_id, 'artifactId': artifact_id},
-            UpdateExpression=update_expr,
-            ExpressionAttributeNames=attr_names,
-            ExpressionAttributeValues=attr_values,
-        )
-        logger.info(
-            'Updated interview prep artifact status',
-            user_id=user_id,
-            request_id=job_id,
-            key_schema_mode=PRIMARY_KEY_MODE,
-            status=status,
-        )
+        table.update_item(**update_kwargs)
     except Exception as exc:
+        error_response = getattr(exc, 'response', {}) if hasattr(exc, 'response') else {}
+        error_code = ((error_response.get('Error') or {}).get('Code')) if isinstance(error_response, dict) else None
+        if fail_if_cancelled and error_code == 'ConditionalCheckFailedException':
+            logger.info('Interview prep cancelled before write — skipping', request_id=job_id, attempted_status=status)
+            raise CancelledBeforePersist(job_id) from exc
         logger.error(
             'Failed to update artifact status',
             user_id=user_id,
@@ -609,7 +676,7 @@ def _extract_vpr_differentiators(vpr_payload: dict[str, Any]) -> list[str] | Non
     return differentiators or None
 
 
-def _resolve_vpr_from_jobs_table(vpr_id: str) -> dict[str, Any] | None:
+def _resolve_vpr_from_jobs_table(vpr_id: str, user_id: str) -> dict[str, Any] | None:
     table_name = _coerce_text(os.environ.get('VPR_JOBS_TABLE_NAME') or os.environ.get('JOBS_TABLE_NAME'))
     if not table_name:
         return None
@@ -624,6 +691,12 @@ def _resolve_vpr_from_jobs_table(vpr_id: str) -> dict[str, Any] | None:
 
     if not isinstance(job_record, dict):
         logger.info('Interview prep context VPR jobs lookup empty', vpr_id=vpr_id, jobs_table_name=table_name)
+        return None
+
+    # Ownership check: the job record must belong to the requesting user.
+    record_owner = str(job_record.get('user_id') or '').strip()
+    if record_owner != user_id:
+        logger.warning('VPR job ownership mismatch for interview prep', vpr_id=vpr_id, expected=user_id, actual=record_owner)
         return None
 
     logger.info('Interview prep context VPR jobs lookup payload', vpr_id=vpr_id, jobs_table_name=table_name, job_record=job_record)
@@ -660,11 +733,12 @@ def _resolve_interview_prep_context(  # noqa: C901
 
     Returns dict with: cv_facts, vpr_data, vpr_differentiators,
     gap_responses, company_research, language, job_title, job_id.
-    Failures are non-fatal — caller proceeds with reduced context.
+    A missing VPR is fatal; downstream interview prep must not use fabricated
+    upstream context.
     """
     context: dict[str, Any] = {
         'cv_facts': None,
-        'vpr_data': {'vpr_id': api_request.vpr_id},
+        'vpr_data': None,
         'vpr_differentiators': None,
         'gap_responses': None,
         'company_research': None,
@@ -707,7 +781,7 @@ def _resolve_interview_prep_context(  # noqa: C901
 
     # Resolve VPR data (prefer VPR jobs table entry by vpr job id)
     try:
-        vpr_payload = _resolve_vpr_from_jobs_table(api_request.vpr_id)
+        vpr_payload = _resolve_vpr_from_jobs_table(api_request.vpr_id, user_id=user_id)
         if isinstance(vpr_payload, dict):
             logger.info('Interview prep context VPR payload from jobs table', vpr_id=api_request.vpr_id, vpr_payload=vpr_payload)
             context['vpr_data'] = vpr_payload
@@ -718,23 +792,32 @@ def _resolve_interview_prep_context(  # noqa: C901
             vpr_result = dal.get_vpr(api_request.vpr_id)
             if hasattr(vpr_result, 'success') and vpr_result.success and vpr_result.data is not None:
                 vpr = vpr_result.data
-                vpr_dict = vpr.model_dump(mode='json') if hasattr(vpr, 'model_dump') else dict(vpr)
-                logger.info(
-                    'Interview prep context VPR payload from DAL fallback',
-                    vpr_id=api_request.vpr_id,
-                    table_name=getattr(dal, 'table_name', ''),
-                    vpr_payload=vpr_dict,
-                )
-                context['vpr_data'] = vpr_dict
-                context['vpr_differentiators'] = _extract_vpr_differentiators(vpr_dict) or []
-                context['language'] = _coerce_text(vpr_dict.get('language')) or context['language']
-                metrics.add_metric(name='InterviewPrepVPRResolved', unit=MetricUnit.Count, value=1)
+                # Ownership: reject VPRs that belong to a different user.
+                vpr_owner = getattr(vpr, 'user_id', None) or (vpr.get('user_id') if isinstance(vpr, dict) else None)
+                if str(vpr_owner or '').strip() != user_id:
+                    logger.warning('VPR ownership mismatch in DAL fallback for interview prep', vpr_id=api_request.vpr_id, expected=user_id)
+                    metrics.add_metric(name='InterviewPrepVPROwnershipMismatch', unit=MetricUnit.Count, value=1)
+                else:
+                    vpr_dict = vpr.model_dump(mode='json') if hasattr(vpr, 'model_dump') else dict(vpr)
+                    logger.info(
+                        'Interview prep context VPR payload from DAL fallback',
+                        vpr_id=api_request.vpr_id,
+                        table_name=getattr(dal, 'table_name', ''),
+                        vpr_payload=vpr_dict,
+                    )
+                    context['vpr_data'] = vpr_dict
+                    context['vpr_differentiators'] = _extract_vpr_differentiators(vpr_dict) or []
+                    context['language'] = _coerce_text(vpr_dict.get('language')) or context['language']
+                    metrics.add_metric(name='InterviewPrepVPRResolved', unit=MetricUnit.Count, value=1)
             else:
                 metrics.add_metric(name='InterviewPrepVPRMissing', unit=MetricUnit.Count, value=1)
                 logger.warning('VPR not found for context resolution', vpr_id=api_request.vpr_id)
     except Exception as exc:
         metrics.add_metric(name='InterviewPrepVPRResolutionError', unit=MetricUnit.Count, value=1)
         logger.warning('VPR resolution failed', vpr_id=api_request.vpr_id, error=str(exc))
+
+    if context['vpr_data'] is None:
+        raise ValueError(f'Required VPR not found for interview prep: {api_request.vpr_id}')
 
     # Resolve gap responses filtered by requested gap_response_ids
     gap_candidates = _build_context_dal_candidates(
@@ -809,7 +892,7 @@ def _resolve_interview_prep_context(  # noqa: C901
         vpr_id=api_request.vpr_id,
         job_id=job_id,
         cv_resolved=context['cv_facts'] is not None,
-        vpr_resolved=context['vpr_data'] != {'vpr_id': api_request.vpr_id},
+        vpr_resolved=context['vpr_data'] is not None,
         gap_resolved=bool(context['gap_responses']),
         company_research_resolved=context['company_research'] is not None,
         language=context['language'],
@@ -1083,6 +1166,201 @@ def _build_interview_prep_status_payload(item: dict[str, Any], fallback_id: str)
             payload['error_details'] = item.get('error_details')
 
     return payload
+
+
+_INTERVIEW_PREP_TERMINAL_STATUSES = {'COMPLETED', 'FAILED', 'CANCELLED'}
+
+
+def _handle_interview_prep_cancel(event: dict[str, Any], user_id: str) -> dict[str, Any]:
+    """Handle POST /interview-prep/{interviewPrepId}/cancel."""
+    import boto3 as _boto3
+
+    path_params = event.get('pathParameters') or {}
+    interview_prep_id = str(path_params.get('interviewPrepId') or '').strip()
+    if not interview_prep_id:
+        return _build_response(HTTPStatus.BAD_REQUEST, {'error': 'Missing interviewPrepId'})
+
+    table_name = _get_artifacts_table_name()
+    table = _boto3.resource('dynamodb').Table(table_name)
+    artifact_id = f'ARTIFACT#INTERVIEW_PREP#{interview_prep_id}'
+
+    try:
+        get_resp = table.get_item(Key={'applicationId': user_id, 'artifactId': artifact_id})
+        item = (get_resp or {}).get('Item')
+    except Exception as exc:
+        logger.error('DynamoDB error during interview prep cancel', error=str(exc))
+        return _build_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Internal server error'})
+
+    if not item:
+        try:
+            query_resp = table.query(
+                KeyConditionExpression='applicationId = :uid AND begins_with(artifactId, :prefix)',
+                ExpressionAttributeValues={
+                    ':uid': user_id,
+                    ':prefix': f'ARTIFACT#INTERVIEW_PREP#{interview_prep_id}',
+                },
+                Limit=1,
+            )
+            items = (query_resp or {}).get('Items', [])
+            item = items[0] if items else None
+        except Exception:
+            item = None
+        if not item:
+            return _build_response(HTTPStatus.NOT_FOUND, {'error': 'Interview prep not found'})
+
+    status = str(item.get('status', '')).upper()
+    if status in _INTERVIEW_PREP_TERMINAL_STATUSES:
+        return _build_response(HTTPStatus.CONFLICT, {'error': 'Cannot cancel terminal task'})
+
+    item_app_id = str(item.get('applicationId', user_id))
+    item_artifact_id = str(item.get('artifactId', artifact_id))
+    table.update_item(
+        Key={'applicationId': item_app_id, 'artifactId': item_artifact_id},
+        UpdateExpression='SET #s = :status',
+        ExpressionAttributeNames={'#s': 'status'},
+        ExpressionAttributeValues={':status': 'CANCELLED'},
+    )
+    return _build_response(HTTPStatus.OK, {'status': 'cancelled'})
+
+
+def _is_interview_prep_patch_path(path: str) -> bool:
+    return path.startswith('/interview-prep/') and path != '/interview-prep/generate' and not path.endswith('/cancel')
+
+
+def _patch_interview_prep(event: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
+    """Handle PATCH /interview-prep/{interviewPrepId} — persist a user STAR answer.
+
+    Mirrors the cover-letter PATCH at-rest pattern but keyed per question_id
+    within the interview_prep item. Enforces base_version optimistic concurrency
+    (FE-UI-045 conflict UX) and keeps suggested_answer untouched.
+    """
+    user_id = _extract_authenticated_user_id(event)
+    if not user_id:
+        return _build_response(
+            HTTPStatus.UNAUTHORIZED,
+            {'error': 'Missing or invalid authentication token', 'code': ResultCode.UNAUTHORIZED},
+        )
+
+    interview_prep_id = _extract_interview_prep_id(event)
+    if not interview_prep_id:
+        return _build_response(
+            HTTPStatus.BAD_REQUEST,
+            {'error': 'Missing interviewPrepId', 'code': ResultCode.MISSING_REQUIRED_FIELD},
+        )
+
+    try:
+        body = json.loads(event.get('body', '{}') or '{}')
+    except json.JSONDecodeError:
+        return _build_response(HTTPStatus.BAD_REQUEST, {'error': 'Invalid JSON', 'code': ResultCode.INVALID_INPUT})
+
+    question_id = str(body.get('question_id', '') or '').strip()
+    answer = body.get('answer')
+    if not question_id or not isinstance(answer, str):
+        return _build_response(
+            HTTPStatus.BAD_REQUEST,
+            {'error': 'question_id and answer are required', 'code': ResultCode.MISSING_REQUIRED_FIELD},
+        )
+    base_version = body.get('base_version')
+
+    item = _get_interview_prep_item(user_id, interview_prep_id)
+    if not item:
+        return _build_response(
+            HTTPStatus.NOT_FOUND,
+            {'error': 'Interview prep not found', 'code': ResultCode.INTERVIEW_PREP_NOT_FOUND},
+        )
+
+    prep_payload = item.get('interview_prep')
+    if not isinstance(prep_payload, dict):
+        prep_payload = {}
+    questions = prep_payload.get('questions')
+    if not isinstance(questions, list):
+        questions = []
+
+    target = None
+    for question in questions:
+        if isinstance(question, dict) and str(question.get('question_id') or question.get('id') or '').strip() == question_id:
+            target = question
+            break
+    if target is None:
+        return _build_response(
+            HTTPStatus.NOT_FOUND,
+            {'error': 'Question not found', 'code': ResultCode.INTERVIEW_PREP_NOT_FOUND},
+        )
+
+    current_version = _coerce_answer_version(target.get('answer_version'))
+    if base_version is not None and _coerce_answer_version(base_version) != current_version:
+        return _build_response(
+            HTTPStatus.CONFLICT,
+            {
+                'error': 'Stale base_version; the answer was modified elsewhere',
+                'code': ResultCode.DYNAMODB_CONDITION_CHECK_FAILED,
+                'question_id': question_id,
+                'answer_version': current_version,
+            },
+        )
+
+    now = datetime.now(timezone.utc).isoformat()
+    new_version = current_version + 1
+    target['answer'] = answer
+    target['answer_version'] = new_version
+    target['answer_updated_at'] = now
+    prep_payload['questions'] = questions
+
+    if not _write_interview_prep_payload(user_id=user_id, interview_prep_id=interview_prep_id, item=item, prep_payload=prep_payload, now=now):
+        return _build_response(
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+            {'error': 'Failed to save interview prep answer', 'code': ResultCode.DYNAMODB_ERROR},
+        )
+
+    return _build_response(
+        HTTPStatus.OK,
+        {
+            'status': 'completed',
+            'interview_prep_id': interview_prep_id,
+            'question_id': question_id,
+            'answer': answer,
+            'answer_version': new_version,
+        },
+    )
+
+
+def _coerce_answer_version(value: Any) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _write_interview_prep_payload(
+    user_id: str,
+    interview_prep_id: str,
+    item: dict[str, Any],
+    prep_payload: dict[str, Any],
+    now: str,
+) -> bool:
+    import boto3 as _boto3
+
+    table_name = _get_artifacts_table_name()
+    table = _boto3.resource('dynamodb').Table(table_name)
+
+    if 'applicationId' in item:
+        key: dict[str, Any] = {'applicationId': item['applicationId'], 'artifactId': item['artifactId']}
+    else:
+        key = {
+            'pk': item.get('pk', user_id),
+            'sk': item.get('sk', _normalize_interview_prep_artifact_id(interview_prep_id)),
+        }
+
+    try:
+        table.update_item(
+            Key=key,
+            UpdateExpression='SET interview_prep = :prep, updated_at = :now',
+            ExpressionAttributeValues={':prep': prep_payload, ':now': now},
+        )
+        return True
+    except Exception as exc:
+        logger.error('Failed to update interview prep answer', interview_prep_id=interview_prep_id, error=str(exc))
+        return False
 
 
 def _build_response(status_code: HTTPStatus, body: dict[str, Any]) -> dict[str, Any]:

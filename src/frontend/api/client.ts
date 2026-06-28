@@ -8,17 +8,42 @@ declare module 'axios' {
   }
 }
 
+type ApiErrorPayload = {
+  classification?: string;
+  error?: string;
+  error_code?: string;
+  field?: string;
+  message?: string;
+};
+
 export class ApiError extends Error {
+  public readonly classification?: string;
+  public readonly errorCode?: string;
+  public readonly field?: string;
+  public readonly isApiError = true;
+
   constructor(
     public readonly status: number,
     message: string,
+    options?: {
+      classification?: string;
+      errorCode?: string;
+      field?: string;
+    },
   ) {
     super(message);
     this.name = 'ApiError';
+    this.classification = options?.classification;
+    this.errorCode = options?.errorCode;
+    this.field = options?.field;
   }
 
   is404(): boolean {
     return this.status === 404;
+  }
+
+  get statusCode(): number {
+    return this.status;
   }
 }
 
@@ -53,7 +78,7 @@ apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) =>
 
 apiClient.interceptors.response.use(
   (response) => response,
-  async (error: AxiosError<{ error?: string; message?: string }>) => {
+  async (error: AxiosError<ApiErrorPayload>) => {
     const originalRequest = error.config!;
 
     if (error.response?.status === 401) {
@@ -73,8 +98,13 @@ apiClient.interceptors.response.use(
     }
 
     const status = error.response?.status ?? 0;
-    const message = error.response?.data?.error ?? error.message;
-    throw new ApiError(status, message);
+    const payload = error.response?.data;
+    const message = payload?.error ?? payload?.message ?? error.message;
+    throw new ApiError(status, message, {
+      classification: payload?.classification,
+      errorCode: payload?.error_code,
+      field: payload?.field,
+    });
   },
 );
 

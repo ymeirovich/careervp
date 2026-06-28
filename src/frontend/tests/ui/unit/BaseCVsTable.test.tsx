@@ -1,147 +1,229 @@
-/**
- * Unit tests: Base CVs Table (CV Center)
- * Spec: docs/frontend/spec-v4/05-base-cvs-table.yaml
- *
- * These tests WILL FAIL until App.jsx implements:
- *   - base-cvs switch case with proper screen rendering
- *   - All 4 table columns (File Name, Upload Date, Used In, Actions)
- *   - Empty state with CTA
- *   - Default CV badge and disabled Set as Default button
- */
+import React from 'react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { BaseCVsTable, type BaseCVListItem } from '../../../components/BaseCVsTable';
 
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, beforeAll } from 'vitest';
+const apiResponse: { cvs: BaseCVListItem[] } = {
+  cvs: [
+    {
+      cv_id: 'cv-1',
+      full_name: 'Zoe Backend CV',
+      language: 'English',
+      created_at: '2026-05-01T08:00:00Z',
+      updated_at: '2026-05-20T10:00:00Z',
+      status: 'ready',
+      used_in: ['SysAid Backend Engineer'],
+    },
+    {
+      cv_id: 'cv-2',
+      full_name: 'Ari Product CV',
+      language: 'Hebrew',
+      created_at: '2026-04-20T08:00:00Z',
+      updated_at: '2026-05-25T09:00:00Z',
+      status: 'processing',
+      used_in_count: 2,
+    },
+    {
+      cv_id: 'cv-3',
+      full_name: 'Maya Data CV',
+      language: 'English',
+      created_at: '2026-04-25T08:00:00Z',
+      updated_at: '2026-05-10T08:00:00Z',
+      status: 'failed',
+      applications_count: 0,
+    },
+    {
+      cv_id: 'cv-4',
+      full_name: 'No Status CV',
+      language: 'English',
+      created_at: '2026-04-28T08:00:00Z',
+      updated_at: '2026-05-12T08:00:00Z',
+    },
+  ],
+};
 
-const CANVAS_APP_PATH = '../../../canvas-app/App';
-
-let App: React.ComponentType<Record<string, never>>;
-
-beforeAll(async () => {
-  try {
-    const mod = await import(CANVAS_APP_PATH);
-    App = mod.default;
-  } catch {
-    App = () => <div data-testid="app-not-found">App.jsx not found</div>;
-  }
+afterEach(() => {
+  document.documentElement.lang = 'en';
+  vi.unstubAllGlobals();
 });
 
-function navigateToBaseCVs() {
-  render(<App />);
-  const link = screen.queryByRole('link', { name: /base cvs/i })
-    ?? screen.queryByRole('button', { name: /base cvs/i })
-    ?? screen.queryByText(/^base cvs$/i);
-  if (link) fireEvent.click(link);
+function table() {
+  return screen.getByTestId('base-cvs-table');
 }
 
-// ---------------------------------------------------------------------------
-// BASE_CV_01
-// ---------------------------------------------------------------------------
-describe("BASE_CV_01 — page title", () => {
-  it("renders page title 'Base CVs'", () => {
-    navigateToBaseCVs();
-    const heading = screen.queryByRole('heading', { name: /base cvs/i })
-      ?? screen.queryByText(/^base cvs$/i);
-    expect(heading, '"Base CVs" heading').not.toBeNull();
-  });
-});
+describe('BaseCVsTable', () => {
+  it('renders semantic table markup with seven scoped column headers in order', () => {
+    render(<BaseCVsTable cvs={apiResponse.cvs} />);
 
-// ---------------------------------------------------------------------------
-// BASE_CV_02
-// ---------------------------------------------------------------------------
-describe("BASE_CV_02 — upload button", () => {
-  it("renders Upload CV button", () => {
-    navigateToBaseCVs();
-    const btn = screen.queryByRole('button', { name: /upload cv/i })
-      ?? screen.queryByText(/\+ upload cv/i);
-    expect(btn, '"Upload CV" button').not.toBeNull();
-  });
-});
+    expect(table().tagName).toBe('TABLE');
+    const headers = within(table()).getAllByRole('columnheader');
 
-// ---------------------------------------------------------------------------
-// BASE_CV_03
-// ---------------------------------------------------------------------------
-describe("BASE_CV_03 — table columns", () => {
-  it("renders all 4 table column headers", () => {
-    navigateToBaseCVs();
-    expect(
-      screen.queryByText(/file name/i) ?? screen.queryByRole('columnheader', { name: /file name/i }),
-      'File Name column'
-    ).not.toBeNull();
-    expect(
-      screen.queryByText(/upload date/i) ?? screen.queryByRole('columnheader', { name: /upload date/i }),
-      'Upload Date column'
-    ).not.toBeNull();
-    expect(
-      screen.queryByText(/used in/i) ?? screen.queryByRole('columnheader', { name: /used in/i }),
-      'Used In column'
-    ).not.toBeNull();
-    expect(
-      screen.queryByText(/^actions$/i) ?? screen.queryByRole('columnheader', { name: /actions/i }),
-      'Actions column'
-    ).not.toBeNull();
+    expect(headers).toHaveLength(7);
+    expect(headers.map((header) => header.textContent?.replace(/[▲▼]/g, '').trim())).toEqual([
+      'File Name',
+      'Upload Date',
+      'Language',
+      'Last Updated',
+      'Status',
+      'Used In',
+      'Actions',
+    ]);
+    headers.forEach((header) => expect(header).toHaveAttribute('scope', 'col'));
   });
-});
 
-// ---------------------------------------------------------------------------
-// BASE_CV_04
-// ---------------------------------------------------------------------------
-describe("BASE_CV_04 — empty state", () => {
-  it("shows empty state when no CVs exist", () => {
-    navigateToBaseCVs();
-    const emptyText = screen.queryByText(/no base cvs/i);
-    const emptyCta = screen.queryByText(/upload your first cv/i)
-      ?? screen.queryByRole('button', { name: /upload your first cv/i });
-    expect(emptyText ?? emptyCta, '"No base CVs" empty state').not.toBeNull();
-  });
-});
+  it('maps API fields to cells, formats both date columns, and renders Used In fallbacks', () => {
+    render(<BaseCVsTable cvs={[apiResponse.cvs[0], apiResponse.cvs[3]]} />);
 
-// ---------------------------------------------------------------------------
-// BASE_CV_05
-// ---------------------------------------------------------------------------
-describe("BASE_CV_05 — Default badge", () => {
-  it("shows Default badge on the default CV row", () => {
-    navigateToBaseCVs();
-    const badge = screen.queryByText(/^default$/i);
-    // If no data is loaded from Firestore (empty state), badge is not expected.
-    // This test passes vacuously here — it will fail when real data is injected
-    // and the badge implementation is missing.
-    if (badge !== null) {
-      expect(badge, '"Default" badge').not.toBeNull();
-    }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// BASE_CV_06
-// ---------------------------------------------------------------------------
-describe("BASE_CV_06 — Set as Default disabled on default row", () => {
-  it("Set as Default is disabled on the already-default CV row", () => {
-    navigateToBaseCVs();
-    const setDefaultBtns = screen.queryAllByRole('button', { name: /set as default/i });
-    // When a default CV exists, its "Set as Default" button must be disabled
-    const disabledBtn = setDefaultBtns.find(
-      btn => (btn as HTMLButtonElement).disabled
+    const firstRow = screen.getByTestId('base-cv-row-cv-1');
+    const expectedCreated = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(
+      new Date(apiResponse.cvs[0].created_at ?? ''),
     );
-    if (setDefaultBtns.length > 0) {
-      expect(disabledBtn, 'One "Set as Default" button should be disabled (the default CV)').toBeDefined();
-    }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// BASE_CV_07
-// ---------------------------------------------------------------------------
-describe("BASE_CV_07 — Set as Default click updates indicator", () => {
-  it("clicking Set as Default makes that row the default", () => {
-    navigateToBaseCVs();
-    const setDefaultBtns = screen.queryAllByRole('button', { name: /set as default/i });
-    const enabledBtn = setDefaultBtns.find(
-      btn => !(btn as HTMLButtonElement).disabled
+    const expectedUpdated = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(
+      new Date(apiResponse.cvs[0].updated_at ?? ''),
     );
-    if (enabledBtn) {
-      fireEvent.click(enabledBtn);
-      const badge = screen.queryByText(/^default$/i);
-      expect(badge, '"Default" badge should appear after clicking Set as Default').not.toBeNull();
-    }
+
+    expect(within(firstRow).getByText('Zoe Backend CV')).toBeInTheDocument();
+    expect(within(firstRow).getByText('English')).toBeInTheDocument();
+    expect(within(firstRow).getByText(expectedCreated)).toBeInTheDocument();
+    expect(within(firstRow).getByText(expectedUpdated)).toBeInTheDocument();
+    expect(within(firstRow).getByText('SysAid Backend Engineer')).toBeInTheDocument();
+    expect(within(screen.getByTestId('base-cv-row-cv-4')).getByText('—')).toBeInTheDocument();
+  });
+
+  it('renders zebra striping, hover highlight, and a bold underlined-on-hover View link', () => {
+    render(<BaseCVsTable cvs={apiResponse.cvs} />);
+
+    expect(screen.getByTestId('base-cv-row-cv-2').className).toContain('bg-white');
+    expect(screen.getByTestId('base-cv-row-cv-1').className).toContain('bg-surface-subtle');
+    expect(screen.getByTestId('base-cv-row-cv-2').className).toContain('hover:bg-surface-selected');
+
+    const viewLink = within(screen.getByTestId('base-cv-row-cv-2')).getByRole('link', { name: 'View' });
+    expect(viewLink.className).toContain('font-bold');
+    expect(viewLink.className).toContain('hover:underline');
+    expect(viewLink.className).toContain('group-hover:underline');
+    expect(viewLink).toHaveAttribute('href', '/cv-center/cv-2');
+  });
+
+  it('maps ready, missing, processing, and failed statuses to soft status badges', () => {
+    render(<BaseCVsTable cvs={apiResponse.cvs} />);
+
+    const readyBadge = within(screen.getByTestId('base-cv-row-cv-1')).getByText('Ready');
+    const missingStatusBadge = within(screen.getByTestId('base-cv-row-cv-4')).getByText('Ready');
+    const processingBadge = within(screen.getByTestId('base-cv-row-cv-2')).getByText('Processing');
+    const failedBadge = within(screen.getByTestId('base-cv-row-cv-3')).getByText('Failed');
+
+    expect(readyBadge.className).toContain('bg-green-50');
+    expect(missingStatusBadge.className).toContain('bg-green-50');
+    expect(processingBadge.className).toContain('bg-blue-50');
+    expect(failedBadge.className).toContain('bg-state-error');
+  });
+
+  it('renders Set as Default, Delete, and View actions and calls action callbacks with the CV id', () => {
+    const onSetDefault = vi.fn();
+    const onDelete = vi.fn();
+
+    render(<BaseCVsTable cvs={[apiResponse.cvs[0]]} onSetDefault={onSetDefault} onDelete={onDelete} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Set as Default' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    expect(onSetDefault).toHaveBeenCalledWith('cv-1');
+    expect(onDelete).toHaveBeenCalledWith('cv-1');
+    expect(screen.getByRole('link', { name: 'View' })).toHaveAttribute('href', '/cv-center/cv-1');
+  });
+
+  it('defaults to Last Updated descending sort and toggles sorting by click and keyboard', () => {
+    render(<BaseCVsTable cvs={apiResponse.cvs} />);
+
+    const initialRows = screen.getAllByTestId(/^base-cv-row-/);
+    expect(initialRows[0]).toHaveAttribute('data-testid', 'base-cv-row-cv-2');
+    expect(initialRows[1]).toHaveAttribute('data-testid', 'base-cv-row-cv-1');
+
+    const fileNameHeader = within(table()).getByRole('columnheader', { name: /File Name/ });
+    const fileNameButton = within(fileNameHeader).getByRole('button', { name: /File Name/ });
+
+    fireEvent.click(fileNameButton);
+    expect(fileNameHeader).toHaveAttribute('aria-sort', 'ascending');
+    expect(screen.getAllByTestId(/^base-cv-row-/)[0]).toHaveAttribute('data-testid', 'base-cv-row-cv-2');
+
+    fireEvent.keyDown(fileNameButton, { key: 'Enter' });
+    expect(fileNameHeader).toHaveAttribute('aria-sort', 'descending');
+    expect(screen.getAllByTestId(/^base-cv-row-/)[0]).toHaveAttribute('data-testid', 'base-cv-row-cv-1');
+
+    const usedInHeader = within(table()).getByRole('columnheader', { name: /Used In/ });
+    fireEvent.click(within(usedInHeader).getByRole('button', { name: /Used In/ }));
+    expect(usedInHeader).toHaveAttribute('aria-sort', 'ascending');
+    expect(fileNameHeader).not.toHaveAttribute('aria-sort');
+  });
+
+  it('makes every column header sortable by exposing a focusable sort button', () => {
+    render(<BaseCVsTable cvs={apiResponse.cvs} />);
+
+    const headers = within(table()).getAllByRole('columnheader');
+    headers.forEach((header) => {
+      expect(within(header).getByRole('button')).toBeInTheDocument();
+    });
+  });
+
+  it('renders loading, error with retry, and empty states inside the table card', () => {
+    const onRetry = vi.fn();
+    const onUploadNew = vi.fn();
+    const { rerender } = render(<BaseCVsTable cvs={apiResponse.cvs} isLoading />);
+
+    expect(screen.getAllByTestId('base-cvs-table-skeleton-row')).toHaveLength(3);
+    expect(screen.queryByTestId('base-cv-row-cv-1')).not.toBeInTheDocument();
+
+    rerender(<BaseCVsTable cvs={[]} error="Could not load base CVs" onRetry={onRetry} />);
+    expect(within(table()).getByText('Could not load base CVs')).toBeInTheDocument();
+    fireEvent.click(within(table()).getByRole('button', { name: 'Retry' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+
+    rerender(<BaseCVsTable cvs={[]} onUploadNew={onUploadNew} />);
+    expect(within(table()).getByText('No primary CVs uploaded yet')).toBeInTheDocument();
+    fireEvent.click(within(table()).getByRole('button', { name: '+ Upload New CV' }));
+    expect(onUploadNew).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders responsive card-style row markup with all seven field labels', () => {
+    render(<BaseCVsTable cvs={[apiResponse.cvs[0]]} />);
+
+    const row = screen.getByTestId('base-cv-row-cv-1');
+    expect(row.className).toContain('block');
+    expect(row.className).toContain('md:table-row');
+    expect(within(row).getByText('File Name')).toBeInTheDocument();
+    expect(within(row).getByText('Upload Date')).toBeInTheDocument();
+    expect(within(row).getByText('Language')).toBeInTheDocument();
+    expect(within(row).getByText('Last Updated')).toBeInTheDocument();
+    expect(within(row).getByText('Status')).toBeInTheDocument();
+    expect(within(row).getByText('Used In')).toBeInTheDocument();
+    expect(within(row).getByText('Actions')).toBeInTheDocument();
+  });
+
+  it('renders Hebrew labels from the document locale', () => {
+    document.documentElement.lang = 'he';
+
+    const { rerender } = render(<BaseCVsTable cvs={[apiResponse.cvs[0]]} />);
+
+    expect(within(table()).getByRole('columnheader', { name: /שם הקובץ/ })).toBeInTheDocument();
+    expect(within(screen.getByTestId('base-cv-row-cv-1')).getByRole('link', { name: 'צפייה' })).toBeInTheDocument();
+    expect(within(screen.getByTestId('base-cv-row-cv-1')).getByText('מוכן')).toBeInTheDocument();
+    expect(within(screen.getByTestId('base-cv-row-cv-1')).getByRole('button', { name: 'הגדר כברירת מחדל' })).toBeInTheDocument();
+    expect(within(screen.getByTestId('base-cv-row-cv-1')).getByRole('button', { name: 'מחיקה' })).toBeInTheDocument();
+
+    rerender(<BaseCVsTable cvs={[]} />);
+    expect(within(table()).getByText('לא הועלו עדיין קורות חיים ראשיים')).toBeInTheDocument();
+    expect(within(table()).getByRole('button', { name: '+ העלאת קורות חיים חדשים' })).toBeInTheDocument();
+
+    rerender(<BaseCVsTable cvs={[]} error="טעינת קורות החיים הבסיסיים נכשלה." />);
+    expect(within(table()).getByRole('button', { name: 'נסה שוב' })).toBeInTheDocument();
+  });
+
+  it('does not call GET /users/me/cv directly from the table component', () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(JSON.stringify(apiResponse), { status: 200 })));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<BaseCVsTable cvs={apiResponse.cvs} />);
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

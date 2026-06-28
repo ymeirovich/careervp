@@ -1,0 +1,374 @@
+spec_id: FE-UI-045
+title: "Inline rich-text editing + autosave-on-blur across all four artifacts (Cover Letter, Tailored CV, Interview Prep, Gap parity)"
+priority: high
+status: draft
+owner: frontend
+created_at: 2026-06-20
+updated_at: 2026-06-20
+tier: feature
+
+recommended_model: opus
+reason_for_model: >
+  Four artifact edit surfaces must converge on ONE mode-based rich-text + autosave-on-blur
+  contract without breaking the existing structured cv_sections DOCX/PDF export path or the
+  already-working Gap Analysis editor. Crash-safe localStorage draft mirroring, optimistic
+  concurrency (base_version / 409), and a non-blocking restore banner are stateful UX with
+  several race conditions (blur vs unmount, restore vs server-newer, AI-apply vs autosave)
+  that are correctness-sensitive across components.
+
+depends_on: []
+blocks:
+  - FE-UI-046   # AI-assist pipeline consumes the same field-scoped edit surfaces + autosave flow
+prior_art:
+  - FE-UI-020   # RichTextEditor — onFocus/onBlur/readOnly, markdownSerializer (markdownToHtml/htmlToMarkdown/normalizeMarkdown)
+related_decisions:
+  - "Anti-AI 8-pattern framework (careervp/CLAUDE.md Decision 1.6) — relevant when AI text (FE-UI-046) flows through these editors"
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    Rich-text editing is implemented inconsistently across the four editable artifacts, and
+    three of the four leak formatting or block editing entirely:
+
+    1. RichTextEditor (components/RichTextEditor/RichTextEditor.tsx, FE-UI-020) already supports
+       onFocus/onBlur/readOnly and serializes HTML<->Markdown via markdownSerializer.ts
+       (markdownToHtml / htmlToMarkdown / normalizeMarkdown). It is MODE-BASED, not focus-mounted.
+    2. Gap Analysis (GapQuestionCard.tsx) ALREADY uses RichTextEditor in both edit and read-only
+       states and works correctly — this is the reference pattern.
+    3. Cover Letter (app/applications/[id]/cover-letter/page.tsx) uses RichTextEditor in
+       ?mode=edit (works), but READ mode renders plain <p className="whitespace-pre-wrap">, so
+       stored Markdown leaks as literal characters (e.g. **bold**, - bullets) instead of rendered
+       formatting.
+    4. Tailored CV (app/applications/[id]/cv-tailored/page.tsx): the structured cv_sections path
+       uses a PLAIN <textarea> (CVDocumentEdit), NOT RichTextEditor. Education and Certifications
+       are hardcoded read-only even in edit mode. RichTextEditor is only wired to the dead raw
+       `tailored_cv` fallback, which the structured path never reaches.
+    5. There is no autosave anywhere: edits are lost on accidental navigation, tab close, or
+       crash. There is no draft mirror, no restore affordance, and no optimistic-concurrency
+       guard, so a stale tab silently overwrites a newer server copy on Save.
+  required_behavior: >
+    ONE mode-based inline rich-text + autosave-on-blur contract, applied uniformly:
+
+    1. TRIGGER stays MODE-BASED. An Edit button flips the surface to edit mode. Within edit mode,
+       focusing a rich-text field shows the Tiptap toolbar; blur hides the toolbar AND triggers
+       autosave IF the field is dirty (normalizeMarkdown(current) !== normalizeMarkdown(baseline)).
+    2. READ mode renders the stored string through the SAME serializer the editor uses
+       (markdownToHtml) by reusing <RichTextEditor readOnly>. Applies to Cover Letter read view,
+       Tailored CV summary + experience bullets read view, and Interview Prep STAR answers.
+       Gap already does this and is left unchanged.
+    3. Tailored CV edit mode adopts the GAP-ANALYSIS model: ONE Edit button flips the WHOLE
+       document to edit mode, making ALL fields editable at once. Summary + each Experience bullet
+       are rich-text (RichTextEditor). Education + Certifications remain STRUCTURED-BUT-EDITABLE
+       plain inputs (so cv_sections stays intact for DOCX/PDF export) — NOT free rich-text.
+    4. Interview Prep gains editable, persisted STAR answers: each question card is editable with
+       RichTextEditor (+ an AI button, wired in FE-UI-046) and saves via the new
+       PATCH /interview-prep/{interviewPrepId} endpoint (delivered by FE-UI-046 backend + FE-UI-047
+       route registration).
+    5. SAVE model: autosave on BLUR ONLY (no debounce timer) using the EXISTING PATCH request
+       shapes per artifact (no Markdown contract change — the field stays a plain string), plus a
+       localStorage draft mirror. On mount, compare the local draft against server updated_at and
+       offer a non-blocking "Restore unsaved changes?" banner. Explicit Save still commits and
+       clears the draft on 2xx. A base_version optimistic-concurrency guard surfaces a 409 conflict
+       modal (Reload / Overwrite). A beforeunload warning fires only while a PATCH is in flight.
+  user_impact: >
+    Formatting renders correctly in every read view, all four artifacts are editable with the same
+    interaction, edits survive accidental navigation / crashes via the draft mirror, and concurrent
+    edits in two tabs no longer silently clobber each other.
+
+# =============================================================================
+# EVIDENCE (file:line)
+# =============================================================================
+evidence:
+  reference_pattern_works:
+    - { file: src/frontend/components/RichTextEditor/RichTextEditor.tsx, note: "mode-based; supports onFocus/onBlur/readOnly (FE-UI-020)" }
+    - { file: src/frontend/components/RichTextEditor/markdownSerializer.ts, note: "markdownToHtml / htmlToMarkdown / normalizeMarkdown — the canonical HTML<->Markdown bridge" }
+    - { file: src/frontend/components/GapQuestionCard.tsx, note: "ALREADY uses RichTextEditor in edit + read-only states — reference implementation, leave unchanged" }
+  cover_letter_read_leak:
+    - { file: "src/frontend/app/applications/[id]/cover-letter/page.tsx", note: "?mode=edit uses RichTextEditor (works); read mode renders plain <p whitespace-pre-wrap> -> markdown leaks as literal text" }
+  tailored_cv_gaps:
+    - { file: "src/frontend/app/applications/[id]/cv-tailored/page.tsx", note: "structured cv_sections path uses plain <textarea> (CVDocumentEdit); Education/Certifications hardcoded read-only in edit mode; RichTextEditor only on dead raw tailored_cv fallback" }
+  interview_prep_readonly:
+    - { file: "src/frontend/app/applications/[id]/interview-prep/page.tsx", note: "fully read-only accordion; no edit, no PATCH route" }
+    - { file: src/backend/careervp/models/interview_prep.py, note: "InterviewQuestion has suggested_answer but no user-editable persisted field (backend extension is FE-UI-046)" }
+  existing_patch_shapes:
+    - { file: src/backend/careervp/handlers/cover_letter_handler.py, line: 1411, note: "PATCH /cover-letter/{id}: req {cover_letter:'<string>'}; resp {id,status:'completed',result:{cover_letter:'<string>'}}; plain string field, FORMAT-AGNOSTIC" }
+    - { file: src/backend/careervp/handlers/gap_handler.py, line: 339, note: "POST /jobs/{jobId}/gap-responses: req {job_id,responses:[{question_id,response}]} FULL-REPLACE; resp {status:'saved',job_id,responses_saved:N} (does NOT echo content)" }
+    - { file: src/backend/careervp/handlers/cv_tailoring_handler.py, line: 922, note: "PATCH /cv-tailoring/{id}: accepts {cv_sections} or {tailored_cv}" }
+
+# =============================================================================
+# ARCHITECTURE / OWNERSHIP MAP
+# =============================================================================
+architecture_ownership_map:
+  owns_frontend:
+    - "All inline rich-text edit + read rendering for Cover Letter, Tailored CV, Interview Prep."
+    - "Autosave-on-blur orchestration, localStorage draft mirror, restore banner, base_version 409 UX, beforeunload-while-in-flight guard."
+    - "Tailored CV conversion to the gap-analysis single-Edit whole-document model."
+    - "Interview Prep card edit UI + wiring to PATCH /interview-prep (the AI button placeholder is owned here; AI behavior is FE-UI-046)."
+  does_not_own:
+    - "Backend PATCH /interview-prep handler + InterviewQuestion model extension -> FE-UI-046 (backend)."
+    - "POST /ai/assist endpoint + prompt-context composition -> FE-UI-046 (backend)."
+    - "API Gateway route-method registration for PATCH /interview-prep + POST /ai/assist -> FE-UI-047 (infra)."
+    - "Existing PATCH /cover-letter, PATCH /cv-tailoring, POST /gap-responses backends (already exist; consumed as-is, no contract change)."
+  shared_contracts:
+    serializer: "markdownToHtml / htmlToMarkdown / normalizeMarkdown (markdownSerializer.ts) is the single source of truth for read rendering AND dirty comparison."
+    localstorage_key: "careervp:draft:{artifactType}:{artifactId}:{fieldKey} -> { markdown, updatedAt, baseVersion }"
+    dirty_check: "normalizeMarkdown(current) !== normalizeMarkdown(baseline)"
+    field_string_invariant: "PATCH bodies send a plain string per existing shapes; NO Markdown contract change is introduced on the wire."
+  primary_files:
+    - "src/frontend/app/applications/[id]/cover-letter/page.tsx"
+    - "src/frontend/app/applications/[id]/cv-tailored/page.tsx"
+    - "src/frontend/app/applications/[id]/interview-prep/page.tsx"
+  cascade_risk: "medium — touches three artifact pages; Gap Analysis + RichTextEditor core are intentionally NOT modified."
+
+# =============================================================================
+# FIX PLAN
+# =============================================================================
+fix_plan:
+  files_to_modify:
+    - file: "src/frontend/app/applications/[id]/cover-letter/page.tsx"
+      change: >
+        Replace the read-mode <p whitespace-pre-wrap> with <RichTextEditor readOnly value={stored} />.
+        In edit mode, wire onBlur -> autosave-if-dirty using PATCH /cover-letter/{id} req {cover_letter}.
+        Subscribe field to the useArtifactAutosave hook (draft mirror + base_version).
+    - file: "src/frontend/app/applications/[id]/cv-tailored/page.tsx"
+      change: >
+        Convert to the gap-analysis model: ONE Edit button flips the whole document to edit mode.
+        Summary + each Experience bullet become <RichTextEditor> (rich-text); Education + Certifications
+        become structured-but-editable plain inputs (preserve cv_sections shape). Read mode renders
+        summary/bullets via <RichTextEditor readOnly>. Autosave-on-blur per field via
+        PATCH /cv-tailoring/{id} req {cv_sections} (structured) — never the dead tailored_cv fallback.
+        Remove the hardcoded read-only lock on Education/Certifications.
+    - file: "src/frontend/app/applications/[id]/interview-prep/page.tsx"
+      change: >
+        Make each question card editable with <RichTextEditor> for the STAR answer + a read view via
+        <RichTextEditor readOnly>. Add a per-card Edit toggle. On blur, autosave-if-dirty via
+        PATCH /interview-prep/{interviewPrepId} req {answer:'<string>'} keyed by question_id.
+        Render an AI-assist button per field (handler injected by FE-UI-046; placeholder no-op until then).
+  files_to_create:
+    - file: "src/frontend/hooks/useArtifactAutosave.ts"
+      purpose: >
+        Reusable autosave-on-blur orchestrator. API: { value, setValue, onBlur, isDirty, isSaving,
+        saveNow, conflict, draftBanner }. Responsibilities: dirty check via normalizeMarkdown;
+        localStorage draft mirror read/write under careervp:draft:{artifactType}:{artifactId}:{fieldKey};
+        base_version optimistic-concurrency (send baseVersion, surface 409 as conflict state);
+        clear draft on 2xx; beforeunload listener active ONLY while a PATCH is in flight.
+    - file: "src/frontend/components/RestoreDraftBanner.tsx"
+      purpose: "Non-blocking banner: 'Restore unsaved changes?' with Restore / Discard. Rendered when a local draft is newer than server updated_at on mount."
+    - file: "src/frontend/components/ConflictModal.tsx"
+      purpose: "409 optimistic-concurrency modal: Reload (discard local, refetch) / Overwrite (re-PATCH with refreshed base_version)."
+  dependencies:
+    upstream:
+      - "RichTextEditor + markdownSerializer (FE-UI-020) — already shipped."
+      - "Existing PATCH /cover-letter, PATCH /cv-tailoring, POST /gap-responses — already shipped."
+    downstream:
+      - "PATCH /interview-prep/{interviewPrepId} handler + InterviewQuestion model field -> FE-UI-046 (interview-prep autosave is non-functional until that lands; ship behind a feature flag or wire AI button as no-op)."
+      - "Route-method registration for PATCH /interview-prep -> FE-UI-047 (infra)."
+
+# =============================================================================
+# ACCEPTANCE CRITERIA
+# =============================================================================
+acceptance_criteria:
+  - id: AC-001
+    artifact: cover_letter
+    given: A cover letter with Markdown formatting (**bold**, bullet list) is stored and viewed in read mode
+    when: The page renders the read view
+    then: The content renders as formatted HTML via markdownToHtml (bold is bold, bullets are a list); no literal Markdown characters are shown.
+
+  - id: AC-002
+    artifact: all
+    given: The user is in edit mode and focuses a rich-text field
+    when: The field gains focus
+    then: The Tiptap toolbar appears for that field; on blur the toolbar disappears.
+
+  - id: AC-003
+    artifact: all
+    given: A rich-text field is in edit mode and its content has changed (normalizeMarkdown differs from baseline)
+    when: The field loses focus (blur)
+    then: A single PATCH fires using that artifact's existing request shape; isSaving is true during the call; baseline + base_version update to the saved value on 2xx; no debounce timer is used.
+
+  - id: AC-004
+    artifact: all
+    given: A rich-text field is in edit mode and its content is unchanged (normalizeMarkdown equals baseline)
+    when: The field loses focus (blur)
+    then: No PATCH is fired (blur on a clean field is a no-op).
+
+  - id: AC-005
+    artifact: cv_tailored
+    given: A tailored CV is viewed in read mode
+    when: The user clicks the single Edit button
+    then: The whole document enters edit mode; Summary and every Experience bullet become rich-text editors; Education and Certifications become editable structured plain inputs (not rich-text); cv_sections structure is preserved on save.
+
+  - id: AC-006
+    artifact: cv_tailored
+    given: The tailored CV is in edit mode
+    when: The user edits Education or Certifications fields and blurs
+    then: The change persists via PATCH /cv-tailoring/{id} {cv_sections} with cv_sections shape intact, so the DOCX/PDF export path (FE-UI-028) still reads the structured sections; the dead tailored_cv fallback is never written.
+
+  - id: AC-007
+    artifact: interview_prep
+    given: An interview prep artifact is rendered
+    when: The user opens a question card and clicks Edit
+    then: The STAR answer becomes a RichTextEditor; on blur with a dirty value it PATCHes /interview-prep/{interviewPrepId} {answer} keyed by question_id; read mode renders the stored answer via <RichTextEditor readOnly>.
+
+  - id: AC-008
+    artifact: all
+    given: A field is edited and a local draft is written under careervp:draft:{artifactType}:{artifactId}:{fieldKey}
+    when: The user reloads or reopens the page and local.updatedAt is NEWER than server updated_at
+    then: A non-blocking "Restore unsaved changes?" banner appears with Restore and Discard; Restore loads the draft into the editor, Discard clears the draft; the banner never blocks viewing.
+
+  - id: AC-009
+    artifact: all
+    given: A local draft exists but server updated_at is NEWER (or equal) than local.updatedAt
+    when: The page mounts
+    then: The stale draft is cleared and no restore banner is shown.
+
+  - id: AC-010
+    artifact: all
+    given: Tab A loaded base_version V1 and Tab B already saved V2 to the server
+    when: Tab A blurs a dirty field and PATCHes with base_version V1
+    then: The server returns 409; a Conflict modal offers Reload (discard local, refetch V2) or Overwrite (refetch base_version, re-PATCH); the field is NOT silently overwritten either way.
+
+  - id: AC-011
+    artifact: all
+    given: An explicit Save button is clicked
+    when: The PATCH returns 2xx
+    then: The committed value becomes the new baseline and the localStorage draft for that field is cleared.
+
+  - id: AC-012
+    artifact: all
+    given: A PATCH request is in flight
+    when: The user attempts to close the tab or navigate away
+    then: A beforeunload warning fires; once no PATCH is in flight the warning is removed (no warning for a clean, fully-saved page).
+
+  - id: AC-013
+    artifact: gap_analysis
+    given: Gap Analysis already uses RichTextEditor for edit + read (FE-UI-019)
+    when: This spec is implemented
+    then: GapQuestionCard.tsx behavior is unchanged (regression guard); it remains the reference pattern.
+
+# =============================================================================
+# STATES TO HANDLE
+# =============================================================================
+states_to_handle:
+  - state: read_rendered
+    trigger: Field is in read mode
+    behavior: "<RichTextEditor readOnly value={storedMarkdown} /> — formatting rendered via markdownToHtml"
+  - state: edit_focused
+    trigger: Edit mode + field focused
+    behavior: "Toolbar visible; editing enabled"
+  - state: edit_blurred_dirty
+    trigger: Blur with normalizeMarkdown(current) != baseline
+    behavior: "Hide toolbar; fire one PATCH (existing shape); write draft mirror; update baseline + base_version on 2xx"
+  - state: edit_blurred_clean
+    trigger: Blur with no change
+    behavior: "Hide toolbar; no PATCH"
+  - state: saving_in_flight
+    trigger: PATCH pending
+    behavior: "isSaving true; beforeunload guard armed"
+  - state: draft_restorable
+    trigger: Mount with local.updatedAt > server.updated_at
+    behavior: "Show non-blocking Restore/Discard banner"
+  - state: draft_stale
+    trigger: Mount with local.updatedAt <= server.updated_at
+    behavior: "Clear draft; no banner"
+  - state: conflict_409
+    trigger: PATCH rejected on base_version mismatch
+    behavior: "Show Conflict modal (Reload / Overwrite); field unchanged"
+  - state: save_error
+    trigger: PATCH non-2xx (non-409)
+    behavior: "Surface inline error; keep draft mirror so the edit is not lost; allow retry via saveNow"
+
+# =============================================================================
+# VERIFICATION CONTRACT
+# =============================================================================
+verification_contract:
+  - { requirement_id: AC-001, verification_type: unit, blocking_gate: pre_merge }
+  - { requirement_id: AC-002, verification_type: unit, blocking_gate: pre_merge }
+  - { requirement_id: AC-003, verification_type: unit, blocking_gate: pre_merge }
+  - { requirement_id: AC-004, verification_type: unit, blocking_gate: pre_merge }
+  - { requirement_id: AC-005, verification_type: unit, blocking_gate: pre_merge }
+  - { requirement_id: AC-006, verification_type: integration, blocking_gate: pre_merge }
+  - { requirement_id: AC-007, verification_type: integration, blocking_gate: pre_merge }
+  - { requirement_id: AC-008, verification_type: unit, blocking_gate: pre_merge }
+  - { requirement_id: AC-009, verification_type: unit, blocking_gate: pre_merge }
+  - { requirement_id: AC-010, verification_type: integration, blocking_gate: pre_merge }
+  - { requirement_id: AC-011, verification_type: unit, blocking_gate: pre_merge }
+  - { requirement_id: AC-012, verification_type: e2e, blocking_gate: post_deploy }
+  - { requirement_id: AC-013, verification_type: regression, blocking_gate: pre_merge }
+
+# =============================================================================
+# BASELINE / REGRESSION BUDGET
+# =============================================================================
+baseline_regression_budget:
+  blocked_regressions:
+    - "GapQuestionCard.tsx edit + read behavior must not change (reference pattern)."
+    - "RichTextEditor.tsx + markdownSerializer.ts public API must not change (consumed by Gap + new surfaces)."
+    - "Tailored CV cv_sections structure on disk must remain export-compatible (FE-UI-028 DOCX/PDF reads cv_sections)."
+    - "PATCH /cover-letter, PATCH /cv-tailoring, POST /gap-responses wire contracts must not change (plain-string fields)."
+    - "Cover Letter ?mode=edit existing editing must continue to work."
+  allowed_deltas:
+    - "New read-mode rendering in Cover Letter / Tailored CV / Interview Prep (formatting now rendered, not literal)."
+    - "New useArtifactAutosave hook + RestoreDraftBanner + ConflictModal components (additive)."
+    - "Education/Certifications become editable (previously hardcoded read-only) — intended behavior change."
+    - "New base_version field sent on PATCH bodies (additive; backend may ignore until FE-UI-046 enforces)."
+
+# =============================================================================
+# TRACEABILITY MATRIX
+# =============================================================================
+traceability_matrix:
+  - { requirement_id: AC-001, code_reference: "src/frontend/app/applications/[id]/cover-letter/page.tsx:TBD", test_reference: "TEST-FE-UI-045.yaml#cover_letter_read_render", verification_type: unit, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-002, code_reference: "src/frontend/hooks/useArtifactAutosave.ts:TBD", test_reference: "TEST-FE-UI-045.yaml#toolbar_focus_blur", verification_type: unit, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-003, code_reference: "src/frontend/hooks/useArtifactAutosave.ts:TBD", test_reference: "TEST-FE-UI-045.yaml#autosave_on_blur_dirty", verification_type: unit, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-004, code_reference: "src/frontend/hooks/useArtifactAutosave.ts:TBD", test_reference: "TEST-FE-UI-045.yaml#no_save_when_clean", verification_type: unit, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-005, code_reference: "src/frontend/app/applications/[id]/cv-tailored/page.tsx:TBD", test_reference: "TEST-FE-UI-045.yaml#cv_whole_document_edit", verification_type: unit, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-006, code_reference: "src/frontend/app/applications/[id]/cv-tailored/page.tsx:TBD", test_reference: "TEST-FE-UI-045.yaml#cv_sections_preserved_for_export", verification_type: integration, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-007, code_reference: "src/frontend/app/applications/[id]/interview-prep/page.tsx:TBD", test_reference: "TEST-FE-UI-045.yaml#interview_prep_star_edit", verification_type: integration, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-008, code_reference: "src/frontend/components/RestoreDraftBanner.tsx:TBD", test_reference: "TEST-FE-UI-045.yaml#restore_banner_newer_local", verification_type: unit, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-009, code_reference: "src/frontend/hooks/useArtifactAutosave.ts:TBD", test_reference: "TEST-FE-UI-045.yaml#stale_draft_cleared", verification_type: unit, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-010, code_reference: "src/frontend/components/ConflictModal.tsx:TBD", test_reference: "TEST-FE-UI-045.yaml#optimistic_concurrency_409", verification_type: integration, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-011, code_reference: "src/frontend/hooks/useArtifactAutosave.ts:TBD", test_reference: "TEST-FE-UI-045.yaml#explicit_save_clears_draft", verification_type: unit, blocking_gate: pre_merge, result: pending }
+  - { requirement_id: AC-012, code_reference: "src/frontend/hooks/useArtifactAutosave.ts:TBD", test_reference: "TEST-FE-UI-045.yaml#beforeunload_in_flight_only", verification_type: e2e, blocking_gate: post_deploy, result: pending }
+  - { requirement_id: AC-013, code_reference: "src/frontend/components/GapQuestionCard.tsx", test_reference: "TEST-FE-UI-045.yaml#gap_unchanged_regression", verification_type: regression, blocking_gate: pre_merge, result: pending }
+
+# =============================================================================
+# ROLLBACK TRIGGER MATRIX
+# =============================================================================
+rollback_trigger_matrix:
+  - { trigger_id: RT-001, condition: "Read-mode rendering corrupts or hides stored content for any artifact", action: "Revert that artifact page's read view to the prior plain renderer; keep the others; ship a hotfix" }
+  - { trigger_id: RT-002, condition: "Tailored CV cv_sections shape changes such that DOCX/PDF export breaks (FE-UI-028 regression)", action: "Revert cv-tailored gap-model conversion; restore CVDocumentEdit textarea path; block merge until export verified" }
+  - { trigger_id: RT-003, condition: "Autosave fires duplicate or lost PATCHes (blur/unmount race) in dev smoke", action: "Disable autosave-on-blur via feature flag (fall back to explicit Save only); keep draft mirror" }
+  - { trigger_id: RT-004, condition: "Restore banner or Conflict modal shows false positives (stale-draft mis-compare)", action: "Disable draft-restore + base_version UX via flag; autosave still writes through; investigate updated_at clock skew" }
+  - { trigger_id: RT-005, condition: "Interview Prep PATCH 404/405 because FE-UI-046/047 not yet deployed", action: "Keep interview-prep edit behind a flag until backend endpoint + route are live; AI button remains no-op" }
+
+# =============================================================================
+# DESIGN NOTES
+# =============================================================================
+design_notes:
+  - >
+    normalizeMarkdown is the ONLY dirty-comparison function. Comparing raw editor HTML or
+    un-normalized Markdown produces false-dirty blurs (e.g. trailing whitespace, list marker
+    normalization) and causes spurious PATCHes. Always compare normalizeMarkdown(current) to
+    normalizeMarkdown(baseline).
+  - >
+    Blur-vs-unmount race: a field can blur because the user clicked away OR because the component
+    unmounted (navigation). The autosave hook must flush the in-flight value on unmount if dirty,
+    and must not double-fire if blur already triggered the save. Use a single saving-guard ref.
+  - >
+    The Markdown stays a plain string on the wire. The serializer is a CLIENT-SIDE rendering and
+    dirty-check convenience only — the backend PATCH contracts (cover_letter, cv_sections, answer)
+    are format-agnostic strings. Do NOT introduce a Markdown content-type negotiation.
+  - >
+    base_version source: use the artifact's server updated_at (or an explicit version field if the
+    backend exposes one) as the optimistic-concurrency token. FE-UI-046 should enforce it server-side;
+    until then the frontend sends it and treats any 409 as the conflict path. If the backend ignores
+    it (pre-FE-UI-046), conflicts degrade to last-write-wins — acceptable for the interim.
+  - >
+    Tailored CV Education/Certifications are STRUCTURED-BUT-EDITABLE plain inputs, never rich-text.
+    This preserves the cv_sections object shape that FE-UI-028 export depends on. Only Summary and
+    Experience bullets are rich-text, because those are free-form prose where formatting matters.
+  - >
+    The AI-assist button placeholder is rendered here but its onClick is supplied by FE-UI-046.
+    When AI text is applied (FE-UI-046, on 200 only), it flows through this same autosave + draft
+    mirror, so AI output is crash-safe exactly like manual edits.

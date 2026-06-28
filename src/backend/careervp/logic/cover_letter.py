@@ -13,6 +13,7 @@ from typing import Any, Literal
 from careervp.logic.fvs_validator import check_anti_ai_patterns
 from careervp.logic.llm_client import LLMClient
 from careervp.logic.prompts.cover_letter_prompt import build_system_prompt, build_user_prompt
+from careervp.models.company import CompanyResearchResult
 from careervp.models.cover_letter import (
     CoverLetter,
     CoverLetterParagraph,
@@ -22,7 +23,7 @@ from careervp.models.cover_letter import (
 from careervp.models.cv import UserCV
 from careervp.models.job import GapResponse
 from careervp.models.result import Result, ResultCode
-from careervp.models.vpr import VPRResponse
+from careervp.models.vpr import VPR, VPRResponse
 
 WORD_COUNT_TARGETS = {'short': 220, 'standard': 300, 'long': 350}
 MAX_WORD_COUNT = 350
@@ -50,8 +51,9 @@ async def _maybe_await(value: Any) -> Any:
 async def generate_cover_letter(  # noqa: C901
     request: CoverLetterRequest,
     user_cv: UserCV,
-    vpr: VPRResponse,
+    vpr: VPR | VPRResponse,
     gap_responses: list[GapResponse | dict[str, Any]] | None = None,
+    company_research: CompanyResearchResult | None = None,
 ) -> Result[CoverLetterResponse]:
     """Generate a personalised cover letter."""
     start_time = time.perf_counter()
@@ -72,6 +74,7 @@ async def generate_cover_letter(  # noqa: C901
         job_title=request.job_title,
         job_description=request.job_description,
         gap_responses=gap_responses,
+        company_research=company_research,
     )
 
     llm_client = LLMClient()

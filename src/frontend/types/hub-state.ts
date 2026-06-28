@@ -8,11 +8,14 @@ export interface RawApplicationData {
   updated_at: string;
   is_finalized: boolean;
   finalized_at?: string;
+  state?: string;
+  trial_credit_consumed?: boolean;
+  company_research_error?: boolean;
 }
 
 export interface RawModuleData {
   job_id: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'expired' | 'not_generated';
   created_at: string;
   updated_at: string;
   result_url?: string;
@@ -38,10 +41,8 @@ export interface RawGapAnalysisData {
 }
 
 export interface RawCVData {
-  cv_id: string;
-  created_at: string;
-  updated_at: string;
-  version: number;
+  cv_id?: string;
+  full_name?: string;
 }
 
 export interface ModuleAction {
@@ -49,6 +50,8 @@ export interface ModuleAction {
   onClick: () => void;
   variant: 'primary' | 'secondary' | 'ghost' | 'destructive';
   isLoading?: boolean;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 export interface HubModuleState {

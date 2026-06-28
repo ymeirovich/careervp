@@ -2,10 +2,10 @@
 spec_id: FE-UI-006
 title: "Finalize ErrorBoundary — behavior contract for redesign"
 priority: low
-status: draft
+status: implemented
 owner: frontend
 created_at: 2026-05-23
-updated_at: 2026-05-23
+updated_at: 2026-05-28
 route: all routes (shared)
 component_file: components/ErrorBoundary/ErrorBoundary.tsx
 tier: shared
@@ -36,8 +36,8 @@ tier: shared
 
 ## Acceptance Criteria
 
-- [ ] AC-001: Given any API failure on any page, when the request returns a non-2xx response, then no ErrorBoundary takeover occurs — the error is handled inline by the affected component (error message + Retry button rendered inside the component's own DOM subtree, not ErrorBoundary's fallback)
-- [ ] AC-002: Given an uncaught JS exception during React rendering, when the exception propagates to ErrorBoundary, then ErrorBoundary renders its fallback UI (centered message + "Try again" button) and logs to CloudWatch — confirming the existing crash-recovery contract is intact
+- [x] AC-001: Given any API failure on any page, when the request returns a non-2xx response, then no ErrorBoundary takeover occurs — the error is handled inline by the affected component (error message + Retry button rendered inside the component's own DOM subtree, not ErrorBoundary's fallback)
+- [x] AC-002: Given an uncaught JS exception during React rendering, when the exception propagates to ErrorBoundary, then ErrorBoundary renders its fallback UI (centered message + "Try again" button) and logs to CloudWatch — confirming the existing crash-recovery contract is intact
 
 ## States to Handle
 N/A — no new states; contract documents existing behavior constraints only
@@ -60,8 +60,8 @@ N/A — no new states; contract documents existing behavior constraints only
 ## Traceability Matrix
 | requirement_id | code_reference | test_reference | verification_type | blocking_gate | result |
 |---|---|---|---|---|---|
-| AC-001 | components/ErrorBoundary/ErrorBoundary.tsx:30 | tests/ui/unit/ErrorBoundary.test.tsx | unit | pre_merge | pending |
-| AC-002 | components/ErrorBoundary/ErrorBoundary.tsx:33-41 | tests/ui/unit/ErrorBoundary.test.tsx | unit | pre_merge | pending |
+| AC-001 | components/ErrorBoundary/ErrorBoundary.tsx:44-62 | src/frontend/tests/ui/unit/ErrorBoundary.test.tsx | unit | pre_merge | pass |
+| AC-002 | components/ErrorBoundary/ErrorBoundary.tsx:30-66 | src/frontend/tests/ui/unit/ErrorBoundary.test.tsx | unit | pre_merge | pass |
 
 ## Rollback Trigger Matrix
 | trigger_id | condition | action |

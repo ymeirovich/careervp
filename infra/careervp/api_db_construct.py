@@ -69,6 +69,12 @@ class ApiDbConstruct(Construct):
             id_, self.gap_analysis_dlq
         )
 
+        # Artifact Chain async queues (FE-UI-031). DLQ first, then primary queue.
+        self.company_research_dlq: sqs.Queue = self._build_company_research_dlq(id_)
+        self.company_research_queue: sqs.Queue = self._build_company_research_queue(
+            id_, self.company_research_dlq
+        )
+
         # Backwards compatibility alias
         self.db = self.users_table
 
@@ -495,6 +501,39 @@ class ApiDbConstruct(Construct):
             ),
         )
 
+    def _build_company_research_dlq(self, id_prefix: str) -> sqs.Queue:
+        """Dead-letter queue for failed company research jobs (FE-UI-031)."""
+        return sqs.Queue(
+            self,
+            f"{id_prefix}CompanyResearchDlq",
+            queue_name=self.naming.dlq_name(constants.COMPANY_RESEARCH_QUEUE),
+            # SQS_001: retain failed messages for 14 days.
+            retention_period=Duration.days(14),
+            # SQS_002: encrypt queue contents with AWS-managed KMS.
+            encryption=sqs.QueueEncryption.KMS_MANAGED,
+        )
+
+    def _build_company_research_queue(
+        self, id_prefix: str, dlq: sqs.Queue
+    ) -> sqs.Queue:
+        """Primary queue for async company research (Step Functions chain, FE-UI-031)."""
+        return sqs.Queue(
+            self,
+            f"{id_prefix}CompanyResearchQueue",
+            queue_name=self.naming.queue_name(constants.COMPANY_RESEARCH_QUEUE),
+            # SQS_003: visibility aligned to the chain task heartbeat (180s) + buffer.
+            visibility_timeout=Duration.seconds(120),
+            receive_message_wait_time=Duration.seconds(20),
+            # SQS_002: encrypt queue contents with AWS-managed KMS.
+            encryption=sqs.QueueEncryption.KMS_MANAGED,
+            # SQS_004: ordering is not required for independent research jobs.
+            fifo=False,
+            dead_letter_queue=sqs.DeadLetterQueue(
+                queue=dlq,
+                max_receive_count=3,
+            ),
+        )
+
     def _build_vpr_results_bucket(self, id_prefix: str) -> s3.Bucket:
         """
         S3 bucket for VPR generation results.
@@ -513,8 +552,8 @@ class ApiDbConstruct(Construct):
             versioned=True,
             lifecycle_rules=[
                 s3.LifecycleRule(
-                    id="delete-after-7-days",
-                    expiration=Duration.days(7),
+                    id="delete-after-365-days",
+                    expiration=Duration.days(365),
                     enabled=True,
                 ),
             ],
@@ -523,7 +562,11 @@ class ApiDbConstruct(Construct):
                     allowed_methods=[
                         s3.HttpMethods.GET,
                     ],
-                    allowed_origins=["https://careervp.com", "http://localhost:3000"],
+                    allowed_origins=[
+                        "https://careervp.com",
+                        "http://localhost:3000",
+                        "https://*.amplifyapp.com",
+                    ],
                     allowed_headers=["*"],
                     max_age=3000,
                 )

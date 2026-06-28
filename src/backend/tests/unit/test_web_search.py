@@ -1,88 +1,138 @@
-"""
-Unit tests for careervp.logic.utils.web_search.
-"""
+"""Unit tests for careervp.logic.utils.web_search."""
 
 from __future__ import annotations
 
 import asyncio
+import subprocess
 from typing import cast
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
-import httpx
 from pydantic import HttpUrl
 
-from careervp.logic.utils.web_search import (
-    _parse_duckduckgo_results,
-    aggregate_search_content,
-    search_company_info,
-)
+from careervp.logic.utils import web_search
+from careervp.logic.utils.web_search import aggregate_search_content, search_company_info
 from careervp.models.company import SearchResult
-from careervp.models.result import ResultCode
+from careervp.models.result import Result, ResultCode
 
 
-def test_search_company_info_success() -> None:
-    """search_company_info should parse DuckDuckGo HTML into SearchResult objects."""
+def _result(title: str, url: str, snippet: str) -> SearchResult:
+    return SearchResult(title=title, url=cast(HttpUrl, url), snippet=snippet)
+
+
+def test_runs_profile_and_news_queries() -> None:
+    """When domain is supplied, both queries use the domain-derived name and include_domains."""
 
     async def run() -> None:
-        html = """
-        <div class="result">
-            <a class="result__a" href="https://duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fabout">
-                Acme About
-            </a>
-            <div class="result__snippet">Culture snippet</div>
-        </div>
-        """
-        mock_response = MagicMock()
-        mock_response.text = html
-        mock_response.raise_for_status = MagicMock()
+        profile = [_result('Acme profile', 'https://acme.com/about', 'Acme Corp mission products business model')]
+        news = [_result('Acme news', 'https://news.example/acme', 'Acme Corp funding leadership update')]
 
-        mock_client = AsyncMock()
-        mock_client.post.return_value = mock_response
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
+        with patch('careervp.logic.utils.web_search.TavilyClient') as client_cls:
+            client = client_cls.return_value
+            client.search = AsyncMock(
+                side_effect=[
+                    Result(success=True, data=profile, code=ResultCode.SUCCESS),
+                    Result(success=True, data=news, code=ResultCode.SUCCESS),
+                ]
+            )
 
-        with patch('careervp.logic.utils.web_search.httpx.AsyncClient', return_value=mock_client):
+            result = await search_company_info('Acme Corp', domain='acme.com')
+
+        assert result.success is True
+        assert result.data == profile + news
+        assert client.search.await_count == 2
+        # Domain-derived name ('acme') used in both queries, not the user-typed company name
+        assert client.search.await_args_list[0].args == ('acme mission products business model',)
+        assert client.search.await_args_list[1].args == ('acme news funding leadership',)
+        # Both queries scoped to domain
+        assert client.search.await_args_list[0].kwargs['include_domains'] == ['acme.com']
+        assert client.search.await_args_list[1].kwargs['include_domains'] == ['acme.com']
+
+    asyncio.run(run())
+
+
+def test_domain_scopes_both_profile_and_news_queries() -> None:
+    """A supplied domain anchors both the profile and news queries via include_domains."""
+
+    async def run() -> None:
+        with patch('careervp.logic.utils.web_search.TavilyClient') as client_cls:
+            client = client_cls.return_value
+            client.search = AsyncMock(
+                side_effect=[
+                    Result(success=True, data=[_result('Acme', 'https://sysaid.com', 'Acme Corp profile')], code=ResultCode.SUCCESS),
+                    Result(success=True, data=[_result('News', 'https://news.example/acme', 'Acme Corp news')], code=ResultCode.SUCCESS),
+                ]
+            )
+
+            await search_company_info('Acme Corp', domain='sysaid.com')
+
+        assert client.search.await_args_list[0].kwargs['include_domains'] == ['sysaid.com']
+        assert client.search.await_args_list[1].kwargs['include_domains'] == ['sysaid.com']
+
+    asyncio.run(run())
+
+
+def test_no_domain_falls_back_to_general_search() -> None:
+    """Without a domain, both searches should remain general."""
+
+    async def run() -> None:
+        with patch('careervp.logic.utils.web_search.TavilyClient') as client_cls:
+            client = client_cls.return_value
+            client.search = AsyncMock(
+                side_effect=[
+                    Result(success=True, data=[_result('Acme', 'https://acme.com', 'Acme Corp profile')], code=ResultCode.SUCCESS),
+                    Result(success=True, data=[_result('News', 'https://news.example/acme', 'Acme Corp news')], code=ResultCode.SUCCESS),
+                ]
+            )
+
+            await search_company_info('Acme Corp', domain=None)
+
+        assert 'include_domains' not in client.search.await_args_list[0].kwargs
+        assert 'include_domains' not in client.search.await_args_list[1].kwargs
+
+    asyncio.run(run())
+
+
+def test_results_normalized_to_searchresult() -> None:
+    """Results should preserve the SearchResult contract and aggregate cleanly."""
+
+    async def run() -> None:
+        profile = [_result('Acme profile', 'https://acme.com/about', 'Acme Corp builds workflow products.')]
+        news = [_result('Acme news', 'https://news.example/acme', 'Acme Corp raised funding.')]
+
+        with patch('careervp.logic.utils.web_search.TavilyClient') as client_cls:
+            client = client_cls.return_value
+            client.search = AsyncMock(
+                side_effect=[
+                    Result(success=True, data=profile, code=ResultCode.SUCCESS),
+                    Result(success=True, data=news, code=ResultCode.SUCCESS),
+                ]
+            )
+
             result = await search_company_info('Acme Corp')
 
         assert result.success is True
         assert result.data is not None
-        assert str(result.data[0].url) == 'https://example.com/about'
+        assert all(isinstance(item, SearchResult) for item in result.data)
+        aggregated = aggregate_search_content(result.data)
+        assert 'Acme profile' in aggregated
+        assert 'Acme Corp raised funding.' in aggregated
 
     asyncio.run(run())
 
 
-def test_search_company_info_timeout() -> None:
-    """search_company_info should handle httpx timeouts gracefully."""
+def test_empty_results_return_no_results() -> None:
+    """No Tavily results should surface a no-results style failure."""
 
     async def run() -> None:
-        mock_client = AsyncMock()
-        mock_client.post.side_effect = httpx.TimeoutException('timeout')
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
+        with patch('careervp.logic.utils.web_search.TavilyClient') as client_cls:
+            client = client_cls.return_value
+            client.search = AsyncMock(
+                side_effect=[
+                    Result(success=False, error='no results', code=ResultCode.NO_RESULTS),
+                    Result(success=False, error='no results', code=ResultCode.NO_RESULTS),
+                ]
+            )
 
-        with patch('careervp.logic.utils.web_search.httpx.AsyncClient', return_value=mock_client):
-            result = await search_company_info('Acme Corp')
-
-        assert result.success is False
-        assert result.code == ResultCode.TIMEOUT
-
-    asyncio.run(run())
-
-
-def test_search_company_info_no_results() -> None:
-    """search_company_info should fail when DuckDuckGo returns no results."""
-
-    async def run() -> None:
-        mock_response = MagicMock()
-        mock_response.text = '<div class="no-results"></div>'
-        mock_response.raise_for_status = MagicMock()
-
-        mock_client = AsyncMock()
-        mock_client.post.return_value = mock_response
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-
-        with patch('careervp.logic.utils.web_search.httpx.AsyncClient', return_value=mock_client):
             result = await search_company_info('Acme Corp')
 
         assert result.success is False
@@ -91,29 +141,15 @@ def test_search_company_info_no_results() -> None:
     asyncio.run(run())
 
 
-def test_parse_duckduckgo_results_extracts_redirect_target() -> None:
-    """_parse_duckduckgo_results should decode DuckDuckGo redirect URLs."""
-    html = """
-    <div class="result">
-        <a class="result__a" href="https://duckduckgo.com/l/?uddg=https%3A%2F%2Facme.com%2Fvalues">Acme Values</a>
-        <div class="result__snippet">Values text</div>
-    </div>
-    """
-    results = _parse_duckduckgo_results(html)
+def test_duckduckgo_removed() -> None:
+    """No DuckDuckGo code path should remain in the runtime module."""
+    result = subprocess.run(
+        ['rg', '-n', '-i', 'duckduckgo', 'careervp/'],
+        capture_output=True,
+        text=True,
+        cwd='/Users/yitzchak/Documents/dev/careervp/src/backend',
+        check=False,
+    )
 
-    assert len(results) == 1
-    assert str(results[0].url) == 'https://acme.com/values'
-    assert results[0].snippet == 'Values text'
-
-
-def test_aggregate_search_content() -> None:
-    """aggregate_search_content should join snippets."""
-    results = [
-        SearchResult(title='Result 1', url=cast(HttpUrl, 'https://acme.com/about'), snippet='Culture first.'),
-        SearchResult(title='Result 2', url=cast(HttpUrl, 'https://acme.com/news'), snippet='Growth story.'),
-    ]
-
-    aggregated = aggregate_search_content(results)
-
-    assert 'Culture first.' in aggregated
-    assert 'Growth story.' in aggregated
+    assert result.stdout.strip() == ''
+    assert not hasattr(web_search, '_parse_duckduckgo_results')

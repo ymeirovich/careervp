@@ -1,0 +1,384 @@
+spec_id: TEST-CHAIN-002
+title: "Test Prompts — Full Auto-Chain + Dependency Resolver + VPR↔CR Binding + CR Quality"
+priority: critical
+status: draft
+owner: backend
+created_at: 2026-06-14
+updated_at: 2026-06-14
+type: test_prompts
+note: >
+  Runnable prompts for fresh Claude sessions (or a test-runner agent). Each section is
+  self-contained: context, setup, run command, assertions. Covers FE-UI-038 (dependency
+  resolver), FE-UI-039 (CL/IP chain legs), FE-UI-040 (VPR↔CR binding), FE-UI-041 (CR quality
+  gate). Run backend before infra. Author tests BEFORE implementation for each gate.
+
+context_required: >
+  Working directory: /Users/yitzchak/Documents/dev/careervp
+  Backend: src/backend/careervp/
+  Infra:   infra/careervp/
+  Specs:   docs/upgrade/specs/ (FE-UI-038 through FE-UI-041)
+
+recommended_model_for_test_authoring: sonnet
+recommended_model_for_complex_test_cases: opus  # resolver graph, ownership security, sfn fan-out
+
+# =============================================================================
+# CATEGORY A: UNIT — DEPENDENCY RESOLVER (FE-UI-038)
+# =============================================================================
+unit_resolver:
+  prompt: |
+    Context: FE-UI-038 adds logic/artifact_dependency_resolver.py with
+    resolve_dependencies(artifact_type, application_id, user_id, repos) -> DependencyResolution.
+    The resolver is PURE logic; repos and the sfn-trigger callable are injected.
+
+    Files to write tests in: src/backend/tests/unit/test_artifact_dependency_resolver.py
+
+    Fixtures: fake_repos with controllable artifact presence/freshness/ownership;
+    a spy start_chain callable.
+
+    Write unit tests covering:
+
+    1. test_all_upstream_present_returns_ready
+       Setup: cover_letter requested; VPR + CR present, fresh, owned by user.
+       Assert: resolution.status == 'ready'; resolved_upstream has 'vpr' and 'company_research';
+               start_chain NOT called; generating == [].
+
+    2. test_missing_vpr_returns_dependency_generating_and_starts_chain
+       Setup: cover_letter requested; CR present, VPR missing.
+       Assert: status == 'dependency_generating'; 'vpr' in generating;
+               start_chain called once at the correct node; chain_execution_arn set.
+
+    3. test_missing_cr_and_vpr_starts_chain_at_cr_node
+       Setup: vpr requested; CR missing.
+       Assert: status == 'dependency_generating'; start_chain node == company_research.
+
+    4. test_stale_upstream_treated_as_needing_regeneration
+       Setup: VPR present but gap_responses.updated_at > vpr.created_at (stale).
+       Assert: status == 'dependency_generating' (uses the canonical staleModules definition).
+
+    5. test_chain_already_running_does_not_start_duplicate
+       Setup: is_chain_running(application_id) == True; VPR missing.
+       Assert: status == 'dependency_generating'; chain_execution_arn is None; start_chain NOT called.
+
+    6. test_flag_off_missing_upstream_returns_upstream_required
+       Setup: ARTIFACT_CHAIN_ENABLED=false; VPR missing.
+       Assert: resolver signals 409 upstream_required with missing=['vpr']; start_chain NOT called;
+               NO placeholder produced.
+
+    Run: cd src/backend && uv run pytest tests/unit/test_artifact_dependency_resolver.py -v --tb=short
+    All 6 tests must pass.
+
+# =============================================================================
+# CATEGORY B: UNIT — RESOLVER OWNERSHIP / SECURITY (FE-UI-038)
+# =============================================================================
+unit_resolver_ownership:
+  prompt: |
+    Context: FE-UI-038 requires that an upstream artifact owned by another user is treated as
+    MISSING (never reused, never leaked).
+
+    Files: src/backend/tests/unit/test_resolver_ownership.py
+
+    1. test_cross_user_vpr_treated_as_missing
+       Setup: cover_letter requested by user A; a VPR exists for application but vpr.user_id == B.
+       Assert: resolution does NOT include that VPR in resolved_upstream;
+               status == 'dependency_generating' (VPR considered missing for user A).
+
+    2. test_cross_user_cr_not_leaked_into_resolution
+       Setup: CR exists owned by user B; requested by user A.
+       Assert: resolved_upstream has no company_research from B; no field of B's CR appears anywhere.
+
+    3. test_owned_artifacts_resolve_normally
+       Setup: both VPR + CR owned by user A, fresh.
+       Assert: status == 'ready'.
+
+    Run: cd src/backend && uv run pytest tests/unit/test_resolver_ownership.py -v --tb=short
+    All 3 tests must pass.
+
+# =============================================================================
+# CATEGORY C: INTEGRATION — DOWNSTREAM HANDLERS RETURN 202 (FE-UI-038)
+# =============================================================================
+integration_downstream_202:
+  prompt: |
+    Context: FE-UI-038 wires the resolver into cover_letter_submit, interview_prep_submit, and
+    cv_tailoring handlers. Missing upstream => HTTP 202 dependency_generating (NO placeholder).
+
+    Files: src/backend/tests/integration/test_downstream_dependency_202.py
+    Use moto mock_dynamodb + mocked sfn client. ARTIFACT_CHAIN_ENABLED=true.
+
+    1. test_cover_letter_no_vpr_returns_202_dependency_generating
+       Action: POST /cover-letter/generate with no existing VPR.
+       Assert: status 202; body.status == 'dependency_generating'; 'vpr' in body.generating;
+               NO cover_letter artifact persisted with placeholder content;
+               artifact_statuses.cover_letter == 'pending'.
+
+    2. test_interview_prep_no_vpr_returns_202
+       Assert: 202 dependency_generating; NO {'vpr_id'} placeholder produced.
+
+    3. test_cv_tailoring_no_vpr_returns_202_not_500
+       Action: POST /cv-tailoring/generate with no vpr_id resolvable.
+       Assert: 202 (NOT 500 / ValueError as before line 62).
+
+    4. test_cover_letter_with_vpr_and_cr_generates_normally
+       Setup: VPR + confident CR present.
+       Assert: normal accepted/processing response; uses real vpr_id + company_research.
+
+    Run: cd src/backend && uv run pytest tests/integration/test_downstream_dependency_202.py -v --tb=short
+    All 4 tests must pass.
+
+# =============================================================================
+# CATEGORY D: REGRESSION — NO SILENT PLACEHOLDERS REMAIN (FE-UI-038)
+# =============================================================================
+regression_no_placeholders:
+  prompt: |
+    Context: FE-UI-038 deletes _FallbackVPR and the interview-prep {'vpr_id'} placeholder.
+
+    Files: src/backend/tests/regression/test_no_placeholder_fallbacks.py
+
+    1. test_fallback_vpr_class_removed
+       Assert: grep of cover_letter_handler.py contains no '_FallbackVPR'.
+
+    2. test_interview_prep_placeholder_removed
+       Assert: interview_prep_submit_handler.py no longer returns a minimal {'vpr_id': vpr_id}
+               dict as the VPR payload (inspect _resolve_vpr_* path).
+
+    3. test_cv_tailoring_no_raise_on_missing_vpr
+       Assert: cv_tailoring_handler does not raise ValueError on missing vpr_id (returns 202).
+
+    Run: cd src/backend && uv run pytest tests/regression/test_no_placeholder_fallbacks.py -v --tb=short
+    All 3 tests must pass.
+
+# =============================================================================
+# CATEGORY E: UNIT — VPR↔CR BINDING (FE-UI-040)
+# =============================================================================
+unit_vpr_cr_binding:
+  prompt: |
+    Context: FE-UI-040 makes the VPR consume Company Research on the manual path and records
+    provenance. load_confident_company_research(application_id, user_id) -> CompanyContext|None.
+
+    Files: src/backend/tests/unit/test_vpr_company_research_binding.py
+
+    1. test_load_confident_cr_returns_context_when_present
+       Setup: confident CR (>=0.85) owned by user.
+       Assert: returns a CompanyContext mapped from the CR; company_name != 'Company for ...'.
+
+    2. test_load_confident_cr_returns_none_for_low_confidence
+       Setup: CR persisted but below threshold / status failed.
+       Assert: returns None.
+
+    3. test_load_confident_cr_ownership_enforced
+       Setup: CR owned by another user.
+       Assert: returns None.
+
+    4. test_vpr_submit_injects_company_context
+       Action: vpr_submit_handler with confident CR present.
+       Assert: SQS message input_data.company_context populated; input_data.company_research_id set.
+
+    5. test_vpr_submit_defers_when_cr_absent
+       Setup: no confident CR; ARTIFACT_CHAIN_ENABLED=true.
+       Assert: hands off to resolver (202 dependency_generating) — does NOT enqueue a CR-less VPR.
+
+    6. test_worker_loads_cr_when_message_lacks_context (defense-in-depth)
+       Setup: SQS message has no company_context but confident CR exists in repo.
+       Assert: worker loads it; VPRRequest.company_context populated.
+
+    7. test_status_endpoint_exposes_provenance
+       Action: GET /vpr/{job_id}/status for a VPR built with CR.
+       Assert: response has company_context_included == true, company_research_id, company_research_at.
+
+    Run: cd src/backend && uv run pytest tests/unit/test_vpr_company_research_binding.py -v --tb=short
+    All 7 tests must pass.
+
+# =============================================================================
+# CATEGORY F: INTEGRATION — VPR ACTUALLY INCLUDES CR (FE-UI-040)
+# =============================================================================
+integration_vpr_includes_cr:
+  prompt: |
+    Context: End-to-end, a VPR generated with company_context must populate company_insights.
+
+    Files: src/backend/tests/integration/test_vpr_includes_cr.py
+    Mock the Anthropic call to echo a payload containing company_insights when company context
+    is present in the prompt.
+
+    1. test_vpr_with_cr_populates_company_insights
+       Setup: confident CR present; run manual VPR submit -> worker -> generate_vpr.
+       Assert: resulting VPR.company_insights is non-empty (mission_and_position set);
+               company_context_included == true.
+
+    2. test_vpr_without_cr_does_not_claim_inclusion
+       Setup: chain off, legacy direct call with no CR.
+       Assert: company_insights None; company_context_included == false; structured warning logged.
+
+    3. test_vpr_never_uses_fabricated_cr
+       Setup: only the (now-removed) fabricated payload would have matched 'Company for'.
+       Assert: no VPR is ever built from a company_name matching /^Company for /.
+
+    Run: cd src/backend && uv run pytest tests/integration/test_vpr_includes_cr.py -v --tb=short
+    All 3 tests must pass.
+
+# =============================================================================
+# CATEGORY G: UNIT — CR QUALITY GATE / NO FABRICATION (FE-UI-041)
+# =============================================================================
+unit_cr_quality:
+  prompt: |
+    Context: FE-UI-041 removes _build_fallback_company_research_payload and the
+    'Company for {uuid}' seeding, and gates persistence on confidence.
+
+    Files: src/backend/tests/unit/test_company_research_quality.py
+
+    1. test_get_missing_cr_returns_not_generated
+       Action: get_company_research for an application with no CR item.
+       Assert: status 200 body {status:'not_generated', company_research:null};
+               body does NOT contain 'Company for'; mission/products are absent/null.
+
+    2. test_fallback_payload_function_removed
+       Assert: grep shows _build_fallback_company_research_payload not defined anywhere.
+
+    3. test_no_company_for_literal_anywhere
+       Assert: grep -r 'Company for ' src/backend/careervp returns no matches
+               (gap_handler.py:537,545 + company_research_handler.py cleaned).
+
+    4. test_subthreshold_cr_not_served_as_completed
+       Setup: CR stored with status failed / confidence 0.6.
+       Assert: get_company_research returns status 'failed' (or not_generated), not 'completed',
+               and company_research is null.
+
+    5. test_no_source_returns_all_sources_failed
+       Setup: scrape + search both return empty; LLM has no real source content.
+       Assert: research_company returns Result(success=False, code=ALL_SOURCES_FAILED);
+               does NOT emit generic _fallback_overview text as a successful result.
+
+    6. test_gap_handler_uses_real_company_name
+       Setup: job posting has company_name='Acme Corp'.
+       Assert: gap_handler seeds 'Acme Corp', never 'Company for {job_id}'.
+
+    Run: cd src/backend && uv run pytest tests/unit/test_company_research_quality.py -v --tb=short
+    All 6 tests must pass.
+
+# =============================================================================
+# CATEGORY H: INFRA — CHAIN FAN-OUT LEGS (FE-UI-039)
+# =============================================================================
+infra_chain_legs:
+  prompt: |
+    Context: FE-UI-039 adds a GenerateFinalArtifacts Parallel state (Cover Letter + Interview
+    Prep) after the CV leg, and IAM grants for the two workers.
+
+    Files: infra/tests/test_artifact_chain_legs.py
+    Use aws_cdk.assertions.Template.
+
+    1. test_state_machine_has_final_artifacts_parallel
+       Action: parse StateMachine.DefinitionString.
+       Assert: 'GenerateFinalArtifacts' in definition; 'StartCoverLetter' in definition;
+               'StartInterviewPrep' in definition; both are sqs sendMessage.waitForTaskToken tasks.
+
+    2. test_cover_letter_leg_passes_vpr_id_and_company_context
+       Assert: StartCoverLetter MessageBody contains vpr_id AND company_context.
+
+    3. test_failure_handlers_present_for_cl_and_ip
+       Assert: 'HandleCoverLetterFailure' and 'HandleInterviewPrepFailure' present, invoke ArtifactFailureHandler.
+
+    4. test_no_states_wildcard_on_new_grants
+       Assert: no new IAM policy statement grants 'states:*' (respect FE-UI-035 invariant);
+               grants are scoped SendTaskSuccess/SendTaskFailure on the chain ARN.
+
+    5. test_template_has_no_dependency_cycle
+       Action: Template.from_stack(stack) must not raise the dependency-cycle error.
+       Assert: synthesis succeeds (regression of FE-UI-035).
+
+    Run: cd infra && uv run pytest tests/test_artifact_chain_legs.py -v --tb=short
+    Then: python src/backend/scripts/validate_naming.py --path infra --strict
+    All 5 tests must pass + naming passes.
+
+# =============================================================================
+# CATEGORY I: UNIT — CL/IP WORKER TASK TOKENS (FE-UI-039)
+# =============================================================================
+unit_cl_ip_tasktoken:
+  prompt: |
+    Context: FE-UI-039 adds task-token handling to cover_letter + interview_prep workers.
+
+    Files: src/backend/tests/unit/test_cl_ip_task_token.py
+
+    1. test_cover_letter_worker_sends_task_success
+       Setup: SQS message with task_token; generation succeeds.
+       Assert: sfn.send_task_success called with the token and {job_id, cover_letter_id}.
+
+    2. test_cover_letter_worker_sends_task_failure_on_error
+       Setup: generation raises.
+       Assert: sfn.send_task_failure called with the token.
+
+    3. test_interview_prep_worker_task_token_success_and_failure
+       Assert: same pattern for interview prep.
+
+    4. test_manual_mode_no_task_token_no_sfn_call
+       Setup: message without task_token.
+       Assert: neither send_task_success nor send_task_failure called (manual path unchanged).
+
+    Run: cd src/backend && uv run pytest tests/unit/test_cl_ip_task_token.py -v --tb=short
+    All 4 tests must pass.
+
+# =============================================================================
+# CATEGORY J: INTEGRATION — FULL FAN-OUT (FE-UI-038/039/040/041)
+# =============================================================================
+integration_full_fanout:
+  prompt: |
+    Context: A single gap submit (flag ON) should drive the full chain to all 5 artifacts on
+    real upstream data.
+
+    Files: src/backend/tests/integration/test_full_chain_fanout.py
+    Mock workers to simulate the Step Functions sequence (or assert the chain input/edges).
+
+    1. test_gap_submit_produces_full_artifact_set
+       Action: POST gap-responses (flag ON); drive chain through CR->VPR->CV->[CL,IP].
+       Assert: artifact_statuses has company_research, vpr, cv_tailored, cover_letter,
+               interview_prep all 'completed'; application state artifacts_completed.
+
+    2. test_vpr_in_fanout_has_company_context_included
+       Assert: the VPR produced in the chain has company_context_included == true.
+
+    3. test_partial_failure_marks_only_failed_artifact
+       Setup: interview_prep leg fails; cover_letter succeeds.
+       Assert: cover_letter 'completed', interview_prep 'failed'; application not globally failed
+               if VPR+CV+CL succeeded.
+
+    Run: cd src/backend && uv run pytest tests/integration/test_full_chain_fanout.py -v --tb=short
+    All 3 tests must pass.
+
+# =============================================================================
+# CATEGORY K: REGRESSION — CROSS-MODULE NON-REGRESSION
+# =============================================================================
+regression_cross_module:
+  prompt: |
+    Context: FE-UI-038 through FE-UI-041 must not break existing behavior.
+
+    Steps:
+    1. cd src/backend && uv run ruff check . && uv run mypy careervp --strict   # zero new errors
+    2. cd src/backend && uv run pytest tests/unit/ -v --tb=short                 # all pass
+    3. cd infra && uv sync && npx cdk synth                                      # exit 0
+    4. cd infra && uv run pytest tests/infrastructure -v --tb=short              # zero cycle errors
+    5. python src/backend/scripts/validate_naming.py --path infra --strict
+    6. uvx checkov -d infra/cdk.out --framework cloudformation --quiet          # still green
+
+    Watch specifically:
+    - Existing manual endpoint tests (TEST-CHAIN-001 § integration_manual_endpoints) still pass.
+    - VPR idempotency tests still pass (key format unchanged).
+    Report any failure with file:line + message.
+
+# =============================================================================
+# EXECUTION ORDER + GATE MAPPING
+# =============================================================================
+execution_order:
+  gate_2_before_implementation:
+    applies_to: FE-UI-039
+    run_first: [infra_chain_legs, unit_cl_ip_tasktoken]
+  gate_3_before_implementation:
+    applies_to: [FE-UI-038, FE-UI-040, FE-UI-041]
+    run_first:
+      - unit_resolver
+      - unit_resolver_ownership
+      - unit_vpr_cr_binding
+      - unit_cr_quality
+  after_all_implementation:
+    run:
+      - integration_downstream_202
+      - regression_no_placeholders
+      - integration_vpr_includes_cr
+      - integration_full_fanout
+      - regression_cross_module

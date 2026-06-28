@@ -1,0 +1,93 @@
+prompt_id: FE-UI-028-spec
+purpose: Generate spec file docs/upgrade/specs/FE-UI-028-export-download.yaml
+model: opus
+output_file: docs/upgrade/specs/FE-UI-028-export-download.yaml
+
+instructions: |
+  ROLE: Senior spec author for a full-stack feature.
+  OUTPUT: YAML spec file only. No prose outside the spec structure.
+  Follow the structure of docs/upgrade/specs/FE-UI-027-hub-generate-ux.yaml exactly.
+  spec_id: FE-UI-028
+
+context:
+  feature: >
+    GET /jobs/{jobId}/artifacts/{moduleType}/export?format=docx|pdf
+    returns { download_url: string, expires_at: string }.
+    All four modules (vpr, cover_letter, interview_prep, cv_tailored) are required.
+    Backend Lambda is a 501 stub. Lambda is NOT registered in API Gateway.
+    Frontend ExportDropdown is complete and handles 200/501/error correctly — no FE changes needed.
+
+  frontend:
+    component: src/frontend/components/ExportDropdown/ExportDropdown.tsx
+    api_method: "api.exportArtifact(jobId, moduleType, format) → GET /jobs/{jobId}/artifacts/{moduleType}/export?format={format}"
+    response_type: "{ download_url: string, expires_at: string }"
+    error_handling: "501 → 'Export is coming soon!'; other → 'Download failed. Please try again.'"
+    existing_tests: src/frontend/tests/unit/export-dropdown.test.tsx
+    status: complete — no changes required
+
+  backend_stub: src/backend/careervp/handlers/export_handler.py
+  backend_lib_available: python-docx>=1.1.0  # already in pyproject.toml
+  pdf_lib: none present — PDF generation is out of scope; GET ?format=pdf returns 501
+
+  data_sources_per_module:
+    vpr:
+      store: S3
+      bucket_env: VPR_RESULTS_BUCKET_NAME
+      key_pattern: "results/{jobId}.json"
+      content_fields: full VPRFullData JSON (sections, summary, etc.)
+    cover_letter:
+      store: DynamoDB
+      table_env: ARTIFACTS_TABLE_NAME
+      pk: applicationId = user_id (from Cognito claims.sub)
+      sk: artifactId = jobId
+      content_field: "item['cover_letter']['full_text'] or item['cover_letter']['text']"
+    interview_prep:
+      store: DynamoDB
+      table_env: ARTIFACTS_TABLE_NAME
+      pk: applicationId = user_id
+      sk: artifactId = normalized jobId (see _normalize_interview_prep_artifact_id in interview_prep_handler.py)
+      content_field: "item['interview_prep']['questions'] (list of {question, answer})"
+    cv_tailored:
+      store: DynamoDB
+      table_env: TABLE_NAME  # main db table, not artifacts table
+      pk: pk = user_id
+      sk: "ARTIFACT#CV_TAILORED#{cvTailoringId}"
+      content_fields: "item['cv_sections'] (structured) + item['tailored_cv'] (summary text)"
+
+  user_id_source: >
+    event['requestContext']['authorizer']['claims']['sub'] (Cognito JWT).
+    Export Lambda must be a protected route (Cognito authorizer, not public).
+
+  generated_file_storage:
+    bucket_env: ARTIFACTS_BUCKET_NAME  # api_db.artifacts_bucket
+    key_pattern: "exports/{moduleType}/{jobId}/{jobId}.docx"
+    presigned_url_ttl_seconds: 3600  # 1 hour — exports are ephemeral, shorter than VPR results
+
+  infra_gap:
+    problem: No Lambda function or API Gateway route exists for export in api_construct.py
+    lambda_pattern: Copy _add_billing_lambda (api_construct.py:2139) — simple function, no SQS/DLQ
+    lambda_name_constant: Add EXPORT_FEATURE = "export" to infra/careervp/constants.py
+    route: "GET /jobs/{jobId}/artifacts/{moduleType}/export"
+    route_map_location: "_add_openapi_contract_routes() in api_construct.py (~line 2352)"
+    allowed_origins_pattern: "copy from billing_lambda env (api_construct.py:2160)"
+    iam_grants_required:
+      - "vpr_results_bucket: s3:GetObject (read source JSON)"
+      - "artifacts_bucket: s3:PutObject + s3:GetObject (write generated file + presign)"
+      - "artifacts_table: dynamodb:GetItem (cover_letter, interview_prep reads)"
+      - "db (main table): dynamodb:GetItem (cv_tailored reads)"
+
+  path_param_note: >
+    CDK route uses camelCase ({jobId}, {moduleType}) matching existing routes.
+    export_handler.py already accepts both snake_case and camelCase fallbacks.
+
+  cors_note: >
+    S3 VPR results bucket CORS already updated to include https://*.amplifyapp.com.
+    Export Lambda CORS handled by cors_utils.py via ALLOWED_ORIGINS env var.
+    API Gateway default_cors_preflight_options uses Cors.ALL_ORIGINS (api_construct.py:294).
+
+  non_goals:
+    - PDF export (no PDF library; ?format=pdf returns 501 with message)
+    - Async generation (synchronous only; Lambda timeout 29s)
+    - Frontend changes
+    - Progress indicator or polling for export
+    - Export for modules not listed above

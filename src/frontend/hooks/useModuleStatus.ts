@@ -51,7 +51,7 @@ export function useModuleStatus(
         setStatus(response.status);
         setResult(response.result ?? null);
 
-        if (response.status === 'completed' || response.status === 'failed') {
+        if (response.status === 'completed' || response.status === 'failed' || response.status === 'cancelled') {
           clearInterval(interval);
           setIsPolling(false);
           if (response.status === 'completed') {

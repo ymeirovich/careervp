@@ -3,11 +3,17 @@ name: UI Upgrade — E2E Smoke Tests
 # Manually triggered after you confirm Amplify deployment succeeded.
 # Runs Playwright tests against the Amplify preview URL.
 #
-# Trigger via CLI:
+# Normal smoke run:
 #   gh workflow run e2e-smoke.yml \
 #     --ref ui-upgrade \
 #     --field batch=2 \
 #     --field preview_url="https://ui-upgrade.<app-id>.amplifyapp.com"
+#
+# Seed / update visual baselines (first run per batch, or after intentional UI change):
+#   gh workflow run e2e-smoke.yml \
+#     --ref ui-upgrade \
+#     --field batch=2 \
+#     --field update_snapshots=true
 #
 # Or from GitHub UI: Actions → UI Upgrade — E2E Smoke Tests → Run workflow
 
@@ -19,21 +25,28 @@ on:
         required: false
         default: ""
       batch:
-        description: "Batch to test: 1 | 2 | 3 | 4 | 5 | 6 | all"
+        description: "Batch to test: 1 | 2 | 3 | 4 | 5 | 6 | all  (runs only @batchN-tagged tests)"
         required: false
         default: "all"
+      update_snapshots:
+        description: "Seed/update visual baselines and commit them back to the branch (true | false)"
+        required: false
+        default: "false"
 
 permissions:
-  contents: read
+  contents: write   # needed to push snapshot files when update_snapshots=true
 
 jobs:
   e2e:
-    name: "Playwright E2E — Batch ${{ github.event.inputs.batch }}"
+    name: "Playwright E2E — Batch ${{ github.event.inputs.batch }}${{ github.event.inputs.update_snapshots == 'true' && ' (update snapshots)' || '' }}"
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history + write token so we can commit snapshots back
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
@@ -44,9 +57,9 @@ jobs:
       - name: Install frontend dependencies
         run: cd src/frontend && npm ci
 
-      # Install only Chromium to keep the job fast
+      # @playwright/test is in src/frontend/node_modules — install browsers from there
       - name: Install Playwright + Chromium
-        run: npx playwright install --with-deps chromium
+        run: cd src/frontend && npx playwright install --with-deps chromium
 
       - name: Resolve target URL
         id: resolve-url
@@ -61,27 +74,47 @@ jobs:
           echo "base_url=$FINAL" >> "$GITHUB_OUTPUT"
           echo "Target URL: $FINAL"
 
+      # Run from src/frontend/ so @playwright/test resolves correctly.
+      # playwright.config.ts and tests both live in src/frontend/.
       - name: Run Playwright e2e tests
         run: |
+          cd src/frontend
           BATCH="${{ github.event.inputs.batch }}"
+          UPDATE="${{ github.event.inputs.update_snapshots }}"
+          GREP_FLAG=""
+          UPDATE_FLAG=""
 
-          if [ "$BATCH" = "all" ]; then
-            npx playwright test --config playwright.config.ts
-          else
-            npx playwright test --config playwright.config.ts \
-              --grep "@batch$BATCH"
-          fi
+          [ "$BATCH" != "all" ] && GREP_FLAG="--grep @batch${BATCH}"
+          [ "$UPDATE" = "true" ] && UPDATE_FLAG="--update-snapshots"
+
+          npx playwright test --config playwright.config.ts $GREP_FLAG $UPDATE_FLAG
         env:
           BASE_URL: ${{ steps.resolve-url.outputs.base_url }}
           E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
           E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+
+      # Commit snapshot files back to the branch when update_snapshots=true.
+      # Only runs if new/changed PNG files exist.
+      - name: Commit updated snapshots
+        if: ${{ github.event.inputs.update_snapshots == 'true' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add 'src/frontend/tests/e2e/**/*.png'
+          if git diff --cached --quiet; then
+            echo "No snapshot changes to commit."
+          else
+            git commit -m "chore(e2e): update visual baselines — batch ${{ github.event.inputs.batch }} [skip ci]"
+            git push
+          fi
 
       - name: Upload Playwright HTML report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: "playwright-report-batch-${{ github.event.inputs.batch }}-${{ github.run_id }}"
-          path: playwright-report/
+          # Report is written relative to CWD (src/frontend/)
+          path: src/frontend/playwright-report/
           retention-days: 14
 
       - name: Upload failure screenshots
@@ -89,5 +122,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: "playwright-failures-batch-${{ github.event.inputs.batch }}-${{ github.run_id }}"
-          path: test-results/
+          path: src/frontend/test-results/
           retention-days: 7

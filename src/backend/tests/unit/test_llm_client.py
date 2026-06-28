@@ -47,9 +47,8 @@ class TestModelIds:
     """Verify model IDs match CLAUDE.md Decision 1.2."""
 
     def test_sonnet_model_id_format(self):
-        """Sonnet model ID should follow claude-sonnet-4-5-YYYYMMDD format."""
-        assert SONNET_MODEL_ID.startswith('claude-sonnet-4-5-')
-        assert len(SONNET_MODEL_ID) == len('claude-sonnet-4-5-20250929')
+        """Sonnet model ID should be claude-sonnet-4-6 (latest available)."""
+        assert SONNET_MODEL_ID == 'claude-sonnet-4-6'
 
     def test_haiku_model_id_format(self):
         """Haiku model ID should follow claude-haiku-4-5-YYYYMMDD format."""

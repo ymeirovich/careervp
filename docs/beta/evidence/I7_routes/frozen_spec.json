@@ -32,12 +32,22 @@
     },
     {
       "method": "POST",
+      "path": "/company-research/{job_id}/cancel",
+      "auth": "COGNITO"
+    },
+    {
+      "method": "POST",
       "path": "/cover-letter/generate",
       "auth": "COGNITO"
     },
     {
       "method": "GET",
       "path": "/cover-letter/{job_id}/status",
+      "auth": "COGNITO"
+    },
+    {
+      "method": "POST",
+      "path": "/cover-letter/{job_id}/cancel",
       "auth": "COGNITO"
     },
     {
@@ -53,6 +63,11 @@
     {
       "method": "GET",
       "path": "/cv-tailoring/{job_id}/status",
+      "auth": "COGNITO"
+    },
+    {
+      "method": "POST",
+      "path": "/cv-tailoring/{job_id}/cancel",
       "auth": "COGNITO"
     },
     {
@@ -73,6 +88,11 @@
     {
       "method": "GET",
       "path": "/interview-prep/{job_id}/status",
+      "auth": "COGNITO"
+    },
+    {
+      "method": "POST",
+      "path": "/interview-prep/{job_id}/cancel",
       "auth": "COGNITO"
     },
     {
@@ -148,6 +168,11 @@
     {
       "method": "GET",
       "path": "/vpr/{job_id}/status",
+      "auth": "COGNITO"
+    },
+    {
+      "method": "POST",
+      "path": "/vpr/{job_id}/cancel",
       "auth": "COGNITO"
     },
     {

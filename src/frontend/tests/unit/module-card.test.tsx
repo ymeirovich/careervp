@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
 import { ModuleCard } from "../../components/ModuleCard/ModuleCard";
 import type { ModuleType, ModuleStatus } from "../../types/enums";
 
@@ -47,7 +47,7 @@ describe("ModuleCard — processing state", () => {
   });
 
   it("does not render any CTA buttons", () => {
-    render(<ModuleCard {...defaultProps} state="processing" />);
+    render(<ModuleCard {...defaultProps} state="processing" cancelAction={undefined} />);
     expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 
@@ -210,5 +210,67 @@ describe("ModuleCard — all module types render without error", () => {
         ).not.toThrow();
       });
     });
+  });
+});
+
+describe("ModuleCard — processing state with cancelAction", () => {
+  it("renders a disabled button with text matching /processing/i", () => {
+    render(
+      <ModuleCard
+        {...defaultProps}
+        state="processing"
+        cancelAction={{ label: "Cancel", onClick: vi.fn() }}
+      />
+    );
+    const processingBtn = screen.getByRole("button", { name: /processing/i });
+    expect(processingBtn.hasAttribute("disabled")).toBe(true);
+  });
+
+  it("shows an animated element (animate-pulse class or aria-hidden ellipsis)", () => {
+    render(
+      <ModuleCard
+        {...defaultProps}
+        state="processing"
+        cancelAction={{ label: "Cancel", onClick: vi.fn() }}
+      />
+    );
+    const animated = document.querySelector(".animate-pulse") ??
+      document.querySelector('[aria-hidden="true"]');
+    expect(animated).not.toBeNull();
+  });
+
+  it("renders a Cancel button when cancelAction is provided", () => {
+    render(
+      <ModuleCard
+        {...defaultProps}
+        state="processing"
+        cancelAction={{ label: "Cancel", onClick: vi.fn() }}
+      />
+    );
+    expect(screen.getByRole("button", { name: /cancel/i })).toBeDefined();
+  });
+
+  it("clicking Cancel fires cancelAction.onClick exactly once", () => {
+    const onCancelClick = vi.fn();
+    render(
+      <ModuleCard
+        {...defaultProps}
+        state="processing"
+        cancelAction={{ label: "Cancel", onClick: onCancelClick }}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    expect(onCancelClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not render a Cancel button when cancelAction is undefined", () => {
+    render(
+      <ModuleCard
+        {...defaultProps}
+        state="processing"
+        cancelAction={undefined}
+      />
+    );
+    expect(screen.queryByRole("button", { name: /cancel/i })).toBeNull();
   });
 });

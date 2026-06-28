@@ -1,0 +1,313 @@
+spec_id: TEST-FE-046
+title: "Test Prompts — AI assist pipeline for frontend UX, prompt builders, and handler"
+priority: high
+status: draft
+owner: backend+frontend
+created_at: 2026-06-20
+updated_at: 2026-06-20
+type: test_prompts
+note: >
+  Runnable prompts for a fresh test-authoring session. Covers FE-UI-046. This feature spans
+  the frontend AI-assist UX, backend prompt builders, handler context resolution, cache
+  behavior, quota behavior, and Interview Prep persistence. Use the source spec ACs as the
+  traceability source of truth, and keep the user-visible AI flow under test as a companion
+  smoke path.
+
+context_required: >
+  Working directory: /Users/yitzchak/Documents/dev/careervp
+  Frontend: src/frontend/
+  Backend: src/backend/
+  Source spec: docs/upgrade/specs/FE-UI-046-ai-assist-pipeline.yaml
+  Existing reference tests:
+  - src/backend/tests/unit/test_cover_letter_prompt_cr_insertion.py
+  - src/backend/tests/unit/test_cv_tailoring_prompt_cr_insertion.py
+  - src/backend/tests/unit/test_interview_prep_prompt_context.py
+  - src/backend/tests/unit/test_llm_client.py
+  - src/backend/tests/unit/test_llm_cache.py
+
+recommended_model_for_test_authoring: sonnet
+recommended_model_for_complex_test_cases: opus
+
+# =============================================================================
+# CATEGORY A: UNIT — FRONTEND AI UX + BACKEND PROMPT BUILDERS + MODEL VALIDATION
+# =============================================================================
+unit:
+  prompt: |
+    Context: FE-UI-046 introduces a field-scoped AI-assist pipeline. The frontend side is
+    a companion UX smoke layer (button, spinner, undo, readOnly, error modal) while the
+    backend unit tests must pin the prompt-builder digests, cache scoping, anti-AI rule
+    validation, and Interview Prep model back-compat.
+
+    Files to author or extend:
+    - src/frontend/tests/ui/unit/AiAssistField.test.tsx
+    - src/backend/tests/unit/test_ai_assist_prompts.py
+    - src/backend/tests/unit/test_interview_prep_model_backcompat.py
+    - src/backend/tests/unit/test_interview_prep_prompt_context.py
+
+    Setup / mocks:
+    - Frontend: use Vitest + @testing-library/react; mock the AI hook/client, the undo
+      snapshot store, the spinner, and any Next router helpers.
+    - Backend: use pytest; build minimal CV, gap, VPR, company research, and Interview Prep
+      fixtures; patch prompt builders and LLM client adapters as needed.
+
+    Write tests with these exact names and assertions:
+
+    Frontend companion smoke:
+    1. test_ai_button_sets_field_readonly_and_shows_spinner_during_call
+       Click the AI button on a field, assert the field becomes readOnly, and assert the
+       spinner is visible until the mocked request resolves.
+       AC-001
+
+    2. test_ai_assist_snapshot_undo_restores_previous_field_text_once
+       Trigger AI assist on an interview-prep answer field, accept a suggestion, click Undo,
+       and assert the original text is restored exactly once.
+       Companion smoke path: FE-045 owns undo/save semantics; keep this as UI coverage for
+       the interview-prep AI button integration rather than a direct FE-046 AC trace.
+
+    3. test_error_modal_maps_status_codes_and_preserves_field_text
+       Exercise 504, 503 with retry_after, 401/402, 409 with deep-link payload, and 400-500
+       failures. Assert the modal/status mapping is correct and the field text is never lost.
+       AC-008
+       AC-009
+       AC-010
+       AC-011
+
+    Backend prompt builders and validation:
+    4. test_cover_letter_prompt_builder_includes_cv_gap_vpr_and_company_research_digests
+       Assert the cover-letter prompt contains the CV digest, gap responses, VPR digest,
+       and company-research digest in the expected sections.
+       AC-001
+
+    5. test_gap_prompt_builder_includes_base_cv_digest_and_sub_question
+       Assert the gap prompt includes the base CV digest and the focused sub-question.
+       AC-002
+
+    6. test_cv_tailored_prompt_builder_includes_cv_gap_and_vpr_digests
+       Assert the CV-tailoring prompt includes the CV digest, Gap responses, and VPR digest.
+       AC-003
+
+    7. test_interview_prep_prompt_builder_includes_gap_vpr_and_cv_digests
+       Assert the interview-prep prompt includes Gap, VPR, and CV digests.
+       AC-004
+
+    8. test_system_prompt_uses_use_system_cache_true_and_ephemeral_cache_control
+       Assert the invariant preamble is passed with use_system_cache=True and cache_control
+       ephemeral, while volatile context stays in the user message.
+       AC-005
+
+    9. test_prompt_builder_validates_output_format_and_anti_ai_patterns
+       Assert output-format constraints are present and anti-AI-pattern validation fires
+       before the model call when weak output is detected.
+       AC-005
+
+    10. test_field_key_participates_in_cache_key
+        Assert distinct field_key/current_text combinations produce distinct cache keys so
+        one field never receives another field’s cached response.
+        AC-012
+
+    11. test_interview_question_model_accepts_answer_version_and_updated_at
+        Assert the InterviewQuestion model round-trips the new answer, answer_version, and
+        answer_updated_at fields without breaking older items.
+        AC-015
+
+    Coverage note:
+    - Explicitly out of scope: real Anthropic latency/quality (mock it), multi-tab
+      concurrency beyond base_version, offline autosave queueing, jsdom clipboard
+      paste-rule fidelity (e2e only), and deep RTL correctness.
+
+    Run:
+    - cd src/frontend && npm run test:unit
+    - cd src/backend && uv run pytest tests/unit/test_ai_assist_prompts.py -v --tb=short
+    - cd src/backend && uv run pytest tests/unit/test_interview_prep_model_backcompat.py -v --tb=short
+    - cd src/backend && uv run ruff format careervp
+    - cd src/backend && uv run ruff check careervp --fix
+    - cd src/backend && uv run mypy careervp --strict
+    All edited tests and strict checks must pass.
+
+# =============================================================================
+# CATEGORY B: INTEGRATION — CONTEXT RESOLUTION, CACHE, QUOTA, FIELD UPDATE, PATCH
+# =============================================================================
+integration:
+  prompt: |
+    Context: FE-UI-046 must resolve cross-artifact context server-side from DynamoDB,
+    ignore client-supplied context, honor LLMResponseCache hit/miss behavior, keep quota
+    semantics free for active subscribers and trials, and persist Interview Prep answers
+    through the PATCH path.
+
+    Files to author or extend:
+    - src/backend/tests/integration/test_ai_assist_handler_pipeline.py
+    - src/backend/tests/integration/test_interview_prep_roundtrip.py
+    - src/frontend/tests/integration/ai-assist.integration.test.tsx
+
+    Setup / mocks:
+    - Backend: moto mock_dynamodb, MagicMock DAL fixtures, and a mocked LLM client.
+    - Frontend: MSW or mocked API client methods so the accept/save/undo flow can be
+      asserted without a real backend.
+
+    Write tests with these exact names and assertions:
+
+    Backend handler and cache:
+    1. test_handler_resolves_context_from_dynamodb_and_ignores_client_supplied_context
+       Assert the handler loads CV, VPR, Gap, and company research from DynamoDB through
+       the mocked DAL and never trusts a client-provided context payload.
+       AC-001
+       AC-006
+
+    2. test_handler_does_not_refetch_artifact_under_edit
+       Assert the artifact currently under edit is not re-fetched and that current_text is
+       treated as authoritative for that field.
+       AC-001
+
+    3. test_llm_response_cache_hit_returns_cached_answer_and_miss_stores_response
+       Assert a cache hit bypasses a new model call and a miss stores the fresh response.
+       AC-012
+
+    4. test_free_trial_and_active_subscription_do_not_decrement_credits
+       Assert active subscribers and trial users can call the endpoint without decrementing
+       application credits.
+       AC-007
+
+    5. test_handler_returns_409_for_missing_upstream_artifact_and_preserves_field_text
+       Assert missing upstream context surfaces a 409 deep-link payload and the field text
+       remains unchanged.
+       AC-010
+
+    6. test_timeout_504_503_401_402_400_and_500_paths_preserve_field_text
+       Assert timeout, circuit-breaker, entitlement, validation, and generic error paths
+       all preserve the user’s current text.
+       AC-008
+       AC-009
+       AC-011
+
+    Interview Prep persistence:
+    7. test_patch_interview_prep_roundtrip_persists_edited_answer_and_version
+       Assert PATCH /interview-prep/{interviewPrepId} persists the edited answer and a
+       subsequent GET reflects it.
+       AC-013
+
+    8. test_patch_interview_prep_conflict_returns_409_and_preserves_stored_answer
+       Assert a stale base_version returns 409 and leaves the stored answer unchanged.
+       AC-014
+
+    Frontend integration:
+    9. test_success_replaces_field_marks_dirty_and_arms_autosave
+       Accept a mocked 200 AI response, assert the field text is replaced, the field is
+       marked dirty, and autosave is armed for the next blur/save cycle.
+       AC-001
+       AC-013
+
+    Coverage note:
+    - Explicitly out of scope: real Anthropic latency/quality (mock it), multi-tab
+      concurrency beyond base_version, offline autosave queueing, jsdom clipboard
+      paste-rule fidelity (e2e only), and deep RTL correctness.
+
+    Run:
+    - cd src/backend && uv run pytest tests/integration/test_ai_assist_handler_pipeline.py -v --tb=short
+    - cd src/backend && uv run pytest tests/integration/test_interview_prep_roundtrip.py -v --tb=short
+    - cd src/frontend && npm run test:integration
+    All edited tests and strict checks must pass.
+
+# =============================================================================
+# CATEGORY C: E2E — ACCEPT / UNDO / SAVE AND MISSING VPR CONFLICT
+# =============================================================================
+e2e:
+  prompt: |
+    Context: FE-UI-046 needs a browser-level flow that proves AI assist can populate a
+    field, be accepted, undone, and saved, while missing upstream VPR data still surfaces
+    the conflict modal with a deep link.
+
+    Files to author or extend:
+    - src/frontend/tests/e2e/ai-assist.spec.ts
+    - src/frontend/tests/e2e/interview-prep.spec.ts
+
+    Setup / mocks:
+    - Use Playwright with the existing auth/storageState setup.
+    - Intercept AI-assist, interview-prep PATCH, and save routes so the tests can assert
+      the UI flow without a real LLM call.
+
+    Write tests with these exact names and assertions:
+
+    1. test_ai_button_accept_undo_save_flow
+       Focus an interview-prep answer field, click AI, wait for a mocked 200, accept the
+       suggestion, click Undo, then Save. Assert the field text changes on accept, reverts
+       on Undo, and the save completes with the final text.
+       Companion smoke path: keep this as user-visible AI flow coverage; the direct FE-046
+       ACs are covered by the backend prompt-builder and handler tests below.
+
+    2. test_missing_vpr_opens_409_modal_with_deep_link
+       Trigger AI on an artifact that lacks VPR context. Assert the 409 modal appears,
+       includes the deep link, and preserves the field text while open.
+       AC-010
+
+    3. test_timeout_or_retryable_failure_leaves_field_text_intact
+       Simulate a 504 or 503 failure from the AI route and assert the visible text remains
+       unchanged and the retry/error surface is correct.
+       AC-008
+       AC-009
+       AC-011
+
+    4. test_interview_prep_patch_save_and_reload_persists_formatted_answer
+       Edit a STAR answer, save it, reload, and assert the persisted answer still renders
+       formatted in read mode.
+       AC-013
+       AC-015
+
+    Coverage note:
+    - Explicitly out of scope: real Anthropic latency/quality (mock it), multi-tab
+      concurrency beyond base_version, offline autosave queueing, jsdom clipboard
+      paste-rule fidelity (e2e only), and deep RTL correctness.
+
+    Run:
+    - cd src/frontend && npm run test:e2e
+    All edited tests and strict checks must pass.
+
+# =============================================================================
+# CATEGORY D: REGRESSION — EXISTING GENERATE FLOWS, TIMEOUT UX, BACKCOMPAT
+# =============================================================================
+regression:
+  prompt: |
+    Context: FE-UI-046 must not regress existing generate flows, and the new Interview Prep
+    persistence fields must remain backward-compatible for older items.
+
+    Files to author or extend:
+    - src/frontend/tests/regression/ai-assist-regression.test.tsx
+    - src/backend/tests/regression/test_ai_assist_regression.py
+    - src/backend/tests/regression/test_interview_prep_model_backcompat.py
+
+    Setup / mocks:
+    - Frontend: use the Jest regression project with mocked API calls.
+    - Backend: use pytest and patch the model/router selection plus timeout handling.
+
+    Write tests with these exact names and assertions:
+
+    1. test_ai_calls_do_not_change_existing_generate_post_flows
+       Assert the existing cover-letter generate flow and related POST contracts still use
+       the current endpoints and are not altered by AI assist.
+       AC-011
+
+    2. test_haiku_model_and_25s_timeout_boundary_preserve_text_on_504
+       Assert the backend configuration still points at the Haiku model, and when the
+       call exceeds the 25-second boundary the field text stays intact.
+       AC-008
+
+    3. test_interview_prep_model_backcompat_keeps_legacy_items_deserializable
+       Assert existing Interview Prep items created before the change deserialize without
+       error and the new fields stay optional/back-compatible.
+       AC-015
+
+    4. test_route_and_error_regressions_do_not_decrement_quota_or_lose_text
+       Assert route/error regressions preserve field text and do not touch quota for active
+       subscription/trial users.
+       AC-007
+       AC-012
+
+    Coverage note:
+    - Explicitly out of scope: real Anthropic latency/quality (mock it), multi-tab
+      concurrency beyond base_version, offline autosave queueing, jsdom clipboard
+      paste-rule fidelity (e2e only), and deep RTL correctness.
+
+    Run:
+    - cd src/frontend && npm run test:regression
+    - cd src/backend && uv run pytest tests/regression/test_ai_assist_regression.py -v --tb=short
+    - cd src/backend && uv run pytest tests/regression/test_interview_prep_model_backcompat.py -v --tb=short
+    All edited tests and strict checks must pass.

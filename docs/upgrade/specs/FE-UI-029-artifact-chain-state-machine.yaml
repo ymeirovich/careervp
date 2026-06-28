@@ -1,0 +1,237 @@
+spec_id: FE-UI-029
+title: "Artifact Chain — State Machine Extension + CR Confidence Gate + Recovery Endpoint"
+priority: critical
+status: draft
+owner: backend
+created_at: 2026-06-08
+updated_at: 2026-06-08
+tier: feature
+
+human_approval_gate:
+  required: true
+  gate_number: 1
+  reason: "DynamoDB schema changes (company_research_error field, new artifact type) and extension of GET /applications/{id} public API response schema"
+  approval_before: "Any DynamoDB migrations, application_handler.py changes, or conditional-write logic"
+
+recommended_model: opus
+reason_for_model: >
+  DynamoDB conditional-write patterns, auth-ownership enforcement in the recovery endpoint,
+  and state-machine transition logic are architecture- and security-sensitive per project guidelines.
+
+depends_on: []
+blocks:
+  - FE-UI-030
+  - FE-UI-031
+  - FE-UI-034
+
+# =============================================================================
+# PROBLEM STATEMENT
+# =============================================================================
+problem_statement:
+  current_behavior: >
+    The application state machine has 7 states. The current transition
+    gap_responses_submitted → artifacts_generating is direct — Company Research
+    is not gated before VPR starts. artifact_statuses has no 'company_research'
+    entry and there is no 'company_research_error' flag on the application record.
+    The recovery endpoint (GET /applications/{id}) does not surface CR status or
+    errors, so the frontend cannot distinguish a CR failure from a missing artifact.
+  required_behavior: >
+    Insert a Company Research confidence gate between gap_responses_submitted
+    and artifacts_generating. Add 'company_research' to artifact_statuses.
+    Persist a 'company_research_error' boolean flag (survives reloads) when CR
+    hard-fails (3 retries exhausted). Extend the recovery endpoint to return
+    artifact_statuses.company_research and the company_research_error flag.
+    All state transitions use conditional writes (optimistic locking on current state).
+  user_impact: >
+    After a CR failure the frontend can render a persistent error toast and disable
+    artifact-generation buttons (except CR retry). On reload the error state is
+    recovered without re-fetching. Prevents VPR from starting with zero company
+    context (the existing 'VPR lacks CR' bug).
+
+# =============================================================================
+# EVIDENCE / ROOT CAUSE FILES
+# =============================================================================
+evidence:
+  state_machine_source: src/backend/careervp/handlers/application_handler.py
+  valid_transitions_line: 36
+  artifact_types_line: 23
+  artifact_types_current:
+    - vpr
+    - cv_tailored
+    - cover_letter
+    - interview_prep
+    - gap_analysis
+  application_state_spec: docs/best_practices/yaml/application_state_spec.yaml
+  dynamodb_spec: docs/best_practices/yaml/dynamodb_modeling_spec.yaml
+  conditional_write_rule: rule_4_1
+
+# =============================================================================
+# ARCHITECTURE
+# =============================================================================
+architecture:
+  primary_files:
+    - src/backend/careervp/handlers/application_handler.py
+    - src/backend/careervp/dal/  # application repository — exact file TBD by implementer
+
+  state_machine_changes:
+    new_transitions:
+      - description: "gap_responses_submitted → cr_pending (auto-chain feature flag ON)"
+        trigger: "Company Research SQS job enqueued by gap submit"
+        note: "When feature flag is OFF, existing gap_responses_submitted → artifacts_generating path remains"
+      - description: "cr_pending → artifacts_generating (CR success, confidence ≥ 0.85)"
+        trigger: "CR worker on successful persist + confidence gate pass"
+      - description: "cr_pending → cr_failed (CR hard-fail after 3 retries)"
+        trigger: "CR worker on exhausted retries"
+      - description: "cr_failed → cr_pending (user retries Company Research)"
+        trigger: "POST /company-research/fetch with retry flag — manual re-trigger ONLY"
+    state_added: cr_pending
+    state_added_2: cr_failed
+    note: >
+      cr_pending and cr_failed are intermediate states visible only when the
+      auto-chain feature flag is ON. When the flag is OFF, this path is bypassed
+      and the existing 7-state machine is unchanged.
+
+  artifact_statuses_extension:
+    add_artifact_type: company_research
+    allowed_values: [pending, processing, completed, failed]
+    new_field_on_application_record:
+      name: company_research_error
+      type: boolean
+      default: false
+      description: "Set to true when CR hard-fails (3 retries exhausted). Never cleared by auto-chain — only cleared on successful CR retry."
+
+  recovery_endpoint_extension:
+    route: "GET /applications/{id}"
+    current_handler: src/backend/careervp/handlers/application_handler.py
+    changes:
+      - "Add 'company_research' to _ARTIFACT_TYPES tuple"
+      - "Add 'company_research_error' boolean to the 'application' block of _build_recovery_payload"
+      - "Add cr_pending and cr_failed to _RELOAD_ROUTE_BY_STATE mapping (route → /artifacts)"
+    response_schema_delta: |
+      {
+        "application": {
+          ...existing fields...,
+          "company_research_error": false   // NEW: boolean
+        },
+        "artifacts": {
+          ...existing artifacts...,
+          "company_research": {             // NEW: artifact entry
+            "status": "pending|processing|completed|failed",
+            "artifact_id": null
+          }
+        }
+      }
+
+  conditional_write_pattern:
+    rule_reference: application_state_spec rule_4_1
+    required_pattern: |
+      # All CR-gate state transitions must use conditional expressions:
+      ConditionExpression: "#s = :expected_state"
+      ExpressionAttributeNames: {"#s": "state"}
+      ExpressionAttributeValues: {":expected_state": "<current_state>"}
+      # On ConditionalCheckFailedException: log a warning, do NOT raise —
+      # idempotent caller (Step Functions retry) will re-read and verify.
+    states_requiring_conditional_write:
+      - "gap_responses_submitted → cr_pending"
+      - "cr_pending → artifacts_generating"
+      - "cr_pending → cr_failed"
+      - "cr_failed → cr_pending"
+
+  valid_transitions_update:
+    file: src/backend/careervp/handlers/application_handler.py
+    current_dict_name: _RELOAD_ROUTE_BY_STATE
+    add_entries:
+      cr_pending: "/artifacts"
+      cr_failed: "/artifacts"
+    valid_transitions_python: |
+      VALID_TRANSITIONS: dict[str, list[str]] = {
+          "created": ["cv_selected"],
+          "cv_selected": ["gap_questions_pending"],
+          "gap_questions_pending": ["gap_questions_ready"],
+          "gap_questions_ready": ["gap_responses_submitted"],
+          "gap_responses_submitted": ["cr_pending", "artifacts_generating"],  # cr_pending when flag ON
+          "cr_pending": ["artifacts_generating", "cr_failed"],
+          "cr_failed": ["cr_pending"],
+          "artifacts_generating": ["artifacts_completed", "artifacts_failed"],
+          "artifacts_completed": [],
+          "artifacts_failed": ["artifacts_generating"],
+      }
+
+# =============================================================================
+# IMPLEMENTATION STEPS
+# =============================================================================
+implementation:
+  step_1:
+    name: "Extend _ARTIFACT_TYPES and _RELOAD_ROUTE_BY_STATE"
+    file: src/backend/careervp/handlers/application_handler.py
+    change: >
+      Add 'company_research' to _ARTIFACT_TYPES tuple.
+      Add cr_pending → '/artifacts' and cr_failed → '/artifacts' to _RELOAD_ROUTE_BY_STATE.
+
+  step_2:
+    name: "Extend _build_recovery_payload"
+    file: src/backend/careervp/handlers/application_handler.py
+    change: >
+      In the 'application' dict returned by _build_recovery_payload, add:
+        'company_research_error': bool(application.get('company_research_error', False))
+      The 'artifacts' dict is already built generically from _ARTIFACT_TYPES,
+      so adding 'company_research' to the tuple (step 1) propagates automatically.
+
+  step_3:
+    name: "Add VALID_TRANSITIONS guard to application DAL/repository"
+    file: src/backend/careervp/dal/<application_repository>.py
+    change: >
+      Add a transition_state(application, new_state) helper that validates against
+      VALID_TRANSITIONS and raises InvalidStateTransitionError on illegal moves.
+      All state-setting DAL methods must call this guard BEFORE writing.
+      Use conditional writes per rule_4_1 (ConditionExpression on current state).
+
+  step_4:
+    name: "Add set_company_research_error DAL method"
+    file: src/backend/careervp/dal/<application_repository>.py
+    change: >
+      New method: set_company_research_error(application_id, user_id, error: bool) → Result.
+      Sets company_research_error attribute and sets artifact_statuses.company_research = 'failed'.
+      Use UpdateExpression (no conditional write required — idempotent flag).
+
+  step_5:
+    name: "Update VALID_TRANSITIONS dict"
+    file: src/backend/careervp/handlers/application_handler.py
+    change: >
+      Replace or supplement the inline transition dict with the extended version
+      that includes cr_pending and cr_failed states (see valid_transitions_python above).
+
+# =============================================================================
+# CONSTRAINTS
+# =============================================================================
+constraints:
+  - "Do NOT change any existing state names or transitions — additive only"
+  - "company_research_error flag must default to False and be backward-compatible (old records with no field → False)"
+  - "Recovery endpoint must preserve existing response schema exactly; only additive changes"
+  - "Ownership check (application.user_id == user_id) is CRITICAL — must not be weakened"
+  - "Feature-flag guard: cr_pending state is only reached when ARTIFACT_CHAIN_ENABLED=true; flag-off path skips straight to artifacts_generating"
+  - "All DynamoDB writes for state transitions use conditional expressions (ConditionalCheckFailedException = idempotent, not an error)"
+
+# =============================================================================
+# VALIDATION
+# =============================================================================
+validation:
+  commands:
+    - "cd src/backend && uv run mypy careervp --strict"
+    - "cd src/backend && uv run pytest tests/unit/ -v --tb=short -k 'application'"
+  acceptance_criteria:
+    - "GET /applications/{id} returns company_research in artifacts block"
+    - "GET /applications/{id} returns company_research_error in application block"
+    - "cr_pending and cr_failed do not appear in response when auto-chain flag is OFF"
+    - "transition_state() raises InvalidStateTransitionError on illegal moves"
+    - "set_company_research_error() is idempotent (double-call safe)"
+    - "mypy strict passes with no new errors"
+
+# =============================================================================
+# TEST HOOKS (references to TEST-CHAIN-001)
+# =============================================================================
+test_hooks:
+  - "TEST-CHAIN-001 § unit-state-machine: transition guard tests"
+  - "TEST-CHAIN-001 § unit-recovery-endpoint: response schema regression"
+  - "TEST-CHAIN-001 § integration-cr-gate: conditional write race condition tests"
+  - "TEST-CHAIN-001 § e2e-reload-recovery: state recovery on page-close/return"

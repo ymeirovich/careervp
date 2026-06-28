@@ -22,9 +22,16 @@ export interface Usage {
 }
 
 export interface SubscriptionDetails {
-  plan_type: "monthly" | "annual";
-  status: "active" | "expired" | "canceled";
+  plan_type: 'monthly' | 'annual' | 'quarterly' | '3month' | '6month';
+  status: 'trialing' | 'active' | 'past_due' | 'canceled' | 'expired';
   current_period_end?: string;
+  next_charge_amount?: number | null;
+  cancel_at_period_end?: boolean;
+  trial_days_remaining?: number | null;
+  payment_method?: {
+    last4?: string | null;
+    brand?: string | null;
+  } | null;
 }
 
 export interface SubscriptionResponse {
@@ -47,7 +54,7 @@ export interface CreateJobInput {
   title: string;
   company_name: string;
   description: string;
-  url?: string;
+  url: string;
   requirements?: string[];
 }
 
@@ -60,7 +67,7 @@ export interface AsyncTaskResponse {
 }
 
 // ── Artifact status (hub artifacts) ──
-export type ArtifactStatus = "pending" | "processing" | "completed" | "failed";
+export type ArtifactStatus = "pending" | "processing" | "completed" | "failed" | "cancelled" | "expired";
 
 export interface HubArtifact {
   status: ArtifactStatus;
@@ -190,6 +197,7 @@ export interface VPRGenerateRequest {
   cv_id: string;
   gap_response_ids: string[];
   options?: Record<string, unknown>;
+  force?: boolean; // bypass idempotency for an existing completed VPR (explicit regenerate)
 }
 
 export interface VPRDifferentiator {
@@ -358,15 +366,39 @@ export interface CoverLetterRequest {
   cv_id: string;
   vpr_id: string;
   gap_response_ids: string[];
-  company_research_id: string;
+  company_research_id?: string;
   options?: Record<string, unknown>;
 }
 
 export interface CoverLetterStatusResponse {
   id?: string;
   status: string;
+  updated_at?: string;
+  version?: number;
   result?: { cover_letter?: string };
   error?: string;
+}
+
+export type CoverLetterListStatus = 'ready' | 'processing' | 'failed';
+
+export interface CoverLetterListItem {
+  applicationId: string;
+  artifact_id?: string;
+  company_name: string;
+  job_title: string;
+  status: CoverLetterListStatus;
+  created_at: string;
+}
+
+export type TailoredCvListStatus = 'ready' | 'processing' | 'failed' | 'edited';
+
+export interface TailoredCvListItem {
+  id: string;
+  applicationId: string;
+  title: string;
+  language: string;
+  status: TailoredCvListStatus;
+  updated_at: string;
 }
 
 // ── Interview Prep ──
@@ -419,18 +451,24 @@ export interface PrepQuestion {
   id: string;
   text: string;
   question_type: string;
+  answer?: string | null;
+  answer_version?: number;
+  answer_updated_at?: string | null;
   suggested_answer?: {
     format: string;
     situation?: string;
     task?: string;
     action?: string;
     result?: string;
+    full_text?: string;
   };
 }
 
 export interface InterviewPrepStatusResponse {
   id?: string;
   status: string;
+  updated_at?: string;
+  version?: number;
   result?: {
     questions?: PrepQuestion[];
     questions_to_ask?: Array<{ question: string; purpose: string }>;
@@ -441,21 +479,32 @@ export interface InterviewPrepStatusResponse {
   error?: string;
 }
 
+export interface InterviewPrepPatchResponse {
+  status: string;
+  interview_prep_id?: string;
+  question_id: string;
+  answer: string;
+  answer_version?: number;
+  answer_updated_at?: string | null;
+}
+
 // ── Company Research ──
 export interface CompanyResearchRequest {
   job_id: string;
   url?: string;
-  company_name?: string;
+  company_name: string;
+  retry?: boolean;
 }
 
 export interface CompanyResearchResult {
   id: string;
   company_name?: string | null;
   mission?: string | null;
-  values: string[];
+  values?: string[] | null;
   culture?: string | null;
-  recent_news: Array<{ title?: string; date?: string }>;
-  products: string[];
+  // Canonical store returns string[]; newer handler returns objects. Accept both.
+  recent_news?: Array<{ title?: string; date?: string } | string> | null;
+  products?: string[] | null;
   funding_status?: string | null;
   size_range?: string | null;
   industry?: string | null;
@@ -545,6 +594,7 @@ export interface CVTailoredStatusResponse {
   version?: number;
   language?: string;
   generated_at?: string;
+  updated_at?: string;
   result?: {
     tailored_cv?: string;
     cv_sections?: CVSections;

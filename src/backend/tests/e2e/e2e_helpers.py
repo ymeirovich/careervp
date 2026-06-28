@@ -139,11 +139,13 @@ def create_job(client: E2EClient, token: str) -> str:
             'title': 'Senior Backend Engineer',
             'company': 'Example Corp',
             'description': 'Build secure APIs and async services.',
+            'url': 'https://example.com/jobs/backend-1',
         },
         {
             'title': 'Senior Backend Engineer',
             'company_name': 'Example Corp',
             'job_description': 'Build secure APIs and async services.',
+            'url': 'https://example.com/jobs/backend-1',
         },
     ]
     for payload in variants:

@@ -36,6 +36,38 @@ class CognitoConstruct(Construct):
                 user_srp=True,
                 user_password=True,
             ),
+            # FE-UI-037 step 0: callback/logout URLs captured from the live dev
+            # User Pool Client so a parent `cdk deploy` does not revert live auth.
+            o_auth=cognito.OAuthSettings(
+                flows=cognito.OAuthFlows(
+                    authorization_code_grant=True,
+                    implicit_code_grant=True,
+                ),
+                scopes=[
+                    cognito.OAuthScope.COGNITO_ADMIN,
+                    cognito.OAuthScope.EMAIL,
+                    cognito.OAuthScope.OPENID,
+                    cognito.OAuthScope.PHONE,
+                    cognito.OAuthScope.PROFILE,
+                ],
+                callback_urls=[
+                    "http://localhost:3000/callback",
+                    "https://app.careervp.com/callback",
+                    "https://dev.careervp.com/callback",
+                    "https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com/callback",
+                    "https://stage.careervp.com/callback",
+                ],
+                logout_urls=[
+                    "http://localhost:3000/",
+                    "https://app.careervp.com/",
+                    "https://dev.careervp.com/",
+                    "https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com/",
+                    "https://stage.careervp.com/",
+                ],
+            ),
+            supported_identity_providers=[
+                cognito.UserPoolClientIdentityProvider.COGNITO,
+            ],
             access_token_validity=Duration.hours(1),
             id_token_validity=Duration.hours(1),
             refresh_token_validity=Duration.days(30),

@@ -11,6 +11,7 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
+from careervp.logic.cv_tailoring_prompt import build_tailoring_system_prompt
 from careervp.models.cv import UserCV as CVUserCV
 from careervp.models.cv_models import UserCV
 from careervp.models.cv_tailoring_models import (
@@ -293,8 +294,9 @@ def run_stage2_cv_generation(
     try:
         response = llm_client.complete(
             prompt=user_prompt,
-            system_prompt=STAGE2_SYSTEM_PROMPT,
+            system_prompt=build_tailoring_system_prompt(),
             max_tokens=2500,
+            use_system_cache=True,
         )
     except Exception as e:
         return Result(

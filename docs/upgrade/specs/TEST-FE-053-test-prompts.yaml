@@ -1,0 +1,97 @@
+spec_id: TEST-FE-053
+title: "Test Prompts — CR async enqueue, processing row, GET status, infra synth"
+priority: high
+status: draft
+owner: backend
+created_at: 2026-06-28
+type: test_prompts
+note: >
+  Runnable prompts for FE-UI-053. Author BEFORE implementation.
+  Working dir: /Users/yitzchak/Documents/dev/careervp
+  Spec: docs/upgrade/specs/FE-UI-053-cr-enqueue-and-status.yaml
+  Key files (verify symbol; lines may have drifted):
+  - handlers/company_research_handler.py: _fetch_company_research (~L154), get_company_research (~L229)
+  - logic/company_research_store.py: write_cr_artifact (~L30), read_cr_artifact (~L78)
+  - handlers/company_research_worker_handler.py: CRWorkerInput (~L34)
+  - infra/careervp/api_construct.py, api_db_construct.py (self.company_research_queue)
+
+recommended_model_for_test_authoring: sonnet
+
+# =============================================================================
+# CATEGORY A: POST ENQUEUES + 202 FAST
+# =============================================================================
+post_enqueue:
+  prompt: |
+    Context: FE-UI-053 R1 — _fetch_company_research enqueues SQS, returns 202, no research_company().
+    Files: src/backend/tests/unit/test_company_research_handler.py
+    Mock: boto3 SQS client (patch careervp.handlers.company_research_handler.boto3).
+    1. test_post_sends_one_sqs_message — assert send_message called once; body valid CRWorkerInput. → SC1
+    2. test_post_returns_202_no_research_call — assert statusCode=202, research_company NOT called. → SC2
+    3. test_post_writes_processing_row — patch write_cr_processing; assert called with correct ids. → SC3
+    Run: cd src/backend && uv run pytest tests/unit/test_company_research_handler.py -q -k post
+    Pass: all 3 green.
+
+# =============================================================================
+# CATEGORY B: GET STATUS ROUTING (4 CASES)
+# =============================================================================
+get_status:
+  prompt: |
+    Context: FE-UI-053 R3 — get_company_research routes all 4 status values.
+    Files: src/backend/tests/unit/test_company_research_handler.py
+    Patch read_cr_artifact for each case:
+    1. test_get_processing — returns {status:"processing"} → body {status:"processing",company_research:null}. → SC4
+    2. test_get_completed — returns {status:"completed",...data} → data present.
+    3. test_get_failed — returns {status:"failed"} → response reflects failed.
+    4. test_get_not_generated — returns None → status:"not_generated", not 500. → SC4
+    Run: cd src/backend && uv run pytest tests/unit/test_company_research_handler.py -q -k get
+    Pass: all 4 green.
+
+# =============================================================================
+# CATEGORY C: STORE IDEMPOTENCY
+# =============================================================================
+store_idempotency:
+  prompt: |
+    Context: FE-UI-053 R2 — write_cr_processing must not overwrite terminal rows.
+    Files: src/backend/tests/unit/test_company_research_store.py
+    1. test_write_processing_on_empty — upserts status=processing. → SC5
+    2. test_write_processing_on_not_generated — overwrites not_generated row.
+    3. test_no_overwrite_completed — existing completed row (has research_data); assert DynamoDB put NOT called.
+    4. test_no_overwrite_failed — existing status=failed row; assert put NOT called.
+    Run: cd src/backend && uv run pytest tests/unit/test_company_research_store.py -q -k processing
+    Pass: all 4 green.
+
+# =============================================================================
+# CATEGORY C2: WORKER WRITES FAILED ROW (RECONCILIATION — R6)
+# =============================================================================
+worker_failed_row:
+  prompt: |
+    Context: FE-UI-053 R6 — hard-fail must write a status=failed row to the artifacts
+    table so GET returns failed, not perpetual processing.
+    Files: src/backend/tests/unit/test_company_research_store.py (store fn),
+           src/backend/tests/unit/test_company_research_worker_handler.py (wiring).
+    1. test_write_cr_failed_puts_failed_row — write_cr_failed() puts {status:'failed',
+       artifactType, user_id, key}; overwrites an existing processing placeholder. → SC8
+    2. test_hard_fail_calls_write_cr_failed — patch write_cr_failed; assert _hard_fail
+       invokes it with (application_id=job_id, user_id). → SC5, SC8
+    3. test_get_failed_after_hard_fail — integration-style: processing row → write_cr_failed
+       → read_cr_artifact returns status=failed → GET envelope status=failed (not processing). → SC8
+    Run: cd src/backend && uv run pytest tests/unit/test_company_research_store.py tests/unit/test_company_research_worker_handler.py -q -k fail
+    Pass: all 3 green.
+
+# =============================================================================
+# CATEGORY D: INFRA SYNTH
+# =============================================================================
+infra_synth:
+  prompt: |
+    Context: FE-UI-053 R4 — handler Lambda needs COMPANY_RESEARCH_QUEUE_URL + scoped SendMessage.
+    Files: infra/tests/test_cr_enqueue_infra.py (new). Use aws_cdk.assertions.Template.from_stack.
+    1. test_cr_handler_has_queue_url_env — Environment contains COMPANY_RESEARCH_QUEUE_URL. → SC6
+    2. test_sqs_send_scoped_to_cr_queue — IAM allows sqs:SendMessage on CR queue ARN only. → SC6
+    3. test_no_wildcard_sqs — no sqs:SendMessage on Resource '*'. → SC6
+    4. test_synth_no_cycle — Template.from_stack succeeds. → SC7
+    Run: cd infra && uv run pytest tests/test_cr_enqueue_infra.py -q && npx cdk synth
+    Pass: all 4 tests + synth exit 0.
+
+execution_order:
+  before_implementation: [post_enqueue, get_status, store_idempotency, worker_failed_row, infra_synth]
+  after_implementation: ["cd src/backend && uv run pytest tests/unit/ -q", "cd infra && npx cdk synth"]

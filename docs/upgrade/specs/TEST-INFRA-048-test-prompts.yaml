@@ -1,0 +1,264 @@
+spec_id: TEST-INFRA-048
+title: "Test Prompts — API Gateway {proxy+} collapse: route parity, authorizer parity, CORS, and parent-budget headroom"
+priority: critical
+status: draft
+owner: backend
+created_at: 2026-06-24
+updated_at: 2026-06-24
+type: test_prompts
+note: >
+  Runnable prompts for a fresh test-authoring session. Covers FE-UI-048 (collapse the API Gateway
+  per-path method surface into per-feature {proxy+} ANY integrations to reclaim parent resource budget).
+  This spec is infrastructure + route-contract focused: keep the parent/budget ceiling, authorizer
+  parity (protected stays protected, public stays public), CORS preflight contract, RestApi identity
+  stability, and route-resolution parity explicit. The human approval gate (AC-012) and the pre-deploy
+  cdk diff review (AC-011) are part of the source spec but are NOT code tests. The canonical route
+  oracle is docs/architecture/api_spec.openapi.yml — tests must assert against it, never invent routes.
+
+context_required: >
+  Working directory: /Users/yitzchak/Documents/dev/careervp
+  Backend: src/backend/
+  Infra: infra/
+  Source spec: docs/upgrade/specs/FE-UI-048-apigw-proxy-collapse-headroom.yaml
+  Route oracle: docs/architecture/api_spec.openapi.yml
+  Existing reference tests:
+  - infra/tests/infrastructure/test_api_construct.py
+  - infra/tests/infrastructure/test_nested_split.py
+  - infra/tests/infrastructure/test_monitoring.py
+  Handler routing evidence (proxy is safe BECAUSE these self-route):
+  - src/backend/careervp/handlers/user_handler.py  (@app.get/put/delete + app.resolve)
+  - src/backend/careervp/handlers/utils/rest_api_resolver.py
+
+recommended_model_for_test_authoring: sonnet
+recommended_model_for_complex_test_cases: opus  # authorizer-parity + route-parity-against-OpenAPI assertions
+
+# =============================================================================
+# CATEGORY A: UNIT — PROXY SHAPE, AUTHORIZER PARITY, PERMISSION COLLAPSE, EXCEPTIONS
+# =============================================================================
+unit:
+  prompt: |
+    Context: FE-UI-048 converts each API-fronted feature from explicit per-path methods to a
+    per-feature {proxy+} ANY LambdaIntegration on the SAME shared RestApi, in-parent (no stack move).
+    The unit checks pin the synthesized route shape, authorizer parity, the Lambda-permission
+    collapse, and the explicit-method exceptions.
+
+    Files to author or extend:
+    - infra/tests/infrastructure/test_api_construct.py
+    - infra/tests/infrastructure/test_apigw_proxy_collapse.py
+
+    Setup / mocks:
+    - Use aws_cdk.assertions.Template from the synthesized CareerVpCrudDev parent stack.
+    - Helper: build a {method -> {ResourceId, AuthorizationType}} index from the synthesized
+      AWS::ApiGateway::Method resources.
+
+    Write tests with these exact names and assertions:
+
+    1. test_proxy_any_replaces_explicit_methods_for_converted_feature
+       For a converted feature (e.g. users), assert there is an ANY method on the feature root
+       resource AND an ANY method on a {proxy+} child resource integrated (proxy=True) to that
+       feature's Lambda, and that the prior explicit GET/PUT/DELETE-per-subpath methods for that
+       feature are GONE.
+       AC-001
+
+    2. test_protected_feature_proxy_any_keeps_cognito_authorizer
+       Assert the ANY method(s) for every PROTECTED feature carry AuthorizationType
+       COGNITO_USER_POOLS and reference the existing Cognito authorizer.
+       AC-002
+
+    3. test_public_feature_proxy_any_has_no_authorizer
+       Assert the ANY method(s) for PUBLIC features (auth, health, swagger) carry AuthorizationType
+       NONE (no authorizer) — preserving the AwsSolutions-COG4 intent.
+       AC-002
+
+    4. test_permission_fanout_collapsed_to_two_per_feature
+       Assert each converted feature has ~2 apigateway-principal AWS::Lambda::Permission resources
+       (one per ANY method), and that the total apigateway-principal permission count dropped from
+       the 99 baseline toward <= 40.
+       AC-007
+
+    5. test_exception_routes_remain_explicit
+       Assert documented exceptions are NOT collapsed: the swagger AwsIntegration routes
+       (api_construct.py:289) keep their non-Lambda integration, and POST /billing/webhook (public)
+       remains an explicit method distinct from the protected /billing proxy.
+       AC-010
+
+    6. test_restapi_identity_unchanged
+       Assert the synthesized RestApi keeps rest_api_name == 'careervp-core-api-dev' and that the
+       RestApi logical id is unchanged from baseline (load the pre-change template fixture for the id).
+       AC-005
+
+    Coverage note:
+    - Out of scope: live Anthropic calls, browser behavior, real Cognito token validation, and any
+      assertion that invents routes not present in docs/architecture/api_spec.openapi.yml.
+
+    Run:
+    - cd infra && cdk synth
+    - cd infra && uv run pytest tests/infrastructure/test_api_construct.py tests/infrastructure/test_apigw_proxy_collapse.py -v --tb=short
+    - python src/backend/scripts/validate_naming.py --path infra --strict
+    All tests in the edited files must pass.
+
+# =============================================================================
+# CATEGORY B: INTEGRATION — PARENT BUDGET, ROUTE PARITY VS OPENAPI, CORS
+# =============================================================================
+integration:
+  prompt: |
+    Context: FE-UI-048 must reclaim parent budget while preserving every documented route's behavior.
+    The integration tests validate the budget ceiling, route-resolution parity against the OpenAPI
+    contract, and the CORS preflight contract.
+
+    Files to author or extend:
+    - infra/tests/infrastructure/test_nested_split.py            # budget ceiling
+    - infra/tests/infrastructure/test_apigw_proxy_collapse.py
+    - src/backend/tests/unit/test_route_parity_openapi.py        # resolver-level parity
+
+    Setup / mocks:
+    - Infra: aws_cdk.assertions.Template on the synthesized parent stack.
+    - Backend: load docs/architecture/api_spec.openapi.yml; for each (path, method), build a minimal
+      API Gateway proxy event and assert the shared Powertools resolver routes it to a handler that
+      does NOT return 404/405 (mock downstream DAL/LLM; only the routing layer is under test).
+
+    Write tests with these exact names and assertions:
+
+    1. test_parent_stack_resource_count_at_or_below_400_after_collapse
+       Assert the synthesized parent CareerVpCrudDev template has <= 400 resources (target <= 350)
+       and at least ~150 fewer than the 498 baseline.
+       AC-003
+
+    2. test_phase1_conversion_drops_parent_by_at_least_30
+       Using the Phase-1 feature set (CVTailor, User API, CV Parser), assert the parent synth dropped
+       by >= 30 resources versus the pre-Phase-1 baseline fixture.
+       AC-004
+
+    3. test_every_openapi_route_resolves_to_a_handler
+       For every (path, method) in docs/architecture/api_spec.openapi.yml, assert the Powertools
+       resolver matches a registered route (no 404/405). This proves {proxy+} forwarding + full-path
+       matching preserves the contract.
+       AC-006
+
+    4. test_path_params_forwarded_through_proxy
+       Assert parameterized paths (e.g. /users/me/cv/<cv_id>, /interview-prep/{interviewPrepId})
+       still bind their path parameters when invoked through the greedy {proxy+} event shape.
+       AC-006
+
+    5. test_cors_preflight_contract_preserved
+       Assert an OPTIONS request to a collapsed path returns the same Access-Control-Allow-Origin/
+       -Methods/-Headers contract (origins sourced from ALLOWED_ORIGINS), and that the synthesized
+       template still attaches CORS preflight on the new feature resources.
+       AC-008
+
+    Coverage note:
+    - Out of scope: live deploys, real network, real Cognito JWT verification (mock the authorizer
+      decision), and routes not present in the OpenAPI oracle.
+
+    Run:
+    - cd infra && cdk synth
+    - cd infra && uv run pytest tests/infrastructure/test_nested_split.py tests/infrastructure/test_apigw_proxy_collapse.py -v --tb=short
+    - cd src/backend && uv run pytest tests/unit/test_route_parity_openapi.py -v --tb=short
+    All tests in the edited files must pass.
+
+# =============================================================================
+# CATEGORY C: E2E — SYNTH SMOKE FOR THE WHOLE COLLAPSED API + BUDGET
+# =============================================================================
+e2e:
+  prompt: |
+    Context: FE-UI-048 has no new browser surface; the e2e layer is a synth smoke proving the whole
+    collapsed API graph synthesizes, stays under budget, and keeps the RestApi identity stable in one
+    pass.
+
+    Files to author or extend:
+    - infra/tests/infrastructure/test_apigw_proxy_collapse_synth_e2e.py
+
+    Setup / mocks:
+    - Use aws_cdk.assertions.Template on the synthesized parent stack; treat as a deployment-wire smoke.
+
+    Write tests with these exact names and assertions:
+
+    1. test_single_synth_shows_collapsed_api_under_budget_with_stable_restapi
+       In ONE synth, assert: parent <= 400 resources; RestApi name == 'careervp-core-api-dev';
+       at least one {proxy+} ANY integration per converted feature; and the apigateway-principal
+       permission total <= 40.
+       AC-003
+       AC-005
+       AC-007
+
+    2. test_synth_preserves_nested_stacks_and_does_not_move_resources
+       Assert AiAssistNestedStack and MonitoringNestedStack still appear as AWS::CloudFormation::Stack
+       resources in the parent and that no new nested stack was introduced by this change (the collapse
+       is in-parent only).
+       AC-011
+
+    Coverage note:
+    - Out of scope: anything requiring a live AWS deploy; the cdk diff stateful-replacement review
+      (AC-011) is a manual pre-deploy gate, asserted here only at synth/topology level.
+
+    Run:
+    - cd infra && cdk synth
+    - cd infra && uv run pytest tests/infrastructure/test_apigw_proxy_collapse_synth_e2e.py -v --tb=short
+    All tests in the edited files must pass.
+
+# =============================================================================
+# CATEGORY D: REGRESSION — BUDGET GUARD, AUTH SAFETY, NO STATEFUL DRIFT
+# =============================================================================
+regression:
+  prompt: |
+    Context: FE-UI-048 must not lose routes, must not flip any route's auth, and must not touch
+    stateful resources. These regression tests are the permanent guardrails.
+
+    Files to author or extend:
+    - infra/tests/infrastructure/test_nested_split.py
+    - infra/tests/infrastructure/test_api_construct.py
+    - infra/tests/infrastructure/test_apigw_proxy_collapse.py
+
+    Setup / mocks:
+    - aws_cdk.assertions.Template on the synthesized parent stack; OpenAPI oracle for route set.
+
+    Write tests with these exact names and assertions:
+
+    1. test_parent_budget_ceiling_holds_below_500_hard_and_400_target
+       Permanent guard: parent synth < 500 (hard) and <= 400 (target). Fails loudly if a future
+       change re-bloats the parent.
+       AC-003
+
+    2. test_no_protected_route_became_public_and_no_public_route_became_protected
+       Cross-check every OpenAPI route's documented auth against the synthesized method's
+       AuthorizationType. Any flip fails.
+       AC-002
+
+    3. test_no_stateful_resource_types_added_or_replaced_by_collapse
+       Assert the collapse introduces/changes only ApiGateway Method/Resource and Lambda Permission
+       resources (+ a Deployment); assert DynamoDB GlobalTable, S3 Bucket, KMS Key, Cognito, and SQS
+       Queue counts are unchanged versus the baseline fixture.
+       AC-011
+
+    4. test_all_openapi_routes_still_present_after_collapse
+       Assert the set of (path, method) resolvable after collapse is a SUPERSET-or-equal of the
+       OpenAPI oracle (no route dropped).
+       AC-006
+
+    5. test_cfn_guard_naming_and_checkov_clean_after_collapse
+       Assert validate_naming --strict passes and checkov/cfn-guard introduce no new findings on the
+       synthesized templates.
+       AC-009
+
+    Coverage note:
+    - AC-011 (cdk diff stateful-replacement) and AC-012 (human approval) are manual gates from the
+      source spec; the stateful guard here is the synth-level proxy for AC-011, not a substitute for
+      the pre-deploy diff review.
+
+    Run:
+    - cd infra && cdk synth
+    - cd infra && uv run pytest tests/infrastructure -v --tb=short
+    - python src/backend/scripts/validate_naming.py --path infra --strict
+    - uvx checkov -d infra/cdk.out --framework cloudformation --quiet
+    All tests in the edited files must pass.
+
+# =============================================================================
+# MANUAL GATES (NOT CODE TESTS)
+# =============================================================================
+manual_gates:
+  - id: AC-011
+    name: "pre-deploy cdk diff review"
+    check: "cdk diff CareerVpCrudDev shows only ApiGateway method/resource + Lambda permission churn and a Deployment update; NO replacement of DynamoDB/S3/KMS/Cognito/SQS/Lambda or the RestApi."
+  - id: AC-012
+    name: "human approval gate"
+    check: "Recorded approval per environment before any cdk deploy / create-stack-refactor against a live stack."

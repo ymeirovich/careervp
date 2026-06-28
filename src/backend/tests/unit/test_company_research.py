@@ -19,15 +19,21 @@ from careervp.logic.company_research import (
     _ensure_list,
     _ensure_optional_text,
     _ensure_text,
+    _normalize_domain,
     _parse_llm_payload,
     _resolve_domain,
     _structure_raw_content,
+    _truncate_text,
     _try_llm_fallback,
     _try_web_search,
     _try_website_scrape,
+    _web_api_identity_verified,
+    load_confident_company_research,
     research_company,
 )
+from careervp.logic.prompts.company_research_prompt import build_structure_user_prompt
 from careervp.models.company import CompanyResearchRequest, CompanyResearchResult, ResearchSource, SearchResult
+from careervp.models.job import CompanyContext
 from careervp.models.result import Result, ResultCode
 
 
@@ -49,6 +55,11 @@ def _build_company_result(source: ResearchSource) -> CompanyResearchResult:
         strategic_priorities=['Scale'],
         recent_news=['Won award'],
         financial_summary=None,
+        key_products=['Workflow Cloud'],
+        company_size='201-500 employees',
+        key_executives=['Alex Rivera, CEO'],
+        competitive_positioning='Operational workflow software',
+        growth_signals=['Hiring'],
         source=source,
         source_urls=['https://www.sysaid.com/about'],
         confidence_score=0.9,
@@ -56,26 +67,21 @@ def _build_company_result(source: ResearchSource) -> CompanyResearchResult:
     )
 
 
-def test_research_company_scrape_success(sample_request: CompanyResearchRequest) -> None:
-    """research_company should return website source when scrape succeeds."""
+def test_research_company_tavily_site_scoped_success(sample_request: CompanyResearchRequest) -> None:
+    """research_company should use site-scoped Tavily retrieval when a domain is available."""
 
     async def run() -> None:
-        rich_content = ' '.join(['mission'] * 250)
-
         with (
             patch(
-                'careervp.logic.company_research.scrape_company_about_page',
+                'careervp.logic.company_research._try_web_search',
                 new_callable=AsyncMock,
-            ) as mock_scrape_page,
-            patch(
-                'careervp.logic.company_research._structure_raw_content',
-                new_callable=AsyncMock,
-            ) as mock_structure,
+            ) as mock_try_search,
+            patch('careervp.logic.company_research._structure_raw_content', new_callable=AsyncMock) as mock_structure,
         ):
-            mock_scrape_page.return_value = Result(success=True, data=rich_content, code=ResultCode.SUCCESS)
+            mock_try_search.return_value = Result(success=True, data=' '.join(['Acme Corp mission products'] * 90), code=ResultCode.SUCCESS)
             mock_structure.return_value = Result(
                 success=True,
-                data=_build_company_result(ResearchSource.WEBSITE_SCRAPE),
+                data=_build_company_result(ResearchSource.WEB_API),
                 code=ResultCode.RESEARCH_COMPLETE,
             )
 
@@ -83,88 +89,70 @@ def test_research_company_scrape_success(sample_request: CompanyResearchRequest)
 
         assert result.success is True
         assert result.data is not None
-        assert result.data.source == ResearchSource.WEBSITE_SCRAPE
+        assert result.data.source == ResearchSource.WEB_API
+        mock_try_search.assert_awaited_once()
+        assert mock_try_search.await_args_list[0].kwargs['domain'] == 'acme.com'
+        assert mock_structure.await_args_list[0].kwargs['source'] == ResearchSource.WEB_API
+        assert mock_structure.await_args_list[0].kwargs['job_domain'] == 'acme.com'
+
+    asyncio.run(run())
+
+
+def test_research_company_tavily_general_fallback(sample_request: CompanyResearchRequest) -> None:
+    """When site-scoped Tavily retrieval fails, research_company should fall back to general Tavily search."""
+
+    async def run() -> None:
+        with (
+            patch(
+                'careervp.logic.company_research._try_web_search',
+                new_callable=AsyncMock,
+            ) as mock_try_search,
+            patch('careervp.logic.company_research._structure_raw_content', new_callable=AsyncMock) as mock_structure,
+        ):
+            mock_try_search.side_effect = [
+                Result(success=False, error='domain miss', code=ResultCode.NO_RESULTS),
+                Result(success=True, data=' '.join(['Acme Corp culture'] * 90), code=ResultCode.SUCCESS),
+            ]
+            mock_structure.return_value = Result(
+                success=True,
+                data=_build_company_result(ResearchSource.WEB_API),
+                code=ResultCode.RESEARCH_COMPLETE,
+            )
+
+            result = await research_company(sample_request)
+
+        assert result.success is True
+        assert result.data is not None
+        assert result.data.source == ResearchSource.WEB_API
+        assert mock_try_search.await_count == 2
+        assert mock_try_search.await_args_list[0].kwargs['domain'] == 'acme.com'
+        assert 'domain' not in mock_try_search.await_args_list[1].kwargs
         mock_structure.assert_awaited_once()
 
     asyncio.run(run())
 
 
-def test_research_company_web_search_fallback(sample_request: CompanyResearchRequest) -> None:
-    """When scrape fails, research_company should fall back to web search."""
-
-    async def run() -> None:
-        search_results = [
-            SearchResult(
-                title='Acme values',
-                url=cast(HttpUrl, 'https://acme.com/about'),
-                snippet=' '.join(['culture'] * 220),
-            )
-        ]
-
-        with (
-            patch(
-                'careervp.logic.company_research.scrape_company_about_page',
-                new_callable=AsyncMock,
-            ) as mock_scrape_page,
-            patch(
-                'careervp.logic.company_research.search_company_info',
-                new_callable=AsyncMock,
-            ) as mock_search_info,
-            patch(
-                'careervp.logic.company_research._structure_raw_content',
-                new_callable=AsyncMock,
-            ) as mock_structure,
-        ):
-            mock_scrape_page.return_value = Result(success=False, error='insufficient', code=ResultCode.SCRAPE_FAILED)
-            mock_search_info.return_value = Result(success=True, data=search_results, code=ResultCode.SUCCESS)
-            mock_structure.return_value = Result(
-                success=True,
-                data=_build_company_result(ResearchSource.WEB_SEARCH),
-                code=ResultCode.RESEARCH_COMPLETE,
-            )
-
-            result = await research_company(sample_request)
-
-        assert result.success is True
-        assert result.data is not None
-        assert result.data.source == ResearchSource.WEB_SEARCH
-        mock_structure.assert_awaited_once()
-
-    asyncio.run(run())
-
-
-def test_research_company_llm_fallback(sample_request: CompanyResearchRequest) -> None:
-    """LLM fallback should run when both scrape and search fail."""
+def test_research_company_no_llm_fabrication_when_sources_fail(sample_request: CompanyResearchRequest) -> None:
+    """FE-UI-041: when Tavily retrieval fails, research must NOT fall back to LLM
+    synthesis of company facts. It returns ALL_SOURCES_FAILED instead of fabricated content."""
 
     async def run() -> None:
         with (
             patch(
-                'careervp.logic.company_research.scrape_company_about_page',
+                'careervp.logic.company_research._try_web_search',
                 new_callable=AsyncMock,
-            ) as mock_scrape_page,
-            patch(
-                'careervp.logic.company_research.search_company_info',
-                new_callable=AsyncMock,
-            ) as mock_search_info,
-            patch(
-                'careervp.logic.company_research._structure_raw_content',
-                new_callable=AsyncMock,
-            ) as mock_structure,
+            ) as mock_try_search,
+            patch('careervp.logic.company_research._structure_raw_content', new_callable=AsyncMock) as mock_structure,
         ):
-            mock_scrape_page.return_value = Result(success=False, error='error', code=ResultCode.SCRAPE_FAILED)
-            mock_search_info.return_value = Result(success=False, error='no results', code=ResultCode.SEARCH_FAILED)
-            mock_structure.return_value = Result(
-                success=True,
-                data=_build_company_result(ResearchSource.LLM_FALLBACK),
-                code=ResultCode.RESEARCH_COMPLETE,
-            )
+            mock_try_search.return_value = Result(success=False, error='no results', code=ResultCode.SEARCH_FAILED)
 
             result = await research_company(sample_request)
 
-        assert result.success is True
-        assert result.data is not None
-        assert result.data.source == ResearchSource.LLM_FALLBACK
-        mock_structure.assert_awaited()
+        assert result.success is False
+        assert result.code == ResultCode.ALL_SOURCES_FAILED
+        assert result.data is None
+        assert mock_try_search.await_count == 2
+        mock_structure.assert_not_awaited()
 
     asyncio.run(run())
 
@@ -175,21 +163,12 @@ def test_research_company_all_sources_fail(sample_request: CompanyResearchReques
     async def run() -> None:
         with (
             patch(
-                'careervp.logic.company_research.scrape_company_about_page',
+                'careervp.logic.company_research._try_web_search',
                 new_callable=AsyncMock,
-            ) as mock_scrape_page,
-            patch(
-                'careervp.logic.company_research.search_company_info',
-                new_callable=AsyncMock,
-            ) as mock_search_info,
-            patch(
-                'careervp.logic.company_research._structure_raw_content',
-                new_callable=AsyncMock,
-            ) as mock_structure,
+            ) as mock_try_search,
+            patch('careervp.logic.company_research._structure_raw_content', new_callable=AsyncMock),
         ):
-            mock_scrape_page.return_value = Result(success=False, error='error', code=ResultCode.SCRAPE_FAILED)
-            mock_search_info.return_value = Result(success=False, error='no results', code=ResultCode.SEARCH_FAILED)
-            mock_structure.return_value = Result(success=False, error='llm error', code=ResultCode.ALL_SOURCES_FAILED)
+            mock_try_search.return_value = Result(success=False, error='no results', code=ResultCode.SEARCH_FAILED)
 
             result = await research_company(sample_request)
 
@@ -283,6 +262,11 @@ def test_structure_raw_content_parses_llm_output() -> None:
         'strategic_priorities': ['Scale'],
         'recent_news': ['Raised Series B'],
         'financial_summary': 'Private',
+        'key_products': ['Platform'],
+        'company_size': '201-500 employees',
+        'key_executives': ['Alex CEO'],
+        'competitive_positioning': 'Enterprise workflow platform',
+        'growth_signals': ['Hiring globally'],
     }
 
     class DummyRouter:
@@ -294,17 +278,23 @@ def test_structure_raw_content_parses_llm_output() -> None:
             response = await _structure_raw_content(
                 company_name='Acme Corp',
                 raw_text=' '.join(['insight'] * 320),
-                source=ResearchSource.WEB_SEARCH,
-                source_urls=['https://source.one', 'https://source.one'],
+                source=ResearchSource.WEB_API,
+                source_urls=['https://acme.com/about', 'https://acme.com/about'],
                 word_count=320,
-                context_hint='web search snippets',
+                context_hint='web api results',
+                job_domain='acme.com',
             )
 
         assert response.success is True
         assert response.data is not None
         assert response.data.values == payload['values']
-        assert response.data.source_urls == ['https://source.one']
+        assert response.data.source_urls == ['https://acme.com/about']
         assert response.data.overview == payload['overview']
+        assert response.data.key_products == payload['key_products']
+        assert response.data.company_size == payload['company_size']
+        assert response.data.key_executives == payload['key_executives']
+        assert response.data.competitive_positioning == payload['competitive_positioning']
+        assert response.data.growth_signals == payload['growth_signals']
 
     asyncio.run(run())
 
@@ -358,7 +348,7 @@ def test_structure_raw_content_handles_invalid_json() -> None:
 
 
 def test_research_company_without_domain(sample_request: CompanyResearchRequest) -> None:
-    """If domain is missing, research_company should still proceed via job posting URL."""
+    """If explicit domain is missing, research_company should use the job posting URL domain."""
     request = sample_request.model_copy()
     request.domain = None
     request.job_posting_url = cast(HttpUrl, 'https://acme.com/jobs/123')
@@ -366,39 +356,22 @@ def test_research_company_without_domain(sample_request: CompanyResearchRequest)
     async def run() -> None:
         with (
             patch(
-                'careervp.logic.company_research.scrape_company_about_page',
+                'careervp.logic.company_research._try_web_search',
                 new_callable=AsyncMock,
-            ) as mock_scrape_page,
-            patch(
-                'careervp.logic.company_research.search_company_info',
-                new_callable=AsyncMock,
-            ) as mock_search_info,
-            patch(
-                'careervp.logic.company_research._structure_raw_content',
-                new_callable=AsyncMock,
-            ) as mock_structure,
+            ) as mock_try_search,
+            patch('careervp.logic.company_research._structure_raw_content', new_callable=AsyncMock) as mock_structure,
         ):
-            mock_scrape_page.return_value = Result(success=False, error='no domain', code=ResultCode.SCRAPE_FAILED)
-            mock_search_info.return_value = Result(
-                success=True,
-                data=[
-                    SearchResult(
-                        title='About',
-                        url=cast(HttpUrl, 'https://acme.com/about'),
-                        snippet=' '.join(['mission'] * 220),
-                    )
-                ],
-                code=ResultCode.SUCCESS,
-            )
+            mock_try_search.return_value = Result(success=True, data=' '.join(['Acme Corp mission'] * 90), code=ResultCode.SUCCESS)
             mock_structure.return_value = Result(
                 success=True,
-                data=_build_company_result(ResearchSource.WEB_SEARCH),
+                data=_build_company_result(ResearchSource.WEB_API),
                 code=ResultCode.RESEARCH_COMPLETE,
             )
 
             response = await research_company(request)
 
         assert response.success is True
+        assert mock_try_search.await_args_list[0].kwargs['domain'] == 'acme.com'
 
     asyncio.run(run())
 
@@ -449,5 +422,248 @@ def test_helper_functions_cover_edge_cases() -> None:
         ResearchSource.WEB_SEARCH, 400, {'mission': 'm', 'values': ['v'], 'recent_news': [], 'strategic_priorities': []}
     )
     assert search_confidence < 0.7
+    web_api_confidence = _calculate_confidence(
+        ResearchSource.WEB_API,
+        600,
+        {
+            'overview': 'Acme overview',
+            'mission': 'm',
+            'values': ['v'],
+            'recent_news': ['n'],
+            'strategic_priorities': ['p'],
+        },
+        company_name='Acme Corp',
+        content_text='Acme Corp builds workflow tools.',
+        source_urls=['https://example.com/about'],
+    )
+    assert web_api_confidence >= 0.85
+    mismatched_web_api_confidence = _calculate_confidence(
+        ResearchSource.WEB_API,
+        600,
+        {
+            'overview': 'Other overview',
+            'mission': 'm',
+            'values': ['v'],
+            'recent_news': ['n'],
+            'strategic_priorities': ['p'],
+        },
+        company_name='Acme Corp',
+        content_text='Different company content.',
+        source_urls=['https://other.example/about'],
+        job_domain='acme.com',
+    )
+    assert mismatched_web_api_confidence <= 0.7
     fallback_confidence = _calculate_confidence(ResearchSource.LLM_FALLBACK, 450, {})
     assert fallback_confidence <= 0.5
+
+
+def test_web_api_with_identity_match_passes_gate() -> None:
+    confidence = _calculate_confidence(
+        ResearchSource.WEB_API,
+        600,
+        {
+            'overview': 'Acme overview',
+            'mission': 'm',
+            'values': ['v'],
+            'recent_news': ['n'],
+            'strategic_priorities': ['p'],
+        },
+        company_name='Acme Corp',
+        content_text='Acme Corp builds workflow tools for IT teams.',
+        source_urls=['https://example.com/about'],
+    )
+
+    assert confidence >= 0.85
+
+
+def test_web_api_domain_match_satisfies_identity() -> None:
+    confidence = _calculate_confidence(
+        ResearchSource.WEB_API,
+        600,
+        {
+            'overview': 'Acme overview',
+            'mission': 'm',
+            'values': ['v'],
+            'recent_news': ['n'],
+            'strategic_priorities': ['p'],
+        },
+        company_name='Acme Corp',
+        content_text='This page describes a modern service desk platform.',
+        source_urls=['https://sysaid.com/about'],
+        job_domain='sysaid.com',
+    )
+
+    assert _web_api_identity_verified(
+        company_name='Acme Corp',
+        content_text='This page describes a modern service desk platform.',
+        source_urls=['https://sysaid.com/about'],
+        job_domain='sysaid.com',
+    )
+    assert confidence >= 0.85
+
+
+def test_web_api_no_identity_match_capped_below_gate() -> None:
+    confidence = _calculate_confidence(
+        ResearchSource.WEB_API,
+        600,
+        {
+            'overview': 'Other overview',
+            'mission': 'm',
+            'values': ['v'],
+            'recent_news': ['n'],
+            'strategic_priorities': ['p'],
+        },
+        company_name='Acme Corp',
+        content_text='Different company content.',
+        source_urls=['https://other.example/about'],
+        job_domain='acme.com',
+    )
+
+    assert confidence <= 0.70
+
+
+def test_missing_core_fields_apply_penalty() -> None:
+    confidence = _calculate_confidence(
+        ResearchSource.WEB_API,
+        600,
+        {
+            'overview': 'Acme overview',
+            'values': ['v'],
+            'recent_news': ['n'],
+        },
+        company_name='Acme Corp',
+        content_text='Acme Corp builds workflow tools.',
+        source_urls=['https://acme.com/about'],
+        job_domain='acme.com',
+    )
+
+    assert confidence == pytest.approx(0.68)
+
+
+def test_total_failure_returns_all_sources_failed(sample_request: CompanyResearchRequest) -> None:
+    async def run() -> None:
+        with (
+            patch('careervp.logic.company_research._try_web_search', new_callable=AsyncMock) as mock_try_search,
+            patch('careervp.logic.company_research._structure_raw_content', new_callable=AsyncMock) as mock_structure,
+        ):
+            mock_try_search.side_effect = [
+                Result(success=False, error='site failed', code=ResultCode.SEARCH_FAILED),
+                Result(success=False, error='general failed', code=ResultCode.NO_RESULTS),
+            ]
+
+            result = await research_company(sample_request)
+
+        assert result.success is False
+        assert result.code == ResultCode.ALL_SOURCES_FAILED
+        assert result.data is None
+        assert mock_try_search.await_count == 2
+        mock_structure.assert_not_awaited()
+
+    asyncio.run(run())
+
+
+def test_truncation_at_2500_words() -> None:
+    raw_text = ' '.join(f'word-{index}' for index in range(3000))
+    truncated = _truncate_text(raw_text, max_words=2500)
+
+    assert len(truncated.split()) == 2500
+    assert 'word-2499' in truncated
+    assert 'word-2500' not in truncated
+
+
+def test_result_model_has_new_fields() -> None:
+    result = CompanyResearchResult(
+        company_name='Acme Corp',
+        overview='Acme overview',
+        values=['Innovation'],
+        mission='Ship reliable workflows',
+        strategic_priorities=['Scale'],
+        recent_news=['Raised funding'],
+        financial_summary='Private',
+        key_products=['Workflow Cloud'],
+        company_size='201-500 employees',
+        key_executives=['Alex Rivera, CEO'],
+        competitive_positioning='Operational workflow software',
+        growth_signals=['Hiring'],
+        source=ResearchSource.WEB_API,
+        source_urls=['https://acme.com/about'],
+        confidence_score=0.88,
+        research_timestamp=datetime.now(timezone.utc),
+    )
+
+    assert result.key_products == ['Workflow Cloud']
+    assert result.company_size == '201-500 employees'
+    assert result.key_executives == ['Alex Rivera, CEO']
+    assert result.competitive_positioning == 'Operational workflow software'
+    assert result.growth_signals == ['Hiring']
+
+
+def test_context_surfaces_overview_and_financial_summary() -> None:
+    item = {
+        'user_id': 'user-1',
+        'company_research_id': 'cr-1',
+        'company_name': 'Acme Corp',
+        'overview': 'Acme overview',
+        'mission': 'Ship reliable workflows',
+        'values': ['Innovation'],
+        'strategic_priorities': ['Scale'],
+        'recent_news': ['Raised funding'],
+        'financial_summary': 'Private',
+        'key_products': ['Workflow Cloud'],
+        'company_size': '201-500 employees',
+        'key_executives': ['Alex Rivera, CEO'],
+        'competitive_positioning': 'Operational workflow software',
+        'growth_signals': ['Hiring'],
+        'confidence_score': '0.9',
+        'created_at': '2026-06-27T10:00:00+00:00',
+    }
+
+    with patch('careervp.logic.company_research.read_cr_artifact', return_value=item):
+        context = load_confident_company_research(application_id='app-1', user_id='user-1')
+
+    assert isinstance(context, CompanyContext)
+    assert context.overview == 'Acme overview'
+    assert context.financial_summary == 'Private'
+
+
+def test_context_carries_new_fields_for_vpr() -> None:
+    context = CompanyContext(
+        company_name='Acme Corp',
+        overview='Acme overview',
+        mission='Ship reliable workflows',
+        values=['Innovation'],
+        strategic_priorities=['Scale'],
+        recent_news=['Raised funding'],
+        financial_summary='Private',
+        key_products=['Workflow Cloud'],
+        company_size='201-500 employees',
+        key_executives=['Alex Rivera, CEO'],
+        competitive_positioning='Operational workflow software',
+        growth_signals=['Hiring'],
+        industry='SaaS',
+    )
+
+    dumped = context.model_dump()
+
+    assert dumped['overview'] == 'Acme overview'
+    assert dumped['financial_summary'] == 'Private'
+    assert dumped['key_products'] == ['Workflow Cloud']
+    assert dumped['company_size'] == '201-500 employees'
+    assert dumped['key_executives'] == ['Alex Rivera, CEO']
+    assert dumped['competitive_positioning'] == 'Operational workflow software'
+    assert dumped['growth_signals'] == ['Hiring']
+
+
+def test_structuring_prompt_requests_new_keys() -> None:
+    prompt = build_structure_user_prompt('Acme Corp', 'raw content', 'Tavily profile search')
+
+    assert 'key_products' in prompt
+    assert 'company_size' in prompt
+    assert 'key_executives' in prompt
+    assert 'competitive_positioning' in prompt
+    assert 'growth_signals' in prompt
+
+
+def test_domain_normalization_handles_urls_and_bare_domains() -> None:
+    assert _normalize_domain('https://www.acme.com/careers') == 'acme.com'
+    assert _normalize_domain('acme.com') == 'acme.com'

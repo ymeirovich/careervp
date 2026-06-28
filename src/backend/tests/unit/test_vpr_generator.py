@@ -350,7 +350,7 @@ def test_full_pipeline_produces_valid_vpr(
                 'input_tokens': 600,
                 'output_tokens': 400,
                 'cost': 0.01,
-                'model': 'claude-sonnet-4-5',
+                'model': 'claude-sonnet-4-6',
             },
             code=ResultCode.SUCCESS,
         ),

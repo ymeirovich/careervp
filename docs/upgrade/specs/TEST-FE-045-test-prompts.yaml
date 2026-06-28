@@ -1,0 +1,277 @@
+spec_id: TEST-FE-045
+title: "Test Prompts — Inline rich-text autosave, markdown restore, and CV edit-mode contract"
+priority: high
+status: draft
+owner: frontend
+created_at: 2026-06-20
+updated_at: 2026-06-20
+type: test_prompts
+note: >
+  Runnable prompts for a fresh test-authoring session. Covers FE-UI-045. Frontend only.
+  Use the current RichTextEditor, GapQuestionCard, cover-letter page, and tailored-CV page
+  implementations as the reference surfaces. The prompts must keep the autosave-on-blur,
+  markdown read rendering, and single-edit-button CV contract explicit.
+
+context_required: >
+  Working directory: /Users/yitzchak/Documents/dev/careervp
+  Frontend: src/frontend/
+  Source spec: docs/upgrade/specs/FE-UI-045-inline-richtext-autosave.yaml
+  Existing reference tests:
+  - src/frontend/tests/ui/unit/RichTextEditor.test.tsx
+  - src/frontend/tests/ui/unit/GapQuestionCard.test.tsx
+  - src/frontend/tests/ui/unit/TailoredCVsPage.test.tsx
+  - src/frontend/tests/e2e/rich-text-editor.spec.ts
+  - src/frontend/tests/e2e/gap-question-card.spec.ts
+
+recommended_model_for_test_authoring: sonnet
+
+# =============================================================================
+# CATEGORY A: UNIT — TOOLBAR, DIRTY CHECK, DRAFT MIRROR, READ RENDER, CV EDIT MODE
+# =============================================================================
+unit:
+  prompt: |
+    Context: FE-UI-045 standardizes inline rich-text editing for the cover letter, Gap
+    Analysis parity surfaces, and the tailored CV page. The unit tests should exercise the
+    editor contract directly: focus-driven toolbar visibility, normalizeMarkdown dirty
+    detection, localStorage draft mirroring, markdown read rendering, and the single Edit
+    button that unlocks the whole CV document.
+
+    Files to author or extend:
+    - src/frontend/tests/ui/unit/RichTextEditor.test.tsx
+    - src/frontend/tests/ui/unit/GapQuestionCard.test.tsx
+    - src/frontend/tests/ui/unit/CoverLetterReadMode.test.tsx
+    - src/frontend/tests/ui/unit/CVTailoredPage.test.tsx
+
+    Setup / mocks:
+    - Use Vitest + @testing-library/react.
+    - Polyfill TipTap DOM range APIs exactly as RichTextEditor.test.tsx already does.
+    - Mock localStorage, window.addEventListener/removeEventListener for beforeunload, and
+      any router/navigation helpers used by the page components.
+    - Stub network writes so the tests assert the edit-state contract, not backend behavior.
+
+    Write tests with these exact names and assertions:
+
+    1. test_cover_letter_read_mode_renders_markdown_to_html_without_literal_tokens
+       Render the cover-letter read surface with stored Markdown that includes bold,
+       italic, underline, bullet-list, and ordered-list syntax. Assert that the rendered
+       output comes from markdownToHtml, that formatting is visible, and that literal
+       markdown tokens such as **, -, and 1. are not shown.
+       AC-001
+
+    2. test_focus_shows_toolbar_and_blur_hides_toolbar
+       Render RichTextEditor in edit mode. Focus the textbox and assert the formatting
+       toolbar appears; blur the textbox and assert the toolbar disappears.
+       AC-002
+
+    3. test_normalize_markdown_marks_semantically_unchanged_content_clean
+       Feed the editor content that differs only in Markdown surface syntax. Assert that
+       normalizeMarkdown treats the content as unchanged and that the dirty flag does not
+       flip.
+       AC-003
+
+    4. test_clean_blur_does_not_fire_any_patch_request
+       Blur a field whose normalizeMarkdown output matches the baseline. Assert that no
+       PATCH is sent and no autosave state is entered.
+       AC-004
+
+    5. test_use_artifact_draft_writes_restores_and_clears_storage
+       Assert that localStorage writes happen on change, that a newer local draft restores
+       on mount, and that save/discard/stale-draft paths clear the stored draft.
+       AC-008
+       AC-009
+       AC-011
+
+    6. test_tailored_cv_single_edit_button_enables_the_whole_document
+       Render the tailored CV read surface and click the single Edit button. Assert that
+       the whole document switches to edit mode, not just one section.
+       AC-005
+
+    7. test_tailored_cv_summary_and_bullets_are_rich_text_while_education_and_certifications_are_plain_inputs
+       In tailored-CV edit mode, assert that summary and experience bullets use
+       RichTextEditor, while education and certifications remain structured plain inputs.
+       AC-005
+       AC-006
+
+    Coverage note:
+    - Explicitly out of scope: real Anthropic latency/quality (mock it), multi-tab
+      concurrency beyond base_version, offline autosave queueing, jsdom clipboard
+      paste-rule fidelity (e2e only), and deep RTL correctness.
+
+    Run:
+    - cd src/frontend && npm run test:unit
+    All tests in the edited files must pass.
+
+# =============================================================================
+# CATEGORY B: INTEGRATION — PATCH SHAPES, RESTORE BANNER, CONFLICT, IN-FLIGHT GUARD
+# =============================================================================
+integration:
+  prompt: |
+    Context: FE-UI-045 keeps existing payload shapes while moving rich-text editing to
+    autosave-on-blur. Cover Letter, Gap Analysis, Tailored CV, and Interview Prep each
+    retain their current wire contracts. The integration tests should pin the PATCH bodies,
+    the restore/discard banner, the 409 conflict modal, and the beforeunload guard that is
+    active only while a PATCH is in flight.
+
+    Files to author or extend:
+    - src/frontend/tests/integration/artifact-rich-text-autosave.integration.test.tsx
+
+    Setup / mocks:
+    - Use MSW or the repo’s existing mocked API helpers.
+    - Mock next/navigation and any save/discard helpers.
+    - Use fake timers or deferred promises to hold a request in flight for beforeunload
+      assertions.
+
+    Write tests with these exact names and assertions:
+
+    1. test_cover_letter_blur_sends_patch_with_cover_letter_shape
+       Edit the cover-letter field, blur it, and assert the PATCH body is
+       { cover_letter: <markdown> } with the existing response shape preserved.
+       AC-003
+
+    2. test_gap_analysis_blur_sends_full_replace_gap_responses_shape
+       Edit one gap answer, blur it, and assert the request still uses the full-replace
+       { responses: [{ question_id, response }] } contract.
+       AC-003
+
+    3. test_cv_tailored_blur_sends_patch_with_cv_sections_shape
+       Edit a CV section, blur it, and assert PATCH /cv-tailoring/{id} still sends
+       { cv_sections: ... } and never falls back to the dead tailored_cv payload.
+       AC-006
+
+    4. test_interview_prep_blur_sends_patch_with_answer_keyed_by_question_id
+       Edit an interview-prep STAR answer, blur it, and assert PATCH
+       /interview-prep/{interviewPrepId} persists { answer } for the matching question_id.
+       AC-007
+
+    5. test_restore_unsaved_changes_banner_offers_restore_and_discard
+       Seed a newer local draft than the server copy and mount the page. Assert the banner
+       appears with Restore and Discard actions, and each action behaves correctly.
+       AC-008
+
+    6. test_stale_local_draft_is_cleared_when_server_updated_at_is_newer_or_equal
+       Seed an older local draft, mount the page, and assert the draft is cleared without
+       showing a restore banner.
+       AC-009
+
+    7. test_base_version_409_opens_conflict_modal_with_reload_and_overwrite
+       Mock a PATCH 409 and assert the conflict modal shows Reload and Overwrite choices
+       while preserving the user’s current text.
+       AC-010
+
+    8. test_beforeunload_guard_is_active_only_while_patch_is_in_flight
+       Hold a PATCH unresolved and assert beforeunload is registered only during the
+       request and removed immediately after the request settles.
+       AC-012
+
+    Coverage note:
+    - Explicitly out of scope: real Anthropic latency/quality (mock it), multi-tab
+      concurrency beyond base_version, offline autosave queueing, jsdom clipboard
+      paste-rule fidelity (e2e only), and deep RTL correctness.
+
+    Run:
+    - cd src/frontend && npm run test:integration
+    All tests in the edited files must pass.
+
+# =============================================================================
+# CATEGORY C: E2E — FORMATTED READ VIEW, AUTOSAVE, AND WHOLE-DOCUMENT EDIT MODE
+# =============================================================================
+e2e:
+  prompt: |
+    Context: FE-UI-045 needs browser-level coverage for the edited surfaces. The end-to-end
+    tests should prove that formatting survives blur-to-autosave and reload, and that the
+    tailored CV page uses one Edit button for the whole document.
+
+    Files to author or extend:
+    - src/frontend/tests/e2e/artifact-rich-text-autosave.spec.ts
+
+    Setup / mocks:
+    - Use Playwright with the repo’s existing auth/storageState helper.
+    - Intercept PATCH/POST requests so each artifact flow can be exercised without a live
+      backend.
+    - Reuse the existing editor visuals and screenshot helpers only if needed.
+
+    Write tests with these exact names and assertions:
+
+    1. test_gap_analysis_edit_format_blur_and_reload_preserves_formatted_read_view
+       Enter edit mode, focus the editor, apply formatting, blur to autosave, reload, and
+       assert the read view still shows the formatted content.
+       AC-003
+       AC-013
+
+    2. test_cover_letter_edit_format_blur_and_reload_preserves_formatted_read_view
+       Repeat the edit-format-blur-reload flow on the cover-letter page.
+       AC-001
+       AC-003
+
+    3. test_cv_tailored_edit_format_blur_and_reload_preserves_formatted_read_view
+       Repeat the flow on the tailored CV page and assert that structured fields continue
+       to render correctly after reload.
+       AC-005
+       AC-006
+
+    4. test_cv_tailored_single_edit_button_flips_entire_document_into_edit_mode
+       Open the tailored CV in read mode, click the single Edit button, and assert the
+       whole document switches into edit mode.
+       AC-005
+
+    Coverage note:
+    - Explicitly out of scope: real Anthropic latency/quality (mock it), multi-tab
+      concurrency beyond base_version, offline autosave queueing, jsdom clipboard
+      paste-rule fidelity (e2e only), and deep RTL correctness.
+
+    Run:
+    - cd src/frontend && npm run test:e2e
+    All tests in the edited files must pass.
+
+# =============================================================================
+# CATEGORY D: REGRESSION — EXISTING SAVE FLOWS, HUB BADGES, EXPORT, AND HEBREW
+# =============================================================================
+regression:
+  prompt: |
+    Context: FE-UI-045 must not regress the existing explicit-save flows, hub-facing status
+    badges, CV ATS/keyword panels, export rendering, or Hebrew read-mode rendering.
+
+    Files to author or extend:
+    - src/frontend/tests/regression/artifact-rich-text-regression.test.tsx
+    - src/frontend/tests/regression/cross-module-invalidation.test.tsx
+
+    Setup / mocks:
+    - Use the existing regression test harness.
+    - Reuse page/component fixtures already present in the frontend regression suite.
+    - Mock DOCX/PDF export helpers so formatting can be asserted without a real download.
+
+    Write tests with these exact names and assertions:
+
+    1. test_cover_letter_and_gap_explicit_save_flows_still_submit_successfully
+       Assert that the existing explicit Save flows still work and that autosave does not
+       interfere with the current manual-save UX.
+       AC-011
+
+    2. test_hub_status_badges_remain_unchanged
+       Assert that the hub status badges and labels remain unchanged after the rich-text
+       autosave change.
+       AC-013
+
+    3. test_tailored_cv_ats_and_keyword_panel_remains_visible
+       Assert that the tailored CV ATS score and keyword panel still render in read and
+       edit modes.
+       AC-006
+
+    4. test_docx_and_pdf_exports_render_formatted_text_without_literal_markdown_tokens
+       Assert that DOCX/PDF export output shows formatted text only, with no literal
+       markdown tokens leaked into the rendered content.
+       AC-006
+
+    5. test_hebrew_locale_read_render_keeps_formatted_content_visible
+       Assert that the Hebrew locale read render still shows the content in Hebrew and
+       keeps formatted Markdown visually intact.
+       AC-001
+
+    Coverage note:
+    - Explicitly out of scope: real Anthropic latency/quality (mock it), multi-tab
+      concurrency beyond base_version, offline autosave queueing, jsdom clipboard
+      paste-rule fidelity (e2e only), and deep RTL correctness.
+
+    Run:
+    - cd src/frontend && npm run test:regression
+    All tests in the edited files must pass.

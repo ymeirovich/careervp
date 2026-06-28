@@ -1,21 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useJobs } from '../../hooks/useJobs';
 import { useDashboard } from '../../contexts/DashboardContext';
 import { StatsRow } from '../../components/dashboard/StatsRow';
 import { JobsTable } from '../../components/dashboard/JobsTable';
-import { UsageGate } from '../../components/UsageGate/UsageGate';
-import { NewApplicationModal } from '../../components/NewApplicationModal/NewApplicationModal';
-import { EmptyState } from '../../components/ui/EmptyState';
-import { Button } from '../../components/ui/Button';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { jobs, isLoading } = useJobs();
-  const { usage, subscription, hasActiveAccess } = useDashboard();
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const { jobs, isLoading, error, refetch } = useJobs();
+  const { usage, subscription, hasActiveAccess, isLoading: isDashboardLoading } = useDashboard();
 
   const planLabel =
     subscription?.subscription?.plan_type === 'monthly'
@@ -33,7 +27,7 @@ export default function DashboardPage() {
     id: job.job_id,
     title: job.title,
     company: job.company_name,
-    status: (job.status as 'active' | 'draft' | 'archived') ?? 'draft',
+    status: job.status,
     updatedAt: new Date(job.created_at).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -48,40 +42,21 @@ export default function DashboardPage() {
         creditsUsed={creditsUsed}
         creditsTotal={creditsTotal || 3}
         isActive={hasActiveAccess}
+        isLoading={Boolean(isDashboardLoading)}
       />
 
-      <div className="flex justify-end">
-        <UsageGate action="new_application">
-          <Button
-            variant="primary"
-            size="md"
-            onClick={() => setIsModalOpen(true)}
-            data-testid="new-application-btn"
-          >
-            + New Application
-          </Button>
-        </UsageGate>
-      </div>
-
-      {jobs.length === 0 && !isLoading ? (
-        <EmptyState
-          title="No applications yet"
-          description="Create your first application to get started with CareerVP."
+      <div data-testid="jobs-table">
+        <JobsTable
+          mode="dashboard"
+          jobs={mappedJobs}
+          isLoading={isLoading}
+          error={error}
+          hasActiveAccess={hasActiveAccess}
+          onRetry={refetch}
+          onViewJob={(id) => router.push(`/applications/${id}`)}
+          onNewApplication={() => router.push('/applications/new')}
         />
-      ) : (
-        <div data-testid="jobs-table">
-          <JobsTable
-            jobs={mappedJobs}
-            onViewJob={(id) => router.push(`/applications/${id}`)}
-            onNewApplication={() => setIsModalOpen(true)}
-          />
-        </div>
-      )}
-
-      <NewApplicationModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-      />
+      </div>
     </div>
   );
 }
