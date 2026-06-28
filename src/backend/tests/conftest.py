@@ -87,6 +87,24 @@ def mock_company_research_load(mocker):
     )
 
 
+@pytest.fixture(autouse=True)
+def mock_artifact_dependency_resolver(mocker):
+    """Bypass upstream VPR/CR dependency checks in unit tests.
+
+    Handlers call resolve_handler_dependencies() before doing any real work.
+    Without a valid VPR in DynamoDB, the resolver returns 409 and the handler
+    exits early — breaking every test that doesn't set up the full artifact
+    chain. Patching the inner resolve_dependencies() to return 'ready' lets
+    each test focus on its own behaviour instead of upstream DAL setup.
+    """
+    from careervp.logic.artifact_dependency_resolver import DependencyResolution
+
+    mocker.patch(
+        'careervp.handlers.artifact_dependency_utils.resolve_dependencies',
+        return_value=DependencyResolution(status='ready'),
+    )
+
+
 @pytest.fixture(scope='session', autouse=True)
 def ensure_lambda_build_dir():
     """Create placeholder lambda asset directory expected by CDK tests."""

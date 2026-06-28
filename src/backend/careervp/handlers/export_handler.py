@@ -309,8 +309,11 @@ def _cv_add_contact(doc: DocxDocument, cv: dict[str, Any]) -> None:
         doc.add_paragraph(line)
 
 
-def _cv_add_experience(doc: DocxDocument, experience: list[Any]) -> None:
+def _cv_add_experience(doc: DocxDocument, experience: list[Any] | str) -> None:
     doc.add_heading('Professional Experience', level=2)
+    if isinstance(experience, str):
+        doc.add_paragraph(experience)
+        return
     for exp in experience:
         if not isinstance(exp, dict):
             continue

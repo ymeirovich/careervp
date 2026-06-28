@@ -186,7 +186,11 @@ def test_cv_tailored_missing_artifact_returns_404(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setenv('TABLE_NAME', 'main-table')
     monkeypatch.setenv('ARTIFACTS_BUCKET_NAME', 'artifacts-bucket')
 
-    mock_resource = _mock_dynamo_item(None)
+    # cv_tailored uses table.query(), not table.get_item()
+    mock_table = MagicMock()
+    mock_table.query.return_value = {'Items': []}
+    mock_resource = MagicMock()
+    mock_resource.Table.return_value = mock_table
 
     with patch('careervp.handlers.export_handler.boto3') as mock_boto3:
         mock_boto3.resource.return_value = mock_resource
@@ -514,10 +518,11 @@ def test_dynamo_read_failure_returns_500(monkeypatch: pytest.MonkeyPatch, module
     monkeypatch.setenv('TABLE_NAME', 'main-table')
     monkeypatch.setenv('ARTIFACTS_BUCKET_NAME', 'artifacts-bucket')
 
+    db_error = botocore.exceptions.ClientError({'Error': {'Code': '400', 'Message': 'ProvisionedThroughputExceededException'}}, 'GetItem')
     mock_table = MagicMock()
-    mock_table.get_item.side_effect = botocore.exceptions.ClientError(
-        {'Error': {'Code': '400', 'Message': 'ProvisionedThroughputExceededException'}}, 'GetItem'
-    )
+    # cv_tailored uses table.query(); cover_letter/interview_prep use table.get_item()
+    mock_table.get_item.side_effect = db_error
+    mock_table.query.side_effect = db_error
     mock_resource = MagicMock()
     mock_resource.Table.return_value = mock_table
 
