@@ -96,6 +96,26 @@ def resolve_handler_dependencies(
     )
 
 
+def _advance_to_cr_pending(application_repo: ApplicationRepository, application_id: str, user_id: str) -> None:
+    """Try to set application state to cr_pending from either valid predecessor state.
+
+    Tries gap_responses_submitted first (initial run), then cr_failed (retry).
+    If both CCF the state is already cr_pending or further along — safe to proceed.
+    """
+    for expected in ('gap_responses_submitted', 'cr_failed'):
+        try:
+            application_repo.update_state(
+                application_id=application_id,
+                user_id=user_id,
+                new_state='cr_pending',
+                expected_state=expected,
+            )
+            return
+        except BotoClientError as exc:
+            if exc.response.get('Error', {}).get('Code') != 'ConditionalCheckFailedException':
+                raise
+
+
 def build_start_chain(application_repo: ApplicationRepository | None) -> Callable[..., str | None]:
     def _start_chain(*, node: str, application_id: str, user_id: str, requested_artifact: str) -> str | None:
         chain_arn = os.environ.get('STEP_FUNCTIONS_CHAIN_ARN', '').strip()
@@ -109,16 +129,7 @@ def build_start_chain(application_repo: ApplicationRepository | None) -> Callabl
             try:
                 application_repo.claim_chain_execution(application_id=application_id, user_id=user_id)
                 if node == 'company_research':
-                    try:
-                        application_repo.update_state(
-                            application_id=application_id,
-                            user_id=user_id,
-                            new_state='cr_pending',
-                            expected_state='gap_responses_submitted',
-                        )
-                    except BotoClientError as exc:
-                        if exc.response.get('Error', {}).get('Code') != 'ConditionalCheckFailedException':
-                            raise
+                    _advance_to_cr_pending(application_repo, application_id, user_id)
             except BotoClientError as exc:
                 if exc.response.get('Error', {}).get('Code') == 'ConditionalCheckFailedException':
                     return None  # Another request already holds the RUNNING lock

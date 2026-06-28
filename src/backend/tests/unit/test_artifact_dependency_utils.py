@@ -2,20 +2,30 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 import pytest
+from botocore.exceptions import ClientError
 
 from careervp.handlers.artifact_dependency_utils import build_start_chain
 
 pytestmark = pytest.mark.unit
 
 
-def test_build_start_chain_claims_and_marks_cr_pending(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv('STEP_FUNCTIONS_CHAIN_ARN', 'arn:aws:states:us-east-1:123456789012:stateMachine:chain')
+def _ccf() -> ClientError:
+    return ClientError({'Error': {'Code': 'ConditionalCheckFailedException', 'Message': ''}}, 'UpdateItem')
+
+
+def _make_sfn(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     mock_sfn = MagicMock()
     mock_sfn.start_execution.return_value = {'executionArn': 'arn:aws:states:us-east-1:123456789012:execution:chain:run-1'}
+    monkeypatch.setenv('STEP_FUNCTIONS_CHAIN_ARN', 'arn:aws:states:us-east-1:123456789012:stateMachine:chain')
     monkeypatch.setattr('boto3.client', MagicMock(return_value=mock_sfn))
+    return mock_sfn
+
+
+def test_build_start_chain_claims_and_marks_cr_pending(monkeypatch: pytest.MonkeyPatch) -> None:
+    _make_sfn(monkeypatch)
     app_repo = MagicMock()
 
     start_chain = build_start_chain(app_repo)
@@ -40,3 +50,43 @@ def test_build_start_chain_claims_and_marks_cr_pending(monkeypatch: pytest.Monke
         execution_arn='arn:aws:states:us-east-1:123456789012:execution:chain:run-1',
         status='RUNNING',
     )
+
+
+def test_build_start_chain_retries_cr_pending_from_cr_failed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When state is cr_failed (not gap_responses_submitted), the second update_state attempt must succeed."""
+    _make_sfn(monkeypatch)
+    app_repo = MagicMock()
+    # First call (gap_responses_submitted) → CCF; second call (cr_failed) → success.
+    app_repo.update_state.side_effect = [_ccf(), None]
+
+    start_chain = build_start_chain(app_repo)
+    execution_arn = start_chain(
+        node='company_research',
+        application_id='app-1',
+        user_id='user-1',
+        requested_artifact='vpr',
+    )
+
+    assert execution_arn == 'arn:aws:states:us-east-1:123456789012:execution:chain:run-1'
+    assert app_repo.update_state.call_args_list == [
+        call(application_id='app-1', user_id='user-1', new_state='cr_pending', expected_state='gap_responses_submitted'),
+        call(application_id='app-1', user_id='user-1', new_state='cr_pending', expected_state='cr_failed'),
+    ]
+
+
+def test_build_start_chain_proceeds_when_already_cr_pending(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When state is already cr_pending (both CCF), chain still starts — state is already correct."""
+    _make_sfn(monkeypatch)
+    app_repo = MagicMock()
+    app_repo.update_state.side_effect = [_ccf(), _ccf()]
+
+    start_chain = build_start_chain(app_repo)
+    execution_arn = start_chain(
+        node='company_research',
+        application_id='app-1',
+        user_id='user-1',
+        requested_artifact='vpr',
+    )
+
+    assert execution_arn == 'arn:aws:states:us-east-1:123456789012:execution:chain:run-1'
+    assert app_repo.update_state.call_count == 2
