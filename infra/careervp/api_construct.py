@@ -2775,8 +2775,9 @@ class ApiConstruct(Construct):
     ) -> None:
         resource = self._get_or_create_path_resource(path)
         # Per auth_and_authorizer_spec.yaml:
-        # - Public (unprotected): /health, /auth/register, /auth/login
-        # - Protected: /auth/refresh and all other routes
+        # - Public (unprotected): /health, /auth/register, /auth/login, /auth/refresh
+        #   (refresh is validated by the auth Lambda using the submitted refresh token)
+        # - Protected: all other routes
         # - billing/webhook is public: verifies webhook signature itself (S-006)
         public_paths = {
             "/health",
@@ -2827,7 +2828,7 @@ class ApiConstruct(Construct):
         # (job_api_func, gap_api_func, export_lambda), so {jobId} explicit routes
         # must coexist with greedy routing — {proxy+} and {jobId} cannot be siblings.
         feature_proxies: list[tuple[str, _lambda.Function, bool]] = [
-            ("/auth", self.auth_api_func, False),
+            ("/auth", self.auth_api_func, True),
             ("/users", self.user_api_func, True),
             ("/gap-analysis", self.gap_api_func, True),
             ("/billing", self.billing_lambda, True),
@@ -2840,6 +2841,10 @@ class ApiConstruct(Construct):
         # {paramId} siblings are removed from the live stack).
         route_map: list[tuple[str, str, _lambda.Function]] = [
             ("/health", "GET", self.health_api_func),
+            # auth — public exceptions below the protected /auth proxy
+            ("/auth/register", "POST", self.auth_api_func),
+            ("/auth/login", "POST", self.auth_api_func),
+            ("/auth/refresh", "POST", self.auth_api_func),
             # users — cross-Lambda exceptions below the /users proxy
             ("/users/me", "GET", self.user_api_func),
             ("/users/me", "PUT", self.user_api_func),

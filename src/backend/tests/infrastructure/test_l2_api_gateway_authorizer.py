@@ -30,6 +30,7 @@ PUBLIC_ROUTES = {
     ('POST', '/auth/login'),
     ('POST', '/auth/refresh'),
     ('POST', '/billing/webhook'),
+    ('POST', '/errors'),
 }
 
 
