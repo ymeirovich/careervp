@@ -35,11 +35,15 @@ requirements:
   R1:
     title: "Auto-resume polling on mount if status=processing"
     detail: >
-      On component mount, GET /company-research. If response status=processing,
-      immediately enter polling mode (same loop as post-trigger). State of truth is
-      the server row — no local state needed to survive reload.
+      On component mount, read STATUS (not just the completed artifact). Use the
+      status-aware api.getCompanyResearchStatus(jobId) — NOT api.getCompanyResearch(),
+      which collapses every non-completed status to null and so cannot distinguish
+      processing from not_generated. If status=processing, immediately enter polling
+      mode (same loop as post-trigger). State of truth is the server row — no local
+      state needed to survive reload/navigation.
     files:
       - src/frontend/app/applications/[id]/company-research/page.tsx
+      - src/frontend/api/methods.ts   # no change expected; getCompanyResearchStatus already returns status verbatim — verify
   R2:
     title: "Move poll loop out of handleTrigger into a status-keyed effect"
     detail: >

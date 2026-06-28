@@ -72,8 +72,27 @@ requirements:
   R5:
     title: "Worker terminal row always wins"
     detail: >
-      Worker writes completed/failed via write_cr_artifact (already exists).
-      write_cr_processing never overwrites those. Re-POST while worker runs is safe.
+      Worker success writes the data row via write_cr_artifact (already exists); its
+      full put_item replaces the processing placeholder. write_cr_processing never
+      overwrites a terminal row. Re-POST while the worker runs is safe.
+  R6:
+    title: "Worker hard-fail writes a terminal failed row to the artifacts table"
+    detail: >
+      CRITICAL reconciliation gap: the worker records failure only on the APPLICATION
+      record (artifact_statuses.company_research='failed'), never on the ARTIFACTS
+      table that GET reads. So a hard-failed job leaves the processing placeholder
+      orphaned and GET returns 'processing' forever.
+      Fix (single-source-of-truth = artifacts table):
+        - Add write_cr_failed(application_id, user_id) to company_research_store.py
+          that puts a minimal row {key, artifactType, user_id, status:'failed',
+          created_at}.
+        - Call it from company_research_worker_handler._hard_fail, alongside the
+          existing app-record update.
+      GET needs NO change: _is_confident_cr already maps status=='failed' → failed,
+      and the failed row overwrites the processing placeholder.
+    files:
+      - src/backend/careervp/logic/company_research_store.py
+      - src/backend/careervp/handlers/company_research_worker_handler.py  # _hard_fail
 
 # =============================================================================
 # SUCCESS CRITERIA
@@ -86,18 +105,20 @@ success_criteria:
   SC5: "sub-0.85 confidence → worker writes status:failed (not silent not_generated)."
   SC6: "CR handler Lambda has sqs:SendMessage scoped to CR queue ARN only; COMPANY_RESEARCH_QUEUE_URL env present."
   SC7: "cdk synth clean; mypy --strict + ruff clean on changed modules."
+  SC8: "a hard-failed job's GET returns 'failed', never perpetual 'processing' (write_cr_failed clears the placeholder)."
 
 # =============================================================================
 # VALIDATION COMMANDS
 # =============================================================================
 validation:
   - "cd src/backend && uv run ruff format . && uv run ruff check --fix ."
-  - "cd src/backend && uv run mypy careervp/handlers/company_research_handler.py careervp/logic/company_research_store.py --strict"
-  - "cd src/backend && uv run pytest tests/unit/test_company_research_handler.py -v --tb=short"
+  - "cd src/backend && uv run mypy careervp/handlers/company_research_handler.py careervp/handlers/company_research_worker_handler.py careervp/logic/company_research_store.py --strict"
+  - "cd src/backend && uv run pytest tests/unit/test_company_research_handler.py tests/unit/test_company_research_store.py tests/unit/test_company_research_worker_handler.py -v --tb=short"
   - "cd infra && npx cdk synth"
 
 test_hooks:
   - "TEST-FE-053 § post_enqueue: SC1, SC2, SC3"
   - "TEST-FE-053 § get_status: SC4"
-  - "TEST-FE-053 § store_idempotency: SC5"
+  - "TEST-FE-053 § store_idempotency: SC5, SC8"
+  - "TEST-FE-053 § worker_failed_row: SC5, SC8"
   - "TEST-FE-053 § infra_synth: SC6, SC7"

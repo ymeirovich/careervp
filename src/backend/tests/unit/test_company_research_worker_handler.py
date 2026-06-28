@@ -257,6 +257,25 @@ class TestTaskTokenSignal:
 
         mock_enqueue.assert_called_once_with('user-1', 'job-1', cr_result)
 
+    def test_hard_fail_calls_write_cr_failed(self) -> None:
+        """SC5, SC8: _hard_fail calls write_cr_failed with application_id=job_id, user_id."""
+        input_data = _make_input()
+
+        mock_app_repo = MagicMock()
+        mock_sfn = MagicMock()
+
+        with (
+            patch('careervp.handlers.company_research_worker_handler.write_cr_failed') as mock_write_failed,
+            patch('careervp.handlers.company_research_worker_handler._get_app_repo', return_value=mock_app_repo),
+            patch('boto3.client', return_value=mock_sfn),
+        ):
+            _hard_fail(input_data, 'test cause')
+
+        mock_write_failed.assert_called_once_with(
+            application_id=input_data.job_id,
+            user_id=input_data.user_id,
+        )
+
     @pytest.mark.asyncio
     async def test_hard_fail_sends_task_failure_to_sfn(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv('STEP_FUNCTIONS_CHAIN_ARN', 'arn:aws:states:us-east-1:123:stateMachine:test')

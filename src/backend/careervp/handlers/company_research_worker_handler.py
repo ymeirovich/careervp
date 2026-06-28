@@ -25,7 +25,7 @@ from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.company_research import research_company
-from careervp.logic.company_research_store import write_cr_artifact
+from careervp.logic.company_research_store import write_cr_artifact, write_cr_failed
 from careervp.models.company import CompanyResearchRequest, CompanyResearchResult, ResearchSource
 
 _DEFAULT_CR_CONFIDENCE_THRESHOLD = 0.85
@@ -171,6 +171,7 @@ def _hard_fail(input_data: CRWorkerInput, cause: str) -> None:
     """
     logger.error('CR hard-fail after max retries', user_id=input_data.user_id, job_id=input_data.job_id, cause=cause)
     try:
+        write_cr_failed(application_id=input_data.job_id, user_id=input_data.user_id)
         app_repo = _get_app_repo()
         app_repo.set_company_research_error(
             application_id=input_data.job_id,

@@ -5,7 +5,6 @@ Follows Handler -> Logic -> DAL pattern per AGENTS.md.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import uuid
@@ -23,9 +22,8 @@ from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.cancellation import CancelStatus, cancel_artifact
-from careervp.logic.company_research import research_company
-from careervp.logic.company_research_store import read_cr_artifact, write_cr_artifact
-from careervp.models.company import CompanyResearchRequest, CompanyResearchResult
+from careervp.logic.company_research_store import read_cr_artifact, write_cr_processing
+from careervp.models.company import CompanyResearchRequest
 from careervp.models.result import Result, ResultCode
 
 COMPANY_RESEARCH_ARTIFACT_PREFIX = 'ARTIFACT#COMPANY_RESEARCH#'
@@ -187,36 +185,44 @@ def _fetch_company_research(event: dict[str, Any]) -> dict[str, Any]:
         )
 
     job_id = _coerce_str(raw_payload.get('job_id')) or str(uuid.uuid4())
+    request = request_result.data
+
+    # FE-UI-053: enqueue the async worker instead of running research on the request
+    # path. The worker (company_research_worker_handler) consumes this message, runs
+    # research_company(), applies the confidence gate, and writes the terminal row.
+    message_body = {
+        'user_id': user_id,
+        'job_id': job_id,
+        'application_id': job_id,
+        'company_name': _coerce_str(raw_payload.get('company_name')) or _coerce_str(request.company_name),
+        'job_posting_url': _coerce_str(raw_payload.get('url')) or _coerce_str(request.job_posting_url),
+        'domain': _coerce_str(raw_payload.get('domain')),
+    }
+
+    queue_url = os.environ.get('COMPANY_RESEARCH_QUEUE_URL', '').strip()
+    if not queue_url:
+        logger.error('COMPANY_RESEARCH_QUEUE_URL not configured; cannot enqueue CR job')
+        metrics.add_metric(name='CompanyResearchFailures', unit=MetricUnit.Count, value=1)
+        return _build_response(
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+            {'error': 'Company research queue not configured', 'code': ResultCode.INVALID_INPUT},
+        )
+
     try:
-        research_result = asyncio.run(research_company(request_result.data))
-    except Exception as exc:
-        logger.warning('Company research execution failed', error=str(exc))
-        research_result = Result(success=False, error=str(exc), code=ResultCode.ALL_SOURCES_FAILED)
+        boto3.client('sqs').send_message(QueueUrl=queue_url, MessageBody=json.dumps(message_body, default=str))
+    except ClientError as exc:
+        logger.warning('Company research enqueue failed', error=str(exc), job_id=job_id)
+        metrics.add_metric(name='CompanyResearchFailures', unit=MetricUnit.Count, value=1)
+        return _build_response(
+            HTTPStatus.SERVICE_UNAVAILABLE,
+            {'error': 'Failed to enqueue company research', 'code': ResultCode.ALL_SOURCES_FAILED},
+        )
+
+    # FE-UI-053: write a processing placeholder so GET can report progress and the
+    # frontend poll (and any reload/navigation) reconnects to the in-flight job.
+    write_cr_processing(application_id=job_id, user_id=user_id)
 
     company_research_id = f'comp-res-{uuid.uuid4()}'
-    threshold = _get_cr_confidence_threshold()
-    is_confident = research_result.success and research_result.data is not None and research_result.data.confidence_score >= threshold
-    if is_confident and research_result.data is not None:
-        metrics.add_metric(name='CompanyResearchSuccess', unit=MetricUnit.Count, value=1)
-        metrics.add_metric(
-            name=f'ResearchSource_{research_result.data.source.value.upper()}',
-            unit=MetricUnit.Count,
-            value=1,
-        )
-        _persist_company_research_item(user_id=user_id, job_id=job_id, result=research_result.data)
-    else:
-        # FE-UI-041: never persist sub-threshold or failed research. A sub-threshold result is
-        # treated the same as a failed run — no artifact is written.
-        if research_result.success and research_result.data is not None:
-            logger.warning(
-                'CR below confidence threshold, not persisted',
-                confidence=research_result.data.confidence_score,
-                threshold=threshold,
-                source=research_result.data.source.value,
-                job_id=job_id,
-            )
-        metrics.add_metric(name='CompanyResearchFailures', unit=MetricUnit.Count, value=1)
-
     return _build_response(
         HTTPStatus.ACCEPTED,
         {
@@ -268,6 +274,12 @@ def get_company_research(event: dict[str, Any]) -> dict[str, Any]:
     # FE-UI-041: a missing CR is explicit, never fabricated.
     if item is None:
         return _build_response(HTTPStatus.OK, {'status': 'not_generated', 'company_research': None})
+
+    # FE-UI-053: an in-flight job has a processing placeholder row. Report progress so
+    # the frontend keeps polling (and reconnects after reload/navigation).
+    item_status = str(item.get('status') or item.get('artifact_status') or '').strip().lower()
+    if item_status == 'processing':
+        return _build_response(HTTPStatus.OK, {'status': 'processing', 'company_research': None})
 
     # FE-UI-041: sub-threshold / failed research is never served as completed.
     if not _is_confident_cr(item):
@@ -512,29 +524,6 @@ def _coerce_list_of_strings(value: Any) -> list[str]:
         return []
     normalized = [str(entry).strip() for entry in value if str(entry).strip()]
     return normalized
-
-
-def _map_result_code_to_status(code: str | None) -> HTTPStatus:
-    """Map Result code strings to HTTP status codes."""
-    mapping = {
-        ResultCode.RESEARCH_COMPLETE: HTTPStatus.OK,
-        ResultCode.SUCCESS: HTTPStatus.OK,
-        ResultCode.INVALID_INPUT: HTTPStatus.BAD_REQUEST,
-        ResultCode.SCRAPE_FAILED: HTTPStatus.PARTIAL_CONTENT,
-        ResultCode.SEARCH_FAILED: HTTPStatus.PARTIAL_CONTENT,
-        ResultCode.ALL_SOURCES_FAILED: HTTPStatus.SERVICE_UNAVAILABLE,
-        ResultCode.TIMEOUT: HTTPStatus.GATEWAY_TIMEOUT,
-        ResultCode.LLM_API_ERROR: HTTPStatus.BAD_GATEWAY,
-    }
-    if code in mapping:
-        return mapping[code]
-    if code is None:
-        return HTTPStatus.OK
-    return HTTPStatus.INTERNAL_SERVER_ERROR
-
-
-def _persist_company_research_item(user_id: str, job_id: str, result: CompanyResearchResult) -> None:
-    write_cr_artifact(application_id=job_id, user_id=user_id, result=result)
 
 
 def _get_cr_confidence_threshold() -> float:

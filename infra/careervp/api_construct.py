@@ -2092,6 +2092,17 @@ class ApiConstruct(Construct):
         self.artifact_chain.state_machine.grant_task_response(
             self.company_research_worker_func
         )
+
+        # FE-UI-053: the CR API handler enqueues research jobs onto the worker queue
+        # instead of running research synchronously on the request path. Grant only
+        # sqs:SendMessage scoped to the CR queue (no wildcard — FE-UI-035 invariant).
+        self.api_db.company_research_queue.grant_send_messages(
+            self.company_research_func
+        )
+        self.company_research_func.add_environment(
+            "COMPANY_RESEARCH_QUEUE_URL",
+            self.api_db.company_research_queue.queue_url,
+        )
         self.artifact_chain.state_machine.grant_task_response(self.vpr_sqs_worker_func)
         self.artifact_chain.state_machine.grant_task_response(
             self.cover_letter_worker_func

@@ -17,6 +17,9 @@ COMPANY_RESEARCH_ARTIFACT_TYPE = 'company_research'
 COMPANY_RESEARCH_ARTIFACT_PREFIX = 'ARTIFACT#COMPANY_RESEARCH#'
 LEGACY_COMPANY_RESEARCH_PREFIX = 'COMPANY_RESEARCH#'
 
+# FE-UI-053: terminal statuses whose rows write_cr_processing must never clobber.
+_TERMINAL_CR_STATUSES = {'completed', 'failed'}
+
 
 def cr_artifact_key(application_id: str) -> dict[str, str]:
     """Build the canonical artifacts-table key for a Company Research artifact."""
@@ -73,6 +76,119 @@ def write_cr_artifact(application_id: str, user_id: str, result: CompanyResearch
             table_name=table_name,
             error=str(exc),
         )
+
+
+def write_cr_processing(application_id: str, user_id: str) -> None:
+    """FE-UI-053 R2: upsert a `processing` placeholder row for an enqueued CR job.
+
+    Idempotent and terminal-safe: writes only when no row exists or the existing
+    row is non-terminal (e.g. ``not_generated`` or a prior ``processing``). A row
+    that already holds research data or a terminal status (``completed``/``failed``)
+    is never overwritten, so a worker result always wins over a re-POST.
+    """
+    clean_application_id = application_id.strip()
+    clean_user_id = user_id.strip()
+    if not clean_application_id or not clean_user_id:
+        logger.warning('Company Research processing-row skipped: missing application/user id')
+        return
+
+    table_name = _artifacts_table_name()
+    if table_name is None:
+        logger.warning('Company Research processing-row skipped: ARTIFACTS_TABLE_NAME not configured')
+        return
+
+    if _has_terminal_cr_row(table_name=table_name, application_id=clean_application_id):
+        logger.info(
+            'Company Research processing-row skipped: terminal row already present',
+            application_id=clean_application_id,
+        )
+        return
+
+    item: dict[str, Any] = {
+        **cr_artifact_key(clean_application_id),
+        'artifactType': COMPANY_RESEARCH_ARTIFACT_TYPE,
+        'user_id': clean_user_id,
+        'job_id': clean_application_id,
+        'company_research_id': clean_application_id,
+        'status': 'processing',
+        'created_at': _utc_now_iso(),
+    }
+
+    try:
+        _table(table_name).put_item(Item=item)
+    except ClientError as exc:
+        logger.warning(
+            'Company Research processing-row persistence failed',
+            application_id=clean_application_id,
+            table_name=table_name,
+            error=str(exc),
+        )
+
+
+def write_cr_failed(application_id: str, user_id: str) -> None:
+    """FE-UI-053 R6: write a `failed` terminal row unconditionally.
+
+    Always overwrites any existing row (including a `processing` placeholder)
+    so GET correctly reports failure after a hard-fail instead of staying stuck
+    on `processing` forever.
+    """
+    clean_application_id = application_id.strip()
+    clean_user_id = user_id.strip()
+    if not clean_application_id or not clean_user_id:
+        logger.warning('Company Research failed-row skipped: missing application/user id')
+        return
+
+    table_name = _artifacts_table_name()
+    if table_name is None:
+        logger.warning('Company Research failed-row skipped: ARTIFACTS_TABLE_NAME not configured')
+        return
+
+    item: dict[str, Any] = {
+        **cr_artifact_key(clean_application_id),
+        'artifactType': COMPANY_RESEARCH_ARTIFACT_TYPE,
+        'user_id': clean_user_id,
+        'job_id': clean_application_id,
+        'company_research_id': clean_application_id,
+        'status': 'failed',
+        'created_at': _utc_now_iso(),
+    }
+
+    try:
+        _table(table_name).put_item(Item=item)
+    except ClientError as exc:
+        logger.warning(
+            'Company Research failed-row persistence failed',
+            application_id=clean_application_id,
+            table_name=table_name,
+            error=str(exc),
+        )
+
+
+def _has_terminal_cr_row(table_name: str, application_id: str) -> bool:
+    """Return True when an existing CR row is terminal and must not be overwritten."""
+    try:
+        response = _table(table_name).get_item(Key=cr_artifact_key(application_id))
+    except ClientError as exc:
+        _log_read_error('canonical', table_name=table_name, application_id=application_id, error=exc)
+        return False
+
+    item = response.get('Item') if isinstance(response, dict) else None
+    if not isinstance(item, dict):
+        return False
+
+    status = str(item.get('status') or '').strip().lower()
+    if status in _TERMINAL_CR_STATUSES:
+        return True
+    if status in {'processing', 'not_generated'}:
+        return False
+    # No explicit status: a worker-written row carries research data → terminal.
+    return item.get('research_data') is not None or item.get('confidence_score') is not None
+
+
+def _utc_now_iso() -> str:
+    from datetime import datetime
+
+    return datetime.now(timezone.utc).isoformat()
 
 
 def read_cr_artifact(application_id: str, user_id: str, table_name: str | None = None) -> dict[str, Any] | None:
@@ -199,4 +315,4 @@ def _log_read_error(kind: str, *, table_name: str, application_id: str, error: C
     )
 
 
-__all__ = ['cr_artifact_key', 'read_cr_artifact', 'write_cr_artifact']
+__all__ = ['cr_artifact_key', 'read_cr_artifact', 'write_cr_artifact', 'write_cr_failed', 'write_cr_processing']
