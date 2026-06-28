@@ -517,21 +517,22 @@ def test_handler_stores_ats_result_in_artifact(monkeypatch: pytest.MonkeyPatch) 
     mock_dal._get_db_handler.return_value = mock_table
 
     with patch.object(handler_module, 'DynamoDalHandler', return_value=mock_dal):
-        with patch.object(handler_module, 'JobsRepository') as mock_jobs_cls:
-            mock_jobs_cls.return_value.get_job.return_value = {
-                'description': 'Python engineer with AWS experience.',
-                'title': 'Senior Engineer',
-            }
-            with patch.object(handler_module, 'LLMClient'):
-                with patch.object(handler_module, 'run_cv_tailoring_pipeline', return_value=pipeline_result):
-                    with patch.object(handler_module, 'compute_ats_result', return_value=mock_ats):
-                        with patch.object(handler_module, '_update_application_artifact'):
-                            handler_module._handle_openapi_async_generate(
-                                event={},
-                                request_data={'cv_id': 'cv-123', 'job_id': 'job-456'},
-                                headers={},
-                                user_id='user-789',
-                            )
+        with patch.object(handler_module, 'resolve_handler_dependencies', return_value=MagicMock(status='ready', resolved_upstream={})):
+            with patch.object(handler_module, 'JobsRepository') as mock_jobs_cls:
+                mock_jobs_cls.return_value.get_job.return_value = {
+                    'description': 'Python engineer with AWS experience.',
+                    'title': 'Senior Engineer',
+                }
+                with patch.object(handler_module, 'LLMClient'):
+                    with patch.object(handler_module, 'run_cv_tailoring_pipeline', return_value=pipeline_result):
+                        with patch.object(handler_module, 'compute_ats_result', return_value=mock_ats):
+                            with patch.object(handler_module, '_update_application_artifact'):
+                                handler_module._handle_openapi_async_generate(
+                                    event={},
+                                    request_data={'cv_id': 'cv-123', 'job_id': 'job-456'},
+                                    headers={},
+                                    user_id='user-789',
+                                )
 
     artifact = mock_table.put_item.call_args.kwargs['Item']
     assert 'ats_result' in artifact, f"Artifact must contain 'ats_result' — P7-E not implemented. Keys: {list(artifact.keys())}"

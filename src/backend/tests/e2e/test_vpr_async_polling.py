@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import time
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -107,6 +107,26 @@ def _status_event(vpr_id: str, user_id: str = 'user-123') -> dict[str, Any]:
     }
 
 
+def _confident_cr_artifact() -> Any:
+    from careervp.logic.company_research import ConfidentCompanyResearch
+    from careervp.models.job import CompanyContext
+
+    return ConfidentCompanyResearch(
+        company_context=CompanyContext(
+            company_name='ExampleCo',
+            overview='ExampleCo builds workflow software for enterprise teams.',
+            values=['Customer focus'],
+            strategic_priorities=['Improve operational AI adoption'],
+            recent_news=['Announced a workflow automation release'],
+            key_products=['Workflow automation platform'],
+            key_executives=['Alex Example'],
+            growth_signals=['Expanding enterprise adoption'],
+        ),
+        company_research_id='cr-vpr-async-e2e',
+        company_research_at='2026-06-14T09:05:00+00:00',
+    )
+
+
 def _poll_until_terminal(
     status_handler: Any,
     event: dict[str, Any],
@@ -140,8 +160,8 @@ def vpr_async_test_env(monkeypatch: pytest.MonkeyPatch) -> None:
     import careervp.handlers.vpr_status_handler as vpr_status_handler
     import careervp.handlers.vpr_submit_handler as vpr_submit_handler
 
-    vpr_submit_handler._auth_service = None
-    vpr_status_handler._auth_service = None
+    cast(Any, vpr_submit_handler)._auth_service = None
+    cast(Any, vpr_status_handler)._auth_service = None
 
 
 def test_submit_vpr_job_returns_202() -> None:
@@ -152,6 +172,7 @@ def test_submit_vpr_job_returns_202() -> None:
     with (
         patch('careervp.handlers.vpr_submit_handler.JobsRepository', return_value=fake_repo),
         patch('careervp.handlers.vpr_submit_handler.uuid.uuid4', return_value='vpr-job-202'),
+        patch('careervp.handlers.vpr_submit_handler.load_confident_company_research_artifact', return_value=_confident_cr_artifact()),
         patch('careervp.handlers.vpr_submit_handler.sqs.send_message', return_value={'MessageId': 'msg-1'}),
     ):
         response = submit_handler(_submit_event(), _lambda_context())
@@ -173,6 +194,7 @@ def test_poll_vpr_status_pending_to_completed() -> None:
         patch('careervp.handlers.vpr_submit_handler.JobsRepository', return_value=fake_repo),
         patch('careervp.handlers.vpr_status_handler.JobsRepository', return_value=fake_repo),
         patch('careervp.handlers.vpr_submit_handler.uuid.uuid4', return_value='vpr-job-lifecycle'),
+        patch('careervp.handlers.vpr_submit_handler.load_confident_company_research_artifact', return_value=_confident_cr_artifact()),
         patch('careervp.handlers.vpr_submit_handler.sqs.send_message', return_value={'MessageId': 'msg-2'}),
     ):
         submit_response = submit_handler(_submit_event(), _lambda_context())
@@ -204,6 +226,7 @@ def test_poll_vpr_status_handles_errors() -> None:
         patch('careervp.handlers.vpr_submit_handler.JobsRepository', return_value=fake_repo),
         patch('careervp.handlers.vpr_status_handler.JobsRepository', return_value=fake_repo),
         patch('careervp.handlers.vpr_submit_handler.uuid.uuid4', return_value='vpr-job-failed'),
+        patch('careervp.handlers.vpr_submit_handler.load_confident_company_research_artifact', return_value=_confident_cr_artifact()),
         patch('careervp.handlers.vpr_submit_handler.sqs.send_message', return_value={'MessageId': 'msg-3'}),
     ):
         submit_response = submit_handler(_submit_event(), _lambda_context())
@@ -233,6 +256,7 @@ def test_vpr_timeout_handling() -> None:
         patch('careervp.handlers.vpr_submit_handler.JobsRepository', return_value=fake_repo),
         patch('careervp.handlers.vpr_status_handler.JobsRepository', return_value=fake_repo),
         patch('careervp.handlers.vpr_submit_handler.uuid.uuid4', return_value='vpr-job-timeout'),
+        patch('careervp.handlers.vpr_submit_handler.load_confident_company_research_artifact', return_value=_confident_cr_artifact()),
         patch('careervp.handlers.vpr_submit_handler.sqs.send_message', return_value={'MessageId': 'msg-4'}),
     ):
         submit_response = submit_handler(_submit_event(), _lambda_context())

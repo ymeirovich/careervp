@@ -319,7 +319,7 @@ class TestVPRPipelineContract:
         mock_dal_with_no_existing_vpr: MagicMock,
         llm_phase2_response: dict[str, Any],
     ) -> None:
-        from careervp.logic.prompts.vpr_prompt import PHASE2_SYSTEM_PROMPT
+        from careervp.logic.prompts.vpr_prompt import build_phase2_system_prompt
         from careervp.logic.vpr_generator import EvidenceList, VPRSixStagePipeline
 
         mock_llm = MagicMock()
@@ -343,4 +343,4 @@ class TestVPRPipelineContract:
 
         mock_llm.invoke.assert_called_once()
         invoke_kwargs = mock_llm.invoke.call_args.kwargs
-        assert invoke_kwargs.get('system_prompt') == PHASE2_SYSTEM_PROMPT
+        assert invoke_kwargs.get('system_prompt') == build_phase2_system_prompt()

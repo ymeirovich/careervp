@@ -217,7 +217,11 @@ async def test_second_company_with_ambiguous_name_degrades(canonical_store_env: 
     ):
         await _async_process_record(input_data, receive_count=3)
 
-    assert read_cr_artifact(application_id='app-2', user_id='user-1') is None
+    # FE-UI-053 R6: a hard-fail writes a terminal `failed` row (so GET reports
+    # failure) rather than leaving no row — but it must not be a usable artifact.
+    failed_row = read_cr_artifact(application_id='app-2', user_id='user-1')
+    assert failed_row is not None
+    assert failed_row['status'] == 'failed'
     app_repo.set_company_research_error.assert_called_once_with(application_id='app-2', user_id='user-1', error=True)
     app_repo.update_artifact_status.assert_called_once_with(
         application_id='app-2',

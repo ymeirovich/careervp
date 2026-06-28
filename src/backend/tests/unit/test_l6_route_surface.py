@@ -10,13 +10,15 @@ Results: docs/beta/execution_results/L6_4_results.md
 
 import json
 import os
+from pathlib import Path
 
 import pytest
 
-CANONICAL_ROUTES_PATH = '/Users/yitzchak/Documents/dev/careervp/docs/beta/canonical_routes.md'
-FROZEN_SPEC_PATH = '/Users/yitzchak/Documents/dev/careervp/docs/beta/evidence/I7_routes/frozen_spec.json'
-ROUTE_DIFF_PATH = '/Users/yitzchak/Documents/dev/careervp/docs/beta/evidence/I7_routes/route-surface-diff.txt'
-API_CONSTRUCT_PATH = '/Users/yitzchak/Documents/dev/careervp/infra/careervp/api_construct.py'
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+CANONICAL_ROUTES_PATH = str(_REPO_ROOT / 'docs/beta/canonical_routes.md')
+FROZEN_SPEC_PATH = str(_REPO_ROOT / 'docs/beta/evidence/I7_routes/frozen_spec.json')
+ROUTE_DIFF_PATH = str(_REPO_ROOT / 'docs/beta/evidence/I7_routes/route-surface-diff.txt')
+API_CONSTRUCT_PATH = str(_REPO_ROOT / 'infra/careervp/api_construct.py')
 
 EXPECTED_ROUTE_COUNT = 31
 

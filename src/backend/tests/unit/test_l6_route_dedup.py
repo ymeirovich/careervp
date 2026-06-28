@@ -15,7 +15,8 @@ from pathlib import Path
 
 import pytest
 
-INFRA_DIR = '/Users/yitzchak/Documents/dev/careervp/infra'
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+INFRA_DIR = str(_REPO_ROOT / 'infra')
 API_CONSTRUCT_PATH = f'{INFRA_DIR}/careervp/api_construct.py'
 EXPECTED_CANONICAL_ROUTE_COUNT = 40
 # Phase 1 of FE-UI-048: auth/users/gap-analysis/billing are proxy-collapsed; all
@@ -23,7 +24,7 @@ EXPECTED_CANONICAL_ROUTE_COUNT = 40
 # remove {paramId} siblings before adding {proxy+}).
 EXPECTED_EXPLICIT_ROUTE_COUNT = 43
 EXPECTED_PROXY_PREFIX_COUNT = 4
-FROZEN_SPEC_PATH = '/Users/yitzchak/Documents/dev/careervp/docs/beta/evidence/I7_routes/frozen_spec.json'
+FROZEN_SPEC_PATH = str(_REPO_ROOT / 'docs/beta/evidence/I7_routes/frozen_spec.json')
 
 # Deprecated route prefixes that must not appear in CDK
 DEPRECATED_PREFIXES = ['/api/cv', '/api/jobs', '/api/users', '/api/vpr', '/api/']

@@ -168,8 +168,8 @@ class TestLLMRouter:
             user_prompt='User',
         )
 
-        # Haiku: 1000 input * 0.25/1M + 1000 output * 1.25/1M = $0.0015
-        expected_cost = (1000 / 1_000_000) * 0.25 + (1000 / 1_000_000) * 1.25
+        # Haiku: 1000 input * 1.0/1M + 1000 output * 5.0/1M = $0.006
+        expected_cost = (1000 / 1_000_000) * 1.0 + (1000 / 1_000_000) * 5.0
         assert result.data is not None
         assert result.data['cost'] == pytest.approx(expected_cost)
 

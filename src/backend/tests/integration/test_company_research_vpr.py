@@ -38,10 +38,26 @@ def aws_env() -> Iterator[None]:
     patcher.setenv('POWERTOOLS_SERVICE_NAME', 'careervp-test')
     patcher.setenv('LOG_LEVEL', 'INFO')
     patcher.setenv('ENV', 'local')
+    patcher.setenv('COMPANY_RESEARCH_QUEUE_URL', 'https://sqs.us-east-1.amazonaws.com/123456789012/cr-queue')
     try:
         yield
     finally:
         patcher.undo()
+
+
+@pytest.fixture
+def mock_company_research_enqueue(monkeypatch: pytest.MonkeyPatch) -> Iterator[MagicMock]:
+    """Mock async Company Research enqueue side effects for handler integration tests."""
+    monkeypatch.setenv('COMPANY_RESEARCH_QUEUE_URL', 'https://sqs.us-east-1.amazonaws.com/123456789012/cr-queue')
+    mock_sqs = MagicMock()
+    mock_sqs.send_message.return_value = {'MessageId': 'mock-cr-message'}
+    with (
+        patch('careervp.handlers.company_research_handler.boto3') as mock_boto3,
+        patch('careervp.handlers.company_research_handler.write_cr_processing') as mock_write_processing,
+    ):
+        mock_boto3.client.return_value = mock_sqs
+        mock_write_processing.return_value = None
+        yield mock_sqs
 
 
 @pytest.fixture(scope='function')
@@ -287,6 +303,7 @@ class TestCompanyResearchFlow:
         mock_get_router: MagicMock,
         mock_scrape: AsyncMock,
         aws_env: None,
+        mock_company_research_enqueue: MagicMock,
     ) -> None:
         """Test successful company research using website scrape as primary source."""
         mock_scrape.return_value = Result(
@@ -312,6 +329,7 @@ class TestCompanyResearchFlow:
             # Async response: returns request_id and status
             assert 'request_id' in body
             assert body['status'] == 'processing'
+            mock_company_research_enqueue.send_message.assert_called_once()
         else:
             # Sync response: returns full company research
             assert body['company_name'] == 'TechCo'
@@ -329,6 +347,7 @@ class TestCompanyResearchFlow:
         mock_search: AsyncMock,
         mock_scrape: AsyncMock,
         aws_env: None,
+        mock_company_research_enqueue: MagicMock,
     ) -> None:
         """Test fallback to web search when website scrape fails."""
         mock_scrape.return_value = Result(
@@ -396,6 +415,7 @@ class TestCompanyResearchFlow:
             # Async response: returns request_id and status
             assert 'request_id' in body
             assert body['status'] == 'processing'
+            mock_company_research_enqueue.send_message.assert_called_once()
         else:
             # Sync response: verify source
             assert body['source'] == 'web_search'
@@ -410,6 +430,7 @@ class TestCompanyResearchFlow:
         mock_search: AsyncMock,
         mock_scrape: AsyncMock,
         aws_env: None,
+        mock_company_research_enqueue: MagicMock,
     ) -> None:
         """Test LLM fallback when both scrape and search fail."""
         mock_scrape.return_value = Result(
@@ -447,6 +468,7 @@ class TestCompanyResearchFlow:
             # Async response: returns request_id and status
             assert 'request_id' in body
             assert body['status'] == 'processing'
+            mock_company_research_enqueue.send_message.assert_called_once()
         else:
             # Sync response: returns full company research
             assert body['source'] == 'llm_fallback'
@@ -473,6 +495,7 @@ class TestCompanyResearchFlow:
         mock_search: AsyncMock,
         mock_scrape: AsyncMock,
         aws_env: None,
+        mock_company_research_enqueue: MagicMock,
     ) -> None:
         """Test 503 when all research sources fail and no job posting for fallback."""
         mock_scrape.return_value = Result(
@@ -501,6 +524,7 @@ class TestCompanyResearchFlow:
             # Async response: returns request_id and status
             assert 'request_id' in body
             assert body['status'] == 'processing'
+            mock_company_research_enqueue.send_message.assert_called_once()
 
 
 class TestVPRGenerationFlow:
@@ -615,6 +639,7 @@ class TestCompanyResearchVPRIntegration:
         mock_research_router: MagicMock,
         mock_scrape: AsyncMock,
         dynamodb_table: Table,
+        mock_company_research_enqueue: MagicMock,
     ) -> None:
         """Test complete flow: research company then generate VPR using company data."""
         _seed_user_cv(dynamodb_table, 'user-123')
@@ -645,6 +670,7 @@ class TestCompanyResearchVPRIntegration:
             # Async response: returns request_id and status
             assert 'request_id' in research_body
             assert research_body['status'] == 'processing'
+            mock_company_research_enqueue.send_message.assert_called_once()
         else:
             # Sync response: verify source
             assert research_body['source'] == 'website_scrape'
@@ -672,6 +698,7 @@ class TestCompanyResearchVPRIntegration:
         mock_get_router: MagicMock,
         mock_scrape: AsyncMock,
         aws_env: None,
+        mock_company_research_enqueue: MagicMock,
     ) -> None:
         """Verify company research response contains all expected fields."""
         mock_scrape.return_value = Result(
@@ -697,6 +724,7 @@ class TestCompanyResearchVPRIntegration:
             # Async response: returns request_id and status
             assert 'request_id' in body
             assert body['status'] == 'processing'
+            mock_company_research_enqueue.send_message.assert_called_once()
         else:
             # Sync response: verify all required fields
             required_fields = [

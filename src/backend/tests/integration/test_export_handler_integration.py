@@ -54,6 +54,9 @@ def export_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv('ARTIFACTS_BUCKET_NAME', ARTIFACTS_BUCKET)
     monkeypatch.setenv('ARTIFACTS_TABLE_NAME', ARTIFACTS_TABLE)
     monkeypatch.setenv('TABLE_NAME', MAIN_TABLE)
+    # _read_cv_tailored prefers DYNAMODB_TABLE_NAME; pin it so the test stays
+    # hermetic regardless of env left behind by earlier integration modules.
+    monkeypatch.setenv('DYNAMODB_TABLE_NAME', MAIN_TABLE)
     monkeypatch.setenv('ALLOWED_ORIGINS', ALLOWED_ORIGIN)
     monkeypatch.setattr('careervp.handlers.cors_utils._ALLOWED_ORIGINS', {ALLOWED_ORIGIN})
 
@@ -138,7 +141,7 @@ def test_cover_letter_docx_full_event_returns_200(aws_resources: dict[str, Any])
     aws_resources['artifacts_table'].put_item(
         Item={
             'applicationId': USER_ID,
-            'artifactId': JOB_ID,
+            'artifactId': f'ARTIFACT#COVER_LETTER#{JOB_ID}',
             'cover_letter': {'full_text': 'Dear Hiring Manager, I am thrilled to apply...'},
         }
     )
@@ -191,6 +194,7 @@ def test_cv_tailored_docx_full_event_returns_200(aws_resources: dict[str, Any]) 
         Item={
             'pk': USER_ID,
             'sk': f'ARTIFACT#CV_TAILORED#{JOB_ID}',
+            'job_id': JOB_ID,
             'cv_sections': {'experience': 'Senior Engineer at Acme Corp.', 'skills': 'Python, Go'},
             'tailored_cv': 'Experienced backend engineer targeting cloud roles.',
         }

@@ -10,6 +10,7 @@ Results: docs/beta/execution_results/L1_2_results.md
 
 import os
 import subprocess
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -20,7 +21,7 @@ os.environ.setdefault('AWS_DEFAULT_REGION', 'us-east-1')
 os.environ.setdefault('DYNAMODB_TABLE_NAME', 'careervp-users-table-test')
 os.environ.setdefault('ENVIRONMENT', 'test')
 
-BACKEND_DIR = '/Users/yitzchak/Documents/dev/careervp/src/backend'
+BACKEND_DIR = str(Path(__file__).resolve().parents[2])
 
 
 @pytest.fixture

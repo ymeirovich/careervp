@@ -63,6 +63,7 @@ def test_cover_letter_submit_handler_validates_and_queues_with_sqs_queue_url() -
     with (
         patch.object(module, 'sqs') as mock_sqs,
         patch.object(module, 'dynamodb_resource') as mock_dynamo,
+        patch.object(module, 'resolve_handler_dependencies', return_value=MagicMock(status='ready', resolved_upstream={})),
     ):
         mock_dynamo.Table.return_value = mock_table
         response = module.lambda_handler(event, context)
@@ -93,6 +94,7 @@ def test_interview_prep_submit_handler_validates_and_queues_with_sqs_queue_url()
     with (
         patch.object(module, 'sqs') as mock_sqs,
         patch.object(module, 'dynamodb_resource') as mock_dynamo,
+        patch.object(module, 'resolve_handler_dependencies', return_value=MagicMock(status='ready', resolved_upstream={})),
     ):
         mock_dynamo.Table.return_value = mock_table
         response = module.lambda_handler(event, context)
@@ -184,6 +186,7 @@ def test_interview_prep_submit_handler_marks_failed_with_artifacts_keys_on_sqs_e
     with (
         patch.object(module, 'sqs') as mock_sqs,
         patch.object(module, 'dynamodb_resource') as mock_dynamo,
+        patch.object(module, 'resolve_handler_dependencies', return_value=MagicMock(status='ready', resolved_upstream={})),
     ):
         mock_sqs.send_message.side_effect = sqs_error
         mock_dynamo.Table.return_value = mock_table

@@ -30,6 +30,12 @@ PUBLIC_ROUTES = {
     ('POST', '/auth/login'),
     ('POST', '/auth/refresh'),
     ('POST', '/billing/webhook'),
+    ('POST', '/errors'),
+}
+
+PUBLIC_PROXY_ROUTES = {
+    ('ANY', '/auth'),
+    ('ANY', '/auth/{proxy+}'),
 }
 
 
@@ -99,6 +105,33 @@ def _method_records(template: Template) -> list[dict[str, Any]]:
     return records
 
 
+def _method_matches(record_method: object, target_method: str) -> bool:
+    return record_method in {target_method, 'ANY'}
+
+
+def _proxy_covers_path(proxy_path: str, target_path: str) -> bool:
+    if not proxy_path.endswith('/{proxy+}'):
+        return False
+    prefix = proxy_path[: -len('/{proxy+}')]
+    return target_path.startswith(f'{prefix}/')
+
+
+def _matching_route_records(methods: list[dict[str, Any]], target_method: str, target_path: str) -> list[dict[str, Any]]:
+    exact_matches = [m for m in methods if _method_matches(m['http_method'], target_method) and m['path'] == target_path]
+    if exact_matches:
+        return exact_matches
+    return [
+        m
+        for m in methods
+        if _method_matches(m['http_method'], target_method) and isinstance(m['path'], str) and _proxy_covers_path(m['path'], target_path)
+    ]
+
+
+def _is_public_route_record(method: dict[str, Any]) -> bool:
+    method_key = (method['http_method'], method['path'])
+    return method_key in PUBLIC_ROUTES or method_key in PUBLIC_PROXY_ROUTES
+
+
 def test_cognito_authorizer_resource_created() -> None:
     template = _template()
     authorizers = template.find_resources('AWS::ApiGateway::Authorizer')
@@ -119,7 +152,7 @@ def test_public_routes_are_unauthenticated() -> None:
     template = _template()
     methods = _method_records(template)
     for public_method, public_path in PUBLIC_ROUTES:
-        matches = [m for m in methods if m['http_method'] == public_method and m['path'] == public_path]
+        matches = _matching_route_records(methods, public_method, public_path)
         assert matches, f'missing route {public_method} {public_path}'
         assert all(m['authorization_type'] == 'NONE' for m in matches)
 
@@ -128,9 +161,7 @@ def test_protected_routes_use_cognito_auth() -> None:
     template = _template()
     methods = _method_records(template)
     protected = [
-        m
-        for m in methods
-        if m['http_method'] != 'OPTIONS' and m['path'] and not m['path'].startswith('/swagger') and (m['http_method'], m['path']) not in PUBLIC_ROUTES
+        m for m in methods if m['http_method'] != 'OPTIONS' and m['path'] and not m['path'].startswith('/swagger') and not _is_public_route_record(m)
     ]
     assert protected
     assert all(m['authorization_type'] == 'COGNITO_USER_POOLS' for m in protected)

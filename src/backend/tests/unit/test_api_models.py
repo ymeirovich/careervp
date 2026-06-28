@@ -120,15 +120,17 @@ def test_register_request_requires_email_password_name() -> None:
     assert valid.email == 'person@example.com'
 
 
-def test_vpr_generate_request_requires_non_empty_gap_ids() -> None:
-    with pytest.raises(ValidationError):
-        VPRGenerateRequest.model_validate(
-            {
-                'cv_id': 'cv-123',
-                'job_id': 'job-123',
-                'gap_response_ids': [],
-            }
-        )
+def test_vpr_generate_request_allows_empty_gap_ids() -> None:
+    # Empty gap_response_ids is intentionally allowed — the frontend previously
+    # sent [] by default and the backend was updated to accept it (see commit 16a2993).
+    request = VPRGenerateRequest.model_validate(
+        {
+            'cv_id': 'cv-123',
+            'job_id': 'job-123',
+            'gap_response_ids': [],
+        }
+    )
+    assert request.gap_response_ids == []
 
 
 def test_gap_response_request_requires_responses() -> None:

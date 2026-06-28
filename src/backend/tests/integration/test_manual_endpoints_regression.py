@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import os
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -56,6 +56,18 @@ def _gap_submit_event(job_id: str = 'job-001', user_id: str = 'user-abc') -> dic
         ),
         'isBase64Encoded': False,
     }
+
+
+def _confident_cr_artifact() -> Any:
+    """A confidence-gated CR artifact so VPR submit clears its CR dependency gate."""
+    from careervp.logic.company_research import ConfidentCompanyResearch
+    from careervp.models.job import CompanyContext
+
+    return ConfidentCompanyResearch(
+        company_context=CompanyContext(company_name='Acme Corp'),
+        company_research_id='cr-001',
+        company_research_at='2026-06-28T00:00:00Z',
+    )
 
 
 def _vpr_submit_event(user_id: str = 'user-abc', cv_id: str = 'cv-1', job_id: str = 'job-001') -> dict[str, Any]:
@@ -165,6 +177,7 @@ class TestManualVPRTrigger:
         with (
             patch('careervp.handlers.vpr_submit_handler.JobsRepository', return_value=self._jobs_repo_mock()),
             patch('careervp.handlers.vpr_submit_handler.sqs', mock_sqs),
+            patch('careervp.handlers.vpr_submit_handler.load_confident_company_research_artifact', return_value=_confident_cr_artifact()),
             patch('boto3.client', return_value=mock_sfn),
         ):
             response = lambda_handler(_vpr_submit_event(), MagicMock())
@@ -187,6 +200,7 @@ class TestManualVPRTrigger:
         with (
             patch('careervp.handlers.vpr_submit_handler.JobsRepository', return_value=self._jobs_repo_mock()),
             patch('careervp.handlers.vpr_submit_handler.sqs', mock_sqs),
+            patch('careervp.handlers.vpr_submit_handler.load_confident_company_research_artifact', return_value=_confident_cr_artifact()),
             patch('boto3.client', return_value=mock_sfn),
         ):
             response = lambda_handler(_vpr_submit_event(), MagicMock())
@@ -224,76 +238,46 @@ class TestManualCRRetry:
             ),
         }
 
-    def test_manual_cr_post_succeeds_with_flag_off(self) -> None:
-        """Flag OFF: POST /company-research performs research and returns 200."""
-        from datetime import datetime, timezone
+    def test_manual_cr_post_succeeds_with_flag_off(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Flag OFF: POST /company-research enqueues the async worker and returns 202."""
+        monkeypatch.setenv('COMPANY_RESEARCH_QUEUE_URL', 'https://sqs.us-east-1.amazonaws.com/123/cr-jobs')
 
         from careervp.handlers.company_research_handler import lambda_handler
-        from careervp.models.company import CompanyResearchResult, ResearchSource
-        from careervp.models.result import Result, ResultCode
 
-        mock_cr_result = CompanyResearchResult(
-            company_name='Acme Corp',
-            overview='Acme overview',
-            values=[],
-            mission=None,
-            strategic_priorities=[],
-            recent_news=[],
-            financial_summary=None,
-            source=ResearchSource.WEBSITE_SCRAPE,
-            source_urls=['https://acme.com'],
-            confidence_score=0.9,
-            research_timestamp=datetime.now(timezone.utc),
-        )
+        mock_sqs = MagicMock()
+        mock_sqs.send_message.return_value = {'MessageId': 'cr-msg-1'}
 
         with (
-            patch('careervp.handlers.company_research_handler.research_company', new_callable=AsyncMock) as mock_research,
-            patch('careervp.handlers.company_research_handler._persist_company_research_item'),
+            patch('careervp.handlers.company_research_handler.boto3.client', return_value=mock_sqs),
+            patch('careervp.handlers.company_research_handler.write_cr_processing'),
         ):
-            mock_research.return_value = Result(success=True, data=mock_cr_result, code=ResultCode.SUCCESS)
             response = lambda_handler(self._make_cr_post_event(), MagicMock())
 
         assert response['statusCode'] == 202
         body = json.loads(response['body'])
         assert 'request_id' in body
+        mock_sqs.send_message.assert_called_once()
 
     def test_manual_cr_post_succeeds_with_flag_on(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Flag ON: manual POST /company-research still works; no SFN call."""
+        """Flag ON: manual POST /company-research still enqueues; no SFN call."""
         monkeypatch.setenv('ARTIFACT_CHAIN_ENABLED', 'true')
         monkeypatch.setenv('STEP_FUNCTIONS_CHAIN_ARN', 'arn:aws:states:us-east-1:123:stateMachine:chain')
-
-        from datetime import datetime, timezone
+        monkeypatch.setenv('COMPANY_RESEARCH_QUEUE_URL', 'https://sqs.us-east-1.amazonaws.com/123/cr-jobs')
 
         from careervp.handlers.company_research_handler import lambda_handler
-        from careervp.models.company import CompanyResearchResult, ResearchSource
-        from careervp.models.result import Result, ResultCode
 
-        mock_cr_result = CompanyResearchResult(
-            company_name='Acme Corp',
-            overview='Acme overview',
-            values=[],
-            mission=None,
-            strategic_priorities=[],
-            recent_news=[],
-            financial_summary=None,
-            source=ResearchSource.WEBSITE_SCRAPE,
-            source_urls=['https://acme.com'],
-            confidence_score=0.9,
-            research_timestamp=datetime.now(timezone.utc),
-        )
-
-        mock_sfn = MagicMock()
+        mock_client = MagicMock()
+        mock_client.send_message.return_value = {'MessageId': 'cr-msg-2'}
 
         with (
-            patch('careervp.handlers.company_research_handler.research_company', new_callable=AsyncMock) as mock_research,
-            patch('careervp.handlers.company_research_handler._persist_company_research_item'),
-            patch('boto3.client', return_value=mock_sfn),
+            patch('careervp.handlers.company_research_handler.boto3.client', return_value=mock_client),
+            patch('careervp.handlers.company_research_handler.write_cr_processing'),
         ):
-            mock_research.return_value = Result(success=True, data=mock_cr_result, code=ResultCode.SUCCESS)
             response = lambda_handler(self._make_cr_post_event(), MagicMock())
 
         assert response['statusCode'] == 202
-        mock_sfn.start_execution.assert_not_called()
+        mock_client.send_message.assert_called_once()
+        mock_client.start_execution.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

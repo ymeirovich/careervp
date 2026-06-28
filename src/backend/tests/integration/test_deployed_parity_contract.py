@@ -19,15 +19,31 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 _ROUTE_TUPLE_RE = re.compile(r'\(\s*"(?P<path>/[^"]+)"\s*,\s*"(?P<method>[A-Z]+)"\s*,\s*self\.[^)]+\)')
+# Proxy mounts forward every sub-path to a single Lambda, e.g.
+# ("/auth", self.auth_api_func, False) or ("/billing", self.billing_lambda, True).
+# Individual routes under such a prefix (e.g. POST /auth/login) are served by the
+# proxy and never appear as explicit (path, method, func) tuples.
+_PROXY_MOUNT_RE = re.compile(r'\(\s*"(?P<prefix>/[^"]+)"\s*,\s*self\.[^,]+,\s*(?:True|False)\s*\)')
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 INFRA_SOURCE = REPO_ROOT / 'infra' / 'careervp' / 'api_construct.py'
 
 
 def _load_infra_routes() -> set[tuple[str, str]]:
-    """Extract (METHOD, /path) tuples from api_construct.py."""
+    """Extract explicit (METHOD, /path) tuples from api_construct.py."""
     text = INFRA_SOURCE.read_text(encoding='utf-8')
     return {(match.group('method'), match.group('path')) for match in _ROUTE_TUPLE_RE.finditer(text)}
+
+
+def _load_infra_proxy_prefixes() -> set[str]:
+    """Extract proxy mount prefixes (e.g. /auth, /billing, /gap-analysis)."""
+    text = INFRA_SOURCE.read_text(encoding='utf-8')
+    return {match.group('prefix') for match in _PROXY_MOUNT_RE.finditer(text)}
+
+
+def _is_covered_by_proxy(path: str, prefixes: set[str]) -> bool:
+    """True if path falls under one of the proxy mount prefixes."""
+    return any(path == prefix or path.startswith(prefix + '/') for prefix in prefixes)
 
 
 # ---------------------------------------------------------------------------
@@ -114,7 +130,8 @@ class TestDeployedParityContract:
     def test_no_routes_missing_from_infra(self) -> None:
         """Every expected route must be present in the infra route map."""
         infra = _load_infra_routes()
-        missing = EXPECTED_ROUTES - infra
+        proxy_prefixes = _load_infra_proxy_prefixes()
+        missing = {(method, path) for (method, path) in (EXPECTED_ROUTES - infra) if not _is_covered_by_proxy(path, proxy_prefixes)}
         assert not missing, f'{len(missing)} expected route(s) missing from infra:\n' + '\n'.join(f'  {m} {p}' for m, p in sorted(missing))
 
     def test_no_unexpected_routes_in_infra(self) -> None:
