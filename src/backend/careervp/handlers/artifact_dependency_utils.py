@@ -116,6 +116,24 @@ def _advance_to_cr_pending(application_repo: ApplicationRepository, application_
                 raise
 
 
+def _reset_cr_artifact_status(application_repo: ApplicationRepository, application_id: str, user_id: str) -> None:
+    """Reset company_research artifact status to 'pending' when starting a fresh CR chain.
+
+    Clears any stale 'cancelled' status left by a prior cancelled run so the
+    worker's fail_if_status='cancelled' guard (FE-UI-043) does not fire on a
+    legitimate new execution.
+    """
+    try:
+        application_repo.update_artifact_status(
+            application_id=application_id,
+            user_id=user_id,
+            artifact_type='company_research',
+            status='pending',
+        )
+    except Exception:
+        pass  # non-fatal: worker proceeds; stale status handled by idempotency check
+
+
 def build_start_chain(application_repo: ApplicationRepository | None) -> Callable[..., str | None]:
     def _start_chain(*, node: str, application_id: str, user_id: str, requested_artifact: str) -> str | None:
         chain_arn = os.environ.get('STEP_FUNCTIONS_CHAIN_ARN', '').strip()
@@ -130,6 +148,7 @@ def build_start_chain(application_repo: ApplicationRepository | None) -> Callabl
                 application_repo.claim_chain_execution(application_id=application_id, user_id=user_id)
                 if node == 'company_research':
                     _advance_to_cr_pending(application_repo, application_id, user_id)
+                    _reset_cr_artifact_status(application_repo, application_id, user_id)
             except BotoClientError as exc:
                 if exc.response.get('Error', {}).get('Code') == 'ConditionalCheckFailedException':
                     return None  # Another request already holds the RUNNING lock

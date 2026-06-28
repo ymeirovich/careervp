@@ -163,6 +163,33 @@ def _enqueue_vpr_standalone(user_id: str, job_id: str, result: CompanyResearchRe
     )
 
 
+def _handle_cancel_ccf(input_data: CRWorkerInput) -> None:
+    """Handle ConditionalCheckFailedException from the cancel guard (FE-UI-043).
+
+    Signals chain success so the execution does not route to handle_cr_failure.
+    If the chain was already stopped by cancel_artifact, send_task_success raises
+    and is swallowed — the execution is gone and no UI error is needed.
+    """
+    logger.info(
+        'CR job cancelled before COMPLETED write — aborting cleanly',
+        job_id=input_data.job_id,
+        cancelled_before_persist=True,
+    )
+    try:
+        _send_chain_signal(
+            task_token=input_data.task_token,
+            job_id=input_data.job_id,
+            success=True,
+            company_context={},
+        )
+    except Exception as signal_exc:
+        logger.info(
+            'CR cancel chain signal suppressed (execution already stopped)',
+            job_id=input_data.job_id,
+            error=str(signal_exc),
+        )
+
+
 def _hard_fail(input_data: CRWorkerInput, cause: str) -> None:
     """Record CR failure on the application record without raising.
 
@@ -263,8 +290,10 @@ async def _async_process_record(input_data: CRWorkerInput, receive_count: int) -
     # CANCELLED guard (FE-UI-043 § worker_cancelled_guard): the update_artifact_status
     # write uses a conditional DynamoDB expression so that if a concurrent cancel
     # already set the artifact status to 'cancelled', this write raises
-    # ConditionalCheckFailedException.  On CCF we signal failure back to the chain
-    # (so Step Functions can mark the branch) and return cleanly — no DLQ.
+    # ConditionalCheckFailedException.  On CCF we signal success (not CRHardFail) so
+    # the chain does not route to handle_cr_failure and the UI shows no error.
+    from botocore.exceptions import ClientError as _ClientError
+
     app_repo = _get_app_repo()
     try:
         app_repo.update_artifact_status(
@@ -274,21 +303,9 @@ async def _async_process_record(input_data: CRWorkerInput, receive_count: int) -
             status='completed',
             fail_if_status='cancelled',
         )
-    except Exception as exc:
-        from botocore.exceptions import ClientError as _ClientError
-
-        if isinstance(exc, _ClientError) and exc.response['Error']['Code'] == 'ConditionalCheckFailedException':
-            logger.info(
-                'CR job cancelled before COMPLETED write — aborting cleanly',
-                job_id=input_data.job_id,
-                cancelled_before_persist=True,
-            )
-            _send_chain_signal(
-                task_token=input_data.task_token,
-                job_id=input_data.job_id,
-                success=False,
-                cause='cancelled_before_persist',
-            )
+    except _ClientError as exc:
+        if exc.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            _handle_cancel_ccf(input_data)
             return
         raise
 
