@@ -331,6 +331,70 @@ class TestTaskTokenSignal:
         assert call_kwargs['taskToken'] == 'sfn-token-xyz'
         assert call_kwargs['error'] == 'CRHardFail'
 
+    @pytest.mark.asyncio
+    async def test_cancel_ccf_sends_task_success_not_hard_fail(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When update_artifact_status raises CCF (cancelled guard), send task_success
+        so the chain does not route to handle_cr_failure and no UI error is shown."""
+        from botocore.exceptions import ClientError
+
+        monkeypatch.setenv('ARTIFACT_CHAIN_ENABLED', 'true')
+        monkeypatch.setenv('STEP_FUNCTIONS_CHAIN_ARN', 'arn:aws:states:us-east-1:123:stateMachine:test')
+
+        cr_result = _make_cr_result(ResearchSource.WEBSITE_SCRAPE, confidence=0.9)
+        input_data = _make_input(task_token='sfn-token-cancel')
+
+        mock_app_repo = MagicMock()
+        mock_app_repo.update_artifact_status.side_effect = ClientError(
+            {'Error': {'Code': 'ConditionalCheckFailedException', 'Message': 'cancelled'}},
+            'UpdateItem',
+        )
+        mock_sfn = MagicMock()
+
+        with (
+            patch('careervp.handlers.company_research_worker_handler.research_company', new_callable=AsyncMock) as mock_research,
+            patch('careervp.handlers.company_research_worker_handler._get_app_repo', return_value=mock_app_repo),
+            patch('careervp.handlers.company_research_worker_handler._persist_cr_result'),
+            patch('boto3.client', return_value=mock_sfn),
+        ):
+            mock_research.return_value = Result(success=True, data=cr_result, code=ResultCode.SUCCESS)
+            await _async_process_record(input_data, receive_count=1)
+
+        mock_sfn.send_task_success.assert_called_once()
+        mock_sfn.send_task_failure.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_cancel_ccf_suppresses_signal_error_when_execution_stopped(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """If the chain execution is already stopped (stop_execution called by cancel_artifact),
+        send_task_success raises — the error must be swallowed and the worker must not raise."""
+        from botocore.exceptions import ClientError
+
+        monkeypatch.setenv('ARTIFACT_CHAIN_ENABLED', 'true')
+        monkeypatch.setenv('STEP_FUNCTIONS_CHAIN_ARN', 'arn:aws:states:us-east-1:123:stateMachine:test')
+
+        cr_result = _make_cr_result(ResearchSource.WEBSITE_SCRAPE, confidence=0.9)
+        input_data = _make_input(task_token='sfn-token-stopped')
+
+        mock_app_repo = MagicMock()
+        mock_app_repo.update_artifact_status.side_effect = ClientError(
+            {'Error': {'Code': 'ConditionalCheckFailedException', 'Message': 'cancelled'}},
+            'UpdateItem',
+        )
+        mock_sfn = MagicMock()
+        mock_sfn.send_task_success.side_effect = ClientError(
+            {'Error': {'Code': 'ExecutionDoesNotExist', 'Message': 'execution stopped'}},
+            'SendTaskSuccess',
+        )
+
+        with (
+            patch('careervp.handlers.company_research_worker_handler.research_company', new_callable=AsyncMock) as mock_research,
+            patch('careervp.handlers.company_research_worker_handler._get_app_repo', return_value=mock_app_repo),
+            patch('careervp.handlers.company_research_worker_handler._persist_cr_result'),
+            patch('boto3.client', return_value=mock_sfn),
+        ):
+            mock_research.return_value = Result(success=True, data=cr_result, code=ResultCode.SUCCESS)
+            # Must not raise even though send_task_success raised
+            await _async_process_record(input_data, receive_count=1)
+
 
 # ---------------------------------------------------------------------------
 # Idempotency
