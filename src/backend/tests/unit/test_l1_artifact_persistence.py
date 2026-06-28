@@ -171,6 +171,10 @@ def test_cover_letter_generation_persists_to_dynamodb() -> None:
         dal = MagicMock()
         dal.get_cv.return_value = _user_cv()
         dal.save_cover_letter.return_value = Result(success=True, data=None, code=ResultCode.SUCCESS)
+        # Mock VPR to bypass dependency resolution
+        mock_vpr = MagicMock()
+        mock_vpr.user_id = 'user-123'
+        dal.get_vpr.return_value = Result(success=True, data=mock_vpr, code=ResultCode.SUCCESS)
         mock_get_dal.return_value = dal
 
         with patch('careervp.handlers.cover_letter_handler.generate_cover_letter') as mock_generate:
@@ -286,7 +290,8 @@ def test_cv_tailoring_async_generate_persists_with_artifact_prefix() -> None:
             with patch('careervp.handlers.cv_tailoring_handler.LLMClient'):
                 with patch('careervp.handlers.cv_tailoring_handler.run_cv_tailoring_pipeline', return_value=mock_pipeline_result):
                     with patch('careervp.handlers.cv_tailoring_handler._update_application_artifact'):
-                        response = lambda_handler(_cv_tailoring_event(), MagicMock())
+                        with patch('careervp.handlers.artifact_dependency_utils.load_confident_company_research_artifact', return_value=None):
+                            response = lambda_handler(_cv_tailoring_event(), MagicMock())
 
     assert response['statusCode'] == 202
     body = json.loads(response['body'])

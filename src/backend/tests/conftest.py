@@ -78,6 +78,15 @@ def reset_dynamo_dal_singleton():
     DynamoDalHandler.reset_instance()
 
 
+@pytest.fixture(autouse=True)
+def mock_company_research_load(mocker):
+    """Mock company research loading to prevent AWS calls in tests."""
+    mocker.patch(
+        'careervp.handlers.artifact_dependency_utils.load_confident_company_research_artifact',
+        return_value=None,
+    )
+
+
 @pytest.fixture(scope='session', autouse=True)
 def ensure_lambda_build_dir():
     """Create placeholder lambda asset directory expected by CDK tests."""
