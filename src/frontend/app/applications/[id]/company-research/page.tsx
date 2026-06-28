@@ -1,35 +1,51 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, useRef, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '../../../../api/methods';
 import { ErrorBoundary } from '../../../../components/ErrorBoundary/ErrorBoundary';
 import { Spinner } from '../../../../components/ui/Spinner';
 import type { CompanyResearchResult } from '../../../../lib/types';
 
-function CompanyResearchContent({ jobId }: { jobId: string }) {
+export function CompanyResearchContent({ jobId }: { jobId: string }) {
   const router = useRouter();
   const [research, setResearch] = useState<CompanyResearchResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
   const [pollMessage, setPollMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState<string>('');
   const [jobPostingUrl, setJobPostingUrl] = useState<string | undefined>(undefined);
+  const pollAttemptRef = useRef(0);
 
+  // Mount effect: status-aware initialization (R1)
   useEffect(() => {
     const init = async () => {
       setLoading(true);
       try {
-        const [data, appData] = await Promise.all([
-          api.getCompanyResearch(jobId),
+        const [statusResult, appData] = await Promise.all([
+          api.getCompanyResearchStatus(jobId),
           api.getApplication(jobId),
         ]);
-        setResearch(data);
         setCompanyName(appData?.job?.company_name ?? '');
         setJobPostingUrl(appData?.job?.url ?? undefined);
+
+        if (statusResult.status === 'completed' && statusResult.data) {
+          setResearch(statusResult.data);
+          setStatus('completed');
+        } else if (statusResult.status === 'failed') {
+          setError('Company research failed on the server. Please try again.');
+          setStatus('failed');
+        } else if (statusResult.status === 'processing') {
+          setStatus('processing');
+        } else {
+          // not_generated or unknown: idle state, no error (R3 BUG-3 fix)
+          setStatus('not_generated');
+        }
       } catch (err) {
         console.error(err);
+        setStatus('not_generated');
       } finally {
         setLoading(false);
       }
@@ -37,40 +53,59 @@ function CompanyResearchContent({ jobId }: { jobId: string }) {
     void init();
   }, [jobId]);
 
+  // Poll effect: keyed on [status, jobId] so it auto-starts when processing (R2)
+  useEffect(() => {
+    if (status !== 'processing') return;
+
+    const MAX_ATTEMPTS = 30;
+    const POLL_INTERVAL_MS = 10_000;
+    pollAttemptRef.current = 0;
+
+    const id = setInterval(async () => {
+      try {
+        const { status: newStatus, data } = await api.getCompanyResearchStatus(jobId);
+
+        if (newStatus === 'completed' && data) {
+          setResearch(data);
+          setStatus('completed');
+          setPollMessage(null);
+        } else if (newStatus === 'failed') {
+          setError('Company research failed on the server. Please try again.');
+          setStatus('failed');
+          setPollMessage(null);
+        } else {
+          pollAttemptRef.current += 1;
+          if (pollAttemptRef.current >= MAX_ATTEMPTS) {
+            clearInterval(id);
+            setStatus('timed_out');
+            setPollMessage('Still running — refresh later');
+          } else {
+            setPollMessage(
+              `Researching… checking for results (attempt ${pollAttemptRef.current} of ${MAX_ATTEMPTS})`,
+            );
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }, POLL_INTERVAL_MS);
+
+    return () => clearInterval(id);
+  }, [status, jobId]);
+
+  // handleTrigger: POST only; poll loop owned by effect above (R2 BUG-2 fix)
   const handleTrigger = async () => {
     setTriggering(true);
     setError(null);
     setPollMessage(null);
     try {
       await api.fetchCompanyResearch({ job_id: jobId, company_name: companyName, url: jobPostingUrl });
-
-      const POLL_INTERVAL_MS = 10_000;
-      const MAX_ATTEMPTS = 30; // 30 × 10 s = 5 minutes
-
-      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-        setPollMessage(`Researching… checking for results (attempt ${attempt} of ${MAX_ATTEMPTS})`);
-        await new Promise<void>((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-
-        const { status, data } = await api.getCompanyResearchStatus(jobId);
-
-        if (status === 'completed' && data) {
-          setResearch(data);
-          return;
-        }
-
-        if (status === 'failed' || status === 'not_generated') {
-          setError('Company research failed on the server. Please try again.');
-          return;
-        }
-      }
-
-      setError('Research is taking longer than expected. Please refresh the page in a few minutes.');
+      setStatus('processing');
     } catch (err) {
       setError('Failed to research company. Please try again.');
       console.error(err);
     } finally {
       setTriggering(false);
-      setPollMessage(null);
     }
   };
 
@@ -95,45 +130,10 @@ function CompanyResearchContent({ jobId }: { jobId: string }) {
     typeof item === 'string' ? { title: item } : item,
   );
 
-  return (
-    <div className="flex flex-col gap-6" data-testid="company-research-page">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold text-text-primary">Company Research</h1>
-          <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-state-info/10 text-state-info">Beta</span>
-        </div>
-        <button
-          onClick={() => router.push(`/applications/${jobId}`)}
-          className="rounded-md border border-border-default px-3 py-2 text-sm text-text-primary hover:bg-surface-subtle"
-        >
-          ← Back to Hub
-        </button>
-      </div>
-
-      <p className="text-xs text-text-muted">Content is AI-researched and may be incomplete or outdated.</p>
-
-      {error && (
-        <div className="rounded-md bg-state-error/10 border border-state-error px-4 py-3 text-sm text-state-error">
-          {error}
-        </div>
-      )}
-
-      {!research ? (
-        <div className="rounded-md border border-border-default bg-card px-6 py-12 text-center flex flex-col items-center gap-4">
-          <p className="text-sm text-text-muted">No company research available yet.</p>
-          <button
-            onClick={() => void handleTrigger()}
-            disabled={triggering}
-            className="rounded-md bg-primary-action px-4 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
-            data-testid="research-company-btn"
-          >
-            {triggering ? 'Researching…' : 'Research this company'}
-          </button>
-          {pollMessage && (
-            <p className="text-xs text-text-muted" data-testid="poll-message">{pollMessage}</p>
-          )}
-        </div>
-      ) : (
+  // Status-driven content (R3)
+  const renderContent = () => {
+    if (status === 'completed' && research) {
+      return (
         <>
           <div className={CARD}>
             <div className="flex items-start justify-between gap-4">
@@ -203,7 +203,65 @@ function CompanyResearchContent({ jobId }: { jobId: string }) {
             </div>
           )}
         </>
-      )}
+      );
+    }
+
+    if (status === 'failed') {
+      return (
+        <div className="rounded-md bg-state-error/10 border border-state-error px-4 py-3 text-sm text-state-error">
+          {error ?? 'Company research failed on the server. Please try again.'}
+        </div>
+      );
+    }
+
+    if (status === 'processing') {
+      return (
+        <div className="rounded-md border border-border-default bg-card px-6 py-12 text-center flex flex-col items-center gap-4">
+          <Spinner size="lg" aria-label="Researching company…" />
+          {pollMessage && (
+            <p className="text-xs text-text-muted" data-testid="poll-message">{pollMessage}</p>
+          )}
+        </div>
+      );
+    }
+
+    // not_generated or timed_out: idle card with CTA (R3 BUG-3 fix, R4)
+    return (
+      <div className="rounded-md border border-border-default bg-card px-6 py-12 text-center flex flex-col items-center gap-4">
+        <p className="text-sm text-text-muted">No company research available yet.</p>
+        <button
+          onClick={() => void handleTrigger()}
+          disabled={triggering}
+          className="rounded-md bg-primary-action px-4 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
+          data-testid="research-company-btn"
+        >
+          {triggering ? 'Researching…' : 'Research this company'}
+        </button>
+        {pollMessage && (
+          <p className="text-xs text-text-muted" data-testid="poll-message">{pollMessage}</p>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-6" data-testid="company-research-page">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-bold text-text-primary">Company Research</h1>
+          <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-state-info/10 text-state-info">Beta</span>
+        </div>
+        <button
+          onClick={() => router.push(`/applications/${jobId}`)}
+          className="rounded-md border border-border-default px-3 py-2 text-sm text-text-primary hover:bg-surface-subtle"
+        >
+          ← Back to Hub
+        </button>
+      </div>
+
+      <p className="text-xs text-text-muted">Content is AI-researched and may be incomplete or outdated.</p>
+
+      {renderContent()}
     </div>
   );
 }
