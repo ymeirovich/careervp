@@ -128,3 +128,38 @@ def test_dev_stack_uses_destroy_policy(frontend_template: Template) -> None:
     # auto_delete_objects=True adds a custom resource Lambda — verify bucket exists
     buckets = frontend_template.find_resources("AWS::S3::Bucket")
     assert buckets, "No S3 buckets found in dev stack"
+
+
+def test_custom_domain_disabled_by_default(frontend_template: Template) -> None:
+    """Guardrail: without explicit opt-in, no ACM cert, Route53 record, or alias.
+
+    Prevents an accidental deploy from creating/repointing the custom domain
+    (which can collide with an existing CNAME and break the live site).
+    """
+    assert (
+        frontend_template.find_resources("AWS::CertificateManager::Certificate") == {}
+    ), "ACM Certificate must not be created when custom domain is disabled"
+    assert frontend_template.find_resources("AWS::Route53::RecordSet") == {}, (
+        "Route53 RecordSet must not be created when custom domain is disabled"
+    )
+    dists = frontend_template.find_resources("AWS::CloudFront::Distribution")
+    for dist in dists.values():
+        config = dist["Properties"]["DistributionConfig"]
+        assert "Aliases" not in config, (
+            "CloudFront Aliases must not be set when custom domain is disabled"
+        )
+
+
+def test_custom_domain_enabled_via_context_creates_cert() -> None:
+    """When explicitly opted in, the ACM certificate is created."""
+    app = App(context={"enable_custom_domain": "true"})
+    stack = FrontendStack(
+        scope=app,
+        construct_id="FrontendStackDomainOn",
+        environment="dev",
+        domain="dev.careervp.com",
+        is_production=False,
+        env=Environment(account="123456789012", region="us-east-1"),
+    )
+    template = Template.from_stack(stack)
+    template.resource_count_is("AWS::CertificateManager::Certificate", 1)

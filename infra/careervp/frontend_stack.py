@@ -66,6 +66,15 @@ class FrontendStack(Stack):
             origin_access_control=self.oac,
         )
 
+        # Custom-domain wiring (ACM certificate + CloudFront alias + Route53 record)
+        # is GATED behind an explicit opt-in flag and defaults to OFF. This prevents
+        # an unrelated `cdk deploy` from accidentally creating an ACM cert, attaching
+        # a CloudFront alias, or writing a Route53 A-alias record — the last of which
+        # can collide with / repoint an existing `{domain}` CNAME and break the live
+        # site. Enable deliberately via `-c enable_custom_domain=true` or
+        # ENABLE_CUSTOM_DOMAIN=true when you actually intend to manage the domain.
+        self.enable_custom_domain = self._resolve_enable_custom_domain()
+
         # ACM certificate (must be us-east-1 for CloudFront)
         # Skip certificate if no hosted zone is configured (dev/testing)
         cert_env = self._resolve_cert_env()
@@ -79,7 +88,7 @@ class FrontendStack(Stack):
                 validation=acm.CertificateValidation.from_dns(),
                 certificate_name=f"careervp-cert-{self._env_name}",
             )
-            if cert_env and has_hosted_zone
+            if cert_env and has_hosted_zone and self.enable_custom_domain
             else None
         )
 
@@ -118,10 +127,16 @@ class FrontendStack(Stack):
             **distribution_kwargs,
         )
 
-        # Route53 alias record (only when hosted zone name is configured)
+        # Route53 alias record (only when custom domain is explicitly enabled AND a
+        # hosted zone name is configured). Gating on enable_custom_domain prevents an
+        # accidental A-alias write that could collide with an existing {domain} CNAME.
         hosted_zone_name = os.environ.get("HOSTED_ZONE_NAME", "careervp.com")
         self.record: route53.ARecord | None = None
+        if not self.enable_custom_domain:
+            hosted_zone_name = ""
         try:
+            if not hosted_zone_name:
+                raise RuntimeError("custom domain disabled; skip Route53 record")
             hosted_zone = route53.HostedZone.from_lookup(
                 self,
                 "HostedZone",
@@ -153,3 +168,16 @@ class FrontendStack(Stack):
         account = self.account
         region = self.region
         return bool(account and account != "unknown" and region == "us-east-1")
+
+    def _resolve_enable_custom_domain(self) -> bool:
+        """Opt-in gate for custom-domain resources. Defaults to disabled.
+
+        Resolution order: CDK context `enable_custom_domain` > env
+        `ENABLE_CUSTOM_DOMAIN`. Any of {"true", "1", "yes"} (case-insensitive)
+        enables it. Anything else (including unset) leaves it disabled so an
+        accidental deploy never creates an ACM cert, CloudFront alias, or Route53
+        record for the domain.
+        """
+        ctx = self.node.try_get_context("enable_custom_domain")
+        raw = ctx if ctx is not None else os.environ.get("ENABLE_CUSTOM_DOMAIN", "")
+        return str(raw).strip().lower() in ("true", "1", "yes")

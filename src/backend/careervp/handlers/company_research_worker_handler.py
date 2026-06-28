@@ -170,9 +170,9 @@ def _hard_fail(input_data: CRWorkerInput, cause: str) -> None:
     hard-fails (sub-threshold confidence after max retries, LLM_FALLBACK).
     """
     logger.error('CR hard-fail after max retries', user_id=input_data.user_id, job_id=input_data.job_id, cause=cause)
+    app_repo = _get_app_repo()
     try:
         write_cr_failed(application_id=input_data.job_id, user_id=input_data.user_id)
-        app_repo = _get_app_repo()
         app_repo.set_company_research_error(
             application_id=input_data.job_id,
             user_id=input_data.user_id,
@@ -184,6 +184,14 @@ def _hard_fail(input_data: CRWorkerInput, cause: str) -> None:
             artifact_type='company_research',
             status='failed',
         )
+    except Exception as exc:
+        logger.warning('Hard-fail DAL update partial', error=str(exc))
+
+    # Best-effort state transition. The conditional guard intentionally refuses to
+    # regress an application that is no longer in cr_pending (e.g. CR re-run on an
+    # already-advanced application). A ConditionalCheckFailedException here means the
+    # guard worked as designed and is safely ignored — it is not a failure.
+    try:
         app_repo.update_state(
             application_id=input_data.job_id,
             user_id=input_data.user_id,
@@ -191,7 +199,15 @@ def _hard_fail(input_data: CRWorkerInput, cause: str) -> None:
             expected_state='cr_pending',
         )
     except Exception as exc:
-        logger.warning('Hard-fail DAL update partial', error=str(exc))
+        from botocore.exceptions import ClientError as _ClientError
+
+        if isinstance(exc, _ClientError) and exc.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            logger.info(
+                'Hard-fail state transition skipped (application not in cr_pending)',
+                job_id=input_data.job_id,
+            )
+        else:
+            logger.warning('Hard-fail state transition failed', error=str(exc))
 
     _send_chain_signal(
         task_token=input_data.task_token,

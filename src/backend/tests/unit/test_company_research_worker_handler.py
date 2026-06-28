@@ -276,6 +276,42 @@ class TestTaskTokenSignal:
             user_id=input_data.user_id,
         )
 
+    def test_hard_fail_tolerates_state_conditional_check_failure(self) -> None:
+        """A ConditionalCheckFailedException on the state transition is benign.
+
+        When CR hard-fails on an application that is no longer in cr_pending (e.g.
+        a re-run on an advanced application), update_state's conditional guard
+        raises ConditionalCheckFailedException. _hard_fail must still mark the
+        artifact failed and signal the chain, without raising.
+        """
+        from botocore.exceptions import ClientError
+
+        input_data = _make_input()
+
+        mock_app_repo = MagicMock()
+        mock_app_repo.update_state.side_effect = ClientError(
+            {'Error': {'Code': 'ConditionalCheckFailedException', 'Message': 'failed'}},
+            'UpdateItem',
+        )
+        mock_sfn = MagicMock()
+
+        with (
+            patch('careervp.handlers.company_research_worker_handler.write_cr_failed') as mock_write_failed,
+            patch('careervp.handlers.company_research_worker_handler._get_app_repo', return_value=mock_app_repo),
+            patch('boto3.client', return_value=mock_sfn),
+        ):
+            # Must not raise despite the CCF on update_state.
+            _hard_fail(input_data, 'confidence below threshold')
+
+        mock_write_failed.assert_called_once()
+        mock_app_repo.update_artifact_status.assert_called_once_with(
+            application_id=input_data.job_id,
+            user_id=input_data.user_id,
+            artifact_type='company_research',
+            status='failed',
+        )
+        mock_app_repo.update_state.assert_called_once()
+
     @pytest.mark.asyncio
     async def test_hard_fail_sends_task_failure_to_sfn(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv('STEP_FUNCTIONS_CHAIN_ARN', 'arn:aws:states:us-east-1:123:stateMachine:test')
