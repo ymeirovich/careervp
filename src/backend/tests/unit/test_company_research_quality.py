@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import subprocess
 from collections.abc import Generator
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -131,7 +132,7 @@ def test_fallback_payload_function_removed() -> None:
         ['grep', '-r', '--include=*.py', '_build_fallback_company_research_payload', 'careervp/'],
         capture_output=True,
         text=True,
-        cwd='/Users/yitzchak/Documents/dev/careervp/src/backend',
+        cwd=str(Path(__file__).resolve().parents[2]),
     )
     matches = result.stdout.strip()
     assert matches == '', f'_build_fallback_company_research_payload still present in codebase:\n{matches}'
@@ -153,7 +154,7 @@ def test_no_company_for_literal_anywhere() -> None:
         ['grep', '-r', '--include=*.py', 'Company for ', 'careervp/'],
         capture_output=True,
         text=True,
-        cwd='/Users/yitzchak/Documents/dev/careervp/src/backend',
+        cwd=str(Path(__file__).resolve().parents[2]),
     )
     matches = result.stdout.strip()
     assert matches == '', f"'Company for ' literal still present in careervp/ source:\n{matches}"

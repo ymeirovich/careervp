@@ -266,20 +266,21 @@ def test_handle_async_generate_artifact_ats_score_from_pipeline(
     mock_dal._get_db_handler.return_value = mock_table
 
     with patch.object(handler_module, 'DynamoDalHandler', return_value=mock_dal):
-        with patch.object(handler_module, 'JobsRepository') as mock_jobs_cls:
-            mock_jobs_cls.return_value.get_job.return_value = {
-                'description': 'Test job description for senior engineer role.',
-                'title': 'Senior Engineer',
-            }
-            with patch.object(handler_module, 'LLMClient'):
-                with patch.object(handler_module, 'run_cv_tailoring_pipeline', return_value=pipeline_result):
-                    with patch.object(handler_module, '_update_application_artifact'):
-                        handler_module._handle_openapi_async_generate(
-                            event={},
-                            request_data={'cv_id': 'cv-123', 'job_id': 'job-456', 'vpr_id': None},
-                            headers={},
-                            user_id='user-789',
-                        )
+        with patch.object(handler_module, 'resolve_handler_dependencies', return_value=MagicMock(status='ready', resolved_upstream={})):
+            with patch.object(handler_module, 'JobsRepository') as mock_jobs_cls:
+                mock_jobs_cls.return_value.get_job.return_value = {
+                    'description': 'Test job description for senior engineer role.',
+                    'title': 'Senior Engineer',
+                }
+                with patch.object(handler_module, 'LLMClient'):
+                    with patch.object(handler_module, 'run_cv_tailoring_pipeline', return_value=pipeline_result):
+                        with patch.object(handler_module, '_update_application_artifact'):
+                            handler_module._handle_openapi_async_generate(
+                                event={},
+                                request_data={'cv_id': 'cv-123', 'job_id': 'job-456', 'vpr_id': None},
+                                headers={},
+                                user_id='user-789',
+                            )
 
     mock_table.put_item.assert_called_once()
     artifact = mock_table.put_item.call_args.kwargs['Item']

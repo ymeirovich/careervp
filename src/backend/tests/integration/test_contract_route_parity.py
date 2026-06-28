@@ -13,8 +13,9 @@ from pathlib import Path
 
 import pytest
 
-PAYLOADS_DIR = Path('/Users/yitzchak/Documents/dev/careervp/docs/refactor2/payloads')
-API_CONSTRUCT_PATH = Path('/Users/yitzchak/Documents/dev/careervp/infra/careervp/api_construct.py')
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+PAYLOADS_DIR = _REPO_ROOT / 'docs/refactor2/payloads'
+API_CONSTRUCT_PATH = _REPO_ROOT / 'infra/careervp/api_construct.py'
 
 LEGACY_ALIASES = [
     '/gap-analysis/questions',

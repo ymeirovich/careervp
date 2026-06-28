@@ -132,17 +132,18 @@ def test_handle_openapi_async_generate_calls_update_application_artifact(
     mock_dal._get_db_handler.return_value = MagicMock()
 
     with patch.object(handler_module, 'DynamoDalHandler', return_value=mock_dal):
-        with patch.object(handler_module, 'JobsRepository') as mock_jobs_cls:
-            mock_jobs_cls.return_value.get_job.return_value = {'description': 'Test job', 'title': 'Engineer'}
-            with patch.object(handler_module, 'LLMClient'):
-                with patch.object(handler_module, 'run_cv_tailoring_pipeline', return_value=mock_pipeline_result):
-                    with patch.object(handler_module, '_update_application_artifact') as mock_update:
-                        handler_module._handle_openapi_async_generate(
-                            event={},
-                            request_data={'cv_id': 'cv-123', 'job_id': 'job-456', 'vpr_id': None},
-                            headers={},
-                            user_id='user-789',
-                        )
+        with patch.object(handler_module, 'resolve_handler_dependencies', return_value=MagicMock(status='ready', resolved_upstream={})):
+            with patch.object(handler_module, 'JobsRepository') as mock_jobs_cls:
+                mock_jobs_cls.return_value.get_job.return_value = {'description': 'Test job', 'title': 'Engineer'}
+                with patch.object(handler_module, 'LLMClient'):
+                    with patch.object(handler_module, 'run_cv_tailoring_pipeline', return_value=mock_pipeline_result):
+                        with patch.object(handler_module, '_update_application_artifact') as mock_update:
+                            handler_module._handle_openapi_async_generate(
+                                event={},
+                                request_data={'cv_id': 'cv-123', 'job_id': 'job-456', 'vpr_id': None},
+                                headers={},
+                                user_id='user-789',
+                            )
 
     mock_update.assert_called_once()
     kwargs = mock_update.call_args.kwargs
@@ -205,17 +206,18 @@ def test_handle_openapi_async_generate_response_contains_request_id(
     mock_dal._get_db_handler.return_value = MagicMock()
 
     with patch.object(handler_module, 'DynamoDalHandler', return_value=mock_dal):
-        with patch.object(handler_module, 'JobsRepository') as mock_jobs_cls:
-            mock_jobs_cls.return_value.get_job.return_value = {'description': 'Test job', 'title': 'Engineer'}
-            with patch.object(handler_module, 'LLMClient'):
-                with patch.object(handler_module, 'run_cv_tailoring_pipeline', return_value=mock_pipeline_result):
-                    with patch.object(handler_module, '_update_application_artifact', side_effect=capture_update):
-                        result = handler_module._handle_openapi_async_generate(
-                            event={},
-                            request_data={'cv_id': 'cv-111', 'job_id': 'job-222', 'vpr_id': None},
-                            headers={},
-                            user_id='user-333',
-                        )
+        with patch.object(handler_module, 'resolve_handler_dependencies', return_value=MagicMock(status='ready', resolved_upstream={})):
+            with patch.object(handler_module, 'JobsRepository') as mock_jobs_cls:
+                mock_jobs_cls.return_value.get_job.return_value = {'description': 'Test job', 'title': 'Engineer'}
+                with patch.object(handler_module, 'LLMClient'):
+                    with patch.object(handler_module, 'run_cv_tailoring_pipeline', return_value=mock_pipeline_result):
+                        with patch.object(handler_module, '_update_application_artifact', side_effect=capture_update):
+                            result = handler_module._handle_openapi_async_generate(
+                                event={},
+                                request_data={'cv_id': 'cv-111', 'job_id': 'job-222', 'vpr_id': None},
+                                headers={},
+                                user_id='user-333',
+                            )
 
     body = json.loads(result['body'])
     response_request_id = body.get('request_id', '')

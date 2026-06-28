@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import subprocess
+from pathlib import Path
 from typing import cast
 from unittest.mock import AsyncMock, patch
 
@@ -147,7 +148,7 @@ def test_duckduckgo_removed() -> None:
         ['rg', '-n', '-i', 'duckduckgo', 'careervp/'],
         capture_output=True,
         text=True,
-        cwd='/Users/yitzchak/Documents/dev/careervp/src/backend',
+        cwd=str(Path(__file__).resolve().parents[2]),
         check=False,
     )
 

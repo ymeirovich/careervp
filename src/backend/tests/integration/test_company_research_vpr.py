@@ -38,6 +38,7 @@ def aws_env() -> Iterator[None]:
     patcher.setenv('POWERTOOLS_SERVICE_NAME', 'careervp-test')
     patcher.setenv('LOG_LEVEL', 'INFO')
     patcher.setenv('ENV', 'local')
+    patcher.setenv('COMPANY_RESEARCH_QUEUE_URL', 'https://sqs.us-east-1.amazonaws.com/123456789012/cr-queue')
     try:
         yield
     finally:
