@@ -312,7 +312,7 @@ async def _refresh_cached_news(
 
 async def _run_news_only_company_research(request: CompanyResearchRequest, *, domain: str | None) -> Result[CompanyResearchResult]:
     source_urls: list[str] = []
-    search_result = await _try_news_search(request.company_name, source_urls=source_urls)
+    search_result = await _try_news_search(request.company_name, domain=domain, source_urls=source_urls)
     if not search_result.success or not search_result.data:
         return Result(
             success=False,
@@ -419,8 +419,8 @@ async def _try_web_search(company_name: str, *, domain: str | None = None, sourc
     return Result(success=True, data=aggregated, code=ResultCode.SUCCESS)
 
 
-async def _try_news_search(company_name: str, *, source_urls: list[str] | None = None) -> Result[str]:
-    search_result = await search_company_news(company_name)
+async def _try_news_search(company_name: str, *, domain: str | None = None, source_urls: list[str] | None = None) -> Result[str]:
+    search_result = await search_company_news(company_name, domain=domain)
     if not search_result.success or not search_result.data:
         return Result(
             success=False,

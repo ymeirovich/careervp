@@ -22,7 +22,7 @@ async def search_company_info(company_name: str, *, domain: str | None = None) -
     clean_domain = _normalize_domain(domain)
     tavily = TavilyClient()
     profile_result = await _search_profile(tavily, clean_company_name, clean_domain)
-    news_result = await _search_news(tavily, clean_company_name)
+    news_result = await _search_news(tavily, clean_company_name, domain=clean_domain)
 
     results = _merge_results(profile_result.data or [], news_result.data or [])
     if results:
@@ -33,13 +33,14 @@ async def search_company_info(company_name: str, *, domain: str | None = None) -
     return Result(success=False, error=error, code=code)
 
 
-async def search_company_news(company_name: str) -> Result[list[SearchResult]]:
+async def search_company_news(company_name: str, *, domain: str | None = None) -> Result[list[SearchResult]]:
     """Run only the volatile company news query."""
     clean_company_name = company_name.strip()
     if not clean_company_name:
         return Result(success=False, error='Company name is required for search', code=ResultCode.INVALID_INPUT)
 
-    result = await _search_news(TavilyClient(), clean_company_name)
+    clean_domain = _normalize_domain(domain)
+    result = await _search_news(TavilyClient(), clean_company_name, domain=clean_domain)
     if result.data:
         return Result(success=True, data=result.data[:NEWS_RESULTS], code=ResultCode.SUCCESS)
     return Result(success=False, error=result.error or 'No Tavily news results found', code=result.code or ResultCode.NO_RESULTS)
@@ -51,21 +52,29 @@ def aggregate_search_content(results: list[SearchResult]) -> str:
 
 
 async def _search_profile(tavily: TavilyClient, company_name: str, domain: str | None) -> Result[list[SearchResult]]:
+    search_name = _domain_to_search_name(domain) if domain else company_name
     if domain:
         return await tavily.search(
-            f'{company_name} mission products business model',
+            f'{search_name} mission products business model',
             max_results=PROFILE_RESULTS,
             include_domains=[domain],
         )
     return await tavily.search(
-        f'{company_name} mission products business model',
+        f'{search_name} mission products business model',
         max_results=PROFILE_RESULTS,
     )
 
 
-async def _search_news(tavily: TavilyClient, company_name: str) -> Result[list[SearchResult]]:
+async def _search_news(tavily: TavilyClient, company_name: str, *, domain: str | None = None) -> Result[list[SearchResult]]:
+    search_name = _domain_to_search_name(domain) if domain else company_name
+    if domain:
+        return await tavily.search(
+            f'{search_name} news funding leadership',
+            max_results=NEWS_RESULTS,
+            include_domains=[domain],
+        )
     return await tavily.search(
-        f'{company_name} news funding leadership',
+        f'{search_name} news funding leadership',
         max_results=NEWS_RESULTS,
     )
 
@@ -96,6 +105,16 @@ def _normalize_domain(domain: str | None) -> str | None:
         return None
     clean_domain = domain.strip().removeprefix('https://').removeprefix('http://').split('/', 1)[0].lower()
     return clean_domain.removeprefix('www.') or None
+
+
+def _domain_to_search_name(domain: str) -> str:
+    """Extract a search-friendly name from a domain (e.g. 'sysaid.com' → 'sysaid').
+
+    Used as the query term when domain is available so searches aren't anchored
+    to a potentially mistyped user-entered company name.
+    """
+    base = domain.split('.')[0]
+    return base if base else domain
 
 
 def _select_failure_code(first: Result[list[SearchResult]], second: Result[list[SearchResult]]) -> str:

@@ -20,7 +20,7 @@ def _result(title: str, url: str, snippet: str) -> SearchResult:
 
 
 def test_runs_profile_and_news_queries() -> None:
-    """search_company_info should issue the expected profile and news queries."""
+    """When domain is supplied, both queries use the domain-derived name and include_domains."""
 
     async def run() -> None:
         profile = [_result('Acme profile', 'https://acme.com/about', 'Acme Corp mission products business model')]
@@ -40,14 +40,18 @@ def test_runs_profile_and_news_queries() -> None:
         assert result.success is True
         assert result.data == profile + news
         assert client.search.await_count == 2
-        assert client.search.await_args_list[0].args == ('Acme Corp mission products business model',)
-        assert client.search.await_args_list[1].args == ('Acme Corp news funding leadership',)
+        # Domain-derived name ('acme') used in both queries, not the user-typed company name
+        assert client.search.await_args_list[0].args == ('acme mission products business model',)
+        assert client.search.await_args_list[1].args == ('acme news funding leadership',)
+        # Both queries scoped to domain
+        assert client.search.await_args_list[0].kwargs['include_domains'] == ['acme.com']
+        assert client.search.await_args_list[1].kwargs['include_domains'] == ['acme.com']
 
     asyncio.run(run())
 
 
-def test_domain_scopes_profile_query() -> None:
-    """A supplied domain should scope only the profile query."""
+def test_domain_scopes_both_profile_and_news_queries() -> None:
+    """A supplied domain anchors both the profile and news queries via include_domains."""
 
     async def run() -> None:
         with patch('careervp.logic.utils.web_search.TavilyClient') as client_cls:
@@ -62,7 +66,7 @@ def test_domain_scopes_profile_query() -> None:
             await search_company_info('Acme Corp', domain='sysaid.com')
 
         assert client.search.await_args_list[0].kwargs['include_domains'] == ['sysaid.com']
-        assert 'include_domains' not in client.search.await_args_list[1].kwargs
+        assert client.search.await_args_list[1].kwargs['include_domains'] == ['sysaid.com']
 
     asyncio.run(run())
 
