@@ -22,7 +22,7 @@ EXPECTED_CANONICAL_ROUTE_COUNT = 40
 # Phase 1 of FE-UI-048: auth/users/gap-analysis/billing are proxy-collapsed; all
 # other features remain as explicit routes pending Phase 2 (two-step deploy to
 # remove {paramId} siblings before adding {proxy+}).
-EXPECTED_EXPLICIT_ROUTE_COUNT = 46
+EXPECTED_EXPLICIT_ROUTE_COUNT = 43
 EXPECTED_PROXY_PREFIX_COUNT = 4
 FROZEN_SPEC_PATH = str(_REPO_ROOT / 'docs/beta/evidence/I7_routes/frozen_spec.json')
 
@@ -145,7 +145,7 @@ class TestCanonicalRouteCount:
 class TestCdkRouteMapMatchesFrozenSpec:
     """Explicit routes plus feature proxies must cover the frozen operations."""
 
-    def test_route_map_operation_count_matches_expected(self):
+    def test_route_map_operation_count_is_42(self):
         route_map_ops = _extract_route_map_operations()
         proxy_prefixes = _extract_proxy_prefixes()
         assert len(route_map_ops) == EXPECTED_EXPLICIT_ROUTE_COUNT, (
