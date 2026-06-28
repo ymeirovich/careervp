@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import subprocess
 from pathlib import Path
 from typing import cast
 from unittest.mock import AsyncMock, patch
@@ -144,13 +143,10 @@ def test_empty_results_return_no_results() -> None:
 
 def test_duckduckgo_removed() -> None:
     """No DuckDuckGo code path should remain in the runtime module."""
-    result = subprocess.run(
-        ['rg', '-n', '-i', 'duckduckgo', 'careervp/'],
-        capture_output=True,
-        text=True,
-        cwd=str(Path(__file__).resolve().parents[2]),
-        check=False,
-    )
+    # Scan in pure Python rather than shelling out to `rg`, which is not
+    # guaranteed to be installed on CI runners.
+    package_root = Path(__file__).resolve().parents[2] / 'careervp'
+    offenders = [str(py_file) for py_file in package_root.rglob('*.py') if 'duckduckgo' in py_file.read_text(encoding='utf-8').lower()]
 
-    assert result.stdout.strip() == ''
+    assert offenders == [], f'DuckDuckGo references remain: {offenders}'
     assert not hasattr(web_search, '_parse_duckduckgo_results')

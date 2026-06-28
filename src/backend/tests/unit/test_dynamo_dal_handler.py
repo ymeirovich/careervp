@@ -2,7 +2,6 @@
 VPR DynamoDAL tests per docs/specs/03-vpr-generator.md:14 storage contract.
 """
 
-import os
 from datetime import datetime, timezone
 from typing import Iterator
 
@@ -46,20 +45,19 @@ TABLE_NAME = 'test-vpr-table'
 
 
 @pytest.fixture(scope='function', autouse=True)
-def aws_env() -> Iterator[None]:
-    """Set AWS defaults so boto3 works under moto."""
-    os.environ['AWS_ACCESS_KEY_ID'] = 'testing'
-    os.environ['AWS_SECRET_ACCESS_KEY'] = 'testing'
-    os.environ['AWS_SESSION_TOKEN'] = 'testing'
-    os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
+def aws_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Set AWS defaults so boto3 works under moto.
+
+    Use monkeypatch so teardown restores the conftest baseline (region + testing
+    creds) instead of popping the vars outright — popping AWS_DEFAULT_REGION
+    leaked to later tests and caused botocore NoRegionError in CI (no ambient
+    region), even though every test passed in isolation.
+    """
+    monkeypatch.setenv('AWS_ACCESS_KEY_ID', 'testing')
+    monkeypatch.setenv('AWS_SECRET_ACCESS_KEY', 'testing')
+    monkeypatch.setenv('AWS_SESSION_TOKEN', 'testing')
+    monkeypatch.setenv('AWS_DEFAULT_REGION', 'us-east-1')
     yield
-    for key in [
-        'AWS_ACCESS_KEY_ID',
-        'AWS_SECRET_ACCESS_KEY',
-        'AWS_SESSION_TOKEN',
-        'AWS_DEFAULT_REGION',
-    ]:
-        os.environ.pop(key, None)
 
 
 @pytest.fixture(scope='function', autouse=True)
