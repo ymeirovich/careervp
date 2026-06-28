@@ -332,9 +332,10 @@ class TestTaskTokenSignal:
         assert call_kwargs['error'] == 'CRHardFail'
 
     @pytest.mark.asyncio
-    async def test_cancel_ccf_sends_task_success_not_hard_fail(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """When update_artifact_status raises CCF (cancelled guard), send task_success
-        so the chain does not route to handle_cr_failure and no UI error is shown."""
+    async def test_cancel_ccf_sends_task_failure_and_updates_state(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When update_artifact_status raises CCF (cancelled guard), send task_failure
+        so the chain routes to HandleCRFailure, and directly transition the application
+        state cr_pending → cr_failed so the UI is not stuck."""
         from botocore.exceptions import ClientError
 
         monkeypatch.setenv('ARTIFACT_CHAIN_ENABLED', 'true')
@@ -359,13 +360,25 @@ class TestTaskTokenSignal:
             mock_research.return_value = Result(success=True, data=cr_result, code=ResultCode.SUCCESS)
             await _async_process_record(input_data, receive_count=1)
 
-        mock_sfn.send_task_success.assert_called_once()
-        mock_sfn.send_task_failure.assert_not_called()
+        mock_sfn.send_task_failure.assert_called_once()
+        mock_sfn.send_task_success.assert_not_called()
+        mock_app_repo.set_company_research_error.assert_called_once_with(
+            application_id=input_data.job_id,
+            user_id=input_data.user_id,
+            error=True,
+        )
+        mock_app_repo.update_state.assert_called_once_with(
+            application_id=input_data.job_id,
+            user_id=input_data.user_id,
+            new_state='cr_failed',
+            expected_state='cr_pending',
+        )
 
     @pytest.mark.asyncio
     async def test_cancel_ccf_suppresses_signal_error_when_execution_stopped(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """If the chain execution is already stopped (stop_execution called by cancel_artifact),
-        send_task_success raises — the error must be swallowed and the worker must not raise."""
+        send_task_failure raises — the error must be swallowed, and the worker must still
+        directly update application state so the UI is not stuck at cr_pending."""
         from botocore.exceptions import ClientError
 
         monkeypatch.setenv('ARTIFACT_CHAIN_ENABLED', 'true')
@@ -380,9 +393,9 @@ class TestTaskTokenSignal:
             'UpdateItem',
         )
         mock_sfn = MagicMock()
-        mock_sfn.send_task_success.side_effect = ClientError(
+        mock_sfn.send_task_failure.side_effect = ClientError(
             {'Error': {'Code': 'ExecutionDoesNotExist', 'Message': 'execution stopped'}},
-            'SendTaskSuccess',
+            'SendTaskFailure',
         )
 
         with (
@@ -392,8 +405,16 @@ class TestTaskTokenSignal:
             patch('boto3.client', return_value=mock_sfn),
         ):
             mock_research.return_value = Result(success=True, data=cr_result, code=ResultCode.SUCCESS)
-            # Must not raise even though send_task_success raised
+            # Must not raise even though send_task_failure raised
             await _async_process_record(input_data, receive_count=1)
+
+        # Direct state update must fire even when the chain signal fails
+        mock_app_repo.update_state.assert_called_once_with(
+            application_id=input_data.job_id,
+            user_id=input_data.user_id,
+            new_state='cr_failed',
+            expected_state='cr_pending',
+        )
 
 
 # ---------------------------------------------------------------------------

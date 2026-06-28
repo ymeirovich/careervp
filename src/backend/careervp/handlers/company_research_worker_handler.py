@@ -166,9 +166,10 @@ def _enqueue_vpr_standalone(user_id: str, job_id: str, result: CompanyResearchRe
 def _handle_cancel_ccf(input_data: CRWorkerInput) -> None:
     """Handle ConditionalCheckFailedException from the cancel guard (FE-UI-043).
 
-    Signals chain success so the execution does not route to handle_cr_failure.
-    If the chain was already stopped by cancel_artifact, send_task_success raises
-    and is swallowed — the execution is gone and no UI error is needed.
+    Signals chain failure so Step Functions routes to HandleCRFailure (→ cr_failed).
+    If the chain was already stopped by cancel_artifact, send_task_failure raises and
+    is swallowed.  In both cases we then directly transition the application state
+    cr_pending → cr_failed and set company_research_error so the UI is not stuck.
     """
     logger.info(
         'CR job cancelled before COMPLETED write — aborting cleanly',
@@ -179,14 +180,40 @@ def _handle_cancel_ccf(input_data: CRWorkerInput) -> None:
         _send_chain_signal(
             task_token=input_data.task_token,
             job_id=input_data.job_id,
-            success=True,
-            company_context={},
+            success=False,
+            cause='CR cancelled before persist',
         )
     except Exception as signal_exc:
         logger.info(
             'CR cancel chain signal suppressed (execution already stopped)',
             job_id=input_data.job_id,
             error=str(signal_exc),
+        )
+
+    # Whether the chain signal succeeded or not, directly unblock the UI by
+    # transitioning the application state and setting the error flag.  If the
+    # chain's HandleCRFailure state already did this, both writes hit CCF/no-op.
+    app_repo = _get_app_repo()
+    try:
+        app_repo.set_company_research_error(
+            application_id=input_data.job_id,
+            user_id=input_data.user_id,
+            error=True,
+        )
+    except Exception as exc:
+        logger.info('CR cancel: could not set company_research_error', job_id=input_data.job_id, error=str(exc))
+    try:
+        app_repo.update_state(
+            application_id=input_data.job_id,
+            user_id=input_data.user_id,
+            new_state='cr_failed',
+            expected_state='cr_pending',
+        )
+    except Exception as exc:
+        logger.info(
+            'CR cancel state transition skipped (application already past cr_pending)',
+            job_id=input_data.job_id,
+            error=str(exc),
         )
 
 
