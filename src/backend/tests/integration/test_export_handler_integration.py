@@ -54,6 +54,9 @@ def export_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv('ARTIFACTS_BUCKET_NAME', ARTIFACTS_BUCKET)
     monkeypatch.setenv('ARTIFACTS_TABLE_NAME', ARTIFACTS_TABLE)
     monkeypatch.setenv('TABLE_NAME', MAIN_TABLE)
+    # _read_cv_tailored prefers DYNAMODB_TABLE_NAME; pin it so the test stays
+    # hermetic regardless of env left behind by earlier integration modules.
+    monkeypatch.setenv('DYNAMODB_TABLE_NAME', MAIN_TABLE)
     monkeypatch.setenv('ALLOWED_ORIGINS', ALLOWED_ORIGIN)
     monkeypatch.setattr('careervp.handlers.cors_utils._ALLOWED_ORIGINS', {ALLOWED_ORIGIN})
 
