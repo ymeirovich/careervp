@@ -1,0 +1,215 @@
+name: DB Redesign — Pre-merge Checks
+
+# Backend jobs (lint, typecheck, tests, deploy) run on every push that touches
+# src/backend/ or infra/. Frontend jobs run when src/frontend/ changes.
+# Deploy is gated on all backend quality checks passing.
+
+on:
+  push:
+    branches: [db-redesign]
+    paths:
+      - "src/frontend/**"
+      - "src/backend/**"
+      - "infra/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write  # Required for OIDC AWS auth
+
+env:
+  PYTHON_VERSION: '3.13'
+  NODE_VERSION: '22'
+  AWS_REGION: 'us-east-1'
+  UV_VERSION: '0.5.21'
+  STACK_NAME: 'CareerVpCrudDev'
+
+jobs:
+  # ── Backend: Ruff Lint ─────────────────────────────────────────────────────
+  ruff-lint:
+    name: Ruff Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: '**/uv.lock'
+
+      - name: Run ruff check
+        working-directory: src/backend
+        run: uv run ruff check .
+
+  # ── Backend: Mypy ──────────────────────────────────────────────────────────
+  mypy:
+    name: Mypy Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: '**/uv.lock'
+
+      - name: Install Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install backend dependencies
+        working-directory: src/backend
+        run: uv sync --group dev
+
+      - name: Run mypy
+        working-directory: src/backend
+        env:
+          AWS_DEFAULT_REGION: us-east-1
+        run: uv run mypy careervp --strict
+
+  # ── Backend: Pytest unit tests ─────────────────────────────────────────────
+  pytest-unit:
+    name: Pytest Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: '**/uv.lock'
+
+      - name: Install Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install backend dependencies
+        working-directory: src/backend
+        run: uv sync --group dev
+
+      - name: Run pytest unit tests
+        working-directory: src/backend
+        env:
+          AWS_REGION: us-east-1
+          AWS_DEFAULT_REGION: us-east-1
+          PYTHONPATH: ${{ github.workspace }}/src/backend
+        run: uv run pytest tests/unit -v --tb=short
+
+  # ── TypeScript ──────────────────────────────────────────────────────────────
+  typecheck:
+    name: TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: cd src/frontend && npm ci
+
+      - name: Run tsc
+        run: cd src/frontend && npm run typecheck
+
+  # ── Vitest UI unit tests ────────────────────────────────────────────────────
+  vitest-ui:
+    name: Vitest UI tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: cd src/frontend && npm ci
+
+      - name: Run Vitest
+        run: cd src/frontend && npx vitest run --config vitest.config.ts --reporter verbose
+        env:
+          CI: true
+
+  # ── Jest unit tests ─────────────────────────────────────────────────────────
+  jest-unit:
+    name: Jest unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: cd src/frontend && npm ci
+
+      - name: Run Jest unit
+        run: cd src/frontend && npm run test:unit -- --passWithNoTests
+        env:
+          CI: true
+
+  # ── Backend deploy to dev ───────────────────────────────────────────────────
+  deploy-backend-dev:
+    name: Deploy backend → dev
+    runs-on: ubuntu-latest
+    environment: dev
+    needs: [ruff-lint, mypy, pytest-unit]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: '**/uv.lock'
+
+      - name: Install Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install backend dependencies
+        working-directory: src/backend
+        run: uv sync --group dev
+
+      - name: Build Lambda artifacts
+        working-directory: src/backend
+        run: make build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          role-session-name: db-redesign-backend-${{ github.sha }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: CDK deploy (Lambda code only)
+        working-directory: src/backend
+        env:
+          ENVIRONMENT: dev
+        run: |
+          set -o pipefail
+          make deploy 2>&1 | tee /tmp/deploy.log || {
+            if grep -Eq "(_IN_PROGRESS state and can not be updated|UPDATE_COMPLETE_CLEANUP_IN_PROGRESS)" /tmp/deploy.log; then
+              echo "::warning::Stack locked — waiting and retrying once..."
+              sleep 30
+              make deploy
+            else
+              exit 1
+            fi
+          }

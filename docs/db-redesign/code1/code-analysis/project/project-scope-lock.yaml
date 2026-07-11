@@ -1,0 +1,236 @@
+# CareerVP Project Scope Lock — machine-checkable twin of project-scope-lock.md
+# Diff implemented specs/tests against `backlog[].id`. Do not edit without bumping meta.version and the MD change log.
+meta:
+  name: careervp-project-scope-lock
+  version: 1.3.0
+  frozen: "2026-07-05"
+  code_anchor: "github.com/ymeirovich/careervp@4f7c294"
+  live_anchor: {account: "788159322332", region: us-east-1, stage: dev, prod_exists: false}
+  status: IMMUTABLE
+  companion_md: project-scope-lock.md
+
+authority_hierarchy:   # highest wins on conflict
+  - this_document
+  - handoff.md
+  - [careervp-architecture-v2.md, careervp-architecture-deepdive.md]   # v1 careervparchitecture.md = DEPRECATED
+  - [findings-register.md, "coverage-matrix.md#2", redesign-runbook.md]
+  - [requirements.md, features.md, db-upgrade-priorities.md]
+  - live_truth   # recon.py + code@4f7c294 supersede aspirational/static claims
+non_authoritative: ["docs/features/*", "docs/swagger/careervp-api-v1.yaml"]   # drifted; do not build from
+
+id_scheme:
+  tracks: {P: production-launch-blockers, D: db-single-table, Q: llm-quality, T: testing, F: frontend-contract, X: cross-cutting}
+  tier: [T1, T2, T3, OUT]
+  loe: [Lo, Md, Hi]
+  status_values: [IMMUTABLE, TARGET, OPEN]
+  impl_states: [not_started, spec_written, test_written, implemented, verified]
+
+constraints:   # IMMUTABLE physics
+  - {id: C-1, text: "scale ceiling < 10k concurrent"}
+  - {id: C-2, text: "> 70% profit margin; LLM tokens are the lever"}
+  - {id: C-3, text: "solo maintainer; no big-bang; reversible steps"}
+  - {id: C-4, text: "DynamoDB kept (closed)"}
+  - {id: C-5, text: "no GDPR gold-plating; lightweight DSAR only"}
+  - {id: C-6, text: "backend + API contract only; frontend out except contract changes"}
+  - {id: C-7, text: "no prod exists; all work targets dev until certified (see path.certification)"}
+  - {id: C-8, text: "shared personal AWS account; {env}-scoped everything"}
+
+locked_decisions:   # IMMUTABLE
+  - {id: L-1, text: "tenant key = internal surrogate user_id; resolve Cognito sub(s)->user_id at edge (supersedes 'sub' directly)"}
+  - {id: L-2, text: "Cognito-only auth; identity only from validated JWT; social IdP (Google/Facebook) via account-link by verified email"}
+  - {id: L-3, text: "single-table core = STAGED-COMMITTED: seams first, full collapse committed later wave w/ go-no-go gate"}
+  - {id: L-4, text: "billing live = launch-critical"}
+  - {id: L-5, text: "Company Research runs FIRST on submit, then gap; reused by all downstream; chain reordered CR->gap->vpr->{cv,cover,interview}"}
+  - {id: L-6, text: "Gap Analysis -> Sonnet (Strategic), gated on real-CV + CR input fixes first"}
+  - {id: L-7, text: "priorities T1/T2/T3; effort Lo/Md/Hi"}
+
+frontend_contract:   # IMMUTABLE; oracle = src/frontend/ code, not swagger
+  oracle_rule: "authoritative contract = src/frontend/ calls + CDK route_map + handlers; NOT any OpenAPI/swagger"
+  items:
+    - {n: 1, rule: "application_id == job_id"}
+    - {n: 2, rule: "artifact_id round-trips; hub artifact_id resolvable by status endpoint"}
+    - {n: 3, rule: "vpr_id = VPR hub artifact_id; CV-tailoring sends vpr_id:null (never omitted); null-vs-absent load-bearing"}
+    - {n: 4, rule: "status enum string-compared/unversioned; changes additive only", values: [pending, processing, completed, failed, cancelled, expired, not_generated, edited]}
+    - {n: 5, rule: "PATCH echoes result.*+version+updated_at; HTTP 409 on stale base_version"}
+    - {n: 6, rule: "request_id primacy (request_id ?? job_id)"}
+    - {n: 7, rule: "nested result trees preserved (VPR/CV/IP/CL)"}
+    - {n: 8, rule: "presigned download_url + status:'expired'"}
+    - {n: 9, rule: "shape polymorphism tolerated, must not worsen"}
+    - {n: 10, rule: "error envelope {error|message, classification, error_code, field}; 401 -> one refresh-retry then sign-out"}
+  known_live_violations: [F-02, F-03, F-04, F-05]
+
+invariants:   # IMMUTABLE architectural
+  - identity_only_from_jwt_to_user_id_surrogate
+  - dal_enforces_tenant_partition_key_no_idor
+  - single_key_authority_repository_sole_key_builder
+  - no_env_var_table_precedence_routing
+  - one_typed_home_one_stored_key_per_artifact
+  - large_bodies_in_s3_with_pointer_store_rich_project_lean
+  - shared_data_never_in_core   # CR cache, llm cache, idempotency = separate tables
+  - one_iam_role_per_fn_arn_scoped_env_suffixed_no_wildcard
+  - sqs_batchItemFailures_visibility_ge_6x_maxconc_dlq_alarm
+  - stateful_RETAIN_deletion_protection_no_live_pk_sk_change_max_400_cfn
+  - vectors_derived_rebuildable_tenant_filtered_never_source_of_record
+
+backlog:
+  # ---- Track P: production launch-blockers ----
+  - {id: P-01, tier: T1, track: [P,D], loe: Hi, status: TARGET, title: "cover letter + interview prep FAIL (3-schema/vpr_id routing)", crosswalk: ["#1","FR-F3","FR-F4"], contract_impact: true, current_state: broken, verification: e2e+characterization}
+  - {id: P-02, tier: T1, track: [P], loe: Lo, status: TARGET, title: "billing reconcile entrypoint mismatch", crosswalk: ["#2","FR-I3"], current_state: broken, verification: integration}
+  - {id: P-03, tier: T1, track: [P], loe: Lo, status: TARGET, title: "map /api/* surface (verify staging-only)", crosswalk: ["#3"], current_state: partially_resolved, verification: recon+route_map}
+  - {id: P-04, tier: T1, track: [P], loe: Md, status: TARGET, title: "remove x-user-id bypass + AUTHORIZER_DISABLED", crosswalk: ["#4","NFR-SEC-1"], current_state: vulnerable, verification: security}
+  - {id: P-05, tier: T1, track: [P], loe: Md, status: TARGET, title: "IDOR - enforce owner/user_id on get_job & peers", crosswalk: ["#5","NFR-SEC-2"], current_state: vulnerable, verification: security}
+  - {id: P-06, tier: T1, track: [P], loe: Md, status: TARGET, title: "secrets out of Lambda env -> SSM/Secrets Mgr", crosswalk: ["#6","NFR-SEC-3"], current_state: vulnerable, verification: iac+security}
+  - {id: P-07, tier: T1, track: [P], loe: Lo, status: TARGET, title: "Cognito MFA + advanced security", crosswalk: ["#7","NFR-SEC-6"], current_state: off, verification: iac}
+  - {id: P-08, tier: T1, track: [P], loe: Lo, status: TARGET, title: "CV bucket CORS * -> locked origins", crosswalk: ["#8","NFR-SEC-7"], current_state: wildcard, verification: iac}
+  - {id: P-09, tier: T1, track: [P], loe: Hi, status: TARGET, title: "one IAM role per fn (retire shared role; fix billing/export default roles)", crosswalk: ["#9","NFR-SEC-4"], current_state: shared_role, verification: iac+security}
+  - {id: P-10, tier: T1, track: [P], loe: Lo, status: TARGET, title: "API GW CORS ALL_ORIGINS -> allow-list", crosswalk: ["#10","NFR-SEC-7"], current_state: wildcard, verification: iac}
+  - {id: P-11, tier: T1, track: [P], loe: Md, status: TARGET, title: "WAF in all envs + rate rule", crosswalk: ["#11","NFR-SEC-5"], current_state: prod-only_no_rate_rule, verification: iac}
+  - {id: P-12, tier: T1, track: [P,D], loe: Md, status: TARGET, title: "RETAIN + deletion_protection all stateful; fix backups auto-delete", crosswalk: ["#12","NFR-DATA-1","DB-H1"], current_state: DESTROY_all, verification: iac+cdk_diff, gate: first_slice}
+  - {id: P-13, tier: T1, track: [P,D], loe: Lo, status: TARGET, title: "remove dead RETAIN stacks never instantiated", crosswalk: ["#13","DB-L1"], current_state: dead_code, verification: cdk_synth}
+  - {id: P-14, tier: T1, track: [P,D], loe: Md, status: TARGET, title: "idempotency wired on webhook + at-least-once workers", crosswalk: ["#14","NFR-REL-1","DB-H5"], current_state: table_empty_unwired, verification: idempotency}
+  - {id: P-15, tier: T1, track: [P,D], loe: Md, status: TARGET, title: "eliminate billing Scan on money path", crosswalk: ["#15","NFR-SCALE-2","DB-H7"], current_state: scan_present, verification: integration}
+  - {id: P-16, tier: T1, track: [P], loe: Lo, status: TARGET, title: "concurrency bounds on rate-limited consumers", crosswalk: ["#16","NFR-REL-3"], current_state: 0_of_31_reserved, verification: iac}
+  - {id: P-17, tier: T1, track: [P], loe: Md, status: TARGET, title: "ReportBatchItemFailures on all consumers; wire 8 DLQs", crosswalk: ["#17","NFR-REL-4"], current_state: silent_loss, verification: integration+iac}
+  - {id: P-18, tier: T1, track: [P], loe: Lo, status: TARGET, title: "SQS visibility >= 6x fn timeout", crosswalk: ["#18","NFR-REL-2"], current_state: 1x, verification: iac}
+  - {id: P-19, tier: T1, track: [P], loe: Md, status: TARGET, title: "SFN retry/heartbeat + JitterStrategy FULL + StartVPR heartbeat", crosswalk: ["#19","NFR-REL-5"], current_state: unset, verification: iac}
+  - {id: P-20, tier: T1, track: [P], loe: Lo, status: TARGET, title: "raise API throttle from 2rps/burst10", crosswalk: ["#20","NFR-SCALE-1"], current_state: self_dos, verification: iac+load}
+  - {id: P-21, tier: T1, track: [P], loe: Lo, status: TARGET, title: "SNS alarms -> subscribed on-call topic", crosswalk: ["#21","NFR-OBS-1"], current_state: zero_subscribers, verification: iac, gate: pre_migration}
+  - {id: P-22, tier: T1, track: [P], loe: Lo, status: TARGET, title: "OIDC in cdk-diff.yml (kill long-lived keys)", crosswalk: ["#22"], current_state: long_lived_keys, verification: ci}
+  - {id: P-23, tier: T1, track: [P], loe: Md, status: TARGET, title: "alias+version + CodeDeploy canary/rollback", crosswalk: ["#23"], current_state: none, verification: ci+cdk}
+  - {id: P-24, tier: T1, track: [P,X], loe: Hi, status: TARGET, title: "internal user_id surrogate + sub->user_id resolution + social-IdP linking", crosswalk: ["L-1","NFR-SEC-1"], contract_impact: false, current_state: sub_resolved_no_surrogate, verification: security+unit, open_ref: O-4_resolved, linking_policy: "auto-link social sub->existing user_id ONLY when IdP asserts email_verified=true AND email matches; else no auto-link (step-up 'sign in with original method to link'); conflicts->earliest-created user_id; all links audit-logged; adversarial review required on this spec (auth)"}
+  - {id: P-25, tier: T1, track: [P], loe: Md, status: TARGET, title: "payment-provider port + MockProvider (plug-n-play; StripeProvider deferred)", crosswalk: ["L-4","FR-I1","FR-I2"], contract_impact: true, current_state: placeholder_provider_only, verification: integration+idempotency, note: "all billing (P-02/14/15, I1-I4) codes against the port, not a concrete provider; Mock signs test webhooks + returns realistic subscription/customer objects; preserves FE checkout/portal URL contract; swap to Stripe behind config later"}
+  - {id: P-26, tier: T1, track: [P], loe: Md, status: TARGET, title: "CFN nested-stack decomposition of the API RestApi (root 415/500) before additive waves", crosswalk: ["#8"], contract_impact: true, current_state: root_415_of_500_4_nested, verification: cdk_synth+cdk_diff, gate: pre_additive, note: "nest whole RestApi -> ~175 API-GW resources collapse to 1 parent entry; feature Lambdas into per-feature nested stacks; refs via constructor props NOT Fn::ImportValue; RestApi recreate can change invoke URL -> mitigate via retained logical id or custom domain+ACM, verify frontend resolves; MUST precede P-09/P-14/P-17/P-21 which add resources"}
+  # ---- Track D: DB single-table (seams T1/T2; collapse committed later) ----
+  - {id: D-H2, tier: T1, track: [D], loe: Md, status: TARGET, title: "single key-authority repository (sole key-builder)", crosswalk: ["DB-H2"], current_state: env_var_precedence, verification: unit}
+  - {id: D-H3, tier: T1, track: [D], loe: Lo, status: TARGET, title: "surface swallowed ValidationException", crosswalk: ["DB-Q1","DB-H3"], current_state: swallowed, verification: unit}
+  - {id: D-H4, tier: T1, track: [D], loe: Md, status: TARGET, title: "stored canonical artifact_id + pass resolved upstreams", crosswalk: ["DB-H4"], contract_impact: true, verification: contract+integration}
+  - {id: D-H7, tier: T1, track: [D], loe: Md, status: TARGET, title: "eliminate request-path Scans", crosswalk: ["DB-H7","#15"], verification: integration}
+  - {id: D-M1, tier: T2, track: [D], loe: Md, status: TARGET, title: "split 1128-LOC DAL god-class", crosswalk: ["DB-M1"], verification: unit}
+  - {id: D-M2, tier: T2, track: [D], loe: Lo, status: TARGET, title: "stop dual-key CV write", crosswalk: ["DB-M2"], current_state: dual_key_confirmed_recon, verification: integration}
+  - {id: D-M3, tier: T3, track: [D], loe: Lo, status: TARGET, title: "minimized GSI projections", crosswalk: ["DB-M3"], low_effort_high_value: true, verification: iac}
+  - {id: D-M5, tier: T2, track: [D], loe: Md, status: TARGET, title: "retire userEmail PII partition key", crosswalk: ["DB-M5"], verification: migration+security}
+  - {id: D-M6, tier: T2, track: [D], loe: Lo, status: TARGET, title: "access-pattern inventory doc (schema contract)", crosswalk: ["DB-M6"], verification: doc}
+  - {id: D-Q, tier: T2, track: [D], loe: Lo, status: TARGET, title: "quick wins: connection reuse, pagination, schema-enforced TTL, PITR 7d->35d", crosswalk: ["DB-Q2","DB-Q3","DB-Q4","DB-Q5","DB-Q6"], verification: iac+integration}
+  - {id: D-H6, tier: T2, track: [D], loe: Md, status: TARGET, title: "TransactWriteItems for multi-item invariants", crosswalk: ["DB-H6"], verification: integration}
+  - {id: D-H8, tier: T2, track: [D], loe: Hi, status: OPEN, title: "FULL single-table core collapse (committed later wave)", crosswalk: ["DB-H8","#48"], contract_impact: true, wave: 6, open_ref: O-1, verification: migration-parity}
+  - {id: D-L, tier: T3, track: [D], loe: Lo, status: TARGET, title: "LOW: delete dead resources, _SingletonMeta removal, api_storage_adapter collapse, BatchGetItem audit", crosswalk: ["DB-L1","DB-L5","DB-L6","DB-L7"], verification: unit}
+  # ---- Track Q: LLM quality ----
+  - {id: Q-01, tier: T2, track: [Q], loe: Md, status: TARGET, title: "reorder chain: CR first on submit -> gap -> vpr -> {cv,cover,interview}", crosswalk: ["L-5"], verification: e2e+integration}
+  - {id: Q-02, tier: T2, track: [Q], loe: Lo, status: TARGET, title: "fix Gap real-CV injection (get_cv_by_id; stop 'Candidate' stub) TDD", crosswalk: ["gap_handler.py:528-533"], current_state: stub_cv_bug, verification: characterization+unit}
+  - {id: Q-03, tier: T2, track: [Q], loe: Lo, status: TARGET, title: "route Gap to Sonnet via LLMRouter TaskMode.STRATEGIC", crosswalk: ["gap_analysis.py:283-286"], current_state: runs_on_haiku, verification: unit+eval}
+  - {id: Q-04, tier: T2, track: [Q], loe: Md, status: TARGET, title: "feed CR into all consumers (gap/vpr/cover/interview) via existing prompt slots; per-step digests for margin", crosswalk: ["L-5","C-2"], verification: eval+cost}
+  - {id: Q-05, tier: T2, track: [Q], loe: Hi, status: TARGET, title: "cross-app knowledge base MVP: PFACT items in core; digest+top-K under 1200-token cap; DynamoDB rank; tenant-filtered; non-PII key", crosswalk: ["FR-K1"], open_ref: O-2, verification: unit+eval+security}
+  - {id: Q-06, tier: T3, track: [Q], loe: Hi, status: OPEN, title: "KB Phase 2: S3 Vectors cosine top-K (swap ranker only), flag-gated", crosswalk: ["FR-K1","ragvector"], wave: 6, open_ref: O-6, verification: eval+security}
+  - {id: Q-07, tier: T2, track: [Q,D], loe: Lo, status: TARGET, title: "recreate knowledge-table on user_id/sub key (declares userEmail, empty); retire mis-wired /knowledge-base route", crosswalk: ["#K","DB-M5"], current_state: userEmail_key_empty_route_miswired, verification: iac+recon}
+  - {id: Q-08, tier: T2, track: [Q,T], loe: Md, status: TARGET, title: "LLM evals: promptfoo + golden dataset + LLM-judge@temp0 + FVS gate + OWASP-LLM red-team", crosswalk: ["T-05"], verification: eval}
+  - {id: Q-09, tier: T3, track: [Q], loe: Lo, status: TARGET, title: "CR margin guard (~15k Tavily tokens/gen: truncate / include_raw_content:false)", crosswalk: ["cost-model"], low_effort_high_value: true, verification: cost}
+  # ---- Track T: testing & spec coverage ----
+  - {id: T-01, tier: T1, track: [T], loe: Lo, status: TARGET, title: "enable branch coverage (currently 0)", crosswalk: ["NFR-DEP"], verification: ci}
+  - {id: T-02, tier: T1, track: [T], loe: Md, status: TARGET, title: "retire autouse mock_artifact_dependency_resolver; real key schemas via moto", crosswalk: ["coverage-matrix#3"], current_state: inflated_78.45pct, verification: ci}
+  - {id: T-03, tier: T1, track: [T], loe: Lo, status: TARGET, title: "coverage gates core 85/80, supporting 75-80/70, glue ~60/excluded; overall 80/70", crosswalk: ["research"], verification: ci}
+  - {id: T-04, tier: T1, track: [T], loe: Md, status: TARGET, title: "full test taxonomy (see quality_gates.test_types)", verification: ci}
+  - {id: T-05, tier: T2, track: [T], loe: Lo, status: TARGET, title: "mutation-testing spot-check (mutmut) on core tier", verification: ci}
+  - {id: T-06, tier: T1, track: [T], loe: Hi, status: TARGET, title: "spec-coverage ledger + ~15-20 per-feature specs (Tier-1 first) derived from route_map+frontend", crosswalk: ["req-sufficiency"], current_state: ~15pct_buildable, verification: doc+ci}
+  - {id: T-07, tier: T1, track: [T], loe: Lo, status: TARGET, title: "8 CI gates: ruff, mypy --strict, pytest, cdk synth, Checkov, Bandit, pip-audit, CodeQL", verification: ci}
+  - {id: T-08, tier: T1, track: [T], loe: Lo, status: TARGET, title: "execution plan: ordered runbook sequencing every clause into copy-paste steps w/ model+effort for Claude Code + Codex", crosswalk: ["redesign-execution-plan.md"], verification: doc}
+  - {id: T-09, tier: T1, track: [T], loe: Md, status: TARGET, title: "scope-diff.py drift checker: clause<->spec<->test<->impl_state via frontmatter scope_lock_clause; CI gate + periodic diff", crosswalk: ["#11"], verification: ci}
+  # ---- Track F: frontend contract ----
+  - {id: F-01, tier: T1, track: [F], loe: Md, status: TARGET, title: "executable oracle: Zod mirror of lib/types.ts + safeParse (FE-truth) + Pydantic model_json_schema()->ajv (BE-truth); MSW in CI + nightly Playwright vs dev", crosswalk: ["coverage-matrix#2"], verification: contract}
+  - {id: F-02, tier: T1, track: [F], loe: Lo, status: TARGET, title: "fix: VPR download_url missing from VPRStatusResult", crosswalk: ["api_models.py:173"], current_state: live_bug, verification: contract}
+  - {id: F-03, tier: T1, track: [F], loe: Lo, status: TARGET, title: "fix: status enum lacks cancelled/expired in backend Literal", crosswalk: ["api_models.py:182","contract#4"], current_state: live_bug, verification: contract}
+  - {id: F-04, tier: T1, track: [F], loe: Lo, status: TARGET, title: "fix: vpr_id required-non-null vs FE sends null (422)", crosswalk: ["api_models.py:282","contract#3"], current_state: live_bug, verification: contract}
+  - {id: F-05, tier: T1, track: [F], loe: Lo, status: TARGET, title: "fix: error envelope nested vs FE flat ([object Object])", crosswalk: ["api_models.py:511","contract#10"], current_state: live_bug, verification: contract}
+  - {id: F-06, tier: T1, track: [F], loe: Md, status: TARGET, title: "encode all 10 contract items as executable assertions", crosswalk: ["contract"], verification: contract}
+  - {id: F-07, tier: T2, track: [F], loe: Lo, status: TARGET, title: "regenerate OpenAPI from live/route_map; mark v1 swagger + docs/features non-authoritative", verification: doc}
+  # ---- Track X: cross-cutting / compliance ----
+  - {id: X-01, tier: T2, track: [X], loe: Md, status: TARGET, title: "account-close delete-all-my-data (export already exists); delete full USER#{user_id} collection + S3 objects + Cognito user", crosswalk: ["C-5","DSAR"], current_state: export_exists_no_delete, verification: integration+security}
+
+out_of_scope:
+  deviations: [global_tables, data_residency_partitioning, heavy_formal_DSAR_tooling]
+  moved_in_this_round: [cmk_dynamo_s3, field_level_pii_encryption, account_close_delete_all_X-01]   # all T2; artifact export already exists
+  residency_note: "confirmed OUT — us-east-1 only for now; revisit only for a contractual EU customer"
+  deferred_bounded:
+    rag_vectors: "only KB Phase 2 (Q-06), derived, flag-gated; OpenSearch rejected"
+    artifact_compression: "measure-first; digests formalized under Q-04"
+    sonnet5_migration: "VPR-pilot-only; gated on temperature=0.65 400-error + SONNET_MODEL_ID CI assertion + token measurement + intro-pricing 2026-08-31; Gap->Sonnet (Q-03) is separate/approved"
+
+path_to_production:
+  ordered_gates: [P-12_retain, cfn_headroom_nested_stacks, schema_recon_done, P-21_sns_subscribers, token_cost_baseline, rehearsed_rollback_drift_visibility]
+  waves:
+    wave_0_guardrails: [reclone_source, anchor_confirmation, P-03, ordered_gates, test_strategy, T-04, T-09, T-07, T-06, F-01, spec_scaffold, T-01, T-02, T-03, P-12, P-13, P-21, P-26, P-24]
+    wave_1_security: [P-04, P-05, P-06, P-07, P-08, P-09, P-10, P-11, P-22]
+    wave_2_reliability_money: [P-14, P-15, P-16, P-17, P-18, P-19, P-20, P-23, P-02, P-25]
+    wave_3_db_seams: [D-H2, D-H3, D-H4, D-H7, D-M1, D-M2, D-M3, D-M5, D-M6, D-Q, P-01]
+    wave_4_quality: [Q-01, Q-02, Q-03, Q-04, Q-05, Q-07, Q-08, Q-09, F-02, F-03, F-04, F-05, F-06]
+    wave_5_cost_obs_tier2: [cmk, field_pii, dsar_export_delete, log_retention, alarms, tagging, low_effort_high_value_picks, F-07, T-05]
+    wave_6_committed_gated: [D-H8, D-H6, Q-06]
+  freeze_line:
+    include: [all_track_P_T1, all_T2, low_effort_high_value_picks]
+    criteria_for_extra_picks: [cost_down, perf_up, security_up, durability_reliability_up]
+    post_launch: [wave_6_full_core_collapse, Q-06_kb_vectors]
+  certification:   # DoD to stand up prod
+    - all_freeze_line_closed
+    - all_NFRs_met
+    - test_suite_green_with_real_key_schema_coverage
+    - branch_coverage_enabled_autouse_mock_retired
+    - executable_oracle_green
+    - cdk_diff_zero_stateful_replacement
+
+quality_gates:
+  coverage:
+    core_generation_orchestration: {line: 85, branch: 80}
+    supporting: {line: 78, branch: 70}
+    glue: {line: 60, branch: null, note: "or excluded"}
+    llm_output: evals_not_coverage
+    ci_gate_overall: {line: 80, branch: 70}
+    preconditions: [enable_branch_coverage, retire_autouse_mock, mutmut_spotcheck_core]
+  ci_gates: [ruff, "mypy --strict", pytest, "cdk synth", "resource_count<400", Checkov, Bandit, pip-audit, CodeQL, executable_oracle, "cdk diff zero-stateful-replacement"]
+  test_types: [unit, contract, characterization, integration_real_services, iac_cdk, idempotency_replay, migration_parity, llm_eval, load_perf, security_sast, smoke_canary]
+  llm_eval: {tool: promptfoo, dataset: versioned_golden, judge: llm_as_judge_temp0, guardrail: fvs_gate, redteam: owasp_llm_top10}
+  spec_completeness: "every endpoint+async behavior has a spec row; every FR maps to >=1 row & vice-versa; frontend contract items are acceptance criteria; spec-complete only when acceptance = executable test"
+
+guardrails:
+  on_document: [immutable_amendment_only, single_authority_hierarchy, one_canonical_id_per_clause, tag_immutable_target_open, current_state_ne_target, commit_anchored, live_truth_supersedes]
+  on_work: [frontend_contract_cannot_break_or_version_route, expand_dualwrite_backfill_dualread_contract, no_live_pk_sk_change_in_one_deploy, retain_backup_before_risky, one_reversible_flag_gated_change, cdk_diff_zero_stateful_replacement, ci_lt_400_resources, props_not_importvalue, tests_real_key_schemas_moto, never_weaken_test, branch_coverage_on, characterization_before_migration_change, env_scoped_iam_one_role_per_fn_no_wildcard, no_secrets_in_env, server_side_quota, adversarial_review_for_auth_iam_data_diffs, serialize_steps_touching_same_cfn_template_file]
+  pr_block_list: [rename_remove_live_table_gsi_bucket_or_pk_sk_change_one_deploy, read_switched_to_core_before_backfill_reconcile, bigbang_cutover_no_canary_flag_rollback, removal_policy_DESTROY_reintroduced, unthrottled_migration_vs_live_capacity, resources_added_to_stack_over_400, iam_scoped_across_environments_no_env_suffix, parallel_edits_to_one_cfn_template_file, spec_edited_to_match_code_without_amendment, contract_amended_retroactively_to_rubberstamp_built_code, test_weakened_to_pass]
+
+amendment_protocol:   # how the contract changes mid-implementation (see MD §0.3)
+  principle: "immutable to DRIFT (silent/unversioned), not to LEARNING; unrecorded change is the defect. Contract changes at the speed of DECISIONS, not code."
+  semver:
+    patch: "clarification / typo / current_state refresh; no scope change"
+    minor: "add a clause; refine a TARGET; resolve an OPEN"
+    major: "change an IMMUTABLE invariant/locked-decision; drop a feature; break a frontend-contract item"
+  deviation_loop:   # a step's subagent cannot satisfy a clause as written, or live truth contradicts current_state
+    - stop_at_clause_never_silently_deviate
+    - emit_amendment_proposal   # {clause_id, tag, what_changed, why_evidence_cite, semver_level, affected_specs_tests}
+    - human_validates_and_confirms   # required; no auto-apply
+    - update_both_twins_same_commit_plus_changelog_plus_version_bump
+    - propagate_to_dependent_specs_tests_then_scope_diff_recheck
+  adversarial_review_required_for: [immutable_invariant, locked_decision, frontend_contract_item]
+
+spec_test_acceptance:   # validating the specs/tests themselves (see test-strategy.md §8)
+  - structural_scope_diff_clean   # frontmatter present, clause exists, no orphan spec, no uncovered clause
+  - contract_consistency          # AC-### not contradicting clause; contract_impact -> carries FE-contract slice
+  - self_sufficiency_fresh_subagent_no_questions
+  - adversarial_refuter_for_auth_iam_data
+  - test_validity_red_green_plus_mutmut_plus_characterization_at_anchor
+  - traceability_roundtrip_fr_to_spec_to_test_to_clause_both_directions
+
+open_questions:   # resolve before dependent spec; never guess
+  - {id: O-1, q: "full core collapse (D-H8) go/no-go metric threshold", blocks: [D-H8]}
+  - {id: O-2, q: "CR cache-key granularity: company-only vs company+role", blocks: [Q-01, Q-04]}
+  - {id: O-3, q: "cutover/downtime tolerance + retention window (fresh recon/product)", blocks: [wave_3, wave_6]}
+  - {id: O-4, q: "social-IdP account-linking policy (link-by-verified-email; takeover safeguards)", blocks: [P-24], status: RESOLVED, resolved: "2026-07-09", decision: "auto-link only when email_verified=true AND email matches; else step-up confirmation; conflicts->earliest user_id; audit-log all links"}
+  - {id: O-5, q: "jobs/applications fold into core or keep focused tables", blocks: [D-H8]}
+  - {id: O-6, q: "KB Phase-2 embedding model + dimension + min-cosine reuse threshold", blocks: [Q-06]}
+
+traceability:
+  diff_protocol: "for each backlog[].id map implemented specs/tests -> id -> impl_state; partial shows as partial; a spec/test with no id, or a clause a spec contradicts, is a drift defect"
+  verification_sources: [recon.py, "cdk synth/diff", executable_oracle, ci_gate_results]
+  never: self_report
+
+change_log:
+  - {version: 1.0.0, date: "2026-07-05", change: "initial contract frozen at code 4f7c294"}
+  - {version: 1.1.0, date: "2026-07-09", change: "MINOR amendment. Added P-25 (payment-provider port + MockProvider, plug-n-play, Stripe deferred) and P-26 (CFN nested-stack decomposition, was an unclause'd gate). Added amendment_protocol (semver + deviation->proposal->human-confirm loop) and spec_test_acceptance gate. Added guardrails: serialize CDK-template-touching steps; new pr_block_list anti-patterns. Wave-0 reordered so nets (T-09 scope-diff, F-01 oracle) precede spec scaffolding; added anchor_confirmation + test_strategy + P-26. test-strategy.md authored (execution-plan step 0.1.5). No IMMUTABLE clause changed; no launch-blocker re-tiered."}
+  - {version: 1.2.0, date: "2026-07-09", change: "MINOR amendment (by protocol: structured proposal + human confirm). (A) Resolved O-4 social-IdP linking: auto-link only when email_verified=true AND email matches; else step-up; conflicts->earliest user_id; audit-logged (recorded on P-24 + O-4). (B) Homed 6 orphaned clauses surfaced by reference audit: P-03/P-13/P-21/T-07 given Wave-0 steps; T-03/T-04 id-linked to steps 0.5/0.1.5. (C) Fixed best-preactice->best-practice typo in historical redesign/ docs (non-authoritative). Anchor confirmed: 4f7c294 present, 541 py, HEAD==anchor. No IMMUTABLE clause changed; no launch-blocker re-tiered."}
+  - {version: 1.3.0, date: "2026-07-09", change: "MINOR amendment (human-decided, option B). RETIRED the never-built TEST-###-test-prompts.yaml claim (no working example existed anywhere; contradicted the one real exemplar). New rule, matching the proven Q-gap exemplar: RED-test descriptions (name + exact assertions) live inline in the spec's Markdown body under a 'RED tests to write first' section; the actual pytest files are written during the IMPLEMENT step, under TDD, in the real careervp repo -- never authored as a standalone artifact in this docs project. Updated §8.5 (scope-lock), execution-plan spec/test authoring rules + step-type definitions, test-strategy.md §7, handoff.md. Also recorded: spec-authoring (step 0.4) fan-out runs via the Workflow tool (human opt-in confirmed) so each clause's spec gets its own {model,effort} per the tooling table, not just model-only via a plain Agent-tool fan-out. No IMMUTABLE clause changed; no launch-blocker re-tiered."}

@@ -4,6 +4,7 @@ import re
 from typing import cast
 
 from aws_cdk import Aws, CfnOutput, Duration, RemovalPolicy, aws_apigateway, aws_sqs
+from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_cloudwatch as cw
 from aws_cdk import aws_cognito as cognito
 from aws_cdk import aws_dynamodb as dynamodb
@@ -237,6 +238,9 @@ class ApiConstruct(Construct):
             mode="dashboards",
         )
 
+        if not is_production_env:
+            self._build_api_custom_domain()
+
         if is_production_env:
             # add WAF
             self.waf = WafToApiGatewayConstruct(
@@ -246,6 +250,33 @@ class ApiConstruct(Construct):
                 naming=naming,
                 feature=constants.API_FEATURE,
             )
+
+    def _build_api_custom_domain(self) -> None:
+        cert = acm.Certificate.from_certificate_arn(
+            self,
+            "ApiDevCert",
+            "arn:aws:acm:us-east-1:788159322332:certificate/d93bafb3-fe1a-4faa-9335-a9e868646bdb",
+        )
+        domain = aws_apigateway.DomainName(
+            self,
+            "ApiDevCustomDomain",
+            domain_name="api.dev.careervp.com",
+            certificate=cert,
+            endpoint_type=aws_apigateway.EndpointType.REGIONAL,
+            security_policy=aws_apigateway.SecurityPolicy.TLS_1_2,
+        )
+        aws_apigateway.BasePathMapping(
+            self,
+            "ApiDevBasePathMapping",
+            domain_name=domain,
+            rest_api=self.rest_api,
+            stage=self.rest_api.deployment_stage,
+        )
+        CfnOutput(
+            self,
+            "ApiDevRegionalDomainName",
+            value=domain.domain_name_alias_domain_name,
+        ).override_logical_id("ApiDevRegionalDomainName")
 
     def register_ai_assist_routes(self, ai_assist_lambda: _lambda.IFunction) -> None:
         self.ai_assist_lambda = ai_assist_lambda

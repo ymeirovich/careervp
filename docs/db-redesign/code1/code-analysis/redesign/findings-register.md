@@ -35,16 +35,6 @@ IAM blast-radius concern (§18.1, #9).
 > re-confirmed. Also resolved: the **active `api_db_construct` schema is the deployed one** (live
 > keys `userId/cvId`, `userId/applicationId`, `job_id`, `pk/sk`); the legacy `RETAIN` `user_email`
 > `DynamoDBStack` is dead code → delete (DB-L1).
->
-> **Re-verified 2026-07-11 (recon.py + CFN List/Describe → `redesign/evidence/live-truth-2026-07-11.md`):**
-> every claim still holds. DynamoDB volumes/PITR/drift unchanged (users 908 / artifacts 221 / jobs 144;
-> PITR on except `llm-cache`; multi-schema drift physically present). **CFN count re-confirmed: root
-> `CareerVpCrudDev` = 415/500 direct + 4 nested (AiAssist/CompanyResearch/ErrorReport/Monitoring);
-> staging = 378, 0 nested.** Reconciliation: the Fable infra-mitigation plan's "476/500, register is
-> stale" is **not the deployed figure** — 476 is most plausibly a post-`cdk synth`-with-additions count;
-> treat **415 as the live baseline** (the eval council must not adopt 476 as current). Still open (need
-> repo/API-GW introspection): is Cognito auth enforced in the deployed stack, and does
-> `AUTHORIZER_DISABLED` have any code readers.
 
 **CONFIRMED LIVE (inferred → verified):**
 - Deletion protection **FALSE on all 10 dev tables** → #12/#13 data-loss risk is real.

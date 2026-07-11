@@ -1,26 +1,8 @@
 # Handoff — CareerVP: write tests & specs (Phase: Test/Spec authoring)
 
-> **Contract v1.5.0 (amended 2026-07-11 — eval-council conditions applied):** the 2026-07-11 local
-> eval council (below) returned SOUND-WITH-CONDITIONS; v1.5.0 landed its 14 amendments (A1–A14) —
-> P-26 blue/green API migration (never move the RestApi in place), P-28 CI-pipeline closure, contract
-> files write-protected from agent sessions, P-04 real rollback (P-23 first + resolver-failure alarm),
-> P-07 SPA-client hardening, new P-25b (real Stripe before paid launch) + D-H9 (finish FE-UI-044),
-> GSI-cardinality invariant, CR soft-blocking fallback, gate 3/5 restructure. Blocking subset before
-> starting: A1/A2/A3 + the exemplar patch + the two 15-min console tasks (Budgets, branch protection).
-> Earlier history: v1.1.0 added P-25 (payment-provider port + mock, Stripe
-> deferred) + P-26 (CFN nested-stack decomposition), reordered Wave 0 (nets before scaffolding),
-> authored `test-strategy.md`, formalized the amendment/deviation loop + CDK-serialization rule;
-> v1.2.0 resolved O-4 (social-IdP linking) + homed 6 orphaned clauses (P-03/P-13/P-21/T-03/T-04/T-07);
-> v1.3.0 retired the `TEST-###-test-prompts.yaml` format for inline RED-test descriptions + set step
-> 0.4 spec-authoring to run via the Workflow tool; v1.4.0 added 9 gap-fill clauses (P-27..P-32,
-> Q-10, Q-11, X-02) closing orphaned NFRs — deploy-safety gates (stack policy, credential split,
-> evidence pack, smoke harness) in Wave 0, real token metering (Q-10) in Wave 2, prompt-injection
-> hardening (X-02) in Wave 4. Backlog 74 clauses. See `gap-closure-checklist.md` for post-completion validation.
->
-> **Optional pre-execution QA (independent):** `project/eval-council-prompt.md` runs a local Fable
-> council that grades THIS plan for risks/gaps (uses the Fable infra-mitigation plan + a 2026-07-11
-> live recon as evidence — see `redesign/evidence/`). Its output splits into spec/runbook fixes and
-> contract amendments (§0.3). Not required to "begin," but recommended before committing to Wave 1.
+> **Contract v1.1.0 (amended 2026-07-09):** added P-25 (payment-provider port + mock, Stripe deferred)
+> and P-26 (CFN nested-stack decomposition); Wave 0 reordered so drift nets precede spec scaffolding;
+> `test-strategy.md` authored; amendment/deviation loop + CDK-serialization rule now formal.
 
 ## HOW YOU RUN THIS (human — simple)
 Start a Claude Code session, **paste this file**, **attach `project-scope-lock.yaml` +
@@ -29,20 +11,9 @@ resume). That's it.
 Re-paste in a new session anytime to resume — the plan's on-disk **status board** is the memory,
 so no place is lost and no single session holds the whole redesign.
 
-**Your four jobs after "begin"** (corrected v1.5.0 — the old "only two jobs" text omitted the two
-most safety-critical duties, which would let a compliant operator rubber-stamp deploys or let the
-orchestrator find its own deploy path):
-1. **Decide open questions** — answer when the agent asks you to resolve an `O-#` (O-1..O-8); the
-   answer is recorded into the scope-lock. Never let the agent guess.
-2. **Approve each wave gate** — after `scope-diff.py` + oracle + coverage report green.
-3. **Execute every `ExecuteChangeSet` yourself** (P-28) — the orchestrator prepares change sets with
-   `CreateChangeSet` only; *you* run the mutation, after reading the machine-parsed
-   `DescribeChangeSet` Replacement report (auto-fail on `Replacement:True` for
-   RestApi/Table/Bucket/UserPool). This includes the human-only base-path/domain flip in P-26.
-4. **Confirm every amendment** (§0.3) — when a step hits a deviation the agent emits an Amendment
-   Proposal; *you* validate and commit it (the contract files are write-protected from agent
-   sessions — v1.5.0/A3). No auto-apply.
-You still do NOT manually load context or run implementation steps — the agent self-orchestrates those.
+**Your only jobs after "begin":** (1) answer when the agent asks you to decide an **open question**
+(O-1..O-6); (2) approve each **wave gate**. Nothing else — you do NOT manually load context or run
+steps yourself.
 
 ## WHAT THE AGENT DOES (you don't do this by hand)
 - Works `redesign-execution-plan.md` **top-to-bottom**. For **each step it spawns a FRESH subagent**
@@ -75,14 +46,9 @@ truth — the agent re-reads the specific clause per step. Read it first.
 - **Specs live in `project/specs/`.** **`project/specs/Q-gap-analysis-track-spec.md` already exists**
   (Track Q gap fixes) — it is BOTH the completed spec for `Q-01..Q-04` AND the **worked exemplar**
   for every other spec you author. The remaining specs are listed as `TO-AUTHOR` in the execution
-  plan; author them in the **v1.3.0 format** (frontmatter + Problem Statement + Evidence `file:line`
-  + numbered Fix Plan + `AC-###` Given/When/Then + **inline RED-test descriptions** under a "RED
-  tests to write first" section — the actual pytest files are written at IMPLEMENT time in the real
-  `careervp` repo, under TDD). **The `TEST-###-test-prompts.yaml` / copy-paste `prompt:`-block format
-  is RETIRED (v1.3.0) — no working example ever existed; do NOT author prompt blocks.** Each spec
-  carries the mandatory frontmatter (scope-lock §8.5): `scope_lock_clause` (single, OR a list +
-  a per-clause `tooling:` map for multi-clause specs), `claude_code:{model,effort}`,
-  `codex:{model,reasoning}`.
+  plan; author them in the `docs/upgrade/specs/` format (frontmatter + numbered Fix Plan + `AC-###`
+  + copy-paste `prompt:` blocks), each with the mandatory frontmatter (scope-lock §8.5):
+  `scope_lock_clause`, `claude_code:{model,effort}`, `codex:{model,reasoning}`.
 - **How it plugs into the plan/spec/test cycle:**
   1. Every plan item, spec, and test **cites a scope-lock clause ID** (`P-##`, `D-##`, `Q-##`,
      `T-##`, `F-##`). A spec/test with no clause ID is out of contract.
