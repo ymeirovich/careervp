@@ -46,16 +46,16 @@ The stable custom domain is the linchpin: because the frontend points `NEXT_PUBL
 - a `BasePathMapping` binding that domain to `self.rest_api` + `self.rest_api.deployment_stage` (`:268-274`);
 - a `CfnOutput ApiDevRegionalDomainName` exposing `domain.domain_name_alias_domain_name` (the regional target for the Cloudflare CNAME) (`:275-279`).
 
-**DNS is external to AWS (O-9).** `careervp.com` is registered at NameCheap with DNS managed by **Cloudflare** — **CDK cannot create DNS records**. The ACM-validation CNAME and the `api.dev` → regional-target CNAME are **manual Cloudflare steps**, and both MUST be **"DNS only" / grey-cloud (NOT orange-cloud proxied)** — orange-cloud proxy terminates TLS and breaks API-GW SNI/cert. The dev ACM cert is already ISSUED (validation CNAME added, confirmed). Historically `api.dev.careervp.com` had **NO DNS record** (LM-1); the live frontend has been on the raw `execute-api` URL.
+**DNS is external to AWS (O-9).** `careervp.com` is registered at NameCheap with DNS managed by **Cloudflare** — **CDK cannot create DNS records**. The ACM-validation CNAME and the `api.dev` → regional-target CNAME are **manual Cloudflare steps**, and both MUST be **"DNS only" / grey-cloud (NOT orange-cloud proxied)** — orange-cloud proxy terminates TLS and breaks API-GW SNI/cert. The dev ACM cert is already ISSUED (validation CNAME added, confirmed). Evidence supplied 2026-07-11: `dig +short api.dev.careervp.com` resolves to `d-ufdp03t4f1.execute-api.us-east-1.amazonaws.com.` plus A records `54.157.91.177`, `98.90.192.136`, `98.89.7.162`.
 
-**Frontend deploy CI is broken (O-9, blocking).** The "Deploy Frontend" workflow has been failing on every run since **2026-05-03**. The blue/green cutover requires a working `NEXT_PUBLIC_API_URL` repoint + Amplify rebuild+redeploy — which **cannot run until O-9's CI is fixed**. This is a human-action blocking precondition, not an IaC deliverable of this spec.
+**Frontend repoint is complete; GitHub CI proof remains.** Evidence supplied 2026-07-11: Amplify `NEXT_PUBLIC_API_URL` was set to `https://api.dev.careervp.com` and the Amplify redeploy was green. The historical blocker was the GitHub "Deploy Frontend" workflow, failing since **2026-05-03** because it still modeled a static S3/CloudFront export (`src/frontend/out/`) while the real deployment is Amplify SSR (`.next`). That workflow must now be green as an Amplify-build validation workflow before O-9 is considered closed.
 
 **Cross-stack refs compile to Export/ImportValue.** CDK's "pass props, not `Fn::ImportValue`" is illusory: a construct reference across a stack boundary compiles to a CloudFormation `Export` + `Fn::ImportValue`, and **an export cannot be removed while it is consumed**. This locks the retire/decompose step unless the export locks are broken first (see Sub-clause C).
 
 **Root causes:**
 1. The RestApi lives inside a parent template that is ~415/500 — near the CFN hard limit; further additive waves (P-09/P-14/P-17/P-21) cannot land until the parent has headroom.
 2. There is no NEW-API stack; a blue path does not yet exist.
-3. `_build_api_custom_domain` exists but the manual Cloudflare CNAME + the O-9 CI fix are not done, so the custom domain is not yet the live frontend seam.
+3. `_build_api_custom_domain` exists and the manual Cloudflare CNAME + Amplify env repoint are now evidenced for dev; the remaining O-9 proof is a green GitHub Deploy Frontend validation run plus P-30 smoke through the custom domain.
 4. The base-path FLIP and the old-API RETIRE have no prepared, machine-checked change set.
 
 ---
@@ -88,10 +88,10 @@ These are the two console tasks that block the custom-domain seam. Automation ma
    - Evidence to capture: Cloudflare record name, target, proxy status, and `dig +short api.{env}.careervp.com` resolving to the regional target.
 
 2. **Deploy-Frontend / Amplify console — repoint the baked frontend API URL.**
-   - Fix the broken "Deploy Frontend" workflow first; it has been failing since 2026-05-03 and must be green before this gate can close.
    - Set `NEXT_PUBLIC_API_URL=https://api.{env}.careervp.com` for the target Amplify frontend environment.
    - Trigger a rebuild/redeploy so the baked frontend config uses the custom domain instead of the raw `execute-api` URL.
-   - Evidence to capture: green Deploy-Frontend run, Amplify deployment id, the resolved frontend environment variable value, and P-30 4-wire smoke results through `https://api.{env}.careervp.com`.
+   - Evidence supplied 2026-07-11 for dev: Amplify env var set and redeployed green.
+   - Remaining evidence to capture: green GitHub Deploy Frontend validation workflow, Amplify deployment id, the resolved frontend environment variable value, and P-30 4-wire smoke results through `https://api.{env}.careervp.com`.
 
 ### Job 1 — Decompose AROUND the RestApi (CFN-limit relief, additive, no RestApi move)
 

@@ -54,15 +54,19 @@ custom domain is enabled). Today the scoped CV-download bucket lists
 The scope-lock's guardrails (`cdk diff` zero-stateful-replacement, the oracle, flag-gating) protect
 everything **inside** CDK. These two are **outside CDK**, so those nets are blind to them:
 
-### LM-1 — `api.dev.careervp.com` is not in the CDK
-Grep of all `infra/careervp/*.py` finds **no API Gateway custom domain, no `BasePathMapping`, no
-Route53 record** for the `api` subdomain. It is wired manually (clickops) in the live account.
-**Consequence:** P-26 (and any RestApi replacement) changes the underlying `execute-api` id; the
-manual base-path mapping keeps pointing at the dead RestApi → `api.dev.careervp.com` returns
-**403/404 for every request → full site outage**, and CDK will not self-heal it.
-**Required before P-26:** resolve how the subdomain is mapped (read-only AWS), then either
-(a) import the custom domain into CDK so the mapping is managed, or (b) add an explicit manual
-"re-point base-path mapping to new RestApi" runbook step gated in the P-26 deploy.
+### LM-1 — `api.dev.careervp.com` is an external-DNS seam, now resolved for dev
+`api.dev.careervp.com` is backed by external Cloudflare DNS, not Route53. Evidence supplied
+2026-07-11: `dig +short api.dev.careervp.com` returns
+`d-ufdp03t4f1.execute-api.us-east-1.amazonaws.com.` and A records `54.157.91.177`,
+`98.90.192.136`, `98.89.7.162`. Amplify was also repointed to
+`NEXT_PUBLIC_API_URL=https://api.dev.careervp.com` and redeployed green.
+
+**Residual consequence:** P-26 can still break the site if a later RestApi/base-path mapping change
+orphanes this external DNS seam. CDK still cannot manage Cloudflare records, so DNS remains a
+human-evidence gate.
+**Required before P-26:** keep the API custom domain/BasePathMapping in CDK, keep Cloudflare
+`api.dev` as **DNS only** / grey-cloud, run the fixed GitHub Deploy Frontend validation workflow
+green, and P-30-smoke the custom domain before any base-path flip.
 
 ### LM-2 — CORS origin allow-lists are hand-authored
 P-08/P-10 replace `*`/`ALL_ORIGINS` with explicit lists. There is **no test today** asserting the
@@ -142,9 +146,11 @@ valid template) and only surfaces as a browser CORS wall in production.
 
 Must be answered with evidence before deploying P-04/P-08/P-10/P-26:
 
-- [ ] **LM-1:** How does `api.dev.careervp.com` resolve? (API GW custom domain? base-path mapping to
-      which RestApi id? Route53 record?) → `aws apigateway get-domain-names`,
-      `get-base-path-mappings`, `aws route53 list-resource-record-sets`.
+- [x] **LM-1 DNS:** `api.dev.careervp.com` resolves through Cloudflare DNS to the API Gateway
+      regional target (`d-ufdp03t4f1.execute-api.us-east-1.amazonaws.com.`) as of 2026-07-11.
+      Remaining LM-1 proof before P-26: `aws apigateway get-domain-names`,
+      `get-base-path-mappings`, fixed Deploy Frontend workflow green, and P-30 smoke through the
+      custom domain.
 - [ ] **LM-2:** Exact live Amplify origin(s) — the `*.amplifyapp.com` host + any custom domain →
       Amplify console / `aws amplify list-apps` + `list-branches`.
 - [ ] Confirm whether any live path still verifies **RS256** tokens (before L-2 retire).
