@@ -1,0 +1,18 @@
+[run]
+branch = True
+source = careervp
+omit =
+    careervp/infrastructure/*
+    */tests/*
+
+[report]
+precision = 2
+show_missing = True
+skip_covered = False
+
+[xml]
+output = coverage.xml
+
+[json]
+output = coverage.json
+pretty_print = True

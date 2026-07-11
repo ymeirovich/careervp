@@ -106,6 +106,18 @@ def _resolved_context() -> dict[str, object]:
     }
 
 
+@pytest.fixture(autouse=True)
+def _bypass_artifact_dependencies(
+    mock_artifact_dependency_resolver: object,
+    mock_company_research_load: object,
+) -> None:
+    """Opt into the dependency-bypass fixtures retired from global autouse (T-02).
+
+    This module exercises LLM cover-letter generation, not resolver/routing
+    behavior, so it declares the upstream bypass explicitly.
+    """
+
+
 @pytest.mark.unit
 class TestCoverLetterCallsLLM:
     """Validates L0.1: cover_letter.py calls LLMClient, not a stub."""

@@ -70,9 +70,9 @@ jobs:
           AWS_DEFAULT_REGION: us-east-1
         run: uv run mypy careervp --strict
 
-  # ── Backend: Pytest unit tests ─────────────────────────────────────────────
+  # ── Backend: Pytest coverage gates ────────────────────────────────────────
   pytest-unit:
-    name: Pytest Unit Tests
+    name: Pytest Coverage Gates
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -91,13 +91,13 @@ jobs:
         working-directory: src/backend
         run: uv sync --group dev
 
-      - name: Run pytest unit tests
+      - name: Run pytest coverage gates
         working-directory: src/backend
         env:
           AWS_REGION: us-east-1
           AWS_DEFAULT_REGION: us-east-1
           PYTHONPATH: ${{ github.workspace }}/src/backend
-        run: uv run pytest tests/unit -v --tb=short
+        run: make coverage-tests
 
   # ── TypeScript ──────────────────────────────────────────────────────────────
   typecheck:

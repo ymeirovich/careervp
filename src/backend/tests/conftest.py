@@ -2,10 +2,13 @@
 
 import json
 import os
+from collections.abc import Generator
 from typing import Any
 from unittest.mock import MagicMock
 
+import boto3
 import pytest
+from moto import mock_aws
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.models.cv import Education, Skill, SkillLevel, UserCV, WorkExperience
@@ -71,42 +74,40 @@ os.environ['IDEMPOTENCY_TABLE_NAME'] = 'test-idempotency-table'
 
 
 @pytest.fixture(autouse=True)
-def reset_dynamo_dal_singleton():
+def reset_dynamo_dal_singleton() -> Generator[None, None, None]:
     """Ensure each test gets a fresh DAL instance with its requested table."""
     DynamoDalHandler.reset_instance()
     yield
     DynamoDalHandler.reset_instance()
 
 
-@pytest.fixture(autouse=True)
-def mock_company_research_load(mocker):
-    """Mock company research loading to prevent AWS calls in tests."""
-    mocker.patch(
+@pytest.fixture
+def mock_company_research_load(mocker: Any) -> MagicMock:
+    """Opt-in company research loader mock for tests that do not seed CR rows."""
+    return mocker.patch(
         'careervp.handlers.artifact_dependency_utils.load_confident_company_research_artifact',
         return_value=None,
     )
 
 
-@pytest.fixture(autouse=True)
-def mock_artifact_dependency_resolver(mocker):
-    """Bypass upstream VPR/CR dependency checks in unit tests.
+@pytest.fixture
+def mock_artifact_dependency_resolver(mocker: Any) -> MagicMock:
+    """Opt-in upstream VPR/CR dependency bypass for narrow handler tests.
 
     Handlers call resolve_handler_dependencies() before doing any real work.
-    Without a valid VPR in DynamoDB, the resolver returns 409 and the handler
-    exits early — breaking every test that doesn't set up the full artifact
-    chain. Patching the inner resolve_dependencies() to return 'ready' lets
-    each test focus on its own behaviour instead of upstream DAL setup.
+    Tests should prefer moto-backed key schemas; this fixture exists only for
+    tests whose subject is unrelated to resolver/routing behavior.
     """
     from careervp.logic.artifact_dependency_resolver import DependencyResolution
 
-    mocker.patch(
+    return mocker.patch(
         'careervp.handlers.artifact_dependency_utils.resolve_dependencies',
         return_value=DependencyResolution(status='ready'),
     )
 
 
 @pytest.fixture(scope='session', autouse=True)
-def ensure_lambda_build_dir():
+def ensure_lambda_build_dir() -> None:
     """Create placeholder lambda asset directory expected by CDK tests."""
     from pathlib import Path
 
@@ -114,6 +115,83 @@ def ensure_lambda_build_dir():
     lambdas_dir = backend_root / '.build' / 'lambdas'
     lambdas_dir.mkdir(parents=True, exist_ok=True)
     (lambdas_dir / '.placeholder').touch()
+
+
+@pytest.fixture
+def moto_aws_context() -> Generator[None, None, None]:
+    """Start a moto AWS context for tests that exercise real boto3 schemas."""
+    with mock_aws():
+        yield
+
+
+@pytest.fixture
+def moto_dynamodb_resource(moto_aws_context: None) -> Any:
+    """Return a moto-backed DynamoDB resource."""
+    _ = moto_aws_context
+    return boto3.resource('dynamodb', region_name='us-east-1')
+
+
+@pytest.fixture
+def moto_artifacts_table(moto_dynamodb_resource: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Create the current artifacts-table schema: applicationId/artifactId."""
+    table_name = 'test-artifacts-table'
+    monkeypatch.setenv('ARTIFACTS_TABLE_NAME', table_name)
+    table = moto_dynamodb_resource.create_table(
+        TableName=table_name,
+        KeySchema=[
+            {'AttributeName': 'applicationId', 'KeyType': 'HASH'},
+            {'AttributeName': 'artifactId', 'KeyType': 'RANGE'},
+        ],
+        AttributeDefinitions=[
+            {'AttributeName': 'applicationId', 'AttributeType': 'S'},
+            {'AttributeName': 'artifactId', 'AttributeType': 'S'},
+        ],
+        BillingMode='PAY_PER_REQUEST',
+    )
+    table.wait_until_exists()
+    return table
+
+
+@pytest.fixture
+def moto_applications_table(moto_dynamodb_resource: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Create the current applications-table schema: userId/applicationId."""
+    table_name = 'test-applications-table'
+    monkeypatch.setenv('APPLICATIONS_TABLE_NAME', table_name)
+    table = moto_dynamodb_resource.create_table(
+        TableName=table_name,
+        KeySchema=[
+            {'AttributeName': 'userId', 'KeyType': 'HASH'},
+            {'AttributeName': 'applicationId', 'KeyType': 'RANGE'},
+        ],
+        AttributeDefinitions=[
+            {'AttributeName': 'userId', 'AttributeType': 'S'},
+            {'AttributeName': 'applicationId', 'AttributeType': 'S'},
+        ],
+        BillingMode='PAY_PER_REQUEST',
+    )
+    table.wait_until_exists()
+    return table
+
+
+@pytest.fixture
+def moto_cvs_table(moto_dynamodb_resource: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Create the current CVs-table schema: userId/cvId."""
+    table_name = 'test-cvs-table'
+    monkeypatch.setenv('CVS_TABLE_NAME', table_name)
+    table = moto_dynamodb_resource.create_table(
+        TableName=table_name,
+        KeySchema=[
+            {'AttributeName': 'userId', 'KeyType': 'HASH'},
+            {'AttributeName': 'cvId', 'KeyType': 'RANGE'},
+        ],
+        AttributeDefinitions=[
+            {'AttributeName': 'userId', 'AttributeType': 'S'},
+            {'AttributeName': 'cvId', 'AttributeType': 'S'},
+        ],
+        BillingMode='PAY_PER_REQUEST',
+    )
+    table.wait_until_exists()
+    return table
 
 
 # ---------------------------------------------------------------------------

@@ -30,7 +30,14 @@ from moto import mock_aws
 
 
 @pytest.fixture(autouse=True)
-def _env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
+def _env(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_artifact_dependency_resolver: Any,
+    mock_company_research_load: Any,
+) -> Generator[None, None, None]:
+    # This roundtrip exercises the submit/status seam, not upstream VPR/CR
+    # resolution, so it opts into the dependency-bypass fixtures retired from
+    # global autouse (T-02).
     monkeypatch.setenv('AWS_ACCESS_KEY_ID', 'testing')
     monkeypatch.setenv('AWS_SECRET_ACCESS_KEY', 'testing')
     monkeypatch.setenv('AWS_SECURITY_TOKEN', 'testing')

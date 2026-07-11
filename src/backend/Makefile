@@ -12,6 +12,7 @@ DOCKER_PLATFORM := linux/amd64
 LAYER_BUNDLING_PLATFORM := linux/amd64
 LAMBDA_BASE_IMAGE := public.ecr.aws/lambda/python:$(PYTHON_RUNTIME_VERSION)
 API_CONSTRUCT_PATH := ../../infra/careervp/api_construct.py
+COVERAGE_ARGS := --cov-config=.coveragerc --cov=careervp --cov-report=xml --cov-report=json:coverage.json
 
 OPENAPI_DIR := ./docs/swagger
 CURRENT_OPENAPI := $(OPENAPI_DIR)/openapi.json
@@ -55,7 +56,7 @@ deps:
 	uv export --no-editable --no-emit-project --no-color --format=requirements-txt > dev_requirements.txt
 
 unit:
-	uv run pytest tests/unit  --cov-config=.coveragerc --cov=careervp --cov-report xml
+	uv run pytest tests/unit $(COVERAGE_ARGS)
 
 build: deps check-runtime
 	rm -rf .build/lambdas
@@ -85,19 +86,20 @@ infra-tests: build
 	uv run pytest tests/infrastructure
 
 integration:
-	uv run pytest tests/integration  --cov-config=.coveragerc --cov=careervp --cov-report xml
+	uv run pytest tests/integration $(COVERAGE_ARGS)
 
 e2e:
 	@if ! ls tests/e2e/test_*.py >/dev/null 2>&1; then \
 		echo "No e2e tests detected; skipping."; \
 	else \
-		uv run pytest tests/e2e --cov-config=.coveragerc --cov=careervp --cov-report xml; \
+		uv run pytest tests/e2e $(COVERAGE_ARGS); \
 	fi
 
 pr: deps format pre-commit complex lint lint-docs unit deploy coverage-tests e2e openapi
 
 coverage-tests:
-	uv run pytest tests/unit tests/integration  --cov-config=.coveragerc --cov=careervp --cov-report xml
+	uv run pytest tests/unit tests/integration $(COVERAGE_ARGS)
+	uv run python scripts/check_coverage_gates.py coverage.json
 
 _CDK_ALLOWED_ORIGINS := $(shell node -e "try{const d=JSON.parse(require('fs').readFileSync('../../infra/cdk.json','utf8'));process.stdout.write(d.context.allowed_origins||'')}catch(e){}" 2>/dev/null)
 

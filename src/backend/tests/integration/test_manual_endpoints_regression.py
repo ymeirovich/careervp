@@ -87,7 +87,14 @@ def _vpr_submit_event(user_id: str = 'user-abc', cv_id: str = 'cv-1', job_id: st
 
 
 @pytest.fixture(autouse=True)
-def _gap_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def _gap_env(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_artifact_dependency_resolver: Any,
+    mock_company_research_load: Any,
+) -> None:
+    # These manual-endpoint regressions assert the submit/flag behavior, not
+    # upstream dependency resolution, so they opt into the bypass fixtures
+    # retired from global autouse (T-02).
     monkeypatch.setenv('USERS_TABLE_NAME', 'test-users-table')
     monkeypatch.setenv('GAP_RESPONSES_TABLE_NAME', 'test-gap-responses-table')
     monteypatch_env_cleaners = ['ARTIFACT_CHAIN_ENABLED', 'STEP_FUNCTIONS_CHAIN_ARN']

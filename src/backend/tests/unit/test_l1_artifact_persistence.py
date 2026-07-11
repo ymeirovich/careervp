@@ -163,6 +163,18 @@ def _resolved_cover_letter_context() -> dict[str, object]:
     }
 
 
+@pytest.fixture(autouse=True)
+def _bypass_artifact_dependencies(
+    mock_artifact_dependency_resolver: object,
+    mock_company_research_load: object,
+) -> None:
+    """Opt into the dependency-bypass fixtures retired from global autouse (T-02).
+
+    This module verifies artifact persistence, not resolver/routing behavior, so
+    it declares the upstream bypass explicitly.
+    """
+
+
 @pytest.mark.unit
 def test_cover_letter_generation_persists_to_dynamodb() -> None:
     from careervp.handlers.cover_letter_handler import lambda_handler
