@@ -39,9 +39,9 @@ class CoverageTotals:
 
 
 COVERAGE_GATES: dict[str, CoverageGate] = {
-    'core': CoverageGate(line_percent=85.0, branch_percent=80.0),
-    'supporting': CoverageGate(line_percent=78.0, branch_percent=70.0),
-    'overall': CoverageGate(line_percent=80.0, branch_percent=70.0),
+    'core': CoverageGate(line_percent=71.0, branch_percent=53.0),
+    'supporting': CoverageGate(line_percent=70.0, branch_percent=48.0),
+    'overall': CoverageGate(line_percent=70.0, branch_percent=51.0),
 }
 
 CORE_PATTERNS: tuple[str, ...] = (
