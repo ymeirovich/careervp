@@ -162,7 +162,9 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
 
     max_questions = _normalize_max_questions(openapi_request.max_questions)
     focus_areas = _normalize_focus_areas(openapi_request.focus_areas)
-    user_cv = _build_user_cv_prompt_payload(cv_id=cv_id, focus_areas=focus_areas)
+    user_cv = _build_user_cv_prompt_payload(user_id=user_id, cv_id=cv_id, focus_areas=focus_areas)
+    if _is_cv_error_envelope(user_cv):
+        return _json_response(HTTPStatus.NOT_FOUND, _public_cv_error_envelope(user_cv))
     job_posting = _build_job_prompt_payload(job_id=job_id, focus_areas=focus_areas)
 
     application_id, error_response = _prepare_trial_and_pending_state(
@@ -525,11 +527,88 @@ def _extract_user_id(event: dict[str, Any]) -> str | None:
     return extract_user_id(event)
 
 
-def _build_user_cv_prompt_payload(cv_id: str, focus_areas: list[str]) -> dict[str, Any]:
+_CV_ERROR_SENTINEL = '__cv_error__'
+
+
+def _is_cv_error_envelope(payload: dict[str, Any]) -> bool:
+    """Return True when payload is a §3 item-10 error envelope (not a CV prompt dict)."""
+    return _CV_ERROR_SENTINEL in payload
+
+
+def _cv_not_found_error_envelope() -> dict[str, Any]:
     return {
-        'personal_info': {'full_name': 'Candidate'},
-        'skills': focus_areas,
-        'work_experience': [{'company': 'Current Company', 'role': 'Engineer', 'cv_id': cv_id}],
+        _CV_ERROR_SENTINEL: True,
+        'error': 'CV not found',
+        'message': 'CV not found',
+        'classification': 'not_found',
+        'error_code': 'cv_not_found',
+        'field': 'cv_id',
+    }
+
+
+def _public_cv_error_envelope(payload: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in payload.items() if key != _CV_ERROR_SENTINEL}
+
+
+def _build_user_cv_prompt_payload(user_id: str, cv_id: str, focus_areas: list[str]) -> dict[str, Any]:
+    """Load the real UserCV from DynamoDB and map it to the prompt-payload dict.
+
+    On success: returns a dict with 'personal_info', 'work_experience', 'skills', 'education'.
+    On CV not found (None from DAL) or any DAL error: returns a §3 item-10 error envelope
+    flagged with _CV_ERROR_SENTINEL so the call site can detect it and return HTTP 404.
+    The stub CV is NEVER used as a fallback.
+    """
+    cv_table_name = os.environ.get('CVS_TABLE_NAME', '').strip()
+    users_table_name = os.environ.get('USERS_TABLE_NAME', '').strip()
+
+    # Mirror the sibling pattern in cover_letter_handler._load_user_cv:
+    # prefer CVS_TABLE_NAME, fall back to USERS_TABLE_NAME.
+    table_name = cv_table_name or users_table_name
+    if not table_name:
+        logger.warning('No CV table configured (CVS_TABLE_NAME / USERS_TABLE_NAME)', user_id=user_id, cv_id=cv_id)
+        return _cv_not_found_error_envelope()
+
+    try:
+        cv_dal = DynamoDalHandler(table_name=table_name)
+        user_cv = cv_dal.get_cv_by_id(user_id, cv_id)
+    except Exception as exc:
+        logger.warning('DAL error loading CV for gap prompt', user_id=user_id, cv_id=cv_id, error=str(exc))
+        return _cv_not_found_error_envelope()
+
+    if user_cv is None:
+        logger.warning('CV not found for gap prompt', user_id=user_id, cv_id=cv_id)
+        return _cv_not_found_error_envelope()
+
+    # Map UserCV → the dict shape that create_gap_analysis_user_prompt reads.
+    work_experience = [
+        {
+            'company': exp.company,
+            'role': exp.role,
+            'start_date': exp.start_date or '',
+            'end_date': exp.end_date or '',
+            'responsibilities': exp.achievements,
+        }
+        for exp in (user_cv.experience or [])
+    ]
+    skills: list[str] = []
+    for s in user_cv.skills or []:
+        if isinstance(s, str):
+            skills.append(s)
+        else:
+            skills.append(s.name)
+    education = [
+        {
+            'institution': edu.institution,
+            'degree': edu.degree,
+            'field': edu.field_of_study or '',
+        }
+        for edu in (user_cv.education or [])
+    ]
+    return {
+        'personal_info': {'full_name': user_cv.full_name},
+        'work_experience': work_experience,
+        'skills': skills,
+        'education': education,
     }
 
 

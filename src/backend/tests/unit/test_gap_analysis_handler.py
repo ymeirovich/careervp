@@ -123,6 +123,27 @@ def test_generate_questions_returns_200_and_persists(gap_table: Any) -> None:
     from careervp.handlers.gap_handler import lambda_handler
     from careervp.models.result import Result, ResultCode
 
+    gap_table.put_item(
+        Item={
+            'pk': 'user-1',
+            'sk': 'CV#cv-123',
+            'user_id': 'user-1',
+            'full_name': 'Legacy Test User',
+            'work_experience': [
+                {
+                    'company': 'ExistingCorp',
+                    'role': 'Engineer',
+                    'achievements': ['Shipped production systems'],
+                }
+            ],
+            'skills': [{'name': 'Python'}],
+            'education': [],
+            'certifications': [],
+            'languages': [],
+            'is_parsed': True,
+        }
+    )
+
     event = _event(
         path='/gap-analysis/questions',
         method='POST',
