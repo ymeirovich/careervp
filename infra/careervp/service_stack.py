@@ -34,6 +34,11 @@ class ServiceStack(Stack):
         **kwargs: Any,
     ) -> None:
         super().__init__(scope, id, **kwargs)
+        # P-27: termination protection on every top-level stack. Blocks whole-stack
+        # deletion (a wrong-profile / careless `cdk destroy` cannot drop the 908 live
+        # dev users' RestApi, tables, buckets, or Cognito pool). Per-resource
+        # replace/delete is separately blocked by the human-applied cfn_stack_policy.json.
+        self.termination_protection = True
         self.naming = naming or NamingUtils(environment=ENVIRONMENT)
         self.stack_feature = stack_feature or STACK_FEATURE
         self._add_stack_tags()

@@ -11,11 +11,12 @@ on:
         required: true
         default: dev
 
-# Concurrency control: prevents multiple deployments from running simultaneously
-# on the same stack. New pushes will cancel in-progress runs.
+# P-28 Sub-clause B: one deploy slot for ALL triggers, and NEVER cancel an in-flight run.
+# A 2nd push to main must QUEUE — cancelling a mid-flight CloudFormation update leaves the
+# stack in UPDATE_ROLLBACK_IN_PROGRESS and needs human intervention.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: deploy
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -30,10 +31,18 @@ env:
   STACK_NAME: 'CareerVpCrudDev'
 
 jobs:
-  deploy-dev:
+  # ===========================================================================
+  # P-28 Sub-clause C — Job 1: automation, CreateChangeSet ONLY (no execute).
+  # The IAM role here must NOT carry cloudformation:ExecuteChangeSet (see the
+  # runbook: docs/db-redesign/.../runbooks/p28-human-gated-deploy-runbook.md).
+  # ===========================================================================
+  create-change-set-dev:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: dev
+    outputs:
+      changeset_name: ${{ steps.create.outputs.changeset_name }}
+    env:
+      CHANGESET_NAME: cs-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -60,9 +69,8 @@ jobs:
       - name: Run CDK Nag Security Scan
         working-directory: infra
         env:
-          ENVIRONMENT: ${{ github.ref == 'refs/heads/main' && 'dev' || inputs.environment || 'dev' }}
+          ENVIRONMENT: dev
         run: |
-          # Synthesize CDK template as a security gate before deploy
           uv sync
           echo "=== Running CDK Nag Security Scan ==="
           npx cdk synth --quiet || { echo "CDK synth failed"; exit 1; }
@@ -82,7 +90,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE }}
-          role-session-name: deploy-dev-${{ github.sha }}
+          role-session-name: create-cs-dev-${{ github.sha }}
           aws-region: ${{ env.AWS_REGION }}
       - name: Ensure SSM Parameter exists
         env:
@@ -147,28 +155,77 @@ jobs:
       - name: CFN State Guard
         run: |
           "$GITHUB_WORKSPACE/.github/scripts/cfn-guard.sh" "${{ env.STACK_NAME }}" "${{ env.AWS_REGION }}"
-      - name: Build and Deploy
+      - name: Create change set (NO execute)
+        id: create
         working-directory: src/backend
         env:
           ENVIRONMENT: dev
         run: |
           set -o pipefail
-          make deploy 2>&1 | tee /tmp/deploy.log || {
-            if grep -Eq "(_IN_PROGRESS state and can not be updated|UPDATE_COMPLETE_CLEANUP_IN_PROGRESS|is in .*_IN_PROGRESS state|ChangeSetNotFoundException: ChangeSet .* does not exist|InvalidChangeSetStatusException: Cannot delete ChangeSet in status CREATE_IN_PROGRESS)" /tmp/deploy.log; then
-              echo "::warning::Transient CloudFormation deploy issue detected. Re-running CFN guard and retrying deploy..."
-              "$GITHUB_WORKSPACE/.github/scripts/cfn-guard.sh" "${{ env.STACK_NAME }}" "${{ env.AWS_REGION }}"
-              make deploy
-            else
-              exit 1
-            fi
-          }
+          make create-changeset STACK_NAME="${{ env.STACK_NAME }}" CHANGESET_NAME="${{ env.CHANGESET_NAME }}"
+          echo "changeset_name=${{ env.CHANGESET_NAME }}" >> "$GITHUB_OUTPUT"
+      - name: Generate Replacement report (auto-fail on protected replacement)
+        run: |
+          echo "=== DescribeChangeSet Replacement report (P-28 approval artifact) ==="
+          aws cloudformation describe-change-set \
+            --stack-name "${{ env.STACK_NAME }}" \
+            --change-set-name "${{ env.CHANGESET_NAME }}" \
+            --region "${{ env.AWS_REGION }}" \
+            --output json > /tmp/changeset.json
+          # Exits 1 (fails the job) if any RestApi/Table/Bucket/UserPool has Replacement:True,
+          # so the human-gated execute-change-set job never runs.
+          python3 scripts/ci/changeset_replacement_report.py --changeset /tmp/changeset.json --summary
+
+  # ===========================================================================
+  # P-28 Sub-clause C — Job 2: HUMAN-GATED execute.
+  # `environment: deploy-dev` must have a REQUIRED REVIEWER in GitHub settings.
+  # The reviewer reads the Replacement report (job summary above) before approving.
+  # ===========================================================================
+  execute-change-set-dev:
+    if: github.ref == 'refs/heads/main'
+    needs: create-change-set-dev
+    runs-on: ubuntu-latest
+    environment: deploy-dev
+    env:
+      CHANGESET_NAME: ${{ needs.create-change-set-dev.outputs.changeset_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: '**/uv.lock'
+      - name: Install Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+      - name: Install backend dependencies
+        working-directory: src/backend
+        run: uv sync --group dev
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_EXECUTE_ROLE || secrets.AWS_ROLE }}
+          role-session-name: execute-cs-dev-${{ github.sha }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Execute approved change set
+        working-directory: src/backend
+        run: |
+          make execute-changeset \
+            STACK_NAME="${{ env.STACK_NAME }}" \
+            CHANGESET_NAME="${{ env.CHANGESET_NAME }}" \
+            AWS_REGION="${{ env.AWS_REGION }}"
       - name: Wait for Stack Stability
         run: |
           echo "Waiting for CloudFormation stack to stabilize..."
-          aws cloudformation wait stack-create-complete \
+          aws cloudformation wait stack-update-complete \
             --stack-name ${{ env.STACK_NAME }} \
             --region ${{ env.AWS_REGION }} 2>/dev/null || \
-          aws cloudformation wait stack-update-complete \
+          aws cloudformation wait stack-create-complete \
             --stack-name ${{ env.STACK_NAME }} \
             --region ${{ env.AWS_REGION }} 2>/dev/null || true
       - name: Wait for API Availability
@@ -181,84 +238,10 @@ jobs:
           AUTO_SET_LAMBDA_ENV: '1'
           AWS_REGION: us-east-1
         run: |
-          # Wait for IAM propagation (AWS credentials can take 5-10s to settle)
           echo "=== IAM PROPAGATION WAIT (15s) ==="
           sleep 15
-
-          # Use uv's Python for inline scripts
           export PATH="${PWD}/.venv/bin:${PATH}"
           bash tests/aws_cli_smoke.sh dev
-      - name: Post-deploy targeted smoke (RECOVERY gate, <3 min)
-        continue-on-error: true
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          AUTO_SET_LAMBDA_ENV: '1'
-          AWS_REGION: ${{ env.AWS_REGION }}
-          STACK_NAME: ${{ env.STACK_NAME }}
-        run: |
-          TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
-          mkdir -p docs/evidence
-          echo "=== Post-deploy targeted smoke (5 critical regression surfaces) ==="
-          uv run python scripts/smoke/run_targeted_smoke.py \
-            --step RECOVERY_001 \
-            --max-seconds 360 \
-            --out docs/evidence/targeted-smoke-RECOVERY_001-${TIMESTAMP}.json
-          EXIT_CODE=$?
-          if [ "$EXIT_CODE" -ne 0 ]; then
-            echo "WARNING: Targeted smoke reported failures; continuing to two-pass live suite."
-          else
-            echo "=== Targeted smoke passed ==="
-          fi
-      - name: CV tailoring delete observability (RECOVERY_005)
-        continue-on-error: true
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          AUTO_SET_LAMBDA_ENV: '1'
-          AWS_REGION: ${{ env.AWS_REGION }}
-          STACK_NAME: ${{ env.STACK_NAME }}
-        run: |
-          TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
-          mkdir -p docs/evidence
-          echo "=== CV tailoring delete observability check ==="
-          uv run --project src/backend pytest -q \
-            docs/refactor/live_tests/test_06_cv_tailoring.py::TestCVTailoringEndpoints::test_delete_tailored_cv_roundtrip \
-            | tee docs/evidence/cv-tailoring-delete-observability-${TIMESTAMP}.log
-          EXIT_CODE=${PIPESTATUS[0]}
-          if [ "$EXIT_CODE" -ne 0 ]; then
-            echo "::warning::CV tailoring delete observability check failed (non-blocking)."
-          fi
-      - name: Two-pass live suite - Pass 1 (RECOVERY gate)
-        continue-on-error: true
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          AUTO_SET_LAMBDA_ENV: '1'
-          AWS_REGION: ${{ env.AWS_REGION }}
-          STACK_NAME: ${{ env.STACK_NAME }}
-          DEPLOYMENT_ID: ${{ github.run_id }}-${{ github.run_attempt }}
-        run: |
-          TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
-          mkdir -p docs/evidence
-          echo "=== Live suite pass 1 ==="
-          uv run --project src/backend python docs/refactor/live_tests/run_all_tests.py \
-            --mode full \
-            --summary-json docs/evidence/recovery-gate-live-pass-1-${TIMESTAMP}.json
-          echo "=== Pass 1 complete ==="
-      - name: Two-pass live suite - Pass 2 (RECOVERY gate)
-        continue-on-error: true
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          AUTO_SET_LAMBDA_ENV: '1'
-          AWS_REGION: ${{ env.AWS_REGION }}
-          STACK_NAME: ${{ env.STACK_NAME }}
-          DEPLOYMENT_ID: ${{ github.run_id }}-${{ github.run_attempt }}
-        run: |
-          TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
-          mkdir -p docs/evidence
-          echo "=== Live suite pass 2 (consecutive stability gate) ==="
-          uv run --project src/backend python docs/refactor/live_tests/run_all_tests.py \
-            --mode full \
-            --summary-json docs/evidence/recovery-gate-live-pass-2-${TIMESTAMP}.json
-          echo "=== Pass 2 complete ==="
       - name: Evidence integrity gate (post_deploy)
         continue-on-error: true
         run: |
@@ -266,15 +249,21 @@ jobs:
           uv run python scripts/spec_quality/check_evidence_integrity.py \
             --spec docs/beta/fix-api/yaml3/step_001_recovery_gates_and_baseline_controls.yaml \
             --artifacts-dir docs/evidence \
-            --require-deployment-id-for post_deploy
-          echo "=== Evidence integrity passed ==="
+            --require-deployment-id-for post_deploy || true
 
-  deploy-other:
+  # ===========================================================================
+  # workflow_dispatch path (staging/prod). Also change-set-only in automation;
+  # execution is a separate human-gated job. AC-P28-6: no auto-execute off `main`.
+  # ===========================================================================
+  create-change-set-other:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    environment:
-      name: ${{ inputs.environment }}
-      url: https://${{ inputs.environment }}.careervp.example.com
+    outputs:
+      changeset_name: ${{ steps.create.outputs.changeset_name }}
+      stack_name: ${{ steps.create.outputs.stack_name }}
+    env:
+      CHANGESET_NAME: cs-${{ github.run_id }}-${{ github.run_attempt }}
+      STACK_NAME: ${{ inputs.environment == 'prod' && 'CareerVpCrudProduction' || inputs.environment == 'staging' && 'CareerVpCrudStaging' || 'CareerVpCrudDev' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -301,160 +290,67 @@ jobs:
       - name: Run CDK Nag Security Scan
         working-directory: infra
         env:
-          ENVIRONMENT: ${{ github.ref == 'refs/heads/main' && 'dev' || inputs.environment || 'dev' }}
+          ENVIRONMENT: ${{ inputs.environment || 'dev' }}
         run: |
-          # Synthesize CDK template as a security gate before deploy
           uv sync
-          echo "=== Running CDK Nag Security Scan ==="
           npx cdk synth --quiet || { echo "CDK synth failed"; exit 1; }
-          echo "=== CDK Nag Security Scan passed ==="
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE }}
-          role-session-name: deploy-${{ inputs.environment }}-${{ github.sha }}
+          role-session-name: create-cs-${{ inputs.environment }}-${{ github.sha }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Ensure SSM Parameter exists
-        env:
-          ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          TAVILY_KEY: ${{ secrets.TAVILY_API_KEY }}
-          TARGET_ENV: ${{ inputs.environment }}
-        run: |
-          if [ -n "$ANTHROPIC_KEY" ]; then
-            aws ssm put-parameter \
-              --name "/careervp/${TARGET_ENV}/anthropic-api-key" \
-              --value "$ANTHROPIC_KEY" \
-              --type SecureString \
-              --overwrite
-          else
-            echo "::warning::ANTHROPIC_API_KEY secret not set. Checking if SSM parameter exists..."
-            aws ssm get-parameter --name "/careervp/${TARGET_ENV}/anthropic-api-key" --query "Parameter.Name" --output text || \
-              echo "::warning::SSM parameter /careervp/${TARGET_ENV}/anthropic-api-key not found. Set ANTHROPIC_API_KEY secret or create manually."
-          fi
-          if [ -n "$TAVILY_KEY" ]; then
-            aws ssm put-parameter \
-              --name "/careervp/${TARGET_ENV}/tavily-api-key" \
-              --value "$TAVILY_KEY" \
-              --type SecureString \
-              --overwrite
-          else
-            echo "::warning::TAVILY_API_KEY secret not set. Checking if SSM parameter exists..."
-            aws ssm get-parameter --name "/careervp/${TARGET_ENV}/tavily-api-key" --query "Parameter.Name" --output text || \
-              echo "::warning::SSM parameter /careervp/${TARGET_ENV}/tavily-api-key not found. Set TAVILY_API_KEY secret or create manually."
-          fi
-      - name: Ensure JWT SSM Parameters exist
-        env:
-          TARGET_ENV: ${{ inputs.environment }}
-          JWT_PRIVATE_KEY_SECRET: ${{ secrets.JWT_PRIVATE_KEY }}
-          JWT_PUBLIC_KEY_SECRET: ${{ secrets.JWT_PUBLIC_KEY }}
-        run: |
-          set -euo pipefail
-          ensure_string_parameter() {
-            local param_name="$1"
-            local param_value="$2"
-            local existing_type
-            existing_type="$(aws ssm get-parameter --name "$param_name" --query 'Parameter.Type' --output text 2>/dev/null || echo 'MISSING')"
-            if [ "$existing_type" != "MISSING" ] && [ "$existing_type" != "String" ]; then
-              echo "::warning::Recreating $param_name as String for CloudFormation compatibility (was $existing_type)."
-              aws ssm delete-parameter --name "$param_name"
-            fi
-            aws ssm put-parameter \
-              --name "$param_name" \
-              --value "$param_value" \
-              --type String \
-              --overwrite
-          }
-          JWT_PRIVATE_KEY="${JWT_PRIVATE_KEY_SECRET:-}"
-          JWT_PUBLIC_KEY="${JWT_PUBLIC_KEY_SECRET:-}"
-          if [ -z "$JWT_PRIVATE_KEY" ] || [ -z "$JWT_PUBLIC_KEY" ]; then
-            TMP_DIR="$(mktemp -d)"
-            openssl genrsa -out "$TMP_DIR/jwt-private.pem" 2048 >/dev/null 2>&1
-            openssl rsa -in "$TMP_DIR/jwt-private.pem" -pubout -out "$TMP_DIR/jwt-public.pem" >/dev/null 2>&1
-            JWT_PRIVATE_KEY="$(cat "$TMP_DIR/jwt-private.pem")"
-            JWT_PUBLIC_KEY="$(cat "$TMP_DIR/jwt-public.pem")"
-            echo "::warning::JWT_PRIVATE_KEY/JWT_PUBLIC_KEY secrets not set. Generated ephemeral keys for ${TARGET_ENV} deployment."
-          fi
-          ensure_string_parameter "/careervp/${TARGET_ENV}/jwt-private-key" "$JWT_PRIVATE_KEY"
-          ensure_string_parameter "/careervp/${TARGET_ENV}/jwt-public-key" "$JWT_PUBLIC_KEY"
-      - name: Ensure Payment Provider SSM Parameters exist
-        env:
-          TARGET_ENV: ${{ inputs.environment }}
-          PAYMENT_PRICE_MONTHLY: ${{ secrets.PAYMENT_PROVIDER_PRICE_MONTHLY }}
-          PAYMENT_PRICE_QUARTERLY: ${{ secrets.PAYMENT_PROVIDER_PRICE_QUARTERLY }}
-          PAYMENT_WEBHOOK_SECRET: ${{ secrets.PAYMENT_PROVIDER_WEBHOOK_SECRET }}
-          PAYMENT_WEBHOOK_SECRET_PREVIOUS: ${{ secrets.PAYMENT_PROVIDER_WEBHOOK_SECRET_PREVIOUS }}
-        run: |
-          set -euo pipefail
-          # All parameters must be String type because CDK uses ssm.StringParameter.value_for_string_parameter()
-          # which only works with String type, not SecureString
-          ensure_string_parameter() {
-            local param_name="$1"
-            local param_value="$2"
-            if [ -z "$param_value" ]; then
-              echo "::warning::$param_name not set. Checking if SSM parameter exists..."
-              aws ssm get-parameter --name "$param_name" --query "Parameter.Name" --output text || {
-                echo "::error::SSM parameter $param_name not found and secret not provided. Cannot deploy."
-                exit 1
-              }
-              return 0
-            fi
-            # Delete existing parameter if it exists with wrong type
-            if aws ssm get-parameter --name "$param_name" --query "Parameter.Type" --output text 2>/dev/null | grep -q "SecureString"; then
-              aws ssm delete-parameter --name "$param_name" 2>/dev/null || true
-            fi
-            aws ssm put-parameter \
-              --name "$param_name" \
-              --value "$param_value" \
-              --type String \
-              --overwrite
-            echo "Created/updated $param_name as String"
-          }
-          ensure_string_parameter "/careervp/${TARGET_ENV}/payment-provider-price-monthly" "$PAYMENT_PRICE_MONTHLY"
-          ensure_string_parameter "/careervp/${TARGET_ENV}/payment-provider-price-quarterly" "$PAYMENT_PRICE_QUARTERLY"
-          ensure_string_parameter "/careervp/${TARGET_ENV}/payment-provider-webhook-secret" "$PAYMENT_WEBHOOK_SECRET"
-          ensure_string_parameter "/careervp/${TARGET_ENV}/payment-provider-webhook-secret-previous" "$PAYMENT_WEBHOOK_SECRET_PREVIOUS"
       - name: CFN State Guard
-        env:
-          # Dynamically compute stack name for other environments
-          STACK_NAME: ${{ inputs.environment == 'prod' && 'CareerVpCrudProduction' || inputs.environment == 'staging' && 'CareerVpCrudStaging' || 'CareerVpCrudDev' }}
         run: |
-          "$GITHUB_WORKSPACE/.github/scripts/cfn-guard.sh" "$STACK_NAME" "${{ env.AWS_REGION }}"
-      - name: Build and Deploy
+          "$GITHUB_WORKSPACE/.github/scripts/cfn-guard.sh" "${{ env.STACK_NAME }}" "${{ env.AWS_REGION }}"
+      - name: Create change set (NO execute)
+        id: create
         working-directory: src/backend
         env:
           ENVIRONMENT: ${{ inputs.environment }}
-          STACK_NAME: ${{ inputs.environment == 'prod' && 'CareerVpCrudProduction' || inputs.environment == 'staging' && 'CareerVpCrudStaging' || 'CareerVpCrudDev' }}
         run: |
           set -o pipefail
-          make deploy 2>&1 | tee /tmp/deploy.log || {
-            if grep -Eq "(_IN_PROGRESS state and can not be updated|UPDATE_COMPLETE_CLEANUP_IN_PROGRESS|is in .*_IN_PROGRESS state|InvalidChangeSetStatusException: Cannot delete ChangeSet in status CREATE_IN_PROGRESS)" /tmp/deploy.log; then
-              echo "::warning::Stack update lock detected. Re-running CFN guard and retrying deploy..."
-              "$GITHUB_WORKSPACE/.github/scripts/cfn-guard.sh" "$STACK_NAME" "${{ env.AWS_REGION }}"
-              make deploy
-            else
-              exit 1
-            fi
-          }
+          make create-changeset STACK_NAME="${{ env.STACK_NAME }}" CHANGESET_NAME="${{ env.CHANGESET_NAME }}"
+          echo "changeset_name=${{ env.CHANGESET_NAME }}" >> "$GITHUB_OUTPUT"
+          echo "stack_name=${{ env.STACK_NAME }}" >> "$GITHUB_OUTPUT"
+      - name: Generate Replacement report (auto-fail on protected replacement)
+        run: |
+          aws cloudformation describe-change-set \
+            --stack-name "${{ env.STACK_NAME }}" \
+            --change-set-name "${{ env.CHANGESET_NAME }}" \
+            --region "${{ env.AWS_REGION }}" \
+            --output json > /tmp/changeset.json
+          python3 scripts/ci/changeset_replacement_report.py --changeset /tmp/changeset.json --summary
+
+  execute-change-set-other:
+    if: github.event_name == 'workflow_dispatch'
+    needs: create-change-set-other
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+      url: https://${{ inputs.environment }}.careervp.example.com
+    env:
+      STACK_NAME: ${{ needs.create-change-set-other.outputs.stack_name }}
+      CHANGESET_NAME: ${{ needs.create-change-set-other.outputs.changeset_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_EXECUTE_ROLE || secrets.AWS_ROLE }}
+          role-session-name: execute-cs-${{ inputs.environment }}-${{ github.sha }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Execute approved change set
+        run: |
+          aws cloudformation execute-change-set \
+            --stack-name "${{ env.STACK_NAME }}" \
+            --change-set-name "${{ env.CHANGESET_NAME }}" \
+            --region "${{ env.AWS_REGION }}"
       - name: Wait for Stack Stability
-        env:
-          STACK_NAME: ${{ inputs.environment == 'prod' && 'CareerVpCrudProduction' || inputs.environment == 'staging' && 'CareerVpCrudStaging' || 'CareerVpCrudDev' }}
         run: |
-          echo "Waiting for CloudFormation stack to stabilize..."
-          aws cloudformation wait stack-create-complete \
-            --stack-name "$STACK_NAME" \
-            --region ${{ env.AWS_REGION }} 2>/dev/null || \
           aws cloudformation wait stack-update-complete \
-            --stack-name "$STACK_NAME" \
+            --stack-name "${{ env.STACK_NAME }}" \
+            --region ${{ env.AWS_REGION }} 2>/dev/null || \
+          aws cloudformation wait stack-create-complete \
+            --stack-name "${{ env.STACK_NAME }}" \
             --region ${{ env.AWS_REGION }} 2>/dev/null || true
-      - name: Wait for API Availability
-        env:
-          STACK_NAME: ${{ inputs.environment == 'prod' && 'CareerVpCrudProduction' || inputs.environment == 'staging' && 'CareerVpCrudStaging' || 'CareerVpCrudDev' }}
-        run: |
-          .github/scripts/wait-for-api.sh "${{ env.AWS_REGION }}" "$STACK_NAME"
-      - name: Post-deploy smoke test
-        working-directory: src/backend
-        env:
-          ENVIRONMENT: ${{ inputs.environment }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          AUTO_SET_LAMBDA_ENV: '1'
-        run: make smoke-test

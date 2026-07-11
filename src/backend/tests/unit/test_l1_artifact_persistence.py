@@ -328,6 +328,15 @@ def test_gap_analysis_generation_persists_item_with_non_null_artifact_id() -> No
         patch('careervp.handlers.gap_handler._get_dal') as mock_get_dal,
         patch('careervp.handlers.gap_handler._get_trial_service') as mock_trial_service,
         patch('careervp.handlers.gap_handler._get_application_repository') as mock_application_repository,
+        patch(
+            'careervp.handlers.gap_handler._build_user_cv_prompt_payload',
+            return_value={
+                'personal_info': {'full_name': 'Test User'},
+                'work_experience': [],
+                'skills': [],
+                'education': [],
+            },
+        ),
     ):
         dal = MagicMock()
         dal.save_gap_questions.return_value = Result(success=True, data=None, code=ResultCode.GAP_QUESTIONS_GENERATED)

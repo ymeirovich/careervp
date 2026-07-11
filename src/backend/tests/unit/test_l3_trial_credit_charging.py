@@ -68,6 +68,15 @@ class TestCreditChargedBeforeLLM:
             patch('careervp.handlers.gap_handler._get_application_repository', return_value=app_repo),
             patch('careervp.handlers.gap_handler._get_dal') as mock_get_dal,
             patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate,
+            patch(
+                'careervp.handlers.gap_handler._build_user_cv_prompt_payload',
+                return_value={
+                    'personal_info': {'full_name': 'Test User'},
+                    'work_experience': [],
+                    'skills': [],
+                    'education': [],
+                },
+            ),
         ):
             dal = MagicMock()
             dal.save_gap_questions.return_value = Result(success=True, data=None, code=ResultCode.GAP_QUESTIONS_GENERATED)
@@ -99,6 +108,15 @@ class TestCreditChargedBeforeLLM:
         with (
             patch('careervp.handlers.gap_handler._get_trial_service', return_value=trial_service),
             patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate,
+            patch(
+                'careervp.handlers.gap_handler._build_user_cv_prompt_payload',
+                return_value={
+                    'personal_info': {'full_name': 'Test User'},
+                    'work_experience': [],
+                    'skills': [],
+                    'education': [],
+                },
+            ),
         ):
             response = lambda_handler(_event(), MagicMock())
 
@@ -113,6 +131,15 @@ class TestCreditChargedBeforeLLM:
         with (
             patch('careervp.handlers.gap_handler._get_trial_service', return_value=trial_service),
             patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate,
+            patch(
+                'careervp.handlers.gap_handler._build_user_cv_prompt_payload',
+                return_value={
+                    'personal_info': {'full_name': 'Test User'},
+                    'work_experience': [],
+                    'skills': [],
+                    'education': [],
+                },
+            ),
         ):
             response = lambda_handler(_event(), MagicMock())
 
@@ -130,6 +157,15 @@ class TestCreditChargedBeforeLLM:
             patch('careervp.handlers.gap_handler._get_application_repository') as mock_repo_factory,
             patch('careervp.handlers.gap_handler._get_dal') as mock_get_dal,
             patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate,
+            patch(
+                'careervp.handlers.gap_handler._build_user_cv_prompt_payload',
+                return_value={
+                    'personal_info': {'full_name': 'Test User'},
+                    'work_experience': [],
+                    'skills': [],
+                    'education': [],
+                },
+            ),
         ):
             mock_repo_factory.return_value = MagicMock()
             dal = MagicMock()

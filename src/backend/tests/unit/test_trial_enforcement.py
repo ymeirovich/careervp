@@ -158,7 +158,18 @@ class TestApplicationCounter:
             'headers': {'Content-Type': 'application/json'},
             'body': json.dumps({'cv_id': 'cv-1', 'job_id': 'job-1'}),
         }
-        with patch('careervp.handlers.gap_handler._get_trial_service', return_value=trial_service):
+        with (
+            patch('careervp.handlers.gap_handler._get_trial_service', return_value=trial_service),
+            patch(
+                'careervp.handlers.gap_handler._build_user_cv_prompt_payload',
+                return_value={
+                    'personal_info': {'full_name': 'Test User'},
+                    'work_experience': [],
+                    'skills': [],
+                    'education': [],
+                },
+            ),
+        ):
             response = lambda_handler(event, MagicMock())
         assert response['statusCode'] == 403
 
@@ -177,7 +188,18 @@ class TestApplicationCounter:
             'headers': {'Content-Type': 'application/json'},
             'body': json.dumps({'cv_id': 'cv-1', 'job_id': 'job-1'}),
         }
-        with patch('careervp.handlers.gap_handler._get_trial_service', return_value=trial_service):
+        with (
+            patch('careervp.handlers.gap_handler._get_trial_service', return_value=trial_service),
+            patch(
+                'careervp.handlers.gap_handler._build_user_cv_prompt_payload',
+                return_value={
+                    'personal_info': {'full_name': 'Test User'},
+                    'work_experience': [],
+                    'skills': [],
+                    'education': [],
+                },
+            ),
+        ):
             response = lambda_handler(event, MagicMock())
         payload = json.loads(response['body'])
         assert payload['code'] == 'trial_exhausted'

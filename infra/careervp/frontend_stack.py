@@ -29,6 +29,9 @@ class FrontendStack(Stack):
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
+        # P-27: termination protection on every top-level stack (see ServiceStack).
+        self.termination_protection = True
+
         self._env_name = environment
         self.domain = domain
         removal_policy = (

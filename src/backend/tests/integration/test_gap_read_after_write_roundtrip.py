@@ -183,6 +183,16 @@ def test_get_after_post_returns_persisted_questions(gap_table: Any) -> None:
     with (
         patch.object(gap_handler, '_get_trial_service', return_value=None),
         patch.object(gap_handler, '_get_application_repository') as mock_app_repo,
+        patch.object(
+            gap_handler,
+            '_build_user_cv_prompt_payload',
+            return_value={
+                'personal_info': {'full_name': 'Test User'},
+                'work_experience': [],
+                'skills': [],
+                'education': [],
+            },
+        ),
         patch('asyncio.run') as mock_run,
     ):
         mock_app_repo.return_value.update_state.return_value = None
@@ -214,6 +224,16 @@ def test_post_failure_does_not_return_200(gap_table: Any) -> None:
         patch.object(gap_handler, '_get_questions_dal', return_value=mock_dal),
         patch.object(gap_handler, '_get_trial_service', return_value=None),
         patch.object(gap_handler, '_get_application_repository') as mock_app_repo,
+        patch.object(
+            gap_handler,
+            '_build_user_cv_prompt_payload',
+            return_value={
+                'personal_info': {'full_name': 'Test User'},
+                'work_experience': [],
+                'skills': [],
+                'education': [],
+            },
+        ),
         patch('asyncio.run') as mock_run,
     ):
         mock_app_repo.return_value.update_state.return_value = None
@@ -319,6 +339,16 @@ def test_cross_user_does_not_leak_questions(gap_table: Any) -> None:
     with (
         patch.object(gap_handler, '_get_trial_service', return_value=None),
         patch.object(gap_handler, '_get_application_repository') as mock_app_repo,
+        patch.object(
+            gap_handler,
+            '_build_user_cv_prompt_payload',
+            return_value={
+                'personal_info': {'full_name': 'Test User'},
+                'work_experience': [],
+                'skills': [],
+                'education': [],
+            },
+        ),
         patch('asyncio.run') as mock_run,
     ):
         mock_app_repo.return_value.update_state.return_value = None

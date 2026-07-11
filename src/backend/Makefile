@@ -1,4 +1,4 @@
-.PHONY: dev lint mypy-lint complex coverage pre-commit sort deploy destroy deps unit infra-tests integration e2e coverage-tests docs lint-docs build format format-fix compare-openapi openapi pr watch update-deps cleanup-changesets wait-for-stack smoke-test ssm-setup
+.PHONY: dev lint mypy-lint complex coverage pre-commit sort deploy create-changeset execute-changeset destroy deps unit infra-tests integration e2e coverage-tests docs lint-docs build format format-fix compare-openapi openapi pr watch update-deps cleanup-changesets wait-for-stack smoke-test ssm-setup
 PYTHON := .venv/bin/python3
 APP := ../../infra/app.py
 .ONESHELL:  # run all commands in a single shell, ensuring it runs within a local virtual env
@@ -106,6 +106,28 @@ _CDK_ALLOWED_ORIGINS := $(shell node -e "try{const d=JSON.parse(require('fs').re
 deploy: build
 	npx cdk acknowledge 34892
 	npx cdk deploy CareerVpCrudDev --app="$(PYTHON) ../../infra/app.py" --require-approval=never --context "allowed_origins=$(_CDK_ALLOWED_ORIGINS)"
+
+# P-28: automation is CreateChangeSet-only. `create-changeset` synthesizes and creates a
+# CFN change set WITHOUT executing it (`--no-execute`); a human-gated job runs
+# `execute-changeset`. Never call `make deploy` (create+execute) from automation.
+STACK_NAME ?= CareerVpCrudDev
+AWS_REGION ?= us-east-1
+CHANGESET_NAME ?= careervp-changeset-$(shell date -u +%Y%m%d%H%M%S)
+
+create-changeset: build
+	npx cdk acknowledge 34892
+	npx cdk deploy $(STACK_NAME) --app="$(PYTHON) ../../infra/app.py" \
+		--require-approval=never --method=change-set --no-execute \
+		--change-set-name "$(CHANGESET_NAME)" \
+		--context "allowed_origins=$(_CDK_ALLOWED_ORIGINS)"
+	@echo "$(CHANGESET_NAME)" | tee /tmp/careervp-changeset-name.txt
+
+execute-changeset:
+	@test -n "$(CHANGESET_NAME)" || { echo "CHANGESET_NAME is required"; exit 1; }
+	aws cloudformation execute-change-set \
+		--stack-name "$(STACK_NAME)" \
+		--change-set-name "$(CHANGESET_NAME)" \
+		--region "$(AWS_REGION)"
 
 destroy:
 	npx cdk acknowledge 34892

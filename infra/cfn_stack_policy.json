@@ -1,0 +1,27 @@
+{
+  "Statement": [
+    {
+      "Effect": "Deny",
+      "Action": ["Update:Replace", "Update:Delete"],
+      "Principal": "*",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "ResourceType": [
+            "AWS::ApiGateway::RestApi",
+            "AWS::DynamoDB::Table",
+            "AWS::S3::Bucket",
+            "AWS::Cognito::UserPool",
+            "AWS::CloudFormation::Stack"
+          ]
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Action": "Update:*",
+      "Principal": "*",
+      "Resource": "*"
+    }
+  ]
+}

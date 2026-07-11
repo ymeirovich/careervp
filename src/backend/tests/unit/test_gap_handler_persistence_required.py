@@ -79,6 +79,15 @@ def _generated_questions(n: int = 3) -> list[dict[str, Any]]:
     ]
 
 
+def _valid_cv_payload() -> dict[str, Any]:
+    return {
+        'personal_info': {'full_name': 'Test User'},
+        'work_experience': [],
+        'skills': [],
+        'education': [],
+    }
+
+
 @pytest.mark.unit
 def test_post_fails_on_save_failure() -> None:
     """POST returns 5xx when DAL save_gap_questions fails (AC-GAP-001)."""
@@ -95,6 +104,7 @@ def test_post_fails_on_save_failure() -> None:
         patch.object(gap_handler, '_get_questions_dal', return_value=mock_dal),
         patch.object(gap_handler, '_get_trial_service', return_value=None),
         patch.object(gap_handler, '_get_application_repository') as mock_app_repo,
+        patch.object(gap_handler, '_build_user_cv_prompt_payload', return_value=_valid_cv_payload()),
     ):
         mock_app_repo.return_value.update_state.return_value = None
         mock_gen.return_value = Result(
@@ -130,6 +140,7 @@ def test_post_fails_when_dal_raises_exception() -> None:
         patch.object(gap_handler, '_get_questions_dal', return_value=mock_dal),
         patch.object(gap_handler, '_get_trial_service', return_value=None),
         patch.object(gap_handler, '_get_application_repository') as mock_app_repo,
+        patch.object(gap_handler, '_build_user_cv_prompt_payload', return_value=_valid_cv_payload()),
         patch('asyncio.run') as mock_run,
     ):
         mock_app_repo.return_value.update_state.return_value = None
@@ -155,6 +166,7 @@ def test_post_fails_when_table_not_configured() -> None:
         patch.object(gap_handler, '_get_questions_dal', side_effect=RuntimeError('table not configured')),
         patch.object(gap_handler, '_get_trial_service', return_value=None),
         patch.object(gap_handler, '_get_application_repository') as mock_app_repo,
+        patch.object(gap_handler, '_build_user_cv_prompt_payload', return_value=_valid_cv_payload()),
         patch('asyncio.run') as mock_run,
     ):
         mock_app_repo.return_value.update_state.return_value = None
@@ -184,6 +196,7 @@ def test_post_returns_200_only_when_persistence_succeeds() -> None:
         patch.object(gap_handler, '_get_questions_dal', return_value=mock_dal),
         patch.object(gap_handler, '_get_trial_service', return_value=None),
         patch.object(gap_handler, '_get_application_repository') as mock_app_repo,
+        patch.object(gap_handler, '_build_user_cv_prompt_payload', return_value=_valid_cv_payload()),
         patch('asyncio.run') as mock_run,
     ):
         mock_app_repo.return_value.update_state.return_value = None

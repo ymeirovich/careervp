@@ -143,6 +143,16 @@ class TestTrialExpiryEnforcement:
             patch.object(gap_handler, '_get_trial_service', return_value=_build_service(_InMemoryTrialTable(days_elapsed=15))),
             patch.object(gap_handler, '_get_application_repository', return_value=MagicMock()),
             patch.object(gap_handler, 'generate_gap_questions', mock_llm),
+            patch.object(
+                gap_handler,
+                '_build_user_cv_prompt_payload',
+                return_value={
+                    'personal_info': {'full_name': 'Test User'},
+                    'work_experience': [],
+                    'skills': [],
+                    'education': [],
+                },
+            ),
         ):
             response = gap_handler.lambda_handler(_gap_event(), MagicMock())
 
@@ -188,6 +198,16 @@ class TestApplicationCounterEnforcement:
             patch.object(gap_handler, '_get_trial_service', return_value=_build_service(_InMemoryTrialTable(application_count=3))),
             patch.object(gap_handler, '_get_application_repository', return_value=MagicMock()),
             patch.object(gap_handler, 'generate_gap_questions', mock_llm),
+            patch.object(
+                gap_handler,
+                '_build_user_cv_prompt_payload',
+                return_value={
+                    'personal_info': {'full_name': 'Test User'},
+                    'work_experience': [],
+                    'skills': [],
+                    'education': [],
+                },
+            ),
         ):
             response = gap_handler.lambda_handler(_gap_event(), MagicMock())
 
@@ -202,6 +222,16 @@ class TestApplicationCounterEnforcement:
         with (
             patch.object(gap_handler, '_get_trial_service', return_value=_build_service(_InMemoryTrialTable(application_count=3))),
             patch.object(gap_handler, '_get_application_repository', return_value=MagicMock()),
+            patch.object(
+                gap_handler,
+                '_build_user_cv_prompt_payload',
+                return_value={
+                    'personal_info': {'full_name': 'Test User'},
+                    'work_experience': [],
+                    'skills': [],
+                    'education': [],
+                },
+            ),
         ):
             response = gap_handler.lambda_handler(_gap_event(), MagicMock())
 
@@ -328,6 +358,16 @@ class TestTrialIntegration:
         with (
             patch.object(gap_handler, '_get_trial_service', return_value=_build_service(_InMemoryTrialTable(days_elapsed=15))),
             patch.object(gap_handler, '_get_application_repository', return_value=MagicMock()),
+            patch.object(
+                gap_handler,
+                '_build_user_cv_prompt_payload',
+                return_value={
+                    'personal_info': {'full_name': 'Test User'},
+                    'work_experience': [],
+                    'skills': [],
+                    'education': [],
+                },
+            ),
         ):
             response = gap_handler.lambda_handler(_gap_event(), MagicMock())
 

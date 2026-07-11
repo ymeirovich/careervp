@@ -2,39 +2,51 @@
 import os
 
 from aws_cdk import App, Environment
-from boto3 import client, session
 from careervp.frontend_stack import FrontendStack
 from careervp.naming_utils import NamingUtils
 from careervp.service_stack import ServiceStack
 
 from careervp import constants
 
-# Prefer explicit env vars first; fall back to session/STS only if available.
-account = os.environ.get("AWS_DEFAULT_ACCOUNT") or os.environ.get("CDK_DEFAULT_ACCOUNT")
-region = os.environ.get("AWS_DEFAULT_REGION") or os.environ.get("CDK_DEFAULT_REGION")
+# P-28: Hard-pin account and region — fail fast on a wrong-profile deploy.
+# The solo/single-account model (O-8, scope-lock live_anchor) means account/region are
+# NOT inferred from ambient env/session/STS. Ambient inference silently targets the wrong
+# account when the wrong AWS profile is active; here we bind a constant and ABORT if an
+# ambient account/region is present and disagrees. Env-agnostic synth is DISABLED for this
+# repo: `env_value` is always set, never None. A future multi-account expansion adds an
+# allow-list, not a revert to ambient inference.
+PINNED_ACCOUNT = "788159322332"
+PINNED_REGION = "us-east-1"
 
-# Try to infer region from the local session if still empty.
-if not region:
-    region = session.Session().region_name
+_inferred_account = os.environ.get("CDK_DEFAULT_ACCOUNT") or os.environ.get(
+    "AWS_DEFAULT_ACCOUNT"
+)
+if _inferred_account and _inferred_account != PINNED_ACCOUNT:
+    raise SystemExit(
+        f"P-28 FAIL-FAST: resolved account {_inferred_account!r} does not match the "
+        f"pinned account {PINNED_ACCOUNT!r}. Wrong AWS profile — aborting before any "
+        "CDK synthesis / CloudFormation API call to prevent a cross-account deploy."
+    )
 
-# As a last resort, try STS for account if creds exist; otherwise allow env-agnostic synth.
-if not account:
-    try:
-        account = client("sts").get_caller_identity().get("Account")
-    except Exception:
-        account = None
+_inferred_region = os.environ.get("CDK_DEFAULT_REGION") or os.environ.get(
+    "AWS_DEFAULT_REGION"
+)
+if _inferred_region and _inferred_region != PINNED_REGION:
+    raise SystemExit(
+        f"P-28 FAIL-FAST: resolved region {_inferred_region!r} does not match the "
+        f"pinned region {PINNED_REGION!r}. Wrong region — aborting."
+    )
 
-# Default region for local/CI synth if none found.
-if not region:
-    region = "us-east-1"
+account = PINNED_ACCOUNT
+region = PINNED_REGION
 
 environment = os.getenv("ENVIRONMENT", constants.ENVIRONMENT)
 stack_feature = os.getenv("CAREERVP_STACK_FEATURE", constants.STACK_FEATURE)
-naming = NamingUtils(environment=environment, region=region, account_id=account or "")
+naming = NamingUtils(environment=environment, region=region, account_id=account)
 app = App()
 
-# Only bind explicit env when both account and region are known; otherwise synth env-agnostic.
-env_value = Environment(account=account, region=region) if account and region else None
+# P-28: env is ALWAYS bound to the pinned account/region — never None (no env-agnostic synth).
+env_value = Environment(account=account, region=region)
 
 my_stack = ServiceStack(
     scope=app,
