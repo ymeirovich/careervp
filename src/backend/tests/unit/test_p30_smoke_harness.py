@@ -6,6 +6,7 @@ no live API or Cognito token is needed. See ``scripts/smoke_harness.py``.
 
 from __future__ import annotations
 
+import base64
 import importlib.util
 import json
 import sys
@@ -50,6 +51,9 @@ BASE = 'https://api.example.test'
 ORIGIN = 'https://app.example.test'
 
 
+SMOKE_CV_ID = 'cv-abc-123'
+
+
 def _happy_routes(*, allow_origin: str = ORIGIN, unauth_status: int = 401):
     return {
         ('GET', '/health'): HttpResponse(200),
@@ -58,8 +62,10 @@ def _happy_routes(*, allow_origin: str = ORIGIN, unauth_status: int = 401):
         # authed_read leg; the fake returns the same success either way, and a
         # separate unauth entry is matched first for the no-auth call.
         ('GET', '/users/me'): HttpResponse(200, {'Access-Control-Allow-Origin': allow_origin}, {'user_id': 'u1'}),
-        ('POST', '/users/me/cv/presigned-upload'): HttpResponse(201, body={'upload_url': 'https://s3.example.test/put/abc'}),
-        ('PUT', 'https://s3.example.test/put/abc'): HttpResponse(200),
+        # The real upload contract: base64 cv_content in, the CV row back out,
+        # then the same path lists the CVs so the wire can read its write back.
+        ('POST', '/users/me/cv'): HttpResponse(201, body={'success': True, 'user_cv': {'cv_id': SMOKE_CV_ID}}),
+        ('GET', '/users/me/cv'): HttpResponse(200, body={'cvs': [{'cv_id': SMOKE_CV_ID}], 'cursor': None}),
     }
 
 
@@ -73,7 +79,7 @@ def test_p30_harness_requires_four_wires():
         'health',
         'cors_exact_origin',
         'authed_read',
-        'presigned_upload',
+        'authed_upload',
     }
     # A run with an unauthenticated-rejection route present produces all four.
     routes = _happy_routes()
@@ -111,6 +117,56 @@ def test_p30_authed_read_rejects_unauthenticated_success():
     authed = next(c for c in report.checks if c.name == 'authed_read')
     assert authed.passed is False
     assert 'unauth' in authed.detail.lower()
+
+
+def test_p30_upload_wire_posts_base64_cv_content_to_the_real_route():
+    """The upload wire uses the real contract: base64 cv_content + file_name to /users/me/cv.
+
+    The API has no presigned-upload route; the handler owns the S3 put.
+    """
+    captured: dict[str, object] = {}
+
+    class _CapturingTransport(_UnauthAwareTransport):
+        def request(self, method, url, *, headers=None, json_body=None):  # type: ignore[no-untyped-def]
+            if method.upper() == 'POST' and url.endswith('/users/me/cv'):
+                captured['body'] = json_body
+            return super().request(method, url, headers=headers, json_body=json_body)
+
+    transport = _CapturingTransport(_happy_routes(), unauth_status=401)
+    report = smoke_harness.run_smoke(_config(), transport)
+
+    upload = next(c for c in report.checks if c.name == 'authed_upload')
+    assert upload.passed is True
+
+    body = captured['body']
+    assert isinstance(body, dict)
+    assert body['file_name'] == 'p30-smoke.txt'
+    decoded = base64.b64decode(body['cv_content']).decode('utf-8')
+    assert decoded == smoke_harness.SMOKE_CV_FIXTURE
+
+
+def test_p30_upload_wire_fails_when_upload_is_not_readable_back():
+    """A write that does not appear in the read-back fails the wire (S3/DB write not durable)."""
+    routes = dict(_happy_routes())
+    routes[('GET', '/users/me/cv')] = HttpResponse(200, body={'cvs': [{'cv_id': 'some-other-cv'}]})
+    transport = _UnauthAwareTransport(routes, unauth_status=401)
+
+    report = smoke_harness.run_smoke(_config(), transport)
+    upload = next(c for c in report.checks if c.name == 'authed_upload')
+    assert upload.passed is False
+    assert 'absent from the CV read-back' in upload.detail
+
+
+def test_p30_upload_wire_fails_when_response_has_no_cv_id():
+    """A 201 with no cv_id fails the wire -- the harness must not accept an empty success."""
+    routes = dict(_happy_routes())
+    routes[('POST', '/users/me/cv')] = HttpResponse(201, body={'success': True})
+    transport = _UnauthAwareTransport(routes, unauth_status=401)
+
+    report = smoke_harness.run_smoke(_config(), transport)
+    upload = next(c for c in report.checks if c.name == 'authed_upload')
+    assert upload.passed is False
+    assert 'no cv_id' in upload.detail
 
 
 def test_p30_outputs_machine_readable_evidence():

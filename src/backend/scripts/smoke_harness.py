@@ -8,7 +8,11 @@ Runs the same four live proofs before and after any risky deploy:
    frontend origin (a wildcard ``*`` success response fails the leg).
 3. ``authed_read``       - an authenticated read returns 200 *and* the same
    read without a token is rejected (an unauthenticated 200 fails the leg).
-4. ``presigned_upload``  - a presigned upload URL is issued and accepted.
+4. ``authed_upload``     - an authenticated CV upload reaches S3 and reads back.
+
+Wire 4 exercises ``POST /users/me/cv``, which is the only upload path this API
+has: the file travels inline as base64 ``cv_content`` and the handler performs
+the S3 put itself. There is no presigned-upload route (see ISSUES.md, I-01).
 
 The harness is transport-injectable so its logic is unit-testable offline; the
 CLI entry point uses ``requests`` against a live ``API_BASE``. It emits
@@ -22,6 +26,7 @@ frontend origin come from the environment.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import sys
@@ -37,10 +42,28 @@ REQUIRED_WIRES: tuple[str, ...] = (
     'health',
     'cors_exact_origin',
     'authed_read',
-    'presigned_upload',
+    'authed_upload',
 )
 
 WILDCARD_ORIGIN = '*'
+
+# Synthetic CV posted by the upload wire. Deliberately small and obviously fake:
+# a real deploy runs this on every risky change, and the handler parses it with
+# the AI parser and persists a CV row for the smoke user.
+SMOKE_CV_FIXTURE = (
+    'Jane Doe\n'
+    'Software Engineer\n'
+    'jane@example.com\n'
+    '\n'
+    'Experience\n'
+    'Acme Corp, Backend Engineer, 2020-2024. Built Python APIs on AWS.\n'
+    '\n'
+    'Education\n'
+    'BSc Computer Science, MIT, 2020.\n'
+    '\n'
+    'Skills\n'
+    'Python, AWS, DynamoDB.\n'
+)
 
 
 @dataclass(frozen=True)
@@ -88,7 +111,8 @@ class SmokeConfig:
     health_path: str = '/health'
     protected_path: str = '/users/me'
     authed_read_path: str = '/users/me'
-    presigned_path: str = '/users/me/cv/presigned-upload'
+    upload_path: str = '/users/me/cv'
+    upload_file_name: str = 'p30-smoke.txt'
     timeout_seconds: int = 30
 
     @classmethod
@@ -104,7 +128,8 @@ class SmokeConfig:
             health_path=source.get('SMOKE_HEALTH_PATH', '/health'),
             protected_path=source.get('SMOKE_PROTECTED_PATH', '/users/me'),
             authed_read_path=source.get('SMOKE_AUTHED_PATH', '/users/me'),
-            presigned_path=source.get('SMOKE_PRESIGNED_PATH', '/users/me/cv/presigned-upload'),
+            upload_path=source.get('SMOKE_UPLOAD_PATH', '/users/me/cv'),
+            upload_file_name=source.get('SMOKE_UPLOAD_FILE_NAME', 'p30-smoke.txt'),
             timeout_seconds=int(source.get('SMOKE_TIMEOUT_SECONDS', '30')),
         )
 
@@ -236,34 +261,68 @@ def check_authed_read(config: SmokeConfig, transport: Transport) -> CheckResult:
     )
 
 
-def check_presigned_upload(config: SmokeConfig, transport: Transport) -> CheckResult:
+def check_authed_upload(config: SmokeConfig, transport: Transport) -> CheckResult:
+    """Wire 4: an authenticated upload lands in S3 and is readable back.
+
+    ``POST /users/me/cv`` takes the file inline (base64 ``cv_content`` +
+    ``file_name``) and the handler owns the S3 put, so posting and then reading
+    the CV back is what proves the authenticated write path end to end.
+    """
+    payload = {
+        'cv_content': base64.b64encode(SMOKE_CV_FIXTURE.encode('utf-8')).decode('ascii'),
+        'file_name': config.upload_file_name,
+    }
     issued = transport.request(
         'POST',
-        config.url(config.presigned_path),
+        config.url(config.upload_path),
         headers={'Authorization': _bearer(config.token)},
-        json_body={'file_type': 'txt'},
+        json_body=payload,
     )
     if issued.status not in (200, 201):
         return CheckResult(
-            'presigned_upload',
+            'authed_upload',
             False,
-            f'presigned request returned {issued.status}',
+            f'upload returned {issued.status}, expected 200/201',
             issued.status,
             issued.request_id,
         )
-    upload_url = _extract_upload_url(issued.body)
-    if not upload_url:
+    cv_id = _extract_cv_id(issued.body)
+    if not cv_id:
         return CheckResult(
-            'presigned_upload',
+            'authed_upload',
             False,
-            'presigned response contained no upload URL',
+            'upload response contained no cv_id',
             issued.status,
             issued.request_id,
         )
-    put = transport.request('PUT', upload_url, json_body={'smoke': True})
-    passed = put.status in (200, 204)
-    detail = 'presigned URL issued and upload accepted' if passed else f'presigned upload PUT returned {put.status}'
-    return CheckResult('presigned_upload', passed, detail, put.status, put.request_id)
+    listed = transport.request(
+        'GET',
+        config.url(config.upload_path),
+        headers={'Authorization': _bearer(config.token)},
+    )
+    if listed.status != 200:
+        return CheckResult(
+            'authed_upload',
+            False,
+            f'CV read-back returned {listed.status}, expected 200',
+            listed.status,
+            listed.request_id,
+        )
+    if not _cv_id_present(listed.body, cv_id):
+        return CheckResult(
+            'authed_upload',
+            False,
+            f'uploaded cv_id {cv_id} is absent from the CV read-back',
+            listed.status,
+            listed.request_id,
+        )
+    return CheckResult(
+        'authed_upload',
+        True,
+        f'CV uploaded (cv_id={cv_id}) and read back',
+        issued.status,
+        issued.request_id,
+    )
 
 
 def run_smoke(config: SmokeConfig, transport: Transport) -> SmokeReport:
@@ -271,7 +330,7 @@ def run_smoke(config: SmokeConfig, transport: Transport) -> SmokeReport:
         check_health(config, transport),
         check_cors_exact_origin(config, transport),
         check_authed_read(config, transport),
-        check_presigned_upload(config, transport),
+        check_authed_upload(config, transport),
     ]
     return SmokeReport(
         api_base=config.api_base,
@@ -285,17 +344,25 @@ def _bearer(token: str | None) -> str:
     return f'Bearer {token}' if token else ''
 
 
-def _extract_upload_url(body: object) -> str | None:
+def _extract_cv_id(body: object) -> str | None:
     if not isinstance(body, Mapping):
         return None
-    for key in ('upload_url', 'url', 'presigned_url'):
-        value = body.get(key)
-        if isinstance(value, str) and value:
-            return value
-    data = body.get('data')
-    if isinstance(data, Mapping):
-        return _extract_upload_url(data)
-    return None
+    user_cv = body.get('user_cv')
+    if isinstance(user_cv, Mapping):
+        nested = user_cv.get('cv_id')
+        if isinstance(nested, str) and nested:
+            return nested
+    top_level = body.get('cv_id')
+    return top_level if isinstance(top_level, str) and top_level else None
+
+
+def _cv_id_present(body: object, cv_id: str) -> bool:
+    if not isinstance(body, Mapping):
+        return False
+    cvs = body.get('cvs')
+    if not isinstance(cvs, list):
+        return False
+    return any(isinstance(cv, Mapping) and cv.get('cv_id') == cv_id for cv in cvs)
 
 
 class RequestsTransport:
