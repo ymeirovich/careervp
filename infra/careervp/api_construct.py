@@ -508,7 +508,8 @@ class ApiConstruct(Construct):
                 if is_production_env
                 else None
             ),
-            removal_policy=RemovalPolicy.DESTROY,
+            removal_policy=RemovalPolicy.RETAIN,
+            deletion_protection=True,
         )
         CfnOutput(
             self,
