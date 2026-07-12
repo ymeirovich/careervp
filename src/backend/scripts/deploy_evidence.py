@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared deploy-gate evidence validators (P-21, P-29).
+"""Shared deploy-gate evidence validators (P-21, P-29, P-32).
 
 These functions turn a captured evidence document into a list of gate errors.
 An empty list means the gate passes; a non-empty list means the deploy gate
@@ -49,6 +49,66 @@ def validate_sns_subscription_confirmed(evidence: Mapping[str, object]) -> list[
     if not confirmed:
         return ['no Confirmed SNS subscription with an ARN found (gate fails closed)']
     return []
+
+
+def validate_budget_evidence(evidence: Mapping[str, object]) -> list[str]:
+    """P-32 Wave 0 gate: require a human-created AWS Budget record.
+
+    AWS Budgets and Cost Anomaly Detection are console-only for this slice
+    (per specs/P-32-cost-obs-edge-spec.md) — there is no CDK resource to
+    synth, so the only proof available is a human-captured evidence document.
+    Fails closed when the ``aws_budget`` section is absent or missing any of
+    the budget name, a numeric threshold, a subscriber (email/SNS endpoint),
+    or a capture timestamp.
+    """
+    budget = evidence.get('aws_budget')
+    if not isinstance(budget, Mapping):
+        return ['aws_budget evidence is missing (gate fails closed)']
+
+    errors: list[str] = []
+    name = str(budget.get('budget_name', '')).strip()
+    if not name:
+        errors.append('aws_budget.budget_name is missing')
+
+    threshold = budget.get('threshold_amount')
+    if not isinstance(threshold, (int, float)) or isinstance(threshold, bool) or threshold <= 0:
+        errors.append('aws_budget.threshold_amount is missing or not a positive number')
+
+    subscriber = str(budget.get('subscriber', '')).strip()
+    if not subscriber:
+        errors.append('aws_budget.subscriber is missing')
+
+    timestamp = str(budget.get('captured_at', '')).strip()
+    if not timestamp:
+        errors.append('aws_budget.captured_at is missing')
+
+    return errors
+
+
+def validate_cost_anomaly_evidence(evidence: Mapping[str, object]) -> list[str]:
+    """P-32 Wave 0 gate: require a human-created Cost Anomaly Detection monitor + subscription.
+
+    Fails closed when the ``cost_anomaly_detection`` section is absent or
+    missing the monitor ARN, the subscription ARN, or a capture timestamp.
+    """
+    anomaly = evidence.get('cost_anomaly_detection')
+    if not isinstance(anomaly, Mapping):
+        return ['cost_anomaly_detection evidence is missing (gate fails closed)']
+
+    errors: list[str] = []
+    monitor_arn = str(anomaly.get('monitor_arn', '')).strip()
+    if not monitor_arn:
+        errors.append('cost_anomaly_detection.monitor_arn is missing')
+
+    subscription_arn = str(anomaly.get('subscription_arn', '')).strip()
+    if not subscription_arn:
+        errors.append('cost_anomaly_detection.subscription_arn is missing')
+
+    timestamp = str(anomaly.get('captured_at', '')).strip()
+    if not timestamp:
+        errors.append('cost_anomaly_detection.captured_at is missing')
+
+    return errors
 
 
 def validate_dynamodb_backups(evidence: Mapping[str, object]) -> list[str]:
