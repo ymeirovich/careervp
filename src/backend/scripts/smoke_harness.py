@@ -265,12 +265,16 @@ def check_authed_upload(config: SmokeConfig, transport: Transport) -> CheckResul
     """Wire 4: an authenticated upload lands in S3 and is readable back.
 
     ``POST /users/me/cv`` takes the file inline (base64 ``cv_content`` +
-    ``file_name``) and the handler owns the S3 put, so posting and then reading
-    the CV back is what proves the authenticated write path end to end.
+    ``file_name`` + ``file_type``) and the handler owns the S3 put, so posting
+    and then reading the CV back is what proves the authenticated write path
+    end to end.
     """
     payload = {
         'cv_content': base64.b64encode(SMOKE_CV_FIXTURE.encode('utf-8')).decode('ascii'),
         'file_name': config.upload_file_name,
+        # Required to exercise the handler's file-content branch. Without this,
+        # the OpenAPI adapter treats cv_content as plain text and skips S3.
+        'file_type': 'txt',
     }
     issued = transport.request(
         'POST',

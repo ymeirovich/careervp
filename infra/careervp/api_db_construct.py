@@ -11,6 +11,7 @@ from constructs import Construct
 
 from . import constants
 from .naming_utils import NamingUtils
+from .scratch_deployment import ScratchDeploymentSettings, validate_scratch_boundary
 
 
 class ApiDbConstruct(Construct):
@@ -30,9 +31,30 @@ class ApiDbConstruct(Construct):
     - CV Upload / Gap Analysis: Async processing queues with DLQs
     """
 
-    def __init__(self, scope: Construct, id_: str, naming: NamingUtils) -> None:
+    def __init__(
+        self,
+        scope: Construct,
+        id_: str,
+        naming: NamingUtils,
+        *,
+        scratch_settings: ScratchDeploymentSettings | None = None,
+    ) -> None:
         super().__init__(scope, id_)
         self.naming = naming
+        if scratch_settings is not None:
+            validate_scratch_boundary(
+                scratch_settings,
+                environment=naming.environment,
+                region=naming.region,
+                account=naming.account_id,
+            )
+        self.scratch_teardown_safe = scratch_settings is not None
+        self.removal_policy = (
+            RemovalPolicy.DESTROY
+            if self.scratch_teardown_safe
+            else RemovalPolicy.RETAIN
+        )
+        self.deletion_protection = not self.scratch_teardown_safe
 
         # DynamoDB Tables
         self.users_table: dynamodb.TableV2 = self._build_users_table(id_)
@@ -98,8 +120,8 @@ class ApiDbConstruct(Construct):
                 point_in_time_recovery_enabled=True,
                 recovery_period_in_days=7,
             ),
-            removal_policy=RemovalPolicy.RETAIN,
-            deletion_protection=True,
+            removal_policy=self.removal_policy,
+            deletion_protection=self.deletion_protection,
             contributor_insights_specification=dynamodb.ContributorInsightsSpecification(
                 enabled=True,
                 mode=dynamodb.ContributorInsightsMode.THROTTLED_KEYS,
@@ -140,8 +162,8 @@ class ApiDbConstruct(Construct):
                 name="id", type=dynamodb.AttributeType.STRING
             ),
             billing=dynamodb.Billing.on_demand(),
-            removal_policy=RemovalPolicy.RETAIN,
-            deletion_protection=True,
+            removal_policy=self.removal_policy,
+            deletion_protection=self.deletion_protection,
             time_to_live_attribute="expiration",
             point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
                 point_in_time_recovery_enabled=True,
@@ -163,7 +185,8 @@ class ApiDbConstruct(Construct):
             self,
             bucket_id,
             bucket_name=self.naming.bucket_name(constants.CV_BUCKET_NAME),
-            removal_policy=RemovalPolicy.RETAIN,
+            removal_policy=self.removal_policy,
+            auto_delete_objects=self.scratch_teardown_safe,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             encryption=s3.BucketEncryption.S3_MANAGED,
             enforce_ssl=True,
@@ -218,8 +241,8 @@ class ApiDbConstruct(Construct):
             billing=dynamodb.Billing.on_demand(),
             # ASYNC_005: stream events drive async worker execution.
             dynamo_stream=dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
-            removal_policy=RemovalPolicy.RETAIN,
-            deletion_protection=True,
+            removal_policy=self.removal_policy,
+            deletion_protection=self.deletion_protection,
             time_to_live_attribute="ttl",
             point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
                 point_in_time_recovery_enabled=True,
@@ -266,8 +289,8 @@ class ApiDbConstruct(Construct):
                 point_in_time_recovery_enabled=True,
                 recovery_period_in_days=7,
             ),
-            removal_policy=RemovalPolicy.RETAIN,
-            deletion_protection=True,
+            removal_policy=self.removal_policy,
+            deletion_protection=self.deletion_protection,
         )
         CfnOutput(
             self, id=constants.CVS_TABLE_OUTPUT, value=table.table_name
@@ -292,8 +315,8 @@ class ApiDbConstruct(Construct):
                 point_in_time_recovery_enabled=True,
                 recovery_period_in_days=7,
             ),
-            removal_policy=RemovalPolicy.RETAIN,
-            deletion_protection=True,
+            removal_policy=self.removal_policy,
+            deletion_protection=self.deletion_protection,
             global_secondary_indexes=[
                 dynamodb.GlobalSecondaryIndexPropsV2(
                     index_name="status-index",
@@ -331,8 +354,8 @@ class ApiDbConstruct(Construct):
                 point_in_time_recovery_enabled=True,
                 recovery_period_in_days=7,
             ),
-            removal_policy=RemovalPolicy.RETAIN,
-            deletion_protection=True,
+            removal_policy=self.removal_policy,
+            deletion_protection=self.deletion_protection,
         )
         CfnOutput(
             self, id=constants.GAP_RESPONSES_TABLE_OUTPUT, value=table.table_name
@@ -358,8 +381,8 @@ class ApiDbConstruct(Construct):
                 point_in_time_recovery_enabled=True,
                 recovery_period_in_days=7,
             ),
-            removal_policy=RemovalPolicy.RETAIN,
-            deletion_protection=True,
+            removal_policy=self.removal_policy,
+            deletion_protection=self.deletion_protection,
             global_secondary_indexes=[
                 dynamodb.GlobalSecondaryIndexPropsV2(
                     index_name="entity-index",
@@ -399,8 +422,8 @@ class ApiDbConstruct(Construct):
                 point_in_time_recovery_enabled=True,
                 recovery_period_in_days=7,
             ),
-            removal_policy=RemovalPolicy.RETAIN,
-            deletion_protection=True,
+            removal_policy=self.removal_policy,
+            deletion_protection=self.deletion_protection,
             global_secondary_indexes=[
                 dynamodb.GlobalSecondaryIndexPropsV2(
                     index_name="type-index",
@@ -437,8 +460,8 @@ class ApiDbConstruct(Construct):
                 point_in_time_recovery_enabled=True,
                 recovery_period_in_days=7,
             ),
-            removal_policy=RemovalPolicy.RETAIN,
-            deletion_protection=True,
+            removal_policy=self.removal_policy,
+            deletion_protection=self.deletion_protection,
         )
         CfnOutput(
             self,
@@ -552,7 +575,8 @@ class ApiDbConstruct(Construct):
             self,
             bucket_id,
             bucket_name=self.naming.results_bucket_name(constants.VPR_RESULTS_BUCKET),
-            removal_policy=RemovalPolicy.RETAIN,
+            removal_policy=self.removal_policy,
+            auto_delete_objects=self.scratch_teardown_safe,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             encryption=s3.BucketEncryption.S3_MANAGED,
             enforce_ssl=True,
@@ -588,7 +612,8 @@ class ApiDbConstruct(Construct):
             self,
             bucket_id,
             bucket_name=self.naming.bucket_name(constants.STATIC_BUCKET_NAME),
-            removal_policy=RemovalPolicy.RETAIN,
+            removal_policy=self.removal_policy,
+            auto_delete_objects=self.scratch_teardown_safe,
             # S3_001: keep public access fully blocked.
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             # Use SSE-S3 for managed at-rest encryption.
@@ -604,7 +629,8 @@ class ApiDbConstruct(Construct):
             self,
             bucket_id,
             bucket_name=self.naming.bucket_name(constants.BACKUPS_BUCKET_NAME),
-            removal_policy=RemovalPolicy.RETAIN,
+            removal_policy=self.removal_policy,
+            auto_delete_objects=self.scratch_teardown_safe,
             # S3_001: keep public access fully blocked.
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             # Use SSE-S3 for managed at-rest encryption.
@@ -638,7 +664,8 @@ class ApiDbConstruct(Construct):
             self,
             bucket_id,
             bucket_name=self.naming.bucket_name(constants.LOGS_BUCKET_NAME),
-            removal_policy=RemovalPolicy.RETAIN,
+            removal_policy=self.removal_policy,
+            auto_delete_objects=self.scratch_teardown_safe,
             # S3_001: keep public access fully blocked.
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             # Use SSE-S3 for managed at-rest encryption.
@@ -671,7 +698,8 @@ class ApiDbConstruct(Construct):
             self,
             bucket_id,
             bucket_name=self.naming.bucket_name(constants.ARTIFACTS_BUCKET_NAME),
-            removal_policy=RemovalPolicy.RETAIN,
+            removal_policy=self.removal_policy,
+            auto_delete_objects=self.scratch_teardown_safe,
             # S3_001: keep public access fully blocked.
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             # Use SSE-S3 for managed at-rest encryption.

@@ -26,6 +26,11 @@ from .api_db_construct import ApiDbConstruct
 from .artifact_chain_construct import ArtifactChainConstruct
 from .monitoring import CrudMonitoring
 from .naming_utils import NamingUtils
+from .scratch_deployment import (
+    ScratchDeploymentSettings,
+    ssm_parameter_name,
+    validate_scratch_boundary,
+)
 from .waf_construct import WafToApiGatewayConstruct
 
 
@@ -39,14 +44,34 @@ class ApiConstruct(Construct):
         naming: NamingUtils,
         user_pool: cognito.IUserPool,
         cognito_client_id: str,
+        scratch_settings: ScratchDeploymentSettings | None = None,
     ) -> None:
         super().__init__(scope, id_)
         self.id_ = id_
         self.naming = naming
+        if scratch_settings is not None:
+            validate_scratch_boundary(
+                scratch_settings,
+                environment=naming.environment,
+                region=naming.region,
+                account=naming.account_id,
+            )
+        self.scratch_mode = scratch_settings is not None
+        self.allowed_origins = (
+            scratch_settings.allowed_origin
+            if scratch_settings is not None
+            else self.node.try_get_context("allowed_origins")
+            or "https://main.d3j2wnm8g5clnw.amplifyapp.com,https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com,https://ui-upgrade.d3j2wnm8g5clnw.amplifyapp.com,https://app.careervp.com,https://dev.careervp.com,https://stage.careervp.com,http://localhost:3000"
+        )
         self.cognito_client_id = cognito_client_id
         self.cognito_user_pool = user_pool
         self._api_permission_scopes: dict[str, set[str]] = {}
-        self.api_db = ApiDbConstruct(self, f"{id_}db", naming=naming)
+        self.api_db = ApiDbConstruct(
+            self,
+            f"{id_}db",
+            naming=naming,
+            scratch_settings=scratch_settings,
+        )
         self.llm_cache_table = self._build_llm_cache_table(is_production_env)
         self.logs_kms_key = self._build_logs_kms_key()
         self.rest_api = self._build_api_gw()
@@ -245,7 +270,7 @@ class ApiConstruct(Construct):
             cw_actions.SnsAction(self.monitoring.notification_topic)
         )
 
-        if not is_production_env:
+        if not is_production_env and not self.scratch_mode:
             self._build_api_custom_domain()
 
         if is_production_env:
@@ -348,31 +373,23 @@ class ApiConstruct(Construct):
         ).override_logical_id(constants.SWAGGER_URL)
 
     def _build_api_gw(self) -> aws_apigateway.RestApi:
-        access_log_group = logs.LogGroup(
-            self,
-            "ApiGatewayAccessLogGroup",
-            retention=logs.RetentionDays.ONE_DAY,
-            removal_policy=RemovalPolicy.DESTROY,
-            encryption_key=self.logs_kms_key,
-        )
-        rest_api: aws_apigateway.RestApi = aws_apigateway.RestApi(
-            self,
-            "service-rest-api",
-            rest_api_name=self.naming.api_name(constants.API_FEATURE),
-            description="CareerVP API - AI-powered job application assistant",
-            default_cors_preflight_options=aws_apigateway.CorsOptions(
-                allow_origins=aws_apigateway.Cors.ALL_ORIGINS,  # gated at Lambda layer
-                allow_methods=aws_apigateway.Cors.ALL_METHODS,
-                allow_headers=[
-                    "Content-Type",
-                    "Authorization",
-                    "X-Amz-Date",
-                    "X-Api-Key",
-                    "X-Amz-Security-Token",
-                ],
-                max_age=Duration.hours(1),
-            ),
-            deploy_options=aws_apigateway.StageOptions(
+        if self.scratch_mode:
+            deploy_options = aws_apigateway.StageOptions(
+                throttling_rate_limit=2,
+                throttling_burst_limit=10,
+                tracing_enabled=True,
+                metrics_enabled=False,
+                logging_level=aws_apigateway.MethodLoggingLevel.OFF,
+            )
+        else:
+            access_log_group = logs.LogGroup(
+                self,
+                "ApiGatewayAccessLogGroup",
+                retention=logs.RetentionDays.ONE_DAY,
+                removal_policy=RemovalPolicy.DESTROY,
+                encryption_key=self.logs_kms_key,
+            )
+            deploy_options = aws_apigateway.StageOptions(
                 throttling_rate_limit=2,
                 throttling_burst_limit=10,
                 tracing_enabled=True,
@@ -401,8 +418,30 @@ class ApiConstruct(Construct):
                         }
                     )
                 ),
+            )
+        rest_api: aws_apigateway.RestApi = aws_apigateway.RestApi(
+            self,
+            "service-rest-api",
+            rest_api_name=self.naming.api_name(constants.API_FEATURE),
+            description="CareerVP API - AI-powered job application assistant",
+            default_cors_preflight_options=aws_apigateway.CorsOptions(
+                allow_origins=(
+                    [self.allowed_origins]
+                    if self.scratch_mode
+                    else aws_apigateway.Cors.ALL_ORIGINS
+                ),
+                allow_methods=aws_apigateway.Cors.ALL_METHODS,
+                allow_headers=[
+                    "Content-Type",
+                    "Authorization",
+                    "X-Amz-Date",
+                    "X-Api-Key",
+                    "X-Amz-Security-Token",
+                ],
+                max_age=Duration.hours(1),
             ),
-            cloud_watch_role=True,
+            deploy_options=deploy_options,
+            cloud_watch_role=not self.scratch_mode,
         )
 
         CfnOutput(
@@ -448,7 +487,9 @@ class ApiConstruct(Construct):
             self,
             "CloudWatchLogsKey",
             enable_key_rotation=True,
-            removal_policy=RemovalPolicy.RETAIN,
+            removal_policy=(
+                RemovalPolicy.DESTROY if self.scratch_mode else RemovalPolicy.RETAIN
+            ),
         )
         key.add_to_resource_policy(
             iam.PolicyStatement(
@@ -508,8 +549,10 @@ class ApiConstruct(Construct):
                 if is_production_env
                 else None
             ),
-            removal_policy=RemovalPolicy.RETAIN,
-            deletion_protection=True,
+            removal_policy=(
+                RemovalPolicy.DESTROY if self.scratch_mode else RemovalPolicy.RETAIN
+            ),
+            deletion_protection=not self.scratch_mode,
         )
         CfnOutput(
             self,
@@ -827,7 +870,7 @@ class ApiConstruct(Construct):
                                 (
                                     f"arn:aws:ssm:{self.naming.region}:"
                                     f"{self.naming.account_id}:parameter/"
-                                    f"{constants.ANTHROPIC_API_KEY_SSM_PARAM.lstrip('/')}"
+                                    f"{self._anthropic_parameter_name().lstrip('/')}"
                                 )
                             ],
                             effect=iam.Effect.ALLOW,
@@ -870,8 +913,7 @@ class ApiConstruct(Construct):
                 self.api_db.company_research_cache_table.table_name
             ),
             "USERS_TABLE_NAME": self.api_db.users_table.table_name,
-            "ALLOWED_ORIGINS": self.node.try_get_context("allowed_origins")
-            or "https://main.d3j2wnm8g5clnw.amplifyapp.com,https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com,https://ui-upgrade.d3j2wnm8g5clnw.amplifyapp.com,https://app.careervp.com,https://dev.careervp.com,https://stage.careervp.com,http://localhost:3000",
+            "ALLOWED_ORIGINS": self.allowed_origins,
         }
 
     def _build_llm_env(self) -> dict[str, str]:
@@ -881,10 +923,27 @@ class ApiConstruct(Construct):
         can be changed with a cdk deploy rather than a code change.
         """
         return {
-            constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+            constants.ANTHROPIC_API_KEY_ENV_VAR: self._anthropic_parameter_name(),
             constants.STRATEGIC_MODEL_ID_ENV_VAR: constants.STRATEGIC_MODEL_ID,
             constants.TEMPLATE_MODEL_ID_ENV_VAR: constants.TEMPLATE_MODEL_ID,
         }
+
+    def _anthropic_parameter_name(self) -> str:
+        return ssm_parameter_name(self.naming.environment, "anthropic-api-key")
+
+    def _parameter_value(self, suffix: str) -> str:
+        """Resolve live SSM values while keeping scratch synthesis lookup-free.
+
+        Scratch authenticates with its isolated Cognito authorizer, so the retired
+        self-managed JWT values and disabled payment-provider values are explicit
+        non-secret placeholders. This avoids borrowing or creating live-tier SSM
+        values outside the runbook's mutation approvals.
+        """
+        if self.scratch_mode:
+            return f"scratch-disabled-{suffix}"
+        return ssm.StringParameter.value_for_string_parameter(
+            self, ssm_parameter_name(self.naming.environment, suffix)
+        )
 
     def _build_common_layer(self) -> PythonLayerVersion:
         return PythonLayerVersion(
@@ -930,14 +989,10 @@ class ApiConstruct(Construct):
                 constants.POWERTOOLS_SERVICE_NAME: constants.SERVICE_NAME,
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
-                "JWT_PRIVATE_KEY": ssm.StringParameter.value_for_string_parameter(
-                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-private-key"
-                ),
-                "JWT_PUBLIC_KEY": ssm.StringParameter.value_for_string_parameter(
-                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-public-key"
-                ),
+                "JWT_PRIVATE_KEY": self._parameter_value("jwt-private-key"),
+                "JWT_PUBLIC_KEY": self._parameter_value("jwt-public-key"),
                 "CONFIGURATION_APP": appconfig_app_name,
-                "CONFIGURATION_ENV": constants.ENVIRONMENT,
+                "CONFIGURATION_ENV": self.naming.environment,
                 "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,
                 "CONFIGURATION_MAX_AGE_MINUTES": constants.CONFIGURATION_MAX_AGE_MINUTES,
                 "TABLE_NAME": db.table_name,
@@ -995,7 +1050,7 @@ class ApiConstruct(Construct):
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
                 "CONFIGURATION_APP": appconfig_app_name,
-                "CONFIGURATION_ENV": constants.ENVIRONMENT,
+                "CONFIGURATION_ENV": self.naming.environment,
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
                 **self._build_llm_env(),
             },
@@ -1044,7 +1099,7 @@ class ApiConstruct(Construct):
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
                 "CONFIGURATION_APP": appconfig_app_name,
-                "CONFIGURATION_ENV": constants.ENVIRONMENT,
+                "CONFIGURATION_ENV": self.naming.environment,
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
                 **self._build_llm_env(),
             },
@@ -1069,7 +1124,9 @@ class ApiConstruct(Construct):
             self,
             "SQSKey",
             enable_key_rotation=True,
-            removal_policy=RemovalPolicy.RETAIN,
+            removal_policy=(
+                RemovalPolicy.DESTROY if self.scratch_mode else RemovalPolicy.RETAIN
+            ),
         )
         queue = aws_sqs.Queue(
             self,
@@ -1110,7 +1167,9 @@ class ApiConstruct(Construct):
             self,
             "CoverLetterSQSKey",
             enable_key_rotation=True,
-            removal_policy=RemovalPolicy.RETAIN,
+            removal_policy=(
+                RemovalPolicy.DESTROY if self.scratch_mode else RemovalPolicy.RETAIN
+            ),
         )
         return aws_sqs.Queue(
             self,
@@ -1141,7 +1200,9 @@ class ApiConstruct(Construct):
             self,
             "InterviewPrepSQSKey",
             enable_key_rotation=True,
-            removal_policy=RemovalPolicy.RETAIN,
+            removal_policy=(
+                RemovalPolicy.DESTROY if self.scratch_mode else RemovalPolicy.RETAIN
+            ),
         )
         return aws_sqs.Queue(
             self,
@@ -1200,7 +1261,7 @@ class ApiConstruct(Construct):
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
                 "CONFIGURATION_APP": appconfig_app_name,
-                "CONFIGURATION_ENV": constants.ENVIRONMENT,
+                "CONFIGURATION_ENV": self.naming.environment,
                 "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,
                 "CONFIGURATION_MAX_AGE_MINUTES": constants.CONFIGURATION_MAX_AGE_MINUTES,
                 "VPR_JOBS_TABLE_NAME": jobs_table.table_name,
@@ -1255,7 +1316,7 @@ class ApiConstruct(Construct):
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
                 "CONFIGURATION_APP": appconfig_app_name,
-                "CONFIGURATION_ENV": constants.ENVIRONMENT,
+                "CONFIGURATION_ENV": self.naming.environment,
                 "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,
                 "CONFIGURATION_MAX_AGE_MINUTES": constants.CONFIGURATION_MAX_AGE_MINUTES,
                 "VPR_JOBS_TABLE_NAME": jobs_table.table_name,
@@ -1311,7 +1372,7 @@ class ApiConstruct(Construct):
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
                 "CONFIGURATION_APP": appconfig_app_name,
-                "CONFIGURATION_ENV": constants.ENVIRONMENT,
+                "CONFIGURATION_ENV": self.naming.environment,
                 "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,
                 "CONFIGURATION_MAX_AGE_MINUTES": constants.CONFIGURATION_MAX_AGE_MINUTES,
                 "VPR_JOBS_TABLE_NAME": jobs_table.table_name,
@@ -1412,12 +1473,8 @@ class ApiConstruct(Construct):
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-cv-upload-worker",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
-                "JWT_PRIVATE_KEY": ssm.StringParameter.value_for_string_parameter(
-                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-private-key"
-                ),
-                "JWT_PUBLIC_KEY": ssm.StringParameter.value_for_string_parameter(
-                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-public-key"
-                ),
+                "JWT_PRIVATE_KEY": self._parameter_value("jwt-private-key"),
+                "JWT_PUBLIC_KEY": self._parameter_value("jwt-public-key"),
                 "TABLE_NAME": cvs_table.table_name,
                 "IDEMPOTENCY_TABLE_NAME": idempotency_table.table_name,
                 "CV_BUCKET_NAME": cv_bucket.bucket_name,
@@ -1437,12 +1494,13 @@ class ApiConstruct(Construct):
         )
 
         # S3 object creation starts background parsing/normalization work.
-        lambda_function.add_event_source(
-            eventsources.S3EventSource(
-                cv_bucket,
-                events=[s3.EventType.OBJECT_CREATED],
+        if not self.scratch_mode:
+            lambda_function.add_event_source(
+                eventsources.S3EventSource(
+                    cv_bucket,
+                    events=[s3.EventType.OBJECT_CREATED],
+                )
             )
-        )
 
         # Least-privilege data access for this worker's responsibilities.
         cv_bucket.grant_read(lambda_function)
@@ -1509,7 +1567,7 @@ class ApiConstruct(Construct):
                     (
                         f"arn:aws:ssm:{self.naming.region}:"
                         f"{self.naming.account_id}:parameter/"
-                        f"{constants.ANTHROPIC_API_KEY_SSM_PARAM.lstrip('/')}"
+                        f"{self._anthropic_parameter_name().lstrip('/')}"
                     )
                 ],
                 effect=iam.Effect.ALLOW,
@@ -1641,7 +1699,7 @@ class ApiConstruct(Construct):
                     (
                         f"arn:aws:ssm:{self.naming.region}:"
                         f"{self.naming.account_id}:parameter/"
-                        f"{constants.ANTHROPIC_API_KEY_SSM_PARAM.lstrip('/')}"
+                        f"{self._anthropic_parameter_name().lstrip('/')}"
                     )
                 ],
                 effect=iam.Effect.ALLOW,
@@ -1711,7 +1769,7 @@ class ApiConstruct(Construct):
                     (
                         f"arn:aws:ssm:{self.naming.region}:"
                         f"{self.naming.account_id}:parameter/"
-                        f"{constants.ANTHROPIC_API_KEY_SSM_PARAM.lstrip('/')}"
+                        f"{self._anthropic_parameter_name().lstrip('/')}"
                     )
                 ],
                 effect=iam.Effect.ALLOW,
@@ -1750,14 +1808,14 @@ class ApiConstruct(Construct):
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
                 "CONFIGURATION_APP": appconfig_app_name,
-                "CONFIGURATION_ENV": constants.ENVIRONMENT,
+                "CONFIGURATION_ENV": self.naming.environment,
                 "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,
                 "CONFIGURATION_MAX_AGE_MINUTES": constants.CONFIGURATION_MAX_AGE_MINUTES,
                 "TABLE_NAME": db.table_name,
                 "IDEMPOTENCY_TABLE_NAME": idempotency_table.table_name,
                 "VPR_JOBS_TABLE_NAME": self.api_db.jobs_table.table_name,
                 "AUTHORIZER_DISABLED": "true"
-                if constants.ENVIRONMENT != "prod"
+                if self.naming.environment != "prod"
                 else "false",
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
                 **self._build_llm_env(),
@@ -1781,7 +1839,7 @@ class ApiConstruct(Construct):
                     (
                         f"arn:aws:ssm:{self.naming.region}:"
                         f"{self.naming.account_id}:parameter/"
-                        f"{constants.ANTHROPIC_API_KEY_SSM_PARAM.lstrip('/')}"
+                        f"{self._anthropic_parameter_name().lstrip('/')}"
                     )
                 ],
                 effect=iam.Effect.ALLOW,
@@ -1814,15 +1872,11 @@ class ApiConstruct(Construct):
                 **self._build_shared_table_env(),
                 "TABLE_NAME": self.api_db.users_table.table_name,
                 "TOKEN_BLACKLIST_TABLE_NAME": self.api_db.idempotency_db.table_name,
-                "JWT_PRIVATE_KEY": ssm.StringParameter.value_for_string_parameter(
-                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-private-key"
-                ),
-                "JWT_PUBLIC_KEY": ssm.StringParameter.value_for_string_parameter(
-                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-public-key"
-                ),
+                "JWT_PRIVATE_KEY": self._parameter_value("jwt-private-key"),
+                "JWT_PUBLIC_KEY": self._parameter_value("jwt-public-key"),
                 "COGNITO_CLIENT_ID": self.cognito_client_id,
                 "COGNITO_USER_POOL_ID": self.cognito_user_pool.user_pool_id,
-                "ENVIRONMENT": constants.ENVIRONMENT,
+                "ENVIRONMENT": self.naming.environment,
             },
             timeout=Duration.seconds(30),
             memory_size=256,
@@ -1892,12 +1946,8 @@ class ApiConstruct(Construct):
                 **self._build_shared_table_env(),
                 "TABLE_NAME": self.api_db.users_table.table_name,
                 "USERS_TABLE_NAME": self.api_db.users_table.table_name,
-                "JWT_PRIVATE_KEY": ssm.StringParameter.value_for_string_parameter(
-                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-private-key"
-                ),
-                "JWT_PUBLIC_KEY": ssm.StringParameter.value_for_string_parameter(
-                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-public-key"
-                ),
+                "JWT_PRIVATE_KEY": self._parameter_value("jwt-private-key"),
+                "JWT_PUBLIC_KEY": self._parameter_value("jwt-public-key"),
             },
             timeout=Duration.seconds(30),
             memory_size=256,
@@ -1932,12 +1982,8 @@ class ApiConstruct(Construct):
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
                 "JOBS_TABLE_NAME": self.api_db.jobs_table.table_name,
-                "JWT_PRIVATE_KEY": ssm.StringParameter.value_for_string_parameter(
-                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-private-key"
-                ),
-                "JWT_PUBLIC_KEY": ssm.StringParameter.value_for_string_parameter(
-                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-public-key"
-                ),
+                "JWT_PRIVATE_KEY": self._parameter_value("jwt-private-key"),
+                "JWT_PUBLIC_KEY": self._parameter_value("jwt-public-key"),
             },
             timeout=Duration.seconds(30),
             memory_size=256,
@@ -1997,12 +2043,8 @@ class ApiConstruct(Construct):
             environment={
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-api-authorizer",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
-                "JWT_PRIVATE_KEY": ssm.StringParameter.value_for_string_parameter(
-                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-private-key"
-                ),
-                "JWT_PUBLIC_KEY": ssm.StringParameter.value_for_string_parameter(
-                    self, f"/careervp/{constants.ENVIRONMENT}/jwt-public-key"
-                ),
+                "JWT_PRIVATE_KEY": self._parameter_value("jwt-private-key"),
+                "JWT_PUBLIC_KEY": self._parameter_value("jwt-public-key"),
             },
             timeout=Duration.seconds(10),
             memory_size=256,
@@ -2188,10 +2230,9 @@ class ApiConstruct(Construct):
         )
         cleanup_rule.add_target(targets.LambdaFunction(self.artifact_cleanup_func))
 
-    @staticmethod
-    def _artifact_chain_enabled() -> str:
+    def _artifact_chain_enabled(self) -> str:
         """Resolve the ARTIFACT_CHAIN_ENABLED flag at synth time (default off)."""
-        default = "true" if constants.ENVIRONMENT == "dev" else "false"
+        default = "true" if self.naming.environment == "dev" else "false"
         return os.environ.get("ARTIFACT_CHAIN_ENABLED", default)
 
     def _add_artifact_cleanup_lambda(self) -> _lambda.Function:
@@ -2364,7 +2405,7 @@ class ApiConstruct(Construct):
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
                 "CONFIGURATION_APP": appconfig_app_name,
-                "CONFIGURATION_ENV": constants.ENVIRONMENT,
+                "CONFIGURATION_ENV": self.naming.environment,
                 "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,
                 # Standalone fallback target when the chain flag is off.
                 "VPR_JOBS_QUEUE_URL": self.vpr_jobs_queue.queue_url,
@@ -2572,19 +2613,18 @@ class ApiConstruct(Construct):
             environment={
                 "TABLE_NAME": self.api_db.db.table_name,
                 "IDEMPOTENCY_TABLE_NAME": self.api_db.idempotency_db.table_name,
-                "ALLOWED_ORIGINS": self.node.try_get_context("allowed_origins")
-                or "https://main.d3j2wnm8g5clnw.amplifyapp.com,https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com,https://ui-upgrade.d3j2wnm8g5clnw.amplifyapp.com,https://app.careervp.com,https://dev.careervp.com,https://stage.careervp.com,http://localhost:3000",
-                constants.WEBHOOK_SECRET_ENV_VAR: ssm.StringParameter.value_for_string_parameter(
-                    self, constants.WEBHOOK_SECRET_SSM_PARAM
+                "ALLOWED_ORIGINS": self.allowed_origins,
+                constants.WEBHOOK_SECRET_ENV_VAR: self._parameter_value(
+                    "payment-provider-webhook-secret"
                 ),
-                constants.WEBHOOK_SECRET_PREVIOUS_ENV_VAR: ssm.StringParameter.value_for_string_parameter(
-                    self, constants.WEBHOOK_SECRET_PREVIOUS_SSM_PARAM
+                constants.WEBHOOK_SECRET_PREVIOUS_ENV_VAR: self._parameter_value(
+                    "payment-provider-webhook-secret-previous"
                 ),
-                "PRICE_ID_MONTHLY": ssm.StringParameter.value_for_string_parameter(
-                    self, constants.PRICE_ID_MONTHLY_SSM_PARAM
+                "PRICE_ID_MONTHLY": self._parameter_value(
+                    "payment-provider-price-monthly"
                 ),
-                "PRICE_ID_QUARTERLY": ssm.StringParameter.value_for_string_parameter(
-                    self, constants.PRICE_ID_QUARTERLY_SSM_PARAM
+                "PRICE_ID_QUARTERLY": self._parameter_value(
+                    "payment-provider-price-quarterly"
                 ),
                 "PAYMENT_PROVIDER": "placeholder",
             },
@@ -2624,8 +2664,7 @@ class ApiConstruct(Construct):
                 "ARTIFACTS_TABLE_NAME": self.api_db.artifacts_table.table_name,
                 "VPR_RESULTS_BUCKET_NAME": self.api_db.vpr_results_bucket.bucket_name,
                 "ARTIFACTS_BUCKET_NAME": self.api_db.artifacts_bucket.bucket_name,
-                "ALLOWED_ORIGINS": self.node.try_get_context("allowed_origins")
-                or "https://main.d3j2wnm8g5clnw.amplifyapp.com,https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com,https://ui-upgrade.d3j2wnm8g5clnw.amplifyapp.com,https://app.careervp.com,https://dev.careervp.com,https://stage.careervp.com,http://localhost:3000",
+                "ALLOWED_ORIGINS": self.allowed_origins,
             },
             timeout=Duration.seconds(29),
             memory_size=512,

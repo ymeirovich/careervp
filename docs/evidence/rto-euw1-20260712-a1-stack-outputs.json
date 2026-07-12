@@ -1,0 +1,23 @@
+{
+  "CareerVpCrudRtoEuw120260712A1": {
+    "ApplicationsTableOutput": "careervp-applications-table-rto-euw1-20260712-a1",
+    "Apigateway": "https://y7mtvv4nw6.execute-api.eu-west-1.amazonaws.com/prod/",
+    "MonitoringTopic": "careervp-monitoring-topic-rto-euw1-20260712-a1",
+    "ArtifactsTableOutput": "careervp-artifacts-table-rto-euw1-20260712-a1",
+    "UsersTableOutput": "careervp-users-table-rto-euw1-20260712-a1",
+    "RawApiInvokeUrl": "https://y7mtvv4nw6.execute-api.eu-west-1.amazonaws.com/prod/",
+    "CompanyResearchCacheTableOutput": "careervp-company-research-cache-table-rto-euw1-20260712-a1",
+    "IdempotencyTableOutput": "careervp-idempotency-table-rto-euw1-20260712-a1",
+    "KnowledgeTableOutput": "careervp-knowledge-table-rto-euw1-20260712-a1",
+    "LlmCacheTableOutput": "careervp-llm-cache-rto-euw1-20260712-a1",
+    "JobsTableOutput": "careervp-jobs-table-rto-euw1-20260712-a1",
+    "UserPoolId": "eu-west-1_9OcPhHvVb",
+    "CvsTableOutput": "careervp-cvs-table-rto-euw1-20260712-a1",
+    "GapResponsesTableOutput": "careervp-gap-responses-table-rto-euw1-20260712-a1",
+    "CareerVpCrudRtoEuw120260712A1CrudservicerestapiEndpoint030F5AC0": "https://y7mtvv4nw6.execute-api.eu-west-1.amazonaws.com/prod/",
+    "ClientId": "5ha9hitoh5tluekvpqkmf195hn",
+    "CVBucketOutput": "careervp-rto-euw1-20260712-a1-cvs-euw1-0daaa4",
+    "ArtifactChainStateMachineArn": "arn:aws:states:eu-west-1:788159322332:stateMachine:careervp-artifact-chain-statemachine-rto-euw1-20260712-a1",
+    "SwaggerURL": "https://y7mtvv4nw6.execute-api.eu-west-1.amazonaws.com/prod/swagger"
+  }
+}

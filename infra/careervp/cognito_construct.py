@@ -1,15 +1,48 @@
 from __future__ import annotations
 
-from aws_cdk import Duration
+from aws_cdk import Duration, RemovalPolicy
 from aws_cdk import aws_cognito as cognito
 from constructs import Construct
+
+from .scratch_deployment import ScratchDeploymentSettings, validate_scratch_boundary
 
 
 class CognitoConstruct(Construct):
     """Provision Cognito User Pool resources for API authentication."""
 
-    def __init__(self, scope: Construct, id_: str, environment: str) -> None:
+    def __init__(
+        self,
+        scope: Construct,
+        id_: str,
+        environment: str,
+        *,
+        scratch_settings: ScratchDeploymentSettings | None = None,
+    ) -> None:
         super().__init__(scope, id_)
+        if scratch_settings is not None:
+            validate_scratch_boundary(scratch_settings, environment=environment)
+        callback_urls = (
+            [f"{scratch_settings.allowed_origin.rstrip('/')}/callback"]
+            if scratch_settings is not None
+            else [
+                "http://localhost:3000/callback",
+                "https://app.careervp.com/callback",
+                "https://dev.careervp.com/callback",
+                "https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com/callback",
+                "https://stage.careervp.com/callback",
+            ]
+        )
+        logout_urls = (
+            [f"{scratch_settings.allowed_origin.rstrip('/')}/"]
+            if scratch_settings is not None
+            else [
+                "http://localhost:3000/",
+                "https://app.careervp.com/",
+                "https://dev.careervp.com/",
+                "https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com/",
+                "https://stage.careervp.com/",
+            ]
+        )
 
         self.user_pool = cognito.UserPool(
             self,
@@ -27,6 +60,8 @@ class CognitoConstruct(Construct):
                 require_symbols=False,
             ),
         )
+        if scratch_settings is not None:
+            self.user_pool.apply_removal_policy(RemovalPolicy.DESTROY)
 
         self.user_pool_client = self.user_pool.add_client(
             "UserPoolClient",
@@ -50,20 +85,8 @@ class CognitoConstruct(Construct):
                     cognito.OAuthScope.PHONE,
                     cognito.OAuthScope.PROFILE,
                 ],
-                callback_urls=[
-                    "http://localhost:3000/callback",
-                    "https://app.careervp.com/callback",
-                    "https://dev.careervp.com/callback",
-                    "https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com/callback",
-                    "https://stage.careervp.com/callback",
-                ],
-                logout_urls=[
-                    "http://localhost:3000/",
-                    "https://app.careervp.com/",
-                    "https://dev.careervp.com/",
-                    "https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com/",
-                    "https://stage.careervp.com/",
-                ],
+                callback_urls=callback_urls,
+                logout_urls=logout_urls,
             ),
             supported_identity_providers=[
                 cognito.UserPoolClientIdentityProvider.COGNITO,

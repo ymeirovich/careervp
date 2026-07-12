@@ -11,6 +11,11 @@ from constructs import Construct
 
 from . import constants
 from .naming_utils import NamingUtils
+from .scratch_deployment import (
+    ScratchDeploymentSettings,
+    ssm_parameter_name,
+    validate_scratch_boundary,
+)
 
 
 class CompanyResearchNestedStack(NestedStack):
@@ -27,9 +32,18 @@ class CompanyResearchNestedStack(NestedStack):
         company_research_role: iam.Role,
         company_research_cache_table: dynamodb.TableV2,
         notification_topic: sns.ITopic,
+        scratch_settings: ScratchDeploymentSettings | None = None,
     ) -> None:
         super().__init__(scope, id_)
         self.naming = naming
+        if scratch_settings is not None:
+            validate_scratch_boundary(
+                scratch_settings,
+                environment=naming.environment,
+                region=naming.region,
+                account=naming.account_id,
+            )
+        self.scratch_mode = scratch_settings is not None
 
         self._inject_tavily_secret_env(
             company_research_lambda,
@@ -49,7 +63,11 @@ class CompanyResearchNestedStack(NestedStack):
         for function in (company_research_lambda, company_research_worker_lambda):
             function.add_environment(
                 constants.TAVILY_API_KEY_SSM_PARAM_ENV,
-                constants.TAVILY_API_KEY_SSM_PARAM,
+                (
+                    "scratch-disabled-tavily-api-key"
+                    if self.scratch_mode
+                    else ssm_parameter_name(self.naming.environment, "tavily-api-key")
+                ),
             )
 
     def _add_company_research_access_policy(
@@ -57,10 +75,32 @@ class CompanyResearchNestedStack(NestedStack):
         company_research_role: iam.Role,
         company_research_cache_table: dynamodb.TableV2,
     ) -> None:
-        tavily_param_arn = (
-            f"arn:aws:ssm:{self.naming.region}:{self.naming.account_id}:parameter/"
-            f"{constants.TAVILY_API_KEY_SSM_PARAM.lstrip('/')}"
-        )
+        statements: list[dict[str, object]] = [
+            {
+                "Effect": "Allow",
+                "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem",
+                    "dynamodb:Query",
+                ],
+                "Resource": company_research_cache_table.table_arn,
+            }
+        ]
+        if not self.scratch_mode:
+            tavily_param_arn = (
+                f"arn:aws:ssm:{self.naming.region}:{self.naming.account_id}:parameter/"
+                f"{ssm_parameter_name(self.naming.environment, 'tavily-api-key').lstrip('/')}"
+            )
+            statements.insert(
+                0,
+                {
+                    "Effect": "Allow",
+                    "Action": "ssm:GetParameter",
+                    "Resource": tavily_param_arn,
+                },
+            )
         iam.CfnPolicy(
             self,
             "CompanyResearchTavilyAccessPolicy",
@@ -71,24 +111,7 @@ class CompanyResearchNestedStack(NestedStack):
             roles=[company_research_role.role_name],
             policy_document={
                 "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Action": "ssm:GetParameter",
-                        "Resource": tavily_param_arn,
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "dynamodb:GetItem",
-                            "dynamodb:PutItem",
-                            "dynamodb:UpdateItem",
-                            "dynamodb:DeleteItem",
-                            "dynamodb:Query",
-                        ],
-                        "Resource": company_research_cache_table.table_arn,
-                    },
-                ],
+                "Statement": statements,
             },
         )
 

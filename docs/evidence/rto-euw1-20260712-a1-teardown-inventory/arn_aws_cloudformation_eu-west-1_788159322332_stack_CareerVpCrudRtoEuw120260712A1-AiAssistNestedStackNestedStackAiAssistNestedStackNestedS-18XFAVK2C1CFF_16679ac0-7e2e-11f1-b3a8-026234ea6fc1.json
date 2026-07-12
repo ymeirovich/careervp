@@ -1,0 +1,74 @@
+{
+    "StackResourceSummaries": [
+        {
+            "LogicalResourceId": "AiAssistLambda5B77D8E3",
+            "PhysicalResourceId": "careervp-ai-assist-lambda-rto-euw1-20260712-a1",
+            "ResourceType": "AWS::Lambda::Function",
+            "LastUpdatedTimestamp": "2026-07-12T20:13:53.144000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "AiAssistLambdaAllowAiAssistApiInvoke25E414B1",
+            "PhysicalResourceId": "CareerVpCrudRtoEuw120260712A1-AiAssistNeste-AiAssistLambdaAllowAiAssistApiInvoke25E414B-ZB3wJ1sPLump",
+            "ResourceType": "AWS::Lambda::Permission",
+            "LastUpdatedTimestamp": "2026-07-12T20:13:54.734000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "AiAssistLambdaEventInvokeConfigB8150C3E",
+            "PhysicalResourceId": "careervp-ai-assist-lambda-rto-euw1-20260712-a1|$LATEST",
+            "ResourceType": "AWS::Lambda::EventInvokeConfig",
+            "LastUpdatedTimestamp": "2026-07-12T20:13:54.851000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "AiAssistLogGroup6AD9C0F9",
+            "PhysicalResourceId": "/aws/lambda/careervp-ai-assist-lambda-rto-euw1-20260712-a1",
+            "ResourceType": "AWS::Logs::LogGroup",
+            "LastUpdatedTimestamp": "2026-07-12T20:13:16.791000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "AiAssistRoleC152EEB0",
+            "PhysicalResourceId": "careervp-role-lambda-ai-assist-rto-euw1-20260712-a1",
+            "ResourceType": "AWS::IAM::Role",
+            "LastUpdatedTimestamp": "2026-07-12T20:13:25.642000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "AiAssistRoleDefaultPolicy855251CC",
+            "PhysicalResourceId": "Caree-AiAss-MY4HBw9zRs7B",
+            "ResourceType": "AWS::IAM::Policy",
+            "LastUpdatedTimestamp": "2026-07-12T20:13:42.407000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CDKMetadata",
+            "PhysicalResourceId": "16679ac0-7e2e-11f1-b3a8-026234ea6fc1",
+            "ResourceType": "AWS::CDK::Metadata",
+            "LastUpdatedTimestamp": "2026-07-12T20:13:07.950000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        }
+    ]
+}

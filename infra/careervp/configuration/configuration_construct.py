@@ -1,10 +1,11 @@
 from pathlib import Path
 
-from aws_cdk import Duration
+from aws_cdk import Duration, RemovalPolicy
 from aws_cdk import aws_appconfig as appconfig
 from constructs import Construct
 
 from .schema import FeatureFlagsConfiguration
+from ..scratch_deployment import ScratchDeploymentSettings, validate_scratch_boundary
 
 
 class ConfigurationStore(Construct):
@@ -15,6 +16,8 @@ class ConfigurationStore(Construct):
         environment: str,
         service_name: str,
         configuration_name: str,
+        configuration_source: str | None = None,
+        scratch_settings: ScratchDeploymentSettings | None = None,
     ) -> None:
         """
         This construct should be deployed in a different repo and have its own pipeline so updates can be decoupled from
@@ -31,7 +34,16 @@ class ConfigurationStore(Construct):
         """
         super().__init__(scope, id_)
 
-        configuration_str = self._get_and_validate_configuration(environment)
+        if scratch_settings is not None:
+            validate_scratch_boundary(scratch_settings, environment=environment)
+        elif configuration_source is not None and configuration_source != environment:
+            raise ValueError(
+                "a configuration source override requires validated scratch settings"
+            )
+
+        configuration_str = self._get_and_validate_configuration(
+            configuration_source or environment
+        )
         self.app_name = f"{id_}{service_name}"
         self.config_app = appconfig.Application(
             self,
@@ -68,6 +80,18 @@ class ConfigurationStore(Construct):
             deployment_strategy=self.config_dep_strategy,
             deploy_to=[self.config_env],
         )
+        if scratch_settings is not None:
+            hosted_versions = [
+                node
+                for node in self.config.node.find_all()
+                if isinstance(node, appconfig.CfnHostedConfigurationVersion)
+            ]
+            if len(hosted_versions) != 1:
+                raise ValueError(
+                    "scratch teardown expected one AppConfig hosted version; "
+                    f"found {len(hosted_versions)}"
+                )
+            hosted_versions[0].apply_removal_policy(RemovalPolicy.DESTROY)
 
     def _get_and_validate_configuration(self, environment: str) -> str:
         current = Path(__file__).parent

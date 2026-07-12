@@ -27,6 +27,7 @@ from constructs import Construct
 
 from . import constants
 from .naming_utils import NamingUtils
+from .scratch_deployment import ScratchDeploymentSettings, validate_scratch_boundary
 
 MonitoringMode = Literal["all", "notifications", "dashboards", "alarms"]
 _Q10_PRICE_PER_APP = 25.0 / 20.0
@@ -303,8 +304,16 @@ class MonitoringNestedStack(NestedStack):
         functions: list[_lambda.Function],
         notification_topic: sns.ITopic,
         naming: NamingUtils,
+        scratch_settings: ScratchDeploymentSettings | None = None,
     ) -> None:
         super().__init__(scope, id_)
+        if scratch_settings is not None:
+            validate_scratch_boundary(
+                scratch_settings,
+                environment=naming.environment,
+                region=naming.region,
+                account=naming.account_id,
+            )
         self.monitoring = CrudMonitoring(
             self,
             monitoring_id,
@@ -335,7 +344,8 @@ class MonitoringNestedStack(NestedStack):
         cost_per_application_alarm.add_alarm_action(
             cloudwatch_actions.SnsAction(notification_topic)
         )
-        self._build_cost_observability(notification_topic, naming)
+        if scratch_settings is None:
+            self._build_cost_observability(notification_topic, naming)
 
     def _build_cost_observability(
         self, notification_topic: sns.ITopic, naming: NamingUtils

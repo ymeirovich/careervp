@@ -11,6 +11,7 @@ from constructs import Construct
 
 from . import constants
 from .naming_utils import NamingUtils
+from .scratch_deployment import ssm_parameter_name
 
 
 class AiAssistNestedStack(NestedStack):
@@ -104,7 +105,9 @@ class AiAssistNestedStack(NestedStack):
                 "COMPANY_RESEARCH_TABLE_NAME": artifacts_table.table_name,
                 "ALLOWED_ORIGINS": allowed_origins,
                 constants.LLM_CACHE_TABLE_NAME_ENV: llm_cache_table.table_name,
-                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: ssm_parameter_name(
+                    naming.environment, "anthropic-api-key"
+                ),
                 constants.STRATEGIC_MODEL_ID_ENV_VAR: constants.STRATEGIC_MODEL_ID,
                 constants.TEMPLATE_MODEL_ID_ENV_VAR: constants.TEMPLATE_MODEL_ID,
                 constants.AI_ASSIST_MODEL_ENV_VAR: constants.TEMPLATE_MODEL_ID,
@@ -176,7 +179,7 @@ class AiAssistNestedStack(NestedStack):
                 resources=[
                     (
                         f"arn:aws:ssm:{naming.region}:{naming.account_id}:parameter/"
-                        f"{constants.ANTHROPIC_API_KEY_SSM_PARAM.lstrip('/')}"
+                        f"{ssm_parameter_name(naming.environment, 'anthropic-api-key').lstrip('/')}"
                     )
                 ],
             )

@@ -1,0 +1,113 @@
+{
+  "schema_version": "1.0",
+  "timestamp_utc": "2026-07-12T20:47:00Z",
+  "account_id": "788159322332",
+  "region": "eu-west-1",
+  "scratch_environment": "rto-euw1-20260712-a1",
+  "stack": {
+    "name": "CareerVpCrudRtoEuw120260712A1",
+    "arn": "arn:aws:cloudformation:eu-west-1:788159322332:stack/CareerVpCrudRtoEuw120260712A1/836f17c0-7e2d-11f1-9b4f-0253c2c837ff",
+    "id": "836f17c0-7e2d-11f1-9b4f-0253c2c837ff"
+  },
+  "git_sha": "425e0bd17a8133d541b3e13c648c3d0a6d80a3bc",
+  "git_working_tree": "dirty — P-64 scratch path uncommitted (15 files) at measurement time",
+  "method": "scratch service-only CDK create in eu-west-1 proxy region; raw execute-api invoke URL; P-30 smoke; cdk destroy teardown",
+  "artifacts": {
+    "synth_template": "scratchpad/p64-final-scratch/CareerVpCrudRtoEuw120260712A1.template.json",
+    "synth_sha256": "13953919d6e2c03c94688771db41aae80530fc91cecbc56f443a445bd96654f3",
+    "nested_template_count": 4,
+    "diff": "not applicable — from-scratch create against a non-existent stack",
+    "note": "SHA is CDK-version sensitive via CDKMetadata.Analytics; compare templates ignoring CDKMetadata + asset hashes before declaring drift"
+  },
+  "deploy": {
+    "command_started_utc": "2026-07-12T20:08:31Z",
+    "command_ended_utc": "2026-07-12T20:14:57Z",
+    "command_duration_seconds": 386,
+    "cfn_started_utc": "2026-07-12T20:09:23Z",
+    "cfn_ended_utc": "2026-07-12T20:14:51Z",
+    "cfn_duration_seconds": 328,
+    "final_status": "CREATE_COMPLETE",
+    "resource_count": 449,
+    "duration_note": "cfn_duration_seconds (328s) is the from-scratch recreate RTO. command_duration_seconds (386s) additionally includes CDK synth and asset build/publish. Neither substitutes for the other."
+  },
+  "outputs": {
+    "api_base": "https://y7mtvv4nw6.execute-api.eu-west-1.amazonaws.com/prod/",
+    "user_pool_id": "eu-west-1_9OcPhHvVb",
+    "client_id": "5ha9hitoh5tluekvpqkmf195hn"
+  },
+  "auth": {
+    "method": "scratch-only Cognito user, USER_PASSWORD_AUTH, email-alias username",
+    "username": "p64-rto-euw1-20260712-a1-20260712T202648Z@example.invalid",
+    "token_recorded": false,
+    "password_recorded": false,
+    "live_credentials_used": false
+  },
+  "anthropic": {
+    "parameter_name": "/careervp/rto-euw1-20260712-a1/anthropic-api-key",
+    "value_recorded": false,
+    "source": "H1-authorized server-side copy from /careervp/dev/anthropic-api-key (us-east-1 READ-only; dev parameter unmodified, Version 426 unchanged)",
+    "real_service_cost_possible": true,
+    "real_service_cost_incurred": true
+  },
+  "smoke": {
+    "evidence_path": "docs/evidence/smoke-20260712T203116Z-1134fd.json",
+    "passed": true,
+    "checks": ["health", "cors_exact_origin", "authed_read", "unauthenticated_rejection", "authed_upload"],
+    "writes_confirmed": {
+      "s3_object": "b2050414-.../b3e683f1-....txt (197 bytes) in careervp-rto-euw1-20260712-a1-cvs-euw1-0daaa4",
+      "dynamodb_items": "2 items in careervp-users-table-rto-euw1-20260712-a1"
+    },
+    "secret_scan": "no JWT, no Authorization header, no API key present in smoke evidence"
+  },
+  "teardown": {
+    "status": "complete",
+    "started_utc": "2026-07-12T20:40:12Z",
+    "completed_utc": "2026-07-12T20:43:53Z",
+    "duration_seconds": 221,
+    "destroy_exit": 0,
+    "stack_absent": true,
+    "reconciled_zero": [
+      "DynamoDB tables", "S3 buckets", "Lambda functions", "SQS queues", "API Gateway REST APIs",
+      "Cognito user pools", "Step Functions", "SNS topics", "CloudWatch alarms", "Log groups",
+      "AppConfig applications", "IAM roles", "EventBridge rules", "SSM scratch parameter", "CareerVp* CFN stacks"
+    ],
+    "residuals": [
+      {
+        "type": "AWS::KMS::Key", "count": 5, "state": "PendingDeletion",
+        "ids": ["6502e6cf-65a9-40ab-9779-f07db4449d67", "1a1f981e-fdcb-469d-b54d-9d1fdb79596f", "908f896d-0a71-46ee-97fa-36f848297554", "97afded0-01c2-4f88-8bd5-9e1330728fb1", "c6e063d6-2463-4177-ac33-cb1271e49bc1"],
+        "deletion_dates": ["2026-07-19", "2026-08-11 (x4)"],
+        "owner_action": "none — auto-deletes at the scheduled date; ~$1/key/month until then",
+        "note": "scheduled KMS deletion is a residual, not 'nothing remains'"
+      }
+    ],
+    "stale_tagging_api_entries": [
+      {"arn": "cognito-idp userpool/eu-west-1_9OcPhHvVb", "verified": "ResourceNotFoundException — does not exist"},
+      {"arn": "appconfig application/8n1vz6v", "verified": "ResourceNotFoundException — does not exist"}
+    ],
+    "out_of_scope_left_in_place": [
+      "CDKToolkit stack (pre-existing since 2020-06-19; upgraded to bootstrap v30 at H0)",
+      "cdk-hnb659fds-assets-788159322332-eu-west-1 (new bootstrap staging bucket, H0)",
+      "cdk-hnb659fds-container-assets ECR repo + 5 cdk-hnb659fds IAM roles (H0)",
+      "cdktoolkit-stagingbucket-85n4srcksims (2020 legacy staging bucket, orphaned by the H0 bootstrap upgrade; 3 objects retained)",
+      "TpsPriExternalIdPDemo, serverlessrepo-cognito-sync-trigger, aws-serverless-repository-simple-mobile-backend (pre-existing legacy stacks)"
+    ],
+    "fixed_cost_sweep_eu_west_1": "0 EC2, 0 NAT gateways, 0 Elastic IPs, 0 load balancers, 0 EBS volumes, 0 RDS, 0 ElastiCache, 0 OpenSearch, 0 VPC interface endpoints, 0 Secrets Manager secrets, 0 Resolver endpoints. Only fixed-cost items are the 5 KMS keys already PendingDeletion."
+  },
+  "approvals": [
+    {"gate": "H0", "status": "approved", "approver": "Yitzchak Meirovich", "approved_utc": "2026-07-12T19:36:00Z", "scope": "cdk bootstrap aws://788159322332/eu-west-1 — NOTE: approved on the mistaken premise of a greenfield create; it in fact UPDATED a pre-existing CDKToolkit stack from 2020 and orphaned its legacy staging bucket. Disclosed to the approver immediately after."},
+    {"gate": "H1", "status": "approved", "approver": "Yitzchak Meirovich", "approved_utc": "2026-07-12T19:35:00Z", "scope": "copy /careervp/dev/anthropic-api-key (us-east-1 READ) -> /careervp/rto-euw1-20260712-a1/anthropic-api-key (eu-west-1 write); explicitly authorized the live-region read"},
+    {"gate": "H2", "status": "approved", "approver": "Yitzchak Meirovich", "approved_utc": "2026-07-12T20:08:00Z", "scope": "deploy/create CareerVpCrudRtoEuw120260712A1 in 788159322332/eu-west-1"},
+    {"gate": "H3", "status": "approved", "approver": "Yitzchak Meirovich", "approved_utc": "2026-07-12T20:26:00Z", "scope": "create scratch Cognito user in pool eu-west-1_9OcPhHvVb; random in-shell password"},
+    {"gate": "H4", "status": "approved", "approver": "Yitzchak Meirovich", "approved_utc": "2026-07-12T20:30:00Z", "scope": "run P-30 against the live scratch API incl. S3/DynamoDB writes and real Anthropic cost"},
+    {"gate": "H5", "status": "not_applicable", "approver": null, "approved_utc": null, "scope": "termination protection was already false on the deployed stack (verified live, not assumed); no stack-policy mutation needed"},
+    {"gate": "H6", "status": "approved", "approver": "Yitzchak Meirovich", "approved_utc": "2026-07-12T20:40:00Z", "scope": "cdk destroy CareerVpCrudRtoEuw120260712A1; delete scratch SSM parameter; delete scratch-only orphaned log group"},
+    {"gate": "H7", "status": "pending", "approver": null, "approved_utc": null, "scope": "edit project-scope-lock.md + project-scope-lock.yaml twins"}
+  ],
+  "caveats": [
+    "eu-west-1 is a proxy region; this is NOT a us-east-1 production DR proof",
+    "scratch omits the CV bucket S3 event notification and its CDK BucketNotificationsHandler Lambda/role/policy; the measured recreate slightly understates a live recreate",
+    "scratch omits the API Gateway access log group, execution logging, and AWS::ApiGateway::Account",
+    "scratch omits Budgets, Cost Anomaly, API custom domain/certificate/base-path mapping, and FrontendStack",
+    "measured on a dirty working tree (P-64 changes uncommitted); the live-mode template delta vs HEAD is a single added output, RawApiInvokeUrl"
+  ]
+}

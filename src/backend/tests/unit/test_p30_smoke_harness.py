@@ -120,7 +120,7 @@ def test_p30_authed_read_rejects_unauthenticated_success():
 
 
 def test_p30_upload_wire_posts_base64_cv_content_to_the_real_route():
-    """The upload wire uses the real contract: base64 cv_content + file_name to /users/me/cv.
+    """The upload wire sends a typed base64 file to /users/me/cv.
 
     The API has no presigned-upload route; the handler owns the S3 put.
     """
@@ -141,6 +141,7 @@ def test_p30_upload_wire_posts_base64_cv_content_to_the_real_route():
     body = captured['body']
     assert isinstance(body, dict)
     assert body['file_name'] == 'p30-smoke.txt'
+    assert body['file_type'] == 'txt'
     decoded = base64.b64decode(body['cv_content']).decode('utf-8')
     assert decoded == smoke_harness.SMOKE_CV_FIXTURE
 
