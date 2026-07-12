@@ -10,10 +10,10 @@ from decimal import Decimal
 from http import HTTPStatus
 from typing import Any
 
-import boto3
+import boto3  # type: ignore[import-untyped]
 from aws_lambda_powertools.metrics import MetricUnit
 from aws_lambda_powertools.utilities.typing import LambdaContext
-from boto3.dynamodb.conditions import Attr, Key
+from boto3.dynamodb.conditions import Attr, Key  # type: ignore[import-untyped]
 from pydantic import ValidationError
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
@@ -23,6 +23,7 @@ from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.cancellation import CancelledBeforePersist
 from careervp.logic.interview_prep import generate_interview_prep
+from careervp.logic.utils.llm_metering import bind_llm_usage_context
 from careervp.models.api_models import InterviewPrepRequest
 from careervp.models.interview_prep import InterviewPrepRequest as LogicInterviewPrepRequest
 from careervp.models.result import Result, ResultCode
@@ -919,18 +920,20 @@ def _generate_interview_prep_result(
         focus_areas=list(api_request.focus_areas),
         question_count=question_count,
     )
-    maybe_async_result = generate_interview_prep(
-        request=logic_request,
-        vpr_data=ctx['vpr_data'],
-        gap_responses=ctx['gap_responses'] or [],
-        job_title=ctx['job_title'],
-        company_name='',
-        cv_facts=ctx['cv_facts'],
-        job_requirements=None,
-        vpr_differentiators=ctx['vpr_differentiators'],
-        company_research=ctx['company_research'],
-        language=ctx['language'],
-    )
+    application_id = str(api_request.application_id or ctx['job_id']).strip()
+    with bind_llm_usage_context(application_id=application_id, user_id=user_id):
+        maybe_async_result = generate_interview_prep(
+            request=logic_request,
+            vpr_data=ctx['vpr_data'],
+            gap_responses=ctx['gap_responses'] or [],
+            job_title=ctx['job_title'],
+            company_name='',
+            cv_facts=ctx['cv_facts'],
+            job_requirements=None,
+            vpr_differentiators=ctx['vpr_differentiators'],
+            company_research=ctx['company_research'],
+            language=ctx['language'],
+        )
     logger.info(
         'Interview prep worker generation input payload',
         user_id=user_id,

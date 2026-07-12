@@ -27,6 +27,8 @@ from . import constants
 from .naming_utils import NamingUtils
 
 MonitoringMode = Literal["all", "notifications", "dashboards", "alarms"]
+_Q10_PRICE_PER_APP = 25.0 / 20.0
+_Q10_COST_PER_APP_ALARM_THRESHOLD = 0.30 * _Q10_PRICE_PER_APP
 
 # P-21: alarms must reach a real on-call destination. Each environment has a
 # default subscribed endpoint so a synthesized stack is never left with zero
@@ -285,4 +287,23 @@ class MonitoringNestedStack(NestedStack):
             naming=naming,
             notification_topic=notification_topic,
             create_dashboards=False,
+        )
+        cost_per_application_alarm = cloudwatch.Alarm(
+            self,
+            "CostPerApplicationAlarm",
+            metric=cloudwatch.Metric(
+                namespace=constants.METRICS_NAMESPACE,
+                metric_name="CostPerApplicationUSD",
+                statistic="Maximum",
+                period=Duration.minutes(5),
+                dimensions_map={"TrafficOrigin": "product"},
+            ),
+            threshold=_Q10_COST_PER_APP_ALARM_THRESHOLD,
+            evaluation_periods=1,
+            datapoints_to_alarm=1,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+        )
+        cost_per_application_alarm.add_alarm_action(
+            cloudwatch_actions.SnsAction(notification_topic)
         )

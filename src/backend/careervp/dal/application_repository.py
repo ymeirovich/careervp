@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
@@ -254,6 +255,67 @@ class ApplicationRepository:
             },
         )
 
+    def record_llm_usage(
+        self,
+        *,
+        application_id: str,
+        user_id: str,
+        model_id: str,
+        traffic_origin: str,
+        input_tokens: int,
+        output_tokens: int,
+        cost_usd: float,
+        prompt_cache_hit: bool,
+        prompt_cache_lookup: bool,
+    ) -> dict[str, float | int]:
+        response = self._table().update_item(
+            Key={
+                'userId': user_id,
+                'applicationId': application_id,
+            },
+            UpdateExpression=(
+                'SET application_id = if_not_exists(application_id, :application_id), '
+                'user_id = if_not_exists(user_id, :user_id), '
+                'job_id = if_not_exists(job_id, :job_id), '
+                'entity_type = if_not_exists(entity_type, :entity_type), '
+                'created_at = if_not_exists(created_at, :created_at), '
+                'updated_at = :updated_at, '
+                'llm_last_model_id = :model_id, '
+                'llm_last_traffic_origin = :traffic_origin '
+                'ADD llm_input_tokens_total :input_tokens, '
+                'llm_output_tokens_total :output_tokens, '
+                'llm_cost_usd_total :cost_usd, '
+                'prompt_cache_hits_total :prompt_cache_hits, '
+                'prompt_cache_lookups_total :prompt_cache_lookups'
+            ),
+            ExpressionAttributeValues={
+                ':application_id': application_id,
+                ':user_id': user_id,
+                ':job_id': application_id,
+                ':entity_type': 'APPLICATION',
+                ':created_at': self._now_iso(),
+                ':updated_at': self._now_iso(),
+                ':model_id': model_id,
+                ':traffic_origin': traffic_origin,
+                ':input_tokens': int(input_tokens),
+                ':output_tokens': int(output_tokens),
+                ':cost_usd': Decimal(f'{cost_usd:.6f}'),
+                ':prompt_cache_hits': 1 if prompt_cache_hit else 0,
+                ':prompt_cache_lookups': 1 if prompt_cache_lookup else 0,
+            },
+            ReturnValues='UPDATED_NEW',
+        )
+        attributes = response.get('Attributes', {})
+        cost_total = self._as_float(attributes.get('llm_cost_usd_total'))
+        lookups_total = self._as_int(attributes.get('prompt_cache_lookups_total'))
+        hits_total = self._as_int(attributes.get('prompt_cache_hits_total'))
+        return {
+            'cost_per_application_usd': cost_total,
+            'input_tokens_total': self._as_int(attributes.get('llm_input_tokens_total')),
+            'output_tokens_total': self._as_int(attributes.get('llm_output_tokens_total')),
+            'prompt_cache_hit_rate': (hits_total / lookups_total) if lookups_total else 0.0,
+        }
+
     def update_artifact_with_id(
         self,
         application_id: str,
@@ -384,6 +446,22 @@ class ApplicationRepository:
     @staticmethod
     def _now_iso() -> str:
         return datetime.now(timezone.utc).isoformat()
+
+    @staticmethod
+    def _as_float(value: Any) -> float:
+        if isinstance(value, Decimal):
+            return float(value)
+        if isinstance(value, int | float):
+            return float(value)
+        return 0.0
+
+    @staticmethod
+    def _as_int(value: Any) -> int:
+        if isinstance(value, Decimal):
+            return int(value)
+        if isinstance(value, int):
+            return value
+        return 0
 
 
 __all__ = ['ApplicationRepository', 'APPLICATION_STATES', 'VALID_TRANSITIONS', 'InvalidStateTransitionError']

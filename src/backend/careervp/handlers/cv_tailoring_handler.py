@@ -10,7 +10,7 @@ from decimal import Decimal
 from http import HTTPStatus
 from typing import Any
 
-from boto3.dynamodb.conditions import Attr, Key
+from boto3.dynamodb.conditions import Attr, Key  # type: ignore[import-untyped]
 from pydantic import ValidationError
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
@@ -27,6 +27,7 @@ from careervp.logic.cv_tailoring_ats import compute_ats_result
 from careervp.logic.cv_tailoring_pipeline import run_cv_tailoring_pipeline
 from careervp.logic.fvs_validator import create_fvs_baseline
 from careervp.logic.llm_client import LLMClient
+from careervp.logic.utils.llm_metering import bind_llm_usage_context
 from careervp.models.api_models import CVTailoringRequest as APICVTailoringRequest
 from careervp.models.cv_tailoring_models import TailorCVRequest, TailoringPreferences
 from careervp.models.result import Result, ResultCode
@@ -453,12 +454,13 @@ def _handle_openapi_async_generate(  # noqa: C901
 
     # ── 4. Run 3-stage pipeline ───────────────────────────────────────────────
     llm_client = LLMClient()
-    pipeline_result = run_cv_tailoring_pipeline(
-        cv=master_cv,
-        job_description=job_description,
-        vpr=vpr,
-        llm_client=llm_client,
-    )
+    with bind_llm_usage_context(application_id=job_id, user_id=user_id):
+        pipeline_result = run_cv_tailoring_pipeline(
+            cv=master_cv,
+            job_description=job_description,
+            vpr=vpr,
+            llm_client=llm_client,
+        )
 
     # ── 5. Build artifact ─────────────────────────────────────────────────────
     request_id = f'cv-tail-{uuid.uuid4()}'
@@ -848,7 +850,7 @@ def _handle_cv_tailoring_cancel(
     headers: dict[str, str],
 ) -> dict[str, Any]:
     """Handle POST /cv-tailoring/{cvTailoringId}/cancel."""
-    import boto3 as _boto3
+    import boto3 as _boto3  # type: ignore[import-untyped]
 
     path_params = event.get('pathParameters') or {}
     cv_tailoring_id = str(path_params.get('cvTailoringId') or '').strip()

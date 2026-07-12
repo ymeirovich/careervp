@@ -21,6 +21,7 @@ from careervp.logic.utils.llm_client import (
     TaskMode,
     get_llm_router,
 )
+from careervp.logic.utils.llm_metering import COST_PER_APP_ALARM_THRESHOLD, PRICE_PER_APP
 from careervp.models.result import ResultCode
 
 
@@ -31,8 +32,8 @@ def _calculate_cost(model_id: str, input_tokens: int, output_tokens: int) -> flo
         input_cost = (input_tokens / 1_000_000) * 3.0
         output_cost = (output_tokens / 1_000_000) * 15.0
     else:  # Haiku
-        input_cost = (input_tokens / 1_000_000) * 0.25
-        output_cost = (output_tokens / 1_000_000) * 1.25
+        input_cost = (input_tokens / 1_000_000) * 1.0
+        output_cost = (output_tokens / 1_000_000) * 5.0
     return input_cost + output_cost
 
 
@@ -65,9 +66,9 @@ class TestCostCalculation:
         assert cost == 18.0  # $3 + $15
 
     def test_haiku_cost_calculation(self):
-        """Haiku 4.5: $0.25/1M input, $1.25/1M output."""
+        """Haiku 4.5: $1.00/1M input, $5.00/1M output."""
         cost = _calculate_cost(HAIKU_MODEL_ID, input_tokens=1_000_000, output_tokens=1_000_000)
-        assert cost == 1.5  # $0.25 + $1.25
+        assert cost == 6.0  # $1.00 + $5.00
 
     def test_small_token_count(self):
         """Verify fractional costs for small token counts."""
@@ -173,6 +174,33 @@ class TestLLMRouter:
         assert result.data is not None
         assert result.data['cost'] == pytest.approx(expected_cost)
 
+    @patch.object(Anthropic, 'messages')
+    def test_invoke_records_prompt_cache_usage_fields(self, mock_messages):
+        """Provider cache-read usage should be surfaced directly, not re-estimated."""
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(type='text', text='Response')]
+        mock_response.usage.input_tokens = 120
+        mock_response.usage.output_tokens = 45
+        mock_response.usage.cache_read_input_tokens = 80
+        mock_response.usage.cache_creation_input_tokens = 0
+        mock_response.stop_reason = 'end_turn'
+        mock_messages.create.return_value = mock_response
+
+        router = LLMRouter(api_key='test-key')
+        result = router.invoke(
+            mode=TaskMode.TEMPLATE,
+            system_prompt='System',
+            user_prompt='User',
+            use_system_cache=True,
+        )
+
+        assert result.data is not None
+        assert result.data['input_tokens'] == 120
+        assert result.data['output_tokens'] == 45
+        assert result.data['cache_read_input_tokens'] == 80
+        assert result.data['cache_creation_input_tokens'] == 0
+        assert result.data['prompt_cache_hit'] is True
+
     def test_invoke_without_api_key_returns_error(self):
         """Invoke without API key should return error Result."""
         router = LLMRouter(api_key='test-key')
@@ -211,6 +239,10 @@ class TestCostThresholds:
         from careervp.logic.utils.llm_client import MAX_COST_PER_APPLICATION
 
         assert MAX_COST_PER_APPLICATION == 0.25
+
+    def test_q10_price_per_app_threshold_is_derived_from_subscription_midpoint(self):
+        assert PRICE_PER_APP == pytest.approx(1.25)
+        assert COST_PER_APP_ALARM_THRESHOLD == pytest.approx(0.375)
 
 
 class TestLLMClientCircuitBreaker:
@@ -263,6 +295,39 @@ class TestLLMClientCircuitBreaker:
         assert llm_client._circuit_breaker.can_proceed() is True
         assert llm_client._circuit_breaker.state == CircuitState.HALF_OPEN
 
+    def test_generate_returns_real_provider_usage_metadata(self):
+        response = _anthropic_text_response('{"ok": true}')
+        response.usage.input_tokens = 321
+        response.usage.output_tokens = 123
+        response.usage.cache_read_input_tokens = 0
+        response.usage.cache_creation_input_tokens = 0
+
+        llm_client, _ = self._build_client(create_return_value=response)
+        payload = llm_client.generate(prompt='return {"ok": true}')
+
+        assert payload['input_tokens'] == 321
+        assert payload['output_tokens'] == 123
+        assert payload['cost'] > 0
+
+    def test_complete_returns_real_provider_usage_metadata(self):
+        response = _anthropic_text_response('hello')
+        response.usage.input_tokens = 222
+        response.usage.output_tokens = 111
+        response.usage.cache_read_input_tokens = 75
+        response.usage.cache_creation_input_tokens = 0
+
+        llm_client, _ = self._build_client(create_return_value=response)
+        payload = llm_client.complete(
+            prompt='hello',
+            system_prompt='system',
+            use_system_cache=True,
+        )
+
+        assert payload.text == 'hello'
+        assert payload.input_tokens == 222
+        assert payload.output_tokens == 111
+        assert payload.prompt_cache_hit is True
+
     def test_circuit_breaker_closed_after_success(self):
         llm_client, mock_client = self._build_client(create_side_effect=RuntimeError('provider unavailable'))
 
@@ -276,7 +341,8 @@ class TestLLMClientCircuitBreaker:
 
         result = llm_client.generate(prompt='return {"ok": true}')
 
-        assert result == {'status': 'ok'}
+        assert result['status'] == 'ok'
+        assert result['input_tokens'] >= 0
         assert llm_client._circuit_breaker.state == CircuitState.CLOSED
         assert llm_client._circuit_breaker.failure_count == 0
 
@@ -304,7 +370,8 @@ class TestLLMClientCircuitBreaker:
 
         result = llm_client.generate(prompt='return {"ok": true}')
 
-        assert result == {'status': 'ok'}
+        assert result['status'] == 'ok'
+        assert result['input_tokens'] >= 0
         assert mock_client.messages.create.call_count == 2
         mock_sleep.assert_called_once()
 

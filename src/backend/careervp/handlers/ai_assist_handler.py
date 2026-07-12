@@ -15,6 +15,7 @@ from __future__ import annotations
 import concurrent.futures
 import json
 import os
+from contextvars import copy_context
 from http import HTTPStatus
 from typing import Any
 
@@ -42,6 +43,7 @@ from careervp.logic.prompts.ai_assist_prompt import (
     build_system_preamble,
     build_user_message,
 )
+from careervp.logic.utils.llm_metering import bind_llm_usage_context
 from careervp.models.api_models import AIAssistRequest
 from careervp.models.result import ResultCode
 
@@ -154,10 +156,10 @@ def _handle_assist(event: dict[str, Any]) -> dict[str, Any]:
             {'error': 'Could not assemble assist context', 'code': ResultCode.INTERNAL_ERROR},
         )
 
-    return _generate(api_request=api_request, context=context)
+    return _generate(api_request=api_request, context=context, user_id=user_id)
 
 
-def _generate(api_request: AIAssistRequest, context: AssistContext) -> dict[str, Any]:
+def _generate(api_request: AIAssistRequest, context: AssistContext, user_id: str) -> dict[str, Any]:
     system_prompt = build_system_preamble(api_request.artifact_type, api_request.locale)
     user_message = build_user_message(
         artifact_type=api_request.artifact_type,
@@ -177,7 +179,8 @@ def _generate(api_request: AIAssistRequest, context: AssistContext) -> dict[str,
         return _build_response(HTTPStatus.OK, cached)
 
     try:
-        generated = _call_llm(system_prompt=system_prompt, user_message=user_message, model_name=model_name, temperature=temperature)
+        with bind_llm_usage_context(application_id=api_request.application_id, user_id=user_id):
+            generated = _call_llm(system_prompt=system_prompt, user_message=user_message, model_name=model_name, temperature=temperature)
     except CircuitBreakerOpen as exc:
         metrics.add_metric(name='AIAssistCircuitOpen', unit=MetricUnit.Count, value=1)
         return _build_response(
@@ -209,26 +212,28 @@ def _generate(api_request: AIAssistRequest, context: AssistContext) -> dict[str,
             {'error': 'AI-assist failed', 'code': ResultCode.INTERNAL_ERROR},
         )
 
-    generated_markdown = generated.strip()
+    generated_markdown = (generated.text if hasattr(generated, 'text') else str(generated)).strip()
     if not generated_markdown:
         return _build_response(
             HTTPStatus.INTERNAL_SERVER_ERROR,
             {'error': 'AI-assist returned no content', 'code': ResultCode.INTERNAL_ERROR},
         )
 
-    tokens = _estimate_tokens(system_prompt, user_message, generated_markdown)
+    tokens = int(getattr(generated, 'input_tokens', 0)) + int(getattr(generated, 'output_tokens', 0))
     payload = {'generated_markdown': generated_markdown, 'model': model_name, 'tokens': tokens}
     _write_cache(cache, cache_key, payload)
     metrics.add_metric(name='AIAssistGenerated', unit=MetricUnit.Count, value=1)
     return _build_response(HTTPStatus.OK, payload)
 
 
-def _call_llm(system_prompt: str, user_message: str, model_name: str, temperature: float) -> str:
+def _call_llm(system_prompt: str, user_message: str, model_name: str, temperature: float) -> Any:
     """Invoke the LLM with a hard wall-clock budget below the APIGW ceiling."""
     client = LLMClient()
+    invocation_context = copy_context()
 
-    def _invoke() -> str:
-        response = client.complete(
+    def _invoke() -> Any:
+        return invocation_context.run(
+            client.complete,
             prompt=user_message,
             system_prompt=system_prompt,
             max_tokens=DEFAULT_ASSIST_MAX_TOKENS,
@@ -236,7 +241,6 @@ def _call_llm(system_prompt: str, user_message: str, model_name: str, temperatur
             temperature=temperature,
             use_system_cache=True,
         )
-        return response.text
 
     budget = _timeout_seconds()
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
@@ -450,7 +454,7 @@ def _load_tailored_cv(dal: DynamoDalHandler, user_id: str, application_id: str) 
     application_id lives in the `job_id` ATTRIBUTE (not the sort key). We must
     therefore filter on job_id, not on the sk.
     """
-    from boto3.dynamodb.conditions import Attr, Key
+    from boto3.dynamodb.conditions import Attr, Key  # type: ignore[import-untyped]
 
     from careervp.dal.dynamo_dal_handler import TAILORED_CV_SORT_KEY_PREFIX
 
@@ -583,11 +587,6 @@ def _timeout_seconds() -> int:
     except ValueError:
         return DEFAULT_ASSIST_TIMEOUT_SECONDS
     return max(1, parsed)
-
-
-def _estimate_tokens(*parts: str) -> int:
-    total_chars = sum(len(part) for part in parts)
-    return max(1, total_chars // 4)
 
 
 def _build_response(status_code: HTTPStatus, body: dict[str, Any]) -> dict[str, Any]:

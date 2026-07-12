@@ -32,6 +32,7 @@ from careervp.logic.prompts.vpr_prompt import (
     build_phase2_prompt,
     build_phase2_system_prompt,
 )
+from careervp.logic.utils.llm_metering import bind_llm_usage_context
 
 if TYPE_CHECKING:
     TaskMode = Any
@@ -425,8 +426,9 @@ def generate_vpr(request: VPRRequest, user_cv: UserCV, dal: DynamoDalHandler) ->
     """Generate VPR through the 6-stage pipeline and persist the output."""
     start_time = time.perf_counter()
 
-    pipeline = VPRSixStagePipeline(request=request, user_cv=user_cv)
-    pipeline_result = pipeline.run()
+    with bind_llm_usage_context(application_id=request.application_id, user_id=request.user_id):
+        pipeline = VPRSixStagePipeline(request=request, user_cv=user_cv)
+        pipeline_result = pipeline.run()
 
     if not pipeline_result.success or pipeline_result.data is None:
         return Result(

@@ -130,7 +130,7 @@ def test_monitoring_alarms_and_metric_filters_move_to_nested_stack(
     assert list(parent_alarms) == ["CareerVpCrudDevCrudBillingLambdaErrorAlarmBF87B315"]
     assert not synthesized_template.find_resources("AWS::Logs::MetricFilter")
 
-    monitoring_template.resource_count_is("AWS::CloudWatch::Alarm", 15)
+    monitoring_template.resource_count_is("AWS::CloudWatch::Alarm", 16)
     monitoring_template.resource_count_is("AWS::Logs::MetricFilter", 7)
     assert not monitoring_template.find_resources("AWS::CloudWatch::Dashboard")
     assert not monitoring_template.find_resources("AWS::SNS::Topic")

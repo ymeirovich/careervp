@@ -15,10 +15,10 @@ from typing import Any, Callable, ParamSpec, TypeVar, cast
 import boto3  # type: ignore[import-untyped]
 from anthropic import Anthropic, APIError, RateLimitError
 from anthropic.types import TextBlockParam
-from aws_lambda_powertools.metrics import MetricUnit
 from botocore.exceptions import BotoCoreError, ClientError  # type: ignore[import-untyped]
 
-from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.handlers.utils.observability import logger, tracer
+from careervp.logic.utils.llm_metering import calculate_cost, record_llm_usage
 from careervp.models.result import Result, ResultCode
 
 P = ParamSpec('P')
@@ -179,18 +179,8 @@ class LLMRouter:
         return HAIKU_MODEL_ID
 
     def _calculate_cost(self, model_id: str, input_tokens: int, output_tokens: int) -> float:
-        """
-        Calculate cost based on model and token usage.
-        Sonnet 4.6: $3/1M input, $15/1M output
-        Haiku 4.5: $1.00/1M input, $5.00/1M output
-        """
-        if model_id == SONNET_MODEL_ID:
-            input_cost = (input_tokens / 1_000_000) * 3.0
-            output_cost = (output_tokens / 1_000_000) * 15.0
-        else:  # Haiku 4.5
-            input_cost = (input_tokens / 1_000_000) * 1.0
-            output_cost = (output_tokens / 1_000_000) * 5.0
-        return input_cost + output_cost
+        """Calculate cost based on provider-reported tokens."""
+        return calculate_cost(model_id, input_tokens, output_tokens)
 
     @_capture_method_typed(capture_response=False)
     @retry_on_transient_error(max_retries=3)
@@ -235,13 +225,25 @@ class LLMRouter:
                 messages=[{'role': 'user', 'content': user_prompt}],
             )
 
-            # Extract usage metrics
-            input_tokens = response.usage.input_tokens
-            output_tokens = response.usage.output_tokens
+            usage = getattr(response, 'usage', None)
+            input_tokens = int(getattr(usage, 'input_tokens', 0) or 0)
+            output_tokens = int(getattr(usage, 'output_tokens', 0) or 0)
+            cache_read_input_tokens = int(getattr(usage, 'cache_read_input_tokens', 0) or 0)
+            cache_creation_input_tokens = int(getattr(usage, 'cache_creation_input_tokens', 0) or 0)
+            prompt_cache_hit = cache_read_input_tokens > 0
             cost = self._calculate_cost(model_id, input_tokens, output_tokens)
 
-            # Log metrics via Powertools
-            self._log_metrics(mode, model_id, input_tokens, output_tokens, cost)
+            self._log_metrics(
+                mode=mode,
+                model_id=model_id,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost=cost,
+                prompt_cache_hit=prompt_cache_hit,
+                prompt_cache_lookup=use_system_cache,
+                cache_read_input_tokens=cache_read_input_tokens,
+                cache_creation_input_tokens=cache_creation_input_tokens,
+            )
 
             # Check cost threshold
             if cost > MAX_COST_PER_APPLICATION:
@@ -262,6 +264,9 @@ class LLMRouter:
                     'output_tokens': output_tokens,
                     'cost': cost,
                     'model': model_id,
+                    'prompt_cache_hit': prompt_cache_hit,
+                    'cache_read_input_tokens': cache_read_input_tokens,
+                    'cache_creation_input_tokens': cache_creation_input_tokens,
                     'stop_reason': response.stop_reason,
                 },
                 code=ResultCode.SUCCESS,
@@ -279,23 +284,30 @@ class LLMRouter:
             logger.exception('Unexpected LLM error', error=str(e))
             return Result(success=False, error=str(e), code=ResultCode.INTERNAL_ERROR)
 
-    def _log_metrics(self, mode: TaskMode, model_id: str, input_tokens: int, output_tokens: int, cost: float) -> None:
-        """Log token usage as custom CloudWatch metrics."""
-        metrics.add_dimension(name='TaskMode', value=mode.value)
-        metrics.add_dimension(name='Model', value=model_id.split('-')[1])  # 'sonnet' or 'haiku'
-
-        metrics.add_metric(name='InputTokens', unit=MetricUnit.Count, value=input_tokens)
-        metrics.add_metric(name='OutputTokens', unit=MetricUnit.Count, value=output_tokens)
-        metrics.add_metric(name='TotalTokens', unit=MetricUnit.Count, value=input_tokens + output_tokens)
-        metrics.add_metric(name='CostUSD', unit=MetricUnit.Count, value=cost * 100)  # Store as cents for precision
-
-        logger.info(
-            'LLM metrics logged',
-            mode=mode.value,
-            model=model_id,
+    def _log_metrics(
+        self,
+        *,
+        mode: TaskMode,
+        model_id: str,
+        input_tokens: int,
+        output_tokens: int,
+        cost: float,
+        prompt_cache_hit: bool,
+        prompt_cache_lookup: bool,
+        cache_read_input_tokens: int,
+        cache_creation_input_tokens: int,
+    ) -> None:
+        """Emit shared Q-10 usage metrics."""
+        record_llm_usage(
+            model_id=model_id,
+            task_mode=mode.value,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
-            cost=f'${cost:.6f}',
+            cost_usd=cost,
+            prompt_cache_hit=prompt_cache_hit,
+            prompt_cache_lookup=prompt_cache_lookup,
+            cache_read_input_tokens=cache_read_input_tokens,
+            cache_creation_input_tokens=cache_creation_input_tokens,
         )
 
 

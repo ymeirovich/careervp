@@ -16,7 +16,7 @@ import json
 import os
 from typing import Any
 
-import boto3
+import boto3  # type: ignore[import-untyped]
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from pydantic import BaseModel, Field
 
@@ -26,6 +26,7 @@ from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.company_research import research_company
 from careervp.logic.company_research_store import write_cr_artifact, write_cr_failed
+from careervp.logic.utils.llm_metering import bind_llm_usage_context
 from careervp.models.company import CompanyResearchRequest, CompanyResearchResult, ResearchSource
 
 _DEFAULT_CR_CONFIDENCE_THRESHOLD = 0.85
@@ -253,7 +254,7 @@ def _hard_fail(input_data: CRWorkerInput, cause: str) -> None:
             expected_state='cr_pending',
         )
     except Exception as exc:
-        from botocore.exceptions import ClientError as _ClientError
+        from botocore.exceptions import ClientError as _ClientError  # type: ignore[import-untyped]
 
         if isinstance(exc, _ClientError) and exc.response['Error']['Code'] == 'ConditionalCheckFailedException':
             logger.info(
@@ -284,7 +285,11 @@ async def _async_process_record(input_data: CRWorkerInput, receive_count: int) -
         domain=input_data.domain,
         job_posting_url=input_data.job_posting_url,  # type: ignore[arg-type]
     )
-    research_result = await research_company(cr_request)
+    with bind_llm_usage_context(
+        application_id=_coerce_str(input_data.application_id) or input_data.job_id,
+        user_id=input_data.user_id,
+    ):
+        research_result = await research_company(cr_request)
 
     if not research_result.success or not research_result.data:
         cause = research_result.error or 'research_company returned no data'

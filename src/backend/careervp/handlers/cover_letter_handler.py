@@ -10,7 +10,7 @@ from decimal import Decimal
 from http import HTTPStatus
 from typing import Any, cast
 
-import boto3
+import boto3  # type: ignore[import-untyped]
 from aws_lambda_powertools.metrics import MetricUnit
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from pydantic import ValidationError
@@ -27,6 +27,7 @@ from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.cancellation import CancelledBeforePersist
 from careervp.logic.cover_letter import generate_cover_letter
+from careervp.logic.utils.llm_metering import bind_llm_usage_context
 from careervp.models.api_models import CoverLetterRequest
 from careervp.models.company import CompanyResearchResult, ResearchSource
 from careervp.models.cover_letter import (
@@ -1042,17 +1043,19 @@ def _generate_cover_letter_result(
         company_research_id=api_request.company_research_id,
         options=_to_logic_options(api_request),
     )
-    maybe_async_result = generate_cover_letter(
-        request=logic_request,
-        user_cv=user_cv,
-        vpr=cast(Any, context['vpr']),
-        gap_responses=cast(Any, context['gap_responses']),
-        company_research=cast(Any, context.get('company_research')),
-    )
-    if asyncio.iscoroutine(maybe_async_result):
-        return asyncio.run(maybe_async_result)
-    if isinstance(maybe_async_result, Result):
-        return maybe_async_result
+    application_id = str(api_request.application_id or api_request.job_id).strip()
+    with bind_llm_usage_context(application_id=application_id, user_id=user_id):
+        maybe_async_result = generate_cover_letter(
+            request=logic_request,
+            user_cv=user_cv,
+            vpr=cast(Any, context['vpr']),
+            gap_responses=cast(Any, context['gap_responses']),
+            company_research=cast(Any, context.get('company_research')),
+        )
+        if asyncio.iscoroutine(maybe_async_result):
+            return asyncio.run(maybe_async_result)
+        if isinstance(maybe_async_result, Result):
+            return maybe_async_result
     return Result(
         success=False,
         error='Invalid cover letter generation response',

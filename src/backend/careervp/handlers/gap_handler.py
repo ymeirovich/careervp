@@ -9,7 +9,7 @@ from http import HTTPStatus
 from typing import Any
 from uuid import uuid4
 
-import boto3
+import boto3  # type: ignore[import-untyped]
 from pydantic import ValidationError
 
 from careervp.dal.application_repository import ApplicationRepository
@@ -21,6 +21,7 @@ from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.gap_analysis import generate_gap_questions
 from careervp.logic.quota_service import QuotaError, QuotaService
 from careervp.logic.trial_service import TrialExhaustedException, TrialExpiredException, TrialService
+from careervp.logic.utils.llm_metering import bind_llm_usage_context
 from careervp.models.api_models import GapQuestionRequest, GapResponseRequest
 from careervp.models.result import Result, ResultCode
 
@@ -178,13 +179,14 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
     application_repo = _get_application_repository()
 
     try:
-        generation_result = asyncio.run(
-            generate_gap_questions(
-                user_cv=user_cv,
-                job_posting=job_posting,
-                dal=None,
+        with bind_llm_usage_context(application_id=application_id, user_id=user_id):
+            generation_result = asyncio.run(
+                generate_gap_questions(
+                    user_cv=user_cv,
+                    job_posting=job_posting,
+                    dal=None,
+                )
             )
-        )
     except Exception as exc:
         error_details = f'{type(exc).__name__}: {str(exc)}'
         logger.error(

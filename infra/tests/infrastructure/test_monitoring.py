@@ -51,3 +51,16 @@ def test_monitoring_includes_dynamodb_validation_exception_alarm(
         "DynamoValidationException" in str(props["Properties"].get("AlarmName", ""))
         for props in alarms.values()
     ), "No CloudWatch alarm found for DynamoDB ValidationException spikes"
+
+
+def test_monitoring_includes_cost_per_application_alarm(
+    monitoring_template: Template,
+) -> None:
+    alarms = monitoring_template.find_resources("AWS::CloudWatch::Alarm")
+    matching = [
+        props["Properties"]
+        for props in alarms.values()
+        if props["Properties"].get("Threshold") == 0.375
+        and props["Properties"].get("ComparisonOperator") == "GreaterThanThreshold"
+    ]
+    assert matching, "No CloudWatch alarm found for Q-10 cost-per-application threshold"
