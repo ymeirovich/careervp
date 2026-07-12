@@ -1,0 +1,110 @@
+scope_lock_clause: P-03
+spec: docs/db-redesign/code/code-analysis/project/specs/P-03-api-surface-spec.md
+oracle: infra/careervp/api_construct.py route_map (L2841-2912) + feature_proxies (L2864-2870)
+generated_by: src/backend/tests/unit/infra/test_p03_api_surface.py
+verified_at: 2026-07-12
+verified_against:
+  dev_synth: infra/cdk.out (fresh `cdk synth` — CareerVpCrudDev + nested stacks)
+  prod_synth: NOT VERIFIED — infra/careervp/configuration/json/prod_configuration.json
+    does not exist in this repo (only dev/staging/test configs present). Pre-existing
+    gap, unrelated to P-03; `ENVIRONMENT=prod cdk synth` fails at ConfigurationStore
+    load before any API Gateway resources are synthesized.
+
+feature_proxies:
+  - { path: /auth, handler: auth_api_func, tag: carry }
+  - { path: /users, handler: user_api_func, tag: carry }
+  - { path: /gap-analysis, handler: gap_api_func, tag: carry }
+  - { path: /billing, handler: billing_lambda, tag: carry }
+
+routes:
+  - { path: /health, method: GET, handler: health_api_func, tag: carry }
+  - { path: /users/me, method: GET, handler: user_api_func, tag: carry }
+  - { path: /users/me, method: PUT, handler: user_api_func, tag: carry }
+  - { path: /users/me/usage, method: GET, handler: user_api_func, tag: carry }
+  - { path: /users/me/trial/reset, method: POST, handler: user_api_func, tag: carry }
+  - { path: /users/me/cv, method: POST, handler: cv_upload_func, tag: carry }
+  - { path: /users/me/cv, method: GET, handler: user_api_func, tag: carry }
+  - { path: /users/me/subscription, method: GET, handler: billing_lambda, tag: carry }
+  - { path: /jobs, method: POST, handler: job_api_func, tag: carry }
+  - { path: /jobs, method: GET, handler: job_api_func, tag: carry }
+  - { path: /jobs/{jobId}, method: GET, handler: job_api_func, tag: carry }
+  - { path: /jobs/{jobId}/gap-questions, method: POST, handler: gap_api_func, tag: carry }
+  - { path: /jobs/{jobId}/gap-questions, method: GET, handler: gap_api_func, tag: carry }
+  - { path: /jobs/{jobId}/gap-responses, method: POST, handler: gap_api_func, tag: carry }
+  - { path: /applications/{application_id}, method: GET, handler: application_api_func, tag: carry }
+  - { path: /vpr/generate, method: POST, handler: vpr_submit_func, tag: carry }
+  - { path: /vpr/{vprId}/status, method: GET, handler: vpr_status_func, tag: carry }
+  - { path: /vpr/{vprId}/cancel, method: POST, handler: vpr_status_func, tag: carry }
+  - { path: /vprs, method: GET, handler: vpr_status_func, tag: carry }
+  - { path: /cv-tailoring/generate, method: POST, handler: cv_tailoring_func, tag: carry }
+  - { path: /cv-tailoring/{cvTailoringId}/status, method: GET, handler: cv_tailoring_func, tag: carry }
+  - { path: /cv-tailoring/{cvTailoringId}/cancel, method: POST, handler: cv_tailoring_func, tag: carry }
+  - { path: /cv-tailoring/{cvTailoringId}, method: DELETE, handler: cv_tailoring_func, tag: carry }
+  - { path: /cv-tailoring/{cvTailoringId}, method: PATCH, handler: cv_tailoring_func, tag: carry }
+  - { path: /cv-tailorings, method: GET, handler: cv_tailoring_func, tag: carry }
+  - { path: /cover-letter/generate, method: POST, handler: cover_letter_api_func, tag: carry }
+  - { path: /cover-letter/{coverLetterId}/status, method: GET, handler: cover_letter_status_func, tag: carry }
+  - { path: /cover-letter/{coverLetterId}/cancel, method: POST, handler: cover_letter_status_func, tag: carry }
+  - { path: /cover-letter/{coverLetterId}, method: PATCH, handler: cover_letter_status_func, tag: carry }
+  - { path: /cover-letters, method: GET, handler: cover_letter_status_func, tag: carry }
+  - { path: /interview-prep/generate, method: POST, handler: interview_prep_api_func, tag: carry }
+  - { path: /interview-prep/{interviewPrepId}/status, method: GET, handler: interview_prep_status_func, tag: carry }
+  - { path: /interview-prep/{interviewPrepId}/cancel, method: POST, handler: interview_prep_status_func, tag: carry }
+  - { path: /interview-preps, method: GET, handler: interview_prep_status_func, tag: carry }
+  - { path: /company-research/{jobId}, method: GET, handler: company_research_func, tag: carry }
+  - { path: /company-research/{jobId}/cancel, method: POST, handler: company_research_func, tag: carry }
+  - { path: /company-research/fetch, method: POST, handler: company_research_func, tag: carry }
+  - { path: /knowledge-base, method: GET, handler: company_research_func, tag: carry }
+  - { path: /billing/webhook, method: POST, handler: billing_lambda, tag: carry }
+  - { path: /jobs/{jobId}/artifacts/{moduleType}/export, method: GET, handler: export_lambda, tag: carry }
+
+stale_comments_tagged_drop:
+  - { location: "infra/careervp/api_construct.py:102", stale_path: "POST /api/vpr", actual_live_path: "POST /vpr/generate", tag: drop }
+  - { location: "infra/careervp/api_construct.py:112", stale_path: "GET /api/vpr/status/{job_id}", actual_live_path: "GET /vpr/{vprId}/status", tag: drop }
+  - { location: "infra/careervp/api_construct.py:151", stale_path: "POST /api/cv-tailoring", actual_live_path: "POST /cv-tailoring/generate", tag: drop }
+
+phase_10_legacy_compat:
+  registry_entry: "Temporary legacy /api/* compatibility during migration"
+  location: infra/careervp/specs/_registry.yaml:29,96
+  resolution: already_removed
+  evidence: >
+    Fresh `cdk synth` of CareerVpCrudDev + all nested stacks (10 templates, 2026-07-12)
+    contains zero AWS::ApiGateway::Resource entries with PathPart == "api". No
+    legacy-compat resource was ever emitted for dev. Prod synth could not be run
+    locally (see verified_against.prod_synth above) — this item should be re-confirmed
+    once prod_configuration.json exists and `ENVIRONMENT=prod cdk synth` succeeds.
+
+nextjs_internal_out_of_scope:
+  - source: src/frontend/app/api/errors/route.ts
+    path: /api/errors
+    tag: carry (Next.js-internal)
+    note: >
+      Next.js SSR route inside src/frontend/app/api/, served by Amplify's Next.js
+      runtime — not an AWS API Gateway resource. Matches service_stack.py:101 in the
+      spec's Evidence section.
+  - source: src/frontend/contexts/AuthContext.tsx:100
+    path: /api/proxy/auth/logout
+    tag: carry (Next.js-internal, same-origin fetch)
+    note: >
+      fetch('/api/proxy/auth/logout') is a same-origin call, not an apiClient (axios)
+      call against the backend API base URL. Not present in the spec's Evidence section
+      (spec claimed "zero grep hits for /api/ in frontend source", which is stale for
+      this real repo — the grep hit is a same-origin Next.js route, not a backend call).
+      No app/api/proxy/** route.ts exists to serve it; out of scope for P-03 (which
+      governs the AWS API Gateway route surface only) but flagged here for visibility —
+      does not block P-03 closure.
+
+false_positive_grep_hits:
+  - pattern: relative import specifiers matching the substring "/api/"
+    example: "import { api } from '../../api/methods'"
+    files: [src/frontend/app/settings/page.tsx, src/frontend/app/applications/new/page.tsx,
+      src/frontend/app/tailored-cvs/page.tsx, src/frontend/app/applications/[id]/cover-letter/page.tsx]
+    note: >
+      A raw `grep -r "/api/" src/frontend` (as specified in the RED-test sketch in the
+      spec) false-positives here: the substring "/api/" matches inside the relative
+      import path "../../api/methods", not an HTTP route. This is why
+      test_frontend_has_no_api_star_backend_calls scans apiClient.<verb>() call sites
+      specifically rather than grepping raw source text.
+
+result: verified
+zero_api_prefixed_carry_routes: true
