@@ -4,11 +4,15 @@ oracle: infra/careervp/api_construct.py route_map (L2841-2912) + feature_proxies
 generated_by: src/backend/tests/unit/infra/test_p03_api_surface.py
 verified_at: 2026-07-12
 verified_against:
-  dev_synth: infra/cdk.out (fresh `cdk synth` — CareerVpCrudDev + nested stacks)
-  prod_synth: NOT VERIFIED — infra/careervp/configuration/json/prod_configuration.json
-    does not exist in this repo (only dev/staging/test configs present). Pre-existing
-    gap, unrelated to P-03; `ENVIRONMENT=prod cdk synth` fails at ConfigurationStore
-    load before any API Gateway resources are synthesized.
+  dev_synth: infra/cdk.out (fresh `cdk synth` — CareerVpCrudDev + nested stacks, 10 templates)
+  prod_synth: infra/cdk.out (fresh `ENVIRONMENT=prod cdk synth --all` —
+    CareerVpCrudProd + CareerVpFrontend-Prod + nested stacks, 6 templates). Unblocked by
+    adding infra/careervp/configuration/json/prod_configuration.json, which was missing
+    from this repo (only dev/staging/test configs existed). That file is an AWS AppConfig
+    feature-flags document (premium_features + ten_percent_off_campaign + countries),
+    unrelated to domains/ARNs/routes — content mirrors staging_configuration.json exactly
+    (dev/staging were already byte-identical placeholder/demo values). Zero
+    AWS::ApiGateway::Resource with PathPart "api" found across all 16 dev+prod templates.
 
 feature_proxies:
   - { path: /auth, handler: auth_api_func, tag: carry }
@@ -68,11 +72,10 @@ phase_10_legacy_compat:
   location: infra/careervp/specs/_registry.yaml:29,96
   resolution: already_removed
   evidence: >
-    Fresh `cdk synth` of CareerVpCrudDev + all nested stacks (10 templates, 2026-07-12)
-    contains zero AWS::ApiGateway::Resource entries with PathPart == "api". No
-    legacy-compat resource was ever emitted for dev. Prod synth could not be run
-    locally (see verified_against.prod_synth above) — this item should be re-confirmed
-    once prod_configuration.json exists and `ENVIRONMENT=prod cdk synth` succeeds.
+    Fresh `cdk synth` of CareerVpCrudDev + CareerVpCrudProd + all nested/frontend
+    stacks (16 templates total, 2026-07-12) contains zero AWS::ApiGateway::Resource
+    entries with PathPart == "api" in either environment. No legacy-compat resource
+    was ever emitted for dev or prod.
 
 nextjs_internal_out_of_scope:
   - source: src/frontend/app/api/errors/route.ts

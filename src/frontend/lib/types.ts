@@ -60,14 +60,14 @@ export interface CreateJobInput {
 
 // ── Async task response (VPR / Cover Letter / Interview Prep generate) ──
 export interface AsyncTaskResponse {
-  request_id: string; // async task ID — use to poll status (NOT the job posting ID)
+  request_id?: string; // async task ID — use to poll status (NOT the job posting ID)
   job_id?: string;    // alias for request_id returned by some endpoints
   status: "processing" | "completed"; // "completed" returned for idempotent duplicate requests
   estimated_time_seconds?: number;
 }
 
 // ── Artifact status (hub artifacts) ──
-export type ArtifactStatus = "pending" | "processing" | "completed" | "failed" | "cancelled" | "expired";
+export type ArtifactStatus = "pending" | "processing" | "completed" | "failed" | "cancelled" | "expired" | "not_generated" | "edited";
 
 export interface HubArtifact {
   status: ArtifactStatus;
@@ -649,4 +649,12 @@ export interface ExportRequest {
 export interface ExportResponse {
   download_url: string;
   expires_at: string; // ISO timestamp
+}
+
+export interface ApiErrorEnvelope {
+  error?: string;
+  message?: string;
+  classification?: string;
+  error_code?: string;
+  field?: string;
 }

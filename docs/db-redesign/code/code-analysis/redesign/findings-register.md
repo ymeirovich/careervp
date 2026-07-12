@@ -240,12 +240,15 @@ new scoping change is the explicit **gating** of the physical collapse behind a 
   Ledger: `redesign/evidence/route-surface-ledger.yaml`.
   Findings: zero `/api/`-prefixed routes under `carry` in the canonical `route_map` +
   `feature_proxies` (AC-P03-3); zero `apiClient.<verb>()` frontend call sites target an
-  `/api/*` path (AC-P03-1); a fresh dev `cdk synth` (10 templates) contains zero
-  `AWS::ApiGateway::Resource` with `PathPart: api` (AC-P03-2, dev only — prod synth
-  blocked by a pre-existing, unrelated gap: no `prod_configuration.json` in this repo).
-  Phase 10 legacy-compat item (`_registry.yaml:29,96`) resolved to `already_removed` for
-  dev; re-confirm for prod once prod synth is unblocked. One out-of-scope finding
-  surfaced and logged in the ledger, not blocking closure: `AuthContext.tsx` fetches a
+  `/api/*` path (AC-P03-1); a fresh dev + prod `cdk synth` (16 templates total) contains
+  zero `AWS::ApiGateway::Resource` with `PathPart: api` in either environment (AC-P03-2).
+  Prod synth was unblocked by adding the missing
+  `infra/careervp/configuration/json/prod_configuration.json` (an AWS AppConfig
+  feature-flags document, unrelated to routes — mirrors `staging_configuration.json`,
+  which was already byte-identical to `dev_configuration.json`). Phase 10 legacy-compat
+  item (`_registry.yaml:29,96`) resolved to `already_removed` for both dev and prod. One
+  out-of-scope finding surfaced and logged in the ledger, not blocking closure:
+  `AuthContext.tsx` fetches a
   same-origin Next.js route `/api/proxy/auth/logout` that has no corresponding
   `app/api/proxy/**/route.ts` handler — a frontend routing gap, not an API Gateway
   surface issue.

@@ -37,6 +37,11 @@ const config: Config = {
     {
       displayName: 'integration',
       testMatch: ['<rootDir>/tests/integration/**/*.test.ts'],
+      moduleNameMapper: {
+        '^@open-draft/deferred-promise$': '<rootDir>/tests/shims/deferred-promise.ts',
+        '^rettime$': '<rootDir>/tests/shims/rettime.ts',
+        '^until-async$': '<rootDir>/tests/shims/until-async.ts',
+      },
       testPathIgnorePatterns: [
         '<rootDir>/tests/integration/cognito-auth.test.ts',
         '<rootDir>/tests/integration/api-polling.test.ts',

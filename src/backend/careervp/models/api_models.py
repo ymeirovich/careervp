@@ -7,6 +7,8 @@ from typing import Any, Literal
 
 from pydantic import AnyUrl, BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+ArtifactStatus = Literal['pending', 'processing', 'completed', 'failed', 'cancelled', 'expired', 'not_generated', 'edited']
+
 
 class APIModel(BaseModel):
     """Shared base for strict API schema validation and (de)serialization."""
@@ -132,6 +134,56 @@ class JobListResponse(APIModel):
     jobs: list[JobResponse] = Field(default_factory=list)
 
 
+class ContractJobDetail(APIModel):
+    job_id: str
+    user_id: str
+    title: str
+    company_name: str
+    description: str | None = None
+    status: str
+    created_at: datetime | None = None
+    url: str | None = None
+    requirements: list[str] = Field(default_factory=list)
+
+
+class HubArtifact(APIModel):
+    status: ArtifactStatus
+    artifact_id: str | None
+
+
+class ApplicationHubApplication(APIModel):
+    application_id: str
+    state: str
+    created_at: datetime
+    trial_credit_consumed: bool
+
+
+class ApplicationHubCV(APIModel):
+    cv_id: str
+
+
+class ApplicationHubGapAnalysis(APIModel):
+    questions: list[dict[str, Any]] = Field(default_factory=list)
+    responses: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ApplicationHubArtifacts(APIModel):
+    vpr: HubArtifact
+    cover_letter: HubArtifact
+    interview_prep: HubArtifact
+    cv_tailored: HubArtifact
+    gap_analysis: HubArtifact
+
+
+class ApplicationHubData(APIModel):
+    application: ApplicationHubApplication
+    job: ContractJobDetail
+    cv: ApplicationHubCV | None = None
+    gap_analysis: ApplicationHubGapAnalysis
+    artifacts: ApplicationHubArtifacts
+    reload_route: str | None = None
+
+
 # ==========================================================================
 # VPR SCHEMAS
 # ==========================================================================
@@ -151,6 +203,13 @@ class VPRGenerateRequest(APIModel):
     # When True, an explicit regeneration is requested: bypass the idempotency
     # short-circuit for an already-completed job and create a fresh job.
     force: bool = False
+
+
+class AsyncTaskResponse(APIModel):
+    request_id: str | None = None
+    job_id: str | None = None
+    status: Literal['processing', 'completed']
+    estimated_time_seconds: int | None = None
 
 
 class VPRGenerateResponse(APIModel):
@@ -176,14 +235,16 @@ class VPRStatusResult(APIModel):
     strategic_narrative: str | None = None
     company_job_fit_score: float | None = None
     meta_evaluation: VPRMetaEvaluation | None = None
+    download_url: str | None = None
 
 
 class VPRStatusResponse(APIModel):
     id: str | None = None
-    status: Literal['pending', 'processing', 'completed', 'failed'] | None = None
+    status: ArtifactStatus
     result: VPRStatusResult | None = None
     created_at: datetime | None = None
     completed_at: datetime | None = None
+    error: str | None = None
 
 
 class VPRListItem(APIModel):
@@ -279,7 +340,7 @@ class CVTailoringOptions(APIModel):
 class CVTailoringRequest(APIModel):
     cv_id: str = Field(min_length=1)
     job_id: str = Field(min_length=1)
-    vpr_id: str = Field(min_length=1)
+    vpr_id: str | None
     options: CVTailoringOptions | None = None
 
 
@@ -302,6 +363,13 @@ class FVSValidation(APIModel):
 class CVTailoringStatusResult(APIModel):
     tailored_cv: str | None = None
     ats_score: float | None = None
+    ats_grade: str | None = None
+    ats_result: dict[str, Any] | None = None
+    cv_sections: dict[str, Any] | None = None
+    keyword_match_score: float | None = None
+    keywords_matched: list[str] = Field(default_factory=list)
+    keywords_missing: list[str] = Field(default_factory=list)
+    fact_verification_detail: dict[str, Any] | None = None
     keyword_matches: KeywordMatches | None = None
     suggestions: list[str] = Field(default_factory=list)
     fvs_validation: FVSValidation | None = None
@@ -309,7 +377,11 @@ class CVTailoringStatusResult(APIModel):
 
 class CVTailoringStatusResponse(APIModel):
     id: str | None = None
-    status: Literal['pending', 'processing', 'completed', 'failed'] | None = None
+    status: ArtifactStatus
+    version: int | None = None
+    language: str | None = None
+    generated_at: datetime | None = None
+    updated_at: datetime | None = None
     result: CVTailoringStatusResult | None = None
 
 
@@ -408,8 +480,11 @@ class CoverLetterStatusResult(APIModel):
 
 class CoverLetterStatusResponse(APIModel):
     id: str | None = None
-    status: str | None = None
+    status: str
+    updated_at: datetime | None = None
+    version: int | None = None
     result: CoverLetterStatusResult | None = None
+    error: str | None = None
 
 
 class CoverLetterListResponse(APIModel):
@@ -446,27 +521,48 @@ class InterviewPrepResponse(APIModel):
 
 
 class InterviewSuggestedAnswer(APIModel):
-    format: Literal['STAR', 'CAR', 'XYZ'] | None = None
+    format: str | None = None
     situation: str | None = None
     task: str | None = None
     action: str | None = None
     result: str | None = None
+    full_text: str | None = None
 
 
 class InterviewPrepQuestion(APIModel):
     id: str | None = None
     text: str | None = None
+    question_type: str | None = None
+    answer: str | None = None
+    answer_version: int | None = None
+    answer_updated_at: datetime | None = None
     suggested_answer: InterviewSuggestedAnswer | None = None
 
 
 class InterviewPrepStatusResult(APIModel):
     questions: list[InterviewPrepQuestion] = Field(default_factory=list)
+    questions_to_ask: list[dict[str, str]] = Field(default_factory=list)
+    pre_interview_checklist: list[str] = Field(default_factory=list)
+    salary_guidance: str | None = None
+    interview_report: dict[str, str] | None = None
 
 
 class InterviewPrepStatusResponse(APIModel):
     id: str | None = None
-    status: str | None = None
+    status: str
+    updated_at: datetime | None = None
+    version: int | None = None
     result: InterviewPrepStatusResult | None = None
+    error: str | None = None
+
+
+class InterviewPrepPatchResponse(APIModel):
+    status: str
+    interview_prep_id: str | None = None
+    question_id: str
+    answer: str
+    answer_version: int | None = None
+    answer_updated_at: datetime | None = None
 
 
 # ==========================================================================
@@ -491,16 +587,21 @@ class RecentNewsItem(APIModel):
 
 
 class CompanyResearchResultResponse(APIModel):
-    id: str | None = None
+    id: str
     company_name: str | None = None
     mission: str | None = None
-    values: list[str] = Field(default_factory=list)
-    recent_news: list[RecentNewsItem] = Field(default_factory=list)
+    values: list[str] | None = None
+    recent_news: list[RecentNewsItem | str] | None = None
     culture: str | None = None
-    products: list[str] = Field(default_factory=list)
+    products: list[str] | None = None
     funding_status: str | None = None
     size_range: str | None = None
     industry: str | None = None
+
+
+class ExportResponse(APIModel):
+    download_url: str
+    expires_at: datetime
 
 
 # ==========================================================================
@@ -520,7 +621,11 @@ class ErrorObject(APIModel):
 
 
 class ErrorResponse(APIModel):
-    error: ErrorObject | None = None
+    error: str | None = None
+    message: str | None = None
+    classification: str | None = None
+    error_code: str | None = None
+    field: str | None = None
 
 
 class HealthServices(APIModel):
@@ -550,6 +655,15 @@ __all__ = [
     'JobCreateRequest',
     'JobResponse',
     'JobListResponse',
+    'ArtifactStatus',
+    'ContractJobDetail',
+    'HubArtifact',
+    'ApplicationHubApplication',
+    'ApplicationHubCV',
+    'ApplicationHubGapAnalysis',
+    'ApplicationHubArtifacts',
+    'ApplicationHubData',
+    'AsyncTaskResponse',
     'VPRGenerateOptions',
     'VPRGenerateRequest',
     'VPRGenerateResponse',
@@ -593,10 +707,12 @@ __all__ = [
     'InterviewPrepQuestion',
     'InterviewPrepStatusResult',
     'InterviewPrepStatusResponse',
+    'InterviewPrepPatchResponse',
     'CompanyResearchRequest',
     'CompanyResearchResponse',
     'RecentNewsItem',
     'CompanyResearchResultResponse',
+    'ExportResponse',
     'ErrorDetail',
     'ErrorObject',
     'ErrorResponse',

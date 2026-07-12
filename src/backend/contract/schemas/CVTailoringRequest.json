@@ -1,0 +1,68 @@
+{
+  "$defs": {
+    "CVTailoringOptions": {
+      "additionalProperties": false,
+      "properties": {
+        "highlight_keywords": {
+          "default": true,
+          "title": "Highlight Keywords",
+          "type": "boolean"
+        },
+        "preserve_length": {
+          "default": true,
+          "title": "Preserve Length",
+          "type": "boolean"
+        },
+        "target_ats": {
+          "default": "standard",
+          "title": "Target Ats",
+          "type": "string"
+        }
+      },
+      "title": "CVTailoringOptions",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "cv_id": {
+      "minLength": 1,
+      "title": "Cv Id",
+      "type": "string"
+    },
+    "job_id": {
+      "minLength": 1,
+      "title": "Job Id",
+      "type": "string"
+    },
+    "options": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CVTailoringOptions"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "vpr_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Vpr Id"
+    }
+  },
+  "required": [
+    "cv_id",
+    "job_id",
+    "vpr_id"
+  ],
+  "title": "CVTailoringRequest",
+  "type": "object"
+}

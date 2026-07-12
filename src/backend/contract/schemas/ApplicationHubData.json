@@ -1,0 +1,260 @@
+{
+  "$defs": {
+    "ApplicationHubApplication": {
+      "additionalProperties": false,
+      "properties": {
+        "application_id": {
+          "title": "Application Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "state": {
+          "title": "State",
+          "type": "string"
+        },
+        "trial_credit_consumed": {
+          "title": "Trial Credit Consumed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "application_id",
+        "state",
+        "created_at",
+        "trial_credit_consumed"
+      ],
+      "title": "ApplicationHubApplication",
+      "type": "object"
+    },
+    "ApplicationHubArtifacts": {
+      "additionalProperties": false,
+      "properties": {
+        "cover_letter": {
+          "$ref": "#/$defs/HubArtifact"
+        },
+        "cv_tailored": {
+          "$ref": "#/$defs/HubArtifact"
+        },
+        "gap_analysis": {
+          "$ref": "#/$defs/HubArtifact"
+        },
+        "interview_prep": {
+          "$ref": "#/$defs/HubArtifact"
+        },
+        "vpr": {
+          "$ref": "#/$defs/HubArtifact"
+        }
+      },
+      "required": [
+        "vpr",
+        "cover_letter",
+        "interview_prep",
+        "cv_tailored",
+        "gap_analysis"
+      ],
+      "title": "ApplicationHubArtifacts",
+      "type": "object"
+    },
+    "ApplicationHubCV": {
+      "additionalProperties": false,
+      "properties": {
+        "cv_id": {
+          "title": "Cv Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cv_id"
+      ],
+      "title": "ApplicationHubCV",
+      "type": "object"
+    },
+    "ApplicationHubGapAnalysis": {
+      "additionalProperties": false,
+      "properties": {
+        "questions": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Questions",
+          "type": "array"
+        },
+        "responses": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Responses",
+          "type": "array"
+        }
+      },
+      "title": "ApplicationHubGapAnalysis",
+      "type": "object"
+    },
+    "ContractJobDetail": {
+      "additionalProperties": false,
+      "properties": {
+        "company_name": {
+          "title": "Company Name",
+          "type": "string"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "job_id": {
+          "title": "Job Id",
+          "type": "string"
+        },
+        "requirements": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Requirements",
+          "type": "array"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
+        "user_id": {
+          "title": "User Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id",
+        "user_id",
+        "title",
+        "company_name",
+        "status"
+      ],
+      "title": "ContractJobDetail",
+      "type": "object"
+    },
+    "HubArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Artifact Id"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "processing",
+            "completed",
+            "failed",
+            "cancelled",
+            "expired",
+            "not_generated",
+            "edited"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "artifact_id"
+      ],
+      "title": "HubArtifact",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "application": {
+      "$ref": "#/$defs/ApplicationHubApplication"
+    },
+    "artifacts": {
+      "$ref": "#/$defs/ApplicationHubArtifacts"
+    },
+    "cv": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ApplicationHubCV"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "gap_analysis": {
+      "$ref": "#/$defs/ApplicationHubGapAnalysis"
+    },
+    "job": {
+      "$ref": "#/$defs/ContractJobDetail"
+    },
+    "reload_route": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reload Route"
+    }
+  },
+  "required": [
+    "application",
+    "job",
+    "gap_analysis",
+    "artifacts"
+  ],
+  "title": "ApplicationHubData",
+  "type": "object"
+}

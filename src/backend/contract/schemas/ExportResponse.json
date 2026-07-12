@@ -1,0 +1,20 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "download_url": {
+      "title": "Download Url",
+      "type": "string"
+    },
+    "expires_at": {
+      "format": "date-time",
+      "title": "Expires At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "download_url",
+    "expires_at"
+  ],
+  "title": "ExportResponse",
+  "type": "object"
+}

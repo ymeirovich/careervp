@@ -146,12 +146,12 @@ backlog:
   - {id: T-08, tier: T1, track: [T], loe: Lo, status: TARGET, title: "execution plan: ordered runbook sequencing every clause into copy-paste steps w/ model+effort for Claude Code + Codex", crosswalk: ["redesign-execution-plan.md"], verification: doc}
   - {id: T-09, tier: T1, track: [T], loe: Md, status: TARGET, title: "scope-diff.py drift checker: clause<->spec<->test<->impl_state via frontmatter scope_lock_clause; CI gate + periodic diff", crosswalk: ["#11"], verification: ci}
   # ---- Track F: frontend contract ----
-  - {id: F-01, tier: T1, track: [F], loe: Md, status: TARGET, title: "executable oracle: Zod mirror of lib/types.ts + safeParse (FE-truth) + Pydantic model_json_schema()->ajv (BE-truth); MSW in CI + nightly Playwright vs dev", crosswalk: ["coverage-matrix#2"], verification: contract}
+  - {id: F-01, tier: T1, track: [F], loe: Md, status: TARGET, impl_state: implemented, title: "executable oracle: Zod mirror of lib/types.ts + safeParse (FE-truth) + Pydantic model_json_schema()->ajv (BE-truth); MSW in CI + nightly Playwright vs dev", crosswalk: ["coverage-matrix#2"], verification: contract}
   - {id: F-02, tier: T1, track: [F], loe: Lo, status: TARGET, title: "fix: VPR download_url missing from VPRStatusResult", crosswalk: ["api_models.py:173"], current_state: live_bug, verification: contract}
   - {id: F-03, tier: T1, track: [F], loe: Lo, status: TARGET, title: "fix: status enum lacks cancelled/expired in backend Literal", crosswalk: ["api_models.py:182","contract#4"], current_state: live_bug, verification: contract}
   - {id: F-04, tier: T1, track: [F], loe: Lo, status: TARGET, title: "fix: vpr_id required-non-null vs FE sends null (422)", crosswalk: ["api_models.py:282","contract#3"], current_state: live_bug, verification: contract}
   - {id: F-05, tier: T1, track: [F], loe: Lo, status: TARGET, title: "fix: error envelope nested vs FE flat ([object Object])", crosswalk: ["api_models.py:511","contract#10"], current_state: live_bug, verification: contract}
-  - {id: F-06, tier: T1, track: [F], loe: Md, status: TARGET, title: "encode all 10 contract items as executable assertions", crosswalk: ["contract"], verification: contract}
+  - {id: F-06, tier: T1, track: [F], loe: Md, status: TARGET, impl_state: implemented, title: "encode all 10 contract items as executable assertions", crosswalk: ["contract"], verification: contract}
   - {id: F-07, tier: T2, track: [F], loe: Lo, status: TARGET, title: "regenerate OpenAPI from live/route_map; mark v1 swagger + docs/features non-authoritative", verification: doc}
   # ---- Track X: cross-cutting / compliance ----
   - {id: X-01, tier: T2, track: [X], loe: Md, status: TARGET, title: "account-close delete-all-my-data (export already exists); delete full USER#{user_id} collection + S3 objects + Cognito user", crosswalk: ["C-5","DSAR","NFR-SEC-8"], current_state: export_exists_no_delete, verification: integration+security}

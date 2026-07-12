@@ -1,0 +1,300 @@
+{
+  "$defs": {
+    "CoverLetterCloseParagraph": {
+      "additionalProperties": false,
+      "properties": {
+        "includes_cta": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Includes Cta"
+        },
+        "word_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Word Count"
+        }
+      },
+      "title": "CoverLetterCloseParagraph",
+      "type": "object"
+    },
+    "CoverLetterHookParagraph": {
+      "additionalProperties": false,
+      "properties": {
+        "includes_company_reference": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Includes Company Reference"
+        },
+        "includes_uvp": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Includes Uvp"
+        },
+        "word_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Word Count"
+        }
+      },
+      "title": "CoverLetterHookParagraph",
+      "type": "object"
+    },
+    "CoverLetterParagraphs": {
+      "additionalProperties": false,
+      "properties": {
+        "close": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoverLetterCloseParagraph"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "hook": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoverLetterHookParagraph"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "proof_points": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoverLetterProofPointsParagraph"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "CoverLetterParagraphs",
+      "type": "object"
+    },
+    "CoverLetterProofPointsParagraph": {
+      "additionalProperties": false,
+      "properties": {
+        "claims_verified": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Claims Verified"
+        },
+        "quantified_evidence": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quantified Evidence"
+        },
+        "requirements_matched": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Requirements Matched"
+        }
+      },
+      "title": "CoverLetterProofPointsParagraph",
+      "type": "object"
+    },
+    "CoverLetterStatusResult": {
+      "additionalProperties": false,
+      "properties": {
+        "cover_letter": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cover Letter"
+        },
+        "fvs_validation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FVSValidation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "paragraphs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoverLetterParagraphs"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "CoverLetterStatusResult",
+      "type": "object"
+    },
+    "FVSValidation": {
+      "additionalProperties": false,
+      "properties": {
+        "is_valid": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Is Valid"
+        },
+        "violations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Violations",
+          "type": "array"
+        }
+      },
+      "title": "FVSValidation",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "error": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error"
+    },
+    "id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Id"
+    },
+    "result": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CoverLetterStatusResult"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "updated_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Updated At"
+    },
+    "version": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Version"
+    }
+  },
+  "required": [
+    "status"
+  ],
+  "title": "CoverLetterStatusResponse",
+  "type": "object"
+}
