@@ -6,6 +6,7 @@ from typing import cast
 from aws_cdk import Aws, CfnOutput, Duration, RemovalPolicy, aws_apigateway, aws_sqs
 from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_cloudwatch as cw
+from aws_cdk import aws_cloudwatch_actions as cw_actions
 from aws_cdk import aws_cognito as cognito
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_events as events
@@ -236,6 +237,12 @@ class ApiConstruct(Construct):
             ],
             naming=naming,
             mode="dashboards",
+        )
+
+        # P-21: route the billing-error alarm to the on-call topic so it is not
+        # silent (it is built before the topic exists, hence wired here).
+        self.billing_error_alarm.add_alarm_action(
+            cw_actions.SnsAction(self.monitoring.notification_topic)
         )
 
         if not is_production_env:

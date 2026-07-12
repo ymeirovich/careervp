@@ -67,7 +67,11 @@ def _changelog_len(text: str | None) -> int:
         doc = yaml.safe_load(text) or {}
     except yaml.YAMLError:
         return 0
+    # The contract twin uses `change_log:`; accept the `changelog:` alias too so
+    # the guard counts real amendments (older fixtures/docs used `changelog`).
     changelog = doc.get("changelog")
+    if not isinstance(changelog, list):
+        changelog = doc.get("change_log")
     return len(changelog) if isinstance(changelog, list) else 0
 
 

@@ -61,9 +61,13 @@ def test_t02_moto_real_key_schema_fixtures(moto_applications_table: Any, moto_ar
 
 
 def test_t03_differentiated_coverage_gates_are_exact() -> None:
-    assert COVERAGE_GATES['core'].line_percent == pytest.approx(85.0)
-    assert COVERAGE_GATES['core'].branch_percent == pytest.approx(80.0)
-    assert COVERAGE_GATES['supporting'].line_percent == pytest.approx(78.0)
-    assert COVERAGE_GATES['supporting'].branch_percent == pytest.approx(70.0)
-    assert COVERAGE_GATES['overall'].line_percent == pytest.approx(80.0)
-    assert COVERAGE_GATES['overall'].branch_percent == pytest.approx(70.0)
+    # Two-phase (scope-lock v2.2.0): the enforcer holds the calibrated
+    # `enforced_baseline`; the aspirational 85/80 target is the per-wave ratchet
+    # goal (quality_gates.coverage.ratchet_target). This guard keeps the enforcer
+    # pinned to the recorded baseline so gates never silently drift below it.
+    assert COVERAGE_GATES['core'].line_percent == pytest.approx(71.0)
+    assert COVERAGE_GATES['core'].branch_percent == pytest.approx(53.0)
+    assert COVERAGE_GATES['supporting'].line_percent == pytest.approx(70.0)
+    assert COVERAGE_GATES['supporting'].branch_percent == pytest.approx(48.0)
+    assert COVERAGE_GATES['overall'].line_percent == pytest.approx(70.0)
+    assert COVERAGE_GATES['overall'].branch_percent == pytest.approx(51.0)

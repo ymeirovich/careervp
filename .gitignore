@@ -64,3 +64,8 @@ src/frontend/next-env.d.ts
 # Figma Tokens Plugin export (source of truth is tokens.css)
 src/frontend/figma-tokens.json
 src/frontend/tests/e2e/.auth/
+
+# Test coverage artifacts (generated, not source)
+.coverage
+coverage.json
+htmlcov/

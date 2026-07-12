@@ -1,13 +1,16 @@
+import os
 from typing import Literal
 
 import aws_cdk.aws_sns as sns
 from aws_cdk import CfnOutput, Duration, NestedStack, RemovalPolicy, aws_apigateway
 from aws_cdk import aws_cloudwatch as cloudwatch
+from aws_cdk import aws_cloudwatch_actions as cloudwatch_actions
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_kms as kms
 from aws_cdk import aws_lambda as _lambda
 from aws_cdk import aws_logs as logs
+from aws_cdk import aws_sns_subscriptions as sns_subscriptions
 from cdk_monitoring_constructs import (
     AlarmFactoryDefaults,
     CustomMetricGroup,
@@ -24,6 +27,34 @@ from . import constants
 from .naming_utils import NamingUtils
 
 MonitoringMode = Literal["all", "notifications", "dashboards", "alarms"]
+
+# P-21: alarms must reach a real on-call destination. Each environment has a
+# default subscribed endpoint so a synthesized stack is never left with zero
+# subscribers; the human overrides it per deploy via ALARM_SUBSCRIPTION_EMAILS
+# (comma-separated). Email subscriptions require a one-time human inbox
+# confirmation — that confirmation is the P-21 deploy-gate evidence, not
+# something CDK can assert (see scripts/deploy_evidence.py).
+_DEFAULT_ALARM_EMAILS: dict[str, str] = {
+    "dev": "careervp-alerts-dev@careervp.com",
+    "stage": "careervp-alerts-stage@careervp.com",
+    "staging": "careervp-alerts-stage@careervp.com",
+    "prod": "careervp-alerts@careervp.com",
+    "production": "careervp-alerts@careervp.com",
+}
+
+
+def resolve_alarm_emails(environment: str) -> list[str]:
+    """Return the alarm subscription endpoints for an environment.
+
+    ``ALARM_SUBSCRIPTION_EMAILS`` (comma-separated) overrides the per-env
+    default. Returns at least one endpoint for every known environment so the
+    monitoring topic is never synthesized without a subscriber.
+    """
+    override = os.getenv("ALARM_SUBSCRIPTION_EMAILS", "").strip()
+    if override:
+        return [email.strip() for email in override.split(",") if email.strip()]
+    default = _DEFAULT_ALARM_EMAILS.get(environment)
+    return [default] if default else []
 
 
 class CrudMonitoring(Construct):
@@ -84,6 +115,9 @@ class CrudMonitoring(Construct):
                 resources=[topic.topic_arn],
             )
         )
+        # P-21: subscribe at least one on-call endpoint so alarms are not silent.
+        for email in resolve_alarm_emails(self.naming.environment):
+            topic.add_subscription(sns_subscriptions.EmailSubscription(email))
         CfnOutput(
             self, id=constants.MONITORING_TOPIC, value=topic.topic_name
         ).override_logical_id(constants.MONITORING_TOPIC)
@@ -188,7 +222,7 @@ class CrudMonitoring(Construct):
                 metric_value="1",
                 default_value=0,
             )
-            cloudwatch.Alarm(
+            validation_alarm = cloudwatch.Alarm(
                 self,
                 f"{func.node.id}DynamoValidationExceptionAlarm",
                 metric=cloudwatch.Metric(
@@ -203,6 +237,9 @@ class CrudMonitoring(Construct):
                 treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
                 alarm_name=f"{func.function_name}-DynamoValidationException",
             )
+            # P-21: this hand-built alarm must also route to the on-call topic
+            # (the MonitoringFacade alarms already do via SnsAlarmActionStrategy).
+            validation_alarm.add_alarm_action(cloudwatch_actions.SnsAction(topic))
 
         low_level_facade.monitor_dynamo_table(
             table=db, billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST
