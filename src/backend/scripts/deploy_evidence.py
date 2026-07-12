@@ -52,14 +52,17 @@ def validate_sns_subscription_confirmed(evidence: Mapping[str, object]) -> list[
 
 
 def validate_budget_evidence(evidence: Mapping[str, object]) -> list[str]:
-    """P-32 Wave 0 gate: require a human-created AWS Budget record.
+    """P-32 Wave 0 gate: require a human-confirmed, deployed AWS Budget.
 
-    AWS Budgets and Cost Anomaly Detection are console-only for this slice
-    (per specs/P-32-cost-obs-edge-spec.md) — there is no CDK resource to
-    synth, so the only proof available is a human-captured evidence document.
-    Fails closed when the ``aws_budget`` section is absent or missing any of
-    the budget name, a numeric threshold, a subscriber (email/SNS endpoint),
-    or a capture timestamp.
+    AWS Budgets and Cost Anomaly Detection are defined as CDK resources in
+    ``infra/careervp/monitoring.py`` (moved console->IaC by explicit human
+    decision, 2026-07-12 — see specs/P-32-cost-obs-edge-spec.md). A passing
+    ``cdk synth`` only proves the template is correct, not that a real deploy
+    happened or that the account actually has these resources, so this gate
+    still requires a human-captured post-deploy evidence document. Fails
+    closed when the ``aws_budget`` section is absent or missing any of the
+    budget name, a numeric threshold, a subscriber (email/SNS endpoint), or a
+    capture timestamp.
     """
     budget = evidence.get('aws_budget')
     if not isinstance(budget, Mapping):
@@ -86,10 +89,13 @@ def validate_budget_evidence(evidence: Mapping[str, object]) -> list[str]:
 
 
 def validate_cost_anomaly_evidence(evidence: Mapping[str, object]) -> list[str]:
-    """P-32 Wave 0 gate: require a human-created Cost Anomaly Detection monitor + subscription.
+    """P-32 Wave 0 gate: require a human-confirmed, deployed Cost Anomaly Detection monitor + subscription.
 
-    Fails closed when the ``cost_anomaly_detection`` section is absent or
-    missing the monitor ARN, the subscription ARN, or a capture timestamp.
+    Defined as CDK (``ce.CfnAnomalyMonitor`` / ``ce.CfnAnomalySubscription`` in
+    ``infra/careervp/monitoring.py``); synth passing is not proof of a real
+    deploy, so this still fails closed when the ``cost_anomaly_detection``
+    section is absent or missing the monitor ARN, the subscription ARN, or a
+    capture timestamp.
     """
     anomaly = evidence.get('cost_anomaly_detection')
     if not isinstance(anomaly, Mapping):

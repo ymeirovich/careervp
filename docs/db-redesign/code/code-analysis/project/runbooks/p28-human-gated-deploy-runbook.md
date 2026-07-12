@@ -45,4 +45,8 @@ Per `infra/cfn_stack_policy.README.md`, run `aws cloudformation set-stack-policy
 top-level stack. Automation never does this.
 
 ## NOT part of P-28 / step 0.55
-- AWS Budgets + Cost-Anomaly Detection = **step 0.56 / P-32** (a separate human console task).
+- AWS Budgets + Cost-Anomaly Detection = **step 0.56 / P-32**, now defined as CDK
+  in `infra/careervp/monitoring.py` (moved console→IaC by explicit decision,
+  2026-07-12 — see `runbooks/p32-budgets-cost-anomaly-runbook.md`). Deploys through
+  this same change-set flow; only the post-deploy evidence capture is still
+  human-only.

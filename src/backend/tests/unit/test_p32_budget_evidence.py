@@ -1,11 +1,12 @@
-"""P-32 Wave 0 RED tests: Budgets + Cost Anomaly Detection console evidence.
+"""P-32 Wave 0 RED tests: Budgets + Cost Anomaly Detection deploy evidence.
 
-The Wave 0 slice of P-32 is human console work (AWS Budgets + Cost Anomaly
-Detection) — it is not expressed in CDK (see specs/P-32-cost-obs-edge-spec.md,
-Fix Plan item 4: "Do not store console-only configuration as fake CDK code").
-The only automatable net is an evidence validator that fails closed until a
-human pastes the budget name/threshold/subscriber and the anomaly monitor +
-subscription ARNs. See ``scripts/deploy_evidence.py``.
+Budgets and Cost Anomaly Detection are now defined as CDK (moved console->IaC
+by explicit human decision, 2026-07-12; see specs/P-32-cost-obs-edge-spec.md
+Fix Plan item 4 and infra/careervp/monitoring.py). A passing synth proves the
+template is correct but not that a real deploy happened, so the evidence
+validator still fails closed until a human pastes the post-deploy budget
+name/threshold/subscriber and the anomaly monitor + subscription ARNs. See
+``scripts/deploy_evidence.py``.
 """
 
 from __future__ import annotations

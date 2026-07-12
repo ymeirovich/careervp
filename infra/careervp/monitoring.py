@@ -3,6 +3,8 @@ from typing import Literal
 
 import aws_cdk.aws_sns as sns
 from aws_cdk import CfnOutput, Duration, NestedStack, RemovalPolicy, aws_apigateway
+from aws_cdk import aws_budgets as budgets
+from aws_cdk import aws_ce as ce
 from aws_cdk import aws_cloudwatch as cloudwatch
 from aws_cdk import aws_cloudwatch_actions as cloudwatch_actions
 from aws_cdk import aws_dynamodb as dynamodb
@@ -29,6 +31,13 @@ from .naming_utils import NamingUtils
 MonitoringMode = Literal["all", "notifications", "dashboards", "alarms"]
 _Q10_PRICE_PER_APP = 25.0 / 20.0
 _Q10_COST_PER_APP_ALARM_THRESHOLD = 0.30 * _Q10_PRICE_PER_APP
+
+# P-32 (Wave 0 slice, moved console-only -> CDK by explicit human decision
+# 2026-07-12 — see specs/P-32-cost-obs-edge-spec.md Fix Plan item 4). A
+# retry-storm or runaway agent chain during Waves 0-4 must trip a dollar
+# threshold instead of burning unbounded LLM/AWS spend unmonitored.
+_P32_BUDGET_MONTHLY_LIMIT_USD = 100.0
+_P32_ANOMALY_THRESHOLD_ABSOLUTE_USD = 10.0
 
 # P-21: alarms must reach a real on-call destination. Each environment has a
 # default subscribed endpoint so a synthesized stack is never left with zero
@@ -114,6 +123,25 @@ class CrudMonitoring(Construct):
                 actions=["sns:Publish"],
                 effect=iam.Effect.ALLOW,
                 principals=[iam.ServicePrincipal("cloudwatch.amazonaws.com")],
+                resources=[topic.topic_arn],
+            )
+        )
+        # P-32: AWS Budgets and Cost Anomaly Detection publish through their own
+        # service principals — without these grants the SNS subscribers built in
+        # _build_cost_observability are silently undeliverable.
+        topic.add_to_resource_policy(
+            statement=iam.PolicyStatement(
+                actions=["sns:Publish"],
+                effect=iam.Effect.ALLOW,
+                principals=[iam.ServicePrincipal("budgets.amazonaws.com")],
+                resources=[topic.topic_arn],
+            )
+        )
+        topic.add_to_resource_policy(
+            statement=iam.PolicyStatement(
+                actions=["sns:Publish"],
+                effect=iam.Effect.ALLOW,
+                principals=[iam.ServicePrincipal("costalerts.amazonaws.com")],
                 resources=[topic.topic_arn],
             )
         )
@@ -306,4 +334,82 @@ class MonitoringNestedStack(NestedStack):
         )
         cost_per_application_alarm.add_alarm_action(
             cloudwatch_actions.SnsAction(notification_topic)
+        )
+        self._build_cost_observability(notification_topic, naming)
+
+    def _build_cost_observability(
+        self, notification_topic: sns.ITopic, naming: NamingUtils
+    ) -> None:
+        """P-32 Wave 0: AWS Budget + Cost Anomaly Detection, both routed to the
+        shared monitoring SNS topic (whose resource policy already grants
+        budgets.amazonaws.com / costalerts.amazonaws.com publish rights — see
+        CrudMonitoring._build_topic)."""
+        budgets.CfnBudget(
+            self,
+            "P32Budget",
+            budget=budgets.CfnBudget.BudgetDataProperty(
+                budget_type="COST",
+                time_unit="MONTHLY",
+                budget_name=naming.resource_name("cost-obs", "monthly-budget"),
+                budget_limit=budgets.CfnBudget.SpendProperty(
+                    amount=_P32_BUDGET_MONTHLY_LIMIT_USD, unit="USD"
+                ),
+            ),
+            notifications_with_subscribers=[
+                budgets.CfnBudget.NotificationWithSubscribersProperty(
+                    notification=budgets.CfnBudget.NotificationProperty(
+                        comparison_operator="GREATER_THAN",
+                        notification_type="ACTUAL",
+                        threshold=80,
+                        threshold_type="PERCENTAGE",
+                    ),
+                    subscribers=[
+                        budgets.CfnBudget.SubscriberProperty(
+                            address=notification_topic.topic_arn,
+                            subscription_type="SNS",
+                        )
+                    ],
+                ),
+                budgets.CfnBudget.NotificationWithSubscribersProperty(
+                    notification=budgets.CfnBudget.NotificationProperty(
+                        comparison_operator="GREATER_THAN",
+                        notification_type="FORECASTED",
+                        threshold=100,
+                        threshold_type="PERCENTAGE",
+                    ),
+                    subscribers=[
+                        budgets.CfnBudget.SubscriberProperty(
+                            address=notification_topic.topic_arn,
+                            subscription_type="SNS",
+                        )
+                    ],
+                ),
+            ],
+        )
+
+        anomaly_monitor = ce.CfnAnomalyMonitor(
+            self,
+            "P32AnomalyMonitor",
+            monitor_name=naming.resource_name("cost-obs", "anomaly-monitor"),
+            monitor_type="DIMENSIONAL",
+            monitor_dimension="SERVICE",
+        )
+        ce.CfnAnomalySubscription(
+            self,
+            "P32AnomalySubscription",
+            subscription_name=naming.resource_name("cost-obs", "anomaly-subscription"),
+            # IMMEDIATE is required for SNS delivery; DAILY/WEEKLY are email-only.
+            frequency="IMMEDIATE",
+            monitor_arn_list=[anomaly_monitor.attr_monitor_arn],
+            threshold_expression=(
+                '{"Dimensions":{"Key":"ANOMALY_TOTAL_IMPACT_ABSOLUTE",'
+                f'"Values":["{_P32_ANOMALY_THRESHOLD_ABSOLUTE_USD}"],'
+                '"MatchOptions":["GREATER_THAN_OR_EQUAL"]}}'
+            ),
+            subscribers=[
+                ce.CfnAnomalySubscription.SubscriberProperty(
+                    address=notification_topic.topic_arn,
+                    type="SNS",
+                )
+            ],
         )
