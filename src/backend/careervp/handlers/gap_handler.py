@@ -9,7 +9,7 @@ from http import HTTPStatus
 from typing import Any
 from uuid import uuid4
 
-import boto3  # type: ignore[import-untyped]
+import boto3
 from pydantic import ValidationError
 
 from careervp.dal.application_repository import ApplicationRepository

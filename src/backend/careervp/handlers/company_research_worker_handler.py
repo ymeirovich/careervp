@@ -16,7 +16,7 @@ import json
 import os
 from typing import Any
 
-import boto3  # type: ignore[import-untyped]
+import boto3
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from pydantic import BaseModel, Field
 
@@ -254,7 +254,7 @@ def _hard_fail(input_data: CRWorkerInput, cause: str) -> None:
             expected_state='cr_pending',
         )
     except Exception as exc:
-        from botocore.exceptions import ClientError as _ClientError  # type: ignore[import-untyped]
+        from botocore.exceptions import ClientError as _ClientError
 
         if isinstance(exc, _ClientError) and exc.response['Error']['Code'] == 'ConditionalCheckFailedException':
             logger.info(

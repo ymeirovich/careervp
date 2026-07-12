@@ -10,7 +10,7 @@ from decimal import Decimal
 from http import HTTPStatus
 from typing import Any
 
-from boto3.dynamodb.conditions import Attr, Key  # type: ignore[import-untyped]
+from boto3.dynamodb.conditions import Attr, Key
 from pydantic import ValidationError
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
@@ -850,7 +850,7 @@ def _handle_cv_tailoring_cancel(
     headers: dict[str, str],
 ) -> dict[str, Any]:
     """Handle POST /cv-tailoring/{cvTailoringId}/cancel."""
-    import boto3 as _boto3  # type: ignore[import-untyped]
+    import boto3 as _boto3
 
     path_params = event.get('pathParameters') or {}
     cv_tailoring_id = str(path_params.get('cvTailoringId') or '').strip()

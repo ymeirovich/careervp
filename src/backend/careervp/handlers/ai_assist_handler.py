@@ -454,7 +454,7 @@ def _load_tailored_cv(dal: DynamoDalHandler, user_id: str, application_id: str) 
     application_id lives in the `job_id` ATTRIBUTE (not the sort key). We must
     therefore filter on job_id, not on the sk.
     """
-    from boto3.dynamodb.conditions import Attr, Key  # type: ignore[import-untyped]
+    from boto3.dynamodb.conditions import Attr, Key
 
     from careervp.dal.dynamo_dal_handler import TAILORED_CV_SORT_KEY_PREFIX
 
