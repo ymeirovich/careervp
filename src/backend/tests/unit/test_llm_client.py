@@ -240,6 +240,7 @@ class TestCostThresholds:
 
         assert MAX_COST_PER_APPLICATION == 0.25
 
+    # scope_lock_clause: Q-10
     def test_q10_price_per_app_threshold_is_derived_from_subscription_midpoint(self):
         assert PRICE_PER_APP == pytest.approx(1.25)
         assert COST_PER_APP_ALARM_THRESHOLD == pytest.approx(0.375)
