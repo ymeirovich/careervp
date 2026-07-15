@@ -2033,7 +2033,7 @@ class ApiConstruct(Construct):
 
     def _add_api_authorizer_lambda(self) -> _lambda.Function:
         function_name = self.naming.lambda_name("api-authorizer")
-        return _lambda.Function(
+        authorizer = _lambda.Function(
             self,
             "ApiAuthorizerLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
@@ -2045,6 +2045,11 @@ class ApiConstruct(Construct):
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 "JWT_PRIVATE_KEY": self._parameter_value("jwt-private-key"),
                 "JWT_PUBLIC_KEY": self._parameter_value("jwt-public-key"),
+                # P-24: presence of this env activates sub -> user_id surrogate
+                # resolution at the edge; USERS_TABLE_NAME feeds the
+                # link-by-verified-email owner lookup (email-index).
+                constants.IDENTITY_MAP_TABLE_NAME_ENV: self.api_db.identity_map_table.table_name,
+                "USERS_TABLE_NAME": self.api_db.users_table.table_name,
             },
             timeout=Duration.seconds(10),
             memory_size=256,
@@ -2055,6 +2060,10 @@ class ApiConstruct(Construct):
             system_log_level_v2=_lambda.SystemLogLevel.INFO,
             architecture=_lambda.Architecture.X86_64,
         )
+        # JIT conditional-put on the mapping + email-index read for linking.
+        self.api_db.identity_map_table.grant_read_write_data(authorizer)
+        self.api_db.users_table.grant_read_data(authorizer)
+        return authorizer
 
     def _add_gap_lambda(self) -> _lambda.Function:
         function_name = self.naming.lambda_name("gap-api")

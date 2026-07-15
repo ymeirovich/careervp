@@ -72,6 +72,9 @@ class ApiDbConstruct(Construct):
         self.company_research_cache_table: dynamodb.TableV2 = (
             self._build_company_research_cache_table(id_)
         )
+        # P-24 identity surrogate: sub -> internal user_id (own sub-keyed table,
+        # looked up BEFORE user_id is known — cannot live in the USER# core).
+        self.identity_map_table: dynamodb.TableV2 = self._build_identity_map_table(id_)
 
         # S3 Buckets
         self.cv_bucket: s3.Bucket = self._build_cv_bucket(id_)
@@ -173,6 +176,35 @@ class ApiDbConstruct(Construct):
         CfnOutput(
             self, id=constants.IDEMPOTENCY_TABLE_NAME_OUTPUT, value=table.table_name
         ).override_logical_id(constants.IDEMPOTENCY_TABLE_NAME_OUTPUT)
+        return table
+
+    def _build_identity_map_table(self, id_: str) -> dynamodb.TableV2:
+        """P-24 sub -> internal user_id surrogate mapping.
+
+        A bare ``sub``-partitioned lookup (no sort key), separate from the
+        ``pk``/``sk`` ``USER#`` core: it is resolved at the edge BEFORE the
+        internal ``user_id`` is known. Durable (RETAIN + deletion protection +
+        PITR) — losing a row would split one human across two internal ids.
+        """
+        table_id = f"{id_}{constants.IDENTITY_MAP_TABLE_NAME}"
+        table = dynamodb.TableV2(
+            self,
+            table_id,
+            table_name=self.naming.table_name(constants.IDENTITY_MAP_TABLE_NAME),
+            partition_key=dynamodb.Attribute(
+                name="sub", type=dynamodb.AttributeType.STRING
+            ),
+            billing=dynamodb.Billing.on_demand(),
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True,
+                recovery_period_in_days=35,
+            ),
+            removal_policy=self.removal_policy,
+            deletion_protection=self.deletion_protection,
+        )
+        CfnOutput(
+            self, id=constants.IDENTITY_MAP_TABLE_OUTPUT, value=table.table_name
+        ).override_logical_id(constants.IDENTITY_MAP_TABLE_OUTPUT)
         return table
 
     def _build_cv_bucket(self, id_prefix: str) -> s3.Bucket:
