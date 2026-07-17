@@ -10,20 +10,23 @@
 
 ## Validation summary (source of truth for this file)
 
+> **Re-validated 2026-07-16.** Two rows below were wrong in the 2026-07-12 pass — corrected inline.
+
 | Step | Real status | Note |
 |---|---|---|
 | 0.0, 0.1, 0.1.5, 0.2, 0.35, 0.4, 0.5, 0.55 | done | table accurate |
-| 0.61, 0.62, 0.63, 0.75 | **done, table says `not_started`** | commits `926a061`, `e3839c4`/`e3d3051` — status-board drift only |
-| 0.1.6 (P-03), 0.3 (F-01/F-06) | **spec_written only — zero implementation/tests** | genuine gap, not board drift |
+| 0.61, 0.62, 0.63, 0.75 | done | commits `926a061`, `e3839c4`/`e3d3051`; `redesign-execution-plan.md`'s Status column already reads `implemented` for these — no board drift remains |
+| 0.1.6 (P-03), 0.3 (F-01/F-06) | **0.3 (F-01/F-06) DONE, not a gap.** | 2026-07-15 verification: `npx jest -t oracle` = 21/21 passing (all 10 F-06 §3 items + F-01 legs incl. `vpr_id` null-vs-absent and 409-on-stale-`base_version`). 0.1.6 (P-03) still genuinely spec_written only — see Prompt 1. |
 | 0.56 (P-32 budgets slice) | not_started | no code, no evidence artifact |
-| 0.6 (P-12/P-13 RETAIN) | not_started | `api_db_construct.py` uses `RemovalPolicy.DESTROY` everywhere, zero `deletion_protection` |
-| 0.64 (fire drill) | not_started | incremental RTO (~7min) known; from-scratch RTO never measured |
+| 0.6 (P-12/P-13 RETAIN) | **CODE LANDED (commit `567320d`), tests missing.** | `api_db_construct.py` already applies `self.removal_policy` (RETAIN unless scratch) + `self.deletion_protection` + PITR at ~11 stateful sites — the "DESTROY everywhere / zero deletion_protection" premise below (Prompt 4, original) was wrong. Remaining gap: no test asserts it, so scope-diff shows P-12/P-13 as spec_written [NO TEST]; and deploy #1 (`ExecuteChangeSet`) status on dev is unconfirmed. See corrected Prompt 4. |
+| 0.64 (fire drill) | verified | `redesign-execution-plan.md` records commit `28411d4`, from-scratch recreate = 328s |
 | 0.64b (domain slice) | in_progress | CDK/DNS/cert done; Deploy Frontend workflow fix never proven green in actual CI |
-| 0.65 (P-26 decomposition) | not_started | correctly blocked |
-| 0.7 (P-24 identity surrogate) | not_started | authorizer is a bare `sub` passthrough, no resolver exists |
+| 0.65 (P-26 decomposition) | not_started | Job-1 amendment (resource-import/`cdk refactor` mechanism) **ACCEPTED 2026-07-15** — the §0.3 STOP is lifted, but the migration itself has not been authored or run. Original Prompt 7 described the pre-amendment mechanism (create-in-nested/delete-from-parent) and is superseded — see corrected Prompt 7. |
+| 0.7 (P-24 identity surrogate) | **IMPLEMENTED (commit `09bd6f3`), DORMANT by design — not `not_started`.** | Resolver + map-table landed under TDD (13 tests). The custom Lambda authorizer that would activate it (`_add_api_authorizer_lambda`) has no call site — live authorizer is Cognito. Landed ahead of its own dep (0.65) per the plan's numeric-dep rule; this is safe (inert code) but means 0.65's resource-import must now also re-home this authorizer construct. See corrected Prompt 8 (verify-only, not IMPLEMENT). |
 
-**Critical path to Wave 1:** `{0.6, 0.64, 0.64b}` → `0.65` → `0.7` → Wave 1 step 1.0. None of the
-four board-drift fixes (0.61/0.62/0.63/0.75) shorten this — they were already off the critical path.
+**Critical path to Wave 1:** `{0.6 (deploy-confirm), 0.64b}` → `0.65` → `0.7 verify` → Wave 1 step 1.0.
+0.64 is verified. 0.7's code already exists dormant, so the critical path is "confirm 0.6 is deployed" +
+"finish 0.65" + "re-verify 0.7," not "build 0.7 from scratch."
 
 **Touches-serialization note:** 0.6 and 0.65/0.7 all touch `app.py` and CDK constructs — do not run
 their prompts concurrently. 0.1.6, 0.3, and 0.56 touch no shared CDK file and are safe to run in
@@ -191,49 +194,47 @@ OUTPUT REQUIRED:
 
 ---
 
-## Prompt 4 — Step 0.6 (P-12/P-13: RETAIN + deletion_protection, deploy #1) — IMPLEMENT
+## Prompt 4 — Step 0.6 (P-12/P-13: RETAIN + deletion_protection) — TEST GAP CLOSURE, not IMPLEMENT
 
 **Model/effort:** Claude Code `sonnet / medium` · Codex `gpt-5-codex / medium`.
-**Deps:** 0.55, 0.61, 0.62 (all done). **Touches:** `api_db_construct.py`, `app.py` — **serialize**;
-do not run concurrently with 0.65/0.7 prompts (they touch the same files later in the chain).
+**Deps:** 0.55, 0.61, 0.62 (all done). **Touches:** `api_db_construct.py` (test file only, unless a
+gap is found), `app.py` — **serialize**; do not run concurrently with 0.65/0.7 prompts.
+
+**⚠️ Corrected 2026-07-16 — the original premise below was wrong.** P-12/P-13 code is ALREADY LANDED
+(commit `567320d`): `api_db_construct.py` applies `self.removal_policy` (RETAIN unless
+`scratch_teardown_safe`) + `self.deletion_protection` + PITR at ~11 stateful sites. Do NOT
+re-implement. The real gap is that scope-diff.py shows P-12/P-13 as `spec_written [NO TEST]` —
+no test asserts this exists — so the step can't reach `verified`.
 
 ```
-Implement clauses P-12+P-13 per
-docs/db-redesign/code/code-analysis/project/specs/P-12-P-13-retain-stateful-spec.md. Confirmed
-current state: infra/careervp/api_db_construct.py uses RemovalPolicy.DESTROY at all 15 stateful-
-resource sites (lines 101,142,164,220,267,292,330,356,396,433,547,584,601,636,670) and
-`deletion_protection` appears zero times repo-wide.
+Step 0.6 (P-12/P-13) code is ALREADY LANDED (commit 567320d): infra/careervp/api_db_construct.py
+defines self.removal_policy (RETAIN unless scratch_teardown_safe) + self.deletion_protection, applied
+with PITR at ~11 stateful DynamoDB/S3 sites. Do NOT re-implement. Per
+specs/P-12-P-13-retain-stateful-spec.md, the gap is test coverage:
 
-- P-12: flip every stateful resource (DynamoDB tables, S3 buckets, etc.) to RemovalPolicy.RETAIN +
-  deletion_protection=True where applicable. This is deploy #1 — the smallest safe first slice, now
-  gated on the evidence pack (0.61) and smoke baseline (0.62) both being in place, which they are.
-- P-13: identify and remove any dead RETAIN-flagged stacks never actually instantiated.
-Write the RED test(s) the spec describes first (assert RemovalPolicy.RETAIN / deletion_protection on
-each stateful construct via synth template inspection), watch them fail, then the minimal GREEN
-CDK change.
+1. Write the missing infra tests (characterization, since code exists): synth CareerVpCrudDev and
+   assert RemovalPolicy.RETAIN + DeletionProtectionEnabled + PITR on EVERY stateful table/bucket, and
+   assert P-13 (no dead RETAIN-flagged stack is instantiated). Tag them scope_lock_clause: P-12 / P-13
+   so scope-diff.py picks them up. If any stateful site is found missing RETAIN, that IS a real GREEN
+   fix — flag it explicitly, don't silently patch it into the test.
+2. cd infra && cdk diff — confirm the DESTROY->RETAIN policy flip on already-deployed resources shows
+   ZERO stateful replacement (this should already be true since the code has been live in the repo
+   since commit 567320d — this is a confirmation, not a new risk).
+3. Do NOT run cdk deploy / ExecuteChangeSet. Instead, answer this for the human: has deploy #1
+   (RETAIN) actually been executed against the live dev stack? Check cdk diff against the deployed
+   stack (not just synth) to determine drift. If cdk diff shows the policy already matches live state,
+   deploy #1 already happened silently as part of a later deploy; if it shows a pending change, deploy
+   #1 is still the human's next action.
 
 VERIFY:
-cd infra && uv sync && cdk synth   # confirm RETAIN + deletion_protection on all 15 sites
-cd infra && cdk diff               # MUST show zero stateful-resource replacement
-cd src/backend && uv run pytest tests/infrastructure -k "retain or p12 or p13" -v
-
-This is a real AWS deploy candidate (deploy #1) — do NOT run `cdk deploy` or `ExecuteChangeSet`
-yourself. Per P-28, only the human executes change sets. Stop at "change set prepared and diffed
-clean" and hand off.
-
-SCOPE-LOCK CHECK-IN: python3 docs/db-redesign/code/code-analysis/project/scope-diff.py — confirm P-12
-and P-13 show test_written/implemented.
-
-COVERAGE REPORT: report actual vs enforced_baseline for touched infra test files (report-only).
-
+cd src/backend && uv run pytest tests/infrastructure -k "retain or p12 or p13" -v   # now selects >0 tests, all green
+cd infra && uv sync && cdk synth && cdk diff
+SCOPE-LOCK CHECK-IN: python3 docs/db-redesign/code/code-analysis/project/scope-diff.py — P-12/P-13 now test_written+.
 OUTPUT REQUIRED:
-1. A git commit message.
-2. A note that a human-run `ExecuteChangeSet` is now the literal next action (per the P-28 runbook),
-   NOT something the next prompt in this series can do.
-3. IF clean: "Ready — 0.6 change set prepared. After the human executes it and confirms deploy #1
-   landed clean, proceed to Prompt 5 (0.64b finish) and Prompt 6 (0.64 fire drill), which can then
-   run in either order relative to each other."
-4. IF issues remain: fix-forward remediation prompt.
+1. A git commit message (tests only, unless a missed RETAIN site needed fixing).
+2. A one-line human question: "Is deploy #1 (RETAIN) live on dev? [confirmed via cdk diff / needs
+   ExecuteChangeSet]".
+3. IF clean: "Ready — 0.6 test gap closed; deploy #1 status = <confirmed live / pending human action>."
 ```
 
 ---
@@ -318,46 +319,58 @@ OUTPUT REQUIRED:
 
 ---
 
-## Prompt 7 — Step 0.65 (P-26 Job 1+2: CFN decomposition + blue/green migration) — IMPLEMENT, hard
+## Prompt 7 — Step 0.65 (P-26 Job 1: resource-import migration) — IMPLEMENT, hard
 
 **Model/effort:** Claude Code `opus / xhigh` · Codex `gpt-5-codex / high (max)` — hardest clause in
 the wave; live-user blast radius.
-**Deps:** 0.64b (fully closed, O-9 resolved), 0.6, 0.61, 0.62, 0.63, 0.64 — **all must be `verified`
-before starting this prompt.** **Touches:** `api_construct.py`, `app.py` — serial, and do not start
-until 0.6's deploy #1 has landed (this step must never move the RestApi or the Cognito pool; the RETAIN
-policy from 0.6 is the safety net if anything goes wrong).
+**Deps:** 0.64b (fully closed, O-9 resolved), 0.6 (deploy #1 confirmed live), 0.61, 0.62, 0.63, 0.64
+(verified) — **all must be `verified` before starting this prompt.** **Touches:** `api_construct.py`,
+`app.py` — serial, and do not start until 0.6's deploy #1 has landed (this step must never move the
+RestApi or the Cognito pool; the RETAIN policy from 0.6 is the safety net if anything goes wrong).
+
+**⚠️ Corrected 2026-07-16 — the original Job-1 mechanism below is SUPERSEDED.** The Job-1 amendment
+(`specs/amendments/P-26-job1-resource-import-amendment.md`, Option A) was **ACCEPTED 2026-07-15**:
+the movable Lambdas/log-groups/queues carry explicit physical names and are already deployed, so a
+plain nested-stack move fails with a CloudFormation "resource already exists" error. Job 1 is now a
+**human-gated CFN resource-import / `cdk refactor` migration** (physical-id preserved), not an
+automation-executed additive change. **Job 2 (new RestApi) is NOT triggered** — per-template resource
+counts are all under 500 (dev 410, prod 421 — the amendment's own measurement).
 
 ```
-Implement clause P-26 (Job 1 + Job 2) per
-docs/db-redesign/code/code-analysis/project/specs/P-26-blue-green-api-spec.md. This is the hardest,
-most dangerous step in Wave 0 — read the spec's "Why this clause is uniquely dangerous" section in
-full before writing anything. Non-negotiable laws: NEVER move the existing RestApi in place or across
-stacks (it changes the execute-api id/URL — 908 live users lose backend access until frontend
-rebuilds); NEVER move the Cognito user pool.
+Implement clause P-26 Job 1 per specs/P-26-blue-green-api-spec.md AS AMENDED by
+specs/amendments/P-26-job1-resource-import-amendment.md (Option A ACCEPTED 2026-07-15). Read BOTH,
+plus the spec's "Why this clause is uniquely dangerous" section, before writing anything.
 
-Job 1 (do this first): decompose AROUND the RestApi — move feature Lambdas/alarms/non-stateful
-resources out of the near-500-resource parent template (ServiceStack, currently ~415/500) into
-per-feature nested stacks, leaving the RestApi's logical id and URL untouched. This alone relieves
-the CFN resource-count pressure blocking later additive waves (P-09/P-14/P-17/P-21).
+MECHANISM (amended — this SUPERSEDES the spec's original Job-1 "create-in-nested/delete-from-parent"):
+Job 1 is a HUMAN-GATED CloudFormation resource-import / `cdk refactor` migration (physical-id
+preserved — no delete/create, no "resource already exists"). The movable feature Lambdas/log-groups/
+queues carry explicit physical names and are already deployed, so import is the ONLY safe relocation.
+The artifact-chain export locks (api_construct.py:2156-2193) must be broken/re-imported in the SAME
+transaction. NOTE: the P-24 custom authorizer Lambda (_add_api_authorizer_lambda, api_construct.py:2034,
+currently dormant/no call site, landed commit 09bd6f3) is another explicitly-named movable resource
+that postdates this spec — account for it in the import mapping.
 
-Job 2 (only if API-GW resource count still needs to shrink after Job 1): stand up a NEW RestApi in
-its OWN stack, verify it via the P-30 4-wire harness against its raw invoke URL, prepare (but do NOT
-execute) the base-path-mapping cutover on the now-proven custom domain api.{env}.careervp.com, and
-prepare (but do NOT execute) the old-API retire as a separately gated change set. The domain FLIP and
-the RETIRE are human-only ExecuteChangeSet actions (P-28) — this step prepares them, a human executes
-them later.
+JOB 2 IS NOT TRIGGERED: every template is <500 (dev 410, prod 421, per the amendment). Do NOT stand up
+a new RestApi. Prepare NO base-path flip / retire change set. If synth reveals a template >=500,
+STOP per §0.3 (that contradicts the amendment's counts) — do not guess.
 
-Write the RED test(s) the spec describes first (synth-based assertions: RestApi logical id/URL
-unchanged, resource counts per nested stack, Cognito pool untouched), watch them fail, then the
-minimal GREEN CDK change.
+NON-NEGOTIABLE (unchanged, IMMUTABLE): never move the RestApi
+(logical id CareerVpCrudDevCrudservicerestapi5E02FD49) in place or across stacks; never move/replace
+the Cognito UserPool.
+
+Write the RED tests first (they already exist as the fail-closed net —
+src/backend/tests/infrastructure/test_p26_blue_green_api.py: RestApi logical-id/URL unchanged, Cognito
+pool singular/untouched, no template >=500, P-28 replacement auto-fail). At IMPLEMENT time, update the
+Job-1 Verify wording in the spec to "cdk diff shows import/refactor (physical-id preserved), not
+create-in-nested/delete-from-parent" (authored now per the amendment DECISION section).
 
 VERIFY:
-cd infra && uv sync && cdk synth      # RestApi id/url unchanged; parent template resource count reduced
-cd infra && cdk diff                  # zero stateful-resource replacement; RestApi shows no replace
+cd infra && uv sync && cdk synth      # RestApi id/URL byte-stable; parent count reduced by the imported subtrees
+cd infra && cdk refactor --dry-run    # (or the equivalent) shows IMPORT/refactor mappings, physical-ids preserved
 cd src/backend && uv run pytest tests/infrastructure -k p26 -v
-Run the P-30 smoke harness against BOTH the old and (if Job 2 ran) new API's raw invoke URL.
 
-Do NOT run cdk deploy or ExecuteChangeSet — hand the prepared change set(s) to the human per P-28.
+Do NOT run cdk deploy / cdk refactor execute / ExecuteChangeSet — hand the prepared refactor mapping +
+templates + the P-28 DescribeChangeSet Replacement report to the human (P-28).
 
 SCOPE-LOCK CHECK-IN: python3 docs/db-redesign/code/code-analysis/project/scope-diff.py — confirm P-26
 shows test_written/implemented.
@@ -366,48 +379,53 @@ COVERAGE REPORT: report actual vs enforced_baseline for touched infra files (rep
 
 OUTPUT REQUIRED:
 1. A git commit message.
-2. An explicit list of what change set(s) are now prepared and awaiting human ExecuteChangeSet.
-3. IF clean: "Ready — 0.65 Job 1 (and Job 2, if triggered) prepared. Once the human executes and
-   confirms, proceed to Prompt 8 (0.7 identity surrogate) — the last Wave-0 blocker before Wave 1."
-4. IF the spec's investigation brief surfaces a live-truth contradiction (e.g. resource counts don't
-   match the spec's current_state numbers): STOP per §0.3, emit an Amendment Proposal, do not guess.
+2. The exact list of resources being re-homed + which export locks are broken/re-imported, and the
+   prepared refactor artifact path awaiting human execution.
+3. IF clean: "Ready — 0.65 Job 1 refactor prepared (Job 2 not triggered). After human executes and
+   P-30 smoke stays green on the RestApi's URL, proceed to Prompt 8 (0.7 re-verification) — the last
+   Wave-0 blocker before Wave 1."
+4. IF a live-truth contradiction surfaces: STOP per §0.3, emit an Amendment Proposal, do not guess.
 ```
 
 ---
 
-## Prompt 8 — Step 0.7 (P-24: identity surrogate `user_id`) — IMPLEMENT
+## Prompt 8 — Step 0.7 (P-24: identity surrogate `user_id`) — RE-VERIFY, not IMPLEMENT
 
-**Model/effort:** Claude Code `opus / xhigh` · Codex `gpt-5-codex / high`.
-**Deps:** 0.65 (verified), 0.62 (done), O-4 (already RESOLVED in project-scope-lock.yaml).
-**Touches:** `cognito_construct.py`, the authorizer — serial with the 0.65 chain, do not overlap.
+**Model/effort:** Claude Code `sonnet / medium` · Codex `gpt-5-codex / medium` (verification only —
+authorizer *instantiation* is a separate, later Wave-1 P-04/P-07 action, out of scope here).
+**Deps:** 0.65 (verified — resource-import must have re-homed the authorizer construct cleanly),
+0.62 (done), O-4 (already RESOLVED). **Touches:** none expected (verification pass).
+
+**⚠️ Corrected 2026-07-16 — this is NOT an IMPLEMENT step.** P-24 is ALREADY IMPLEMENTED (commit
+`09bd6f3`, TDD, 13 tests): `identity_resolver.py`, `identity_map_repository.py`, authorizer wiring,
+additive identity-map table. It landed DORMANT by design — `_add_api_authorizer_lambda`
+(`api_construct.py:2034`) has no call site; the live authorizer is Cognito. It also landed AHEAD of
+its own dependency (0.65) — safe (inert code) but means this prompt must re-confirm nothing broke
+during 0.65's resource-import.
 
 ```
-Implement clause P-24 per
-docs/db-redesign/code/code-analysis/project/specs/P-24-identity-surrogate-spec.md. Confirmed current
-state: src/backend/careervp/handlers/api_gateway_authorizer.py:72-83 is a bare passthrough —
-`claims.get('user_id') or claims.get('sub')` — with no surrogate/resolver/link-table logic anywhere
-(grep for identity_surrogate/sub_to_user_id/resolve_user_id/IdentityLink returns nothing).
+Step 0.7 (P-24) is IMPLEMENTED (commit 09bd6f3): identity_resolver.py, identity_map_repository.py,
+authorizer wiring, additive identity-map table. It landed DORMANT — _add_api_authorizer_lambda
+(api_construct.py:2034) has no call site; the live authorizer is Cognito. Do NOT re-implement, and do
+NOT instantiate the custom authorizer here (that is a Wave-1 P-04/P-07 auth flip with its own P-23
+canary + resolver-failure alarm — explicitly out of scope for 0.7/Wave 0).
 
-Build the conservative link-by-verified-email default resolver (per O-4's decision, already recorded
-in project-scope-lock.yaml — read that resolution before starting, do not re-ask the question). Write
-the RED test(s) the spec describes first (sub→user_id resolution, link-by-verified-email behavior,
-authorizer wiring), watch them fail, then the minimal GREEN code. Do NOT move the Cognito pool
-(shared exclusion with P-26, already enforced by P-27's stack policy).
-
-VERIFY:
-cd src/backend && uv run pytest tests/unit -k "p24 or identity_surrogate" -v
-cd src/backend && uv run ruff format . && uv run ruff check --fix . && uv run mypy careervp --strict
-cd infra && cdk synth   # confirm authorizer/cognito_construct changes, Cognito pool untouched (no replace)
-
-SCOPE-LOCK CHECK-IN: python3 docs/db-redesign/code/code-analysis/project/scope-diff.py — confirm P-24
-shows test_written/implemented.
-
-COVERAGE REPORT: report actual vs enforced_baseline for touched files (report-only).
+Verify to the `verified` bar, AFTER 0.65's resource-import has landed (confirm the authorizer
+construct/Lambda survived the re-home cleanly — that's the one thing 0.65 could break here):
+1. cd src/backend && uv run pytest -k "p24 or identity_surrogate" -v   # expect the 13+ existing tests green
+2. cd src/backend && uv run ruff format . && uv run ruff check . && uv run mypy careervp --strict
+3. cd infra && uv sync && cdk synth   # Cognito UserPool + RestApi logical ids byte-stable (no replace);
+   confirm the identity-map table and authorizer Lambda still synth correctly post-0.65 refactor
+4. scope-diff.py — P-24 shows test_written/implemented.
+5. Confirm in writing that the resolver is still dormant-by-design (authorizer not wired) and that
+   flipping it on is a Wave-1 deliverable — so 0.7 = code+tests+synth verified, NOT live-behavior
+   verified.
 
 OUTPUT REQUIRED:
-1. A git commit message.
-2. IF clean: "Ready — Wave 0 is now FULLY complete and verified. Run the Wave-0 GATE
-   (scope-diff.py full run + F-01 oracle + coverage/CI) before generating wave-1-prompts.md."
+1. A git commit message (status/docs only, unless 0.65 broke something needing a fix).
+2. IF clean: "0.7 re-verified post-0.65 (still dormant-by-design). Wave 0 is now FULLY complete and
+   verified. Run the Wave-0 GATE (scope-diff.py full run + F-01 oracle + coverage/CI) before
+   generating wave-1-prompts.md."
 3. IF issues remain: fix-forward remediation prompt.
 ```
 
