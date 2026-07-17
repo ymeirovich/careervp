@@ -3,7 +3,15 @@ import os
 import re
 from typing import cast
 
-from aws_cdk import Aws, CfnOutput, Duration, RemovalPolicy, aws_apigateway, aws_sqs
+from aws_cdk import (
+    Aws,
+    CfnOutput,
+    CfnResource,
+    Duration,
+    RemovalPolicy,
+    aws_apigateway,
+    aws_sqs,
+)
 from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_cloudwatch as cw
 from aws_cdk import aws_cloudwatch_actions as cw_actions
@@ -18,14 +26,17 @@ from aws_cdk import aws_lambda_event_sources as eventsources
 from aws_cdk import aws_logs as logs
 from aws_cdk import aws_s3 as s3
 from aws_cdk import aws_ssm as ssm
+from aws_cdk import aws_stepfunctions as sfn
 from aws_cdk.aws_lambda_python_alpha import PythonLayerVersion
 from constructs import Construct
 
 from . import constants
 from .api_db_construct import ApiDbConstruct
 from .artifact_chain_construct import ArtifactChainConstruct
+from .crud_features_nested_stack import CrudFeaturesNestedStack
 from .monitoring import CrudMonitoring
 from .naming_utils import NamingUtils
+from .rehome_map import rehome_cfn
 from .scratch_deployment import (
     ScratchDeploymentSettings,
     ssm_parameter_name,
@@ -66,11 +77,22 @@ class ApiConstruct(Construct):
         self.cognito_client_id = cognito_client_id
         self.cognito_user_pool = user_pool
         self._api_permission_scopes: dict[str, set[str]] = {}
+        # P-26 Job 1: single nested stack that re-homes every explicitly-named,
+        # non-stateful feature resource off the near-limit parent template. Created
+        # first so ApiDbConstruct can parent its async queues here too. Empty at
+        # construction (no dependencies), so it never introduces a parent->nested
+        # cycle. See crud_features_nested_stack.py + rehome_map.py.
+        self._features = CrudFeaturesNestedStack(
+            self,
+            "CrudFeatures",
+            naming=naming,
+        )
         self.api_db = ApiDbConstruct(
             self,
             f"{id_}db",
             naming=naming,
             scratch_settings=scratch_settings,
+            queue_scope=self._features,
         )
         self.llm_cache_table = self._build_llm_cache_table(is_production_env)
         self.logs_kms_key = self._build_logs_kms_key()
@@ -100,7 +122,6 @@ class ApiConstruct(Construct):
             self.api_db.cv_bucket,
             self.api_db.jobs_table,
             self.api_db.vpr_results_bucket,
-            self.vpr_jobs_queue,
             self.api_db.cvs_table,
             self.api_db.applications_table,
             self.api_db.gap_responses_table,
@@ -112,6 +133,7 @@ class ApiConstruct(Construct):
             self.api_db.logs_bucket,
             self.api_db.artifacts_bucket,
         )
+        self._grant_vpr_jobs_queue_access()
         self.api_authorizer = self._build_api_authorizer(user_pool)
 
         root_resource = cast(aws_apigateway.Resource, self.rest_api.root)
@@ -147,7 +169,7 @@ class ApiConstruct(Construct):
 
         # Keep the original SQS worker for existing queue-based VPR flow.
         self.vpr_sqs_worker_func = self._add_vpr_sqs_worker_lambda_integration(
-            self,
+            self._features,
             self.lambda_role,
             self.api_db.jobs_table,
             self.api_db.vpr_results_bucket,
@@ -156,7 +178,7 @@ class ApiConstruct(Construct):
             appconfig_app_name,
         )
         self.vpr_dlq_handler_func = self._add_vpr_dlq_handler_lambda(
-            self, self.vpr_jobs_dlq, self.api_db.jobs_table
+            self._features, self.vpr_jobs_dlq, self.api_db.jobs_table
         )
         self.company_research_func = self._add_company_research_lambda_integration(
             root_resource,
@@ -170,6 +192,13 @@ class ApiConstruct(Construct):
         self.job_api_func = self._add_job_lambda()
         self.application_api_func = self._add_application_lambda()
         self.gap_api_func = self._add_gap_lambda()
+        # P-24 authorizer Lambda (dormant): the live authorizer is Cognito, so this
+        # function is NOT attached to the RestApi — it is the latent custom-authorizer
+        # scaffolding. P-26 Job 1 re-homes it into CrudFeaturesNestedStack so it is
+        # accounted for alongside the other feature Lambdas. It is not currently
+        # deployed, so on the human `cdk refactor`/deploy it is an additive CREATE
+        # (not a resource-import); adding it changes no request handling.
+        self.api_authorizer_func = self._add_api_authorizer_lambda()
         self.cover_letter_api_func = self._add_cover_letter_lambda()
         self.cover_letter_status_func = self._add_cover_letter_status_lambda()
         self.interview_prep_api_func = self._add_interview_prep_lambda()
@@ -198,7 +227,7 @@ class ApiConstruct(Construct):
             dlq=self.cv_upload_worker_dlq,
         )
         self.vpr_worker_func = self._add_vpr_worker_lambda(
-            self,
+            self._features,
             jobs_table=self.api_db.jobs_table,
             artifacts_table=self.api_db.artifacts_table,
             applications_table=self.api_db.applications_table,
@@ -206,13 +235,13 @@ class ApiConstruct(Construct):
             results_bucket=self.api_db.vpr_results_bucket,
         )
         self.cv_tailor_worker_func = self._add_cv_tailor_worker_lambda(
-            self,
+            self._features,
             artifacts_table=self.api_db.artifacts_table,
             cvs_table=self.api_db.cvs_table,
             dlq=self.cv_tailor_worker_dlq,
         )
         self.cover_letter_worker_func = self._add_cover_letter_worker_lambda(
-            self,
+            self._features,
             artifacts_table=self.api_db.artifacts_table,
             cvs_table=self.api_db.cvs_table,
             users_table=self.api_db.users_table,
@@ -220,7 +249,7 @@ class ApiConstruct(Construct):
             dlq=self.cover_letter_worker_dlq,
         )
         self.interview_prep_worker_func = self._add_interview_prep_worker_lambda(
-            self,
+            self._features,
             artifacts_table=self.api_db.artifacts_table,
             applications_table=self.api_db.applications_table,
             jobs_table=self.api_db.jobs_table,
@@ -282,6 +311,11 @@ class ApiConstruct(Construct):
                 naming=naming,
                 feature=constants.API_FEATURE,
             )
+
+        # P-26 Job 1: after every re-homed resource exists in CrudFeaturesNestedStack,
+        # pin each named resource's deployed logical id so the human-gated cdk refactor
+        # is a clean IMPORT (physical id preserved, no delete/create).
+        self._rehome_feature_logical_ids()
 
     def _build_api_custom_domain(self) -> None:
         cert = acm.Certificate.from_certificate_arn(
@@ -568,7 +602,6 @@ class ApiConstruct(Construct):
         cv_bucket: s3.Bucket,
         jobs_table: dynamodb.TableV2,
         results_bucket: s3.Bucket,
-        queue: aws_sqs.Queue,
         cvs_table: dynamodb.TableV2,
         applications_table: dynamodb.TableV2,
         gap_responses_table: dynamodb.TableV2,
@@ -580,8 +613,16 @@ class ApiConstruct(Construct):
         logs_bucket: s3.Bucket,
         artifacts_bucket: s3.Bucket,
     ) -> iam.Role:
-        return iam.Role(
-            self,
+        # P-26 Job 1: the shared service role is re-homed into
+        # CrudFeaturesNestedStack alongside every Lambda that assumes it and every
+        # queue / state machine it is granted on. Keeping it in the parent while
+        # its default policy references re-homed resources (and the nested Lambdas
+        # depend on that policy) forms a parent<->nested CloudFormation cycle. Its
+        # inline policies reference only PARENT tables/buckets/Cognito, a one-way
+        # nested->parent import. Its deployed logical id is preserved for a clean
+        # cdk refactor import (it is not in the RED-test map, so pinned here).
+        role = iam.Role(
+            self._features,
             constants.SERVICE_ROLE_ARN,
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             role_name=self.naming.role_name(
@@ -837,19 +878,14 @@ class ApiConstruct(Construct):
                         ),
                     ]
                 ),
-                "vpr_jobs_queue": iam.PolicyDocument(
-                    statements=[
-                        iam.PolicyStatement(
-                            actions=[
-                                "sqs:SendMessage",
-                                "sqs:ReceiveMessage",
-                                "sqs:DeleteMessage",
-                            ],
-                            resources=[queue.queue_arn],
-                            effect=iam.Effect.ALLOW,
-                        )
-                    ]
-                ),
+                # P-26 Job 1: the vpr_jobs_queue SendMessage/ReceiveMessage grant
+                # is NOT an inline policy here. The queue is re-homed into
+                # CrudFeaturesNestedStack; embedding its ARN in this (parent) role
+                # resource would make the role depend on the nested stack while the
+                # nested stack depends on the role — a CloudFormation cycle. It is
+                # instead attached to the role's separate default policy in
+                # _grant_vpr_jobs_queue_access() (a distinct AWS::IAM::Policy
+                # resource, so no cycle).
                 "sqs_kms_access": iam.PolicyDocument(
                     statements=[
                         iam.PolicyStatement(
@@ -899,6 +935,61 @@ class ApiConstruct(Construct):
                 )
             ],
         )
+        cast(CfnResource, role.node.default_child).override_logical_id(
+            "CareerVpCrudDevCrudServiceRoleArn305AAC1B"
+        )
+        return role
+
+    def _grant_vpr_jobs_queue_access(self) -> None:
+        """Grant the shared role SendMessage/ReceiveMessage on the vpr_jobs_queue.
+
+        P-26 Job 1: the queue is re-homed into CrudFeaturesNestedStack, so this
+        grant must NOT be an inline policy on the (parent) role — that would make
+        the role depend on the nested stack and form a cycle. ``add_to_policy``
+        targets the role's separate default policy (a distinct AWS::IAM::Policy),
+        which may reference the nested queue ARN without a cycle.
+        """
+        self.lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "sqs:SendMessage",
+                    "sqs:ReceiveMessage",
+                    "sqs:DeleteMessage",
+                ],
+                resources=[self.vpr_jobs_queue.queue_arn],
+                effect=iam.Effect.ALLOW,
+            )
+        )
+
+    def _rehome_feature_logical_ids(self) -> None:
+        """Preserve deployed logical ids for every re-homed named resource.
+
+        P-26 Job 1 moves explicitly-named feature resources into
+        CrudFeaturesNestedStack. So the move is a clean CloudFormation
+        resource-import (``cdk refactor``) with no delete/create, each resource
+        keeps its currently-deployed logical id byte-for-byte; only the containing
+        template changes. Logical ids are matched by explicit physical name via
+        rehome_map.REHOME_LOGICAL_IDS (dev-scoped; a no-op for other environments,
+        which are not deployed for this migration). Auxiliary resources (IAM
+        policies, permissions, event-source mappings) are not named/imported and
+        keep their natural nested logical ids.
+        """
+        name_attr_by_type: tuple[tuple[type, str], ...] = (
+            (_lambda.CfnFunction, "function_name"),
+            (logs.CfnLogGroup, "log_group_name"),
+            (aws_sqs.CfnQueue, "queue_name"),
+            (sfn.CfnStateMachine, "state_machine_name"),
+        )
+        for node in self._features.node.find_all():
+            if not isinstance(node, CfnResource):
+                continue
+            cfn_node: CfnResource = node
+            for cfn_type, attr in name_attr_by_type:
+                if isinstance(cfn_node, cfn_type):
+                    physical = getattr(cfn_node, attr, None)
+                    if isinstance(physical, str):
+                        rehome_cfn(cfn_node, physical)
+                    break
 
     def _build_shared_table_env(self) -> dict[str, str]:
         """Build shared table-name environment variables for Lambda portability."""
@@ -970,7 +1061,7 @@ class ApiConstruct(Construct):
     ) -> _lambda.Function:
         function_name = self.naming.lambda_name(constants.CV_PARSER_FEATURE)
         log_group = logs.LogGroup(
-            self,
+            self._features,
             f"{constants.CV_PARSER_LAMBDA}LogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -979,7 +1070,7 @@ class ApiConstruct(Construct):
         )
 
         lambda_function = _lambda.Function(
-            self,
+            self._features,
             constants.CV_PARSER_LAMBDA,
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -1078,7 +1169,7 @@ class ApiConstruct(Construct):
     ) -> _lambda.Function:
         function_name = self.naming.lambda_name(constants.COMPANY_RESEARCH_FEATURE)
         log_group = logs.LogGroup(
-            self,
+            self._features,
             f"{constants.COMPANY_RESEARCH_LAMBDA}LogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -1087,7 +1178,7 @@ class ApiConstruct(Construct):
         )
 
         lambda_function = _lambda.Function(
-            self,
+            self._features,
             constants.COMPANY_RESEARCH_LAMBDA,
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -1129,7 +1220,7 @@ class ApiConstruct(Construct):
             ),
         )
         queue = aws_sqs.Queue(
-            self,
+            self._features,
             constants.VPR_JOBS_QUEUE,
             queue_name=self.naming.queue_name(constants.VPR_JOBS_QUEUE),
             visibility_timeout=Duration.minutes(10),  # must be >= Lambda timeout
@@ -1146,7 +1237,7 @@ class ApiConstruct(Construct):
     def _build_vpr_jobs_dlq(self) -> aws_sqs.Queue:
         """Build SQS dead letter queue for failed VPR jobs."""
         return aws_sqs.Queue(
-            self,
+            self._features,
             constants.VPR_JOBS_DLQ,
             queue_name=self.naming.dlq_name(constants.VPR_JOBS_DLQ),
             encryption=aws_sqs.QueueEncryption.SQS_MANAGED,
@@ -1155,7 +1246,7 @@ class ApiConstruct(Construct):
     def _build_cover_letter_jobs_dlq(self) -> aws_sqs.Queue:
         """Build SQS dead letter queue for failed cover letter jobs."""
         return aws_sqs.Queue(
-            self,
+            self._features,
             constants.COVER_LETTER_JOBS_DLQ,
             queue_name=self.naming.dlq_name(constants.COVER_LETTER_JOBS_DLQ),
             encryption=aws_sqs.QueueEncryption.SQS_MANAGED,
@@ -1172,7 +1263,7 @@ class ApiConstruct(Construct):
             ),
         )
         return aws_sqs.Queue(
-            self,
+            self._features,
             constants.COVER_LETTER_JOBS_QUEUE,
             queue_name=self.naming.queue_name(constants.COVER_LETTER_JOBS_QUEUE),
             visibility_timeout=Duration.seconds(300),
@@ -1188,7 +1279,7 @@ class ApiConstruct(Construct):
     def _build_interview_prep_jobs_dlq(self) -> aws_sqs.Queue:
         """Build SQS dead letter queue for failed interview prep jobs."""
         return aws_sqs.Queue(
-            self,
+            self._features,
             constants.INTERVIEW_PREP_JOBS_DLQ,
             queue_name=self.naming.dlq_name(constants.INTERVIEW_PREP_JOBS_DLQ),
             encryption=aws_sqs.QueueEncryption.SQS_MANAGED,
@@ -1205,7 +1296,7 @@ class ApiConstruct(Construct):
             ),
         )
         return aws_sqs.Queue(
-            self,
+            self._features,
             constants.INTERVIEW_PREP_JOBS_QUEUE,
             queue_name=self.naming.queue_name(constants.INTERVIEW_PREP_JOBS_QUEUE),
             visibility_timeout=Duration.seconds(300),
@@ -1222,7 +1313,7 @@ class ApiConstruct(Construct):
         """Create a dedicated encrypted DLQ for a worker Lambda."""
         worker_id = worker_feature.replace("-", " ").title().replace(" ", "")
         return aws_sqs.Queue(
-            self,
+            self._features,
             f"{worker_id}Dlq",
             queue_name=self.naming.dlq_name(worker_feature),
             retention_period=Duration.days(14),
@@ -1241,7 +1332,7 @@ class ApiConstruct(Construct):
         """Add VPR Submit Lambda integration - POST /api/vpr."""
         function_name = self.naming.lambda_name(constants.VPR_SUBMIT_FEATURE)
         log_group = logs.LogGroup(
-            self,
+            self._features,
             f"{constants.VPR_SUBMIT_LAMBDA}LogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -1250,7 +1341,7 @@ class ApiConstruct(Construct):
         )
 
         lambda_function = _lambda.Function(
-            self,
+            self._features,
             constants.VPR_SUBMIT_LAMBDA,
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -1296,7 +1387,7 @@ class ApiConstruct(Construct):
         """Add VPR Status Lambda integration - GET /api/vpr/status/{job_id}."""
         function_name = self.naming.lambda_name(constants.VPR_STATUS_FEATURE)
         log_group = logs.LogGroup(
-            self,
+            self._features,
             f"{constants.VPR_STATUS_LAMBDA}LogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -1305,7 +1396,7 @@ class ApiConstruct(Construct):
         )
 
         lambda_function = _lambda.Function(
-            self,
+            self._features,
             constants.VPR_STATUS_LAMBDA,
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -1455,7 +1546,7 @@ class ApiConstruct(Construct):
         """Create cv_upload_worker (S3 event -> Lambda) with an explicit DLQ."""
         function_name = self.naming.lambda_name("cv-upload-worker")
         log_group = logs.LogGroup(
-            self,
+            self._features,
             "CvUploadWorkerLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -1463,7 +1554,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         lambda_function = _lambda.Function(
-            self,
+            self._features,
             "CvUploadWorkerLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -1788,7 +1879,7 @@ class ApiConstruct(Construct):
         """Add CV Tailoring Lambda integration - POST /api/cv-tailoring."""
         function_name = self.naming.lambda_name(constants.CV_TAILOR_LAMBDA.lower())
         log_group = logs.LogGroup(
-            self,
+            self._features,
             f"{constants.CV_TAILOR_LAMBDA}LogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -1797,7 +1888,7 @@ class ApiConstruct(Construct):
         )
 
         lambda_function = _lambda.Function(
-            self,
+            self._features,
             constants.CV_TAILOR_LAMBDA,
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -1852,7 +1943,7 @@ class ApiConstruct(Construct):
     def _add_auth_lambda(self) -> _lambda.Function:
         function_name = self.naming.lambda_name("auth-api")
         log_group = logs.LogGroup(
-            self,
+            self._features,
             "AuthApiLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -1860,7 +1951,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         return _lambda.Function(
-            self,
+            self._features,
             "AuthApiLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -1892,7 +1983,7 @@ class ApiConstruct(Construct):
     def _add_health_lambda(self) -> _lambda.Function:
         function_name = self.naming.lambda_name("health-api")
         log_group = logs.LogGroup(
-            self,
+            self._features,
             "HealthApiLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -1900,7 +1991,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         return _lambda.Function(
-            self,
+            self._features,
             "HealthApiLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -1926,7 +2017,7 @@ class ApiConstruct(Construct):
     def _add_user_lambda(self) -> _lambda.Function:
         function_name = self.naming.lambda_name("user-api")
         log_group = logs.LogGroup(
-            self,
+            self._features,
             "UserApiLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -1934,7 +2025,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         return _lambda.Function(
-            self,
+            self._features,
             "UserApiLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -1963,7 +2054,7 @@ class ApiConstruct(Construct):
     def _add_job_lambda(self) -> _lambda.Function:
         function_name = self.naming.lambda_name("job-api")
         log_group = logs.LogGroup(
-            self,
+            self._features,
             "JobApiLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -1971,7 +2062,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         return _lambda.Function(
-            self,
+            self._features,
             "JobApiLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -1999,7 +2090,7 @@ class ApiConstruct(Construct):
     def _add_application_lambda(self) -> _lambda.Function:
         function_name = self.naming.lambda_name("application-api")
         log_group = logs.LogGroup(
-            self,
+            self._features,
             "ApplicationApiLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -2007,7 +2098,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         return _lambda.Function(
-            self,
+            self._features,
             "ApplicationApiLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -2034,7 +2125,7 @@ class ApiConstruct(Construct):
     def _add_api_authorizer_lambda(self) -> _lambda.Function:
         function_name = self.naming.lambda_name("api-authorizer")
         authorizer = _lambda.Function(
-            self,
+            self._features,
             "ApiAuthorizerLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -2068,7 +2159,7 @@ class ApiConstruct(Construct):
     def _add_gap_lambda(self) -> _lambda.Function:
         function_name = self.naming.lambda_name("gap-api")
         log_group = logs.LogGroup(
-            self,
+            self._features,
             "GapApiLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -2076,7 +2167,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         return _lambda.Function(
-            self,
+            self._features,
             "GapApiLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -2124,10 +2215,12 @@ class ApiConstruct(Construct):
 
         # FE-UI-035: build the dedicated failure-handler role once, before the
         # handlers, so neither reuses the shared role that holds states:* grants.
-        self.failure_handler_role = self._build_failure_handler_role(self)
-        self.cr_failure_handler_func = self._add_cr_failure_handler_lambda(self)
+        self.failure_handler_role = self._build_failure_handler_role(self._features)
+        self.cr_failure_handler_func = self._add_cr_failure_handler_lambda(
+            self._features
+        )
         self.artifact_failure_handler_func = self._add_artifact_failure_handler_lambda(
-            self
+            self._features
         )
         self.company_research_worker_func = self._add_company_research_worker_lambda(
             appconfig_app_name
@@ -2140,7 +2233,7 @@ class ApiConstruct(Construct):
         )
 
         self.artifact_chain = ArtifactChainConstruct(
-            self,
+            self._features,
             "ArtifactChain",
             naming=self.naming,
             company_research_queue=self.api_db.company_research_queue,
@@ -2248,7 +2341,7 @@ class ApiConstruct(Construct):
         """Orphan-cleanup reaper triggered hourly by EventBridge (FE-UI-043)."""
         function_name = self.naming.lambda_name(constants.ARTIFACT_CLEANUP_FEATURE)
         log_group = logs.LogGroup(
-            self,
+            self._features,
             "ArtifactCleanupLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -2256,7 +2349,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         return _lambda.Function(
-            self,
+            self._features,
             constants.ARTIFACT_CLEANUP_LAMBDA,
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -2395,7 +2488,7 @@ class ApiConstruct(Construct):
             constants.COMPANY_RESEARCH_WORKER_FEATURE
         )
         log_group = logs.LogGroup(
-            self,
+            self._features,
             "CompanyResearchWorkerLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -2403,7 +2496,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         lambda_function = _lambda.Function(
-            self,
+            self._features,
             "CompanyResearchWorkerLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -2444,7 +2537,7 @@ class ApiConstruct(Construct):
     def _add_cover_letter_lambda(self) -> _lambda.Function:
         function_name = self.naming.lambda_name("cover-letter-api")
         log_group = logs.LogGroup(
-            self,
+            self._features,
             "CoverLetterApiLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -2452,7 +2545,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         lambda_function = _lambda.Function(
-            self,
+            self._features,
             "CoverLetterApiLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -2483,7 +2576,7 @@ class ApiConstruct(Construct):
     def _add_interview_prep_lambda(self) -> _lambda.Function:
         function_name = self.naming.lambda_name("interview-prep-api")
         log_group = logs.LogGroup(
-            self,
+            self._features,
             "InterviewPrepApiLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -2491,7 +2584,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         lambda_function = _lambda.Function(
-            self,
+            self._features,
             "InterviewPrepApiLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -2522,7 +2615,7 @@ class ApiConstruct(Construct):
         """Lambda for GET /cover-letter/* status and list routes."""
         function_name = self.naming.lambda_name("cover-letter-status")
         log_group = logs.LogGroup(
-            self,
+            self._features,
             "CoverLetterStatusLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -2530,7 +2623,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         return _lambda.Function(
-            self,
+            self._features,
             "CoverLetterStatusLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -2559,7 +2652,7 @@ class ApiConstruct(Construct):
         """Lambda for GET /interview-prep/* status and list routes."""
         function_name = self.naming.lambda_name("interview-prep-status")
         log_group = logs.LogGroup(
-            self,
+            self._features,
             "InterviewPrepStatusLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -2567,7 +2660,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         return _lambda.Function(
-            self,
+            self._features,
             "InterviewPrepStatusLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -2594,7 +2687,7 @@ class ApiConstruct(Construct):
     def _build_billing_webhook_dlq(self) -> aws_sqs.Queue:
         """Dead-letter queue for failed billing webhook events."""
         return aws_sqs.Queue(
-            self,
+            self._features,
             "BillingWebhookDlq",
             queue_name=self.naming.dlq_name(constants.BILLING_WEBHOOK_DLQ),
             retention_period=Duration.days(14),
@@ -2605,7 +2698,7 @@ class ApiConstruct(Construct):
         """Billing handler Lambda for payment webhooks and checkout flows."""
         function_name = self.naming.lambda_name(constants.BILLING_FEATURE)
         log_group = logs.LogGroup(
-            self,
+            self._features,
             "BillingLambdaLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -2613,7 +2706,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         lambda_function = _lambda.Function(
-            self,
+            self._features,
             "BillingLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -2654,7 +2747,7 @@ class ApiConstruct(Construct):
         """Export handler Lambda — generates DOCX artifacts and returns presigned URLs (FE-UI-028)."""
         function_name = self.naming.lambda_name(constants.EXPORT_FEATURE)
         log_group = logs.LogGroup(
-            self,
+            self._features,
             "ExportLambdaLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -2662,7 +2755,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         lambda_function = _lambda.Function(
-            self,
+            self._features,
             "ExportLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
@@ -2694,7 +2787,7 @@ class ApiConstruct(Construct):
         """Billing reconciliation Lambda triggered nightly by EventBridge."""
         function_name = self.naming.lambda_name(constants.BILLING_RECONCILE_FEATURE)
         log_group = logs.LogGroup(
-            self,
+            self._features,
             "BillingReconcileLambdaLogGroup",
             log_group_name=f"/aws/lambda/{function_name}",
             retention=logs.RetentionDays.ONE_DAY,
@@ -2702,7 +2795,7 @@ class ApiConstruct(Construct):
             encryption_key=self.logs_kms_key,
         )
         lambda_function = _lambda.Function(
-            self,
+            self._features,
             "BillingReconcileLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),

@@ -42,8 +42,8 @@ def test_cv_tailoring_queue_removed(synthesized_template: Template) -> None:
     assert "cv-tailoring" not in queue_names
 
 
-def test_start_cv_tailoring_is_lambda_invoke(synthesized_template: Template) -> None:
-    definition = _state_machine_definition(synthesized_template)
+def test_start_cv_tailoring_is_lambda_invoke(features_template: Template) -> None:
+    definition = _state_machine_definition(features_template)
 
     assert "StartCVTailoring" in definition
     assert "function:careervp-cvtailor-lambda-dev" in definition
@@ -51,8 +51,8 @@ def test_start_cv_tailoring_is_lambda_invoke(synthesized_template: Template) -> 
     assert "cv-tailoring" not in definition
 
 
-def test_state_machine_can_invoke_cv_worker(synthesized_template: Template) -> None:
-    policies = _resources(synthesized_template, "AWS::IAM::Policy")
+def test_state_machine_can_invoke_cv_worker(features_template: Template) -> None:
+    policies = _resources(features_template, "AWS::IAM::Policy")
     found = False
     for policy in policies.values():
         statements = policy["Properties"].get("PolicyDocument", {}).get("Statement", [])

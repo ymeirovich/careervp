@@ -94,11 +94,11 @@ def _resource_refs_artifact_chain(resource: Any) -> bool:
 
 
 def test_submit_lambdas_have_chain_env_and_artifacts_table(
-    synthesized_template: Template,
+    features_template: Template,
 ) -> None:
     for handler, function_name in SUBMIT_LAMBDAS:
         lambda_resource = _lambda_by_handler_and_name(
-            synthesized_template, handler, function_name
+            features_template, handler, function_name
         )
         env_vars = cast(
             dict[str, Any],
@@ -117,14 +117,14 @@ def test_submit_lambdas_have_chain_env_and_artifacts_table(
 
 
 def test_submit_lambda_roles_can_start_chain_on_specific_arn(
-    synthesized_template: Template,
+    features_template: Template,
 ) -> None:
     for handler, function_name in SUBMIT_LAMBDAS:
         lambda_resource = _lambda_by_handler_and_name(
-            synthesized_template, handler, function_name
+            features_template, handler, function_name
         )
         role_logical_id = _lambda_role_logical_id(lambda_resource)
-        statements = _policy_statements_for_role(synthesized_template, role_logical_id)
+        statements = _policy_statements_for_role(features_template, role_logical_id)
         matching = [
             statement
             for statement in statements

@@ -7,7 +7,7 @@ from inspect import signature
 from typing import cast
 
 import pytest
-from aws_cdk import App, Environment
+from aws_cdk import App, Environment, NestedStack
 from aws_cdk.assertions import Match, Template
 
 from careervp.naming_utils import NamingUtils
@@ -57,13 +57,17 @@ def scratch_stack() -> ServiceStack:
 
 @pytest.fixture(scope="module")
 def scratch_templates(scratch_stack: ServiceStack) -> list[Template]:
-    return [
-        Template.from_stack(scratch_stack),
-        Template.from_stack(scratch_stack.monitoring_nested_stack),
-        Template.from_stack(scratch_stack.ai_assist_nested_stack),
-        Template.from_stack(scratch_stack.error_report_nested_stack),
-        Template.from_stack(scratch_stack.company_research_nested_stack),
-    ]
+    # Parent plus every nested stack. P-26 Job 1 adds CrudFeaturesNestedStack
+    # (re-homed feature Lambdas/queues/state machine), so enumerate nested stacks
+    # generically rather than by name to keep the scratch-isolation guards
+    # covering the whole deployment.
+    templates = [Template.from_stack(scratch_stack)]
+    templates.extend(
+        Template.from_stack(construct)
+        for construct in scratch_stack.node.find_all()
+        if isinstance(construct, NestedStack)
+    )
+    return templates
 
 
 def _resource_names(template: Template) -> list[str]:

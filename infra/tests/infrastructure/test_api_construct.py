@@ -69,9 +69,9 @@ def _policy_statements_for_role(
     return statements
 
 
-def test_company_research_lambda_configuration(synthesized_template: Template) -> None:
+def test_company_research_lambda_configuration(features_template: Template) -> None:
     """Ensure the new Lambda uses the required handler, timeout, and memory settings."""
-    all_functions = synthesized_template.find_resources("AWS::Lambda::Function")
+    all_functions = features_template.find_resources("AWS::Lambda::Function")
     functions = {
         logical_id: props
         for logical_id, props in all_functions.items()
@@ -213,8 +213,18 @@ def test_llm_cache_table_configuration(synthesized_template: Template) -> None:
     assert ttl_spec["Enabled"] is True
 
 
-def test_lambda_role_has_llm_cache_permissions(synthesized_template: Template) -> None:
-    """Ensure Lambda execution role has least-privilege LLM cache read/write access."""
+def test_lambda_role_has_llm_cache_permissions(
+    synthesized_template: Template,
+    features_template: Template,
+) -> None:
+    """Ensure Lambda execution role has least-privilege LLM cache read/write access.
+
+    P-26 Job 1: the LLM cache table stays in the parent (stateful), but the shared
+    role is re-homed into CrudFeaturesNestedStack. So the role's inline policy now
+    binds the table ARN through a cross-stack CloudFormation parameter whose name
+    embeds the parent table's logical id (rather than a same-stack Fn::GetAtt).
+    The least-privilege intent is unchanged: scoped actions on that exact table.
+    """
     tables = synthesized_template.find_resources("AWS::DynamoDB::GlobalTable")
     llm_cache_logical_ids = [
         logical_id
@@ -222,9 +232,8 @@ def test_lambda_role_has_llm_cache_permissions(synthesized_template: Template) -
         if props["Properties"].get("TableName") == "careervp-llm-cache-dev"
     ]
     assert llm_cache_logical_ids, "LLM cache table logical ID not found"
-    llm_cache_logical_id = llm_cache_logical_ids[0]
 
-    roles = synthesized_template.find_resources("AWS::IAM::Role")
+    roles = features_template.find_resources("AWS::IAM::Role")
     cache_policy_found = False
 
     for role in roles.values():
@@ -250,13 +259,12 @@ def test_lambda_role_has_llm_cache_permissions(synthesized_template: Template) -
                 if not required_actions.issubset(set(actions)):
                     continue
 
-                resource = statement.get("Resource")
-                if (
-                    isinstance(resource, dict)
-                    and resource.get("Fn::GetAtt", [None, None])[0]
-                    == llm_cache_logical_id
-                    and resource.get("Fn::GetAtt", [None, None])[1] == "Arn"
-                ):
+                # Same-stack Fn::GetAtt (pre-move) OR cross-stack parameter ref
+                # (post-move) — both name the LLM cache table (the "llmcachetable"
+                # construct fragment) and must not be a wildcard, preserving the
+                # least-privilege, scoped-to-that-table intent.
+                resource_repr = str(statement.get("Resource"))
+                if "llmcachetable" in resource_repr and resource_repr != "*":
                     cache_policy_found = True
                     break
             if cache_policy_found:
@@ -270,11 +278,11 @@ def test_lambda_role_has_llm_cache_permissions(synthesized_template: Template) -
 
 
 def test_interview_prep_worker_has_vpr_jobs_table_env(
-    synthesized_template: Template,
+    features_template: Template,
 ) -> None:
     """Interview prep worker must receive VPR jobs table env for cross-service context lookup."""
     lambda_resource = _lambda_resource_by_handler(
-        synthesized_template,
+        features_template,
         "careervp.handlers.interview_prep_handler.lambda_handler",
         function_name_contains="interview-prep-worker",
     )
@@ -285,17 +293,17 @@ def test_interview_prep_worker_has_vpr_jobs_table_env(
 
 
 def test_interview_prep_worker_role_can_read_anthropic_ssm_parameter(
-    synthesized_template: Template,
+    features_template: Template,
 ) -> None:
     """Interview prep worker role should include explicit ssm:GetParameter on anthropic key."""
     lambda_resource = _lambda_resource_by_handler(
-        synthesized_template,
+        features_template,
         "careervp.handlers.interview_prep_handler.lambda_handler",
         function_name_contains="interview-prep-worker",
     )
     role_logical_id = _lambda_role_logical_id(lambda_resource)
 
-    policies = synthesized_template.find_resources("AWS::IAM::Policy")
+    policies = features_template.find_resources("AWS::IAM::Policy")
     ssm_statement_found = False
     for policy in policies.values():
         roles = policy["Properties"].get("Roles", [])
@@ -434,13 +442,19 @@ def test_api_gateway_gateway_responses_include_request_id(
     ), "Gateway responses must include request_id in the response body"
 
 
-def test_lambda_log_groups_are_kms_encrypted(synthesized_template: Template) -> None:
-    """Ensure Lambda CloudWatch log groups are encrypted with a KMS key."""
-    log_groups = synthesized_template.find_resources("AWS::Logs::LogGroup")
+def test_lambda_log_groups_are_kms_encrypted(
+    merged_resources: dict[str, dict[str, Any]],
+) -> None:
+    """Ensure Lambda CloudWatch log groups are encrypted with a KMS key.
+
+    P-26 Job 1 spreads the Lambda log groups across the parent and nested stacks,
+    so this checks every log group in the whole deployment, not just the parent.
+    """
     lambda_log_groups = [
         props
-        for props in log_groups.values()
-        if str(props["Properties"].get("LogGroupName", "")).startswith("/aws/lambda/")
+        for props in merged_resources.values()
+        if props.get("Type") == "AWS::Logs::LogGroup"
+        and str(props["Properties"].get("LogGroupName", "")).startswith("/aws/lambda/")
     ]
     assert lambda_log_groups, "No Lambda log groups were synthesized"
     assert all("KmsKeyId" in props["Properties"] for props in lambda_log_groups), (
@@ -678,7 +692,7 @@ def test_protected_routes_require_authorizer(synthesized_template: Template) -> 
 
 
 def test_vpr_worker_has_required_env_vars(
-    synthesized_template: Template,
+    features_template: Template,
 ) -> None:
     """
     Regression guard: the VPR worker Lambdas must carry the critical env vars needed
@@ -686,7 +700,7 @@ def test_vpr_worker_has_required_env_vars(
     DYNAMODB_TABLE_NAME causes the worker to fail mid-job.
     """
     vpr_worker = _lambda_resource_by_handler(
-        synthesized_template,
+        features_template,
         "careervp.handlers.vpr_worker_handler.lambda_handler",
         function_name_contains="vpr-worker",
     )
@@ -713,7 +727,7 @@ def test_vpr_worker_has_required_env_vars(
 
 
 def test_vpr_worker_has_no_dynamo_stream_event_source(
-    synthesized_template: Template,
+    features_template: Template,
 ) -> None:
     """
     Regression guard: the vpr-worker Lambda must NOT have a DynamoDB Stream event
@@ -722,7 +736,7 @@ def test_vpr_worker_has_no_dynamo_stream_event_source(
     and, when the stream worker wins but lacks permissions, jobs stuck in PROCESSING.
     """
     # Collect the logical ID of the vpr-worker Lambda by matching handler + name
-    all_functions = synthesized_template.find_resources("AWS::Lambda::Function")
+    all_functions = features_template.find_resources("AWS::Lambda::Function")
     vpr_worker_logical_id = next(
         logical_id
         for logical_id, props in all_functions.items()
@@ -733,7 +747,7 @@ def test_vpr_worker_has_no_dynamo_stream_event_source(
         )
     )
 
-    event_source_mappings = synthesized_template.find_resources(
+    event_source_mappings = features_template.find_resources(
         "AWS::Lambda::EventSourceMapping"
     )
     dynamo_stream_mappings = [

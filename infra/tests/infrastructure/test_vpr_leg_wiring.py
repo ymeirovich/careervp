@@ -82,21 +82,19 @@ def _vpr_sqs_worker_role(template: Template) -> str:
     return _lambda_role_logical_id(matches[0])
 
 
-def test_start_vpr_has_no_short_heartbeat(synthesized_template: Template) -> None:
-    definition = _state_machine_definition(synthesized_template)
+def test_start_vpr_has_no_short_heartbeat(features_template: Template) -> None:
+    definition = _state_machine_definition(features_template)
 
     assert "StartVPR" in definition
     assert "HeartbeatSecondsPath" not in definition
     assert 'HeartbeatSeconds":300' not in definition
 
 
-def test_vpr_worker_role_has_send_task_response(synthesized_template: Template) -> None:
-    role_logical_id = _vpr_sqs_worker_role(synthesized_template)
+def test_vpr_worker_role_has_send_task_response(features_template: Template) -> None:
+    role_logical_id = _vpr_sqs_worker_role(features_template)
     actions = {
         action
-        for statement in _policy_statements_for_role(
-            synthesized_template, role_logical_id
-        )
+        for statement in _policy_statements_for_role(features_template, role_logical_id)
         for action in _actions(statement)
     }
 

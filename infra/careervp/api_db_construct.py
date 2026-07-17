@@ -11,6 +11,7 @@ from constructs import Construct
 
 from . import constants
 from .naming_utils import NamingUtils
+from .rehome_map import rehome
 from .scratch_deployment import ScratchDeploymentSettings, validate_scratch_boundary
 
 
@@ -38,9 +39,15 @@ class ApiDbConstruct(Construct):
         naming: NamingUtils,
         *,
         scratch_settings: ScratchDeploymentSettings | None = None,
+        queue_scope: Construct | None = None,
     ) -> None:
         super().__init__(scope, id_)
         self.naming = naming
+        # P-26 Job 1: the async queues carry explicit physical names and are
+        # re-homed into CrudFeaturesNestedStack (queue_scope). The stateful tables
+        # and buckets stay in this construct (the parent stack). Defaults to self
+        # so non-service callers / tests that omit queue_scope keep the old shape.
+        self._queue_scope: Construct = queue_scope if queue_scope is not None else self
         if scratch_settings is not None:
             validate_scratch_boundary(
                 scratch_settings,
@@ -504,97 +511,115 @@ class ApiDbConstruct(Construct):
 
     def _build_cv_upload_dlq(self, id_prefix: str) -> sqs.Queue:
         """Dead-letter queue for failed CV upload processing jobs."""
-        return sqs.Queue(
-            self,
-            f"{id_prefix}CvUploadDlq",
-            queue_name=self.naming.dlq_name(constants.CV_UPLOAD_QUEUE),
-            # SQS_001: retain failed messages for 14 days.
-            retention_period=Duration.days(14),
-            # SQS_002: encrypt queue contents with AWS-managed KMS.
-            encryption=sqs.QueueEncryption.KMS_MANAGED,
+        return rehome(
+            sqs.Queue(
+                self._queue_scope,
+                f"{id_prefix}CvUploadDlq",
+                queue_name=self.naming.dlq_name(constants.CV_UPLOAD_QUEUE),
+                # SQS_001: retain failed messages for 14 days.
+                retention_period=Duration.days(14),
+                # SQS_002: encrypt queue contents with AWS-managed KMS.
+                encryption=sqs.QueueEncryption.KMS_MANAGED,
+            ),
+            self.naming.dlq_name(constants.CV_UPLOAD_QUEUE),
         )
 
     def _build_cv_upload_queue(self, id_prefix: str, dlq: sqs.Queue) -> sqs.Queue:
         """Primary queue for CV upload async processing."""
-        return sqs.Queue(
-            self,
-            f"{id_prefix}CvUploadQueue",
-            queue_name=self.naming.queue_name(constants.CV_UPLOAD_QUEUE),
-            # SQS_003: visibility must exceed Lambda timeout + 60s buffer.
-            visibility_timeout=Duration.seconds(390),
-            receive_message_wait_time=Duration.seconds(20),
-            # SQS_002: encrypt queue contents with AWS-managed KMS.
-            encryption=sqs.QueueEncryption.KMS_MANAGED,
-            # SQS_004: ordering is not required for independent CV jobs.
-            fifo=False,
-            dead_letter_queue=sqs.DeadLetterQueue(
-                queue=dlq,
-                max_receive_count=5,
+        return rehome(
+            sqs.Queue(
+                self._queue_scope,
+                f"{id_prefix}CvUploadQueue",
+                queue_name=self.naming.queue_name(constants.CV_UPLOAD_QUEUE),
+                # SQS_003: visibility must exceed Lambda timeout + 60s buffer.
+                visibility_timeout=Duration.seconds(390),
+                receive_message_wait_time=Duration.seconds(20),
+                # SQS_002: encrypt queue contents with AWS-managed KMS.
+                encryption=sqs.QueueEncryption.KMS_MANAGED,
+                # SQS_004: ordering is not required for independent CV jobs.
+                fifo=False,
+                dead_letter_queue=sqs.DeadLetterQueue(
+                    queue=dlq,
+                    max_receive_count=5,
+                ),
             ),
+            self.naming.queue_name(constants.CV_UPLOAD_QUEUE),
         )
 
     def _build_gap_analysis_dlq(self, id_prefix: str) -> sqs.Queue:
         """Dead-letter queue for failed gap analysis jobs."""
-        return sqs.Queue(
-            self,
-            f"{id_prefix}GapAnalysisDlq",
-            queue_name=self.naming.dlq_name(constants.GAP_ANALYSIS_QUEUE),
-            # SQS_001: retain failed messages for 14 days.
-            retention_period=Duration.days(14),
-            # SQS_002: encrypt queue contents with AWS-managed KMS.
-            encryption=sqs.QueueEncryption.KMS_MANAGED,
+        return rehome(
+            sqs.Queue(
+                self._queue_scope,
+                f"{id_prefix}GapAnalysisDlq",
+                queue_name=self.naming.dlq_name(constants.GAP_ANALYSIS_QUEUE),
+                # SQS_001: retain failed messages for 14 days.
+                retention_period=Duration.days(14),
+                # SQS_002: encrypt queue contents with AWS-managed KMS.
+                encryption=sqs.QueueEncryption.KMS_MANAGED,
+            ),
+            self.naming.dlq_name(constants.GAP_ANALYSIS_QUEUE),
         )
 
     def _build_gap_analysis_queue(self, id_prefix: str, dlq: sqs.Queue) -> sqs.Queue:
         """Primary queue for gap analysis async processing."""
-        return sqs.Queue(
-            self,
-            f"{id_prefix}GapAnalysisQueue",
-            queue_name=self.naming.queue_name(constants.GAP_ANALYSIS_QUEUE),
-            # SQS_003: visibility must exceed Lambda timeout + 60s buffer.
-            visibility_timeout=Duration.seconds(390),
-            receive_message_wait_time=Duration.seconds(20),
-            # SQS_002: encrypt queue contents with AWS-managed KMS.
-            encryption=sqs.QueueEncryption.KMS_MANAGED,
-            # SQS_004: ordering is not required for independent gap-analysis jobs.
-            fifo=False,
-            dead_letter_queue=sqs.DeadLetterQueue(
-                queue=dlq,
-                max_receive_count=5,
+        return rehome(
+            sqs.Queue(
+                self._queue_scope,
+                f"{id_prefix}GapAnalysisQueue",
+                queue_name=self.naming.queue_name(constants.GAP_ANALYSIS_QUEUE),
+                # SQS_003: visibility must exceed Lambda timeout + 60s buffer.
+                visibility_timeout=Duration.seconds(390),
+                receive_message_wait_time=Duration.seconds(20),
+                # SQS_002: encrypt queue contents with AWS-managed KMS.
+                encryption=sqs.QueueEncryption.KMS_MANAGED,
+                # SQS_004: ordering is not required for independent gap-analysis jobs.
+                fifo=False,
+                dead_letter_queue=sqs.DeadLetterQueue(
+                    queue=dlq,
+                    max_receive_count=5,
+                ),
             ),
+            self.naming.queue_name(constants.GAP_ANALYSIS_QUEUE),
         )
 
     def _build_company_research_dlq(self, id_prefix: str) -> sqs.Queue:
         """Dead-letter queue for failed company research jobs (FE-UI-031)."""
-        return sqs.Queue(
-            self,
-            f"{id_prefix}CompanyResearchDlq",
-            queue_name=self.naming.dlq_name(constants.COMPANY_RESEARCH_QUEUE),
-            # SQS_001: retain failed messages for 14 days.
-            retention_period=Duration.days(14),
-            # SQS_002: encrypt queue contents with AWS-managed KMS.
-            encryption=sqs.QueueEncryption.KMS_MANAGED,
+        return rehome(
+            sqs.Queue(
+                self._queue_scope,
+                f"{id_prefix}CompanyResearchDlq",
+                queue_name=self.naming.dlq_name(constants.COMPANY_RESEARCH_QUEUE),
+                # SQS_001: retain failed messages for 14 days.
+                retention_period=Duration.days(14),
+                # SQS_002: encrypt queue contents with AWS-managed KMS.
+                encryption=sqs.QueueEncryption.KMS_MANAGED,
+            ),
+            self.naming.dlq_name(constants.COMPANY_RESEARCH_QUEUE),
         )
 
     def _build_company_research_queue(
         self, id_prefix: str, dlq: sqs.Queue
     ) -> sqs.Queue:
         """Primary queue for async company research (Step Functions chain, FE-UI-031)."""
-        return sqs.Queue(
-            self,
-            f"{id_prefix}CompanyResearchQueue",
-            queue_name=self.naming.queue_name(constants.COMPANY_RESEARCH_QUEUE),
-            # SQS_003: visibility aligned to the chain task heartbeat (180s) + buffer.
-            visibility_timeout=Duration.seconds(120),
-            receive_message_wait_time=Duration.seconds(20),
-            # SQS_002: encrypt queue contents with AWS-managed KMS.
-            encryption=sqs.QueueEncryption.KMS_MANAGED,
-            # SQS_004: ordering is not required for independent research jobs.
-            fifo=False,
-            dead_letter_queue=sqs.DeadLetterQueue(
-                queue=dlq,
-                max_receive_count=3,
+        return rehome(
+            sqs.Queue(
+                self._queue_scope,
+                f"{id_prefix}CompanyResearchQueue",
+                queue_name=self.naming.queue_name(constants.COMPANY_RESEARCH_QUEUE),
+                # SQS_003: visibility aligned to the chain task heartbeat (180s) + buffer.
+                visibility_timeout=Duration.seconds(120),
+                receive_message_wait_time=Duration.seconds(20),
+                # SQS_002: encrypt queue contents with AWS-managed KMS.
+                encryption=sqs.QueueEncryption.KMS_MANAGED,
+                # SQS_004: ordering is not required for independent research jobs.
+                fifo=False,
+                dead_letter_queue=sqs.DeadLetterQueue(
+                    queue=dlq,
+                    max_receive_count=3,
+                ),
             ),
+            self.naming.queue_name(constants.COMPANY_RESEARCH_QUEUE),
         )
 
     def _build_vpr_results_bucket(self, id_prefix: str) -> s3.Bucket:

@@ -63,7 +63,9 @@ PROXY_COLLAPSE_TARGET = 400
 # ApiGateway Method/Resource, Lambda Permission, and the API Deployment (AC-011).
 EXPECTED_STATEFUL_BASELINE: dict[str, int] = {
     "AWS::DynamoDB::Table": 0,  # tables are GlobalTables — none of the legacy type
-    "AWS::DynamoDB::GlobalTable": 10,
+    # 11 = the 10 api_db tables + llm-cache; the identity-map table (P-24, commit
+    # 09bd6f3) is the 11th. This baseline predated that table and was stale at 10.
+    "AWS::DynamoDB::GlobalTable": 11,
     "AWS::S3::Bucket": 6,
     "AWS::KMS::Key": 5,
     "AWS::Cognito::UserPool": 1,
@@ -724,20 +726,24 @@ def test_parent_budget_ceiling_holds_below_500_hard_and_400_target(
 
 
 def test_no_stateful_resource_types_added_or_replaced_by_collapse(
-    synthesized_template: Template,
+    merged_resources: dict[str, dict[str, Any]],
 ) -> None:
-    """The collapse must not add, drop, or replace any stateful resource (AC-011).
+    """No stateful resource is added, dropped, or replaced (AC-011).
 
-    Cross-checks the synthesized count of each stateful resource type against the
-    documented baseline. The {proxy+} collapse may only churn ApiGateway Method/Resource,
-    Lambda Permission, and the API Deployment — never DynamoDB/S3/KMS/Cognito/SQS, whose
-    logical-id change would risk a CloudFormation REPLACE and data loss.
+    Cross-checks the count of each stateful resource type against the documented
+    baseline. The {proxy+} collapse may only churn ApiGateway Method/Resource,
+    Lambda Permission, and the API Deployment — never DynamoDB/S3/KMS/Cognito/SQS,
+    whose logical-id change would risk a CloudFormation REPLACE and data loss.
+
+    P-26 Job 1 re-homes the SQS queues into CrudFeaturesNestedStack via a
+    logical-id-preserving cdk refactor IMPORT (no delete/create, no REPLACE), so
+    the count is taken across the whole deployment (parent + nested): the total
+    set of stateful resources is unchanged, they have merely moved template.
     """
-    resources = synthesized_template.to_json().get("Resources", {})
     actual: dict[str, int] = {}
     for resource_type in EXPECTED_STATEFUL_BASELINE:
         actual[resource_type] = sum(
-            1 for r in resources.values() if r.get("Type") == resource_type
+            1 for r in merged_resources.values() if r.get("Type") == resource_type
         )
 
     drift = {
@@ -746,12 +752,12 @@ def test_no_stateful_resource_types_added_or_replaced_by_collapse(
         if actual[rtype] != EXPECTED_STATEFUL_BASELINE[rtype]
     }
     assert not drift, (
-        "Stateful resource drift detected after proxy collapse "
+        "Stateful resource drift detected "
         "(type: expected -> actual): "
         + ", ".join(
             f"{rtype}: {expected} -> {got}" for rtype, (expected, got) in drift.items()
         )
-        + ". The collapse must leave all stateful resources untouched."
+        + ". No stateful resource may be added, dropped, or replaced."
     )
 
 

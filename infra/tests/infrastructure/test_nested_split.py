@@ -40,17 +40,25 @@ def _resource_types(template: Template) -> dict[str, dict[str, Any]]:
 def test_parent_declares_only_approved_nested_stacks(
     synthesized_template: Template,
 ) -> None:
-    """The parent keeps the four approved nested stacks and adds no unapproved split."""
+    """The parent keeps the approved nested stacks and adds no unapproved split.
+
+    P-26 Job 1 adds a fifth approved nested stack, CrudFeatures, which re-homes the
+    explicitly-named, non-stateful feature resources (Lambdas, log groups, async
+    SQS queues/DLQs, the shared role, the artifact-chain state machine) via a
+    human-gated cdk refactor resource-import.
+    """
     nested = synthesized_template.find_resources("AWS::CloudFormation::Stack")
     nested_ids = list(nested)
-    assert len(nested_ids) == 4, (
-        "Expected exactly four nested-stack resources in the parent "
-        f"(monitoring + ai-assist + error-report + company-research), found {nested_ids}."
+    assert len(nested_ids) == 5, (
+        "Expected exactly five nested-stack resources in the parent "
+        "(monitoring + ai-assist + error-report + company-research + crud-features), "
+        f"found {nested_ids}."
     )
     assert any("MonitoringNestedStack" in logical_id for logical_id in nested_ids)
     assert any("AiAssistNestedStack" in logical_id for logical_id in nested_ids)
     assert any("ErrorReportNestedStack" in logical_id for logical_id in nested_ids)
     assert any("CompanyResearchNestedStack" in logical_id for logical_id in nested_ids)
+    assert any("CrudFeatures" in logical_id for logical_id in nested_ids)
 
 
 def test_parent_resource_count_below_cfn_hard_limit(
@@ -103,9 +111,25 @@ def test_phase1_conversion_drops_parent_by_at_least_30(
     )
 
 
-def test_state_machine_lives_in_parent(synthesized_template: Template) -> None:
-    """The Step Functions state machine stays in the parent (already deployed)."""
-    synthesized_template.resource_count_is("AWS::StepFunctions::StateMachine", 1)
+def test_state_machine_rehomed_to_features_with_preserved_logical_id(
+    synthesized_template: Template,
+    features_template: Template,
+) -> None:
+    """P-26 Job 1: the state machine is re-homed to CrudFeaturesNestedStack.
+
+    It leaves the parent and lands in the nested stack under its DEPLOYED logical
+    id (byte-for-byte), which is exactly what makes the human-gated cdk refactor a
+    resource-IMPORT (no delete/create, no REPLACE, no data/URL change).
+    """
+    synthesized_template.resource_count_is("AWS::StepFunctions::StateMachine", 0)
+    features_template.resource_count_is("AWS::StepFunctions::StateMachine", 1)
+    state_machines = features_template.find_resources(
+        "AWS::StepFunctions::StateMachine"
+    )
+    assert (
+        "CareerVpCrudDevCrudArtifactChainArtifactChainStateMachine53EF3518"
+        in state_machines
+    ), "Re-homed state machine must keep its deployed logical id for a clean import"
 
 
 def test_monitoring_dashboards_topic_and_key_stay_in_parent(
@@ -173,25 +197,60 @@ def test_company_research_nested_stack_has_no_stateful_resources(
         company_research_template.resource_count_is(resource_type, 0)
 
 
-def test_company_research_worker_stays_in_parent(
+def test_company_research_worker_rehomed_to_features(
     synthesized_template: Template,
+    features_template: Template,
 ) -> None:
-    """The CR worker uses the shared role + grant_task_response, so it stays in the
-    parent — relocating it would give the shared role a back-edge into the
-    artifact chain (the FE-UI-035 cycle)."""
-    functions = synthesized_template.find_resources("AWS::Lambda::Function")
-    handlers = {props["Properties"].get("Handler") for props in functions.values()}
-    assert (
-        "careervp.handlers.company_research_worker_handler.lambda_handler" in handlers
-    ), "Company-research worker must remain in the parent stack"
+    """P-26 Job 1: the CR worker is re-homed into CrudFeaturesNestedStack.
+
+    The FE-UI-035 cycle concern (the shared role gaining a back-edge into the
+    artifact chain) does not arise here: the shared role AND the state machine are
+    re-homed into the SAME nested stack as the worker, so grant_task_response is an
+    intra-stack edge, not a cross-stack export/import lock.
+    """
+    handler = "careervp.handlers.company_research_worker_handler.lambda_handler"
+    parent_handlers = {
+        props["Properties"].get("Handler")
+        for props in synthesized_template.find_resources(
+            "AWS::Lambda::Function"
+        ).values()
+    }
+    features_handlers = {
+        props["Properties"].get("Handler")
+        for props in features_template.find_resources("AWS::Lambda::Function").values()
+    }
+    assert handler not in parent_handlers, "CR worker must leave the parent stack"
+    assert handler in features_handlers, "CR worker must be re-homed into CrudFeatures"
 
 
-def test_async_workers_stay_in_parent(
+def test_async_workers_rehomed_to_features(
     synthesized_template: Template,
+    features_template: Template,
 ) -> None:
-    """Previously deployed async workers stay in the parent until a migration path exists."""
-    functions = synthesized_template.find_resources("AWS::Lambda::Function")
-    handlers = {props["Properties"].get("Handler") for props in functions.values()}
-    assert "careervp.handlers.cv_tailoring_handler.handler" in handlers
-    assert "careervp.handlers.cover_letter_handler.lambda_handler" in handlers
-    assert "careervp.handlers.interview_prep_handler.lambda_handler" in handlers
+    """P-26 Job 1: the explicitly-named async workers are re-homed to CrudFeatures.
+
+    The amendment's cdk refactor resource-import is the migration path the old
+    guard was waiting for; the workers leave the parent and land in the nested
+    stack under their preserved logical ids.
+    """
+    async_handlers = {
+        "careervp.handlers.cv_tailoring_handler.handler",
+        "careervp.handlers.cover_letter_handler.lambda_handler",
+        "careervp.handlers.interview_prep_handler.lambda_handler",
+    }
+    parent_handlers = {
+        props["Properties"].get("Handler")
+        for props in synthesized_template.find_resources(
+            "AWS::Lambda::Function"
+        ).values()
+    }
+    features_handlers = {
+        props["Properties"].get("Handler")
+        for props in features_template.find_resources("AWS::Lambda::Function").values()
+    }
+    assert async_handlers.isdisjoint(parent_handlers), (
+        "async workers must leave the parent stack"
+    )
+    assert async_handlers.issubset(features_handlers), (
+        "async workers must be re-homed into CrudFeatures"
+    )

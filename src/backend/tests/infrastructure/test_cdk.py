@@ -22,5 +22,7 @@ def test_synthesizes_properly():
 
     # verify that we have one API GW, that is it not deleted by mistake
     template.resource_count_is('AWS::ApiGateway::RestApi', 1)
-    # users + idempotency + jobs + llm-cache + 6 async-support tables
-    template.resource_count_is('AWS::DynamoDB::GlobalTable', 10)
+    # users + idempotency + jobs + llm-cache + 6 async-support tables +
+    # identity-map (P-24, commit 09bd6f3). The baseline predated the identity-map
+    # table and was stale at 10.
+    template.resource_count_is('AWS::DynamoDB::GlobalTable', 11)
