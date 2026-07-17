@@ -1,0 +1,38 @@
+{
+  "captured_at": "2026-07-17T14:11:48Z",
+  "account_id": "788159322332",
+  "region": "us-east-1",
+  "status": "deployed",
+  "aws_budget": {
+    "budget_name": "careervp-cost-obs-monthly-budget-dev",
+    "threshold_amount": 100.0,
+    "subscriber": "arn:aws:sns:us-east-1:788159322332:careervp-monitoring-topic-dev",
+    "captured_at": "2026-07-17T14:11:48Z"
+  },
+  "budget_notifications": [
+    {
+      "notification_type": "ACTUAL",
+      "comparison_operator": "GREATER_THAN",
+      "threshold": 80.0,
+      "subscriber": "arn:aws:sns:us-east-1:788159322332:careervp-monitoring-topic-dev",
+      "state": "OK"
+    },
+    {
+      "notification_type": "FORECASTED",
+      "comparison_operator": "GREATER_THAN",
+      "threshold": 100.0,
+      "subscriber": "arn:aws:sns:us-east-1:788159322332:careervp-monitoring-topic-dev",
+      "state": "OK"
+    }
+  ],
+  "cost_anomaly_detection": {
+    "monitor_name": "careervp-cost-obs-anomaly-monitor-dev",
+    "monitor_arn": "arn:aws:ce::788159322332:anomalymonitor/0a2cd5b7-b290-497a-b6e0-266150d02756",
+    "subscription_name": "careervp-cost-obs-anomaly-subscription-dev",
+    "subscription_arn": "arn:aws:ce::788159322332:anomalysubscription/32f21b0e-43c8-4905-b1c4-c20286ca0c7f",
+    "subscriber": "arn:aws:sns:us-east-1:788159322332:careervp-monitoring-topic-dev",
+    "threshold_amount": 10.0,
+    "frequency": "IMMEDIATE",
+    "captured_at": "2026-07-17T14:11:48Z"
+  }
+}
