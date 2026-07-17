@@ -97,27 +97,28 @@ def collect_specs(specs_dir: Path) -> dict[str, dict]:
     return result
 
 
-def collect_test_references(tests_dir: Path) -> dict[str, list[str]]:
+def collect_test_references(*tests_dirs: Path) -> dict[str, list[str]]:
     """
-    Scan all .py files under tests_dir for clause ID references.
+    Scan all .py files under each of tests_dirs for clause ID references.
     Returns {clause_id: [file_path, ...]}
     """
     result: dict[str, list[str]] = {}
-    if not tests_dir.exists():
-        return result
     # Match patterns like scope_lock_clause='P-27', # P-27, "Q-02", etc.
     clause_pattern = re.compile(r"\b([PDQTFX]-\d+[a-z]?)\b")
-    for py in tests_dir.rglob("*.py"):
-        try:
-            text = py.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
+    for tests_dir in tests_dirs:
+        if not tests_dir.exists():
             continue
-        for m in clause_pattern.finditer(text):
-            cid = m.group(1)
-            result.setdefault(cid, [])
-            rel = str(py)
-            if rel not in result[cid]:
-                result[cid].append(rel)
+        for py in tests_dir.rglob("*.py"):
+            try:
+                text = py.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            for m in clause_pattern.finditer(text):
+                cid = m.group(1)
+                result.setdefault(cid, [])
+                rel = str(py)
+                if rel not in result[cid]:
+                    result[cid].append(rel)
     return result
 
 
@@ -154,7 +155,10 @@ def main() -> int:
     parser.add_argument("--yaml", default=str(SCRIPT_DIR / "project-scope-lock.yaml"))
     parser.add_argument("--specs-dir", default=str(SCRIPT_DIR / "specs"))
     parser.add_argument(
-        "--tests-dir", help="Path to backend tests dir (auto-detected if omitted)"
+        "--tests-dir",
+        action="append",
+        help="Path to a tests dir to scan (repeatable; auto-detected if omitted — "
+        "scans both src/backend/tests and infra/tests)",
     )
     parser.add_argument(
         "--ci", action="store_true", help="Exit 1 on any drift (CI mode)"
@@ -167,12 +171,15 @@ def main() -> int:
     yaml_path = Path(args.yaml)
     specs_dir = Path(args.specs_dir)
 
-    # Auto-detect tests dir
+    # Auto-detect tests dirs (additive — scans every dir that carries clause tests)
     if args.tests_dir:
-        tests_dir = Path(args.tests_dir)
+        tests_dirs = [Path(p) for p in args.tests_dir]
     else:
         repo_root = find_repo_root(Path(__file__))
-        tests_dir = repo_root / "src" / "backend" / "tests"
+        tests_dirs = [
+            repo_root / "src" / "backend" / "tests",
+            repo_root / "infra" / "tests",
+        ]
 
     if not yaml_path.exists():
         print(f"ERROR: scope-lock YAML not found: {yaml_path}", file=sys.stderr)
@@ -181,7 +188,7 @@ def main() -> int:
     # Collect data
     all_clause_ids = collect_clause_ids(yaml_path)
     spec_map = collect_specs(specs_dir)
-    test_map = collect_test_references(tests_dir)
+    test_map = collect_test_references(*tests_dirs)
     yaml_impl_states = load_yaml_impl_states(yaml_path)
 
     # Build status board
@@ -254,7 +261,7 @@ def main() -> int:
     print("=" * 70)
     print(f"Contract:  {yaml_path}")
     print(f"Specs dir: {specs_dir}")
-    print(f"Tests dir: {tests_dir}")
+    print(f"Tests dirs: {', '.join(str(d) for d in tests_dirs)}")
     print()
     print(f"Total clauses: {total}  |  With spec: {n_spec}  |  With test: {n_test}")
     print()
