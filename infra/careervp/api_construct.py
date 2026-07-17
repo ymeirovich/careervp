@@ -82,17 +82,23 @@ class ApiConstruct(Construct):
         # first so ApiDbConstruct can parent its async queues here too. Empty at
         # construction (no dependencies), so it never introduces a parent->nested
         # cycle. See crud_features_nested_stack.py + rehome_map.py.
-        self._features = CrudFeaturesNestedStack(
+        self._crud_features = CrudFeaturesNestedStack(
             self,
             "CrudFeatures",
             naming=naming,
+        )
+        self._rehome_features_enabled = (
+            self.node.try_get_context("p26_rehome_features") == "true"
+        )
+        self._features: Construct = (
+            self._crud_features if self._rehome_features_enabled else self
         )
         self.api_db = ApiDbConstruct(
             self,
             f"{id_}db",
             naming=naming,
             scratch_settings=scratch_settings,
-            queue_scope=self._features,
+            queue_scope=self._features if self._rehome_features_enabled else None,
         )
         self.llm_cache_table = self._build_llm_cache_table(is_production_env)
         self.logs_kms_key = self._build_logs_kms_key()
@@ -192,13 +198,6 @@ class ApiConstruct(Construct):
         self.job_api_func = self._add_job_lambda()
         self.application_api_func = self._add_application_lambda()
         self.gap_api_func = self._add_gap_lambda()
-        # P-24 authorizer Lambda (dormant): the live authorizer is Cognito, so this
-        # function is NOT attached to the RestApi — it is the latent custom-authorizer
-        # scaffolding. P-26 Job 1 re-homes it into CrudFeaturesNestedStack so it is
-        # accounted for alongside the other feature Lambdas. It is not currently
-        # deployed, so on the human `cdk refactor`/deploy it is an additive CREATE
-        # (not a resource-import); adding it changes no request handling.
-        self.api_authorizer_func = self._add_api_authorizer_lambda()
         self.cover_letter_api_func = self._add_cover_letter_lambda()
         self.cover_letter_status_func = self._add_cover_letter_status_lambda()
         self.interview_prep_api_func = self._add_interview_prep_lambda()
@@ -315,7 +314,8 @@ class ApiConstruct(Construct):
         # P-26 Job 1: after every re-homed resource exists in CrudFeaturesNestedStack,
         # pin each named resource's deployed logical id so the human-gated cdk refactor
         # is a clean IMPORT (physical id preserved, no delete/create).
-        self._rehome_feature_logical_ids()
+        if self._rehome_features_enabled:
+            self._rehome_feature_logical_ids()
 
     def _build_api_custom_domain(self) -> None:
         cert = acm.Certificate.from_certificate_arn(

@@ -88,15 +88,15 @@ def _policy_statements_for_role(
 
 
 def test_template_synthesizes_without_dependency_cycle(
-    service_stack: ServiceStack,
+    rehome_service_stack: ServiceStack,
 ) -> None:
-    Template.from_stack(service_stack)
+    Template.from_stack(rehome_service_stack)
 
 
 def test_failure_handlers_use_dedicated_role_not_shared_service_role(
-    service_stack: ServiceStack,
+    rehome_service_stack: ServiceStack,
 ) -> None:
-    template = _artifact_chain_template(service_stack)
+    template = _artifact_chain_template(rehome_service_stack)
     cr_function = _lambda_by_handler(template, CR_FAILURE_HANDLER)
     artifact_function = _lambda_by_handler(template, ARTIFACT_FAILURE_HANDLER)
 
@@ -113,9 +113,9 @@ def test_failure_handlers_use_dedicated_role_not_shared_service_role(
 
 
 def test_dedicated_failure_handler_role_has_no_stepfunctions_permission(
-    service_stack: ServiceStack,
+    rehome_service_stack: ServiceStack,
 ) -> None:
-    template = _artifact_chain_template(service_stack)
+    template = _artifact_chain_template(rehome_service_stack)
     role_logical_id = _lambda_role_logical_id(
         _lambda_by_handler(template, CR_FAILURE_HANDLER)
     )
@@ -132,9 +132,9 @@ def test_dedicated_failure_handler_role_has_no_stepfunctions_permission(
 
 
 def test_dedicated_role_is_least_privilege_on_applications_table(
-    service_stack: ServiceStack,
+    rehome_service_stack: ServiceStack,
 ) -> None:
-    template = _artifact_chain_template(service_stack)
+    template = _artifact_chain_template(rehome_service_stack)
     role_logical_id = _lambda_role_logical_id(
         _lambda_by_handler(template, CR_FAILURE_HANDLER)
     )
@@ -191,9 +191,9 @@ def test_shared_role_still_has_stepfunctions_grants(
 
 
 def test_failure_handler_role_name_follows_convention(
-    service_stack: ServiceStack,
+    rehome_service_stack: ServiceStack,
 ) -> None:
-    template = _artifact_chain_template(service_stack)
+    template = _artifact_chain_template(rehome_service_stack)
     role_logical_id = _lambda_role_logical_id(
         _lambda_by_handler(template, CR_FAILURE_HANDLER)
     )

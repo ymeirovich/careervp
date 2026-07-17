@@ -38,7 +38,7 @@ def _resource_types(template: Template) -> dict[str, dict[str, Any]]:
 
 # § approved_nested_topology --------------------------------------------------
 def test_parent_declares_only_approved_nested_stacks(
-    synthesized_template: Template,
+    rehome_synthesized_template: Template,
 ) -> None:
     """The parent keeps the approved nested stacks and adds no unapproved split.
 
@@ -47,7 +47,7 @@ def test_parent_declares_only_approved_nested_stacks(
     SQS queues/DLQs, the shared role, the artifact-chain state machine) via a
     human-gated cdk refactor resource-import.
     """
-    nested = synthesized_template.find_resources("AWS::CloudFormation::Stack")
+    nested = rehome_synthesized_template.find_resources("AWS::CloudFormation::Stack")
     nested_ids = list(nested)
     assert len(nested_ids) == 5, (
         "Expected exactly five nested-stack resources in the parent "
@@ -62,14 +62,14 @@ def test_parent_declares_only_approved_nested_stacks(
 
 
 def test_parent_resource_count_below_cfn_hard_limit(
-    synthesized_template: Template,
+    rehome_synthesized_template: Template,
 ) -> None:
     """Parent must stay below the 500-resource hard limit.
 
     The approved monitoring-only nested stack should keep the parent below the
     pre-refactor 497-resource baseline while avoiding stateful moves.
     """
-    count = len(_resource_types(synthesized_template))
+    count = len(_resource_types(rehome_synthesized_template))
     assert count < CFN_MAX_RESOURCES, (
         f"Parent template has {count} resources, at/over the {CFN_MAX_RESOURCES} "
         f"hard limit — headroom must be reclaimed via a nested-stack import migration."
@@ -77,7 +77,7 @@ def test_parent_resource_count_below_cfn_hard_limit(
 
 
 def test_parent_stack_resource_count_at_or_below_400_after_collapse(
-    synthesized_template: Template,
+    rehome_synthesized_template: Template,
 ) -> None:
     """FE-UI-048 Phase 1: parent must stay below the 500 CFN hard limit.
 
@@ -85,7 +85,7 @@ def test_parent_stack_resource_count_at_or_below_400_after_collapse(
     existing {paramId} siblings (vpr, cover-letter, cv-tailoring, interview-prep,
     applications, company-research) are proxy-collapsed in a follow-up deploy.
     """
-    count = len(_resource_types(synthesized_template))
+    count = len(_resource_types(rehome_synthesized_template))
     assert count < CFN_MAX_RESOURCES, (
         f"Parent template has {count} resources; must stay below the "
         f"{CFN_MAX_RESOURCES} CloudFormation hard limit."
@@ -93,7 +93,7 @@ def test_parent_stack_resource_count_at_or_below_400_after_collapse(
 
 
 def test_phase1_conversion_drops_parent_by_at_least_30(
-    synthesized_template: Template,
+    rehome_synthesized_template: Template,
 ) -> None:
     """The Phase-1 {proxy+} conversion must reclaim >= 30 parent resources (AC-004).
 
@@ -102,7 +102,7 @@ def test_phase1_conversion_drops_parent_by_at_least_30(
     pre-Phase-1 parent baseline, the synthesized parent must have shed at least 30 resources
     — a loud regression guard if a later change re-expands those feature surfaces.
     """
-    count = len(_resource_types(synthesized_template))
+    count = len(_resource_types(rehome_synthesized_template))
     drop = PRE_PHASE1_PARENT_BASELINE - count
     assert drop >= PHASE1_MIN_RESOURCE_DROP, (
         f"Phase-1 proxy conversion dropped only {drop} parent resources "
@@ -112,7 +112,7 @@ def test_phase1_conversion_drops_parent_by_at_least_30(
 
 
 def test_state_machine_rehomed_to_features_with_preserved_logical_id(
-    synthesized_template: Template,
+    rehome_synthesized_template: Template,
     features_template: Template,
 ) -> None:
     """P-26 Job 1: the state machine is re-homed to CrudFeaturesNestedStack.
@@ -121,7 +121,7 @@ def test_state_machine_rehomed_to_features_with_preserved_logical_id(
     id (byte-for-byte), which is exactly what makes the human-gated cdk refactor a
     resource-IMPORT (no delete/create, no REPLACE, no data/URL change).
     """
-    synthesized_template.resource_count_is("AWS::StepFunctions::StateMachine", 0)
+    rehome_synthesized_template.resource_count_is("AWS::StepFunctions::StateMachine", 0)
     features_template.resource_count_is("AWS::StepFunctions::StateMachine", 1)
     state_machines = features_template.find_resources(
         "AWS::StepFunctions::StateMachine"
@@ -198,7 +198,7 @@ def test_company_research_nested_stack_has_no_stateful_resources(
 
 
 def test_company_research_worker_rehomed_to_features(
-    synthesized_template: Template,
+    rehome_synthesized_template: Template,
     features_template: Template,
 ) -> None:
     """P-26 Job 1: the CR worker is re-homed into CrudFeaturesNestedStack.
@@ -211,7 +211,7 @@ def test_company_research_worker_rehomed_to_features(
     handler = "careervp.handlers.company_research_worker_handler.lambda_handler"
     parent_handlers = {
         props["Properties"].get("Handler")
-        for props in synthesized_template.find_resources(
+        for props in rehome_synthesized_template.find_resources(
             "AWS::Lambda::Function"
         ).values()
     }
@@ -224,7 +224,7 @@ def test_company_research_worker_rehomed_to_features(
 
 
 def test_async_workers_rehomed_to_features(
-    synthesized_template: Template,
+    rehome_synthesized_template: Template,
     features_template: Template,
 ) -> None:
     """P-26 Job 1: the explicitly-named async workers are re-homed to CrudFeatures.
@@ -240,7 +240,7 @@ def test_async_workers_rehomed_to_features(
     }
     parent_handlers = {
         props["Properties"].get("Handler")
-        for props in synthesized_template.find_resources(
+        for props in rehome_synthesized_template.find_resources(
             "AWS::Lambda::Function"
         ).values()
     }

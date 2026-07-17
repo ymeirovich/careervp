@@ -6,6 +6,9 @@ from .naming_utils import NamingUtils
 
 
 def get_username() -> str:
+    owner_override = os.getenv("CAREERVP_OWNER_TAG")
+    if owner_override:
+        return owner_override.replace(".", "-")
     try:
         return getpass.getuser().replace(".", "-")
     except Exception:

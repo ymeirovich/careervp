@@ -633,7 +633,7 @@ def _dev_stack() -> Any:
     from careervp.naming_utils import NamingUtils  # type: ignore[import-not-found]
     from careervp.service_stack import ServiceStack  # type: ignore[import-not-found]
 
-    app = App()
+    app = App(context={'p26_rehome_features': 'true'})
     naming = NamingUtils(environment='dev', region='us-east-1', account_id='788159322332')
     return ServiceStack(
         scope=app,
@@ -784,15 +784,13 @@ def test_artifact_chain_grants_still_resolve_after_rehoming() -> None:
     assert not failures, 'P-26 Job 1 artifact-chain grant resolution is incomplete:\n' + _failure_summary(failures)
 
 
-def test_p24_api_authorizer_lambda_is_accounted_for_in_rehome_mapping() -> None:
-    # Amendment lines 164-171 cover explicit-name movable Lambdas. The P-24
-    # authorizer was added later at api_construct.py:2034 with the same physical
-    # naming pattern, so the Job-1 mapping must account for it too.
+def test_p24_api_authorizer_lambda_remains_dormant_and_uninstantiated() -> None:
+    # P-24 landed dormant by design: the live authorizer remains Cognito, so the
+    # latent custom-authorizer Lambda must not be synthesized by P-26 Job 1.
     parent_resource = _resource(_templates().parent, P24_AUTHORIZER.logical_id)
     nested_match = _nested_resource(P24_AUTHORIZER.logical_id)
     physical_match = _resource_with_physical_name(P24_AUTHORIZER)
 
-    assert parent_resource is None, f'{P24_AUTHORIZER.logical_id} must not remain in the parent after P-26 Job 1'
-    assert nested_match is not None, f'{P24_AUTHORIZER.logical_id} is missing from all per-feature nested templates'
-    assert physical_match is not None, f'{P24_AUTHORIZER.logical_id} must preserve FunctionName={P24_AUTHORIZER.physical_value!r}'
-    assert physical_match[0] != 'parent', f'{P24_AUTHORIZER.physical_value!r} is still in the parent template'
+    assert parent_resource is None, f'{P24_AUTHORIZER.logical_id} must remain absent from the parent template'
+    assert nested_match is None, f'{P24_AUTHORIZER.logical_id} must remain absent from per-feature nested templates'
+    assert physical_match is None, f'{P24_AUTHORIZER.physical_value!r} must not be synthesized while the authorizer remains dormant'

@@ -29,9 +29,32 @@ def service_stack() -> ServiceStack:
 
 
 @pytest.fixture(scope="module")
+def rehome_service_stack() -> ServiceStack:
+    """Build the ServiceStack with the P-26 rehome topology enabled."""
+    app = App(context={"p26_rehome_features": "true"})
+    naming = NamingUtils(
+        environment="dev", region="us-east-1", account_id="123456789012"
+    )
+    return ServiceStack(
+        scope=app,
+        id=naming.stack_id("crud"),
+        env=Environment(account="123456789012", region="us-east-1"),
+        is_production_env=False,
+        naming=naming,
+        stack_feature="crud",
+    )
+
+
+@pytest.fixture(scope="module")
 def synthesized_template(service_stack: ServiceStack) -> Template:
     """The parent CareerVpCrudDev template (API Gateway, tables, buckets, core Lambdas)."""
     return Template.from_stack(service_stack)
+
+
+@pytest.fixture(scope="module")
+def rehome_synthesized_template(rehome_service_stack: ServiceStack) -> Template:
+    """The parent template after the P-26 Job-1 rehome topology is enabled."""
+    return Template.from_stack(rehome_service_stack)
 
 
 @pytest.fixture(scope="module")
@@ -59,7 +82,7 @@ def company_research_template(service_stack: ServiceStack) -> Template:
 
 
 @pytest.fixture(scope="module")
-def features_template(service_stack: ServiceStack) -> Template:
+def features_template(rehome_service_stack: ServiceStack) -> Template:
     """The P-26 Job-1 CrudFeaturesNestedStack template.
 
     Job 1 re-homes every explicitly-named, non-stateful feature resource here
@@ -70,14 +93,14 @@ def features_template(service_stack: ServiceStack) -> Template:
     """
     feature_stack = next(
         c
-        for c in service_stack.node.find_all()
+        for c in rehome_service_stack.node.find_all()
         if isinstance(c, CrudFeaturesNestedStack)
     )
     return Template.from_stack(feature_stack)
 
 
 @pytest.fixture(scope="module")
-def merged_resources(service_stack: ServiceStack) -> dict[str, dict[str, Any]]:
+def merged_resources(rehome_service_stack: ServiceStack) -> dict[str, dict[str, Any]]:
     """Every CloudFormation resource across the parent and all nested templates.
 
     P-26 Job 1 spreads the deployment across the parent plus five nested stacks.
@@ -86,8 +109,8 @@ def merged_resources(service_stack: ServiceStack) -> dict[str, dict[str, Any]]:
     only care that a resource EXISTS somewhere with the right shape merge here.
     """
     merged: dict[str, dict[str, Any]] = {}
-    templates = [Template.from_stack(service_stack)]
-    for construct in service_stack.node.find_all():
+    templates = [Template.from_stack(rehome_service_stack)]
+    for construct in rehome_service_stack.node.find_all():
         if isinstance(construct, NestedStack):
             templates.append(Template.from_stack(construct))
     for template in templates:
