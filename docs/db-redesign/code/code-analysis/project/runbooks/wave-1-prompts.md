@@ -469,6 +469,7 @@ OUTPUT REQUIRED:
 3. RED failure output if this session wrote tests.
 4. EXPLICIT soak status: "PKCE cutover deployed + soaked, implicit+COGNITO_ADMIN removed" vs
    "migration window OPEN — implicit still enabled; 1.1 (P-04) MUST NOT START until soak completes."
+5. Update wave-1-status.md with your status.
 
 ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULES.md):
 - Compare what you built against this prompt AND against P-07's and P-11's entries in

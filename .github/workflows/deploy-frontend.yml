@@ -27,6 +27,8 @@ jobs:
       NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${{ secrets.COGNITO_USER_POOL_ID || 'us-east-1_WiHMRqLpe' }}
       NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ secrets.COGNITO_CLIENT_ID || '7blipbarsisbctqh6hlsj46sqa' }}
       NEXT_PUBLIC_COGNITO_APP_CLIENT_ID: ${{ secrets.COGNITO_APP_CLIENT_ID || secrets.COGNITO_CLIENT_ID || '7blipbarsisbctqh6hlsj46sqa' }}
+      NEXT_PUBLIC_COGNITO_DOMAIN: ${{ secrets.COGNITO_DOMAIN || 'https://careervp-dev.auth.us-east-1.amazoncognito.com' }}
+      NEXT_PUBLIC_COGNITO_REDIRECT_URI: ${{ secrets.COGNITO_REDIRECT_URI || 'https://dev.careervp.com/callback' }}
 
     steps:
       - name: Checkout

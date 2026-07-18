@@ -2,6 +2,12 @@
 
 ## Current Phase: VPR Generator Complete
 
+## Wave 1 Security — Step 1.3c
+
+- [x] P-11 WebACL rate rules implemented for dev, staging, and prod with API-stage association tests.
+- [x] P-07 authorization-code + S256 PKCE frontend path, Cognito Plus threat protection, OPTIONAL TOTP grace state, self-service TOTP enrollment, scope inventory, and 401 retry oracle implemented and tested.
+- [ ] P-07 final cutover remains blocked on human deploy + 30-day soak and backend proxies for password change/TOTP enrollment; implicit grant and `COGNITO_ADMIN` intentionally remain enabled, and Wave 1 step 1.1 must not start.
+
 - [x] Folder Structure Initialization
 - [x] Environment Configuration
 - [x] Command Center Setup (`CLAUDE.md`, `.clauderules`)

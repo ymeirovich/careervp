@@ -6,6 +6,8 @@ from constructs import Construct
 
 from .scratch_deployment import ScratchDeploymentSettings, validate_scratch_boundary
 
+P07_AUTH_MIGRATION_PHASE = "migration_window"
+
 
 class CognitoConstruct(Construct):
     """Provision Cognito User Pool resources for API authentication."""
@@ -52,6 +54,10 @@ class CognitoConstruct(Construct):
             sign_in_aliases=cognito.SignInAliases(email=True),
             auto_verify=cognito.AutoVerifiedAttrs(email=True),
             account_recovery=cognito.AccountRecovery.EMAIL_ONLY,
+            feature_plan=cognito.FeaturePlan.PLUS,
+            standard_threat_protection_mode=cognito.StandardThreatProtectionMode.FULL_FUNCTION,
+            mfa=cognito.Mfa.OPTIONAL,
+            mfa_second_factor=cognito.MfaSecondFactor(sms=False, otp=True),
             password_policy=cognito.PasswordPolicy(
                 min_length=8,
                 require_lowercase=True,
@@ -71,8 +77,9 @@ class CognitoConstruct(Construct):
                 user_srp=True,
                 user_password=True,
             ),
-            # FE-UI-037 step 0: callback/logout URLs captured from the live dev
-            # User Pool Client so a parent `cdk deploy` does not revert live auth.
+            # P-07 migration window: code+PKCE is the frontend default, while
+            # implicit and COGNITO_ADMIN remain until the deployed frontend has
+            # soaked and browser-side password change moves behind a proxy.
             o_auth=cognito.OAuthSettings(
                 flows=cognito.OAuthFlows(
                     authorization_code_grant=True,

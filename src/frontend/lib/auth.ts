@@ -1,10 +1,12 @@
 import {
   CognitoUser,
   CognitoUserPool,
-  AuthenticationDetails,
   CognitoUserAttribute,
   type CognitoUserSession,
 } from 'amazon-cognito-identity-js';
+import { beginPkceSignIn, hostedUiLogoutUrl } from './pkce';
+
+export { beginPkceSignIn };
 
 const USER_POOL_ID =
   process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID ?? 'us-east-1_WiHMRqLpe';
@@ -22,24 +24,9 @@ function getPool(): CognitoUserPool {
   return _pool;
 }
 
-/** Returns the idToken JWT and user. Throws Cognito error codes on failure. */
-export function signIn(email: string, password: string): Promise<{ token: string; user: CognitoUser }> {
-  return new Promise((resolve, reject) => {
-    const user = new CognitoUser({ Username: email, Pool: getPool() });
-    const details = new AuthenticationDetails({ Username: email, Password: password });
-    user.authenticateUser(details, {
-      onSuccess(session: CognitoUserSession) {
-        resolve({ token: session.getIdToken().getJwtToken(), user });
-      },
-      onFailure(err) {
-        reject(err);
-      },
-    });
-  });
-}
-
-export function signOut(): void {
+export function signOut(): string | null {
   getPool().getCurrentUser()?.signOut();
+  return typeof window === 'undefined' ? null : hostedUiLogoutUrl(window.location.origin);
 }
 
 export function signUp(email: string, password: string, name: string): Promise<void> {

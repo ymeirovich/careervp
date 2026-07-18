@@ -5,8 +5,16 @@ from aws_cdk import aws_apigateway as apigateway
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_logs as logs
 from aws_cdk import aws_wafv2 as waf
-from .naming_utils import NamingUtils
 from constructs import Construct
+
+from .naming_utils import NamingUtils
+
+_RATE_LIMITS_BY_ENVIRONMENT = {
+    "dev": 2_000,
+    "staging": 1_500,
+    "prod": 1_000,
+}
+_DEFAULT_RATE_LIMIT = 1_000
 
 
 class WafToApiGatewayConstruct(Construct):
@@ -101,6 +109,25 @@ class WafToApiGatewayConstruct(Construct):
                         sampled_requests_enabled=True,
                         cloud_watch_metrics_enabled=True,
                         metric_name="Product-AWSManagedRulesKnownBadInputsRuleSet",
+                    ),
+                ),
+                waf.CfnWebACL.RuleProperty(
+                    name=f"careervp-api-rate-limit-{naming.environment}",
+                    priority=4,
+                    action=waf.CfnWebACL.RuleActionProperty(block={}),
+                    statement=waf.CfnWebACL.StatementProperty(
+                        rate_based_statement=waf.CfnWebACL.RateBasedStatementProperty(
+                            aggregate_key_type="IP",
+                            limit=_RATE_LIMITS_BY_ENVIRONMENT.get(
+                                naming.environment,
+                                _DEFAULT_RATE_LIMIT,
+                            ),
+                        )
+                    ),
+                    visibility_config=waf.CfnWebACL.VisibilityConfigProperty(
+                        sampled_requests_enabled=True,
+                        cloud_watch_metrics_enabled=True,
+                        metric_name=f"careervp-api-rate-limit-{naming.environment}",
                     ),
                 ),
             ],

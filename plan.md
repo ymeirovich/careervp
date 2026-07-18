@@ -8,6 +8,12 @@
 **Cost Target:** 95%+ profit margin via hybrid AI strategy
 **Target Launch:** Q2 2026
 
+## Wave 1 Security Cutover
+
+- [x] Step 1.3c implementation window: code+PKCE frontend, dual OAuth grants, Cognito Plus threat protection, OPTIONAL TOTP enrollment grace, 401 contract coverage, and environment-tuned WAF rate rules.
+- [ ] Human deployment and soak: deploy the PKCE frontend and in-place Cognito/WAF change set, observe for at least the 30-day refresh-token lifetime, and keep Wave 1 step 1.1 blocked.
+- [ ] Final P-07 cutover: proxy browser-side password/TOTP operations, set the migration phase to `cutover_complete`, remove implicit + `COGNITO_ADMIN`, enforce MFA, and rerun the full auth oracle.
+
 ---
 
 ## IMPORTANT: Documentation-First Development Rule ⚠️
