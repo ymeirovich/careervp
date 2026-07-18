@@ -1,11 +1,20 @@
 from pathlib import Path
 
-from aws_cdk import Duration, RemovalPolicy
+from aws_cdk import Duration, RemovalPolicy, Tags
 from aws_cdk import aws_appconfig as appconfig
 from constructs import Construct
 
 from .schema import FeatureFlagsConfiguration
+from .. import constants
 from ..scratch_deployment import ScratchDeploymentSettings, validate_scratch_boundary
+
+# AWS::AppConfig::Deployment treats Tags as an immutable (replacement-
+# triggering) property, same as the CE anomaly resources (see monitoring.py
+# _P32_ANOMALY_OWNER_TAG). Pin its owner tag to the deploy identity CI
+# actually uses so a human running cdk diff/deploy locally doesn't propose
+# replacing a live config rollout just from a tag-identity mismatch
+# (see P-23 ledger step 1.0, 2026-07-18).
+_APPCONFIG_DEPLOYMENT_OWNER_TAG = "runner"
 
 
 class ConfigurationStore(Construct):
@@ -80,6 +89,15 @@ class ConfigurationStore(Construct):
             deployment_strategy=self.config_dep_strategy,
             deploy_to=[self.config_env],
         )
+        deployments = [
+            node
+            for node in self.config.node.find_all()
+            if isinstance(node, appconfig.CfnDeployment)
+        ]
+        for deployment in deployments:
+            Tags.of(deployment).add(
+                constants.OWNER_TAG, _APPCONFIG_DEPLOYMENT_OWNER_TAG
+            )
         if scratch_settings is not None:
             hosted_versions = [
                 node

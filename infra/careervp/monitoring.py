@@ -2,7 +2,14 @@ import os
 from typing import Literal
 
 import aws_cdk.aws_sns as sns
-from aws_cdk import CfnOutput, Duration, NestedStack, RemovalPolicy, aws_apigateway
+from aws_cdk import (
+    CfnOutput,
+    Duration,
+    NestedStack,
+    RemovalPolicy,
+    Tags,
+    aws_apigateway,
+)
 from aws_cdk import aws_budgets as budgets
 from aws_cdk import aws_ce as ce
 from aws_cdk import aws_cloudwatch as cloudwatch
@@ -39,6 +46,15 @@ _Q10_COST_PER_APP_ALARM_THRESHOLD = 0.30 * _Q10_PRICE_PER_APP
 # threshold instead of burning unbounded LLM/AWS spend unmonitored.
 _P32_BUDGET_MONTHLY_LIMIT_USD = 100.0
 _P32_ANOMALY_THRESHOLD_ABSOLUTE_USD = 10.0
+
+# AWS::CE::AnomalyMonitor / AWS::CE::AnomalySubscription treat ResourceTags as
+# an immutable (replacement-triggering) property. The stack-wide `owner` tag
+# (service_stack.py) derives from whoever runs cdk deploy/diff, so a human
+# running `cdk diff` after CI last deployed would otherwise show these two
+# resources as `replace` just from a tag-identity mismatch. Pin their owner
+# tag to the deploy identity CI actually uses so it stays stable regardless
+# of who is running cdk locally (see P-23 ledger step 1.0, 2026-07-18).
+_P32_ANOMALY_OWNER_TAG = "runner"
 
 # P-21: alarms must reach a real on-call destination. Each environment has a
 # default subscribed endpoint so a synthesized stack is never left with zero
@@ -404,7 +420,8 @@ class MonitoringNestedStack(NestedStack):
             monitor_type="DIMENSIONAL",
             monitor_dimension="SERVICE",
         )
-        ce.CfnAnomalySubscription(
+        Tags.of(anomaly_monitor).add(constants.OWNER_TAG, _P32_ANOMALY_OWNER_TAG)
+        anomaly_subscription = ce.CfnAnomalySubscription(
             self,
             "P32AnomalySubscription",
             subscription_name=naming.resource_name("cost-obs", "anomaly-subscription"),
@@ -423,3 +440,4 @@ class MonitoringNestedStack(NestedStack):
                 )
             ],
         )
+        Tags.of(anomaly_subscription).add(constants.OWNER_TAG, _P32_ANOMALY_OWNER_TAG)
