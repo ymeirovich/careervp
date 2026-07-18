@@ -498,7 +498,7 @@ class ApiConstruct(Construct):
                     "X-Api-Key",
                     "X-Amz-Security-Token",
                 ],
-                max_age=Duration.hours(1),
+                max_age=Duration.seconds(60),
             ),
             deploy_options=deploy_options,
             cloud_watch_role=not self.scratch_mode,

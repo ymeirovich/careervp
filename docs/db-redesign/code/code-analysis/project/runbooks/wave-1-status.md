@@ -21,7 +21,7 @@ first.
 | 1.3d | P-26 Job-1 | amendment landed; engineering not started | The v2.5.0 amendment recording Job-1's Wave-1 tracking is committed (`project-scope-lock.yaml`/`.md` both at v2.5.0). The precondition check in Prompt 1.3d is satisfied — normal step preconditions (1.3c-gate landed, spine free) still apply before starting. | `0a0cb81` | 2026-07-18 |
 | 1.4 | P-09 | not started | — | — | — |
 | 1.1 | P-04, P-05 | not started | — | — | — |
-| 1.5 | P-22 | not started | — | — | — |
+| 1.5 | P-22 | Done in repo: P-22 spec authored; `cdk-diff.yml` now uses GitHub OIDC role assumption via `aws-actions/configure-aws-credentials` `role-to-assume`, grants `id-token: write`, and no longer references long-lived AWS access-key secrets. RED tests failed first, then passed after the workflow change; `scope-diff.py` reports P-22 as `test_written`. | Human must create or verify the AWS IAM GitHub OIDC provider plus the cdk-diff role trust policy for this repository, and store that role ARN in the GitHub secret `AWS_CDK_DIFF_ROLE_ARN`. | pending commit: `ci: use OIDC for cdk diff workflow` | 2026-07-18 |
 | GATE | — | not started | — | — | — |
 
 ## Standing notes carried into every step (do not lose these)
