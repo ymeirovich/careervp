@@ -1,0 +1,184 @@
+name: P-26 Job-1 cdk refactor (human-gated)
+
+# Relocates the 76 named feature resources CareerVpCrudDev -> CrudFeatures nested
+# stack via a CloudFormation resource-import (`cdk refactor`), physical + logical
+# ids preserved. Mirrors the P-28 human-gated deploy split:
+#   plan  = read-only dry-run + gate         (role: AWS_ROLE, no execute perms)
+#   apply = execute refactor + P-30 smoke    (role: AWS_EXECUTE_ROLE, env gate)
+# The `apply` job is gated by the `deploy-dev` GitHub environment required reviewer.
+#
+# PRECONDITION: live CareerVpCrudDev must be the current HEAD deployed FROM CI
+# (owner tag = `runner`, matching Lambda asset hashes). If it was last deployed
+# from a laptop, the plan gate (G5) will fail on cosmetic drift — re-deploy HEAD
+# via deploy.yml (workflow_dispatch) first, then re-run this plan.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "plan = dry-run + gate (read-only); apply = execute + smoke (human-gated)"
+        type: choice
+        options: [plan, apply]
+        default: plan
+      confirm_stack:
+        description: "Type the stack name to authorize APPLY (must equal CareerVpCrudDev)"
+        required: false
+        default: ""
+      override_file:
+        description: "Optional path to a refactor --override-file (leave empty to auto-map)"
+        required: false
+        default: ""
+
+# One refactor slot; never cancel an in-flight CloudFormation refactor.
+concurrency:
+  group: p26-refactor
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+  STACK_NAME: CareerVpCrudDev
+  NODE_VERSION: "22"
+  UV_VERSION: "0.5.21"
+  CDK_CTX: "-c p26_rehome_features=true"
+
+jobs:
+  # ===========================================================================
+  # PLAN — read-only. Synth flag-ON, cdk refactor --dry-run, enforce the gate.
+  # ===========================================================================
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install Node dependencies
+        run: npm ci
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
+      - name: Build lambda artifacts (real build → asset-hash parity with live)
+        working-directory: src/backend
+        run: make build
+      - name: Configure AWS credentials (read-only plan role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          role-session-name: p26-refactor-plan-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Synth flag-ON (re-homed shape)
+        working-directory: infra
+        run: npx cdk synth "$STACK_NAME" $CDK_CTX --output cdk.out.on >/dev/null
+      - name: cdk refactor --dry-run (read-only; changes nothing)
+        id: dryrun
+        continue-on-error: true
+        working-directory: infra
+        run: |
+          npx cdk refactor "$STACK_NAME" --unstable=refactor --dry-run $CDK_CTX \
+            2>&1 | tee refactor_dryrun.out
+      - name: Enforce P-26 refactor gate (STOP conditions)
+        working-directory: infra
+        run: |
+          uv run python scripts/p26_refactor_gate.py \
+            --synth-on cdk.out.on \
+            --refactor-out refactor_dryrun.out \
+            --parent-max 400 --template-max 500
+      - name: Upload plan artifacts for reviewer
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p26-refactor-plan-${{ github.run_id }}
+          path: |
+            infra/cdk.out.on/CareerVpCrudDev.template.json
+            infra/cdk.out.on/*CrudFeatures*.nested.template.json
+            infra/refactor_dryrun.out
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## P-26 refactor PLAN";
+            echo "Mode: ${{ inputs.mode }}";
+            echo "Gate must be GREEN before apply is approved.";
+            echo '```';
+            tail -40 infra/refactor_dryrun.out || true;
+            echo '```';
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ===========================================================================
+  # APPLY — human-gated. Executes the refactor, then P-30 smoke. Requires the
+  # `deploy-dev` environment reviewer to approve AND confirm_stack to match.
+  # ===========================================================================
+  apply:
+    needs: plan
+    if: ${{ inputs.mode == 'apply' }}
+    environment: deploy-dev # required reviewer = the human gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Guard — confirm_stack must match
+        run: |
+          if [ "${{ inputs.confirm_stack }}" != "$STACK_NAME" ]; then
+            echo "::error::APPLY blocked — confirm_stack '${{ inputs.confirm_stack }}' != '$STACK_NAME'";
+            exit 1;
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install Node dependencies
+        run: npm ci
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
+      - name: Build lambda artifacts
+        working-directory: src/backend
+        run: make build
+      - name: Configure AWS credentials (execute role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_EXECUTE_ROLE || secrets.AWS_ROLE }}
+          role-session-name: p26-refactor-apply-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Re-synth + re-gate (defense in depth, must pass before execute)
+        working-directory: infra
+        run: |
+          npx cdk synth "$STACK_NAME" $CDK_CTX --output cdk.out.on >/dev/null
+          npx cdk refactor "$STACK_NAME" --unstable=refactor --dry-run $CDK_CTX \
+            2>&1 | tee refactor_dryrun.out || true
+          uv run python scripts/p26_refactor_gate.py \
+            --synth-on cdk.out.on --refactor-out refactor_dryrun.out \
+            --parent-max 400 --template-max 500
+      - name: EXECUTE cdk refactor (human-approved)
+        working-directory: infra
+        run: |
+          OVERRIDE=""
+          if [ -n "${{ inputs.override_file }}" ]; then
+            OVERRIDE="--override-file ${{ inputs.override_file }}";
+          fi
+          npx cdk refactor "$STACK_NAME" --unstable=refactor --force $CDK_CTX $OVERRIDE
+      - name: P-30 smoke (must stay 4/4 green)
+        working-directory: src/backend
+        env:
+          API_BASE: https://api.dev.careervp.com
+          SMOKE_ORIGIN: https://dev.careervp.com
+          SMOKE_TOKEN: ${{ secrets.P30_SMOKE_TOKEN }}
+        run: uv run python scripts/smoke_harness.py --evidence-dir ../../docs/evidence
+      - name: Upload post-refactor evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p26-refactor-apply-evidence-${{ github.run_id }}
+          path: docs/evidence/smoke-*.json
