@@ -18,7 +18,7 @@ first.
 | 1.3a | P-08 | not started | — | — | — |
 | 1.3b | P-10 | not started | — | — | — |
 | 1.2 | P-06 | not started | — | — | — |
-| 1.3d | P-26 Job-1 | amendment drafted, not yet committed | The v2.5.0 amendment recording Job-1's Wave-1 tracking has been EDITED into `project-scope-lock.yaml` and `.md` (2026-07-18) but not yet committed with the required human-signed trailer. Confirm `git log -1 -- project-scope-lock.yaml` shows this landed (version 2.5.0, change_log entry present) before starting engineering work on this step. | (pending) | 2026-07-18 |
+| 1.3d | P-26 Job-1 | amendment landed; engineering not started | The v2.5.0 amendment recording Job-1's Wave-1 tracking is committed (`project-scope-lock.yaml`/`.md` both at v2.5.0). The precondition check in Prompt 1.3d is satisfied — normal step preconditions (1.3c-gate landed, spine free) still apply before starting. | `0a0cb81` | 2026-07-18 |
 | 1.4 | P-09 | not started | — | — | — |
 | 1.1 | P-04, P-05 | not started | — | — | — |
 | 1.5 | P-22 | not started | — | — | — |
