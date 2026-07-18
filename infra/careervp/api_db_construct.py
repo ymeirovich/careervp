@@ -214,6 +214,20 @@ class ApiDbConstruct(Construct):
         ).override_logical_id(constants.IDENTITY_MAP_TABLE_OUTPUT)
         return table
 
+    def _s3_frontend_origins(self) -> list[str]:
+        """P-08: explicit per-env frontend origins for CV/generated bucket CORS.
+
+        Dev is localhost-only (no deployed frontend depends on dev bucket CORS
+        from a browser origin other than local dev). Stage/prod map to their
+        deployed frontend domains. No wildcard origin is ever returned.
+        """
+        env = self.naming.environment
+        if env in ("stage", "staging"):
+            return ["https://stage.careervp.com"]
+        if env in ("prod", "production"):
+            return ["https://app.careervp.com"]
+        return ["http://localhost:3000"]
+
     def _build_cv_bucket(self, id_prefix: str) -> s3.Bucket:
         """
         S3 bucket for CV uploads.
@@ -250,7 +264,7 @@ class ApiDbConstruct(Construct):
                         s3.HttpMethods.POST,
                         s3.HttpMethods.GET,
                     ],
-                    allowed_origins=["*"],  # Restrict in production
+                    allowed_origins=self._s3_frontend_origins(),
                     allowed_headers=["*"],
                     max_age=3000,
                 )
@@ -650,11 +664,7 @@ class ApiDbConstruct(Construct):
                     allowed_methods=[
                         s3.HttpMethods.GET,
                     ],
-                    allowed_origins=[
-                        "https://careervp.com",
-                        "http://localhost:3000",
-                        "https://*.amplifyapp.com",
-                    ],
+                    allowed_origins=self._s3_frontend_origins(),
                     allowed_headers=["*"],
                     max_age=3000,
                 )
