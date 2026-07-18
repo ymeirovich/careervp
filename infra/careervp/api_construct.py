@@ -327,15 +327,15 @@ class ApiConstruct(Construct):
         if not is_production_env and not self.scratch_mode:
             self._build_api_custom_domain()
 
-        if is_production_env:
-            # add WAF
-            self.waf = WafToApiGatewayConstruct(
-                self,
-                f"{id_}waf",
-                self.rest_api,
-                naming=naming,
-                feature=constants.API_FEATURE,
-            )
+        # P-11: WAF must exist in every environment; rule content is owned by
+        # the follow-up WAF prompt.
+        self.waf = WafToApiGatewayConstruct(
+            self,
+            f"{id_}waf",
+            self.rest_api,
+            naming=naming,
+            feature=constants.API_FEATURE,
+        )
 
         # P-26 Job 1: after every re-homed resource exists in CrudFeaturesNestedStack,
         # pin each named resource's deployed logical id so the human-gated cdk refactor
