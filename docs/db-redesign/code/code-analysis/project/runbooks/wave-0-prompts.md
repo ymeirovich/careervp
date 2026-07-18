@@ -1,5 +1,10 @@
 # Wave 0 — Remaining Prompts (copy-paste runbook)
 
+> **Retroactive note (2026-07-18):** this file predates [`RUNBOOK-RULES.md`](./RUNBOOK-RULES.md),
+> the standing rules every wave's prompt file follows from Wave 1 onward. **Anyone writing a new
+> wave's prompt file must read `RUNBOOK-RULES.md` first and apply it** — see `wave-1-prompts.md`
+> for a worked example of a fully-compliant file.
+
 - **Generated:** 2026-07-12, against `redesign-execution-plan.md` v2.0.0.
 - **Purpose:** Wave 0 has 20 rows (0.0 → 0.75). A fresh validation pass (code + git evidence, not
   the table's own Status column, which is known to lag) found the table **wrong for four rows**

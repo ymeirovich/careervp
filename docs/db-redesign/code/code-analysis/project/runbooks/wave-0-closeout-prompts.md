@@ -6,6 +6,12 @@
 >
 > **Branch:** `db-redesign` · **Repo:** `/Users/yitzchak/Documents/dev/careervp`
 > **Canonical docs tree:** `docs/db-redesign/code/` (`code1`/`code2` are stale artifacts — ignore)
+>
+> **Retroactive note (2026-07-18):** this file predates [`RUNBOOK-RULES.md`](./RUNBOOK-RULES.md),
+> the standing rules every wave's prompt file follows from Wave 1 onward (status ledger, carryover
+> handling, prerequisite checks, self-check against the contract, plain-language flags). Wave 0's
+> prompts below were not retrofitted with it. **Anyone writing a new wave's prompt file — Wave 2
+> onward — must read `RUNBOOK-RULES.md` first and apply it**, not copy this file's older pattern.
 
 ---
 
