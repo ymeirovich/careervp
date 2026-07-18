@@ -15,6 +15,7 @@ from aws_cdk import (
 from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_cloudwatch as cw
 from aws_cdk import aws_cloudwatch_actions as cw_actions
+from aws_cdk import aws_codedeploy as codedeploy
 from aws_cdk import aws_cognito as cognito
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_events as events
@@ -141,6 +142,25 @@ class ApiConstruct(Construct):
         )
         self._grant_vpr_jobs_queue_access()
         self.api_authorizer = self._build_api_authorizer(user_pool)
+        self.p23_deployment_application = codedeploy.LambdaApplication(
+            self,
+            "P23CanaryApplication",
+            application_name=self.naming.resource_name("api-canary", "application"),
+        )
+        self.p23_deployment_role = iam.Role(
+            self,
+            "P23CodeDeployRole",
+            assumed_by=iam.ServicePrincipal("codedeploy.amazonaws.com"),
+            role_name=self.naming.role_name("codedeploy", "api-canary"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AWSCodeDeployRoleForLambda"
+                )
+            ],
+        )
+        self.p23_rollback_alarms = self._build_p23_rollback_alarms()
+        self._p23_canary_alarms: list[cw.Alarm] = []
+        self._p23_api_aliases: dict[str, _lambda.Alias] = {}
 
         root_resource = cast(aws_apigateway.Resource, self.rest_api.root)
         self.cv_upload_func = self._add_post_lambda_integration(
@@ -268,10 +288,12 @@ class ApiConstruct(Construct):
         # Export infrastructure (FE-UI-028)
         self.export_lambda = self._add_export_lambda()
 
+        self._enable_p23_canary_deployments()
         self._add_openapi_contract_routes()
 
         self._build_swagger_endpoints(
-            rest_api=self.rest_api, dest_func=self.cv_upload_func
+            rest_api=self.rest_api,
+            dest_func=self._p23_route_target(self.cv_upload_func),
         )
         self.monitoring = CrudMonitoring(
             self,
@@ -297,6 +319,10 @@ class ApiConstruct(Construct):
         self.billing_error_alarm.add_alarm_action(
             cw_actions.SnsAction(self.monitoring.notification_topic)
         )
+        for alarm in [*self.p23_rollback_alarms, *self._p23_canary_alarms]:
+            alarm.add_alarm_action(
+                cw_actions.SnsAction(self.monitoring.notification_topic)
+            )
 
         if not is_production_env and not self.scratch_mode:
             self._build_api_custom_domain()
@@ -374,7 +400,7 @@ class ApiConstruct(Construct):
         )
 
     def _build_swagger_endpoints(
-        self, rest_api: aws_apigateway.RestApi, dest_func: _lambda.Function
+        self, rest_api: aws_apigateway.RestApi, dest_func: _lambda.IFunction
     ) -> None:
         # GET /swagger
         swagger_resource: aws_apigateway.Resource = rest_api.root.add_resource(
@@ -562,6 +588,120 @@ class ApiConstruct(Construct):
             cognito_user_pools=[user_pool],
             identity_source="method.request.header.Authorization",
         )
+
+    def _build_p23_rollback_alarms(self) -> list[cw.Alarm]:
+        """Create outcome-specific resolver alarms shared by every API canary.
+
+        These intentionally observe resolver outcomes rather than aggregate HTTP
+        401s: an incorrect ``sub -> user_id`` resolution can either look like a
+        normal expired token or return an incorrect tenant's successful response.
+        The P-24 authorizer remains dormant; these alarms are wired now for its
+        eventual metrics and are non-breaching while no data is emitted.
+        """
+        alarms: list[tuple[str, str, str]] = [
+            (
+                "P23AuthResolverFailureAlarm",
+                "AuthResolverFailure",
+                "auth-resolver-failure",
+            ),
+            (
+                "P23AuthResolverStepUpRequiredAlarm",
+                "AuthResolverStepUpRequired",
+                "auth-resolver-step-up-required",
+            ),
+        ]
+        return [
+            cw.Alarm(
+                self,
+                construct_id,
+                alarm_name=self.naming.resource_name(feature, "alarm"),
+                metric=cw.Metric(
+                    namespace=constants.METRICS_NAMESPACE,
+                    metric_name=metric_name,
+                    dimensions_map={
+                        constants.METRICS_DIMENSION_KEY: "careervp-api-authorizer"
+                    },
+                    period=Duration.minutes(1),
+                    statistic="Sum",
+                ),
+                threshold=1,
+                evaluation_periods=1,
+                treat_missing_data=cw.TreatMissingData.NOT_BREACHING,
+            )
+            for construct_id, metric_name, feature in alarms
+        ]
+
+    def _add_p23_canary_alias(
+        self,
+        function: _lambda.Function,
+        *,
+        feature: str,
+    ) -> _lambda.Alias:
+        """Attach a stable alias, error alarm, and CodeDeploy canary to one route Lambda."""
+        alias = function.add_alias(f"live-{self.naming.environment}")
+        error_alarm = cw.Alarm(
+            self,
+            f"P23{self._p23_construct_suffix(feature)}CanaryErrorAlarm",
+            alarm_name=self.naming.resource_name(f"{feature}-canary-error", "alarm"),
+            metric=alias.metric_errors(period=Duration.minutes(1), statistic="Sum"),
+            threshold=1,
+            evaluation_periods=1,
+            treat_missing_data=cw.TreatMissingData.NOT_BREACHING,
+        )
+        self._p23_canary_alarms.append(error_alarm)
+        codedeploy.LambdaDeploymentGroup(
+            self,
+            f"P23{self._p23_construct_suffix(feature)}CanaryDeploymentGroup",
+            application=self.p23_deployment_application,
+            alias=alias,
+            deployment_group_name=self.naming.resource_name(
+                f"{feature}-canary", "deployment-group"
+            ),
+            deployment_config=codedeploy.LambdaDeploymentConfig.CANARY_10_PERCENT_5_MINUTES,
+            alarms=[error_alarm, *self.p23_rollback_alarms],
+            auto_rollback=codedeploy.AutoRollbackConfig(
+                deployment_in_alarm=True,
+                failed_deployment=True,
+                stopped_deployment=True,
+            ),
+            role=self.p23_deployment_role,
+        )
+        return alias
+
+    @staticmethod
+    def _p23_construct_suffix(feature: str) -> str:
+        """Turn a kebab-case feature into a deterministic construct-id suffix."""
+        return "".join(segment.title() for segment in feature.split("-"))
+
+    def _enable_p23_canary_deployments(self) -> None:
+        """Create P-23 canary aliases for every Lambda serving an API route."""
+        route_functions: list[tuple[str, _lambda.Function]] = [
+            ("cv-parser", self.cv_upload_func),
+            ("vpr-submit", self.vpr_submit_func),
+            ("vpr-status", self.vpr_status_func),
+            ("company-research", self.company_research_func),
+            ("auth-api", self.auth_api_func),
+            ("health-api", self.health_api_func),
+            ("user-api", self.user_api_func),
+            ("job-api", self.job_api_func),
+            ("application-api", self.application_api_func),
+            ("gap-api", self.gap_api_func),
+            ("cover-letter-api", self.cover_letter_api_func),
+            ("cover-letter-status", self.cover_letter_status_func),
+            ("interview-prep-api", self.interview_prep_api_func),
+            ("interview-prep-status", self.interview_prep_status_func),
+            ("cvtailor", self.cv_tailoring_func),
+            ("billing", self.billing_lambda),
+            ("export", self.export_lambda),
+        ]
+        self._p23_api_aliases = {
+            function.node.path: self._add_p23_canary_alias(function, feature=feature)
+            for feature, function in route_functions
+        }
+
+    def _p23_route_target(self, function: _lambda.IFunction) -> _lambda.IFunction:
+        """Use the stable alias where P-23 protects an API-route Lambda."""
+        return self._p23_api_aliases.get(function.node.path, function)
 
     def _build_llm_cache_table(self, is_production_env: bool) -> dynamodb.TableV2:
         table = dynamodb.TableV2(
@@ -2858,8 +2998,9 @@ class ApiConstruct(Construct):
         self,
         path: str,
         method: str,
-        handler: _lambda.Function,
+        handler: _lambda.IFunction,
     ) -> None:
+        handler = self._p23_route_target(handler)
         handler_key = handler.node.path
         permission_scope = self._permission_scope(path)
         handler_scopes = self._api_permission_scopes.setdefault(handler_key, set())
@@ -2908,11 +3049,12 @@ class ApiConstruct(Construct):
     def _register_feature_proxy(
         self,
         path: str,
-        handler: _lambda.Function,
+        handler: _lambda.IFunction,
         *,
         authorized: bool,
     ) -> None:
         """Register root and greedy ANY Lambda-proxy methods for one feature."""
+        handler = self._p23_route_target(handler)
         resource = self._get_or_create_path_resource(path)
         proxy_resource = cast(
             aws_apigateway.Resource,

@@ -127,8 +127,12 @@ class ServiceStack(Stack):
             users_table=self.api.api_db.users_table,
             llm_cache_table=self.api.llm_cache_table,
             allowed_origins=self.api.allowed_origins,
+            deployment_application=self.api.p23_deployment_application,
+            deployment_role=self.api.p23_deployment_role,
+            rollback_alarms=self.api.p23_rollback_alarms,
+            notification_topic=self.api.monitoring.notification_topic,
         )
-        self.api.register_ai_assist_routes(self.ai_assist_nested_stack.ai_assist_lambda)
+        self.api.register_ai_assist_routes(self.ai_assist_nested_stack.ai_assist_alias)
 
         # Client error reports (forwarded from the Next.js SSR /api/errors route).
         # Lambda lives in a nested stack to keep the near-limit parent stack lean;
@@ -139,9 +143,13 @@ class ServiceStack(Stack):
             naming=self.naming,
             logs_kms_key=self.api.logs_kms_key,
             allowed_origins=self.api.allowed_origins,
+            deployment_application=self.api.p23_deployment_application,
+            deployment_role=self.api.p23_deployment_role,
+            rollback_alarms=self.api.p23_rollback_alarms,
+            notification_topic=self.api.monitoring.notification_topic,
         )
         self.api.register_error_report_route(
-            self.error_report_nested_stack.error_report_lambda
+            self.error_report_nested_stack.error_report_alias
         )
 
         self.company_research_nested_stack = CompanyResearchNestedStack(

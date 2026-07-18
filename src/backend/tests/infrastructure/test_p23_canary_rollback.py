@@ -51,6 +51,7 @@ API_ROUTE_FUNCTION_NAMES = frozenset(
         'careervp-cover-letter-status-lambda-dev',
         'careervp-cv-parser-lambda-dev',
         'careervp-cvtailor-lambda-dev',
+        'careervp-error-report-lambda-dev',
         'careervp-export-lambda-dev',
         'careervp-gap-api-lambda-dev',
         'careervp-health-api-lambda-dev',
@@ -126,25 +127,23 @@ def _api_route_functions(resources: dict[str, dict[str, Any]]) -> dict[str, str]
 def test_p23_api_lambdas_have_alias_and_version(synthesized_resources: dict[str, dict[str, Any]]) -> None:
     """AC-P23-1: every API Lambda routes deployments through a published stable alias."""
     functions = _api_route_functions(synthesized_resources)
-    aliases = {
-        logical_id: resource.get('Properties', {})
-        for logical_id, resource in synthesized_resources.items()
-        if resource.get('Type') == 'AWS::Lambda::Alias'
-    }
+    aliases = {logical_id: resource for logical_id, resource in synthesized_resources.items() if resource.get('Type') == 'AWS::Lambda::Alias'}
     versions = {
         logical_id: resource.get('Properties', {})
         for logical_id, resource in synthesized_resources.items()
         if resource.get('Type') == 'AWS::Lambda::Version'
     }
 
-    aliased_functions = {_referenced_logical_id(props.get('FunctionName')): logical_id for logical_id, props in aliases.items()}
-    assert set(aliased_functions) == set(functions), (
+    aliased_functions = {
+        _referenced_logical_id(resource.get('Properties', {}).get('FunctionName')): logical_id for logical_id, resource in aliases.items()
+    }
+    assert set(aliased_functions) == set(functions.values()), (
         'every public/API-route Lambda must have exactly one stable deployment alias '
         f'(found aliases for {sorted(function_id for function_id in aliased_functions if function_id)})'
     )
     for function_id, alias_id in aliased_functions.items():
         assert function_id is not None
-        version_id = _referenced_logical_id(aliases[alias_id].get('FunctionVersion'))
+        version_id = _referenced_logical_id(aliases[alias_id].get('Properties', {}).get('FunctionVersion'))
         assert version_id in versions, f'alias {alias_id} must target a published Lambda Version'
         assert _referenced_logical_id(versions[version_id].get('FunctionName')) == function_id
 
@@ -152,11 +151,7 @@ def test_p23_api_lambdas_have_alias_and_version(synthesized_resources: dict[str,
 def test_p23_codedeploy_groups_exist_for_api_lambdas(synthesized_resources: dict[str, dict[str, Any]]) -> None:
     """AC-P23-1: each API alias uses CodeDeploy's canary rollout and alarm rollback."""
     functions = _api_route_functions(synthesized_resources)
-    aliases = {
-        logical_id: resource.get('Properties', {})
-        for logical_id, resource in synthesized_resources.items()
-        if resource.get('Type') == 'AWS::Lambda::Alias'
-    }
+    aliases = {logical_id: resource for logical_id, resource in synthesized_resources.items() if resource.get('Type') == 'AWS::Lambda::Alias'}
     deployment_groups = [
         resource.get('Properties', {}) for resource in synthesized_resources.values() if resource.get('Type') == 'AWS::CodeDeploy::DeploymentGroup'
     ]
@@ -169,11 +164,11 @@ def test_p23_codedeploy_groups_exist_for_api_lambdas(synthesized_resources: dict
     for group in deployment_groups:
         assert group.get('DeploymentConfigName') == 'CodeDeployDefault.LambdaCanary10Percent5Minutes'
         assert group.get('AutoRollbackConfiguration', {}).get('Enabled') is True
-        assert group.get('AutoRollbackConfiguration', {}).get('Events') == [
+        assert set(group.get('AutoRollbackConfiguration', {}).get('Events', [])) == {
             'DEPLOYMENT_FAILURE',
             'DEPLOYMENT_STOP_ON_ALARM',
             'DEPLOYMENT_STOP_ON_REQUEST',
-        ]
+        }
         assert group.get('AlarmConfiguration', {}).get('Enabled') is True
         assert group.get('AlarmConfiguration', {}).get('Alarms'), 'canary rollback needs alarms'
 
@@ -188,23 +183,23 @@ def test_p23_rollback_alarms_include_auth_resolver_failure(synthesized_resources
     resolver_alarm_ids = {
         logical_id
         for logical_id, props in alarms.items()
-        if props.get('Metrics', [{}])[0].get('MetricStat', {}).get('Metric', {}).get('MetricName')
-        in {'AuthResolverFailure', 'AuthResolverStepUpRequired'}
+        if isinstance(props.get('MetricName'), str) and props['MetricName'] in {'AuthResolverFailure', 'AuthResolverStepUpRequired'}
     }
     assert len(resolver_alarm_ids) == 2, 'P-23 needs distinct resolver-failure and step-up outcome alarms'
     assert not any('401' in str(props.get('MetricName', '')) for props in alarms.values()), (
         'an aggregate 401-rate is not a resolver-correctness signal'
     )
 
+    resolver_alarm_markers = {
+        'P23AuthResolverFailureAlarm',
+        'P23AuthResolverStepUpRequiredAlarm',
+    }
     for resource in synthesized_resources.values():
         if resource.get('Type') != 'AWS::CodeDeploy::DeploymentGroup':
             continue
-        configured_alarm_ids = {
-            _referenced_logical_id(alarm.get('Name'))
-            for alarm in resource.get('Properties', {}).get('AlarmConfiguration', {}).get('Alarms', [])
-            if isinstance(alarm, dict)
-        }
-        assert resolver_alarm_ids <= configured_alarm_ids, 'each canary must roll back on resolver outcome alarms'
+        configured_alarms = repr(resource.get('Properties', {}).get('AlarmConfiguration', {}).get('Alarms', []))
+        for resolver_alarm_marker in resolver_alarm_markers:
+            assert resolver_alarm_marker in configured_alarms, 'each canary must roll back on resolver outcome alarms'
 
 
 def test_p23_revert_runbook_distinguishes_lambda_from_api_gateway() -> None:

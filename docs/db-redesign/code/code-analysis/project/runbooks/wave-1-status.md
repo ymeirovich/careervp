@@ -12,7 +12,7 @@ first.
 
 | Step | Clause(s) | Status (plain English) | Open problem for the next step | Commit | Date |
 |---|---|---|---|---|---|
-| 1.0 | P-23 | not started | — | — | — |
+| 1.0 | P-23 | Blocked: the P-23 code and tests are ready, but the required live diff also proposes replacing two existing Cost Explorer anomaly resources. Do not deploy or start the next spine step. | Human must resolve the deployed `owner: runner` versus local `owner: yitzchak` tag drift on `AWS::CE::AnomalyMonitor` and `AWS::CE::AnomalySubscription`, then re-run `cdk diff CareerVpCrudDev` and prove zero stateful replacements. | `81db09b` (RED tests only) | 2026-07-18 |
 | 1.3c-gate | P-11 (enable WAF in all envs) | not started | — | — | — |
 | 1.3c | P-07, P-11 (rate-rule content) | not started | — | — | — |
 | 1.3a | P-08 | not started | — | — | — |

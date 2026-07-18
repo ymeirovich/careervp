@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from aws_cdk import Aws, Duration, NestedStack, RemovalPolicy
+from aws_cdk import aws_cloudwatch as cw
+from aws_cdk import aws_cloudwatch_actions as cw_actions
+from aws_cdk import aws_codedeploy as codedeploy
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_kms as kms
 from aws_cdk import aws_lambda as _lambda
 from aws_cdk import aws_logs as logs
+from aws_cdk import aws_sns as sns
 from cdk_nag import NagSuppressions
 from constructs import Construct
 
@@ -30,6 +36,10 @@ class AiAssistNestedStack(NestedStack):
         users_table: dynamodb.TableV2,
         llm_cache_table: dynamodb.TableV2,
         allowed_origins: str,
+        deployment_application: codedeploy.ILambdaApplication,
+        deployment_role: iam.IRole,
+        rollback_alarms: Sequence[cw.IAlarm],
+        notification_topic: sns.ITopic,
     ) -> None:
         super().__init__(scope, id_)
         self.naming = naming
@@ -114,6 +124,38 @@ class AiAssistNestedStack(NestedStack):
                 constants.AI_ASSIST_TIMEOUT_ENV_VAR: "25",
             },
         )
+        self.ai_assist_alias = self.ai_assist_lambda.add_alias(
+            f"live-{naming.environment}"
+        )
+        canary_error_alarm = cw.Alarm(
+            self,
+            "P23AiAssistCanaryErrorAlarm",
+            alarm_name=naming.resource_name("ai-assist-canary-error", "alarm"),
+            metric=self.ai_assist_alias.metric_errors(
+                period=Duration.minutes(1), statistic="Sum"
+            ),
+            threshold=1,
+            evaluation_periods=1,
+            treat_missing_data=cw.TreatMissingData.NOT_BREACHING,
+        )
+        canary_error_alarm.add_alarm_action(cw_actions.SnsAction(notification_topic))
+        codedeploy.LambdaDeploymentGroup(
+            self,
+            "P23AiAssistCanaryDeploymentGroup",
+            application=deployment_application,
+            alias=self.ai_assist_alias,
+            deployment_group_name=naming.resource_name(
+                "ai-assist-canary", "deployment-group"
+            ),
+            deployment_config=codedeploy.LambdaDeploymentConfig.CANARY_10_PERCENT_5_MINUTES,
+            alarms=[canary_error_alarm, *rollback_alarms],
+            auto_rollback=codedeploy.AutoRollbackConfig(
+                deployment_in_alarm=True,
+                failed_deployment=True,
+                stopped_deployment=True,
+            ),
+            role=deployment_role,
+        )
 
         log_group.grant_write(self.role)
         self.role.add_to_policy(
@@ -185,7 +227,7 @@ class AiAssistNestedStack(NestedStack):
             )
         )
 
-        self.ai_assist_lambda.add_permission(
+        self.ai_assist_alias.add_permission(
             "AllowAiAssistApiInvoke",
             principal=iam.ServicePrincipal("apigateway.amazonaws.com"),
             action="lambda:InvokeFunction",

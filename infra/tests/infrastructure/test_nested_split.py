@@ -149,9 +149,19 @@ def test_monitoring_alarms_and_metric_filters_move_to_nested_stack(
     synthesized_template: Template,
     monitoring_template: Template,
 ) -> None:
-    """Only monitoring alarms and metric filters move to MonitoringNestedStack."""
+    """Monitoring alarms move to the nested stack; P-23 rollback alarms stay with aliases."""
     parent_alarms = synthesized_template.find_resources("AWS::CloudWatch::Alarm")
-    assert list(parent_alarms) == ["CareerVpCrudDevCrudBillingLambdaErrorAlarmBF87B315"]
+    non_p23_alarms = [
+        logical_id for logical_id in parent_alarms if "P23" not in logical_id
+    ]
+    assert non_p23_alarms == ["CareerVpCrudDevCrudBillingLambdaErrorAlarmBF87B315"]
+    assert any(
+        "P23AuthResolverFailureAlarm" in logical_id for logical_id in parent_alarms
+    )
+    assert any(
+        "P23" in logical_id and "CanaryErrorAlarm" in logical_id
+        for logical_id in parent_alarms
+    )
     assert not synthesized_template.find_resources("AWS::Logs::MetricFilter")
 
     monitoring_template.resource_count_is("AWS::CloudWatch::Alarm", 16)
