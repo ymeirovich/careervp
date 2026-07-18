@@ -488,7 +488,7 @@ class ApiConstruct(Construct):
                 allow_origins=(
                     [self.allowed_origins]
                     if self.scratch_mode
-                    else aws_apigateway.Cors.ALL_ORIGINS
+                    else self.allowed_origins.split(",")
                 ),
                 allow_methods=aws_apigateway.Cors.ALL_METHODS,
                 allow_headers=[
