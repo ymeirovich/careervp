@@ -1047,7 +1047,12 @@ class ApiConstruct(Construct):
                                     f"arn:aws:ssm:{self.naming.region}:"
                                     f"{self.naming.account_id}:parameter/"
                                     f"{self._anthropic_parameter_name().lstrip('/')}"
-                                )
+                                ),
+                                # P-06: JWT signing key material, fetched at
+                                # runtime with decryption, never resolved into
+                                # the Lambda env by CloudFormation.
+                                self._secret_parameter_arn("jwt-private-key"),
+                                self._secret_parameter_arn("jwt-public-key"),
                             ],
                             effect=iam.Effect.ALLOW,
                         )
@@ -1176,6 +1181,26 @@ class ApiConstruct(Construct):
             self, ssm_parameter_name(self.naming.environment, suffix)
         )
 
+    def _secret_parameter_name(self, suffix: str) -> str:
+        """Name-only SSM reference for secret material fetched at runtime (P-06).
+
+        Unlike `_parameter_value`, this never resolves to the underlying
+        secret in the synthesized template. The Lambda fetches the
+        SecureString value itself at runtime with decryption
+        (`careervp.logic.utils.secret_provider.get_ssm_secret`). Scratch mode
+        keeps the same non-secret placeholder convention as `_parameter_value`.
+        """
+        if self.scratch_mode:
+            return f"scratch-disabled-{suffix}"
+        return ssm_parameter_name(self.naming.environment, suffix)
+
+    def _secret_parameter_arn(self, suffix: str) -> str:
+        return (
+            f"arn:aws:ssm:{self.naming.region}:"
+            f"{self.naming.account_id}:parameter/"
+            f"{ssm_parameter_name(self.naming.environment, suffix).lstrip('/')}"
+        )
+
     def _build_common_layer(self) -> PythonLayerVersion:
         return PythonLayerVersion(
             self,
@@ -1220,8 +1245,12 @@ class ApiConstruct(Construct):
                 constants.POWERTOOLS_SERVICE_NAME: constants.SERVICE_NAME,
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
-                "JWT_PRIVATE_KEY": self._parameter_value("jwt-private-key"),
-                "JWT_PUBLIC_KEY": self._parameter_value("jwt-public-key"),
+                constants.JWT_PRIVATE_KEY_ENV_VAR: self._secret_parameter_name(
+                    "jwt-private-key"
+                ),
+                constants.JWT_PUBLIC_KEY_ENV_VAR: self._secret_parameter_name(
+                    "jwt-public-key"
+                ),
                 "CONFIGURATION_APP": appconfig_app_name,
                 "CONFIGURATION_ENV": self.naming.environment,
                 "CONFIGURATION_NAME": constants.CONFIGURATION_NAME,
@@ -1704,8 +1733,12 @@ class ApiConstruct(Construct):
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-cv-upload-worker",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
-                "JWT_PRIVATE_KEY": self._parameter_value("jwt-private-key"),
-                "JWT_PUBLIC_KEY": self._parameter_value("jwt-public-key"),
+                constants.JWT_PRIVATE_KEY_ENV_VAR: self._secret_parameter_name(
+                    "jwt-private-key"
+                ),
+                constants.JWT_PUBLIC_KEY_ENV_VAR: self._secret_parameter_name(
+                    "jwt-public-key"
+                ),
                 "TABLE_NAME": cvs_table.table_name,
                 "IDEMPOTENCY_TABLE_NAME": idempotency_table.table_name,
                 "CV_BUCKET_NAME": cv_bucket.bucket_name,
@@ -1737,6 +1770,18 @@ class ApiConstruct(Construct):
         cv_bucket.grant_read(lambda_function)
         cvs_table.grant_read_write_data(lambda_function)
         idempotency_table.grant_read_write_data(lambda_function)
+        # P-06: this Lambda has its own auto-generated role (no role= above),
+        # so the shared lambda_role's JWT SSM grant does not cover it.
+        lambda_function.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["ssm:GetParameter"],
+                resources=[
+                    self._secret_parameter_arn("jwt-private-key"),
+                    self._secret_parameter_arn("jwt-public-key"),
+                ],
+                effect=iam.Effect.ALLOW,
+            )
+        )
         return lambda_function
 
     def _add_vpr_worker_lambda(
@@ -2103,8 +2148,12 @@ class ApiConstruct(Construct):
                 **self._build_shared_table_env(),
                 "TABLE_NAME": self.api_db.users_table.table_name,
                 "TOKEN_BLACKLIST_TABLE_NAME": self.api_db.idempotency_db.table_name,
-                "JWT_PRIVATE_KEY": self._parameter_value("jwt-private-key"),
-                "JWT_PUBLIC_KEY": self._parameter_value("jwt-public-key"),
+                constants.JWT_PRIVATE_KEY_ENV_VAR: self._secret_parameter_name(
+                    "jwt-private-key"
+                ),
+                constants.JWT_PUBLIC_KEY_ENV_VAR: self._secret_parameter_name(
+                    "jwt-public-key"
+                ),
                 "COGNITO_CLIENT_ID": self.cognito_client_id,
                 "COGNITO_USER_POOL_ID": self.cognito_user_pool.user_pool_id,
                 "ENVIRONMENT": self.naming.environment,
@@ -2177,8 +2226,12 @@ class ApiConstruct(Construct):
                 **self._build_shared_table_env(),
                 "TABLE_NAME": self.api_db.users_table.table_name,
                 "USERS_TABLE_NAME": self.api_db.users_table.table_name,
-                "JWT_PRIVATE_KEY": self._parameter_value("jwt-private-key"),
-                "JWT_PUBLIC_KEY": self._parameter_value("jwt-public-key"),
+                constants.JWT_PRIVATE_KEY_ENV_VAR: self._secret_parameter_name(
+                    "jwt-private-key"
+                ),
+                constants.JWT_PUBLIC_KEY_ENV_VAR: self._secret_parameter_name(
+                    "jwt-public-key"
+                ),
             },
             timeout=Duration.seconds(30),
             memory_size=256,
@@ -2213,8 +2266,12 @@ class ApiConstruct(Construct):
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 **self._build_shared_table_env(),
                 "JOBS_TABLE_NAME": self.api_db.jobs_table.table_name,
-                "JWT_PRIVATE_KEY": self._parameter_value("jwt-private-key"),
-                "JWT_PUBLIC_KEY": self._parameter_value("jwt-public-key"),
+                constants.JWT_PRIVATE_KEY_ENV_VAR: self._secret_parameter_name(
+                    "jwt-private-key"
+                ),
+                constants.JWT_PUBLIC_KEY_ENV_VAR: self._secret_parameter_name(
+                    "jwt-public-key"
+                ),
             },
             timeout=Duration.seconds(30),
             memory_size=256,
@@ -2274,8 +2331,12 @@ class ApiConstruct(Construct):
             environment={
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-api-authorizer",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
-                "JWT_PRIVATE_KEY": self._parameter_value("jwt-private-key"),
-                "JWT_PUBLIC_KEY": self._parameter_value("jwt-public-key"),
+                constants.JWT_PRIVATE_KEY_ENV_VAR: self._secret_parameter_name(
+                    "jwt-private-key"
+                ),
+                constants.JWT_PUBLIC_KEY_ENV_VAR: self._secret_parameter_name(
+                    "jwt-public-key"
+                ),
                 # P-24: presence of this env activates sub -> user_id surrogate
                 # resolution at the edge; USERS_TABLE_NAME feeds the
                 # link-by-verified-email owner lookup (email-index).
@@ -2856,10 +2917,10 @@ class ApiConstruct(Construct):
                 "TABLE_NAME": self.api_db.db.table_name,
                 "IDEMPOTENCY_TABLE_NAME": self.api_db.idempotency_db.table_name,
                 "ALLOWED_ORIGINS": self.allowed_origins,
-                constants.WEBHOOK_SECRET_ENV_VAR: self._parameter_value(
+                constants.WEBHOOK_SECRET_ENV_VAR: self._secret_parameter_name(
                     "payment-provider-webhook-secret"
                 ),
-                constants.WEBHOOK_SECRET_PREVIOUS_ENV_VAR: self._parameter_value(
+                constants.WEBHOOK_SECRET_PREVIOUS_ENV_VAR: self._secret_parameter_name(
                     "payment-provider-webhook-secret-previous"
                 ),
                 "PRICE_ID_MONTHLY": self._parameter_value(
@@ -2881,6 +2942,20 @@ class ApiConstruct(Construct):
         )
         self.api_db.db.grant_read_write_data(lambda_function)
         self.api_db.idempotency_db.grant_read_write_data(lambda_function)
+        # P-06: webhook signing secrets, fetched at runtime with decryption;
+        # this Lambda has its own auto-generated role (no role= above).
+        lambda_function.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["ssm:GetParameter"],
+                resources=[
+                    self._secret_parameter_arn("payment-provider-webhook-secret"),
+                    self._secret_parameter_arn(
+                        "payment-provider-webhook-secret-previous"
+                    ),
+                ],
+                effect=iam.Effect.ALLOW,
+            )
+        )
         return lambda_function
 
     def _add_export_lambda(self) -> _lambda.Function:

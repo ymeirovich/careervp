@@ -20,6 +20,7 @@ from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.billing_service import BillingService
+from careervp.logic.utils.secret_provider import get_ssm_secret
 from careervp.logic.webhook_service import WebhookService
 from careervp.payment_providers.interface import PaymentProviderError
 from careervp.payment_providers.placeholder import PlaceholderPaymentProvider
@@ -33,8 +34,10 @@ _webhook_service: WebhookService | None = None
 def _get_webhook_service() -> WebhookService:
     global _webhook_service
     if _webhook_service is None:
-        primary_secret = os.environ['PAYMENT_PROVIDER_WEBHOOK_SECRET_SSM_PARAM']
-        previous_secret = os.environ.get('PAYMENT_PROVIDER_WEBHOOK_SECRET_PREVIOUS_SSM_PARAM', 'none')
+        primary_secret_param = os.environ['PAYMENT_PROVIDER_WEBHOOK_SECRET_SSM_PARAM']
+        previous_secret_param = os.environ.get('PAYMENT_PROVIDER_WEBHOOK_SECRET_PREVIOUS_SSM_PARAM')
+        primary_secret = get_ssm_secret(primary_secret_param)
+        previous_secret = get_ssm_secret(previous_secret_param) if previous_secret_param else 'none'
         _webhook_service = WebhookService(
             subscription_repo=SubscriptionRepository(),
             payment_provider=PlaceholderPaymentProvider(),

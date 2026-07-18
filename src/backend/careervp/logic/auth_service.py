@@ -25,6 +25,8 @@ from botocore.exceptions import ClientError
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
+from careervp.logic.utils.secret_provider import get_ssm_secret
+
 try:
     import bcrypt as _bcrypt  # type: ignore[import-not-found]
 except ImportError:  # pragma: no cover - exercised only when bcrypt is absent.
@@ -137,9 +139,16 @@ class AuthService:
         cognito_client_id = os.environ.get('COGNITO_CLIENT_ID', '')
         use_cognito = cognito_client_id and not cognito_client_id.startswith('test-')
 
-        # Only require JWT keys if NOT using Cognito auth
+        # Only require JWT keys if NOT using Cognito auth. JWT_PRIVATE_KEY/
+        # JWT_PUBLIC_KEY (direct value) remain supported for local/test use;
+        # production Lambdas set only the *_SSM_PARAM name (P-06) and the
+        # value is fetched at runtime with decryption, never placed in env.
         private_key = os.environ.get('JWT_PRIVATE_KEY')
         public_key = os.environ.get('JWT_PUBLIC_KEY')
+        if not private_key and os.environ.get('JWT_PRIVATE_KEY_SSM_PARAM'):
+            private_key = get_ssm_secret(os.environ['JWT_PRIVATE_KEY_SSM_PARAM'])
+        if not public_key and os.environ.get('JWT_PUBLIC_KEY_SSM_PARAM'):
+            public_key = get_ssm_secret(os.environ['JWT_PUBLIC_KEY_SSM_PARAM'])
 
         if use_cognito:
             # Cognito auth - JWT keys are optional (can use ephemeral for legacy fallback)

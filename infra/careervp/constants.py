@@ -190,6 +190,13 @@ ANTHROPIC_API_KEY_ENV_VAR = "ANTHROPIC_API_KEY_SSM_PARAM"
 TAVILY_API_KEY_SSM_PARAM = f"/careervp/{ENVIRONMENT}/tavily-api-key"
 TAVILY_API_KEY_SSM_PARAM_ENV = "TAVILY_API_KEY_SSM_PARAM"
 
+# JWT signing key material (P-06): Lambda env carries only the parameter name;
+# the runtime secret provider fetches the SecureString value with decryption.
+JWT_PRIVATE_KEY_SSM_PARAM = f"/careervp/{ENVIRONMENT}/jwt-private-key"
+JWT_PUBLIC_KEY_SSM_PARAM = f"/careervp/{ENVIRONMENT}/jwt-public-key"
+JWT_PRIVATE_KEY_ENV_VAR = "JWT_PRIVATE_KEY_SSM_PARAM"
+JWT_PUBLIC_KEY_ENV_VAR = "JWT_PUBLIC_KEY_SSM_PARAM"
+
 # =============================================================================
 # LLM MODEL IDs  — update here + cdk deploy to swap models, no code change needed
 # =============================================================================
