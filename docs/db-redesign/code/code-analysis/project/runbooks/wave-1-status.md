@@ -33,6 +33,18 @@ first.
 
 ## Deploy-state reconciliation (2026-07-18) — recordkeeping was stale
 
+**CORRECTION 2026-07-19: the "zero substantive changes" / "DEPLOYED" claim below is WRONG.** A
+real CloudFormation change set formed against live `CareerVpCrudDev` this session (2026-07-19,
+`docs/evidence/p26-o9-changeset-review-20260719.json`) shows **523 pending changes** — including
+the P-06 JWT/webhook env-var renames, P-08/P-10 CORS changes, the P-11 WAF WebACL, P-23's canary
+CodeDeploy infra, P-24's identity-map table, and P-32's budgets. A plain `cdk diff` re-run the same
+day shows 470 diff lines, not "owner-tag/asset-hash noise only." **None of P-06/P-08/P-10/P-11/P-23
+is actually live yet** — each is "done" only in the sense of being committed to the repo, not
+deployed. See `runbooks/wave-1-handoff-20260719.md` §0 and §1 for the corrected priority and the
+prepared, human-executable fix (a change set already reviewed and proven safe, `auto_fail: false`,
+zero stateful replacements — just not yet executed). The note below is left as-is for history; do
+not trust its "DEPLOYED" conclusion.
+
 Verified against git + a live flag-OFF `cdk diff CareerVpCrudDev` this session. Prior rows used
 `pending (see commit message…)` placeholders and one prompt's "KNOWN-BUT-VERIFY" block carried
 Jul-17 figures; both were stale. Corrected facts:
