@@ -324,7 +324,7 @@ class ApiConstruct(Construct):
                 cw_actions.SnsAction(self.monitoring.notification_topic)
             )
 
-        if not is_production_env and not self.scratch_mode:
+        if self.naming.environment == "dev":
             self._build_api_custom_domain()
 
         # P-11: WAF must exist in every environment; rule content is owned by

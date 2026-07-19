@@ -84,6 +84,25 @@ def _dev_stack() -> Any:
     )
 
 
+def _devx_stack() -> Any:
+    if INFRA_SRC not in sys.path:
+        sys.path.insert(0, INFRA_SRC)
+
+    from careervp.naming_utils import NamingUtils  # type: ignore[import-not-found]
+    from careervp.service_stack import ServiceStack  # type: ignore[import-not-found]
+
+    app = App()
+    naming = NamingUtils(environment='devx', region='us-east-1', account_id='788159322332')
+    return ServiceStack(
+        scope=app,
+        id=naming.stack_id('crud'),
+        env=Environment(account='788159322332', region='us-east-1'),
+        is_production_env=False,
+        naming=naming,
+        stack_feature='crud',
+    )
+
+
 def _parent_template() -> Template:
     return Template.from_stack(_dev_stack())
 
@@ -205,6 +224,46 @@ def test_custom_domain_is_regional_and_maps_to_rest_api() -> None:
 
     outputs = template.to_json().get('Outputs', {})
     assert 'ApiDevRegionalDomainName' in outputs, 'missing CfnOutput exposing the regional target domain for the Cloudflare CNAME'
+
+
+def test_devx_does_not_claim_shared_domain_before_cutover() -> None:
+    """devx must NOT claim the shared api.dev.careervp.com custom domain.
+
+    AC-P26-9 (v2.6.0 devx amendment): CareerVpCrudDevx is a fresh, disposable
+    stack that must not fight CareerVpCrudDev for the globally-unique API
+    Gateway custom domain name before a human-gated cutover. MUST FAIL if
+    devx's ``_build_api_custom_domain`` (or equivalent) is invoked
+    unconditionally instead of being skipped/env-scoped away from the shared
+    hostname pre-cutover.
+    """
+    devx_template = Template.from_stack(_devx_stack())
+
+    devx_domains = devx_template.find_resources('AWS::ApiGateway::DomainName')
+    for logical_id, resource in devx_domains.items():
+        assert resource['Properties'].get('DomainName') != DEV_CUSTOM_DOMAIN, (
+            f'devx resource {logical_id!r} claims the shared domain '
+            f'{DEV_CUSTOM_DOMAIN!r} — this collides with the live CareerVpCrudDev '
+            'stack that already owns it pre-cutover'
+        )
+
+    devx_mappings = devx_template.find_resources('AWS::ApiGateway::BasePathMapping')
+    for logical_id, resource in devx_mappings.items():
+        domain_ref = resource['Properties'].get('DomainName')
+        assert domain_ref != DEV_CUSTOM_DOMAIN, (
+            f'devx BasePathMapping {logical_id!r} references the shared hostname {DEV_CUSTOM_DOMAIN!r} before cutover'
+        )
+
+    # Positive control: the existing CareerVpCrudDev still owns the domain
+    # pair, so the shared seam is verifiably bound to the old stack, not
+    # silently unclaimed by both.
+    dev_template = _parent_template()
+    dev_domains = dev_template.find_resources('AWS::ApiGateway::DomainName')
+    assert len(dev_domains) == 1, f'expected CareerVpCrudDev to still own one DomainName, found {sorted(dev_domains)}'
+    dev_domain_props = next(iter(dev_domains.values()))['Properties']
+    assert dev_domain_props['DomainName'] == DEV_CUSTOM_DOMAIN
+
+    dev_mappings = dev_template.find_resources('AWS::ApiGateway::BasePathMapping')
+    assert len(dev_mappings) == 1, f'expected CareerVpCrudDev to still own one BasePathMapping, found {sorted(dev_mappings)}'
 
 
 # --------------------------------------------------------------------------- #

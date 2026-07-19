@@ -1,0 +1,36 @@
+{
+  "api_base": "https://api.dev.careervp.com",
+  "checks": [
+    {
+      "detail": "health returned 200",
+      "name": "health",
+      "passed": true,
+      "request_id": "4cf9a708-fe33-42ac-8036-becfa15edc24",
+      "status": 200
+    },
+    {
+      "detail": "exact origin echoed: 'https://main.d3j2wnm8g5clnw.amplifyapp.com'",
+      "name": "cors_exact_origin",
+      "passed": true,
+      "request_id": "f26c5bef-49a0-4b64-b50a-4de31fd61f14",
+      "status": 200
+    },
+    {
+      "detail": "authed 200 and unauth rejected with 401",
+      "name": "authed_read",
+      "passed": true,
+      "request_id": "76479925-fd9f-435f-9876-dd22ec1bbd32",
+      "status": 200
+    },
+    {
+      "detail": "CV uploaded (cv_id=5a96c222-06de-4cd9-a779-c18ce0fa8b19) and read back",
+      "name": "authed_upload",
+      "passed": true,
+      "request_id": "96644dcc-2903-4e25-a0c0-1a8d7a596fa7",
+      "status": 201
+    }
+  ],
+  "origin": "https://main.d3j2wnm8g5clnw.amplifyapp.com",
+  "passed": true,
+  "timestamp": "2026-07-19T17:32:31.225437+00:00"
+}
