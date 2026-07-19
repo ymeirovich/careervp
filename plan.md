@@ -14,6 +14,15 @@
 - [ ] Human deployment and soak: deploy the PKCE frontend and in-place Cognito/WAF change set, observe for at least the 30-day refresh-token lifetime, and keep Wave 1 step 1.1 blocked.
 - [ ] Final P-07 cutover: proxy browser-side password/TOTP operations, set the migration phase to `cutover_complete`, remove implicit + `COGNITO_ADMIN`, enforce MFA, and rerun the full auth oracle.
 
+## Wave 1 P-26 devx parallel stack
+
+- [x] Preserve `CareerVpCrudDev` as the sole pre-cutover owner of `api.dev.careervp.com` and guard custom-domain creation to the literal `dev` environment.
+- [x] Synthesize `CareerVpCrudDevx` with `ENVIRONMENT=devx` and `-c p26_rehome_features=true`; verify distinct naming and no shared-domain claim.
+- [x] Capture the review-only devx creation change set and P-28 Replacement report (292 additions, zero replacements, `auto_fail: false`), then delete the review change set without execution.
+- [ ] Human re-forms and executes the devx creation change set.
+- [ ] Run the P-30 four-wire smoke against devx's raw execute-api URL before any traffic move.
+- [ ] Assess P-09 against devx's actual resource count. The BasePathMapping flip and old-stack decommission remain later, separate human-only steps.
+
 ---
 
 ## IMPORTANT: Documentation-First Development Rule ⚠️

@@ -8,6 +8,14 @@
 - [x] P-07 authorization-code + S256 PKCE frontend path, Cognito Plus threat protection, OPTIONAL TOTP grace state, self-service TOTP enrollment, scope inventory, and 401 retry oracle implemented and tested.
 - [ ] P-07 final cutover remains blocked on human deploy + 30-day soak and backend proxies for password change/TOTP enrollment; implicit grant and `COGNITO_ADMIN` intentionally remain enabled, and Wave 1 step 1.1 must not start.
 
+## Wave 1 — P-26 devx preparation
+
+- [x] O-9 custom-domain prerequisite human-executed and live-verified on `CareerVpCrudDev`.
+- [x] `CareerVpCrudDevx` domain-claim guard and AC-P26-9 RED→GREEN infrastructure test landed; devx synthesizes with zero shared `DomainName`/`BasePathMapping` resources.
+- [x] Review-only devx creation change set captured: 292 additions, zero replacements, `auto_fail: false` (`docs/evidence/p26-devx-changeset-review-20260719.json`).
+- [ ] Human must re-form and execute the devx creation change set, then run P-30 against devx's raw invoke URL.
+- [ ] The shared-domain BasePathMapping flip and old-dev decommission remain separate, later human-only actions; P-09 waits for the created devx stack's resource count.
+
 - [x] Folder Structure Initialization
 - [x] Environment Configuration
 - [x] Command Center Setup (`CLAUDE.md`, `.clauderules`)
