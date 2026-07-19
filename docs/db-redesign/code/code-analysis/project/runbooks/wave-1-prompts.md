@@ -633,89 +633,122 @@ ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULE
 
 ---
 
-## PROMPT 1.3d — P-26 Job-1 count-relief: EXECUTE the prepared resource-import (spine; hard blocker)
+## PROMPT 1.3d — P-26 Job-1 count-relief: devx parallel-stack cutover (spine; hard blocker)
 
-**Model/effort:** Claude Code `opus / xhigh` · Codex `GPT-5.6 Sol, xhigh` — hardest step; 908-user blast radius. **Deps:** 0.7 (satisfied). **Touches:** `api_construct.py`, `app.py` (spine). **Human-gated execute.**
+**Model/effort:** Claude Code `opus / xhigh` · Codex `GPT-5.6 Sol, xhigh` — hardest step; 908-user blast radius. **Deps:** v2.6.0 amendment committed (satisfied). **Touches:** `api_construct.py`, `app.py` (spine). **Human-gated execute.**
+
+> **SUPERSEDED MECHANISM, DO NOT USE:** earlier revisions of this prompt directed a human-gated
+> `cdk refactor` resource-import (physical-id-preserving migration of 77 named resources into
+> `CrudFeaturesNestedStack`, commits `dd33025`/`7fe3c4d`). The v2.6.0 amendment
+> (`specs/amendments/P-26-devx-parallel-cutover-amendment.md`, `Scope-Lock-Approved-By: Yitzchak
+> Meirovich 2026-07-18`, committed `3bbb963`) supersedes that mechanism for `dev`: pre-launch dev
+> data/Cognito accounts are disposable, so relief comes from a **parallel fresh `CareerVpCrudDevx`
+> stack**, not from importing the existing one. **Do not run `cdk refactor` against dev under any
+> circumstances** — that engineering is dormant/historical only. See
+> `specs/P-26-blue-green-api-spec.md` (Job 1 dev-only amendment note, AC-P26-9) for the full
+> governing text.
 
 ```
-Finish P-26 Job-1 count-relief. VERIFY BEFORE ACTING — the execution-plan status note for this row
-is STALE. Confirm the REAL current state from git + a command you just ran, do not trust the table.
+Stand up P-26 Job-1 relief for dev via the devx parallel stack. VERIFY BEFORE ACTING.
 
 STANDING CHECK (see runbooks/RUNBOOK-RULES.md) — before anything else, in this order:
-1. Open runbooks/wave-1-status.md and check its row for this step (1.3d). It records that a
-   contract amendment (project-scope-lock.yaml v2.5.0) must be COMMITTED before this step is
-   allowed to run — the contract file otherwise still files this work under Wave 0, and running it
-   here without that commit would repeat the exact undocumented-drift problem that amendment fixes.
-   Run `git log -1 -- project-scope-lock.yaml` and confirm the top commit's message references
-   v2.5.0 / P-26 wave tracking. If it does NOT, STOP — do not proceed with the engineering below
-   until a human has committed that amendment.
-2. Once confirmed, check whichever spine step landed most recently for any open problem, and
-   confirm 1.3c-gate (P-11) has landed so the spine is clear.
+1. Open runbooks/wave-1-status.md's row for this step (1.3d). As of 2026-07-19 it records: the O-9
+   domain fix (AWS::ApiGateway::DomainName + BasePathMapping for api.dev.careervp.com) already
+   exists in CDK, was proven safe via a real review-only change set (523 changes, auto_fail: false,
+   zero RestApi/DynamoDB/S3/Cognito replacements — evidence at
+   docs/evidence/p26-o9-changeset-review-20260719.json), but has NOT been human-executed yet. If
+   that row still shows the domain fix un-executed, STOP here — devx creation is explicitly gated
+   on that landing first (do not create devx against a domain seam that doesn't live-resolve yet).
+2. Confirm the v2.6.0 amendment is actually committed: `git log -1 --format=%H%n%B -- \
+   docs/db-redesign/code/code-analysis/project/project-scope-lock.yaml` must show
+   `Scope-Lock-Approved-By:` in a commit message and `meta.version: 2.6.0` in the file. If not,
+   STOP — this step cannot run on an unapproved amendment.
+3. Confirm the spine is free (no other session mid-edit on api_construct.py).
 
-KNOWN-BUT-VERIFY current state (2026-07-17):
-- Commit dd33025 re-homed 77 named feature resources into CrudFeaturesNestedStack (Job-1 import
-  PREPARED). Commit 7fe3c4d deployed CareerVpCrudDev with CrudFeatures staged as an EMPTY nested
-  stack first, and ran P-30 smoke 4/4 GREEN against the LIVE custom domain https://api.dev.careervp.com.
-- BUT offline synth this pass shows parent CareerVpCrudDev = 412 and NO CrudFeaturesNestedStack
-  template in cdk.out. So EITHER HEAD toggled the re-homing back to the empty staged form, OR
-  cdk.out is stale. RESOLVE THIS FIRST with `cdk synth` + `cdk diff CareerVpCrudDev` against live —
-  do not proceed on assumption.
-- P-24 authorizer was restored dormant-by-design in 7fe3c4d — confirm it stays dormant here.
+REAL BLOCKING CODE GAP FOUND 2026-07-19 (fix this before creating any devx stack):
+_build_api_custom_domain() (api_construct.py:346-371) is HARDCODED to domain_name=
+"api.dev.careervp.com" and a specific dev-only ACM cert ARN, and is invoked whenever
+`not is_production_env and not self.scratch_mode` (api_construct.py:327-328). Per app.py,
+is_production_env = settings.environment in ("prod","production") — "devx" is neither production
+nor scratch, so AS WRITTEN TODAY, creating a devx stack (ENVIRONMENT=devx) would try to claim the
+SAME "api.dev.careervp.com" AWS::ApiGateway::DomainName that CareerVpCrudDev already owns. API
+Gateway custom domain names are globally unique per account/region — this WILL fail at deploy time
+with a "domain already exists" conflict, the same failure class as the identity-map-table conflict
+found in this session (see wave-1-status.md 1.3d row). This is a code fix, not just a test:
+1. Gate _build_api_custom_domain() so it only runs for the literal "dev" environment (the stack
+   that actually owns api.dev.careervp.com), never for "devx" or any other non-prod/non-scratch
+   environment string. The simplest correct guard: only call it when self.naming.environment ==
+   "dev" (in addition to the existing not is_production_env / not scratch_mode checks) — devx does
+   not get its own custom domain before cutover; it is validated on its raw execute-api URL and
+   only takes the domain via the human-only P-28 BasePathMapping flip (never a DomainName resource
+   of its own for the shared hostname).
+2. Write the RED test first (see spec, AC-P26-9): synth CareerVpCrudDevx (ENVIRONMENT=devx) and
+   assert no AWS::ApiGateway::DomainName/BasePathMapping in its template names
+   "api.dev.careervp.com"; assert CareerVpCrudDev's template still owns that pair (positive
+   control, so the seam is verifiably claimed by exactly one stack, never zero).
 
-The RED outcome tests already exist (c6fa939 / dd33025):
-  src/backend/tests/infrastructure/test_p26_job1_resource_import_outcomes.py (5 tests)
-  src/backend/tests/infrastructure/test_p26_blue_green_api.py (12 guard tests, incl. RestApi
-  logical-id + Cognito singular + <500 + PARENT_HEADROOM_TARGET=400 warn-only).
-DO NOT rewrite these. If one seems wrong -> STOP, §0.3 amendment; never weaken a test to pass.
+RED tests to write (none exist yet as pytest files — this is genuinely new work, unlike the old
+resource-import prompt which only needed EXECUTE):
+  test_devx_does_not_claim_shared_domain_before_cutover  (see spec, cite AC-P26-9)
+The old test_p26_job1_resource_import_outcomes.py / test_p26_blue_green_api.py RED tests governed
+the SUPERSEDED mechanism — do not delete them (staging/prod still use that path per the amendment),
+but do not expect them to pass for a devx-shaped synth; they are out of scope for this dev-only step.
 
-MECHANISM (amendment ACCEPTED 2026-07-15, Option A): human-gated `cdk refactor` resource-import,
-physical-id PRESERVED (no delete/create). CDK CLI 2.1105.0, UNSTABLE feature (--unstable required).
-  cd infra && cdk refactor --unstable=refactor --dry-run     # inspect computed mapping
-  # --override-file to correct where CDK guesses; --revert exists; RETAIN(567320d) is the net.
-
-REMAINING WORK (mostly EXECUTE + verify, not fresh authoring):
-1. Resolve the synth/live discrepancy above; get the working tree to the intended re-homed shape.
-2. cdk refactor --dry-run: mapping must show IMPORT with physical-ids PRESERVED, ZERO DELETE+CREATE,
-   and RestApi + Cognito must NOT appear in the mapping at all.
-3. Prove parent CareerVpCrudDev drops BELOW 400 with the 77 resources in CrudFeatures; no template >=500.
-4. Hand the prepared mapping + templates + the P-28 DescribeChangeSet Replacement report to the
-   HUMAN to execute. After human execution: re-run P-30 smoke (must stay 4/4 green through
-   https://api.dev.careervp.com).
+REMAINING WORK:
+1. Fix the domain-claim gate in api_construct.py (above) — GREEN against the new RED test.
+2. Confirm ENVIRONMENT=devx synths cleanly end-to-end: `ENVIRONMENT=devx cd infra && uv run cdk
+   synth` (no CAREERVP_SCRATCH_MODE — this is a real live-tier stack, not the eu-west-1 scratch
+   rig). Naming should produce a distinct stack id (verify via naming_utils.py — do not assume).
+3. Confirm p26_rehome_features is a CDK context value (`-c p26_rehome_features=true`, NOT an env
+   var) — pass it explicitly on every devx synth/diff/deploy command per the amendment.
+4. Prepare (do NOT execute) the devx creation change set + P-28 Replacement report, same pattern
+   used for the O-9 review (docs/evidence/p26-o9-changeset-review-20260719.json is the template to
+   follow — describe-change-set --no-execute, pipe to scripts/ci/changeset_replacement_report.py,
+   delete the review-only change set after capturing evidence, confirm via describe-stacks that
+   nothing executed).
+5. Hand the prepared change set + Replacement report + domain-claim test result to the HUMAN to
+   execute. After human execution: P-30 4-wire smoke against devx's own raw invoke URL (NOT the
+   shared custom domain — devx does not own it yet).
+6. The base-path flip (cutting api.dev.careervp.com from CareerVpCrudDev to CareerVpCrudDevx) and
+   the eventual CareerVpCrudDev decommission are SEPARATE, LATER, human-only steps — out of scope
+   for this prompt. Do not prepare either here.
 
 STOP CONDITIONS (any -> STOP, §0.3):
-- RestApi or Cognito appears in the refactor mapping AT ALL (IMMUTABLE breach).
-- dry-run shows DELETE+CREATE (not IMPORT) for any named resource.
-- Any template >= 500, or parent still >= 400 after re-homing.
-- No AWS creds -> report honestly, do not fake a mapping. (cdk refactor reads live stack state.)
-
-STRONGLY RECOMMENDED: rehearse on the 0.64 scratch rig (scratch_deployment.py, eu-west-1, ~5.5min,
-tears down to zero) BEFORE the human touches dev. That rig was built for exactly this.
+- The O-9 domain fix has not been human-executed on CareerVpCrudDev yet (see standing check #1).
+- devx's synthesized template claims api.dev.careervp.com in any resource.
+- RestApi or the EXISTING Cognito user pool appears touched/moved/replaced in any diff (devx
+  getting its OWN fresh Cognito pool is fine and expected per the amendment — that is not a move).
+- CloudFormation early-validation reports any "already exists" conflict — investigate root cause
+  (as this session did for the orphaned identity-map table) before deleting/resolving anything;
+  never delete a live resource without confirming it's actually orphaned/empty first.
+- No AWS creds -> report honestly, do not fake a change set.
 
 VERIFY:
-cd infra && uv sync && cdk synth      # RestApi id BYTE-STABLE; parent < 400
-cd infra && cdk refactor --unstable=refactor --dry-run
-cd src/backend && uv run pytest tests/infrastructure -k "p26 or p24 or identity_surrogate" -v
-cd infra && uv run pytest tests/infrastructure -k "p26 or nested_split or artifact_chain" -v
+cd infra && uv sync
+ENVIRONMENT=devx uv run cdk synth -c p26_rehome_features=true
+cd src/backend && uv run pytest tests/infrastructure -k "p26 and devx" -v
 cd src/backend && uv run ruff format . && uv run ruff check --fix . && uv run mypy careervp --strict
 
-DO NOT EXECUTE against AWS (no cdk deploy, no refactor without --dry-run, no ExecuteChangeSet).
+DO NOT EXECUTE against AWS (create-change-set / --no-execute only; no cdk deploy without
+--no-execute; no ExecuteChangeSet; no DeleteTable/DeleteStack on anything without explicit human
+sign-off, even on something that looks orphaned).
 
 OUTPUT REQUIRED:
 1. A git commit message.
-2. Parent resource count BEFORE/AFTER + the exact 77-resource re-home list + which artifact-chain
-   export locks are broken/re-imported + the prepared refactor artifact path awaiting human execution.
-3. The rollback lever (cdk refactor --revert + RETAIN net), stated explicitly.
-4. IF clean: "1.3d P-26 Job-1 PREPARED and dry-run IMPORT-clean, parent < 400. Human executes;
-   then P-30 smoke; then 1.4 P-09 is unblocked." IF a live-truth contradiction surfaces: STOP, §0.3.
+2. Confirmation the domain-claim gate is fixed + its RED-then-GREEN test evidence.
+3. The prepared devx change-set evidence path + Replacement-report auto_fail verdict.
+4. IF clean: "1.3d P-26 devx PREPARED, domain-claim gate GREEN, change set safe. Human executes;
+   then P-30 smoke on devx raw URL; then 1.4 P-09 assessment (against devx's resource count) can
+   start." IF a live-truth contradiction surfaces: STOP, §0.3.
 
 ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULES.md):
 - Compare what you built against this prompt AND P-26's entry in project-scope-lock.yaml
-  (including the wave_1_carryover note); say plainly whether they match.
-- If anything drifted — especially RestApi/Cognito appearing in the mapping, or the parent
-  staying ≥400 — STOP, explain in one plain sentence first then technical detail, flag for human
-  review, do not mark done.
-- Update runbooks/wave-1-status.md's row for this step. If the human hasn't executed the refactor
-  yet, that IS the open problem for 1.4 (P-09) — write it there explicitly.
+  (including the dev_only_cutover field); say plainly whether they match.
+- If anything drifted — especially the shared domain being claimed by more than one stack, or the
+  existing Cognito pool/RestApi being touched — STOP, explain in one plain sentence first then
+  technical detail, flag for human review, do not mark done.
+- Update runbooks/wave-1-status.md's row for this step. If the human hasn't executed either change
+  set yet (O-9 or devx creation), that IS the open problem for 1.4 (P-09) — write it there explicitly.
 ```
 
 ---
