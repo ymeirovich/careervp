@@ -95,7 +95,37 @@ These are the two console tasks that block the custom-domain seam. Automation ma
 
 ### Job 1 — Decompose AROUND the RestApi (CFN-limit relief, additive, no RestApi move)
 
-Reduce the parent template's resource count by moving **non-stateful, non-RestApi** resources into per-feature nested stacks, **leaving `service-rest-api` and its `deployment_stage` in the parent, at the same logical id, with the same URL.**
+> **DEV-ONLY AMENDMENT (v2.6.0, 2026-07-18, `Scope-Lock-Approved-By: Yitzchak Meirovich`):**
+> for the **`dev` environment only**, this Job 1's live-resource-import mechanism (`cdk refactor`,
+> preserving the existing tables/buckets/Cognito pool while relieving the CFN-resource-count
+> limit) is **superseded** by standing up a parallel, fresh `CareerVpCrudDevx` stack
+> (`ENVIRONMENT=devx`, `p26_rehome_features=true` from first creation) because pre-launch dev
+> data and Cognito accounts are declared disposable. Devx is validated on its own raw invoke URL
+> (P-30 4-wire), then cut over to the shared `api.dev.careervp.com` domain via the same
+> human-only P-28 `BasePathMapping` flip described in Job 2 below — devx is architecturally a
+> Job-2-style blue/green swap, not a Job-1 in-place decomposition, even though it also relieves
+> the CFN-resource count. The old `CareerVpCrudDev` stays live and mapped until devx is proven;
+> its decommission is a **separate, later, human-approved step** — nothing here authorizes it.
+> **This exception applies to `dev` only.** `staging` and `prod` retain the full Job 1
+> live-resource-import guarantee below (no data/Cognito loss) unchanged. The historical
+> resource-import engineering for dev (commits `dd33025`, `7fe3c4d`) is inactive and MUST NOT be
+> executed. See `specs/amendments/P-26-devx-parallel-cutover-amendment.md` for the full decision
+> record and `runbooks/wave-1-status.md` rows 1.3d/1.4 for live execution status.
+>
+> **Domain-claim gate (new requirement for the devx path):** `CareerVpCrudDevx` MUST NOT create
+> or claim an `AWS::ApiGateway::DomainName`/`BasePathMapping` for `api.dev.careervp.com` at any
+> point before the human-only cutover — that domain stays bound to `CareerVpCrudDev` until the
+> P-28 flip. A synth-time test MUST assert devx's stack template contains no `DomainName`/
+> `BasePathMapping` resource for the shared hostname (see new RED test below).
+>
+> **O-9 reopened, blocks devx creation:** a 2026-07-18 live check found `api.dev.careervp.com`
+> has no `AWS::ApiGateway::DomainName` in the account (only `dev-api.careervp.com`/
+> `stage-api.careervp.com` exist) and the dev ACM cert (`d93bafb3-...`) is `ISSUED` but unused.
+> The stable-domain seam this whole clause depends on is not actually live for dev. **Reconcile
+> O-9 before creating any devx change set** — do not implement/deploy devx against a domain seam
+> that does not exist.
+
+Reduce the parent template's resource count by moving **non-stateful, non-RestApi** resources into per-feature nested stacks, **leaving `service-rest-api` and its `deployment_stage` in the parent, at the same logical id, with the same URL.** (Unchanged; governs `staging`/`prod`, and dev if the devx amendment above is ever superseded back.)
 
 1. Identify the largest movable subtrees in `ApiConstruct` that are NOT the RestApi and NOT stateful: feature Lambdas + their log groups, DLQs/queues, per-feature alarms/dashboards. (The existing four nested stacks are the template to follow; the `ErrorReportNestedStack` AwsIntegration-proxy pattern at `api_construct.py:294-308` shows how a nested-stack Lambda is wired to a parent Resource/method while keeping the invoke permission in the nested stack.)
 2. Move each subtree into a new/existing `NestedStack`, passing the parent's RestApi/root-resource **as a construct prop** where a route must attach to it. Accept that this compiles to Export/ImportValue; that is fine while the parent RestApi is stable (it is not being retired here).
@@ -143,6 +173,17 @@ All tests live in `tests/infra/test_p26_blue_green_api.py` (authored at IMPLEMEN
 - Assert: the `BasePathMapping` binds that domain to the RestApi and its deployment stage; a `CfnOutput` exposes the regional target domain (for the Cloudflare CNAME).
 - MUST FAIL if the domain is EDGE-typed, hard-codes `dev` in a non-dev env, or the mapping is absent.
 
+**`test_devx_does_not_claim_shared_domain_before_cutover`** *(dev-only devx amendment, v2.6.0)*
+- Synth `CareerVpCrudDevx` (`ENVIRONMENT=devx`).
+- Assert: no `AWS::ApiGateway::DomainName` resource in the devx template has `DomainName ==
+  "api.dev.careervp.com"`, and no `AWS::ApiGateway::BasePathMapping` in the devx template
+  references that hostname.
+- Assert (positive control): the existing `CareerVpCrudDev` template still owns that
+  `DomainName`/`BasePathMapping` pair, so the shared seam is verifiably still bound to the old
+  stack, not silently unclaimed by both.
+- MUST FAIL if devx's `_build_api_custom_domain` (or equivalent) is invoked unconditionally
+  instead of being skipped/env-scoped away from the shared hostname pre-cutover.
+
 **`test_new_api_born_in_own_stack_not_parent`** *(Job 2 only)*
 - When a NEW RestApi is introduced, synth and assert the new `AWS::ApiGateway::RestApi` resides in a **separate** top-level stack template (e.g. `ApiV2Stack`), NOT in the `ServiceStack` parent template.
 - MUST FAIL if the new RestApi subtree lands inside the ~415/500 parent.
@@ -161,7 +202,9 @@ All tests live in `tests/infra/test_p26_blue_green_api.py` (authored at IMPLEMEN
 
 ## Acceptance Criteria
 
-**AC-P26-1** — *Given* the Job 1 decomposition ships, *When* the stack is synthesized, *Then* the `service-rest-api` RestApi remains in the same (parent) stack at the same logical id with an unchanged invoke URL, feature Lambdas/alarms/queues have moved into per-feature nested stacks, and `cdk diff` shows **zero replacement** of the RestApi or any DynamoDB table / S3 bucket / Cognito pool.
+**AC-P26-1** — *Given* the Job 1 decomposition ships, *When* the stack is synthesized, *Then* the `service-rest-api` RestApi remains in the same (parent) stack at the same logical id with an unchanged invoke URL, feature Lambdas/alarms/queues have moved into per-feature nested stacks, and `cdk diff` shows **zero replacement** of the RestApi or any DynamoDB table / S3 bucket / Cognito pool. *(Governs `staging`/`prod`; for `dev` this is superseded by AC-P26-9 below per the v2.6.0 amendment.)*
+
+**AC-P26-9 (dev-only devx supersession, v2.6.0)** — *Given* the approved devx amendment, *When* `CareerVpCrudDevx` is created, *Then* it is a fresh stack (`ENVIRONMENT=devx`, `p26_rehome_features=true` from birth, disposable data/Cognito), it does NOT claim `api.dev.careervp.com`'s `DomainName`/`BasePathMapping` before cutover (see the domain-claim RED test), it passes the P-30 4-wire smoke on its own raw invoke URL, the OLD `CareerVpCrudDev` remains live and mapped until devx is proven, and no devx change set is created until O-9 (the missing `api.dev.careervp.com` DomainName/BasePathMapping in the live account) is reconciled.
 
 **AC-P26-2** — *Given* the parent template was near the CFN limit (~415/498 of 500), *When* decomposition and any Job-2 stand-up are complete, *Then* **no single template reaches 500 resources**, the parent trends toward the `< 400` headroom target (warn-only, not a build-failing gate at the current count), and the additive waves (P-09/P-14/P-17/P-21) can land.
 
@@ -181,7 +224,7 @@ All tests live in `tests/infra/test_p26_blue_green_api.py` (authored at IMPLEMEN
 
 ## Done-when
 
-All RED tests pass (Job-1 tests unconditionally; Job-2 tests when a new RestApi is introduced); `ruff`/`mypy` clean (infra is CDK Python); AC-P26-1..8 hold; the RestApi is never moved in place or across stacks; `cdk diff` shows zero stateful-resource replacement for every prepared change; no single template reaches the 500-resource CFN limit; the custom-domain constructs are REGIONAL + env-scoped and the base-path mapping (still pointing at the OLD RestApi until cutover) is present; the base-path FLIP and old-API RETIRE exist only as **prepared change sets** with the P-28 Replacement report auto-fail wired — neither is executed by automation; the P-27 temporary-lift + reinstate procedure is cross-referenced in the retire runbook; the O-9 preconditions (frontend CI fixed, Cloudflare CNAME, `NEXT_PUBLIC_API_URL` repoint) are documented as owned, gated human actions that block the cutover.
+All RED tests pass (Job-1 tests unconditionally on `staging`/`prod`; the devx domain-claim test unconditionally once devx exists; Job-2 tests when a new RestApi is introduced); `ruff`/`mypy` clean (infra is CDK Python); AC-P26-1..9 hold; the RestApi is never moved in place or across stacks; `cdk diff` shows zero stateful-resource replacement for every prepared change; no single template reaches the 500-resource CFN limit; the custom-domain constructs are REGIONAL + env-scoped and the base-path mapping (still pointing at the OLD RestApi until cutover) is present; the base-path FLIP and old-API RETIRE exist only as **prepared change sets** with the P-28 Replacement report auto-fail wired — neither is executed by automation; the P-27 temporary-lift + reinstate procedure is cross-referenced in the retire runbook; the O-9 preconditions (frontend CI fixed, Cloudflare CNAME, `NEXT_PUBLIC_API_URL` repoint) are documented as owned, gated human actions that block the cutover.
 
 ---
 
@@ -192,7 +235,7 @@ P-26 is the last of the deploy-safety guardrails and has hard dependencies on:
 - **P-30** (4-wire smoke) — baseline green BEFORE and AFTER every P-26 change; the sole proof the new API path is live.
 - **P-27** (stack policy) — the retire step is blocked-by-design by P-27; must be applied first and lifted/reinstated only by a human.
 - **P-28** (deploy identity) — the base-path flip and the retire are human-only `ExecuteChangeSet` gates with the machine-parsed Replacement report.
-- **O-9** (frontend CI + external DNS) — the domain cutover cannot proceed until the Deploy-Frontend CI is fixed and `NEXT_PUBLIC_API_URL` can be repointed+redeployed.
+- **O-9** (frontend CI + external DNS) — the domain cutover cannot proceed until the Deploy-Frontend CI is fixed and `NEXT_PUBLIC_API_URL` can be repointed+redeployed. **Reopened 2026-07-18**: a live check found `api.dev.careervp.com` has no `AWS::ApiGateway::DomainName` in the account and the dev ACM cert is unused — the devx amendment's cutover path is blocked on this being reconciled first, not just on frontend CI.
 
 **Order:** Job 0 (custom domain stabilize, additive) → Job 1 (decompose around the RestApi, additive, CFN-limit relief) → **[only if still over]** Job 2 (NEW RestApi in own stack → P-30-verify on raw URL → human flip base-path on the stable domain → human retire old API with P-27 lift/reinstate). P-26 MUST precede P-09/P-14/P-17/P-21 (they need the freed parent headroom). Nothing in P-26 touches the Cognito user pool.
 

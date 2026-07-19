@@ -44,6 +44,17 @@ GitHub → Settings → Environments → **New environment** → name it exactly
 Per `infra/cfn_stack_policy.README.md`, run `aws cloudformation set-stack-policy` once per
 top-level stack. Automation never does this.
 
+## 5. Dev-only devx parallel-stack cutover (P-26 v2.6.0 amendment)
+
+`CareerVpCrudDevx`'s creation change set and its later base-path flip (`api.dev.careervp.com`
+`BasePathMapping` re-pointed from `CareerVpCrudDev` to `CareerVpCrudDevx`) both go through this
+same create-change-set → human-gated execute-change-set flow — no new environment/role is
+needed. The flip change set MUST show `Replacement: false` for the `BasePathMapping` and MUST
+NOT touch any `AWS::ApiGateway::RestApi`, `DynamoDB::Table`, `S3::Bucket`, or
+`AWS::Cognito::UserPool`; the Replacement report auto-fails otherwise (see P-26 spec, AC-P26-6).
+The eventual decommission of the old `CareerVpCrudDev` stack is a separate, later, explicitly
+human-approved step — never bundled into the cutover change set.
+
 ## NOT part of P-28 / step 0.55
 - AWS Budgets + Cost-Anomaly Detection = **step 0.56 / P-32**, now defined as CDK
   in `infra/careervp/monitoring.py` (moved console→IaC by explicit decision,
