@@ -142,13 +142,22 @@ class ApiConstruct(Construct):
         )
         self._grant_vpr_jobs_queue_access()
         self.api_authorizer = self._build_api_authorizer(user_pool)
+        # P-26 Job 1: co-located with self._features (not self) because CodeDeploy's
+        # LambdaDeploymentGroup mutates the Alias's own CFN resource (UpdatePolicy) and
+        # adds an ordering-only dependency on the Application/DeploymentGroup. Ordering
+        # DependsOn edges are NOT rewritten across a nested-stack boundary by CDK (unlike
+        # plain Ref/GetAtt value references, which do get converted into nested-stack
+        # Parameters) -- if these lived in the parent while the Alias/Lambda live in
+        # self._features, CFN nested-stack validation fails with "Unresolved resource
+        # dependencies" because the nested template ends up depending on parent-only
+        # logical ids. Must stay scoped identically to the aliased Lambda.
         self.p23_deployment_application = codedeploy.LambdaApplication(
-            self,
+            self._features,
             "P23CanaryApplication",
             application_name=self.naming.resource_name("api-canary", "application"),
         )
         self.p23_deployment_role = iam.Role(
-            self,
+            self._features,
             "P23CodeDeployRole",
             assumed_by=iam.ServicePrincipal("codedeploy.amazonaws.com"),
             role_name=self.naming.role_name("codedeploy", "api-canary"),
@@ -639,8 +648,12 @@ class ApiConstruct(Construct):
     ) -> _lambda.Alias:
         """Attach a stable alias, error alarm, and CodeDeploy canary to one route Lambda."""
         alias = function.add_alias(f"live-{self.naming.environment}")
+        # Scoped to self._features (not self) for the same nested-stack-boundary reason
+        # documented where p23_deployment_application/p23_deployment_role are created:
+        # this alarm and the DeploymentGroup below must live in the same template as the
+        # alias/function they reference.
         error_alarm = cw.Alarm(
-            self,
+            self._features,
             f"P23{self._p23_construct_suffix(feature)}CanaryErrorAlarm",
             alarm_name=self.naming.resource_name(f"{feature}-canary-error", "alarm"),
             metric=alias.metric_errors(period=Duration.minutes(1), statistic="Sum"),
@@ -650,7 +663,7 @@ class ApiConstruct(Construct):
         )
         self._p23_canary_alarms.append(error_alarm)
         codedeploy.LambdaDeploymentGroup(
-            self,
+            self._features,
             f"P23{self._p23_construct_suffix(feature)}CanaryDeploymentGroup",
             application=self.p23_deployment_application,
             alias=alias,
