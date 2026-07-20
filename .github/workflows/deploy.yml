@@ -7,9 +7,15 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Environment to deploy (dev, staging, prod)'
+        description: 'Environment to deploy'
         required: true
         default: dev
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+          - devx
 
 # P-28 Sub-clause B: one deploy slot for ALL triggers, and NEVER cancel an in-flight run.
 # A 2nd push to main must QUEUE — cancelling a mid-flight CloudFormation update leaves the
@@ -263,8 +269,22 @@ jobs:
       stack_name: ${{ steps.create.outputs.stack_name }}
     env:
       CHANGESET_NAME: cs-${{ github.run_id }}-${{ github.run_attempt }}
-      STACK_NAME: ${{ inputs.environment == 'prod' && 'CareerVpCrudProduction' || inputs.environment == 'staging' && 'CareerVpCrudStaging' || 'CareerVpCrudDev' }}
+      # Any environment not explicitly listed here used to silently fall through
+      # to CareerVpCrudDev -- a typo'd `environment` input would target the LIVE
+      # dev stack instead of failing. `devx` (the P-26 parallel-cutover stack,
+      # runbooks/p26-devx-parallel-cutover-handoff.md blocker #5) hit exactly
+      # this. The "Validate resolved stack name" step below is the fail-closed
+      # backstop if this ternary and the `type: choice` restriction above ever
+      # disagree.
+      STACK_NAME: ${{ inputs.environment == 'prod' && 'CareerVpCrudProduction' || inputs.environment == 'staging' && 'CareerVpCrudStaging' || inputs.environment == 'devx' && 'CareerVpCrudDevx' || inputs.environment == 'dev' && 'CareerVpCrudDev' || 'UNKNOWN' }}
     steps:
+      - name: Validate resolved stack name
+        run: |
+          if [ "${{ env.STACK_NAME }}" = "UNKNOWN" ]; then
+            echo "::error::inputs.environment='${{ inputs.environment }}' did not map to a known stack name. Refusing to fall through to a default stack."
+            exit 1
+          fi
+          echo "Deploying environment '${{ inputs.environment }}' -> stack '${{ env.STACK_NAME }}'"
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:

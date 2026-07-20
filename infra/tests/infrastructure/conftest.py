@@ -46,6 +46,35 @@ def rehome_service_stack() -> ServiceStack:
 
 
 @pytest.fixture(scope="module")
+def devx_service_stack() -> ServiceStack:
+    """A non-``dev`` environment, for account-singleton scoping assertions.
+
+    ``devx`` is the P-26 parallel-cutover stack: same account and region as
+    live dev, different environment slug. Resources that are unique per AWS
+    *account* rather than per stack (see P-32's Cost Anomaly monitor) must not
+    be synthesized here, or the real create fails with ``AlreadyExists``.
+    """
+    app = App(context={"p26_rehome_features": "true"})
+    naming = NamingUtils(
+        environment="devx", region="us-east-1", account_id="123456789012"
+    )
+    return ServiceStack(
+        scope=app,
+        id=naming.stack_id("crud"),
+        env=Environment(account="123456789012", region="us-east-1"),
+        is_production_env=False,
+        naming=naming,
+        stack_feature="crud",
+    )
+
+
+@pytest.fixture(scope="module")
+def devx_monitoring_template(devx_service_stack: ServiceStack) -> Template:
+    """The monitoring nested stack as synthesized for a non-``dev`` environment."""
+    return Template.from_stack(devx_service_stack.monitoring_nested_stack)
+
+
+@pytest.fixture(scope="module")
 def synthesized_template(service_stack: ServiceStack) -> Template:
     """The parent CareerVpCrudDev template (API Gateway, tables, buckets, core Lambdas)."""
     return Template.from_stack(service_stack)

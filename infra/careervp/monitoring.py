@@ -56,6 +56,21 @@ _P32_ANOMALY_THRESHOLD_ABSOLUTE_USD = 10.0
 # of who is running cdk locally (see P-23 ledger step 1.0, 2026-07-18).
 _P32_ANOMALY_OWNER_TAG = "runner"
 
+# AWS Cost Anomaly Detection allows exactly ONE DIMENSIONAL/SERVICE monitor per
+# AWS *account* — the "watch every AWS service" monitor. The limit is enforced on
+# the account, not the monitor name, so an env-scoped name does NOT avoid it: a
+# second environment requesting `...-anomaly-monitor-devx` still fails with
+# `AlreadyExists` because `...-anomaly-monitor-dev` already occupies the account's
+# single slot. This is invisible to `cdk synth` and to the P-28 change-set
+# Replacement report (both validate shape, not account-level creatability), so it
+# only surfaces ~9 minutes into a real create and takes the whole stack down with
+# it (CareerVpCrudDevx, 2026-07-19T20:13:20Z). `dev` owns the account's monitor;
+# every other environment skips it. One account-wide monitor is also the correct
+# behaviour on its own merits — N per-env monitors would double-alert on the same
+# account spend. The Budget is NOT affected: budget names are genuinely per-account
+# unique, so every environment keeps its own (see _build_budget).
+_P32_ANOMALY_OWNER_ENVIRONMENT = "dev"
+
 # P-21: alarms must reach a real on-call destination. Each environment has a
 # default subscribed endpoint so a synthesized stack is never left with zero
 # subscribers; the human overrides it per deploy via ALARM_SUBSCRIPTION_EMAILS
@@ -68,6 +83,11 @@ _DEFAULT_ALARM_EMAILS: dict[str, str] = {
     "staging": "careervp-alerts-stage@careervp.com",
     "prod": "careervp-alerts@careervp.com",
     "production": "careervp-alerts@careervp.com",
+    # P-26 parallel-cutover stack: no shared distribution list yet since it is a
+    # temporary, personally-operated stack, so alerts go straight to the human
+    # standing it up rather than being silently dropped (the P-21 zero-subscriber
+    # gap this map exists to close).
+    "devx": "ymeirovich@presgen.net",
 }
 
 
@@ -369,7 +389,24 @@ class MonitoringNestedStack(NestedStack):
         """P-32 Wave 0: AWS Budget + Cost Anomaly Detection, both routed to the
         shared monitoring SNS topic (whose resource policy already grants
         budgets.amazonaws.com / costalerts.amazonaws.com publish rights — see
-        CrudMonitoring._build_topic)."""
+        CrudMonitoring._build_topic).
+
+        The two halves have different scoping rules and must not be built
+        together: the Budget is per-environment (its name is env-scoped and
+        genuinely unique per account), while the anomaly monitor is an
+        account-wide singleton owned by ``dev``. See
+        ``_P32_ANOMALY_OWNER_ENVIRONMENT``.
+        """
+        self._build_budget(notification_topic, naming)
+        if naming.environment == _P32_ANOMALY_OWNER_ENVIRONMENT:
+            self._build_cost_anomaly(notification_topic, naming)
+
+    def _build_budget(
+        self, notification_topic: sns.ITopic, naming: NamingUtils
+    ) -> None:
+        """Per-environment $100/mo cost budget. Safe in every environment —
+        ``naming.resource_name`` makes the budget name unique per env, and AWS
+        Budgets enforces uniqueness on that name alone."""
         budgets.CfnBudget(
             self,
             "P32Budget",
@@ -413,6 +450,15 @@ class MonitoringNestedStack(NestedStack):
             ],
         )
 
+    def _build_cost_anomaly(
+        self, notification_topic: sns.ITopic, naming: NamingUtils
+    ) -> None:
+        """Account-wide Cost Anomaly Detection monitor + subscription.
+
+        Only ever built for ``_P32_ANOMALY_OWNER_ENVIRONMENT``: AWS permits one
+        DIMENSIONAL/SERVICE monitor per account, so building this in a second
+        environment fails the whole stack create with ``AlreadyExists``.
+        """
         anomaly_monitor = ce.CfnAnomalyMonitor(
             self,
             "P32AnomalyMonitor",
