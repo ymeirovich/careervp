@@ -1,0 +1,36 @@
+{
+  "api_base": "https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod",
+  "checks": [
+    {
+      "detail": "health returned 200",
+      "name": "health",
+      "passed": true,
+      "request_id": "9f2ae594-b916-4377-9b2e-6130d4beef51",
+      "status": 200
+    },
+    {
+      "detail": "exact origin echoed: 'https://main.d3j2wnm8g5clnw.amplifyapp.com'",
+      "name": "cors_exact_origin",
+      "passed": true,
+      "request_id": "3a993eb5-6095-4abd-8eed-e3ec5ea6bbf6",
+      "status": 200
+    },
+    {
+      "detail": "authed 200 and unauth rejected with 401",
+      "name": "authed_read",
+      "passed": true,
+      "request_id": "090546cf-f0b9-4d72-870e-c9fa2371291d",
+      "status": 200
+    },
+    {
+      "detail": "upload returned 500, expected 200/201",
+      "name": "authed_upload",
+      "passed": false,
+      "request_id": "8f8ea558-da75-4f16-a75a-4372edd2c902",
+      "status": 500
+    }
+  ],
+  "origin": "https://main.d3j2wnm8g5clnw.amplifyapp.com",
+  "passed": false,
+  "timestamp": "2026-07-20T20:31:15.301286+00:00"
+}

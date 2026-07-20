@@ -159,8 +159,7 @@ def check_stack_state(ctx: Context) -> list[Finding]:
                 logical_id=ctx.stack_name,
                 detail=f"stack is in {status}{note} and cannot be deployed into",
                 remedy=(
-                    f"scripts/deploy/cleanup_stack.sh {ctx.stack_name} "
-                    "(disables termination protection, deletes, waits)"
+                    f"scripts/deploy/cleanup_stack.sh {ctx.stack_name} (disables termination protection, deletes, waits)"
                 ),
             )
         ]
@@ -220,8 +219,7 @@ def check_cost_anomaly_monitor(ctx: Context) -> list[Finding]:
                         "AlreadyExists regardless of its name"
                     ),
                     remedy=(
-                        "gate this resource to the owning environment "
-                        "(monitoring.py: _P32_ANOMALY_OWNER_ENVIRONMENT)"
+                        "gate this resource to the owning environment (monitoring.py: _P32_ANOMALY_OWNER_ENVIRONMENT)"
                     ),
                 )
             )
@@ -319,6 +317,72 @@ def check_named_iam_roles(ctx: Context) -> list[Finding]:
     return findings
 
 
+def check_dynamodb_table_names(ctx: Context) -> list[Finding]:
+    """Explicit DynamoDB TableNames are account+region-scoped.
+
+    A prior stack delete can leave these behind (``DeletionPolicy: Retain`` is
+    standard for stateful tables), so the next create collides on the literal
+    name even though the owning stack is gone. This is the class of failure
+    that hit CareerVpCrudDevx on 2026-07-20: 11 orphaned tables from a deleted
+    stack blocked change-set creation.
+    """
+    client = ctx.session.client("dynamodb")
+    findings: list[Finding] = []
+    for logical_id, props in by_type(ctx, "AWS::DynamoDB::GlobalTable"):
+        name = literal(props.get("TableName"))
+        if not name or name in ctx.owned_physical_ids:
+            continue
+        try:
+            client.describe_table(TableName=name)
+        except ClientError as exc:
+            if exc.response["Error"]["Code"] == "ResourceNotFoundException":
+                continue
+            continue  # permission problems are not this check's business
+        findings.append(
+            Finding(
+                check="dynamodb-table-name",
+                logical_id=logical_id,
+                detail=f"DynamoDB table {name!r} already exists in {ctx.account_id}",
+                remedy=(
+                    f"delete the orphaned table (aws dynamodb delete-table --table-name {name}), or confirm it belongs to this stack"
+                ),
+            )
+        )
+    return findings
+
+
+def check_s3_bucket_names(ctx: Context) -> list[Finding]:
+    """S3 bucket names are globally unique across ALL AWS accounts.
+
+    Same orphan-after-delete failure mode as DynamoDB tables: a bucket left
+    behind by ``DeletionPolicy: Retain`` blocks the next create on the same
+    literal name.
+    """
+    client = ctx.session.client("s3")
+    findings: list[Finding] = []
+    for logical_id, props in by_type(ctx, "AWS::S3::Bucket"):
+        name = literal(props.get("BucketName"))
+        if not name or name in ctx.owned_physical_ids:
+            continue
+        try:
+            client.head_bucket(Bucket=name)
+        except ClientError as exc:
+            if exc.response["Error"]["Code"] in {"404", "NoSuchBucket"}:
+                continue
+            continue  # permission problems (403 on a bucket we don't own) too
+        findings.append(
+            Finding(
+                check="s3-bucket-name",
+                logical_id=logical_id,
+                detail=f"S3 bucket {name!r} already exists",
+                remedy=(
+                    f"delete the orphaned bucket (aws s3 rb s3://{name} --force), or confirm it belongs to this stack"
+                ),
+            )
+        )
+    return findings
+
+
 def check_alarm_subscribers(ctx: Context) -> list[Finding]:
     """P-21 invariant: a synthesized stack is never left with zero alarm
     subscribers. ``resolve_alarm_emails`` returns [] for any environment absent
@@ -346,6 +410,8 @@ CHECKS = (
     check_budget_names,
     check_cognito_domain,
     check_named_iam_roles,
+    check_dynamodb_table_names,
+    check_s3_bucket_names,
     check_alarm_subscribers,
 )
 
