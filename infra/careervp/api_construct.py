@@ -1063,9 +1063,11 @@ class ApiConstruct(Construct):
                                 ),
                                 # P-06: JWT signing key material, fetched at
                                 # runtime with decryption, never resolved into
-                                # the Lambda env by CloudFormation.
-                                self._secret_parameter_arn("jwt-private-key"),
-                                self._secret_parameter_arn("jwt-public-key"),
+                                # the Lambda env by CloudFormation. Empty in
+                                # scratch mode, where the values are placeholders.
+                                *self._secret_parameter_arns(
+                                    "jwt-private-key", "jwt-public-key"
+                                ),
                             ],
                             effect=iam.Effect.ALLOW,
                         )
@@ -1213,6 +1215,22 @@ class ApiConstruct(Construct):
             f"{self.naming.account_id}:parameter/"
             f"{ssm_parameter_name(self.naming.environment, suffix).lstrip('/')}"
         )
+
+    def _secret_parameter_arns(self, *suffixes: str) -> list[str]:
+        """ARNs for runtime-fetched SecureString material (P-06), scratch-aware.
+
+        Scratch mode substitutes non-secret placeholders for this material (see
+        `_secret_parameter_name`), so there is no parameter to read. Emitting a
+        scratch-scoped ARN here would grant `ssm:GetParameter` on a path that does
+        not and should not exist, and would leak the scratch SSM namespace into the
+        synthesized template — which `test_p64_scratch_path` correctly rejects.
+
+        Returns an empty list in scratch mode; callers must skip the whole
+        PolicyStatement rather than emit one with no resources.
+        """
+        if self.scratch_mode:
+            return []
+        return [self._secret_parameter_arn(suffix) for suffix in suffixes]
 
     def _build_common_layer(self) -> PythonLayerVersion:
         return PythonLayerVersion(
@@ -1785,16 +1803,15 @@ class ApiConstruct(Construct):
         idempotency_table.grant_read_write_data(lambda_function)
         # P-06: this Lambda has its own auto-generated role (no role= above),
         # so the shared lambda_role's JWT SSM grant does not cover it.
-        lambda_function.add_to_role_policy(
-            iam.PolicyStatement(
-                actions=["ssm:GetParameter"],
-                resources=[
-                    self._secret_parameter_arn("jwt-private-key"),
-                    self._secret_parameter_arn("jwt-public-key"),
-                ],
-                effect=iam.Effect.ALLOW,
+        jwt_key_arns = self._secret_parameter_arns("jwt-private-key", "jwt-public-key")
+        if jwt_key_arns:
+            lambda_function.add_to_role_policy(
+                iam.PolicyStatement(
+                    actions=["ssm:GetParameter"],
+                    resources=jwt_key_arns,
+                    effect=iam.Effect.ALLOW,
+                )
             )
-        )
         return lambda_function
 
     def _add_vpr_worker_lambda(
@@ -2957,18 +2974,18 @@ class ApiConstruct(Construct):
         self.api_db.idempotency_db.grant_read_write_data(lambda_function)
         # P-06: webhook signing secrets, fetched at runtime with decryption;
         # this Lambda has its own auto-generated role (no role= above).
-        lambda_function.add_to_role_policy(
-            iam.PolicyStatement(
-                actions=["ssm:GetParameter"],
-                resources=[
-                    self._secret_parameter_arn("payment-provider-webhook-secret"),
-                    self._secret_parameter_arn(
-                        "payment-provider-webhook-secret-previous"
-                    ),
-                ],
-                effect=iam.Effect.ALLOW,
-            )
+        webhook_secret_arns = self._secret_parameter_arns(
+            "payment-provider-webhook-secret",
+            "payment-provider-webhook-secret-previous",
         )
+        if webhook_secret_arns:
+            lambda_function.add_to_role_policy(
+                iam.PolicyStatement(
+                    actions=["ssm:GetParameter"],
+                    resources=webhook_secret_arns,
+                    effect=iam.Effect.ALLOW,
+                )
+            )
         return lambda_function
 
     def _add_export_lambda(self) -> _lambda.Function:
