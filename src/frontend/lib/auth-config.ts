@@ -12,12 +12,18 @@
  * static analysis.
  */
 
-function requireEnv(...names: string[]): string {
-  for (const name of names) {
-    const value = process.env[name];
-    if (value !== undefined && value.trim() !== '') {
-      return value.trim();
-    }
+/**
+ * Each getter below reads `process.env.NEXT_PUBLIC_*` as a literal, static property
+ * access. Next.js/webpack inlines `NEXT_PUBLIC_*` values at build time by pattern-matching
+ * that exact syntactic form; it cannot see through a dynamic `process.env[name]` lookup,
+ * because the substitution is a compile-time text replacement, not a real runtime object.
+ * A dynamic lookup silently resolves to `undefined` in every browser bundle regardless of
+ * what's configured in the deploy environment — do not refactor this into a loop or a
+ * `names.map(n => process.env[n])`-style helper.
+ */
+function requireValue(value: string | undefined, ...names: string[]): string {
+  if (value !== undefined && value.trim() !== '') {
+    return value.trim();
   }
   throw new Error(
     `Missing required Cognito configuration: ${names.join(' or ')}. ` +
@@ -27,15 +33,25 @@ function requireEnv(...names: string[]): string {
 }
 
 export function getUserPoolId(): string {
-  return requireEnv('NEXT_PUBLIC_COGNITO_USER_POOL_ID');
+  return requireValue(
+    process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID,
+    'NEXT_PUBLIC_COGNITO_USER_POOL_ID',
+  );
 }
 
 export function getClientId(): string {
-  return requireEnv('NEXT_PUBLIC_COGNITO_APP_CLIENT_ID', 'NEXT_PUBLIC_COGNITO_CLIENT_ID');
+  return requireValue(
+    process.env.NEXT_PUBLIC_COGNITO_APP_CLIENT_ID ?? process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID,
+    'NEXT_PUBLIC_COGNITO_APP_CLIENT_ID',
+    'NEXT_PUBLIC_COGNITO_CLIENT_ID',
+  );
 }
 
 export function getCognitoDomain(): string {
-  return requireEnv('NEXT_PUBLIC_COGNITO_DOMAIN').replace(/\/$/, '');
+  return requireValue(
+    process.env.NEXT_PUBLIC_COGNITO_DOMAIN,
+    'NEXT_PUBLIC_COGNITO_DOMAIN',
+  ).replace(/\/$/, '');
 }
 
 export function getPoolConfig(): { UserPoolId: string; ClientId: string } {
