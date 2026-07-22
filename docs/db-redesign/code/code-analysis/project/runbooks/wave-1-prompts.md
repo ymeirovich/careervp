@@ -95,6 +95,49 @@ claim was **wrong for the P-11 half** and is corrected below: the `is_production
 is now called out as a small, explicitly-serialized spine touch-point (see the updated Prompt 1.3c
 and the concurrency diagram in §2).
 
+### 0.2 — STANDING CORRECTIONS (2026-07-22). Read before running ANY prompt below.
+
+Three facts changed after most of this file was written. They override the prompt text wherever
+they conflict. Evidence and reasoning live in `wave-1-status.md` §"Soak reinterpretation
+(2026-07-22)"; this is the operational summary.
+
+**(a) `CareerVpCrudDevx` is the deploy target, not `CareerVpCrudDev`.** Human decision recorded
+2026-07-22: devx *is* dev now, and old `CareerVpCrudDev` is scheduled for decommission (date not
+yet set — an open governance question, §4). Every prompt below says `cdk diff CareerVpCrudDev`.
+**Read that as `cdk diff CareerVpCrudDevx`** for any step that has not already landed (1.1, 1.6,
+GATE). Rows already closed against `CareerVpCrudDev` (1.0, 1.2, 1.3a–d, 1.4, 1.5) stay as they
+are — they record what actually happened. Do not retroactively rewrite history rows.
+
+The devx name becomes confusing once devx *is* dev, but renaming means recreating the stack
+(physical resource names embed the env slug). Decision: **keep the name, document it loudly.**
+
+**(b) The P-07 soak never started, and waiting will not start it.** The PKCE commit (`4228346`)
+exists only on `db-redesign`; Amplify app `d3j2wnm8g5clnw` builds `main`, `ui-upgrade`, and
+`front/ui-update-amplify1` — **not `db-redesign`**. The browser has never served the PKCE SPA. The
+30-day clock has no start date. This is why **PROMPT 1.6 now exists and runs before 1.1**: it
+replaces an un-startable 30-day wait with about an hour of concrete verification.
+
+**(c) 1.1 is now three prompts, not one.** `PROMPT 1.1` below is retained for its GREEN-side
+technical content but **must not be run as a single session.** Run `PROMPT 1.6` → `PROMPT
+1.1-RED` → `PROMPT 1.1-GREEN`, each in a separate session. See RUNBOOK-RULES.md rule 7.
+
+**Stale citations corrected this pass** (the file has shifted; same class of problem the 1.3a and
+1.2 ledger rows already flagged):
+
+| Cited as | Actually at (verified 2026-07-22) |
+|---|---|
+| `api_construct.py:1720` — `AUTHORIZER_DISABLED` | **`api_construct.py:2106`** |
+| `api_construct.py:2864-2936` — `route_map` | **`api_construct.py:3251-3323`** |
+| `api_construct.py:2811-2817` — public-route exception | **`api_construct.py:3190-3196`** |
+| `cognito_construct.py:39-58` — callback/logout URLs | **`cognito_construct.py:26-47`** |
+| `cognito_construct.py:44` — `implicit_code_grant` | **`cognito_construct.py:86`** |
+| `cognito_construct.py:47` — `COGNITO_ADMIN` | **`cognito_construct.py:89`** |
+| `cognito_construct.py:71-73` — token validity | **`cognito_construct.py:101-103`** |
+
+Re-verify these yourself before acting on them. They were correct once too.
+
+---
+
 ### The two IMMUTABLE laws (every prompt, no exceptions)
 
 1. **NEVER** move the `service-rest-api` RestApi in place or across stacks. Logical id
@@ -159,6 +202,7 @@ authors a tiny spec first, then implements. Flagged in §1 and §4.
 | 1.4 | P-09 | One IAM role per Lambda, ARN-scoped, env-suffixed | `P-09-iam-per-function-spec.md` ✅ | Full implement. **Blocked by 1.3d; serialize vs P-26.** |
 | 1.1 | P-04, P-05 | Remove `x-user-id` fallback + delete dead `AUTHORIZER_DISABLED` + IDOR owner checks on every authed route | `P-04-P-05-auth-idor-spec.md` ✅ | Full implement. **Gated on 1.0 landed AND 1.3c soaked.** Most correctness-critical step. |
 | 1.5 | P-22 | OIDC in `cdk-diff.yml` (kill long-lived keys) | **MISSING** ❌ | **Author the spec first**, then implement (tiny CI change). |
+| 1.6 | P-07 (delivery) | **NEW 2026-07-22, runs before 1.1.** Delete hardcoded Cognito pool/client fallbacks; register devx callback URLs; deploy the PKCE SPA to an Amplify branch pointed at devx; one verified end-to-end login | `P-07-cognito-hardening-spec.md` ✅ (+ 2026-07-22 amendment) | Full implement + human-executed deploy/branch/login. **This is what unblocks 1.1** — it replaces an un-startable 30-day soak with concrete evidence. Not a new clause; delivery of P-07's already-locked frontend cutover. |
 
 **Only 1.3d is largely execute-and-verify** (and even then, needs its wave-placement amendment
 per §0.1). The other eight-and-a-bit are genuine TDD implement cycles.
@@ -807,9 +851,141 @@ ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULE
 
 ---
 
+## PROMPT 1.6 — auth-config hardening + PKCE end-to-end verification (NEW, runs before 1.1)
+
+**Model/effort:** Claude Code `opus / high` · Codex `GPT-5.6 Terra, high`
+**Deps:** 1.3c (P-07 PKCE code) LANDED in git; 1.4 (devx live) CLOSED. **Touches:**
+`src/frontend/lib/pkce.ts`, `src/frontend/lib/auth.ts`, `infra/careervp/cognito_construct.py`.
+**Serialize** vs nothing in Wave 1 — no other open step touches these files.
+
+**Why this step exists (plain English first).** Wave-1 step 1.1 was blocked on "wait 30 days for
+old login tokens to expire." Nobody was waiting on anything: the new login code was never put in
+front of a browser, so the 30 days had never started counting. This step does the thing the wait
+was standing in for — put the new login flow in front of a real browser and prove it works once —
+and fixes two configuration bugs found while looking. It replaces roughly 30 days of waiting with
+roughly an hour of checking. See `wave-1-status.md` §"Soak reinterpretation (2026-07-22)".
+
+```
+Implement auth-config hardening + PKCE end-to-end verification. VERIFY BEFORE ACTING.
+
+STANDING CHECK (see runbooks/RUNBOOK-RULES.md) — before anything else: open
+runbooks/wave-1-status.md. Read the 1.3c row (and the AMENDMENT under it), the 1.4 row, and the
+"Soak reinterpretation (2026-07-22)" section in full. If the step immediately before this one left
+something open, deal with that FIRST. Then confirm THIS step's prerequisites with real commands,
+right now, not from memory:
+  git log --oneline -1 4228346        # the PKCE commit exists
+  aws cloudformation describe-stacks --stack-name CareerVpCrudDevx --query 'Stacks[0].StackStatus'
+If either fails, STOP and say so in plain English.
+
+CONTEXT YOU MUST RE-VERIFY, NOT TRUST (every one of these was true on 2026-07-22; check each):
+- src/frontend/lib/pkce.ts:11,15 and src/frontend/lib/auth.ts:12,16 fall back to the hardcoded DEV
+  pool 'us-east-1_WiHMRqLpe' and client '7blipbarsisbctqh6hlsj46sqa' when env vars are missing.
+- infra/careervp/cognito_construct.py:26-47 hardcodes callback_urls/logout_urls to five URLs, none
+  of them a db-redesign Amplify URL.
+- Amplify app d3j2wnm8g5clnw has NO db-redesign branch; app-level NEXT_PUBLIC_COGNITO_REGION is
+  " us-east-1" WITH A LEADING SPACE; NEXT_PUBLIC_COGNITO_DOMAIN and _REDIRECT_URI are unset at app
+  level, so real builds silently rely on the pkce.ts fallback.
+- devx outputs: UserPoolId us-east-1_bAZ6jb6HP, ClientId 10c72h0q6cshe7dh3tup6ek9de,
+  RawApiInvokeUrl https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod/
+
+RED TESTS FIRST (vitest for the frontend, pytest for infra — write them, prove them failing,
+commit tests before any fix):
+- test_pkce_config_throws_when_pool_id_env_missing: importing/initialising the auth config with
+  NEXT_PUBLIC_COGNITO_USER_POOL_ID unset MUST throw, not silently return a dev pool id. Same for
+  the client id. Assert the literal strings 'us-east-1_WiHMRqLpe' and '7blipbarsisbctqh6hlsj46sqa'
+  appear NOWHERE in src/frontend/lib/**.
+- test_cognito_callback_urls_include_devx_amplify_branch: synth with ENVIRONMENT=devx; assert the
+  user-pool client's CallbackURLs and LogoutURLs contain the db-redesign Amplify origin.
+
+GREEN:
+1. Delete the hardcoded pool/client fallbacks in pkce.ts and auth.ts. Missing config must fail
+   loudly at startup. THIS IS THE HIGHEST-VALUE FIX IN THE STEP: today a devx build with a typo'd
+   env var authenticates against the DEV pool and looks fine, which is a silent cross-environment
+   auth failure — exactly the class of bug that makes "which environment did I just test?"
+   unanswerable.
+2. Add the db-redesign Amplify callback + logout URLs to cognito_construct.py:26-47. Cognito
+   rejects any redirect_uri not on that list, so this must land BEFORE the first login attempt.
+
+HUMAN-ONLY STEPS (do NOT execute — prepare and hand off, per P-28; no agent session deploys):
+3. Deploy the cognito_construct change to CareerVpCrudDevx via the existing change-set gate.
+   Produce the changeset_replacement_report.py output and assert auto_fail: false and zero
+   Replacement:True on the Cognito UserPool.
+4. Create the Amplify branch and build. Draft command (VERIFY every value against live stack
+   outputs before running; note NEXT_PUBLIC_API_URL is devx's RAW execute-api URL, NOT
+   api.dev.careervp.com — that domain still points at the old CareerVpCrudDev stack):
+
+   aws amplify create-branch --app-id d3j2wnm8g5clnw --branch-name db-redesign \
+     --framework "Next.js - SSR" --stage DEVELOPMENT \
+     --environment-variables \
+       NEXT_PUBLIC_COGNITO_USER_POOL_ID=us-east-1_bAZ6jb6HP,\
+   NEXT_PUBLIC_COGNITO_CLIENT_ID=10c72h0q6cshe7dh3tup6ek9de,\
+   NEXT_PUBLIC_COGNITO_APP_CLIENT_ID=10c72h0q6cshe7dh3tup6ek9de,\
+   NEXT_PUBLIC_COGNITO_DOMAIN=https://careervp-devx.auth.us-east-1.amazoncognito.com,\
+   NEXT_PUBLIC_COGNITO_REDIRECT_URI=https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/callback,\
+   NEXT_PUBLIC_API_URL=https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod,\
+   NEXT_PUBLIC_COGNITO_REGION=us-east-1
+
+   aws amplify start-job --app-id d3j2wnm8g5clnw --branch-name db-redesign --job-type RELEASE
+
+   Set NEXT_PUBLIC_COGNITO_REGION explicitly at BRANCH level (branch overrides app), which routes
+   around the leading-space typo. The app-level typo still affects `main` — flag it, do not fix it
+   here (main is out of this step's blast radius).
+5. ONE REAL LOGIN as ymeirovich@gmail.com against the devx pool, capturing each wire:
+   authorization-code redirect -> /callback -> token exchange -> one authenticated API call ->
+   a forced 401 -> EXACTLY ONE refresh -> sign-out. The refresh-once contract is the §3 item-10
+   frontend behaviour; more than one refresh is a FAILURE, not a retry.
+
+THE POINT OF STEP 5 (do not shortcut it): the frontend unit suite mocks away precisely the things
+that can be wrong here — the registered redirect URI, the hosted-domain config, the
+state/code_verifier round-trip through sessionStorage, and the /callback route. A green vitest run
+is not evidence for any of them. One real browser round-trip is.
+
+EVIDENCE: write docs/evidence/pkce-devx-verification-<UTC-timestamp>.json following the shape of
+the existing docs/evidence/smoke-*.json files (same key style, one object per wire, explicit
+pass/fail). This file IS the artifact that closes the soak gate. Without it, 1.1 stays blocked.
+
+GUARDRAILS / STOP:
+- Do NOT deploy. Do NOT create the Amplify branch yourself. Both are human steps (P-28).
+- Do NOT touch api.dev.careervp.com or any base-path mapping. The flip from CareerVpCrudDev to
+  CareerVpCrudDevx is a separate, later, human-only step.
+- Do NOT remove implicit grant or COGNITO_ADMIN here. That is the FINAL P-07 cutover and it needs
+  backend proxies for password-change/TOTP that do not exist yet — tracked as P-07b, blocks
+  STAGING promotion, not 1.1. See redesign-execution-plan.md.
+- Do NOT weaken the RED tests to make them pass.
+
+VERIFY:
+cd src/frontend && npm run typecheck && npm run test:unit && npm run test:integration
+cd infra && uv sync && cdk synth && cdk diff CareerVpCrudDevx    # NOT CareerVpCrudDev — see §0.2(a)
+python src/backend/scripts/validate_naming.py --path infra --verbose
+
+OUTPUT REQUIRED:
+1. A git commit message.  2. RED failure output, verbatim.  3. The prepared change set + its
+replacement report.  4. The exact Amplify command for the human, with every value confirmed
+against live stack outputs.  5. The evidence-file path.  6. IF clean: "1.6 landed; hardcoded pool
+fallbacks gone; devx callback URLs registered; PKCE verified end-to-end on devx. 1.1 is unblocked."
+
+ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULES.md):
+- Compare what you built against this prompt AND P-07's entry in project-scope-lock.yaml; say
+  plainly whether they match. NOTE: 1.6 does not change any clause definition — it is delivery of
+  P-07's already-locked frontend-cutover step, so no twin-sync ceremony is expected. If you
+  conclude otherwise, that is a rule-5 stop.
+- If anything drifted, STOP, explain in one plain sentence first then technical detail, flag for
+  human review, do not mark done.
+- Update runbooks/wave-1-status.md's 1.6 row.
+```
+
+---
+
 ## PROMPT 1.1 — P-04/P-05 auth cleanup + IDOR owner checks (spine, LAST)
 
-**Model/effort:** Claude Code `opus / high` · Codex `GPT-5.6 Sol, high→xhigh` — most correctness-critical step in the wave. **Deps:** 1.0 (P-23) LANDED **and** 1.3c (P-07 PKCE) SOAKED. **Touches:** `src/backend/handlers/**` + `api_construct.py:1720`. **Serialize** vs api_construct.py editors.
+> **SUPERSEDED 2026-07-22 — DO NOT RUN AS A SINGLE SESSION.** This prompt is split into
+> [`PROMPT 1.1-RED`](#prompt-11-red--p-04p-05-write-the-failing-tests-only-isolated-session) and
+> [`PROMPT 1.1-GREEN`](#prompt-11-green--p-04p-05-make-the-committed-tests-pass-fresh-session),
+> which are the ones to copy-paste. It is kept here because both halves cite its GUARDRAILS and
+> VERIFY blocks verbatim, and because its HARD PRECONDITIONS record why 1.6 had to exist. Its
+> preconditions are amended below.
+
+**Model/effort:** Claude Code `opus / high` · Codex `GPT-5.6 Sol, high→xhigh` — most correctness-critical step in the wave. **Deps:** 1.0 (P-23) LANDED **and** 1.6 (PKCE verified on devx) CLOSED. **Touches:** `src/backend/handlers/**` + `api_construct.py:2106`. **Serialize** vs api_construct.py editors.
 
 ```
 Implement P-04 + P-05 per specs/P-04-P-05-auth-idor-spec.md. VERIFY BEFORE ACTING. This is the most
@@ -817,18 +993,26 @@ correctness-critical step in Wave 1 — an IDOR miss serves wrong-tenant data.
 
 HARD PRECONDITIONS (confirm both, do not start otherwise):
 - 1.0 P-23 has LANDED (the canary is the revert lever for the x-user-id removal — a Lambda change).
-- 1.3c P-07 PKCE cutover has DEPLOYED + SOAKED (stale implicit tokens must not meet strict auth mid-migration).
+- 1.6 has CLOSED GREEN. (AMENDED 2026-07-22. This precondition previously read "1.3c P-07 PKCE
+  cutover has DEPLOYED + SOAKED." That soak was never startable — the PKCE commit 4228346 is on
+  db-redesign only and Amplify never built that branch, so the 30-day clock has no start date.
+  1.6 replaces it with concrete verification: the PKCE SPA actually deployed to an Amplify branch
+  pointed at devx, and one real end-to-end login round-trip captured as evidence. The full
+  reasoning, and why the stale-token half of the original gate is vacuous on devx, is in
+  wave-1-status.md §"Soak reinterpretation (2026-07-22)". Read it before accepting this amendment.)
 
 STANDING CHECK (see runbooks/RUNBOOK-RULES.md) — before anything else: open
-runbooks/wave-1-status.md and check the rows for 1.0 and 1.3c. If EITHER shows an open problem —
-especially "soak still open" on 1.3c — STOP, do not start this step. This is the most
-correctness-critical step in the wave; starting it early is exactly the mistake this rule exists
-to prevent.
+runbooks/wave-1-status.md and check the rows for 1.0, 1.3c, and 1.6. 1.3c's row still carries the
+original "1.1 MUST NOT START until the soak completes" text — that text is preserved for history
+and is superseded by the 1.3c AMENDMENT directly beneath it plus the 1.6 row. If 1.6 is not
+closed green, STOP. This is the most correctness-critical step in the wave; starting it early is
+exactly the mistake this rule exists to prevent.
 
 RECON SUBAGENT (read-only, recommended): "build the route x handler ownership matrix from the LIVE
-CDK route_map (api_construct.py:2864-2936), excluding only documented public routes: /health, auth
-routes, /billing/webhook (2811-2817), error reports." Do NOT enumerate from stale docs — the spec
-requires the table be generated from the live route_map. Check the matrix in as evidence.
+CDK route_map (api_construct.py:3251-3323 as of 2026-07-22 — VERIFY the line range yourself, it has
+already moved once from 2864-2936), excluding only documented public routes: /health, auth routes,
+/billing/webhook (3190-3196), error reports." Do NOT enumerate from stale docs — the spec requires
+the table be generated from the live route_map. Check the matrix in as evidence.
 
 TDD FIREWALL STRONGLY ADVISED: RED session writes the tests + the checked-in matrix and proves them
 failing; a FRESH GREEN session removes the fallbacks + enforces owner checks. The cross-tenant
@@ -843,8 +1027,9 @@ RED TESTS (cite AC-P04-1/2, AC-P05-1/2):
 - test_p05_error_envelope_is_flat               (IDOR denial keeps §3 item-10 FLAT envelope, no nested error.code)
 
 GREEN:
-- P-04: delete x-user-id / body / query / path user_id trust and the dead AUTHORIZER_DISABLED env at
-  api_construct.py:1720. Identity comes ONLY from validated JWT claims or the P-24 resolver context.
+- P-04: delete x-user-id / body / query / path user_id trust (auth_utils.py:44 is the live fallback
+  site) and the dead AUTHORIZER_DISABLED env at api_construct.py:2106 (NOT :1720 — stale citation,
+  corrected 2026-07-22). Identity comes ONLY from validated JWT claims or the P-24 resolver context.
 - P-05: every authed handler resolves records by authenticated owner; another tenant's job_id/
   artifact_id/cv_id/vpr_id/application_id -> 403/404 with the flat envelope.
 - Add the P-24 resolver-failure metric HOOK expectation (do NOT implement P-24 here; do NOT
@@ -878,6 +1063,192 @@ ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULE
   breaking — STOP, explain in one plain sentence first then technical detail (a wrong-tenant data
   leak is the single worst outcome in this wave), flag for human review, do not mark done.
 - Update runbooks/wave-1-status.md's row for this step.
+```
+
+---
+
+## PROMPT 1.1-RED — P-04/P-05: write the failing tests ONLY (isolated session)
+
+**Model/effort:** Claude Code `opus / high` · Codex `GPT-5.6 Sol, high`
+**Deps:** 1.0 LANDED, 1.6 CLOSED. **Touches:** test files + the checked-in route matrix ONLY.
+
+**Session discipline:** this session must NOT be the one that writes the fix. `/clear` before
+1.1-GREEN at minimum; a separate `claude` invocation is preferred. See RUNBOOK-RULES.md rule 7 for
+why (a test author who also writes the implementation writes tests that agree with their own
+bugs — the test grades the same reasoning that produced the code).
+
+```
+Write the RED tests for P-04 + P-05 per specs/P-04-P-05-auth-idor-spec.md. WRITE TESTS ONLY.
+VERIFY BEFORE ACTING.
+
+STANDING CHECK (see runbooks/RUNBOOK-RULES.md) — before anything else: open
+runbooks/wave-1-status.md. Check the rows for 1.0, 1.3c (and its AMENDMENT), and 1.6. If 1.6 is
+not closed green, STOP — the PKCE verification that replaced the P-07 soak is this step's real
+precondition. Then confirm with a real command that the tests genuinely do not exist yet:
+  grep -rl "AC-P04\|AC-P05" src/backend/tests infra/tests   # expect: no files
+If that returns files, STOP — someone has already started this and you must reconcile first.
+
+ABSOLUTE PROHIBITION — THIS IS THE ENTIRE POINT OF THIS SESSION:
+Do NOT modify src/backend/careervp/handlers/**, src/backend/careervp/logic/**,
+src/backend/careervp/dal/**, or infra/careervp/api_construct.py. Not one line, not "just to see if
+it works", not a temporary edit you intend to revert. If a test cannot be written without touching
+implementation code, that is a finding to report — STOP and report it, do not reach for the file.
+You are writing the contract. A different session, which has not read your reasoning, implements
+against it.
+
+RECON SUBAGENT (read-only, recommended — this is the one good subagent use in this wave): "build
+the route x handler ownership matrix from the LIVE CDK route_map in infra/careervp/api_construct.py
+(~3251-3323 as of 2026-07-22 — locate it yourself, it has already moved once), excluding only the
+documented public routes: /health, auth routes, /billing/webhook (~3190-3196), error reports.
+Return a compact table: route, method, handler function, public-or-authenticated." Do NOT enumerate
+from stale docs — the spec requires the matrix be generated from the live route_map. Check the
+matrix in as evidence at a path you name in your output. Never let a subagent write test code.
+
+THE FIVE RED TESTS (cite the AC-### line in a comment on each):
+- test_p04_no_x_user_id_fallbacks_remain           [AC-P04-1]
+    Scan src/backend/careervp/handlers/**/*.py; assert zero 'x-user-id' outside test fixtures and
+    docs. MUST fail today at auth_utils.py:44.
+- test_p04_no_authorizer_disabled_runtime_switch   [AC-P04-1]
+    Scan infra/ and src/backend/; assert AUTHORIZER_DISABLED absent from Lambda env + runtime code.
+    MUST fail today at api_construct.py:2106. Exclude infra/cdk.out/ — it is build output, and a
+    hit there is a stale-artifact false positive, not a source finding.
+- test_p05_route_matrix_has_owner_assertion_for_every_authenticated_route   [AC-P05-1]
+    Build the matrix from the CDK route_map; assert every non-public route has a named owner-check
+    test case. This is the coverage RATCHET — it is what makes it impossible to add a route later
+    without an owner check, so write it to read the route_map at test time, not from a frozen copy.
+- test_p05_cross_tenant_authenticated_routes_deny  [AC-P05-1]
+    THE IMPORTANT ONE. Parameterized over EVERY authenticated route: seed REAL records for tenant A
+    and tenant B, authenticate as B, request A's job_id / artifact_id / cv_id / vpr_id /
+    application_id, assert 403 or 404 AND that no field of A's data appears in the response body.
+    Both tenants must be really seeded. A mock that asserts nothing is WORSE than no test at all —
+    it produces a green checkmark for a property nobody verified.
+- test_p05_error_envelope_is_flat                  [AC-P05-2]
+    For an IDOR denial: assert keys include one of error/message, plus classification, error_code,
+    and field; assert NO nested error.code object. This guards the frontend contract — a denial
+    that changes response shape breaks the 401 -> refresh -> sign-out flow even when the security
+    fix itself is correct.
+
+PROVE THEY ARE RED FOR THE RIGHT REASON:
+Run them. Capture output VERBATIM. For each failing test, state in one sentence WHY it failed. A
+test that fails on ImportError, a collection error, a missing fixture, or a typo is NOT red — it is
+broken, and it will go green later for reasons that have nothing to do with the fix. Every one of
+the five must fail on its own assertion.
+
+VERIFY:
+cd src/backend && uv run pytest tests/unit -k "p04 or p05 or idor or owner" -v
+cd src/backend && uv run pytest tests/integration -k "cross_tenant or owner" -v
+cd src/backend && uv run ruff format . && uv run ruff check --fix . && uv run mypy careervp --strict
+Do NOT run the coverage gate in this session — core branch coverage is failing by 0.06pp
+pre-existing (see wave-1-status.md), and these tests are expected to close it only once GREEN.
+
+OUTPUT REQUIRED:
+1. A git commit message (tests + matrix only).
+2. Verbatim RED output for all five, each with its one-sentence "failed because…".
+3. The checked-in route x handler matrix path, and the route count it contains.
+4. Explicit confirmation that test_p05_cross_tenant_authenticated_routes_deny seeds two REAL
+   tenants, naming the fixture that does the seeding.
+5. Explicit confirmation you modified ZERO implementation files (git diff --stat backs this up).
+6. IF clean: "1.1-RED landed; five tests failing on their own assertions; 1.1-GREEN may start in a
+   fresh session."
+
+ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULES.md):
+- Compare what you built against this prompt AND P-04's and P-05's entries in
+  project-scope-lock.yaml; say plainly whether they match.
+- If anything drifted — especially a route in the matrix with no corresponding test case — STOP,
+  explain in one plain sentence first then technical detail, flag for human review, do not mark done.
+- Update runbooks/wave-1-status.md's 1.1-RED row, and state explicitly in the "open problem for the
+  next step" column that 1.1-GREEN must run in a FRESH session.
+```
+
+---
+
+## PROMPT 1.1-GREEN — P-04/P-05: make the committed tests pass (FRESH session)
+
+**Model/effort:** Claude Code `opus / high` · Codex `GPT-5.6 Sol, high→xhigh` — most correctness-critical step in the wave.
+**Deps:** 1.1-RED committed. **Touches:** `src/backend/careervp/handlers/**` + `api_construct.py:2106`. **Serialize** vs api_construct.py editors.
+
+**Session discipline:** this MUST be a fresh session that has not seen the RED session's reasoning.
+If you are reading this in the same context that just wrote the tests, STOP and start a new one.
+
+```
+Make the committed P-04/P-05 tests pass, per specs/P-04-P-05-auth-idor-spec.md's Fix Plan. VERIFY
+BEFORE ACTING. This is the most correctness-critical step in Wave 1 — an IDOR miss serves
+wrong-tenant data to a real person.
+
+STANDING CHECK (see runbooks/RUNBOOK-RULES.md) — before anything else: open
+runbooks/wave-1-status.md, read the 1.1-RED row, and confirm with a real command that the RED
+commit exists and the tests are currently failing:
+  git log --oneline -5
+  cd src/backend && uv run pytest tests/unit -k "p04 or p05 or idor or owner" -v
+If the tests are already passing, STOP — something is wrong, and "already green" is the single most
+likely shape of a silent failure here.
+
+ABSOLUTE PROHIBITION — THIS CLAUSE IS THE ENTIRE FIREWALL:
+Do NOT modify the test files. Do NOT modify the checked-in route matrix. Do NOT relax an
+assertion, widen an exclusion list, mark a test xfail/skip, or add a route to the public-exception
+list to make a test pass. You did not write these tests and you may not edit them. If a test looks
+WRONG — not merely inconvenient, but actually asserting the wrong thing — STOP and raise a §0.3
+amendment for human review. Never a quiet edit. Weakening a test here converts a real wrong-tenant
+data leak into a green checkmark, which is worse than having no test at all.
+
+GREEN:
+- P-04: delete x-user-id / body / query / path user_id identity trust (auth_utils.py:44 is the live
+  fallback site) and the dead AUTHORIZER_DISABLED env at api_construct.py:2106. Identity comes ONLY
+  from validated JWT claims or the P-24 resolver context.
+- P-05: every authenticated handler resolves records by authenticated owner. Another tenant's
+  job_id / artifact_id / cv_id / vpr_id / application_id returns 403 or 404 with the flat envelope.
+- Add the P-24 resolver-failure metric HOOK expectation. Do NOT implement P-24 here. Do NOT
+  instantiate the custom authorizer — it is dormant by design and must stay dormant. Aggregate
+  401-rate is NOT a sufficient signal: a mis-resolved sub can 401 exactly like a benign token
+  expiry, or worse, serve a wrong-tenant 200.
+
+BEFORE YOU START, ANSWER THIS (it is a real precondition, not a formality): does anything still
+SEND x-user-id? grep the frontend, src/backend/scripts/smoke_harness.py, and the integration
+fixtures. If a test helper or the smoke harness depends on that header, removing the fallback
+turns it into a mysterious 401 during the next P-30 smoke run. Find it now as a caught
+precondition, not later as a confusing failure.
+
+GUARDRAILS / STOP:
+- NO route shape / enum / envelope change except correct denials. F-01 oracle MUST stay green.
+- Do NOT rebuild AUTHORIZER_DISABLED as a lever in any form. A dead switch labelled "disable auth"
+  is one refactor away from being a live one.
+- Do NOT invent a second identity authority — P-24 owns sub->user_id.
+- IMMUTABLE laws hold. Any infra edit: cdk diff zero stateful replacement + validate_naming --verbose.
+- Do NOT deploy.
+
+VERIFY:
+cd src/backend && uv run pytest tests/unit -k "p04 or p05 or idor or owner" -v
+cd src/backend && uv run pytest tests/integration -k "cross_tenant or owner" -v
+cd src/backend && uv run pytest tests/unit/ -v --tb=short          # full suite, no regressions
+cd src/frontend && npm run test:integration        # F-01 oracle: 401 + flat envelope still green
+cd infra && uv sync && cdk synth && cdk diff CareerVpCrudDevx      # NOT CareerVpCrudDev — see §0.2(a)
+cd src/backend && uv run ruff format . && uv run ruff check --fix . && uv run mypy careervp --strict
+python src/backend/scripts/validate_naming.py --path infra --verbose
+cd src/backend && make coverage-tests
+SCOPE-LOCK: scope-diff.py -> P-04 and P-05 test_written/implemented.
+
+COVERAGE — expected outcome, report it explicitly: core branch coverage was 52.94% against a 53.00%
+enforced_baseline, failing by 0.06pp, and it was ALREADY failing on main before P-06 (confirmed by
+the 1.2 session against the pre-P-06 tree — this is not debt you created). The recorded decision is
+that this step's dense branch tests over core auth paths close that 0.06pp on their own. Report the
+actual number. If it does NOT clear, say so plainly and STOP — do not re-baseline the gate to make
+it pass. Lowering a bar to walk under it needs the same human ledger treatment as any other
+weakened rule.
+
+OUTPUT REQUIRED:
+1. A git commit message.  2. Before/after test output.  3. Confirmation you modified ZERO test
+files (git diff --stat backs this up).  4. The coverage number, and whether the 0.06pp closed.
+5. The answer to the "does anything still send x-user-id" question.  6. IF clean:
+   "1.1-GREEN landed; x-user-id + AUTHORIZER_DISABLED gone; every authed route owner-enforced;
+   F-01 oracle green."
+
+ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULES.md):
+- Compare what you built against this prompt AND P-04's and P-05's entries in
+  project-scope-lock.yaml; say plainly whether they match.
+- If anything drifted — especially any route left without an owner check, or the F-01 oracle
+  breaking — STOP, explain in one plain sentence first then technical detail (a wrong-tenant data
+  leak is the single worst outcome in this wave), flag for human review, do not mark done.
+- Update runbooks/wave-1-status.md's 1.1-GREEN row.
 ```
 
 ---
@@ -941,10 +1312,10 @@ Run the Wave-1 exit gate. VERIFY EVERY ROW against git + files on disk — the l
 before. Do not transcribe the table; adjudicate it.
 
 STANDING CHECK (see runbooks/RUNBOOK-RULES.md) — before anything else: open
-runbooks/wave-1-status.md in full. Every row for 1.0 through 1.5 must show a landed status with no
-open problem. If ANY row shows an open problem or a status other than "landed"/"done", STOP — this
-gate cannot legitimately run yet. Do not adjudicate a wave that the ledger itself says is
-incomplete.
+runbooks/wave-1-status.md in full. Every row for 1.0 through 1.6 must show a landed status with no
+open problem — INCLUDING the rows added 2026-07-22: 1.6, 1.1-RED, and 1.1-GREEN. If ANY row shows
+an open problem or a status other than "landed"/"done", STOP — this gate cannot legitimately run
+yet. Do not adjudicate a wave that the ledger itself says is incomplete.
 
 1. scope-diff.py full run: every Wave-1 clause (P-04,P-05,P-06,P-07,P-08,P-09,P-10,P-11,P-22,P-23)
    resolves to test_written/implemented. (P-22 needs its newly-authored spec + tests.)
@@ -954,11 +1325,25 @@ incomplete.
    (401 refresh-once + flat envelope survived the CORS + auth changes).
 4. make coverage-tests: enforced_baseline PASSES (no regression); report distance to ratchet_target.
 5. IMMUTABLE re-check: RestApi + Cognito logical ids byte-stable; P-24 authorizer still dormant.
-6. 1.3d actually landed: parent CareerVpCrudDev < 400 after human execution + P-30 smoke green;
-   P-09 was unblocked by it. If 1.3d only PREPARED (human hasn't executed) -> Wave 1 is AMBER;
-   say so and name P-09/P-14/P-17/P-21 as still-blocked.
-7. Reconcile redesign-execution-plan.md Wave-1 Status column to VERIFIED REALITY, dated narrative
-   line per row (match the 0.55/0.75 style).
+6. (RE-POINTED 2026-07-22 — this check previously asked whether parent CareerVpCrudDev < 400.
+   That question is SETTLED and was answered by the wrong stack: the P-26 count relief was
+   delivered as the fresh parallel CareerVpCrudDevx, live-verified 2026-07-20 at 211 physical
+   resources — 100 parent + 11 AiAssist + 100 CrudFeatures — comfortably under 400. Re-verify
+   THAT number live, do not trust this sentence:
+     aws cloudformation describe-stack-resources --stack-name CareerVpCrudDevx
+   Confirm 1.3d + 1.4 landed with P-30 smoke green (evidence: docs/evidence/smoke-20260720T203735Z-019ff0.json,
+   4/4) and that P-09 was unblocked by it. The old CareerVpCrudDev's resource count is no longer a
+   Wave-1 gating question — it is a decommission question, tracked in §4.
+7. NEW (2026-07-22): 1.6's PKCE end-to-end evidence file exists and shows every wire passing —
+   authorization-code redirect, /callback, token exchange, authenticated call, forced 401, EXACTLY
+   one refresh, sign-out. This artifact is what stands in for the original 30-day P-07 soak; if it
+   is missing or partial, the soak gate is NOT satisfied and Wave 1 is AMBER regardless of how the
+   ledger reads. Confirm the ledger's soak-reinterpretation entry carries its rationale, per
+   RUNBOOK-RULES.md rule 8.
+8. Reconcile redesign-execution-plan.md Wave-1 Status column to VERIFIED REALITY, dated narrative
+   line per row (match the 0.55/0.75 style). Confirm the P-07b deferral row (COGNITO_ADMIN backend
+   proxies) is present and marked as blocking STAGING promotion — a deferral with no home is a
+   deferral that gets forgotten.
 
 GUARDRAILS: do NOT edit project-scope-lock.md/.yaml without the twin-sync ceremony (§12 changelog +
 version bump + Scope-Lock-Approved-By: Yitzchak Meirovich trailer), human-approved only. Do NOT mark

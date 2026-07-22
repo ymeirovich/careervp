@@ -187,6 +187,33 @@ Resume by re-pasting `handoff.md` + attachments and saying "continue".
 | 1.3d | P-26 Job-1 | **Hard blocker before additive resource work:** finish the human-gated `cdk refactor`/resource-import count-relief migration, or STOP with an amendment if dry-run still shows non-move add/remove noise. Done-when the parent template is below the headroom target, RestApi/Cognito logical ids remain byte-stable, and P-30 smoke stays green. Blocks P-09/P-14/P-17/P-21. | opus/xhigh | codex/high(max) | 0.7 |
 | 1.4 | P-09 | One IAM role per fn (retire shared role) | opus/high | codex/high | 0.1, 1.3d |
 | 1.5 | P-22 | OIDC in `cdk-diff.yml` | sonnet/med | codex/med | 0.1 |
+| 1.6 | P-07 (delivery) | **NEW 2026-07-22 — runs before 1.1; this is what unblocks it.** Delete the hardcoded dev-pool/client fallbacks in `src/frontend/lib/pkce.ts` + `auth.ts` (a devx build with a missing env var currently authenticates against **dev**, silently); register devx Amplify callback/logout URLs in `cognito_construct.py`; then human-executed: deploy to `CareerVpCrudDevx`, create the Amplify `db-redesign` branch with devx env vars, and perform ONE verified end-to-end login. Discharges the P-07 soak by evidence rather than elapsed time — the 30-day clock provably never started (PKCE commit `4228346` is on `db-redesign` only; Amplify never built that branch). Not a new clause; delivery of P-07's already-locked frontend cutover. | opus/high | codex/high | 1.3c, 1.4 |
+| **P-07b** | P-07 (deferred half) | **DEFERRED — BLOCKS STAGING PROMOTION, not Wave 1.** Move browser-side password-change and TOTP enrollment behind backend proxy endpoints, then remove `COGNITO_ADMIN` + implicit grant and enforce MFA. The scope-usage inventory in `4228346` classifies all five usages `temporarily_allowed` and **none** as `backend_proxy`; removing the scope first breaks password change and MFA enrollment. Does **not** gate 1.1 — P-04/P-05 remove a header-trust fallback and a dead env var and do not touch OAuth flows. Recorded here because an undocumented deferral becomes a forgotten one, and this one stops being theoretical at staging, which has 3 real accounts. | opus/high | codex/high | 1.6 |
+
+> **Status 2026-07-22 — Wave-1 reconciliation against live AWS + git.** Verified, not transcribed.
+> **Closed and live-verified:** 1.0 (P-23, `3bb5446`), 1.2 (P-06), 1.3a (P-08), 1.3b (P-10),
+> 1.3c-gate (P-11), 1.3d (P-26 Job-1 — human-executed O-9 deploy, `CareerVpCrudDev`
+> `UPDATE_COMPLETE`, P-30 smoke 4/4 through `https://api.dev.careervp.com`), 1.4 (P-09 —
+> `CareerVpCrudDevx` `CREATE_COMPLETE` 2026-07-20, **211 physical resources**, P-30 smoke 4/4 after
+> seeding `/careervp/devx/anthropic-api-key`), 1.5 (P-22 — OIDC role live, 8/8 checks).
+> **Open:** 1.6 (new, not started), 1.1-RED + 1.1-GREEN (not started; the five P-04/P-05 tests do
+> not exist — `grep -rl "AC-P04\|AC-P05" src/backend/tests infra/tests` returns zero files), GATE.
+> **Corrected:** 1.3c was recorded as awaiting a 30-day soak. That soak **never started and could
+> not have** — see `runbooks/wave-1-status.md` §"Soak reinterpretation (2026-07-22)". 1.6 replaces
+> it; P-07b carries the genuinely-deferred half.
+> **Environment correction:** `CareerVpCrudDevx` is now the deploy target ("devx *is* dev"). Old
+> `CareerVpCrudDev` still holds `api.dev.careervp.com` and ~119 junk test users and is scheduled for
+> decommission — **date not yet set, and every "run it on dev" instruction is ambiguous until it
+> is.** Three orphaned 0-user Cognito pools await human deletion (`ZRGBT6phK`, `dfBh4yF48`,
+> `y5t4ZB77e`).
+> **Coverage:** core branch 52.94% vs a 53.00% enforced baseline — failing by 0.06pp, pre-existing
+> on `main` before P-06. Decision recorded: 1.1-GREEN's P-05 branch tests close it; no re-baseline.
+> **CI discipline (open, unresolved).** Nothing today prevents deploying a commit to the wrong
+> environment. Highest-value mitigations, in order: (1) delete the hardcoded pool fallbacks —
+> folded into 1.6; (2) a branch→stack allowlist in the deploy workflow, so an unlisted target
+> fails rather than proceeding; (3) GitHub Environments with required reviewers for staging/prod;
+> (4) optionally, a CI check that parses the ledger's "open problem" column. Today (2)–(4) are
+> enforced only by agents reading markdown carefully.
 
 ### Wave 2 — Reliability / money
 | # | Clause(s) | Step | Claude | Codex | Deps |

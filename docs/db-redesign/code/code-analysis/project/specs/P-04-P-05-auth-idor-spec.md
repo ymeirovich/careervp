@@ -57,5 +57,48 @@ All RED tests pass; the route matrix is checked in as evidence; no production ro
 
 ## Sequencing / Dependencies
 
-P-23 canary/rollback must land before handler fallback removal. P-07 SPA auth-code+PKCE cutover must soak before any auth enforcement change. P-24 owns the durable `sub -> user_id` resolver; this spec must not invent a separate identity authority.
+P-23 canary/rollback must land before handler fallback removal. ~~P-07 SPA auth-code+PKCE cutover must soak before any auth enforcement change.~~ **AMENDED 2026-07-22 — see below.** P-24 owns the durable `sub -> user_id` resolver; this spec must not invent a separate identity authority.
+
+### Amendment 2026-07-22 — the P-07 soak precondition is superseded, not waived
+
+The struck sentence above is replaced by: **runbook step 1.6 must close green**, evidenced by
+`docs/evidence/pkce-devx-verification-*.json` showing a complete real login round-trip against
+`CareerVpCrudDevx` (authorization-code redirect -> `/callback` -> token exchange -> authenticated
+call -> forced 401 -> exactly one refresh -> sign-out).
+
+Why: the soak was never startable. The PKCE commit (`4228346`) exists only on `db-redesign`, and
+Amplify has never built that branch, so the PKCE SPA has never been served to a browser and the
+30-day clock has no start date. Separately, on `devx` the stale-token concern is vacuous — that
+pool was created 2026-07-20, holds one smoke-test user, and has never issued an implicit-flow token
+to a browser. Waiting protects nothing; one verified login proves what the wait could not.
+
+**Not waived by this amendment:** `COGNITO_ADMIN` and implicit-grant removal still require backend
+proxies for password-change/TOTP. That is tracked as **P-07b and blocks STAGING promotion**. It
+does not gate this spec, because P-04/P-05 remove a header-trust fallback and a dead env var and do
+not touch OAuth flows — a header fallback cannot be broken by the presence of an OAuth scope.
+
+Full reasoning, live evidence, and the epistemic caveats: `runbooks/wave-1-status.md`
+§"Soak reinterpretation (2026-07-22)". Recorded per `RUNBOOK-RULES.md` rule 8.
+
+### Amendment 2026-07-22 — implementation is split across two sessions
+
+Per `RUNBOOK-RULES.md` rule 7, this spec is implemented as `PROMPT 1.1-RED` (tests + route matrix
+only, zero implementation files touched) followed by `PROMPT 1.1-GREEN` in a **fresh session** that
+may not edit the test files. This is the most correctness-critical clause in Wave 1; the author of
+the tests must not be the author of the code.
+
+### Citation corrections 2026-07-22 (the Evidence section above has drifted)
+
+Verified against the working tree on 2026-07-22 — re-verify before relying on them:
+
+| Evidence cites | Actually at |
+|---|---|
+| `api_construct.py:2864-2936` — `route_map` | **`api_construct.py:3251-3323`** |
+| `api_construct.py:2811-2817` — public-route exception | **`api_construct.py:3190-3196`** |
+
+Also worth naming explicitly, since the Evidence section does not: the live `x-user-id` fallback
+site is **`src/backend/careervp/handlers/auth_utils.py:44`**, and the dead `AUTHORIZER_DISABLED`
+env is at **`infra/careervp/api_construct.py:2106`** (the Wave-1 prompt's `:1720` was stale). When
+scanning for `AUTHORIZER_DISABLED`, exclude `infra/cdk.out/` — it is build output, and a hit there
+is a stale-artifact false positive rather than a source finding.
 

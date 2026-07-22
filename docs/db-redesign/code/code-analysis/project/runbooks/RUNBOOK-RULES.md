@@ -2,14 +2,17 @@
 
 **What this file is:** the rulebook every wave-prompt file (`wave-0-prompts.md`,
 `wave-1-prompts.md`, `wave-2-prompts.md`, …) must follow. Whoever writes a new wave's prompt
-file — human or agent — must apply these six rules to every prompt in it, and must link this
+file — human or agent — must apply these eight rules to every prompt in it, and must link this
 file from the top of the new wave-prompts file. This is the fix for a real problem found while
 building `wave-1-prompts.md`: status lived only in loose prose inside the prompt file itself,
 so it went stale and nothing forced the next prompt to notice.
 
+> **Amended 2026-07-22:** rules 7 and 8 added while planning Wave-1 step 1.1. Both come from real
+> incidents in this project, described in each rule. Rules 1–6 are unchanged.
+
 ---
 
-## The six rules
+## The eight rules
 
 ### 1. Every prompt ends by writing a git commit message
 
@@ -58,12 +61,67 @@ clause IDs, line numbers) for whoever picks it up to actually fix it. Never lead
 A useful test: if the plain-English sentence were the *only* thing a person read, would they
 understand the problem and roughly how serious it is? If not, rewrite it.
 
+### 7. For any correctness-critical clause, RED and GREEN are two different sessions
+
+The reason is simple: **whoever writes the test must not be whoever writes the code.** If the same
+reasoning does both, the test agrees with the implementation's bugs and goes green for the wrong
+reason. It is a student grading their own exam — not dishonesty, just no independent check.
+
+The ceremony:
+
+- **RED session.** Writes only the test files (plus any checked-in evidence artifact the spec asks
+  for, like a route matrix). Carries an **absolute prohibition** on touching implementation files —
+  not even temporarily, not even "to see if it works." Runs the tests, captures the failure output
+  verbatim, and states for each one *why* it failed. **A test that fails on an ImportError, a
+  collection error, or a missing fixture is not RED — it is broken**, and it will go green later
+  for reasons unrelated to the fix. Commits tests only.
+- **GREEN session.** A **fresh session** that has not seen the RED session's reasoning. `/clear` is
+  the minimum; a separate `claude` invocation is preferred. It reads the failing tests as a
+  contract it did not write and **may not edit** — that clause is the entire firewall. No relaxing
+  an assertion, widening an exclusion list, adding an `xfail`/`skip`, or extending a public-route
+  exception to make something pass. If a test looks genuinely *wrong* (not merely inconvenient),
+  it **STOPS and raises a §0.3 amendment**. Never a quiet edit.
+
+Apply this to every clause where being wrong is worse than being late — anything touching auth,
+tenancy, money, or data durability. For small isolated clauses, a single session that still writes
+RED first and pastes the failing output before going GREEN is acceptable; say which you used.
+
+Subagents are not a substitute. A fresh subagent works only if you do not paste the RED reasoning
+into its prompt — and the safe use of subagents remains read-only recon (enumeration searches),
+never writing tests or implementation.
+
+### 8. A written gate satisfied differently needs a dated ledger entry with its reasoning
+
+Sometimes a gate written in a spec or runbook turns out to be satisfiable another way, or to be
+protecting nothing. That can be legitimate — but **it may never be an unexplained shortcut.**
+
+If you conclude a written gate should be satisfied differently, write a dated section in
+`wave-N-status.md` containing: what the gate said; what you found (with the live commands you ran,
+not a summary); which concerns the gate actually bundles, taken one at a time; which of those are
+now discharged, by what concrete artifact; and which remain open, with an explicit new home. Then
+amend the gate's original text by **appending**, never by rewriting — the original sentence stays
+readable so the history is intact.
+
+The test of a good entry: a session six weeks from now that hits the original gate and is inclined
+to refuse should find **reasoning it can evaluate and disagree with**, not an assertion it has to
+take on faith. Worked example: `wave-1-status.md` §"Soak reinterpretation (2026-07-22)", where a
+30-day soak was replaced by about an hour of verification because the 30-day clock provably never
+started.
+
+Two things this rule is not. It is not permission to shorten gates that are merely inconvenient —
+the reasoning has to actually hold. And it does not extend to `project-scope-lock.yaml`/`.md`:
+changing a **clause definition** still requires the twin-sync ceremony with a version bump and a
+signed `Scope-Lock-Approved-By` trailer. This rule governs *how a locked requirement is delivered*,
+never *what is required*.
+
 ---
 
 ## The two blocks every prompt must contain
 
 Every copy-paste prompt in every wave-N-prompts.md file must include these two blocks, near
 verbatim (swap in the correct wave number and file names). They implement rules 2–6 above.
+(Rules 7–8 are structural rather than per-prompt: rule 7 shapes how a clause is *split into
+prompts*, and rule 8 fires only when a gate is reinterpreted.)
 
 **Near the top, right after the prompt states what it's implementing:**
 

@@ -11,17 +11,24 @@
 ## Wave 1 Security Cutover
 
 - [x] Step 1.3c implementation window: code+PKCE frontend, dual OAuth grants, Cognito Plus threat protection, OPTIONAL TOTP enrollment grace, 401 contract coverage, and environment-tuned WAF rate rules.
-- [ ] Human deployment and soak: deploy the PKCE frontend and in-place Cognito/WAF change set, observe for at least the 30-day refresh-token lifetime, and keep Wave 1 step 1.1 blocked.
-- [ ] Final P-07 cutover: proxy browser-side password/TOTP operations, set the migration phase to `cutover_complete`, remove implicit + `COGNITO_ADMIN`, enforce MFA, and rerun the full auth oracle.
+- [x] ~~Human deployment and soak: observe for at least the 30-day refresh-token lifetime~~ **Superseded 2026-07-22.** The soak was never startable — the PKCE frontend was never deployed (commit `4228346` sits on `db-redesign`; Amplify builds `main`, `ui-upgrade`, `front/ui-update-amplify1`), so the clock had no start date and waiting changed nothing. Replaced by step 1.6's concrete verification. Rationale: `docs/db-redesign/code/code-analysis/project/runbooks/wave-1-status.md` §"Soak reinterpretation (2026-07-22)".
+- [ ] **Step 1.6 (blocks 1.1):** make missing Cognito config fail loudly instead of falling back to the hardcoded dev pool; register devx callback URLs; deploy the PKCE SPA to an Amplify `db-redesign` branch pointed at `CareerVpCrudDevx`; capture one verified end-to-end login (redirect → callback → token exchange → authed call → forced 401 → exactly one refresh → sign-out) as evidence.
+- [ ] **P-07b — final cutover, deferred, blocks STAGING promotion (not step 1.1):** proxy browser-side password/TOTP operations, set the migration phase to `cutover_complete`, remove implicit + `COGNITO_ADMIN`, enforce MFA, and rerun the full auth oracle.
 
-## Wave 1 P-26 devx parallel stack
+## Wave 1 step 1.1 (P-04/P-05) — two sessions, not one
+
+- [ ] **1.1-RED:** the five P-04/P-05 tests plus the checked-in route×handler matrix, generated from the live `route_map`. Tests only.
+- [ ] **1.1-GREEN:** a fresh session that did not write the tests and may not edit them. Per `RUNBOOK-RULES.md` rule 7 — a test author who also writes the implementation writes tests that agree with their own bugs.
+
+## Wave 1 P-26 devx parallel stack (CLOSED 2026-07-20)
 
 - [x] Preserve `CareerVpCrudDev` as the sole pre-cutover owner of `api.dev.careervp.com` and guard custom-domain creation to the literal `dev` environment.
 - [x] Synthesize `CareerVpCrudDevx` with `ENVIRONMENT=devx` and `-c p26_rehome_features=true`; verify distinct naming and no shared-domain claim.
 - [x] Capture the review-only devx creation change set and P-28 Replacement report (292 additions, zero replacements, `auto_fail: false`), then delete the review change set without execution.
-- [ ] Human re-forms and executes the devx creation change set.
-- [ ] Run the P-30 four-wire smoke against devx's raw execute-api URL before any traffic move.
-- [ ] Assess P-09 against devx's actual resource count. The BasePathMapping flip and old-stack decommission remain later, separate human-only steps.
+- [x] Human re-formed and executed the devx creation change set — `CareerVpCrudDevx` is `CREATE_COMPLETE`.
+- [x] P-30 four-wire smoke green against devx's raw execute-api URL (4/4).
+- [x] P-09 assessed against devx's actual resource count: **211 physical resources**, well under the 400 ceiling.
+- [ ] The BasePathMapping flip and old-stack decommission remain later, separate human-only steps. **`CareerVpCrudDevx` is now the deploy target** ("devx *is* dev"); until the flip, devx is reachable only at its raw execute-api URL.
 
 ---
 
