@@ -8,6 +8,10 @@ from .scratch_deployment import ScratchDeploymentSettings, validate_scratch_boun
 
 P07_AUTH_MIGRATION_PHASE = "migration_window"
 
+# Amplify branch that the devx stack is verified from (P-07 step 1.6). Cognito rejects any
+# redirect_uri not on the registered list, so this must be registered before the first login.
+DEVX_AMPLIFY_ORIGIN = "https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com"
+
 
 class CognitoConstruct(Construct):
     """Provision Cognito User Pool resources for API authentication."""
@@ -31,6 +35,7 @@ class CognitoConstruct(Construct):
                 "https://app.careervp.com/callback",
                 "https://dev.careervp.com/callback",
                 "https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com/callback",
+                f"{DEVX_AMPLIFY_ORIGIN}/callback",
                 "https://stage.careervp.com/callback",
             ]
         )
@@ -42,6 +47,7 @@ class CognitoConstruct(Construct):
                 "https://app.careervp.com/",
                 "https://dev.careervp.com/",
                 "https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com/",
+                f"{DEVX_AMPLIFY_ORIGIN}/",
                 "https://stage.careervp.com/",
             ]
         )

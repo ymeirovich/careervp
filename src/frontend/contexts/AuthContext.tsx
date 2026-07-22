@@ -4,6 +4,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { useRouter } from 'next/navigation';
 import { CognitoUserPool, CognitoUser, type CognitoUserSession } from 'amazon-cognito-identity-js';
 import * as auth from '../lib/auth';
+import { getPoolConfig } from '../lib/auth-config';
 
 interface AuthContextValue {
   user: CognitoUser | null;
@@ -43,13 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   function getPool(): CognitoUserPool {
     if (!poolRef.current) {
-      poolRef.current = new CognitoUserPool({
-        UserPoolId: process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID ?? 'us-east-1_WiHMRqLpe',
-        ClientId:
-          process.env.NEXT_PUBLIC_COGNITO_APP_CLIENT_ID ??
-          process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID ??
-          '7blipbarsisbctqh6hlsj46sqa',
-      });
+      poolRef.current = new CognitoUserPool(getPoolConfig());
     }
     return poolRef.current;
   }

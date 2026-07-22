@@ -66,8 +66,7 @@ def test_cognito_callback_urls_include_devx_amplify_branch() -> None:
         f'is not registered. Registered: {sorted(properties["CallbackURLs"])}'
     )
     assert f'{DEVX_AMPLIFY_ORIGIN}/' in properties['LogoutURLs'], (
-        f'devx sign-out will be rejected by Cognito: {DEVX_AMPLIFY_ORIGIN}/ '
-        f'is not registered. Registered: {sorted(properties["LogoutURLs"])}'
+        f'devx sign-out will be rejected by Cognito: {DEVX_AMPLIFY_ORIGIN}/ is not registered. Registered: {sorted(properties["LogoutURLs"])}'
     )
 
 

@@ -4,22 +4,16 @@ import {
   CognitoUserAttribute,
   type CognitoUserSession,
 } from 'amazon-cognito-identity-js';
+import { getPoolConfig } from './auth-config';
 import { beginPkceSignIn, hostedUiLogoutUrl } from './pkce';
 
 export { beginPkceSignIn };
-
-const USER_POOL_ID =
-  process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID ?? 'us-east-1_WiHMRqLpe';
-const CLIENT_ID =
-  process.env.NEXT_PUBLIC_COGNITO_APP_CLIENT_ID ??
-  process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID ??
-  '7blipbarsisbctqh6hlsj46sqa';
 
 let _pool: CognitoUserPool | null = null;
 
 function getPool(): CognitoUserPool {
   if (!_pool) {
-    _pool = new CognitoUserPool({ UserPoolId: USER_POOL_ID, ClientId: CLIENT_ID });
+    _pool = new CognitoUserPool(getPoolConfig());
   }
   return _pool;
 }

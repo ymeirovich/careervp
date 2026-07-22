@@ -7,15 +7,7 @@ import {
   CognitoUserSession,
 } from 'amazon-cognito-identity-js';
 
-const USER_POOL_ID =
-  process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID ?? 'us-east-1_WiHMRqLpe';
-const CLIENT_ID =
-  process.env.NEXT_PUBLIC_COGNITO_APP_CLIENT_ID ??
-  process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID ??
-  '7blipbarsisbctqh6hlsj46sqa';
-const COGNITO_DOMAIN =
-  process.env.NEXT_PUBLIC_COGNITO_DOMAIN ||
-  'https://careervp-dev.auth.us-east-1.amazoncognito.com';
+import { getClientId, getCognitoDomain, getPoolConfig } from './auth-config';
 
 const CODE_VERIFIER_KEY = 'careervp.pkce.code_verifier';
 const OAUTH_STATE_KEY = 'careervp.pkce.state';
@@ -87,8 +79,8 @@ export async function beginPkceSignIn(email: string): Promise<void> {
   const request = await createPkceAuthorizationRequest({
     email,
     origin: window.location.origin,
-    cognitoDomain: COGNITO_DOMAIN,
-    clientId: CLIENT_ID,
+    cognitoDomain: getCognitoDomain(),
+    clientId: getClientId(),
   });
   window.sessionStorage.setItem(CODE_VERIFIER_KEY, request.codeVerifier);
   window.sessionStorage.setItem(OAUTH_STATE_KEY, request.state);
@@ -112,11 +104,11 @@ export async function completePkceSignIn(
     throw new Error('Invalid authorization callback');
   }
 
-  const response = await fetch(`${normalizeDomain(COGNITO_DOMAIN)}/oauth2/token`, {
+  const response = await fetch(`${getCognitoDomain()}/oauth2/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id: CLIENT_ID,
+      client_id: getClientId(),
       code,
       code_verifier: codeVerifier,
       grant_type: 'authorization_code',
@@ -139,7 +131,7 @@ export async function completePkceSignIn(
   const username = String(idToken.payload['cognito:username'] ?? idToken.payload.sub);
   const user = new CognitoUser({
     Username: username,
-    Pool: new CognitoUserPool({ UserPoolId: USER_POOL_ID, ClientId: CLIENT_ID }),
+    Pool: new CognitoUserPool(getPoolConfig()),
   });
   user.setSignInUserSession(session);
   window.sessionStorage.removeItem(CODE_VERIFIER_KEY);
@@ -148,9 +140,9 @@ export async function completePkceSignIn(
 }
 
 export function hostedUiLogoutUrl(origin: string): string {
-  const logoutUrl = new URL(`${normalizeDomain(COGNITO_DOMAIN)}/logout`);
+  const logoutUrl = new URL(`${getCognitoDomain()}/logout`);
   logoutUrl.search = new URLSearchParams({
-    client_id: CLIENT_ID,
+    client_id: getClientId(),
     logout_uri: `${origin.replace(/\/$/, '')}/`,
   }).toString();
   return logoutUrl.toString();
