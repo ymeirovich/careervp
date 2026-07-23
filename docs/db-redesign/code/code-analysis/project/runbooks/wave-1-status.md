@@ -21,7 +21,7 @@ first.
 | 1.3d | P-26 Job-1 | **O-9 fix human-executed and live-verified.** `project-scope-lock.yaml`/`.md` at v2.6.0 (commit `3bbb963`); spec/runbook docs updated (commit `443dabe`). Investigated O-9: `_build_api_custom_domain()` (`api_construct.py:346-371`) already creates the `api.dev.careervp.com` `DomainName`+`BasePathMapping`, unconditionally invoked for non-prod/non-scratch — no new code needed. Created a review-only CloudFormation change set (`cdk deploy CareerVpCrudDev --no-execute`, name `p26-o9-review-20260719`) to get the authoritative P-28 Replacement report; found and resolved a live-account blocker (orphaned, deletion-protected `careervp-identity-map-table-dev` GlobalTable from an interrupted prior deploy — deleted per explicit human instruction), then re-formed the change set clean: **523 changes, `auto_fail: false`**, only 6 non-protected `Replacement:True` entries (`AWS::Lambda::Permission` swagger churn), zero `RestApi`/`DynamoDB::Table`/`S3::Bucket`/`Cognito::UserPool` replacements (evidence at `docs/evidence/p26-o9-changeset-review-20260719.json` + `-replacement-report-20260719.json`). **Human then executed the real deploy**, change set `p26-o9-execute-19-07-2026`: CloudTrail confirms `CreateChangeSet` at `2026-07-19T17:08:00Z` and `ExecuteChangeSet` at `2026-07-19T17:12:55Z` (principal `presgen_user`, `aws-cli/2.31.23`, request id `6b805e53-e7fa-4ddc-a171-6a37020ccbfe`); stack `CareerVpCrudDev` reached `UPDATE_COMPLETE` at `2026-07-19T17:20:20Z` (`aws cloudformation describe-stacks` / `describe-stack-events`, confirmed live, not from a cached report). This deploy recreated the `ApiDevCustomDomain` resource with a fresh ACM cert (`certificateUploadDate: 2026-07-19T20:13:05+03:00`) and a new `regionalDomainName` (`d-97qenqpec3.execute-api.us-east-1.amazonaws.com`, replacing the prior `d-ufdp03t4f1...`), which orphaned the existing Cloudflare CNAME for `api.dev.careervp.com` (NXDOMAIN on the old target, confirmed via `dig`/`host` against `1.1.1.1` and `8.8.8.8`). Human updated the Cloudflare CNAME to the new `d-97qenqpec3...` target; re-verified live resolution from two independent public resolvers post-fix. Ran the P-30 4-wire deploy smoke harness (`scripts/smoke_harness.py`) live against `https://api.dev.careervp.com`: **4/4 PASS** — `health` 200, `cors_exact_origin` exact-origin echo (no wildcard) for `https://main.d3j2wnm8g5clnw.amplifyapp.com`, `authed_read` 200 authed / 401 unauth-rejected, `authed_upload` CV posted and read back (`cv_id=5a96c222-06de-4cd9-a779-c18ce0fa8b19`) — evidence at `docs/evidence/smoke-20260719T173231Z-996d89.json`, matching the pre-deploy baseline (`docs/evidence/smoke-20260717T185228Z-37fe2d.json`, also 4/4). Also updated `specs/P-26-blue-green-api-spec.md` (dev-only Job-1 supersession note, AC-P26-9, domain-claim RED test) and `runbooks/p28-human-gated-deploy-runbook.md` (§5, devx cutover flows through the existing gate). | None — fully resolved and live-verified. `api.dev.careervp.com` resolves to `CareerVpCrudDev` and passes the full 4-wire smoke; devx creation (1.4) can now proceed on O-9. | `3bbb963`, `443dabe`, `ea882c3`; change-set execution + DNS fix are AWS/Cloudflare-side (no repo diff) | 2026-07-19 |
 | 1.4 | P-09 | **Human executed the devx stack-creation change set; `CareerVpCrudDevx` is live.** Building on the prior review-only change set (below), the human formed and executed a fresh change set (`deploy-20260720T192943Z`, preceded by a `deploy-20260720T192517Z` review) against a not-yet-created `CareerVpCrudDevx`. Live-verified via `aws cloudformation describe-stacks --stack-name CareerVpCrudDevx`: **`StackStatus: CREATE_COMPLETE`**, `LastUpdatedTime: 2026-07-20T19:31:58Z`. Change-set evidence (`docs/evidence/careervpcruddevx-changeset-deploy-20260720T192943Z.json`, uncommitted): **257 changes, all `Action: Add`, zero `Replacement: True`** — matches the review change set's shape (292 template resources at synth-count granularity vs. 257 change-set entries vs. 211 deployed physical resources across parent + 2 nested stacks; the three counting methods disagree by a small, expected margin, not a discrepancy). Live resource-count check (`describe-stack-resources`): parent stack 100 direct resources + `AiAssistNestedStack` 11 + `CrudFeaturesNestedStack` (the P-26 re-homed features, flag-ON) 100 = **211 physical resources total**, well under the <400 target already established for this row. Stack outputs confirm a fresh, isolated `RawApiInvokeUrl` (`https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod/`) and Cognito pool (`UserPoolId us-east-1_bAZ6jb6HP`), distinct from `CareerVpCrudDev`. **P-30 4-wire smoke run against the devx raw URL (`src/backend/scripts/smoke_harness.py`, not the nonexistent `scripts/smoke_harness.py` path — the correct path was the first thing that needed fixing): 3/4 PASS.** `health` 200, `cors_exact_origin` exact-origin echo, `authed_read` 200 authed / 401 unauth (using a fresh Cognito test user created via `admin-create-user`/`admin-set-user-password`/`initiate-auth` against devx's own pool, following the P-64 runbook's pattern). `authed_upload` initially **FAILED**: `cv-parser-lambda-devx` returned 500 because SSM parameter `/careervp/devx/anthropic-api-key` did not exist (confirmed via live CloudWatch logs, `requestId` matched to the smoke request's `correlation_id`) — `/careervp/dev/anthropic-api-key` and `/careervp/staging/anthropic-api-key` exist as `SecureString`, `/careervp/devx/...` was never seeded when devx was created. Human decision: copy dev's key value into devx (both are non-prod dev-tier envs; not a distinct-key requirement). Seeded via `aws ssm put-parameter --name /careervp/devx/anthropic-api-key --type SecureString` (value read from dev's parameter with `--with-decryption`, held only in a local shell var, never written to disk or logged). **Re-ran the full 4-wire smoke: 4/4 PASS**, including `authed_upload` (`cv_id=07e4a7c6-4664-4746-9c68-604d0953c075` uploaded and read back). Evidence: `docs/evidence/smoke-20260720T203115Z-434341.json` (pre-fix, 3/4) and `docs/evidence/smoke-20260720T203735Z-019ff0.json` (post-fix, 4/4). | None — devx creation, resource-count clearance, and full P-30 smoke are all live-verified and closed. Un-committed: the two changeset evidence JSONs and the two smoke evidence JSONs (3/4 pre-fix + 4/4 post-fix, kept for the record). Next: 1.1 (P-04/P-05, blocked on the 1.3c soak) is the only remaining open Wave-1 row. | `ea882c3`, `7c8a85c`; devx creation change-set execution + SSM parameter seed are AWS-side (no repo diff); evidence files pending commit | 2026-07-20 |
 | 1.3c AMENDMENT | P-07 | **2026-07-22 — the soak gate in the row above is superseded, not satisfied.** The 1.3c row's closing sentence ("soak for at least the 30-day refresh-token lifetime… 1.1 (P-04) MUST NOT START until that soak completes") is left intact above for history. It is superseded because **that soak was never startable**: the PKCE commit `4228346` lives only on `db-redesign`, and Amplify app `d3j2wnm8g5clnw` builds `main` / `ui-upgrade` / `front/ui-update-amplify1` — never `db-redesign`. `git merge-base --is-ancestor 4228346 ee78796` (last successful Amplify build, 2026-07-18 18:36) returns **false**. The browser has never been served the PKCE SPA, so the 30-day clock has no start date and waiting longer changes nothing. The backend half of 1.3c *did* deploy (dev pool `us-east-1_WiHMRqLpe`: `Tier: PLUS`, `AdvancedSecurityMode: ENFORCED`, `LastModifiedDate: 2026-07-19T21:02`, via the O-9 deploy). Full reasoning in §"Soak reinterpretation (2026-07-22)" below — read it before accepting this. | **New step 1.6 replaces the soak** as 1.1's precondition. 1.1 stays blocked until 1.6 closes green with its evidence file. Separately still open and NOT closed by 1.6: `COGNITO_ADMIN` + implicit-grant removal still needs backend proxies for password-change/TOTP, now tracked as **P-07b, blocking STAGING promotion** (see `redesign-execution-plan.md`). | docs-only (this entry) | 2026-07-22 |
-| 1.6 | P-07 (delivery) | **Code half landed and verified locally; the three human-only steps are NOT done, so 1.6 is NOT closed.** RED first (`08b4211`, tests only): 4 jest tests + 1 pytest test, all failing on their own assertions (`Received function did not throw`; offenders `["auth.ts","pkce.ts"]`; devx origin absent from the five registered CallbackURLs) — no import/collection errors. GREEN (`5b42321`): new `src/frontend/lib/auth-config.ts` resolves user-pool id, app-client id, and hosted domain lazily and **throws a named error when any is missing**, replacing the `?? '<dev value>'` fallbacks in `lib/pkce.ts` and `lib/auth.ts`; values are trimmed so a leading-space env var cannot silently mis-resolve. `cognito_construct.py` now registers `https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com` as a callback + logout URL (new module constant `DEVX_AMPLIFY_ORIGIN`). Verified: frontend typecheck clean, jest unit 149/149, integration 87/87, vitest 67 files/738 tests, backend infra 51/51, naming validator passed. `cdk diff CareerVpCrudDevx` (`ENVIRONMENT=devx -c p26_rehome_features=true`): UserPoolClient is an in-place `[~]` adding exactly one CallbackURL and one LogoutURL, **zero `[!]` replacement markers in the entire diff**. Prereqs re-verified live this session, not from this file: PKCE commit `4228346` exists; `CareerVpCrudDevx` is `CREATE_COMPLETE`; the devx pool/client/raw-API values and the leading-space `NEXT_PUBLIC_COGNITO_REGION=" us-east-1"` app-level typo all confirmed via `aws` calls. | **1.1 STAYS BLOCKED.** Three human-only steps remain, in order: (1) deploy the `cognito_construct.py` change to `CareerVpCrudDevx` through the P-28 change-set gate and attach the `changeset_replacement_report.py` output (`auto_fail: false`, zero `Replacement:True` on the Cognito UserPool); (2) create the Amplify `db-redesign` branch and build (exact command in the session output — set `NEXT_PUBLIC_COGNITO_REGION` at BRANCH level to route around the app-level typo); (3) ONE real login capturing all seven wires into `docs/evidence/pkce-devx-verification-<UTC-timestamp>.json`. A template with the required shape is committed at `docs/evidence/pkce-devx-verification-TEMPLATE.json` — it is explicitly `status: not_executed` and does NOT close the gate. **Three items flagged for human review, see the three bullets under "1.6 flags (2026-07-22)" below.** | `08b4211` (RED), `5b42321` (GREEN) | 2026-07-22 |
+| 1.6 | P-07 (delivery) | **Code landed; devx deploy done; login proven end-to-end; 1.6 is CLOSE but NOT closed — two of seven evidence wires (forced-401/refresh-once, sign-out) are still uncaptured.** RED (`08b4211`) then GREEN (`5b42321`): `src/frontend/lib/auth-config.ts` replaces the `?? '<dev value>'` fallbacks with a hard-throw on missing config; `cognito_construct.py` registers the db-redesign callback/logout URLs. Both change-set-deployed to `CareerVpCrudDevx` (P-28 gate, reviewed then executed live this session): Cognito URLs via `p07-16-devx-callbacks` (74 changes, 0 `Replacement:True`), CORS origins via `p07-16-devx-cors-v2` (137 changes, 0 `Replacement:True`) — both confirmed live via `aws` reads post-deploy, not trusted from the diff alone. Amplify `db-redesign` branch created and built (job 1 and job 2 both `SUCCEED`). **A real login as `ymeirovich@gmail.com` against devx was captured via two browser HAR exports and verified end-to-end**: `/oauth2/authorize` (302) → hosted UI (200) → `POST /login` (302, real credentials) → `/callback` (200) → `POST /oauth2/token` (200, real tokens) → `/dashboard` loads and reads real API data. Decoded the returned `id_token`: `iss` = `us-east-1_bAZ6jb6HP` (devx), not the dev pool — the one check that proves environment isolation actually works, not just "a login succeeded somewhere." Full narrative of what broke and how it was found and fixed is in the new section below. **Not yet done: the forced-401/exactly-one-refresh check and the sign-out check** (wires 5–7 of 7) — blocked this session because the `claude-in-chrome` MCP connection dropped mid-session and manual DevTools capture was handed to the human but not yet returned. See "1.6 handoff (2026-07-23)" below for the exact resume point. | **1.1 STAYS BLOCKED** — not on any remaining code or deploy work, only on the two missing evidence wires. Next session: get `claude-in-chrome` reconnected (a session restart, not a retry from inside a stuck session) or walk the human through the manual DevTools steps recorded in the handoff section; then assemble the real `docs/evidence/pkce-devx-verification-<UTC-timestamp>.json` (the committed `-TEMPLATE.json` is not evidence — `status: not_executed`); then flip this row to fully closed and confirm 1.1 unblocked. | `08b4211`, `5b42321`, `d0c53e2`, `f340fbd`, `65c8d4f` (repo); Cognito risk-config change is AWS-side, no repo diff | 2026-07-23 |
 | 1.1-RED | P-04, P-05 | **not started.** Replaces the test half of 1.1. Isolated session, tests + checked-in route matrix ONLY, zero implementation files touched. Confirmed 2026-07-22 that none of the five tests exist: `grep -rl "AC-P04\|AC-P05" src/backend/tests infra/tests` returns **zero files**, and `scope-diff.py` reports `P-05 spec_written [NO TEST]`. | Blocked until 1.6 closes green. | — | — |
 | 1.1-GREEN | P-04, P-05 | **not started.** Replaces the implementation half of 1.1. FRESH session that has not seen 1.1-RED's reasoning; may not edit the test files. Targets are `auth_utils.py:44` (x-user-id fallback) and `api_construct.py:2106` (dead `AUTHORIZER_DISABLED` — **not** `:1720` as the prompt originally cited). | Blocked until 1.1-RED commits five tests failing on their own assertions. Expected to close the 0.06pp core-branch coverage gap (see §"Coverage decision" below). | — | — |
 | 1.1 | P-04, P-05 | **SPLIT 2026-07-22 — superseded by 1.1-RED + 1.1-GREEN.** Do not run `PROMPT 1.1` as a single session; it is retained in `wave-1-prompts.md` for its guardrail text only. | See the two rows above. | — | — |
@@ -68,6 +68,131 @@ fails asserting `/careervp/<scratch-env>/jwt-private-key` is absent from the ren
 P-06 ARN-scoped `ssm_parameters` IAM grant now legitimately puts that parameter ARN in the policy.
 Confirmed pre-existing by `git stash` round-trip: identical failure on the unmodified tree
 (1 failed, 26 passed). Belongs to P-06/P-64, not P-07 — needs its own owner.
+
+---
+
+## 1.6 live verification (2026-07-23) — three real bugs the code-review pass could not have caught
+
+**Recorded per `RUNBOOK-RULES.md` rule 8's spirit**: none of this was a written gate being
+reinterpreted, but the same discipline applies — a future session should find reasoning, not just
+a conclusion. All three bugs below were found by actually deploying and logging in, not by reading
+code more carefully. The 1.3c AMENDMENT's point stands a third time: **verify from live, not from
+docs.**
+
+### Bug 1 — Cognito adaptive security dead-ended the pool's first-ever login
+
+*Plain English:* the very first real login attempt against devx failed with a generic
+"Sign in could not be completed" error, right after the correct password was accepted. Cognito's
+built-in fraud-detection feature was treating a brand-new pool's first-ever browser login as too
+risky to allow, and since the account had no backup verification method (MFA) set up, there was no
+way for it to prove itself — a dead end with no self-service recovery.
+
+*Technical:* `us-east-1_bAZ6jb6HP` has `AdvancedSecurityMode: ENFORCED` (by design, part of the
+1.3c P-07 hardening) and the login account had no MFA enrolled. Confirmed via
+`aws cognito-idp describe-user-pool` (`LambdaConfig` empty, ruling out a trigger throwing) and
+`MFAOptions: null` on the account. Fixed live, not via a code/CDK change:
+`aws cognito-idp set-risk-configuration --user-pool-id us-east-1_bAZ6jb6HP` with
+`AccountTakeoverRiskConfiguration.Actions` set to `NO_ACTION` for Low/Medium/High. This is a
+runtime Cognito API setting, not modeled in `cognito_construct.py` — it does not appear in any
+`cdk diff`. Verified the fix by creating a disposable diagnostic user
+(`p07-diag-<timestamp>@example.invalid`, deleted immediately after) and replaying the full OAuth
+flow via `curl` with a real PKCE code/verifier pair: authorize → hosted-UI login POST → `/callback`
+with a real `code` → `/oauth2/token` exchange → decoded `id_token` confirming
+`iss: .../us-east-1_bAZ6jb6HP`. No password was ever touched or seen by the agent.
+
+### Bug 2 — `process.env[name]` silently defeated Next.js's build-time env inlining
+
+*Plain English:* the very fix from 1.6's first pass — replacing hardcoded fallback values with a
+hard error when config is missing — had a bug that made the hard error fire on every single
+production build, regardless of what was actually configured. The real login page would fail
+immediately after typing an email, before ever reaching Cognito, with a generic "Sign in failed"
+message that hid the real cause.
+
+*Technical:* `src/frontend/lib/auth-config.ts`'s `requireEnv` (from `5b42321`) read
+`process.env[name]` — a dynamic, variable-keyed lookup. Next.js/webpack only inlines
+`NEXT_PUBLIC_*` values at build time by pattern-matching the literal static form
+`process.env.NEXT_PUBLIC_X`; it cannot see through a bracket lookup keyed by a runtime variable.
+Proved this concretely: built the frontend locally with the real devx env vars, then grepped the
+actual **client-shipped** bundle (`.next/static/`, not the server-only
+`required-server-files.json` manifest) for the live pool id — zero occurrences under the old code,
+present after switching every getter to a literal `process.env.NEXT_PUBLIC_X` reference. Fixed in
+`d0c53e2`; same 149 jest tests pass unchanged (Jest's Node runtime treats `process.env[name]` and
+`process.env.NAME` identically, which is exactly why this bug was invisible to the RED/GREEN test
+pass and only surfaced via a live browser build).
+
+### Bug 3 — the API's CORS allow-list is a second, separate list that also needed the new origin
+
+*Plain English:* even after the login bug above was fixed and a real login succeeded completely,
+the dashboard couldn't load any of its data. The login and the "can this website talk to the API"
+permission list turned out to be two entirely separate settings, and only one of them had been
+updated.
+
+*Technical:* `ApiConstruct.allowed_origins` (`api_construct.py`) is unrelated to Cognito's
+`CallbackURLs`/`LogoutURLs` — registering the db-redesign origin with Cognito did nothing for this
+list. Found via a live HAR capture: every authenticated API call after a successful login failed
+with `net::ERR_FAILED` / status 0 and zero response headers — the exact signature Chrome produces
+when a request fails the CORS check (it deliberately hides response details on a CORS failure, so
+a "clean" 401/200 never appears in the HAR either way). Confirmed live before writing any code:
+`aws lambda get-function-configuration --function-name careervp-user-api-lambda-devx` showed
+`ALLOWED_ORIGINS` missing the db-redesign origin. Fixed in two parts, and the two-part nature is
+itself the finding: `f340fbd` edited the Python-level default in `api_construct.py`, deployed
+clean (`auto_fail: false`, 0 `Replacement:True`), but **changed nothing live** — confirmed by
+re-reading `ALLOWED_ORIGINS` post-deploy, still the old list. Root cause: `cdk.json`'s
+`context.allowed_origins` is read by `try_get_context` *before* the Python default and was never
+touched, so it silently overrode the fix on every real `cdk deploy`. `65c8d4f` fixes `cdk.json`
+itself and adds `test_cdk_json_context_allowed_origins_includes_db_redesign`, which reads
+`cdk.json` directly — the existing test built its stack via a bare `App(context=...)` that never
+loads `cdk.json`, so it validated the (for-real-deploys dead) Python fallback and passed while the
+actual deploy target was still wrong. Redeployed for real (`p07-16-devx-cors-v2`, 137 changes, 0
+`Replacement:True`); live-verified across `user-api`, `cv-parser`, `vpr-dlq-handler`, and `billing`
+Lambdas post-deploy.
+
+---
+
+## 1.6 handoff (2026-07-23) — exact resume point for the next session
+
+**What's done:** all three bugs above are fixed, tested, deployed, and live-verified. A real login
+completed successfully end-to-end (see the 1.6 row) and the dashboard loads real data. Everything
+in this session is committed on `db-redesign` (`08b4211` … `65c8d4f`) — **push to origin before
+resuming**, since nothing auto-pushes reliably.
+
+**What's NOT done:** two of the seven required evidence wires — a forced 401 with an
+exactly-one-refresh check, and sign-out — have not been captured. The `claude-in-chrome` MCP
+connection dropped mid-session (confirmed via `ToolSearch` returning zero matches after the human
+reported the extension itself was connected — the disconnect is per-session, not per-extension; a
+session restart is the fix, not a retry from inside the stuck session). Manual DevTools steps were
+handed to the human as a fallback but not yet completed:
+
+1. DevTools → Application → Local Storage → find the key ending `.idToken` → corrupt a handful of
+   characters in the **last** dot-segment only (the signature), leaving the first two segments
+   (header/payload, including `exp`) untouched.
+2. Reload the dashboard, watch the Network tab (Preserve log on).
+3. Confirm: one 401, exactly one retry, then either the retry succeeds or the app signs out
+   cleanly — **not** a second uncounted retry or an infinite loop.
+4. Sign out; confirm the `/logout` URL targets the db-redesign origin and the session actually
+   clears (reload bounces to `/login`).
+
+**Known nuance for whoever runs this next:** this app's Cognito SDK (`lib/auth.ts`'s
+`getCurrentToken`) auto-refreshes silently inside `getSession()` whenever it locally judges a token
+expired — before the axios request interceptor ever sends anything. That means a *naturally*
+expired token never reaches the app as an observable 401; only a token the client still believes
+is valid but the *server* rejects (a tampered signature, a real revocation) produces one. Don't
+mistake "no spontaneous 401 after an hour" for a bug — that's the silent-refresh path working as
+designed, and you'd only ever see the interceptor's own retry-once/sign-out branch by tampering as
+above.
+
+**Once wires 5–7 are captured:** write the real evidence file
+(`docs/evidence/pkce-devx-verification-<UTC-timestamp>.json`, following the committed
+`-TEMPLATE.json` shape — it is explicitly `not_executed` and does not itself close the gate), flip
+the 1.6 row above to fully closed, and state plainly that 1.1 is unblocked.
+
+**Separate, unrelated housekeeping from the same session:** the pre-existing `test_p64_scratch_path`
+failure flagged in the "1.6 flags" section above (P-06/P-64, not P-07) was root-caused and fixed on
+its own branch, `fix/p06-scratch-ssm-arns` (commit `c62fb03`) — `_secret_parameter_arn` wasn't
+scratch-aware like its sibling `_secret_parameter_name`, so scratch-mode synths granted
+`ssm:GetParameter` on a parameter path that doesn't exist. Deliberately kept off `db-redesign`
+since it's a different concern; pushed to origin this session but not yet merged or PR'd — needs
+its own review, not bundled into the P-07 work above.
 
 ---
 
