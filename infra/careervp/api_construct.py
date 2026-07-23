@@ -520,21 +520,45 @@ class ApiConstruct(Construct):
 
     def _add_gateway_error_responses(self, rest_api: aws_apigateway.RestApi) -> None:
         response_types = (
-            ("Default4xx", aws_apigateway.ResponseType.DEFAULT_4_XX, "DEFAULT_4XX"),
-            ("Default5xx", aws_apigateway.ResponseType.DEFAULT_5_XX, "DEFAULT_5XX"),
-            ("Unauthorized", aws_apigateway.ResponseType.UNAUTHORIZED, "UNAUTHORIZED"),
+            (
+                "Default4xx",
+                aws_apigateway.ResponseType.DEFAULT_4_XX,
+                "DEFAULT_4XX",
+                None,
+            ),
+            (
+                "Default5xx",
+                aws_apigateway.ResponseType.DEFAULT_5_XX,
+                "DEFAULT_5XX",
+                None,
+            ),
+            (
+                "Unauthorized",
+                aws_apigateway.ResponseType.UNAUTHORIZED,
+                "UNAUTHORIZED",
+                None,
+            ),
             (
                 "AccessDenied",
                 aws_apigateway.ResponseType.ACCESS_DENIED,
                 "ACCESS_DENIED",
+                # The Cognito authorizer emits ACCESS_DENIED (403 by default) for
+                # an invalid/tampered token, not only for a missing one. Remap to
+                # 401 so the frontend's refresh-once interceptor (api/client.ts,
+                # which only retries on 401) can tell "re-authenticate" apart
+                # from the app-level 403s that Lambda integrations return for
+                # real authorization failures (quota limits, ownership checks) -
+                # those must stay 403 and must never trigger a token refresh.
+                "401",
             ),
         )
-        for response_id, response_type, response_code in response_types:
+        for response_id, response_type, response_code, status_code in response_types:
             aws_apigateway.GatewayResponse(
                 self,
                 f"GatewayResponse{response_id}",
                 rest_api=rest_api,
                 type=response_type,
+                status_code=status_code,
                 response_headers={
                     "Access-Control-Allow-Origin": "'*'",
                     "Access-Control-Allow-Headers": "'Content-Type,Authorization'",

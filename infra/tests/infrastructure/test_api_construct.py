@@ -442,6 +442,29 @@ def test_api_gateway_gateway_responses_include_request_id(
     ), "Gateway responses must include request_id in the response body"
 
 
+def test_access_denied_gateway_response_remaps_to_401(
+    synthesized_template: Template,
+) -> None:
+    """The Cognito authorizer returns ACCESS_DENIED (403 by default) for both a
+    missing and an invalid/tampered token. Remapped to 401 so the frontend's
+    401-refresh-once interceptor can retry, without touching the app-level 403s
+    that Lambda integrations return for real authorization failures (quota
+    limits, ownership checks) - those must stay 403 untouched."""
+    gateway_responses = synthesized_template.find_resources(
+        "AWS::ApiGateway::GatewayResponse"
+    )
+    access_denied_responses = [
+        props
+        for props in gateway_responses.values()
+        if props["Properties"].get("ResponseType") == "ACCESS_DENIED"
+    ]
+    assert access_denied_responses, "No ACCESS_DENIED GatewayResponse synthesized"
+    assert all(
+        props["Properties"].get("StatusCode") == "401"
+        for props in access_denied_responses
+    ), "ACCESS_DENIED GatewayResponse must override StatusCode to 401"
+
+
 def test_lambda_log_groups_are_kms_encrypted(
     merged_resources: dict[str, dict[str, Any]],
 ) -> None:
