@@ -3,6 +3,7 @@ import { renderHook, act } from '@testing-library/react';
 import React from 'react';
 import { useAuth, AuthProvider } from '../../contexts/AuthContext';
 import { beginPkceSignIn } from '../../lib/pkce';
+import * as apiClientModule from '../../api/client';
 
 vi.mock('../../lib/pkce', () => ({
   beginPkceSignIn: vi.fn(),
@@ -168,6 +169,24 @@ describe('AuthContext — session restoration on mount', () => {
 
     expect(result.current.isAuthenticated).toBe(false);
     expect(result.current.isLoading).toBe(false);
+  });
+});
+
+describe('AuthContext — axios interceptor wiring', () => {
+  it('registers the real refreshSession/signOut with the api client on mount', async () => {
+    // Regression test for a bug where the interceptor's authContext stub was
+    // never replaced: production 401s silently failed to refresh or sign out
+    // because nothing called setAuthContext, even though the real
+    // implementations existed here all along.
+    const spy = vi.spyOn(apiClientModule, 'setAuthContext');
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+
+    expect(spy).toHaveBeenCalled();
+    const registered = spy.mock.calls.at(-1)?.[0];
+    expect(registered?.refreshSession).toBe(result.current.refreshSession);
+    expect(registered?.signOut).toBe(result.current.signOut);
   });
 });
 

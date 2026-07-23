@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { CognitoUserPool, CognitoUser, type CognitoUserSession } from 'amazon-cognito-identity-js';
 import * as auth from '../lib/auth';
 import { getPoolConfig } from '../lib/auth-config';
+import { setAuthContext } from '../api/client';
 
 interface AuthContextValue {
   user: CognitoUser | null;
@@ -131,6 +132,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return token;
     });
   }, [signOut]);
+
+  // Registers the real Cognito-backed refresh/sign-out with the axios interceptor
+  // (api/client.ts), which otherwise falls back to a stub that never refreshes and
+  // never signs out — the 401-refresh-once contract depends on this wiring.
+  useEffect(() => {
+    setAuthContext({ refreshSession, signOut });
+  }, [refreshSession, signOut]);
 
   const changePassword = useCallback(
     (oldPassword: string, newPassword: string): Promise<void> => {
