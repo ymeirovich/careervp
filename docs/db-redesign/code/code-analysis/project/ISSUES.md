@@ -13,6 +13,13 @@ scope-lock clause (via the §0.3 amendment protocol) or by being closed with a r
 | **Severity** | `high` (will bite a real user), `medium` (will bite an operator), `low` (hygiene) |
 | **Disposition** | What we decided to do *for now*, and why that is defensible |
 | **Trigger** | The condition that should force this back onto the table |
+| **Stopping condition** | When the trigger fires and the work still is not done — what smaller thing ships instead. Added 2026-07-24 per `RUNBOOK-RULES.md` rule 10. Must be observable (a date, or a state you can query), never a judgement call. |
+
+This file also holds the **bets** each wave rests on (`RUNBOOK-RULES.md` rule 9) — beliefs that
+are load-bearing, might be false, and each carry the check that would disprove them and the
+fallback decided in advance. Bets are numbered `B-<wave>-<n>` and are **re-read at that wave's
+gate**. A bet that turns out to underwrite a locked decision gets promoted into
+`project-scope-lock.yaml` by human amendment; agents may write here but never there.
 
 ---
 
@@ -149,3 +156,180 @@ and "make the test pass" is the specific temptation to avoid until (a) vs (b) is
 **Trigger.** Diagnose before Q-10's step runs — Q-10 cannot be evidenced as done while this is red.
 Start by checking whether the handler reads a real `usage` block from the Anthropic response or
 still falls back to an estimate.
+
+---
+
+## I-06 — The browser login client still holds the admin scope and the insecure grant
+
+- **Found:** 2026-07-18, step 1.3c. Tracked until now only as a row in `redesign-execution-plan.md`.
+- **Severity:** high — an admin-level scope on a public browser client is a privilege-escalation
+  primitive, and the insecure grant puts tokens in URLs.
+- **Status:** OPEN, deferred.
+
+**What is true.** Removing `COGNITO_ADMIN` and the implicit grant from the browser client requires
+backend endpoints for password change and two-factor enrollment first. The scope-usage inventory in
+commit `4228346` classifies all five current usages as `temporarily_allowed` and **none** as
+`backend_proxy`. Remove the scope before those endpoints exist and password change and two-factor
+enrollment break for real users.
+
+**Why it is here now.** It was deferred on 2026-07-18 with a home and a trigger but no stopping
+condition, and the migration window has been open ever since. It also never entered this file,
+which is the one place deferrals are supposed to live — so the mechanism built to catch exactly
+this case was bypassed by that case. Recorded here per `RUNBOOK-RULES.md` rule 10.
+
+**Disposition.** Not fixed in Wave 1 or Wave 2. It does not gate either: the Wave-1 auth work
+removed a header-trust fallback and a dead environment variable and never touched the login flows.
+It stops being theoretical at staging promotion, where three real accounts are in scope.
+
+**Trigger.** Staging promotion.
+
+**Stopping condition.** If the backend password-change and two-factor-enrollment endpoints are not
+built when staging is otherwise ready to promote, staging promotes anyway in this reduced form:
+the implicit grant is **disabled**, the admin scope is **retained**, and self-service password
+change and two-factor enrollment are **turned off in the staging interface** — three users,
+administrator reset instead. Worse product, bounded risk, and the window closes on the half that
+actually leaks tokens. This is a pre-authorised fallback, not permission to skip the work; the
+endpoints remain required before any production promotion or paid launch.
+
+---
+
+# Wave-2 bets
+
+Per `RUNBOOK-RULES.md` rule 9. Each is a belief Wave 2 rests on that could be false, with the check
+that would show it and the fallback decided now. **All five are re-read at the Wave-2 gate.** They
+are ordered by how much downstream work they delete if wrong, not by severity.
+
+---
+
+## B-2-1 — The mock provider's signature scheme is a faithful stand-in for Stripe's
+
+- **Load-bearing for:** 2.0, 2.0b, 2.1. Deletes the most work if wrong.
+
+**The belief.** A signature check built for the mock provider can be replaced by Stripe's without
+changing the port's shape or the tests written against it.
+
+**Why it is a bet and not a fact.** The port declares
+`construct_webhook_event(payload: bytes, signature: str, secret: str)` — a *single* signature
+string (`payment_providers/interface.py`). Stripe's real header is compound: a timestamp and one or
+more signatures in one value (`t=...,v1=...`), and replay rejection needs the timestamp *out of that
+header*. If the mock is implemented as "signature is a bare hex digest" and takes its timestamp from
+somewhere else, then the replay-rejection test required by the spec is written against a shape
+Stripe cannot satisfy, and step 2.0b rewrites both the provider and the tests. The whole point of
+the mock's signature check being cryptographically real (rather than tautological) is defeated if it
+is real in a different scheme.
+
+**The check.** Before 2.1 starts, diff the mock's header format against Stripe's documented
+`Stripe-Signature` format and confirm the mock parses timestamp and digest out of one compound
+string. Concretely: `construct_webhook_event` must reject a payload whose digest is valid but whose
+timestamp is outside tolerance, with the timestamp read from the `signature` argument and nowhere
+else.
+
+**The fallback.** Write Stripe's verification first and make the mock conform to it, rather than the
+reverse. Cheap now — the compound-header parse is a few lines. A rewrite of every idempotency and
+replay test later.
+
+---
+
+## B-2-2 — The provider's event id is a stable, safe idempotency key
+
+- **Load-bearing for:** 2.1 (the money path).
+
+**The belief.** `WebhookEvent.event_id` is unique per real-world event, stable across provider
+retries of the same event, and different across genuinely distinct events.
+
+**Why it is a bet.** Step 2.1 wires idempotency "via the port's event id." The existing webhook
+service already keys on it — `record_payment_event(event.event_id, event.event_type)` returns
+whether the event is new, with a commit-after-work release on failure. So the mechanism is partly
+built *already*, against a mock whose ids are generated locally. If the mock issues a fresh id per
+delivery attempt where Stripe reuses one, every duplicate-suppression test passes while the real
+system double-charges on a provider retry. That is the single worst failure available in this wave.
+
+**The check.** Assert directly that two deliveries of the *same* event carry the same `event_id`,
+and that the second is suppressed — using the mock's own retry path, not two hand-built payloads.
+Then confirm against Stripe's documented retry semantics that its `evt_` id is stable across
+retries of one event.
+
+**The fallback.** If the ids are not stable, key idempotency on a digest of the verified raw payload
+instead of on `event_id`, and record that as the port's contract. Decide this before 2.1 writes its
+tests, not after.
+
+---
+
+## B-2-3 — Wave 2's added resources stay under the CloudFormation ceiling
+
+- **Load-bearing for:** 2.1, 2.2, 2.7 — and the reason to check early rather than at the gate.
+
+**The belief.** Wave 2's additive infrastructure fits without another decomposition.
+
+**Why it is a bet.** This exact ceiling has already bitten once: it was filed as a minor guardrail
+and turned out to hard-block four clauses, discovered mid-Wave-1, costing a contract amendment and a
+parallel-stack redesign. Wave 2 is the most additive wave remaining — eight dead-letter queues,
+reserved concurrency across consumers, EventBridge target queues, and their alarms. The current
+devx stack is 211 physical resources (100 parent, 11 in one nested stack, **100 in the features
+nested stack**). That 100 is close enough to matter.
+
+**The check.** `cdk synth` resource count **after every additive step**, not once at the gate. The
+`resource_count<400` continuous-integration gate already exists; this makes it a per-step
+observation so the trend is visible before it is a wall.
+
+**The fallback.** If a step would cross the line, that step splits its resources into a new nested
+stack of its own rather than growing the features stack — decided now, so it is a planned move
+rather than an emergency redesign. Never move the API or the user pool.
+
+---
+
+## B-2-4 — "Deploy" means devx
+
+- **Load-bearing for:** every Wave-2 step that reaches AWS.
+
+**The belief.** Wave-2 code lands on `CareerVpCrudDevx` and nowhere else.
+
+**Why it is a bet.** It is currently false on one path. `deploy.yml` sets
+`STACK_NAME: 'CareerVpCrudDev'` as a workflow-wide constant and the push-to-`main` jobs hardcode the
+old environment, its parameter-store paths, and its parity target. Manual dispatch maps targets
+correctly and refuses to guess; **merging does not.** Wave 2 is payments. Separately, the approval
+gate is bound to a deployment environment named `deploy-dev`, which does not cover devx deploys at
+all (see `runbooks/p28-human-gated-deploy-runbook.md` §2a).
+
+**The check.** Before 2.0 deploys anything: confirm a deployment environment named `devx` exists
+with a required reviewer, and confirm what a merge to `main` would target.
+
+**The fallback.** Until both are settled, Wave-2 deploys are manual-dispatch only, and no Wave-2
+work merges to `main`. Stated as a rule now so it is a decision rather than an accident.
+
+---
+
+## B-2-5 — Billing already depends on the port, so 2.0 is small
+
+- **Load-bearing for:** the effort estimate on 2.0, and on 2.1 inheriting a clean seam.
+
+**The belief.** The payment port exists and its consumers already use it, so the first step is
+mostly adding a mock provider.
+
+**Why it is a bet — and it is already false.** The consumers inject the provider, but typed as
+`Any` (`logic/billing_service.py`, `logic/webhook_service.py`), so **nothing enforces the port** —
+strict type checking cannot see a mismatch. And there is one, in **two** consumers:
+
+- `logic/webhook_service.py:115` — `self._payment_provider.retrieve_subscription(subscription_id)`
+- `logic/reconciliation_service.py:53` — the same call, and its module docstring (`:6`) documents
+  `retrieve_subscription(...)` as a step in the expected provider contract
+
+`retrieve_subscription` is **not declared by the Protocol at all** — the port declares exactly five
+methods (`create_customer`, `create_checkout_session`, `create_portal_session`,
+`construct_webhook_event`, `get_price_map`). The local variable in the webhook path is even named
+`stripe_sub`, so the concrete provider has already leaked into the consumer. The acceptance
+criterion "billing logic uses the provider port, not concrete classes" therefore reads as satisfied
+and is not.
+
+**This also links to step 2.5.** The reconciliation service is the one whose entrypoint never runs
+because of a handler-name mismatch — so a consumer that depends on an undeclared port method has
+never executed in a deployed environment. Fixing 2.5 without first reconciling the port would put
+that call on a live schedule for the first time.
+
+**The check.** Change both annotations from `Any` to `PaymentProviderInterface` and run strict type
+checking. Every call to a method the port does not declare fails there and then. That is the real
+inventory of the gap, and it takes minutes.
+
+**The fallback.** If the mismatch list is longer than `retrieve_subscription`, 2.0 grows to cover
+reconciling the port with its actual consumers, and 2.1 waits. Better to learn that in the first
+hour of 2.0 than during the idempotency work.

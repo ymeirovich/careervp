@@ -29,6 +29,31 @@ GitHub → Settings → Environments → **New environment** → name it exactly
 - Repeat for `staging` / `prod` environments (used by `execute-change-set-other`) if/when
   those environments exist.
 
+### 2a. `devx` needs its own environment — `deploy-dev` does not cover it
+
+**Plain English:** the approval gate is attached to a named GitHub environment. The one that was
+set up is called `deploy-dev`, and it only guards deploys to the old `CareerVpCrudDev` stack.
+Deploys to `devx` — which is where all work now goes — run through a different job that asks
+GitHub for an environment named `devx`. If no environment by that name exists with a required
+reviewer on it, that deploy does not pause for approval. It just runs.
+
+**Technical:** `execute-change-set-dev` hardcodes `environment: deploy-dev`
+(`.github/workflows/deploy.yml:194`). `execute-change-set-other` — the job that handles every
+`workflow_dispatch` target including `devx` — sets `environment.name: ${{ inputs.environment }}`
+(`:350`), so it resolves to the literal string `devx`.
+
+**Do this:** GitHub → Settings → Environments → create (or confirm) an environment named exactly
+`devx`, and add yourself as a **required reviewer**. Verify with:
+
+```
+gh api repos/ymeirovich/careervp/environments \
+  --jq '.environments[] | {name, rules: [.protection_rules[].type]}'
+```
+
+`devx` must appear in the output with `required_reviewers` among its rules. If it is absent, or
+present with no reviewer rule, the human-only-execute invariant is decorative for every Wave-2
+deploy — which is the money path.
+
 ## 3. Split the deploy IAM roles (least privilege)
 - **`secrets.AWS_ROLE`** (automation, create job): grant ONLY
   `cloudformation:CreateChangeSet`, `DescribeChangeSet`, `DescribeStacks`,

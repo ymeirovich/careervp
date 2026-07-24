@@ -9,13 +9,13 @@ on:
       environment:
         description: 'Environment to deploy'
         required: true
-        default: dev
+        default: devx
         type: choice
         options:
+          - devx
           - dev
           - staging
           - prod
-          - devx
 
 # P-28 Sub-clause B: one deploy slot for ALL triggers, and NEVER cancel an in-flight run.
 # A 2nd push to main must QUEUE — cancelling a mid-flight CloudFormation update leaves the
@@ -320,6 +320,51 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE }}
           role-session-name: create-cs-${{ inputs.environment }}-${{ github.sha }}
           aws-region: ${{ env.AWS_REGION }}
+      # ---------------------------------------------------------------------
+      # Ensure this env's SSM parameters exist BEFORE the change set is built,
+      # so CloudFormation's parameter lookups resolve. CREATE-IF-MISSING only:
+      # this path serves devx / staging / prod, so it must NEVER overwrite an
+      # existing value (unlike the dev push path, which --overwrite's its own).
+      # devx's first deploy in step 1.4 500'd for exactly this reason -- the
+      # anthropic key had never been seeded and a human did it by hand.
+      # ---------------------------------------------------------------------
+      - name: Ensure env SSM parameters exist (create-if-missing)
+        env:
+          TARGET_ENV: ${{ inputs.environment }}
+          ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TAVILY_KEY: ${{ secrets.TAVILY_API_KEY }}
+          JWT_PRIVATE_KEY_SECRET: ${{ secrets.JWT_PRIVATE_KEY }}
+          JWT_PUBLIC_KEY_SECRET: ${{ secrets.JWT_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          exists() { aws ssm get-parameter --name "$1" >/dev/null 2>&1; }
+          create_if_missing() {
+            local name="$1" value="$2" type="$3"
+            if exists "$name"; then
+              echo "SSM ok (unchanged): $name"
+            elif [ -n "$value" ]; then
+              aws ssm put-parameter --name "$name" --value "$value" --type "$type"
+              echo "SSM created: $name ($type)"
+            else
+              echo "::warning::$name is missing and no secret was supplied to create it."
+            fi
+          }
+          create_if_missing "/careervp/${TARGET_ENV}/anthropic-api-key" "${ANTHROPIC_KEY:-}" SecureString
+          create_if_missing "/careervp/${TARGET_ENV}/tavily-api-key" "${TAVILY_KEY:-}" SecureString
+          JWT_PRIVATE_KEY="${JWT_PRIVATE_KEY_SECRET:-}"
+          JWT_PUBLIC_KEY="${JWT_PUBLIC_KEY_SECRET:-}"
+          if { ! exists "/careervp/${TARGET_ENV}/jwt-private-key" || ! exists "/careervp/${TARGET_ENV}/jwt-public-key"; } \
+             && { [ -z "$JWT_PRIVATE_KEY" ] || [ -z "$JWT_PUBLIC_KEY" ]; }; then
+            TMP_DIR="$(mktemp -d)"
+            openssl genrsa -out "$TMP_DIR/jwt-private.pem" 2048 >/dev/null 2>&1
+            openssl rsa -in "$TMP_DIR/jwt-private.pem" -pubout -out "$TMP_DIR/jwt-public.pem" >/dev/null 2>&1
+            JWT_PRIVATE_KEY="$(cat "$TMP_DIR/jwt-private.pem")"
+            JWT_PUBLIC_KEY="$(cat "$TMP_DIR/jwt-public.pem")"
+            echo "::warning::JWT secrets not set; generated an ephemeral keypair to seed ${TARGET_ENV}."
+          fi
+          # String (not SecureString) for CloudFormation dynamic-reference compatibility, matching the dev path.
+          create_if_missing "/careervp/${TARGET_ENV}/jwt-private-key" "$JWT_PRIVATE_KEY" String
+          create_if_missing "/careervp/${TARGET_ENV}/jwt-public-key" "$JWT_PUBLIC_KEY" String
       - name: CFN State Guard
         run: |
           "$GITHUB_WORKSPACE/.github/scripts/cfn-guard.sh" "${{ env.STACK_NAME }}" "${{ env.AWS_REGION }}"
@@ -354,6 +399,22 @@ jobs:
       CHANGESET_NAME: ${{ needs.create-change-set-other.outputs.changeset_name }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: '**/uv.lock'
+      - name: Install Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+      - name: Install backend dependencies
+        working-directory: src/backend
+        run: uv sync --group dev
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -374,3 +435,21 @@ jobs:
           aws cloudformation wait stack-create-complete \
             --stack-name "${{ env.STACK_NAME }}" \
             --region ${{ env.AWS_REGION }} 2>/dev/null || true
+      # Post-deploy verification, mirroring execute-change-set-dev so devx is
+      # protected to the same standard as dev. Ordering is identical: execute ->
+      # wait -> smoke, so a smoke failure marks the run red AFTER the stack has
+      # already updated -- same semantics as the dev path, no new deploy risk.
+      - name: Wait for API Availability
+        run: |
+          .github/scripts/wait-for-api.sh "${{ env.AWS_REGION }}" "${{ env.STACK_NAME }}"
+      - name: Full smoke test
+        working-directory: src/backend
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AUTO_SET_LAMBDA_ENV: '1'
+          AWS_REGION: us-east-1
+        run: |
+          echo "=== IAM PROPAGATION WAIT (15s) ==="
+          sleep 15
+          export PATH="${PWD}/.venv/bin:${PATH}"
+          bash tests/aws_cli_smoke.sh "${{ inputs.environment }}"

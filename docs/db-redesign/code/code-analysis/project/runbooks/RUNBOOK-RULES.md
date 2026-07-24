@@ -10,9 +10,19 @@ so it went stale and nothing forced the next prompt to notice.
 > **Amended 2026-07-22:** rules 7 and 8 added while planning Wave-1 step 1.1. Both come from real
 > incidents in this project, described in each rule. Rules 1–6 are unchanged.
 
+> **Amended 2026-07-24:** rules 9–13 added while planning Wave 2, from a review of what Wave 1
+> actually cost. Rules 1–8 govern **how a prompt runs**. Rules 9–13 govern **what gets built, in
+> what order, and how you know it worked** — a different layer. Rules 1–8 are unchanged.
+>
+> One rule from that review was deliberately **not** adopted: requiring every spec to declare what
+> it does not touch. It is a good idea and it is cheap, but the single incident it would have caught
+> (commit `2513ee6` editing a CDK construct under a CI-only title) converged harmlessly and was
+> correctly flagged at review. Fold it into the spec template when one is next edited; it does not
+> justify a session of its own. Recorded here so the next reader knows it was considered, not missed.
+
 ---
 
-## The eight rules
+## The thirteen rules
 
 ### 1. Every prompt ends by writing a git commit message
 
@@ -114,14 +124,137 @@ changing a **clause definition** still requires the twin-sync ceremony with a ve
 signed `Scope-Lock-Approved-By` trailer. This rule governs *how a locked requirement is delivered*,
 never *what is required*.
 
+### 9. Every belief a wave rests on is written down, with the check that would disprove it and the fallback if it does
+
+A clause says what will be built. A **bet** says what has to be true for building it to be worth
+anything. Three parts, all required, none optional:
+
+| Part | What it has to be |
+|---|---|
+| **The belief** | Stated so it could turn out false. "The mock's signature check matches Stripe's" — not "signature verification works." |
+| **The check** | The actual command, query, or run that would show it false. Not "review this later." |
+| **The fallback** | What we do instead, decided **now**, while the answer is still genuinely unknown. |
+
+A belief with no check is a hope. A belief with no fallback is a single point of failure that
+nobody has planned around. Bets live in `ISSUES.md` (agents may write there); a bet that turns out
+to underwrite a locked decision gets promoted into `project-scope-lock.yaml` by human amendment.
+**Every wave's bets are re-read at that wave's gate** — an unread register is just more text.
+
+**The incident.** Wave 1's 30-day waiting period rested on "stale implicit-era refresh tokens are
+in circulation on the target pool." That was never written as something checkable, so nobody
+checked it. It surfaced four days later only because someone happened to run
+`describe-user-pool-client` and `git merge-base --is-ancestor`. Written as a bet, the whole soak
+reinterpretation was available on day zero for three lines — and **the check is exactly the command
+that eventually found it.**
+
+**Free consequence, worth taking.** Once a wave's bets are listed, ask which one, if wrong, deletes
+the most downstream work — and schedule that first. This project already does that by instinct and
+records it as an amendment afterward: token metering was pulled forward so a measured baseline would
+exist before the model-routing decisions; the canary was pulled ahead of the auth flip so the flip
+had a fire-drilled revert; the research-cost guard was pulled ahead of the chain reorder so volume
+was bounded before it multiplied. Three correct orderings, each discovered late. Ask the question up
+front instead.
+
+### 10. Every deferral carries a stopping condition, not just a home and a trigger
+
+`ISSUES.md` already asks for a **Trigger** — the condition that forces an item back onto the table.
+That is half of it. The other half is: **when the trigger fires and the work still has not been
+done, what smaller thing ships instead?** Written at the same time as the deferral, while the
+outcome is unknown.
+
+The condition must be **observable** — a date, or a state you can query. "When it feels urgent" is
+not a stopping condition, and a soft one is decoration.
+
+**The incident.** The deferred removal of the admin scope from the browser login client has a home
+and a trigger (staging promotion). It has no stopping condition, and the migration window has been
+open since 2026-07-18 with the insecure grant still live. Every extension was individually
+reasonable — that is precisely how extension works. Worse, it never went into `ISSUES.md` at all;
+it is a row in a plan table. **The mechanism built to catch exactly this was bypassed by the case
+it was built for.** A deferral that skips this file has not been deferred, it has been mislaid.
+
+A project without written stopping conditions does not stop. It extends.
+
+### 11. Detail the first prompt in full; skeleton the rest of the wave
+
+Do not instantiate a whole wave of prompts up front, and do not write them strictly one at a time
+either. Both fail differently: a full wave goes stale and then fights sunk cost to rewrite, while
+one-at-a-time loses the whole-wave view and hides work that could run in parallel.
+
+The split:
+
+- **The first prompt is written in full** — every check, every command, every output requirement.
+- **Every later prompt is written as a skeleton**: its clause id(s), its acceptance-criteria ids
+  from the spec, its dependencies, its deploy target, its done-when, and the bets it rests on.
+  Enough to see the whole wave and its wiring; not so much that it rots.
+- **A skeleton is filled in to a full prompt only when its dependencies have actually landed**, and
+  it is filled in *by a session that has read the ledger rows above it* — so real deviations from
+  earlier steps get absorbed rather than contradicted.
+
+**The skeleton is contractual.** Clause ids, acceptance-criteria ids, and done-when come from
+`project-scope-lock.yaml` and the spec, and **may not be invented or widened at fill-in time**. If
+filling one in requires changing its clause or its acceptance criteria, that is a rule-5 stop and a
+§0.3 amendment — not an edit.
+
+**The incident.** `wave-1-prompts.md` was written whole, up front. It then needed three standing
+corrections, a seven-row stale-citation table, a three-way split of step 1.1, and a supersession
+banner on 1.3d. In places it now carries more correction than original text, and every reader has
+to hold "which parts of this are still true" in their head. The rule already existed *between*
+waves ("a wave's prompt file is only generated once the prior GATE is truly verified"). This
+applies it *within* a wave, without giving up the map.
+
+### 12. A wave closes on a demonstration someone else can re-run
+
+Not "every row says done and `scope-diff.py` agrees." A wave-closing gate is a **script** that
+someone who was not there can run, that emits a dated evidence file, and that gives the same answer
+twice from a cold start.
+
+Checks that genuinely need a human (did a real person complete a login?) stay human — the script
+prints them as `HUMAN REQUIRED` and exits non-zero until their evidence file exists. **A gate script
+that honestly covers six of eight checks is worth more than one that pretends to cover eight.**
+
+**The incident.** On 2026-07-18 a session read a `cdk diff` and concluded five clauses were
+`DEPLOYED`. On 2026-07-19 a real change set showed **523 pending changes** and the entry was
+corrected — "committed to the repo" had been read as "live," in a ledger that already had eight
+standing rules. Wave 1's GATE was a genuine improvement (eight checks adjudicated against live AWS
+and git), but it was still an agent reading and asserting. A reading error is the one kind of error
+a script cannot make. `src/backend/scripts/smoke_harness.py` is the right instrument and the right
+precedent — it is applied per step and has never been applied to a wave.
+
+### 13. A test that has not been observed to fail is not a test
+
+Rule 7 governs *who* writes the test. This governs whether it **can** fail at all. Before a
+regression test is trusted, break the implementation on purpose, watch it go red, and **paste the
+failure output** — do not assert that you did it. If it stays green, it is decorative, and it will
+be believed anyway, because regression tests are the ones trusted most and examined least.
+
+For infrastructure and synth tests this is fiddlier than for unit tests. Do it anyway: flip the
+asserted property in the construct, re-synth, capture the failure, revert.
+
+**The incident, twice over.** The technique was already invented here — the 1.2 session verified its
+RED tests by `git stash` round-trip against the pre-fix tree, and 1.1-RED did the same. It was
+standard practice for nobody. And Wave 1 shows the cost of skipping it: `api-client.test.ts` proved
+the 401 retry interceptor worked *when something registered it*, and **nothing in the running
+application ever did** — a permanently green test over a sign-out path that was broken in
+production, found only by logging in for real. Standardizing this is the cheapest rule in this file.
+
 ---
 
 ## The two blocks every prompt must contain
 
 Every copy-paste prompt in every wave-N-prompts.md file must include these two blocks, near
 verbatim (swap in the correct wave number and file names). They implement rules 2–6 above.
-(Rules 7–8 are structural rather than per-prompt: rule 7 shapes how a clause is *split into
-prompts*, and rule 8 fires only when a gate is reinterpreted.)
+
+The others are structural rather than per-prompt, and fire at different moments:
+
+| Rule | When it fires |
+|---|---|
+| 7 (RED/GREEN are separate sessions) | when a clause is *split into prompts* |
+| 8 (reinterpreting a written gate) | only when a gate is satisfied differently |
+| 9 (bets) | when the wave is *planned*, and re-read at its gate |
+| 10 (stopping conditions) | whenever anything is deferred |
+| 11 (first prompt full, rest skeleton) | when the wave's prompt file is *created*, and again at each fill-in |
+| 12 (re-runnable demonstration) | at the wave GATE |
+| 13 (a test must be seen to fail) | inside every RED session, before GREEN starts |
 
 **Near the top, right after the prompt states what it's implementing:**
 
@@ -155,9 +288,14 @@ ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULE
    for the exact placement — right after the "READ FIRST" section).
 2. Create `wave-N-status.md` before writing any prompts — seed it with one row per step, all
    marked "not started."
-3. Bake the two standard blocks above into every single prompt, not just the risky ones. A
-   skipped small step is exactly where a silent problem hides.
-4. If you're validating a wave's prompt file against `project-scope-lock.yaml` (as was done for
+3. **Write the wave's bets before its prompts** (rule 9), into `ISSUES.md`. Planning the wave is
+   when you know least and can still change the order cheaply; the gate is when you find out.
+4. **Write the first prompt in full and the rest as contractual skeletons** (rule 11). Do not
+   instantiate the whole wave.
+5. Bake the two standard blocks above into every single prompt, not just the risky ones. A
+   skipped small step is exactly where a silent problem hides. A skeleton carries them by
+   reference; a filled-in prompt carries them verbatim.
+6. If you're validating a wave's prompt file against `project-scope-lock.yaml` (as was done for
    Wave 1), and you find a discrepancy between what the working plan says and what the contract
    file says — that is itself a rule-5 situation. Flag it in plain language, and don't treat the
    working plan as authoritative over the contract file, ever.

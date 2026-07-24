@@ -228,6 +228,28 @@ Resume by re-pasting `handoff.md` + attachments and saying "continue".
 > enforced only by agents reading markdown carefully.
 
 ### Wave 2 — Reliability / money
+
+> **Deploy target for every step below: `CareerVpCrudDevx`.** Not `CareerVpCrudDev`. Where a
+> Wave-0/Wave-1 row or a runbook says `dev`, read `devx` for all Wave-2+ work — those rows are
+> closed history and are deliberately not rewritten. Concretely: `cdk diff CareerVpCrudDevx`,
+> `ENVIRONMENT=devx`, SSM under `/careervp/devx/*`, and smoke against the raw invoke URL
+> `https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod/` — `api.dev.careervp.com` still
+> resolves to the OLD stack, so anything pointed at the friendly domain is testing the wrong thing.
+>
+> **Two things a human must settle before step 2.0 deploys anything:**
+>
+> 1. **A merge to `main` auto-deploys to old `CareerVpCrudDev`, not devx.** `deploy.yml` sets
+>    `STACK_NAME: 'CareerVpCrudDev'` as a workflow-level constant (`:37`) and the
+>    `create-change-set-dev` / `execute-change-set-dev` pair runs on `push: main` with
+>    `ENVIRONMENT: dev`, `/careervp/dev/*` SSM reads, and `--env dev-live` all hardcoded. The
+>    `devx` dropdown option only reaches `create-change-set-other` (`:279`), which maps targets
+>    correctly and refuses to fall through to a default. So manual dispatch to devx is safe;
+>    merging is not. Wave 2 is payments and idempotency — decide whether main-merge should target
+>    devx, or should stop auto-deploying, **before** money-path code can reach that path.
+> 2. **`devx` needs a GitHub environment with a required reviewer.** See
+>    `runbooks/p28-human-gated-deploy-runbook.md` §2a. Without it, devx deploys skip the
+>    human-gated execute step entirely.
+
 | # | Clause(s) | Step | Claude | Codex | Deps |
 |---|---|---|---|---|---|
 | 2.0 | P-25 | **Payment-provider port + `MockProvider`** (checkout/portal/verify-webhook/fetch-subscription/list-events). **Mock's `verify_webhook` MUST implement a real HMAC check that REJECTS a tampered signature** (v2.0.0/A6 — so the negative test is meaningful, not tautological); preserves FE checkout/portal URL contract. All 2.1+ billing codes against the port. | opus/high | codex/high | 1.* |
