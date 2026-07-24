@@ -59,17 +59,14 @@ the rows above.
 - A red backend unit test predates this wave: the AI-assist path reports zero tokens
   (`ISSUES.md` I-05). It belongs to the token-metering clause, not to any Wave-2 step. Do not
   silence it inside a Wave-2 prompt.
-- **(2026-07-24) devx is missing SSM parameters that dev has.** Verified live against account
-  788159322332: `/careervp/devx/` holds only `anthropic-api-key` and the two payment price ids.
-  Missing versus dev: `tavily-api-key`, `jwt-private-key`, `jwt-public-key`,
-  `payment-provider-webhook-secret`, and `payment-provider-webhook-secret-previous`.
-  - The **tavily and JWT** parameters are now seeded automatically (create-if-missing) by the
-    enriched `create-change-set-other` job in `.github/workflows/deploy.yml` on the next devx
-    deploy — no action needed.
-  - The **webhook secret** parameters are seeded by NEITHER deploy path (dev's are not in the
-    workflow either — they were placed some other way). Wave-2 step 2.1 fetches this secret at
-    runtime for webhook verification. **Before 2.1 deploys, a human must create
-    `/careervp/devx/payment-provider-webhook-secret` (and `-previous`)** — the value is the mock
-    provider's signing secret settled in 2.0, so this is a 2.0→2.1 handoff item, not a blocker
-    for 2.0 (which is backend-only and deploys nothing). Recorded here so it is not discovered as
-    a runtime 500 the way the anthropic key was in step 1.4.
+- **(2026-07-24) devx SSM parameters — full parity with dev, verified live.** Human confirmation:
+  **parameter keys and secrets are the same for dev and devx.** devx originally held only
+  `anthropic-api-key` and the two payment price ids; the five missing values
+  (`tavily-api-key`, `jwt-private-key`, `jwt-public-key`, `payment-provider-webhook-secret`,
+  `payment-provider-webhook-secret-previous`) were copied from `/careervp/dev/*` to
+  `/careervp/devx/*` this session, preserving type (read with `--with-decryption` into a shell var,
+  never logged — the same pattern step 1.4 used for the anthropic key). `get-parameters-by-path`
+  now shows dev↔devx parity (`dev minus devx` is empty). **No Wave-2 step has a parameter
+  prerequisite** — in particular the webhook secret is NOT a 2.0→2.1 handoff; it already holds
+  dev's value. The enriched `create-change-set-other` seeding (create-if-missing) will now skip all
+  of these because they exist, so it cannot generate a divergent ephemeral JWT for devx.
