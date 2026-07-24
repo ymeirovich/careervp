@@ -196,10 +196,22 @@ Resume by re-pasting `handoff.md` + attachments and saying "continue".
 > `UPDATE_COMPLETE`, P-30 smoke 4/4 through `https://api.dev.careervp.com`), 1.4 (P-09 —
 > `CareerVpCrudDevx` `CREATE_COMPLETE` 2026-07-20, **211 physical resources**, P-30 smoke 4/4 after
 > seeding `/careervp/devx/anthropic-api-key`), 1.5 (P-22 — OIDC role live, 8/8 checks).
-> **Open:** 1.6 (new, not started), 1.1-RED + 1.1-GREEN (not started; the five P-04/P-05 tests do
-> not exist — `grep -rl "AC-P04\|AC-P05" src/backend/tests infra/tests` returns zero files), GATE.
+> **Update 2026-07-24 — the three previously-open rows all CLOSED, and the Wave-1 GATE PASSED.**
+> 1.6 (P-07 devx frontend cutover) closed `2026-07-23` — real `ymeirovich@gmail.com` login proven
+> end-to-end against devx, `pkce-devx-verification-20260723T204342Z.json` all seven wires pass
+> (three live bugs found and fixed: Cognito adaptive-security dead-end, `process.env[name]` env
+> inlining, second CORS allow-list — see `runbooks/wave-1-status.md`). 1.1-RED (`4e16e43`) landed
+> five failing P-04/P-05 tests; 1.1-GREEN (`8c51047`) removed the shared `x-user-id` header
+> fallback (`auth_utils.py`) + the dead `AUTHORIZER_DISABLED` env var + the flat ownership-denial
+> envelope, all five contract tests green, cross-tenant IDOR closed, coverage gate flipped to pass
+> (core branch 55.14%). **Wave-1 GATE PASSED 2026-07-24** — all eight checks adjudicated live; the
+> only blocker (a pre-existing scratch-mode P-06 SSM-ARN test failure) was closed by cherry-picking
+> `c62fb03` from `fix/p06-scratch-ssm-arns` onto `db-redesign` (`a555e70`). See the GATE row in
+> `runbooks/wave-1-status.md` for the full per-check evidence.
+> **Open:** none in Wave 1 — only the deferred P-07b (below) carries forward, and it gates STAGING,
+> not Wave 1. Wave 2 (reliability/money) may now begin: `wave-2-prompts.md` is authorized.
 > **Corrected:** 1.3c was recorded as awaiting a 30-day soak. That soak **never started and could
-> not have** — see `runbooks/wave-1-status.md` §"Soak reinterpretation (2026-07-22)". 1.6 replaces
+> not have** — see `runbooks/wave-1-status.md` §"Soak reinterpretation (2026-07-22)". 1.6 replaced
 > it; P-07b carries the genuinely-deferred half.
 > **Environment correction:** `CareerVpCrudDevx` is now the deploy target ("devx *is* dev"). Old
 > `CareerVpCrudDev` still holds `api.dev.careervp.com` and ~119 junk test users and is scheduled for
