@@ -35,12 +35,13 @@ def test_extract_user_id_does_not_use_principal_id_fallback(monkeypatch) -> None
     assert extract_user_id(event) is None
 
 
-def test_extract_user_id_uses_header_fallback_for_backward_compatibility(monkeypatch) -> None:
+def test_extract_user_id_does_not_use_x_user_id_header_fallback(monkeypatch) -> None:
     monkeypatch.setenv('ENV', 'local')
     event = {'headers': {'x-user-id': 'local-user'}}
 
-    # Header fallback is enabled for backward compatibility
-    assert extract_user_id(event) == 'local-user'
+    # P-04: the client-supplied `x-user-id` header fallback was an identity bypass and has been
+    # removed. Identity comes only from validated Cognito claims; a header-only event fails closed.
+    assert extract_user_id(event) is None
 
 
 def test_extract_user_id_returns_none_when_claims_missing_sub(monkeypatch) -> None:

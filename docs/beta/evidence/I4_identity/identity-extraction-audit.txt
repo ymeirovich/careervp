@@ -1,1 +1,0 @@
-/Users/yitzchak/Documents/dev/careervp/src/backend/careervp/handlers/auth_utils.py:44:        for header_name in ('x-user-id', 'X-User-Id'):

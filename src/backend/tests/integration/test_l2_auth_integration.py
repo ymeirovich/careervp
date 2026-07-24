@@ -182,12 +182,14 @@ def test_l2_auth_scenarios_generate_i3_evidence() -> None:
 
 @pytest.mark.integration
 def test_l2_identity_extraction_audit_generates_i4_evidence() -> None:
+    # P-04: the client-supplied identity-header fallback has been removed entirely. The L2 audit
+    # previously proved the fallback was *contained* to handlers/auth_utils.py; post-P-04 the correct
+    # I4 evidence is that the scan finds it in NO handler at all (including auth_utils.py), matching
+    # test_p04_no_x_user_id_fallbacks_remain.
     output = _run_identity_audit()
 
     assert I4_EVIDENCE_PATH.exists()
-    assert 'handlers/auth_utils.py' in output
-    assert 'handlers/cover_letter_handler.py' not in output
-    assert 'handlers/interview_prep_handler.py' not in output
+    assert output == ''
 
     written = I4_EVIDENCE_PATH.read_text(encoding='utf-8')
-    assert 'handlers/auth_utils.py' in written
+    assert written.strip() == ''

@@ -2127,9 +2127,9 @@ class ApiConstruct(Construct):
                 "TABLE_NAME": db.table_name,
                 "IDEMPOTENCY_TABLE_NAME": idempotency_table.table_name,
                 "VPR_JOBS_TABLE_NAME": self.api_db.jobs_table.table_name,
-                "AUTHORIZER_DISABLED": "true"
-                if self.naming.environment != "prod"
-                else "false",
+                # P-04: the dead authorizer-bypass env var (zero runtime readers) was a
+                # re-armable auth bypass and has been deleted. Dev auth is enforced by the Cognito
+                # authorizer at API Gateway; there is no runtime switch to disable it.
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
                 **self._build_llm_env(),
             },

@@ -76,6 +76,23 @@ def _job_url_error_response(
     )
 
 
+def _ownership_denied_response() -> Response[str]:
+    """Flat §3 item-10 envelope for a cross-tenant ownership denial (P-05).
+
+    Returns 403 with the flat keys the frontend oracle requires (``error``/``message``,
+    ``classification``, ``error_code``, ``field``) and never a nested ``error.code`` object.
+    """
+    return _json_response(
+        HTTPStatus.FORBIDDEN,
+        {
+            'error': 'User can only access own jobs',
+            'error_code': 'forbidden',
+            'field': 'jobId',
+            'classification': 'access_denied',
+        },
+    )
+
+
 def _get_trial_service() -> TrialService | None:
     global _trial_service
     if _trial_service is not None:
@@ -296,7 +313,9 @@ def get_job(jobId: str | None = None, job_id: str | None = None) -> Response[str
     if job_record is None:
         return _json_response(HTTPStatus.NOT_FOUND, {'error': 'Job not found'})
     if str(job_record.get('user_id', '')) != user_id:
-        return _json_response(HTTPStatus.FORBIDDEN, {'error': 'User can only access own jobs'})
+        # P-05: cross-tenant ownership denial. Use the flat §3 item-10 error envelope so the
+        # frontend oracle parses it consistently (no nested error.code object).
+        return _ownership_denied_response()
     if 'title' not in job_record:
         return _json_response(HTTPStatus.NOT_FOUND, {'error': 'Job not found'})
 
