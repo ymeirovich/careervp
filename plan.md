@@ -2413,6 +2413,12 @@ aws lambda get-function --function-name careervp-interview-prep-lambda-dev \
 **Priority:** P0 (Critical)
 **Service:** Stripe
 
+### Task 15.0: Payment Provider Freeze Line
+
+- [x] P-25 provider port and cryptographic MockProvider baseline
+- [x] P-25b StripeProvider with tested real multi-`v1` HMAC verification
+- [ ] P-25 follow-up: make MockProvider accept any matching `v1` before Wave-2 step 2.1
+
 ### Task 15.1: Stripe Models
 
 - [ ] Create `SubscriptionPlan` model

@@ -24,6 +24,12 @@
 - [x] P-30 four-wire smoke green against devx's raw invoke URL (4/4, after seeding `/careervp/devx/anthropic-api-key`) — `docs/evidence/smoke-20260720T203735Z-019ff0.json`.
 - [ ] The shared-domain BasePathMapping flip and old-dev decommission remain separate, later human-only actions. **No decommission date is set** — until one is, "run it on dev" is ambiguous, since `api.dev.careervp.com` still points at the old stack.
 
+## Wave 2 Money — Step 2.0b-GREEN (P-25b)
+
+- [x] `StripeProvider` implements the payment-provider port, real Stripe REST calls, multi-`v1` webhook signature rotation, tamper/wrong-secret rejection, and stale-timestamp replay rejection.
+- [x] P-25b freeze-line tests pass without network calls; P-25 mock regressions, full backend unit/integration, coverage, Ruff, and strict mypy are green.
+- [ ] `2.0b-mock` remains: add a fresh RED/GREEN follow-up for MockProvider's first-`v1`-only rotation gap before 2.1; B-2-1 remains false until then.
+
 - [x] Folder Structure Initialization
 - [x] Environment Configuration
 - [x] Command Center Setup (`CLAUDE.md`, `.clauderules`)

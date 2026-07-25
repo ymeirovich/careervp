@@ -533,31 +533,53 @@ ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULE
 > edit** — no relaxing an assertion, no `xfail`, no `skip`. If a test looks genuinely *wrong* (not
 > merely inconvenient), STOP and raise a §0.3 amendment.
 > **Clause:** P-25b · **Claude: opus/xhigh · Codex: gpt-5.3-codex/max**
+>
+> **CORRECTION (2026-07-25) — this step is NOT blocked by the MockProvider rotation gap.** A first
+> GREEN attempt stopped, reading 2.0b-RED's ledger note ("resolve the mock rotation gap before
+> continuing") as a hard prerequisite. Verified against the landed tests, it is not: both P-25b RED
+> tests in `test_p25b_stripe_provider.py` exercise **`StripeProvider` only** (`provider =
+> StripeProvider()`; the shared `_assert_signature_negatives` helper is always called with
+> `provider.construct_webhook_event`). Neither references `MockProvider`. So this session builds
+> StripeProvider self-contained and makes both tests pass with **zero mock edits and zero test
+> edits**. The mock's proven multi-`v1` divergence (B-2-1) is real and has its own follow-up
+> (skeleton `2.0b-mock` below — B-2-1's pre-committed fallback "make the mock conform"); it does
+> **not** gate StripeProvider and must **not** be attempted inside this GREEN session.
 
 ```
 STANDING CHECK — before doing anything else: open runbooks/wave-2-status.md and read the 2.0b-RED
-row. If it left anything open (in particular, whether the B-2-1 cross-check found a divergence),
-deal with that FIRST. Confirm the RED tests exist and fail, right now, with a real command:
+row. It flags a proven MockProvider multi-v1 divergence — that is tracked as follow-up 2.0b-mock and
+is NOT a prerequisite for this step (see the CORRECTION note above): the two P-25b tests exercise
+StripeProvider only, so you build StripeProvider self-contained and touch neither mock_provider.py
+nor any test file. Do not attempt the mock fix here. Confirm the RED tests exist and fail, right
+now, with a real command:
 
   cd src/backend && uv run pytest tests/unit/test_p25b_stripe_provider.py -q 2>&1 | tail -20
 
 If they pass, or fail on import/collection errors rather than their own assertions, STOP.
 
 You are implementing clause P-25b (AC-P25b-1). You are the GREEN session. You may not edit the RED
-test file. Build:
+test file, and you may not edit mock_provider.py (its rotation gap is 2.0b-mock's job, not yours).
+Build:
 
 1. careervp/payment_providers/stripe_provider.py — StripeProvider implementing
    PaymentProviderInterface (all methods the port declares, including retrieve_subscription).
    construct_webhook_event must verify the REAL Stripe signature scheme confirmed by 2.0b-RED's
-   cross-check:
+   cross-check — INCLUDING the multi-v1 rotation behavior the cross-check proved the mock lacks:
+     - Parse ALL v1 digests out of the compound header (Stripe emits one per active secret during
+       rotation) and ACCEPT if ANY of them matches the computed HMAC — this is exactly the case the
+       RED test's `_stripe_signature_header` puts the matching digest in the SECOND v1 slot to prove.
+       Do NOT copy the mock's first-v1-only parse; that is the divergence being fixed here for
+       StripeProvider (and, separately, for the mock in 2.0b-mock).
      - PREFER the official `stripe` SDK's verification (stripe.Webhook.construct_event /
        WebhookSignature.verify_header) IF `stripe` is already a project dependency. If it is NOT a
        dependency, that is a decision, not a default: adding a runtime dependency to the money path
-       is a rule-5 flag — either implement Stripe's DOCUMENTED v1 HMAC scheme directly (identical to
-       what the cross-check validated in mock_provider.py) OR propose the dependency to the human.
-       Do not silently `uv add stripe`. State which path you took and why.
+       is a rule-5 flag — either implement Stripe's DOCUMENTED v1 HMAC scheme directly (the compound
+       header + `{t}.{payload}` signing the cross-check validated, WITH multi-v1 acceptance) OR
+       propose the dependency to the human. Do not silently `uv add stripe`. State which path you
+       took and why. (Note: the official SDK handles multi-v1 for you; the direct path must
+       implement it explicitly.)
      - Distinct error codes for tamper/wrong-secret vs replay/stale-timestamp, matching what the RED
-       tests assert.
+       tests assert (WEBHOOK_SIGNATURE_VERIFICATION_FAILED vs WEBHOOK_TIMESTAMP_OUT_OF_TOLERANCE).
    The API-call methods (create_customer, create_checkout_session, retrieve_subscription, …) wrap
    real Stripe calls and are NOT exercised in unit tests (no network in tests); they must be present,
    typed, and pass mypy --strict, with Stripe errors mapped to PaymentProviderError. The signature
@@ -585,12 +607,55 @@ ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULE
 - If ANYTHING drifted, STOP, write the plain-English sentence first, then the technical detail, and
   flag it for human review. Do not mark the step done.
 - Update runbooks/wave-2-status.md with a plain-English status, the commit, today's date, and
-  anything the NEXT step must resolve first (or write "none"). Also record in ISSUES.md that B-2-1
-  is now proven against the real provider (or, if the cross-check diverged, what changed).
+  anything the NEXT step must resolve first. In particular, record that StripeProvider now handles
+  multi-v1 rotation correctly, but that B-2-1 stays FALSE until 2.0b-mock lands (the MockProvider
+  still has the first-v1-only gap) — do not mark B-2-1 settled here.
 - FREEZE-LINE confirmation (rule 5): state explicitly whether any part of the signature-verification
   path is untested when this session ends. If it is, that is a STOP condition, not a note for later
   — a paid launch must not run untested verification code (AC-P25b-1).
 ```
+
+---
+
+## 2.0b-mock — MockProvider multi-`v1` rotation conformance (skeleton)
+
+| | |
+|---|---|
+| **Clause** | P-25 (MockProvider hardening) — executes bet `B-2-1`'s pre-committed fallback |
+| **Spec** | `specs/P-25-payment-provider-spec.md` (add one RED-test brief; do not widen any AC) |
+| **Acceptance criteria** | AC-P25-2 (webhook verification correctness) |
+| **Claude / Codex** | sonnet/medium · gpt-5.3-codex/medium |
+| **Depends on** | 2.0-GREEN landed. **File-isolated from 2.0b-GREEN** (`mock_provider.py` + its test vs `stripe_provider.py` + its test) — parallel-safe, but recommended AFTER 2.0b-GREEN since StripeProvider is the freeze-line and higher priority. |
+| **Deploy target** | none (backend only) |
+| **Rule 7** | RED and GREEN separate — money path (webhook verification) |
+| **Bets** | `B-2-1` — this step is what flips it from FALSE back to TRUE |
+
+**Why this exists.** 2.0b-RED's cross-check proved `MockProvider._parse_signature` takes only the
+FIRST `v1` digest and rejects a header whose matching digest is a later `v1` — but Stripe emits
+multiple `v1` values during secret rotation and accepts if ANY matches. So the mock is not a
+faithful stand-in for the rotation case (bet `B-2-1` is FALSE). It is currently **inert** — no
+test or consumer feeds the mock a multi-`v1` header, so no existing test is wrong — but B-2-1's
+written fallback is "make the mock conform to Stripe," and this step discharges it so B-2-1 can be
+marked TRUE at the GATE (rule 9 re-reads it there).
+
+**In plain English.** Teach the mock the same rotation rule the real Stripe provider already got in
+2.0b-GREEN: when a webhook signature carries several candidate signatures, accept it if any one of
+them matches, not only the first.
+
+**RED (fresh session).** Add one test to the mock's own test file (`test_p25_payment_provider_port.py`
+or a sibling — NOT `test_p25b_stripe_provider.py`, which is StripeProvider's and off-limits):
+`test_p25_mock_webhook_accepts_matching_second_v1` — build `t=<now>,v1=<non-matching>,v1=<matching>`
+over a payload and assert `MockProvider.construct_webhook_event` returns the event (today it raises
+`WEBHOOK_SIGNATURE_VERIFICATION_FAILED`). Cite AC-P25-2. Watch it fail on its own assertion (rule
+13). First, tighten the spec with this one RED-test brief (authoring the brief, not changing an AC).
+
+**GREEN (fresh session).** Fix `MockProvider._parse_signature`/`construct_webhook_event` to collect
+ALL `v1` digests and accept if any matches — mirroring the StripeProvider logic 2.0b-GREEN landed.
+May not edit the RED test. The existing four P-25 mock tests and both P-25b StripeProvider tests must
+stay green. Update B-2-1 to TRUE with the evidence.
+
+**Done-when.** The new mock rotation test passes; the four P-25 + two P-25b tests still pass; B-2-1
+flips to TRUE in `ISSUES.md`; `mypy --strict`/ruff/coverage-gate clean.
 
 ---
 

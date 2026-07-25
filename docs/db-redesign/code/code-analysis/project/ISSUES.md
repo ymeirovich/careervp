@@ -280,6 +280,33 @@ Stripe's real any-matching-`v1` behavior and must not inherit the mock's first-`
 The 2.0-GREEN mock tests need a follow-up RED test for a matching second `v1`, followed by a separate
 GREEN fix to the mock parser. Points 2 and 3 need no follow-up.
 
+**Sequencing correction 2026-07-25 (orchestrator).** The two consequences above are **independent**,
+and the mock fix does **not** gate `StripeProvider`:
+- Both P-25b RED tests (`test_p25b_stripe_provider.py:126,159`) exercise `StripeProvider` **only**
+  (`provider = StripeProvider()`; `_assert_signature_negatives` always receives
+  `provider.construct_webhook_event`). Neither touches `MockProvider`. So **2.0b-GREEN builds
+  StripeProvider self-contained with any-matching-`v1`** and makes both tests pass with zero mock and
+  zero test edits — it is unblocked. (A first 2.0b-GREEN attempt stopped, reading the 2.0b-RED
+  ledger cell as requiring the mock fix first; that cell was over-scoped and is corrected in
+  `wave-2-status.md`.)
+- The mock's first-`v1`-only gap is real but **currently INERT** — no test or consumer feeds the
+  mock a multi-`v1` header, so no existing test is wrong. It is tracked as **follow-up `2.0b-mock`**
+  in `wave-2-prompts.md` (this bet's pre-committed "make the mock conform" fallback), file-isolated
+  from `stripe_provider.py` and therefore parallel-safe, recommended after 2.0b-GREEN. **B-2-1 stays
+  FALSE until 2.0b-mock lands**; the GATE re-reads it (rule 9).
+
+**Proven against the real provider 2026-07-25 (step 2.0b-GREEN).** `StripeProvider` now implements
+the cross-checked Stripe behavior independently: it collects every `v1` from the compound header
+and accepts when any digest constant-time-matches the HMAC over `{timestamp}.{raw_payload}`. The
+P-25b test header places a non-matching digest first and the matching digest second, and both the
+real-signature test and paid-launch gate pass against that provider. The official `stripe` SDK was
+not in `pyproject.toml` or `uv.lock`, so no money-path dependency was silently added; the provider
+uses the documented scheme directly, while its API-call methods use the already-present `httpx`
+runtime dependency. Tampered body, wrong secret, and a valid digest signed 301 seconds ago execute
+the distinct frozen negative paths with no network call. **B-2-1 remains FALSE:** this proves the
+real provider is correct, but the mock remains first-`v1`-only until the separate `2.0b-mock`
+RED/GREEN follow-up lands.
+
 ---
 
 ## B-2-2 — The provider's event id is a stable, safe idempotency key
