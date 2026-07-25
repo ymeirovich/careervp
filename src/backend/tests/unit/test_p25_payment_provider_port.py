@@ -60,7 +60,7 @@ import pytest
 from careervp.logic import billing_service, reconciliation_service, webhook_service
 from careervp.logic.billing_service import BillingService
 from careervp.payment_providers import interface as interface_module
-from careervp.payment_providers.interface import PaymentProviderError
+from careervp.payment_providers.interface import PaymentProviderError, WebhookEvent
 
 # ─── Canonical webhook-signature scheme (B-2-1) ───────────────────────────────
 # A single compound header string, identical in shape to Stripe's `Stripe-Signature`.
@@ -244,6 +244,36 @@ def test_p25_mock_webhook_rejects_replay_timestamp(webhook_secret: str) -> None:
     with pytest.raises(PaymentProviderError) as excinfo:
         provider.construct_webhook_event(payload, stale_signature, webhook_secret)
     assert excinfo.value.code == EXPECTED_REPLAY_ERROR_CODE
+
+
+def test_p25_mock_webhook_accepts_matching_second_v1(webhook_secret: str) -> None:
+    """AC-P25-2: MockProvider accepts a compound header when the matching digest is the second v1."""
+    MockProvider = _load_mock_provider()
+    assert MockProvider is not None, (
+        'AC-P25-2: careervp/payment_providers/mock_provider.py:MockProvider is not '
+        'implemented yet — construct_webhook_event must accept the matching second '
+        'v1 digest in a Stripe-style rotation header.'
+    )
+    provider = MockProvider()
+
+    now = int(time.time())
+    payload = _event_payload('evt_p25_mock_second_v1', 'checkout.session.completed', created=now)
+    signed_payload = f'{now}.'.encode('utf-8') + payload
+    real_digest = hmac.new(webhook_secret.encode('utf-8'), signed_payload, hashlib.sha256).hexdigest()
+    non_matching_digest = '0' * 64
+    header = f't={now},v1={non_matching_digest},v1={real_digest}'
+
+    try:
+        event = provider.construct_webhook_event(payload, header, webhook_secret)
+    except PaymentProviderError as exc:
+        pytest.fail(f'AC-P25-2: expected MockProvider to accept a matching second v1 digest; got PaymentProviderError code {exc.code}')
+
+    # AC-P25-2: successful local verification returns the normalized port DTO.
+    assert isinstance(event, WebhookEvent)
+    # AC-P25-2: the normalized event preserves the exact signed payload id.
+    assert event.event_id == 'evt_p25_mock_second_v1'
+    # AC-P25-2: the normalized event preserves the exact signed payload type.
+    assert event.event_type == 'checkout.session.completed'
 
 
 def test_p25_checkout_portal_contract_shape_preserved(webhook_secret: str) -> None:
