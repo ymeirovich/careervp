@@ -250,11 +250,13 @@ From the spec's "RED Tests to Write First", scoped to P-25 (the two P-25b tests 
       State the exact tolerance as a named constant. No "or"-shaped assertions, no undefined
       values (spec_time_lint, project-scope-lock.yaml spec_test_acceptance).
 
-  test_p25_mock_event_id_is_stable_across_retries
-      NEW, from bet B-2-2 — not in the spec's list. Two deliveries of the SAME event, through the
-      mock's own retry path, must carry the same event_id, and the second must be suppressed.
-      If you conclude this belongs to 2.1 rather than here, say so and leave it out rather than
-      writing a weak version.
+  RESOLVED 2026-07-25 (was an open question in this prompt): test_p25_mock_event_id_is_stable_
+  across_retries belongs to 2.1, NOT here. Do not write it in this session — see 2.1's skeleton
+  below, which now owns it explicitly. Reasoning: this is a claim about the MockProvider's own
+  retry behavior (an implementation detail 2.0-GREEN builds), and the thing actually load-bearing
+  for bet B-2-2 is whether 2.1's idempotency wiring correctly consumes whatever id shape the
+  provider emits — that is 2.1's job to prove, against a real table, not 2.0's job to prove against
+  its own mock in isolation. Writing it here would test the mock against itself.
 
   test_p25_checkout_portal_contract_shape_preserved
       Assert checkout and portal responses carry the same URL fields the frontend consumes. Derive
@@ -387,6 +389,30 @@ paid launch is not running untested verification code on the money path.
 the idempotency negative test passes against the real provider; the launch gate fails if either the
 provider or the negative tests are absent. No real network calls in tests.
 
+**Owes the Stripe cross-check (resolved 2026-07-25 — this is now a required, named first step of
+2.0b, not an implicit assumption).** By the time 2.0-GREEN lands, MockProvider centralizes its
+signature constants in `mock_provider.py` — the `t=`/`v1=` compound-header format, the signed
+payload construction, and the replay-tolerance window. 2.0b's first job, before writing a single
+StripeProvider line, is to verify each of those against Stripe's own documented
+`Stripe-Signature` scheme, not assume the mock guessed right:
+
+1. **Header format:** confirm Stripe's real header is `t=<unix_timestamp>,v1=<hex_digest>[,v0=...]`
+   and that the constants `mock_provider.py` used for the `t=`/`v1=` prefixes match exactly
+   (case, delimiter, multi-`v1` handling if Stripe sends a rotation pair).
+2. **Signed-payload construction:** confirm the string HMAC'd is `"{timestamp}.{payload}"` (a
+   period-joined concatenation of the timestamp and the raw request body) — Stripe's actual
+   scheme — and that `mock_provider.py` builds the identical string, not e.g. payload-then-timestamp
+   or a different separator.
+3. **Replay tolerance:** confirm the named tolerance constant `mock_provider.py` centralized (bet
+   `B-2-1`'s "name the tolerance as a named constant" requirement) matches Stripe's actual default
+   — **300 seconds (5 minutes)** — and that this is genuinely a constant Stripe allows the caller
+   to reconstruct verification with (not a value only Stripe's own SDK enforces server-side).
+
+If any of the three diverges, StripeProvider must implement Stripe's real behavior — it does NOT
+inherit the mock's version to stay "consistent." Record the outcome of this cross-check in `B-2-1`
+before writing any StripeProvider code; if a divergence is found, that is what actually "proves"
+`B-2-1` false rather than settled, and 2.0-GREEN's test suite needs a follow-up fix, not just 2.0b.
+
 **Freeze-line, not gate.** This is required before any *paid* launch, not before the Wave-2 GATE.
 It may run after the gate. It may not be skipped on the grounds that the mock works.
 
@@ -420,6 +446,12 @@ live, before writing anything. That determination is this step's first output.
 **Done-when.** A replayed webhook is provably suppressed against a real table (not a mock); the
 customer-id lookup uses a named index with zero scans on the money path; the access pattern is
 recorded. Resource count checked after the change (`B-2-3`).
+
+**Owns `test_p25_mock_event_id_is_stable_across_retries`** (reassigned from 2.0-RED, 2026-07-25 —
+see that prompt's resolved note). Two deliveries of the SAME event, through the provider's own
+retry path, must carry the same `event_id`, and the second delivery must be suppressed by this
+step's idempotency wiring against a real table. This is the direct settlement of bet `B-2-2` — do
+not treat it as optional or fold it silently into a differently-named test.
 
 ---
 

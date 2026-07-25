@@ -44,8 +44,8 @@ the rows above.
 | B-2-1 | The mock provider's signature scheme is a faithful stand-in for Stripe's | 2.0, before 2.1 starts | **format decided 2026-07-25 (2.0-RED): `t=,v1=`, HMAC over `{t}.{payload}`, tol 300s; Stripe cross-check pending at 2.0b** |
 | B-2-2 | The provider's event id is a stable, safe idempotency key | 2.0/2.1 | **decision fixed 2026-07-25 (2.0-RED): stable-across-retries else digest fallback; stable-id TEST assigned to 2.1** |
 | B-2-3 | Wave 2's added resources stay under the CloudFormation ceiling | every additive step | open |
-| B-2-4 | "Deploy" means devx | before 2.0 deploys | **decision made 2026-07-25 (devx primary); merge-to-main CI still needs the matching fix** |
-| B-2-5 | Billing already depends on the port, so 2.0 is small | first hour of 2.0 | **settled 2026-07-25 (2.0-RED): FALSE — 3 findings (2× `retrieve_subscription` + `customer_id: str\|None`) + 2 cast cleanups; 2.0 larger than the "two call sites" estimate** |
+| B-2-4 | "Deploy" means devx | before 2.0 deploys | **decision made 2026-07-25 (devx primary); GitHub environment + required reviewer live-verified via `gh api`; merge-to-main CI still needs the matching fix (`deploy.yml:37,194` still hardcode the old stack)** |
+| B-2-5 | Billing already depends on the port, so 2.0 is small | first hour of 2.0 | **settled 2026-07-25 (2.0-RED then closed by 2.0-GREEN): FALSE — 3 findings (2× `retrieve_subscription` + `customer_id: str\|None`) + 2 cast cleanups; 2.0 larger than the "two call sites" estimate; all 3 fixed in 2.0-GREEN** |
 
 ---
 

@@ -6,8 +6,8 @@ owner: backend
 tier: T1
 scope_lock_clause: [P-14, P-15]
 tooling:
-  P-14: {claude_code: {model: opus, effort: high}, codex: {model: gpt-5-codex, reasoning: high}}
-  P-15: {claude_code: {model: opus, effort: high}, codex: {model: gpt-5-codex, reasoning: high}}
+  P-14: {claude_code: {model: opus, effort: high}, codex: {model: gpt-5.5, reasoning: high}}
+  P-15: {claude_code: {model: opus, effort: high}, codex: {model: gpt-5.5, reasoning: high}}
 format_note: "AUTHOR ONLY. RED tests are inline descriptions; pytest files are written later at IMPLEMENT time."
 ---
 

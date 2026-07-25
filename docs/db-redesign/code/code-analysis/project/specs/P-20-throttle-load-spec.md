@@ -6,7 +6,7 @@ owner: infra
 tier: T1
 scope_lock_clause: P-20
 claude_code: {model: sonnet, effort: medium}
-codex: {model: gpt-5-codex, reasoning: medium}
+codex: {model: gpt-5.4, reasoning: medium}
 format_note: "AUTHOR ONLY. RED tests are inline descriptions; load tests are written later at IMPLEMENT time."
 ---
 

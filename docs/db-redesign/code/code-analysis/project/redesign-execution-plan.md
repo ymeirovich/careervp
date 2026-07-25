@@ -83,6 +83,88 @@ contract globally; wave gates re-verify against the contract before advancing.
 | **Standard** | handlers, DAL, repositories, most tests, contract/oracle tests | `opus` / effort **high** | `gpt-5-codex` / reasoning **high** |
 | **Hard** | single-table `core` migration + classifier + parity, chain reorder, identity surrogate, CFN decomposition, adversarial reviews | `opus` / effort **xhigh** | `gpt-5-codex` / reasoning **high (max)** |
 
+> **⚠️ UNRECONCILED CONFLICT (2026-07-25) — flagged for human decision, not silently resolved
+> either way.** A parallel session wrote the table above plus `RUNBOOK-RULES.md` rule 16, pinning
+> Codex to the `gpt-5-codex` / `gpt-5.3-codex` family (rule 16: *"this project's current pin"*,
+> `gpt-5.6-sol/terra/luna` demoted to *"fallback only if no Codex-specific model is available"*).
+> In this same conversation, the user separately dictated a different, more granular taxonomy —
+> `gpt-5.4` (default) / `gpt-5.5` (escalation) / `gpt-5.6-{sol,terra,luna}` + `pro` mode (frontier),
+> reproduced in full below — and asked for it to become project policy, applied to Wave 2's
+> per-row Codex columns. **Both are recorded here rather than one silently overwriting the other.**
+> The Wave-2 table's per-row Codex column already uses the gpt-5.4/5.5/5.6 taxonomy (applied before
+> rule 16 existed); rule 16's reasoning-tier table (low/medium/high/xhigh/max) is substantively
+> compatible with the "Reasoning-level selection rule" below — the actual disagreement is narrower
+> than it first looks: it is model-slug naming (`gpt-5-codex`/`gpt-5.3-codex` vs
+> `gpt-5.4`/`gpt-5.5`/`gpt-5.6-*`), not the reasoning-tier logic itself. **Needs a human call on
+> which slug family is real/available in this environment before Wave 2 continues past 2.0b.**
+
+### DRAFT — user-dictated convention (2026-07-25), pending reconciliation with rule 16 above
+Two separate decisions, never conflated: **which model generation** (capability + economics), then
+**how much reasoning effort** (deterministic vs ambiguous, cheap-to-be-wrong vs expensive-to-be-wrong).
+Size of the diff is not the signal for either — a 20-file mechanical rename is still low/cheap; a
+2-file race condition can be high/expensive. Increase reasoning for **ambiguity** and **cost of being
+wrong**, not for line count. If uncertain, prefer the middle tier — it's the safest default for real
+repo work.
+
+#### Codex side — model generation first, reasoning level second (as dictated)
+GPT-5.4/5.5/5.6 are **not interchangeable at the same reasoning level** — each generation has its
+own capability/cost curve, and 5.6 additionally splits into three variants (Sol/Terra/Luna) plus a
+separate `pro` execution mode. Pick the generation+variant for required capability and economics,
+**then** pick the lowest reasoning effort that can still reliably find the *correct* change (not
+merely a plausible one).
+
+| Codex workload | Model | Reasoning |
+|---|---|---|
+| Mechanical, high-volume, well-specified edits and tests | `gpt-5.4` or `gpt-5.4-mini` | none / low |
+| Normal multi-file feature work, debugging, refactors | `gpt-5.4` | medium |
+| Difficult implementation with meaningful ambiguity or cross-layer impact | `gpt-5.5` | high |
+| High-stakes code review, architecture, migrations, subtle concurrency/security failures | `gpt-5.5` or `gpt-5.5-pro` | xhigh |
+| Frontier quality, long-horizon agentic coding, difficult design judgment | `gpt-5.6-sol` (or `gpt-5.6`) | high / xhigh |
+| Same 5.6 capability family at lower cost | `gpt-5.6-terra` | medium / high |
+| High-volume, bounded tasks where cost dominates | `gpt-5.6-luna` | none / low / medium |
+| Hardest quality-first task, only after a normal high/xhigh run proves insufficient | `gpt-5.6-sol` + `reasoning.mode: pro` | xhigh or max |
+
+**Generation notes:**
+- `gpt-5.4` is the pragmatic default — capable and comparatively economical. Use it for most
+  established-pattern implementation work. `5.4-mini`/`5.4-nano` are for clearly bounded,
+  high-throughput subagent tasks, never for uncertain debugging.
+- `gpt-5.5` is the escalation for difficult professional/coding work where 5.4 may make a plausible
+  but *incorrect* architectural call. Reserve `5.5-pro` for cases where the incremental precision is
+  worth its cost and latency, not as a default upgrade.
+- `gpt-5.6` changes the taxonomy rather than just adding a tier: **Sol** = frontier capability,
+  **Terra** = balanced, **Luna** = throughput. `pro` is an execution *mode* layered on `reasoning`,
+  not a model slug — never select it by default. Official 5.6 guidance: keep whatever effort setting
+  worked at 5.4/5.5 as a baseline, then test one level lower — 5.6 often matches quality with fewer
+  reasoning tokens.
+
+#### Reasoning-level selection rule (applies within whichever generation/family wins reconciliation)
+- **low** — deterministic, local, short-horizon: grep-driven edits, renames, small bug fixes,
+  formatting, narrow tests, wiring one function to another, a known call site. Set too high →
+  wasted time, over-analysis, more tokens, slower turnaround for no quality gain.
+- **medium** — normal engineering: multi-file refactors, a feature added inside existing patterns,
+  debugging from logs+code, tests requiring some inference, API-contract fixes, moderate FE/BE
+  coordination. **Default when the task is not obviously trivial and not obviously architectural.**
+- **high** — ambiguity, hidden coupling, or irreversible decisions: architecture changes, tricky
+  async/state bugs, migration plans, security-sensitive flows, infra changes, root-cause analysis
+  across layers, or an underspecified prompt where the agent must infer constraints carefully. Set
+  too low → shallow fixes, local optimizations that break system behavior, missed edge cases.
+
+Selection shortcut: "find the place and make the edit" → low. "Read several files and preserve
+patterns" → medium. "Decide what the right change even is, before coding" → high. Auth, billing,
+infra, data migrations, deletion paths, concurrency, and public API contracts bias upward *because
+the cost of being wrong is high*, not because the diff is large. If acceptance criteria, target
+files, and change shape are already explicit in the spec, don't pay for extra reasoning just because
+the code volume is big — boilerplate generation is usually low or medium regardless of line count.
+
+#### Claude Code ↔ Codex pairing (when Claude Code hands work to Codex)
+- **Sonnet + Codex low/medium** (whichever model family wins reconciliation) — most implementation
+  runs (the Wave-1 "Mechanical"/"Standard" rows land here by default).
+- **Opus + Codex high/xhigh** (or the frontier-tier model, whichever family wins) — only when the
+  hard part is problem framing, architecture, or adversarial review (the Wave-1 "Hard" row and
+  anything money/auth/migration-shaped in Wave 2).
+One-line policy: **use the cheapest reasoning level that still lets Codex choose the *correct* change,
+not merely produce a plausible one.**
+
 ## Concurrency & serialization (v1.1.0; step-0.4 mechanism decided v1.3.0)
 - **Spec authoring parallelizes** — each spec is a distinct file; fan out one subagent per clause.
   **Decided (human opt-in, 2026-07-09): step 0.4 runs via the `Workflow` tool**, not a plain
@@ -261,18 +343,31 @@ Resume by re-pasting `handoff.md` + attachments and saying "continue".
 >
 > **Until item 2 lands: Wave-2 deploys are manual-dispatch only, and no Wave-2 work merges to
 > `main`** — merging today would still silently target the stack being retired.
+>
+> **Codex model/reasoning below (per-row) follows the v2.1.0 draft convention pending reconciliation
+> with `RUNBOOK-RULES.md` rule 16 — model generation picked for capability/economics, reasoning
+> level picked for ambiguity + cost-of-being-wrong, not diff size. Flagged for human review: rule 16
+> names a different model family (`gpt-5-codex`/`gpt-5.3-codex`) as this project's actual pin; the
+> per-row values below have not yet been reconciled against it.
 
 | # | Clause(s) | Step | Claude | Codex | Deps |
 |---|---|---|---|---|---|
-| 2.0 | P-25 | **Payment-provider port + `MockProvider`** (checkout/portal/verify-webhook/fetch-subscription/list-events). **Mock's `verify_webhook` MUST implement a real HMAC check that REJECTS a tampered signature** (v2.0.0/A6 — so the negative test is meaningful, not tautological); preserves FE checkout/portal URL contract. All 2.1+ billing codes against the port. | opus/high | codex/high | 1.* |
-| 2.0b | P-25b | **Real `StripeProvider` + signature verification + idempotency negative test — freeze-line, before any *paid* launch** (v2.0.0/A6). Not "deferred, swap later": a paid launch (L-4) must not run untested signature-verification code on the money path. | opus/high | codex/high | 2.0 |
-| 2.1 | P-14, P-15 | Idempotency wired (webhook + workers, via the port's event id); kill money-path Scan (customer-id → GSI) | opus/high | codex/high | 2.0 |
-| 2.2 | P-16, P-17, P-18 | Concurrency bounds; `ReportBatchItemFailures`; visibility ≥6× | sonnet/med | codex/med | 0.1 |
-| 2.3 | P-19 | SFN retry/heartbeat/JitterStrategy FULL | sonnet/med | codex/med | 0.1 |
-| 2.4 | P-20 | Raise API throttle. **Fold in a minimal load/perf harness (v2.0.0 Layer-2 item 3): a locust smoke — hub read + one generate flow, p99 assert — so the throttle target is sized from data, not guessed; emit bootstrap-latency so O-1's D-H8 go/no-go metric actually gets measured (via P-32's correlation-ID/metrics work).** | sonnet/med | codex/med | 0.1 |
-| 2.5 | P-02 | Fix billing-reconcile handler (`Handler` ≠ `lambda_handler`). *(P-23 canary moved to Wave 1 step 1.0.)* | opus/high | codex/high | 0.1 |
-| 2.7 | P-31 | EventBridge rule targets get a DLQ (cleanup 1h, reconcile 02:00) | sonnet/med | codex/med | 0.1 |
+| 2.0 | P-25 | **Payment-provider port + `MockProvider`** (checkout/portal/verify-webhook/fetch-subscription/list-events). **Mock's `verify_webhook` MUST implement a real HMAC check that REJECTS a tampered signature** (v2.0.0/A6 — so the negative test is meaningful, not tautological); preserves FE checkout/portal URL contract. All 2.1+ billing codes against the port. | opus/high | `gpt-5.5` / high — new port shape + a security-meaningful negative test is "decide what's right before coding," not a known call site | 1.* |
+| 2.0b | P-25b | **Real `StripeProvider` + signature verification + idempotency negative test — freeze-line, before any *paid* launch** (v2.0.0/A6). Not "deferred, swap later": a paid launch (L-4) must not run untested signature-verification code on the money path. | opus/xhigh | `gpt-5.5-pro` / xhigh — highest cost-of-being-wrong in Wave 2 (real signature verification on the money path, pre-launch freeze-line); worth the extra precision/latency | 2.0 |
+| 2.1 | P-14, P-15 | Idempotency wired (webhook + workers, via the port's event id); kill money-path Scan (customer-id → GSI) | opus/high | `gpt-5.5` / high — money-path correctness + a Scan→GSI migration has hidden coupling (existing callers, key design) | 2.0 |
+| 2.2 | P-16, P-17, P-18 | Concurrency bounds; `ReportBatchItemFailures`; visibility ≥6× | sonnet/med | `gpt-5.4` / medium — established SQS/Lambda reliability patterns, multi-file but not architecturally ambiguous | 0.1 |
+| 2.3 | P-19 | SFN retry/heartbeat/JitterStrategy FULL | sonnet/med | `gpt-5.4` / medium — same reliability-pattern class as 2.2 | 0.1 |
+| 2.4 | P-20 | Raise API throttle. **Fold in a minimal load/perf harness (v2.0.0 Layer-2 item 3): a locust smoke — hub read + one generate flow, p99 assert — so the throttle target is sized from data, not guessed; emit bootstrap-latency so O-1's D-H8 go/no-go metric actually gets measured (via P-32's correlation-ID/metrics work).** | sonnet/med | `gpt-5.4` / medium — the throttle bump is deterministic, the harness needs some inference (target sizing from data); medium covers both | 0.1 |
+| 2.5 | P-02 | Fix billing-reconcile handler (`Handler` ≠ `lambda_handler`). *(P-23 canary moved to Wave 1 step 1.0.)* | opus/high | `gpt-5.4` / low — a known, concrete, single-site fix; acceptance criteria are already explicit, don't pay for extra reasoning because it's a billing file | 0.1 |
+| 2.7 | P-31 | EventBridge rule targets get a DLQ (cleanup 1h, reconcile 02:00) | sonnet/med | `gpt-5.4` / low — mechanical IaC wiring, well-specified target shape (cleanup 1h, reconcile 02:00) | 0.1 |
 > *(Q-10 real token metering moved to Wave-0 step 0.75 — no payment-port dependency, and a measured baseline must precede the Wave-4 Sonnet decisions.)*
+> **Note on 2.5's reasoning downgrade:** the old scheme gave every P-clause a flat `codex/high`
+> regardless of shape; the new rule explicitly rejects that — "billing" biases reasoning up only
+> when the *change itself* is ambiguous or hard to get wrong safely. A `Handler` attribute typo fix
+> has neither property once the bad value is found, so it stays `low` even though the file is
+> billing-adjacent. Claude Code's own `opus/high` is unchanged here — that pairing (expensive
+> orchestrator effort, cheap Codex reasoning) is intentional: Claude Code does the framing/citation
+> work, Codex does the mechanical edit.
 
 ### Wave 3 — DB seams (fixes the actual break P-01)
 | # | Clause(s) | Step | Claude | Codex | Deps |

@@ -390,6 +390,33 @@ that call on a live schedule for the first time.
 checking. Every call to a method the port does not declare fails there and then. That is the real
 inventory of the gap, and it takes minutes.
 
+**Status 2026-07-25 — CHECK RUN. The mismatch list is longer than `retrieve_subscription` — the
+fallback is now in effect.** Diagnostic edit made and reverted in the same session (billing_service.py,
+webhook_service.py, reconciliation_service.py annotated `PaymentProviderInterface`, `uv run mypy
+careervp --strict` run, then `git checkout --` on all three — confirmed zero net diff). Full result:
+
+1. `logic/webhook_service.py:119` — `retrieve_subscription(subscription_id)`, undeclared. (Line
+   drifted from the `:115` cited above — re-verify line numbers live, not from this file, same
+   discipline Wave 1 used throughout.)
+2. `logic/reconciliation_service.py:54` — same undeclared call. (Drifted from `:53`.)
+3. **NEW — not previously known.** `logic/billing_service.py:78` —
+   `create_checkout_session(customer_id=customer_id, ...)` where `customer_id` is typed
+   `str | None` (the return of `_get_or_create_customer_id`, a `tuple[str, None] |
+   tuple[None, dict]` union) but the Protocol requires `customer_id: str`. Not an undeclared
+   method — the method exists — but strict typing cannot prove `customer_id` is non-`None` at the
+   call site through the `if error is not None: return error` tuple-unpack guard. `Any` swallowed
+   this silently; it is a real narrowing gap, not a false positive — the fix is either an
+   `assert customer_id is not None` after the guard or restructuring the guard's return so mypy can
+   narrow it, GREEN's call which one.
+4. Two `redundant-cast` findings at `webhook_service.py:63,66` — `cast(WebhookEvent, ...)` around
+   both `construct_webhook_event(...)` calls in `_verify_webhook` is now provably redundant once
+   the provider is typed `PaymentProviderInterface` (the cast existed only to satisfy mypy against
+   `Any`). Not a port mismatch — a cleanup GREEN should make while it has the file open.
+
+So: **2 previously-known undeclared-method call sites, 1 new nullable-argument gap, 2 cosmetic
+cleanups.** Per the fallback below, this is enough to make 2.0 cover reconciling the port with all
+three real gaps — not just the two already known.
+
 **The fallback.** If the mismatch list is longer than `retrieve_subscription`, 2.0 grows to cover
 reconciling the port with its actual consumers, and 2.1 waits. Better to learn that in the first
 hour of 2.0 than during the idempotency work.

@@ -57,9 +57,9 @@ It has already been proven safe:
    change set was deleted after evidence capture, so a fresh one must be created to execute):
    ```
    cd infra
-   cdk deploy CareerVpCrudDev --no-execute --change-set-name p26-o9-execute-<date>
+   cdk deploy CareerVpCrudDev --no-execute --change-set-name p26-o9-execute-19-07-2026
    aws cloudformation describe-change-set --stack-name CareerVpCrudDev \
-     --change-set-name p26-o9-execute-<date> > /tmp/changeset.json
+     --change-set-name p26-o9-execute-19-07-2026 > /tmp/changeset.json
    python3 ../scripts/ci/changeset_replacement_report.py --changeset /tmp/changeset.json
    ```
 2. Confirm `auto_fail: false` again on the fresh change set (state can drift between review and
@@ -68,7 +68,7 @@ It has already been proven safe:
 3. Execute:
    ```
    aws cloudformation execute-change-set --stack-name CareerVpCrudDev \
-     --change-set-name p26-o9-execute-<date>
+     --change-set-name p26-o9-execute-19-07-2026
    aws cloudformation wait stack-update-complete --stack-name CareerVpCrudDev
    ```
 4. Verify O-9 live: `dig +short api.dev.careervp.com` should resolve; confirm
