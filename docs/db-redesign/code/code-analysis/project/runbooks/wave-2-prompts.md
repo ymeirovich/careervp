@@ -367,9 +367,10 @@ it in without widening its clause, that is a rule-5 stop.
 **Before filling in any skeleton:** read every ledger row above it in `wave-2-status.md`, and
 re-read the bets it lists. Earlier steps will have found things this file could not know.
 
-> **Fill-in progress:** 2.0b and 2.0b-mock are **already filled in** (each has full RED + GREEN
-> prompts below, immediately after its summary table) — 2.0-GREEN unblocked 2.0b, and 2.0b-GREEN
-> (landed 2026-07-25) unblocked 2.0b-mock. 2.1 through 2.7 remain skeletons.
+> **Fill-in progress:** 2.0b, 2.0b-mock, and **2.1** are **already filled in** (each has full RED +
+> GREEN prompts below, immediately after its summary table) — 2.0-GREEN unblocked 2.0b and 2.1,
+> 2.0b-GREEN (landed 2026-07-25) unblocked 2.0b-mock, and 2.0b-mock-GREEN (landed 2026-07-25) is the
+> last backend prerequisite before 2.1 runs. 2.2 through 2.7 remain skeletons.
 
 ---
 
@@ -801,36 +802,290 @@ flips to TRUE in `ISSUES.md`; `mypy --strict`/ruff/coverage-gate clean.
 
 ---
 
-## 2.1 — Don't charge twice; stop scanning the money path (skeleton)
+## 2.1 — Don't charge twice; stop scanning the money path
+
+> **FILLED IN 2026-07-25** from the skeleton below (rule 11). The session that did so read every
+> Wave-2 ledger row through 2.0b-mock-GREEN first, and verified the current billing code live rather
+> than trusting the contract's "table empty, unwired" line. What it found is baked into the prompts
+> below and must still be re-confirmed from live at run time (§0.2):
+> - **P-14 idempotency already exists in code.** `logic/webhook_service.py:82` keys on
+>   `event.event_id` via `self._sub_repo.record_payment_event(event.event_id, event.event_type)`;
+>   `dal/subscription_repository.py:279` does a conditional put into the idempotency table
+>   (PK=`id`, TTL on `expiration`, default `ttl_seconds = 86400 * 7` = 7 days), and
+>   `webhook_service.py:101` calls `delete_payment_event` to release the slot on failure. So the
+>   webhook idempotency *mechanism* is built; this step proves it and settles whether anything
+>   actually writes to that table in a deployed environment.
+> - **The P-15 money-path Scan is real and located.** `dal/subscription_repository.py:103`
+>   `get_subscription_by_customer_id` queries `EMAIL_INDEX_NAME` and then **falls back to
+>   `self._table.scan(...)` at line 127** — that fallback is the webhook-path scan P-15 forbids.
+>   Its own docstring says to prefer a `customer_id → user_id` lookup instead. The IAM
+>   `dynamodb:Scan` grant is at `infra/careervp/api_construct.py:661`.
+> - **`scan_active_subscriptions` (subscription_repository.py:374) is NOT this step's target.** It
+>   is the batch *reconcile* path (2.5's entrypoint), not the interactive webhook money path. Drawing
+>   that line — which scans are "money path" — is 2.1-RED's first job, and it must not silently
+>   delete the reconcile scan to make a permission test pass.
+> - **"Real table" = moto.** `tests/integration/` already uses `from moto import mock_aws`
+>   (e.g. `test_p05_cross_tenant_idor.py:32`), so replay suppression can be proven against a real
+>   DynamoDB table with the real GSI, no devx deploy required.
+>
+> **Header corrected against the spec frontmatter (rule 16).** The skeleton read
+> `opus/high · gpt-5-codex/high`. The P-14/P-15 spec frontmatter (`tooling:`) reads
+> `codex: {model: gpt-5.3-codex, reasoning: high}` for both clauses — same 2026-07-25 codex-family
+> resolution 2.0b applied. Corrected below to **`opus/high · gpt-5.3-codex/high`**; `opus/high` is
+> unchanged.
+>
+> **⚠️ Serialization deviation surfaced at fill-in (rule 5 flag, do not resolve silently).** §2 lists
+> `api_construct.py` as edited only by 2.2, 2.4, and 2.7. But P-15 removes the `dynamodb:Scan` grant
+> at `api_construct.py:661`, so **2.1 also edits `api_construct.py`** and joins that serial set: 2.1's
+> GREEN must not run at the same time as any of 2.2/2.4/2.7. The backend lane is still parallel with
+> the infra lane *for the RED session and for the P-14 DAL work*, but the one-line IAM removal is a
+> shared-file edit. Whoever runs 2.1-GREEN confirms no infra-lane step is mid-flight on
+> `api_construct.py` first, exactly as §2 requires.
 
 | | |
 |---|---|
 | **Clauses** | P-14, P-15 |
 | **Spec** | `specs/P-14-P-15-billing-idempotency-scan-spec.md` |
-| **Claude / Codex** | opus/high · gpt-5-codex/high |
-| **Depends on** | 2.0-GREEN |
-| **Deploy target** | `CareerVpCrudDevx` |
+| **Acceptance criteria** | AC-P14-1, AC-P14-2, AC-P15-1 |
+| **Claude / Codex** | opus/high · gpt-5.3-codex/high |
+| **Depends on** | 2.0-GREEN (landed — `MockProvider` + port `retrieve_subscription`) |
+| **Deploy target** | `CareerVpCrudDevx` (manual-dispatch only per §0.3; P-15 IAM change edits `api_construct.py` — see serialization flag above) |
 | **Rule 7** | RED and GREEN separate — money path |
-| **Bets** | `B-2-2` (the event id is a safe idempotency key) · `B-2-3` (resource count) |
+| **Bets** | `B-2-2` (the event id is a safe idempotency key — **this step settles it**) · `B-2-3` (resource count — check synth before/after; P-15 only removes a permission, adds no resource) |
 
 **In plain English.** Make sure a payment event that arrives twice is only acted on once, and stop
 the billing code from scanning the whole table to find a customer.
 
-**Known before you start.** `logic/webhook_service.py` already keys on `event.event_id` via
-`record_payment_event(...)`, with commit-after-work and a `delete_payment_event` release on failure.
-The contract records this clause's state as "table empty, unwired." **Both may be true** — the code
-path may exist while nothing writes to the table in a deployed environment. Establish which, from
-live, before writing anything. That determination is this step's first output.
-
-**Done-when.** A replayed webhook is provably suppressed against a real table (not a mock); the
-customer-id lookup uses a named index with zero scans on the money path; the access pattern is
-recorded. Resource count checked after the change (`B-2-3`).
-
 **Owns `test_p25_mock_event_id_is_stable_across_retries`** (reassigned from 2.0-RED, 2026-07-25 —
-see that prompt's resolved note). Two deliveries of the SAME event, through the provider's own
-retry path, must carry the same `event_id`, and the second delivery must be suppressed by this
-step's idempotency wiring against a real table. This is the direct settlement of bet `B-2-2` — do
-not treat it as optional or fold it silently into a differently-named test.
+see that prompt's resolved note). Two deliveries of the SAME event, through the provider's own retry
+path, must carry the same `event_id`, and the second delivery must be suppressed by this step's
+idempotency wiring against a real table. This is the direct settlement of bet `B-2-2` — do not treat
+it as optional or fold it silently into a differently-named test.
+
+**Done-when.** A replayed webhook is provably suppressed against a real (moto) table, not a mock;
+the customer-id lookup uses a named index/query with zero scans on the money path; the money-path
+Lambda's IAM policy no longer includes `dynamodb:Scan`; the access pattern is recorded; `cdk diff`
+shows zero stateful replacement and the naming validator passes if infra changed; synth resource
+count is captured before and after (`B-2-3`).
+
+---
+
+# PROMPT 2.1-RED — billing idempotency + no-Scan money path (tests only)
+
+> **Clause:** P-14, P-15 · **Spec:** [`specs/P-14-P-15-billing-idempotency-scan-spec.md`](../specs/P-14-P-15-billing-idempotency-scan-spec.md)
+> **Acceptance criteria:** AC-P14-1, AC-P14-2, AC-P15-1 · **Claude: opus/high · Codex: gpt-5.3-codex/high**
+> **Rule 7 applies — money path.** RED and GREEN are two different sessions. This one writes tests
+> only (plus, where rule 14 requires it, tightening the spec's own RED-test briefs) and carries an
+> **absolute prohibition** on touching implementation files.
+
+```
+STANDING CHECK — before doing anything else: open runbooks/wave-2-status.md and read the 2.0-GREEN,
+2.0b-GREEN, and 2.0b-mock-GREEN rows. All must show landed/green (2.1 depends on 2.0-GREEN; the mock
+work is what makes the reassigned B-2-2 test meaningful). Then confirm THIS step's prerequisites are
+met right now, with real commands (not memory, not this file):
+
+  git log --oneline -3
+  cd src/backend && uv run pytest tests/unit/test_p25_payment_provider_port.py tests/unit/test_p25b_stripe_provider.py -q 2>&1 | tail -5
+  python -c "from careervp.payment_providers.mock_provider import MockProvider; print('mock ok')"
+  grep -n "record_payment_event\|delete_payment_event" careervp/logic/webhook_service.py
+  grep -n "def get_subscription_by_customer_id\|\.scan(\|IndexName" careervp/dal/subscription_repository.py
+  grep -n "dynamodb:Scan\|actions=\[.*Scan" infra/careervp/api_construct.py | head
+
+If the P-25/P-25b provider tests are not green, or MockProvider is not importable, STOP and say so
+plainly — the money-path port this step builds on is not there.
+
+BEFORE WRITING ANY TEST (rule 14): open specs/P-14-P-15-billing-idempotency-scan-spec.md,
+"RED Tests to Write First". It names five tests but several briefs do NOT state exact assertion
+values ("a named GSI", "a deterministic retention window", "idempotent success"). Rule 14 forbids
+writing tests against a brief that does not say what it is testing. Your FIRST authoring task is to
+tighten those briefs IN THE SPEC to name exact values you derived live — the exact index/query path
+used for the customer lookup, the exact TTL retention (the code today is 86400*7 = 7 days; state the
+number, do not invent a new one), the exact money-path Lambda whose IAM you assert on, and the exact
+"same recorded result" the replayed webhook returns. This is authoring the spec's RED-test brief,
+which is allowed; do NOT widen AC-P14-1/AC-P14-2/AC-P15-1 or add a clause. If you find you must
+change an AC itself, that is a rule-5 stop + a §0.3 amendment, not an edit.
+
+You are implementing clauses P-14 and P-15 (AC-P14-1, AC-P14-2, AC-P15-1). You are the RED session:
+TEST FILES + the spec's RED-test-brief tightening ONLY. You may not create or edit any file under
+src/backend/careervp/ or infra/careervp/, even "to see if it works." If you believe an implementation
+file must change, write the test that proves it and stop.
+
+--------------------------------------------------------------------------------
+FIRST — establish the live billing state (this is 2.1's first output, per the skeleton)
+--------------------------------------------------------------------------------
+
+The contract records this clause as "idempotency table empty, unwired," but the CODE path already
+exists (webhook_service.py:82 records on event.event_id; subscription_repository.py:279 conditional-
+puts with TTL). BOTH can be true — the mechanism can exist while nothing writes to the table in a
+deployed environment. Determine which, from live evidence, and REPORT it before writing any test:
+  1. Read webhook_service.py end to end. Confirm the claim/commit/release ordering
+     (record_payment_event → work → delete on failure) and quote the lines.
+  2. Read subscription_repository.py get_subscription_by_customer_id: the query-then-scan fallback at
+     ~:113 (query EMAIL_INDEX_NAME) and ~:127 (scan). This scan IS the P-15 money-path target.
+  3. Enumerate EVERY Scan on the billing path and classify each as money-path (webhook / interactive
+     checkout / portal) vs batch-reconcile. scan_active_subscriptions (~:374) is the reconcile path —
+     2.5's entrypoint — NOT this step's target; say so explicitly so GREEN does not delete it.
+  4. Identify the money-path Lambda that carries the dynamodb:Scan IAM grant (api_construct.py:661)
+     and confirm whether that same function also runs the reconcile path (if it does, removing Scan
+     is coupled to 2.5 — flag it; do not resolve it here).
+REPORT this classification in plain English first. If the scan surface is larger than the one webhook
+fallback, say so — it changes the size of GREEN and the next session must know.
+
+--------------------------------------------------------------------------------
+THEN — tighten the briefs, then write exactly these tests
+--------------------------------------------------------------------------------
+
+Put the unit-level tests in src/backend/tests/unit/ and the IAM/synth test where the other
+infrastructure synth tests live (src/backend/tests/infrastructure/ — confirm live). Cite the AC in
+each. No real network calls. Secrets under P-06 (parameter NAME in env, value at runtime, never a
+literal). Use moto (mock_aws) for the real-table tests, the pattern tests/integration already uses.
+
+  test_p14_webhook_replay_same_event_id_single_side_effect        (AC-P14-1)
+      Send the SAME signed event twice through the webhook path against a moto table with the real
+      idempotency GSI. Assert EXACTLY ONE subscription mutation (assert the write/upsert is invoked
+      once — count it) and that the second delivery returns the same deterministic idempotent-success
+      response as the first (state the exact response). No second side effect.
+
+  test_p14_worker_replay_same_business_id_single_artifact         (AC-P14-2)
+      Invoke the worker path twice with the SAME stable business id (application_id + artifact type +
+      operation, per the spec fix plan — NOT a request timestamp). Assert one side effect and exactly
+      one idempotency record. Derive the stable-key shape from the code live; state it exactly.
+
+  test_p15_billing_lookup_uses_query_not_scan                     (AC-P15-1)
+      Patch the DynamoDB table so query() and scan() are observable. Drive the money-path
+      customer/subscription lookup and assert it calls query() on the named index and NEVER calls
+      scan(). Name the index explicitly.
+
+  test_p15_iam_money_path_has_no_scan_permission                  (AC-P15-1)
+      Synth the billing/webhook money-path Lambda's IAM policy and assert it does NOT include
+      dynamodb:Scan. Name the exact logical construct asserted on. (This is the test that proves the
+      api_construct.py:661 grant is gone — and the reason 2.1 joins the api_construct.py serial set.)
+
+  test_p14_idempotency_ttl_is_set                                 (AC-P14-1)
+      Assert idempotency records carry a TTL attribute (expiration) with the deterministic retention
+      the code uses — 86400*7 seconds (7 days). State the exact number; no "or".
+
+  test_p25_mock_event_id_is_stable_across_retries                 (AC-P14-1 / bet B-2-2)
+      REASSIGNED HERE from 2.0-RED. Put it in src/backend/tests/unit/ (its own file or the P-25 file
+      — your call, but it is a P-14/B-2-2 test, not a new P-25 clause). Deliver the SAME logical
+      provider event TWICE through the provider's retry path (MockProvider) and assert BOTH carry the
+      SAME event_id, THEN assert this step's idempotency wiring suppresses the second against a real
+      (moto) table. A fresh id per attempt is the exact failure B-2-2 fears — this test is what proves
+      it cannot happen. Do NOT rename it or fold it into another test.
+
+RULE 13 — run every test, capture the failure output VERBATIM, and for each state WHY it failed. A
+test that fails on ImportError/collection/missing-fixture is NOT red, it is broken; structure each
+(or a minimal skip-guard) so it fails on ITS OWN assertion. State which technique you used. The
+P-25/P-25b provider tests and the full existing suite must still be green after your run — you have
+ADDED tests, not changed implementation.
+
+--------------------------------------------------------------------------------
+OUTPUT REQUIRED
+--------------------------------------------------------------------------------
+1. The live billing-state determination (idempotency wiring: mechanism-only vs actually-writing) and
+   the full money-path-vs-reconcile Scan classification, in plain English first.
+2. The tightened P-14/P-15 RED-test briefs as they now read in the spec (diff of that section).
+3. The new test files, each assertion cited to its AC.
+4. Verbatim failure output for every new test + one-line why for each, AND proof the P-25/P-25b
+   tests and the rest of the suite are still green.
+5. Confirmation that ZERO files under src/backend/careervp/ and infra/careervp/ were modified
+   (git diff --stat).
+6. A git commit message.
+
+ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULES.md):
+- Compare what you actually built against (a) this prompt's own instructions and (b) clauses P-14 and
+  P-15 in project-scope-lock.yaml. If everything matches, say so in one plain sentence.
+- If ANYTHING drifted — extra work not asked for, required work skipped, or a test/rule had to be
+  weakened — STOP. Do not fix it yourself. Write one plain-English sentence a non-engineer could
+  follow (what should have happened, what actually happened, why it matters), THEN the technical
+  detail, and flag it for human review. Do not mark the step done.
+- Update runbooks/wave-2-status.md: add/update this step's row with a plain-English status, the
+  commit, today's date, and what GREEN must resolve first. B-2-2 stays open until GREEN lands.
+```
+
+---
+
+# PROMPT 2.1-GREEN — key on the event id, kill the money-path Scan
+
+> Run in a **FRESH session** that has not seen 2.1-RED's reasoning. `/clear` is the minimum; a
+> separate invocation is preferred. The failing tests are a contract you did not write and **may not
+> edit** — no relaxing an assertion, no `xfail`, no `skip`. If a test looks genuinely *wrong* (not
+> merely inconvenient), STOP and raise a §0.3 amendment.
+> **Clause:** P-14, P-15 · **Claude: opus/high · Codex: gpt-5.3-codex/high**
+>
+> **Serialization (from the fill-in flag above).** This step removes the `dynamodb:Scan` grant at
+> `api_construct.py:661`, so it edits `api_construct.py` — a file the infra lane (2.2/2.4/2.7) also
+> edits. Before touching that file, confirm no infra-lane step is mid-flight on it (§2). The P-14 DAL
+> + idempotency work does not touch `api_construct.py` and is not gated by that.
+
+```
+STANDING CHECK — before doing anything else: open runbooks/wave-2-status.md and read the 2.1-RED row.
+If it left anything open, deal with it FIRST — especially its money-path-vs-reconcile Scan
+classification: you must remove ONLY the money-path scan, never scan_active_subscriptions (that is
+2.5's reconcile path). Confirm the RED tests exist and fail, right now, with a real command:
+
+  cd src/backend && uv run pytest tests/unit -q -k "p14 or p15 or event_id_is_stable" 2>&1 | tail -25
+  cd src/backend && uv run pytest tests/infrastructure -q -k p15 2>&1 | tail -15
+
+If they pass, or fail on import/collection errors rather than their own assertions, STOP.
+
+You are implementing clauses P-14 and P-15 (AC-P14-1, AC-P14-2, AC-P15-1). You are the GREEN session.
+You may not edit any test file written by 2.1-RED, nor the RED-tightened spec briefs. Build:
+
+1. P-14 idempotency, proven end to end. The mechanism exists (record_payment_event / commit-after-
+   work / delete_payment_event release on failure). Make the webhook-replay and worker-replay tests
+   pass against a real (moto) table: key webhook idempotency by provider event id + provider name;
+   key worker idempotency by the stable business id (application_id + artifact type + operation +
+   provider event id where applicable), NEVER by request timestamp. A replayed webhook returns the
+   same recorded result with no duplicate side effect. Keep the TTL retention the RED test pinned
+   (86400*7). Preserve MockProvider's stable-event-id-across-retries behavior (bet B-2-2) — if the
+   mock issues a fresh id per attempt, fix the mock, do not weaken the test.
+
+2. P-15 no money-path Scan. Replace the get_subscription_by_customer_id scan fallback
+   (subscription_repository.py:~127) with a customer-id/subscription-id GSI query path (the infra at
+   api_db_construct.py already defines an idempotency-key-index; confirm which index serves
+   customer_id → subscription and use a named Query, add one only if the spec's evidence shows it is
+   needed and P-26 headroom allows — B-2-3). Remove the dynamodb:Scan grant from the money-path
+   Lambda at api_construct.py:661. Do NOT remove scan_active_subscriptions or any grant the reconcile
+   path (2.5) still needs — if the same Lambda serves both, that coupling is a rule-5 stop: flag it,
+   do not force it.
+
+3. Preserve the checkout and portal response shapes the frontend consumes (no contract drift).
+
+VERIFY: every RED test passes (unit + infrastructure); the P-25/P-25b provider tests still pass; full
+backend unit + integration suites (zero regressions); frontend suites if any contract file changed;
+ruff; mypy careervp --strict; the coverage gate (make coverage-tests, at/above the enforced
+baseline); scope-diff reports P-14 and P-15. If infra changed: cdk synth clean, `cdk diff` shows ZERO
+stateful replacement, the naming validator passes, and you capture the synth resource count BEFORE and
+AFTER (B-2-3 — P-15 only removes a permission, so the count must not rise). No merge to main (§0.3);
+any deploy is manual-dispatch devx only, and the money-path proof is the moto real-table test, not a
+live charge.
+
+OUTPUT REQUIRED
+1. Every RED test now passing (unit + infrastructure), with output, plus the P-25/P-25b tests still
+   green.
+2. Confirmation that ZERO test files and ZERO RED-authored spec briefs were modified (git diff --stat).
+3. The customer-lookup access pattern you landed (which named index, query shape), stated plainly,
+   and the before/after synth resource count.
+4. A git commit message.
+
+ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULES.md):
+- Compare what you actually built against (a) this prompt's own instructions and (b) clauses P-14 and
+  P-15 in project-scope-lock.yaml. If everything matches, say so in one plain sentence.
+- If ANYTHING drifted, STOP, write the plain-English sentence first, then the technical detail, and
+  flag it for human review. Do not mark the step done.
+- Update runbooks/wave-2-status.md with a plain-English status, the commit, today's date, and
+  anything the NEXT step (2.5, then GATE) must resolve first. **Settle bet B-2-2 in ISSUES.md** with
+  the evidence (event id stable across retries AND the second delivery suppressed against a real
+  table) — this is the step authorized to close B-2-2; the GATE re-reads it (rule 9). Record the
+  money-path/reconcile Scan coupling finding for 2.5 if the same Lambda serves both.
+```
+
+**Done-when.** All P-14/P-15 RED tests pass (unit + infrastructure) and the P-25/P-25b tests stay
+green; a replayed webhook is provably suppressed against a real (moto) table; the money-path
+customer lookup uses a named Query with zero scans and the money-path Lambda has no `dynamodb:Scan`
+IAM grant; `cdk diff` zero stateful replacement + naming validator pass if infra changed; synth
+resource count not raised (`B-2-3`); bet `B-2-2` settled in `ISSUES.md`.
 
 ---
 

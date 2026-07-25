@@ -36,11 +36,12 @@ Billing must be launch-safe: webhook and at-least-once worker paths need stable 
 
 ## RED Tests to Write First
 
-- `test_p14_webhook_replay_same_event_id_single_side_effect`: send the same signed event twice; assert only one subscription mutation and second response is idempotent success.
-- `test_p14_worker_replay_same_business_id_single_artifact`: invoke a worker twice with the same stable idempotency key; assert one side effect and one idempotency record.
-- `test_p15_billing_lookup_uses_query_not_scan`: patch DynamoDB table; assert money-path billing lookup calls `query()` on a named GSI and never `scan()`.
-- `test_p15_iam_money_path_has_no_scan_permission`: synth billing IAM and assert billing Lambda policy does not include `dynamodb:Scan`.
-- `test_p14_idempotency_ttl_is_set`: assert idempotency records have a TTL attribute with a deterministic retention window.
+- `test_p14_webhook_replay_same_event_id_single_side_effect` (AC-P14-1): send the same MockProvider-signed `checkout.session.completed` event twice through `WebhookService.handle_webhook` against a moto idempotency table; assert `upsert_subscription` is called exactly once and both deliveries return exactly `{'status_code': 200}` (the second delivery replays that recorded result, with no second side effect).
+- `test_p14_worker_replay_same_business_id_single_artifact` (AC-P14-2): invoke the company-research SQS worker twice for `application_id=app-p14-001`, artifact type `company_research`, and operation `generate`; assert the stable key is exactly `WORKER_OPERATION#app-p14-001#company_research#generate` (never timestamp-derived), `_async_process_record` is called exactly once, and the moto idempotency table contains exactly one record with that key.
+- `test_p15_billing_lookup_uses_query_not_scan` (AC-P15-1): drive `SubscriptionRepository.get_subscription_by_customer_id('cus_p15_001')`; assert `query()` is called on exactly `customer-id-index` with `Key('customer_id').eq('cus_p15_001')`, and assert `scan()` is never called.
+- `test_p15_iam_money_path_has_no_scan_permission` (AC-P15-1): synth the `BillingLambda` construct (physical function `careervp-billing-lambda-dev`, handler `careervp.handlers.billing_handler.handler`) and assert no IAM statement attached to its execution role includes `dynamodb:Scan`; the separate `BillingReconcileLambda` is outside this assertion.
+- `test_p14_idempotency_ttl_is_set` (AC-P14-1): assert a payment-event idempotency record carries the `expiration` TTL attribute and that `expiration - claim_epoch` is exactly `604800` seconds (7 days).
+- `test_p25_mock_event_id_is_stable_across_retries` (AC-P14-1; bet B-2-2): verify the same logical MockProvider event twice through `construct_webhook_event`, assert both verified deliveries have the same `event_id`, then deliver both through `WebhookService.handle_webhook` against a moto idempotency table and assert exactly one subscription mutation and one payment-event idempotency record.
 
 ## Acceptance Criteria
 
@@ -57,4 +58,3 @@ All RED tests pass; P-25 provider port is used; no frontend checkout/portal cont
 ## Sequencing / Dependencies
 
 P-25 precedes this spec. P-26 must precede any additive infra if parent stack headroom is needed.
-
