@@ -367,58 +367,230 @@ it in without widening its clause, that is a rule-5 stop.
 **Before filling in any skeleton:** read every ledger row above it in `wave-2-status.md`, and
 re-read the bets it lists. Earlier steps will have found things this file could not know.
 
+> **Fill-in progress:** 2.0b is **already filled in** (its full RED + GREEN prompts are below,
+> immediately after its summary table) — 2.0-GREEN having landed unblocked it. 2.1 through 2.7
+> remain skeletons.
+
 ---
 
-## 2.0b — Real payments (skeleton)
+## 2.0b — Real payments
+
+> **FILLED IN 2026-07-25** from the skeleton below (rule 11). The session that did so read the
+> 2.0-RED and 2.0-GREEN ledger rows first; what those steps actually built is baked in below (the
+> mock's centralized signature constants, the port now carrying `retrieve_subscription`). Split into
+> RED and GREEN per rule 7 — this is the money path, and its freeze-line is the highest
+> cost-of-being-wrong step in the wave.
+>
+> **Header values corrected against the plan, not copied from the stale skeleton.** The skeleton's
+> `Claude / Codex` line read `opus/high · gpt-5-codex/high`. Both the execution-plan row 2.0b and
+> the `P-25b` spec frontmatter now read **`opus/xhigh · gpt-5.3-codex/max`** (2026-07-25 taxonomy
+> resolution — rule 16 wins, and 2.0b is `max` for "hardest quality-first work where the extra cost
+> is justified by clear evaluation criteria: security-critical design review"). The corrected values
+> are used below; the skeleton's were stale.
 
 | | |
 |---|---|
 | **Clause** | P-25b |
 | **Spec** | `specs/P-25-payment-provider-spec.md` |
 | **Acceptance criteria** | AC-P25b-1 |
-| **Claude / Codex** | opus/high · gpt-5-codex/high |
-| **Depends on** | 2.0-GREEN |
-| **Deploy target** | none (backend only) |
+| **Claude / Codex** | opus/xhigh · gpt-5.3-codex/max |
+| **Depends on** | 2.0-GREEN (landed — `MockProvider` + port `retrieve_subscription` in `a654821`) |
+| **Deploy target** | none (backend only — no CDK, no devx deploy, so `B-2-4` does not gate this) |
 | **Rule 7** | RED and GREEN separate — money path |
-| **Bets** | `B-2-1` (settled by 2.0; this step is where it is *proven* against the real provider) |
+| **Bets** | `B-2-1` (settled by 2.0 at the mock level; this step is where it is *proven* against real Stripe) |
 
-**In plain English.** Build the real Stripe provider and its real signature verification, so that a
-paid launch is not running untested verification code on the money path.
+**In plain English.** Build the real Stripe provider and its real signature verification, so a paid
+launch is not running untested verification code on the money path. This is a freeze-line: it is
+required before any *paid* launch, **not** before the Wave-2 GATE, and it may not be skipped on the
+grounds that the mock works.
 
-**Done-when.** A Stripe test-secret fixture verifies a valid signature and rejects an invalid one;
-the idempotency negative test passes against the real provider; the launch gate fails if either the
-provider or the negative tests are absent. No real network calls in tests.
+**⚠️ rule-14 gap you must close FIRST.** The spec's two P-25b RED-test descriptions
+(`test_p25b_stripe_provider_verifies_real_signature`, `test_p25b_paid_launch_gate_fails_without_stripe_provider`)
+do **not** name exact assertion values — "assert valid passes and invalid fails" is not an exact
+assertion. Per rule 14 you may not write tests against a spec that does not say what it is testing.
+So 2.0b-RED's literal first task is to tighten those two descriptions in the spec (authoring the
+test brief, which is allowed — it is the spec's RED-test section, not a scope-lock clause change),
+using the concrete Stripe scheme the cross-check below confirms. Only then write the tests.
 
-**Owes the Stripe cross-check (resolved 2026-07-25 — this is now a required, named first step of
-2.0b, not an implicit assumption).** By the time 2.0-GREEN lands, MockProvider centralizes its
-signature constants in `mock_provider.py` — the `t=`/`v1=` compound-header format, the signed
-payload construction, and the replay-tolerance window. 2.0b's first job, before writing a single
-StripeProvider line, is to verify each of those against Stripe's own documented
-`Stripe-Signature` scheme, not assume the mock guessed right:
+---
 
-1. **Header format:** confirm Stripe's real header is `t=<unix_timestamp>,v1=<hex_digest>[,v0=...]`
-   and that the constants `mock_provider.py` used for the `t=`/`v1=` prefixes match exactly
-   (case, delimiter, multi-`v1` handling if Stripe sends a rotation pair).
-2. **Signed-payload construction:** confirm the string HMAC'd is `"{timestamp}.{payload}"` (a
-   period-joined concatenation of the timestamp and the raw request body) — Stripe's actual
-   scheme — and that `mock_provider.py` builds the identical string, not e.g. payload-then-timestamp
-   or a different separator.
-3. **Replay tolerance:** confirm the named tolerance constant `mock_provider.py` centralized (bet
-   `B-2-1`'s "name the tolerance as a named constant" requirement) matches Stripe's actual default
-   — **300 seconds (5 minutes)** — and that this is genuinely a constant Stripe allows the caller
-   to reconstruct verification with (not a value only Stripe's own SDK enforces server-side).
+# PROMPT 2.0b-RED — real Stripe signature verification + launch gate (tests only)
 
-If any of the three diverges, StripeProvider must implement Stripe's real behavior — it does NOT
-inherit the mock's version to stay "consistent." Record the outcome of this cross-check in `B-2-1`
-before writing any StripeProvider code; if a divergence is found, that is what actually "proves"
-`B-2-1` false rather than settled, and 2.0-GREEN's test suite needs a follow-up fix, not just 2.0b.
+> **Clause:** P-25b · **Spec:** [`specs/P-25-payment-provider-spec.md`](../specs/P-25-payment-provider-spec.md)
+> **Acceptance criteria:** AC-P25b-1 · **Claude: opus/xhigh · Codex: gpt-5.3-codex/max**
+> **Rule 7 applies — money path.** RED and GREEN are two different sessions. This one writes tests
+> only and carries an **absolute prohibition** on touching implementation files.
 
-**Freeze-line, not gate.** This is required before any *paid* launch, not before the Wave-2 GATE.
-It may run after the gate. It may not be skipped on the grounds that the mock works.
+```
+STANDING CHECK — before doing anything else: open runbooks/wave-2-status.md and read the 2.0-RED and
+2.0-GREEN rows. If either left something open, deal with it FIRST. Then confirm THIS step's
+prerequisites are met right now, with real commands (not memory, not this file):
 
-**Fill-in note.** If 2.0 settled `B-2-1` by making the mock conform to Stripe's compound header
-format, this step is mostly mechanical. If it settled it the other way, read that decision first —
-this is where the cost lands.
+  cd src/backend && uv run pytest tests/unit/test_p25_payment_provider_port.py -q 2>&1 | tail -5
+  ls careervp/payment_providers/           # interface.py + mock_provider.py must exist; stripe_provider.py must NOT
+  python -c "from careervp.payment_providers.mock_provider import WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS; print(WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS)"
+
+If the four P-25 tests are not green, or stripe_provider.py already exists, STOP and say so plainly.
+
+BEFORE WRITING ANY TEST (rule 14): open specs/P-25-payment-provider-spec.md and confirm its
+"RED Tests to Write First" section names AC-P25b-1's two tests. It does — but their descriptions do
+NOT name exact assertion values, which rule 14 forbids writing tests against. Your FIRST task is to
+tighten those two descriptions in the spec, then write the tests to match. Do not widen AC-P25b-1
+or add clauses — you are authoring the test brief, not changing the contract (if you find you must
+change AC-P25b-1 itself, that is a rule-5 stop + a §0.3 amendment, not an edit).
+
+You are implementing clause P-25b (AC-P25b-1). You are the RED session: TEST FILES + the spec's
+RED-test-brief tightening ONLY. You may not create or edit any file under
+src/backend/careervp/payment_providers/ or any billing logic file, even "to see if it works."
+
+--------------------------------------------------------------------------------
+FIRST — the B-2-1 Stripe cross-check (settle it before tightening the spec)
+--------------------------------------------------------------------------------
+
+2.0-GREEN centralized the mock's signature constants in mock_provider.py:
+  - compound header  t=<unix>,v1=<hex>   (WEBHOOK_SIGNATURE_MALFORMED on a bad shape)
+  - signed payload   HMAC-SHA256(secret, f"{t}.{raw_payload_bytes}")   (period-joined, raw body)
+  - replay window    WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS = 300
+  - distinct codes   WEBHOOK_TIMESTAMP_OUT_OF_TOLERANCE vs WEBHOOK_SIGNATURE_VERIFICATION_FAILED
+
+Verify EACH against Stripe's own documented Stripe-Signature scheme (the official docs / SDK, not
+the mock — the mock is what is being checked):
+  1. Header format is t=<unix>,v1=<hex>[,v0=...]; the mock tolerates extra pairs — confirm that
+     matches Stripe (rotation sends multiple v1). 
+  2. Signed payload is exactly "{timestamp}.{payload}" over the RAW body bytes — confirm the mock
+     builds the identical string, not payload-then-timestamp or a different separator.
+  3. Default tolerance is 300s and is a value the CALLER reconstructs verification with (not one only
+     Stripe's servers enforce).
+Record the result in ISSUES.md's B-2-1 row. If all three match, B-2-1 is confirmed and StripeProvider
+can verify against the same scheme the mock's tests already exercise. If ANY diverges, StripeProvider
+must implement Stripe's real behavior (never inherit the mock's to "stay consistent"), that finding
+is what proves B-2-1 FALSE rather than settled, and you note that 2.0-GREEN's mock tests need a
+follow-up fix — flag it, do not fix it here.
+
+--------------------------------------------------------------------------------
+THEN — tighten the spec's two P-25b RED-test descriptions, then write exactly these tests
+--------------------------------------------------------------------------------
+
+Write them in src/backend/tests/unit/test_p25b_stripe_provider.py. Cite AC-P25b-1 in each. Derive
+every assertion value from the cross-check above — no "or"-shaped assertions, no undefined
+placeholders (spec_time_lint, project-scope-lock.yaml spec_test_acceptance).
+
+  test_p25b_stripe_provider_verifies_real_signature
+      Build a VALID Stripe-format header (t=<now>,v1=HMAC-SHA256(secret,"{t}.{payload}")) over a
+      known payload with a test secret (a fixture secret, NOT a literal in the test body — P-06:
+      parameter NAME in env, value at runtime). Assert StripeProvider.construct_webhook_event returns
+      a WebhookEvent whose event_id/event_type match the payload. THEN, three distinct negatives,
+      each asserting a DISTINCT error (not a generic "raises"):
+        - tampered body (valid header, mutated payload)  -> signature-verification-failed code
+        - wrong secret                                    -> signature-verification-failed code
+        - stale timestamp within a valid digest           -> replay/out-of-tolerance code
+      No real network call — signature verification is local HMAC. Do NOT call any Stripe API method.
+
+  test_p25b_paid_launch_gate_fails_without_stripe_provider
+      This is the FREEZE-LINE mechanism, and it must be able to fail (rule 13). Assert, structurally:
+        (a) careervp.payment_providers.stripe_provider.StripeProvider is importable and structurally
+            satisfies PaymentProviderInterface (all port methods present, including
+            retrieve_subscription); AND
+        (b) the three signature negatives above exist AND pass.
+      Because StripeProvider does not exist yet, guard the import INSIDE the test and assert on its
+      absence so the test fails on ITS OWN ASSERTION (a clear "StripeProvider missing → launch gate
+      fails" message), NOT on a bare collection-time ImportError. State which technique you used.
+
+RULE 13 — run every test, capture the failure output VERBATIM, and for each state WHY it failed. A
+test that fails on ImportError/collection/missing-fixture is NOT red, it is broken; structure the
+tests (or a minimal skip-guard) so each fails on its own assertion. The mock's four tests must STILL
+be green after your run — you have added tests, not touched theirs.
+
+--------------------------------------------------------------------------------
+OUTPUT REQUIRED
+--------------------------------------------------------------------------------
+1. The B-2-1 cross-check result (match / diverge, per the three points), in plain English first;
+   update the B-2-1 row in ISSUES.md.
+2. The tightened P-25b RED-test descriptions as they now read in the spec (diff of that section).
+3. The new test file, each assertion cited to AC-P25b-1.
+4. Verbatim failure output for every new test + one-line why for each, AND proof the four P-25 mock
+   tests are still green.
+5. Confirmation that ZERO files under src/backend/careervp/ were modified (git diff --stat).
+6. A git commit message.
+
+ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULES.md):
+- Compare what you actually built against (a) this prompt's own instructions and (b) clause P-25b
+  in project-scope-lock.yaml. If everything matches, say so in one plain sentence.
+- If ANYTHING drifted — extra work not asked for, required work skipped, or a test/rule had to be
+  weakened — STOP. Do not fix it yourself. Write one plain-English sentence a non-engineer could
+  follow (what should have happened, what actually happened, why it matters), THEN the technical
+  detail, and flag it for human review. Do not mark the step done.
+- Update runbooks/wave-2-status.md: add/update this step's row with a plain-English status, the
+  commit, today's date, and anything the NEXT step must resolve first (or write "none").
+```
+
+---
+
+# PROMPT 2.0b-GREEN — build StripeProvider, make the freeze-line hold
+
+> Run in a **FRESH session** that has not seen 2.0b-RED's reasoning. `/clear` is the minimum; a
+> separate invocation is preferred. The failing tests are a contract you did not write and **may not
+> edit** — no relaxing an assertion, no `xfail`, no `skip`. If a test looks genuinely *wrong* (not
+> merely inconvenient), STOP and raise a §0.3 amendment.
+> **Clause:** P-25b · **Claude: opus/xhigh · Codex: gpt-5.3-codex/max**
+
+```
+STANDING CHECK — before doing anything else: open runbooks/wave-2-status.md and read the 2.0b-RED
+row. If it left anything open (in particular, whether the B-2-1 cross-check found a divergence),
+deal with that FIRST. Confirm the RED tests exist and fail, right now, with a real command:
+
+  cd src/backend && uv run pytest tests/unit/test_p25b_stripe_provider.py -q 2>&1 | tail -20
+
+If they pass, or fail on import/collection errors rather than their own assertions, STOP.
+
+You are implementing clause P-25b (AC-P25b-1). You are the GREEN session. You may not edit the RED
+test file. Build:
+
+1. careervp/payment_providers/stripe_provider.py — StripeProvider implementing
+   PaymentProviderInterface (all methods the port declares, including retrieve_subscription).
+   construct_webhook_event must verify the REAL Stripe signature scheme confirmed by 2.0b-RED's
+   cross-check:
+     - PREFER the official `stripe` SDK's verification (stripe.Webhook.construct_event /
+       WebhookSignature.verify_header) IF `stripe` is already a project dependency. If it is NOT a
+       dependency, that is a decision, not a default: adding a runtime dependency to the money path
+       is a rule-5 flag — either implement Stripe's DOCUMENTED v1 HMAC scheme directly (identical to
+       what the cross-check validated in mock_provider.py) OR propose the dependency to the human.
+       Do not silently `uv add stripe`. State which path you took and why.
+     - Distinct error codes for tamper/wrong-secret vs replay/stale-timestamp, matching what the RED
+       tests assert.
+   The API-call methods (create_customer, create_checkout_session, retrieve_subscription, …) wrap
+   real Stripe calls and are NOT exercised in unit tests (no network in tests); they must be present,
+   typed, and pass mypy --strict, with Stripe errors mapped to PaymentProviderError. The signature
+   path is the tested freeze-line.
+2. Make test_p25b_paid_launch_gate_fails_without_stripe_provider PASS — StripeProvider now imports
+   and satisfies the port, and the three signature negatives pass.
+
+Secrets stay under P-06: the webhook secret is passed by value (resolved from the parameter store by
+NAME upstream); no literal secret in the module. No real network call in any test.
+
+VERIFY: the two P-25b tests pass AND the four P-25 mock tests still pass; full backend unit +
+integration suites (zero regressions); ruff; mypy careervp --strict; the coverage gate
+(make coverage-tests, at/above the enforced baseline); scope-diff reports P-25b.
+
+OUTPUT REQUIRED
+1. Both P-25b tests passing + the four P-25 tests still green, with output.
+2. Confirmation that ZERO test files were modified (git diff --stat on tests/).
+3. The signature-verification path you chose (official SDK vs documented-scheme direct) and the
+   dependency decision, stated plainly.
+4. A git commit message.
+
+ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULES.md):
+- Compare what you actually built against (a) this prompt's own instructions and (b) clause P-25b
+  in project-scope-lock.yaml. If everything matches, say so in one plain sentence.
+- If ANYTHING drifted, STOP, write the plain-English sentence first, then the technical detail, and
+  flag it for human review. Do not mark the step done.
+- Update runbooks/wave-2-status.md with a plain-English status, the commit, today's date, and
+  anything the NEXT step must resolve first (or write "none"). Also record in ISSUES.md that B-2-1
+  is now proven against the real provider (or, if the cross-check diverged, what changed).
+- FREEZE-LINE confirmation (rule 5): state explicitly whether any part of the signature-verification
+  path is untested when this session ends. If it is, that is a STOP condition, not a note for later
+  — a paid launch must not run untested verification code (AC-P25b-1).
+```
 
 ---
 

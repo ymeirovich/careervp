@@ -252,6 +252,34 @@ Status: open → format decided; Stripe cross-check is 2.0b's.
 the Stripe cross-check against these exact constants is still owed before 2.1 — they are named
 constants in `mock_provider.py`, so 2.0b diffs against one file.
 
+**Cross-checked 2026-07-25 (step 2.0b-RED) — B-2-1 is FALSE because rotation handling diverges.**
+
+1. **Header format: DIVERGES at multiple-`v1` verification.** Stripe documents one compound
+   `Stripe-Signature` header containing `t=<unix>` plus one or more `v1=<hex>` values, with other
+   scheme pairs such as `v0` ignored. During a signing-secret roll Stripe emits one `v1` per active
+   secret, and its official Python SDK collects every `v1` and accepts when *any* one matches.
+   `MockProvider._parse_signature`, by contrast, retains only the first `v1`. A live probe with a
+   non-matching first `v1`, matching second `v1`, and extra `v0` produced:
+   `REJECTED_MATCHING_SECOND_V1 code=WEBHOOK_SIGNATURE_VERIFICATION_FAILED`. The mock tolerates the
+   extra pairs syntactically but does not reproduce Stripe's rotation behavior.
+2. **Signed payload: MATCH.** Stripe constructs `signed_payload` as the decimal timestamp, one
+   period, then the exact raw request body, and computes HMAC-SHA256 with the endpoint secret.
+   The mock constructs the identical byte sequence:
+   `f'{timestamp}.'.encode('utf-8') + payload`.
+3. **Tolerance: MATCH.** Stripe's official libraries default to five minutes (`300` seconds), and
+   verification is reconstructed by the caller from the raw payload, signature header, endpoint
+   secret, and optional tolerance. The mock's
+   `WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS = 300` therefore matches this caller-side replay window.
+
+Official sources: [Stripe manual signature verification](https://docs.stripe.com/webhooks#verify-manually),
+[Stripe replay prevention and secret rolling](https://docs.stripe.com/webhooks#preventing-replay-attacks),
+and [stripe-python webhook verifier](https://github.com/stripe/stripe-python/blob/master/stripe/_webhook.py).
+
+**Required consequence (flagged; not fixed in this RED session):** `StripeProvider` must implement
+Stripe's real any-matching-`v1` behavior and must not inherit the mock's first-`v1` limitation.
+The 2.0-GREEN mock tests need a follow-up RED test for a matching second `v1`, followed by a separate
+GREEN fix to the mock parser. Points 2 and 3 need no follow-up.
+
 ---
 
 ## B-2-2 — The provider's event id is a stable, safe idempotency key

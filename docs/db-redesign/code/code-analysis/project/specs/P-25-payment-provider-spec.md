@@ -6,8 +6,8 @@ owner: backend
 tier: T1
 scope_lock_clause: [P-25, P-25b]
 tooling:
-  P-25: {claude_code: {model: opus, effort: high}, codex: {model: gpt-5.5, reasoning: high}}
-  P-25b: {claude_code: {model: opus, effort: xhigh}, codex: {model: gpt-5.5-pro, reasoning: xhigh}}
+  P-25: {claude_code: {model: opus, effort: high}, codex: {model: gpt-5.3-codex, reasoning: high}}
+  P-25b: {claude_code: {model: opus, effort: xhigh}, codex: {model: gpt-5.3-codex, reasoning: max}}
 format_note: "AUTHOR ONLY. RED tests are inline descriptions; pytest files are written later at IMPLEMENT time."
 ---
 
@@ -39,8 +39,8 @@ Billing must code against a provider port. MockProvider is valid for launch rehe
 - `test_p25_mock_webhook_rejects_tampered_signature`: sign payload, mutate body, assert verification fails.
 - `test_p25_mock_webhook_rejects_replay_timestamp`: signed old timestamp fails with exact replay error.
 - `test_p25_checkout_portal_contract_shape_preserved`: assert checkout/portal responses contain the same URL fields the frontend consumes.
-- `test_p25b_stripe_provider_verifies_real_signature`: use Stripe test secret/payload fixture; assert valid passes and invalid signature fails.
-- `test_p25b_paid_launch_gate_fails_without_stripe_provider`: launch gate asserts provider implementation exists and negative signature tests pass.
+- `test_p25b_stripe_provider_verifies_real_signature` (AC-P25b-1): obtain a generated fixture secret at runtime from the `PAYMENT_PROVIDER_WEBHOOK_SECRET` environment name; for the exact raw payload whose `id` is `evt_p25b_001` and whose `type` is `checkout.session.completed`, build `t=<now>,v1=<non-matching 64-hex>,v1=HMAC-SHA256(secret, "{t}.{raw_payload}"),v0=<ignored 64-hex>` and assert the returned `WebhookEvent.event_id == "evt_p25b_001"` and `event_type == "checkout.session.completed"` (the matching second `v1` is Stripe's signing-secret-rotation behavior). Then assert three separate negatives: the original valid header with a body mutated from `evt_p25b_001` to `evt_p25b_002` raises `PaymentProviderError.code == "WEBHOOK_SIGNATURE_VERIFICATION_FAILED"`; verification with a separately generated wrong secret raises that same exact code; and a valid digest whose signed timestamp is exactly 301 seconds old raises `PaymentProviderError.code == "WEBHOOK_TIMESTAMP_OUT_OF_TOLERANCE"`. Perform local HMAC verification only; call no Stripe API method.
+- `test_p25b_paid_launch_gate_fails_without_stripe_provider` (AC-P25b-1): guard the `careervp.payment_providers.stripe_provider.StripeProvider` import inside the test by catching `ModuleNotFoundError` into a `None` sentinel, then assert the sentinel is not `None` with the exact failure reason `StripeProvider missing -> paid launch gate fails` so absence fails on the test's own assertion rather than collection. Assert the class structurally satisfies `PaymentProviderInterface` and has callable `create_customer`, `create_checkout_session`, `create_portal_session`, `construct_webhook_event`, `get_price_map`, and `retrieve_subscription`; then run the shared negative-signature assertion helper used by `test_p25b_stripe_provider_verifies_real_signature` and require the exact tampered-body/wrong-secret code `WEBHOOK_SIGNATURE_VERIFICATION_FAILED` and exact 301-second-stale code `WEBHOOK_TIMESTAMP_OUT_OF_TOLERANCE`.
 
 ## Acceptance Criteria
 
@@ -57,4 +57,3 @@ All RED tests pass; no real external API calls in tests; P-14/P-15 can code agai
 ## Sequencing / Dependencies
 
 P-25 precedes P-14/P-15. P-25b is freeze-line before any paid launch.
-

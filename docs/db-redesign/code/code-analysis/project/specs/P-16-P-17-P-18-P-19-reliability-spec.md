@@ -6,10 +6,10 @@ owner: infra
 tier: T1
 scope_lock_clause: [P-16, P-17, P-18, P-19]
 tooling:
-  P-16: {claude_code: {model: sonnet, effort: medium}, codex: {model: gpt-5.4, reasoning: medium}}
-  P-17: {claude_code: {model: sonnet, effort: medium}, codex: {model: gpt-5.4, reasoning: medium}}
-  P-18: {claude_code: {model: sonnet, effort: medium}, codex: {model: gpt-5.4, reasoning: medium}}
-  P-19: {claude_code: {model: sonnet, effort: medium}, codex: {model: gpt-5.4, reasoning: medium}}
+  P-16: {claude_code: {model: sonnet, effort: medium}, codex: {model: gpt-5.3-codex, reasoning: medium}}
+  P-17: {claude_code: {model: sonnet, effort: medium}, codex: {model: gpt-5.3-codex, reasoning: medium}}
+  P-18: {claude_code: {model: sonnet, effort: medium}, codex: {model: gpt-5.3-codex, reasoning: medium}}
+  P-19: {claude_code: {model: sonnet, effort: medium}, codex: {model: gpt-5.3-codex, reasoning: medium}}
 format_note: "AUTHOR ONLY. RED tests are inline descriptions; pytest files are written later at IMPLEMENT time."
 ---
 
