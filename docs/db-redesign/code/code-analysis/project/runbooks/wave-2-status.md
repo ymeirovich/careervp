@@ -21,7 +21,8 @@ its own dedicated fix, tracked there, not fixed as a side effect of a Wave-2 ste
 
 | Step | Clause(s) | Status (plain English) | Open problem for the next step | Commit | Date |
 |---|---|---|---|---|---|
-| 2.0 | P-25 | not started | — | — | — |
+| 2.0-RED | P-25 | **RED landed. Four RED tests in `src/backend/tests/unit/test_p25_payment_provider_port.py`, all four observed failing on their own assertions (not ImportError/collection error); ZERO files under `src/backend/careervp/` modified (`git diff --stat` clean). Spec-before-test (rule 14) verified live. Bets B-2-5/B-2-1/B-2-2 settled — see ISSUES.md.** Full unit suite: 4 failed (these) / 1356 passed, no regressions; ruff+mypy clean on the new file; `mypy careervp --strict` still 130/130 clean. | **2.0-GREEN runs in a FRESH session (rule 7); may NOT edit the RED file.** B-2-5 grew: GREEN must also fix a `customer_id: str \| None` gap at `billing_service.py:76` and drop 2 redundant casts in `webhook_service.py` (`:63`,`:66`), on top of reconciling `retrieve_subscription`. `test_p25_mock_event_id_is_stable_across_retries` was intentionally omitted → assigned to **2.1** (B-2-2). **2.0b** must cross-check the B-2-1 signature format (`t=,v1=`, HMAC over `{t}.{payload}`, tol 300s) against real Stripe before 2.1. | pending — see commit message in session output | 2026-07-25 |
+| 2.0-GREEN | P-25 | not started — blocked on 2.0-RED (above) | — | — | — |
 | 2.0b | P-25b | not started | — | — | — |
 | 2.1 | P-14, P-15 | not started | — | — | — |
 | 2.2 | P-16, P-17, P-18 | not started | — | — | — |
@@ -40,11 +41,11 @@ the rows above.
 
 | Bet | Belief | Settled by | Status |
 |---|---|---|---|
-| B-2-1 | The mock provider's signature scheme is a faithful stand-in for Stripe's | 2.0, before 2.1 starts | open |
-| B-2-2 | The provider's event id is a stable, safe idempotency key | 2.0/2.1 | open |
+| B-2-1 | The mock provider's signature scheme is a faithful stand-in for Stripe's | 2.0, before 2.1 starts | **format decided 2026-07-25 (2.0-RED): `t=,v1=`, HMAC over `{t}.{payload}`, tol 300s; Stripe cross-check pending at 2.0b** |
+| B-2-2 | The provider's event id is a stable, safe idempotency key | 2.0/2.1 | **decision fixed 2026-07-25 (2.0-RED): stable-across-retries else digest fallback; stable-id TEST assigned to 2.1** |
 | B-2-3 | Wave 2's added resources stay under the CloudFormation ceiling | every additive step | open |
 | B-2-4 | "Deploy" means devx | before 2.0 deploys | **decision made 2026-07-25 (devx primary); merge-to-main CI still needs the matching fix** |
-| B-2-5 | Billing already depends on the port, so 2.0 is small | first hour of 2.0 | **open — already FALSE: two consumers call a method the port never declares** |
+| B-2-5 | Billing already depends on the port, so 2.0 is small | first hour of 2.0 | **settled 2026-07-25 (2.0-RED): FALSE — 3 findings (2× `retrieve_subscription` + `customer_id: str\|None`) + 2 cast cleanups; 2.0 larger than the "two call sites" estimate** |
 
 ---
 

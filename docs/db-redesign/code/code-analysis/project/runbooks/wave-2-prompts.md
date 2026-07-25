@@ -141,7 +141,7 @@ If two people or two sessions are available, the backend lane (step 1 above) and
 
 > **Clause:** P-25 · **Spec:** [`specs/P-25-payment-provider-spec.md`](../specs/P-25-payment-provider-spec.md)
 > **Acceptance criteria:** AC-P25-1, AC-P25-2
-> **Claude:** opus/high · **Codex:** codex/high (rule 15 — from `redesign-execution-plan.md` step 2.0)
+> **Claude:** opus/high · **Codex:** gpt-5-codex/high (rule 15 — from `redesign-execution-plan.md` step 2.0)
 > **Rule 7 applies — this is the money path.** RED and GREEN are two different sessions. This one
 > writes tests only and carries an **absolute prohibition** on touching implementation files.
 
@@ -300,7 +300,7 @@ ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULE
 # PROMPT 2.0-GREEN — make them pass
 
 > **Clause:** P-25 · **Acceptance criteria:** AC-P25-1, AC-P25-2
-> **Claude:** opus/high · **Codex:** codex/high (rule 15 — from `redesign-execution-plan.md` step 2.0)
+> **Claude:** opus/high · **Codex:** gpt-5-codex/high (rule 15 — from `redesign-execution-plan.md` step 2.0)
 > Run in a **FRESH session** that has not seen 2.0-RED's reasoning. `/clear` is the minimum; a
 > separate invocation is preferred. The failing tests are a contract you did not write and **may
 > not edit** — that clause is the entire firewall. No relaxing an assertion, no `xfail`, no `skip`.
@@ -374,7 +374,7 @@ re-read the bets it lists. Earlier steps will have found things this file could 
 | **Clause** | P-25b |
 | **Spec** | `specs/P-25-payment-provider-spec.md` |
 | **Acceptance criteria** | AC-P25b-1 |
-| **Claude / Codex** | opus/high · codex/high |
+| **Claude / Codex** | opus/high · gpt-5-codex/high |
 | **Depends on** | 2.0-GREEN |
 | **Deploy target** | none (backend only) |
 | **Rule 7** | RED and GREEN separate — money path |
@@ -402,7 +402,7 @@ this is where the cost lands.
 |---|---|
 | **Clauses** | P-14, P-15 |
 | **Spec** | `specs/P-14-P-15-billing-idempotency-scan-spec.md` |
-| **Claude / Codex** | opus/high · codex/high |
+| **Claude / Codex** | opus/high · gpt-5-codex/high |
 | **Depends on** | 2.0-GREEN |
 | **Deploy target** | `CareerVpCrudDevx` |
 | **Rule 7** | RED and GREEN separate — money path |
@@ -429,7 +429,7 @@ recorded. Resource count checked after the change (`B-2-3`).
 |---|---|
 | **Clauses** | P-16, P-17, P-18 |
 | **Spec** | `specs/P-16-P-17-P-18-P-19-reliability-spec.md` |
-| **Claude / Codex** | sonnet/med · codex/med |
+| **Claude / Codex** | sonnet/med · gpt-5-codex/med |
 | **Depends on** | Wave 1 |
 | **Deploy target** | `CareerVpCrudDevx` |
 | **Serialization** | edits `api_construct.py` — do not run alongside 2.4 or 2.7 |
@@ -452,7 +452,7 @@ least 6× on every queue. Synth resource count captured **before and after**.
 |---|---|
 | **Clause** | P-19 |
 | **Spec** | `specs/P-16-P-17-P-18-P-19-reliability-spec.md` |
-| **Claude / Codex** | sonnet/med · codex/med |
+| **Claude / Codex** | sonnet/med · gpt-5-codex/med |
 | **Depends on** | 2.2 (same lane) |
 | **Deploy target** | `CareerVpCrudDevx` |
 | **Bets** | `B-2-3` |
@@ -472,7 +472,7 @@ heartbeat interval — do not pick a new number.
 |---|---|
 | **Clause** | P-20 |
 | **Spec** | `specs/P-20-throttle-load-spec.md` |
-| **Claude / Codex** | sonnet/med · codex/med |
+| **Claude / Codex** | sonnet/med · gpt-5-codex/med |
 | **Depends on** | 2.2, 2.3 (same lane) |
 | **Deploy target** | `CareerVpCrudDevx` |
 | **Serialization** | edits `api_construct.py` |
@@ -497,7 +497,7 @@ throttle value up front has skipped the point.
 |---|---|
 | **Clause** | P-02 |
 | **Spec** | **none — mechanical-inline by design.** `redesign-execution-plan.md`'s own step-0.4 status note lists P-02 among the intentionally uncovered clauses (same pattern as P-22). Verified live (rule 14) while writing this skeleton: `ls specs/` has no `P-02-*` file. Do not treat this as a missing spec to hunt for — this step's done-when below is what a spec would otherwise state. |
-| **Claude / Codex** | opus/high · codex/high |
+| **Claude / Codex** | opus/high · gpt-5-codex/high |
 | **Depends on** | Wave 1 (independent of every other Wave-2 step) |
 | **Deploy target** | `CareerVpCrudDevx` |
 | **Bets** | none |
@@ -526,7 +526,7 @@ into another step to "save a deploy": that is exactly the cross-contamination Wa
 |---|---|
 | **Clause** | P-31 |
 | **Spec** | `specs/P-31-eventbridge-dlq-spec.md` |
-| **Claude / Codex** | sonnet/med · codex/med |
+| **Claude / Codex** | sonnet/med · gpt-5-codex/med |
 | **Depends on** | 2.2 (same lane) |
 | **Deploy target** | `CareerVpCrudDevx` |
 | **Serialization** | edits `api_construct.py` |
@@ -545,7 +545,7 @@ target is observed landing in it.
 | | |
 |---|---|
 | **Depends on** | 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7 (2.0b is freeze-line, not a gate blocker) |
-| **Claude / Codex** | not in `redesign-execution-plan.md`'s wave table — the GATE is a verification script, not an authored implementation clause. Whoever fills this in should pick a model/effort and record it here rather than leave it silently unstated (rule 15's spirit, applied to a step the plan never routed). |
+| **Claude / Codex** | opus/high · gpt-5-codex/high — not in `redesign-execution-plan.md`'s wave table (the GATE is a verification script, not an authored implementation clause), so picked via `RUNBOOK-RULES.md` rule 16 rather than copied from a plan row. Reasoning: cross-cutting orchestration across scope-diff, two test suites, the coverage gate, two immutable-invariant checks, a live AWS resource-count read, the deploy smoke harness, and the bets ledger — needs careful sequencing and, per rule 13, must itself be proven to fail on purpose before it's trusted, which is more than one verification pass. That lands it at `high`, not `xhigh`/`max`: it is read-only against AWS (no CFN mutation, no auth/tenancy code path), and it sits at the same tier as the two precedents it calls into — P-30's smoke harness (step 0.62) and T-09/T-07/T-06's scope-diff+oracle (step 0.2), both already `opus/high · gpt-5-codex/high` in the plan. |
 | **Rule 12** | this gate is a **script**, not a reading |
 
 **In plain English.** Wave 2 closes when someone who was not here can run one command and get the

@@ -73,6 +73,10 @@ contract globally; wave gates re-verify against the contract before advancing.
   the real bar; "copy-paste" was an overstatement for the hard clauses.
 
 ## Model + effort convention (map task-class → both tools)
+> These three buckets are the coarse defaults. For a step that doesn't fit one cleanly, or a
+> skeleton/GATE row with no pair recorded yet, derive the Codex side from the finer rubric in
+> `runbooks/RUNBOOK-RULES.md` rule 16 — never guess it independently or default to the largest tier.
+
 | Task class | Examples | Claude Code | Codex |
 |---|---|---|---|
 | **Mechanical** | config/IaC edits (RETAIN, throttle, tags, log retention, SNS sub), prompt-slot wiring, doc updates | `sonnet` / effort **medium** | `gpt-5-codex` / reasoning **medium** |

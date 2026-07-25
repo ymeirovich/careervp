@@ -22,7 +22,7 @@ itself, so it went stale and nothing forced the next prompt to notice.
 
 ---
 
-## The fifteen rules
+## The sixteen rules
 
 ### 1. Every prompt ends by writing a git commit message
 
@@ -335,6 +335,86 @@ Wave-2 table row for step 2.0 (P-25) names both `opus/high` and `codex/high`. Fo
 human read the header and noticed the omission, in the same session rule 14 was found in — two
 gaps in the one prompt meant to model the discipline for the rest of the wave.
 
+> **Amended 2026-07-25 (later same day):** rule 16 added. Rule 15 fixed *whether* both engines'
+> model and effort are stated. It does not say how the Codex side gets *decided* — and
+> `redesign-execution-plan.md`'s own "Model + effort convention" table only covers three coarse
+> buckets (Mechanical/Standard/Hard). Anything that falls outside those three, or is filled in
+> later by a different session, has nothing to consult but instinct. Rules 1–15 unchanged.
+
+### 16. Codex's model and reasoning are picked by rubric, never guessed independently or defaulted to the largest setting
+
+Rule 15 says both engines' model and effort must be stated, copied verbatim from the execution
+plan. It says nothing about how that Codex value is *arrived at* in the first place — and that gap
+is not hypothetical. `wave-2-prompts.md`'s own "GATE — Wave 2 close-out" skeleton has an unfilled
+`Claude / Codex` field that says, verbatim, *"Whoever fills this in should pick a model/effort and
+record it here"* — with no method attached. Left as-is, two different sessions filling in two
+different skeletons will pick differently, for the same class of work, and rule 15 will faithfully
+record two inconsistent answers as if they were both authoritative.
+
+This rule is the method. Whenever a step's Claude model/effort is chosen — authoring or extending
+`redesign-execution-plan.md`'s convention table, or filling in a skeleton/GATE row rule 15 left for
+"whoever gets to it" — the paired Codex model/reasoning is derived from the rubric below, not
+invented independently and not defaulted to the largest tier "to be safe." Both engines are being
+pointed at **the same task**, so they should track the same difficulty judgment, just expressed in
+each engine's own vocabulary. This is the same instinct as rule 9's cheapest-check ladder, applied
+to tooling cost instead of verification cost: **pick the cheapest model and lowest reasoning level
+that can reliably satisfy the acceptance criteria, not the largest one available.**
+
+**Bare `codex` is not a model.** `codex/high` names the vendor, not the model — rule 15's
+`Codex: <model>/<reasoning>` requires the actual slug in `<model>`, and "codex" is not one. **The
+incident:** every Wave-2 row in `wave-2-prompts.md` (both `PROMPT 2.0` headers and all seven
+skeleton/GATE tables) carried exactly this — `codex/high`, `codex/med` — until fixed on 2026-07-25.
+`redesign-execution-plan.md`'s convention table and every wave's per-step Codex column carry the
+same bare form today; that is a known, tracked gap in the plan, not something this rule silently
+papers over — it is not being swept in the same pass, but every new row and every row filled in
+from here forward names the real model (`gpt-5-codex/high`, not `codex/high`), per the table below.
+
+**Model choice.** Use the newest Codex-optimized model available in the executing environment for
+real implementation work, unless the task is explicitly cost-sensitive:
+
+| Model | When |
+|---|---|
+| `gpt-5.3-codex` | Default for serious agentic coding — multi-file changes, debugging, refactors, migrations, test repair, anything requiring many steps of inspect-then-act. |
+| `gpt-5-codex` | Only if the environment/runbook does not expose a newer Codex model, or compatibility requires this exact slug. This is this project's current pin (`scope_lock_clause` frontmatter exemplar, `redesign-execution-plan.md`'s convention table) — this rule does not license silently renaming those; a change to an already-authored spec's pinned model is a written value being satisfied differently and goes through rule 8, not a global find-and-replace. |
+| `gpt-5.6-sol` / `gpt-5.6-terra` / `gpt-5.6-luna` | Fallback only if no Codex-specific model is available — highest / balanced / cheapest of the general GPT-5.6 family, respectively. |
+
+**Reasoning choice.** Reasoning is the difficulty dial, not a prestige label — moving it up does
+not make correct what an unclear prompt made ambiguous.
+
+| Tier | Use for | This project's flavor |
+|---|---|---|
+| `low` | Mechanical, localized, low-risk: rename, one config value, formatting, a simple assertion change. Spec is clear, files are known, failure modes are obvious. | A single doc update or a one-line tag/log-retention change — cheaper than today's floor of `medium`. |
+| `medium` | Default for normal implementation: a feature across a few files, handler/logic/DAL wiring, a focused bug fix, unit tests, a small infra change. | The convention table's **Mechanical** row (config/IaC edits, prompt-slot wiring) already lands here. |
+| `high` | Complex or cross-cutting: needs careful sequencing and more than one verification pass, but the blast radius is contained. | The convention table's **Standard** row (handlers, DAL, contract/oracle tests) already lands here. |
+| `xhigh` | High blast radius: data-model migration, auth/tenancy-sensitive change, hard concurrency/state bug, production-adjacent infra, ambiguous legacy behavior. Reserve — cost and latency rise. | Reserved for the same class of step the plan already marks `opus/xhigh` (P-24 identity surrogate, P-26 CFN decomposition) — this rule does not by itself promote anything into this tier that plan authorship hasn't already flagged. |
+| `max` | Only for the hardest quality-first work where the extra cost is justified by clear evaluation criteria: review of a dangerous migration, a rollback plan, security-critical design review. | The convention table's **Hard** row already lands here (`codex/high(max)`, paired with `opus/xhigh`). |
+
+**Fast decision table**, for the common shapes:
+
+| Prompt shape | Selection |
+|---|---|
+| Edit one file / fix one small test | `gpt-5.3-codex` + `low` |
+| Implement a spec with tests | `gpt-5.3-codex` + `medium` |
+| Trace a cross-cutting failure (backend/frontend/infra) | `gpt-5.3-codex` + `high` |
+| Plan or review a dangerous deploy/migration | `gpt-5.3-codex` + `high` or `xhigh` |
+| Large ambiguous architecture change | `gpt-5.3-codex` + `xhigh` |
+| Bulk repetitive edits, obvious pattern | Codex model + `low` |
+| Cheap exploratory summary, no code edits | cheapest available model + `low` or `medium` |
+
+**Rule of thumb.** Start at `medium`. Drop to `low` only when the task is genuinely mechanical.
+Raise to `high` when the work crosses file/module boundaries, can break production behavior, or
+needs non-obvious reasoning. Reserve `xhigh`/`max` for when the cost of a subtle mistake is high —
+never as a default. **Never use a higher reasoning tier to compensate for a vague prompt.** If the
+acceptance criteria, target files, or safety boundary aren't clear, that is a rule-14/rule-4
+problem — fix the prompt, don't paper over it with more Codex reasoning.
+
+**What this does not change.** It does not retroactively re-tier anything already recorded in
+`redesign-execution-plan.md`'s table or in a landed prompt header — those stand as written; rule 8
+governs revisiting a written value, this rule does not do it silently. It refines the resolution
+available *going forward*, and fills the specific gap rule 15 left open: a skeleton or GATE row
+with no `Claude/Codex` pair yet gets one from this rubric, not from whoever happens to fill it in
+first guessing alone.
+
 ---
 
 ## The two blocks every prompt must contain
@@ -355,10 +435,14 @@ The others are structural rather than per-prompt, and fire at different moments:
 | 12 (re-runnable demonstration) | at the wave GATE |
 | 13 (a test must be seen to fail) | inside every RED session, before GREEN starts |
 | 15 (both models stated) | when the prompt/skeleton header is *written*, never left to the runner to guess |
+| 16 (Codex side picked by rubric) | when a step's Claude model/effort is *decided* — plan authorship, or filling in a skeleton/GATE row rule 15 left open — never invented at prompt-writing time |
 
 **Every prompt header states, without exception:** the clause id(s), the spec file path, the
 acceptance-criteria IDs, and both `Claude: <model>/<effort>` and `Codex: <model>/<reasoning>` —
-copied from the execution plan's row for that step (rule 15).
+copied from the execution plan's row for that step (rule 15), with the Codex side derived per
+rule 16 wherever that row didn't already exist. **`<model>` means the actual slug** (`gpt-5-codex`,
+`gpt-5.3-codex` — rule 16's table) — `Codex: codex/high` is not a filled-in value, it is the bare
+vendor name where a model belongs, and fails this check exactly as `Codex:` left blank would.
 
 **Near the top, right after the prompt states what it's implementing:**
 
@@ -404,7 +488,11 @@ ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULE
    instantiate the whole wave.
 5. Bake the two standard blocks above into every single prompt, not just the risky ones — including
    the rule-14 spec-verification line inside the standing check and both models on the header line
-   (rule 15). A skipped small step is exactly where a silent problem hides. A skeleton carries these
+   (rule 15), the Codex side picked by rule 16's rubric wherever the execution plan doesn't already
+   name it. **If the plan's own row still has the bare `codex/<tier>` form** (true today for every
+   wave past Wave 2 — rule 16's known, tracked gap), do not copy that forward verbatim: resolve it
+   to the real model (rule 16's table) in the new prompt file, the same fix already applied to
+   Wave 2. A skipped small step is exactly where a silent problem hides. A skeleton carries these
    by reference (its `Spec`, `Acceptance criteria`, and model/effort fields); a filled-in prompt
    carries them verbatim, re-verified live, not copied on faith from the skeleton.
 6. If you're validating a wave's prompt file against `project-scope-lock.yaml` (as was done for

@@ -228,6 +228,19 @@ else.
 reverse. Cheap now — the compound-header parse is a few lines. A rewrite of every idempotency and
 replay test later.
 
+**Settled 2026-07-25 (step 2.0-RED) — canonical format fixed, written so 2.0b can check Stripe
+against it.** A SINGLE compound string `t=<unix>,v1=<hex>`, where
+`v1 = HMAC-SHA256(secret, f"{t}.{payload}")` over the exact raw body bytes; freshness window = 300 s
+(named constant `WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS`). This is Stripe's `Stripe-Signature` scheme.
+The RED tests (`src/backend/tests/unit/test_p25_payment_provider_port.py`) encode it in a local
+`_sign()` helper and FORCE the mock to read the timestamp out of that one string: the replay test
+signs a *stale* timestamp into the signature while leaving the payload body's `created` field
+*fresh*, so a mock that reads the body — or skips the timestamp — is rejected. Proven to have teeth
+in a scratch harness: a body-ignoring mock fails the tamper test; a no-timestamp-check mock fails the
+replay test. **2.0b's remaining job:** confirm real Stripe uses `t`/`v1`, HMAC over `{t}.{payload}`,
+default tolerance 300 s — if any differs, the port shape and these tests change at 2.0b, not in 2.1.
+Status: open → format decided; Stripe cross-check is 2.0b's.
+
 ---
 
 ## B-2-2 — The provider's event id is a stable, safe idempotency key
@@ -252,6 +265,20 @@ retries of one event.
 **The fallback.** If the ids are not stable, key idempotency on a digest of the verified raw payload
 instead of on `event_id`, and record that as the port's contract. Decide this before 2.1 writes its
 tests, not after.
+
+**Addressed 2026-07-25 (step 2.0-RED) — decision fixed now; the strong test is assigned to 2.1.**
+The footgun ("a FRESH id per delivery attempt where Stripe reuses ONE id") lives in the mock's event
+*generation/emission* surface. Clause P-25 scopes the mock to "signs test webhooks + returns
+realistic subscription/customer objects"; it has no retry/emission API, and inventing one at 2.0 to
+test it would over-reach the clause (rule 5). A 2.0-only test over `construct_webhook_event` parsing
+could assert only "same payload → same id", which is trivially green for any id-from-payload mock and
+does NOT exercise the footgun — the weak version the prompt forbids. So
+`test_p25_mock_event_id_is_stable_across_retries` is deliberately NOT in the 2.0 RED file; it moves
+to **2.1** (the money path, which this bet is load-bearing for and where the emission + idempotency
+wiring lives). **Decision fixed now (the bet's job):** `WebhookEvent.event_id` MUST be stable across
+provider retries of one event; idempotency keys on it (`record_payment_event`). If a provider cannot
+guarantee a stable id, idempotency keys on a digest of the verified raw payload instead — decided now,
+before 2.1 writes its tests, per this bet's own fallback. Status: open (test lands in 2.1).
 
 ---
 
@@ -345,3 +372,29 @@ inventory of the gap, and it takes minutes.
 **The fallback.** If the mismatch list is longer than `retrieve_subscription`, 2.0 grows to cover
 reconciling the port with its actual consumers, and 2.1 waits. Better to learn that in the first
 hour of 2.0 than during the idempotency work.
+
+**Settled 2026-07-25 (step 2.0-RED) — tier-2 check as designed; the mismatch IS longer, so 2.0 is
+bigger than "add a mock".** All THREE consumers (`billing_service`, `webhook_service`,
+`reconciliation_service`) were annotated from `Any` to `PaymentProviderInterface`, `mypy --strict`
+was run, then reverted (RED session — the edit belongs to GREEN). The pristine tree is mypy-clean, so
+every finding below is the port enforcement, nothing pre-existing. **5 errors in 3 files:**
+
+1. `webhook_service.py:115` — `retrieve_subscription(...)`: `"PaymentProviderInterface" has no
+   attribute "retrieve_subscription"`. *(known)*
+2. `reconciliation_service.py:53` — `retrieve_subscription(...)`: same. *(known)*
+3. `billing_service.py:76` — **NEW.** `create_checkout_session(customer_id=...)` receives
+   `str | None`, but the port requires `str`. `_get_or_create_customer_id` returns
+   `tuple[str, None] | tuple[None, dict]`, and mypy cannot narrow `customer_id` to `str` after the
+   `if error is not None: return error` guard. A latent None-on-the-checkout-path type gap the `Any`
+   annotation hid — not an undeclared method, a real defect the port surfaces.
+4. `webhook_service.py:63` and `:66` — two `Redundant cast to "WebhookEvent"`: once the port is
+   typed, `construct_webhook_event` returns `WebhookEvent` and the two `cast()`s become redundant.
+   Artifacts of the annotation, not violations (they prove the port return type now flows); GREEN
+   deletes them when it makes the annotation permanent.
+
+**So GREEN's 2.0 must:** declare `retrieve_subscription` on the port (or refactor both consumers off
+it), fix the `customer_id` narrowing, and drop the two casts. The belief stays FALSE and the effort
+is a little larger than the bet's own "two call sites" estimate. **Note the 2.5 link (unchanged):**
+`reconciliation_service` is the consumer whose scheduled entrypoint has never run (handler-name
+mismatch), so this undeclared-port call has never executed deployed — whoever does 2.5 must reconcile
+the port BEFORE fixing the entrypoint, or that call goes live for the first time.
