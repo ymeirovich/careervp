@@ -22,8 +22,8 @@ from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.billing_service import BillingService
 from careervp.logic.utils.secret_provider import get_ssm_secret
 from careervp.logic.webhook_service import WebhookService
+from careervp.payment_providers.factory import get_payment_provider
 from careervp.payment_providers.interface import PaymentProviderError
-from careervp.payment_providers.placeholder import PlaceholderPaymentProvider
 
 # ─── Cold-start singletons ────────────────────────────────────────────────────
 
@@ -40,7 +40,7 @@ def _get_webhook_service() -> WebhookService:
         previous_secret = get_ssm_secret(previous_secret_param) if previous_secret_param else 'none'
         _webhook_service = WebhookService(
             subscription_repo=SubscriptionRepository(),
-            payment_provider=PlaceholderPaymentProvider(),
+            payment_provider=get_payment_provider(),
             primary_secret=primary_secret,
             previous_secret=previous_secret,
         )
@@ -53,7 +53,7 @@ def _get_billing_service() -> BillingService:
         _billing_service = BillingService(
             subscription_repo=SubscriptionRepository(),
             user_repo=UserRepository(),
-            payment_provider=PlaceholderPaymentProvider(),
+            payment_provider=get_payment_provider(),
         )
     return _billing_service
 

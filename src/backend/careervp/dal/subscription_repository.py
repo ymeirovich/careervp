@@ -409,11 +409,8 @@ class SubscriptionRepository:
         pagination is mandatory for correctness at scale.
         """
         results: list[dict[str, Any]] = []
-        filter_expr = Attr('sk').eq(SUBSCRIPTION_SK) & Attr('#s').eq('active')
-        kwargs: dict[str, Any] = {
-            'FilterExpression': filter_expr,
-            'ExpressionAttributeNames': {'#s': 'status'},
-        }
+        filter_expr = Attr('sk').eq(SUBSCRIPTION_SK) & Attr('status').eq('active')
+        kwargs: dict[str, Any] = {'FilterExpression': filter_expr}
         while True:
             response = self._table.scan(**kwargs)
             results.extend(response.get('Items', []))
