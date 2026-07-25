@@ -307,6 +307,16 @@ the distinct frozen negative paths with no network call. **B-2-1 remains FALSE:*
 real provider is correct, but the mock remains first-`v1`-only until the separate `2.0b-mock`
 RED/GREEN follow-up lands.
 
+**Settled TRUE 2026-07-25 (step 2.0b-mock-GREEN).** `MockProvider` now conforms to the same rotation
+behavior as `StripeProvider`: `_parse_signature` collects all non-empty `v1` digests from the
+compound header, and `construct_webhook_event` accepts when any provided digest constant-time-matches
+the expected HMAC over `{timestamp}.{raw_payload}`. The mock no longer verifies only the first `v1`;
+a header with a non-matching first `v1` and matching second `v1` now passes, while no matching `v1`
+still fails with `WEBHOOK_SIGNATURE_VERIFICATION_FAILED` and missing `t`/all `v1` remains
+`WEBHOOK_SIGNATURE_MALFORMED`. Evidence: `test_p25_mock_webhook_accepts_matching_second_v1` passes,
+all five P-25 mock tests pass, and both P-25b StripeProvider tests remain green. Both providers are
+now faithful to Stripe's secret-rotation behavior, so B-2-1 is TRUE.
+
 ---
 
 ## B-2-2 — The provider's event id is a stable, safe idempotency key

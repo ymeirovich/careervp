@@ -138,11 +138,11 @@ class MockProvider:
             PaymentProviderError: on a malformed header, a digest mismatch, a stale
                 timestamp, or an unparseable body.
         """
-        timestamp, provided_digest = self._parse_signature(signature)
+        timestamp, provided_digests = self._parse_signature(signature)
 
         signed_payload = f'{timestamp}.'.encode('utf-8') + payload
         expected_digest = hmac.new(secret.encode('utf-8'), signed_payload, hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(expected_digest, provided_digest):
+        if not any(hmac.compare_digest(expected_digest, provided_digest) for provided_digest in provided_digests):
             raise PaymentProviderError('Webhook signature verification failed', code=WEBHOOK_SIGNATURE_VERIFICATION_FAILED)
 
         age = int(time.time()) - timestamp
@@ -165,15 +165,15 @@ class MockProvider:
         )
 
     @staticmethod
-    def _parse_signature(signature: str) -> tuple[int, str]:
-        """Parse ``t=<unix>,v1=<hex>`` into (timestamp, digest).
+    def _parse_signature(signature: str) -> tuple[int, list[str]]:
+        """Parse ``t=<unix>,v1=<hex>`` into (timestamp, digests).
 
         Tolerates extra comma-separated pairs (as Stripe emits) and whitespace.
-        Raises PaymentProviderError if ``t`` or a ``v1`` digest is absent or ``t``
+        Raises PaymentProviderError if ``t`` or any ``v1`` digest is absent or ``t``
         is not an integer.
         """
         timestamp: int | None = None
-        digest: str | None = None
+        digests: list[str] = []
         for part in signature.split(','):
             key, _, value = part.strip().partition('=')
             if key == 't' and value:
@@ -184,15 +184,15 @@ class MockProvider:
                         f'Malformed webhook signature timestamp: {value!r}',
                         code=WEBHOOK_SIGNATURE_MALFORMED,
                     ) from exc
-            elif key == 'v1' and value and digest is None:
-                digest = value
+            elif key == 'v1' and value:
+                digests.append(value)
 
-        if timestamp is None or digest is None:
+        if timestamp is None or not digests:
             raise PaymentProviderError(
                 'Malformed webhook signature header (expected t=<unix>,v1=<hex>)',
                 code=WEBHOOK_SIGNATURE_MALFORMED,
             )
-        return timestamp, digest
+        return timestamp, digests
 
 
 # Satisfy runtime_checkable Protocol assertion (mirrors PlaceholderPaymentProvider).
