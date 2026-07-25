@@ -3085,7 +3085,7 @@ class ApiConstruct(Construct):
             "BillingReconcileLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
-            handler="careervp.handlers.billing_reconcile_handler.handler",
+            handler="careervp.handlers.billing_reconcile_handler.lambda_handler",
             function_name=function_name,
             environment={
                 "TABLE_NAME": self.api_db.db.table_name,

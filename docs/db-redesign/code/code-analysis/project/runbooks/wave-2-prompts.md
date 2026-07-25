@@ -367,10 +367,13 @@ it in without widening its clause, that is a rule-5 stop.
 **Before filling in any skeleton:** read every ledger row above it in `wave-2-status.md`, and
 re-read the bets it lists. Earlier steps will have found things this file could not know.
 
-> **Fill-in progress:** 2.0b, 2.0b-mock, and **2.1** are **already filled in** (each has full RED +
-> GREEN prompts below, immediately after its summary table) — 2.0-GREEN unblocked 2.0b and 2.1,
-> 2.0b-GREEN (landed 2026-07-25) unblocked 2.0b-mock, and 2.0b-mock-GREEN (landed 2026-07-25) is the
-> last backend prerequisite before 2.1 runs. 2.2 through 2.7 remain skeletons.
+> **Fill-in progress:** 2.0b, 2.0b-mock, **2.1**, and **2.5** are **already filled in** (each has its
+> full prompt(s) below, immediately after its summary table) — 2.0-GREEN unblocked 2.0b and 2.1,
+> 2.0b-GREEN (landed 2026-07-25) unblocked 2.0b-mock, 2.0b-mock-GREEN (landed 2026-07-25) was the last
+> backend prerequisite before 2.1, and 2.1-GREEN (landed 2026-07-25) closed the 2.0→2.1 backend spine.
+> 2.5 (P-02, filled in 2026-07-25) is a single RED-first session — the small-isolated-clause carve-out
+> (rule 7) — and is the last backend step before the GATE. 2.2, 2.3, 2.4, and 2.7 (the infra lane)
+> remain skeletons.
 
 ---
 
@@ -1002,7 +1005,6 @@ ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULE
 - Update runbooks/wave-2-status.md: add/update this step's row with a plain-English status, the
   commit, today's date, and what GREEN must resolve first. B-2-2 stays open until GREEN lands.
 ```
-
 ---
 
 # PROMPT 2.1-GREEN — key on the event id, kill the money-path Scan
@@ -1157,32 +1159,223 @@ throttle value up front has skipped the point.
 
 ---
 
-## 2.5 — Fix the billing-reconcile entrypoint (skeleton)
+## 2.5 — Fix the billing-reconcile entrypoint
+
+> **FILLED IN 2026-07-25** from the skeleton below (rule 11). The session that did so read every
+> Wave-2 ledger row through 2.1-GREEN first, and verified the bug live rather than trusting the
+> skeleton's prose. What it found is baked into the prompt below and must still be re-confirmed from
+> live at run time (§0.2):
+> - **The mismatch is exact and located.**
+>   `/Users/yitzchak/Documents/dev/careervp/infra/careervp/api_construct.py:3088` configures the
+>   Lambda with `handler="careervp.handlers.billing_reconcile_handler.handler"`, but
+>   `/Users/yitzchak/Documents/dev/careervp/src/backend/careervp/handlers/billing_reconcile_handler.py`
+>   defines **`lambda_handler`** (line 34) and no `handler` symbol at all. So AWS Lambda cannot
+>   import the configured entrypoint — the 02:00 `BillingReconcileScheduleRule`
+>   (`api_construct.py:3106`) has never successfully run a reconcile.
+> - **The repo convention is `.lambda_handler`.** 29 handler files define `lambda_handler`; only the
+>   `billing_handler` and `cv_tailoring_handler` infra rows use `.handler` (and those two modules do
+>   define a `handler` symbol). `billing_reconcile_handler` does not — it is the one broken row. The
+>   convention-matching fix is therefore to change the infra string to `.lambda_handler`, not to add
+>   a `handler` alias to the module (which would spread the minority form). GREEN picks; both are
+>   recorded below with their consequences.
+> - **B-2-5's port dependency is already satisfied.**
+>   `/Users/yitzchak/Documents/dev/careervp/src/backend/careervp/logic/reconciliation_service.py`
+>   calls `retrieve_subscription(...)`; 2.0-GREEN added that method to the `PaymentProviderInterface`
+>   Protocol (landed — see the 2.0-GREEN ledger row). So putting the reconcile call on a live schedule
+>   is now type-safe. Re-confirm live in the STANDING CHECK; if it were somehow not there, 2.5 is
+>   blocked regardless of how small it looks.
+>
+> **⚠️ Serialization deviation surfaced at fill-in (rule 5 flag, do not resolve silently).** §2 lists
+> `api_construct.py` as edited only by 2.2, 2.4, and 2.7. But the recommended fix edits the Handler
+> string at `api_construct.py:3088`, so **that fix makes 2.5 edit `api_construct.py` too** and joins
+> that serial set — 2.5's edit must not run at the same time as 2.1-GREEN or any of 2.2/2.4/2.7. The
+> alternative fix (a `handler` alias in the handler module) does **not** touch `api_construct.py`.
+> Whichever GREEN chooses, it states which, and if it edits `api_construct.py` it first confirms no
+> other api_construct.py step is mid-flight (§2), exactly as 2.1 had to.
+>
+> **Header corrected against the execution plan (rules 15/16).** The skeleton read
+> `opus/high · gpt-5-codex/high`. `redesign-execution-plan.md`'s own Wave-2 row for step 2.5 (line
+> 287) reads **`opus/high · gpt-5.3-codex/low`**, with an explicit downgrade note (lines 290–296): a
+> `Handler` attribute typo fix is neither ambiguous nor hard to get right once the bad value is
+> found, so Codex reasoning stays `low` even though the file is billing-adjacent; Claude Code's
+> `opus/high` is unchanged (expensive framing/citation effort, cheap mechanical edit). The corrected
+> values are used below; the skeleton's `gpt-5-codex/high` was stale.
 
 | | |
 |---|---|
 | **Clause** | P-02 |
-| **Spec** | **none — mechanical-inline by design.** `redesign-execution-plan.md`'s own step-0.4 status note lists P-02 among the intentionally uncovered clauses (same pattern as P-22). Verified live (rule 14) while writing this skeleton: `ls specs/` has no `P-02-*` file. Do not treat this as a missing spec to hunt for — this step's done-when below is what a spec would otherwise state. |
-| **Claude / Codex** | opus/high · gpt-5-codex/high |
-| **Depends on** | Wave 1 (independent of every other Wave-2 step) |
-| **Deploy target** | `CareerVpCrudDevx` |
-| **Bets** | none |
+| **Spec** | **none — mechanical-inline by design.** `/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/redesign-execution-plan.md`'s step-0.4 status note (line 338) lists P-02 among the intentionally uncovered clauses (same pattern as P-22), and `scope-diff.py` reports it as a known mechanical-inline uncovered clause, not an orphan. Verified live again while filling this in (rule 14): `ls /Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/specs/` has no `P-02-*` file. Do not treat this as a missing spec to hunt for — this step's done-when below is what a spec would otherwise state. |
+| **Acceptance criteria** | none authored (mechanical-inline); the three done-when bullets below are the contract this step is checked against, alongside clause P-02 in `project-scope-lock.yaml` |
+| **Claude / Codex** | opus/high · gpt-5.3-codex/low |
+| **Depends on** | 2.0-GREEN (landed — the port declares `retrieve_subscription`, which the reconcile path calls; see B-2-5), otherwise independent of every other Wave-2 step |
+| **Deploy target** | `CareerVpCrudDevx` (manual-dispatch only per §0.3; the live-scheduled-run observation is a human/deploy follow-up, not a code-session deliverable) |
+| **Rule 7** | single session, RED-first — the small-isolated-clause carve-out (see prompt header) |
+| **Bets** | none new. B-2-5 is already settled by 2.0-GREEN; this step is where its reconcile call first goes live |
 
 **In plain English.** The scheduled billing-reconciliation function points at a handler name that
-does not match the code, so it has never run.
+does not match the code, so it has never run. Fix the name so the entrypoint resolves, prove it runs
+the reconcile the way the 02:00 schedule triggers it, and leave the one-time live observation as a
+human deploy check.
 
 **Done-when.** The configured entrypoint matches the actual handler; an integration test invokes it
-the way the schedule does; a real scheduled run is observed in logs.
-
-**⚠️ Not as independent as it looks — read this before filling it in.** `logic/reconciliation_service.py`
-calls `retrieve_subscription(...)` on the payment provider, and the port **does not declare that
-method** (see bet `B-2-5`). Because this entrypoint has never run, that call has never executed in a
-deployed environment. Fixing the entrypoint name puts it on a live schedule for the first time.
-**2.0-GREEN must have reconciled the port first.** If 2.0 has not landed, this step is blocked
-regardless of how small it looks.
+the way the schedule does (the exact event shape the rule sends) against a real (moto) table; a real
+scheduled run is observed in logs (human/deploy follow-up, recorded in the ledger, not gating the
+code landing).
 
 **Fill-in note.** The smallest step in the wave by diff size — but not the safest. Do not bundle it
 into another step to "save a deploy": that is exactly the cross-contamination Wave 1 flagged.
+
+---
+
+# PROMPT 2.5 — fix the billing-reconcile entrypoint (single session, RED-first)
+
+> **Clause:** P-02 · **Spec:** none — mechanical-inline by design (see the section table above; the three done-when bullets are the contract)
+> **Acceptance criteria:** none authored · **Claude: opus/high · Codex: gpt-5.3-codex/low**
+> **Rule 7 — single session, RED-first.** This is the "small isolated clause" carve-out (`RUNBOOK-RULES.md` rule 7): the whole change is one entrypoint name plus its integration test, so one session may write the failing test first, observe it fail, then fix. RED-first discipline is still mandatory — you write and run the test and see it red (rule 13) BEFORE you touch the entrypoint. It is billing-adjacent, so if the change turns out to be anything larger than "make the configured entrypoint resolve and prove it runs," STOP and split it.
+> **Rule 17 — every file named below is a full path from the repo root.** Keep it that way in anything you add.
+
+```
+STANDING CHECK — before doing anything else: open
+/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md
+and read the 2.0-GREEN and 2.1-GREEN rows (2.5 depends on 2.0-GREEN's port reconciliation; 2.1-GREEN
+also edits api_construct.py, so if it is mid-flight you must not edit that file concurrently). If
+either left something open for 2.5, deal with it FIRST. Then confirm THIS step's prerequisites are
+met right now, with real commands (not memory, not this file):
+
+  cd /Users/yitzchak/Documents/dev/careervp && git log --oneline -3
+  grep -n 'handler="careervp.handlers.billing_reconcile_handler' /Users/yitzchak/Documents/dev/careervp/infra/careervp/api_construct.py
+  grep -n "^def lambda_handler\|^def handler\|^handler = " /Users/yitzchak/Documents/dev/careervp/src/backend/careervp/handlers/billing_reconcile_handler.py
+  grep -n "retrieve_subscription" /Users/yitzchak/Documents/dev/careervp/src/backend/careervp/payment_providers/interface.py
+  grep -n "retrieve_subscription" /Users/yitzchak/Documents/dev/careervp/src/backend/careervp/logic/reconciliation_service.py
+
+Confirm live, and STOP with a plain-English sentence if any is not true:
+  - the infra Handler string still ends in `.handler` (the bug is still present — if it already reads
+    `.lambda_handler`, this step is already done; say so and stop);
+  - the handler module defines `lambda_handler` and NOT `handler`;
+  - the port `PaymentProviderInterface` declares `retrieve_subscription` (2.0-GREEN landed — without
+    it, putting reconcile live is not type-safe and 2.5 is blocked).
+
+RULE 14 ADAPTATION — there is NO P-02 spec, by design. Do not go hunting for one and do not stop on
+its absence. Confirm the absence is the DOCUMENTED intentional one, not an oversight, with a real
+command:
+
+  ls /Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/specs/ | grep -i p-02   # expect: no output
+  grep -n "P-02" /Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/redesign-execution-plan.md
+
+The execution plan's step-0.4 status note must list P-02 as intentionally mechanical-inline. If it
+does NOT, that is a rule-5 stop — flag it; do not invent a spec or improvise. The three done-when
+bullets in this prompt are the contract this step is checked against, together with clause P-02 in
+/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/project-scope-lock.yaml.
+
+You are implementing clause P-02. This is a SINGLE RED-first session (rule 7 carve-out). You WRITE
+THE FAILING TEST FIRST and observe it red before editing any entrypoint.
+
+--------------------------------------------------------------------------------
+FIRST — write the RED tests and observe them fail (rule 13), before any fix
+--------------------------------------------------------------------------------
+
+Put the integration test where the other billing integration tests live — confirm the directory live
+(ls /Users/yitzchak/Documents/dev/careervp/src/backend/tests/integration/) — and the synth assertion
+where the infrastructure synth tests live (confirm live: the same place 2.1's IAM test landed,
+/Users/yitzchak/Documents/dev/careervp/src/backend/tests/infrastructure/). No real network calls;
+use moto (mock_aws), the pattern tests/integration already uses. Secrets are parameter-NAME-in-env
+only (P-06), never a literal.
+
+  test_p02_reconcile_configured_entrypoint_resolves            (done-when #1)
+      Synth the stack (or read the synthesized template) and extract the BillingReconcileLambda's
+      `Handler` property. Split it into module + attribute and assert, on the test's OWN assertion
+      (not an uncaught ImportError), that importlib can import the module and getattr finds a CALLABLE
+      of that exact name. RED: the configured attribute is `handler`, which does not exist on
+      careervp.handlers.billing_reconcile_handler, so the assertion fails with a clear message naming
+      the missing attribute. This is the test that pins done-when #1.
+
+  test_p02_reconcile_runs_via_configured_entrypoint            (done-when #2)
+      "Invoke it the way the schedule does." Read the SAME `Handler` string from synth, resolve it to
+      the callable (guarding so a missing attribute fails on this test's assertion, not a raw
+      AttributeError), then invoke it against a moto table with the EXACT event the rule sends —
+      `{"detail": {"action": "reconcile_subscriptions"}}` (confirm the shape live at
+      /Users/yitzchak/Documents/dev/careervp/infra/careervp/api_construct.py:3106, the
+      RuleTargetInput). Assert the reconcile path actually executes (e.g. it returns the
+      reconcile_all summary dict / the counts shape reconcile_all produces — read
+      /Users/yitzchak/Documents/dev/careervp/src/backend/careervp/logic/reconciliation_service.py:37
+      live and assert on what it really returns, exact shape, no "or"). RED: fails at resolution
+      because the configured entrypoint is unreachable; GREEN makes the same configured path both
+      resolve and run the reconcile.
+
+RULE 13 — run both tests, capture the failure output VERBATIM, and for EACH state why it failed (the
+configured `.handler` attribute does not exist). A test that fails on a missing FIXTURE or a typo in
+the test's own imports is NOT red, it is broken — structure each so it fails on ITS OWN assertion
+about the configured entrypoint. State which technique you used. The full existing suite must still
+be green after this step — you have ADDED tests, not changed implementation yet.
+
+--------------------------------------------------------------------------------
+THEN — make the configured entrypoint match the real handler (the whole fix)
+--------------------------------------------------------------------------------
+
+Make both RED tests pass with the SMALLEST change that makes the configured entrypoint resolve and
+run. Two options; pick one, state which, and do not do more than one:
+
+  (A) RECOMMENDED — convention-matching. Change the Handler string at
+      /Users/yitzchak/Documents/dev/careervp/infra/careervp/api_construct.py:3088 from
+      `careervp.handlers.billing_reconcile_handler.handler` to
+      `careervp.handlers.billing_reconcile_handler.lambda_handler`, matching the 29-handler repo
+      convention and the function that actually exists. THIS EDITS api_construct.py — so first
+      confirm no other api_construct.py step (2.1-GREEN, 2.2, 2.4, 2.7) is mid-flight (§2), and note
+      in the ledger that 2.5 joined that serial set (the rule-5 flag from the fill-in banner).
+
+  (B) Alternative — module alias. Add `handler = lambda_handler` in
+      /Users/yitzchak/Documents/dev/careervp/src/backend/careervp/handlers/billing_reconcile_handler.py.
+      This does NOT touch api_construct.py (no serialization concern) but spreads the minority
+      `.handler` form. If you choose this, say why you preferred it over (A).
+
+Do NOT change anything in reconciliation_service.py or the reconcile behavior itself — the port was
+already reconciled by 2.0-GREEN. If you find the reconcile logic itself needs a change to run, that
+is larger than P-02 and a rule-5 stop: flag it, do not fold it in.
+
+VERIFY: both RED tests now pass; the full backend unit + integration suites (zero regressions); the
+backend and infra infrastructure test directories green if you touched infra; ruff format+check;
+`mypy careervp --strict`; the coverage gate (make coverage-tests, at/above the enforced baseline);
+scope-diff still resolves the Wave-2 clauses. If you edited api_construct.py: `cd
+/Users/yitzchak/Documents/dev/careervp/infra && uv sync && cdk synth` clean, `cdk diff` shows the
+Handler-string change and ZERO stateful replacement, and the naming validator passes
+(python /Users/yitzchak/Documents/dev/careervp/src/backend/scripts/validate_naming.py --path infra
+--strict). No merge to main (§0.3); no deploy from this session — the live-scheduled-run observation
+(done-when #3) is a human/deploy follow-up.
+
+--------------------------------------------------------------------------------
+OUTPUT REQUIRED
+--------------------------------------------------------------------------------
+1. The live confirmation of the mismatch (the two grep outputs), in plain English first.
+2. The new test files, and the verbatim RED failure output for each with a one-line why, BEFORE the
+   fix — plus proof the rest of the suite was green at that point.
+3. The one-option fix you applied (A or B), stated explicitly, and — if (A) — the api_construct.py
+   serialization confirmation.
+4. Both tests now passing, with output, and the full verification run results.
+5. Confirmation of exactly which files changed (git diff --stat) — it should be the one test file(s)
+   plus exactly one of {api_construct.py, billing_reconcile_handler.py}, nothing else.
+6. A git commit message.
+
+ALSO REQUIRED (standing rule for every wave prompt — see
+/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/RUNBOOK-RULES.md):
+- Compare what you actually built against (a) this prompt's own instructions and (b) clause P-02 in
+  /Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/project-scope-lock.yaml.
+  If everything matches, say so in one plain sentence.
+- If ANYTHING drifted — extra work not asked for, required work skipped, or a test/rule had to be
+  weakened — STOP. Do not fix it yourself. Write one plain-English sentence a non-engineer could
+  follow (what should have happened, what actually happened, why it matters), THEN the technical
+  detail, and flag it for human review. Do not mark the step done.
+- Update
+  /Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md:
+  add/update this step's row with a plain-English status, the commit, today's date, and what the NEXT
+  step (the GATE) must resolve first — including the still-pending done-when #3 (a real scheduled run
+  observed in devx logs), which is the one human/deploy follow-up this code session cannot close.
+```
+
+**Done-when.** Both RED tests pass; the billing-reconcile Lambda's configured `Handler` resolves to
+the real callable and runs the reconcile against a moto table with the schedule's exact event shape;
+the reconcile behavior itself is unchanged; `cdk diff` shows zero stateful replacement and the naming
+validator passes if `api_construct.py` changed; done-when #3 (a real scheduled run observed in devx
+logs) is recorded in the ledger as the remaining human/deploy follow-up.
 
 ---
 

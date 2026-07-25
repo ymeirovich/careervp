@@ -22,7 +22,7 @@ itself, so it went stale and nothing forced the next prompt to notice.
 
 ---
 
-## The sixteen rules
+## The seventeen rules
 
 ### 1. Every prompt ends by writing a git commit message
 
@@ -415,6 +415,46 @@ available *going forward*, and fills the specific gap rule 15 left open: a skele
 with no `Claude/Codex` pair yet gets one from this rubric, not from whoever happens to fill it in
 first guessing alone.
 
+> **Amended 2026-07-25 (later same day):** rule 17 added while filling in Wave 2's `2.5` prompt —
+> caught live, the same way rules 14–16 were, inside a prompt that names one spec file three
+> different ways. Rules 1–16 unchanged.
+
+### 17. Every file a prompt names is written as one full path from the repository root, never a bare relative fragment
+
+A prompt is copy-pasted into a fresh session whose working directory is the repository root, not
+the folder the prompt file happens to live in. A relative reference — `runbooks/wave-2-status.md`,
+`../specs/P-25-payment-provider-spec.md`, `specs/P-25-payment-provider-spec.md` — only resolves if
+the reader already knows which directory the author had in mind, and different lines in the same
+prompt silently assume different ones. Write every file reference as the single full path from the
+filesystem root:
+`/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md`,
+never the bare fragment. This applies to **every** place a file is named — prose, a markdown link's
+target *and* its visible text, a "confirm it exists" check, the header's `Spec` field, and a
+commit-message file citation alike.
+
+**The one carve-out is a shell snippet.** A command block may use paths relative to its own working
+directory, but only when that directory is set by an explicit `cd <full absolute path>` at the top
+of the same block — the `cd` is the anchor that makes the rest unambiguous. So
+`cd src/backend && uv run pytest tests/unit/...` becomes
+`cd /Users/yitzchak/Documents/dev/careervp/src/backend && uv run pytest tests/unit/...`, never a
+bare `cd src/backend` that assumes the reader started at the repo root. The paths *inside* pytest
+or grep arguments then stay relative to that anchored `cd`, which is correct — a shell needs a cwd.
+
+**The incident.** Found live while writing this rule: `wave-2-prompts.md`'s filled-in `2.0b` prompt
+names the P-25 spec three different ways in the space of a few lines — the header's markdown link
+points at `../specs/P-25-payment-provider-spec.md` (relative to `runbooks/`), its visible link text
+reads `specs/P-25-payment-provider-spec.md` (relative to `project/`), and the STANDING CHECK's
+`open specs/P-25-payment-provider-spec.md` line resolves only from a directory the block never names.
+All three happen to point at one real file, but nothing in the prompt says so, and a reader who
+starts from the wrong base gets a "file not found" on a spec that exists — the exact confusion
+rule 14's spec-existence check exists to remove, reintroduced one layer down in how the path itself
+is written.
+
+**What this does not change.** Like the other amendments, it is not a retroactive rewrite of landed
+prompts — those stand as written. It governs every prompt or skeleton written or filled in from here
+forward, including the standard blocks below: wherever a template placeholder like `<spec file path>`
+or `wave-N-status.md` is instantiated, it is instantiated as a full path.
+
 ---
 
 ## The two blocks every prompt must contain
@@ -436,6 +476,7 @@ The others are structural rather than per-prompt, and fire at different moments:
 | 13 (a test must be seen to fail) | inside every RED session, before GREEN starts |
 | 15 (both models stated) | when the prompt/skeleton header is *written*, never left to the runner to guess |
 | 16 (Codex side picked by rubric) | when a step's Claude model/effort is *decided* — plan authorship, or filling in a skeleton/GATE row rule 15 left open — never invented at prompt-writing time |
+| 17 (file references are full paths) | when any prompt or skeleton is *written or filled in* — every file it names is a full path from the repo root |
 
 **Every prompt header states, without exception:** the clause id(s), the spec file path, the
 acceptance-criteria IDs, and both `Claude: <model>/<effort>` and `Codex: <model>/<reasoning>` —
