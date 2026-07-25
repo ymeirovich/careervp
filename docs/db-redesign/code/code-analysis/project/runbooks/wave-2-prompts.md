@@ -1379,6 +1379,374 @@ logs) is recorded in the ledger as the remaining human/deploy follow-up.
 
 ---
 
+## 2.5a — Repair the runtime blockers exposed by P-02
+
+> **ADDED 2026-07-25 after 2.5 stopped correctly on rule 5.** This is the separate follow-up that
+> the original 2.5 prompt required if making the configured entrypoint resolve exposed a reconcile
+> behavior defect. It does not rewrite or weaken 2.5: the accepted P-02 entrypoint tests remain
+> unchanged, and 2.5 stays incomplete until this follow-up makes them green.
+>
+> The work has two existing contract homes. The invalid active-subscription scan blocks P-02's
+> already-written done-when requirement that the scheduled entrypoint run reconciliation against a
+> moto table. Configuration-based provider selection is already required by AC-P25-1. Therefore
+> this is a delivery split across P-02 and P-25, not a new product requirement. If
+> `/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/scope-diff.py`
+> or a human reviewer
+> concludes otherwise, STOP and use the §0.3 amendment process; do not silently invent a new clause.
+>
+> **Why RED/GREEN are separate here.** The original P-02 handler-name change qualified for rule 7's
+> small mechanical carve-out. This follow-up does not: it crosses DynamoDB expression behavior,
+> payment-provider selection, two billing handlers, and CDK environment configuration. It touches
+> money and persisted billing state, so 2.5a-RED and 2.5a-GREEN run in separate fresh sessions.
+
+| | |
+|---|---|
+| **Clause** | P-02, P-25 |
+| **Spec** | P-25: `/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/specs/P-25-payment-provider-spec.md`; P-02: none, mechanical-inline by the documented exception in `/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/redesign-execution-plan.md` |
+| **Acceptance criteria** | AC-P25-1 plus P-02 done-when #2 (the scheduled entrypoint runs reconciliation against a real moto table) |
+| **Claude / Codex** | opus/high · gpt-5.3-codex/high — the Claude tier follows the existing P-25/P-02 rows; Codex `high` follows rule 16 because the defect crosses handler, provider, DAL, tests, and infrastructure |
+| **Depends on** | 2.5 stopped with its RED evidence and option-A Handler change preserved; P-25/P-25b providers already landed |
+| **Deploy target** | No deploy in RED or GREEN. After GREEN and full verification, P-02's existing human follow-up deploys only to `CareerVpCrudDevx` and observes one real scheduled run. |
+| **Serialization** | RED edits tests only. GREEN will edit `/Users/yitzchak/Documents/dev/careervp/infra/careervp/api_construct.py`, so it joins the 2.2/2.4/2.5/2.7 serial set and may not overlap another edit to that file. |
+| **Bets** | none new — the scan and provider-selection failures are observed facts, not unsettled beliefs |
+
+**In plain English.** The schedule can now find the handler, but the job still cannot reconcile:
+DynamoDB rejects its active-subscription filter, and the deployed configuration says
+`PAYMENT_PROVIDER=placeholder` while the handlers ignore that setting and construct an inert
+placeholder directly. Pin both failures with independent tests, then repair them without weakening
+the original P-02 tests.
+
+**Done-when.** A real moto scan returns only active current-subscription rows; configuration selects
+`MockProvider` for devx and can select `StripeProvider` through a parameter-name-only secret seam;
+unsupported placeholder configuration fails closed; the scheduled entrypoint processes one active
+subscription with the exact result `{"status": "ok", "checked": 1, "updated": 0, "errors": 0}`;
+the original P-02 entrypoint tests pass unchanged; and the full verification matrix is green before
+the existing human scheduled-run follow-up.
+
+---
+
+# PROMPT 2.5a-RED — pin the billing-reconcile runtime blockers (tests only)
+
+> **Clause:** P-02, P-25
+> · **Spec:** P-25:
+> `/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/specs/P-25-payment-provider-spec.md`;
+> P-02: none, mechanical-inline by documented exception
+> · **Acceptance criteria:** AC-P25-1 plus P-02 done-when #2
+> · **Claude: opus/high · Codex: gpt-5.3-codex/high**
+>
+> **Rule 7 RED firewall.** This session writes tests only. It may create or edit files only under
+> `/Users/yitzchak/Documents/dev/careervp/src/backend/tests/` and update
+> `/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md`.
+> It must make ZERO changes under `/Users/yitzchak/Documents/dev/careervp/src/backend/careervp/` or
+> `/Users/yitzchak/Documents/dev/careervp/infra/careervp/`. GREEN runs in a fresh session and may
+> not edit any RED test or either accepted P-02 entrypoint test.
+>
+> **Rule 17.** Every file named below is a full path from the repository root. Keep that property in
+> anything you add.
+
+```
+STANDING CHECK — before doing anything else: open
+/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md.
+Read every row through 2.5, including the dated "2.5 blocker delivery decision" below the table. If
+the dependency chain left a different unresolved problem, deal with that FIRST — do not start this
+step with unfinished business hidden behind it. Then confirm THIS step's prerequisites are actually
+met right now, using real commands (not memory, not this file):
+
+  cd /Users/yitzchak/Documents/dev/careervp
+  git status --short --branch
+  git log --oneline -5
+  grep -n "Attr('#s')\\|ExpressionAttributeNames" /Users/yitzchak/Documents/dev/careervp/src/backend/careervp/dal/subscription_repository.py
+  grep -n "PlaceholderPaymentProvider\\|PAYMENT_PROVIDER" /Users/yitzchak/Documents/dev/careervp/src/backend/careervp/handlers/billing_handler.py /Users/yitzchak/Documents/dev/careervp/src/backend/careervp/handlers/billing_reconcile_handler.py /Users/yitzchak/Documents/dev/careervp/infra/careervp/api_construct.py
+  grep -n "^class MockProvider\\|^class StripeProvider" /Users/yitzchak/Documents/dev/careervp/src/backend/careervp/payment_providers/mock_provider.py /Users/yitzchak/Documents/dev/careervp/src/backend/careervp/payment_providers/stripe_provider.py
+  git diff -- /Users/yitzchak/Documents/dev/careervp/src/backend/tests/infrastructure/test_p02_billing_reconcile_entrypoint.py /Users/yitzchak/Documents/dev/careervp/src/backend/tests/integration/test_p02_billing_reconcile_entrypoint.py
+
+Confirm all of these live, or STOP in plain English:
+  - the accepted P-02 tests exist and the final git-diff command is empty;
+  - the scan still combines Attr('#s') with an explicit #s -> status name mapping;
+  - both billing handlers still construct PlaceholderPaymentProvider directly;
+  - the synthesized billing and billing-reconcile environments still say
+    PAYMENT_PROVIDER=placeholder;
+  - MockProvider and StripeProvider both exist and satisfy the already-landed port.
+
+Run the cheapest live-state confirmation without printing any secret value:
+
+  aws lambda get-function-configuration \
+    --function-name careervp-billing-reconcile-lambda-dev \
+    --region us-east-1 \
+    --query '[Handler,Environment.Variables.PAYMENT_PROVIDER,Environment.Variables.PAYMENT_PROVIDER_PLACEHOLDER]' \
+    --output json
+
+This is read-only evidence. If credentials or network access are unavailable, record that fact and
+continue from the source+synth evidence; do not replace it with a real invocation or any AWS write.
+
+BEFORE WRITING ANY TEST (rule 14): confirm, with real commands, that
+/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/specs/P-25-payment-provider-spec.md
+exists; that its "RED Tests to Write First" section names AC-P25-1; and that it contains exact briefs
+for test_p25_configured_provider_factory_selects_mock_and_stripe,
+test_p25_devx_billing_lambdas_configure_mock_provider, and
+test_p25_active_reconcile_uses_configured_provider. Each brief must state exact values and have no
+"or"-shaped assertion. If any check fails, STOP — fix the spec in a separate visible docs action;
+do not write tests against an underspecified brief.
+
+RULE 14 ADAPTATION FOR P-02: P-02 intentionally has no spec. Confirm the documented exception:
+
+  ls /Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/specs/ | grep -i p-02
+  grep -n "intentionally mechanical-inline\\|P-02" /Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/redesign-execution-plan.md
+
+The first command must return no P-02 spec and the second must show the documented mechanical-inline
+exception. If not, STOP for §0.3 review. P-02's existing done-when #2 in
+/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-prompts.md
+is the exact contract for the scan leg; do not invent additional P-02 behavior.
+```
+
+You are writing RED tests only. Do not import or call a real provider endpoint, do not alter the
+accepted P-02 tests, and do not change any implementation or infrastructure file.
+
+## 1. Add the focused scan regression
+
+Create
+`/Users/yitzchak/Documents/dev/careervp/src/backend/tests/integration/test_p02_billing_reconcile_runtime.py`
+using `moto.mock_aws`. Add:
+
+`test_p02_scan_active_subscriptions_filters_real_moto_table`
+
+- Create a real moto users table with `pk` and `sk`.
+- Insert exactly three rows:
+  - `pk=USER#active`, `sk=SUBSCRIPTION#CURRENT`, `status=active`;
+  - `pk=USER#inactive`, `sk=SUBSCRIPTION#CURRENT`, `status=inactive`;
+  - `pk=USER#other`, `sk=PROFILE`, `status=active`.
+- Construct the real
+  `/Users/yitzchak/Documents/dev/careervp/src/backend/careervp/dal/subscription_repository.py`
+  repository against that table and call `scan_active_subscriptions()`.
+- Guard `ClientError` and fail on the test's own assertion with a message that includes the DynamoDB
+  error code and message. An uncaught `ValidationException` is a broken RED harness, not accepted
+  RED evidence.
+- Assert the exact returned primary-key list is `["USER#active"]`.
+
+RED reason: boto3 treats `Attr('#s')` as the literal attribute name `#s`, creates a second name
+placeholder for it, and DynamoDB rejects the separately supplied unused `#s -> status` mapping.
+
+## 2. Pin configuration-based provider selection
+
+Create
+`/Users/yitzchak/Documents/dev/careervp/src/backend/tests/unit/test_p25_configured_provider.py`.
+Implement the spec's exact
+`test_p25_configured_provider_factory_selects_mock_and_stripe` brief:
+
+- Guard import of
+  `/Users/yitzchak/Documents/dev/careervp/src/backend/careervp/payment_providers/factory.py`
+  inside the test and assert the module exposes a callable `get_payment_provider`; a missing module
+  or callable must fail on this test's own assertion, not during collection.
+- With `PAYMENT_PROVIDER=mock`, assert the exact concrete result type is `MockProvider`.
+- With `PAYMENT_PROVIDER=stripe` and
+  `PAYMENT_PROVIDER_API_KEY_SSM_PARAM=/careervp/test/payment-provider-api-key`, patch the runtime
+  secret resolver to return a generated fixture secret. Assert it receives exactly that parameter
+  name, no secret value enters the environment, and the returned type is `StripeProvider`
+  configured with the resolved value. Make no HTTP call.
+- Parameterize the unsupported values as exactly `["placeholder", "bogus"]`; for each, assert exact
+  `PaymentProviderError.code == "PAYMENT_PROVIDER_CONFIGURATION_ERROR"`.
+
+RED reason: no configured-provider factory exists; both handlers directly construct the placeholder.
+
+## 3. Pin the devx Lambda configuration
+
+Create
+`/Users/yitzchak/Documents/dev/careervp/src/backend/tests/infrastructure/test_p25_provider_selection.py`.
+Synthesize the devx stack using the established infrastructure-test fixture/pattern and locate
+exactly these physical functions:
+
+- `careervp-billing-lambda-devx`;
+- `careervp-billing-reconcile-lambda-devx`.
+
+Add `test_p25_devx_billing_lambdas_configure_mock_provider` and assert for both:
+
+- `PAYMENT_PROVIDER == "mock"`;
+- `PAYMENT_PROVIDER_PLACEHOLDER` is absent;
+- `PAYMENT_PROVIDER_API_KEY_SSM_PARAM` is absent;
+- `STRIPE_SECRET_KEY` is absent;
+- the generated provider-secret fixture value is absent.
+
+Guard missing/duplicate functions and missing environment mappings with the test's own assertions.
+
+RED reason: both Lambdas currently synthesize `PAYMENT_PROVIDER == "placeholder"`.
+
+## 4. Prove an active scheduled reconciliation reaches the configured provider
+
+In
+`/Users/yitzchak/Documents/dev/careervp/src/backend/tests/integration/test_p02_billing_reconcile_runtime.py`,
+add `test_p25_active_reconcile_uses_configured_provider` exactly as tightened in
+`/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/specs/P-25-payment-provider-spec.md`.
+
+- Reuse the synthesized Handler-resolution technique from the accepted
+  `/Users/yitzchak/Documents/dev/careervp/src/backend/tests/integration/test_p02_billing_reconcile_entrypoint.py`
+  without editing that file.
+- Create the exact three-row moto table from step 1.
+- Set `PAYMENT_PROVIDER=mock`.
+- Invoke the synthesized callable with exactly
+  `{"detail": {"action": "reconcile_subscriptions"}}` and a real Lambda-like context.
+- Guard handler resolution, `ClientError`, `NotImplementedError`, and provider configuration errors
+  so failure lands on this test's own assertion and names the failing layer.
+- Assert the exact result is
+  `{"status": "ok", "checked": 1, "updated": 0, "errors": 0}`.
+- Patch HTTP clients to fail immediately if called; assert zero external network calls.
+
+RED reason: the scan is invalid and the handler ignores `PAYMENT_PROVIDER`, so an active row cannot
+be reconciled through the configured provider.
+
+## 5. Observe RED and prove there are no unrelated regressions
+
+Run the four new tests together and capture every failure verbatim:
+
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+uv run pytest \
+  tests/integration/test_p02_billing_reconcile_runtime.py \
+  tests/unit/test_p25_configured_provider.py \
+  tests/infrastructure/test_p25_provider_selection.py -vv
+```
+
+For each test, state one exact failure reason. Import/collection/fixture errors and uncaught
+`ClientError`/`NotImplementedError` are not accepted RED.
+
+Run the previously accepted P-02 tests separately and record their current state:
+
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+uv run pytest \
+  tests/infrastructure/test_p02_billing_reconcile_entrypoint.py \
+  tests/integration/test_p02_billing_reconcile_entrypoint.py -vv
+```
+
+The resolution test should pass and the scheduled-invocation test may retain its already-recorded
+scan failure. Do not edit either test.
+
+Prove the rest of the pre-existing suites remain green by excluding only that already-known blocked
+P-02 integration file and the new RED files:
+
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+uv run pytest tests/unit tests/integration \
+  --ignore=tests/integration/test_p02_billing_reconcile_entrypoint.py \
+  --ignore=tests/integration/test_p02_billing_reconcile_runtime.py \
+  --ignore=tests/unit/test_p25_configured_provider.py -v --tb=short
+uv run pytest tests/infrastructure \
+  --ignore=tests/infrastructure/test_p25_provider_selection.py -v --tb=short
+```
+
+Run the mandatory test-file checks:
+
+```bash
+cd /Users/yitzchak/Documents/dev/careervp/src/backend
+uv run ruff format \
+  tests/integration/test_p02_billing_reconcile_runtime.py \
+  tests/unit/test_p25_configured_provider.py \
+  tests/infrastructure/test_p25_provider_selection.py
+uv run ruff check \
+  tests/integration/test_p02_billing_reconcile_runtime.py \
+  tests/unit/test_p25_configured_provider.py \
+  tests/infrastructure/test_p25_provider_selection.py --fix
+uv run mypy \
+  tests/integration/test_p02_billing_reconcile_runtime.py \
+  tests/unit/test_p25_configured_provider.py \
+  tests/infrastructure/test_p25_provider_selection.py --strict
+```
+
+Run the drift checker and record only the step-relevant result plus the known global baseline:
+
+```bash
+cd /Users/yitzchak/Documents/dev/careervp
+python /Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/scope-diff.py --json
+```
+
+P-02 and P-25 must remain `test_written`, with no orphan spec or new tooling error. The repository
+already has a global non-zero `--ci` baseline for unrelated uncovered clauses; do not fix or hide
+those inside 2.5a.
+
+Finally prove the RED firewall:
+
+```bash
+cd /Users/yitzchak/Documents/dev/careervp
+git diff --stat
+git diff --exit-code -- src/backend/careervp infra/careervp
+git diff --exit-code -- \
+  src/backend/tests/infrastructure/test_p02_billing_reconcile_entrypoint.py \
+  src/backend/tests/integration/test_p02_billing_reconcile_entrypoint.py
+```
+
+No deploy, synth mutation, merge, or implementation edit is authorized in RED.
+
+## OUTPUT REQUIRED
+
+1. Plain-English confirmation of the two defects before technical output.
+2. The exact new test files and the verbatim RED output for every new test, with a one-line reason
+   for each.
+3. The accepted P-02 test output, explicitly confirming neither accepted file changed.
+4. Pre-existing-suite results using the exact exclusions above.
+5. Ruff-format, Ruff-check, and strict-mypy results for all new tests.
+6. The step-relevant scope-diff result and the unchanged global drift baseline.
+7. `git diff --stat` plus proof that ZERO implementation/infrastructure files and ZERO accepted
+   P-02 test files changed.
+8. A git commit message; use `test: pin billing reconcile runtime blockers` unless the actual
+   test-only scope justifies a more accurate message.
+
+ALSO REQUIRED (standing rule for every wave prompt — see
+/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/RUNBOOK-RULES.md):
+- Compare what you actually built against (a) this prompt's own instructions and (b) clauses P-02
+  and P-25 in
+  /Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/project-scope-lock.yaml.
+  If everything matches, say so in one plain sentence.
+- If ANYTHING drifted — extra work not asked for, required work skipped, a test/rule weakened, or
+  `/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/scope-diff.py`
+  says this delivery split needs a new clause — STOP. Do not fix it yourself. Write one
+  plain-English sentence a non-engineer could follow, then the technical detail, and flag it for
+  human §0.3 review. Do not mark the step done.
+- Update
+  /Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md:
+  update the 2.5a-RED row with plain-English status, the commit, today's date, and exactly what the
+  fresh 2.5a-GREEN session must resolve first.
+
+---
+
+## 2.5a-GREEN — repair the billing-reconcile runtime blockers (skeleton)
+
+| | |
+|---|---|
+| **Clause** | P-02, P-25 |
+| **Spec** | P-25: `/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/specs/P-25-payment-provider-spec.md`; P-02: none, mechanical-inline by documented exception |
+| **Acceptance criteria** | AC-P25-1 plus P-02 done-when #2 |
+| **Claude / Codex** | opus/high · gpt-5.3-codex/high |
+| **Rule 7 firewall** | Run only in a fresh session after 2.5a-RED lands. GREEN may not edit the three RED files or either accepted P-02 entrypoint test. If a test looks wrong, STOP for §0.3 review. |
+| **Depends on** | 2.5a-RED landed with all new tests failing on their own intended assertions and the remaining suites green |
+| **Deploy target** | No deploy in GREEN. The existing P-02 human follow-up deploys only after all verification passes. |
+| **Serialization** | Edits `/Users/yitzchak/Documents/dev/careervp/infra/careervp/api_construct.py`; may not overlap 2.2, 2.4, 2.5, 2.7, or another template edit. |
+| **Files expected** | `/Users/yitzchak/Documents/dev/careervp/src/backend/careervp/dal/subscription_repository.py`; a configured-provider factory under `/Users/yitzchak/Documents/dev/careervp/src/backend/careervp/payment_providers/`; `/Users/yitzchak/Documents/dev/careervp/src/backend/careervp/handlers/billing_handler.py`; `/Users/yitzchak/Documents/dev/careervp/src/backend/careervp/handlers/billing_reconcile_handler.py`; `/Users/yitzchak/Documents/dev/careervp/infra/careervp/api_construct.py`; `/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md` only beyond those |
+| **Bets** | none new |
+
+**In plain English.** Make DynamoDB's active-subscription filter valid, make both billing handlers
+obey one fail-closed provider configuration seam, configure devx to use the real-HMAC MockProvider,
+and prove one active scheduled subscription is reconciled without a network call.
+
+**Done-when.** Every 2.5a-RED test and both accepted P-02 tests pass unchanged; the provider factory
+selects mock and Stripe exactly as AC-P25-1 specifies while placeholder/unknown values fail closed;
+both devx billing Lambdas synthesize `PAYMENT_PROVIDER=mock`; the scan returns only the active
+current-subscription row; the exact active scheduled result is
+`{"status": "ok", "checked": 1, "updated": 0, "errors": 0}`; full backend unit/integration and both
+infrastructure suites pass; Ruff and strict mypy pass; the coverage gate passes; and
+`/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/scope-diff.py`
+still reports P-02 and P-25 as `test_written` with no orphan spec or new tooling error. The script's
+pre-existing global non-zero baseline for unrelated uncovered clauses must be recorded, not fixed
+inside 2.5a. Lambda artifacts are rebuilt before synth; `cdk synth` is clean; `cdk diff` shows only
+the intended Handler/provider environment changes with ZERO stateful replacement; verbose and
+strict naming validation pass; no real provider/network call occurs in tests; no deploy or merge
+occurs.
+
+**Fill-in note (rule 11).** Do not turn this skeleton into a full GREEN prompt until the 2.5a-RED
+commit has actually landed and its ledger row contains the verbatim failures. The fill-in session
+must read those failures, preserve all five immutable test files, inspect the live provider-secret
+parameter names without printing values, and state the exact implementation boundary before coding.
+
+---
+
 ## 2.7 — Dead-letter queues for scheduled rules (skeleton)
 
 | | |
@@ -1403,7 +1771,7 @@ target is observed landing in it.
 
 | | |
 |---|---|
-| **Depends on** | 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7 (2.0b is freeze-line, not a gate blocker) |
+| **Depends on** | 2.0, 2.1, 2.2, 2.3, 2.4, 2.5a-GREEN, completed 2.5 including its human scheduled-log observation, and 2.7 (2.0b is freeze-line, not a gate blocker) |
 | **Claude / Codex** | opus/high · gpt-5-codex/high — not in `redesign-execution-plan.md`'s wave table (the GATE is a verification script, not an authored implementation clause), so picked via `RUNBOOK-RULES.md` rule 16 rather than copied from a plan row. Reasoning: cross-cutting orchestration across scope-diff, two test suites, the coverage gate, two immutable-invariant checks, a live AWS resource-count read, the deploy smoke harness, and the bets ledger — needs careful sequencing and, per rule 13, must itself be proven to fail on purpose before it's trusted, which is more than one verification pass. That lands it at `high`, not `xhigh`/`max`: it is read-only against AWS (no CFN mutation, no auth/tenancy code path), and it sits at the same tier as the two precedents it calls into — P-30's smoke harness (step 0.62) and T-09/T-07/T-06's scope-diff+oracle (step 0.2), both already `opus/high · gpt-5-codex/high` in the plan. |
 | **Rule 12** | this gate is a **script**, not a reading |
 

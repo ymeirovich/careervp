@@ -32,9 +32,58 @@ its own dedicated fix, tracked there, not fixed as a side effect of a Wave-2 ste
 | 2.2 | P-16, P-17, P-18 | not started | — | — | — |
 | 2.3 | P-19 | not started | — | — | — |
 | 2.4 | P-20 | not started | — | — | — |
-| 2.5 | P-02 | **HUMAN REVIEW REQUIRED — not marked done.** Live prerequisites passed: CDK configured `careervp.handlers.billing_reconcile_handler.handler`, the module defined only `lambda_handler`, and the P-25 port declared `retrieve_subscription`. P-02's missing spec is the documented intentional mechanical-inline exception. Added the requested synth-resolution and moto scheduled-invocation tests; both were observed RED on their own guarded assertions because the configured `.handler` attribute did not exist. All 1,531 pre-existing backend unit+integration tests and all 52 pre-existing backend infrastructure tests remained green. Applied option A only: the Handler now ends in `.lambda_handler`; the resolution test passes. The scheduled invocation then exposed a pre-existing reconcile-path defect: DynamoDB rejects `SubscriptionRepository.scan_active_subscriptions()` because `Attr('#s')` is combined with an explicit `ExpressionAttributeNames={'#s': 'status'}`, producing an unused `#s` mapping. The prompt explicitly forbids changing reconcile logic inside P-02, so verification stopped and the step is not done. No deploy or merge was performed.** | **NEXT/GATE must resolve first:** a human must give the existing `scan_active_subscriptions` expression defect its own scoped fix (or amend P-02) before 2.5 can resume; do not fold it into this mechanical entrypoint step. Then rerun the scheduled-entrypoint moto test and the full P-02 verification matrix. Done-when #3 also remains pending: deploy through the human-gated devx path and observe one real scheduled billing-reconcile run in devx logs. `api_construct.py` is now part of the serialized CDK-template edit set for 2.5; do not overlap 2.2, 2.4, 2.7, or other edits to that file.** | pending — proposed commit message: `fix: align billing reconcile Lambda entrypoint` | 2026-07-25 |
+| 2.5 | P-02 | **HUMAN REVIEW REQUIRED — not marked done.** Live prerequisites passed: CDK configured `careervp.handlers.billing_reconcile_handler.handler`, the module defined only `lambda_handler`, and the P-25 port declared `retrieve_subscription`. P-02's missing spec is the documented intentional mechanical-inline exception. Added the requested synth-resolution and moto scheduled-invocation tests; both were observed RED on their own guarded assertions because the configured `.handler` attribute did not exist. All 1,531 pre-existing backend unit+integration tests and all 52 pre-existing backend infrastructure tests remained green. Applied option A only: the Handler now ends in `.lambda_handler`; the resolution test passes. The scheduled invocation then exposed a pre-existing reconcile-path defect: DynamoDB rejects `SubscriptionRepository.scan_active_subscriptions()` because `Attr('#s')` is combined with an explicit `ExpressionAttributeNames={'#s': 'status'}`, producing an unused `#s` mapping. The prompt explicitly forbids changing reconcile logic inside P-02, so verification stopped and the step is not done. No deploy or merge was performed.** | **NEXT/GATE must resolve first:** a human must give the existing `scan_active_subscriptions` expression defect its own scoped fix (or amend P-02) before 2.5 can resume; do not fold it into this mechanical entrypoint step. Then rerun the scheduled-entrypoint moto test and the full P-02 verification matrix. **Delivery decision recorded below:** run 2.5a-RED then a fresh 2.5a-GREEN; do not resume 2.5 directly. Done-when #3 also remains pending: deploy through the human-gated devx path and observe one real scheduled billing-reconcile run in devx logs. `api_construct.py` is now part of the serialized CDK-template edit set for 2.5; do not overlap 2.2, 2.4, 2.7, or other edits to that file.** | `2eae38b` — checkpoint commit; mixed with pre-existing prompt/rulebook documentation and therefore not the final isolated P-02 commit | 2026-07-25 |
+| 2.5a-RED | P-02, P-25 | **Prompt authored; RED not run.** P-25's AC-P25-1 RED-test briefs now name exact configured-provider, devx synth, and active-reconcile assertions. The full tests-only prompt is appended after 2.5 in `wave-2-prompts.md`. It preserves both accepted P-02 tests and prohibits implementation/infra edits. | Run 2.5a-RED only after this prompt-authoring docs change lands. RED must create the three isolated test files, observe every new test fail on its own assertion, prove the rest of the suites green with only the known P-02 blocker excluded, and commit tests only. | pending — prompt-authoring commit message: `docs(wave-2): add billing reconcile blocker prompts` | 2026-07-25 |
+| 2.5a-GREEN | P-02, P-25 | **Skeleton only — correctly not filled before RED lands (rule 11).** It will repair the invalid active-subscription scan, add fail-closed configuration-based provider selection, wire both billing handlers through that seam, and configure devx billing Lambdas for `MockProvider`. | BLOCKED on a landed 2.5a-RED commit with verbatim failures and immutable tests. A fresh GREEN session may not edit the three RED files or either accepted P-02 test. After GREEN, 2.5 still owes its human-only devx scheduled-log observation. | pending | 2026-07-25 |
 | 2.7 | P-31 | not started | — | — | — |
 | GATE | — | not started | — | — | — |
+
+---
+
+## 2.5 blocker delivery decision (2026-07-25)
+
+**What the original gate said.** P-02 was allowed to change only the configured Handler name. If
+the scheduled path required any reconciliation behavior change, 2.5 had to stop and receive a
+separately scoped fix rather than absorbing it. The session stopped as required.
+
+**What review found, using live commands.**
+
+- `uv run pytest` over the accepted P-02 tests plus focused repository tests produced
+  `1 failed, 3 passed`; DynamoDB rejected the scan with
+  `ValidationException: Value provided in ExpressionAttributeNames unused in expressions: keys:
+  {#s}`.
+- A local provider probe with `PAYMENT_PROVIDER=placeholder` raised
+  `NotImplementedError: PlaceholderPaymentProvider is not configured for production use`.
+- Read-only `aws lambda get-function-configuration` returned the deployed handler
+  `careervp.handlers.billing_reconcile_handler.handler`, `PAYMENT_PROVIDER=placeholder`, and no
+  `PAYMENT_PROVIDER_PLACEHOLDER` value.
+- A read-only DynamoDB count returned zero active current-subscription rows while scanning 915 rows.
+  That means an empty-table scheduled run can avoid the provider call and is not sufficient proof
+  that configured reconciliation works for an active subscription.
+
+**Concerns discharged and still open, one at a time.**
+
+1. Handler-name resolution is discharged in source by the option-A `.lambda_handler` change and
+   remains pinned by the accepted P-02 infrastructure test.
+2. The invalid active-subscription filter is still open. Its home is 2.5a, where a real moto table
+   must prove that only `SUBSCRIPTION#CURRENT/status=active` rows are returned.
+3. Configuration-based provider selection is still open under existing AC-P25-1. Both billing
+   handlers construct `PlaceholderPaymentProvider` directly even though CDK emits a
+   `PAYMENT_PROVIDER` setting. Its home is 2.5a.
+4. The empty-table false positive is still open. Its home is the 2.5a active-row test, which
+   requires the exact scheduled result `{"status": "ok", "checked": 1, "updated": 0, "errors": 0}`
+   with no external network call.
+5. The real scheduled-run observation remains open and stays in P-02 as a human-only devx follow-up
+   after 2.5a-GREEN and the full P-02 verification matrix pass.
+
+**Why this is a delivery split, not a silent contract change.** P-02 already requires its scheduled
+entrypoint to run reconciliation against a real moto table, and AC-P25-1 already requires billing to
+swap providers by configuration. 2.5a gives those existing requirements a separate RED/GREEN home
+after the original prompt correctly refused to widen itself. It does not add a product behavior or
+weaken an acceptance criterion. If
+`docs/db-redesign/code/code-analysis/project/scope-diff.py` or human review concludes that a new
+clause is required, 2.5a stops before implementation and follows the §0.3 twin-sync amendment
+process.
 
 ---
 
