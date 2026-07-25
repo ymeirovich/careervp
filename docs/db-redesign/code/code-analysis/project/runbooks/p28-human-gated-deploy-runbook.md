@@ -29,21 +29,27 @@ GitHub → Settings → Environments → **New environment** → name it exactly
 - Repeat for `staging` / `prod` environments (used by `execute-change-set-other`) if/when
   those environments exist.
 
-### 2a. `devx` needs its own environment — `deploy-dev` does not cover it
+### 2a. `devx` needs its own environment — `deploy-dev` does not cover it — **DONE, verified 2026-07-25**
+
+**Status: closed.** The `devx` GitHub environment exists with a required reviewer, confirmed live
+this date. Left below for the technical record and as the standing verification command — re-run
+it after any GitHub settings change, since this is exactly the kind of state that can silently
+revert with no diff and no PR.
 
 **Plain English:** the approval gate is attached to a named GitHub environment. The one that was
-set up is called `deploy-dev`, and it only guards deploys to the old `CareerVpCrudDev` stack.
-Deploys to `devx` — which is where all work now goes — run through a different job that asks
-GitHub for an environment named `devx`. If no environment by that name exists with a required
-reviewer on it, that deploy does not pause for approval. It just runs.
+set up first is called `deploy-dev`, and it only guards deploys to the old `CareerVpCrudDev`
+stack — the one being retired. Deploys to `devx` — **the primary development environment as of
+2026-07-25, where all work now goes** — run through a different job that asks GitHub for an
+environment named `devx`. If no environment by that name exists with a required reviewer on it,
+that deploy does not pause for approval. It just runs.
 
 **Technical:** `execute-change-set-dev` hardcodes `environment: deploy-dev`
 (`.github/workflows/deploy.yml:194`). `execute-change-set-other` — the job that handles every
 `workflow_dispatch` target including `devx` — sets `environment.name: ${{ inputs.environment }}`
-(`:350`), so it resolves to the literal string `devx`.
+(`:350`), so it resolves to the literal string `devx`. The dispatch input's default is now `devx`
+(top of the options list) rather than `dev`.
 
-**Do this:** GitHub → Settings → Environments → create (or confirm) an environment named exactly
-`devx`, and add yourself as a **required reviewer**. Verify with:
+**Verify (re-run any time to confirm the gate is still live):**
 
 ```
 gh api repos/ymeirovich/careervp/environments \
@@ -53,6 +59,11 @@ gh api repos/ymeirovich/careervp/environments \
 `devx` must appear in the output with `required_reviewers` among its rules. If it is absent, or
 present with no reviewer rule, the human-only-execute invariant is decorative for every Wave-2
 deploy — which is the money path.
+
+**What this does NOT cover:** a merge to `main` still deploys to old `CareerVpCrudDev` through a
+completely separate job (`execute-change-set-dev`, gated by `deploy-dev`, not `devx`). Making the
+push-to-`main` path honor the devx-primary decision is a separate, tracked, not-yet-done change —
+see `ISSUES.md` bet `B-2-4`.
 
 ## 3. Split the deploy IAM roles (least privilege)
 - **`secrets.AWS_ROLE`** (automation, create job): grant ONLY

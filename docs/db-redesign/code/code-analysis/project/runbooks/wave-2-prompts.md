@@ -47,22 +47,30 @@ amount of code reading would have surfaced. Trust git history, the file on disk,
 command you just ran. Never a status column or a prior runbook's "current state" paragraph —
 **including this one.**
 
-### 0.3 — Two things must be settled before 2.0 deploys anything
+### 0.3 — `devx` is the primary environment. One thing about bet `B-2-4` is now decided; one is not.
 
-Both are bet `B-2-4`, and it is currently **false**:
+**(2026-07-25, human decision.)** devx is now the primary development environment, and deploys
+should go **only** to devx. This is not a new stack — devx is the same `CareerVpCrudDevx` this
+wave already targets, which the P-26 v2.6.0 amendment describes as a parallel deployment created
+with `ENVIRONMENT=devx` and `p26_rehome_features=true` — i.e. the revised architecture with
+features rehomed into `CrudFeaturesNestedStack`, replacing the old flat/near-400-resource
+`CareerVpCrudDev` shape. `CareerVpCrudDev` is being retired, not extended.
 
-1. **A merge to `main` deploys to the OLD stack.** `deploy.yml:37` sets
-   `STACK_NAME: 'CareerVpCrudDev'` as a workflow-wide constant, and the `push: main` jobs hardcode
-   `ENVIRONMENT: dev`, `/careervp/dev/*` parameter reads, and `--env dev-live` parity. The `devx`
-   dropdown option only reaches the manual-dispatch job, which maps targets correctly and refuses
-   to fall through to a default. **Wave 2 is payments.** Decide whether merging should target devx
-   or should stop auto-deploying.
-2. **The approval gate does not cover devx.** See
-   [`p28-human-gated-deploy-runbook.md`](./p28-human-gated-deploy-runbook.md) §2a — the required
-   reviewer is bound to an environment named `deploy-dev`; devx deploys ask for one named `devx`.
+That resolves the *decision* half of bet `B-2-4`, but **not the code**:
 
-**Until both are settled: Wave-2 deploys are manual-dispatch only, and no Wave-2 work merges to
-`main`.**
+1. **DECIDED, not yet implemented:** a merge to `main` still deploys to the OLD stack.
+   `deploy.yml:37` sets `STACK_NAME: 'CareerVpCrudDev'` as a workflow-wide constant, and the
+   `push: main` jobs still hardcode `ENVIRONMENT: dev`, `/careervp/dev/*` parameter reads, and
+   `--env dev-live` parity. This is now a **known contradiction between policy and code**, not an
+   open question — flip the push-to-`main` target to devx (or stop auto-deploying on push) as a
+   dedicated, reviewed CI change; do not fold it silently into a Wave-2 payments step.
+2. **DONE, verified live:** the approval gate now covers devx — the `devx` GitHub deployment
+   environment exists with a required reviewer (verified 2026-07-25). See
+   [`p28-human-gated-deploy-runbook.md`](./p28-human-gated-deploy-runbook.md) §2a.
+
+**Until item 1 lands: Wave-2 deploys are manual-dispatch only** (already defaulted to `devx`), **and
+no Wave-2 work merges to `main`** — merging today would still silently target the stack being
+retired.
 
 ---
 
@@ -102,12 +110,38 @@ The backend lane (2.0 → 2.1, 2.5) may run in parallel with the infrastructure 
 reconciliation service calls a provider method the port does not declare, and fixing its entrypoint
 puts that call on a live schedule for the first time. See bet `B-2-5`.
 
+### 2.1 — Documented order is not run order
+
+**§1's table and the skeletons below are listed 2.0b, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7 — that is
+reading order, not execution order.** Running them top-to-bottom would be wrong in two ways:
+
+- **The infra lane doesn't wait for 2.0 at all.** 2.2 → 2.3 → 2.4 → 2.7 depends only on Wave 1 and
+  can start immediately — in parallel with 2.0-RED, not after it.
+- **2.0b is written second but runs last, or later.** It's freeze-line — required before a *paid*
+  launch, not before the GATE — so it can run any time after 2.0-GREEN, including after the wave
+  closes. Reading it as "step two" and running it second would burn effort on real-Stripe work
+  before the GATE actually needs it.
+
+The one true ordering constraint is the diagram above. Concretely:
+
+1. **2.0-RED → 2.0-GREEN** — sequential, blocks everything backend-side.
+2. **In parallel with the above:** 2.2 → 2.3 → 2.4 → 2.7, strictly serial within itself (all edit
+   `api_construct.py`), but this whole lane can start now.
+3. **After 2.0-GREEN:** 2.1 and 2.5, in either order — both depend only on 2.0-GREEN, not on each
+   other. (2.5 looks smaller but is not safer — see the note above.)
+4. **GATE** once 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7 are all done.
+5. **2.0b** whenever, after 2.0-GREEN — before a paid launch, not before the GATE.
+
+If two people or two sessions are available, the backend lane (step 1 above) and the infra lane
+(step 2) are the actual parallelization opportunity this wave offers.
+
 ---
 
 # PROMPT 2.0-RED — payment port + mock provider (tests only)
 
 > **Clause:** P-25 · **Spec:** [`specs/P-25-payment-provider-spec.md`](../specs/P-25-payment-provider-spec.md)
-> **Acceptance criteria:** AC-P25-1, AC-P25-2 · **Model:** opus/high
+> **Acceptance criteria:** AC-P25-1, AC-P25-2
+> **Claude:** opus/high · **Codex:** codex/high (rule 15 — from `redesign-execution-plan.md` step 2.0)
 > **Rule 7 applies — this is the money path.** RED and GREEN are two different sessions. This one
 > writes tests only and carries an **absolute prohibition** on touching implementation files.
 
@@ -124,6 +158,14 @@ prerequisites are met right now, using real commands (not memory, not this file)
 
 If the payment_providers package does not contain interface.py and placeholder.py, STOP and say so
 in plain English.
+
+BEFORE WRITING ANY TEST (rule 14): confirm, with a real command, that
+docs/db-redesign/code/code-analysis/project/specs/P-25-payment-provider-spec.md exists, that its
+"RED Tests to Write First" section names AC-P25-1 and AC-P25-2, and that each cited test states
+exact assertion values (no "or", no undefined placeholders). This will most likely be true — the
+spec was authored in Wave 0's step 0.4 fan-out, before Wave 2 began — but confirm it live rather
+than trusting that history. If any of it is not true, STOP and say so; do not write tests against
+a spec that does not say what it is testing.
 
 You are implementing clause P-25, acceptance criteria AC-P25-1 and AC-P25-2, from
 docs/db-redesign/code/code-analysis/project/specs/P-25-payment-provider-spec.md.
@@ -232,13 +274,15 @@ environment, value fetched at runtime, never a literal.
 --------------------------------------------------------------------------------
 OUTPUT REQUIRED
 --------------------------------------------------------------------------------
-1. The B-2-5 mismatch list (every port violation strict type checking found), in plain English
+1. Confirmation (rule 14) that the spec existed, named AC-P25-1/AC-P25-2, and stated exact
+   assertion values — or, if it did not, what you found and where you stopped.
+2. The B-2-5 mismatch list (every port violation strict type checking found), in plain English
    first. Update the B-2-5 row in ISSUES.md with what you actually found.
-2. Your B-2-1 decision: the exact signature-string format the tests require, written so 2.0b can
+3. Your B-2-1 decision: the exact signature-string format the tests require, written so 2.0b can
    check Stripe against it. Update B-2-1 in ISSUES.md.
-3. Verbatim failure output for every test, with a one-line why for each.
-4. Confirmation that ZERO files under src/backend/careervp/ were modified (`git diff --stat`).
-5. A git commit message.
+4. Verbatim failure output for every test, with a one-line why for each.
+5. Confirmation that ZERO files under src/backend/careervp/ were modified (`git diff --stat`).
+6. A git commit message.
 
 ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULES.md):
 - Compare what you actually built against (a) this prompt's own instructions and (b) clause P-25
@@ -255,6 +299,8 @@ ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULE
 
 # PROMPT 2.0-GREEN — make them pass
 
+> **Clause:** P-25 · **Acceptance criteria:** AC-P25-1, AC-P25-2
+> **Claude:** opus/high · **Codex:** codex/high (rule 15 — from `redesign-execution-plan.md` step 2.0)
 > Run in a **FRESH session** that has not seen 2.0-RED's reasoning. `/clear` is the minimum; a
 > separate invocation is preferred. The failing tests are a contract you did not write and **may
 > not edit** — that clause is the entire firewall. No relaxing an assertion, no `xfail`, no `skip`.
@@ -328,6 +374,7 @@ re-read the bets it lists. Earlier steps will have found things this file could 
 | **Clause** | P-25b |
 | **Spec** | `specs/P-25-payment-provider-spec.md` |
 | **Acceptance criteria** | AC-P25b-1 |
+| **Claude / Codex** | opus/high · codex/high |
 | **Depends on** | 2.0-GREEN |
 | **Deploy target** | none (backend only) |
 | **Rule 7** | RED and GREEN separate — money path |
@@ -355,6 +402,7 @@ this is where the cost lands.
 |---|---|
 | **Clauses** | P-14, P-15 |
 | **Spec** | `specs/P-14-P-15-billing-idempotency-scan-spec.md` |
+| **Claude / Codex** | opus/high · codex/high |
 | **Depends on** | 2.0-GREEN |
 | **Deploy target** | `CareerVpCrudDevx` |
 | **Rule 7** | RED and GREEN separate — money path |
@@ -381,6 +429,7 @@ recorded. Resource count checked after the change (`B-2-3`).
 |---|---|
 | **Clauses** | P-16, P-17, P-18 |
 | **Spec** | `specs/P-16-P-17-P-18-P-19-reliability-spec.md` |
+| **Claude / Codex** | sonnet/med · codex/med |
 | **Depends on** | Wave 1 |
 | **Deploy target** | `CareerVpCrudDevx` |
 | **Serialization** | edits `api_construct.py` — do not run alongside 2.4 or 2.7 |
@@ -403,6 +452,7 @@ least 6× on every queue. Synth resource count captured **before and after**.
 |---|---|
 | **Clause** | P-19 |
 | **Spec** | `specs/P-16-P-17-P-18-P-19-reliability-spec.md` |
+| **Claude / Codex** | sonnet/med · codex/med |
 | **Depends on** | 2.2 (same lane) |
 | **Deploy target** | `CareerVpCrudDevx` |
 | **Bets** | `B-2-3` |
@@ -422,6 +472,7 @@ heartbeat interval — do not pick a new number.
 |---|---|
 | **Clause** | P-20 |
 | **Spec** | `specs/P-20-throttle-load-spec.md` |
+| **Claude / Codex** | sonnet/med · codex/med |
 | **Depends on** | 2.2, 2.3 (same lane) |
 | **Deploy target** | `CareerVpCrudDevx` |
 | **Serialization** | edits `api_construct.py` |
@@ -445,6 +496,8 @@ throttle value up front has skipped the point.
 | | |
 |---|---|
 | **Clause** | P-02 |
+| **Spec** | **none — mechanical-inline by design.** `redesign-execution-plan.md`'s own step-0.4 status note lists P-02 among the intentionally uncovered clauses (same pattern as P-22). Verified live (rule 14) while writing this skeleton: `ls specs/` has no `P-02-*` file. Do not treat this as a missing spec to hunt for — this step's done-when below is what a spec would otherwise state. |
+| **Claude / Codex** | opus/high · codex/high |
 | **Depends on** | Wave 1 (independent of every other Wave-2 step) |
 | **Deploy target** | `CareerVpCrudDevx` |
 | **Bets** | none |
@@ -473,6 +526,7 @@ into another step to "save a deploy": that is exactly the cross-contamination Wa
 |---|---|
 | **Clause** | P-31 |
 | **Spec** | `specs/P-31-eventbridge-dlq-spec.md` |
+| **Claude / Codex** | sonnet/med · codex/med |
 | **Depends on** | 2.2 (same lane) |
 | **Deploy target** | `CareerVpCrudDevx` |
 | **Serialization** | edits `api_construct.py` |
@@ -491,6 +545,7 @@ target is observed landing in it.
 | | |
 |---|---|
 | **Depends on** | 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7 (2.0b is freeze-line, not a gate blocker) |
+| **Claude / Codex** | not in `redesign-execution-plan.md`'s wave table — the GATE is a verification script, not an authored implementation clause. Whoever fills this in should pick a model/effort and record it here rather than leave it silently unstated (rule 15's spirit, applied to a step the plan never routed). |
 | **Rule 12** | this gate is a **script**, not a reading |
 
 **In plain English.** Wave 2 closes when someone who was not here can run one command and get the

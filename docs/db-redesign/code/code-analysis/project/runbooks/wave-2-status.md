@@ -10,9 +10,14 @@ Rows are listed in dependency order. Before starting a step, read the row above 
 it depends on per `wave-2-prompts.md` §2) — if any of them show an open problem, resolve that
 first.
 
-**Deploy target for this entire wave: `CareerVpCrudDevx`.** Not `CareerVpCrudDev`. See the bet
-`B-2-4` in `ISSUES.md` — one deploy path still targets the old stack and must be settled before
-2.0 deploys anything.
+**Deploy target: `CareerVpCrudDevx` — and as of 2026-07-25, project-wide, not just this wave.**
+Human decision: devx is the primary development environment; deploys should go only to devx.
+`CareerVpCrudDev` is being retired. devx is the P-26 v2.6.0 parallel-stack architecture
+(`ENVIRONMENT=devx`, `p26_rehome_features=true`, features rehomed into `CrudFeaturesNestedStack`),
+not a second copy of the old shape. See `ISSUES.md` bet `B-2-4` — the *decision* is made and
+verified live in two places (devx GitHub environment + required reviewer confirmed; manual
+dispatch defaults to devx); **the push-to-`main` CI path still targets the old stack** and needs
+its own dedicated fix, tracked there, not fixed as a side effect of a Wave-2 step.
 
 | Step | Clause(s) | Status (plain English) | Open problem for the next step | Commit | Date |
 |---|---|---|---|---|---|
@@ -38,7 +43,7 @@ the rows above.
 | B-2-1 | The mock provider's signature scheme is a faithful stand-in for Stripe's | 2.0, before 2.1 starts | open |
 | B-2-2 | The provider's event id is a stable, safe idempotency key | 2.0/2.1 | open |
 | B-2-3 | Wave 2's added resources stay under the CloudFormation ceiling | every additive step | open |
-| B-2-4 | "Deploy" means devx | before 2.0 deploys | **open — currently false on the merge path** |
+| B-2-4 | "Deploy" means devx | before 2.0 deploys | **decision made 2026-07-25 (devx primary); merge-to-main CI still needs the matching fix** |
 | B-2-5 | Billing already depends on the port, so 2.0 is small | first hour of 2.0 | **open — already FALSE: two consumers call a method the port never declares** |
 
 ---

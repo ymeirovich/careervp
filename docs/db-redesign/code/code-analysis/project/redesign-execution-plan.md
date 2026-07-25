@@ -229,26 +229,34 @@ Resume by re-pasting `handoff.md` + attachments and saying "continue".
 
 ### Wave 2 — Reliability / money
 
-> **Deploy target for every step below: `CareerVpCrudDevx`.** Not `CareerVpCrudDev`. Where a
+> **`CareerVpCrudDevx` is the primary development environment, project-wide, as of 2026-07-25 —
+> not just this wave's deploy target.** Human decision: deploys should go only to devx;
+> `CareerVpCrudDev` is being retired, not extended. devx is not a second copy of the old stack — it
+> is the P-26 v2.6.0 amendment's revised architecture, created with `ENVIRONMENT=devx` and
+> `p26_rehome_features=true` so features are rehomed into `CrudFeaturesNestedStack` from first
+> creation, already proven at 211 live resources against the old shape's near-400. Where a
 > Wave-0/Wave-1 row or a runbook says `dev`, read `devx` for all Wave-2+ work — those rows are
 > closed history and are deliberately not rewritten. Concretely: `cdk diff CareerVpCrudDevx`,
 > `ENVIRONMENT=devx`, SSM under `/careervp/devx/*`, and smoke against the raw invoke URL
 > `https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod/` — `api.dev.careervp.com` still
 > resolves to the OLD stack, so anything pointed at the friendly domain is testing the wrong thing.
 >
-> **Two things a human must settle before step 2.0 deploys anything:**
+> **One item from this decision is verified done; one is a known, tracked gap — not silently
+> assumed fixed:**
 >
-> 1. **A merge to `main` auto-deploys to old `CareerVpCrudDev`, not devx.** `deploy.yml` sets
->    `STACK_NAME: 'CareerVpCrudDev'` as a workflow-level constant (`:37`) and the
+> 1. ✅ **`devx` has a GitHub environment with a required reviewer** (verified live 2026-07-25). See
+>    `runbooks/p28-human-gated-deploy-runbook.md` §2a. Manual `workflow_dispatch` now defaults to
+>    `devx` and maps every target correctly.
+> 2. ❌ **A merge to `main` still auto-deploys to the old `CareerVpCrudDev`, not devx.** `deploy.yml`
+>    sets `STACK_NAME: 'CareerVpCrudDev'` as a workflow-level constant (`:37`) and the
 >    `create-change-set-dev` / `execute-change-set-dev` pair runs on `push: main` with
->    `ENVIRONMENT: dev`, `/careervp/dev/*` SSM reads, and `--env dev-live` all hardcoded. The
->    `devx` dropdown option only reaches `create-change-set-other` (`:279`), which maps targets
->    correctly and refuses to fall through to a default. So manual dispatch to devx is safe;
->    merging is not. Wave 2 is payments and idempotency — decide whether main-merge should target
->    devx, or should stop auto-deploying, **before** money-path code can reach that path.
-> 2. **`devx` needs a GitHub environment with a required reviewer.** See
->    `runbooks/p28-human-gated-deploy-runbook.md` §2a. Without it, devx deploys skip the
->    human-gated execute step entirely.
+>    `ENVIRONMENT: dev`, `/careervp/dev/*` SSM reads, and `--env dev-live` all hardcoded. This is now
+>    a **known contradiction between policy and code** — the decision to deploy only to devx is
+>    made; the CI change that would make push-to-`main` honor it is not. Fix as a dedicated,
+>    reviewed CI change, not folded into a Wave-2 payments step. See `ISSUES.md` bet `B-2-4`.
+>
+> **Until item 2 lands: Wave-2 deploys are manual-dispatch only, and no Wave-2 work merges to
+> `main`** — merging today would still silently target the stack being retired.
 
 | # | Clause(s) | Step | Claude | Codex | Deps |
 |---|---|---|---|---|---|

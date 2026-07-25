@@ -2,10 +2,10 @@
 
 **What this file is:** the rulebook every wave-prompt file (`wave-0-prompts.md`,
 `wave-1-prompts.md`, `wave-2-prompts.md`, …) must follow. Whoever writes a new wave's prompt
-file — human or agent — must apply these eight rules to every prompt in it, and must link this
-file from the top of the new wave-prompts file. This is the fix for a real problem found while
-building `wave-1-prompts.md`: status lived only in loose prose inside the prompt file itself,
-so it went stale and nothing forced the next prompt to notice.
+file — human or agent — must apply every rule in this file to every prompt in it, and must link
+this file from the top of the new wave-prompts file. This is the fix for a real problem found
+while building `wave-1-prompts.md`: status lived only in loose prose inside the prompt file
+itself, so it went stale and nothing forced the next prompt to notice.
 
 > **Amended 2026-07-22:** rules 7 and 8 added while planning Wave-1 step 1.1. Both come from real
 > incidents in this project, described in each rule. Rules 1–6 are unchanged.
@@ -22,7 +22,7 @@ so it went stale and nothing forced the next prompt to notice.
 
 ---
 
-## The thirteen rules
+## The fifteen rules
 
 ### 1. Every prompt ends by writing a git commit message
 
@@ -237,12 +237,74 @@ the 401 retry interceptor worked *when something registered it*, and **nothing i
 application ever did** — a permanently green test over a sign-out path that was broken in
 production, found only by logging in for real. Standardizing this is the cheapest rule in this file.
 
+> **Amended 2026-07-25:** rules 14 and 15 added while writing Wave 2's `2.0-RED` prompt — both
+> caught live, inside the very prompt meant to demonstrate the discipline. Rules 1–13 unchanged.
+
+### 14. A prompt confirms the spec exists — with real RED-test descriptions naming exact assertions — before writing a single test
+
+Spec-before-test is not new; it is this project's standing convention
+(`project-scope-lock.yaml` v1.3.0): a spec's "RED Tests to Write First" section is authored first,
+naming exact assertions per acceptance criterion, and the pytest files that make those tests real
+are written later, at implement time, never as a separate artifact. This rule makes that ordering
+an **enforced check inside the standing-check block**, not an assumption inherited from the fact
+that Wave 0 happened to author the specs first.
+
+Before writing any test file, the standing check confirms, with a real command, not memory:
+
+1. The named spec file exists at the path the prompt (or skeleton) cites.
+2. It has a "RED Tests to Write First" section naming the exact acceptance-criteria IDs this
+   prompt implements.
+3. Each cited RED-test description states exact assertion values — no "or"-shaped assertions, no
+   undefined placeholders (`spec_time_lint`, `project-scope-lock.yaml` `spec_test_acceptance`).
+
+If any of the three fails, **STOP.** Do not write a test against a spec that does not exist or
+does not say what it is testing — author or fix the spec section first, as a separate, visible
+action, never as a silent workaround folded into the test-writing step.
+
+If a RED session concludes a needed test is not in the spec's list, it says so explicitly, names
+what discovered the need, and does not silently fold it in as if the spec had always covered it —
+this is rule 5's flag-don't-fix, applied specifically to test coverage the spec never anticipated.
+
+**This applies identically when a skeleton is filled in.** A skeleton's `Spec` and
+`Acceptance criteria` fields are a claim made when the wave was planned, not a proof — the session
+filling it in re-verifies all three checks live, exactly as it would starting from nothing. This is
+rule 4 (check your own prerequisites), applied specifically to the spec/test ordering, and it is
+why a skeleton is not itself sufficient to start writing tests.
+
+**The incident.** Found live, inside this file's own Wave-2 work: `wave-2-prompts.md`'s
+`PROMPT 2.0-RED` cites `specs/P-25-payment-provider-spec.md` in its header and lists tests drawn
+from that spec's "RED Tests to Write First" section — but its standing check verified git history
+and package structure and never verified the spec file itself existed or contained what the prompt
+was about to build tests from. It happened to be true (the spec was authored in Wave 0's step 0.4
+fan-out, before any wave began) — but nothing in the prompt checked that; it was inherited on
+faith. The same class of unverified assumption rule 9's bets exist to catch, here applied to
+spec/test sequencing instead of an infrastructure belief.
+
+### 15. Every prompt states both Claude's and Codex's model and effort — never one alone
+
+The execution plan's wave tables (`redesign-execution-plan.md`, one row per step) carry two model
+columns, because this project routes work to either engine. A prompt or skeleton that states only
+one silently narrows that choice for whoever runs it next, and drifts from the plan that is
+supposed to be authoritative over it.
+
+Every full prompt's header, and every skeleton's field table, states **both** —
+`Claude: <model>/<effort>` and `Codex: <model>/<reasoning>` — copied verbatim from the execution
+plan's per-step columns for that clause. Never invented at prompt-writing time, never left
+Claude-only.
+
+**The incident.** `wave-2-prompts.md`'s `PROMPT 2.0-RED` and `PROMPT 2.0-GREEN` headers stated
+`Model: opus/high` and said nothing about Codex — even though `redesign-execution-plan.md`'s own
+Wave-2 table row for step 2.0 (P-25) names both `opus/high` and `codex/high`. Found live when a
+human read the header and noticed the omission, in the same session rule 14 was found in — two
+gaps in the one prompt meant to model the discipline for the rest of the wave.
+
 ---
 
 ## The two blocks every prompt must contain
 
 Every copy-paste prompt in every wave-N-prompts.md file must include these two blocks, near
-verbatim (swap in the correct wave number and file names). They implement rules 2–6 above.
+verbatim (swap in the correct wave number, file names, spec path, and acceptance-criteria IDs).
+They implement rules 2–6 and 14 above.
 
 The others are structural rather than per-prompt, and fire at different moments:
 
@@ -255,6 +317,11 @@ The others are structural rather than per-prompt, and fire at different moments:
 | 11 (first prompt full, rest skeleton) | when the wave's prompt file is *created*, and again at each fill-in |
 | 12 (re-runnable demonstration) | at the wave GATE |
 | 13 (a test must be seen to fail) | inside every RED session, before GREEN starts |
+| 15 (both models stated) | when the prompt/skeleton header is *written*, never left to the runner to guess |
+
+**Every prompt header states, without exception:** the clause id(s), the spec file path, the
+acceptance-criteria IDs, and both `Claude: <model>/<effort>` and `Codex: <model>/<reasoning>` —
+copied from the execution plan's row for that step (rule 15).
 
 **Near the top, right after the prompt states what it's implementing:**
 
@@ -264,6 +331,12 @@ before this one (in dependency order) left something open or unresolved, deal wi
 do not start this step's own work with unfinished business behind you. Then confirm THIS step's
 own prerequisites are actually met right now, using a real command (not memory, not this file) —
 if they are not, STOP and say so in plain English.
+
+BEFORE WRITING ANY TEST (rule 14): confirm, with a real command, that <spec file path> exists, that
+it has a "RED Tests to Write First" section naming <the acceptance-criteria IDs this prompt
+implements>, and that each cited test names exact assertion values (no "or", no undefined
+placeholders). If any of that is not true, STOP — author or fix the spec section first; do not
+write tests against a spec that does not say what it is testing.
 ```
 
 **At the end, inside "OUTPUT REQUIRED":**
@@ -292,9 +365,11 @@ ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULE
    when you know least and can still change the order cheaply; the gate is when you find out.
 4. **Write the first prompt in full and the rest as contractual skeletons** (rule 11). Do not
    instantiate the whole wave.
-5. Bake the two standard blocks above into every single prompt, not just the risky ones. A
-   skipped small step is exactly where a silent problem hides. A skeleton carries them by
-   reference; a filled-in prompt carries them verbatim.
+5. Bake the two standard blocks above into every single prompt, not just the risky ones — including
+   the rule-14 spec-verification line inside the standing check and both models on the header line
+   (rule 15). A skipped small step is exactly where a silent problem hides. A skeleton carries these
+   by reference (its `Spec`, `Acceptance criteria`, and model/effort fields); a filled-in prompt
+   carries them verbatim, re-verified live, not copied on faith from the skeleton.
 6. If you're validating a wave's prompt file against `project-scope-lock.yaml` (as was done for
    Wave 1), and you find a discrepancy between what the working plan says and what the contract
    file says — that is itself a rule-5 situation. Flag it in plain language, and don't treat the

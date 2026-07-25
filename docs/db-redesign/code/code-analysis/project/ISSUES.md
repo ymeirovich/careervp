@@ -281,21 +281,33 @@ rather than an emergency redesign. Never move the API or the user pool.
 ## B-2-4 — "Deploy" means devx
 
 - **Load-bearing for:** every Wave-2 step that reaches AWS.
+- **Status (2026-07-25): decision made, code not yet updated.** See below.
 
 **The belief.** Wave-2 code lands on `CareerVpCrudDevx` and nowhere else.
 
-**Why it is a bet.** It is currently false on one path. `deploy.yml` sets
-`STACK_NAME: 'CareerVpCrudDev'` as a workflow-wide constant and the push-to-`main` jobs hardcode the
-old environment, its parameter-store paths, and its parity target. Manual dispatch maps targets
-correctly and refuses to guess; **merging does not.** Wave 2 is payments. Separately, the approval
-gate is bound to a deployment environment named `deploy-dev`, which does not cover devx deploys at
-all (see `runbooks/p28-human-gated-deploy-runbook.md` §2a).
+**Why it was a bet.** It was false on one path. `deploy.yml` sets `STACK_NAME: 'CareerVpCrudDev'`
+as a workflow-wide constant and the push-to-`main` jobs hardcode the old environment, its
+parameter-store paths, and its parity target. Manual dispatch maps targets correctly and refuses
+to guess; merging did not. Separately, the approval gate was bound to a deployment environment
+named `deploy-dev`, which did not cover devx deploys at all.
 
-**The check.** Before 2.0 deploys anything: confirm a deployment environment named `devx` exists
-with a required reviewer, and confirm what a merge to `main` would target.
+**Resolved (2026-07-25), human decision: devx is the primary development environment; deploys
+should go only to devx.** `CareerVpCrudDev` is being retired, not extended — devx is the P-26
+v2.6.0 parallel-stack architecture (`ENVIRONMENT=devx`, `p26_rehome_features=true`, features
+rehomed into `CrudFeaturesNestedStack`), already proven at 211 resources against the old shape's
+near-400. This settles the *decision* this bet was checking for.
 
-**The fallback.** Until both are settled, Wave-2 deploys are manual-dispatch only, and no Wave-2
-work merges to `main`. Stated as a rule now so it is a decision rather than an accident.
+**What is actually true right now, checked live:**
+- ✅ The `devx` GitHub deployment environment exists with a required reviewer (verified
+  2026-07-25) — see `runbooks/p28-human-gated-deploy-runbook.md` §2a.
+- ✅ Manual `workflow_dispatch` now defaults to `devx` and correctly maps every target.
+- ❌ **`deploy.yml`'s push-to-`main` path still targets `CareerVpCrudDev`.** This is now a known
+  contradiction between policy and code, not an open question — the decision is made, the CI
+  change to act on it is not. Do not read "decided" as "done."
+
+**The fallback, still in force:** Wave-2 deploys are manual-dispatch only (already defaults to
+`devx`), and **no Wave-2 work merges to `main`** until the push-to-`main` target is fixed —
+merging today would still silently deploy to the stack being retired.
 
 ---
 
