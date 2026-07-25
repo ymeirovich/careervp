@@ -53,6 +53,25 @@ the rows above.
   to the OLD stack. Use the raw invoke URL
   `https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod/` until the human-only base-path
   flip happens.
+- **(2026-07-25) Amplify's `db-redesign` branch already targets devx — but only as live AWS
+  state, not as code.** Verified via `aws amplify get-branch --app-id d3j2wnm8g5clnw
+  --branch-name db-redesign`: `NEXT_PUBLIC_API_URL` is the devx raw invoke URL,
+  `NEXT_PUBLIC_COGNITO_USER_POOL_ID` is `us-east-1_bAZ6jb6HP` (devx pool), domain is
+  `careervp-devx.auth...`. This was set by hand in Wave-1 step 1.6; `infra/careervp/
+  frontend_stack.py` does not manage Amplify branches or their env vars at all (zero matches
+  for `amplify`/`Branch(` in that file) — so nothing in the repo documents this, and nothing
+  prevents someone clearing the override in the Amplify console ("use app defaults") and
+  silently reverting the branch to the dev pool / `api.dev.careervp.com` (the APP-LEVEL
+  defaults, confirmed still dev via `aws amplify get-app`). **This is out-of-band state exactly
+  like the SSM parity note above — verify from live before trusting either.** Not a Wave-2
+  blocker; recorded so the drift risk is known rather than rediscovered.
+  Separately, `.github/workflows/deploy-frontend.yml` (validate-only, does not deploy — see
+  `ISSUES.md` I-03) still hardcodes dev-pool fallback values, but only triggers on push to
+  `main`, so it never runs against `db-redesign` and this has no live effect.
+  **The GitHub deployment environment `devx` (Settings → Environments) governs NEITHER of the
+  above.** It gates exactly one thing: the `execute-change-set-other` job in `deploy.yml` — the
+  backend CloudFormation approval step. Amplify has no concept of a GitHub environment and never
+  reads it.
 - Carried in from Wave 1, still open: the browser login client still holds the admin scope and the
   insecure grant (`ISSUES.md` I-06). It does **not** gate Wave 2. It gates staging promotion, and
   it now has a written stopping condition.
