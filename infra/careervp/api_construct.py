@@ -61,6 +61,7 @@ class ApiConstruct(Construct):
         super().__init__(scope, id_)
         self.id_ = id_
         self.naming = naming
+        self._is_production_env = is_production_env
         if scratch_settings is not None:
             validate_scratch_boundary(
                 scratch_settings,
@@ -2940,6 +2941,16 @@ class ApiConstruct(Construct):
             architecture=_lambda.Architecture.X86_64,
         )
 
+    def _billing_payment_provider_name(self) -> str:
+        """Provider selection for the billing Lambdas.
+
+        Non-production environments run the launch-rehearsal MockProvider. Production
+        stays on the fail-closed ``placeholder`` sentinel until StripeProvider wiring
+        lands at the paid-launch freeze line (P-25b), so no real money path can run on
+        a mock provider.
+        """
+        return "placeholder" if self._is_production_env else "mock"
+
     def _build_billing_webhook_dlq(self) -> aws_sqs.Queue:
         """Dead-letter queue for failed billing webhook events."""
         return aws_sqs.Queue(
@@ -2984,7 +2995,7 @@ class ApiConstruct(Construct):
                 "PRICE_ID_QUARTERLY": self._parameter_value(
                     "payment-provider-price-quarterly"
                 ),
-                "PAYMENT_PROVIDER": "placeholder",
+                "PAYMENT_PROVIDER": self._billing_payment_provider_name(),
             },
             timeout=Duration.seconds(30),
             memory_size=256,
@@ -3089,7 +3100,7 @@ class ApiConstruct(Construct):
             function_name=function_name,
             environment={
                 "TABLE_NAME": self.api_db.db.table_name,
-                "PAYMENT_PROVIDER": "placeholder",
+                "PAYMENT_PROVIDER": self._billing_payment_provider_name(),
             },
             timeout=Duration.seconds(300),
             memory_size=256,

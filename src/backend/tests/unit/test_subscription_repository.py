@@ -409,15 +409,31 @@ class TestScanActiveSubscriptions:
         idempotency_table.scan.assert_not_called()
 
     def test_aliases_reserved_word_status(self) -> None:
-        """status is a DynamoDB reserved word — must use ExpressionAttributeNames."""
+        """status is a DynamoDB reserved word — boto3 must alias it, not the caller.
+
+        The scan filters on ``status`` via a boto3 ``Attr('status')`` condition, so
+        boto3 serializes the reserved word into its own ExpressionAttributeNames
+        placeholder. The repository must NOT hand-roll an ``#s`` alias: injecting one
+        alongside the ``Attr`` condition leaves it unused and DynamoDB rejects the scan
+        with ``ValidationException: ... ExpressionAttributeNames unused in expressions``.
+        """
+        from boto3.dynamodb.conditions import ConditionExpressionBuilder
+
         repo, users_table, _ = _make_repo()
         users_table.scan.return_value = {'Items': []}
 
         repo.scan_active_subscriptions()
 
         kwargs = users_table.scan.call_args.kwargs
-        assert '#s' in kwargs.get('ExpressionAttributeNames', {})
-        assert kwargs['ExpressionAttributeNames']['#s'] == 'status'
+        # boto3 owns the aliasing — no hand-rolled, unused ExpressionAttributeNames.
+        assert 'ExpressionAttributeNames' not in kwargs
+
+        built = ConditionExpressionBuilder().build_expression(kwargs['FilterExpression'], is_key_condition=False)
+        # The reserved word `status` is still aliased (by boto3) and filtered on `active`,
+        # alongside the SUBSCRIPTION#CURRENT sort-key guard.
+        assert 'status' in built.attribute_name_placeholders.values()
+        assert 'active' in built.attribute_value_placeholders.values()
+        assert SUBSCRIPTION_SK in built.attribute_value_placeholders.values()
 
     def test_paginates_until_no_last_evaluated_key(self) -> None:
         """Must loop pages — a single scan is capped at 1 MB."""

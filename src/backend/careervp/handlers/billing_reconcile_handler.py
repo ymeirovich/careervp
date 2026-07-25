@@ -24,7 +24,7 @@ def _get_reconciliation_service() -> ReconciliationService:
     if _reconciliation_service is None:
         _reconciliation_service = ReconciliationService(
             subscription_repo=SubscriptionRepository(),
-            payment_provider=get_payment_provider(),
+            provider_factory=get_payment_provider,
         )
     return _reconciliation_service
 
