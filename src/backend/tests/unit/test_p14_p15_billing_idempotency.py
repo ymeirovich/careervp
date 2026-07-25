@@ -22,7 +22,6 @@ from careervp.payment_providers.mock_provider import MockProvider
 
 _IDEMPOTENCY_TABLE_NAME = 'careervp-idempotency-table-test'
 _USERS_TABLE_NAME = 'careervp-users-table-test'
-_IDEMPOTENCY_INDEX_NAME = 'idempotency-key-index'
 _CUSTOMER_ID_INDEX_NAME = 'customer-id-index'
 _WEBHOOK_SECRET_PARAMETER_NAME = '/careervp/test/payment-provider-webhook-secret'
 _WORKER_APPLICATION_ID = 'app-p14-001'
@@ -33,20 +32,20 @@ _PAYMENT_EVENT_RETENTION_SECONDS = 604800
 
 
 def _create_idempotency_table(dynamodb: Any) -> Any:
-    """Create the idempotency table with its named duplicate-detection GSI."""
+    """Create the idempotency table exactly as deployed: PK ``id``, no GSI.
+
+    Mirrors ``_build_idempotency_table`` (infra/careervp/api_db_construct.py:164)
+    — a single ``id`` partition key with a ``expiration`` TTL and NO secondary
+    index. Billing/webhook idempotency is a conditional ``put_item`` on that
+    primary key (attribute_not_exists(id)); it never queries an index. The
+    ``idempotency-key-index`` GSI is a *jobs-table* construct (api_db_construct.py
+    :304-311) for job dedup and does not belong on this table.
+    """
     return dynamodb.create_table(
         TableName=_IDEMPOTENCY_TABLE_NAME,
         KeySchema=[{'AttributeName': 'id', 'KeyType': 'HASH'}],
         AttributeDefinitions=[
             {'AttributeName': 'id', 'AttributeType': 'S'},
-            {'AttributeName': 'idempotency_key', 'AttributeType': 'S'},
-        ],
-        GlobalSecondaryIndexes=[
-            {
-                'IndexName': _IDEMPOTENCY_INDEX_NAME,
-                'KeySchema': [{'AttributeName': 'idempotency_key', 'KeyType': 'HASH'}],
-                'Projection': {'ProjectionType': 'ALL'},
-            }
         ],
         BillingMode='PAY_PER_REQUEST',
     )
