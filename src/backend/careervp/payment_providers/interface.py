@@ -144,3 +144,22 @@ class PaymentProviderInterface(Protocol):
         This is called once at cold-start and cached by the billing service.
         """
         ...
+
+    def retrieve_subscription(self, subscription_id: str) -> dict[str, Any]:
+        """
+        Fetch the current provider-side subscription object by its ID.
+
+        Used by the webhook (checkout.session.completed) and the nightly
+        reconciliation run to read authoritative subscription state — status,
+        period bounds, price/items, cancellation flags — straight from the
+        provider rather than trusting a possibly-stale stored copy.
+
+        Returns:
+            The provider's raw subscription object as a dict (e.g. keys
+            ``status``, ``current_period_start``, ``current_period_end``,
+            ``cancel_at_period_end``, ``items``).
+
+        Raises:
+            PaymentProviderError: if the subscription cannot be retrieved.
+        """
+        ...

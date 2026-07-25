@@ -241,6 +241,17 @@ replay test. **2.0b's remaining job:** confirm real Stripe uses `t`/`v1`, HMAC o
 default tolerance 300 s — if any differs, the port shape and these tests change at 2.0b, not in 2.1.
 Status: open → format decided; Stripe cross-check is 2.0b's.
 
+**Implemented 2026-07-25 (step 2.0-GREEN).** The scheme is now real code, not just a decided format:
+`careervp/payment_providers/mock_provider.py:MockProvider.construct_webhook_event` parses
+`t=<unix>,v1=<hex>` out of the single signature string, recomputes
+`HMAC-SHA256(secret, f"{t}.{payload}")` over the raw body bytes, constant-time-compares
+(`hmac.compare_digest`), and only then rejects a timestamp outside `WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS`
+(300 s) with code `WEBHOOK_TIMESTAMP_OUT_OF_TOLERANCE`. The two RED negative tests
+(`rejects_tampered_signature`, `rejects_replay_timestamp`) now pass against this real check, so the
+"cryptographically real, not tautological" requirement is satisfied in code. **Unchanged for 2.0b:**
+the Stripe cross-check against these exact constants is still owed before 2.1 — they are named
+constants in `mock_provider.py`, so 2.0b diffs against one file.
+
 ---
 
 ## B-2-2 — The provider's event id is a stable, safe idempotency key
@@ -279,6 +290,16 @@ wiring lives). **Decision fixed now (the bet's job):** `WebhookEvent.event_id` M
 provider retries of one event; idempotency keys on it (`record_payment_event`). If a provider cannot
 guarantee a stable id, idempotency keys on a digest of the verified raw payload instead — decided now,
 before 2.1 writes its tests, per this bet's own fallback. Status: open (test lands in 2.1).
+
+**Parsing side confirmed 2026-07-25 (step 2.0-GREEN); emission side still 2.1's.**
+`MockProvider.construct_webhook_event` derives `WebhookEvent.event_id` from the verified body's `id`
+field (`body.get('id', …)`), so "same verified payload → same `event_id`" holds by construction on the
+parse path — consistent with the decision above. This is exactly the *weak* half the RED note flagged:
+it does NOT exercise the fresh-id-per-delivery-attempt footgun, which lives in the mock's
+emission/retry surface (not built at 2.0). So the strong
+`test_p25_mock_event_id_is_stable_across_retries` remains **assigned to 2.1**, together with the
+digest-fallback wiring if a real provider's id turns out unstable. Status: unchanged — open, test lands
+in 2.1; nothing at 2.0-GREEN moved it.
 
 ---
 
@@ -398,3 +419,18 @@ is a little larger than the bet's own "two call sites" estimate. **Note the 2.5 
 `reconciliation_service` is the consumer whose scheduled entrypoint has never run (handler-name
 mismatch), so this undeclared-port call has never executed deployed — whoever does 2.5 must reconcile
 the port BEFORE fixing the entrypoint, or that call goes live for the first time.
+
+**CLOSED 2026-07-25 (step 2.0-GREEN) — port reconciled, all five findings fixed.**
+`retrieve_subscription(subscription_id: str) -> dict[str, Any]` is now declared on
+`PaymentProviderInterface` (the port describes what billing needs, per the prompt's "add it to the
+Protocol" guidance) and implemented on `MockProvider` + `PlaceholderPaymentProvider`. All THREE
+consumers are annotated `PaymentProviderInterface` instead of `Any`
+(`billing_service`, `webhook_service`, `reconciliation_service`). The `billing_service:76`
+`customer_id: str | None` gap is fixed by changing `_get_or_create_customer_id` to return
+`str | dict[str, Any]` (str on success, error-dict otherwise), so strict typing narrows
+`customer_id` to `str` at the `create_checkout_session` call with no dead branch. The two redundant
+`cast(WebhookEvent, …)` in `webhook_service` are removed now that `construct_webhook_event` returns
+`WebhookEvent` through the typed port. `mypy careervp --strict` clean (131 files), full unit 1360
+passed. **2.5 link now DISCHARGED at the port level:** the undeclared-port call is gone, so fixing
+the reconciliation entrypoint in 2.5 no longer puts an unenforced call on a live schedule — 2.5 still
+owns the handler-name fix itself. Status: **settled — belief was FALSE, port now enforced.**

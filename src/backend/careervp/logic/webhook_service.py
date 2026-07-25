@@ -23,9 +23,13 @@ Idempotency (commit-after-work):
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, cast
+from typing import Any
 
-from careervp.payment_providers.interface import PaymentProviderError, WebhookEvent
+from careervp.payment_providers.interface import (
+    PaymentProviderError,
+    PaymentProviderInterface,
+    WebhookEvent,
+)
 
 
 def _ts_to_iso(unix_ts: int) -> str:
@@ -43,7 +47,7 @@ class WebhookService:
     def __init__(
         self,
         subscription_repo: Any,
-        payment_provider: Any,
+        payment_provider: PaymentProviderInterface,
         primary_secret: str,
         previous_secret: str = 'none',
     ) -> None:
@@ -60,10 +64,10 @@ class WebhookService:
         if all attempts fail.
         """
         try:
-            return cast(WebhookEvent, self._payment_provider.construct_webhook_event(payload_bytes, sig_header, self._primary_secret))
+            return self._payment_provider.construct_webhook_event(payload_bytes, sig_header, self._primary_secret)
         except PaymentProviderError:
             if self._previous_secret and self._previous_secret != 'none':
-                return cast(WebhookEvent, self._payment_provider.construct_webhook_event(payload_bytes, sig_header, self._previous_secret))
+                return self._payment_provider.construct_webhook_event(payload_bytes, sig_header, self._previous_secret)
             raise
 
     def handle_webhook(self, payload_bytes: bytes, sig_header: str) -> dict[str, Any]:

@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import Any
 
 from careervp.handlers.utils.observability import logger
+from careervp.payment_providers.interface import PaymentProviderInterface
 
 
 class ReconciliationService:
@@ -28,7 +29,7 @@ class ReconciliationService:
     def __init__(
         self,
         subscription_repo: Any,
-        payment_provider: Any,
+        payment_provider: PaymentProviderInterface,
     ) -> None:
         self._sub_repo = subscription_repo
         self._payment_provider = payment_provider

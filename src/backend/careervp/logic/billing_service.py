@@ -17,6 +17,7 @@ from careervp.payment_providers.interface import (
     CheckoutSession,
     CustomerRecord,
     PaymentProviderError,
+    PaymentProviderInterface,
     PortalSession,
 )
 
@@ -30,7 +31,7 @@ class BillingService:
         self,
         subscription_repo: Any,
         user_repo: Any,
-        payment_provider: Any,
+        payment_provider: PaymentProviderInterface,
     ) -> None:
         self._sub_repo = subscription_repo
         self._user_repo = user_repo
@@ -65,9 +66,13 @@ class BillingService:
         if existing and existing.get('status') == 'active':
             return {'status_code': 409, 'error': 'User already has an active subscription'}
 
-        customer_id, error = self._get_or_create_customer_id(user_id)
-        if error is not None:
-            return error
+        # Returns the customer_id (str) on success, or an error-response dict.
+        # The str|dict split lets strict typing narrow customer_id to str below,
+        # which the port's create_checkout_session(customer_id: str) now requires.
+        outcome = self._get_or_create_customer_id(user_id)
+        if isinstance(outcome, dict):
+            return outcome
+        customer_id = outcome
 
         price_map: dict[str, str] = self._payment_provider.get_price_map()
         price_id = price_map[plan]
@@ -93,8 +98,8 @@ class BillingService:
     def _get_or_create_customer_id(
         self,
         user_id: str,
-    ) -> tuple[str, None] | tuple[None, dict[str, Any]]:
-        """Return (customer_id, None) or (None, error_dict).
+    ) -> str | dict[str, Any]:
+        """Return the customer_id (str) on success, or an error-response dict.
 
         If a customer_id already exists, returns it immediately.
         Otherwise acquires a checkout lock, creates the customer, stores the id,
@@ -102,7 +107,7 @@ class BillingService:
         """
         customer_id: str | None = self._sub_repo.get_customer_id(user_id)
         if customer_id:
-            return customer_id, None
+            return customer_id
 
         # Acquire atomic lock — raises ClientError(ConditionalCheckFailedException)
         # if another checkout is already in progress for this user
@@ -111,7 +116,7 @@ class BillingService:
         except ClientError as exc:
             error_code = exc.response.get('Error', {}).get('Code', '')
             if error_code == 'ConditionalCheckFailedException':
-                return None, {
+                return {
                     'status_code': 409,
                     'error': 'checkout_in_progress',
                     'code': ResultCode.CHECKOUT_IN_PROGRESS,
@@ -133,7 +138,7 @@ class BillingService:
                     metadata={'user_id': user_id},
                 )
             except PaymentProviderError as exc:
-                return None, {
+                return {
                     'status_code': 502,
                     'error': str(exc),
                     'code': ResultCode.PAYMENT_PROVIDER_ERROR,
@@ -141,7 +146,7 @@ class BillingService:
 
             new_id: str = customer.customer_id
             self._sub_repo.update_customer_id(user_id, new_id)
-            return new_id, None
+            return new_id
         finally:
             # Always release the lock — TTL is last-resort cleanup only
             self._sub_repo.release_checkout_intent(user_id)
