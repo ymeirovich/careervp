@@ -38,10 +38,11 @@ Async generation and billing workers must survive retries without silent loss or
 
 ## RED Tests to Write First
 
-- `test_p16_rate_limited_consumers_have_max_concurrency`: synth event sources and assert configured max concurrency/reserved concurrency for each rate-limited worker.
+- `test_p16_rate_limited_consumers_have_max_concurrency`: synth functions and event-source mappings and assert `reserved_concurrent_executions == 5` for each rate-limited worker: `VprSqsWorkerLambda` (`careervp.handlers.vpr_worker_handler.lambda_handler`, Anthropic VPR generation; docs/specs/07-vpr-async-architecture.md pins worker concurrency 5 for Claude Tier-2 rate-limit compliance), `CoverLetterWorkerLambda` (`careervp.handlers.cover_letter_handler.lambda_handler`, Anthropic cover-letter generation; shares the same Anthropic key/rate budget), `InterviewPrepWorkerLambda` (`careervp.handlers.interview_prep_handler.lambda_handler`, Anthropic interview-prep generation; shares the same Anthropic key/rate budget), `CvTailorWorkerLambda` (`careervp.handlers.cv_tailoring_handler.handler`, Anthropic CV-tailoring generation; stream-triggered but the function reservation still bounds downstream Anthropic calls), and `CompanyResearchWorkerLambda` (`careervp.handlers.company_research_worker_handler.lambda_handler`, Tavily search plus Anthropic structuring; bounded to the same 5-worker AI-consumer ceiling from the reliability context). Use function-level reserved concurrency, not SQS event-source `max_concurrency`, because the live rate-limited set includes both SQS and DynamoDB-stream consumers and the function reservation is the one mechanism that caps all concurrent downstream API calls.
 - `test_p17_all_sqs_event_sources_report_batch_item_failures`: synth Lambda event source mappings and assert `FunctionResponseTypes` includes `ReportBatchItemFailures`.
 - `test_p17_worker_handlers_return_batch_item_failures`: call worker handlers with one failing record and assert `batchItemFailures == [{'itemIdentifier': <failed-message-id>}]`.
 - `test_p18_visibility_timeout_at_least_6x_lambda_timeout`: synth queues and functions; assert `visibility_timeout_seconds >= 6 * function_timeout_seconds`.
+- `test_p17_all_eight_dlqs_have_depth_alarms`: synth both stacks and assert each of the eight DLQs (`careervp-vpr-jobs-dlq-dlq-{env}`, `careervp-cover-letter-jobs-dlq-dlq-{env}`, `careervp-interview-prep-jobs-dlq-dlq-{env}`, `careervp-cv-upload-dlq-{env}`, `careervp-gap-analysis-dlq-{env}`, `careervp-company-research-dlq-{env}`, `careervp-cv-upload-worker-dlq-{env}`, `careervp-cv-tailor-worker-dlq-{env}`) has a CloudWatch alarm on the native SQS `ApproximateNumberOfMessagesVisible` metric with `Threshold == 1` and `EvaluationPeriods == 1`; do not detect depth with a DynamoDB GSI scan.
 - `test_p19_sfn_retries_use_full_jitter_and_start_vpr_heartbeat`: synth state machine definition; assert retry policy includes exact `JitterStrategy: FULL`, `MaxAttempts`, `BackoffRate`, and `StartVPR` heartbeat.
 
 ## Acceptance Criteria
@@ -61,4 +62,3 @@ All RED tests pass; DLQ alarms exist; `cdk diff` zero stateful replacement; nami
 ## Sequencing / Dependencies
 
 P-26 and P-21 should precede additive queue/alarm waves if parent template headroom or subscribed alerting is needed.
-
