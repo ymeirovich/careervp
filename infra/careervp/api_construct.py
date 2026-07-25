@@ -2768,6 +2768,7 @@ class ApiConstruct(Construct):
                 "VPR_JOBS_QUEUE_URL": self.vpr_jobs_queue.queue_url,
                 "VPR_JOBS_TABLE_NAME": self.api_db.jobs_table.table_name,
                 "ARTIFACT_CHAIN_ENABLED": self._artifact_chain_enabled(),
+                "IDEMPOTENCY_TABLE_NAME": self.api_db.idempotency_db.table_name,
                 constants.LLM_CACHE_TABLE_NAME_ENV: self.llm_cache_table.table_name,
                 **self._build_llm_env(),
             },
@@ -2994,8 +2995,24 @@ class ApiConstruct(Construct):
             system_log_level_v2=_lambda.SystemLogLevel.INFO,
             architecture=_lambda.Architecture.X86_64,
         )
-        self.api_db.db.grant_read_write_data(lambda_function)
-        self.api_db.idempotency_db.grant_read_write_data(lambda_function)
+        self.api_db.db.grant(
+            lambda_function,
+            "dynamodb:BatchGetItem",
+            "dynamodb:BatchWriteItem",
+            "dynamodb:ConditionCheckItem",
+            "dynamodb:DeleteItem",
+            "dynamodb:GetItem",
+            "dynamodb:PutItem",
+            "dynamodb:Query",
+            "dynamodb:UpdateItem",
+        )
+        self.api_db.idempotency_db.grant(
+            lambda_function,
+            "dynamodb:DeleteItem",
+            "dynamodb:GetItem",
+            "dynamodb:PutItem",
+            "dynamodb:UpdateItem",
+        )
         # P-06: webhook signing secrets, fetched at runtime with decryption;
         # this Lambda has its own auto-generated role (no role= above).
         webhook_secret_arns = self._secret_parameter_arns(

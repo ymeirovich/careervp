@@ -154,6 +154,13 @@ class ApiDbConstruct(Construct):
                     ),
                     projection_type=dynamodb.ProjectionType.ALL,
                 ),
+                dynamodb.GlobalSecondaryIndexPropsV2(
+                    index_name="customer-id-index",
+                    partition_key=dynamodb.Attribute(
+                        name="customer_id", type=dynamodb.AttributeType.STRING
+                    ),
+                    projection_type=dynamodb.ProjectionType.ALL,
+                ),
             ],
         )
         CfnOutput(

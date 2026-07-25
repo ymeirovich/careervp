@@ -78,10 +78,19 @@ class WebhookService:
         Unknown event types return 200 {'status': 'ignored', 'event_type': ...}.
         """
         event = self._verify_webhook(payload_bytes, sig_header)
+        provider_name = self._provider_name()
 
-        is_new = self._sub_repo.record_payment_event(event.event_id, event.event_type)
+        is_new = self._sub_repo.record_payment_event(
+            event.event_id,
+            event.event_type,
+            provider_name=provider_name,
+        )
         if not is_new:
-            return {'status_code': 200, 'message': 'duplicate event ignored'}
+            return self._sub_repo.get_payment_event_result(
+                event.event_id,
+                event.event_type,
+                provider_name,
+            ) or {'status_code': 200}
 
         handlers = {
             'checkout.session.completed': self._handle_checkout_completed,
@@ -92,16 +101,39 @@ class WebhookService:
         }
         handler = handlers.get(event.event_type)
         if handler is None:
-            return {'status_code': 200, 'status': 'ignored', 'event_type': event.event_type}
+            result = {'status_code': 200, 'status': 'ignored', 'event_type': event.event_type}
+            self._sub_repo.complete_payment_event(
+                event.event_id,
+                event.event_type,
+                result,
+                provider_name,
+            )
+            return result
 
         try:
             handler(event)
         except Exception:
             # Commit-after-work: release idempotency slot so provider can retry
-            self._sub_repo.delete_payment_event(event.event_id, event.event_type)
+            self._sub_repo.delete_payment_event(
+                event.event_id,
+                event.event_type,
+                provider_name=provider_name,
+            )
             raise
 
-        return {'status_code': 200}
+        result = {'status_code': 200}
+        self._sub_repo.complete_payment_event(
+            event.event_id,
+            event.event_type,
+            result,
+            provider_name,
+        )
+        return result
+
+    def _provider_name(self) -> str:
+        """Return the stable provider namespace used in payment-event keys."""
+        class_name = type(self._payment_provider).__name__
+        return class_name.removesuffix('Provider').lower()
 
     # ── Event handlers ────────────────────────────────────────────────────────
 

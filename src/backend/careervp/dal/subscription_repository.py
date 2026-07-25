@@ -10,8 +10,7 @@ Key schema:
   sk  = SUBSCRIPTION#CURRENT
 
 Payment-event deduplication uses the existing idempotency table:
-  pk  = PAYMENT_EVENT#{event_id}
-  sk  = EVENT_TYPE#{event_type}
+  id = PAYMENT_EVENT#{provider_name}#{event_id}
 
 No new DynamoDB tables are created.  Naming follows NamingUtils conventions.
 """
@@ -56,8 +55,8 @@ _RESERVED = frozenset(
     }
 )
 
-# ─── User-table GSI for customer-id lookups (already on users table) ─────────
-EMAIL_INDEX_NAME = 'email-index'
+# ─── User-table GSI for payment-provider customer-id lookups ──────────────────
+CUSTOMER_ID_INDEX_NAME = 'customer-id-index'
 
 
 class SubscriptionRepository:
@@ -101,37 +100,17 @@ class SubscriptionRepository:
 
     @tracer.capture_method(capture_response=False)
     def get_subscription_by_customer_id(self, customer_id: str) -> Result[dict[str, Any]]:
-        """Scan the users table for a subscription row matching customer_id.
-
-        This is an infrequent path (webhook fallback); it uses a FilterExpression
-        scan on the users table subset that has sk = SUBSCRIPTION#CURRENT.
-
-        In production, prefer caching customer_id→user_id in the user PROFILE row
-        (see update_customer_id) and looking up that way.
-        """
+        """Query the customer-id GSI for the provider's subscription row."""
         try:
             response = self._table.query(
-                IndexName=EMAIL_INDEX_NAME,
-                KeyConditionExpression=Key('email').eq(customer_id),
+                IndexName=CUSTOMER_ID_INDEX_NAME,
+                KeyConditionExpression=Key('customer_id').eq(customer_id),
                 FilterExpression=Attr('sk').eq(SUBSCRIPTION_SK),
-                Limit=1,
-            )
-            items = response.get('Items', [])
-            item = items[0] if items else None
-            return Result(success=True, data=item, code=ResultCode.SUCCESS)
-        except ClientError:
-            # Fall back to sk-filter scan (rare, only if no email-index match)
-            pass
-
-        try:
-            response = self._table.scan(
-                FilterExpression=(Attr('sk').eq(SUBSCRIPTION_SK) & Attr('customer_id').eq(customer_id)),
-                Limit=10,
             )
             items = response.get('Items', [])
             item = items[0] if items else None
             logger.info(
-                'get_subscription_by_customer_id (scan)',
+                'get_subscription_by_customer_id',
                 customer_id=customer_id,
                 found=item is not None,
             )
@@ -281,16 +260,18 @@ class SubscriptionRepository:
         event_id: str,
         event_type: str,
         ttl_seconds: int = 86400 * 7,
+        provider_name: str | None = None,
     ) -> bool:
         """Atomically record a payment event; returns True if first delivery.
 
         Uses a conditional put_item on the existing idempotency table.
         The idempotency table's partition key is ``id`` (no sort key) —
-        we encode event_id + event_type into a single composite id string.
+        webhook callers encode provider name + provider event id into a single
+        composite id string. Direct legacy callers retain the event-type key.
         TTL defaults to 7 days — long enough to catch late webhook retries.
         """
         now = int(datetime.now(timezone.utc).timestamp())
-        composite_id = f'PAYMENT_EVENT#{event_id}#{event_type}'
+        composite_id = self._payment_event_key(event_id, event_type, provider_name)
         try:
             self._idempotency_table.put_item(
                 Item={
@@ -311,6 +292,54 @@ class SubscriptionRepository:
                 return False
             logger.error('record_payment_event failed', event_id=event_id, error=str(exc))
             return False
+
+    @tracer.capture_method(capture_response=False)
+    def complete_payment_event(
+        self,
+        event_id: str,
+        event_type: str,
+        result: dict[str, Any],
+        provider_name: str,
+    ) -> None:
+        """Persist the deterministic webhook result for subsequent replays."""
+        try:
+            self._idempotency_table.update_item(
+                Key={'id': self._payment_event_key(event_id, event_type, provider_name)},
+                UpdateExpression='SET recorded_result = :result',
+                ConditionExpression='attribute_exists(id)',
+                ExpressionAttributeValues={':result': result},
+            )
+        except ClientError as exc:
+            logger.error(
+                'complete_payment_event failed',
+                event_id=event_id,
+                provider_name=provider_name,
+                error=str(exc),
+            )
+
+    @tracer.capture_method(capture_response=False)
+    def get_payment_event_result(
+        self,
+        event_id: str,
+        event_type: str,
+        provider_name: str,
+    ) -> dict[str, Any] | None:
+        """Return the result recorded by the first successful webhook delivery."""
+        try:
+            response = self._idempotency_table.get_item(
+                Key={'id': self._payment_event_key(event_id, event_type, provider_name)},
+                ProjectionExpression='recorded_result',
+            )
+            result = (response.get('Item') or {}).get('recorded_result')
+            return result if isinstance(result, dict) else None
+        except ClientError as exc:
+            logger.error(
+                'get_payment_event_result failed',
+                event_id=event_id,
+                provider_name=provider_name,
+                error=str(exc),
+            )
+            return None
 
     # ─── Checkout-lock (concurrent checkout prevention) ───────────────────────
 
@@ -398,7 +427,12 @@ class SubscriptionRepository:
     # ─── Payment-event retry support ─────────────────────────────────────────
 
     @tracer.capture_method(capture_response=False)
-    def delete_payment_event(self, event_id: str, event_type: str) -> None:
+    def delete_payment_event(
+        self,
+        event_id: str,
+        event_type: str,
+        provider_name: str | None = None,
+    ) -> None:
         """Remove an idempotency record so the payment provider can retry.
 
         Call this when partial work fails BEFORE the full event is processed.
@@ -413,7 +447,7 @@ class SubscriptionRepository:
         """
         try:
             self._idempotency_table.delete_item(
-                Key={'id': f'PAYMENT_EVENT#{event_id}#{event_type}'},  # idempotency table PK is 'id'
+                Key={'id': self._payment_event_key(event_id, event_type, provider_name)},
             )
             logger.warning(
                 'delete_payment_event (partial failure — allowing retry)',
@@ -450,6 +484,16 @@ class SubscriptionRepository:
         return f'USER#{user_id}'
 
     @staticmethod
+    def _payment_event_key(
+        event_id: str,
+        event_type: str,
+        provider_name: str | None,
+    ) -> str:
+        if provider_name:
+            return f'PAYMENT_EVENT#{provider_name}#{event_id}'
+        return f'PAYMENT_EVENT#{event_id}#{event_type}'
+
+    @staticmethod
     def _resolve_table_name(env_var: str, feature: str) -> str:
         env_val = os.environ.get(env_var, '').strip()
         if env_val:
@@ -463,4 +507,5 @@ __all__ = [
     'SUBSCRIPTION_SK',
     'PAYMENT_EVENT_SK_PREFIX',
     'CHECKOUT_LOCK_TTL_SECONDS',
+    'CUSTOMER_ID_INDEX_NAME',
 ]

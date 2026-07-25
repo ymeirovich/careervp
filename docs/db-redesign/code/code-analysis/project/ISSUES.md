@@ -366,6 +366,18 @@ emission/retry surface (not built at 2.0). So the strong
 digest-fallback wiring if a real provider's id turns out unstable. Status: unchanged — open, test lands
 in 2.1; nothing at 2.0-GREEN moved it.
 
+**Settled TRUE 2026-07-25 (step 2.1-GREEN).** The strong retry path now passes end to end.
+`MockProvider` uses the verified provider event id when present and a SHA-256 digest of the exact
+verified raw payload as its deterministic fallback, so reconstructing the same logical event no
+longer generates a fresh UUID. `test_p25_mock_event_id_is_stable_across_retries` verifies two
+constructions of one provider-signed payload return the same event id, then delivers both through
+`WebhookService` against a real moto DynamoDB table. The first delivery writes one
+`PAYMENT_EVENT#{provider_name}#{event_id}` conditional claim and performs one subscription
+mutation; the second delivery reads the recorded result and performs no second mutation. Evidence:
+the focused P-14/P-15 run reports `5 passed`, including exactly one durable payment-event record,
+and all seven P-25/P-25b provider tests remain green. B-2-2 is closed; the digest fallback is the
+pre-committed fallback for provider payloads without an explicit stable id.
+
 ---
 
 ## B-2-3 — Wave 2's added resources stay under the CloudFormation ceiling
@@ -388,6 +400,12 @@ observation so the trend is visible before it is a wall.
 **The fallback.** If a step would cross the line, that step splits its resources into a new nested
 stack of its own rather than growing the features stack — decided now, so it is a planned move
 rather than an emergency redesign. Never move the API or the user pool.
+
+**Step 2.1 observation (2026-07-25).** The valid devx topology was synthesized with
+`ENVIRONMENT=devx -c p26_rehome_features=true` before and after P-14/P-15. Counts were unchanged:
+parent 257, AiAssist nested 11, CrudFeatures nested 231, total 499. The new
+`customer-id-index` updates the existing users-table resource in place and adds no CloudFormation
+resource. B-2-3 remains open for the additive queue/alarm steps, especially 2.2.
 
 ---
 

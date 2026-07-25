@@ -158,7 +158,7 @@ class MockProvider:
             raise PaymentProviderError(f'Invalid webhook payload: {exc}', code=WEBHOOK_PAYLOAD_INVALID) from exc
 
         return WebhookEvent(
-            event_id=body.get('id', f'evt_mock_{uuid.uuid4().hex[:12]}'),
+            event_id=body.get('id', f'evt_mock_{hashlib.sha256(payload).hexdigest()[:12]}'),
             event_type=body.get('type', 'unknown'),
             data=body.get('data', {}).get('object', {}),
             created=body.get('created', 0),

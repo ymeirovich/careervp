@@ -24,11 +24,14 @@
 - [x] P-30 four-wire smoke green against devx's raw invoke URL (4/4, after seeding `/careervp/devx/anthropic-api-key`) — `docs/evidence/smoke-20260720T203735Z-019ff0.json`.
 - [ ] The shared-domain BasePathMapping flip and old-dev decommission remain separate, later human-only actions. **No decommission date is set** — until one is, "run it on dev" is ambiguous, since `api.dev.careervp.com` still points at the old stack.
 
-## Wave 2 Money — Step 2.0b-GREEN (P-25b)
+## Wave 2 Money — Steps 2.0b–2.1 (P-25/P-25b/P-14/P-15)
 
 - [x] `StripeProvider` implements the payment-provider port, real Stripe REST calls, multi-`v1` webhook signature rotation, tamper/wrong-secret rejection, and stale-timestamp replay rejection.
 - [x] P-25b freeze-line tests pass without network calls; P-25 mock regressions, full backend unit/integration, coverage, Ruff, and strict mypy are green.
-- [ ] `2.0b-mock` remains: add a fresh RED/GREEN follow-up for MockProvider's first-`v1`-only rotation gap before 2.1; B-2-1 remains false until then.
+- [x] `MockProvider` accepts any matching `v1` and produces a stable digest event id when the verified payload has no provider id; B-2-1 and B-2-2 are settled true.
+- [x] P-14 webhook and company-research worker replays are suppressed by primary-key conditional claims against the shared idempotency table; successful webhook results replay deterministically and failed work releases its claim.
+- [x] P-15 customer lookup uses `customer-id-index`; `BillingLambda` has no Scan permission, while the separate reconciliation Lambda and `scan_active_subscriptions` remain intact for step 2.5.
+- [x] Devx synth count is unchanged at 499 across parent and active nested templates; naming, CDK diff, full backend/CDK tests, coverage, Ruff, and strict mypy are green.
 
 - [x] Folder Structure Initialization
 - [x] Environment Configuration

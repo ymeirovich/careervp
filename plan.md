@@ -2417,7 +2417,11 @@ aws lambda get-function --function-name careervp-interview-prep-lambda-dev \
 
 - [x] P-25 provider port and cryptographic MockProvider baseline
 - [x] P-25b StripeProvider with tested real multi-`v1` HMAC verification
-- [ ] P-25 follow-up: make MockProvider accept any matching `v1` before Wave-2 step 2.1
+- [x] P-25 follow-up: MockProvider accepts any matching `v1`
+- [x] P-14 stable provider-event webhook idempotency with recorded replay results
+- [x] P-14 stable company-research worker operation idempotency
+- [x] P-15 `customer-id-index` Query path and Scan-free billing Lambda role
+- [ ] P-02 step 2.5 retains and hardens the separate billing reconciliation path
 
 ### Task 15.1: Stripe Models
 
