@@ -132,7 +132,7 @@ anything. Three parts, all required, none optional:
 | Part | What it has to be |
 |---|---|
 | **The belief** | Stated so it could turn out false. "The mock's signature check matches Stripe's" — not "signature verification works." |
-| **The check** | The actual command, query, or run that would show it false. Not "review this later." |
+| **The check** | **The cheapest command, query, or run that would show it false.** Not "review this later" — and not "implement it and run the test suite" either, when something cheaper would answer the same question. |
 | **The fallback** | What we do instead, decided **now**, while the answer is still genuinely unknown. |
 
 A belief with no check is a hope. A belief with no fallback is a single point of failure that
@@ -140,12 +140,41 @@ nobody has planned around. Bets live in `ISSUES.md` (agents may write there); a 
 to underwrite a locked decision gets promoted into `project-scope-lock.yaml` by human amendment.
 **Every wave's bets are re-read at that wave's gate** — an unread register is just more text.
 
+**The check is not free to be expensive.** "A check exists" is satisfied just as well by "build
+the feature and see if it breaks" as by a two-line probe — and the first one is the exact failure
+this rule exists to prevent: the cost of being wrong discovered only after the cost of building on
+top of it was already spent. Pick the cheapest tier that can actually answer the belief, cheapest
+first:
+
+1. **Read live state** — an AWS/GitHub/git query. Zero new code.
+2. **Check the type system** — assert it with the existing type checker. Near-zero new code.
+3. **One minimal test** — the smallest red test that could answer it, not the whole suite.
+4. **A dry-run** — synth, plan, `--no-execute`. Never a real mutation.
+5. **Build the real thing.** Last resort — and the check must say why nothing cheaper applied.
+
+If a bet's check lands on tier 5, that is a decision to record, not a default to reach for.
+
 **The incident.** Wave 1's 30-day waiting period rested on "stale implicit-era refresh tokens are
 in circulation on the target pool." That was never written as something checkable, so nobody
 checked it. It surfaced four days later only because someone happened to run
 `describe-user-pool-client` and `git merge-base --is-ancestor`. Written as a bet, the whole soak
 reinterpretation was available on day zero for three lines — and **the check is exactly the command
 that eventually found it.**
+
+**The ladder is not theoretical — it already paid for itself twice, before this amendment existed.**
+Both times, the cheap check reversed a more expensive plan already in motion:
+
+- Devx's Amplify branch. Before writing any CDK fix for "the frontend still points at dev," a
+  tier-1 read (`aws amplify get-branch`) showed it was already devx-wired. Zero fix code written
+  for a problem that had already been solved by hand.
+- The webhook-secret parameter. A tier-1 read (`aws ssm get-parameters-by-path` on both prefixes)
+  disproved a more complex plan already being written into these docs — a "2.0→2.1 handoff"
+  section treating the secret as dependent on step 2.0's output — and collapsed it to a five-value
+  copy.
+- Bet `B-2-5` inside `wave-2-prompts.md`'s own `PROMPT 2.0-RED` is a tier-2 check *by construction*:
+  two annotations changed from `Any` to the real Protocol type, `mypy --strict` run, then reverted —
+  before any of the step's five planned tests are written. It surfaces every port violation for the
+  cost of a diagnostic, not the cost of discovering it mid-suite.
 
 **Free consequence, worth taking.** Once a wave's bets are listed, ask which one, if wrong, deletes
 the most downstream work — and schedule that first. This project already does that by instinct and
@@ -236,6 +265,14 @@ standard practice for nobody. And Wave 1 shows the cost of skipping it: `api-cli
 the 401 retry interceptor worked *when something registered it*, and **nothing in the running
 application ever did** — a permanently green test over a sign-out path that was broken in
 production, found only by logging in for real. Standardizing this is the cheapest rule in this file.
+
+> **Amended 2026-07-25 (later same day):** rule 9's "check" requirement tightened — a check must
+> now be the *cheapest* tier that can answer the belief (a five-tier ladder: live-state read, type
+> check, one minimal test, dry-run, real build — in that order), not merely "a check exists." A
+> bet whose check jumps to building the real thing must say why nothing cheaper applied. Grounded
+> in two checks that already paid for themselves this session before the rule existed (the Amplify
+> branch read, the SSM parameter-parity read) and in `B-2-5`'s own tier-2 design. Closes a real gap
+> in the original rule 9: "build it and see" technically satisfied "a check exists."
 
 > **Amended 2026-07-25:** rules 14 and 15 added while writing Wave 2's `2.0-RED` prompt — both
 > caught live, inside the very prompt meant to demonstrate the discipline. Rules 1–13 unchanged.
