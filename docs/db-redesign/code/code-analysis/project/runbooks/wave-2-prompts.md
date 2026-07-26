@@ -1548,7 +1548,7 @@ heartbeat interval — do not pick a new number.
 >   the step is smaller still.
 >
 > - **This is a SINGLE-SESSION RED-first step (rule-7 carve-out), not a split.** Unlike 2.2, P-19 is
->   ~6 lines of SFN configuration in one file — `jitter_strategy=sfn.JitterStrategy.FULL` on each
+>   ~6 lines of SFN configuration in one file — `jitter_strategy=sfn.JitterType.FULL` on each
 >   `add_retry`, plus one `heartbeat_timeout` on StartVPR. That is the "small isolated clause"
 >   carve-out `RUNBOOK-RULES.md` rule 7 sanctions (the same one 2.5 used): one session writes the
 >   failing test first, sees it red (rule 13), then implements. It touches no money/tenancy/auth path.
@@ -1597,7 +1597,7 @@ no api_construct.py lock to wait on. Then confirm THIS step's gap is real right 
   grep -n "add_retry\|jitter_strategy\|JitterStrategy\|heartbeat_timeout\|StartVPR" infra/careervp/artifact_chain_construct.py
 
 Confirm live, and STOP with a plain-English sentence if any is not true:
-  - every add_retry currently has NO jitter_strategy (if any already sets JitterStrategy.FULL, say so);
+  - every add_retry currently has NO jitter_strategy (if any already sets JitterType.FULL, say so);
   - the StartVPR task has an add_retry but NO heartbeat_timeout, while the other long tasks do.
 
 BEFORE WRITING ANY TEST (rule 14): confirm, with a real command, that the spec above exists and its
@@ -1649,7 +1649,7 @@ STEP 3 — implement: FULL jitter on every retry + the StartVPR heartbeat
 --------------------------------------------------------------------------------
 
 In /Users/yitzchak/Documents/dev/careervp/infra/careervp/artifact_chain_construct.py ONLY:
-  - Add `jitter_strategy=sfn.JitterStrategy.FULL` to EVERY `add_retry(...)` call (`:158`, `:186`,
+  - Add `jitter_strategy=sfn.JitterType.FULL` to EVERY `add_retry(...)` call (`:158`, `:186`,
     `:227`, `:251`, `:286`) — do not change interval, max_attempts, or backoff_rate.
   - Add `heartbeat_timeout=sfn.Timeout.duration(Duration.seconds(180))` to the StartVPR task (`:238`),
     matching the pattern the other long tasks already use.

@@ -43,7 +43,7 @@ Async generation and billing workers must survive retries without silent loss or
 - `test_p17_worker_handlers_return_batch_item_failures`: call worker handlers with one failing record and assert `batchItemFailures == [{'itemIdentifier': <failed-message-id>}]`.
 - `test_p18_visibility_timeout_at_least_6x_lambda_timeout`: synth queues and functions; assert `visibility_timeout_seconds >= 6 * function_timeout_seconds`.
 - `test_p17_all_eight_dlqs_have_depth_alarms`: synth both stacks and assert each of the eight DLQs (`careervp-vpr-jobs-dlq-dlq-{env}`, `careervp-cover-letter-jobs-dlq-dlq-{env}`, `careervp-interview-prep-jobs-dlq-dlq-{env}`, `careervp-cv-upload-dlq-{env}`, `careervp-gap-analysis-dlq-{env}`, `careervp-company-research-dlq-{env}`, `careervp-cv-upload-worker-dlq-{env}`, `careervp-cv-tailor-worker-dlq-{env}`) has a CloudWatch alarm on the native SQS `ApproximateNumberOfMessagesVisible` metric with `Threshold == 1` and `EvaluationPeriods == 1`; do not detect depth with a DynamoDB GSI scan.
-- `test_p19_sfn_retries_use_full_jitter_and_start_vpr_heartbeat`: synth state machine definition; assert retry policy includes exact `JitterStrategy: FULL`, `MaxAttempts`, `BackoffRate`, and `StartVPR` heartbeat.
+- `test_p19_sfn_retries_use_full_jitter_and_start_vpr_heartbeat`: synth state machine definition; assert every retry policy includes exact `JitterStrategy: FULL`, `MaxAttempts`, and `BackoffRate`; assert `StartVPR` heartbeat is exactly `180` seconds because it waits on the async VPR worker, the same long-external-step class as research.
 
 ## Acceptance Criteria
 

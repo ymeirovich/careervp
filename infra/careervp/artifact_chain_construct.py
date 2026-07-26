@@ -160,6 +160,7 @@ class ArtifactChainConstruct(Construct):
             interval=Duration.seconds(30),
             max_attempts=2,
             backoff_rate=2.0,
+            jitter_strategy=sfn.JitterType.FULL,
         )
         start_cover_letter.add_catch(
             handle_cover_letter_failure,
@@ -188,6 +189,7 @@ class ArtifactChainConstruct(Construct):
             interval=Duration.seconds(30),
             max_attempts=2,
             backoff_rate=2.0,
+            jitter_strategy=sfn.JitterType.FULL,
         )
         start_interview_prep.add_catch(
             handle_interview_prep_failure,
@@ -229,6 +231,7 @@ class ArtifactChainConstruct(Construct):
             interval=Duration.seconds(30),
             max_attempts=2,
             backoff_rate=2.0,
+            jitter_strategy=sfn.JitterType.FULL,
         )
         start_cv_tailoring.add_catch(handle_cv_failure, errors=["States.ALL"])
         start_cv_tailoring.next(generate_final_artifacts)
@@ -238,6 +241,7 @@ class ArtifactChainConstruct(Construct):
             "StartVPR",
             queue=vpr_jobs_queue,
             integration_pattern=sfn.IntegrationPattern.WAIT_FOR_TASK_TOKEN,
+            heartbeat_timeout=sfn.Timeout.duration(Duration.seconds(180)),
             result_path="$.vpr_result",
             message_body=sfn.TaskInput.from_object(
                 {
@@ -253,6 +257,7 @@ class ArtifactChainConstruct(Construct):
             interval=Duration.seconds(30),
             max_attempts=2,
             backoff_rate=2.0,
+            jitter_strategy=sfn.JitterType.FULL,
         )
         start_vpr.add_catch(handle_vpr_failure, errors=["States.ALL"])
         after_vpr = sfn.Choice(
@@ -288,6 +293,7 @@ class ArtifactChainConstruct(Construct):
             interval=Duration.seconds(120),
             max_attempts=3,
             backoff_rate=2.0,
+            jitter_strategy=sfn.JitterType.FULL,
         )
         start_company_research.add_catch(
             handle_cr_failure,
