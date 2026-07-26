@@ -407,6 +407,19 @@ parent 257, AiAssist nested 11, CrudFeatures nested 231, total 499. The new
 `customer-id-index` updates the existing users-table resource in place and adds no CloudFormation
 resource. B-2-3 remains open for the additive queue/alarm steps, especially 2.2.
 
+**SETTLED — TRUE — at the Wave-2 gate (2026-07-26).** All additive steps have now landed (2.2 =
+reserved concurrency + eight DLQ depth alarms + SQS visibility fixes; 2.7 = two EventBridge schedule
+DLQs + two alarms + two CDK-default queue policies). `cdk synth` of the **devx deploy topology**
+(the only target, per B-2-4) at HEAD shows the largest single template at **261** resources
+(`CareerVpCrudDevx` parent), with `CrudFeatures` nested at **241** and every other nested template
+under 30 — all comfortably under the 500 hard ceiling and even under the 400 headroom target. The
+fallback (split a step's resources into a new nested stack) was **never needed**; no clause crossed
+the line; the API and user pool were never moved. Note the non-rehome `CareerVpCrudDev` template is
+493 (near the ceiling), but that stack is being retired and is NOT a deploy target, so it does not
+bear on this bet. B-2-3 is closed TRUE: Wave 2's additive infrastructure fit without another
+decomposition. The `wave_gate.py` `live_resource_count` check enforces the hard ceiling going
+forward, read from AWS.
+
 ---
 
 ## B-2-4 — "Deploy" means devx

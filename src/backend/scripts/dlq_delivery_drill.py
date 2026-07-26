@@ -107,18 +107,26 @@ def _queue_policy(sqs: Any, url: str) -> dict[str, Any]:
     return json.loads(raw) if raw else {}
 
 
-def _find_rule_for(events: Any, hint: str) -> tuple[str, dict[str, Any]] | None:
-    """Return (rule_name, target) for the schedule rule whose target references hint."""
+def _find_rule_for(events: Any, hint: str, expected_dlq_arn: str | None = None) -> tuple[str, dict[str, Any]] | None:
+    """Return (rule_name, target) for the schedule rule whose target references hint.
+
+    When the expected DLQ ARN is known, prefer an exact DeadLetterConfig match so
+    devx checks do not accidentally select the older dev schedule rules.
+    """
+    fallback: tuple[str, dict[str, Any]] | None = None
     paginator = events.get_paginator('list_rules')
     for page in paginator.paginate():
         for rule in page.get('Rules', []):
             name = rule['Name']
             targets = events.list_targets_by_rule(Rule=name).get('Targets', [])
             for target in targets:
+                target_dlq = (target.get('DeadLetterConfig') or {}).get('Arn')
+                if expected_dlq_arn and target_dlq == expected_dlq_arn:
+                    return name, target
                 blob = json.dumps(target)
                 if hint in blob or hint in name.lower():
-                    return name, target
-    return None
+                    fallback = fallback or (name, target)
+    return fallback
 
 
 def _policy_grants_events_send(policy: dict[str, Any], rule_arn: str | None) -> bool:
@@ -149,7 +157,7 @@ def run_check() -> list[Leg]:
         dlq_arn = _queue_arn(sqs, url)
         leg.facts['dlq_arn'] = dlq_arn
 
-        found = _find_rule_for(events, hint)
+        found = _find_rule_for(events, hint, dlq_arn)
         if not found:
             leg.detail = f'no EventBridge rule found whose target references {hint!r}'
             legs.append(leg)
@@ -241,7 +249,8 @@ def run_execute(only_hint: str) -> list[Leg]:
     if not url:
         leg.detail = f'DLQ {dlq_name!r} not deployed; cannot run live drill'
         return [leg]
-    found = _find_rule_for(events, hint)
+    dlq_arn = _queue_arn(sqs, url)
+    found = _find_rule_for(events, hint, dlq_arn)
     if not found:
         leg.detail = f'rule for {hint!r} not found'
         return [leg]
@@ -302,7 +311,9 @@ def write_evidence(mode: str, legs: list[Leg], passed: bool) -> Path:
 
 def main(argv: Iterable[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description='AC-P31-1 DLQ-delivery drill')
-    parser.add_argument('--execute', action='store_true', help='run the destructive live drill')
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument('--check', action='store_true', help='run the read-only wiring check (default)')
+    mode_group.add_argument('--execute', action='store_true', help='run the destructive live drill')
     parser.add_argument(
         '--target',
         choices=[h for _, h in SCHEDULE_TARGETS],
