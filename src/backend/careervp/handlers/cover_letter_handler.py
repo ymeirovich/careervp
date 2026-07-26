@@ -453,7 +453,13 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
 def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
     """Process SQS messages for async cover letter generation."""
+    batch_item_failures: list[dict[str, str]] = []
+    sqs_batch_seen = False
+
     for record in event.get('Records', []):
+        message_id = str(record.get('messageId', ''))
+        is_sqs_record = record.get('eventSource') == 'aws:sqs' and bool(message_id)
+        sqs_batch_seen = sqs_batch_seen or is_sqs_record
         body = json.loads(record.get('body', '{}'))
         job_id = body.get('job_id', '')
         user_id = body.get('user_id', '')
@@ -481,10 +487,13 @@ def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
             # stage context before re-raising. Re-raise here so SQS routes to DLQ.
             logger.error('Cover letter SQS job failed', job_id=job_id, error=str(exc), exc_info=True)
             _send_task_failure(task_token, cause=str(exc))
-            if task_token:
-                continue
-            raise
+            if not task_token and not is_sqs_record:
+                raise
+            batch_item_failures.append({'itemIdentifier': message_id})
+            continue
 
+    if sqs_batch_seen:
+        return {'batchItemFailures': batch_item_failures}
     return {'statusCode': 200, 'body': 'OK'}
 
 

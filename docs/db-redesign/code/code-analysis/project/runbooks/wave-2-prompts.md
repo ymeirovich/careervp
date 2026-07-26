@@ -1115,6 +1115,403 @@ least 6× on every queue. Synth resource count captured **before and after**.
 
 ---
 
+> **FILLED IN 2026-07-25** from the skeleton above (rule 11), by a session that first read every
+> Wave-2 ledger row through 2.5a-GREEN (HEAD `e919e06`). Five things it resolved at fill-in, each of
+> which the runner must still re-confirm live (§0.2), none of which widens the skeleton's clauses:
+>
+> - **This is a RED/GREEN split (rule 7), and the skeleton did not say so.** P-17 is
+>   "stop silently losing queued work" — data durability. Rule 7 makes RED and GREEN two different
+>   sessions with the test-writer/code-writer firewall. This is NOT the small-isolated-clause carve-out
+>   2.5 used: it spans eight queues, six-plus consumers, two infra files, and one real handler behavior.
+>   So 2.2 is written below as **2.2-RED** then **2.2-GREEN**, exactly like 2.0/2.1.
+>
+> - **P-19 is NOT in this step.** The spec `specs/P-16-P-17-P-18-P-19-reliability-spec.md` covers four
+>   clauses; step 2.2 is P-16, P-17, P-18 only (AC-P16-1, AC-P17-1, AC-P18-1). The
+>   `test_p19_sfn_retries_use_full_jitter_and_start_vpr_heartbeat` brief and every Step-Functions
+>   heartbeat/jitter change belong to **2.3** (P-19). Writing any P-19 test or touching
+>   `artifact_chain_construct.py` here is scope drift — a rule-5 stop.
+>
+> - **The spec's RED-test list is underspecified in two places (rule 14) — RED fixes the spec FIRST.**
+>   (a) `test_p16_..._have_max_concurrency` says "max concurrency/reserved concurrency for each
+>   rate-limited worker" — an `or`-shaped assertion with no worker list and no value. (b) The
+>   done-when and Fix-Plan step 6 require "all eight DLQs wired with alarms," but the RED-test list
+>   has **no alarm test at all**. Both are rule-14 gaps: RED authors/tightens those spec briefs as a
+>   separate visible action before writing tests, never folded into the test-writing step.
+>
+> - **GREEN edits two infra files, and only one is in the documented serial set (rule-5 flag, do not
+>   resolve silently).** §2 lists `api_construct.py` as the serialized file (2.2/2.4/2.5/2.7) — that
+>   holds the VPR / cover-letter / interview-prep queues + event sources. But the CV-upload / gap /
+>   company-research queues live in `/Users/yitzchak/Documents/dev/careervp/infra/careervp/api_db_construct.py`,
+>   which **no other Wave-2 step edits** (verified: zero editing references in this prompt file). So
+>   2.2-GREEN edits both; it must still hold the `api_construct.py` serialization lock (confirm no
+>   2.4/2.5/2.7/2.1-GREEN mid-flight), and note `api_db_construct.py` is 2.2-exclusive.
+>
+> - **Header corrected against the execution plan (rules 15/16).** The skeleton reads
+>   `sonnet/med · gpt-5-codex/med`. `redesign-execution-plan.md` line 284 and the spec's own
+>   `tooling:` block both read **`sonnet/medium · gpt-5.3-codex/medium`** ("normal implementation
+>   across a few files, established SQS/Lambda reliability patterns — rule 16 `medium`"). The
+>   skeleton's `gpt-5-codex` is a stale slug (rule 16 forbids it); the corrected slug is used below.
+
+---
+
+# PROMPT 2.2-RED — pin the reliability contract in failing tests (tests only, no implementation)
+
+> **Clause:** P-16, P-17, P-18 · **Spec:** [/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/specs/P-16-P-17-P-18-P-19-reliability-spec.md](/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/specs/P-16-P-17-P-18-P-19-reliability-spec.md)
+> **Acceptance criteria:** AC-P16-1, AC-P17-1, AC-P18-1 (NOT AC-P19-1 — that is step 2.3) · **Claude: sonnet/medium · Codex: gpt-5.3-codex/medium**
+> **Rule 7 — RED/GREEN split (P-17 is data durability).** This is the RED session. It writes **test files and spec-brief edits only**, touches **zero** files under `/Users/yitzchak/Documents/dev/careervp/infra/careervp/` or `/Users/yitzchak/Documents/dev/careervp/src/backend/careervp/`, observes every test fail on its OWN assertion (rule 13), and commits tests only. GREEN is a separate fresh session that has not seen this reasoning and may not edit these tests.
+> **Rule 17 — every file named below is a full path from the repo root.** Keep it that way in anything you add.
+
+```
+STANDING CHECK — before doing anything else: open
+/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md
+and read the rows through 2.5a-GREEN. This infra lane depends only on Wave 1, not on the 2.0/2.1/2.5
+billing lane — but if any api_construct.py step (2.4, 2.5, 2.7, or a straggling 2.1-GREEN) shows an
+OPEN row, note it: this RED session does not edit api_construct.py so it is safe now, but 2.2-GREEN
+will, and must not overlap them. Then confirm THIS step's prerequisites are met right now, with real
+commands (not memory, not this file):
+
+  cd /Users/yitzchak/Documents/dev/careervp && git log --oneline -3
+  # the six generation queues + their DLQs + event sources exist to test against:
+  grep -n "SqsEventSource\|visibility_timeout\|dead_letter_queue\|DeadLetterQueue\|report_batch_item_failures\|reserved_concurrent\|max_concurrency" /Users/yitzchak/Documents/dev/careervp/infra/careervp/api_construct.py
+  grep -n "SqsEventSource\|visibility_timeout\|dead_letter_queue\|DeadLetterQueue\|report_batch_item_failures\|reserved_concurrent\|max_concurrency" /Users/yitzchak/Documents/dev/careervp/infra/careervp/api_db_construct.py
+  # the one worker that already returns the desired shape, to copy its pattern in the handler test:
+  grep -n "batchItemFailures\|itemIdentifier" /Users/yitzchak/Documents/dev/careervp/src/backend/careervp/handlers/company_research_worker_handler.py
+
+Confirm live, and STOP with a plain-English sentence if any is not true:
+  - the eight DLQs exist but their event-source mappings do NOT yet set report_batch_item_failures
+    (if they already do, the durability gap is closed and this step is smaller than written — say so);
+  - no reserved / max concurrency is configured on the rate-limited workers (the "0 of 31" state);
+  - at least one visibility timeout is currently below 6x its consumer's timeout (the "1x" state the
+    spec's current_state records — if all are already >= 6x, say so and note P-18 may be a no-op test).
+
+BEFORE WRITING ANY TEST (rule 14): confirm, with a real command, that
+/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/specs/P-16-P-17-P-18-P-19-reliability-spec.md
+exists, that it has a "RED Tests to Write First" section naming AC-P16-1 / AC-P17-1 / AC-P18-1, and
+that each cited test names EXACT assertion values (no "or", no undefined placeholders). It does NOT
+today — two briefs are underspecified (see below). So your FIRST visible action is to tighten the
+spec, as its own edit, before you write a single test.
+```
+
+You are implementing clauses P-16, P-17, P-18. This is the RED half of a rule-7 split. Do the two
+things below **in order** and keep them as separate visible steps.
+
+--------------------------------------------------------------------------------
+STEP 1 — tighten the spec's two underspecified RED briefs (rule 14), as its own edit
+--------------------------------------------------------------------------------
+
+Edit ONLY the "RED Tests to Write First" section of
+/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/specs/P-16-P-17-P-18-P-19-reliability-spec.md.
+Do not touch its clause list, its Acceptance Criteria, or the P-19 brief.
+
+  (1) `test_p16_rate_limited_consumers_have_max_concurrency` currently reads
+      "max concurrency/reserved concurrency for each rate-limited worker" — an `or` with no worker
+      list and no number. Pin all three:
+        - ENUMERATE, from the live event sources you grepped above, exactly which workers are
+          rate-limited (the ones whose work calls an externally rate-limited API — Anthropic model
+          calls and Tavily search — e.g. VPR generation, cover letter, interview prep, CV tailoring,
+          gap analysis, company research). List them by their construct/function id, from source, not
+          from memory.
+        - CHOOSE ONE mechanism, not "or": event-source `max_concurrency` (SQS scaling bound) OR
+          function `reserved_concurrent_executions`. Pick the one that actually bounds concurrent
+          consumers for these SQS workers and say why in one line. The test asserts THAT mechanism.
+        - SET AN EXACT NUMBER per worker, justified against the downstream limit it protects (the
+          external API's concurrency/rate budget), not invented "to be safe." Write the number and
+          its one-line justification into the brief. GREEN implements exactly this number; it may not
+          choose its own.
+  (2) The done-when ("all eight DLQs wired with alarms") and Fix-Plan step 6 require DLQ depth alarms,
+      but there is NO alarm test in the RED list. ADD one brief:
+        - `test_p17_all_eight_dlqs_have_depth_alarms`: synth both stacks and assert each of the eight
+          DLQs has a CloudWatch alarm on its `ApproximateNumberOfMessagesVisible` metric with an
+          exact threshold and evaluation period. Name the exact threshold in the brief. The alarm MUST
+          use the native SQS metric — Fix-Plan step 6's constraint "without using low-cardinality
+          STATUS#{status} GSI patterns" means do not build depth detection off a DynamoDB GSI scan.
+
+If pinning any of these would require changing an Acceptance Criterion (not just a test brief), STOP —
+that is a §0.3 amendment, not a spec-brief tightening. Commit this spec edit as its own visible change
+(it may ride in the same RED commit, but call it out).
+
+--------------------------------------------------------------------------------
+STEP 2 — write the RED tests and observe each fail on its OWN assertion (rule 13)
+--------------------------------------------------------------------------------
+
+Put the synth/IaC assertions where the infrastructure synth tests live — confirm the directory live
+(ls /Users/yitzchak/Documents/dev/careervp/src/backend/tests/infrastructure/, the same place 2.1's
+IAM synth test landed) — and the handler-behavior test where the worker unit/integration tests live
+(confirm live). No real network or AWS calls; synth the template / use moto (mock_aws), the pattern
+those directories already use. Secrets, if any surface, are parameter-NAME-in-env only (P-06).
+
+Write exactly these five, and NOT `test_p19_*` (that is step 2.3):
+
+  test_p16_rate_limited_consumers_have_max_concurrency          (AC-P16-1)
+      Synth the event sources / functions and assert the EXACT mechanism + number you pinned in
+      STEP 1 for EACH enumerated rate-limited worker. RED: current state is "0 of 31 reserved" — the
+      property is absent, so the assertion fails naming the worker with no bound.
+
+  test_p17_all_sqs_event_sources_report_batch_item_failures     (AC-P17-1, infra half)
+      Synth every SQS Lambda event-source mapping and assert `FunctionResponseTypes` includes exactly
+      `ReportBatchItemFailures`. RED: the mappings do not set it, so the property is missing.
+
+  test_p17_worker_handlers_return_batch_item_failures           (AC-P17-1, behavior half)
+      Call each generation worker handler (enumerate them from source) with a batch containing one
+      failing record among good ones, and assert the return is exactly
+      `{'batchItemFailures': [{'itemIdentifier': <failed-message-id>}]}` — only the failed id, in that
+      exact shape (copy the proven pattern in
+      /Users/yitzchak/Documents/dev/careervp/src/backend/careervp/handlers/company_research_worker_handler.py).
+      RED: the workers that do not yet report partial failure either raise or return nothing, so the
+      assertion fails on shape. Guard so a missing handler fails on the test's assertion, not a raw
+      ImportError.
+
+  test_p18_visibility_timeout_at_least_6x_lambda_timeout         (AC-P18-1)
+      Synth every queue + its consuming function and assert, per pair,
+      `visibility_timeout_seconds >= 6 * function_timeout_seconds`. RED: at least one pair violates it
+      today (the spec's "1x" current_state). Assert on the real numbers read from synth, no "or".
+
+  test_p17_all_eight_dlqs_have_depth_alarms                      (done-when: DLQ alarms)
+      The brief you added in STEP 1. RED: no alarms exist, so the synth has zero alarms on the DLQ
+      metric and the assertion fails counting them.
+
+RULE 13 — run all five, capture the failure output VERBATIM, and for EACH state why it failed (which
+property/shape/number is absent). A test that fails on a missing FIXTURE, a collection error, or a
+typo in its own imports is NOT red, it is broken — structure each to fail on its OWN assertion about
+the synthesized template or the handler return. The full existing suite (backend unit + integration +
+both infrastructure dirs) must still be GREEN after this step — you have ADDED tests and tightened a
+spec, and changed ZERO implementation. Prove it with `git diff --stat`: only test files under
+`.../tests/` and the one spec file may appear; ZERO files under `infra/careervp/` or
+`src/backend/careervp/`.
+
+Do NOT implement anything. Do NOT wire a single DLQ, set a single concurrency bound, change a single
+visibility timeout, or add a `batchItemFailures` return. That is 2.2-GREEN, in a different session.
+
+--------------------------------------------------------------------------------
+OUTPUT REQUIRED
+--------------------------------------------------------------------------------
+- The live prerequisite confirmations (the greps), in plain English first: DLQs exist but unwired,
+  concurrency unset, at least one visibility timeout under 6x.
+- The spec-brief tightening from STEP 1: the enumerated rate-limited workers, the ONE concurrency
+  mechanism chosen and why, the exact per-worker number and its justification, and the exact DLQ-alarm
+  threshold — as the diff to the spec's RED-test section.
+- The five new test files, and the verbatim RED failure output for EACH with a one-line why. State
+  the technique you used to make each fail on its own assertion rather than on import/collection.
+- `git diff --stat` proving only test files + the one spec file changed; ZERO implementation/infra.
+- A git commit message (tests + spec brief only).
+
+ALSO REQUIRED (standing rule for every wave prompt — see
+/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/RUNBOOK-RULES.md):
+- Compare what you actually built against (a) this prompt's own instructions and (b) clauses P-16,
+  P-17, P-18 in
+  /Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/project-scope-lock.yaml.
+  If everything matches, say so in one plain sentence. Confirm you wrote NO P-19 test.
+- If ANYTHING drifted — extra work not asked for, required work skipped, or a test/rule weakened —
+  STOP. Do not fix it yourself. Write one plain-English sentence a non-engineer could follow (what
+  should have happened, what actually happened, why it matters), THEN the technical detail, and flag
+  it for human review. Do not mark the step done.
+- Update
+  /Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md:
+  add a `2.2-RED` row with a plain-English status, the commit, today's date, and what 2.2-GREEN must
+  resolve first (the api_construct.py serialization lock; the exact concurrency numbers it must
+  implement verbatim; the B-2-3 resource-count baseline to measure against).
+
+---
+
+# PROMPT 2.2-GREEN — implement the reliability contract (fresh session; may not edit the tests)
+
+> **Clause:** P-16, P-17, P-18 · **Spec:** [/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/specs/P-16-P-17-P-18-P-19-reliability-spec.md](/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/specs/P-16-P-17-P-18-P-19-reliability-spec.md)
+> **Acceptance criteria:** AC-P16-1, AC-P17-1, AC-P18-1 (NOT AC-P19-1 — that is step 2.3) · **Claude: sonnet/medium · Codex: gpt-5.3-codex/medium**
+> **Rule 7 — this is the GREEN session.** It runs FRESH, having NOT seen 2.2-RED's reasoning. It reads the five failing tests as a contract it did not write and **may not edit** — no relaxing an assertion, no changing the pinned concurrency number, no `xfail`/`skip`, no adding an exclusion. If a test looks genuinely WRONG (not merely inconvenient), STOP and raise a §0.3 amendment; never a quiet edit.
+> **Rule 17 — every file named below is a full path from the repo root.**
+
+```
+STANDING CHECK — before doing anything else: open
+/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md
+and read the 2.2-RED row plus every api_construct.py-editing row (2.4, 2.5, 2.7, 2.1-GREEN). This step
+edits api_construct.py, so it JOINS that serial set (§2) — if any of those rows is OPEN / mid-flight,
+STOP: you may not edit api_construct.py concurrently. It ALSO edits api_db_construct.py, which no
+other Wave-2 step edits, so no second lock is needed there. Then confirm 2.2-RED actually landed and
+the five tests are RED right now, with a real command (not this file):
+
+  cd /Users/yitzchak/Documents/dev/careervp/src/backend && uv run pytest \
+    tests/infrastructure -k "p16 or p17 or p18" tests -k "p17_worker" -q
+  # expect: the five 2.2 tests FAIL on their assertions; the rest of the suite passes.
+
+Read the pinned values out of the tests and the spec BEFORE coding — the exact concurrency mechanism
+and per-worker number, and the DLQ-alarm threshold — and implement THOSE. You do not get to choose
+them; RED already did, and you may not edit the tests to match a different choice.
+```
+
+You are implementing clauses P-16, P-17, P-18 — the GREEN half. Make all five RED tests pass with the
+smallest infra + handler changes that satisfy them, touching NO test file and NO spec file.
+
+--------------------------------------------------------------------------------
+THE WORK — four changes, all sized by the tests, none wider
+--------------------------------------------------------------------------------
+
+1. **P-16 concurrency bounds.** For each rate-limited worker the RED test names, set the EXACT
+   mechanism + number the test asserts, in
+   /Users/yitzchak/Documents/dev/careervp/infra/careervp/api_construct.py (VPR / cover-letter /
+   interview-prep) and
+   /Users/yitzchak/Documents/dev/careervp/infra/careervp/api_db_construct.py (CV / gap /
+   company-research). Do not bound workers the test does not name.
+
+2. **P-17 partial-failure reporting — both halves.**
+   (a) Set `report_batch_item_failures=True` on every SQS event-source mapping the infra test checks
+       (so `FunctionResponseTypes: [ReportBatchItemFailures]` appears in synth).
+   (b) In each generation worker handler that does not yet do it, return
+       `{'batchItemFailures': [{'itemIdentifier': <failed-message-id>}, ...]}` listing ONLY the failed
+       records — copy the proven pattern in
+       /Users/yitzchak/Documents/dev/careervp/src/backend/careervp/handlers/company_research_worker_handler.py.
+       A partial failure must NOT re-drive the whole batch.
+
+3. **P-18 visibility timeout.** Raise every violating queue's `visibility_timeout` to at least 6x its
+   consumer's function timeout — the exact rule the test asserts. Changing a queue's visibility
+   timeout is an in-place update; confirm `cdk diff` shows no stateful replacement of the queue.
+
+4. **DLQ depth alarms.** Add a CloudWatch alarm on `ApproximateNumberOfMessagesVisible` for each of
+   the eight DLQs, at the threshold the RED alarm test asserts. Native SQS metric only — no DynamoDB
+   `STATUS#{status}` GSI scan (Fix-Plan step 6).
+
+Do NOT touch `/Users/yitzchak/Documents/dev/careervp/infra/careervp/artifact_chain_construct.py`,
+Step Functions retry/heartbeat, or `JitterStrategy` — that is P-19 / step 2.3. If you find P-16/17/18
+cannot pass without a P-19 change, that is a rule-5 stop: flag it, do not fold it in.
+
+--------------------------------------------------------------------------------
+B-2-3 — the resource-ceiling bet this step is most likely to break (measure it)
+--------------------------------------------------------------------------------
+
+Capture the synth resource count BEFORE and AFTER your changes and put both in the output. Baseline
+from the 2.1-GREEN ledger row: 257 parent + 11 AiAssist nested + 231 CrudFeatures nested = 499.
+Adding ~8 alarms must not push the parent template or ANY nested stack to the 500-resource
+CloudFormation ceiling. If any stack lands at 490+, STOP and flag B-2-3 as tripped — do not shave the
+contract to fit; that is a human decision about nested-stack decomposition, recorded in ISSUES.md.
+
+--------------------------------------------------------------------------------
+VERIFY (fresh evidence, all of it)
+--------------------------------------------------------------------------------
+- The five 2.2 tests now PASS; `git diff --stat -- **/tests` is EMPTY (no test edited) and the spec
+  file is unchanged.
+- Full backend unit + integration suites: zero regressions. Both infrastructure test dirs green.
+- `cd /Users/yitzchak/Documents/dev/careervp/src/backend` — ruff format + check clean;
+  `uv run mypy careervp --strict` clean; `make coverage-tests` gate exit 0 at/above the enforced
+  baseline.
+- `cd /Users/yitzchak/Documents/dev/careervp/infra && uv sync && cdk synth` clean; `cdk diff` shows
+  the concurrency / batch-response / visibility / alarm additions and ZERO stateful replacement
+  (queues and their DLQs updated in place, never replaced — replacing a live queue drops in-flight
+  messages, the exact silent loss P-17 exists to stop).
+- Naming validator: `python /Users/yitzchak/Documents/dev/careervp/src/backend/scripts/validate_naming.py --path infra --strict` exit 0.
+- scope-diff still resolves the Wave-2 clauses with no new orphan/drift.
+- NO deploy and NO merge from this session (§0.3). Any devx deploy is a separate human-gated
+  manual `workflow_dispatch` to `CareerVpCrudDevx` ONLY.
+
+--------------------------------------------------------------------------------
+OUTPUT REQUIRED
+--------------------------------------------------------------------------------
+- Proof the five tests were RED before your changes and PASS after (both runs' output).
+- The BEFORE/AFTER synth resource counts (parent + each nested), with the B-2-3 verdict in one line.
+- `git diff --stat` proving no test file and no spec file changed, and exactly the two infra files +
+  the worker handler file(s) did.
+- The full verification results above.
+- A git commit message.
+
+ALSO REQUIRED (standing rule for every wave prompt — see
+/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/RUNBOOK-RULES.md):
+- Compare what you actually built against (a) this prompt's own instructions and (b) clauses P-16,
+  P-17, P-18 in
+  /Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/project-scope-lock.yaml.
+  If everything matches, say so in one plain sentence. Confirm you changed NOTHING for P-19.
+- If ANYTHING drifted — extra work not asked for, required work skipped, or a test/rule had to be
+  weakened — STOP. Do not fix it yourself. Write one plain-English sentence a non-engineer could
+  follow (what should have happened, what actually happened, why it matters), THEN the technical
+  detail, and flag it for human review. Do not mark the step done.
+- Update
+  /Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md:
+  add a `2.2-GREEN` row with a plain-English status, the commit, today's date, the B-2-3 measured
+  headroom, and what 2.3 must resolve first (it depends on 2.2 in the same lane and also edits infra —
+  confirm the api_construct.py lock is free) or "none".
+
+---
+
+# PROMPT 2.2-RED-fix — §0.3-approved correction to the P-17 worker test (tests only)
+
+> **Clause:** P-17 · **Spec:** [/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/specs/P-16-P-17-P-18-P-19-reliability-spec.md](/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/specs/P-16-P-17-P-18-P-19-reliability-spec.md)
+> **Acceptance criteria:** AC-P17-1 (worker half only) · **Claude: sonnet/medium · Codex: gpt-5.3-codex/low**
+> **Why this prompt exists.** 2.2-GREEN correctly STOPPED (rule 7): the landed 2.2-RED
+> `test_p17_worker_handlers_return_batch_item_failures` drove `CvTailorWorkerLambda` with fabricated SQS
+> records, but that Lambda is a **DynamoDB-stream** consumer (`/Users/yitzchak/Documents/dev/careervp/infra/careervp/api_construct.py:1951`, `DynamoEventSource`), so the SQS-`itemIdentifier` contract is false for it. A human §0.3 review (recorded 2026-07-26 in [/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md](/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md), "2.2 P-17 CV-tailor §0.3 decision") APPROVED correcting the test. **This is the ONLY circumstance under which a landed RED test may be edited — a dated §0.3 approval exists.** No other 2.2 test may be touched.
+> **Rule 17 — every file named below is a full path from the repo root.**
+
+```
+STANDING CHECK — before doing anything else: open
+/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md
+and confirm the "2.2 P-17 CV-tailor §0.3 decision (2026-07-26)" section exists and says SPLIT — if it
+does not, STOP: you have no authority to edit a landed RED test. Then confirm the mismatch is still
+real with a real command:
+
+  cd /Users/yitzchak/Documents/dev/careervp
+  grep -n "DynamoEventSource\|SqsEventSource" infra/careervp/api_construct.py | sed -n '1,40p'
+  grep -rn "CvTailor\|cv_tailor\|msg-failed" src/backend/tests/ | grep -i p17
+
+Confirm live and STOP if untrue: CvTailorWorkerLambda is wired by DynamoEventSource (api_construct.py
+:1951), and the P-17 worker test currently enumerates it among SQS workers.
+```
+
+Make EXACTLY this correction, nothing more:
+
+1. In the landed P-17 worker test file (find it via the grep above), remove `CvTailorWorkerLambda`
+   from the set of workers driven with SQS records and asserted for an SQS
+   `{'batchItemFailures': [{'itemIdentifier': <messageId>}]}` return. The test must now enumerate ONLY
+   the four real SQS workers: `VprSqsWorkerLambda`, `CoverLetterWorkerLambda`, `InterviewPrepWorkerLambda`,
+   `CompanyResearchWorkerLambda` (company-research is the already-passing reference case).
+2. Do NOT touch the P-16 concurrency test — CV-tailor legitimately stays in the
+   `reserved_concurrent_executions=5` set there (reserved concurrency applies to any rate-limited
+   Lambda; P-16 is not about event-source type). Do NOT touch the P-17 infra test, P-18, the DLQ-alarm
+   test, or any implementation file.
+3. Re-run and OBSERVE the corrected worker test still RED on its own assertions for the four SQS
+   workers (three of them lack the pattern; company-research passes). Capture verbatim output.
+
+VERIFY: `git diff --stat` shows ONLY the one P-17 worker test file changed — ZERO under
+`infra/careervp/` or `src/backend/careervp/`, ZERO other test files. Ruff + `mypy --strict` clean on it.
+
+OUTPUT REQUIRED
+- The live confirmation CV-tailor is a DynamoEventSource consumer, plain English first.
+- The one-file diff, and the corrected test's verbatim RED output with a one-line why per case.
+- `git diff --stat` proving the single-file scope.
+- A git commit message.
+- Update [/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md](/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md):
+  set the `2.2-RED-fix` row DONE with the commit, and note 2.2-GREEN may now resume fresh.
+
+---
+
+## 2.2b — CV-tailor stream partial-failure (skeleton, post-2.2 follow-up)
+
+| | |
+|---|---|
+| **Clause** | P-17 (CV-tailor stream flavor) |
+| **Spec** | `specs/P-16-P-17-P-18-P-19-reliability-spec.md` (needs a stream-shaped brief added at fill-in) |
+| **Claude / Codex** | sonnet/medium · gpt-5.3-codex/medium |
+| **Depends on** | 2.2-GREEN (landed) |
+| **Deploy target** | `CareerVpCrudDevx` |
+| **Serialization** | edits `api_construct.py` (the CvTailor DynamoEventSource) — joins the api_construct.py serial set |
+| **Bets** | none new |
+
+**In plain English.** CV-tailor processes DynamoDB-stream records, not SQS. It already bisects a bad
+batch and routes the poison record to its DLQ (`bisect_batch_on_error=True` + `on_failure=SqsDlq`,
+`api_construct.py:1956-1958`), so there is no silent loss today. This step decides whether P-17's
+clause additionally requires per-record `ReportBatchItemFailures` on the stream source — and if so,
+adds it with the CORRECT stream shape (`itemIdentifier` = record **sequence number**, a DynamoDB-stream
+record in the test, NOT an SQS record).
+
+**Fill-in note (rule 11).** First answer the yes/no: does P-17 (`project-scope-lock.yaml`) require
+per-record reporting on top of bisect+DLQ for a low-throughput stream consumer? If bisect+DLQ already
+satisfies "no silent loss," this step may be a documented no-op that records that finding rather than
+adding machinery. If it does require reporting, RED writes a stream-shaped test first (rule 7 carve-out
+or split, decided at fill-in), GREEN adds `report_batch_item_failures=True` to the DynamoEventSource
+and the sequence-number return in the handler.
+
+**Done-when.** Either a recorded finding that CV-tailor's existing bisect+DLQ satisfies P-17 (with the
+GATE stopping-condition note already in the §0.3 section), or a stream-shaped `ReportBatchItemFailures`
+contract added and proven, with `cdk diff` zero stateful replacement.
+
+---
+
 ## 2.3 — Retry and heartbeat on the workflows (skeleton)
 
 | | |
@@ -1132,6 +1529,168 @@ no jitter — so a transient failure kills a job and simultaneous retries pile u
 **Done-when.** Retry with full jitter and a heartbeat on the workflow steps, including the
 VPR start step. The 180-second timeout this project already settled on for the research step is the
 heartbeat interval — do not pick a new number.
+
+---
+
+> **FILLED IN 2026-07-25** from the skeleton above (rule 11), by the session that filled 2.2, after
+> reading the SFN construct live. Four things it resolved, each re-confirmable live (§0.2), none
+> widening the clause:
+>
+> - **The skeleton's "no retry policy" is STALE (rule-5 flag).** Every task in
+>   /Users/yitzchak/Documents/dev/careervp/infra/careervp/artifact_chain_construct.py ALREADY calls
+>   `add_retry(errors=["States.TaskFailed"], interval=30s, max_attempts=2|3, backoff_rate=2.0)` —
+>   cover-letter `:158`, interview-prep `:186`, cv-tailoring `:227`, StartVPR `:251`,
+>   company-research `:286`. So P-19's real, narrow gap is **two** things, not a from-scratch retry
+>   build: (a) NO `jitter_strategy` is set on any `add_retry` (so simultaneous retries still
+>   thundering-herd), and (b) StartVPR (`:238`, an `SqsSendMessage` WAIT_FOR_TASK_TOKEN) has an
+>   `add_retry` but **no `heartbeat_timeout`**, while cover-letter (`:144`=300s), interview-prep
+>   (`:175`=300s) and company-research (`:275`=180s) do. Confirm this live; if jitter is already set,
+>   the step is smaller still.
+>
+> - **This is a SINGLE-SESSION RED-first step (rule-7 carve-out), not a split.** Unlike 2.2, P-19 is
+>   ~6 lines of SFN configuration in one file — `jitter_strategy=sfn.JitterStrategy.FULL` on each
+>   `add_retry`, plus one `heartbeat_timeout` on StartVPR. That is the "small isolated clause"
+>   carve-out `RUNBOOK-RULES.md` rule 7 sanctions (the same one 2.5 used): one session writes the
+>   failing test first, sees it red (rule 13), then implements. It touches no money/tenancy/auth path.
+>
+> - **The "same lane, all edit api_construct.py" serialization is STALE for 2.3 (rule-5 flag).** 2.3
+>   edits ONLY `artifact_chain_construct.py`; it does NOT touch `api_construct.py` or
+>   `api_db_construct.py` (the files 2.2 edits). So 2.3 has **zero file contention with 2.2/2.4/2.5/2.7**
+>   and needs none of the api_construct.py lock. The `Depends on 2.2` is sequencing on the shared spec,
+>   not a file lock — see the "roll-in" note below. B-2-3 is a near-no-op here: jitter and heartbeat
+>   are task *properties*, not new resources, so 2.3 adds ~0 to the resource count (confirm with
+>   `cdk diff`).
+>
+> - **The done-when's heartbeat number needs pinning (rule 14).** The spec's P-19 brief says "StartVPR
+>   heartbeat" with no value; the skeleton says use the settled **180 s** research number, "do not pick
+>   a new number." But the existing heartbeats are mixed (300 s / 300 s / 180 s). RED pins StartVPR's
+>   heartbeat to the settled 180 s value in the spec brief before writing the test, and records why
+>   180 (StartVPR waits on the async VPR worker, the same class of long external step as research).
+>
+> **Roll-in (answers "what from 2.2 can 2.3 reuse without context rot").** 2.3 may be run in the SAME
+> session immediately AFTER 2.2-GREEN lands, and should reuse that context: same spec file, same
+> reliability subsystem, same `cdk synth`/`cdk diff`/naming-validator/coverage discipline, same devx
+> deploy target. This does NOT break the rule-7 firewall because (i) 2.3 is a sanctioned single-session
+> carve-out, so its test-writer legitimately is its code-writer, and (ii) 2.2-GREEN wrote no tests, so
+> nothing it reasoned about contaminates a test it must treat as a contract. The one hard guardrail:
+> 2.3 must still write its P-19 test and SEE IT RED (rule 13) before adding jitter/heartbeat, and must
+> not retro-edit any 2.2 test. Header corrected to `sonnet/medium · gpt-5.3-codex/medium` (rules 15/16;
+> execution-plan line 285), same as 2.2.
+
+---
+
+# PROMPT 2.3 — full jitter + StartVPR heartbeat on the workflows (single session, RED-first)
+
+> **Clause:** P-19 · **Spec:** [/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/specs/P-16-P-17-P-18-P-19-reliability-spec.md](/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/specs/P-16-P-17-P-18-P-19-reliability-spec.md)
+> **Acceptance criteria:** AC-P19-1 (P-16/17/18 are step 2.2 — do not touch them here) · **Claude: sonnet/medium · Codex: gpt-5.3-codex/medium**
+> **Rule 7 — single session, RED-first (small-isolated-clause carve-out).** The whole change is `JitterStrategy: FULL` on the existing retries plus one `StartVPR` heartbeat, all in one file. One session may write the failing test first, observe it red (rule 13), then implement. If the change turns out larger than that — anything touching a handler, a queue, or a second file — STOP and split it.
+> **Rule 17 — every file named below is a full path from the repo root.**
+
+```
+STANDING CHECK — before doing anything else: open
+/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md
+and read the 2.2-GREEN row. 2.3 depends on 2.2 landing (shared reliability spec); if 2.2-GREEN is not
+done, STOP. 2.3 edits ONLY artifact_chain_construct.py, which no other Wave-2 step edits, so there is
+no api_construct.py lock to wait on. Then confirm THIS step's gap is real right now, with real commands:
+
+  cd /Users/yitzchak/Documents/dev/careervp
+  grep -n "add_retry\|jitter_strategy\|JitterStrategy\|heartbeat_timeout\|StartVPR" infra/careervp/artifact_chain_construct.py
+
+Confirm live, and STOP with a plain-English sentence if any is not true:
+  - every add_retry currently has NO jitter_strategy (if any already sets JitterStrategy.FULL, say so);
+  - the StartVPR task has an add_retry but NO heartbeat_timeout, while the other long tasks do.
+
+BEFORE WRITING ANY TEST (rule 14): confirm, with a real command, that the spec above exists and its
+"RED Tests to Write First" section names AC-P19-1 with EXACT values. The StartVPR heartbeat value is
+underspecified today — pin it FIRST (see STEP 1) as its own visible spec edit, before writing the test.
+```
+
+You are implementing clause P-19. SINGLE RED-first session. Do the three steps below in order.
+
+--------------------------------------------------------------------------------
+STEP 1 — pin the StartVPR heartbeat value in the spec (rule 14), as its own edit
+--------------------------------------------------------------------------------
+
+Edit ONLY the P-19 brief in the "RED Tests to Write First" section of
+/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/specs/P-16-P-17-P-18-P-19-reliability-spec.md.
+Set the StartVPR heartbeat to the settled **180 seconds** (the research-step number the project already
+uses at artifact_chain_construct.py:275 — do NOT pick a new number), and state in one line why 180
+(StartVPR waits on the async VPR worker, the same long-external-step class as research). Also make the
+brief assert `JitterStrategy: FULL` on EVERY retry, not "some." Do not touch the P-16/17/18 briefs or
+any Acceptance Criterion. If pinning this needs an AC change, STOP — that is a §0.3 amendment.
+
+--------------------------------------------------------------------------------
+STEP 2 — write the RED test and observe it fail on its OWN assertion (rule 13)
+--------------------------------------------------------------------------------
+
+Put it where 2.2's synth tests live (confirm live:
+/Users/yitzchak/Documents/dev/careervp/src/backend/tests/infrastructure/). Synth the state machine and
+read its definition — no AWS calls.
+
+  test_p19_sfn_retries_use_full_jitter_and_start_vpr_heartbeat   (AC-P19-1)
+      Synth the artifact-chain state machine definition and assert, on the test's OWN assertions:
+        - EVERY Retry entry carries `JitterStrategy: FULL` (enumerate the retriers from the synthesized
+          definition; none may be missing it);
+        - each Retry still carries its existing `MaxAttempts` and `BackoffRate` (unchanged: 2/2.0,
+          except company-research 3/2.0 — read them from source, assert the real numbers, no "or");
+        - the StartVPR state has a `HeartbeatSeconds` of exactly 180.
+      RED: no retry sets JitterStrategy today and StartVPR has no heartbeat, so the assertions fail
+      naming the missing property. Guard so a missing state fails on the test's assertion, not a raw
+      KeyError.
+
+RULE 13 — run it, capture the failure output VERBATIM, state why it failed (JitterStrategy absent;
+StartVPR HeartbeatSeconds absent). A test that fails on a collection error or a bad import is NOT red,
+it is broken — make it fail on its own assertion about the synthesized definition. The full existing
+suite must still be green (you ADDED a test, changed no implementation — prove with `git diff --stat`:
+only the test file and the spec file, ZERO under infra/careervp/).
+
+--------------------------------------------------------------------------------
+STEP 3 — implement: FULL jitter on every retry + the StartVPR heartbeat
+--------------------------------------------------------------------------------
+
+In /Users/yitzchak/Documents/dev/careervp/infra/careervp/artifact_chain_construct.py ONLY:
+  - Add `jitter_strategy=sfn.JitterStrategy.FULL` to EVERY `add_retry(...)` call (`:158`, `:186`,
+    `:227`, `:251`, `:286`) — do not change interval, max_attempts, or backoff_rate.
+  - Add `heartbeat_timeout=sfn.Timeout.duration(Duration.seconds(180))` to the StartVPR task (`:238`),
+    matching the pattern the other long tasks already use.
+
+Do NOT touch api_construct.py, api_db_construct.py, any handler, any queue, or the P-16/17/18 work —
+that is step 2.2. If P-19 cannot pass without touching them, that is a rule-5 stop: flag it.
+
+VERIFY (fresh evidence): the RED test now passes; `git diff --stat -- **/tests` empty except the one
+new test file; full backend unit + integration suites green (zero regressions); both infrastructure
+test dirs green; `cd /Users/yitzchak/Documents/dev/careervp/infra && uv sync && cdk synth` clean;
+`cdk diff` shows ONLY the jitter/heartbeat property additions and ZERO stateful replacement and ~0
+resource-count change (B-2-3: properties, not resources); ruff + `mypy careervp --strict` clean;
+`make coverage-tests` gate exit 0 at/above baseline; naming validator
+(python /Users/yitzchak/Documents/dev/careervp/src/backend/scripts/validate_naming.py --path infra
+--strict) exit 0; scope-diff resolves P-19. No deploy, no merge from this session (§0.3).
+
+--------------------------------------------------------------------------------
+OUTPUT REQUIRED
+--------------------------------------------------------------------------------
+- The live confirmation of the gap (the grep), plain English first: retries exist, jitter absent,
+  StartVPR heartbeat absent.
+- The spec-brief pin from STEP 1 (the 180 s heartbeat + FULL-on-every-retry), as the spec diff.
+- The new test file and its verbatim RED failure output with a one-line why, BEFORE the fix.
+- The test passing after the fix, with output; the full verification results; the `cdk diff` showing
+  ~0 resource-count change (B-2-3 verdict in one line).
+- `git diff --stat` proving only the test file, the spec file, and artifact_chain_construct.py changed.
+- A git commit message.
+
+ALSO REQUIRED (standing rule for every wave prompt — see
+/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/RUNBOOK-RULES.md):
+- Compare what you actually built against (a) this prompt's own instructions and (b) clause P-19 in
+  /Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/project-scope-lock.yaml.
+  If everything matches, say so in one plain sentence. Confirm you changed NOTHING for P-16/17/18.
+- If ANYTHING drifted — extra work not asked for, required work skipped, or a test/rule had to be
+  weakened — STOP. Do not fix it yourself. Write one plain-English sentence a non-engineer could
+  follow (what should have happened, what actually happened, why it matters), THEN the technical
+  detail, and flag it for human review. Do not mark the step done.
+- Update
+  /Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md:
+  add a `2.3` row with a plain-English status, the commit, today's date, and what 2.4 must resolve
+  first (2.4 edits api_construct.py — confirm that lock is free) or "none".
 
 ---
 

@@ -605,15 +605,20 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     jobs_repo = JobsRepository()
     bucket = _get_results_bucket()
 
+    batch_item_failures: list[dict[str, str]] = []
+
     # Process each record in the SQS event
     for record in event.get('Records', []):
+        message_id = str(record.get('messageId', ''))
         try:
             _process_job_record(jobs_repo, record, bucket)
 
         except Exception as e:
             logger.exception(
                 'Unexpected error processing job',
+                message_id=message_id,
                 error=str(e),
             )
+            batch_item_failures.append({'itemIdentifier': message_id})
 
-    return {'statusCode': 200, 'body': json.dumps({'message': 'Jobs processed'})}
+    return {'batchItemFailures': batch_item_failures}

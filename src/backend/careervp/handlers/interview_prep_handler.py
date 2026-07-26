@@ -117,7 +117,13 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
 def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
     """Process SQS messages for async interview prep generation."""
+    batch_item_failures: list[dict[str, str]] = []
+    sqs_batch_seen = False
+
     for record in event.get('Records', []):
+        message_id = str(record.get('messageId', ''))
+        is_sqs_record = record.get('eventSource') == 'aws:sqs' and bool(message_id)
+        sqs_batch_seen = sqs_batch_seen or is_sqs_record
         logger.info('Interview prep worker received SQS record', sqs_record=record)
         body = json.loads(record.get('body', '{}'))
         logger.info('Interview prep worker parsed SQS body', sqs_body=body)
@@ -145,10 +151,13 @@ def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
         except Exception as exc:
             logger.error('Interview prep SQS job failed', job_id=job_id, error=str(exc), exc_info=True)
             _send_task_failure(task_token, cause=str(exc))
-            if task_token:
-                continue
-            raise
+            if not task_token and not is_sqs_record:
+                raise
+            batch_item_failures.append({'itemIdentifier': message_id})
+            continue
 
+    if sqs_batch_seen:
+        return {'batchItemFailures': batch_item_failures}
     return {'statusCode': 200, 'body': 'OK'}
 
 

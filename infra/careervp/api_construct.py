@@ -95,6 +95,7 @@ class ApiConstruct(Construct):
         self._features: Construct = (
             self._crud_features if self._rehome_features_enabled else self
         )
+        self._dlq_depth_alarms: list[cw.Alarm] = []
         self.api_db = ApiDbConstruct(
             self,
             f"{id_}db",
@@ -329,7 +330,12 @@ class ApiConstruct(Construct):
         self.billing_error_alarm.add_alarm_action(
             cw_actions.SnsAction(self.monitoring.notification_topic)
         )
-        for alarm in [*self.p23_rollback_alarms, *self._p23_canary_alarms]:
+        for alarm in [
+            *self.p23_rollback_alarms,
+            *self._p23_canary_alarms,
+            *self.api_db.dlq_depth_alarms,
+            *self._dlq_depth_alarms,
+        ]:
             alarm.add_alarm_action(
                 cw_actions.SnsAction(self.monitoring.notification_topic)
             )
@@ -1448,7 +1454,7 @@ class ApiConstruct(Construct):
             self._features,
             constants.VPR_JOBS_QUEUE,
             queue_name=self.naming.queue_name(constants.VPR_JOBS_QUEUE),
-            visibility_timeout=Duration.minutes(10),  # must be >= Lambda timeout
+            visibility_timeout=Duration.minutes(60),
             receive_message_wait_time=Duration.seconds(20),  # Long polling
             encryption=aws_sqs.QueueEncryption.KMS,
             encryption_master_key=sqs_key,
@@ -1461,21 +1467,34 @@ class ApiConstruct(Construct):
 
     def _build_vpr_jobs_dlq(self) -> aws_sqs.Queue:
         """Build SQS dead letter queue for failed VPR jobs."""
-        return aws_sqs.Queue(
+        queue = aws_sqs.Queue(
             self._features,
             constants.VPR_JOBS_DLQ,
             queue_name=self.naming.dlq_name(constants.VPR_JOBS_DLQ),
+            visibility_timeout=Duration.seconds(180),
             encryption=aws_sqs.QueueEncryption.SQS_MANAGED,
         )
+        self._add_dlq_depth_alarm(
+            scope=self._features,
+            construct_id="VprJobsDlqDepthAlarm",
+            queue_name=self.naming.dlq_name(constants.VPR_JOBS_DLQ),
+        )
+        return queue
 
     def _build_cover_letter_jobs_dlq(self) -> aws_sqs.Queue:
         """Build SQS dead letter queue for failed cover letter jobs."""
-        return aws_sqs.Queue(
+        queue = aws_sqs.Queue(
             self._features,
             constants.COVER_LETTER_JOBS_DLQ,
             queue_name=self.naming.dlq_name(constants.COVER_LETTER_JOBS_DLQ),
             encryption=aws_sqs.QueueEncryption.SQS_MANAGED,
         )
+        self._add_dlq_depth_alarm(
+            scope=self._features,
+            construct_id="CoverLetterJobsDlqDepthAlarm",
+            queue_name=self.naming.dlq_name(constants.COVER_LETTER_JOBS_DLQ),
+        )
+        return queue
 
     def _build_cover_letter_jobs_queue(self, dlq: aws_sqs.Queue) -> aws_sqs.Queue:
         """Build SQS queue for cover letter async job processing."""
@@ -1491,7 +1510,7 @@ class ApiConstruct(Construct):
             self._features,
             constants.COVER_LETTER_JOBS_QUEUE,
             queue_name=self.naming.queue_name(constants.COVER_LETTER_JOBS_QUEUE),
-            visibility_timeout=Duration.seconds(300),
+            visibility_timeout=Duration.seconds(1800),
             receive_message_wait_time=Duration.seconds(20),
             encryption=aws_sqs.QueueEncryption.KMS,
             encryption_master_key=sqs_key,
@@ -1503,12 +1522,18 @@ class ApiConstruct(Construct):
 
     def _build_interview_prep_jobs_dlq(self) -> aws_sqs.Queue:
         """Build SQS dead letter queue for failed interview prep jobs."""
-        return aws_sqs.Queue(
+        queue = aws_sqs.Queue(
             self._features,
             constants.INTERVIEW_PREP_JOBS_DLQ,
             queue_name=self.naming.dlq_name(constants.INTERVIEW_PREP_JOBS_DLQ),
             encryption=aws_sqs.QueueEncryption.SQS_MANAGED,
         )
+        self._add_dlq_depth_alarm(
+            scope=self._features,
+            construct_id="InterviewPrepJobsDlqDepthAlarm",
+            queue_name=self.naming.dlq_name(constants.INTERVIEW_PREP_JOBS_DLQ),
+        )
+        return queue
 
     def _build_interview_prep_jobs_queue(self, dlq: aws_sqs.Queue) -> aws_sqs.Queue:
         """Build SQS queue for interview prep async job processing."""
@@ -1524,7 +1549,7 @@ class ApiConstruct(Construct):
             self._features,
             constants.INTERVIEW_PREP_JOBS_QUEUE,
             queue_name=self.naming.queue_name(constants.INTERVIEW_PREP_JOBS_QUEUE),
-            visibility_timeout=Duration.seconds(300),
+            visibility_timeout=Duration.seconds(1800),
             receive_message_wait_time=Duration.seconds(20),
             encryption=aws_sqs.QueueEncryption.KMS,
             encryption_master_key=sqs_key,
@@ -1537,13 +1562,44 @@ class ApiConstruct(Construct):
     def _build_worker_dlq(self, worker_feature: str) -> aws_sqs.Queue:
         """Create a dedicated encrypted DLQ for a worker Lambda."""
         worker_id = worker_feature.replace("-", " ").title().replace(" ", "")
-        return aws_sqs.Queue(
+        queue_name = self.naming.dlq_name(worker_feature)
+        queue = aws_sqs.Queue(
             self._features,
             f"{worker_id}Dlq",
-            queue_name=self.naming.dlq_name(worker_feature),
+            queue_name=queue_name,
             retention_period=Duration.days(14),
             encryption=aws_sqs.QueueEncryption.KMS_MANAGED,
         )
+        if worker_feature in {"cv-upload-worker", "cv-tailor-worker"}:
+            self._add_dlq_depth_alarm(
+                scope=self._features,
+                construct_id=f"{worker_id}DlqDepthAlarm",
+                queue_name=queue_name,
+            )
+        return queue
+
+    def _add_dlq_depth_alarm(
+        self, *, scope: Construct, construct_id: str, queue_name: str
+    ) -> None:
+        if not self._rehome_features_enabled:
+            return
+
+        alarm = cw.Alarm(
+            scope,
+            construct_id,
+            metric=cw.Metric(
+                namespace="AWS/SQS",
+                metric_name="ApproximateNumberOfMessagesVisible",
+                dimensions_map={"QueueName": queue_name},
+                statistic="Maximum",
+                period=Duration.minutes(1),
+            ),
+            threshold=1,
+            evaluation_periods=1,
+            comparison_operator=cw.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+            treat_missing_data=cw.TreatMissingData.NOT_BREACHING,
+        )
+        self._dlq_depth_alarms.append(alarm)
 
     def _add_vpr_submit_lambda_integration(
         self,
@@ -1703,6 +1759,7 @@ class ApiConstruct(Construct):
                 10
             ),  # 10 minutes for VPR generation (single LLM call ~2:20 min)
             memory_size=1024,
+            reserved_concurrent_executions=5,
             role=role,
             log_group=log_group,
             logging_format=_lambda.LoggingFormat.JSON,
@@ -1712,7 +1769,11 @@ class ApiConstruct(Construct):
 
         # Add SQS event source
         lambda_function.add_event_source(
-            eventsources.SqsEventSource(queue, batch_size=1)
+            eventsources.SqsEventSource(
+                queue,
+                batch_size=1,
+                report_batch_item_failures=True,
+            )
         )
 
         return lambda_function
@@ -1757,7 +1818,13 @@ class ApiConstruct(Construct):
             architecture=_lambda.Architecture.X86_64,
         )
 
-        lambda_function.add_event_source(eventsources.SqsEventSource(dlq, batch_size=1))
+        lambda_function.add_event_source(
+            eventsources.SqsEventSource(
+                dlq,
+                batch_size=1,
+                report_batch_item_failures=True,
+            )
+        )
 
         return lambda_function
 
@@ -1940,6 +2007,7 @@ class ApiConstruct(Construct):
             },
             timeout=Duration.seconds(300),
             memory_size=512,
+            reserved_concurrent_executions=5,
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=2,
             log_group=log_group,
@@ -2002,6 +2070,7 @@ class ApiConstruct(Construct):
             },
             timeout=Duration.seconds(300),
             memory_size=512,
+            reserved_concurrent_executions=5,
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=2,
             log_group=log_group,
@@ -2014,6 +2083,7 @@ class ApiConstruct(Construct):
             eventsources.SqsEventSource(
                 self.cover_letter_jobs_queue,
                 batch_size=1,
+                report_batch_item_failures=True,
             )
         )
 
@@ -2074,6 +2144,7 @@ class ApiConstruct(Construct):
             },
             timeout=Duration.seconds(300),
             memory_size=512,
+            reserved_concurrent_executions=5,
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=2,
             log_group=log_group,
@@ -2086,6 +2157,7 @@ class ApiConstruct(Construct):
             eventsources.SqsEventSource(
                 self.interview_prep_jobs_queue,
                 batch_size=1,
+                report_batch_item_failures=True,
             )
         )
 
@@ -2776,6 +2848,7 @@ class ApiConstruct(Construct):
             # Aligned with the chain CR heartbeat (180s).
             timeout=Duration.seconds(120),
             memory_size=512,
+            reserved_concurrent_executions=5,
             tracing=_lambda.Tracing.ACTIVE,
             retry_attempts=0,
             role=self.lambda_role,
@@ -2786,7 +2859,9 @@ class ApiConstruct(Construct):
         )
         lambda_function.add_event_source(
             eventsources.SqsEventSource(
-                self.api_db.company_research_queue, batch_size=1
+                self.api_db.company_research_queue,
+                batch_size=1,
+                report_batch_item_failures=True,
             )
         )
         return lambda_function

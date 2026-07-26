@@ -4,6 +4,7 @@ DynamoDB tables and S3 buckets for the CV processing pipeline.
 """
 
 from aws_cdk import CfnOutput, Duration, RemovalPolicy
+from aws_cdk import aws_cloudwatch as cw
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_s3 as s3
 from aws_cdk import aws_sqs as sqs
@@ -48,6 +49,8 @@ class ApiDbConstruct(Construct):
         # and buckets stay in this construct (the parent stack). Defaults to self
         # so non-service callers / tests that omit queue_scope keep the old shape.
         self._queue_scope: Construct = queue_scope if queue_scope is not None else self
+        self._build_dlq_depth_alarms = queue_scope is not None
+        self.dlq_depth_alarms: list[cw.Alarm] = []
         if scratch_settings is not None:
             validate_scratch_boundary(
                 scratch_settings,
@@ -532,18 +535,25 @@ class ApiDbConstruct(Construct):
 
     def _build_cv_upload_dlq(self, id_prefix: str) -> sqs.Queue:
         """Dead-letter queue for failed CV upload processing jobs."""
-        return rehome(
+        queue_name = self.naming.dlq_name(constants.CV_UPLOAD_QUEUE)
+        queue = rehome(
             sqs.Queue(
                 self._queue_scope,
                 f"{id_prefix}CvUploadDlq",
-                queue_name=self.naming.dlq_name(constants.CV_UPLOAD_QUEUE),
+                queue_name=queue_name,
                 # SQS_001: retain failed messages for 14 days.
                 retention_period=Duration.days(14),
                 # SQS_002: encrypt queue contents with AWS-managed KMS.
                 encryption=sqs.QueueEncryption.KMS_MANAGED,
             ),
-            self.naming.dlq_name(constants.CV_UPLOAD_QUEUE),
+            queue_name,
         )
+        self._add_dlq_depth_alarm(
+            id_prefix=id_prefix,
+            construct_id="CvUploadDlqDepthAlarm",
+            queue_name=queue_name,
+        )
+        return queue
 
     def _build_cv_upload_queue(self, id_prefix: str, dlq: sqs.Queue) -> sqs.Queue:
         """Primary queue for CV upload async processing."""
@@ -552,8 +562,8 @@ class ApiDbConstruct(Construct):
                 self._queue_scope,
                 f"{id_prefix}CvUploadQueue",
                 queue_name=self.naming.queue_name(constants.CV_UPLOAD_QUEUE),
-                # SQS_003: visibility must exceed Lambda timeout + 60s buffer.
-                visibility_timeout=Duration.seconds(390),
+                # SQS_003: visibility must be at least 6x the Lambda timeout.
+                visibility_timeout=Duration.seconds(1800),
                 receive_message_wait_time=Duration.seconds(20),
                 # SQS_002: encrypt queue contents with AWS-managed KMS.
                 encryption=sqs.QueueEncryption.KMS_MANAGED,
@@ -569,18 +579,25 @@ class ApiDbConstruct(Construct):
 
     def _build_gap_analysis_dlq(self, id_prefix: str) -> sqs.Queue:
         """Dead-letter queue for failed gap analysis jobs."""
-        return rehome(
+        queue_name = self.naming.dlq_name(constants.GAP_ANALYSIS_QUEUE)
+        queue = rehome(
             sqs.Queue(
                 self._queue_scope,
                 f"{id_prefix}GapAnalysisDlq",
-                queue_name=self.naming.dlq_name(constants.GAP_ANALYSIS_QUEUE),
+                queue_name=queue_name,
                 # SQS_001: retain failed messages for 14 days.
                 retention_period=Duration.days(14),
                 # SQS_002: encrypt queue contents with AWS-managed KMS.
                 encryption=sqs.QueueEncryption.KMS_MANAGED,
             ),
-            self.naming.dlq_name(constants.GAP_ANALYSIS_QUEUE),
+            queue_name,
         )
+        self._add_dlq_depth_alarm(
+            id_prefix=id_prefix,
+            construct_id="GapAnalysisDlqDepthAlarm",
+            queue_name=queue_name,
+        )
+        return queue
 
     def _build_gap_analysis_queue(self, id_prefix: str, dlq: sqs.Queue) -> sqs.Queue:
         """Primary queue for gap analysis async processing."""
@@ -589,8 +606,8 @@ class ApiDbConstruct(Construct):
                 self._queue_scope,
                 f"{id_prefix}GapAnalysisQueue",
                 queue_name=self.naming.queue_name(constants.GAP_ANALYSIS_QUEUE),
-                # SQS_003: visibility must exceed Lambda timeout + 60s buffer.
-                visibility_timeout=Duration.seconds(390),
+                # SQS_003: visibility must be at least 6x the Lambda timeout.
+                visibility_timeout=Duration.seconds(1800),
                 receive_message_wait_time=Duration.seconds(20),
                 # SQS_002: encrypt queue contents with AWS-managed KMS.
                 encryption=sqs.QueueEncryption.KMS_MANAGED,
@@ -606,18 +623,25 @@ class ApiDbConstruct(Construct):
 
     def _build_company_research_dlq(self, id_prefix: str) -> sqs.Queue:
         """Dead-letter queue for failed company research jobs (FE-UI-031)."""
-        return rehome(
+        queue_name = self.naming.dlq_name(constants.COMPANY_RESEARCH_QUEUE)
+        queue = rehome(
             sqs.Queue(
                 self._queue_scope,
                 f"{id_prefix}CompanyResearchDlq",
-                queue_name=self.naming.dlq_name(constants.COMPANY_RESEARCH_QUEUE),
+                queue_name=queue_name,
                 # SQS_001: retain failed messages for 14 days.
                 retention_period=Duration.days(14),
                 # SQS_002: encrypt queue contents with AWS-managed KMS.
                 encryption=sqs.QueueEncryption.KMS_MANAGED,
             ),
-            self.naming.dlq_name(constants.COMPANY_RESEARCH_QUEUE),
+            queue_name,
         )
+        self._add_dlq_depth_alarm(
+            id_prefix=id_prefix,
+            construct_id="CompanyResearchDlqDepthAlarm",
+            queue_name=queue_name,
+        )
+        return queue
 
     def _build_company_research_queue(
         self, id_prefix: str, dlq: sqs.Queue
@@ -628,8 +652,8 @@ class ApiDbConstruct(Construct):
                 self._queue_scope,
                 f"{id_prefix}CompanyResearchQueue",
                 queue_name=self.naming.queue_name(constants.COMPANY_RESEARCH_QUEUE),
-                # SQS_003: visibility aligned to the chain task heartbeat (180s) + buffer.
-                visibility_timeout=Duration.seconds(120),
+                # SQS_003: visibility must be at least 6x the Lambda timeout.
+                visibility_timeout=Duration.seconds(720),
                 receive_message_wait_time=Duration.seconds(20),
                 # SQS_002: encrypt queue contents with AWS-managed KMS.
                 encryption=sqs.QueueEncryption.KMS_MANAGED,
@@ -642,6 +666,32 @@ class ApiDbConstruct(Construct):
             ),
             self.naming.queue_name(constants.COMPANY_RESEARCH_QUEUE),
         )
+
+    def _add_dlq_depth_alarm(
+        self, *, id_prefix: str, construct_id: str, queue_name: str
+    ) -> None:
+        if not self._build_dlq_depth_alarms:
+            return
+
+        alarm = rehome(
+            cw.Alarm(
+                self._queue_scope,
+                f"{id_prefix}{construct_id}",
+                metric=cw.Metric(
+                    namespace="AWS/SQS",
+                    metric_name="ApproximateNumberOfMessagesVisible",
+                    dimensions_map={"QueueName": queue_name},
+                    statistic="Maximum",
+                    period=Duration.minutes(1),
+                ),
+                threshold=1,
+                evaluation_periods=1,
+                comparison_operator=cw.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+                treat_missing_data=cw.TreatMissingData.NOT_BREACHING,
+            ),
+            f"{queue_name}-depth-alarm",
+        )
+        self.dlq_depth_alarms.append(alarm)
 
     def _build_vpr_results_bucket(self, id_prefix: str) -> s3.Bucket:
         """
