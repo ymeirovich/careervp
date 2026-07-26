@@ -155,8 +155,13 @@ class Cmd:
     stderr: str
 
 
-def run(cmd: Sequence[str], *, cwd: Path, timeout: int = 1200) -> Cmd:
+def run(cmd: Sequence[str], *, cwd: Path, timeout: int = 1200, remove_env: Sequence[str] = ()) -> Cmd:
     """Run a command, capturing output. Never raises on non-zero exit."""
+    env = None
+    if remove_env:
+        env = os.environ.copy()
+        for name in remove_env:
+            env.pop(name, None)
     try:
         proc = subprocess.run(
             list(cmd),
@@ -164,6 +169,7 @@ def run(cmd: Sequence[str], *, cwd: Path, timeout: int = 1200) -> Cmd:
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=env,
         )
         return Cmd(proc.returncode, proc.stdout, proc.stderr)
     except subprocess.TimeoutExpired as exc:
@@ -255,7 +261,10 @@ def check_suites_and_coverage() -> list[GateCheck]:
     """Checks 3+4: backend unit+integration green AND coverage gate at/above the
     enforced baseline, with distance to target reported. Both come from one
     ``make coverage-tests`` run so the numbers are internally consistent."""
-    res = run(['make', 'coverage-tests'], cwd=BACKEND_DIR, timeout=1200)
+    # The gate itself may be launched with API_BASE/SMOKE_TOKEN so the live smoke
+    # check can run. Do not leak those variables into the offline coverage suite:
+    # several E2E tests intentionally become live tests when API_BASE is present.
+    res = run(['make', 'coverage-tests'], cwd=BACKEND_DIR, timeout=1200, remove_env=('API_BASE', 'SMOKE_ORIGIN', 'SMOKE_TOKEN'))
     out = res.stdout + res.stderr
     summary = _pytest_summary(out)
     suite_pass = ' failed' not in summary and 'passed' in summary
@@ -410,7 +419,7 @@ def check_smoke_harness() -> GateCheck:
             '`API_BASE=<devx-invoke-url> SMOKE_ORIGIN=<fe-origin> SMOKE_TOKEN=<cognito> '
             'uv run python scripts/smoke_harness.py` and keep the docs/evidence/smoke-*.json',
         )
-    res = run(['uv', 'run', 'python', 'scripts/smoke_harness.py'], cwd=BACKEND_DIR, timeout=300)
+    res = run(['uv', 'run', 'python', 'scripts/smoke_harness.py', '--evidence-dir', str(EVIDENCE_DIR)], cwd=BACKEND_DIR, timeout=300)
     passed = res.returncode == 0
     return GateCheck(
         'smoke_harness_4x4',

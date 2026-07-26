@@ -7,7 +7,13 @@ test runs offline and deterministically.
 
 from __future__ import annotations
 
-from scripts.wave_gate import GateCheck, Status, gate_passed
+import sys
+from pathlib import Path
+
+import pytest
+
+import scripts.wave_gate as wave_gate
+from scripts.wave_gate import Cmd, GateCheck, Status, gate_passed, run
 
 
 def _c(status: Status) -> GateCheck:
@@ -41,3 +47,36 @@ def test_blocking_flags_per_status() -> None:
     assert _c(Status.HUMAN_REQUIRED).blocking is True
     assert _c(Status.PASS).blocking is False
     assert _c(Status.RECORDED).blocking is False
+
+
+def test_run_can_scrub_live_smoke_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('API_BASE', 'https://live.example.test')
+    result = run(
+        [sys.executable, '-c', 'import os; print(os.getenv("API_BASE", "missing"))'],
+        cwd=Path.cwd(),
+        remove_env=('API_BASE',),
+    )
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == 'missing'
+
+
+def test_smoke_harness_writes_canonical_evidence_dir(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run(cmd: list[str], *, cwd: Path, timeout: int = 1200, remove_env: tuple[str, ...] = ()) -> Cmd:
+        captured['cmd'] = cmd
+        captured['cwd'] = cwd
+        captured['timeout'] = timeout
+        captured['remove_env'] = remove_env
+        return Cmd(0, '', '')
+
+    monkeypatch.setenv('API_BASE', 'https://api.example.test')
+    monkeypatch.setenv('SMOKE_TOKEN', 'token')
+    monkeypatch.setattr(wave_gate, 'run', fake_run)
+
+    result = wave_gate.check_smoke_harness()
+
+    assert result.status is Status.PASS
+    assert captured['cmd'] == ['uv', 'run', 'python', 'scripts/smoke_harness.py', '--evidence-dir', str(wave_gate.EVIDENCE_DIR)]
+    assert captured['cwd'] == wave_gate.BACKEND_DIR
