@@ -2662,7 +2662,26 @@ class ApiConstruct(Construct):
             "ArtifactCleanupSchedule",
             schedule=events.Schedule.rate(Duration.hours(1)),
         )
-        cleanup_rule.add_target(targets.LambdaFunction(self.artifact_cleanup_func))
+        cleanup_schedule_dlq_name = self.naming.dlq_name(
+            constants.ARTIFACT_CLEANUP_SCHEDULE_DLQ
+        )
+        cleanup_schedule_dlq = aws_sqs.Queue(
+            self,
+            "ArtifactCleanupScheduleDlq",
+            queue_name=cleanup_schedule_dlq_name,
+            encryption=aws_sqs.QueueEncryption.SQS_MANAGED,
+        )
+        self._add_dlq_depth_alarm(
+            scope=self._features,
+            construct_id="ArtifactCleanupScheduleDlqDepthAlarm",
+            queue_name=cleanup_schedule_dlq_name,
+        )
+        cleanup_rule.add_target(
+            targets.LambdaFunction(
+                self.artifact_cleanup_func,
+                dead_letter_queue=cleanup_schedule_dlq,
+            )
+        )
 
     def _artifact_chain_enabled(self) -> str:
         """Resolve the ARTIFACT_CHAIN_ENABLED flag at synth time (default off)."""
@@ -3195,6 +3214,20 @@ class ApiConstruct(Construct):
 
     def _add_billing_eventbridge_rule(self) -> events.Rule:
         """EventBridge scheduled rule — triggers billing reconciliation at 02:00 UTC."""
+        billing_reconcile_schedule_dlq_name = self.naming.dlq_name(
+            constants.BILLING_RECONCILE_SCHEDULE_DLQ
+        )
+        billing_reconcile_schedule_dlq = aws_sqs.Queue(
+            self,
+            "BillingReconcileScheduleDlq",
+            queue_name=billing_reconcile_schedule_dlq_name,
+            encryption=aws_sqs.QueueEncryption.SQS_MANAGED,
+        )
+        self._add_dlq_depth_alarm(
+            scope=self._features,
+            construct_id="BillingReconcileScheduleDlqDepthAlarm",
+            queue_name=billing_reconcile_schedule_dlq_name,
+        )
         return events.Rule(
             self,
             "BillingReconcileScheduleRule",
@@ -3205,6 +3238,7 @@ class ApiConstruct(Construct):
                     event=events.RuleTargetInput.from_object(
                         {"detail": {"action": "reconcile_subscriptions"}}
                     ),
+                    dead_letter_queue=billing_reconcile_schedule_dlq,
                 )
             ],
         )

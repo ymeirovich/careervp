@@ -25,6 +25,8 @@ careervp/configuration/json/devx_configuration.json
 careervp/configuration/json/prod_configuration.json
 careervp/configuration/json/staging_configuration.json
 careervp/configuration/json/test_configuration.json
+loadtest/load_harness_config.json
+loadtest/locustfile.py
 scripts/p26_refactor_gate.py
 service_cdk.egg-info/PKG-INFO
 service_cdk.egg-info/SOURCES.txt
@@ -46,6 +48,7 @@ tests/infrastructure/test_frontend_stack.py
 tests/infrastructure/test_monitoring.py
 tests/infrastructure/test_naming_utils.py
 tests/infrastructure/test_nested_split.py
+tests/infrastructure/test_p07_devx_cors_origin.py
 tests/infrastructure/test_p08_s3_cors_no_wildcard.py
 tests/infrastructure/test_p10_api_cors_allowlist.py
 tests/infrastructure/test_p12_p13_retain_stateful.py

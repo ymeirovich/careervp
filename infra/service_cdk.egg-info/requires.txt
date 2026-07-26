@@ -9,3 +9,6 @@ pydantic>=2.0.0
 gitpython>=3.1.0
 mypy>=1.10.0
 pytest>=8.0.0
+
+[loadtest]
+locust>=2.31.0

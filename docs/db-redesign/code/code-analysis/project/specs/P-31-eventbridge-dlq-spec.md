@@ -32,9 +32,9 @@ Scheduled EventBridge targets for cleanup and billing reconcile must have DLQs, 
 
 ## RED Tests to Write First
 
-- `test_p31_cleanup_rule_target_has_dlq`: synth EventBridge targets and assert cleanup target has `DeadLetterConfig`.
-- `test_p31_billing_reconcile_target_has_dlq`: assert billing reconcile target has `DeadLetterConfig`.
-- `test_p31_eventbridge_dlqs_have_depth_alarms`: synth CloudWatch alarms and assert each schedule DLQ has visible-messages alarm.
+- `test_p31_cleanup_rule_target_has_dlq`: synth EventBridge targets and assert cleanup target has `DeadLetterConfig`; the target's `DeadLetterConfig.Arn` must resolve via `Ref` or `Fn::GetAtt` to an `AWS::SQS::Queue` logical id present in the same synthesized template, not just key-presence on the target.
+- `test_p31_billing_reconcile_target_has_dlq`: assert billing reconcile target has `DeadLetterConfig`; the target's `DeadLetterConfig.Arn` must resolve via `Ref` or `Fn::GetAtt` to an `AWS::SQS::Queue` logical id present in the same synthesized template, not just key-presence on the target.
+- `test_p31_eventbridge_dlqs_have_depth_alarms`: synth CloudWatch alarms and assert each schedule DLQ has a visible-messages alarm with metric `AWS/SQS` `ApproximateNumberOfMessagesVisible`, `Threshold: 1`, and `EvaluationPeriods: 1`. This uses the same DLQ-depth-alarm contract already settled for sibling P-17 queue DLQs, not a new P-31-specific number.
 - `test_p31_dlq_names_follow_naming_convention`: assert queue names start `careervp-` and end `-{env}`.
 
 ## Acceptance Criteria
@@ -50,4 +50,3 @@ All RED tests pass; `cdk diff` zero stateful replacement; naming validator passe
 ## Sequencing / Dependencies
 
 Wave 2 reliability/money. Depends on P-21 if alarm delivery is required.
-

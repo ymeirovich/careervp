@@ -2743,23 +2743,205 @@ ALSO REQUIRED (standing rule for every wave prompt — see
 
 ---
 
-## 2.7 — Dead-letter queues for scheduled rules (skeleton)
+## 2.7 — Dead-letter queues for scheduled rules
 
-| | |
-|---|---|
-| **Clause** | P-31 |
-| **Spec** | `specs/P-31-eventbridge-dlq-spec.md` |
-| **Claude / Codex** | sonnet/med · gpt-5-codex/med |
-| **Depends on** | 2.2 (same lane) |
-| **Deploy target** | `CareerVpCrudDevx` |
-| **Serialization** | edits `api_construct.py` |
-| **Bets** | `B-2-3` |
+> **FILLED IN 2026-07-26** from the skeleton below (rule 11), after 2.2/2.3/2.4 all landed and the
+> `api_construct.py` serialization lock was confirmed free. Verified live rather than trusting the
+> skeleton's or spec's line numbers, both of which have drifted:
+>
+> - **The spec's line numbers are STALE (rule-5 flag).** `P-31-eventbridge-dlq-spec.md` cites
+>   `api_construct.py:2176-2181` (cleanup rule) and `:2673-2684` (billing reconcile target) and
+>   `:2536-2541` (billing webhook DLQ naming precedent). Live on this branch the cleanup rule is at
+>   `:2660-2665` and the billing reconcile rule is at `:3196-3210` (method
+>   `_add_billing_eventbridge_rule`); the webhook DLQ precedent is at `:3038`
+>   (`self.naming.dlq_name(constants.BILLING_WEBHOOK_DLQ)`). Re-confirm live at run time (§0.2) —
+>   these will drift again as long as 2.2/2.4/2.7 keep landing sequentially in this file.
+>
+> - **Neither target has a DLQ today — confirmed live.**
+>   `grep -n "dead_letter_queue\|DeadLetterConfig" infra/careervp/api_construct.py` shows
+>   `dead_letter_queue=` used only for the SQS-queue-level redrive policies (`aws_sqs.DeadLetterQueue`,
+>   e.g. `:1465`) — a different CDK type from what EventBridge targets need. Neither
+>   `cleanup_rule.add_target(targets.LambdaFunction(self.artifact_cleanup_func))` (`:2665`, no kwargs
+>   at all) nor `_add_billing_eventbridge_rule`'s `targets.LambdaFunction(handler=..., event=...)`
+>   (`:3203-3208`, no `dead_letter_queue=`) passes one. `targets.LambdaFunction.__init__` (confirmed via
+>   `inspect.signature`) accepts `dead_letter_queue: Optional[IQueue]` directly — a plain `aws_sqs.Queue`,
+>   NOT the `aws_sqs.DeadLetterQueue` wrapper used for SQS-to-SQS redrive. Do not confuse the two.
+>
+> - **A depth-alarm helper already exists and must be reused, not re-invented.**
+>   `_add_dlq_depth_alarm(self, *, scope, construct_id, queue_name)` (`:1585-1606`) builds the exact
+>   `AWS/SQS ApproximateNumberOfMessagesVisible` alarm (threshold 1, evaluation period 1,
+>   `NOT_BREACHING`) that P-17's eight DLQs already use, appends it to `self._dlq_depth_alarms`, and is
+>   gated behind `self._rehome_features_enabled` (same P-26 devx-rehome path as P-17 — confirm this
+>   flag is on in the same synth context the RED tests use). Everything in `self._dlq_depth_alarms` is
+>   auto-wired to the monitoring SNS topic at `:337` — P-31 must call this helper for both new DLQs,
+>   not build a bespoke `cw.Alarm`.
+>
+> - **Naming convention, confirmed against `naming_utils.py`.** `dlq_name(feature)` returns
+>   `careervp-{feature}-dlq-{env}`. Existing DLQ feature constants already end in `-dlq`
+>   (e.g. `VPR_JOBS_DLQ = "vpr-jobs-dlq"` → `careervp-vpr-jobs-dlq-dlq-{env}`), so P-31's two new
+>   constants must follow the same doubled-`dlq` shape for consistency, not fight it:
+>   `ARTIFACT_CLEANUP_SCHEDULE_DLQ = "artifact-cleanup-schedule-dlq"` and
+>   `BILLING_RECONCILE_SCHEDULE_DLQ = "billing-reconcile-schedule-dlq"`, matching the existing feature
+>   name roots `ARTIFACT_CLEANUP_FEATURE`/`BILLING_RECONCILE_FEATURE` (`constants.py:148,180`).
+>
+> - **"Serialization: edits `api_construct.py`" still holds — confirm the lock is free.** 2.2, 2.3
+>   (no — 2.3 only touched `artifact_chain_construct.py`, see its own ledger row), 2.4, and 2.5 have all
+>   landed per `wave-2-status.md`. Re-confirm no other `api_construct.py`-editing step is mid-flight
+>   before starting (§0.2) — this is the last step in the serial infra lane before the GATE.
+>
+> - **The skeleton's done-when ("a deliberately failing target is observed landing in it") is a LIVE
+>   observation, not a synth assertion — split accordingly.** The four RED tests below are all
+>   synth-level (rule 13 needs them failing for the right reason before any AWS call), but the
+>   acceptance criteria (AC-P31-1) describe a live retry-exhaustion → DLQ delivery. Treat the live
+>   observation the same way 2.4 treated its load evidence: real, but scoped to a human-gated follow-up
+>   if a live deliberate-failure drill is out of scope for this session — do not fabricate it.
 
-**In plain English.** The two scheduled rules (hourly cleanup, 2am reconcile) drop their work
-silently if the target fails. Give them a dead-letter queue.
+---
 
-**Done-when.** Both rule targets have a dead-letter queue with an alarm; a deliberately failing
-target is observed landing in it.
+# PROMPT 2.7 — dead-letter queues for the two scheduled EventBridge targets (RED-first)
+
+> **Clause:** P-31 · **Spec:** [/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/specs/P-31-eventbridge-dlq-spec.md](/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/specs/P-31-eventbridge-dlq-spec.md)
+> **Acceptance criteria:** AC-P31-1, AC-P31-2 · **Claude: sonnet/medium · Codex: gpt-5.3-codex/low**
+> **Rule 7 — RED and GREEN may be one session only if this stays a small, isolated clause** (two new
+> SQS queues + two `dead_letter_queue=` kwargs + two alarm calls, all in `api_construct.py`, no handler
+> or money/tenancy path touched). If it grows beyond that — a third target, a new Lambda, a queue
+> policy hand-written instead of CDK's default — STOP and split into a separate GREEN session.
+> **Rule 17 — every file named below is a full path from the repo root.**
+
+```
+STANDING CHECK — before doing anything else: open
+/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md
+and confirm 2.2, 2.4 (and 2.5/2.5a) show DONE with no open api_construct.py lock. 2.7 is the last
+step in the serial infra lane (2.2 → 2.3 → 2.4 → 2.7) — if any of those rows is still open, STOP.
+Then confirm THIS step's gap is real right now, with real commands:
+
+  cd /Users/yitzchak/Documents/dev/careervp
+  grep -n "ArtifactCleanupSchedule\|_add_billing_eventbridge_rule\|dead_letter_queue\|DeadLetterConfig" \
+    infra/careervp/api_construct.py
+
+Confirm live, and STOP with a plain-English sentence if any is not true:
+  - the hourly `ArtifactCleanupSchedule` rule's `add_target(targets.LambdaFunction(...))` call passes
+    no `dead_letter_queue`;
+  - `_add_billing_eventbridge_rule`'s `targets.LambdaFunction(handler=..., event=...)` call passes no
+    `dead_letter_queue` either;
+  - `_add_dlq_depth_alarm` exists and is the helper every other DLQ alarm in this file already uses.
+
+BEFORE WRITING ANY TEST (rule 14): confirm the spec's "RED Tests to Write First" section names all
+four tests below with the exact assertions they must make.
+```
+
+You are implementing clause P-31. Do the steps below in order.
+
+--------------------------------------------------------------------------------
+STEP 1 — write the four RED tests and observe them fail on their OWN assertions (rule 13)
+--------------------------------------------------------------------------------
+
+Put them alongside the other infra synth tests (confirm live:
+`/Users/yitzchak/Documents/dev/careervp/src/backend/tests/infrastructure/`), synthesizing
+`CareerVpCrudDevx` the same way `test_p18_sqs_visibility_timeout.py` and
+`test_p19_sfn_retries_full_jitter.py` do (same `ServiceStack` construction, `devx` environment,
+`p26_rehome_features: 'true'` context — confirm this context flag live, since `_add_dlq_depth_alarm`
+is gated on `self._rehome_features_enabled`).
+
+  test_p31_cleanup_rule_target_has_dlq   (AC-P31-1)
+      Find the `AWS::Events::Rule` for the hourly cleanup schedule (match on its `ScheduleExpression`
+      `rate(1 hour)` or the target Lambda's function name) and assert its `Targets[0]` has a
+      `DeadLetterConfig.Arn` pointing at an `AWS::SQS::Queue` resource that exists in the synthesized
+      template. RED: no `DeadLetterConfig` key exists on the target today.
+
+  test_p31_billing_reconcile_target_has_dlq   (AC-P31-1)
+      Same shape for the `cron(0 2 * * ? *)` billing-reconcile rule. RED: same missing key.
+
+  test_p31_eventbridge_dlqs_have_depth_alarms   (AC-P31-2)
+      For each of the two new DLQ queues, assert a CloudWatch alarm exists on `AWS/SQS`
+      `ApproximateNumberOfMessagesVisible` for that queue's name, threshold 1, evaluation periods 1 —
+      the same shape `test_p17_all_eight_dlqs_have_depth_alarms` already asserts for the worker DLQs.
+      RED: the queues do not exist yet, so no such alarm can be found.
+
+  test_p31_dlq_names_follow_naming_convention   (naming validator precedent, not a numbered AC)
+      Assert both new queue names start with `careervp-` and end with `-{env}` (`devx` in this synth),
+      matching every other `dlq_name(...)`-derived queue in the template.
+
+RULE 13 — run all four, capture the failure output VERBATIM, state why each failed (missing
+`DeadLetterConfig`, missing `DeadLetterConfig`, missing alarm resource, N/A queue does not exist yet).
+Guard so a missing resource fails on the test's own assertion, not a raw `KeyError`/`StopIteration`.
+The full existing suite must still be green (you ADDED tests, changed no implementation — prove with
+`git diff --stat`: only the new test file, ZERO under `infra/careervp/`).
+
+--------------------------------------------------------------------------------
+STEP 2 — implement: two DLQs, two `dead_letter_queue=` kwargs, two alarm calls
+--------------------------------------------------------------------------------
+
+In `/Users/yitzchak/Documents/dev/careervp/infra/careervp/constants.py`, add two feature constants
+next to `ARTIFACT_CLEANUP_FEATURE`/`BILLING_RECONCILE_FEATURE`:
+  `ARTIFACT_CLEANUP_SCHEDULE_DLQ = "artifact-cleanup-schedule-dlq"`
+  `BILLING_RECONCILE_SCHEDULE_DLQ = "billing-reconcile-schedule-dlq"`
+
+In `/Users/yitzchak/Documents/dev/careervp/infra/careervp/api_construct.py` ONLY:
+  - Build one `aws_sqs.Queue` per schedule target, `queue_name=self.naming.dlq_name(<constant>)`,
+    `encryption=aws_sqs.QueueEncryption.SQS_MANAGED` — same shape as `_build_vpr_jobs_dlq` (`:1472`).
+    Do NOT wrap these in `aws_sqs.DeadLetterQueue` — that type is for SQS-to-SQS redrive, not what
+    `targets.LambdaFunction` takes.
+  - Call `self._add_dlq_depth_alarm(scope=self._features, construct_id=<...>, queue_name=<queue's
+    dlq_name>)` once per new queue — do not write a bespoke `cw.Alarm`.
+  - Pass `dead_letter_queue=<queue>` into the existing `targets.LambdaFunction(...)` calls at `:2665`
+    (cleanup) and `:3203` (billing reconcile) — do not change `event=`, `schedule=`, or any other
+    kwarg on either rule.
+
+Do NOT touch `artifact_chain_construct.py`, `api_db_construct.py`, any handler, or any money/tenancy
+path — this clause is EventBridge/SQS wiring only. If P-31 cannot pass without touching them, that is
+a rule-5 stop: flag it.
+
+--------------------------------------------------------------------------------
+STEP 3 — verify, then scope the live-observation half of AC-P31-1 honestly
+--------------------------------------------------------------------------------
+
+VERIFY (fresh evidence): all four RED tests now pass; `git diff --stat -- **/tests` empty except the
+one new test file; full backend unit + integration suites green (zero regressions); both
+infrastructure test dirs green (`src/backend/tests/infrastructure` AND `infra/tests/infrastructure`);
+`cd /Users/yitzchak/Documents/dev/careervp/infra && uv sync && cdk synth` clean; `cdk diff` for
+`CareerVpCrudDevx` shows ONLY two new SQS queues + two alarms + the two targets' `DeadLetterConfig`
+additions, and ZERO replacement markers on any EXISTING resource (adding queues is additive, not a
+replacement — confirm with the same isolated before/after synth-diff technique 2.3 and 2.4 used, since
+devx's live stack is still stale per the 2.3-root-cause ledger row); B-2-3 resource-count delta is
+exactly +2 queues +2 alarms (confirm against the last recorded baseline); ruff + `mypy careervp
+--strict` clean; `make coverage-tests` gate exit 0 at/above baseline; naming validator (`python
+/Users/yitzchak/Documents/dev/careervp/src/backend/scripts/validate_naming.py --path infra --strict`)
+exit 0; scope-diff resolves P-31.
+
+AC-P31-1's live half — "when EventBridge retries are exhausted, then the event is sent to a DLQ" — is
+a real observation, not something `cdk synth` can prove. Do not claim it done from synth alone. Either
+(a) run it live against `CareerVpCrudDevx` (deliberately break one target, e.g. temporarily deny-list
+its invoke permission, observe a message land in the DLQ, then restore), human-gated same as every
+other live devx action this wave, or (b) record it as an explicit open follow-up in the ledger with
+its own stopping condition (rule 10) — do not mark AC-P31-1 fully verified without one of these two.
+
+--------------------------------------------------------------------------------
+OUTPUT REQUIRED
+--------------------------------------------------------------------------------
+- The live confirmation of the gap (the grep), plain English first: both rule targets have no
+  `dead_letter_queue` today.
+- The four new RED tests and their verbatim failure output with a one-line why each, BEFORE the fix.
+- The tests passing after the fix, with output; the full verification results; the `cdk diff` showing
+  the additive-only delta (B-2-3 verdict in one line).
+- Whether AC-P31-1's live retry-exhaustion observation was actually run, or recorded as a follow-up
+  with a stopping condition — do not gloss over which one happened.
+- `git diff --stat` proving only the test file, `constants.py`, and `api_construct.py` changed.
+- A git commit message.
+
+ALSO REQUIRED (standing rule for every wave prompt — see
+/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/RUNBOOK-RULES.md):
+- Compare what you actually built against (a) this prompt's own instructions and (b) clause P-31 in
+  /Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/project-scope-lock.yaml.
+  If everything matches, say so in one plain sentence.
+- If ANYTHING drifted — extra work not asked for, required work skipped, or a test/rule had to be
+  weakened — STOP. Do not fix it yourself. Write one plain-English sentence a non-engineer could
+  follow (what should have happened, what actually happened, why it matters), THEN the technical
+  detail, and flag it for human review. Do not mark the step done.
+- Update
+  /Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md:
+  add a `2.7` row with a plain-English status, the commit, today's date, and confirm the
+  `api_construct.py` lock is now free for the GATE (nothing else in Wave 2 edits that file after 2.7).
 
 ---
 

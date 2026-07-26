@@ -146,6 +146,7 @@ FAILURE_HANDLER_FEATURE = "failure-handler"
 FAILURE_HANDLER_ROLE = "FailureHandlerRole"
 # FE-UI-043: orphan-cleanup reaper Lambda + schedule
 ARTIFACT_CLEANUP_FEATURE = "artifact-cleanup"
+ARTIFACT_CLEANUP_SCHEDULE_DLQ = "artifact-cleanup-schedule-dlq"
 ARTIFACT_CLEANUP_LAMBDA = "ArtifactCleanupLambda"
 
 LAMBDA_LAYER_NAME = "common"
@@ -178,6 +179,7 @@ BILLING_FEATURE = "billing"
 EXPORT_FEATURE = "export"
 BILLING_RECONCILE_LAMBDA = "billing-reconcile"
 BILLING_RECONCILE_FEATURE = "billing-reconcile"
+BILLING_RECONCILE_SCHEDULE_DLQ = "billing-reconcile-schedule-dlq"
 
 # SQS — webhook partial-failure DLQ
 BILLING_WEBHOOK_DLQ = "billing-webhook-dlq"
