@@ -449,10 +449,14 @@ class ApiConstruct(Construct):
         ).override_logical_id(constants.SWAGGER_URL)
 
     def _build_api_gw(self) -> aws_apigateway.RestApi:
+        # P-20: rate/burst sized from the locust smoke-mode load harness
+        # (infra/loadtest/locustfile.py) — see wave-2-status.md 2.4 for the measured
+        # p99/error-rate evidence backing this target. The prior 2 rps / burst 10 was a
+        # guess that self-DoS'd normal hub-read + generate traffic.
         if self.scratch_mode:
             deploy_options = aws_apigateway.StageOptions(
-                throttling_rate_limit=2,
-                throttling_burst_limit=10,
+                throttling_rate_limit=20,
+                throttling_burst_limit=40,
                 tracing_enabled=True,
                 metrics_enabled=False,
                 logging_level=aws_apigateway.MethodLoggingLevel.OFF,
@@ -466,8 +470,8 @@ class ApiConstruct(Construct):
                 encryption_key=self.logs_kms_key,
             )
             deploy_options = aws_apigateway.StageOptions(
-                throttling_rate_limit=2,
-                throttling_burst_limit=10,
+                throttling_rate_limit=20,
+                throttling_burst_limit=40,
                 tracing_enabled=True,
                 metrics_enabled=True,
                 logging_level=aws_apigateway.MethodLoggingLevel.INFO,

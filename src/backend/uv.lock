@@ -150,6 +150,7 @@ dependencies = [
     { name = "beautifulsoup4" },
     { name = "boto3" },
     { name = "cachetools" },
+    { name = "cryptography" },
     { name = "email-validator" },
     { name = "httpx" },
     { name = "langdetect" },
@@ -203,6 +204,7 @@ requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.12.0" },
     { name = "boto3", specifier = ">=1.26.125" },
     { name = "cachetools" },
+    { name = "cryptography", specifier = ">=42.0.0" },
     { name = "email-validator" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "langdetect", specifier = ">=1.0.9" },
@@ -1840,10 +1842,12 @@ requires-dist = [
     { name = "cdk-nag", specifier = ">=2.28.0" },
     { name = "constructs", specifier = ">=10.0.0" },
     { name = "gitpython", specifier = ">=3.1.0" },
+    { name = "locust", marker = "extra == 'loadtest'", specifier = ">=2.31.0" },
     { name = "mypy", specifier = ">=1.10.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pytest", specifier = ">=8.0.0" },
 ]
+provides-extras = ["loadtest"]
 
 [[package]]
 name = "six"
