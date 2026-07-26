@@ -70,7 +70,11 @@ EXPECTED_STATEFUL_BASELINE: dict[str, int] = {
     "AWS::KMS::Key": 5,
     "AWS::Cognito::UserPool": 1,
     "AWS::Cognito::UserPoolClient": 1,
-    "AWS::SQS::Queue": 17,
+    # 19 = the 17 pre-existing queues + the two P-31 (Wave 2.7) EventBridge
+    # schedule-target DLQs (artifact-cleanup + billing-reconcile). This baseline
+    # predated those DLQs and was stale at 17; the +2 is the intended, additive
+    # delta, not proxy-collapse churn.
+    "AWS::SQS::Queue": 19,
 }
 
 # Permission total baseline before collapse.
