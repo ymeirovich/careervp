@@ -20,7 +20,6 @@ WORKERS = {
     'VprSqsWorkerLambda': ('careervp.handlers.vpr_worker_handler', 'lambda_handler'),
     'CoverLetterWorkerLambda': ('careervp.handlers.cover_letter_handler', 'lambda_handler'),
     'InterviewPrepWorkerLambda': ('careervp.handlers.interview_prep_handler', 'lambda_handler'),
-    'CvTailorWorkerLambda': ('careervp.handlers.cv_tailoring_handler', 'handler'),
     'CompanyResearchWorkerLambda': ('careervp.handlers.company_research_worker_handler', 'lambda_handler'),
 }
 
