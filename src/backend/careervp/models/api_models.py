@@ -501,8 +501,12 @@ class InterviewPrepRequest(APIModel):
     gap_response_ids: list[str]
     focus_areas: list[str] = Field(default_factory=list)
     question_count: int = 10
-    # Optional context fields for agentic architecture alignment (section 3.7).
-    # Backend resolves these server-side; clients that omit them continue to work.
+    # Application identity (section 3.7). v3.0.0 / scope-lock decision A1: at least ONE
+    # of application_id / job_id is REQUIRED. Both stay typed optional because an
+    # either-or rule is not a per-field constraint; it is enforced at the handler
+    # boundary, which owns the pinned 400 envelope. The former promise that "clients
+    # that omit them continue to work" is WITHDRAWN — a client-supplied vpr_id no
+    # longer stands in for the canonical application key (O-3: no legacy-id resolution).
     application_id: str | None = None
     job_id: str | None = None
     language: str = 'en'

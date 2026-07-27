@@ -87,6 +87,15 @@ human-approved before landing; neither pinned RED test was modified.
   (v3.0.0) and the fixture now sends `application_id`. The rejected alternative was
   branching on Pydantic `model_fields_set`, which would preserve the fallback behind a
   present-versus-absent check and reintroduce compatibility machinery under a new name.
+- `tests/unit/test_async_submit_handlers.py::test_interview_prep_submit_handler_marks_failed_with_artifacts_keys_on_sqs_error`
+  — **a second affected test the §0.3 proposal did not inventory**, found while landing A1.
+  Same payload shape and same root cause as the row above, so it falls inside the same
+  approved reconciliation rather than needing its own; recorded here because the
+  proposal's affected-tests list was incomplete and a reader must not conclude only one
+  fixture moved. Fixture now sends `application_id`.
+  `test_interview_prep_submit_handler_returns_structured_validation_errors` needs no
+  change: its payload already fails Pydantic parsing on `gap_response_ids`, which is
+  raised before the new handler-level identity guard is reached.
 
 ## Acceptance Criteria
 

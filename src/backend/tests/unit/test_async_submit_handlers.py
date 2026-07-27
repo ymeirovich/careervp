@@ -82,6 +82,9 @@ def test_interview_prep_submit_handler_validates_and_queues_with_sqs_queue_url()
     event = _event(
         '/interview-prep/generate',
         {
+            # v3.0.0 (scope-lock A1): application_id is required; vpr_id is no
+            # longer accepted as a stand-in application key.
+            'application_id': 'app-1',
             'vpr_id': 'vpr-1',
             'gap_response_ids': ['gap-1'],
             'focus_areas': ['system design'],
@@ -169,6 +172,9 @@ def test_interview_prep_submit_handler_marks_failed_with_artifacts_keys_on_sqs_e
     event = _event(
         '/interview-prep/generate',
         {
+            # v3.0.0 (scope-lock A1): application_id is required; vpr_id is no
+            # longer accepted as a stand-in application key.
+            'application_id': 'app-1',
             'vpr_id': 'vpr-1',
             'gap_response_ids': ['gap-1'],
             'focus_areas': ['system design'],

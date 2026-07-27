@@ -442,7 +442,9 @@ export interface InterviewPrep {
 export interface InterviewPrepRequest {
   vpr_id: string;
   gap_response_ids: string[];
-  application_id?: string;
+  // v3.0.0 (scope-lock A1): application_id is required — vpr_id is no longer
+  // accepted as a stand-in application key. job_id remains its accepted alias.
+  application_id: string;
   job_id?: string;
   language?: string;
 }
