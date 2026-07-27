@@ -31,7 +31,7 @@ Cover letter and interview prep fail because upstream artifacts have multiple sc
 2. Store one canonical opaque `artifact_id` per artifact and route status reads through it.
 3. Resolve upstream VPR/CR/CV dependencies through D-H2 repository, not raw client-supplied keys.
 4. Keep public `application_id == job_id`, `artifact_id`, and `vpr_id` semantics stable.
-5. Prove migration parity for legacy ids before removing dual-read support.
+5. *(v2.7.0: the "prove migration parity for legacy ids before removing dual-read support" step is removed — all stored data is disposable test data, so there are no legacy ids to carry across. Canonical ids only; see scope-lock O-3.)*
 
 ## RED Tests to Write First
 
@@ -39,7 +39,6 @@ Cover letter and interview prep fail because upstream artifacts have multiple sc
 - `test_p01_cover_letter_uses_resolved_vpr_not_client_key`: call cover letter generation with a stale/cross-tenant `vpr_id`; assert repository resolves owned canonical VPR or rejects.
 - `test_p01_interview_prep_uses_resolved_vpr_not_client_key`: same assertion for interview prep.
 - `test_dh4_cv_tailoring_preserves_vpr_id_null`: request with present `vpr_id: null`; assert accepted and distinguishable from omitted.
-- `test_dh4_legacy_artifact_id_parity_before_cutover`: D-H2 harness asserts legacy id and canonical id projections are identical.
 
 ## Acceptance Criteria
 
@@ -51,7 +50,7 @@ Cover letter and interview prep fail because upstream artifacts have multiple sc
 
 ## Done-when
 
-All RED tests pass; F-01 oracle is green for §3 items 1-3; migration parity evidence exists; no route versioning required.
+All RED tests pass; F-01 oracle is green for §3 items 1-3; no route versioning required.
 
 ## Sequencing / Dependencies
 

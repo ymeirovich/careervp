@@ -97,7 +97,7 @@ If Ruff reports any errors that cannot be auto-fixed:
 
 ```bash
 # Example workflow for any code change
-cd /Users/yitzchak/Documents/dev/careervp/src/backend
+cd /Users/yitzchak.meirovich/Documents/code5/careervp/src/backend
 uv run ruff format careervp/logic/<file>.py
 uv run ruff check careervp/logic/<file>.py --fix
 # Verify output shows no errors before proceeding

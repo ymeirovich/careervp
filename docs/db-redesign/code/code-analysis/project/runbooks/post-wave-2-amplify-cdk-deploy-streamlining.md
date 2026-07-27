@@ -1,7 +1,7 @@
 # Post-Wave-2 — Amplify → CDK, and streamlining deployments
 
 **Status:** DRAFT runbook, authored 2026-07-26. Not a Wave-2 step. Runs AFTER the Wave-2 GATE passes.
-Follows `/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/RUNBOOK-RULES.md`
+Follows `/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/RUNBOOK-RULES.md`
 (the seventeen standing rules) — same rigor: full absolute paths, RED-first where code changes,
 human-gated deploys, every bet and every deferral written with a stopping condition.
 
@@ -21,10 +21,10 @@ this is exactly the out-of-band state the project keeps getting burned by.
      `db-redesign` branch. It builds on git push via Amplify's own git integration. Its per-branch
      env vars (`NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_COGNITO_USER_POOL_ID`, …) are **set by hand in the
      console** and are NOT in any repo file. Verified: `grep -rn "amplify" ` over
-     `/Users/yitzchak/Documents/dev/careervp/infra/careervp/` finds only CORS-origin strings, never a
+     `/Users/yitzchak.meirovich/Documents/code5/careervp/infra/careervp/` finds only CORS-origin strings, never a
      `CfnApp`/`CfnBranch`/`aws_amplify` construct.
    - **CDK `FrontendStack`** at
-     `/Users/yitzchak/Documents/dev/careervp/infra/careervp/frontend_stack.py` — manages a DIFFERENT
+     `/Users/yitzchak.meirovich/Documents/code5/careervp/infra/careervp/frontend_stack.py` — manages a DIFFERENT
      path: CloudFront + S3 + ACM + Route53 (line 1 docstring). It does not manage Amplify at all. Do
      not assume editing `FrontendStack` changes what db-redesign users see — today it does not.
 
@@ -41,13 +41,13 @@ this is exactly the out-of-band state the project keeps getting burned by.
    from CDK" is only half a fix unless a rebuild is also triggered.
 
 4. **O-9: the frontend CI deploy pipeline is BROKEN and has been since 2026-05-03.**
-   `/Users/yitzchak/Documents/dev/careervp/.github/workflows/deploy-frontend.yml` is **validate-only**
+   `/Users/yitzchak.meirovich/Documents/code5/careervp/.github/workflows/deploy-frontend.yml` is **validate-only**
    (`validate-amplify-build` job; push to `main`; it builds but never calls `aws amplify start-job`),
    and its fallback env values point at the OLD dev pool (`us-east-1_WiHMRqLpe`,
    `https://api.dev.careervp.com`). Nothing here auto-deploys Amplify today.
 
 5. **The backend `main`-push path still targets the OLD stack.**
-   `/Users/yitzchak/Documents/dev/careervp/.github/workflows/deploy.yml:37` hardcodes
+   `/Users/yitzchak.meirovich/Documents/code5/careervp/.github/workflows/deploy.yml:37` hardcodes
    `STACK_NAME: 'CareerVpCrudDev'`. Only the `workflow_dispatch` path resolves to `CareerVpCrudDevx`
    (line 279), gated by the GitHub `devx` environment's required reviewer. This is B-2-4's open item.
 
@@ -81,13 +81,13 @@ Neither is optional; auto-deploy on a mis-targeted pipeline is worse than manual
 
 **§2.1 — Repair the backend `main`/dispatch stack targeting (B-2-4).** Make the deploy workflow's
 default and `main`-push path resolve to the intended stack explicitly, never fall back to
-`CareerVpCrudDev`. Change `/Users/yitzchak/Documents/dev/careervp/.github/workflows/deploy.yml:37` so
+`CareerVpCrudDev`. Change `/Users/yitzchak.meirovich/Documents/code5/careervp/.github/workflows/deploy.yml:37` so
 the old-stack literal is not the ambient default; keep the fail-closed "Validate resolved stack name"
 step (line 281) as the backstop. Done-when: a dry-run of every trigger path prints the stack it will
 touch and none silently resolves to `CareerVpCrudDev`.
 
 **§2.2 — Fix O-9 (the FE CI pipeline).** Make
-`/Users/yitzchak/Documents/dev/careervp/.github/workflows/deploy-frontend.yml` either actually deploy
+`/Users/yitzchak.meirovich/Documents/code5/careervp/.github/workflows/deploy-frontend.yml` either actually deploy
 (call `aws amplify start-job --app-id d3j2wnm8g5clnw --branch-name <branch> --job-type RELEASE`) or be
 deleted in favor of the §C job below. Remove the stale dev-pool fallback literals (lines 26–31) — a
 deploy pipeline must never carry a silent wrong-pool default. Done-when: a push to the target branch
@@ -103,7 +103,7 @@ change-set approval for every devx backend change is toil with little safety pay
 push-triggered job that creates AND executes the change-set against `CareerVpCrudDevx` automatically,
 while leaving the human `environment:` approval in place for `staging`/`prod`.
 
-**How.** In `/Users/yitzchak/Documents/dev/careervp/.github/workflows/deploy.yml`, add a job that
+**How.** In `/Users/yitzchak.meirovich/Documents/code5/careervp/.github/workflows/deploy.yml`, add a job that
 runs on `push` to `db-redesign`, resolves `STACK_NAME=CareerVpCrudDevx` through the SAME ternary +
 validate-name backstop the dispatch path uses (lines 279–287), and executes the change-set WITHOUT the
 `environment: ${{ inputs.environment }}` gate — but ONLY when the resolved stack is `CareerVpCrudDevx`.

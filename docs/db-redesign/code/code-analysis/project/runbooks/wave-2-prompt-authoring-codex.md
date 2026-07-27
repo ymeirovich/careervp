@@ -2,10 +2,10 @@
 
 **What this file is.** A single, copy-paste instruction you hand to Codex before it writes or fills
 in *any* Wave-2 prompt in
-`/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-prompts.md`.
+`/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-prompts.md`.
 It tells Codex exactly **what** a prompt is, **where** it goes, **when** to write it, **how** to
 build it, and **why** each part exists. It is the operational front-end to
-`/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/RUNBOOK-RULES.md`
+`/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/RUNBOOK-RULES.md`
 (the seventeen standing rules) — that file is the law; this file is the checklist that makes a
 prompt obey it without re-deriving it every time.
 
@@ -18,7 +18,7 @@ Everything below the line is the prompt. Paste it verbatim.
 You are authoring (or filling in) one prompt in the Wave-2 runbook. A "prompt" here is a
 **copy-paste unit of work**: a self-contained block that a *fresh* Codex or Claude session, with
 no memory of this conversation and its working directory at the repository root
-`/Users/yitzchak/Documents/dev/careervp`, can paste in and execute correctly with nothing else in
+`/Users/yitzchak.meirovich/Documents/code5/careervp`, can paste in and execute correctly with nothing else in
 front of it. If your prompt only works because the runner remembers what you were thinking, you
 have failed. Write for a stranger who starts cold.
 
@@ -42,17 +42,17 @@ in a markdown link's target AND its visible text, in a "confirm it exists" check
 
 | Thing | Full path |
 |---|---|
-| The rulebook (the law) | `/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/RUNBOOK-RULES.md` |
-| The prompt file you are editing | `/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-prompts.md` |
-| The live status ledger | `/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md` |
-| The bets register | `/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/ISSUES.md` |
-| The contract (master requirements) | `/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/project-scope-lock.yaml` |
-| The execution plan (model/effort per step) | `/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/redesign-execution-plan.md` |
-| Spec files | `/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/specs/<spec-file>.md` |
+| The rulebook (the law) | `/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/RUNBOOK-RULES.md` |
+| The prompt file you are editing | `/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-prompts.md` |
+| The live status ledger | `/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md` |
+| The bets register | `/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/ISSUES.md` |
+| The contract (master requirements) | `/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/project-scope-lock.yaml` |
+| The execution plan (model/effort per step) | `/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/redesign-execution-plan.md` |
+| Spec files | `/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/specs/<spec-file>.md` |
 
 **The one carve-out is a shell snippet.** A command block may use paths relative to its own working
 directory, but only when an explicit `cd <full absolute path>` sits at the top of that same block as
-the anchor — e.g. `cd /Users/yitzchak/Documents/dev/careervp/src/backend && uv run pytest tests/unit/...`,
+the anchor — e.g. `cd /Users/yitzchak.meirovich/Documents/code5/careervp/src/backend && uv run pytest tests/unit/...`,
 never a bare `cd src/backend`.
 
 ### WHEN you write which prompt (RULE 11 — do not instantiate the whole wave)
@@ -171,7 +171,7 @@ Produce exactly these four parts, in this order:
 
 ```
 STANDING CHECK — before doing anything else: open
-/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md.
+/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md.
 If the step immediately before this one (in dependency order) left something open or unresolved,
 deal with that FIRST — do not start this step's own work with unfinished business behind you. Then
 confirm THIS step's own prerequisites are actually met right now, using a real command (not memory,
@@ -194,17 +194,17 @@ OUTPUT REQUIRED
 - A git commit message (literally output the text — every prompt ends this way, rule 1).
 
 ALSO REQUIRED (standing rule for every wave prompt — see
-/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/RUNBOOK-RULES.md):
+/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/RUNBOOK-RULES.md):
 - Compare what you actually built against (a) this prompt's own instructions and (b) the matching
   clause <clause id> in
-  /Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/project-scope-lock.yaml.
+  /Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/project-scope-lock.yaml.
   If everything matches, say so in one plain sentence.
 - If ANYTHING drifted — extra work not asked for, required work skipped, or a test/rule had to be
   weakened — STOP. Do not fix it yourself. Write one plain-English sentence a non-engineer could
   follow (what should have happened, what actually happened, why it matters), THEN the technical
   detail, and flag it for human review. Do not mark the step done.
 - Update
-  /Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md:
+  /Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md:
   add/update this step's row with a plain-English status, the commit, today's date, and anything the
   NEXT step must resolve first (or write "none").
 ```

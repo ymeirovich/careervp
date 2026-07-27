@@ -1,6 +1,6 @@
 # CareerVP — Test Strategy (the safety net)
 
-- **Version:** 1.1.0 · **Created:** 2026-07-09 · **Amended:** 2026-07-11 (v2.0.0 eval-council: gate 3 operationalized as a `questions: []` dry-run; gate 5 split into spec-time lint + implement-time proof with mutmut→Wave-3; migration-parity harness homed at D-H2 for Wave-3 cutovers; load/perf + cross-tenant + F-06 assertions now owned; frontmatter dual-form)
+- **Version:** 1.1.0 · **Created:** 2026-07-09 · **Amended:** 2026-07-11 (v2.0.0 eval-council: gate 3 operationalized as a `questions: []` dry-run; gate 5 split into spec-time lint + implement-time proof with mutmut→Wave-3; migration-parity harness homed at D-H2 for Wave-3 cutovers [RETIRED v2.7.0]; load/perf + cross-tenant + F-06 assertions now owned; frontmatter dual-form)
 - **Layer:** sits BELOW the contract, BESIDE the execution plan. Does **not** supersede
   [`project-scope-lock.md`](./project-scope-lock.md) (authority §0.2). It *operationalizes*
   the scope-lock's quality gates (§8) and the coverage-matrix frontend contract (§2) into a
@@ -95,7 +95,7 @@ F-06 folded into F-01, so a touched item can no longer pass a gate that has no a
 coverage gate met · the 8+ CI gates green (ruff · mypy --strict · pytest · cdk synth <400 · Checkov ·
 Bandit · pip-audit · CodeQL · oracle · `cdk diff` zero-stateful-replacement). Never parallelize across
 a gate. **Wave-specific adds (v2.0.0): the Wave-3 gate additionally requires the `mutmut` core
-spot-check green + the migration-parity harness green on every D-H4/D-M2/D-M5/D-H9 cutover.**
+spot-check green.** *(v2.7.0: the migration-parity harness requirement on D-H4/D-M2/D-M5/D-H9 cutovers is removed — all stored data is disposable test data, so there is no cutover. See scope-lock O-3.)*
 
 ---
 

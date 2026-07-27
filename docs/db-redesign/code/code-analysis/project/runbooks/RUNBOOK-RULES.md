@@ -427,7 +427,7 @@ the folder the prompt file happens to live in. A relative reference — `runbook
 the reader already knows which directory the author had in mind, and different lines in the same
 prompt silently assume different ones. Write every file reference as the single full path from the
 filesystem root:
-`/Users/yitzchak/Documents/dev/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md`,
+`/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-2-status.md`,
 never the bare fragment. This applies to **every** place a file is named — prose, a markdown link's
 target *and* its visible text, a "confirm it exists" check, the header's `Spec` field, and a
 commit-message file citation alike.
@@ -436,7 +436,7 @@ commit-message file citation alike.
 directory, but only when that directory is set by an explicit `cd <full absolute path>` at the top
 of the same block — the `cd` is the anchor that makes the rest unambiguous. So
 `cd src/backend && uv run pytest tests/unit/...` becomes
-`cd /Users/yitzchak/Documents/dev/careervp/src/backend && uv run pytest tests/unit/...`, never a
+`cd /Users/yitzchak.meirovich/Documents/code5/careervp/src/backend && uv run pytest tests/unit/...`, never a
 bare `cd src/backend` that assumes the reader started at the repo root. The paths *inside* pytest
 or grep arguments then stay relative to that anchored `cd`, which is correct — a shell needs a cwd.
 
@@ -454,6 +454,48 @@ is written.
 prompts — those stand as written. It governs every prompt or skeleton written or filled in from here
 forward, including the standard blocks below: wherever a template placeholder like `<spec file path>`
 or `wave-N-status.md` is instantiated, it is instantiated as a full path.
+
+> **Amended 2026-07-27 (rule 17a — the repo root is declared, not assumed):** rule 17 turned against
+> itself. Rules 1–17 unchanged.
+
+### 17a. The repository root is declared once per file, and every full path is built from it
+
+**The incident.** The repository moved from `/Users/yitzchak/Documents/dev/careervp` to
+`/Users/yitzchak.meirovich/Documents/code5/careervp`. Rule 17 had faithfully written **608
+occurrences** of the old absolute path across the docs tree — including all 33 in
+`wave-3-prompts.md` and every command in `PROMPT 3.1-RED`'s standing check. The rule whose entire
+purpose is *"a cold session can paste this and it resolves"* had produced a runbook where the very
+first command fails with `No such file or directory`, on a path that looks authoritative because it
+is absolute. Rule 17 is still right — a bare relative fragment is worse — but an absolute path is a
+**hardcoded environment assumption**, and this project already has a rule about those.
+
+**What to do instead — three parts:**
+
+1. **Declare the root once, at the top of the file**, as a labelled line:
+   `**Repo root:** `/Users/yitzchak.meirovich/Documents/code5/careervp`` — so relocating the
+   checkout is a one-line edit plus one mechanical sweep, not an archaeology exercise.
+2. **Keep writing full paths in prose, headers, links, and checks** (rule 17 unchanged) — they are
+   unambiguous, and a reader who is *not* pasting into a shell needs to see the real location.
+3. **Anchor every shell block on the live root, not on a literal**:
+   `cd "$(git rev-parse --show-toplevel)" && …`, or `cd "$(git rev-parse --show-toplevel)/src/backend" && …`.
+   This is the carve-out rule 17 already grants, made self-healing: the block works on any checkout,
+   and a wrong-directory paste fails loudly instead of silently reading the wrong tree.
+
+**What was explicitly rejected, and why.** A *shim* — a header note saying "read every
+`/Users/yitzchak/Documents/dev/careervp` in this file as the repo root" — is cheaper to write once
+and more expensive forever: it leaves literal dead paths that a cold agent pastes into `ls`/`open`
+and gets a not-found on, and it reintroduces exactly the "the reader must know what the author had
+in mind" ambiguity rule 17 was written to delete. A *wholesale rewrite to bare repo-relative
+fragments* fails the same test for the same reason. The mechanical rewrite is `sed`, whose authoring
+cost is **one command regardless of occurrence count** — the expensive part was never the
+replacement, it was reviewing a diff across archived documents that nobody will run again.
+
+**Scope discipline for the sweep.** Fix the **live execution surface** — the current wave's prompts
+and ledger, `RUNBOOK-RULES.md`, the prompt-authoring instruction, any runbook still queued to run,
+and the root agent-instruction files. **Do not** sweep closed waves' prompt files or the archived
+`docs/refactor*`, `docs/tasks/`, `docs/upgrade/` trees: those are history, they are not going to be
+pasted into a shell, and churning them buries the real change in review noise. On 2026-07-27 that
+was 63 occurrences across 7 files fixed, and ~545 in archived documents deliberately left alone.
 
 ---
 
@@ -477,6 +519,7 @@ The others are structural rather than per-prompt, and fire at different moments:
 | 15 (both models stated) | when the prompt/skeleton header is *written*, never left to the runner to guess |
 | 16 (Codex side picked by rubric) | when a step's Claude model/effort is *decided* — plan authorship, or filling in a skeleton/GATE row rule 15 left open — never invented at prompt-writing time |
 | 17 (file references are full paths) | when any prompt or skeleton is *written or filled in* — every file it names is a full path from the repo root |
+| 17a (repo root declared, shell blocks anchored on `git rev-parse --show-toplevel`) | same moment as 17, plus whenever the checkout moves — then sweep the live execution surface only |
 
 **Every prompt header states, without exception:** the clause id(s), the spec file path, the
 acceptance-criteria IDs, and both `Claude: <model>/<effort>` and `Codex: <model>/<reasoning>` —
@@ -514,6 +557,84 @@ ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULE
 - Update wave-N-status.md: add/update this step's row with a plain-English status, the commit,
   today's date, and anything the NEXT step must resolve first (or write "none").
 ```
+
+> **Amended 2026-07-27:** rule 18 added when Fable was routed to Wave-3 implementation work for the
+> first time. Rules 1–17 unchanged.
+
+### 18. Fable is routed by rubric to long-horizon implementation, never to recon, RED, or security work
+
+Rule 16 gives a rubric for picking Codex's tier against Claude's. It assumes Claude's own tier is a
+choice among Sonnet and Opus. It is not any more: `claude-fable-5` is available, it is materially
+more capable on long-horizon agentic work, and it costs **$10/$50 per MTok against Opus 5's
+$5/$25** — 2×. Without a rule, "use the best model" collapses into "use Fable for everything",
+which is the same failure rule 16 exists to prevent, one tier up.
+
+Fable is not new to this project. `fable-infra-mitigation-plan` and `fable-findings-digest` are
+already cited across `project-scope-lock.yaml` and drove clauses P-27 through P-30 — but those were
+Fable used as an *analysis source*, one-off and human-run. This rule is about routing **steps** to
+it.
+
+**Route to Fable when all three hold:**
+
+1. The work is **implementation against an already-pinned spec** — a GREEN step, a multi-file
+   conversion, a demolition sweep. The specification exists and is not being discovered during the
+   run.
+2. It is **long-horizon**: many files, many steps, one coherent goal. Fable's documented strength is
+   first-shot implementation of well-specified systems and sustained autonomous execution.
+3. The cost is justified by the blast radius of getting it wrong — key authority, data shape,
+   irreversible deletion.
+
+**Never route to Fable:**
+
+- **RED steps.** Writing tests against a spec whose assertion values are already pinned is precision
+  work, not exploration. Rule 14 has already removed the judgment Fable would be paying for.
+- **Recon, enumeration, and census work.** Counting call sites, listing env-var injections, parsing
+  a synth template. This is breadth and care, not reasoning depth. Paying 2× for mechanical
+  completeness is the exact waste rule 16 forbids.
+- **Anything security-focused** — the P-04/P-05 IDOR work, P-07, X-01, X-02, and any auth or
+  secrets slice. Two independent reasons: Fable's cyber classifiers can decline a request outright
+  (HTTP 200, `stop_reason: "refusal"`), and its bug-finding gains are documented as **excluding**
+  security-focused analysis. It is both less reliable and less available here. Use Opus.
+- **Steps whose real blocker is a human decision.** A more capable model does not settle a question
+  that requires the human's intent; it produces a more articulate recommendation. Route those to
+  Opus and ask.
+- **GATE steps.** A gate reads evidence and checks it against a contract. That is not the shape.
+
+**Two hard gates to confirm before writing `fable` into any row:**
+
+- **30-day data retention is required.** Fable is unavailable under zero data retention; a ZDR
+  organization gets a `400 invalid_request_error` on **every** request regardless of payload. If a
+  Fable-routed step fails immediately with a 400 and the payload looks fine, check the org's
+  retention configuration before debugging anything else.
+- **Refusals are a normal outcome, not an error.** A declined request returns HTTP 200 with
+  `stop_reason: "refusal"`. A session that reads `content[0]` unconditionally will look like it
+  produced nothing.
+
+**Prompt shape changes for a Fable-routed step — and precisely how far.** Prompts written for prior
+models are documented as *too prescriptive* for Fable, reducing output quality. That does **not**
+license loosening this runbook. The distinction:
+
+| Keep verbatim | Drop |
+|---|---|
+| The standing check, rule-14 spec verification, rule-5 stop conditions, the drift-comparison block, the status-ledger update | Step-by-step implementation scaffolding in the body — "first do X, then Y, then Z" |
+| Acceptance criteria, exact assertion values, scope boundaries, the file-touching prohibition | Worked examples of *how* to write the code |
+| Every full path (rule 17) | Redundant restatements of the same instruction in three places |
+
+The rules and gates are contract enforcement and are non-negotiable. The implementation choreography
+is what Fable does better unaided. **State the goal, the constraints, and the acceptance criteria up
+front in one turn, then let it run** — its worst results come from a task specified progressively
+across many turns. Expect single requests to run for minutes; that is normal, not a hang.
+
+**Recording it.** Fable rows are written `fable/high` or `fable/xhigh` in
+`redesign-execution-plan.md`'s per-step Claude column and copied verbatim into the prompt header per
+rule 15. In a spec's `tooling:` frontmatter the form is `{claude_code: {model: fable, effort: high}}`.
+`scope-diff.py` validates only that a tooling entry *exists* per clause, never the model string, so
+this adds no drift-checker risk — and equally, no automated check will catch a mis-routed step.
+That is what this rule is for.
+
+**The Codex pairing is unchanged.** Rule 16's rubric still governs the Codex column; Fable on the
+Claude side does not imply the largest Codex tier. Both engines are pointed at the same task and
+should track the same difficulty judgment.
 
 ---
 

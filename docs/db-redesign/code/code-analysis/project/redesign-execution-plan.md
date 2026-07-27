@@ -82,6 +82,16 @@ contract globally; wave gates re-verify against the contract before advancing.
 | **Mechanical** | config/IaC edits (RETAIN, throttle, tags, log retention, SNS sub), prompt-slot wiring, doc updates | `sonnet` / effort **medium** | `gpt-5-codex` / reasoning **medium** |
 | **Standard** | handlers, DAL, repositories, most tests, contract/oracle tests | `opus` / effort **high** | `gpt-5-codex` / reasoning **high** |
 | **Hard** | single-table `core` migration + classifier + parity, chain reorder, identity surrogate, CFN decomposition, adversarial reviews | `opus` / effort **xhigh** | `gpt-5-codex` / reasoning **high (max)** |
+| **Long-horizon implementation** | multi-file conversion or demolition against an already-pinned spec — many files, one coherent goal, irreversible blast radius | `fable` / effort **high** (**xhigh** for the hardest) | `gpt-5-codex` / reasoning **high** |
+
+> **The fourth bucket is narrow on purpose — see `runbooks/RUNBOOK-RULES.md` rule 18.** `fable`
+> costs 2× `opus` per token, so it earns a step only when the work is *implementation against a spec
+> that already exists*, long-horizon, and expensive to get wrong. It is **never** routed to RED
+> steps (rule 14 has already removed the judgment it would be paying for), recon/enumeration
+> (breadth, not depth), GATE steps, or **anything security-focused** — Fable's cyber classifiers can
+> decline a request outright and its bug-finding gains explicitly exclude security analysis. Two
+> hard gates before writing `fable` into a row: the org must not be on zero data retention (every
+> request 400s otherwise), and the session must treat `stop_reason: "refusal"` as a normal outcome.
 
 > **RESOLVED (2026-07-25).** This section briefly carried a competing draft (a `gpt-5.4`/`gpt-5.5`/
 > `gpt-5.6-{sol,terra,luna}` taxonomy dictated mid-conversation) alongside `RUNBOOK-RULES.md` rule
@@ -298,11 +308,12 @@ Resume by re-pasting `handoff.md` + attachments and saying "continue".
 ### Wave 3 — DB seams (fixes the actual break P-01)
 | # | Clause(s) | Step | Claude | Codex | Deps |
 |---|---|---|---|---|---|
-| 3.1 | D-H2, D-H3 | Single key-authority repository; surface ValidationException. **Also build the reusable dual-read migration-parity harness here (v2.0.0/A14) — the key-authority chokepoint; reused by 3.2/3.4/3.5.** | opus/high | codex/high | 0.6 |
-| 3.2 | D-H4, P-01 | Stored canonical `artifact_id` + resolved upstreams → fixes cover-letter/interview-prep. **Migration-parity gated (A14): every pre-migration `artifact_id` must still resolve via the status endpoint post-cutover (dual-read until contract phase); legacy-id probe in the oracle.** | opus/high | codex/high | 3.1 |
+| 3.1-RED | D-H2, D-H3 | Write the RED tests only, against the pinned spec. **Opus, not Fable (rule 18):** rule 14 has already fixed every assertion value, so this is precision authoring, not exploration — there is no judgment left for a larger tier to buy. | opus/high | gpt-5-codex/high | 0.6 |
+| 3.1-GREEN | D-H2, D-H3 | Single key-authority repository (`TableRegistry`/`CoreRepository`); surface ValidationException. *(v2.7.0: the A14 dual-read migration-parity harness is **removed** from this step — all stored data is disposable test data, so there is no cutover to prove. See scope-lock O-3.)* **Fable (rule 18):** long-horizon implementation against a spec that is already pinned, multi-file, with key-authority blast radius. Give the full task spec up front in one turn. | fable/high | gpt-5-codex/high | 3.1-RED |
+| 3.2 | D-H4, P-01 | Stored canonical `artifact_id` + resolved upstreams → fixes cover-letter/interview-prep. *(v2.7.0: the A14 migration-parity gate is removed — canonical ids only, no dual-read, no legacy-id probe. See scope-lock O-3.)* | opus/high | codex/high | 3.1 |
 | 3.3 | D-H7 | Eliminate request-path Scans | opus/high | codex/high | 3.1 |
-| 3.4 | D-M1, D-M2, D-M3, D-M5, D-M6, D-Q | God-class split; stop dual-key CV write; minimized GSI; retire userEmail PK; **access-pattern doc (D-M6 now proves every §1a endpoint + §1b/§1c async maps to a named Query/GSI, zero Scan, incl. status-by-`artifact_id` + sparse in-flight index — hard dep of D-H8)**; quick wins. D-M2/D-M5 migration-parity gated. | opus/high | codex/high | 3.1 |
-| 3.5 | D-H9 | **Complete the in-flight FE-UI-044 CR canonical-store migration (v2.0.0/A10):** verify backfill of the 239 legacy items, confirm dual-read parity (harness from 3.1), retire the legacy `users-table` CR read path — closes the dual-read-fallback family that is the root of the P-01 drift. | opus/high | codex/high | 3.1 |
+| 3.4 | D-M1, D-M2, D-M3, D-M5, D-M6, D-Q | God-class split; stop dual-key CV write; minimized GSI; retire userEmail PK; **access-pattern doc (D-M6 now proves every §1a endpoint + §1b/§1c async maps to a named Query/GSI, zero Scan, incl. status-by-`artifact_id` + sparse in-flight index — hard dep of D-H8)**; quick wins. | opus/high | codex/high | 3.1 |
+| 3.5 | D-H9 | **Complete the in-flight FE-UI-044 CR canonical-store migration (v2.0.0/A10):** verify backfill of the 239 legacy items, confirm dual-read parity (harness from 3.1), retire the legacy `users-table` CR read path — closes the dual-read-fallback family that is the root of the P-01 drift. **⛔ AMENDMENT-DEPENDENT:** `specs/amendments/D-H2-harness-removal-amendment.md` (items 2, 6) proposes repointing D-H9 to **legacy-path demolition gated by a retirement register** — no backfill, no parity, deletion only, each item gated on evidence that nothing still depends on it (`specs/D-H9-legacy-path-demolition-spec.md`). Until the twins land, the migration wording above is the clause of record. **Fable (rule 18)** on either reading: multi-file, irreversible, against a pinned spec. | fable/high | gpt-5-codex/high | 3.1-GREEN, 3.2, 3.3, 3.4 |
 
 ### Wave 4 — Generation quality (Track Q + frontend fixes)
 | # | Clause(s) | Step | Spec | Claude | Codex | Deps |
@@ -339,7 +350,7 @@ Resume by re-pasting `handoff.md` + attachments and saying "continue".
 > **Deduped + counted (v2.0.0 — the previous list double-listed Q-08/X-01/Q-05/Q-07 and enumerated clauses, not files).** Specs are **per-feature files** that may group several clauses (multi-clause form, §8.5 — the `Q-gap` exemplar already covers Q-01..Q-04 in one file). **~20 spec files**, reconciled with T-06's estimate (T-06 updated to "~20 grouped per-feature specs"). Tier-1 first. The AUTHORED exemplar (`Q-gap`) is not on this list. Purely-mechanical config edits (e.g. a one-line throttle bump) may be handled inline by their runbook step without a standalone spec.
 
 **Track P (14 files):** P-03 (api-surface) · P-04+P-05 (auth/IDOR — incl. the 31-handler route×handler table) · P-06 (secrets) · P-07 (cognito hardening) · P-08+P-10+P-11 (CORS+WAF) · P-09 (IAM per-fn) · P-12+P-13 (RETAIN) · P-14+P-15 (money idempotency+Scan) · P-16+P-17+P-18+P-19 (SQS/SFN reliability) · P-20 (throttle+load harness) · P-21 (SNS) · P-23 (canary/rollback) · P-24 (identity surrogate) · **P-25+P-25b (payment port + real Stripe)** · P-26 (CFN blue/green **+ the custom-domain/DNS slice for 0.64b**) · P-27+P-28 (deploy safety + pipeline closure) · P-29 (evidence pack) · P-30 (smoke harness) · P-31 (EB DLQ) · P-32 (cost/obs; budgets slice authored early at 0.56). *(P-22 OIDC = a mechanical CI edit, inline.)*
-**Track D (5 files):** D-H2+D-H3 (key-authority + parity harness) · D-H4 (canonical `artifact_id`) · D-H7 (Scans) · D-M* + D-Q (seams bundle) · **D-H9 (FE-UI-044 completion)**. *(D-H8 collapse = Wave-6, its own spec then.)*
+**Track D (5 files):** D-H2+D-H3 (key-authority) · D-H4 (canonical `artifact_id`) · D-H7 (Scans) · D-M* + D-Q (seams bundle) · **D-H9 (legacy-path demolition)**. *(D-H8 collapse = Wave-6, its own spec then.)*
 **Track Q (5 files):** Q-05 (KB MVP) · Q-07+Q-09 (knowledge-table + CR margin guard) · Q-08 (evals + golden dataset) · **Q-10 (token metering — authored early for 0.75)** · Q-11 (cost bounds).
 **Track F (2 files):** F-01 (oracle, now carrying the F-06 all-10 assertions) · F-02..F-05 (contract fixes). *(F-07 OpenAPI regen = mechanical, inline.)*
 **Track T (2 files):** scope-diff.py + spec-coverage-ledger.

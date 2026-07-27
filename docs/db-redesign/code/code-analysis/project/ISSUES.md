@@ -557,3 +557,225 @@ consumers are annotated `PaymentProviderInterface` instead of `Any`
 passed. **2.5 link now DISCHARGED at the port level:** the undeclared-port call is gone, so fixing
 the reconciliation entrypoint in 2.5 no longer puts an unenforced call on a live schedule — 2.5 still
 owns the handler-name fix itself. Status: **settled — belief was FALSE, port now enforced.**
+
+---
+
+# Wave-3 bets
+
+Per `RUNBOOK-RULES.md` rule 9. Each is a belief Wave 3 rests on that could be false, with the
+**cheapest** check that would show it false (rule 9's five-tier ladder) and the fallback decided
+now, while the answer is still genuinely unknown. **All five are re-read at the Wave-3 gate** and
+recorded there as settled TRUE/FALSE with the concrete artifact that settled them.
+
+Promoted from the seed table in
+`/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-3-status.md`
+on **2026-07-27**, before any Wave-3 prompt ran — which is the point of rule 9 ("planning the wave
+is when you know least and can still change the order cheaply; the gate is when you find out").
+They are ordered by how much downstream work they delete if wrong, not by severity.
+
+---
+
+## B-3-1 — The parity harness can assert exact public-projection equality with no benign diffs
+
+- **Load-bearing for:** 3.1, and then 3.2, 3.4 (D-M2/D-M5), and 3.5. **Deletes the most work if
+  wrong** — every migration-gated step in the wave reuses this one harness.
+
+**The belief.** A single dual-read harness can compare a legacy read against the canonical read and
+assert they are identical, for every migrated slice, without the assertion failing for reasons that
+have nothing to do with the migration.
+
+**Why it is a bet and not a fact.** The spec says "asserts identical public projection" and the
+acceptance criterion (AC-DH2-2) says "match exactly". Neither says *what is compared*. If the
+comparison is raw DynamoDB items, then attribute insertion order, an internal-only bookkeeping
+attribute (`_schema_version`, `updated_at`, a TTL stamp), or a `Decimal`-vs-`int` numeric type from
+two different write paths will fail the assertion for a benign reason. That flakiness is not
+contained: 3.2, 3.4, and 3.5 all inherit it, and the natural fix under deadline pressure is to
+loosen the assertion per slice until it proves nothing — the failure mode rule 13 exists to name.
+
+**The check (tier 3 — one minimal test, not a suite).** In moto, seed one legacy-shaped item and
+one canonical-shaped item for a single artifact type, run the candidate harness, and read the diff
+it reports. That is the whole check; it does not require any handler to be migrated.
+
+**The fallback, decided now.** The harness does **not** compare raw items. It compares a
+**normalized public projection**: the response-shaped view a frontend §3 consumer would see, with a
+**documented, checked-in internal-field allowlist** of attributes excluded from comparison. The
+allowlist lives in the harness module, is enumerated in the spec, and **grows only by an explicit,
+dated ledger entry naming the attribute and why it is internal** — never silently at the call site
+of a failing slice. If a slice needs an exclusion the allowlist does not already carry, that is a
+rule-5 flag, not a fix.
+
+**RETIRED 2026-07-27 at scope-lock v2.7.0 — the harness this bet is about no longer exists.** The
+migration-parity harness was removed from D-H2 because all stored data is disposable test data (O-3),
+so there is no migration to prove parity for. Kept here, not deleted, because rule 9 re-reads every
+bet at the GATE and a silently vanished bet is indistinguishable from an unsettled one. The finding
+below stands on its own merits and is why the harness could never have worked as originally specced.
+
+**Settled: 2026-07-27 — FALSE. Fallback was taken, then the whole instrument was retired.** Settled at tier 1, not tier 3: the
+planned moto test was unnecessary because a live read of the DAL write paths showed the benign diffs
+are guaranteed rather than hypothetical. The cover-letter write at
+`src/backend/careervp/dal/dynamo_dal_handler.py:535-552` puts **both** key conventions
+(`applicationId`/`artifactId` *and* `pk`/`sk`) and **both** spellings of the type field
+(`artifactType` *and* `artifact_type`) on a single item; and the artifacts, gap-responses, and
+knowledge tables all declare `time_to_live_attribute="expiration"`
+(`infra/careervp/api_db_construct.py:483,415,442`) while the DAL writes `ttl`
+(`:451,550,912,989,1024`). Exact raw-item equality was never achievable on this data.
+
+The fallback is therefore in force, and the allowlist it depends on is no longer a placeholder: it
+is **enumerated with its derivation rule** in `specs/D-H2-D-H3-key-authority-spec.md` — 10
+attributes (`pk`, `sk`, `applicationId`, `artifactId`, `userId`, `questionId`, `artifactType`,
+`ttl`, `expiration`, `entity_type`), each with live evidence, under the rule *"internal iff it is a
+table/GSI key attribute, a storage-lifecycle attribute, or a bookkeeping duplicate of a compared
+payload field — and appears nowhere in the frontend §3 contract."* Normalization (key order,
+`Decimal`↔`int`, ISO-8601→UTC) applies to every attribute and is **not** exclusion; `created_at` and
+`updated_at` stay compared. The harness reports what it excluded, so exclusions are visible.
+
+> ✅ **The amendment landed 2026-07-27 (scope-lock v2.7.0).** The harness, its RED test, `AC-DH2-2`,
+> and the allowlist are gone from `specs/D-H2-D-H3-key-authority-spec.md`. Nothing in Wave 3 depends
+> on this bet any more. `B-3-3` (the 239-item backfill) is retired by the same release.
+
+---
+
+## B-3-2 — The swallowed `ValidationException`s D-H3 targets are reachable on a request path
+
+- **Load-bearing for:** 3.1 (D-H3 only). Decides whether D-H3 is a behavior change or a guard-rail.
+
+**The belief.** At least one `except` site that converts a DynamoDB `ValidationException` into
+`None` / a 404 is actually reachable by a real request, so surfacing it changes live behavior.
+
+**Why it is a bet.** D-H3's whole value is "a malformed key stops looking like an empty result."
+If every such `except` is dead defensive code, the clause still deserves a regression test, but it
+does **not** deserve to be described as fixing a live false-404 — and a session that believes it
+did will report a behavior change that never happened. The spec's Evidence cites
+`/Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/careervp/dal/dynamo_dal_handler.py:101`
+and the handler table-name precedence sites, but citing a line is not the same as proving a request
+reaches it.
+
+**The check (tier 1 then tier 3).** First grep the DAL/handler `except` sites that convert a
+`ValidationException` into `None`/404 — zero new code. Then, for one site that looks reachable, a
+single moto test that forces a malformed key through the real request path and observes what the
+caller receives.
+
+**The fallback, decided now.** If no site is reachable, D-H3 ships as **surface-and-log plus a
+regression test**, not a behavior change; the 3.1-RED row records explicitly that it changed nothing
+live and why, so 3.1-GREEN does not go hunting for a false-404 that does not exist.
+
+**Settled:** _open, but **pre-settled toward TRUE** by the 2026-07-27 precision edit — 3.1-RED
+confirms it live rather than discovering it from scratch._ The tier-1 grep has already been run:
+`src/backend/careervp/dal/dynamo_dal_handler.py:629-637` catches the `ValidationException`, retries
+under the legacy `{'pk','sk'}` schema, and on a miss returns
+`Result(success=True, data=None, code=ResultCode.SUCCESS)` — a schema mismatch presented as an empty
+success. `:678-684` is the same shape on the scan path. That branch is **not** dead defensive code:
+it sits behind `COVER_LETTER_LEGACY_READ_ENABLED`, which defaults to `'true'` (`:621`), so it is a
+live, default-on compatibility path. The tier-3 moto test that forces it is
+`test_dh3_validation_exception_not_returned_as_not_found`.
+
+3.1-RED must (a) re-confirm both sites and the flag default live, and (b) record the confirmation
+here. **If it finds the path is NOT reachable, that contradicts the spec's corrected mechanism —
+STOP and flag it, do not quietly record the opposite finding.** The "surface-and-log only" fallback
+above stays available but is now unlikely to be needed.
+
+> Note: the earlier framing of this bet cited `dynamo_dal_handler.py:101` and the handler
+> table-name precedence sites as its evidence. Those are real defects but they are **D-H2's**, not
+> the swallow site. The actual swallow is at `:629-637`, found by live read on 2026-07-27.
+
+---
+
+## B-3-3 — The "239 legacy CR items" figure is still accurate at Wave-3 time
+
+> **RETIRED 2026-07-27 at scope-lock v2.7.0 — there is no backfill.** D-H9 was repointed from
+> "complete the FE-UI-044 CR migration (verify the 239-item backfill, confirm dual-read parity)" to
+> legacy-path demolition. All stored data is disposable test data dropped before production (O-3),
+> so the count is irrelevant: legacy CR items are deleted, not migrated, and company research is
+> written canonically from the start. Kept rather than deleted because rule 9 re-reads every bet at
+> the GATE and a vanished bet reads as an unsettled one.
+>
+> **Nothing replaces it.** The check this bet asked for (a live count before 3.5) is not needed; the
+> demolition gate asks a different question — not "how many items are there" but "does anything
+> still read them". See `specs/D-H9-legacy-path-demolition-spec.md`.
+
+<details><summary>Original bet, kept for the audit trail</summary>
+
+- **Load-bearing for:** 3.5 (D-H9).
+
+**The belief.** The count of legacy Company Research items in the `users-table` that D-H9 backfills
+is still 239, as recorded when the clause was written.
+
+**Why it is a bet.** 239 is a number from a document, and the FE-UI-044 migration is described in
+the contract as `partial_migration_dual_read_fallback_live` — i.e. **in flight**. A live dual-read
+fallback means new legacy items can still be written. Backfilling "the 239" and declaring the legacy
+read path retired, when the live count is 244, leaves five items that resolve only through the path
+just deleted.
+
+**The check (tier 1 — a live read, zero new code).** Count legacy CR items in the **devx**
+`users-table` immediately before 3.5 starts. Not at planning time; the number only matters as of the
+moment the backfill runs.
+
+**The fallback, decided now.** Re-derive the count from live and backfill whatever the live count
+actually is. Record the delta from 239 in the 3.5 ledger row. **The legacy read path may not be
+retired until a second live count, taken after the backfill, reports zero unmigrated items** — the
+count is the gate, not the backfill's exit code.
+
+**Settled:** _open — settle at the start of 3.5._
+
+</details>
+
+---
+
+## B-3-4 — Wave 3's GSI/PK changes stay under the CFN ceiling with zero stateful replacement
+
+- **Load-bearing for:** 3.4 (D-M3 minimized GSI, D-M5 `userEmail` PK retirement). Carries `B-2-3`
+  forward, and carries the **highest blast radius in the wave**.
+
+**The belief.** The minimized GSI projection and the retirement of the `userEmail` partition key
+can be deployed without CloudFormation replacing a stateful resource, and without crossing the
+resource ceiling.
+
+**Why it is a bet.** Changing a GSI's projection or a table's key schema is one of the few CDK edits
+that CloudFormation resolves by **replacing the table** — which is the IMMUTABLE-law failure mode
+one step removed from the API and the user pool. B-2-3 settled TRUE for Wave 2's *additive* work
+(largest devx template 261, ceiling 500); Wave 3's work is not additive, so B-2-3's evidence does
+not transfer.
+
+**The check (tier 4 — a dry run, never a mutation).** A synthesized-template diff per infra-touching
+change, asserting zero replacement markers on stateful resources. **Use the isolated technique the
+2.3-root-cause row proved, not a live `cdk diff`**: synth `CareerVpCrudDevx` at HEAD, synth again
+with the change stashed, and diff the two templates directly. Wave 2 lost a session to a live diff
+that reported six stacks of drift which turned out to be pre-existing devx staleness unrelated to
+the change under test.
+
+**The fallback, decided now.** Sequence any change the diff shows as replacing into separate gated
+deploys — **add new → dual-read → drop old** — never a single replacing change. If a replacement
+cannot be avoided even when sequenced, that is a rule-5 stop, not a scheduled outage.
+
+**Settled:** _open — check per infra-touching change in 3.4; do not defer to the gate._
+
+---
+
+## B-3-5 — D-H2's static scans can be scoped to the artifacts/core table without leaving a hole
+
+- **Load-bearing for:** 3.1-RED (both static-scan tests) and 3.1-GREEN's file list.
+
+**The belief.** "Single key authority" can be delivered for the **artifacts/core** table in Wave 3
+while user-table, applications-table, and jobs-table keying stay as they are — without the scan
+becoming a fiction that passes while the sprawl it names still exists.
+
+**Why it is a bet.** AC-DH2-1 says "any **artifact** repository operation", and the Wave-6 D-H8
+single-table collapse is where the rest lands. But the scan is a static text scan: draw the boundary
+loosely and it fails on 11+ files that no Wave-3 clause authorizes touching; draw it too tightly and
+it passes while `USER#` is still built by hand three modules away. Wave 2 already paid for this exact
+shape — 2.2's RED test enumerated a worker that was not an SQS consumer, GREEN correctly refused to
+special-case it, and it cost a §0.3 amendment, a `2.2-RED-fix` session, and a split step.
+
+**The check (tier 1 — a grep, run before the test is written).** Enumerate every candidate site
+live and classify each as artifacts/core keying or other-table keying. Done on 2026-07-27; the
+resulting baseline is pinned in the spec's RED-test section and reproduced in the 3.1 scope decision
+in `wave-3-status.md`.
+
+**The fallback, decided now.** If the artifacts/core boundary cannot be drawn from the code as it
+actually is, the scan ships as a **frozen-baseline ratchet** — an enumerated list of known offending
+sites that may shrink but never grow, failing on any *new* site — rather than an absolute "zero
+occurrences" assertion the wave is not scoped to satisfy. A ratchet that holds the line is worth
+more than an absolute that has to be weakened in its first GREEN session.
+
+**Settled:** _boundary drawn 2026-07-27 (see the 3.1 scope decision in `wave-3-status.md`);
+re-confirm the enumerated baseline live in 3.1-RED, since the scan asserts against it._
