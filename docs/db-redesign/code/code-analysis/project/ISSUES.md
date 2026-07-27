@@ -678,6 +678,18 @@ above stays available but is now unlikely to be needed.
 > table-name precedence sites as its evidence. Those are real defects but they are **D-H2's**, not
 > the swallow site. The actual swallow is at `:629-637`, found by live read on 2026-07-27.
 
+**Confirmed 2026-07-27 by 3.1-RED — TRUE and reachable.** A fresh live read found the corrected
+mechanism unchanged at `src/backend/careervp/dal/dynamo_dal_handler.py:628-637`:
+`read_cover_letter_by_artifact_id` catches the canonical read's `ValidationException`, retries
+`{'pk', 'sk'}`, and returns `Result(success=True, data=None, code=ResultCode.SUCCESS)` directly when
+that retry misses. The scan fallback has the same swallowed-miss shape at `:677-683`. This is a
+default-on request path, not dead defensive code:
+`COVER_LETTER_LEGACY_READ_ENABLED` defaults to the literal `'true'` at `:621` (and the explicit
+legacy entry point repeats that default at `:768`). The tier-3 RED test uses the pinned
+`ValidationException` message, stages a legacy retry miss, and requires exactly
+`success=False`/`data=None`/`TABLE_SCHEMA_MISMATCH`; retry-hit and retry-raises remain outside that
+single stimulus and retain the spec's three-outcome GREEN boundary.
+
 ---
 
 ## B-3-3 — The "239 legacy CR items" figure is still accurate at Wave-3 time
@@ -779,3 +791,15 @@ more than an absolute that has to be weakened in its first GREEN session.
 
 **Settled:** _boundary drawn 2026-07-27 (see the 3.1 scope decision in `wave-3-status.md`);
 re-confirm the enumerated baseline live in 3.1-RED, since the scan asserts against it._
+
+**Re-confirmed 2026-07-27 by 3.1-RED, with one recorded precision delta.** The `USER#` census
+matches exactly: **9 sites across 5 files**. The artifacts/core precedence census still spans the
+same **9 handler files**, but the spec's enumerated location list contains **22 locations, not the
+“23 sites” stated immediately before it** (2 + 1 + 6 + 1 + 8 + 1 + 1 + 1 + 1 = 22). A fresh
+same-line chain scan finds 20 executable fallback-expression locations; the remaining two
+enumerated locations are the multi-line `resolved_from` diagnostic at
+`cover_letter_handler.py:59-60`. The RED test does not hide either number: it keeps 23 as the
+documented maximum, freezes the 22 enumerated source signatures so any new site fails even if an old
+one disappears, and reports all 22 current locations before asserting the required end state of
+zero. The count-label discrepancy is documentation precision debt; it does not widen the scan,
+silence a violation, or change the D-H2 boundary.

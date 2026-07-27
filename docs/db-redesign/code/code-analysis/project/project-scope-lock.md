@@ -1,6 +1,6 @@
 # CareerVP — Project Scope Lock (Contract)
 
-Version: 2.7.0
+Version: 2.7.1
 Date: 2026-07-27
 Scope-Lock-Approved-By: Yitzchak Meirovich 2026-07-18
  · last amended 2026-07-18 (v2.5.0 — records that P-26's Job-1 count-relief sub-step is now tracked/executed under the Wave-1 runbook (wave-1-prompts.md step 1.3d); P-26 itself stays a Wave-0 guardrail clause, unchanged; v2.4.0 — measured from-scratch recreate RTO recorded (step 0.64, eu-west-1 proxy); v2.3.0 — O-9 RESOLVED: custom domain live + frontend CI green for real; P-30 wire 4 refined to the real upload path; ISSUES.md added; v2.2.1 — P-32 budgets/cost-anomaly sub-slice moved console-only → IaC; v2.2.0 two-phase coverage gates; v2.1.1 dev ACM cert ISSUED; v2.1.0 human decisions on O-2/O-7/O-8 + recon refresh; v2.0.0 eval-council conditions)

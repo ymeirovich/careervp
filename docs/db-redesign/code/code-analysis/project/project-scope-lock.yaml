@@ -2,7 +2,7 @@
 # Diff implemented specs/tests against `backlog[].id`. Do not edit without bumping meta.version and the MD change log.
 meta:
   name: careervp-project-scope-lock
-  version: 2.7.0
+  version: 2.7.1
   frozen: "2026-07-05"
   code_anchor: "github.com/ymeirovich/careervp@4f7c294"
   live_anchor: {account: "788159322332", region: us-east-1, stage: dev, prod_exists: false}
@@ -109,7 +109,7 @@ backlog:
   - {id: P-31, tier: T2, track: [P], loe: Lo, status: TARGET, title: "EventBridge rule targets have a DLQ (cleanup 1h, reconcile 02:00)", crosswalk: ["NFR-REL-6"], current_state: no_eb_dlq, verification: iac}
   - {id: P-32, tier: T2, track: [P], loe: Lo, status: TARGET, impl_state: test_written, title: "cost/obs + edge hygiene: AWS Budgets + Cost-Anomaly Detection + app-wide Tags.of (NFR-COST-3); correlation-ID propagation (NFR-OBS-3); log retention 30-90d + alarm coverage (NFR-OBS-2); API-edge request validators/models (NFR-SCALE-4)", crosswalk: ["NFR-COST-3","NFR-OBS-3","NFR-OBS-2","NFR-SCALE-4"], current_state: budgets_slice_iac_defined_awaiting_deploy_evidence_remainder_partial_tagging_only, verification: iac+obs, note: "v2.0.1/A15: Wave 0 budgets+cost-anomaly sub-slice moved console-only -> CDK by explicit human decision 2026-07-12 (infra/careervp/monitoring.py MonitoringNestedStack._build_cost_observability; synth-tested in infra/tests/infrastructure/test_p32_budgets_cost_anomaly.py). Post-deploy evidence capture (validate_budget_evidence/validate_cost_anomaly_evidence in src/backend/scripts/deploy_evidence.py) remains human-only -- synth passing is not proof of a real deploy. P-32 remainder (tags/correlation-id/log-retention/validators) unaffected, still Wave 5."}
   # ---- Track D: DB single-table (seams T1/T2; collapse committed later) ----
-  - {id: D-H2, tier: T1, track: [D], loe: Md, status: TARGET, title: "single key-authority repository (sole key-builder); ALSO homes the reusable dual-read migration-parity harness", crosswalk: ["DB-H2"], current_state: env_var_precedence, verification: unit+migration-parity, note: "v2.0.0/A14: the key-authority chokepoint owns ONE dual-read parity harness, reused per entity by D-H4/D-M2/D-M5/D-H9 so a pre-launch live-data cutover is proven legacy-read==core-read per item, not asserted"}
+  - {id: D-H2, tier: T1, track: [D], loe: Md, status: TARGET, title: "single key-authority repository (sole key-builder)", crosswalk: ["DB-H2"], current_state: env_var_precedence, verification: unit, note: "v2.7.0: the reusable dual-read migration-parity harness is REMOVED from this clause. A14 homed it here to prove a pre-launch live-data cutover legacy-read==core-read per item; all stored data is disposable test data dropped before production, so there is no cutover to prove -- see O-3."}
   - {id: D-H3, tier: T1, track: [D], loe: Lo, status: TARGET, title: "surface swallowed ValidationException", crosswalk: ["DB-Q1","DB-H3"], current_state: swallowed, verification: unit}
   - {id: D-H4, tier: T1, track: [D], loe: Md, status: TARGET, title: "stored canonical artifact_id + pass resolved upstreams", crosswalk: ["DB-H4"], contract_impact: true, verification: contract+integration, note: "v2.7.0: A14 parity-harness dependency REMOVED -- all stored data is disposable test data (see O-3), so there is no pre-migration artifact_id to resolve post-migration. Canonical ids only; no dual-read, no cutover probe."}
   - {id: D-H7, tier: T1, track: [D], loe: Md, status: TARGET, title: "eliminate request-path Scans", crosswalk: ["DB-H7","#15"], verification: integration}

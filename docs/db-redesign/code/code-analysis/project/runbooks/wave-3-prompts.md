@@ -188,14 +188,14 @@ on 2026-07-27, before this prompt ran. Read them there — belief, cheapest chec
 already decided. Your job is to RUN the checks and record what you find, not to re-invent the bets.
 --------------------------------------------------------------------------------
 
-BET B-3-1 (parity-harness projection semantics) shapes
-test_dh2_migration_parity_harness_reports_identical_projection. **The fallback is already the
-decision:** normalized PUBLIC projection against a documented internal-field allowlist, key order
-normalized, numeric types coerced — NOT raw items. Run the tier-3 check (seed one legacy-shaped and
-one canonical-shaped item for a SINGLE artifact type in moto, read the diff the harness reports) to
-ENUMERATE the actual allowlist, then write it into B-3-1 and into the spec. Do not leave it "or", and
-do not silently widen it later at a failing slice's call site — every later step (3.2/3.4/3.5)
-inherits this harness.
+BET B-3-1 is **RETIRED at scope-lock v2.7.0 — do not run its check, do not settle it, and do not
+build what it shaped.** The migration-parity harness no longer exists: the RED test
+`test_dh2_migration_parity_harness_reports_identical_projection`, `AC-DH2-2`, and the 10-attribute
+allowlist were all deleted from `D-H2-D-H3-key-authority-spec.md`, and D-H2's `verification` is now
+`unit` alone in both contract twins. All stored data is disposable test data (`O-3`, resolved
+2026-07-27), so there is no cutover to prove parity for and no later step inherits a harness. Write
+the four RED tests the spec names for AC-DH2-1/AC-DH3-1 and nothing else. Settle only `B-3-2` and
+`B-3-5` in this step.
 
 BET B-3-2 (are the swallowed ValidationExceptions reachable?) decides whether
 test_dh3_validation_exception_not_returned_as_not_found tests a live behavior change or a guard-rail.
@@ -467,9 +467,9 @@ fill-in edit.
 | **Bets** | none — `B-3-1` retired at scope-lock v2.7.0 (no harness, no migration, no legacy-id probe) |
 
 **In plain English.** Store a canonical `artifact_id` and its resolved upstream ids so cover-letter
-and interview-prep stop failing to find their VPR/CV. Migration-parity gated: dual-read until the
-contract phase; every pre-migration `artifact_id` must still resolve after cutover, proven by the
-harness and by a legacy-id probe in the oracle.
+and interview-prep stop failing to find their VPR/CV. **Canonical ids only — no dual-read window, no
+cutover probe, no harness, no legacy-id resolution** (v2.7.0/`O-3`: the data is disposable, so there
+is no pre-migration `artifact_id` to keep resolving).
 
 ---
 
@@ -502,8 +502,8 @@ read latency and cost stop scaling with table size. No money-path or reconcile S
 | **Claude / Codex** | opus/high · gpt-5-codex/high |
 | **Depends on** | 3.1-GREEN |
 | **Deploy target** | `CareerVpCrudDevx` (manual-dispatch only; no merge to `main`) — **touches `infra/` (GSI + PK), highest blast radius in the wave** |
-| **Rule 7** | RED and GREEN separate — D-M2/D-M5 are migration cutovers; the `userEmail` PK retirement is stateful infra |
-| **Bets** | `B-3-4` (GSI/PK changes stay under the CFN ceiling and cause ZERO stateful replacement — `cdk diff` per change; add-new → dual-read → drop-old, never a single replacing change) · `B-3-1` (D-M2/D-M5 parity-gated) |
+| **Rule 7** | RED and GREEN separate — the `userEmail` PK retirement is stateful infra (D-M2/D-M5 are canonical-shape rewrites, **not** migration cutovers — v2.7.0/`O-3`) |
+| **Bets** | `B-3-4` (GSI/PK changes stay under the CFN ceiling and cause ZERO stateful replacement — isolated synth-template diff per change, never a single replacing change) — `B-3-1` **retired** at scope-lock v2.7.0, so D-M2/D-M5 are not parity-gated |
 
 **In plain English.** Split the god-class read/write path behind `CoreRepository`, stop the dual-key
 CV write, minimize the GSI, retire the `userEmail` primary key, and produce the access-pattern doc
@@ -530,12 +530,14 @@ rather than accumulating undeployed debt; if you do not deploy, say so in the le
 | **Claude / Codex** | fable/high · gpt-5-codex/high (rule 15 — from `redesign-execution-plan.md` row 3.5. **Fable per rule 18:** multi-file, irreversible, against a pinned spec. Read rule 18's prompt-shape guidance before filling this in — goal and constraints up front in one turn, no step-by-step choreography, rules and gates verbatim.) |
 | **Depends on** | 3.1-GREEN, 3.2, 3.3, 3.4 — **all four**, because every deletion cites a positive proof owned by an earlier step. Do not run this early. |
 | **Deploy target** | `CareerVpCrudDevx` (manual-dispatch only; no merge to `main`) |
-| **Rule 7** | RED and GREEN separate — backfill + dual-read cutover of live data |
-| **Bets** | `B-3-3` (the "239 legacy CR items" figure is still accurate — count live in devx before starting; backfill whatever the live count actually is) · `B-3-1` (dual-read parity via the harness) |
+| **Rule 7** | RED and GREEN separate — irreversible deletion of legacy read paths |
+| **Bets** | none — `B-3-1` and `B-3-3` were **both retired** at scope-lock v2.7.0 (no harness, no backfill). The demolition gate asks "does anything still read this?", not "how many items are there?" |
 
-**In plain English.** Finish moving Company Research into the canonical store: verify the legacy
-items are backfilled, confirm dual-read parity with the 3.1 harness, then retire the legacy
-`users-table` CR read path — closing the dual-read-fallback family that is the root of the P-01 drift.
+**In plain English.** Demolish every legacy read path, dual-shape write, overloaded table-name
+variable, and migration script — each removed **only** on evidence that nothing still depends on it
+(fault injection for error-path items, an observed zero hit count for flag-gated items, a source scan
+plus a canonical-only read test for static items). Legacy CR items are **deleted, not backfilled**
+(v2.7.0/`O-3`). This closes the dual-read-fallback family that is the root of the P-01 drift.
 This is the step that actually removes the fallback, so it comes after 3.2 has proven canonical
 resolution works.
 
