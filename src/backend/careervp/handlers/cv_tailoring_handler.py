@@ -603,7 +603,7 @@ def _validate_openapi_cv_tailoring_payload(body: dict[str, Any]) -> None:
 
     The existing tailoring flow still accepts the legacy `job_description` payload.
     """
-    if {'cv_id', 'job_id', 'vpr_id'}.issubset(body):
+    if {'cv_id', 'job_id'}.issubset(body):
         APICVTailoringRequest.model_validate(body)
 
 

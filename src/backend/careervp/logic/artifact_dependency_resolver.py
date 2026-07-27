@@ -58,6 +58,16 @@ DEPENDENCIES: dict[str, tuple[str, ...]] = {
 GENERATION_ORDER: tuple[str, ...] = ('gap_analysis', 'company_research', 'vpr', 'cv_tailored', 'cover_letter', 'interview_prep')
 
 
+def vpr_access_denied_envelope() -> dict[str, str]:
+    """Shared public denial shape for downstream VPR ownership failures."""
+    return {
+        'error': 'VPR is not available for this application',
+        'classification': 'access_denied',
+        'error_code': 'forbidden',
+        'field': 'vpr_id',
+    }
+
+
 def resolve_dependencies(
     *,
     artifact_type: str,
@@ -165,10 +175,14 @@ def _is_stale(repos: ArtifactDependencyRepos, artifact_type: str, candidate: Any
 
 
 def _artifact_id(candidate: Any) -> str | None:
-    for field_name in ('artifact_id', 'artifactId', 'vpr_id', 'company_research_id', 'job_id', 'id'):
-        value = _field(candidate, field_name)
-        if value:
-            return str(value)
+    return resolve_artifact_id(candidate)
+
+
+def resolve_artifact_id(candidate: Any) -> str | None:
+    """Return the sole canonical opaque artifact_id; aliases are not ids."""
+    value = _field(candidate, 'artifact_id')
+    if value:
+        return str(value)
     return None
 
 

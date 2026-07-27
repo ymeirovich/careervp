@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.models.exceptions import InvalidStateTransitionError
+from careervp.models.result import Result, ResultCode
 
 APPLICATION_STATES: tuple[str, ...] = (
     'created',
@@ -323,7 +324,7 @@ class ApplicationRepository:
         artifact_type: str,
         status: str,
         artifact_id: str,
-    ) -> None:
+    ) -> Result[None]:
         """Write both artifact status and artifact_id into artifact_statuses.
 
         The hub reads ``artifact_statuses.<type>`` for status and
@@ -369,8 +370,13 @@ class ApplicationRepository:
                     },
                     ConditionExpression='attribute_not_exists(userId)',
                 )
-            except Exception:
-                return  # Concurrent write or permanent error — localStorage fallback handles it
+            except Exception as exc:
+                return Result(
+                    success=False,
+                    data=None,
+                    error=f'failed to initialise application artifact identity: {exc}',
+                    code=ResultCode.DYNAMODB_ERROR,
+                )
         try:
             # Step 2: set the nested artifact keys now that the map is guaranteed to exist.
             self._table().update_item(
@@ -386,8 +392,14 @@ class ApplicationRepository:
                     ':updated_at': self._now_iso(),
                 },
             )
-        except Exception:
-            pass  # Non-fatal — frontend localStorage fallback handles missing artifact_id
+        except Exception as exc:
+            return Result(
+                success=False,
+                data=None,
+                error=f'failed to persist canonical artifact_id: {exc}',
+                code=ResultCode.DYNAMODB_ERROR,
+            )
+        return Result(success=True, data=None, code=ResultCode.SUCCESS)
 
     def set_company_research_error(self, application_id: str, user_id: str, error: bool) -> None:
         """Persist the company_research_error flag on the application record.

@@ -88,6 +88,19 @@ def canonical_key_condition(application_id: str, artifact_id_prefix: str) -> Con
     return Key('applicationId').eq(application_id) & Key('artifactId').begins_with(artifact_id_prefix)
 
 
+def canonical_application_condition(application_id: str) -> ConditionBase:
+    """Canonical application partition condition for opaque artifact lookup."""
+    return Key('applicationId').eq(application_id)
+
+
+def canonical_artifact_id(item: dict[str, Any]) -> str | None:
+    """Return the one canonical opaque artifactId stored on an item."""
+    value = item.get('artifactId')
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
 def company_research_candidate_keys(user_id: str, job_id: str) -> list[dict[str, str]]:
     """Every legacy key convention a company-research item may live under."""
     return [

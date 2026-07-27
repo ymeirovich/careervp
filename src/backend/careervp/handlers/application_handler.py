@@ -11,6 +11,7 @@ from aws_lambda_powertools.logging.correlation_paths import API_GATEWAY_REST
 from aws_lambda_powertools.utilities.typing import LambdaContext
 
 from careervp.dal.application_repository import ApplicationRepository
+from careervp.dal.core_repository import CoreRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
@@ -93,6 +94,39 @@ def _build_artifacts(application: dict[str, Any]) -> dict[str, dict[str, Any]]:
         }
         for artifact_type in _ARTIFACT_TYPES
     }
+
+
+def _resolve_missing_artifact_ids(
+    application: dict[str, Any],
+    *,
+    application_id: str,
+    user_id: str,
+) -> dict[str, Any]:
+    """Fill hub identities from canonical repository reads without API drift."""
+    statuses = application.get('artifact_statuses')
+    if not isinstance(statuses, dict):
+        return application
+
+    resolved_statuses = dict(statuses)
+    repository = CoreRepository()
+    for artifact_type in _ARTIFACT_TYPES:
+        id_key = f'{artifact_type}_artifact_id'
+        if resolved_statuses.get(id_key) is not None:
+            continue
+        status = str(resolved_statuses.get(artifact_type, 'pending')).strip().lower()
+        if status == 'pending':
+            continue
+        result = repository.resolve_artifact_id(
+            application_id=application_id,
+            artifact_type=artifact_type,
+            user_id=user_id,
+        )
+        if result.success and result.data is not None:
+            resolved_statuses[id_key] = result.data
+
+    resolved_application = dict(application)
+    resolved_application['artifact_statuses'] = resolved_statuses
+    return resolved_application
 
 
 def _build_application_from_job(application_id: str, user_id: str, job_record: dict[str, Any]) -> dict[str, Any]:
@@ -215,6 +249,11 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     if job_record is None:
         job_record = _load_job_for_application(application)
 
+    application = _resolve_missing_artifact_ids(
+        application,
+        application_id=application_id,
+        user_id=user_id,
+    )
     payload = _build_recovery_payload(application=application, job_record=job_record)
     return _response(HTTPStatus.OK, payload)
 

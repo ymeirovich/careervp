@@ -17,11 +17,13 @@ from boto3.dynamodb.conditions import Attr, Key
 from pydantic import ValidationError
 
 from careervp.dal import table_registry
+from careervp.dal.core_repository import CoreRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.logic.artifact_dependency_resolver import vpr_access_denied_envelope
 from careervp.logic.cancellation import CancelledBeforePersist
 from careervp.logic.interview_prep import generate_interview_prep
 from careervp.logic.utils.llm_metering import bind_llm_usage_context
@@ -33,6 +35,10 @@ sfn = boto3.client('stepfunctions')
 
 INTERVIEW_PREP_SORT_KEY_PREFIX = table_registry.INTERVIEW_PREP_SORT_KEY_PREFIX
 PRIMARY_KEY_MODE = 'applicationId/artifactId'
+
+
+class _VPRAccessDenied(ValueError):
+    """Terminal owned-upstream refusal; callers must not try another key."""
 
 
 def _convert_decimal_to_float(obj: Any) -> Any:
@@ -477,9 +483,23 @@ def _submit_interview_prep_request(event: dict[str, Any]) -> dict[str, Any]:
     api_request = request_result.data
 
     dal = _get_dal()
+    application_id, vpr_artifact_id, denial_response = _resolve_request_vpr_identity(
+        dal=dal,
+        api_request=api_request,
+        user_id=user_id,
+    )
+    if denial_response is not None:
+        return denial_response
 
     try:
-        generation_result = _generate_interview_prep_result(api_request=api_request, user_id=user_id)
+        generation_result = _generate_interview_prep_result(
+            api_request=api_request,
+            user_id=user_id,
+            application_id=application_id,
+            vpr_artifact_id=vpr_artifact_id,
+        )
+    except _VPRAccessDenied:
+        return _build_response(HTTPStatus.FORBIDDEN, vpr_access_denied_envelope())
     except Exception as gen_exc:
         logger.error(
             'Interview prep generation raised exception',
@@ -683,48 +703,83 @@ def _extract_vpr_differentiators(vpr_payload: dict[str, Any]) -> list[str] | Non
     return differentiators or None
 
 
-def _resolve_vpr_from_jobs_table(vpr_id: str, user_id: str) -> dict[str, Any] | None:
+def _resolve_request_vpr_identity(
+    *,
+    dal: DynamoDalHandler,
+    api_request: InterviewPrepRequest,
+    user_id: str,
+) -> tuple[str | None, str | None, dict[str, Any] | None]:
+    application_id = api_request.application_id or api_request.job_id
+    if not application_id:
+        return None, None, None
+    artifact_id = _resolve_owned_vpr_artifact_id(
+        dal=dal,
+        application_id=application_id,
+        user_id=user_id,
+    )
+    if artifact_id is None:
+        return application_id, None, _build_response(HTTPStatus.FORBIDDEN, vpr_access_denied_envelope())
+    return application_id, artifact_id, None
+
+
+def _resolve_owned_vpr_artifact_id(
+    *,
+    dal: DynamoDalHandler,
+    application_id: str,
+    user_id: str,
+) -> str | None:
+    jobs_repository = JobsRepository()
+    jobs_result = CoreRepository(
+        dal=dal,
+        vpr_jobs_repository=jobs_repository,
+    ).resolve_artifact_id(
+        application_id=application_id,
+        artifact_type='vpr',
+        user_id=user_id,
+    )
+    if jobs_result.success and jobs_result.data is not None:
+        return jobs_result.data
+
+    artifact_result = CoreRepository(dal=dal).resolve_artifact_id(
+        application_id=application_id,
+        artifact_type='vpr',
+        user_id=user_id,
+    )
+    return artifact_result.data if artifact_result.success else None
+
+
+def _resolve_vpr_from_jobs_table(
+    application_id: str,
+    artifact_id: str,
+    user_id: str,
+) -> dict[str, Any] | None:
     table_name = _coerce_text(os.environ.get('VPR_JOBS_TABLE_NAME') or os.environ.get('JOBS_TABLE_NAME'))
     if not table_name:
         return None
 
-    logger.info('Interview prep context VPR jobs lookup start', vpr_id=vpr_id, jobs_table_name=table_name)
-    try:
-        repository = JobsRepository(table_name=table_name)
-        job_record = repository.get_job(vpr_id)
-    except Exception as exc:
-        logger.warning('Interview prep context VPR jobs lookup failed', vpr_id=vpr_id, jobs_table_name=table_name, error=str(exc))
+    logger.info('Interview prep context VPR jobs lookup start', artifact_id=artifact_id, jobs_table_name=table_name)
+    repository = CoreRepository(
+        vpr_jobs_repository=JobsRepository(table_name=table_name),
+    )
+    result = repository.get_vpr_by_artifact_id(
+        application_id=application_id,
+        artifact_id=artifact_id,
+        user_id=user_id,
+    )
+    if result.code == ResultCode.FORBIDDEN:
+        raise _VPRAccessDenied('VPR is not available for this application')
+    if not result.success:
+        logger.warning(
+            'Interview prep context VPR jobs lookup failed',
+            artifact_id=artifact_id,
+            jobs_table_name=table_name,
+            error=result.error,
+        )
         return None
-
-    if not isinstance(job_record, dict):
-        logger.info('Interview prep context VPR jobs lookup empty', vpr_id=vpr_id, jobs_table_name=table_name)
+    if not isinstance(result.data, dict):
+        logger.info('Interview prep context VPR jobs lookup empty', artifact_id=artifact_id, jobs_table_name=table_name)
         return None
-
-    # Ownership check: the job record must belong to the requesting user.
-    record_owner = str(job_record.get('user_id') or '').strip()
-    if record_owner != user_id:
-        logger.warning('VPR job ownership mismatch for interview prep', vpr_id=vpr_id, expected=user_id, actual=record_owner)
-        return None
-
-    logger.info('Interview prep context VPR jobs lookup payload', vpr_id=vpr_id, jobs_table_name=table_name, job_record=job_record)
-    payload = job_record.get('result')
-    if isinstance(payload, dict):
-        merged_payload = dict(payload)
-    else:
-        merged_payload = {}
-
-    merged_payload.setdefault('vpr_id', vpr_id)
-    application_id = _coerce_text(job_record.get('application_id'))
-    if application_id:
-        merged_payload.setdefault('application_id', application_id)
-
-    input_data = job_record.get('input_data')
-    if isinstance(input_data, dict):
-        language = _coerce_text(input_data.get('language'))
-        if language:
-            merged_payload.setdefault('language', language)
-
-    return merged_payload if merged_payload else None
+    return result.data
 
 
 _MAX_QUESTION_COUNT = 15
@@ -735,6 +790,9 @@ def _resolve_interview_prep_context(  # noqa: C901
     dal: Any,
     user_id: str,
     api_request: InterviewPrepRequest,
+    *,
+    application_id: str | None = None,
+    vpr_artifact_id: str | None = None,
 ) -> dict[str, Any]:
     """Resolve architecture-required context inputs server-side (section 3.7).
 
@@ -786,42 +844,36 @@ def _resolve_interview_prep_context(  # noqa: C901
         metrics.add_metric(name='InterviewPrepCVMissing', unit=MetricUnit.Count, value=1)
         logger.warning('CV not found for interview prep context', user_id=user_id)
 
-    # Resolve VPR data (prefer VPR jobs table entry by vpr job id)
-    try:
-        vpr_payload = _resolve_vpr_from_jobs_table(api_request.vpr_id, user_id=user_id)
+    # Resolve VPR only from an owned application-derived artifact id.
+    resolved_application_id = application_id or api_request.application_id or api_request.job_id or ''
+    resolved_artifact_id = vpr_artifact_id or api_request.vpr_id
+    if resolved_artifact_id:
+        vpr_payload = _resolve_vpr_from_jobs_table(
+            application_id=resolved_application_id,
+            artifact_id=resolved_artifact_id,
+            user_id=user_id,
+        )
         if isinstance(vpr_payload, dict):
-            logger.info('Interview prep context VPR payload from jobs table', vpr_id=api_request.vpr_id, vpr_payload=vpr_payload)
             context['vpr_data'] = vpr_payload
-            context['vpr_differentiators'] = _extract_vpr_differentiators(vpr_payload) or []
-            context['language'] = _coerce_text(vpr_payload.get('language')) or context['language']
-            metrics.add_metric(name='InterviewPrepVPRResolved', unit=MetricUnit.Count, value=1)
         else:
-            vpr_result = dal.get_vpr(api_request.vpr_id)
-            if hasattr(vpr_result, 'success') and vpr_result.success and vpr_result.data is not None:
+            vpr_result = CoreRepository(dal=dal).get_vpr_by_artifact_id(
+                application_id=resolved_application_id or resolved_artifact_id,
+                artifact_id=resolved_artifact_id,
+                user_id=user_id,
+            )
+            if vpr_result.code == ResultCode.FORBIDDEN:
+                raise _VPRAccessDenied('VPR is not available for this application')
+            if vpr_result.success and vpr_result.data is not None:
                 vpr = vpr_result.data
-                # Ownership: reject VPRs that belong to a different user.
-                vpr_owner = getattr(vpr, 'user_id', None) or (vpr.get('user_id') if isinstance(vpr, dict) else None)
-                if str(vpr_owner or '').strip() != user_id:
-                    logger.warning('VPR ownership mismatch in DAL fallback for interview prep', vpr_id=api_request.vpr_id, expected=user_id)
-                    metrics.add_metric(name='InterviewPrepVPROwnershipMismatch', unit=MetricUnit.Count, value=1)
-                else:
-                    vpr_dict = vpr.model_dump(mode='json') if hasattr(vpr, 'model_dump') else dict(vpr)
-                    logger.info(
-                        'Interview prep context VPR payload from DAL fallback',
-                        vpr_id=api_request.vpr_id,
-                        table_name=getattr(dal, 'table_name', ''),
-                        vpr_payload=vpr_dict,
-                    )
-                    context['vpr_data'] = vpr_dict
-                    context['vpr_differentiators'] = _extract_vpr_differentiators(vpr_dict) or []
-                    context['language'] = _coerce_text(vpr_dict.get('language')) or context['language']
-                    metrics.add_metric(name='InterviewPrepVPRResolved', unit=MetricUnit.Count, value=1)
-            else:
-                metrics.add_metric(name='InterviewPrepVPRMissing', unit=MetricUnit.Count, value=1)
-                logger.warning('VPR not found for context resolution', vpr_id=api_request.vpr_id)
-    except Exception as exc:
-        metrics.add_metric(name='InterviewPrepVPRResolutionError', unit=MetricUnit.Count, value=1)
-        logger.warning('VPR resolution failed', vpr_id=api_request.vpr_id, error=str(exc))
+                context['vpr_data'] = vpr.model_dump(mode='json') if hasattr(vpr, 'model_dump') else dict(vpr)
+
+    if isinstance(context['vpr_data'], dict):
+        vpr_data = context['vpr_data']
+        context['vpr_differentiators'] = _extract_vpr_differentiators(vpr_data) or []
+        context['language'] = _coerce_text(vpr_data.get('language')) or context['language']
+        metrics.add_metric(name='InterviewPrepVPRResolved', unit=MetricUnit.Count, value=1)
+    else:
+        metrics.add_metric(name='InterviewPrepVPRMissing', unit=MetricUnit.Count, value=1)
 
     if context['vpr_data'] is None:
         raise ValueError(f'Required VPR not found for interview prep: {api_request.vpr_id}')
@@ -911,9 +963,18 @@ def _resolve_interview_prep_context(  # noqa: C901
 def _generate_interview_prep_result(
     api_request: InterviewPrepRequest,
     user_id: str,
+    *,
+    application_id: str | None = None,
+    vpr_artifact_id: str | None = None,
 ) -> Result[Any]:
     dal = _get_dal()
-    ctx = _resolve_interview_prep_context(dal, user_id, api_request)
+    ctx = _resolve_interview_prep_context(
+        dal,
+        user_id,
+        api_request,
+        application_id=application_id,
+        vpr_artifact_id=vpr_artifact_id,
+    )
 
     # Enforce question_count policy: honor explicit lower values, cap at MAX
     question_count = min(max(int(api_request.question_count or _DEFAULT_QUESTION_COUNT), 1), _MAX_QUESTION_COUNT)

@@ -16,6 +16,7 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 from pydantic import ValidationError
 
 from careervp.dal import table_registry
+from careervp.dal.core_repository import CoreRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.artifact_dependency_utils import (
@@ -26,6 +27,10 @@ from careervp.handlers.artifact_dependency_utils import (
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.logic.artifact_dependency_resolver import (
+    DependencyResolution,
+    vpr_access_denied_envelope,
+)
 from careervp.logic.cancellation import CancelledBeforePersist
 from careervp.logic.cover_letter import generate_cover_letter
 from careervp.logic.utils.llm_metering import bind_llm_usage_context
@@ -319,36 +324,42 @@ def _resolve_gap_responses(
 
 def _resolve_vpr_payload(
     dal: DynamoDalHandler,
-    vpr_id: str,
-    job_id: str,
+    application_id: str,
+    artifact_id: str,
     user_id: str,
 ) -> Any:
-    try:
-        vpr_result = dal.get_vpr(vpr_id)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning('VPR lookup failed for cover letter context', vpr_id=vpr_id, error=str(exc))
-        raise ValueError(f'Required VPR not found for cover letter: {vpr_id}') from exc
-
-    if not hasattr(vpr_result, 'success') or not vpr_result.success or vpr_result.data is None:
-        raise ValueError(f'Required VPR not found for cover letter: {vpr_id}')
+    jobs_repository = JobsRepository()
+    vpr_result = CoreRepository(dal=dal, vpr_jobs_repository=jobs_repository).get_vpr_by_artifact_id(
+        application_id=application_id,
+        artifact_id=artifact_id,
+        user_id=user_id,
+    )
+    if vpr_result.success and vpr_result.data is None:
+        vpr_result = CoreRepository(dal=dal).get_vpr_by_artifact_id(
+            application_id=application_id,
+            artifact_id=artifact_id,
+            user_id=user_id,
+        )
+    if not vpr_result.success or vpr_result.data is None:
+        raise ValueError(f'Required VPR not found for cover letter application: {application_id}')
 
     resolved_vpr = vpr_result.data
-    # Ownership: ensure the VPR belongs to the requesting user, not a different user's record.
     vpr_owner = getattr(resolved_vpr, 'user_id', None) if not isinstance(resolved_vpr, dict) else resolved_vpr.get('user_id')
     if str(vpr_owner or '').strip() != user_id:
-        raise ValueError(f'VPR ownership mismatch for cover letter: {vpr_id}')
+        raise ValueError(f'VPR ownership mismatch for cover letter application: {application_id}')
 
     if hasattr(resolved_vpr, 'model_dump'):
         return cast(Any, resolved_vpr)
     if isinstance(resolved_vpr, dict):
         return cast(Any, _ResolvedVPRPayload(resolved_vpr))
-    raise ValueError(f'Required VPR payload has unsupported shape for cover letter: {job_id}')
+    raise ValueError(f'Required VPR payload has unsupported shape for cover letter: {application_id}')
 
 
 def _resolve_cover_letter_context(
     dal: DynamoDalHandler,
     user_id: str,
     api_request: CoverLetterRequest,
+    vpr_artifact_id: str | None = None,
 ) -> dict[str, Any]:
     posting_id = api_request.application_id or api_request.job_id
     job_record = _resolve_job_record(user_id=user_id, job_id=posting_id)
@@ -366,8 +377,8 @@ def _resolve_cover_letter_context(
         ),
         'vpr': _resolve_vpr_payload(
             dal=dal,
-            vpr_id=api_request.vpr_id,
-            job_id=api_request.job_id,
+            application_id=posting_id,
+            artifact_id=vpr_artifact_id or posting_id,
             user_id=user_id,
         ),
         'company_research': _resolve_company_research(
@@ -782,9 +793,32 @@ def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:  # no
     api_request = request_result.data
 
     dal = _get_dal()
-    dependency_response = _resolve_cover_letter_dependency_response(api_request=api_request, user_id=user_id, dal=dal)
+    dependency_resolution, dependency_response = _resolve_cover_letter_dependency_response(
+        api_request=api_request,
+        user_id=user_id,
+        dal=dal,
+    )
     if dependency_response is not None:
         return dependency_response
+    application_id = api_request.application_id or api_request.job_id
+    resolved_vpr_ref = dependency_resolution.resolved_upstream.get('vpr')
+    vpr_artifact_id = resolved_vpr_ref.artifact_id if resolved_vpr_ref is not None else None
+    if resolved_vpr_ref is not None and not vpr_artifact_id:
+        vpr_artifact_id = application_id
+    if not vpr_artifact_id:
+        repository = CoreRepository(dal=dal, vpr_jobs_repository=JobsRepository())
+        resolved_id = repository.resolve_artifact_id(
+            application_id=application_id,
+            artifact_type='vpr',
+            user_id=user_id,
+        )
+        if resolved_id.success:
+            vpr_artifact_id = resolved_id.data
+    if not vpr_artifact_id:
+        job_record = JobsRepository().get_job(application_id)
+        if isinstance(job_record, dict):
+            return _build_response(HTTPStatus.FORBIDDEN, vpr_access_denied_envelope())
+        vpr_artifact_id = application_id
 
     try:
         user_cv = _load_user_cv(dal=dal, user_id=user_id)
@@ -802,6 +836,7 @@ def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:  # no
             user_id=user_id,
             user_cv=user_cv,
             dal=dal,
+            vpr_artifact_id=vpr_artifact_id,
         )
     except Exception as e:
         logger.error('Cover letter generation failed', user_id=user_id, error=str(e), exc_info=True)
@@ -869,7 +904,7 @@ def _resolve_cover_letter_dependency_response(
     api_request: CoverLetterRequest,
     user_id: str,
     dal: DynamoDalHandler,
-) -> dict[str, Any] | None:
+) -> tuple[DependencyResolution, dict[str, Any] | None]:
     application_id = api_request.application_id or api_request.job_id
     dependency_resolution = resolve_handler_dependencies(
         artifact_type='cover_letter',
@@ -878,12 +913,15 @@ def _resolve_cover_letter_dependency_response(
         dal=dal,
     )
     if dependency_resolution.status == 'ready':
-        return None
+        return dependency_resolution, None
     if dependency_resolution.status == 'dependency_generating':
         mark_requested_artifact_pending(application_id=application_id, user_id=user_id, artifact_type='cover_letter')
-    return _build_response(
-        HTTPStatus(dependency_resolution.http_status),
-        dependency_response_body(dependency_resolution, requested_artifact='cover_letter'),
+    return (
+        dependency_resolution,
+        _build_response(
+            HTTPStatus(dependency_resolution.http_status),
+            dependency_response_body(dependency_resolution, requested_artifact='cover_letter'),
+        ),
     )
 
 
@@ -1025,12 +1063,14 @@ def _generate_cover_letter_result(
     user_id: str,
     user_cv: UserCV,
     dal: DynamoDalHandler | None = None,
+    vpr_artifact_id: str | None = None,
 ) -> Result[Any]:
     resolved_dal = dal or _get_dal()
     context = _resolve_cover_letter_context(
         dal=resolved_dal,
         user_id=user_id,
         api_request=api_request,
+        vpr_artifact_id=vpr_artifact_id,
     )
     logic_request = LogicCoverLetterRequest(
         user_id=user_id,
