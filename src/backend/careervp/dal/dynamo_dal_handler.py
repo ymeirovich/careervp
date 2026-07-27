@@ -11,6 +11,7 @@ from botocore.exceptions import ClientError
 from mypy_boto3_dynamodb import DynamoDBServiceResource
 from pydantic import ValidationError
 
+from careervp.dal import table_registry
 from careervp.dal.db_handler import DalHandler
 from careervp.handlers.utils.observability import logger, tracer
 from careervp.models.cv import UserCV
@@ -20,16 +21,17 @@ from careervp.models.job import GapResponse
 from careervp.models.result import Result, ResultCode
 from careervp.models.vpr import VPR
 
-VPR_SORT_KEY_PREFIX = 'ARTIFACT#VPR#v'
+# Key grammar lives in the D-H2 key authority; re-exported here for existing importers.
+VPR_SORT_KEY_PREFIX = table_registry.VPR_SORT_KEY_PREFIX
 USER_VPRS_INDEX = 'user_id-index'
 # Storage per docs/specs/03-vpr-generator.md:14 uses PK=applicationId with ARTIFACT#VPR#v{version} SK.
 
-TAILORED_CV_SORT_KEY_PREFIX = 'ARTIFACT#CV_TAILORED#'
-COVER_LETTER_SORT_KEY_PREFIX = 'ARTIFACT#COVER_LETTER#'
-GAP_ANALYSIS_SORT_KEY_PREFIX = 'ARTIFACT#GAP_ANALYSIS#'
-GAP_RESPONSES_SORT_KEY_PREFIX = 'ARTIFACT#GAP_RESPONSES#'
-COMPANY_RESEARCH_ARTIFACT_PREFIX = 'ARTIFACT#COMPANY_RESEARCH#'
-COMPANY_RESEARCH_KB_PREFIX = 'COMPANY_RESEARCH#'
+TAILORED_CV_SORT_KEY_PREFIX = table_registry.TAILORED_CV_SORT_KEY_PREFIX
+COVER_LETTER_SORT_KEY_PREFIX = table_registry.COVER_LETTER_SORT_KEY_PREFIX
+GAP_ANALYSIS_SORT_KEY_PREFIX = table_registry.GAP_ANALYSIS_SORT_KEY_PREFIX
+GAP_RESPONSES_SORT_KEY_PREFIX = table_registry.GAP_RESPONSES_SORT_KEY_PREFIX
+COMPANY_RESEARCH_ARTIFACT_PREFIX = table_registry.COMPANY_RESEARCH_ARTIFACT_PREFIX
+COMPANY_RESEARCH_KB_PREFIX = table_registry.COMPANY_RESEARCH_KB_PREFIX
 
 
 class DynamoDalHandler(DalHandler):
@@ -99,8 +101,7 @@ class DynamoDalHandler(DalHandler):
             item['userId'] = user_cv.user_id
             item['cvId'] = user_cv.cv_id
             # Legacy aliases retained for backward compatibility in mixed environments.
-            item['pk'] = user_cv.user_id
-            item['sk'] = f'CV#{user_cv.cv_id}'
+            item.update(table_registry.legacy_item_key(user_cv.user_id, table_registry.cv_sort_key(user_cv.cv_id)))
             table.put_item(Item=item)
         except (ClientError, ValidationError) as exc:  # pragma: no cover
             error_msg = 'failed to save CV'
@@ -634,7 +635,13 @@ class DynamoDalHandler(DalHandler):
                     if item:
                         logger.info('cover letter found via legacy key fallback', key_schema='legacy')
                         return Result(success=True, data=item, code=ResultCode.SUCCESS)
-                    return Result(success=True, data=None, code=ResultCode.SUCCESS)
+                    # D-H3: the canonical read failed on key schema and the legacy retry
+                    # missed — surface the mismatch instead of reporting not-found.
+                    return self._dal_failure_result(
+                        operation='read_cover_letter_by_artifact_id',
+                        exc=exc,
+                        key_names=['applicationId', 'artifactId', 'pk', 'sk'],
+                    )
                 except (ClientError, ValidationError) as fallback_exc:
                     return self._dal_failure_result(
                         operation='read_cover_letter_by_artifact_id',
@@ -679,7 +686,16 @@ class DynamoDalHandler(DalHandler):
             if error_code == 'ValidationException':
                 try:
                     items = self._query_cover_letter_items(table, application_id, use_canonical_keys=False)
-                    return self._match_cover_letter_item(items, artifact_id, request_id, allow_sk_match=True)
+                    matched = self._match_cover_letter_item(items, artifact_id, request_id, allow_sk_match=True)
+                    if matched.success and matched.data is None:
+                        # D-H3: schema mismatch on the scan path with a legacy-retry
+                        # miss — surface it, never a false not-found.
+                        return self._dal_failure_result(
+                            operation='_legacy_read_cover_letter_by_scan',
+                            exc=exc,
+                            key_names=['applicationId', 'artifactId', 'pk', 'sk'],
+                        )
+                    return matched
                 except (ClientError, ValidationError) as fallback_exc:
                     return self._dal_failure_result(
                         operation='_legacy_read_cover_letter_by_scan',

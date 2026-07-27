@@ -19,10 +19,11 @@ import botocore.exceptions
 from docx import Document
 from docx.document import Document as DocxDocument
 
+from careervp.dal import table_registry
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger
 
-INTERVIEW_PREP_SORT_KEY_PREFIX = 'ARTIFACT#INTERVIEW_PREP#'
+INTERVIEW_PREP_SORT_KEY_PREFIX = table_registry.INTERVIEW_PREP_SORT_KEY_PREFIX
 VALID_MODULE_TYPES = frozenset({'vpr', 'cover_letter', 'interview_prep', 'cv_tailored'})
 PRESIGNED_URL_TTL = 3600
 
@@ -134,8 +135,8 @@ def _read_vpr(job_id: str) -> dict[str, Any]:
 def _read_cover_letter(job_id: str, user_id: str) -> dict[str, Any]:
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(os.environ['ARTIFACTS_TABLE_NAME'])
-    artifact_key = f'ARTIFACT#COVER_LETTER#{job_id}'
-    response = table.get_item(Key={'applicationId': user_id, 'artifactId': artifact_key})
+    artifact_key = table_registry.cover_letter_artifact_id(job_id)
+    response = table.get_item(Key=table_registry.canonical_item_key(user_id, artifact_key))
     item = response.get('Item')
     if not item:
         raise ArtifactNotFoundError(f'Cover letter artifact not found: {job_id}')
@@ -145,8 +146,8 @@ def _read_cover_letter(job_id: str, user_id: str) -> dict[str, Any]:
 def _read_interview_prep(job_id: str, user_id: str) -> dict[str, Any]:
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(os.environ['ARTIFACTS_TABLE_NAME'])
-    artifact_id = f'{INTERVIEW_PREP_SORT_KEY_PREFIX}{job_id}'
-    response = table.get_item(Key={'applicationId': user_id, 'artifactId': artifact_id})
+    artifact_id = table_registry.interview_prep_artifact_id(job_id)
+    response = table.get_item(Key=table_registry.canonical_item_key(user_id, artifact_id))
     item = response.get('Item')
     if not item:
         raise ArtifactNotFoundError(f'Interview prep artifact not found: {job_id}')
@@ -155,15 +156,14 @@ def _read_interview_prep(job_id: str, user_id: str) -> dict[str, Any]:
 
 def _read_cv_tailored(job_id: str, user_id: str) -> dict[str, Any]:
     from boto3.dynamodb.conditions import Attr
-    from boto3.dynamodb.conditions import Key as DynamoKey
 
     dynamodb = boto3.resource('dynamodb')
-    table_name = os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')
+    table_name = table_registry.resolve_legacy_artifacts_table_name()
     table = dynamodb.Table(table_name)
     # Artifacts are stored with sk=ARTIFACT#CV_TAILORED#{request_id} and job_id as a field.
     # Query all cv_tailored artifacts for this user and filter by job_id to find the right one.
     response = table.query(
-        KeyConditionExpression=DynamoKey('pk').eq(user_id) & DynamoKey('sk').begins_with('ARTIFACT#CV_TAILORED#'),
+        KeyConditionExpression=table_registry.legacy_key_condition(user_id, table_registry.TAILORED_CV_SORT_KEY_PREFIX),
         FilterExpression=Attr('job_id').eq(job_id),
     )
     items: list[dict[str, Any]] = response.get('Items') or []

@@ -66,11 +66,9 @@ class UpstreamMissingError(Exception):
 
 
 def _artifacts_table_name() -> str:
-    for env_key in ('ARTIFACTS_TABLE_NAME', 'DYNAMODB_TABLE_NAME', 'TABLE_NAME'):
-        value = os.environ.get(env_key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return ''
+    from careervp.dal import table_registry
+
+    return table_registry.resolve_artifacts_table_name()
 
 
 def _applications_table_name() -> str:
@@ -454,14 +452,14 @@ def _load_tailored_cv(dal: DynamoDalHandler, user_id: str, application_id: str) 
     application_id lives in the `job_id` ATTRIBUTE (not the sort key). We must
     therefore filter on job_id, not on the sk.
     """
-    from boto3.dynamodb.conditions import Attr, Key
+    from boto3.dynamodb.conditions import Attr
 
-    from careervp.dal.dynamo_dal_handler import TAILORED_CV_SORT_KEY_PREFIX
+    from careervp.dal import table_registry
 
     try:
         table = dal._get_db_handler(dal.table_name)
         response = table.query(
-            KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with(TAILORED_CV_SORT_KEY_PREFIX),
+            KeyConditionExpression=table_registry.legacy_key_condition(user_id, table_registry.TAILORED_CV_SORT_KEY_PREFIX),
             FilterExpression=Attr('job_id').eq(application_id),
         )
         items = response.get('Items', []) if isinstance(response, dict) else []
@@ -495,11 +493,9 @@ def _load_company_research(dal: DynamoDalHandler, user_id: str, application_id: 
 
 
 def _company_research_table_name() -> str:
-    for env_key in ('COMPANY_RESEARCH_TABLE_NAME', 'ARTIFACTS_TABLE_NAME', 'DYNAMODB_TABLE_NAME', 'TABLE_NAME'):
-        value = os.environ.get(env_key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return ''
+    from careervp.dal import table_registry
+
+    return table_registry.resolve_company_research_table_name()
 
 
 def _read_company_research_item(dal: DynamoDalHandler, user_id: str, application_id: str) -> dict[str, Any] | None:

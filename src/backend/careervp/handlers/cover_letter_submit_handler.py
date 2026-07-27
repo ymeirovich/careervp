@@ -23,6 +23,7 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 from botocore.exceptions import ClientError as BotoClientError
 from pydantic import ValidationError
 
+from careervp.dal import table_registry
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.handlers.artifact_dependency_utils import (
     dependency_response_body,
@@ -69,11 +70,7 @@ def _get_sqs_queue_url() -> str:
 
 
 def _get_artifacts_table_name() -> str:
-    for env_key in ('ARTIFACTS_TABLE_NAME', 'DYNAMODB_TABLE_NAME', 'TABLE_NAME'):
-        value = os.environ.get(env_key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    raise RuntimeError('Artifacts table environment variable is not configured')
+    return table_registry.resolve_artifacts_table_name(required=True)
 
 
 @logger.inject_lambda_context(log_event=False)
@@ -156,10 +153,8 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         table = dynamodb_resource.Table(table_name)
         table.put_item(
             Item={
-                'pk': authenticated_user_id,
-                'sk': f'ARTIFACT#COVER_LETTER#{job_id}',
-                'applicationId': authenticated_user_id,
-                'artifactId': f'ARTIFACT#COVER_LETTER#{job_id}',
+                **table_registry.legacy_item_key(authenticated_user_id, table_registry.cover_letter_artifact_id(job_id)),
+                **table_registry.canonical_item_key(authenticated_user_id, table_registry.cover_letter_artifact_id(job_id)),
                 'artifactType': 'cover_letter',
                 'user_id': authenticated_user_id,
                 'job_id': api_request.job_id,
@@ -203,7 +198,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         try:
             table = dynamodb_resource.Table(_get_artifacts_table_name())
             table.update_item(
-                Key={'applicationId': authenticated_user_id, 'artifactId': f'ARTIFACT#COVER_LETTER#{job_id}'},
+                Key=table_registry.canonical_item_key(authenticated_user_id, table_registry.cover_letter_artifact_id(job_id)),
                 UpdateExpression='SET #s = :status, updated_at = :now, #e = :err, error_type = :etype, stage = :stage',
                 ExpressionAttributeNames={'#s': 'status', '#e': 'error'},
                 ExpressionAttributeValues={
@@ -219,7 +214,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             if error_code == 'ValidationException':
                 try:
                     table.update_item(
-                        Key={'pk': authenticated_user_id, 'sk': f'ARTIFACT#COVER_LETTER#{job_id}'},
+                        Key=table_registry.legacy_item_key(authenticated_user_id, table_registry.cover_letter_artifact_id(job_id)),
                         UpdateExpression='SET #s = :status, updated_at = :now, #e = :err, error_type = :etype, stage = :stage',
                         ExpressionAttributeNames={'#s': 'status', '#e': 'error'},
                         ExpressionAttributeValues={

@@ -16,6 +16,7 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 from boto3.dynamodb.conditions import Attr, Key
 from pydantic import ValidationError
 
+from careervp.dal import table_registry
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
@@ -30,7 +31,7 @@ from careervp.models.result import Result, ResultCode
 
 sfn = boto3.client('stepfunctions')
 
-INTERVIEW_PREP_SORT_KEY_PREFIX = 'ARTIFACT#INTERVIEW_PREP#'
+INTERVIEW_PREP_SORT_KEY_PREFIX = table_registry.INTERVIEW_PREP_SORT_KEY_PREFIX
 PRIMARY_KEY_MODE = 'applicationId/artifactId'
 
 
@@ -46,11 +47,7 @@ def _convert_decimal_to_float(obj: Any) -> Any:
 
 
 def _get_artifacts_table_name() -> str:
-    for env_key in ('ARTIFACTS_TABLE_NAME', 'DYNAMODB_TABLE_NAME', 'TABLE_NAME'):
-        value = os.environ.get(env_key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return ''
+    return table_registry.resolve_artifacts_table_name()
 
 
 def _get_dal() -> DynamoDalHandler:
@@ -883,7 +880,7 @@ def _resolve_interview_prep_context(  # noqa: C901
     if job_id:
         try:
             table = dal._get_db_handler(dal.table_name)
-            company_prefix = 'ARTIFACT#COMPANY_RESEARCH#'
+            company_prefix = table_registry.COMPANY_RESEARCH_ARTIFACT_PREFIX
             resp = table.query(
                 KeyConditionExpression=Key('applicationId').eq(user_id) & Key('artifactId').begins_with(company_prefix),
                 FilterExpression=Attr('artifactId').contains(job_id),
@@ -983,10 +980,9 @@ def _persist_interview_prep(dal: DynamoDalHandler, user_id: str, prep_payload: d
     if not prep_id:
         prep_id = f'prep-{datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")}'
     ttl = int((datetime.now(timezone.utc) + timedelta(days=730)).timestamp())
-    artifact_id = f'{INTERVIEW_PREP_SORT_KEY_PREFIX}{prep_id}'
+    artifact_id = table_registry.interview_prep_artifact_id(prep_id)
     item = {
-        'applicationId': user_id,
-        'artifactId': artifact_id,
+        **table_registry.canonical_item_key(user_id, artifact_id),
         'artifactType': 'interview_prep',
         'user_id': user_id,
         'prep_id': prep_id,
@@ -996,8 +992,7 @@ def _persist_interview_prep(dal: DynamoDalHandler, user_id: str, prep_payload: d
         'updated_at': datetime.now(timezone.utc).isoformat(),
         'expiration': ttl,
         # Compatibility mirrors for legacy readers still expecting pk/sk attributes.
-        'pk': user_id,
-        'sk': artifact_id,
+        **table_registry.legacy_item_key(user_id, artifact_id),
     }
     logger.info('Interview prep worker writing interview prep artifact', user_id=user_id, prep_payload=prep_payload, dynamodb_item=item)
     table.put_item(Item=item)
@@ -1043,7 +1038,7 @@ def _get_interview_prep_item(user_id: str, interview_prep_id: str) -> dict[str, 
     # Temporary backward-compatible fallback for legacy records written with pk/sk key schema.
     for artifact_id in candidate_artifact_ids:
         try:
-            legacy_response = table.get_item(Key={'pk': user_id, 'sk': artifact_id})
+            legacy_response = table.get_item(Key=table_registry.legacy_item_key(user_id, artifact_id))
         except Exception:
             legacy_response = {}
         legacy_item = legacy_response.get('Item') if isinstance(legacy_response, dict) else None
@@ -1065,7 +1060,7 @@ def _get_interview_prep_item(user_id: str, interview_prep_id: str) -> dict[str, 
     # Temporary legacy-query fallback while old records exist.
     try:
         legacy_query_response = table.query(
-            KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with(INTERVIEW_PREP_SORT_KEY_PREFIX),
+            KeyConditionExpression=table_registry.legacy_key_condition(user_id, INTERVIEW_PREP_SORT_KEY_PREFIX),
             FilterExpression=Attr('sk').contains(interview_prep_id),
             Limit=1,
         )
@@ -1194,7 +1189,7 @@ def _handle_interview_prep_cancel(event: dict[str, Any], user_id: str) -> dict[s
 
     table_name = _get_artifacts_table_name()
     table = _boto3.resource('dynamodb').Table(table_name)
-    artifact_id = f'ARTIFACT#INTERVIEW_PREP#{interview_prep_id}'
+    artifact_id = table_registry.interview_prep_artifact_id(interview_prep_id)
 
     try:
         get_resp = table.get_item(Key={'applicationId': user_id, 'artifactId': artifact_id})
@@ -1209,7 +1204,7 @@ def _handle_interview_prep_cancel(event: dict[str, Any], user_id: str) -> dict[s
                 KeyConditionExpression='applicationId = :uid AND begins_with(artifactId, :prefix)',
                 ExpressionAttributeValues={
                     ':uid': user_id,
-                    ':prefix': f'ARTIFACT#INTERVIEW_PREP#{interview_prep_id}',
+                    ':prefix': table_registry.interview_prep_artifact_id(interview_prep_id),
                 },
                 Limit=1,
             )
@@ -1356,12 +1351,12 @@ def _write_interview_prep_payload(
     table = _boto3.resource('dynamodb').Table(table_name)
 
     if 'applicationId' in item:
-        key: dict[str, Any] = {'applicationId': item['applicationId'], 'artifactId': item['artifactId']}
+        key: dict[str, Any] = table_registry.canonical_item_key(item['applicationId'], item['artifactId'])
     else:
-        key = {
-            'pk': item.get('pk', user_id),
-            'sk': item.get('sk', _normalize_interview_prep_artifact_id(interview_prep_id)),
-        }
+        key = table_registry.legacy_item_key(
+            item.get('pk', user_id),
+            item.get('sk', _normalize_interview_prep_artifact_id(interview_prep_id)),
+        )
 
     try:
         table.update_item(

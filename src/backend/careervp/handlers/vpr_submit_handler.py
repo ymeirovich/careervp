@@ -27,6 +27,7 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 from botocore.exceptions import ClientError as BotoClientError
 from pydantic import ValidationError
 
+from careervp.dal import table_registry
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.artifact_dependency_utils import (
@@ -351,7 +352,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             artifact_type='vpr',
             application_id=application_id,
             user_id=str(normalized_request['user_id']),
-            dal=DynamoDalHandler(os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')),
+            dal=DynamoDalHandler(table_registry.resolve_legacy_artifacts_table_name()),
         )
         if dependency_resolution.status != 'ready':
             if dependency_resolution.status == 'dependency_generating':

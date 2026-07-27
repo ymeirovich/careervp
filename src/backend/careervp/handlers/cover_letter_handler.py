@@ -15,6 +15,7 @@ from aws_lambda_powertools.metrics import MetricUnit
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from pydantic import ValidationError
 
+from careervp.dal import table_registry
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.artifact_dependency_utils import (
@@ -54,16 +55,7 @@ def _convert_decimal_to_float(obj: Any) -> Any:
 
 
 def _get_dal() -> DynamoDalHandler:
-    table_name = os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME') or ''
-    resolved_from = (
-        'ARTIFACTS_TABLE_NAME'
-        if os.environ.get('ARTIFACTS_TABLE_NAME')
-        else 'DYNAMODB_TABLE_NAME'
-        if os.environ.get('DYNAMODB_TABLE_NAME')
-        else 'TABLE_NAME'
-        if os.environ.get('TABLE_NAME')
-        else 'none'
-    )
+    table_name, resolved_from = table_registry.resolve_artifacts_table_name_with_source()
     logger.debug('Cover letter DAL table resolved', table_name=table_name, resolved_from=resolved_from)
     return DynamoDalHandler(table_name)
 
@@ -656,7 +648,7 @@ def _update_artifact_status(  # noqa: C901
 
     import boto3 as _boto3
 
-    table_name = os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME') or ''
+    table_name = table_registry.resolve_artifacts_table_name()
     table = _boto3.resource('dynamodb').Table(table_name)
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
 
@@ -688,9 +680,9 @@ def _update_artifact_status(  # noqa: C901
         condition = 'attribute_not_exists(#s) OR #s <> :cancelled'
         attr_values[':cancelled'] = 'CANCELLED'
 
-    artifact_id = f'ARTIFACT#COVER_LETTER#{job_id}'
+    artifact_id = table_registry.cover_letter_artifact_id(job_id)
     primary_kwargs: dict[str, Any] = {
-        'Key': {'applicationId': user_id, 'artifactId': artifact_id},
+        'Key': table_registry.canonical_item_key(user_id, artifact_id),
         'UpdateExpression': update_expr,
         'ExpressionAttributeNames': attr_names,
         'ExpressionAttributeValues': attr_values,
@@ -707,7 +699,7 @@ def _update_artifact_status(  # noqa: C901
             raise CancelledBeforePersist(job_id) from exc
         if error_code == 'ValidationException':
             fallback_kwargs: dict[str, Any] = {
-                'Key': {'pk': user_id, 'sk': artifact_id},
+                'Key': table_registry.legacy_item_key(user_id, artifact_id),
                 'UpdateExpression': update_expr,
                 'ExpressionAttributeNames': attr_names,
                 'ExpressionAttributeValues': attr_values,
@@ -1126,7 +1118,7 @@ def _find_cover_letter_item(user_id: str, cover_letter_id: str) -> dict[str, Any
     dal = _get_dal()
 
     # Canonical read: construct the expected artifactId
-    artifact_id = f'ARTIFACT#COVER_LETTER#{cover_letter_id}'
+    artifact_id = table_registry.cover_letter_artifact_id(cover_letter_id)
     canonical_result = dal.read_cover_letter_by_artifact_id(
         application_id=user_id,
         artifact_id=artifact_id,
@@ -1170,7 +1162,7 @@ def _matches_cover_letter_id(item: dict[str, Any], cover_letter_id: str) -> bool
     artifact_id_attr = str(item.get('artifactId', '')).strip()
     if artifact_id_attr == cover_letter_id:
         return True
-    if artifact_id_attr == f'ARTIFACT#COVER_LETTER#{cover_letter_id}':
+    if artifact_id_attr == table_registry.cover_letter_artifact_id(cover_letter_id):
         return True
 
     nested_payload = item.get('cover_letter')
@@ -1378,9 +1370,9 @@ def _handle_cover_letter_cancel(event: dict[str, Any], user_id: str) -> dict[str
     if not cover_letter_id:
         return _build_response(HTTPStatus.BAD_REQUEST, {'error': 'Missing coverLetterId'})
 
-    table_name = os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME') or ''
+    table_name = table_registry.resolve_artifacts_table_name()
     table = _boto3.resource('dynamodb').Table(table_name)
-    artifact_id = f'ARTIFACT#COVER_LETTER#{cover_letter_id}'
+    artifact_id = table_registry.cover_letter_artifact_id(cover_letter_id)
 
     try:
         get_resp = table.get_item(Key={'applicationId': user_id, 'artifactId': artifact_id})
@@ -1395,7 +1387,7 @@ def _handle_cover_letter_cancel(event: dict[str, Any], user_id: str) -> dict[str
                 KeyConditionExpression='applicationId = :uid AND begins_with(artifactId, :prefix)',
                 ExpressionAttributeValues={
                     ':uid': user_id,
-                    ':prefix': f'ARTIFACT#COVER_LETTER#{cover_letter_id}',
+                    ':prefix': table_registry.cover_letter_artifact_id(cover_letter_id),
                 },
                 Limit=1,
             )
@@ -1455,14 +1447,17 @@ def _patch_cover_letter(event: dict[str, Any]) -> dict[str, Any]:
 
     import boto3 as _boto3
 
-    table_name = os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME') or ''
+    table_name = table_registry.resolve_artifacts_table_name()
     table = _boto3.resource('dynamodb').Table(table_name)
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
 
     if 'applicationId' in item:
-        key: dict[str, Any] = {'applicationId': item['applicationId'], 'artifactId': item['artifactId']}
+        key: dict[str, Any] = table_registry.canonical_item_key(item['applicationId'], item['artifactId'])
     else:
-        key = {'pk': item.get('pk', user_id), 'sk': item.get('sk', f'ARTIFACT#COVER_LETTER#{cover_letter_id}')}
+        key = table_registry.legacy_item_key(
+            item.get('pk', user_id),
+            item.get('sk', table_registry.cover_letter_artifact_id(cover_letter_id)),
+        )
 
     existing_cl = item.get('cover_letter') or {}
     updated_cl: dict[str, Any] = {**existing_cl, 'full_text': new_text} if isinstance(existing_cl, dict) else {'full_text': new_text}

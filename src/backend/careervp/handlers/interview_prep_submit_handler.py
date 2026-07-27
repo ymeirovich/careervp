@@ -23,6 +23,7 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 from botocore.exceptions import ClientError as BotoClientError
 from pydantic import ValidationError
 
+from careervp.dal import table_registry
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.handlers.artifact_dependency_utils import (
     dependency_response_body,
@@ -69,11 +70,7 @@ def _get_sqs_queue_url() -> str:
 
 
 def _get_artifacts_table_name() -> str:
-    for env_key in ('ARTIFACTS_TABLE_NAME', 'DYNAMODB_TABLE_NAME', 'TABLE_NAME'):
-        value = os.environ.get(env_key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    raise RuntimeError('Artifacts table environment variable is not configured')
+    return table_registry.resolve_artifacts_table_name(required=True)
 
 
 @logger.inject_lambda_context(log_event=False)
@@ -161,7 +158,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         }
 
     job_id = str(uuid.uuid4())
-    artifact_id = f'ARTIFACT#INTERVIEW_PREP#{job_id}'
+    artifact_id = table_registry.interview_prep_artifact_id(job_id)
     now = datetime.datetime.now(datetime.timezone.utc)
     created_at = now.isoformat()
 
@@ -172,10 +169,8 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     try:
         table = dynamodb_resource.Table(table_name)
         artifact_item = {
-            'pk': authenticated_user_id,
-            'sk': artifact_id,
-            'applicationId': authenticated_user_id,
-            'artifactId': artifact_id,
+            **table_registry.legacy_item_key(authenticated_user_id, artifact_id),
+            **table_registry.canonical_item_key(authenticated_user_id, artifact_id),
             'artifactType': 'interview_prep',
             'user_id': authenticated_user_id,
             'job_id': job_id,

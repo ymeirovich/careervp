@@ -10,9 +10,10 @@ from decimal import Decimal
 from http import HTTPStatus
 from typing import Any
 
-from boto3.dynamodb.conditions import Attr, Key
+from boto3.dynamodb.conditions import Attr
 from pydantic import ValidationError
 
+from careervp.dal import table_registry
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.artifact_dependency_utils import (
@@ -343,7 +344,7 @@ def _handle_openapi_async_generate(  # noqa: C901
             headers,
         )
 
-    table_name = os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')
+    table_name = table_registry.resolve_legacy_artifacts_table_name()
     dal = DynamoDalHandler(table_name)
     dependency_resolution = resolve_handler_dependencies(
         artifact_type='cv_tailored',
@@ -465,7 +466,7 @@ def _handle_openapi_async_generate(  # noqa: C901
     # ── 5. Build artifact ─────────────────────────────────────────────────────
     request_id = f'cv-tail-{uuid.uuid4()}'
     now_iso = datetime.now(timezone.utc).isoformat()
-    artifact_sk = f'ARTIFACT#CV_TAILORED#{request_id}'
+    artifact_sk = table_registry.tailored_cv_artifact_id(request_id)
     ttl = int((datetime.now(timezone.utc) + timedelta(days=730)).timestamp())
 
     if pipeline_result.success and pipeline_result.data is not None:
@@ -488,8 +489,7 @@ def _handle_openapi_async_generate(  # noqa: C901
         }
 
         artifact: dict[str, Any] = {
-            'pk': user_id,
-            'sk': artifact_sk,
+            **table_registry.legacy_item_key(user_id, artifact_sk),
             'request_id': request_id,
             'entity_type': 'CV_TAILORING',
             'artifact_type': 'cv_tailored',
@@ -523,8 +523,7 @@ def _handle_openapi_async_generate(  # noqa: C901
         error_msg = (pipeline_result.error if pipeline_result else None) or 'Pipeline execution failed'
         logger.error('CV tailoring pipeline failed', job_id=job_id, error=error_msg)
         artifact = {
-            'pk': user_id,
-            'sk': artifact_sk,
+            **table_registry.legacy_item_key(user_id, artifact_sk),
             'request_id': request_id,
             'entity_type': 'CV_TAILORING',
             'artifact_type': 'cv_tailored',
@@ -731,7 +730,7 @@ def delete_tailored_cv(event: dict[str, Any]) -> dict[str, Any]:
         user_id=user_id,
         cv_tailoring_id=cv_tailoring_id,
     )
-    dal = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))
+    dal = DynamoDalHandler(table_registry.resolve_legacy_artifacts_table_name())
     delete_result = dal.delete_tailored_cv(user_id=user_id, cv_tailoring_id=cv_tailoring_id)
     logger.info(
         'cv_tailoring delete dal result',
@@ -802,7 +801,7 @@ def delete_tailored_cv(event: dict[str, Any]) -> dict[str, Any]:
 
 def _fetch_and_tailor_cv(request: TailorCVRequest) -> Result[Any]:
     """Fetch CV from DAL and invoke tailoring logic."""
-    dal = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))
+    dal = DynamoDalHandler(table_registry.resolve_legacy_artifacts_table_name())
     llm_client = LLMClient()
 
     if not request.user_id:
@@ -857,12 +856,12 @@ def _handle_cv_tailoring_cancel(
     if not cv_tailoring_id:
         return _response(HTTPStatus.BAD_REQUEST, {'error': 'Missing cvTailoringId'}, headers)
 
-    table_name = os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')
+    table_name = table_registry.resolve_legacy_artifacts_table_name()
     table = _boto3.resource('dynamodb').Table(table_name)
-    sk = f'ARTIFACT#CV_TAILORED#{cv_tailoring_id}'
+    sk = table_registry.tailored_cv_artifact_id(cv_tailoring_id)
 
     try:
-        get_resp = table.get_item(Key={'pk': user_id, 'sk': sk})
+        get_resp = table.get_item(Key=table_registry.legacy_item_key(user_id, sk))
         item = (get_resp or {}).get('Item')
     except Exception as exc:
         logger.error('DynamoDB error during cv tailoring cancel', error=str(exc))
@@ -874,7 +873,7 @@ def _handle_cv_tailoring_cancel(
                 KeyConditionExpression='pk = :uid AND begins_with(sk, :prefix)',
                 ExpressionAttributeValues={
                     ':uid': user_id,
-                    ':prefix': f'ARTIFACT#CV_TAILORED#{cv_tailoring_id}',
+                    ':prefix': table_registry.tailored_cv_artifact_id(cv_tailoring_id),
                 },
                 Limit=1,
             )
@@ -892,7 +891,7 @@ def _handle_cv_tailoring_cancel(
     item_pk = str(item.get('pk', user_id))
     item_sk = str(item.get('sk', sk))
     table.update_item(
-        Key={'pk': item_pk, 'sk': item_sk},
+        Key=table_registry.legacy_item_key(item_pk, item_sk),
         UpdateExpression='SET #s = :status',
         ExpressionAttributeNames={'#s': 'status'},
         ExpressionAttributeValues={':status': 'CANCELLED'},
@@ -945,10 +944,10 @@ def _patch_cv_tailored(event: dict[str, Any], user_id: str, headers: dict[str, s
 
     import boto3 as _boto3
 
-    table_name = os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')
+    table_name = table_registry.resolve_legacy_artifacts_table_name()
     table = _boto3.resource('dynamodb').Table(table_name)
     pk = str(item.get('pk', user_id))
-    sk = str(item.get('sk', f'ARTIFACT#CV_TAILORED#{cv_tailoring_id}'))
+    sk = str(item.get('sk', table_registry.tailored_cv_artifact_id(cv_tailoring_id)))
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
 
     update_parts: list[str] = ['updated_at = :now']
@@ -962,7 +961,7 @@ def _patch_cv_tailored(event: dict[str, Any], user_id: str, headers: dict[str, s
 
     try:
         table.update_item(
-            Key={'pk': pk, 'sk': sk},
+            Key=table_registry.legacy_item_key(pk, sk),
             UpdateExpression='SET ' + ', '.join(update_parts),
             ExpressionAttributeValues=attr_values,
         )
@@ -1000,13 +999,12 @@ def _extract_cv_tailoring_id(event: dict[str, Any]) -> str | None:
 
 
 def _get_tailored_cv_item(user_id: str, cv_tailoring_id: str) -> dict[str, Any] | None:
-    table = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))._get_db_handler(
-        (os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', ''))
-    )
+    legacy_table_name = table_registry.resolve_legacy_artifacts_table_name()
+    table = DynamoDalHandler(legacy_table_name)._get_db_handler(legacy_table_name)
 
     # Try direct get_item first
     try:
-        key_response = table.get_item(Key={'pk': user_id, 'sk': cv_tailoring_id})
+        key_response = table.get_item(Key=table_registry.legacy_item_key(user_id, cv_tailoring_id))
         item = key_response.get('Item') if isinstance(key_response, dict) else None
         if isinstance(item, dict):
             return item
@@ -1014,7 +1012,7 @@ def _get_tailored_cv_item(user_id: str, cv_tailoring_id: str) -> dict[str, Any] 
         pass
 
     try:
-        prefixed_response = table.get_item(Key={'pk': user_id, 'sk': f'ARTIFACT#CV_TAILORED#{cv_tailoring_id}'})
+        prefixed_response = table.get_item(Key=table_registry.legacy_item_key(user_id, table_registry.tailored_cv_artifact_id(cv_tailoring_id)))
         prefixed_item = prefixed_response.get('Item') if isinstance(prefixed_response, dict) else None
         if isinstance(prefixed_item, dict):
             return prefixed_item
@@ -1023,7 +1021,7 @@ def _get_tailored_cv_item(user_id: str, cv_tailoring_id: str) -> dict[str, Any] 
 
     try:
         query_response = table.query(
-            KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with('ARTIFACT#CV_TAILORED#'),
+            KeyConditionExpression=table_registry.legacy_key_condition(user_id, table_registry.TAILORED_CV_SORT_KEY_PREFIX),
             FilterExpression=Attr('request_id').eq(cv_tailoring_id),
             Limit=1,
         )
@@ -1037,7 +1035,7 @@ def _get_tailored_cv_item(user_id: str, cv_tailoring_id: str) -> dict[str, Any] 
 
 
 def _list_tailored_cv_items(user_id: str) -> list[dict[str, Any]]:
-    dal = DynamoDalHandler((os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')))
+    dal = DynamoDalHandler(table_registry.resolve_legacy_artifacts_table_name())
     result = dal.list_tailored_cvs(user_id)
     if not result.success or not isinstance(result.data, list):
         return []

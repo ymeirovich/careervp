@@ -10,12 +10,13 @@ from typing import Any
 import boto3  # type: ignore[import-untyped]
 from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 
+from careervp.dal import table_registry
 from careervp.handlers.utils.observability import logger
 from careervp.models.company import CompanyResearchResult
 
 COMPANY_RESEARCH_ARTIFACT_TYPE = 'company_research'
-COMPANY_RESEARCH_ARTIFACT_PREFIX = 'ARTIFACT#COMPANY_RESEARCH#'
-LEGACY_COMPANY_RESEARCH_PREFIX = 'COMPANY_RESEARCH#'
+COMPANY_RESEARCH_ARTIFACT_PREFIX = table_registry.COMPANY_RESEARCH_ARTIFACT_PREFIX
+LEGACY_COMPANY_RESEARCH_PREFIX = table_registry.COMPANY_RESEARCH_KB_PREFIX
 
 # FE-UI-053: terminal statuses whose rows write_cr_processing must never clobber.
 _TERMINAL_CR_STATUSES = {'completed', 'failed'}
@@ -24,10 +25,10 @@ _TERMINAL_CR_STATUSES = {'completed', 'failed'}
 def cr_artifact_key(application_id: str) -> dict[str, str]:
     """Build the canonical artifacts-table key for a Company Research artifact."""
     clean_application_id = application_id.strip()
-    return {
-        'applicationId': clean_application_id,
-        'artifactId': f'{COMPANY_RESEARCH_ARTIFACT_PREFIX}{clean_application_id}',
-    }
+    return table_registry.canonical_item_key(
+        clean_application_id,
+        table_registry.company_research_artifact_sk(clean_application_id),
+    )
 
 
 def write_cr_artifact(application_id: str, user_id: str, result: CompanyResearchResult) -> None:
@@ -244,11 +245,7 @@ def _read_legacy_artifact(application_id: str, user_id: str) -> dict[str, Any] |
     if table_name is None:
         return None
 
-    for key in (
-        {'pk': user_id, 'sk': f'{COMPANY_RESEARCH_ARTIFACT_PREFIX}{application_id}'},
-        {'pk': user_id, 'sk': f'{LEGACY_COMPANY_RESEARCH_PREFIX}{application_id}'},
-        {'pk': f'USER#{user_id}', 'sk': f'{LEGACY_COMPANY_RESEARCH_PREFIX}{application_id}'},
-    ):
+    for key in table_registry.company_research_candidate_keys(user_id, application_id):
         try:
             response = _table(table_name).get_item(Key=key)
         except ClientError as exc:

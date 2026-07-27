@@ -20,9 +20,9 @@ import boto3
 from aws_lambda_powertools.event_handler import Response, content_types
 from aws_lambda_powertools.logging.correlation_paths import API_GATEWAY_REST
 from aws_lambda_powertools.utilities.typing import LambdaContext
-from boto3.dynamodb.conditions import Key
 from pydantic import ValidationError
 
+from careervp.dal import table_registry
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.user_repository import UserRepository
 from careervp.handlers.auth_utils import extract_user_id
@@ -135,7 +135,7 @@ def _list_user_cvs(user_id: str, limit: int, cursor: dict[str, Any] | None) -> t
     table = boto3.resource('dynamodb').Table(table_name)
     # Query using pk=user_id and sk begins_with 'CV#' (same schema as DynamoDalHandler.save_cv)
     query_args: dict[str, Any] = {
-        'KeyConditionExpression': Key('pk').eq(user_id) & Key('sk').begins_with('CV#'),
+        'KeyConditionExpression': table_registry.legacy_key_condition(user_id, table_registry.CV_SORT_KEY_PREFIX),
         'Limit': limit,
     }
     if cursor:

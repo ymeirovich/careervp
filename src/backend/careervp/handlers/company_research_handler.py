@@ -14,10 +14,11 @@ from typing import Any
 import boto3
 from aws_lambda_powertools.metrics import MetricUnit
 from aws_lambda_powertools.utilities.typing import LambdaContext
-from boto3.dynamodb.conditions import Attr, Key
+from boto3.dynamodb.conditions import Attr
 from botocore.exceptions import ClientError
 from pydantic import ValidationError
 
+from careervp.dal import table_registry
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
@@ -26,8 +27,8 @@ from careervp.logic.company_research_store import read_cr_artifact, write_cr_pro
 from careervp.models.company import CompanyResearchRequest
 from careervp.models.result import Result, ResultCode
 
-COMPANY_RESEARCH_ARTIFACT_PREFIX = 'ARTIFACT#COMPANY_RESEARCH#'
-COMPANY_RESEARCH_KB_PREFIX = 'COMPANY_RESEARCH#'
+COMPANY_RESEARCH_ARTIFACT_PREFIX = table_registry.COMPANY_RESEARCH_ARTIFACT_PREFIX
+COMPANY_RESEARCH_KB_PREFIX = table_registry.COMPANY_RESEARCH_KB_PREFIX
 
 # FE-UI-041: single confidence threshold shared with the worker persist gate (FE-UI-030).
 _DEFAULT_CR_CONFIDENCE_THRESHOLD = 0.85
@@ -264,7 +265,7 @@ def get_company_research(event: dict[str, Any]) -> dict[str, Any]:
     if item is not None:
         item_pk = str(item.get('pk', ''))
         item_uid = str(item.get('user_id', ''))
-        if item_pk not in (user_id, f'USER#{user_id}') and item_uid != user_id:
+        if item_pk not in table_registry.user_partition_candidates(user_id) and item_uid != user_id:
             logger.error(
                 'CR ownership mismatch — item does not match authenticated user',
                 job_id=job_id,
@@ -400,22 +401,13 @@ def _get_company_research_item(user_id: str, job_id: str) -> dict[str, Any] | No
 
 
 def _resolve_table_candidates() -> list[str]:
-    candidates: list[str] = []
-    for env_key in ('DYNAMODB_TABLE_NAME', 'TABLE_NAME'):
-        value = os.getenv(env_key)
-        if isinstance(value, str) and value.strip() and value.strip() not in candidates:
-            candidates.append(value.strip())
-    return candidates
+    return table_registry.legacy_artifacts_table_candidates()
 
 
 def _get_item_from_table(table_name: str, user_id: str, job_id: str) -> dict[str, Any] | None:
     table = boto3.resource('dynamodb').Table(table_name)
 
-    candidate_keys = [
-        {'pk': user_id, 'sk': f'{COMPANY_RESEARCH_ARTIFACT_PREFIX}{job_id}'},
-        {'pk': user_id, 'sk': f'{COMPANY_RESEARCH_KB_PREFIX}{job_id}'},
-        {'pk': f'USER#{user_id}', 'sk': f'{COMPANY_RESEARCH_KB_PREFIX}{job_id}'},
-    ]
+    candidate_keys = table_registry.company_research_candidate_keys(user_id, job_id)
 
     for key in candidate_keys:
         try:
@@ -427,16 +419,12 @@ def _get_item_from_table(table_name: str, user_id: str, job_id: str) -> dict[str
         if isinstance(item, dict):
             return item
 
-    query_candidates = [
-        (user_id, COMPANY_RESEARCH_ARTIFACT_PREFIX),
-        (user_id, COMPANY_RESEARCH_KB_PREFIX),
-        (f'USER#{user_id}', COMPANY_RESEARCH_KB_PREFIX),
-    ]
+    query_candidates = table_registry.company_research_query_candidates(user_id)
 
     for partition_key, prefix in query_candidates:
         try:
             query_response = table.query(
-                KeyConditionExpression=Key('pk').eq(partition_key) & Key('sk').begins_with(prefix),
+                KeyConditionExpression=table_registry.legacy_key_condition(partition_key, prefix),
                 FilterExpression=Attr('sk').contains(job_id),
                 Limit=1,
             )
