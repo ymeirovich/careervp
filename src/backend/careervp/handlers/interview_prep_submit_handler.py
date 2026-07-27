@@ -132,16 +132,11 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             validation_errors=[{'code': ResultCode.INVALID_JSON, 'field': 'body', 'message': str(exc)}],
         )
 
-    try:
-        table_name = _get_artifacts_table_name()
-    except RuntimeError:
-        logger.exception('Artifacts table configuration error')
-        metrics.add_metric(name='MissingEnvError', unit='Count', value=1)
-        return _build_error_response(
-            'Internal server error', HTTPStatus.INTERNAL_SERVER_ERROR, code=ResultCode.MISSING_ENV, request_id=_get_request_id(event, context)
-        )
+    resolved = _resolve_submit_preconditions(api_request, event, context)
+    if isinstance(resolved, dict):
+        return resolved
+    table_name, application_id = resolved
 
-    application_id = api_request.application_id or api_request.job_id or api_request.vpr_id
     dependency_resolution = resolve_handler_dependencies(
         artifact_type='interview_prep',
         application_id=application_id,
@@ -267,6 +262,44 @@ def _parse_body(event: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ValueError('Request body must be a JSON object.')
     return parsed
+
+
+def _resolve_submit_preconditions(
+    api_request: InterviewPrepRequest,
+    event: dict[str, Any],
+    context: LambdaContext,
+) -> tuple[str, str] | dict[str, Any]:
+    """Resolve `(artifacts_table_name, application_id)`, or return an error response.
+
+    Both preconditions live here so `lambda_handler` spends one decision point on
+    them instead of two — it is already at the C901 complexity ceiling.
+    """
+    try:
+        table_name = _get_artifacts_table_name()
+    except RuntimeError:
+        logger.exception('Artifacts table configuration error')
+        metrics.add_metric(name='MissingEnvError', unit='Count', value=1)
+        return _build_error_response(
+            'Internal server error', HTTPStatus.INTERNAL_SERVER_ERROR, code=ResultCode.MISSING_ENV, request_id=_get_request_id(event, context)
+        )
+
+    # v3.0.0 / scope-lock A1 (P-01): ONE canonical application key. A client-supplied
+    # vpr_id may never stand in for it — that is legacy-id resolution, which O-3 forbids.
+    # Refuse BEFORE dependency resolution so an identity-less request performs no
+    # resolver read and no mark_requested_artifact_pending write into the canonical hub.
+    application_id = api_request.application_id or api_request.job_id
+    if not application_id:
+        logger.warning('Interview prep submit rejected: no application identity')
+        metrics.add_metric(name='MissingApplicationIdentity', unit='Count', value=1)
+        # request_id is deliberately NOT passed here: AC-P01-1 pins this exact
+        # three-key envelope. Adding it would break the pinned contract.
+        return _build_error_response(
+            'application_id/job_id is required',
+            HTTPStatus.BAD_REQUEST,
+            code=ResultCode.MISSING_REQUIRED_FIELD,
+        )
+
+    return table_name, application_id
 
 
 def _build_error_response(

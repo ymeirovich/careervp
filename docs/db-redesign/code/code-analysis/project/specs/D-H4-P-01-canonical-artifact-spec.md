@@ -87,12 +87,23 @@ human-approved before landing; neither pinned RED test was modified.
   (v3.0.0) and the fixture now sends `application_id`. The rejected alternative was
   branching on Pydantic `model_fields_set`, which would preserve the fallback behind a
   present-versus-absent check and reintroduce compatibility machinery under a new name.
-- `tests/unit/test_async_submit_handlers.py::test_interview_prep_submit_handler_marks_failed_with_artifacts_keys_on_sqs_error`
-  — **a second affected test the §0.3 proposal did not inventory**, found while landing A1.
-  Same payload shape and same root cause as the row above, so it falls inside the same
-  approved reconciliation rather than needing its own; recorded here because the
-  proposal's affected-tests list was incomplete and a reader must not conclude only one
-  fixture moved. Fixture now sends `application_id`.
+- **The §0.3 proposal inventoried ONE affected test; the real count is eight.** The
+  other seven were found only by running the full suite while landing A1. All seven are
+  the same class — fixtures that omitted `application_id` and silently relied on the
+  `vpr_id` application-key fallback — so they fall inside the same approved
+  reconciliation rather than needing their own. Recorded in full here so no reader
+  concludes a single fixture moved, and so the incompleteness of the proposal's
+  inventory is itself on the record:
+  - `tests/unit/test_async_submit_handlers.py::test_interview_prep_submit_handler_marks_failed_with_artifacts_keys_on_sqs_error` (1)
+  - `tests/integration/test_interview_prep_roundtrip.py` — five tests fed by the shared
+    `_valid_request_body()` helper: `test_submit_returns_202_with_request_id`,
+    `test_submit_writes_pending_artifact_with_artifacts_schema`,
+    `test_status_readable_immediately_after_submit`,
+    `test_request_id_suffix_matches_artifact_id_format`, `test_cross_user_status_returns_404` (5)
+  - plus the one the proposal did name (1) and its sibling above = 8 total.
+  Each fixture now sends `application_id`. No assertion was weakened: the
+  `applicationId` key in that table is derived from `user_id`, not from the request's
+  application id, so adding the field disturbs no stored-key assertion.
   `test_interview_prep_submit_handler_returns_structured_validation_errors` needs no
   change: its payload already fails Pydantic parsing on `gap_response_ids`, which is
   raised before the new handler-level identity guard is reached.

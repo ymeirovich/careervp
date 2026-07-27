@@ -115,6 +115,9 @@ def _context() -> Any:
 
 def _valid_request_body() -> dict[str, Any]:
     return {
+        # v3.0.0 (scope-lock A1): application_id is required; vpr_id is no longer
+        # accepted as a stand-in application key.
+        'application_id': 'app-integration-001',
         'vpr_id': 'vpr-integration-001',
         'gap_response_ids': ['gap-001'],
         'focus_areas': ['technical', 'behavioral'],

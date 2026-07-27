@@ -1604,7 +1604,7 @@
     "run_id": "l0-phase-vpr-001",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-1\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
+    "response_excerpt": "{\"application_id\": \"app-1\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
     "environment": "local-integration-test"
   },
   {
@@ -1612,7 +1612,7 @@
     "run_id": "l0-phase-vpr-002",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-2\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
+    "response_excerpt": "{\"application_id\": \"app-2\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
     "environment": "local-integration-test"
   },
   {
@@ -1620,7 +1620,7 @@
     "run_id": "l0-phase-vpr-003",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-3\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
+    "response_excerpt": "{\"application_id\": \"app-3\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
     "environment": "local-integration-test"
   },
   {
@@ -1628,7 +1628,7 @@
     "run_id": "l0-phase-vpr-004",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-4\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
+    "response_excerpt": "{\"application_id\": \"app-4\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
     "environment": "local-integration-test"
   },
   {
@@ -1636,7 +1636,7 @@
     "run_id": "l0-phase-vpr-005",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-5\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
+    "response_excerpt": "{\"application_id\": \"app-5\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
     "environment": "local-integration-test"
   },
   {
@@ -1644,7 +1644,7 @@
     "run_id": "l0-phase-vpr-006",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-6\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
+    "response_excerpt": "{\"application_id\": \"app-6\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
     "environment": "local-integration-test"
   },
   {
@@ -1652,7 +1652,7 @@
     "run_id": "l0-phase-vpr-007",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-7\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
+    "response_excerpt": "{\"application_id\": \"app-7\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
     "environment": "local-integration-test"
   },
   {
@@ -1660,7 +1660,7 @@
     "run_id": "l0-phase-vpr-008",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-8\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
+    "response_excerpt": "{\"application_id\": \"app-8\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
     "environment": "local-integration-test"
   },
   {
@@ -1668,7 +1668,7 @@
     "run_id": "l0-phase-vpr-009",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-9\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
+    "response_excerpt": "{\"application_id\": \"app-9\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": \"",
     "environment": "local-integration-test"
   },
   {
@@ -1676,7 +1676,7 @@
     "run_id": "l0-phase-vpr-010",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-10\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-10\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1684,7 +1684,7 @@
     "run_id": "l0-phase-vpr-011",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-11\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-11\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1692,7 +1692,7 @@
     "run_id": "l0-phase-vpr-012",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-12\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-12\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1700,7 +1700,7 @@
     "run_id": "l0-phase-vpr-013",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-13\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-13\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1708,7 +1708,7 @@
     "run_id": "l0-phase-vpr-014",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-14\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-14\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1716,7 +1716,7 @@
     "run_id": "l0-phase-vpr-015",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-15\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-15\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1724,7 +1724,7 @@
     "run_id": "l0-phase-vpr-016",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-16\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-16\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1732,7 +1732,7 @@
     "run_id": "l0-phase-vpr-017",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-17\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-17\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1740,7 +1740,7 @@
     "run_id": "l0-phase-vpr-018",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-18\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-18\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1748,7 +1748,7 @@
     "run_id": "l0-phase-vpr-019",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-19\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-19\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1756,7 +1756,7 @@
     "run_id": "l0-phase-vpr-020",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-20\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-20\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1764,7 +1764,7 @@
     "run_id": "l0-phase-vpr-021",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-21\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-21\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1772,7 +1772,7 @@
     "run_id": "l0-phase-vpr-022",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-22\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-22\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1780,7 +1780,7 @@
     "run_id": "l0-phase-vpr-023",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-23\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-23\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1788,7 +1788,7 @@
     "run_id": "l0-phase-vpr-024",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-24\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-24\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1796,7 +1796,7 @@
     "run_id": "l0-phase-vpr-025",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-25\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-25\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1804,7 +1804,7 @@
     "run_id": "l0-phase-vpr-026",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-26\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-26\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1812,7 +1812,7 @@
     "run_id": "l0-phase-vpr-027",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-27\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-27\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1820,7 +1820,7 @@
     "run_id": "l0-phase-vpr-028",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-28\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-28\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1828,7 +1828,7 @@
     "run_id": "l0-phase-vpr-029",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-29\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-29\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1836,7 +1836,7 @@
     "run_id": "l0-phase-vpr-030",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-30\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-30\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1844,7 +1844,7 @@
     "run_id": "l0-phase-vpr-031",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-31\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-31\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1852,7 +1852,7 @@
     "run_id": "l0-phase-vpr-032",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-32\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-32\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1860,7 +1860,7 @@
     "run_id": "l0-phase-vpr-033",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-33\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-33\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1868,7 +1868,7 @@
     "run_id": "l0-phase-vpr-034",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-34\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-34\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1876,7 +1876,7 @@
     "run_id": "l0-phase-vpr-035",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-35\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-35\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1884,7 +1884,7 @@
     "run_id": "l0-phase-vpr-036",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-36\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-36\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1892,7 +1892,7 @@
     "run_id": "l0-phase-vpr-037",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-37\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-37\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1900,7 +1900,7 @@
     "run_id": "l0-phase-vpr-038",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-38\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-38\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1908,7 +1908,7 @@
     "run_id": "l0-phase-vpr-039",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-39\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-39\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1916,7 +1916,7 @@
     "run_id": "l0-phase-vpr-040",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-40\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-40\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1924,7 +1924,7 @@
     "run_id": "l0-phase-vpr-041",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-41\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-41\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1932,7 +1932,7 @@
     "run_id": "l0-phase-vpr-042",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-42\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-42\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1940,7 +1940,7 @@
     "run_id": "l0-phase-vpr-043",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-43\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-43\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1948,7 +1948,7 @@
     "run_id": "l0-phase-vpr-044",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-44\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-44\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1956,7 +1956,7 @@
     "run_id": "l0-phase-vpr-045",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-45\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-45\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1964,7 +1964,7 @@
     "run_id": "l0-phase-vpr-046",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-46\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-46\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1972,7 +1972,7 @@
     "run_id": "l0-phase-vpr-047",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-47\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-47\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1980,7 +1980,7 @@
     "run_id": "l0-phase-vpr-048",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-48\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-48\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1988,7 +1988,7 @@
     "run_id": "l0-phase-vpr-049",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-49\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-49\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   },
   {
@@ -1996,7 +1996,7 @@
     "run_id": "l0-phase-vpr-050",
     "is_template": false,
     "template_match": null,
-    "response_excerpt": "{\"application_id\": \"app-50\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-26\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
+    "response_excerpt": "{\"application_id\": \"app-50\", \"user_id\": \"user-l0-integration\", \"metadata\": {\"report_date\": \"2026-07-27\", \"candidate_name\": \"Candidate\", \"target_role\": \"Target Role\", \"target_company\": \"Target Company\", \"report_version\": ",
     "environment": "local-integration-test"
   }
 ]
